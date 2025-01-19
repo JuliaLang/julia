@@ -247,6 +247,14 @@ end
     @test JuliaLowering.include_string(test_mod, """
     [1,2] .+ ([3,4] .< [5,6] .< [7,1])
     """) == [2, 2]
+
+    @test JuliaLowering.include_string(test_mod, """
+    let
+        x = [0,0,0,0]
+        x[begin+1:end-1] .= [1,2] .+ [3,4]
+        x
+    end
+    """) == [0,4,6,0]
 end
 
 end

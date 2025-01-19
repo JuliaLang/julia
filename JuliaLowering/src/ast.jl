@@ -186,6 +186,9 @@ function assign_tmp(ctx::AbstractLoweringContext, ex, name="tmp")
 end
 
 function emit_assign_tmp(stmts::SyntaxList, ctx, ex, name="tmp")
+    if is_ssa(ctx, ex)
+        return ex
+    end
     var = ssavar(ctx, ex, name)
     push!(stmts, makenode(ctx, ex, K"=", var, ex))
     var
@@ -559,6 +562,13 @@ function is_valid_modref(ex)
            (kind(ex[1]) == K"Identifier" || is_valid_modref(ex[1]))
 end
 
+function is_simple_atom(ctx, ex)
+    k = kind(ex)
+    # TODO thismodule
+    is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) ||
+        (k == K"core" && ex.name_val == "nothing")
+end
+
 function decl_var(ex)
     kind(ex) == K"::" ? ex[1] : ex
 end
@@ -586,3 +596,39 @@ function new_scope_layer(ctx, mod_ref::SyntaxTree)
     @assert kind(mod_ref) == K"Identifier"
     new_scope_layer(ctx, ctx.scope_layers[mod_ref.scope_layer].mod)
 end
+
+#-------------------------------------------------------------------------------
+# Context wrapper which helps to construct a list of statements to be executed
+# prior to some expression. Useful when we need to use subexpressions multiple
+# times.
+struct StatementListCtx{Ctx, GraphType} <: AbstractLoweringContext
+    ctx::Ctx
+    stmts::SyntaxList{GraphType}
+end
+
+function Base.getproperty(ctx::StatementListCtx, field::Symbol)
+    if field === :ctx
+        getfield(ctx, :ctx)
+    elseif field === :stmts
+        getfield(ctx, :stmts)
+    else
+        getproperty(getfield(ctx, :ctx), field)
+    end
+end
+
+function emit(ctx::StatementListCtx, ex)
+    push!(ctx.stmts, ex)
+end
+
+function emit_assign_tmp(ctx::StatementListCtx, ex, name="tmp")
+    emit_assign_tmp(ctx.stmts, ctx.ctx, ex, name)
+end
+
+with_stmts(ctx, stmts) = StatementListCtx(ctx, stmts)
+with_stmts(ctx::StatementListCtx, stmts) = StatementListCtx(ctx.ctx, stmts)
+
+function with_stmts(ctx)
+    StatementListCtx(ctx, SyntaxList(ctx))
+end
+
+with_stmts(ctx::StatementListCtx) = StatementListCtx(ctx.ctx)

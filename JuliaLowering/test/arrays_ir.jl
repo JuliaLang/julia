@@ -11,7 +11,7 @@
 #---------------------
 LoweringError:
 [10, 20; 30]
-└──────────┘ ── unexpected semicolon in array expression
+#      └──┘ ── unexpected semicolon in array expression
 
 ########################################
 # Error: vect syntax with embedded assignments
@@ -248,4 +248,103 @@ LoweringError:
 #---------------------
 LoweringError:
 #= line 1 =# - Badly nested rows in `ncat`
+
+########################################
+# Simple getindex
+a[i]
+#---------------------
+1   TestMod.a
+2   TestMod.i
+3   (call top.getindex %₁ %₂)
+4   (return %₃)
+
+########################################
+# simple 1D getindex with begin
+a[begin]
+#---------------------
+1   TestMod.a
+2   (call top.firstindex %₁)
+3   (call top.getindex %₁ %₂)
+4   (return %₃)
+
+########################################
+# simple 1D getindex with end
+a[end]
+#---------------------
+1   TestMod.a
+2   (call top.lastindex %₁)
+3   (call top.getindex %₁ %₂)
+4   (return %₃)
+
+########################################
+# multidimensional getindex with begin
+a[i, begin]
+#---------------------
+1   TestMod.a
+2   TestMod.i
+3   (call top.firstindex %₁ 2)
+4   (call top.getindex %₁ %₂ %₃)
+5   (return %₄)
+
+########################################
+# multidimensional getindex with end
+a[i, end]
+#---------------------
+1   TestMod.a
+2   TestMod.i
+3   (call top.lastindex %₁ 2)
+4   (call top.getindex %₁ %₂ %₃)
+5   (return %₄)
+
+########################################
+# multidimensional getindex with begin/end and splats
+a[is..., end, js..., begin]
+#---------------------
+1   TestMod.a
+2   TestMod.is
+3   (call top.length %₂)
+4   (call top.+ 1 %₃)
+5   (call top.lastindex %₁ %₄)
+6   TestMod.js
+7   (call top.length %₂)
+8   (call top.length %₆)
+9   (call top.+ 2 %₇ %₈)
+10  (call top.firstindex %₁ %₉)
+11  (call core.tuple %₁)
+12  (call core.tuple %₅)
+13  (call core.tuple %₁₀)
+14  (call core._apply_iterate top.iterate top.getindex %₁₁ %₂ %₁₂ %₆ %₁₃)
+15  (return %₁₄)
+
+########################################
+# getindex with nontrivial array expression and begin/end
+f()[end]
+#---------------------
+1   TestMod.f
+2   (call %₁)
+3   (call top.lastindex %₂)
+4   (call top.getindex %₂ %₃)
+5   (return %₄)
+
+########################################
+# nested refs with getindex and begin/end
+b[a[begin, end], begin, end]
+#---------------------
+1   TestMod.b
+2   TestMod.a
+3   (call top.firstindex %₂ 1)
+4   (call top.lastindex %₂ 2)
+5   (call top.getindex %₂ %₃ %₄)
+6   (call top.firstindex %₁ 2)
+7   (call top.lastindex %₁ 3)
+8   (call top.getindex %₁ %₅ %₆ %₇)
+9   (return %₈)
+
+########################################
+# Error: parameters in array ref
+a[i, j; w=1]
+#---------------------
+LoweringError:
+a[i, j; w=1]
+#     └───┘ ── unexpected semicolon in array expression
 

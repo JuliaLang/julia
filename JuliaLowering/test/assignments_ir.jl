@@ -161,70 +161,64 @@ a[i] = x
 # simple setindex! with begin
 a[begin] = x
 #---------------------
-1   TestMod.x
-2   TestMod.a
-3   TestMod.a
-4   (call top.firstindex %₃)
-5   (call top.setindex! %₂ %₁ %₄)
-6   (return %₁)
+1   TestMod.a
+2   TestMod.x
+3   (call top.firstindex %₁)
+4   (call top.setindex! %₁ %₂ %₃)
+5   (return %₂)
 
 ########################################
 # simple setindex! with end
 a[end] = x
 #---------------------
-1   TestMod.x
-2   TestMod.a
-3   TestMod.a
-4   (call top.lastindex %₃)
-5   (call top.setindex! %₂ %₁ %₄)
-6   (return %₁)
+1   TestMod.a
+2   TestMod.x
+3   (call top.lastindex %₁)
+4   (call top.setindex! %₁ %₂ %₃)
+5   (return %₂)
 
 ########################################
 # multidimensional setindex! with begin
 a[i, begin] = x
 #---------------------
-1   TestMod.x
-2   TestMod.a
+1   TestMod.a
+2   TestMod.x
 3   TestMod.i
-4   TestMod.a
-5   (call top.firstindex %₄ 2)
-6   (call top.setindex! %₂ %₁ %₃ %₅)
-7   (return %₁)
+4   (call top.firstindex %₁ 2)
+5   (call top.setindex! %₁ %₂ %₃ %₄)
+6   (return %₂)
 
 ########################################
 # multidimensional setindex! with end
 a[i, end] = x
 #---------------------
-1   TestMod.x
-2   TestMod.a
+1   TestMod.a
+2   TestMod.x
 3   TestMod.i
-4   TestMod.a
-5   (call top.lastindex %₄ 2)
-6   (call top.setindex! %₂ %₁ %₃ %₅)
-7   (return %₁)
+4   (call top.lastindex %₁ 2)
+5   (call top.setindex! %₁ %₂ %₃ %₄)
+6   (return %₂)
 
 ########################################
 # multidimensional setindex! with begin/end and splats
 a[is..., end, js..., begin] = x
 #---------------------
-1   TestMod.is
-2   TestMod.a
-3   (call top.length %₁)
+1   TestMod.a
+2   TestMod.is
+3   (call top.length %₂)
 4   (call top.+ 1 %₃)
-5   (call top.lastindex %₂ %₄)
+5   (call top.lastindex %₁ %₄)
 6   TestMod.js
-7   TestMod.a
-8   (call top.length %₁)
-9   (call top.length %₆)
-10  (call top.+ 2 %₈ %₉)
-11  (call top.firstindex %₇ %₁₀)
-12  TestMod.x
-13  TestMod.a
-14  (call core.tuple %₁₃ %₁₂)
-15  (call core.tuple %₅)
-16  (call core.tuple %₁₁)
-17  (call core._apply_iterate top.iterate top.setindex! %₁₄ %₁ %₁₅ %₆ %₁₆)
-18  (return %₁₂)
+7   (call top.length %₂)
+8   (call top.length %₆)
+9   (call top.+ 2 %₇ %₈)
+10  (call top.firstindex %₁ %₉)
+11  TestMod.x
+12  (call core.tuple %₁ %₁₁)
+13  (call core.tuple %₅)
+14  (call core.tuple %₁₀)
+15  (call core._apply_iterate top.iterate top.setindex! %₁₂ %₂ %₁₃ %₆ %₁₄)
+16  (return %₁₁)
 
 ########################################
 # setindex! with nontrivial array expression and begin/end
@@ -238,16 +232,16 @@ f()[end] = x
 6   (return %₃)
 
 ########################################
-# nested refs (fixme!)
+# nested refs
 b[a[begin]] = x
 #---------------------
-1   TestMod.x
-2   TestMod.b
+1   TestMod.b
+2   TestMod.x
 3   TestMod.a
-4   TestMod.begin
+4   (call top.firstindex %₃)
 5   (call top.getindex %₃ %₄)
-6   (call top.setindex! %₂ %₁ %₅)
-7   (return %₁)
+6   (call top.setindex! %₁ %₂ %₅)
+7   (return %₂)
 
 ########################################
 # empty ref and setindex!

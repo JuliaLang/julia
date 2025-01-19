@@ -18,6 +18,8 @@ function DesugaringContext(ctx)
     DesugaringContext(graph, ctx.bindings, ctx.scope_layers, ctx.current_layer.mod)
 end
 
+#-------------------------------------------------------------------------------
+
 function is_identifier_like(ex)
     k = kind(ex)
     k == K"Identifier" || k == K"BindingId" || k == K"Placeholder"
@@ -67,6 +69,22 @@ function is_effect_free(ex)
         k == K"inert" || k == K"top" || k == K"core"
     # flisp also includes `a.b` with simple `a`, but this seems like a bug
     # because this calls the user-defined getproperty?
+end
+
+function check_no_parameters(ex::SyntaxTree, msg)
+    if numchildren(ex) >= 1 
+        pars = ex[end]
+        if kind(pars) == K"parameters"
+            throw(LoweringError(pars, msg))
+        end
+    end
+end
+
+function check_no_assignment(exs)
+    assign_pos = findfirst(kind(e) == K"=" for e in exs)
+    if !isnothing(assign_pos)
+        throw(LoweringError(exs[assign_pos], "misplaced assignment statement in `[ ... ]`"))
+    end
 end
 
 #-------------------------------------------------------------------------------
@@ -574,9 +592,9 @@ end
 # Go through indices and replace the `begin` or `end` symbol
 # `arr` - array being indexed
 # `idxs` - list of indices
-# returns `idxs_out`; any statements that need to execute first are appended to
-# `stmts`.
-function process_indices(ctx, stmts, arr, idxs, expand_stmts)
+# returns the expanded indices. Any statements that need to execute first are
+# added to ctx.stmts.
+function process_indices(ctx::StatementListCtx, arr, idxs)
     has_splats = any(kind(i) == K"..." for i in idxs)
     idxs_out = SyntaxList(ctx)
     splats = SyntaxList(ctx)
@@ -585,8 +603,7 @@ function process_indices(ctx, stmts, arr, idxs, expand_stmts)
         val = replace_beginend(ctx, is_splat ? idx0[1] : idx0,
                                arr, n, splats, n == length(idxs))
         # TODO: kwarg?
-        idx = !has_splats || is_simple_atom(ctx, val) ?
-              val : emit_assign_tmp(stmts, ctx, expand_stmts ? expand_forms_2(ctx, val) : val)
+        idx = !has_splats || is_simple_atom(ctx, val) ? val : emit_assign_tmp(ctx, val)
         if is_splat
             push!(splats, idx)
         end
@@ -595,30 +612,36 @@ function process_indices(ctx, stmts, arr, idxs, expand_stmts)
     return idxs_out
 end
 
+# Expand things like `f()[i,end]`, add to `ctx.stmts` (temporaries for
+# computing indices) and return
+# * `arr` -  The array (may be a temporary ssa value)
+# * `idxs` - List of indices
+function expand_ref_components(ctx::StatementListCtx, ex)
+    check_no_parameters(ex, "unexpected semicolon in array expression")
+    @assert kind(ex) == K"ref"
+    @chk numchildren(ex) >= 1
+    arr = ex[1]
+    idxs = ex[2:end]
+    if any(contains_identifier(e, "begin", "end") for e in idxs)
+        arr = emit_assign_tmp(ctx, arr)
+    end
+    new_idxs = process_indices(ctx, arr, idxs)
+    return (arr, new_idxs)
+end
+
 function expand_setindex(ctx, ex)
     @assert kind(ex) == K"=" && numchildren(ex) == 2
     lhs = ex[1]
-    @assert kind(lhs) == K"ref"
-    @chk numchildren(lhs) >= 1
-    arr = lhs[1]
-    idxs = lhs[2:end]
-    rhs = ex[2]
-
-    stmts = SyntaxList(ctx)
-    if !is_leaf(arr) && any(contains_identifier(e, "begin", "end") for e in idxs)
-        arr = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, arr))
-    end
-    new_idxs = process_indices(ctx, stmts, arr, idxs, true)
-    if !is_ssa(ctx, rhs) && !is_quoted(rhs)
-        rhs = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
-    end
+    sctx = with_stmts(ctx)
+    (arr, idxs) = expand_ref_components(sctx, lhs)
+    rhs = emit_assign_tmp(sctx, ex[2])
     @ast ctx ex [K"block"
-        stmts...
+        sctx.stmts...
         expand_forms_2(ctx, [K"call"
             "setindex!"::K"top"
             arr
             rhs
-            new_idxs...
+            idxs...
         ])
         [K"unnecessary" rhs]
     ]
@@ -668,7 +691,16 @@ function expand_fuse_broadcast(ctx, ex)
         @ast ctx ex [K"call"
             "materialize!"::K"top"
             if kl == K"ref"
-                TODO(lhs, "Need to call partially-expand-ref")
+                sctx = with_stmts(ctx)
+                (arr, idxs) = expand_ref_components(sctx, lhs)
+                [K"block"
+                    sctx.stmts...
+                    [K"call"
+                        "dotview"::K"top"
+                        arr
+                        idxs...
+                    ]
+                ]
             elseif kl == K"." && numchildren(lhs) == 2
                 [K"call"
                     "dotgetproperty"::K"top"
@@ -699,17 +731,8 @@ end
 #-------------------------------------------------------------------------------
 # Expansion of array concatenation notation `[a b ; c d]` etc
 
-function check_no_assignment(exs)
-    assign_pos = findfirst(kind(e) == K"=" for e in exs)
-    if !isnothing(assign_pos)
-        throw(LoweringError(exs[assign_pos], "misplaced assignment statement in `[ ... ]`"))
-    end
-end
-
 function expand_vcat(ctx, ex)
-    if has_parameters(ex)
-        throw(LoweringError(ex, "unexpected semicolon in array expression"))
-    end
+    check_no_parameters(ex, "unexpected semicolon in array expression")
     check_no_assignment(children(ex))
     had_row = false
     had_row_splat = false
@@ -1014,7 +1037,7 @@ function expand_assignment(ctx, ex)
         end
     elseif kl == K"ref"
         # a[i1, i2] = rhs
-        expand_setindex(ctx, ex)
+        expand_forms_2(ctx, expand_setindex(ctx, ex))
     elseif kl == K"::" && numchildren(lhs) == 2
         x = lhs[1]
         T = lhs[2]
@@ -1336,7 +1359,10 @@ function expand_call(ctx, ex)
             expand_forms_2(ctx, _wrap_unsplatted_args(ctx, ex, args))...
         ]
     else
-        @ast ctx ex [K"call" expand_forms_2(ctx, farg) expand_forms_2(ctx, args)...]
+        @ast ctx ex [K"call"
+            expand_forms_2(ctx, farg)
+            expand_forms_2(ctx, args)...
+        ]
     end
 end
 
@@ -2976,7 +3002,7 @@ end
 #-------------------------------------------------------------------------------
 # Expand module definitions
 
-function expand_module(ctx::DesugaringContext, ex::SyntaxTree)
+function expand_module(ctx, ex::SyntaxTree)
     modname_ex = ex[1]
     @chk kind(modname_ex) == K"Identifier"
     modname = modname_ex.name_val
@@ -3102,7 +3128,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"="
         if is_dotted(ex)
-            expand_fuse_broadcast(ctx, ex)
+            expand_forms_2(ctx, expand_fuse_broadcast(ctx, ex))
         else
             expand_assignment(ctx, ex)
         end
@@ -3192,14 +3218,20 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"struct"
         expand_forms_2(ctx, expand_struct_def(ctx, ex, docs))
     elseif k == K"ref"
-        if numchildren(ex) > 2
-            TODO(ex, "ref expansion")
-        end
-        expand_forms_2(ctx, @ast ctx ex [K"call" "getindex"::K"top" ex[1] ex[2]])
+        sctx = with_stmts(ctx)
+        (arr, idxs) = expand_ref_components(sctx, ex)
+        expand_forms_2(ctx,
+            @ast ctx ex [K"block"
+                sctx.stmts...
+                [K"call"
+                    "getindex"::K"top"
+                    arr
+                    idxs...
+                ]
+            ]
+        )
     elseif k == K"curly"
-        if has_parameters(ex)
-            throw(LoweringError(ex[end], "unexpected semicolon in type parameter list"))
-        end
+        check_no_parameters(ex, "unexpected semicolon in type parameter list")
         for c in children(ex)
             if kind(c) == K"="
                 throw(LoweringError(c, "misplace assignment in type parameter list"))
@@ -3219,9 +3251,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             ]
         ]
     elseif k == K"vect"
-        if has_parameters(ex)
-            throw(LoweringError(ex, "unexpected semicolon in array expression"))
-        end
+        check_no_parameters(ex, "unexpected semicolon in array expression")
         check_no_assignment(children(ex))
         @ast ctx ex [K"call"
             "vect"::K"top"
@@ -3272,7 +3302,11 @@ function expand_forms_2(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector}
     res
 end
 
-function expand_forms_2(ctx, ex::SyntaxTree)
+function expand_forms_2(ctx::StatementListCtx, args...)
+    expand_forms_2(ctx.ctx, args...)
+end
+
+function expand_forms_2(ctx::MacroExpansionContext, ex::SyntaxTree)
     ctx1 = DesugaringContext(ctx)
     ex1 = expand_forms_2(ctx1, reparent(ctx1, ex))
     ctx1, ex1

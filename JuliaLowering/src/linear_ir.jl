@@ -1,13 +1,6 @@
 #-------------------------------------------------------------------------------
 # Lowering pass 5: Flatten to linear IR
 
-function is_simple_atom(ctx, ex)
-    k = kind(ex)
-    # TODO thismodule
-    is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) ||
-        (k == K"core" && ex.name_val == "nothing")
-end
-
 function is_valid_ir_argument(ctx, ex)
     k = kind(ex)
     if is_simple_atom(ctx, ex) || k == K"inert" || k == K"top" || k == K"core"

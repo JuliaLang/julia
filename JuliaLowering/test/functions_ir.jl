@@ -1109,16 +1109,15 @@ x.prop .= y
 6   (return %₅)
 
 ########################################
-# TODO: In-place broadcast update with ref on left hand side
-x[i] .= y
+# In-place broadcast update with ref on left hand side
+x[i,end] .= y
 #---------------------
-LoweringError:
-x[i] .= y
-└──┘ ── Lowering TODO: Need to call partially-expand-ref
-
-Detailed provenance:
-(ref x i)
-└─ (ref x i)
-   └─ @ :1
-
+1   TestMod.x
+2   TestMod.i
+3   (call top.lastindex %₁ 2)
+4   (call top.dotview %₁ %₂ %₃)
+5   TestMod.y
+6   (call top.broadcasted top.identity %₅)
+7   (call top.materialize! %₄ %₆)
+8   (return %₇)
 

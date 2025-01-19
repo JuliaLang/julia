@@ -80,5 +80,28 @@ end
 Int[1.0 ;;; 2.0 ;;; 3.0]
 """) ≅ [1 ;;; 2 ;;; 3]
 
+# getindex
+@test JuliaLowering.include_string(test_mod, """
+let
+    x = [1 2;
+         3 4]
+    (x[end,begin], x[begin,end])
+end
+""") == (3, 2)
+
+# getindex with splats
+@test JuliaLowering.include_string(test_mod, """
+let
+    x = [1 2;
+         3 4
+         ;;;
+         5 6;
+         7 8]
+    inds = (2,1)
+    ind1 = (1,)
+    (x[inds..., begin], x[inds..., end], x[1, inds...],
+     x[ind1..., ind1..., end])
+end
+""") == (3, 7, 2, 5)
 
 end
