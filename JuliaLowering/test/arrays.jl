@@ -80,6 +80,29 @@ end
 Int[1.0 ;;; 2.0 ;;; 3.0]
 """) ≅ [1 ;;; 2 ;;; 3]
 
+# Lowering of ref to setindex
+@test JuliaLowering.include_string(test_mod, """
+let
+    as = [0,0,0,0]
+    as[begin] = 1
+    as[2] = 2
+    as[end] = 4
+    as
+end
+""") == [1, 2, 0, 4]
+
+@test JuliaLowering.include_string(test_mod, """
+let
+    as = zeros(Int, 2,3)
+    as[begin, end] = 1
+    as[end, begin] = 2
+    js = (2,)
+    as[js..., end] = 3
+    as
+end
+""") == [0 0 1;
+         2 0 3]
+
 # getindex
 @test JuliaLowering.include_string(test_mod, """
 let
