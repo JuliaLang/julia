@@ -252,6 +252,12 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
             farg = ex[1]
             append!(args, ex[2:end])
         end
+        if !isempty(args)
+            if kind(args[end]) == K"do"
+                # move do block into first argument location
+                pushfirst!(args, pop!(args))
+            end
+        end
         if length(args) == 2 && is_same_identifier_like(farg, "^") && kind(args[2]) == K"Integer"
             # Do literal-pow expansion here as it's later used in both call and
             # dotcall expansion.

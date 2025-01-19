@@ -98,6 +98,15 @@ begin
 end
 """) == 5
 
+# Do block syntax
+@test JuliaLowering.include_string(test_mod, """
+begin
+    local y = 2
+    call_it(3) do x
+        x + y
+    end
+end
+""") == 5
 
 # Attempt to reference capture which is not assigned
 @test_throws UndefVarError(:x, :local) JuliaLowering.include_string(test_mod, """

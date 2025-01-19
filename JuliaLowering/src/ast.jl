@@ -545,12 +545,26 @@ function is_function_def(ex)
     return k == K"function" || k == K"->"
 end
 
+function find_parameters_ind(exs)
+    i = length(exs)
+    while i >= 1
+        k = kind(exs[i])
+        if k == K"parameters"
+            return i
+        elseif k != K"do"
+            break
+        end
+        i -= 1
+    end
+    return 0
+end
+
 function has_parameters(ex::SyntaxTree)
-    numchildren(ex) >= 1 && kind(ex[end]) == K"parameters"
+    find_parameters_ind(children(ex)) != 0
 end
 
 function has_parameters(args::AbstractVector)
-    length(args) >= 1 && kind(args[end]) == K"parameters"
+    find_parameters_ind(args) != 0
 end
 
 function any_assignment(exs)

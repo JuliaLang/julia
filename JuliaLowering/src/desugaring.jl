@@ -72,18 +72,16 @@ function is_effect_free(ex)
 end
 
 function check_no_parameters(ex::SyntaxTree, msg)
-    if numchildren(ex) >= 1 
-        pars = ex[end]
-        if kind(pars) == K"parameters"
-            throw(LoweringError(pars, msg))
-        end
+    i = find_parameters_ind(children(ex))
+    if i > 0 
+        throw(LoweringError(ex[i], msg))
     end
 end
 
 function check_no_assignment(exs)
-    assign_pos = findfirst(kind(e) == K"=" for e in exs)
-    if !isnothing(assign_pos)
-        throw(LoweringError(exs[assign_pos], "misplaced assignment statement in `[ ... ]`"))
+    i = findfirst(kind(e) == K"=" for e in exs)
+    if !isnothing(i)
+        throw(LoweringError(exs[i], "misplaced assignment statement in `[ ... ]`"))
     end
 end
 
@@ -2068,11 +2066,11 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     ]
 end
 
-function expand_arrow_arglist(ctx, arglist)
+function expand_arrow_arglist(ctx, arglist, arrowname)
     k = kind(arglist)
     if k == K"where"
         @ast ctx arglist [K"where"
-            expand_arrow_arglist(ctx, arglist[1])
+            expand_arrow_arglist(ctx, arglist[1], arrowname)
             argslist[2]
         ]
     else
@@ -2092,10 +2090,20 @@ function expand_arrow_arglist(ctx, arglist)
             ]
         end
         @ast ctx arglist [K"call"
-            "->"::K"Placeholder"
+            arrowname::K"Placeholder"
             children(arglist)...
         ]
     end
+end
+
+function expand_arrow(ctx, ex)
+    @chk numchildren(ex) == 2
+    expand_forms_2(ctx, 
+        @ast ctx ex [K"function"
+            expand_arrow_arglist(ctx, ex[1], string(kind(ex)))
+            ex[2]
+        ]
+    )
 end
 
 #-------------------------------------------------------------------------------
@@ -3144,13 +3152,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         sig = expand_forms_2(ctx, ex[2], ex)
     elseif k == K"for"
         expand_forms_2(ctx, expand_for(ctx, ex))
-    elseif k == K"->"
-        expand_forms_2(ctx, 
-            @ast ctx ex [K"function"
-                expand_arrow_arglist(ctx, ex[1])
-                ex[2]
-            ]
-        )
+    elseif k == K"->" || k == K"do"
+        expand_forms_2(ctx, expand_arrow(ctx, ex))
     elseif k == K"function"
         expand_forms_2(ctx, expand_function_def(ctx, ex, docs))
     elseif k == K"macro"

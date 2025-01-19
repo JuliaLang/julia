@@ -412,6 +412,44 @@ end
 9   (return %₃)
 
 ########################################
+# `do` blocks
+f(x; a=1) do y
+    y + 2
+end
+#---------------------
+1   TestMod.f
+2   (call core.tuple :a)
+3   (call core.apply_type core.NamedTuple %₂)
+4   (call core.tuple 1)
+5   (call %₃ %₄)
+6   --- thunk
+    1   (global TestMod.#do##0)
+    2   (call core.svec)
+    3   (call core.svec)
+    4   (call core.svec)
+    5   (call core._structtype TestMod :#do##0 %₂ %₃ %₄ false 0)
+    6   (call core._setsuper! %₅ core.Function)
+    7   (const TestMod.#do##0)
+    8   (= TestMod.#do##0 %₅)
+    9   (call core.svec)
+    10  (call core._typebody! %₅ %₉)
+    11  (return core.nothing)
+7   TestMod.#do##0
+8   (call core.svec %₇ core.Any)
+9   (call core.svec)
+10  (call core.svec %₈ %₉ :($(QuoteNode(:(#= line 1 =#)))))
+11  --- method core.nothing %₁₀
+    slots: [slot₁/#self#(!read) slot₂/y]
+    1   TestMod.+
+    2   (call %₁ slot₂/y 2)
+    3   (return %₂)
+12  TestMod.#do##0
+13  (new %₁₂)
+14  TestMod.x
+15  (call core.kwcall %₅ %₁ %₁₃ %₁₄)
+16  (return %₁₅)
+
+########################################
 # Error: Attempt to add methods to a function argument
 function f(g)
     function g()
