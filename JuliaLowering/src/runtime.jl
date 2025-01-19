@@ -301,6 +301,29 @@ function Base.var"@nospecialize"(__context__::MacroContext, ex)
     _apply_nospecialize(__context__, ex)
 end
 
+function Base.GC.var"@preserve"(__context__::MacroContext, exs...)
+    idents = exs[1:end-1]
+    for e in idents
+        if kind(e) != K"Identifier"
+            throw(MacroExpansionError(e, "Preserved variable must be a symbol"))
+        end
+    end
+    @ast __context__ __context__.macrocall [K"block"
+        [K"="
+            "s"::K"Identifier"
+            [K"gc_preserve_begin"
+                idents...
+            ]
+        ]
+        [K"="
+            "r"::K"Identifier"
+            exs[end]
+        ]
+        [K"gc_preserve_end" "s"::K"Identifier"]
+        "r"::K"Identifier"
+    ]
+end
+
 function Base.var"@atomic"(__context__::MacroContext, ex)
     @chk kind(ex) == K"Identifier" || kind(ex) == K"::" (ex, "Expected identifier or declaration")
     @ast __context__ __context__.macrocall [K"atomic" ex]

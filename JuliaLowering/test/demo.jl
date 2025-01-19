@@ -755,8 +755,8 @@ end
 # """
 
 src = """
-function f_slotflags(x, y, f, z)
-    f() + x + y
+GC.@preserve a b begin
+    f(a,b)
 end
 """
 

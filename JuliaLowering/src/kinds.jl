@@ -9,6 +9,9 @@ function _register_kinds()
         "BEGIN_EXTENSION_KINDS"
             # atomic fields or accesses (see `@atomic`)
             "atomic"
+            # Temporary rooting of identifiers (GC.@preserve)
+            "gc_preserve_begin"
+            "gc_preserve_end"
             # A literal Julia value of any kind, as might be inserted into the
             # AST during macro expansion
             "Value"

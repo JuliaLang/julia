@@ -515,8 +515,6 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
             end
             push!(stmts, locals_dict)
             makenode(ctx, ex, K"block", stmts)
-        else
-            throw(LoweringError(ex, "Unknown syntax extension"))
         end
     elseif k == K"assert"
         etype = extension_type(ex)

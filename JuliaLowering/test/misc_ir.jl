@@ -258,3 +258,32 @@ let
 #   └───────┘ ── unimplemented or unsupported atomic declaration
 end
 
+########################################
+# GC.@preserve support
+GC.@preserve a b begin
+    f(a,b)
+end
+#---------------------
+1   TestMod.a
+2   TestMod.b
+3   (= slot₂/s (gc_preserve_begin %₁ %₂))
+4   TestMod.f
+5   TestMod.a
+6   TestMod.b
+7   (= slot₁/r (call %₄ %₅ %₆))
+8   (gc_preserve_end slot₂/s)
+9   slot₁/r
+10  (return %₉)
+
+########################################
+# Error: GC.@preserve bad args
+GC.@preserve a b g() begin
+    body
+end
+#---------------------
+MacroExpansionError while expanding (. GC @preserve) in module Main.TestMod:
+GC.@preserve a b g() begin
+#                └─┘ ── Preserved variable must be a symbol
+    body
+end
+

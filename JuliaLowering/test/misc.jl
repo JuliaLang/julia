@@ -11,4 +11,13 @@ end
 # Placeholders
 @test JuliaLowering.include_string(test_mod, """_ = 10""") == 10
 
+# GC.@preserve
+@test JuliaLowering.include_string(test_mod, """
+let x = [1,2]
+    GC.@preserve x begin
+        x
+    end
+end        
+""") == [1,2]
+
 end

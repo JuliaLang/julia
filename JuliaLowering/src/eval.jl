@@ -279,6 +279,8 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
                k == K"isdefined" ? :isdefined  :
                k == K"pop_exception" ? :pop_exception  :
                k == K"captured_local" ? :captured_local :
+               k == K"gc_preserve_begin" ? :gc_preserve_begin :
+               k == K"gc_preserve_end"   ? :gc_preserve_end   :
                nothing
         if isnothing(head)
             TODO(ex, "Unhandled form for kind $k")

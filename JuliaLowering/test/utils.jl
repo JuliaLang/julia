@@ -17,7 +17,7 @@ using JuliaLowering:
     Kind, SourceRef, SyntaxTree, NodeId,
     makenode, makeleaf, setattr!, sethead!,
     is_leaf, numchildren, children,
-    @ast, flattened_provenance, showprov, LoweringError,
+    @ast, flattened_provenance, showprov, LoweringError, MacroExpansionError,
     syntax_graph, Bindings, ScopeLayer
 
 function _ast_test_graph()
@@ -155,7 +155,7 @@ end
 function format_ir_for_test(mod, description, input, expect_error=false, is_todo=false)
     ex = parsestmt(SyntaxTree, input)
     try
-        if kind(ex) == K"macrocall" && ex[1].name_val == "@ast_"
+        if kind(ex) == K"macrocall" && kind(ex[1]) == K"MacroName" && ex[1].name_val == "@ast_"
             # Total hack, until @ast_ can be implemented in terms of new-style
             # macros.
             ex = JuliaLowering.eval(mod, Expr(ex))
@@ -171,6 +171,8 @@ function format_ir_for_test(mod, description, input, expect_error=false, is_todo
             rethrow()
         elseif expect_error && (exc isa LoweringError)
             return sprint(io->Base.showerror(io, exc, show_detail=false))
+        elseif expect_error && (exc isa MacroExpansionError)
+            return sprint(io->Base.showerror(io, exc))
         elseif is_todo
             return sprint(io->Base.showerror(io, exc))
         else

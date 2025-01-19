@@ -144,7 +144,7 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
             # FIXME: add: splatnew isdefined invoke cfunction gc_preserve_begin copyast new_opaque_closure globalref
-            kind(rhs) in KSet"new call foreigncall")
+            kind(rhs) in KSet"new call foreigncall gc_preserve_begin")
 end
 
 # evaluate the arguments of a call, creating temporary locations as needed
@@ -751,6 +751,13 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         else
             emit(ctx, lam)
         end
+    elseif k == K"gc_preserve_begin"
+        makenode(ctx, ex, k, compile_args(ctx, children(ex)))
+    elseif k == K"gc_preserve_end"
+        if needs_value
+            throw(LoweringError(ex, "misplaced label in value position"))
+        end
+        emit(ctx, ex)
     elseif k == K"_while"
         end_label = make_label(ctx, ex)
         top_label = emit_label(ctx, ex)
@@ -1017,7 +1024,7 @@ function compile_lambda(outer_ctx, ex)
         @assert info.kind == :static_parameter
         slot_rewrites[id] = i
     end
-    # @info "" @ast ctx ex [K"block" ctx.code]
+    # @info "" @ast ctx ex [K"block" ctx.code...]
     code = renumber_body(ctx, ctx.code, slot_rewrites)
     @ast ctx ex [K"code_info"(is_toplevel_thunk=ex.is_toplevel_thunk,
                               slots=slots)
