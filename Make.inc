@@ -483,14 +483,6 @@ fPIC := -fPIC
 EXE :=
 endif
 
-# For test only
-# https://github.com/JuliaLang/julia/pull/56875
-# Only build on windows
-ifneq ($(OS), WINNT)
-# not on win32
-$(error "JuliaLang/julia#56875" Only build on windows)
-endif
-
 # Set to 1 to enable profiling with perf
 ifeq ("$(OS)", "Linux")
 USE_PERF_JITEVENTS ?= 1
