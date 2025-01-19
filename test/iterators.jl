@@ -1015,6 +1015,40 @@ end
     @test last(Iterators.filter(iseven, (Iterators.map(identity, 1:3)))) == 2
 end
 
+@testset "`eltype` for `Generator` involving `Fix` and `getindex`/`getfield` (issue #41519)" begin
+    @testset "correct `eltype`" begin
+        for (f, i) ∈ (
+            (Base.Fix1(getindex, Int), [3, 7]),
+            (Base.Fix1(getindex, [3, 7]), [[1 2], [2 1]]),
+        )
+            r = map(f, i)
+            t = Iterators.map(f, i)
+            @test eltype(r) <: @inferred eltype(t)
+            @test (@inferred Base.IteratorEltype(t)) isa Base.IteratorEltype
+        end
+    end
+    @testset "precise `eltype`" begin
+        for (f, i) ∈ (
+            (identity, [3, 7]),
+            (Base.Fix1(getindex, [3, 7]), 1:2),
+            (Base.Fix1(getindex, Dict("a" => 3, "b" => 7)), ["a", "b"]),
+            (Base.Fix1(getindex, Dict{AbstractString, Int}("a" => 3, "b" => 7)), ["a", "b"]),
+            (Base.Fix1(getfield, (; a = 3, b = 7)), 1:2),
+            (Base.Fix1(getfield, (; a = 3, b = 7)), [:a, :b]),
+        )
+            r = map(f, i)
+            t = Iterators.map(f, i)
+            @test eltype(r) == @inferred eltype(t)
+            @test (@inferred Base.IteratorEltype(t)) isa Base.IteratorEltype
+        end
+    end
+end
+
+@testset "issue #48448" begin
+    it = union(i for i in 1:5)
+    @test Int == @inferred eltype(it)
+end
+
 @testset "isempty and isdone for Generators" begin
     itr = eachline(IOBuffer("foo\n"))
     gen = (x for x in itr)
@@ -1049,7 +1083,7 @@ end
     end
 end
 
-let itr = (i for i in 1:9) # Base.eltype == Any
+let itr = ((x -> x)(i) for i in 1:9) # Base.eltype == Any
     @test first(Iterators.partition(itr, 3)) isa Vector{Any}
     @test collect(zip(repeat([Iterators.Stateful(itr)], 3)...)) == [(1, 2, 3), (4, 5, 6), (7, 8, 9)]
 end
