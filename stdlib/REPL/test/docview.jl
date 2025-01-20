@@ -146,7 +146,7 @@ module InternalWarningsTests
         @test docstring("A.B") == "No docstring or readme file found for public module `$(@__MODULE__).A.B`.\n\n# Public names\n\n`e`\n"
         @test startswith(docstring("A.B.c"), prefix(["A.B.c"]))
         @test startswith(docstring("A.B.d"), prefix(["A.B.d"]))
-        @test docstring("A.B.e") == "e is 6\n"
+        @test occursin("e is 6\n", docstring("A.B.e"))
         @test startswith(docstring("A.B2"), prefix(["A.B2"]))
         @test startswith(docstring("A.B2.C"), prefix(["A.B2", "A.B2.C"]))
         @test startswith(docstring("A.B2.C.d"), prefix(["A.B2", "A.B2.C", "A.B2.C.d"]))

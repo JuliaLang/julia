@@ -708,10 +708,13 @@ using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnN
 end # module IR
 
 # docsystem basics
+function _ensure_doc_expr(@nospecialize(x), mod::Module, __source__::LineNumberNode)
+    isa(x, Expr) && x.head === :escape && return x
+    return Expr(:escape, Expr(:var"hygienic-scope", x, mod, __source__))
+end
 macro doc(x...)
     docex = atdoc(__source__, __module__, x...)
-    isa(docex, Expr) && docex.head === :escape && return docex
-    return Expr(:escape, Expr(:var"hygienic-scope", docex, typeof(atdoc).name.module, __source__))
+    return _ensure_doc_expr(docex, typeof(atdoc).name.module, __source__)
 end
 macro __doc__(x)
     return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
