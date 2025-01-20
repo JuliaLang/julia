@@ -610,13 +610,17 @@ precompile_test_harness(false) do dir
     @eval using UseBaz
     @test haskey(Base.loaded_modules, Base.PkgId("UseBaz"))
     @test haskey(Base.loaded_modules, Base.PkgId("Baz"))
-    @test Base.invokelatest(UseBaz.biz) === 1
-    @test Base.invokelatest(UseBaz.buz) === 2
-    @test UseBaz.generating == 0
-    @test UseBaz.incremental == 0
+    invokelatest() do
+        @test UseBaz.biz() === 1
+        @test UseBaz.buz() === 2
+        @test UseBaz.generating == 0
+        @test UseBaz.incremental == 0
+    end
     @eval using Baz
-    @test Base.invokelatest(Baz.baz) === 1
-    @test Baz === UseBaz.Baz
+    invokelatest() do
+        @test Baz.baz() === 1
+        @test Baz === UseBaz.Baz
+    end
 
     # should not throw if the cachefile does not exist
     @test !isfile("DoesNotExist.ji")

@@ -3136,8 +3136,11 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
 {
     if (jl_is_symbol(ex)) {
         jl_sym_t *sym = (jl_sym_t*)ex;
-        if (jl_is_const(ctx.module, sym))
-            return jl_get_global(ctx.module, sym);
+        jl_binding_t *bnd = jl_get_module_binding(ctx.module, sym, 0);
+        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+        jl_ptr_kind_union_t pku = jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
+        if (jl_bkind_is_some_constant(decode_restriction_kind(pku)))
+            return decode_restriction_value(pku);
         return NULL;
     }
     if (jl_is_slotnumber(ex) || jl_is_argument(ex))
@@ -3158,11 +3161,15 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
     jl_sym_t *s = NULL;
     if (jl_is_globalref(ex)) {
         s = jl_globalref_name(ex);
-        jl_binding_t *b = jl_get_binding(jl_globalref_mod(ex), s);
-        jl_value_t *v = jl_get_binding_value_if_const(b);
+        jl_binding_t *bnd = jl_get_module_binding(jl_globalref_mod(ex), s, 0);
+        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+        jl_ptr_kind_union_t pku = jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
+        jl_value_t *v = NULL;
+        if (jl_bkind_is_some_constant(decode_restriction_kind(pku)))
+            v = decode_restriction_value(pku);
         if (v) {
-            if (b->deprecated)
-                cg_bdw(ctx, s, b);
+            if (bnd->deprecated)
+                cg_bdw(ctx, s, bnd);
             return v;
         }
         return NULL;
@@ -3181,11 +3188,15 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                     // Assumes that the module is rooted somewhere.
                     s = (jl_sym_t*)static_eval(ctx, jl_exprarg(e, 2));
                     if (s && jl_is_symbol(s)) {
-                        jl_binding_t *b = jl_get_binding(m, s);
-                        jl_value_t *v = jl_get_binding_value_if_const(b);
+                        jl_binding_t *bnd = jl_get_module_binding(m, s, 0);
+                        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+                        jl_ptr_kind_union_t pku = jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
+                        jl_value_t *v = NULL;
+                        if (jl_bkind_is_some_constant(decode_restriction_kind(pku)))
+                            v = decode_restriction_value(pku);
                         if (v) {
-                            if (b->deprecated)
-                                cg_bdw(ctx, s, b);
+                            if (bnd->deprecated)
+                                cg_bdw(ctx, s, bnd);
                             return v;
                         }
                     }
@@ -3465,14 +3476,13 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
             return mark_julia_const(ctx, constval);
         }
     }
-    if (!bpart) {
+    if (!bpart || decode_restriction_kind(pku) != BINDING_KIND_GLOBAL) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
     Value *bp = julia_binding_gv(ctx, bnd);
     if (bnd->deprecated) {
         cg_bdw(ctx, name, bnd);
     }
-    assert(decode_restriction_kind(pku) == BINDING_KIND_GLOBAL);
     jl_value_t *ty = decode_restriction_value(pku);
     bp = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)

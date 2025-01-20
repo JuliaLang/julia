@@ -249,6 +249,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     }
 
     if (jl_base_module) {
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             jl_value_t **fargs;
@@ -257,10 +259,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
             fargs[1] = jl_box_int32(exitcode);
             JL_TRY {
                 assert(ct);
-                size_t last_age = ct->world_age;
-                ct->world_age = jl_get_world_counter();
                 jl_apply(fargs, 2);
-                ct->world_age = last_age;
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
@@ -270,10 +269,15 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
             }
             JL_GC_POP();
         }
+        ct->world_age = last_age;
     }
 
-    if (ct && exitcode == 0)
+    if (ct && exitcode == 0) {
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
         jl_write_compiler_output();
+        ct->world_age = last_age;
+    }
 
     jl_print_gc_stats(JL_STDERR);
     if (jl_options.code_coverage)
@@ -893,6 +897,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_init_primitives();
         jl_init_main_module();
         jl_load(jl_core_module, "boot.jl");
+        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
         post_boot_hooks();
     }
 

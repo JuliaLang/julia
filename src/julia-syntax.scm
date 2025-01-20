@@ -433,7 +433,7 @@
                                  (inert ,loc)))
                           ,body))))
        (if (or (symbol? name) (globalref? name))
-           `(block ,@generator (method ,name) ,mdef (unnecessary ,name))  ;; return the function
+           `(block ,@generator (method ,name) (latestworld-if-toplevel) ,mdef (unnecessary ,name))  ;; return the function
            (if (not (null? generator))
                `(block ,@generator ,mdef)
                mdef))))))
@@ -531,6 +531,7 @@
       `(call (core ifelse) (false) (false) (block
         ;; forward-declare function so its type can occur in the signature of the inner method below
         ,@(if (or (symbol? name) (globalref? name)) `((method ,name)) '())
+        (latestworld-if-toplevel)
 
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
@@ -1515,6 +1516,7 @@
                            (scope-block (block (hardscope)
                             (local (= ,(cadr arg) ,rr))
                             ,.(map (lambda (v) `(,(car e) (globalref (thismodule) ,v) ,v)) (filter-not-underscore (lhs-vars (cadr arg))))
+                            (latestworld)
                             ,rr))))))))
             (else (error "expected assignment after \"const\"")))))))
 
@@ -2473,7 +2475,7 @@
                         (error "Opaque closure argument type may not be specified both in the method signature and separately"))
                     (if (or (varargexpr? lastarg) (vararg? lastarg))
                         '(true) '(false))))
-            (meth (caddr (caddr (expand-forms F)))) ;; `method` expr
+            (meth  (cadddr (caddr (expand-forms F)))) ;; `method` expr
             (lam       (cadddr meth))
             (sig-block (caddr meth))
             (sig-block (if (and (pair? sig-block) (eq? (car sig-block) 'block))
@@ -3154,6 +3156,11 @@
                  (else `(globalref (thismodule) ,e)))))
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel symbolicgoto symboliclabel toplevel-only)))
          e)
+        ((eq? (car e) 'isglobal)
+         (let ((val (and scope (get (scope:table scope) (cadr e) #f))))
+           (cond (val `(false))
+                 ((underscore-symbol? (cadr e)) `(false))
+                 (else `(true)))))
         ((eq? (car e) 'global)
          (check-valid-name (cadr e))
          e)
@@ -3793,7 +3800,7 @@ f(x) = yt(x)
   (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
-         global globalref assign-const-if-global thismodule
+         global globalref assign-const-if-global isglobal thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
          error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
 
@@ -4296,6 +4303,7 @@ f(x) = yt(x)
                          `(toplevel-butfirst
                            ,(convert-assignment name mk-closure fname lam interp opaq parsed-method-stack globals locals)
                            ,@typedef
+                           (latestworld)
                            ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                            ,@sp-inits
                            ,@mk-method

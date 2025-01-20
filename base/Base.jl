@@ -401,6 +401,7 @@ end
 # we know whether the .ji can just give the Base copy or not.
 # TODO: We may want to do this earlier to avoid TOCTOU issues.
 const _compiler_require_dependencies = Any[]
+@Core.latestworld
 for i = 1:length(_included_files)
     isassigned(_included_files, i) || continue
     (mod, file) = _included_files[i]

@@ -2622,7 +2622,7 @@ end
 # issue #8338
 let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
-    @test invokelatest(f8338, 2) == 8
+    @test (@invokelatest f8338(2)) == 8
 end
 
 # call overloading (#2403)

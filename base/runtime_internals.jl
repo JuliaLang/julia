@@ -239,12 +239,16 @@ function lookup_binding_partition(world::UInt, b::Core.Binding)
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
 end
 
-function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
+function convert(::Type{Core.Binding}, gr::Core.GlobalRef)
     if isdefined(gr, :binding)
-        b = gr.binding
+        return gr.binding
     else
-        b = ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), gr.mod, gr.name, true)
+        return ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), gr.mod, gr.name, true)
     end
+end
+
+function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
+    b = convert(Core.Binding, gr)
     return lookup_binding_partition(world, b)
 end
 
@@ -420,7 +424,11 @@ end
 """
     isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
 
-Determine whether a field `s` is declared `const` in a given type `t`.
+Determine whether a field `s` is const in a given type `t`
+in the sense that a read from said field is consistent
+for egal objects. Note in particular that out-of-bounds
+fields are considered const under this definition (because
+they always throw).
 """
 function isconst(@nospecialize(t::Type), s::Symbol)
     @_foldable_meta

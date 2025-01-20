@@ -1266,6 +1266,9 @@ arbitrary code in fixed worlds. `world` may be `UnitRange`, in which case the ma
 will error unless the binding is valid and has the same value across the entire world
 range.
 
+As a special case, the world `∞` always refers to the latest world, even if that world
+is newer than the world currently running.
+
 The `@world` macro is primarily used in the printing of bindings that are no longer
 available in the current world.
 
@@ -1290,6 +1293,9 @@ julia> fold
     This functionality requires at least Julia 1.12.
 """
 macro world(sym, world)
+    if world == :∞
+        world = Expr(:call, get_world_counter)
+    end
     if isa(sym, Symbol)
         return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(GlobalRef(__module__, sym)))))
     elseif isa(sym, GlobalRef)
