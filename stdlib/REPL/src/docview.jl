@@ -666,7 +666,7 @@ function fielddoc(binding::Binding, field::Symbol)
         if multidoc !== nothing
             structdoc = get(multidoc.docs, Union{}, nothing)
             if structdoc !== nothing
-                fieldsdoc = get(structdoc.data, :field, nothing)
+                fieldsdoc = get(structdoc.data, :fields, nothing)
                 if fieldsdoc !== nothing
                     fielddoc = get(fieldsdoc, field)
                     if fielddoc !== nothing
