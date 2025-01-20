@@ -100,19 +100,13 @@ for f in (:(!), :(~), :(+), :(-), :(*), :(&), :(|), :(xor),
           :(real), :(imag), :(sign), :(inv))
     @eval ($f)(::Missing) = missing
 end
-for f in (:(Base.zero), :(Base.one), :(Base.oneunit))
-    @eval ($f)(::Type{Missing}) = missing
-    @eval function $(f)(::Type{Union{T, Missing}}) where T
-        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
-        $f(T)
-    end
+for f in (:zero, :one, :oneunit)
+    @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+    @eval ($f)(::Type{T}) where {T>:Missing} = $f(nonmissingtype_checked(T))
 end
-for f in (:(Base.float), :(Base.complex))
-    @eval $f(::Type{Missing}) = Missing
-    @eval function $f(::Type{Union{T, Missing}}) where T
-        T === Any && throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
-        Union{$f(T), Missing}
-    end
+for f in (:float, :complex)
+    @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
+    @eval ($f)(::Type{T}) where {T>:Missing} = Union{$f(nonmissingtype_checked(T)), Missing}
 end
 
 # Binary operators/functions
