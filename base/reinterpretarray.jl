@@ -186,15 +186,15 @@ StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
 StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray},IsReshaped} = ReinterpretArray{T,N,S,A,IsReshaped} where S
 StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,StridedReinterpretArray}} = ReshapedArray{T,N,A}
 StridedDenseArray{T,N} = Union{DenseArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
-StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray,StridedReinterpretArray},
+StridedSubArray{T,N,A<:StridedDenseArray,
     I<:Tuple{Vararg{Union{RangeIndex, ReshapedUnitRange, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
-StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
+StridedArray{T,N} = Union{StridedDenseArray{T,N}, StridedSubArray{T,N}}
 StridedVector{T} = StridedArray{T,1}
 StridedMatrix{T} = StridedArray{T,2}
 StridedVecOrMat{T} = Union{StridedVector{T}, StridedMatrix{T}}
 
-strides(a::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}) = size_to_strides(1, size(a)...)
-stride(A::Union{DenseArray,StridedReshapedArray,StridedReinterpretArray}, k::Integer) =
+strides(a::StridedDenseArray) = size_to_strides(1, size(a)...)
+stride(A::StridedDenseArray, k::Integer) =
     k ≤ ndims(A) ? strides(A)[k] : length(A)
 
 function strides(a::ReinterpretArray{T,<:Any,S,<:AbstractArray{S},IsReshaped}) where {T,S,IsReshaped}
