@@ -1031,7 +1031,7 @@ end
 # Make sure that code that has unbound sparams works
 #https://github.com/JuliaLang/julia/issues/56739
 
-f56739(a) where {T} = a
+@test_warn r"declares type variable T but does not use it" @eval f56739(a) where {T} = a
 
 @test f56739(1) == 1
 g56739(x) = @noinline f56739(x)
