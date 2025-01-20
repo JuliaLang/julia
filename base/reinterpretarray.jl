@@ -185,6 +185,7 @@ reinterpret(::typeof(reshape), ::Type{T}, a::ReshapedReinterpretArray) where {T}
 StridedFastContiguousSubArray{T,N,A<:DenseArray} = FastContiguousSubArray{T,N,A}
 StridedReinterpretArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray},IsReshaped} = ReinterpretArray{T,N,S,A,IsReshaped} where S
 StridedReshapedArray{T,N,A<:Union{DenseArray,StridedFastContiguousSubArray,StridedReinterpretArray}} = ReshapedArray{T,N,A}
+StridedDenseArray{T,N} = Union{DenseArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
 StridedSubArray{T,N,A<:Union{DenseArray,StridedReshapedArray,StridedReinterpretArray},
     I<:Tuple{Vararg{Union{RangeIndex, ReshapedUnitRange, AbstractCartesianIndex}}}} = SubArray{T,N,A,I}
 StridedArray{T,N} = Union{DenseArray{T,N}, StridedSubArray{T,N}, StridedReshapedArray{T,N}, StridedReinterpretArray{T,N}}
