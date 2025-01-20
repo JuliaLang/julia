@@ -293,19 +293,19 @@ end
 end
 
 
-function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Union{Memory{T}, Array{T}}, ::SamplerTrivial{CloseOpen01{T}}) where {T<:Union{Float16,Float32,Float64}}
+function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Base.StridedDenseArray{T}, ::SamplerTrivial{CloseOpen01{T}}) where {T<:Union{Float16,Float32,Float64}}
     GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*sizeof(T), T, xoshiroWidth(), _bits2float)
     dst
 end
 
 for T in BitInteger_types
-    @eval function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Union{Memory{$T}, Array{$T}, UnsafeView{$T}}, ::SamplerType{$T})
+    @eval function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Base.StridedDenseArray{$T}, ::SamplerType{$T})
         GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*sizeof($T), UInt8, xoshiroWidth())
         dst
     end
 end
 
-function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Union{Memory{Bool}, Array{Bool}}, ::SamplerType{Bool})
+function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::Base.StridedDenseArray{Bool}, ::SamplerType{Bool})
     GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst), Bool, xoshiroWidth())
     dst
 end
