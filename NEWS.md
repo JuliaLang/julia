@@ -23,6 +23,8 @@ New language features
   - actual running time for the task (`Base.Experimental.task_running_time_ns`), and
   - wall-time for the task (`Base.Experimental.task_wall_time_ns`).
 - Support for Unicode 16 ([#56925]).
+- `Threads.@spawn` now takes a `:same` argument to specify the same threadpool as the caller.
+  `Threads.@spawn :same foo()` which is shorthand for `Threads.@spawn Threads.threadpool() foo()` ([#])
 
 Language changes
 ----------------
