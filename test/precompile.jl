@@ -1007,6 +1007,17 @@ precompile_test_harness("invoke") do dir
               f44320(::Any) = 2
               g44320() = invoke(f44320, Tuple{Any}, 0)
               g44320()
+              # Issue #57115
+              f57115(@nospecialize(::Any)) = error("unimplemented")
+              function g57115(@nospecialize(x))
+                  if @noinline rand(Bool)
+                      # Add an 'invoke' edge from 'foo' to 'bar'
+                      Core.invoke(f57115, Tuple{Any}, x)
+                  else
+                      # ... and also an identical 'call' edge
+                      @noinline f57115(x)
+                  end
+              end
 
               # Adding new specializations should not invalidate `invoke`s
               function getlast(itr)
@@ -1023,6 +1034,8 @@ precompile_test_harness("invoke") do dir
           """
           module $CallerModule
               using $InvokeModule
+              import $InvokeModule: f57115, g57115
+
               # involving external modules
               callf(x) = f(x)
               callg(x) = x < 5 ? g(x) : invoke(g, Tuple{Real}, x)
@@ -1043,6 +1056,8 @@ precompile_test_harness("invoke") do dir
 
               # Issue #44320
               f44320(::Real) = 3
+              # Issue #57115
+              f57115(::Int) = 1
 
               call_getlast(x) = getlast(x)
 
@@ -1063,6 +1078,7 @@ precompile_test_harness("invoke") do dir
                   internalnc(3)
                   call_getlast([1,2,3])
               end
+              precompile(g57115, (Any,))
 
               # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
               $InvokeModule.h(x::Integer) = -1
@@ -1083,7 +1099,7 @@ precompile_test_harness("invoke") do dir
         for m in methods(func)
             m.sig.parameters[end] === T && return m
         end
-        error("no ::Real method found for $func")
+        error("no ::$T method found for $func")
     end
     function nvalid(mi::Core.MethodInstance)
         isdefined(mi, :cache) || return 0
@@ -1128,6 +1144,27 @@ precompile_test_harness("invoke") do dir
 
     m = only(methods(M.g44320))
     @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
+
+    m = only(methods(M.g57115))
+    mi = m.specializations::Core.MethodInstance
+
+    f_m = get_method_for_type(M.f57115, Any)
+    f_mi = f_m.specializations::Core.MethodInstance
+
+    # Make sure that f57115(::Any) has a 'call' backedge to 'g57115'
+    has_f_call_backedge = false
+    it = Core.Compiler.BackedgeIterator(f_mi.backedges)
+    # Manually-written iterate(...) protocol, since this is in Core.Compiler
+    item = Core.Compiler.iterate(it)
+    while item !== nothing
+        (; sig, caller) = item[1]
+        if sig === nothing && caller === mi
+            has_f_call_backedge = true
+            break
+        end
+        item = Core.Compiler.iterate(it, item[2])
+    end
+    @test has_f_call_backedge
 
     m = which(MI.getlast, (Any,))
     @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)

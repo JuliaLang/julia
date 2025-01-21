@@ -510,7 +510,8 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets, jl_arra
             // (invokeTypes, c) => invoke
             // (nullptr, invokeTypes) => missing call
             // (invokeTypes, nullptr) => missing invoke (unused--inferred as Any)
-            void *target = ptrhash_get(&edges_map2, invokeTypes ? (void*)invokeTypes : (void*)callee);
+            void *key = invokeTypes ? (void*)invokeTypes : (void*)callee;
+            void *target = ptrhash_get(&edges_map2, key);
             if (target == HT_NOTFOUND) {
                 size_t min_valid = 0;
                 size_t max_valid = ~(size_t)0;
@@ -554,7 +555,7 @@ static void jl_collect_edges(jl_array_t *edges, jl_array_t *ext_targets, jl_arra
                 jl_array_ptr_1d_push(ext_targets, callee);
                 jl_array_ptr_1d_push(ext_targets, matches);
                 target = (void*)((char*)HT_NOTFOUND + jl_array_len(ext_targets) / 3);
-                ptrhash_put(&edges_map2, (void*)callee, target);
+                ptrhash_put(&edges_map2, key, target);
             }
             idxs[++nt] = (char*)target - (char*)HT_NOTFOUND - 1;
         }
