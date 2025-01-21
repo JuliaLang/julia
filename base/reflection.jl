@@ -1393,23 +1393,6 @@ It also supports the following syntax:
     (as well as `f` itself if it is not a literal global) will be evaluated
     in the current world age.
 
-```jldoctest
-julia> @macroexpand @invokelatest f(x; kw=kwv)
-:(Base.invokelatest(f, x; kw = kwv))
-
-julia> @macroexpand @invokelatest x.f
-:(Base.invokelatest(Base.getproperty, x, :f))
-
-julia> @macroexpand @invokelatest x.f = v
-:(Base.invokelatest(Base.setproperty!, x, :f, v))
-
-julia> @macroexpand @invokelatest xs[i]
-:(Base.invokelatest(Base.getindex, xs, i))
-
-julia> @macroexpand @invokelatest xs[i] = v
-:(Base.invokelatest(Base.setindex!, xs, v, i))
-```
-
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
 
