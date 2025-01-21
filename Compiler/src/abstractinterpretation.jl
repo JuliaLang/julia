@@ -3785,13 +3785,22 @@ function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
     slottypes = frame.slottypes
     rt = widenreturn(rt, BestguessInfo(interp, bestguess, nargs, slottypes, currstate))
     # narrow representation of bestguess slightly to prepare for tmerge with rt
-    if rt isa InterConditional && bestguess isa Const
+    if rt isa InterConditional && bestguess isa Const && bestguess.val isa Bool
         slot_id = rt.slot
         old_id_type = widenconditional(slottypes[slot_id])
         if bestguess.val === true && rt.elsetype !== Bottom
             bestguess = InterConditional(slot_id, old_id_type, Bottom)
         elseif bestguess.val === false && rt.thentype !== Bottom
             bestguess = InterConditional(slot_id, Bottom, old_id_type)
+        end
+    # or narrow representation of rt slightly to prepare for tmerge with bestguess
+    elseif bestguess isa InterConditional && rt isa Const && rt.val isa Bool
+        slot_id = bestguess.slot
+        old_id_type = widenconditional(slottypes[slot_id])
+        if rt.val === true && bestguess.elsetype !== Bottom
+            rt = InterConditional(slot_id, old_id_type, Bottom)
+        elseif rt.val === false && bestguess.thentype !== Bottom
+            rt = InterConditional(slot_id, Bottom, old_id_type)
         end
     end
     # copy limitations to return value
