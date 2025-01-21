@@ -784,7 +784,10 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
             break;
         }
     }
-    bpart->min_world = new_world;
+    // N.B.: This backdates the first definition of the constant to world age 0 for backwards compatibility
+    // TODO: Mark this specially with a separate partition.
+    if (bpart->min_world != 0)
+        bpart->min_world = new_world;
     JL_GC_POP();
     return bpart;
 }
