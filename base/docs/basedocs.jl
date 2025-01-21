@@ -3798,11 +3798,11 @@ unused and delete the entire benchmark code).
     the code is semantically equivalent to `donotdelete(2).`
 
 !!! note
-    This intrinsic does not affect the semantics of code that is dead because it is
+    This function does not affect the semantics of code that is dead because it is
     *unreachable*. For example, the body of the function `f(x) = false && donotdelete(x)`
-    may be deleted in its entirety. The semantics of this intrinsic only guarantee that
-    *if* the intrinsic is semantically executed, then there is some program state at
-    which the value of the arguments of this intrinsic were available (in a register,
+    may be deleted in its entirety. The semantics of this function only guarantee that
+    *if* the function is semantically executed, then there is some program state at
+    which the value of the arguments of this function were available (in a register,
     in memory, etc.).
 
 !!! compat "Julia 1.8"
