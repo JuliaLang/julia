@@ -440,10 +440,10 @@ function _spawn_set_thrpool(t::Task, tp::Symbol)
 end
 
 """
-    Threads.@spawn [:default|:interactive|:same] expr
+    Threads.@spawn [:default|:interactive|:samepool] expr
 
 Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available
-thread in the specified threadpool: `:default`, `:interactive`, or `:same`
+thread in the specified threadpool: `:default`, `:interactive`, or `:samepool`
 to use the same as the caller. `:default` is used if unspecified. The task is
 allocated to a thread once one becomes available. To wait for the task to
 finish, call [`wait`](@ref) on the result of this macro, or call
@@ -490,7 +490,7 @@ macro spawn(args...)
         ttype, ex = args
         if ttype isa QuoteNode
             ttype = ttype.value
-            if !in(ttype, (:interactive, :default, :same))
+            if !in(ttype, (:interactive, :default, :samepool))
                 throw(ArgumentError(LazyString("unsupported threadpool in @spawn: ", ttype)))
             end
             tp = QuoteNode(ttype)
@@ -512,7 +512,7 @@ macro spawn(args...)
             local task = Task($thunk)
             task.sticky = false
             local tp = $(esc(tp))
-            if tp == :same
+            if tp == :samepool
                 tp = Threads.threadpool()
             end
             _spawn_set_thrpool(task, tp)
