@@ -668,7 +668,7 @@ function fielddoc(binding::Binding, field::Symbol)
             if structdoc !== nothing
                 fieldsdoc = get(structdoc.data, :fields, nothing)
                 if fieldsdoc !== nothing
-                    fielddoc = get(fieldsdoc, field)
+                    fielddoc = get(fieldsdoc, field, nothing)
                     if fielddoc !== nothing
                         return isa(fielddoc, Markdown.MD) ?
                             fielddoc : Markdown.parse(fielddoc)
