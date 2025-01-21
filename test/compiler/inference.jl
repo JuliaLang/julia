@@ -5193,3 +5193,9 @@ end
 @test only(Base.return_types((x,f) -> getfield(x, f), (An51317, Symbol))) === Int
 @test only(Base.return_types(x -> getfield(x, :b), (A51317,))) === Union{}
 @test only(Base.return_types(x -> getfield(x, :b), (An51317,))) === Union{}
+
+# issue #56628
+@test Core.Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}} ]) === Tuple{Int, UnitRange{Int}}
+@test Core.Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64 ]) === Tuple{Int, UnitRange{Int}, Float64}
+@test Core.Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64, Tuple{2} ]) === Union{}
+@test Base.return_types(Tuple{Tuple{Int, Vararg{Pair{Any, Union{}}}}},) do x; Returns(true)(x...); end |> only === Bool
