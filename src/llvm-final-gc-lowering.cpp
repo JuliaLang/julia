@@ -165,11 +165,6 @@ void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
 bool FinalLowerGC::runOnFunction(Function &F)
 {
     initAll(*F.getParent());
-    if (!pgcstack_getter && !adoptthread_func) {
-        LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Skipping function " << F.getName() << "\n");
-        return false;
-    }
-
     // Look for a call to 'julia.get_pgcstack'.
     pgcstack = getPGCstack(F);
     if (!pgcstack) {
