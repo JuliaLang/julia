@@ -6182,3 +6182,9 @@ end <: Any
     end
     return out
 end == Union{Float64,DomainError}
+
+# issue #56628
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}} ]) === Tuple{Int, UnitRange{Int}}
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64 ]) === Tuple{Int, UnitRange{Int}, Float64}
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64, Memory{2} ]) === Union{}
+@test Base.return_types(Tuple{Tuple{Int, Vararg{Pair{Any, Union{}}}}},) do x; Returns(true)(x...); end |> only === Bool

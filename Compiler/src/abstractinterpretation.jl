@@ -368,6 +368,7 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
     for i in 1:length(split_argtypes)
         arg_n = split_argtypes[i]::Vector{Any}
         sig_n = argtypes_to_type(arg_n)
+        sig_n === Bottom && continue
         mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
         mt === nothing && return FailedMethodMatch("Could not identify method table for call")
         mt = mt::MethodTable
@@ -614,7 +615,7 @@ function abstract_call_method(interp::AbstractInterpreter,
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType ||
         return Future(MethodCallResult(Any, Any, Effects(), nothing, false, false))
-    all(@nospecialize(x) -> valid_as_lattice(unwrapva(x), true), sigtuple.parameters) ||
+    all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), sigtuple.parameters) ||
         return Future(MethodCallResult(Union{}, Any, EFFECTS_THROWS, nothing, false, false)) # catch bad type intersections early
 
     if is_nospecializeinfer(method)
@@ -2840,6 +2841,7 @@ function abstract_call_unknown(interp::AbstractInterpreter, @nospecialize(ft),
     end
     # non-constant function, but the number of arguments is known and the `f` is not a builtin or intrinsic
     atype = argtypes_to_type(arginfo.argtypes)
+    atype === Bottom && return Future(CallMeta(Union{}, Union{}, EFFECTS_THROWS, NoCallInfo())) # accidentally unreachable
     return abstract_call_gf_by_type(interp, nothing, arginfo, si, atype, sv, max_methods)::Future
 end
 
