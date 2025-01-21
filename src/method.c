@@ -1081,6 +1081,7 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, 
     if (!jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
         if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
             gf = decode_restriction_value(pku);
+            JL_GC_PROMISE_ROOTED(gf);
             jl_check_gf(gf, b->globalref->name);
             JL_UNLOCK(&world_counter_lock);
             return gf;
@@ -1092,6 +1093,7 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, 
     // because we've used it to declare the type name.
     jl_atomic_store_release(&jl_world_counter, new_world);
     jl_declare_constant_val3(b, mod, name, gf, BINDING_KIND_CONST, new_world);
+    JL_GC_PROMISE_ROOTED(gf);
     JL_UNLOCK(&world_counter_lock);
     return gf;
 }
