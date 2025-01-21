@@ -843,13 +843,14 @@ typedef union {
     struct sockaddr_in6 v6;
 } uv_sockaddr_in;
 
-static void jl_sockaddr_fill(uv_sockaddr_in *addr, uint16_t port, void *host, int ipv6)
+static void jl_sockaddr_fill(uv_sockaddr_in *addr, uint16_t port, void *host, uint32_t scope_id, int ipv6)
 {
     memset(addr, 0, sizeof(*addr));
     if (ipv6) {
         addr->v6.sin6_family = AF_INET6;
         memcpy(&addr->v6.sin6_addr, host, 16);
         addr->v6.sin6_port = port;
+        addr->v6.sin6_scope_id = scope_id;
     }
     else {
         addr->v4.sin_family = AF_INET;
@@ -859,11 +860,11 @@ static void jl_sockaddr_fill(uv_sockaddr_in *addr, uint16_t port, void *host, in
 }
 
 //NOTE: These function expects port/host to be in network byte-order (Big Endian)
-JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, void *host,
+JL_DLLEXPORT int jl_tcp_bind(uv_tcp_t *handle, uint16_t port, void *host, uint32_t scope_id,
                              unsigned int flags, int ipv6)
 {
     uv_sockaddr_in addr;
-    jl_sockaddr_fill(&addr, port, host, ipv6);
+    jl_sockaddr_fill(&addr, port, host, scope_id, ipv6);
     return uv_tcp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
@@ -915,19 +916,19 @@ JL_DLLEXPORT int jl_tcp_getpeername(uv_tcp_t *handle, uint16_t *port,
     return res;
 }
 
-JL_DLLEXPORT int jl_udp_bind(uv_udp_t *handle, uint16_t port, void *host,
+JL_DLLEXPORT int jl_udp_bind(uv_udp_t *handle, uint16_t port, void *host, uint32_t scope_id,
                              uint32_t flags, int ipv6)
 {
     uv_sockaddr_in addr;
-    jl_sockaddr_fill(&addr, port, host, ipv6);
+    jl_sockaddr_fill(&addr, port, host, scope_id, ipv6);
     return uv_udp_bind(handle, (struct sockaddr*)&addr, flags);
 }
 
-JL_DLLEXPORT int jl_udp_send(uv_udp_send_t *req, uv_udp_t *handle, uint16_t port, void *host,
+JL_DLLEXPORT int jl_udp_send(uv_udp_send_t *req, uv_udp_t *handle, uint16_t port, void *host, uint32_t scope_id,
                              char *data, uint32_t size, uv_udp_send_cb cb, int ipv6)
 {
     uv_sockaddr_in addr;
-    jl_sockaddr_fill(&addr, port, host, ipv6);
+    jl_sockaddr_fill(&addr, port, host, scope_id, ipv6);
     uv_buf_t buf[1];
     buf[0].base = data;
     buf[0].len = size;
@@ -970,10 +971,10 @@ JL_DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, uv_getaddrinfo_t *req,
 }
 
 JL_DLLEXPORT int jl_getnameinfo(uv_loop_t *loop, uv_getnameinfo_t *req,
-        void *host, uint16_t port, int flags, uv_getnameinfo_cb uvcb, int ipv6)
+        void *host, uint16_t port, uint32_t scope_id, int flags, uv_getnameinfo_cb uvcb, int ipv6)
 {
     uv_sockaddr_in addr;
-    jl_sockaddr_fill(&addr, port, host, ipv6);
+    jl_sockaddr_fill(&addr, port, host, scope_id, ipv6);
     return uv_getnameinfo(loop, req, uvcb, (struct sockaddr*)&addr, flags);
 }
 
@@ -1018,7 +1019,6 @@ JL_DLLEXPORT uint16_t jl_sockaddr_port6(struct sockaddr_in6 *addr)
     return addr->sin6_port;
 }
 
-
 JL_DLLEXPORT void jl_sockaddr_set_port(uv_sockaddr_in *addr, uint16_t port)
 {
     if (addr->in.sa_family == AF_INET)
@@ -1027,11 +1027,17 @@ JL_DLLEXPORT void jl_sockaddr_set_port(uv_sockaddr_in *addr, uint16_t port)
         addr->v6.sin6_port = port;
 }
 
-JL_DLLEXPORT int jl_tcp_connect(uv_tcp_t *handle, void *host, uint16_t port,
+JL_DLLEXPORT void jl_sockaddr_set_scopeid(uv_sockaddr_in *addr, uint32_t scope_id)
+{
+    if (addr->in.sa_family == AF_INET6)
+        addr->v6.sin6_scope_id = scope_id;
+}
+
+JL_DLLEXPORT int jl_tcp_connect(uv_tcp_t *handle, void *host, uint16_t port, uint32_t scope_id,
                                 uv_connect_cb cb, int ipv6)
 {
     uv_sockaddr_in addr;
-    jl_sockaddr_fill(&addr, port, host, ipv6);
+    jl_sockaddr_fill(&addr, port, host, scope_id, ipv6);
     uv_connect_t *req = (uv_connect_t*)malloc_s(sizeof(uv_connect_t));
     req->data = NULL;
     int r = uv_tcp_connect(req, handle, &addr.in, cb);
