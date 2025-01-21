@@ -356,6 +356,49 @@ macro noinline(x)
 end
 
 """
+    @outline expr
+
+Outline an expression into its own function, and call that function.
+
+This macro introduces a "function barrier", which can be helpful in some code optimization
+scenarios. The expr is extracted into an outlined function, which is marked `@noinline`.
+
+Outlining an expr can be used to make a function smaller, e.g. by outlining an unlikely
+branch, which could help with runtime performance by improving instruction cache locality,
+and could help with compilation performance since 2 smaller functions can sometimes compile
+faster than one larger function. Finally, outlining can be useful for type-stability, by
+outlining a type unstable block within a hot loop, where the outlined function could be type
+stable.
+
+A common use case is to @outline the code that throws exceptions, since this should be a
+rare case, but it can introduce a lot of complexity to the generated code, which can
+sometimes harm the compiler's ability to optimize.
+
+# Examples
+```julia
+function getindex(container, index)
+    if index < 1 || index > length(container)
+        # Outline this throw, since constructing a BoundsError requires boxing
+        # the arguments, which produces a lot of code.
+        @outline throw(BoundsError(container, index))
+    end
+    return container.data[index]
+end
+```
+"""
+macro outline(expr)
+    vars = esc.(_free_vars(expr))
+    quote
+        @noinline outline($(vars...)) = $(esc(expr))
+
+        outline($(vars...))
+    end
+end
+_free_vars(s::Symbol) = [s]
+_free_vars(_) = []
+_free_vars(e::Expr) = isempty(e.args) ? [] : unique!(mapreduce(_free_vars, vcat, e.args))
+
+"""
     Base.@constprop setting [ex]
 
 Control the mode of interprocedural constant propagation for the annotated function.

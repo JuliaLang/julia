@@ -235,14 +235,14 @@ macro assert(ex, msgs...)
         # message is an expression needing evaluating
         # N.B. To reduce the risk of invalidation caused by the complex callstack involved
         # with `string`, use `inferencebarrier` here to hide this `string` from the compiler.
-        msg = :(Main.Base.inferencebarrier(Main.Base.string)($(esc(msg))))
+        msg = :($Main.Base.inferencebarrier($Main.Base.string)($(msg)))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(Main.Base.inferencebarrier(_assert_tostring)($(Expr(:quote,msg))))
+        msg = :($Main.Base.inferencebarrier($_assert_tostring)($(Expr(:quote,msg))))
     end
-    return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
+    return esc(:($(ex) ? $(nothing) : $Base.@outline($throw($AssertionError($msg)))))
 end
 
 # this may be overridden in contexts where `string(::Expr)` doesn't work
