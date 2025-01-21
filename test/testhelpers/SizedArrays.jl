@@ -14,7 +14,7 @@ import LinearAlgebra: mul!
 
 export SizedArray
 
-struct SOneTo{N} <: AbstractUnitRange{Int} end
+struct SOneTo{N} <: Base.AbstractOneTo{Int} end
 SOneTo(N) = SOneTo{N}()
 Base.length(::SOneTo{N}) where {N} = N
 Base.size(r::SOneTo) = (length(r),)
@@ -58,14 +58,6 @@ Base.parent(S::SizedArray) = S.data
 +(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = SizedArray{SZ}(S1.data + S2.data)
 ==(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = S1.data == S2.data
 
-homogenize_shape(t::Tuple) = (_homogenize_shape(first(t)), homogenize_shape(Base.tail(t))...)
-homogenize_shape(::Tuple{}) = ()
-_homogenize_shape(x::Integer) = x
-_homogenize_shape(x::AbstractUnitRange) = length(x)
-const Dims = Union{Integer, Base.OneTo, SOneTo}
-function Base.similar(::Type{A}, shape::Tuple{Dims, Vararg{Dims}}) where {A<:AbstractArray}
-    similar(A, homogenize_shape(shape))
-end
 function Base.similar(::Type{A}, shape::Tuple{SOneTo, Vararg{SOneTo}}) where {A<:AbstractArray}
     R = similar(A, length.(shape))
     SizedArray{length.(shape)}(R)
@@ -73,6 +65,10 @@ end
 function Base.similar(x::SizedArray, ::Type{T}, shape::Tuple{SOneTo, Vararg{SOneTo}}) where {T}
     sz = map(length, shape)
     SizedArray{sz}(similar(parent(x), T, sz))
+end
+function Base.reshape(x::AbstractArray, shape::Tuple{SOneTo, Vararg{SOneTo}})
+    sz = map(length, shape)
+    SizedArray{length.(sz)}(reshape(x, length.(sz)))
 end
 
 const SizedMatrixLike = Union{SizedMatrix, Transpose{<:Any, <:SizedMatrix}, Adjoint{<:Any, <:SizedMatrix}}
