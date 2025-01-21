@@ -755,9 +755,7 @@ end
 # """
 
 src = """
-GC.@preserve a b begin
-    f(a,b)
-end
+ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")
 """
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")

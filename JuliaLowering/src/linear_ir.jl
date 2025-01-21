@@ -144,7 +144,13 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
             # FIXME: add: splatnew isdefined invoke cfunction gc_preserve_begin copyast new_opaque_closure globalref
-            kind(rhs) in KSet"new call foreigncall gc_preserve_begin")
+            kind(rhs) in KSet"new call foreigncall gc_preserve_begin foreigncall")
+end
+
+function contains_nonglobal_binding(ctx, ex)
+    contains_unquoted(ex) do e
+        kind(e) == K"BindingId" && lookup_binding(ctx, e).kind !== :global
+    end
 end
 
 # evaluate the arguments of a call, creating temporary locations as needed
@@ -573,9 +579,40 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             nothing
         end
-    elseif k == K"call" || k == K"new" || k == K"splatnew"
-        # TODO k ∈ foreigncall cfunction new_opaque_closure cglobal
-        args = compile_args(ctx, children(ex))
+    elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall"
+        # TODO k ∈ cfunction new_opaque_closure cglobal
+        args = if k == K"foreigncall"
+            args_ = SyntaxList(ctx)
+            # todo: is is_leaf correct here? flisp uses `atom?`
+            func = ex[1]
+            if kind(func) == K"call" && kind(func[1]) == K"core" && func[1].name_val == "tuple"
+                # Tuples like core.tuple(:funcname, mylib_name) are allowed,
+                # but may only reference globals.
+                if contains_nonglobal_binding(ctx, func)
+                    throw(LoweringError(func, "ccall function name and library expression cannot reference local variables"))
+                end
+                append!(args_, compile_args(ctx, ex[1:1]))
+            elseif is_leaf(func)
+                append!(args_, compile_args(ctx, ex[1:1]))
+            else
+                push!(args_, func)
+            end
+            # 2nd to 5th arguments of foreigncall are special. They must be
+            # left in place but cannot reference locals.
+            if contains_nonglobal_binding(ctx, ex[2])
+                throw(LoweringError(ex[2], "ccall return type cannot reference local variables"))
+            end
+            for argt in children(ex[3])
+                if contains_nonglobal_binding(ctx, argt)
+                    throw(LoweringError(argt, "ccall argument types cannot reference local variables"))
+                end
+            end
+            append!(args_, ex[2:5])
+            append!(args_, compile_args(ctx, ex[6:end]))
+            args_
+        else
+            compile_args(ctx, children(ex))
+        end
         callex = makenode(ctx, ex, k, args)
         if in_tail_pos
             emit_return(ctx, ex, callex)

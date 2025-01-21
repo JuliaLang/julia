@@ -592,38 +592,38 @@ end
 # `idxs` - list of indices
 # returns the expanded indices. Any statements that need to execute first are
 # added to ctx.stmts.
-function process_indices(ctx::StatementListCtx, arr, idxs)
+function process_indices(sctx::StatementListCtx, arr, idxs)
     has_splats = any(kind(i) == K"..." for i in idxs)
-    idxs_out = SyntaxList(ctx)
-    splats = SyntaxList(ctx)
+    idxs_out = SyntaxList(sctx)
+    splats = SyntaxList(sctx)
     for (n, idx0) in enumerate(idxs)
         is_splat = kind(idx0) == K"..."
-        val = replace_beginend(ctx, is_splat ? idx0[1] : idx0,
+        val = replace_beginend(sctx, is_splat ? idx0[1] : idx0,
                                arr, n, splats, n == length(idxs))
         # TODO: kwarg?
-        idx = !has_splats || is_simple_atom(ctx, val) ? val : emit_assign_tmp(ctx, val)
+        idx = !has_splats || is_simple_atom(sctx, val) ? val : emit_assign_tmp(sctx, val)
         if is_splat
             push!(splats, idx)
         end
-        push!(idxs_out, is_splat ? @ast(ctx, idx0, [K"..." idx]) : idx)
+        push!(idxs_out, is_splat ? @ast(sctx, idx0, [K"..." idx]) : idx)
     end
     return idxs_out
 end
 
-# Expand things like `f()[i,end]`, add to `ctx.stmts` (temporaries for
+# Expand things like `f()[i,end]`, add to `sctx.stmts` (temporaries for
 # computing indices) and return
 # * `arr` -  The array (may be a temporary ssa value)
 # * `idxs` - List of indices
-function expand_ref_components(ctx::StatementListCtx, ex)
+function expand_ref_components(sctx::StatementListCtx, ex)
     check_no_parameters(ex, "unexpected semicolon in array expression")
     @assert kind(ex) == K"ref"
     @chk numchildren(ex) >= 1
     arr = ex[1]
     idxs = ex[2:end]
     if any(contains_identifier(e, "begin", "end") for e in idxs)
-        arr = emit_assign_tmp(ctx, arr)
+        arr = emit_assign_tmp(sctx, arr)
     end
-    new_idxs = process_indices(ctx, arr, idxs)
+    new_idxs = process_indices(sctx, arr, idxs)
     return (arr, new_idxs)
 end
 
@@ -1283,6 +1283,146 @@ function expand_kw_call(ctx, srcref, farg, args, kws)
     ]
 end
 
+function expand_ccall(ctx, ex)
+    @assert kind(ex) == K"call" && is_same_identifier_like(ex[1], "ccall")
+    if numchildren(ex) < 4
+        throw(LoweringError(ex, "too few arguments to ccall"))
+    end
+    cfunc_name = ex[2]
+    # Detect calling convention if present.
+    #
+    # Note `@ccall` also emits `Expr(:cconv, convention, nreq)`, but this is a
+    # somewhat undocumented performance workaround. Instead we should just make
+    # sure @ccall can emit foreigncall directly and efficiently.
+    known_conventions = ("cdecl", "stdcall", "fastcall", "thiscall", "llvmcall")
+    cconv = if any(is_same_identifier_like(ex[3], id) for id in known_conventions)
+        ex[3]
+    end
+    if isnothing(cconv)
+        rt_idx = 3
+    else
+        rt_idx = 4
+        if numchildren(ex) < 5
+            throw(LoweringError(ex, "too few arguments to ccall with calling convention specified"))
+        end
+    end
+    return_type = ex[rt_idx]
+    arg_type_tuple = ex[rt_idx+1]
+    args = ex[rt_idx+2:end]
+    if kind(arg_type_tuple) != K"tuple"
+        msg = "ccall argument types must be a tuple; try `(T,)`"
+        if kind(return_type) == K"tuple"
+            throw(LoweringError(return_type, msg*" and check if you specified a correct return type"))
+        else
+            throw(LoweringError(arg_type_tuple, msg))
+        end
+    end
+    arg_types = children(arg_type_tuple)
+    vararg_type = nothing
+    if length(arg_types) >= 1
+        va = arg_types[end]
+        if kind(va) == K"..."
+            @chk numchildren(va) == 1
+            # Ok: vararg function
+            vararg_type = va
+        end
+    end
+    # todo: use multi-range errors here
+    if length(args) < length(arg_types)
+        throw(LoweringError(ex, "Too few arguments in ccall compared to argument types"))
+    elseif length(args) > length(arg_types) && isnothing(vararg_type)
+        throw(LoweringError(ex, "More arguments than types in ccall"))
+    end
+    if isnothing(vararg_type)
+        num_required_args = 0
+    else
+        num_required_args = length(arg_types) - 1
+        if num_required_args < 1
+            throw(LoweringError(vararg_type, "C ABI prohibits vararg without one required argument"))
+        end
+    end
+    sctx = with_stmts(ctx)
+    expanded_types = SyntaxList(ctx)
+    for (i, argt) in enumerate(arg_types)
+        if kind(argt) == K"..."
+            if i == length(arg_types)
+                argt = argt[1]
+            else
+                throw(LoweringError(argt, "only the trailing ccall argument type should have `...`"))
+            end
+        end
+        if is_same_identifier_like(argt, "Any")
+            # Special rule: Any becomes core.Any regardless of the module
+            # scope, and don't need GC roots.
+            argt = @ast ctx argt "Any"::K"core"
+        end
+        push!(expanded_types, expand_forms_2(ctx, argt))
+    end
+    #
+    # An improvement might be wrap the use of types in cconvert in a special
+    # K"global_scope" expression which modifies the scope resolution. This
+    # would at least make the rules self consistent if not pretty.
+    #
+    # One small improvement we make here is to emit temporaries for all the
+    # types used during expansion so at least we don't have their side effects
+    # more than once.
+    types_for_conv = SyntaxList(ctx)
+    for argt in expanded_types
+        push!(types_for_conv, emit_assign_tmp(sctx, argt))
+    end
+    gc_roots = SyntaxList(ctx)
+    unsafe_args  = SyntaxList(ctx)
+    for (i,arg) in enumerate(args)
+        if i > length(expanded_types)
+            raw_argt = expanded_types[end]
+            push!(expanded_types, raw_argt)
+            argt = types_for_conv[end]
+        else
+            raw_argt = expanded_types[i]
+            argt = types_for_conv[i]
+        end
+        exarg = expand_forms_2(ctx, arg)
+        if kind(raw_argt) == K"core" && raw_argt.name_val == "Any"
+            push!(unsafe_args, exarg)
+        else
+            cconverted_arg = emit_assign_tmp(sctx, 
+                @ast ctx argt [K"call"
+                    "cconvert"::K"top"
+                    argt 
+                    exarg
+                ]
+            )
+            push!(gc_roots, cconverted_arg)
+            push!(unsafe_args,
+                @ast ctx argt [K"call"
+                    "unsafe_convert"::K"top"
+                    argt
+                    cconverted_arg
+                ]
+            )
+        end
+    end
+    @ast ctx ex [K"block"
+        sctx.stmts...
+        [K"foreigncall"
+            expand_forms_2(ctx, cfunc_name)
+            expand_forms_2(ctx, return_type)
+            [K"call"
+                "svec"::K"core"
+                expanded_types...
+            ]
+            num_required_args::K"Integer"
+            if isnothing(cconv)
+                "ccall"::K"Symbol"
+            else
+                cconv=>K"Symbol"
+            end
+            unsafe_args...
+            gc_roots... # GC roots
+        ]
+    ]
+end
+
 # Wrap unsplatted arguments in `tuple`:
 # `[a, b, xs..., c]` -> `[(a, b), xs, (c,)]`
 function _wrap_unsplatted_args(ctx, call_ex, args)
@@ -1343,6 +1483,9 @@ end
 
 function expand_call(ctx, ex)
     farg = ex[1]
+    if is_same_identifier_like(farg, "ccall")
+        return expand_ccall(ctx, ex)
+    end
     args = copy(ex[2:end])
     kws = remove_kw_args!(ctx, args)
     if !isnothing(kws)

@@ -110,6 +110,7 @@ function ccall_macro_lower(ex, convention, func, rettype, types, args, num_varar
               func
               rettype
               ast":(Core.svec($(types...)))"
+              # Is this num_varargs correct? It seems wrong?
               num_varargs::K"Integer"
               convention::K"Symbol"
               cargs...
