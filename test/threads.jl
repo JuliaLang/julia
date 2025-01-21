@@ -123,10 +123,11 @@ if AFFINITY_SUPPORTED
     end
 end
 
-function get_nthreads(options = ``; cpus = nothing)
+function get_nthreads(options = ``; cpus = nothing, exclusive = false)
     cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
     cmd = `$cmd -e "print(Threads.threadpoolsize())"`
-    cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "0", "JULIA_NUM_THREADS" => "auto")
+    cmd = addenv(cmd, "JULIA_EXCLUSIVE" => exclusive ? "1" : "0",
+        "JULIA_NUM_THREADS" => "auto")
     if cpus !== nothing
         cmd = setcpuaffinity(cmd, cpus)
     end
@@ -138,6 +139,7 @@ end
         allowed_cpus = findall(uv_thread_getaffinity())
         if length(allowed_cpus) ≥ 2
             @test get_nthreads() ≥ 2
+            @test get_nthreads(exclusive = true) ≥ 2
             @test get_nthreads(cpus = allowed_cpus[1:1]) == 1
             @test get_nthreads(cpus = allowed_cpus[2:2]) == 1
             @test get_nthreads(cpus = allowed_cpus[1:2]) == 2
