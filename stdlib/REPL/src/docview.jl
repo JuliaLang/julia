@@ -662,13 +662,17 @@ function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
         dict = meta(mod; autoinit=false)
         isnothing(dict) && continue
-        if haskey(dict, binding)
-            multidoc = dict[binding]
-            if haskey(multidoc.docs, Union{})
-                fields = multidoc.docs[Union{}].data[:fields]
-                if haskey(fields, field)
-                    doc = fields[field]
-                    return isa(doc, Markdown.MD) ? doc : Markdown.parse(doc)
+        multidoc = get(dict, binding, nothing)
+        if multidoc !== nothing
+            structdoc = get(multidoc.docs, Union{}, nothing)
+            if structdoc !== nothing
+                fieldsdoc = get(structdoc.data, :fields, nothing)
+                if fieldsdoc !== nothing
+                    fielddoc = get(fieldsdoc, field, nothing)
+                    if fielddoc !== nothing
+                        return isa(fielddoc, Markdown.MD) ?
+                            fielddoc : Markdown.parse(fielddoc)
+                    end
                 end
             end
         end
