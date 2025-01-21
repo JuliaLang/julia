@@ -183,6 +183,7 @@
     XX(jl_gc_sync_total_bytes) \
     XX(jl_gc_total_hrtime) \
     XX(jl_gdblookup) \
+    XX(jl_running_under_rr) \
     XX(jl_generating_output) \
     XX(jl_declare_const_gf) \
     XX(jl_gensym) \
