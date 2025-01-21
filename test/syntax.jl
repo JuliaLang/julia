@@ -3971,11 +3971,12 @@ end
 
 # Module Replacement
 module ReplacementContainer
+    using Test
     module ReplaceMe
         const x = 1
     end
     const Old = ReplaceMe
-    module ReplaceMe
+    @test_warn r"WARNING: replacing module ReplaceMe" @eval module ReplaceMe
         const x = 2
     end
 end
