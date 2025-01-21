@@ -1232,7 +1232,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 function iterate(A::AbstractArray, state=(eachindex(A),))
     y = iterate(state...)
     y === nothing && return nothing
-    A[y[1]], (state[1], tail(y)...)
+    @inbounds A[y[1]], (state[1], tail(y)...)
 end
 
 isempty(a::AbstractArray) = (length(a) == 0)
