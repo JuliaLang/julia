@@ -97,6 +97,7 @@ New library functions
 * `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
 * `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`. ([#45793])
 * The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
+* `Sys.detectwsl()` allows to testing if Julia is running inside WSL at runtime. ([#57069])
 
 New library features
 --------------------
