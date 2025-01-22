@@ -564,7 +564,7 @@ end
 
 float(::Type{Rational{T}}) where {T<:Integer} = float(T)
 
-function gcd(x::Rational, y::Rational) 
+function gcd(x::Rational, y::Rational)
     # Check for special cases involving infinity and non-zero numbers
     if (isinf(x) && !isinf(y) && !iszero(y)) || (isinf(y) && !isinf(x) && !iszero(x))
         return if isinf(x) y else x end
