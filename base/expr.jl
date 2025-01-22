@@ -365,12 +365,12 @@ scenarios. The expr is extracted into an outlined function, which is marked `@no
 
 Outlining an expr can be used to make a function smaller, e.g. by outlining an unlikely
 branch, which could help with runtime performance by improving instruction cache locality,
-and could help with compilation performance since 2 smaller functions can sometimes compile
+and could help with compilation performance since two smaller functions can sometimes compile
 faster than one larger function. Finally, outlining can be useful for type-stability, by
 outlining a type unstable block within a hot loop, where the outlined function could be type
 stable.
 
-A common use case is to @outline the code that throws exceptions, since this should be a
+A common use case is to `@outline` the code that throws exceptions, since this should be a
 rare case, but it can introduce a lot of complexity to the generated code, which can
 sometimes harm the compiler's ability to optimize.
 
