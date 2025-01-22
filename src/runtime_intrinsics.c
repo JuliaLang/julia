@@ -812,7 +812,6 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pr) 
     runtime_nbits = 16; \
     float R = OP(A, B); \
     *(uint16_t*)pr = float_to_half(R); \
-    *(uint16_t*)pr = float_to_half(R); \
 }
 
 #define bi_intrinsic_bfloat(OP, name) \
@@ -902,7 +901,6 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, 
     float C = half_to_float(c); \
     runtime_nbits = 16; \
     float R = OP(A, B, C); \
-    *(uint16_t*)pr = float_to_half(R); \
     *(uint16_t*)pr = float_to_half(R); \
 }
 
