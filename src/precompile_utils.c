@@ -367,7 +367,7 @@ static void *jl_precompile_trimmed(size_t world)
 {
     // array of MethodInstances and ccallable aliases to include in the output
     jl_array_t *m = jl_alloc_vec_any(0);
-    JL_GC_PUSH(&m);
+    JL_GC_PUSH1(&m);
     for (size_t i = 0; i < jl_entrypoint_list->len ; i++) {
         jl_array_ptr_1d_push(m, (jl_value_t*)(jl_entrypoint_list->items[i]));
     }
