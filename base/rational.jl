@@ -564,8 +564,23 @@ end
 
 float(::Type{Rational{T}}) where {T<:Integer} = float(T)
 
-gcd(x::Rational, y::Rational) = unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
-lcm(x::Rational, y::Rational) = unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.den))
+function gcd(x::Rational, y::Rational) 
+    # Check for special cases involving infinity and non-zero numbers
+    if (isinf(x) && !isinf(y) && !iszero(y)) || (isinf(y) && !isinf(x) && !iszero(x))
+        return if isinf(x) y else x end
+    end
+    return unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
+end
+
+function lcm(x::Rational, y::Rational)
+    # Check for special cases involving infinity and non-zero numbers
+    if (isinf(x) && !isinf(y) && !iszero(y)) || (isinf(y) && !isinf(x) && !iszero(x))
+        return isinf(x) ? x : y  # Return the one that is infinite
+    end
+    return unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.den))
+end
+
+
 function gcdx(x::Rational, y::Rational)
     c = gcd(x, y)
     if iszero(c.num)
