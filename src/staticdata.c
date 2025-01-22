@@ -1789,16 +1789,17 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     newm->nroots_sysimg = m->roots ? jl_array_len(m->roots) : 0;
                 }
                 if (m->ccallable) {
-                    int should_push = !jl_options.trim;
-                    for (size_t i = 0; !should_push && i < jl_entrypoint_list->len  ; i++) {
-                        jl_value_t* val = jl_entrypoint_list->items[i];
-                        if ((jl_value_t *)m->ccallable == val) {
-                            should_push = 1;
-                            break;
+                    if (jl_options.trim == JL_TRIM_NO) {
+                        arraylist_push(&s->ccallable_list, (void*)reloc_offset);
+                    } else {
+                        for (size_t i = 0; i < jl_entrypoint_list->len; i++) {
+                            jl_value_t* val = (jl_value_t*)jl_entrypoint_list->items[i];
+                            if ((jl_value_t *)m->ccallable == val) {
+                                arraylist_push(&s->ccallable_list, (void*)reloc_offset);
+                                break;
+                            }
                         }
                     }
-                    if (should_push)
-                        arraylist_push(&s->ccallable_list, (void*)reloc_offset);
                 }
             }
             else if (jl_is_method_instance(v)) {
