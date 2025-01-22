@@ -288,6 +288,15 @@ GC.@preserve a b g() begin
 end
 
 ########################################
+# Juxtaposition
+20x
+#---------------------
+1   TestMod.*
+2   TestMod.x
+3   (call %₁ 20 %₂)
+4   (return %₃)
+
+########################################
 # basic ccall
 ccall(:strlen, Csize_t, (Cstring,), "asdfg")
 #---------------------

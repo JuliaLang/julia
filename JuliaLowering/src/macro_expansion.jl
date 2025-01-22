@@ -211,6 +211,14 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         # Strip "container" nodes
         @chk numchildren(ex) == 1
         expand_forms_1(ctx, ex[1])
+    elseif k == K"juxtapose"
+        layerid = get(ex, :scope_layer, ctx.current_layer.id)
+        @chk numchildren(ex) == 2
+        @ast ctx ex [K"call"
+            "*"::K"Identifier"(scope_layer=layerid)
+            expand_forms_1(ctx, ex[1])
+            expand_forms_1(ctx, ex[2])
+        ]
     elseif k == K"quote"
         @chk numchildren(ex) == 1
         # TODO: Upstream should set a general flag for detecting parenthesized

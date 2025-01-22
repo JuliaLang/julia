@@ -20,7 +20,15 @@ let x = [1,2]
 end        
 """) == [1,2]
 
+@test JuliaLowering.include_string(test_mod, """
+let x=11
+    20x
+end
+""") == 220
+
 # ccall
-@test ccall(:strlen, Csize_t, (Cstring,), "asdfg") == 5
+@test JuliaLowering.include_string(test_mod, """
+ccall(:strlen, Csize_t, (Cstring,), "asdfg")
+""") == 5
 
 end
