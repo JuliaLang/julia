@@ -1217,11 +1217,11 @@ public:
 
 class JLMemoryUsagePlugin : public ObjectLinkingLayer::Plugin {
 private:
-    std::atomic<size_t> &jit_bytes_size;
+    _Atomic(size_t)* jit_bytes_size;
 
 public:
 
-    JLMemoryUsagePlugin(std::atomic<size_t> &jit_bytes_size)
+    JLMemoryUsagePlugin(_Atomic(size_t)* jit_bytes_size)
         : jit_bytes_size(jit_bytes_size) {}
 
     Error notifyFailed(orc::MaterializationResponsibility &MR) override {
@@ -1258,7 +1258,7 @@ public:
             }
             (void) code_size;
             (void) data_size;
-            this->jit_bytes_size.fetch_add(graph_size, std::memory_order_relaxed);
+            jl_atomic_fetch_add_relaxed(this->jit_bytes_size, graph_size)
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, graph_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, code_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITDataSize, data_size);
@@ -2001,7 +2001,7 @@ JuliaOJIT::JuliaOJIT()
         ES, std::move(ehRegistrar)));
 
     ObjectLayer.addPlugin(std::make_unique<JLDebuginfoPlugin>());
-    ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(jit_bytes_size));
+    ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(&jit_bytes_size));
 #else
     UnlockedObjectLayer.setNotifyLoaded(registerRTDyldJITObject);
 #endif
