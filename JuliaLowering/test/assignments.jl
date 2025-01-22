@@ -49,5 +49,40 @@ let
 end
 """) === 10
 
+# Updating assignments
+@test JuliaLowering.include_string(test_mod, """
+let x = "hi"
+    x *= " ho"
+    x
+end
+""") == "hi ho"
+
+@test JuliaLowering.include_string(test_mod, """
+let x = [1,3]
+    x .-= [0,1]
+    x
+end
+""") == [1,2]
+
+@test JuliaLowering.include_string(test_mod, """
+let x = [1 2; 3 4]
+    x[begin, 1:end] .-= 1
+    x
+end
+""") == [0 1 ; 3 4]
+
+# Test that side effects of computing indices in left hand side only occur
+# once.
+@test JuliaLowering.include_string(test_mod, """
+let
+    x = [1, 2]
+    n_calls = 0
+    the_index() = (n_calls = n_calls + 1; 1)
+    x[the_index()] += 1
+    x[the_index()]::Int += 1
+    x[the_index():end] .+= 1
+    n_calls
+end
+""") == 3
 
 end

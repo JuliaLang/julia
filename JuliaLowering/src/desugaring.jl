@@ -48,6 +48,12 @@ function contains_identifier(ex::SyntaxTree, idents...)
     end
 end
 
+function contains_ssa_binding(ctx, ex)
+    contains_unquoted(ex) do e
+        kind(e) == K"BindingId" && lookup_binding(ctx, e).is_ssa
+    end
+end
+
 # Return true if `f(e)` is true for any unquoted child of `ex`, recursively.
 function contains_unquoted(f::Function, ex::SyntaxTree)
     if f(ex)
@@ -1074,6 +1080,65 @@ function expand_assignment(ctx, ex)
     else
         throw(LoweringError(lhs, "invalid assignment location"))
     end
+end
+
+function expand_update_operator(ctx, ex)
+    k = kind(ex)
+    dotted = is_dotted(ex)
+
+    @chk numchildren(ex) == 3
+    lhs = ex[1]
+    op = ex[2]
+    rhs = ex[3]
+
+    stmts = SyntaxList(ctx)
+
+    declT = nothing
+    if kind(lhs) == K"::"
+        # eg `a[i]::T += 1`
+        declT = lhs[2]
+        decl_lhs = lhs
+        lhs = lhs[1]
+    end
+
+    if kind(lhs) == K"ref"
+        # eg `a[end] = rhs`
+        sctx = with_stmts(ctx, stmts)
+        (arr, idxs) = expand_ref_components(sctx, lhs)
+        lhs = @ast ctx lhs [K"ref" arr idxs...]
+    end
+
+    lhs = remove_argument_side_effects(ctx, stmts, lhs)
+
+    if dotted
+        if !(kind(lhs) == K"ref" || (kind(lhs) == K"." && numchildren(lhs) == 2))
+            # `f() .+= rhs`
+            lhs = emit_assign_tmp(stmts, ctx, lhs)
+        end
+    else
+        if kind(lhs) == K"tuple" && contains_ssa_binding(ctx, lhs)
+            # If remove_argument_side_effects needed to replace an expression
+            # with an ssavalue, then it can't be updated by assignment
+            # (JuliaLang/julia#30062)
+            throw(LoweringError(lhs, "invalid multiple assignment location"))
+        end
+    end
+
+    @ast ctx ex [K"block"
+        stmts...
+        [K"="(syntax_flags=(dotted ? JuliaSyntax.DOTOP_FLAG : nothing))
+            lhs
+            [(dotted ? K"dotcall" : K"call")
+                op
+                if isnothing(declT)
+                    lhs
+                else
+                    [K"::"(decl_lhs) lhs declT]
+                end
+                rhs
+            ]
+        ]
+    ]
 end
 
 #-------------------------------------------------------------------------------
@@ -3279,6 +3344,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             expand_forms_2(ctx, ex[1])
             expand_forms_2(ctx, ex[2])
         ]
+    elseif k == K"op="
+        expand_forms_2(ctx, expand_update_operator(ctx, ex))
     elseif k == K"="
         if is_dotted(ex)
             expand_forms_2(ctx, expand_fuse_broadcast(ctx, ex))

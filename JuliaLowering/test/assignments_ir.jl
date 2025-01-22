@@ -219,3 +219,128 @@ LoweringError:
 1 = rhs
 ╙ ── invalid assignment location
 
+########################################
+# Basic updating assignment
+begin
+    local x
+    x += y
+end
+#---------------------
+1   TestMod.+
+2   slot₁/x
+3   TestMod.y
+4   (call %₁ %₂ %₃)
+5   (= slot₁/x %₄)
+6   (return %₄)
+
+########################################
+# Broadcasted updating assignment
+begin
+    local x
+    x .+= y
+end
+#---------------------
+1   (newvar slot₁/x)
+2   slot₁/x
+3   TestMod.+
+4   TestMod.y
+5   (call top.broadcasted %₃ %₂ %₄)
+6   (call top.materialize! %₂ %₅)
+7   (return %₆)
+
+########################################
+# Broadcasted updating assignment with general left hand side permitted
+f() .+= y
+#---------------------
+1   TestMod.f
+2   (call %₁)
+3   TestMod.+
+4   TestMod.y
+5   (call top.broadcasted %₃ %₂ %₄)
+6   (call top.materialize! %₂ %₅)
+7   (return %₆)
+
+########################################
+# Updating assignment with basic ref as left hand side
+x[i] += y
+#---------------------
+1   TestMod.+
+2   TestMod.x
+3   TestMod.i
+4   (call top.getindex %₂ %₃)
+5   TestMod.y
+6   (call %₁ %₄ %₅)
+7   TestMod.x
+8   TestMod.i
+9   (call top.setindex! %₇ %₆ %₈)
+10  (return %₆)
+
+########################################
+# Updating assignment with complex ref as left hand side
+g()[f(), end] += y
+#---------------------
+1   TestMod.g
+2   (call %₁)
+3   TestMod.f
+4   (call %₃)
+5   (call top.lastindex %₂ 2)
+6   TestMod.+
+7   (call top.getindex %₂ %₄ %₅)
+8   TestMod.y
+9   (call %₆ %₇ %₈)
+10  (call top.setindex! %₂ %₉ %₄ %₅)
+11  (return %₉)
+
+########################################
+# Updating assignment with type assert on left hand side
+begin
+    local x
+    x::T += y
+end
+#---------------------
+1   TestMod.+
+2   slot₁/x
+3   TestMod.T
+4   (call core.typeassert %₂ %₃)
+5   TestMod.y
+6   (call %₁ %₄ %₅)
+7   (= slot₁/x %₆)
+8   (return %₆)
+
+########################################
+# Updating assignment with ref and type assert on left hand side
+begin
+    local x
+    x[f()]::T += y
+end
+#---------------------
+1   (newvar slot₁/x)
+2   TestMod.f
+3   (call %₂)
+4   TestMod.+
+5   slot₁/x
+6   (call top.getindex %₅ %₃)
+7   TestMod.T
+8   (call core.typeassert %₆ %₇)
+9   TestMod.y
+10  (call %₄ %₈ %₉)
+11  slot₁/x
+12  (call top.setindex! %₁₁ %₁₀ %₃)
+13  (return %₁₀)
+
+########################################
+# Error: Updating assignment with invalid left hand side
+f() += y
+#---------------------
+LoweringError:
+f() += y
+└─┘ ── invalid assignment location
+
+########################################
+# Error: Updating assignment with invalid tuple destructuring on left hand side
+(if false end, b) += 2
+#---------------------
+LoweringError:
+(if false end, b) += 2
+└───────────────┘ ── invalid multiple assignment location
+
