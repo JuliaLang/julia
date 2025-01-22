@@ -1,3 +1,10 @@
+module JuxtTest
+    macro emit_juxt()
+        :(10x)
+    end
+end
+
+#*******************************************************************************
 ########################################
 # Getproperty syntax
 x.a
@@ -294,6 +301,22 @@ end
 1   TestMod.*
 2   TestMod.x
 3   (call %₁ 20 %₂)
+4   (return %₃)
+
+########################################
+# Juxtaposition - check the juxtapose multiply is resolved to `JuxtTest.*` when
+# emitted by the macro in the JuxtTest module.
+# 
+# This is consistent with Julia's existing system but it's not entirely clear
+# this is good - perhaps we should resolve to Base.* instead? Resolving to the
+# module-local version makes it exactly equivalent to `*`. But one might argue
+# this is confusing because the symbol `*` appears nowhere in the user's source
+# code.
+JuxtTest.@emit_juxt
+#---------------------
+1   TestMod.JuxtTest.*
+2   TestMod.JuxtTest.x
+3   (call %₁ 10 %₂)
 4   (return %₃)
 
 ########################################

@@ -147,7 +147,7 @@ end
 
 function setup_ir_test_module(preamble)
     test_mod = Module(:TestMod)
-    Base.include_string(test_mod, preamble)
+    JuliaLowering.include_string(test_mod, preamble)
     Base.eval(test_mod, :(const var"@ast_" = $(var"@ast_")))
     test_mod
 end
