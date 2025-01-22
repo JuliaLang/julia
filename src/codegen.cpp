@@ -3469,7 +3469,8 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
                 break;
             pku = jl_atomic_load_acquire(&bpart->restriction);
         }
-        if (bpart && jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
+        enum jl_partition_kind kind = decode_restriction_kind(pku);
+        if (bpart && (jl_bkind_is_some_constant(kind) && kind != BINDING_KIND_BACKDATED_CONST)) {
             jl_value_t *constval = decode_restriction_value(pku);
             if (!constval) {
                 undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);

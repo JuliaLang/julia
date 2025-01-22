@@ -3524,6 +3524,11 @@ function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Co
     end
 
     if is_defined_const_binding(kind)
+        if kind == BINDING_KIND_BACKDATED_CONST
+            # Infer this as guard. We do not want a later const definition to retroactively improve
+            # inference results in an earlier world.
+            return RTEffects(Any, UndefVarError, generic_getglobal_effects)
+        end
         rt = Const(partition_restriction(partition))
         return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL, inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE))
     end

@@ -121,7 +121,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
         if mi !== nothing
             push!(error_args, "\n", "  Method instance: ", mi)
         end
-        error(error_args...)
+        invokelatest(error, error_args...)
     end
     # Verify CFG graph. Must be well formed to construct domtree
     if !(length(ir.cfg.blocks) - 1 <= length(ir.cfg.index) <= length(ir.cfg.blocks))
@@ -378,6 +378,15 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                     if stmt.args[1] isa GlobalRef
                         # undefined GlobalRef is OK in isdefined
+                        continue
+                    end
+                elseif stmt.head === :throw_undef_if_not
+                    if length(stmt.args) > 3
+                        @verify_error "malformed throw_undef_if_not"
+                        raise_error()
+                    end
+                    if stmt.args[1] isa GlobalRef
+                        # undefined GlobalRef is OK in throw_undef_if_not
                         continue
                     end
                 elseif stmt.head === :gc_preserve_end
