@@ -154,7 +154,7 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
             if (codeinst->owner != jl_nothing) {
                 jl_error("Failed to invoke or compile external codeinst");
             }
-            result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, codeinst->def);
+            result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, jl_get_ci_mi(codeinst));
         }
     } else {
         result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, (jl_method_instance_t*)c);
@@ -251,22 +251,15 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
-        int allow_import = 1;
-        if (nargs == 2) {
-            assert(jl_is_bool(args[1]) && "malformed IR");
-            allow_import = args[1] == jl_true;
-        }
+        assert(nargs == 1 && "malformed IR");
         if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
             if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
                 jl_error("access to invalid slot number");
             defined = s->locals[n - 1] != NULL;
         }
-        else if (jl_is_globalref(sym)) {
-            defined = jl_boundp(jl_globalref_mod(sym), jl_globalref_name(sym), allow_import);
-        }
-        else if (jl_is_symbol(sym)) {
-            defined = jl_boundp(s->module, (jl_sym_t*)sym, allow_import);
+        else if (jl_is_globalref(sym) || jl_is_symbol(sym)) {
+            jl_error("[Internal Error]: :isdefined on globalref should use `isdefinedglobal`");
         }
         else if (jl_is_expr(sym) && ((jl_expr_t*)sym)->head == jl_static_parameter_sym) {
             ssize_t n = jl_unbox_long(jl_exprarg(sym, 0));
@@ -767,7 +760,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
 {
     interpreter_state *s;
-    jl_method_instance_t *mi = codeinst->def;
+    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
     jl_code_info_t *src = NULL;

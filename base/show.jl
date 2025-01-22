@@ -1045,7 +1045,7 @@ function check_world_bounded(tn::Core.TypeName)
     isdefined(bnd, :partitions) || return nothing
     partition = @atomic bnd.partitions
     while true
-        if is_some_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
+        if is_defined_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
             max_world = @atomic partition.max_world
             max_world == typemax(UInt) && return nothing
             return Int(partition.min_world):Int(max_world)
@@ -1353,7 +1353,13 @@ end
 show(io::IO, mi::Core.MethodInstance) = show_mi(io, mi)
 function show(io::IO, codeinst::Core.CodeInstance)
     print(io, "CodeInstance for ")
-    show_mi(io, codeinst.def)
+    def = codeinst.def
+    if isa(def, Core.ABIOverride)
+        show_mi(io, def.def)
+        print(io, " (ABI Overridden)")
+    else
+        show_mi(io, def::MethodInstance)
+    end
 end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
@@ -3144,7 +3150,7 @@ Print to a stream `io`, or return a string `str`, giving a brief description of
 a value. By default returns `string(typeof(x))`, e.g. [`Int64`](@ref).
 
 For arrays, returns a string of size and type info,
-e.g. `10-element Array{Int64,1}`.
+e.g. `10-element Vector{Int64}` or `9×4×5 Array{Float64, 3}`.
 
 # Examples
 ```jldoctest
@@ -3259,7 +3265,9 @@ showindices(io) = nothing
 function showarg(io::IO, r::ReshapedArray, toplevel)
     print(io, "reshape(")
     showarg(io, parent(r), false)
-    print(io, ", ", join(r.dims, ", "))
+    if !isempty(r.dims)
+        print(io, ", ", join(r.dims, ", "))
+    end
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(r))
     return nothing
@@ -3356,9 +3364,11 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     end
     print(io, " - ")
     kind = binding_kind(partition)
-    if is_some_const_binding(kind)
+    if is_defined_const_binding(kind)
         print(io, "constant binding to ")
         print(io, partition_restriction(partition))
+    elseif kind == BINDING_KIND_UNDEF_CONST
+        print(io, "undefined const binding")
     elseif kind == BINDING_KIND_GUARD
         print(io, "undefined binding - guard entry")
     elseif kind == BINDING_KIND_FAILED

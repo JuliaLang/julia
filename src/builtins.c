@@ -1352,6 +1352,33 @@ JL_CALLABLE(jl_f_getglobal)
     return v;
 }
 
+JL_CALLABLE(jl_f_isdefinedglobal)
+{
+    jl_module_t *m = NULL;
+    jl_sym_t *s = NULL;
+    JL_NARGS(isdefined, 2, 3);
+    int allow_import = 1;
+    enum jl_memory_order order = jl_memory_order_unspecified;
+    JL_TYPECHK(isdefined, module, args[0]);
+    JL_TYPECHK(isdefined, symbol, args[1]);
+    if (nargs == 3) {
+        JL_TYPECHK(isdefined, bool, args[2]);
+        allow_import = jl_unbox_bool(args[2]);
+    }
+    if (nargs == 4) {
+        JL_TYPECHK(isdefined, symbol, args[3]);
+        order = jl_get_atomic_order_checked((jl_sym_t*)args[2], 1, 0);
+    }
+    m = (jl_module_t*)args[0];
+    s = (jl_sym_t*)args[1];
+    if (order == jl_memory_order_unspecified)
+        order = jl_memory_order_unordered;
+    if (order < jl_memory_order_unordered)
+        jl_atomic_error("isdefined: module binding cannot be accessed non-atomically");
+    int bound = jl_boundp(m, s, allow_import); // seq_cst always
+    return bound ? jl_true : jl_false;
+}
+
 JL_CALLABLE(jl_f_setglobal)
 {
     enum jl_memory_order order = jl_memory_order_release;
@@ -1589,11 +1616,19 @@ JL_CALLABLE(jl_f_invoke)
         return jl_gf_invoke_by_method(m, args[0], &args[2], nargs - 1);
     } else if (jl_is_code_instance(argtypes)) {
         jl_code_instance_t *codeinst = (jl_code_instance_t*)args[1];
+        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
         jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
         // N.B.: specTypes need not be a subtype of the method signature. We need to check both.
-        if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)codeinst->def->specTypes) ||
-            (jl_is_method(codeinst->def->def.value) && !jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)codeinst->def->def.method->sig))) {
-            jl_type_error("invoke: argument type error", codeinst->def->specTypes, arg_tuple(args[0], &args[2], nargs - 1));
+        if (jl_is_abioverride(codeinst->def)) {
+            jl_datatype_t *abi = (jl_datatype_t*)((jl_abi_override_t*)(codeinst->def))->abi;
+            if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, abi)) {
+                jl_type_error("invoke: argument type error (ABI overwrite)", (jl_value_t*)abi, arg_tuple(args[0], &args[2], nargs - 1));
+            }
+        } else {
+            if (!jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)mi->specTypes) ||
+                (jl_is_method(mi->def.value) && !jl_tuple1_isa(args[0], &args[2], nargs - 1, (jl_datatype_t*)mi->def.method->sig))) {
+                jl_type_error("invoke: argument type error", mi->specTypes, arg_tuple(args[0], &args[2], nargs - 1));
+            }
         }
         if (jl_atomic_load_relaxed(&codeinst->min_world) > jl_current_task->world_age ||
             jl_current_task->world_age > jl_atomic_load_relaxed(&codeinst->max_world)) {
@@ -1609,7 +1644,7 @@ JL_CALLABLE(jl_f_invoke)
             if (codeinst->owner != jl_nothing) {
                 jl_error("Failed to invoke or compile external codeinst");
             }
-            return jl_invoke(args[0], &args[2], nargs - 1, codeinst->def);
+            return jl_invoke(args[0], &args[2], nargs - 1, mi);
         }
     }
     if (!jl_is_tuple_type(jl_unwrap_unionall(argtypes)))
@@ -2443,6 +2478,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     // module bindings
     jl_builtin_getglobal = add_builtin_func("getglobal", jl_f_getglobal);
     jl_builtin_setglobal = add_builtin_func("setglobal!", jl_f_setglobal);
+    jl_builtin_isdefinedglobal = add_builtin_func("isdefinedglobal", jl_f_isdefinedglobal);
     add_builtin_func("get_binding_type", jl_f_get_binding_type);
     jl_builtin_swapglobal = add_builtin_func("swapglobal!", jl_f_swapglobal);
     jl_builtin_replaceglobal = add_builtin_func("replaceglobal!", jl_f_replaceglobal);

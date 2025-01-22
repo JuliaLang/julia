@@ -45,6 +45,7 @@ DECLARE_BUILTIN(invoke);
 DECLARE_BUILTIN(is);
 DECLARE_BUILTIN(isa);
 DECLARE_BUILTIN(isdefined);
+DECLARE_BUILTIN(isdefinedglobal);
 DECLARE_BUILTIN(issubtype);
 DECLARE_BUILTIN(memorynew);
 DECLARE_BUILTIN(memoryref);

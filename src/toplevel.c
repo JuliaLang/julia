@@ -66,14 +66,13 @@ void jl_module_run_initializer(jl_module_t *m)
 {
     JL_TIMING(INIT_MODULE, INIT_MODULE);
     jl_timing_show_module(m, JL_TIMING_DEFAULT_BLOCK);
-    jl_function_t *f = jl_module_get_initializer(m);
-    if (f == NULL)
-        return;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_apply(&f, 1);
+        jl_function_t *f = jl_module_get_initializer(m);
+        if (f != NULL)
+            jl_apply(&f, 1);
         ct->world_age = last_age;
     }
     JL_CATCH {
@@ -157,7 +156,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     else {
         jl_binding_t *b = jl_get_module_binding(parent_module, name, 1);
         jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
-        jl_ptr_kind_union_t pku = encode_restriction(NULL, BINDING_KIND_CONST);
+        jl_ptr_kind_union_t pku = encode_restriction(NULL, BINDING_KIND_UNDEF_CONST);
         jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)newm, BINDING_KIND_CONST);
         if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku)) {
             if (decode_restriction_kind(pku) != BINDING_KIND_CONST) {
@@ -640,7 +639,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instan
     jl_code_instance_t *ci = jl_new_codeinst(mi, (jl_value_t*)jl_uninferred_sym,
         (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, jl_nothing,
         (jl_value_t*)src, 0, src->min_world, src->max_world,
-        0, NULL, 1, NULL, NULL);
+        0, NULL, NULL, NULL);
     return ci;
 }
 
@@ -740,17 +739,21 @@ static void jl_eval_errorf(jl_module_t *m, const char *filename, int lineno, con
     JL_GC_POP();
 }
 
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val, enum jl_partition_kind constant_kind)
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
+    jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val,
+    enum jl_partition_kind constant_kind, size_t new_world)
 {
     JL_GC_PUSH1(&val);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    if (!b) {
+        b = jl_get_module_binding(mod, var, 1);
+    }
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     int did_warn = 0;
     while (1) {
         if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
             if (!val) {
-                JL_GC_POP();
-                return bpart;
+                break;
             }
             jl_value_t *old = decode_restriction_value(pku);
             JL_GC_PROMISE_ROOTED(old);
@@ -781,13 +784,30 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, j
             break;
         }
     }
+    // N.B.: This backdates the first definition of the constant to world age 0 for backwards compatibility
+    // TODO: Mark this specially with a separate partition.
+    if (bpart->min_world != 0)
+        bpart->min_world = new_world;
     JL_GC_POP();
+    return bpart;
+}
+
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(
+    jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val,
+    enum jl_partition_kind constant_kind)
+{
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    jl_binding_partition_t *bpart = jl_declare_constant_val3(b, mod, var, val, constant_kind, new_world);
+    if (bpart->min_world == new_world)
+        jl_atomic_store_release(&jl_world_counter, new_world);
+    JL_UNLOCK(&world_counter_lock);
     return bpart;
 }
 
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val)
 {
-    return jl_declare_constant_val2(b, mod, var, val, BINDING_KIND_CONST);
+    return jl_declare_constant_val2(b, mod, var, val, val ? BINDING_KIND_CONST : BINDING_KIND_UNDEF_CONST);
 }
 
 JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val)
@@ -870,6 +890,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     else if (head == jl_using_sym) {
         jl_sym_t *name = NULL;
         jl_module_t *from = eval_import_from(m, ex, "using");
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         size_t i = 0;
         if (from) {
             i = 1;
@@ -909,6 +930,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                     jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
                     name = NULL;
                     jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "using");
+                    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
                     assert(name);
                     check_macro_rename(name, asname, "using");
                     // `using A: B as C` syntax
@@ -920,11 +942,13 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 "syntax: malformed \"using\" statement");
         }
         JL_GC_POP();
+        ct->world_age = last_age;
         return jl_nothing;
     }
     else if (head == jl_import_sym) {
         jl_sym_t *name = NULL;
         jl_module_t *from = eval_import_from(m, ex, "import");
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         size_t i = 0;
         if (from) {
             i = 1;
@@ -968,6 +992,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 "syntax: malformed \"import\" statement");
         }
         JL_GC_POP();
+        ct->world_age = last_age;
         return jl_nothing;
     }
     else if (head == jl_export_sym || head == jl_public_sym) {
@@ -1049,12 +1074,12 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
         mfunc = jl_method_instance_for_thunk(thk, m);
-        jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
+        jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, 0);
         // Don't infer blocks containing e.g. method definitions, since it's probably not worthwhile.
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
-            (void)jl_type_infer(mfunc, world, SOURCE_MODE_NOT_REQUIRED);
+            (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
         ct->world_age = last_age;
@@ -1063,7 +1088,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         // use interpreter
         assert(thk);
         if (has_opaque) {
-            jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
+            jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, 0);
         }
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
@@ -1137,20 +1162,6 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     assert(v);
     return v;
 }
-
-JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
-{
-    jl_method_instance_t *li = jl_method_instance_for_thunk(thk, m);
-    JL_GC_PUSH1(&li);
-    jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
-    jl_task_t *ct = jl_current_task;
-    jl_code_instance_t *ci = jl_type_infer(li, ct->world_age, SOURCE_MODE_NOT_REQUIRED);
-    JL_GC_POP();
-    if (ci)
-        return ci->rettype;
-    return (jl_value_t*)jl_any_type;
-}
-
 
 //------------------------------------------------------------------------------
 // Code loading: combined parse+eval for include()
