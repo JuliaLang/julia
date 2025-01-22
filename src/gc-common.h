@@ -25,6 +25,31 @@ extern "C" {
 #endif
 
 // =========================================================================== //
+// GC Big objects
+// =========================================================================== //
+
+JL_EXTENSION typedef struct _bigval_t {
+    struct _bigval_t *next;
+    struct _bigval_t *prev;
+    size_t sz;
+#ifdef _P64 // Add padding so that the value is 64-byte aligned
+    // (8 pointers of 8 bytes each) - (4 other pointers in struct)
+    void *_padding[8 - 4];
+#else
+    // (16 pointers of 4 bytes each) - (4 other pointers in struct)
+    void *_padding[16 - 4];
+#endif
+    //struct jl_taggedvalue_t <>;
+    union {
+        uintptr_t header;
+        struct {
+            uintptr_t gc:2;
+        } bits;
+    };
+    // must be 64-byte aligned here, in 32 & 64 bit modes
+} bigval_t;
+
+// =========================================================================== //
 // GC Callbacks
 // =========================================================================== //
 
@@ -60,12 +85,6 @@ extern jl_gc_callback_list_t *gc_cblist_notify_gc_pressure;
 // =========================================================================== //
 // malloc wrappers, aligned allocation
 // =========================================================================== //
-
-// data structure for tracking malloc'd genericmemory.
-typedef struct _mallocmemory_t {
-    jl_genericmemory_t *a; // lowest bit is tagged if this is aligned memory
-    struct _mallocmemory_t *next;
-} mallocmemory_t;
 
 #if defined(_OS_WINDOWS_)
 STATIC_INLINE void *jl_malloc_aligned(size_t sz, size_t align)
@@ -192,5 +211,15 @@ extern jl_ptls_t* gc_all_tls_states;
 // =========================================================================== //
 
 extern int gc_logging_enabled;
+
+// =========================================================================== //
+// MISC
+// =========================================================================== //
+
+// number of stacks to always keep available per pool
+#define MIN_STACK_MAPPINGS_PER_POOL 5
+
+void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
+void sweep_mtarraylist_buffers(void) JL_NOTSAFEPOINT;
 
 #endif // JL_GC_COMMON_H

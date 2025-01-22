@@ -352,34 +352,6 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     abort();
 }
 
-JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *ptid)
-{
-    size_t off = 0;
-#ifndef _OS_WINDOWS_
-    jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    if (ptls0->root_task == task) {
-        // See jl_init_root_task(). The root task of the main thread
-        // has its buffer enlarged by an artificial 3000000 bytes, but
-        // that means that the start of the buffer usually points to
-        // inaccessible memory. We need to correct for this.
-        off = ROOT_TASK_STACK_ADJUSTMENT;
-    }
-#endif
-    jl_ptls_t ptls2 = task->ptls;
-    *ptid = -1;
-    if (ptls2) {
-        *ptid = jl_atomic_load_relaxed(&task->tid);
-#ifdef COPY_STACKS
-        if (task->ctx.copy_stack) {
-            *size = ptls2->stacksize;
-            return (char *)ptls2->stackbase - *size;
-        }
-#endif
-    }
-    *size = task->ctx.bufsz - off;
-    return (void *)((char *)task->ctx.stkbuf + off);
-}
-
 JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
                                        char **active_start, char **active_end,
                                        char **total_start, char **total_end)
@@ -541,7 +513,6 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     jl_set_pgcstack(&t->gcstack);
     jl_signal_fence();
     lastt->ptls = NULL;
-    fegetenv(&lastt->fenv);
 #ifdef MIGRATE_TASKS
     ptls->previous_task = lastt;
 #endif
@@ -734,7 +705,6 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
            0 == ptls->finalizers_inhibited);
     ptls->finalizers_inhibited = finalizers_inhibited;
     jl_timing_block_task_enter(ct, ptls, blk); (void)blk;
-    fesetenv(&ct->fenv);
 
     sig_atomic_t other_defer_signal = ptls->defer_signal;
     ptls->defer_signal = defer_signal;
@@ -1147,7 +1117,6 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->excstack = NULL;
     t->ctx.started = 0;
     t->priority = 0;
-    fegetenv(&t->fenv);
     jl_atomic_store_relaxed(&t->tid, -1);
     t->threadpoolid = ct->threadpoolid;
     t->ptls = NULL;
@@ -1254,7 +1223,6 @@ CFI_NORETURN
     if (!pt->sticky && !pt->ctx.copy_stack)
         jl_atomic_store_release(&pt->tid, -1);
 #endif
-    fesetenv(&ct->fenv);
 
     ct->ctx.started = 1;
     if (ct->metrics_enabled) {

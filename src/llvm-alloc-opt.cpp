@@ -752,11 +752,11 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
                 call->eraseFromParent();
                 return;
             }
-            //if (pass.gc_loaded_func == callee) {
-            //    call->replaceAllUsesWith(new_i);
-            //    call->eraseFromParent();
-            //    return;
-            //}
+            if (pass.gc_loaded_func == callee) {
+                // TODO: handle data pointer forwarding, length forwarding, and fence removal
+                user->replaceUsesOfWith(orig_i, Constant::getNullValue(orig_i->getType()));
+                return;
+            }
             if (pass.typeof_func == callee) {
                 ++RemovedTypeofs;
                 call->replaceAllUsesWith(tag);

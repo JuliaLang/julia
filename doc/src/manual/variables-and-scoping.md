@@ -64,7 +64,7 @@ The constructs introducing scope blocks are:
 | Construct | Scope Type Introduced | Scope Types Able to Contain Construct |
 |:----------|:----------------------|:--------------------------------------|
 | [`module`](@ref), [`baremodule`](@ref) | global | global |
-| [`struct`](@ref) | local (soft) | global |
+| [`struct`](@ref) | local (hard) | global |
 | [`macro`](@ref) | local (hard) | global |
 | [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
 | [`function`](@ref), [`do`](@ref), [`let`](@ref), [comprehensions](@ref man-comprehensions), [generators](@ref man-generators) | local (hard) | global, local |
@@ -169,10 +169,10 @@ that location:
 1. **Existing local:** If `x` is *already a local variable*, then the existing local `x` is
    assigned;
 2. **Hard scope:** If `x` is *not already a local variable* and assignment occurs inside of any
-   hard scope construct (i.e. within a `let` block, function or macro body, comprehension, or
+   hard scope construct (i.e. within a `let` block, function, struct or macro body, comprehension, or
    generator), a new local named `x` is created in the scope of the assignment;
 3. **Soft scope:** If `x` is *not already a local variable* and all of the scope constructs
-   containing the assignment are soft scopes (loops, `try`/`catch` blocks, or `struct` blocks), the
+   containing the assignment are soft scopes (loops, `try`/`catch` blocks), the
    behavior depends on whether the global variable `x` is defined:
    * if global `x` is *undefined*, a new local named `x` is created in the scope of the
      assignment;

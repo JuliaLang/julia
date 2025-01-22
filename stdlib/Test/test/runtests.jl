@@ -870,12 +870,12 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
             end
         end'`), stderr=devnull), String)
     @test occursin(r"""
-        Test Summary: | Pass  Fail  Total  Time
-        Foo Tests     |    2     2      4  \s*\d*.\ds
-          Animals     |    1     1      2  \s*\d*.\ds
-            Felines   |    1            1  \s*\d*.\ds
-            Canines   |          1      1  \s*\d*.\ds
-          Arrays      |    1     1      2  \s*\d*.\ds
+        Test Summary: \| Pass  Fail  Total +Time
+        Foo Tests     \|    2     2      4  \s*\d*\.\ds
+          Animals     \|    1     1      2  \s*\d*\.\ds
+            Felines   \|    1            1  \s*\d*\.\ds
+            Canines   \|          1      1  \s*\d*\.\ds
+          Arrays      \|    1     1      2  \s*\d*\.\ds
         """, msg)
 end
 
@@ -1253,17 +1253,17 @@ end
 
 @testset "verbose option" begin
     expected = r"""
-    Test Summary:             | Pass  Total  Time
-    Parent                    |    9      9  \s*\d*.\ds
-      Child 1                 |    3      3  \s*\d*.\ds
-        Child 1.1 (long name) |    1      1  \s*\d*.\ds
-        Child 1.2             |    1      1  \s*\d*.\ds
-        Child 1.3             |    1      1  \s*\d*.\ds
-      Child 2                 |    3      3  \s*\d*.\ds
-      Child 3                 |    3      3  \s*\d*.\ds
-        Child 3.1             |    1      1  \s*\d*.\ds
-        Child 3.2             |    1      1  \s*\d*.\ds
-        Child 3.3             |    1      1  \s*\d*.\ds
+    Test Summary:             \| Pass  Total +Time
+    Parent                    \|    9      9  \s*\d*\.\ds
+      Child 1                 \|    3      3  \s*\d*\.\ds
+        Child 1\.1 \(long name\) \|    1      1  \s*\d*\.\ds
+        Child 1\.2             \|    1      1  \s*\d*\.\ds
+        Child 1\.3             \|    1      1  \s*\d*\.\ds
+      Child 2                 \|    3      3  \s*\d*\.\ds
+      Child 3                 \|    3      3  \s*\d*\.\ds
+        Child 3\.1             \|    1      1  \s*\d*\.\ds
+        Child 3\.2             \|    1      1  \s*\d*\.\ds
+        Child 3\.3             \|    1      1  \s*\d*\.\ds
     """
 
     mktemp() do f, _
@@ -1324,9 +1324,9 @@ end
 @testset "failfast option" begin
     @testset "non failfast (default)" begin
         expected = r"""
-        Test Summary: | Pass  Fail  Error  Total  Time
-        Foo           |    1     2      1      4  \s*\d*.\ds
-          Bar         |    1     1             2  \s*\d*.\ds
+        Test Summary: \| Pass  Fail  Error  Total +Time
+        Foo           \|    1     2      1      4  \s*\d*\.\ds
+          Bar         \|    1     1             2  \s*\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1350,8 +1350,8 @@ end
     end
     @testset "failfast" begin
         expected = r"""
-        Test Summary: | Fail  Total  Time
-        Foo           |    1      1  \s*\d*.\ds
+        Test Summary: \| Fail  Total +Time
+        Foo           \|    1      1  \s*\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1375,9 +1375,9 @@ end
     end
     @testset "failfast passes to child testsets" begin
         expected = r"""
-        Test Summary: | Fail  Total  Time
-        PackageName   |    1      1  \s*\d*.\ds
-          1           |    1      1  \s*\d*.\ds
+        Test Summary: \| Fail  Total +Time
+        Foo           \|    1      1  \s*\d*\.\ds
+          1           \|    1      1  \s*\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1401,8 +1401,8 @@ end
     end
     @testset "failfast via env var" begin
         expected = r"""
-        Test Summary: | Fail  Total  Time
-        Foo           |    1      1  \s*\d*.\ds
+        Test Summary: \| Fail  Total +Time
+        Foo           \|    1      1  \s*\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1712,13 +1712,13 @@ end
 
         # this tests both the `TestCounts` parts as well as the fallback `x`s
         expected = r"""
-                    Test Summary: | Pass  Fail  Error  Broken  Total  Time
-                    outer         |    3     1      1       1      6  \s*\d*.\ds
-                      a           |    1                           1  \s*\d*.\ds
-                      custom      |    1     1      1       1      4  \s*?s
-                      no-record   |    x     x      x       x      ?  \s*?s
-                      b           |    1                           1  \s*\d*.\ds
-                    ERROR: Some tests did not pass: 3 passed, 1 failed, 1 errored, 1 broken.
+                    Test Summary: \| Pass  Fail  Error  Broken  Total +Time
+                    outer         \|    3     1      1       1      6  \s*\d*.\ds
+                      a           \|    1                           1  \s*\d*.\ds
+                      custom      \|    1     1      1       1      4  \s*\?s
+                      no-record   \|    x     x      x       x      \?  \s*\?s
+                      b           \|    1                           1  \s*\d*.\ds
+                    RNG of the outermost testset: .*
                     """
 
         cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
@@ -1751,5 +1751,22 @@ module M54082 end
             @test_throws UndefVarError(:var, Main) M54082.var
         end
         @test only(result) isa Test.Fail
+    end
+end
+
+@testset "Set RNG of testset" begin
+    rng1 = Xoshiro(0x2e026445595ed28e, 0x07bb81ac4c54926d, 0x83d7d70843e8bad6, 0xdbef927d150af80b, 0xdbf91ddf2534f850)
+    rng2 = Xoshiro(0xc380f460355639ee, 0xb39bc754b7d63bbf, 0x1551dbcfb5ed5668, 0x71ab5a18fec21a25, 0x649d0c1be1ca5436)
+    rng3 = Xoshiro(0xee97f5b53f7cdc49, 0x480ac387b0527d3d, 0x614b416502a9e0f5, 0x5250cb36e4a4ceb1, 0xed6615c59e475fa0)
+
+    @testset rng=rng1 begin
+        @test rand() == rand(rng1)
+    end
+
+    @testset rng=rng2 "Outer" begin
+        @test rand() == rand(rng2)
+        @testset rng=rng3 "Inner: $(i)" for i in 1:10
+            @test rand() == rand(rng3)
+        end
     end
 end

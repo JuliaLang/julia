@@ -149,10 +149,33 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
                 // Use system mutexes rather than spin locking to minimize wasted CPU time
                 // while we wait for other threads reach a safepoint.
                 // This is particularly important when run under rr.
-                uv_mutex_lock(&safepoint_lock);
-                if (!jl_atomic_load_relaxed(&ptls2->gc_state))
-                    uv_cond_wait(&safepoint_cond_begin, &safepoint_lock);
-                uv_mutex_unlock(&safepoint_lock);
+                if (jl_options.timeout_for_safepoint_straggler_s == -1) { // timeout was not specified: no need to dump the backtrace
+                    uv_mutex_lock(&safepoint_lock);
+                    if (!jl_atomic_load_relaxed(&ptls2->gc_state)) {
+                        uv_cond_wait(&safepoint_cond_begin, &safepoint_lock);
+                    }
+                    uv_mutex_unlock(&safepoint_lock);
+                }
+                else {
+                    const int64_t timeout = jl_options.timeout_for_safepoint_straggler_s * 1000000000; // convert to nanoseconds
+                    int ret = 0;
+                    uv_mutex_lock(&safepoint_lock);
+                    if (!jl_atomic_load_relaxed(&ptls2->gc_state)) {
+                        ret = uv_cond_timedwait(&safepoint_cond_begin, &safepoint_lock, timeout);
+                    }
+                    uv_mutex_unlock(&safepoint_lock);
+                    // If we woke up because of a timeout, print the backtrace of the straggler
+                    if (ret == UV_ETIMEDOUT) {
+                        jl_safe_printf("===== Thread %d failed to reach safepoint after %d seconds, printing backtrace below =====\n", ptls2->tid + 1, jl_options.timeout_for_safepoint_straggler_s);
+                        // Try to record the backtrace of the straggler using `jl_try_record_thread_backtrace`
+                        jl_ptls_t ptls = jl_current_task->ptls;
+                        size_t bt_size = jl_try_record_thread_backtrace(ptls2, ptls->bt_data, JL_MAX_BT_SIZE);
+                        // Print the backtrace of the straggler
+                        for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(ptls->bt_data + i)) {
+                            jl_print_bt_entry_codeloc(ptls->bt_data + i);
+                        }
+                    }
+                }
             }
         }
     }

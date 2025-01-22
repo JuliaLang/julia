@@ -27,9 +27,9 @@ commonly passed in registers when using C or Julia calling conventions.
 The syntax for [`@ccall`](@ref) to generate a call to the library function is:
 
 ```julia
-  @ccall library.function_name(argvalue1::argtype1, ...)::returntype
-  @ccall function_name(argvalue1::argtype1, ...)::returntype
-  @ccall $function_pointer(argvalue1::argtype1, ...)::returntype
+@ccall library.function_name(argvalue1::argtype1, ...)::returntype
+@ccall function_name(argvalue1::argtype1, ...)::returntype
+@ccall $function_pointer(argvalue1::argtype1, ...)::returntype
 ```
 
 where `library` is a string constant or literal (but see [Non-constant Function
@@ -825,7 +825,7 @@ Instead define a [`Base.cconvert`](@ref) method and pass the variables directly 
 automatically arranges that all of its arguments will be preserved from garbage collection until
 the call returns. If a C API will store a reference to memory allocated by Julia, after the `@ccall`
 returns, you must ensure that the object remains visible to the garbage collector. The suggested
-way to do this is to make a global variable of type `Array{Ref,1}` to hold these values until
+way to do this is to make a global variable of type `Vector{Ref}` to hold these values until
 the C library notifies you that it is finished with them.
 
 Whenever you have created a pointer to Julia data, you must ensure the original data exists until

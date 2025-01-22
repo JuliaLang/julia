@@ -91,6 +91,12 @@ include("osutils.jl")
 include("io.jl")
 include("iobuffer.jl")
 
+# Concurrency (part 1)
+include("linked_list.jl")
+include("condition.jl")
+include("threads.jl")
+include("lock.jl")
+
 # strings & printing
 include("intfuncs.jl")
 include("strings/strings.jl")
@@ -116,12 +122,6 @@ include("missing.jl")
 
 # version
 include("version.jl")
-
-# Concurrency (part 1)
-include("linked_list.jl")
-include("condition.jl")
-include("threads.jl")
-include("lock.jl")
 
 # system & environment
 include("sysinfo.jl")
@@ -262,6 +262,7 @@ include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
 include("linking.jl")
+include("staticdata.jl")
 include("loading.jl")
 
 # misc useful functions & macros
@@ -400,6 +401,7 @@ end
 # we know whether the .ji can just give the Base copy or not.
 # TODO: We may want to do this earlier to avoid TOCTOU issues.
 const _compiler_require_dependencies = Any[]
+@Core.latestworld
 for i = 1:length(_included_files)
     isassigned(_included_files, i) || continue
     (mod, file) = _included_files[i]

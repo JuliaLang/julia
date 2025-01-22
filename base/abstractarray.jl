@@ -828,7 +828,6 @@ similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, 
 # define this method to convert supported axes to Ints, with the expectation that an offset array
 # package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
-similar(a::AbstractArray, ::Type{T}, dims::Tuple{Integer, Vararg{Integer}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
 
@@ -2190,48 +2189,8 @@ true
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray...) = typed_hvcat(promote_eltype(xs...), rows, xs...)
 hvcat(rows::Tuple{Vararg{Int}}, xs::AbstractArray{T}...) where {T} = typed_hvcat(T, rows, xs...)
 
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T
-    nbr = length(rows)  # number of block rows
-
-    nc = 0
-    for i=1:rows[1]
-        nc += size(as[i],2)
-    end
-
-    nr = 0
-    a = 1
-    for i = 1:nbr
-        nr += size(as[a],1)
-        a += rows[i]
-    end
-
-    out = similar(as[1], T, nr, nc)
-
-    a = 1
-    r = 1
-    for i = 1:nbr
-        c = 1
-        szi = size(as[a],1)
-        for j = 1:rows[i]
-            Aj = as[a+j-1]
-            szj = size(Aj,2)
-            if size(Aj,1) != szi
-                throw(DimensionMismatch("mismatched height in block row $(i) (expected $szi, got $(size(Aj,1)))"))
-            end
-            if c-1+szj > nc
-                throw(DimensionMismatch("block row $(i) has mismatched number of columns (expected $nc, got $(c-1+szj))"))
-            end
-            out[r:r-1+szi, c:c-1+szj] = Aj
-            c += szj
-        end
-        if c != nc+1
-            throw(DimensionMismatch("block row $(i) has mismatched number of columns (expected $nc, got $(c-1))"))
-        end
-        r += szi
-        a += rows[i]
-    end
-    out
-end
+rows_to_dimshape(rows::Tuple{Vararg{Int}}) = all(==(rows[1]), rows) ? (length(rows), rows[1]) : (rows, (sum(rows),))
+typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as::AbstractVecOrMat...) where T = typed_hvncat(T, rows_to_dimshape(rows), true, as...)
 
 hvcat(rows::Tuple{Vararg{Int}}) = []
 typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}) where {T} = Vector{T}()
@@ -2289,16 +2248,7 @@ function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, xs::Number...) where T
     hvcat_fill!(Matrix{T}(undef, nr, nc), xs)
 end
 
-function typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T
-    nbr = length(rows)  # number of block rows
-    rs = Vector{Any}(undef, nbr)
-    a = 1
-    for i = 1:nbr
-        rs[i] = typed_hcat(T, as[a:a-1+rows[i]]...)
-        a += rows[i]
-    end
-    T[rs...;]
-end
+typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T = typed_hvncat(T, rows_to_dimshape(rows), true, as...)
 
 ## N-dimensional concatenation ##
 
@@ -2646,7 +2596,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         throw(DimensionMismatch("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
     # copy into final array
-    A = cat_similar(as[1], T, outdims)
+    A = cat_similar(as[1], T, ntuple(i -> outdims[i], N))
     # @assert all(==(0), currentdims)
     outdims .= 0
     hvncat_fill!(A, currentdims, outdims, d1, d2, as)
@@ -2740,7 +2690,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     # @assert all(==(0), blockcounts)
 
     # copy into final array
-    A = cat_similar(as[1], T, outdims)
+    A = cat_similar(as[1], T, ntuple(i -> outdims[i], nd))
     hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
     return A
 end
@@ -3504,10 +3454,31 @@ julia> map!(+, zeros(Int, 5), 100:999, 1:3)
 ```
 """
 function map!(f::F, dest::AbstractArray, As::AbstractArray...) where {F}
-    isempty(As) && throw(ArgumentError(
-        """map! requires at least one "source" argument"""))
+    @assert !isempty(As) # should dispatch to map!(f, A)
     map_n!(f, dest, As)
 end
+
+"""
+    map!(function, array)
+
+Like [`map`](@ref), but stores the result in the same array.
+!!! compat "Julia 1.12"
+    This method requires Julia 1.12 or later. To support previous versions too,
+    use the equivalent `map!(function, array, array)`.
+
+# Examples
+```jldoctest
+julia> a = [1 2 3; 4 5 6];
+
+julia> map!(x -> x^3, a);
+
+julia> a
+2×3 Matrix{$Int}:
+  1    8   27
+ 64  125  216
+```
+"""
+map!(f::F, inout::AbstractArray) where F = map!(f, inout, inout)
 
 """
     map(f, A::AbstractArray...) -> N-array

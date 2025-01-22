@@ -1280,17 +1280,20 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         sv = try
             if ocachepath !== nothing
                 @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachepath, depmods, false, pkg.name, ignore_native)
+                ccall(:jl_restore_package_image_from_file, Ref{SimpleVector}, (Cstring, Any, Cint, Cstring, Cint),
+                    ocachepath, depmods, #=completeinfo=#false, pkg.name, ignore_native)
             else
                 @debug "Loading cache file $path for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), path, depmods, false, pkg.name)
+                ccall(:jl_restore_incremental, Ref{SimpleVector}, (Cstring, Any, Cint, Cstring),
+                    path, depmods, #=completeinfo=#false, pkg.name)
             end
         finally
             lock(require_lock)
         end
-        if isa(sv, Exception)
-            return sv
-        end
+
+        edges = sv[3]::Vector{Any}
+        ext_edges = sv[4]::Union{Nothing,Vector{Any}}
+        StaticData.insert_backedges(edges, ext_edges)
 
         restored = register_restored_modules(sv, pkg, path)
 
@@ -1828,7 +1831,7 @@ function compilecache_path(pkg::PkgId;
     path = nothing
     isnothing(sourcepath) && error("Cannot locate source for $(repr("text/plain", pkg))")
     for path_to_try in cachepaths
-        staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true, requested_flags=flags)
+        staledeps = stale_cachefile(sourcepath, path_to_try; ignore_loaded, requested_flags=flags)
         if staledeps === true
             continue
         end
@@ -2361,6 +2364,18 @@ function require(into::Module, mod::Symbol)
     return invoke_in_world(world, __require, into, mod)
 end
 
+function check_for_hint(into, mod)
+    return begin
+        if isdefined(into, mod) && getfield(into, mod) isa Module
+            true, "."
+        elseif isdefined(parentmodule(into), mod) && getfield(parentmodule(into), mod) isa Module
+            true, ".."
+        else
+            false, ""
+        end
+    end
+end
+
 function __require(into::Module, mod::Symbol)
     if into === __toplevel__ && generating_output(#=incremental=#true)
         error("`using/import $mod` outside of a Module detected. Importing a package outside of a module \
@@ -2374,15 +2389,7 @@ function __require(into::Module, mod::Symbol)
         if uuidkey_env === nothing
             where = PkgId(into)
             if where.uuid === nothing
-                hint, dots = begin
-                    if isdefined(into, mod) && getfield(into, mod) isa Module
-                        true, "."
-                    elseif isdefined(parentmodule(into), mod) && getfield(parentmodule(into), mod) isa Module
-                        true, ".."
-                    else
-                        false, ""
-                    end
-                end
+                hint, dots = invokelatest(check_for_hint, into, mod)
                 hint_message = hint ? ", maybe you meant `import/using $(dots)$(mod)`" : ""
                 install_message = if mod != :Pkg
                     start_sentence = hint ? "Otherwise, run" : "Run"
@@ -2649,7 +2656,7 @@ function __require_prelocked(pkg::PkgId, env)
                 parallel_precompile_attempted = true
                 unlock(require_lock)
                 try
-                    Precompilation.precompilepkgs([pkg.name]; _from_loading=true)
+                    Precompilation.precompilepkgs([pkg.name]; _from_loading=true, ignore_loaded=false)
                 finally
                     lock(require_lock)
                 end
@@ -4198,7 +4205,7 @@ function precompile(@nospecialize(argt::Type))
 end
 
 # Variants that work for `invoke`d calls for which the signature may not be sufficient
-precompile(mi::Core.MethodInstance, world::UInt=get_world_counter()) =
+precompile(mi::MethodInstance, world::UInt=get_world_counter()) =
     (ccall(:jl_compile_method_instance, Cvoid, (Any, Ptr{Cvoid}, UInt), mi, C_NULL, world); return true)
 
 """
@@ -4214,7 +4221,7 @@ end
 
 function precompile(@nospecialize(argt::Type), m::Method)
     atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
-    mi = Core.Compiler.specialize_method(m, atype, sparams)
+    mi = Base.Compiler.specialize_method(m, atype, sparams)
     return precompile(mi)
 end
 

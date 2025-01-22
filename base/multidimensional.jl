@@ -1313,16 +1313,16 @@ See also: [`circshift`](@ref).
 # Examples
 ```julia-repl
 julia> src = reshape(Vector(1:16), (4,4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
-julia> dest = OffsetArray{Int}(undef, (0:3,2:5))
+julia> dest = OffsetArray{Int}(undef, (0:3,2:5));
 
 julia> circcopy!(dest, src)
-OffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:
+4×4 OffsetArray(::Matrix{Int64}, 0:3, 2:5) with eltype Int64 with indices 0:3×2:5:
  8  12  16  4
  5   9  13  1
  6  10  14  2

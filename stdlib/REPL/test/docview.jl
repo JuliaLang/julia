@@ -92,6 +92,9 @@ end
     @test endswith(get_help_standard("StructWithOneField.not_a_field"), "StructWithOneField` has field `field1`.\n")
     @test endswith(get_help_standard("StructWithTwoFields.not_a_field"), "StructWithTwoFields` has fields `field1`, and `field2`.\n")
     @test endswith(get_help_standard("StructWithThreeFields.not_a_field"), "StructWithThreeFields` has fields `field1`, `field2`, and `field3`.\n")
+
+    # Shouldn't error if the struct doesn't have any field documentations at all.
+    @test endswith(get_help_standard("Int.not_a_field"), "`$Int` has no fields.\n")
 end
 
 module InternalWarningsTests

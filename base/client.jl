@@ -299,7 +299,7 @@ function exec_options(opts)
         elseif cmd == 'm'
             entrypoint = push!(split(arg, "."), "main")
             Base.eval(Main, Expr(:import, Expr(:., Symbol.(entrypoint)...)))
-            if !should_use_main_entrypoint()
+            if !invokelatest(should_use_main_entrypoint)
                 error("`main` in `$arg` not declared as entry point (use `@main` to do so)")
             end
             return false
@@ -408,8 +408,7 @@ function load_InteractiveUtils(mod::Module=Main)
             return nothing
         end
     end
-    Core.eval(mod, :(using Base.MainInclude.InteractiveUtils))
-    return MainInclude.InteractiveUtils
+    return Core.eval(mod, :(using Base.MainInclude.InteractiveUtils; Base.MainInclude.InteractiveUtils))
 end
 
 function load_REPL()
@@ -556,11 +555,12 @@ function _start()
     local ret = 0
     try
         repl_was_requested = exec_options(JLOptions())
-        if should_use_main_entrypoint() && !is_interactive
+        if invokelatest(should_use_main_entrypoint) && !is_interactive
+            main = invokelatest(getglobal, Main, :main)
             if Base.generating_output()
-                precompile(Main.main, (typeof(ARGS),))
+                precompile(main, (typeof(ARGS),))
             else
-                ret = invokelatest(Main.main, ARGS)
+                ret = invokelatest(main, ARGS)
             end
         elseif (repl_was_requested || is_interactive)
             # Run the Base `main`, which will either load the REPL stdlib

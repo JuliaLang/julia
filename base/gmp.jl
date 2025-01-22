@@ -174,8 +174,8 @@ end
 
 invert!(x::BigInt, a::BigInt, b::BigInt) =
     ccall((:__gmpz_invert, libgmp), Cint, (mpz_t, mpz_t, mpz_t), x, a, b)
-invert(a::BigInt, b::BigInt) = invert!(BigInt(), a, b)
 invert!(x::BigInt, b::BigInt) = invert!(x, x, b)
+invert(a::BigInt, b::BigInt) = (ret=BigInt(); invert!(ret, a, b); ret)
 
 for op in (:add_ui, :sub_ui, :mul_ui, :mul_2exp, :fdiv_q_2exp, :pow_ui, :bin_ui)
     op! = Symbol(op, :!)
@@ -264,8 +264,6 @@ end
 
 limbs_write!(x::BigInt, a) = ccall((:__gmpz_limbs_write, libgmp), Ptr{Limb}, (mpz_t, Clong), x, a)
 limbs_finish!(x::BigInt, a) = ccall((:__gmpz_limbs_finish, libgmp), Cvoid, (mpz_t, Clong), x, a)
-import!(x::BigInt, a, b, c, d, e, f) = ccall((:__gmpz_import, libgmp), Cvoid,
-    (mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}), x, a, b, c, d, e, f)
 
 setbit!(x, a) = (ccall((:__gmpz_setbit, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
 tstbit(a::BigInt, b) = ccall((:__gmpz_tstbit, libgmp), Cint, (mpz_t, bitcnt_t), a, b) % Bool

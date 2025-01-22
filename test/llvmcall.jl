@@ -157,7 +157,7 @@ module ObjLoadTest
         nothing
     end
     @test_throws(ErrorException("@ccallable was already defined for this method name"),
-                 @eval @ccallable Cvoid jl_the_callback(not_the_method::Int) = "other")
+            @eval @ccallable String jl_the_callback(not_the_method::Int) = "other")
     # Make sure everything up until here gets compiled
     @test jl_the_callback() === nothing
     @test jl_the_callback(1) == "other"

@@ -8,6 +8,7 @@ import ..REPL
 Base._track_dependencies[] = false
 try
     Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+    @Core.latestworld
     import .FakePTYs: open_fake_pty
 finally
     Base._track_dependencies[] = true

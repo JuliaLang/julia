@@ -78,7 +78,7 @@ out = read(`$echocmd hello` & `$echocmd world`, String)
 @test occursin("hello", out)
 @test read(pipeline(`$echocmd hello` & `$echocmd world`, sortcmd), String) == "hello\nworld\n"
 
-@test (run(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
+@test_warn r"[stdio passthrough ok]" run(pipeline(`$printfcmd "       \033[34m[stdio passthrough ok]\033[0m\n"`, stdout=stderr, stderr=stderr))
 
 # Test for SIGPIPE being a failure condition
 @test_throws ProcessFailedException run(pipeline(yescmd, `head`, devnull))
