@@ -84,10 +84,10 @@ function check_no_parameters(ex::SyntaxTree, msg)
     end
 end
 
-function check_no_assignment(exs)
+function check_no_assignment(exs, msg="misplaced assignment statement in `[ ... ]`")
     i = findfirst(kind(e) == K"=" for e in exs)
     if !isnothing(i)
-        throw(LoweringError(exs[i], "misplaced assignment statement in `[ ... ]`"))
+        throw(LoweringError(exs[i], msg))
     end
 end
 
@@ -3135,6 +3135,45 @@ function expand_wheres(ctx, ex)
     body
 end
 
+# Match implicit where parameters for `Foo{<:Bar}` ==> `Foo{T} where T<:Bar`
+function expand_curly(ctx, ex)
+    @assert kind(ex) == K"curly"
+    check_no_parameters(ex, "unexpected semicolon in type parameter list")
+    check_no_assignment(children(ex), "misplace assignment in type parameter list")
+
+    stmts = SyntaxList(ctx)
+    type_args = SyntaxList(ctx)
+    implicit_typevars = SyntaxList(ctx)
+
+    i = 1
+    for e in children(ex)
+        k = kind(e)
+        if (k == K"<:" || k == K">:") && numchildren(e) == 1
+            # `X{<:A}` and `X{>:A}`
+            name = @ast ctx e "#T$i"::K"Placeholder"
+            i += 1
+            typevar = k == K"<:" ?
+                bounds_to_TypeVar(ctx, e, (name, nothing, e[1])) :
+                bounds_to_TypeVar(ctx, e, (name, e[1], nothing))
+            arg = emit_assign_tmp(stmts, ctx, typevar)
+            push!(implicit_typevars, arg)
+        else
+            arg = e
+        end
+        push!(type_args, arg)
+    end
+
+    type = @ast ctx ex [K"call" "apply_type"::K"core" type_args...]
+    if !isempty(implicit_typevars)
+        type = @ast ctx ex [K"block"
+            stmts...
+            [K"where" type [K"_typevars" implicit_typevars...]]
+        ]
+    end
+
+    return type
+end
+
 #-------------------------------------------------------------------------------
 # Expand import / using / export
 
@@ -3446,14 +3485,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             ]
         )
     elseif k == K"curly"
-        check_no_parameters(ex, "unexpected semicolon in type parameter list")
-        for c in children(ex)
-            if kind(c) == K"="
-                throw(LoweringError(c, "misplace assignment in type parameter list"))
-            end
-        end
-        # TODO: implicit where parameters like T{A<:B}
-        expand_forms_2(ctx, @ast ctx ex [K"call" "apply_type"::K"core" children(ex)...])
+        expand_forms_2(ctx, expand_curly(ctx, ex))
     elseif k == K"toplevel"
         # The toplevel form can't be lowered here - it needs to just be quoted
         # and passed through to a call to eval.

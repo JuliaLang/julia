@@ -119,6 +119,71 @@ A where Y >: f()
 #            └─┘ ── expected type name
 
 ########################################
+# Simple type application
+X{A,B,C}
+#---------------------
+1   TestMod.X
+2   TestMod.A
+3   TestMod.B
+4   TestMod.C
+5   (call core.apply_type %₁ %₂ %₃ %₄)
+6   (return %₅)
+
+########################################
+# Type with implicit where param upper bound
+X{<:A}
+#---------------------
+1   TestMod.A
+2   (call core.TypeVar :#T1 %₁)
+3   TestMod.X
+4   (call core.apply_type %₃ %₂)
+5   (call core.UnionAll %₂ %₄)
+6   (return %₅)
+
+########################################
+# Type with implicit where param lower bound
+X{>:A}
+#---------------------
+1   TestMod.A
+2   (call core.TypeVar :#T1 %₁ core.Any)
+3   TestMod.X
+4   (call core.apply_type %₃ %₂)
+5   (call core.UnionAll %₂ %₄)
+6   (return %₅)
+
+########################################
+# Type with several implicit where params
+X{S, <:A, T, >:B}
+#---------------------
+1   TestMod.A
+2   (call core.TypeVar :#T1 %₁)
+3   TestMod.B
+4   (call core.TypeVar :#T2 %₃ core.Any)
+5   TestMod.X
+6   TestMod.S
+7   TestMod.T
+8   (call core.apply_type %₅ %₆ %₂ %₇ %₄)
+9   (call core.UnionAll %₄ %₈)
+10  (call core.UnionAll %₂ %₉)
+11  (return %₁₀)
+
+########################################
+# Error: parameters in type application
+X{S, T; W}
+#---------------------
+LoweringError:
+X{S, T; W}
+#     └─┘ ── unexpected semicolon in type parameter list
+
+########################################
+# Error: assignment in type application
+X{S, T=w}
+#---------------------
+LoweringError:
+X{S, T=w}
+#   └──┘ ── misplace assignment in type parameter list
+
+########################################
 # Simple abstract type definition
 abstract type A end
 #---------------------

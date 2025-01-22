@@ -2,6 +2,12 @@
 
 test_mod = Module(:TestMod)
 
+Base.eval(test_mod, :(struct XX{S,T,U,W} end))
+
+@test JuliaLowering.include_string(test_mod, """
+XX{Int, <:Integer, Float64, >:AbstractChar}
+""") == (test_mod.XX{Int, T, Float64, S} where {T <: Integer, S >: AbstractChar})
+
 @test JuliaLowering.include_string(test_mod, """
 abstract type A end
 """) === nothing
