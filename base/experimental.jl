@@ -134,7 +134,8 @@ parent module.
 Supported values are 0, 1, 2, and 3.
 
 This sets a lower-bound for optimization level, such that the effective optimization
-level, `o` is `@min_optlevel <= o <= @optlevel` and `--min-optlevel <= o <= -O`.
+level, `o` is `@min_optlevel <= o <= @optlevel`, overriding the defaults that come
+from the command line arguments: `--min-optlevel <= o <= -O`.
 
 NOTE: This min optimization level will only be applied to LLVM functions that are compiled
 from this module. If a function defined in this module is *inlined* into a function defined
