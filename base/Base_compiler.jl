@@ -159,7 +159,7 @@ end
     time_ns() -> UInt64
 
 Get the time in nanoseconds relative to some machine-specific arbitrary time in the past
-(which may change if the system is suspended or rebooted).
+(which may change if the system is rebooted or suspended).
 The primary use is for measuring the elapsed time during program execution.  The return value is guaranteed to
 be monotonic and is unaffected by clock drift or changes to local calendar time.
 
