@@ -902,7 +902,6 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, 
     runtime_nbits = 16; \
     float R = OP(A, B, C); \
     *(uint16_t*)pr = float_to_half(R); \
-    *(uint16_t*)pr = float_to_half(R); \
 }
 
 #define ter_intrinsic_bfloat(OP, name) \
