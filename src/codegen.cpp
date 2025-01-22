@@ -3282,24 +3282,7 @@ static bool local_var_occurs(jl_value_t *e, int sl)
     return false;
 }
 
-static std::set<int> assigned_in_try(jl_array_t *stmts, int s, long l)
-{
-    std::set<int> av;
-    for(int i=s; i < l; i++) {
-        jl_value_t *st = jl_array_ptr_ref(stmts,i);
-        if (jl_is_expr(st)) {
-            if (((jl_expr_t*)st)->head == jl_assign_sym) {
-                jl_value_t *ar = jl_exprarg(st, 0);
-                if (jl_is_slotnumber(ar)) {
-                    av.insert(jl_slot_number(ar)-1);
-                }
-            }
-        }
-    }
-    return av;
-}
-
-static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> &slots)
+static bool have_try_block(jl_array_t *stmts)
 {
     size_t slength = jl_array_dim0(stmts);
     for (int i = 0; i < (int)slength; i++) {
@@ -3308,17 +3291,36 @@ static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> 
             int last = jl_enternode_catch_dest(st);
             if (last == 0)
                 continue;
-            std::set<int> as = assigned_in_try(stmts, i + 1, last - 1);
-            for (int j = 0; j < (int)slength; j++) {
-                if (j < i || j > last) {
-                    std::set<int>::iterator it = as.begin();
-                    for (; it != as.end(); it++) {
-                        if (local_var_occurs(jl_array_ptr_ref(stmts, j), *it)) {
-                            jl_varinfo_t &vi = slots[*it];
-                            vi.isVolatile = true;
-                        }
-                    }
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// conservative marking of all variables potentially used after a catch block that were assigned before it
+static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> &slots, const std::set<int> &bbstarts)
+{
+    if (!have_try_block(stmts))
+        return;
+    size_t slength = jl_array_dim0(stmts);
+    BitVector assigned_in_block(slots.size()); // conservatively only ignore slots assigned in the same basic block
+    for (int j = 0; j < (int)slength; j++) {
+        if (bbstarts.count(j + 1))
+            assigned_in_block.reset();
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, j);
+        if (jl_is_expr(stmt)) {
+            jl_expr_t *e = (jl_expr_t*)stmt;
+            if (e->head == jl_assign_sym) {
+                jl_value_t *l = jl_exprarg(e, 0);
+                if (jl_is_slotnumber(l)) {
+                    assigned_in_block.set(jl_slot_number(l)-1);
                 }
+            }
+        }
+        for (int slot = 0; slot < (int)slots.size(); slot++) {
+            if (!assigned_in_block.test(slot) && local_var_occurs(stmt, slot)) {
+                jl_varinfo_t &vi = slots[slot];
+                vi.isVolatile = true;
             }
         }
     }
@@ -8439,7 +8441,6 @@ static jl_llvm_functions_t
     ctx.code = src->code;
     ctx.source = src;
 
-    std::map<int, BasicBlock*> labels;
     ctx.module = jl_is_method(lam->def.method) ? lam->def.method->module : lam->def.module;
     ctx.linfo = lam;
     ctx.name = name_from_method_instance(lam);
@@ -8498,6 +8499,49 @@ static jl_llvm_functions_t
     bool debug_enabled = ctx.emission_context.params->debug_info_level != 0;
     if (dbgFuncName.empty()) // Should never happen anymore?
         debug_enabled = false;
+
+    // First go through and collect all branch targets, so we know where to
+    // split basic blocks.
+    std::set<int> branch_targets; // 1-indexed, sorted
+    for (size_t i = 0; i < stmtslen; ++i) {
+        jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+        if (jl_is_gotoifnot(stmt)) {
+            int dest = jl_gotoifnot_label(stmt);
+            branch_targets.insert(dest);
+            // The next 1-indexed statement
+            branch_targets.insert(i + 2);
+        }
+        else if (jl_is_returnnode(stmt)) {
+            // We don't do dead branch elimination before codegen
+            // so we need to make sure to start a BB after any
+            // return node, even if they aren't otherwise branch
+            // targets.
+            if (i + 2 <= stmtslen)
+                branch_targets.insert(i + 2);
+        }
+        else if (jl_is_enternode(stmt)) {
+            branch_targets.insert(i + 1);
+            if (i + 2 <= stmtslen)
+                branch_targets.insert(i + 2);
+            size_t catch_dest = jl_enternode_catch_dest(stmt);
+            if (catch_dest)
+                branch_targets.insert(catch_dest);
+        }
+        else if (jl_is_gotonode(stmt)) {
+            int dest = jl_gotonode_label(stmt);
+            branch_targets.insert(dest);
+            if (i + 2 <= stmtslen)
+                branch_targets.insert(i + 2);
+        }
+        else if (jl_is_phinode(stmt)) {
+            jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(stmt, 0);
+            for (size_t j = 0; j < jl_array_nrows(edges); ++j) {
+                size_t edge = jl_array_data(edges, int32_t)[j];
+                if (edge == i)
+                    branch_targets.insert(i + 1);
+            }
+        }
+    }
 
     // step 2. process var-info lists to see what vars need boxing
     int n_ssavalues = jl_is_long(src->ssavaluetypes) ? jl_unbox_long(src->ssavaluetypes) : jl_array_nrows(src->ssavaluetypes);
@@ -8559,7 +8603,7 @@ static jl_llvm_functions_t
         simple_use_analysis(ctx, jl_array_ptr_ref(stmts, i));
 
     // determine which vars need to be volatile
-    mark_volatile_vars(stmts, ctx.slots);
+    mark_volatile_vars(stmts, ctx.slots, branch_targets);
 
     // step 4. determine function signature
     if (!specsig)
@@ -9310,8 +9354,8 @@ static jl_llvm_functions_t
 
     // step 11b. Do codegen in control flow order
     SmallVector<int, 0> workstack;
-    std::map<int, BasicBlock*> BB;
-    std::map<size_t, BasicBlock*> come_from_bb;
+    DenseMap<size_t, BasicBlock*> BB;
+    DenseMap<size_t, BasicBlock*> come_from_bb;
     int cursor = 0;
     int current_label = 0;
     auto find_next_stmt = [&] (int seq_next) {
@@ -9429,47 +9473,6 @@ static jl_llvm_functions_t
     }
 
     come_from_bb[0] = ctx.builder.GetInsertBlock();
-
-    // First go through and collect all branch targets, so we know where to
-    // split basic blocks.
-    std::set<int> branch_targets; // 1-indexed
-    {
-        for (size_t i = 0; i < stmtslen; ++i) {
-            jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-            if (jl_is_gotoifnot(stmt)) {
-                int dest = jl_gotoifnot_label(stmt);
-                branch_targets.insert(dest);
-                // The next 1-indexed statement
-                branch_targets.insert(i + 2);
-            } else if (jl_is_returnnode(stmt)) {
-                // We don't do dead branch elimination before codegen
-                // so we need to make sure to start a BB after any
-                // return node, even if they aren't otherwise branch
-                // targets.
-                if (i + 2 <= stmtslen)
-                    branch_targets.insert(i + 2);
-            } else if (jl_is_enternode(stmt)) {
-                branch_targets.insert(i + 1);
-                if (i + 2 <= stmtslen)
-                    branch_targets.insert(i + 2);
-                size_t catch_dest = jl_enternode_catch_dest(stmt);
-                if (catch_dest)
-                    branch_targets.insert(catch_dest);
-            } else if (jl_is_gotonode(stmt)) {
-                int dest = jl_gotonode_label(stmt);
-                branch_targets.insert(dest);
-                if (i + 2 <= stmtslen)
-                    branch_targets.insert(i + 2);
-            } else if (jl_is_phinode(stmt)) {
-                jl_array_t *edges = (jl_array_t*)jl_fieldref_noalloc(stmt, 0);
-                for (size_t j = 0; j < jl_array_nrows(edges); ++j) {
-                    size_t edge = jl_array_data(edges, int32_t)[j];
-                    if (edge == i)
-                        branch_targets.insert(i + 1);
-                }
-            }
-        }
-    }
 
     for (int label : branch_targets) {
         BasicBlock *bb = BasicBlock::Create(ctx.builder.getContext(),
