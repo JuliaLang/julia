@@ -134,25 +134,16 @@ end
 
 # When the function is side effect-free, we may avoid short-circuiting to help
 # vectorize the loop.
-function _any(::typeof(identity), itr::NTuple, ::Colon)
+function _any(::typeof(identity), itr::Tuple{Vararg{Bool}}, ::Colon)
     @_terminates_locally_meta
     r = false
-    anymissing = false
     for i in eachindex(itr)
         # Avoid bounds checking to help vectorization. Use `getfield` directly,
         # instead of `@inbounds itr[i]`, for better effects.
         v = getfield(itr, i, false)
-        if ismissing(v)
-            anymissing = true
-        else
-            r |= v::Bool
-        end
+        r |= v
     end
-    if r
-        true
-    else
-        anymissing ? missing : false
-    end
+    r
 end
 
 # Specialized versions of any(f, ::Tuple)
@@ -230,25 +221,16 @@ end
 
 # When the function is side effect-free, we may avoid short-circuiting to help
 # vectorize the loop.
-function _all(::typeof(identity), itr::NTuple, ::Colon)
+function _all(::typeof(identity), itr::Tuple{Vararg{Bool}}, ::Colon)
     @_terminates_locally_meta
     r = true
-    anymissing = false
     for i in eachindex(itr)
         # Avoid bounds checking to help vectorization. Use `getfield` directly,
         # instead of `@inbounds itr[i]`, for better effects.
         v = getfield(itr, i, false)
-        if ismissing(v)
-            anymissing = true
-        else
-            r &= v::Bool
-        end
+        r &= v
     end
-    if r
-        anymissing ? missing : true
-    else
-        false
-    end
+    r
 end
 
 # Specialized versions of all(f, ::Tuple),
