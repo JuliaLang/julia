@@ -185,7 +185,7 @@ end
     # unary
     @test_intrinsic Core.Intrinsics.abs_float Float32(-3.3) Float32(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float32(3.3) Float32(-3.3)
-    @test_intrinsic Core.Intrinsics.fpext Float32 Float32(3.3) Float32(3.3) 
+    @test_intrinsic Core.Intrinsics.fpext Float32 Float32(3.3) Float32(3.3)
     @test_intrinsic Core.Intrinsics.fpext Float64 Float32(3.3) 3.299999952316284
     @test_intrinsic Core.Intrinsics.fptrunc Float32 Float32(3.3) Float32(3.3)
     @test_intrinsic Core.Intrinsics.fptrunc Float32 Float64(3.3) Float32(3.3)
@@ -221,7 +221,7 @@ end
     # unary
     @test_intrinsic Core.Intrinsics.abs_float Float16(-3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float16(3.3) Float16(-3.3)
-    @test_intrinsic Core.Intrinsics.fpext Float16 Float16(3.3) Float16(3.3) 
+    @test_intrinsic Core.Intrinsics.fpext Float16 Float16(3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.fpext Float32 Float16(3.3) 3.3007812f0
     @test_intrinsic Core.Intrinsics.fpext Float64 Float16(3.3) 3.30078125
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float16(3.3) Float16(3.3)
