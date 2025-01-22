@@ -349,7 +349,7 @@ static int enq_ccallable_entrypoints_(jl_typemap_entry_t *def, void *closure)
     if (m->external_mt)
         return 1;
     if (m->ccallable)
-        jl_add_entrypoint((jl_tupletype_t*)jl_svecref(m->ccallable, 1));
+        arraylist_push(jl_entrypoint_list, m->ccallable);
     return 1;
 }
 
@@ -367,16 +367,9 @@ static void *jl_precompile_trimmed(size_t world)
 {
     // array of MethodInstances and ccallable aliases to include in the output
     jl_array_t *m = jl_alloc_vec_any(0);
-    jl_value_t *ccallable = NULL;
-    JL_GC_PUSH2(&m, &ccallable);
-    jl_method_instance_t *mi;
-    for (size_t i = 0; i < jl_entrypoint_mis->len ; i++) {
-        mi = (jl_method_instance_t*)jl_entrypoint_mis->items[i];
-        assert(jl_is_method_instance(mi));
-        jl_array_ptr_1d_push(m, (jl_value_t*)mi);
-        ccallable = (jl_value_t *)mi->def.method->ccallable;
-        if (ccallable)
-            jl_array_ptr_1d_push(m, ccallable);
+    JL_GC_PUSH(&m);
+    for (size_t i = 0; i < jl_entrypoint_list->len ; i++) {
+        jl_array_ptr_1d_push(m, (jl_value_t*)(jl_entrypoint_list->items[i]));
     }
 
     void *native_code = jl_create_native(m, NULL, jl_options.trim, 0, world);

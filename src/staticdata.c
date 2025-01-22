@@ -1790,11 +1790,9 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 }
                 if (m->ccallable) {
                     int should_push = !jl_options.trim;
-                    for (size_t i = 0; !should_push && i < jl_entrypoint_mis->len  ; i++) {
-                        jl_method_instance_t* mi = (jl_method_instance_t*)jl_entrypoint_mis->items[i];
-                        assert(jl_is_method_instance(mi));
-                        jl_method_t *ccallable = mi->def.method;
-                        if (ccallable == m) {
+                    for (size_t i = 0; !should_push && i < jl_entrypoint_list->len  ; i++) {
+                        jl_value_t* val = jl_entrypoint_list->items[i];
+                        if ((jl_value_t *)m->ccallable == val) {
                             should_push = 1;
                             break;
                         }
