@@ -93,6 +93,7 @@ function _nondot_symbolic_operator_kinds()
         K"isa"
         K"in"
         K".'"
+        K"op="
     ])
 end
 
@@ -527,14 +528,14 @@ function _next_token(l::Lexer, c)
     elseif c == '-'
         return lex_minus(l);
     elseif c == '−' # \minus '−' treated as hyphen '-'
-        return emit(l, accept(l, '=') ? K"-=" : K"-")
+        return emit(l, accept(l, '=') ? K"op=" : K"-")
     elseif c == '`'
         return lex_backtick(l);
     elseif is_identifier_start_char(c)
         return lex_identifier(l, c)
     elseif isdigit(c)
         return lex_digit(l, K"Integer")
-    elseif (k = get(_unicode_ops, c, K"error")) != K"error"
+    elseif (k = get(_unicode_ops, c, K"None")) != K"None"
         return emit(l, k)
     else
         emit(l,
@@ -797,12 +798,12 @@ function lex_greater(l::Lexer)
     if accept(l, '>')
         if accept(l, '>')
             if accept(l, '=')
-                return emit(l, K">>>=")
+                return emit(l, K"op=")
             else # >>>?, ? not a =
                 return emit(l, K">>>")
             end
         elseif accept(l, '=')
-            return emit(l, K">>=")
+            return emit(l, K"op=")
         else
             return emit(l, K">>")
         end
@@ -819,7 +820,7 @@ end
 function lex_less(l::Lexer)
     if accept(l, '<')
         if accept(l, '=')
-            return emit(l, K"<<=")
+            return emit(l, K"op=")
         else # '<<?', ? not =, ' '
             return emit(l, K"<<")
         end
@@ -888,7 +889,7 @@ end
 
 function lex_percent(l::Lexer)
     if accept(l, '=')
-        return emit(l, K"%=")
+        return emit(l, K"op=")
     else
         return emit(l, K"%")
     end
@@ -896,7 +897,7 @@ end
 
 function lex_bar(l::Lexer)
     if accept(l, '=')
-        return emit(l, K"|=")
+        return emit(l, K"op=")
     elseif accept(l, '>')
         return emit(l, K"|>")
     elseif accept(l, '|')
@@ -910,7 +911,7 @@ function lex_plus(l::Lexer)
     if accept(l, '+')
         return emit(l, K"++")
     elseif accept(l, '=')
-        return emit(l, K"+=")
+        return emit(l, K"op=")
     end
     return emit(l, K"+")
 end
@@ -925,7 +926,7 @@ function lex_minus(l::Lexer)
     elseif !l.dotop && accept(l, '>')
         return emit(l, K"->")
     elseif accept(l, '=')
-        return emit(l, K"-=")
+        return emit(l, K"op=")
     end
     return emit(l, K"-")
 end
@@ -934,35 +935,35 @@ function lex_star(l::Lexer)
     if accept(l, '*')
         return emit(l, K"Error**") # "**" is an invalid operator use ^
     elseif accept(l, '=')
-        return emit(l, K"*=")
+        return emit(l, K"op=")
     end
     return emit(l, K"*")
 end
 
 function lex_circumflex(l::Lexer)
     if accept(l, '=')
-        return emit(l, K"^=")
+        return emit(l, K"op=")
     end
     return emit(l, K"^")
 end
 
 function lex_division(l::Lexer)
     if accept(l, '=')
-        return emit(l, K"÷=")
+        return emit(l, K"op=")
     end
     return emit(l, K"÷")
 end
 
 function lex_dollar(l::Lexer)
     if accept(l, '=')
-        return emit(l, K"$=")
+        return emit(l, K"op=")
     end
     return emit(l, K"$")
 end
 
 function lex_xor(l::Lexer)
     if accept(l, '=')
-        return emit(l, K"⊻=")
+        return emit(l, K"op=")
     end
     return emit(l, K"⊻")
 end
@@ -1110,7 +1111,7 @@ function lex_amper(l::Lexer)
     if accept(l, '&')
         return emit(l, K"&&")
     elseif accept(l, '=')
-        return emit(l, K"&=")
+        return emit(l, K"op=")
     else
         return emit(l, K"&")
     end
@@ -1148,12 +1149,12 @@ end
 function lex_forwardslash(l::Lexer)
     if accept(l, '/')
         if accept(l, '=')
-            return emit(l, K"//=")
+            return emit(l, K"op=")
         else
             return emit(l, K"//")
         end
     elseif accept(l, '=')
-        return emit(l, K"/=")
+        return emit(l, K"op=")
     else
         return emit(l, K"/")
     end
@@ -1161,7 +1162,7 @@ end
 
 function lex_backslash(l::Lexer)
     if accept(l, '=')
-        return emit(l, K"\=")
+        return emit(l, K"op=")
     end
     return emit(l, K"\\")
 end
@@ -1193,7 +1194,7 @@ function lex_dot(l::Lexer)
         elseif pc == '−'
             l.dotop = true
             readchar(l)
-            return emit(l, accept(l, '=') ? K"-=" : K"-")
+            return emit(l, accept(l, '=') ? K"op=" : K"-")
         elseif pc =='*'
             l.dotop = true
             readchar(l)
@@ -1222,7 +1223,7 @@ function lex_dot(l::Lexer)
             l.dotop = true
             readchar(l)
             if accept(l, '=')
-                return emit(l, K"&=")
+                return emit(l, K"op=")
             else
                 if accept(l, '&')
                     return emit(l, K"&&")
