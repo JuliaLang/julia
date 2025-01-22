@@ -160,7 +160,7 @@ end
 
 Get the time in nanoseconds relative to some machine-specific arbitrary time in the past
 (which may change if the system is rebooted or suspended).
-The primary use is for measuring the elapsed time during program execution.  The return value is guaranteed to
+The primary use is for measuring elapsed times during program execution.  The return value is guaranteed to
 be monotonic and is unaffected by clock drift or changes to local calendar time.
 
 (Although the returned time is always in nanoseconds, the timing resolution is platform-dependent.)
