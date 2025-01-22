@@ -98,6 +98,7 @@ New library functions
 * `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`. ([#45793])
 * The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
 * `Sys.detectwsl()` allows to testing if Julia is running inside WSL at runtime. ([#57069])
+* `@outline expr` moves `expr` out to a separate, noinlined function -- a common performance optimization for error-throwing parts of code. ([#57122])
 
 New library features
 --------------------
