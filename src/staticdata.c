@@ -1674,8 +1674,18 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 #ifndef _P64
             write_uint(f, decode_restriction_kind(pku));
 #endif
-            write_uint(f, bpart->min_world);
-            write_uint(f, jl_atomic_load_relaxed(&bpart->max_world));
+            size_t max_world = jl_atomic_load_relaxed(&bpart->max_world);
+            if (max_world == ~(size_t)0) {
+                // Still valid. Will be considered primordial after re-load.
+                // We could consider updating min_world to the loaded world, but
+                // there doesn't appear to be much point.
+                write_uint(f, 0);
+                write_uint(f, max_world);
+            } else {
+                // The world will not be reachable after loading
+                write_uint(f, 1);
+                write_uint(f, 0);
+            }
             write_pointerfield(s, (jl_value_t*)jl_atomic_load_relaxed(&bpart->next));
 #ifdef _P64
             write_uint(f, decode_restriction_kind(pku)); // This will be moved back into place during deserialization (if necessary)
@@ -2714,7 +2724,6 @@ static void jl_strip_all_codeinfos(void)
 jl_genericmemory_t *jl_global_roots_list;
 jl_genericmemory_t *jl_global_roots_keyset;
 jl_mutex_t global_roots_lock;
-extern jl_mutex_t world_counter_lock;
 
 jl_mutex_t precompile_field_replace_lock;
 jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED;

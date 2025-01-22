@@ -66,14 +66,13 @@ void jl_module_run_initializer(jl_module_t *m)
 {
     JL_TIMING(INIT_MODULE, INIT_MODULE);
     jl_timing_show_module(m, JL_TIMING_DEFAULT_BLOCK);
-    jl_function_t *f = jl_module_get_initializer(m);
-    if (f == NULL)
-        return;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_apply(&f, 1);
+        jl_function_t *f = jl_module_get_initializer(m);
+        if (f != NULL)
+            jl_apply(&f, 1);
         ct->world_age = last_age;
     }
     JL_CATCH {
@@ -740,10 +739,15 @@ static void jl_eval_errorf(jl_module_t *m, const char *filename, int lineno, con
     JL_GC_POP();
 }
 
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val, enum jl_partition_kind constant_kind)
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
+    jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val,
+    enum jl_partition_kind constant_kind, size_t new_world)
 {
     JL_GC_PUSH1(&val);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    if (!b) {
+        b = jl_get_module_binding(mod, var, 1);
+    }
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     int did_warn = 0;
     while (1) {
@@ -780,7 +784,24 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, j
             break;
         }
     }
+    // N.B.: This backdates the first definition of the constant to world age 0 for backwards compatibility
+    // TODO: Mark this specially with a separate partition.
+    if (bpart->min_world != 0)
+        bpart->min_world = new_world;
     JL_GC_POP();
+    return bpart;
+}
+
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(
+    jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val,
+    enum jl_partition_kind constant_kind)
+{
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    jl_binding_partition_t *bpart = jl_declare_constant_val3(b, mod, var, val, constant_kind, new_world);
+    if (bpart->min_world == new_world)
+        jl_atomic_store_release(&jl_world_counter, new_world);
+    JL_UNLOCK(&world_counter_lock);
     return bpart;
 }
 
@@ -869,6 +890,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     else if (head == jl_using_sym) {
         jl_sym_t *name = NULL;
         jl_module_t *from = eval_import_from(m, ex, "using");
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         size_t i = 0;
         if (from) {
             i = 1;
@@ -908,6 +930,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                     jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
                     name = NULL;
                     jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "using");
+                    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
                     assert(name);
                     check_macro_rename(name, asname, "using");
                     // `using A: B as C` syntax
@@ -919,11 +942,13 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 "syntax: malformed \"using\" statement");
         }
         JL_GC_POP();
+        ct->world_age = last_age;
         return jl_nothing;
     }
     else if (head == jl_import_sym) {
         jl_sym_t *name = NULL;
         jl_module_t *from = eval_import_from(m, ex, "import");
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         size_t i = 0;
         if (from) {
             i = 1;
@@ -967,6 +992,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 "syntax: malformed \"import\" statement");
         }
         JL_GC_POP();
+        ct->world_age = last_age;
         return jl_nothing;
     }
     else if (head == jl_export_sym || head == jl_public_sym) {

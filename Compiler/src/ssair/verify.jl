@@ -12,7 +12,7 @@ end
 
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
-        arg isa String && return esc(:(print && println(stderr, $arg)))
+        arg isa String && return esc(:(print && println($(GlobalRef(Core, :stderr)), $arg)))
         isexpr(arg, :string) || error("verify_error macro expected a string expression")
         pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
@@ -61,8 +61,14 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             raise_error()
         end
     elseif isa(op, GlobalRef)
-        if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
-            @verify_error "Unbound GlobalRef not allowed in value position"
+        force_binding_resolution!(op, min_world(ir.valid_worlds))
+        bpart = lookup_binding_partition(min_world(ir.valid_worlds), op)
+        while is_some_imported(binding_kind(bpart)) && max_world(ir.valid_worlds) <= bpart.max_world
+            imported_binding = partition_restriction(bpart)::Core.Binding
+            bpart = lookup_binding_partition(min_world(ir.valid_worlds), imported_binding)
+        end
+        if !is_defined_const_binding(binding_kind(bpart)) || (bpart.max_world < max_world(ir.valid_worlds))
+            @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
             raise_error()
         end
     elseif isa(op, Expr)

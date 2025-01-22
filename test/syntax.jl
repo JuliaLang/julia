@@ -3303,6 +3303,7 @@ const typeof = error
 end
 let ex = :(const $(esc(:x)) = 1; (::typeof($(esc(:foo43993))))() = $(esc(:x)))
     Core.eval(M43993, Expr(:var"hygienic-scope", ex, Core))
+    @Core.latestworld
     @test M43993.x === 1
     @test invokelatest(M43993.foo43993) === 1
 end

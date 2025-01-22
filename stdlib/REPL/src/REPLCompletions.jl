@@ -639,18 +639,24 @@ function is_call_graph_uncached(sv::CC.InferenceState)
     return is_call_graph_uncached(parent::CC.InferenceState)
 end
 
-isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
-
 # aggressive global binding resolution within `repl_frame`
 function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, bailed::Bool,
                                     sv::CC.InferenceState)
+    # Ignore saw_latestworld
+    partition = CC.abstract_eval_binding_partition!(interp, g, sv)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
-        if isdefined_globalref(g)
+        if CC.is_defined_const_binding(CC.binding_kind(partition))
             return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
-                CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), Union{}, CC.EFFECTS_TOTAL), nothing)
+                CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL), partition)
+        else
+            b = convert(Core.Binding, g)
+            if CC.binding_kind(partition) == CC.BINDING_KIND_GLOBAL && isdefined(b, :value)
+                return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
+                    CC.RTEffects(Const(b.value), Union{}, CC.EFFECTS_TOTAL), partition)
+            end
         end
         return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
-            CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS), nothing)
+            CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS), partition)
     end
     return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef, bailed::Bool,
                                               sv::CC.InferenceState)

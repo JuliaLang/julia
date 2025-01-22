@@ -3456,10 +3456,10 @@ world_range(ir::IRCode) = ir.valid_worlds
 world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
-function force_binding_resolution!(g::GlobalRef)
+function force_binding_resolution!(g::GlobalRef, world::UInt)
     # Force resolution of the binding
     # TODO: This will go away once we switch over to fully partitioned semantics
-    ccall(:jl_globalref_boundp, Cint, (Any,), g)
+    ccall(:jl_force_binding_resolution, Cvoid, (Any, Csize_t), g, world)
     return nothing
 end
 
@@ -3477,7 +3477,7 @@ function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode,
             # This method is surprisingly hot. For performance, don't ask the runtime to resolve
             # the binding unless necessary - doing so triggers an additional lookup, which though
             # not super expensive is hot enough to show up in benchmarks.
-            force_binding_resolution!(g)
+            force_binding_resolution!(g, min_world(worlds))
             return abstract_eval_globalref_type(g, src, false)
         end
         # return Union{}
@@ -3490,7 +3490,7 @@ function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode,
 end
 
 function lookup_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
-    force_binding_resolution!(g)
+    force_binding_resolution!(g, get_inference_world(interp))
     partition = lookup_binding_partition(get_inference_world(interp), g)
     update_valid_age!(sv, WorldRange(partition.min_world, partition.max_world))
     partition
@@ -3539,7 +3539,8 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_
     partition = abstract_eval_binding_partition!(interp, g, sv)
     ret = abstract_eval_partition_load(interp, partition)
     if ret.rt !== Union{} && ret.exct === UndefVarError && InferenceParams(interp).assume_bindings_static
-        if isdefined(g, :binding) && isdefined(g.binding, :value)
+        b = convert(Core.Binding, g)
+        if isdefined(b, :value)
             ret = RTEffects(ret.rt, Union{}, Effects(generic_getglobal_effects, nothrow=true))
         end
         # We do not assume in general that assigned global bindings remain assigned.

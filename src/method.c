@@ -1073,16 +1073,28 @@ JL_DLLEXPORT void jl_check_gf(jl_value_t *gf, jl_sym_t *name)
 
 JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, jl_sym_t *name)
 {
-    jl_value_t *gf = jl_get_binding_value_if_const(b);
-    if (gf) {
-        jl_check_gf(gf, b->globalref->name);
-        return gf;
-    }
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    if (!jl_bkind_is_some_guard(decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction))))
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
+    jl_ptr_kind_union_t pku = jl_walk_binding_inplace(&b, &bpart, new_world);
+    jl_value_t *gf = NULL;
+    if (!jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
+        if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
+            gf = decode_restriction_value(pku);
+            JL_GC_PROMISE_ROOTED(gf);
+            jl_check_gf(gf, b->globalref->name);
+            JL_UNLOCK(&world_counter_lock);
+            return gf;
+        }
         jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
-    gf = (jl_value_t*)jl_new_generic_function(name, mod);
-    jl_declare_constant_val(b, mod, name, gf);
+    }
+    gf = (jl_value_t*)jl_new_generic_function(name, mod, new_world);
+    // From this point on (if we didn't error), we're committed to raising the world age,
+    // because we've used it to declare the type name.
+    jl_atomic_store_release(&jl_world_counter, new_world);
+    jl_declare_constant_val3(b, mod, name, gf, BINDING_KIND_CONST, new_world);
+    JL_GC_PROMISE_ROOTED(gf);
+    JL_UNLOCK(&world_counter_lock);
     return gf;
 }
 
