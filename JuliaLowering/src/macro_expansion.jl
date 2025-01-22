@@ -297,6 +297,11 @@ function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
         end
     elseif is_leaf(ex)
         ex
+    elseif k == K"<:" || k == K">:" || k == K"-->"
+        # TODO: Should every form get layerid systematically? Or only the ones
+        # which expand_forms_2 needs?
+        layerid = get(ex, :scope_layer, ctx.current_layer.id)
+        mapchildren(e->expand_forms_1(ctx,e), ctx, ex; scope_layer=layerid)
     else
         mapchildren(e->expand_forms_1(ctx,e), ctx, ex)
     end

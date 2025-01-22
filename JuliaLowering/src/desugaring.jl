@@ -1579,6 +1579,9 @@ function expand_dot(ctx, ex)
 
     if numchildren(ex) == 1
         # eg, `f = .+`
+        # Upstream TODO: Remove the (. +) representation and replace with use
+        # of DOTOP_FLAG? This way, `K"."` will be exclusively used for
+        # getproperty.
         @ast ctx ex [K"call"
             "BroadcastFunction"::K"top"
             ex[1]
@@ -3383,6 +3386,11 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             expand_forms_2(ctx, ex[1])
             expand_forms_2(ctx, ex[2])
         ]
+    elseif k == K"<:" || k == K">:" || k == K"-->"
+        expand_forms_2(ctx, @ast ctx ex [K"call"
+            adopt_scope(string(k)::K"Identifier", ex)
+            children(ex)...
+        ])
     elseif k == K"op="
         expand_forms_2(ctx, expand_update_operator(ctx, ex))
     elseif k == K"="
@@ -3534,6 +3542,12 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         ]
     elseif k == K"inert"
         ex
+    elseif k == K"&"
+        throw(LoweringError(ex, "invalid syntax"))
+    elseif k == K"$"
+        throw(LoweringError(ex, "`\$` expression outside string or quote"))
+    elseif k == K"..."
+        throw(LoweringError(ex, "`...` expression outside call"))
     elseif is_leaf(ex)
         ex
     else

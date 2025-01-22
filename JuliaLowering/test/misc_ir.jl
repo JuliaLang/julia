@@ -30,6 +30,36 @@ x."b"
 3   (return %₂)
 
 ########################################
+# <: as a function call
+x <: y
+#---------------------
+1   TestMod.<:
+2   TestMod.x
+3   TestMod.y
+4   (call %₁ %₂ %₃)
+5   (return %₄)
+
+########################################
+# >: as a function call
+x >: y
+#---------------------
+1   TestMod.>:
+2   TestMod.x
+3   TestMod.y
+4   (call %₁ %₂ %₃)
+5   (return %₄)
+
+########################################
+# --> as a function call
+x --> y
+#---------------------
+1   TestMod.-->
+2   TestMod.x
+3   TestMod.y
+4   (call %₁ %₂ %₃)
+5   (return %₄)
+
+########################################
 # Error: Wrong number of children in `.`
 @ast_ [K"." "x"::K"Identifier" "a"::K"Identifier" 3::K"Integer"]
 #---------------------
@@ -482,4 +512,28 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 LoweringError:
 ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 #                     └────────┘ ── only the trailing ccall argument type should have `...`
+
+########################################
+# Error: unary & syntax
+&x
+#---------------------
+LoweringError:
+&x
+└┘ ── invalid syntax
+
+########################################
+# Error: $ outside quote/string
+$x
+#---------------------
+LoweringError:
+$x
+└┘ ── `$` expression outside string or quote block
+
+########################################
+# Error: splat outside call
+x...
+#---------------------
+LoweringError:
+x...
+└──┘ ── `...` expression outside call
 
