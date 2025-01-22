@@ -232,6 +232,16 @@ function _internal_node_to_Expr(source, srcrange, head, childranges, childheads,
 
     if k == K"?"
         headsym = :if
+    elseif k == K"op=" && length(args) == 3
+        lhs = args[1]
+        op = args[2]
+        rhs = args[3]
+        headstr = string(args[2], '=')
+        if is_dotted(head)
+            headstr = '.'*headstr
+        end
+        headsym = Symbol(headstr)
+        args = Any[lhs, rhs]
     elseif k == K"macrocall"
         if length(args) >= 2
             a2 = args[2]

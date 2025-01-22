@@ -871,8 +871,9 @@ end
 Bump the next token, splitting it into several pieces
 
 Tokens are defined by a number of `token_spec` of shape `(nbyte, kind, flags)`.
-The number of input bytes of the last spec is taken from the remaining bytes of
-the input token, with the associated `nbyte` ignored.
+If all `nbyte` are positive, the sum must equal the token length. If one
+`nbyte` is negative, that token is given `tok_len + nbyte` bytes and the sum of
+all `nbyte` must equal zero.
 
 This is a hack which helps resolves the occasional lexing ambiguity. For
 example
@@ -887,12 +888,14 @@ function bump_split(stream::ParseStream, split_spec::Vararg{Any, N}) where {N}
     tok = stream.lookahead[stream.lookahead_index]
     stream.lookahead_index += 1
     b = _next_byte(stream)
+    toklen = tok.next_byte - b
     for (i, (nbyte, k, f)) in enumerate(split_spec)
         h = SyntaxHead(k, f)
-        b = (i == length(split_spec)) ? tok.next_byte : b + nbyte
+        b += nbyte < 0 ? (toklen + nbyte) : nbyte
         orig_k = k == K"." ? K"." : kind(tok)
         push!(stream.tokens, SyntaxToken(h, orig_k, false, b))
     end
+    @assert tok.next_byte == b
     stream.peek_count = 0
     return position(stream)
 end

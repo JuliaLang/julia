@@ -501,6 +501,16 @@
         @test parsestmt("./x", ignore_errors=true) == Expr(:call, Expr(:error, Expr(:., :/)), :x)
     end
 
+    @testset "syntactic update-assignment operators" begin
+        @test parsestmt("x += y") == Expr(:(+=), :x, :y)
+        @test parsestmt("x .+= y") == Expr(:(.+=), :x, :y)
+        @test parsestmt(":+=") == QuoteNode(Symbol("+="))
+        @test parsestmt(":(+=)") == QuoteNode(Symbol("+="))
+        @test parsestmt(":.+=") == QuoteNode(Symbol(".+="))
+        @test parsestmt(":(.+=)") == QuoteNode(Symbol(".+="))
+        @test parsestmt("x \u2212= y") == Expr(:(-=), :x, :y)
+    end
+
     @testset "let" begin
         @test parsestmt("let x=1\n end") ==
             Expr(:let, Expr(:(=), :x, 1),  Expr(:block, LineNumberNode(2)))

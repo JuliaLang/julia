@@ -62,8 +62,8 @@ tests = [
         # parse_assignment
         "a = b"       =>  "(= a b)"
         "a .= b"      =>  "(.= a b)"
-        "a += b"      =>  "(+= a b)"
-        "a .+= b"     =>  "(.+= a b)"
+        "a += b"      =>  "(op= a + b)"
+        "a .+= b"     =>  "(.op= a + b)"
         "a, b = c, d" =>  "(= (tuple a b) (tuple c d))"
         "x, = xs"     =>  "(= (tuple x) xs)"
         "[a ~b]"      =>  "(hcat a (call-pre ~ b))"
@@ -497,7 +497,7 @@ tests = [
         "let x ; end"      =>  "(let (block x) (block))"
         "let x::1 ; end"   =>  "(let (block (::-i x 1)) (block))"
         "let x=1,y=2 end"  =>  "(let (block (= x 1) (= y 2)) (block))"
-        "let x+=1 ; end"   =>  "(let (block (+= x 1)) (block))"
+        "let x+=1 ; end"   =>  "(let (block (op= x + 1)) (block))"
         "let ; end"        =>  "(let (block) (block))"
         "let ; body end"   =>  "(let (block) (block body))"
         "let\na\nb\nend"   =>  "(let (block) (block a b))"
@@ -576,7 +576,7 @@ tests = [
         "const x = 1"    =>  "(const (= x 1))"
         "const x .= 1"   => "(error (const (.= x 1)))"
         "global x ~ 1"   =>  "(global (call-i x ~ 1))"
-        "global x += 1"  => "(global (+= x 1))"
+        "global x += 1"  => "(global (op= x + 1))"
         "const x"        => "(error (const x))"
         "global const x" => "(global (error (const x)))"
         "const global x" => "(error (const (global x)))"
@@ -715,6 +715,7 @@ tests = [
         "using :A"         =>  "(using (importpath (error (quote-: A))))"
         "using A: :b"      =>  "(using (: (importpath A) (importpath (error (quote-: b)))))"
         "using A: b.:c"    =>  "(using (: (importpath A) (importpath b (quote-: c))))"
+        # Syntactic operators not allowed in import
     ],
     JuliaSyntax.parse_iteration_specs => [
         "i = rhs"        =>  "(iteration (in i rhs))"
@@ -832,6 +833,7 @@ tests = [
         "≕"  =>  "≕"
         # Quoted syntactic operators allowed
         ":+="  =>  "(quote-: +=)"
+        ":.+=" =>  "(quote-: (. +=))"
         ":.="  =>  "(quote-: (. =))"
         ":.&&" =>  "(quote-: (. &&))"
         # Special symbols quoted
@@ -1023,7 +1025,7 @@ tests = [
     JuliaSyntax.parse_stmts => with_version.(v"1.11", [
         "function f(public)\n    public + 3\nend"       => "(function (call f public) (block (call-i public + 3)))"
         "public A, B"                                   => "(public A B)"
-        "if true \n public *= 4 \n end"                 => "(if true (block (*= public 4)))"
+        "if true \n public *= 4 \n end"                 => "(if true (block (op= public * 4)))"
         "module Mod\n public A, B \n end"               => "(module Mod (block (public A B)))"
         "module Mod2\n a = 3; b = 6; public a, b\n end" => "(module Mod2 (block (= a 3) (= b 6) (public a b)))"
         "a = 3; b = 6; public a, b"                     => "(toplevel-; (= a 3) (= b 6) (public a b))"
@@ -1141,6 +1143,12 @@ parsestmt_with_kind_tests = [
     ":(<:)"  => "(quote-: (parens <:::<:))"
     ":(&&)"  => "(quote-: (parens &&::&&))"
     ":(=)"   => "(quote-: (parens =::=))"
+    "a := b" => "(:= a::Identifier b::Identifier)"
+    "a += b" => "(op= a::Identifier +::Identifier b::Identifier)"
+    "a .+= b" => "(.op= a::Identifier +::Identifier b::Identifier)"
+    "a >>= b" => "(op= a::Identifier >>::Identifier b::Identifier)"
+    ":+="    => "(quote-: +=::op=)"
+    ":.+="   => "(quote-: (. +=::op=))"
 ]
 
 @testset "parser `Kind` remapping" begin
@@ -1174,10 +1182,10 @@ end
     # · and · normalize to ⋅
     @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a \u00B7 b") == "(call-i a \u22C5 b)"
     @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a \u0387 b") == "(call-i a \u22C5 b)"
-    # − normalizes to -
+    # − ('\u2212') normalizes to - ('\u002d')
     @test parse_to_sexpr_str(JuliaSyntax.parse_expr, "a \u2212 b")  == "(call-i a - b)"
-    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a \u2212= b") == "(-= a b)"
-    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a .\u2212= b") == "(.-= a b)"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a \u2212= b") == "(op= a - b)"
+    @test parse_to_sexpr_str(JuliaSyntax.parse_eq, "a .\u2212= b") == "(.op= a - b)"
 end
 
 @testset "Unbalanced bidirectional unicode" begin

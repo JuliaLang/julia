@@ -175,14 +175,15 @@ end
 end
 
 @testset "test added operators" begin
-    @test tok("1+=2",  2).kind == K"+="
-    @test tok("1-=2",  2).kind == K"-="
+    @test tok("1+=2",  2).kind == K"op="
+    @test tok("1-=2",  2).kind == K"op="
+    @test tok("1*=2",  2).kind == K"op="
+    @test tok("1^=2",  2).kind == K"op="
+    @test tok("1÷=2",  2).kind == K"op="
+    @test tok("1\\=2", 2).kind == K"op="
+    @test tok("1\$=2", 2).kind == K"op="
+    @test tok("1⊻=2",  2).kind == K"op="
     @test tok("1:=2",  2).kind == K":="
-    @test tok("1*=2",  2).kind == K"*="
-    @test tok("1^=2",  2).kind == K"^="
-    @test tok("1÷=2",  2).kind == K"÷="
-    @test tok("1\\=2", 2).kind == K"\="
-    @test tok("1\$=2", 2).kind == K"$="
     @test tok("1-->2", 2).kind == K"-->"
     @test tok("1<--2", 2).kind == K"<--"
     @test tok("1<-->2", 2).kind == K"<-->"
@@ -340,10 +341,6 @@ end
 
 @testset "issue in PR #45" begin
     @test length(collect(tokenize("x)"))) == 3
-end
-
-@testset "xor_eq" begin
-    @test tok("1 ⊻= 2", 3).kind==K"⊻="
 end
 
 @testset "lex binary" begin
@@ -824,6 +821,9 @@ for opkind in Tokenize._nondot_symbolic_operator_kinds()
                 tokens = collect(tokenize(str))
                 exop = expr.head == :call ? expr.args[1] : expr.head
                 #println(str)
+                if Symbol(Tokenize.untokenize(tokens[arity == 1 ? 1 : 3], str)) != exop
+                    @info "" arity str exop
+                end
                 @test Symbol(Tokenize.untokenize(tokens[arity == 1 ? 1 : 3], str)) == exop
             else
                 break
@@ -842,7 +842,7 @@ end
 
     # https://github.com/JuliaLang/julia/pull/40948
     @test tok("−").kind == K"-"
-    @test tok("−=").kind == K"-="
+    @test tok("−=").kind == K"op="
     @test tok(".−").dotop
 end
 

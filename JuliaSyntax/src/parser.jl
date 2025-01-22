@@ -340,7 +340,7 @@ function bump_dotsplit(ps, flags=EMPTY_FLAGS;
         bump_trivia(ps)
         mark = position(ps)
         k = remap_kind != K"None" ? remap_kind : kind(t)
-        pos = bump_split(ps, (1, K".", TRIVIA_FLAG), (0, k, flags))
+        pos = bump_split(ps, (1, K".", TRIVIA_FLAG), (-1, k, flags))
         if emit_dot_node
             pos = emit(ps, mark, K".")
         end
@@ -626,7 +626,22 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         # a += b   ==>  (+= a b)
         # a .= b   ==>  (.= a b)
         is_short_form_func = k == K"=" && !is_dotted(t) && was_eventually_call(ps)
-        bump(ps, TRIVIA_FLAG)
+        if k == K"op="
+            # x += y   ==>  (op= x + y)
+            # x .+= y  ==>  (.op= x + y)
+            bump_trivia(ps)
+            if is_dotted(t)
+                bump_split(ps, (1, K".", TRIVIA_FLAG),
+                           (-2, K"Identifier", EMPTY_FLAGS),  # op
+                           (1, K"=", TRIVIA_FLAG))
+            else
+                bump_split(ps,
+                           (-1, K"Identifier", EMPTY_FLAGS),  # op
+                           (1, K"=", TRIVIA_FLAG))
+            end
+        else
+            bump(ps, TRIVIA_FLAG)
+        end
         bump_trivia(ps)
         # Syntax Edition TODO: We'd like to call `down` here when
         # is_short_form_func is true, to prevent `f() = 1 = 2` from parsing.
@@ -1843,7 +1858,7 @@ function parse_resword(ps::ParseState)
             # let x::1 ; end    ==>  (let (block (::-i x 1)) (block))
             # let x ; end       ==>  (let (block x) (block))
             # let x=1,y=2 ; end ==>  (let (block (= x 1) (= y 2) (block)))
-            # let x+=1 ; end    ==>  (let (block (+= x 1)) (block))
+            # let x+=1 ; end    ==>  (let (block (op= x + 1)) (block))
             parse_comma_separated(ps, parse_eq_star)
         end
         emit(ps, m, K"block")
@@ -2571,7 +2586,7 @@ function parse_import_path(ps::ParseState)
         # Modules with operator symbol names
         # import .⋆  ==>  (import (importpath . ⋆))
         bump_trivia(ps)
-        bump_split(ps, (1,K".",EMPTY_FLAGS), (1,peek(ps),EMPTY_FLAGS))
+        bump_split(ps, (1,K".",EMPTY_FLAGS), (-1,peek(ps),EMPTY_FLAGS))
     else
         # import @x     ==>  (import (importpath @x))
         # import $A     ==>  (import (importpath ($ A)))
@@ -2599,7 +2614,12 @@ function parse_import_path(ps::ParseState)
                                 warning="space between dots in import path")
             end
             bump_trivia(ps)
-            bump_split(ps, (1,K".",TRIVIA_FLAG), (1,k,EMPTY_FLAGS))
+            m = position(ps)
+            bump_split(ps, (1,K".",TRIVIA_FLAG), (-1,k,EMPTY_FLAGS))
+            if is_syntactic_operator(k)
+                # import A.=  ==>  (import (importpath A (error =)))
+                emit(ps, m, K"error", error="syntactic operators not allowed in import")
+            end
         elseif k == K"..."
             # Import the .. operator
             # import A...  ==>  (import (importpath A ..))
@@ -3550,13 +3570,13 @@ function parse_atom(ps::ParseState, check_identifiers=true)
         bump_dotsplit(ps, emit_dot_node=true, remap_kind=
                       is_syntactic_operator(leading_kind) ? leading_kind : K"Identifier")
         if check_identifiers && !is_valid_identifier(leading_kind)
-            # +=   ==>  (error +=)
+            # +=   ==>  (error (op= +))
             # ?    ==>  (error ?)
-            # .+=  ==>  (error (. +=))
+            # .+=  ==>  (error (. (op= +)))
             emit(ps, mark, K"error", error="invalid identifier")
         else
             # Quoted syntactic operators allowed
-            # :+=  ==>  (quote-: +=)
+            # :+=  ==>  (quote-: (op= +))
         end
     elseif is_keyword(leading_kind)
         if leading_kind == K"var" && (t = peek_token(ps,2);
