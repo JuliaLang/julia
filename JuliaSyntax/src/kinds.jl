@@ -464,6 +464,7 @@ register_kinds!(JuliaSyntax, 0, [
         "↶"
         "↺"
         "↻"
+        "🢲"
     "END_ARROW"
 
     # Level 4
