@@ -678,7 +678,12 @@ let p = Pipe()
     @test data_read[1:nread] == data[2:nread+1]
     @test read(p.out, 49) == data[end-48:end]
     wait(t)
+
+    closewrite(p)
+    @test !isopen(p.in)
+    @test isopen(p.out)
     close(p)
+    @test !isopen(p.out)
 end
 
 @testset "issue #27412" for itr in [eachline(IOBuffer("a")), readeach(IOBuffer("a"), Char)]
