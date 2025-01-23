@@ -377,7 +377,7 @@ sometimes harm the compiler's ability to optimize.
 # Examples
 ```julia
 function getindex(container, index)
-    if index < 1 || index > length(container)
+    if index ∉ eachindex(container)
         # Outline this throw, since constructing a BoundsError requires boxing
         # the arguments, which produces a lot of code.
         @outline throw(BoundsError(container, index))
