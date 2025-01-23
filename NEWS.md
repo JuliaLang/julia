@@ -25,6 +25,9 @@ New language features
 - Support for Unicode 16 ([#56925]).
 - `Threads.@spawn` now takes a `:samepool` argument to specify the same threadpool as the caller.
   `Threads.@spawn :samepool foo()` which is shorthand for `Threads.@spawn Threads.threadpool() foo()` ([#57109])
+- The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
+  is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
+  ([JuliaLang/JuliaSyntax.jl#525], [#57143])
 
 Language changes
 ----------------
