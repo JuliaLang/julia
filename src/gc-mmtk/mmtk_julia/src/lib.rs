@@ -21,6 +21,7 @@ pub mod active_plan;
 pub mod api;
 mod build_info;
 pub mod collection;
+pub mod gc_trigger;
 pub mod object_model;
 pub mod reference_glue;
 pub mod scanning;
@@ -118,4 +119,5 @@ extern "C" {
     pub fn jl_gc_prepare_to_collect();
     pub fn jl_gc_get_owner_address_to_mmtk(m: Address) -> Address;
     pub fn jl_gc_genericmemory_how(m: Address) -> usize;
+    pub fn jl_gc_get_max_memory() -> usize;
 }

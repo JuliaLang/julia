@@ -1,11 +1,12 @@
 use crate::SINGLETON;
 use crate::{
-    jl_gc_prepare_to_collect, jl_gc_update_stats, jl_get_gc_disable_counter, jl_hrtime,
-    jl_throw_out_of_memory_error,
+    jl_gc_get_max_memory, jl_gc_prepare_to_collect, jl_gc_update_stats, jl_get_gc_disable_counter,
+    jl_hrtime, jl_throw_out_of_memory_error,
 };
 use crate::{JuliaVM, USER_TRIGGERED_GC};
 use log::{info, trace};
 use mmtk::util::alloc::AllocationError;
+use mmtk::util::heap::GCTriggerPolicy;
 use mmtk::util::opaque_pointer::*;
 use mmtk::vm::{Collection, GCThreadContext};
 use mmtk::Mutator;
@@ -13,7 +14,7 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
 
 use crate::{BLOCK_FOR_GC, STW_COND, WORLD_HAS_STOPPED};
 
-static GC_START: AtomicU64 = AtomicU64::new(0);
+pub static GC_START: AtomicU64 = AtomicU64::new(0);
 
 pub struct VMCollection {}
 
@@ -110,6 +111,12 @@ impl Collection<JuliaVM> for VMCollection {
 
     fn is_collection_enabled() -> bool {
         unsafe { jl_get_gc_disable_counter() == 0 }
+    }
+
+    fn create_gc_trigger() -> Box<dyn GCTriggerPolicy<JuliaVM>> {
+        use crate::gc_trigger::*;
+        let max_memory = unsafe { jl_gc_get_max_memory() };
+        Box::new(JuliaGCTrigger::new(max_memory))
     }
 }
 
