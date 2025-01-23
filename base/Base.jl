@@ -128,6 +128,8 @@ include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
+const USING_STOCK_GC = occursin("stock", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
+
 # These used to be in build_h.jl and are retained for backwards compatibility.
 # NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
 const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
