@@ -331,8 +331,12 @@ end
     @test checked_pow(BigInt(2), 2) == BigInt(4)
     @test checked_pow(BigInt(2), 100) == BigInt(1267650600228229401496703205376)
 
-    # Perf test: Make sure BigInts allocs don't scale with the power:
-    @test @allocations(checked_pow(BigInt(2), 2)) ≈ @allocations(checked_pow(BigInt(2), 10000)) rtol=0.9
+    # FIXME: Issue #57103: the following test may fail because
+    # allocation may not be logged via MMTk's fastpath allocation
+    @static if Base.USING_STOCK_GC
+        # Perf test: Make sure BigInts allocs don't scale with the power:
+        @test @allocations(checked_pow(BigInt(2), 2)) ≈ @allocations(checked_pow(BigInt(2), 10000)) rtol=0.9
+    end
 end
 
 @testset "Additional tests" begin

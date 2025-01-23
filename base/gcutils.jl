@@ -281,4 +281,15 @@ function logging_enabled()
     ccall(:jl_is_gc_logging_enabled, Cint, ()) != 0
 end
 
+"""
+    GC.gc_active_impl()
+
+Return a string stating which GC implementation is being used and possibly
+its version according to the list of supported GCs
+"""
+function gc_active_impl()
+    unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ()))
+end
+
+
 end # module GC
