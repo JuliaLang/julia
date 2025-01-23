@@ -17,14 +17,21 @@ function run_gctest(file)
     end
 end
 
-#FIXME: Issue #57103 disabling tests for MMTk, since
-# they rely on information that is specific to the stock GC.
-@static if Base.USING_STOCK_GC
 function run_nonzero_page_utilization_test()
     GC.gc()
     page_utilization = Base.gc_page_utilization_data()
     # at least one of the pools should have nonzero page_utilization
     @test any(page_utilization .> 0)
+end
+
+function run_pg_size_test()
+    page_size = @ccall jl_get_pg_size()::UInt64
+    # supported page sizes: 4KB and 16KB
+    @test page_size == (1 << 12) || page_size == (1 << 14)
+end
+
+function issue_54275_alloc_string()
+    String(UInt8['a' for i in 1:10000000])
 end
 
 function issue_54275_test()
@@ -48,17 +55,6 @@ function full_sweep_reasons_test()
     @test reasons[:FULL_SWEEP_REASON_FORCED_FULL_SWEEP] >= 1
     @test keys(reasons) == Set(Base.FULL_SWEEP_REASONS)
 end
-end
-
-function run_pg_size_test()
-    page_size = @ccall jl_get_pg_size()::UInt64
-    # supported page sizes: 4KB and 16KB
-    @test page_size == (1 << 12) || page_size == (1 << 14)
-end
-
-function issue_54275_alloc_string()
-    String(UInt8['a' for i in 1:10000000])
-end
 
 # !!! note:
 #     Since we run our tests on 32bit OS as well we confine ourselves
@@ -71,6 +67,9 @@ end
     run_gctest("gc/chunks.jl")
 end
 
+#FIXME: Issue #57103 disabling tests for MMTk, since
+# they rely on information that is specific to the stock GC.
+@static if Base.USING_STOCK_GC
 @testset "GC page metrics" begin
     run_nonzero_page_utilization_test()
     run_pg_size_test()
@@ -80,12 +79,13 @@ end
     issue_54275_test()
 end
 
-@testset "Base.GC docstrings" begin
-    @test isempty(Docs.undocumented_names(GC))
-end
-
 @testset "Full GC reasons" begin
     full_sweep_reasons_test()
+end
+end
+
+@testset "Base.GC docstrings" begin
+    @test isempty(Docs.undocumented_names(GC))
 end
 
 #testset doesn't work here because this needs to run in top level
