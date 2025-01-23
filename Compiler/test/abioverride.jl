@@ -40,6 +40,7 @@ let world = Base.tls_world_age()
     ## Remove the argument
     resize!(new_source.slotnames, 2)
     resize!(new_source.slotflags, 2)
+    new_source.nargs = 2
 
     # Construct the CodeInstance from the modified CodeInfo data
     global new_ci = Core.CodeInstance(Core.ABIOverride(Tuple{typeof(myplus), Int}, mi),
