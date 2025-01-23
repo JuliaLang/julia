@@ -22,6 +22,7 @@ end
 function is_identifier_start_char(c::Char)
     c == EOF_CHAR && return false
     isvalid(c) || return false
+    c == '🢲' && return false  # First divergence from Base.is_id_start_char
     return Base.is_id_start_char(c)
 end
 
