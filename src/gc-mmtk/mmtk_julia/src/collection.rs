@@ -16,6 +16,27 @@ use crate::{BLOCK_FOR_GC, STW_COND, WORLD_HAS_STOPPED};
 
 pub static GC_START: AtomicU64 = AtomicU64::new(0);
 
+use std::collections::HashSet;
+use std::sync::RwLock;
+use std::thread::ThreadId;
+
+lazy_static! {
+    static ref GC_THREADS: RwLock<HashSet<ThreadId>> = RwLock::new(HashSet::new());
+}
+
+pub(crate) fn register_gc_thread() {
+    let id = std::thread::current().id();
+    GC_THREADS.write().unwrap().insert(id);
+}
+pub(crate) fn unregister_gc_thread() {
+    let id = std::thread::current().id();
+    GC_THREADS.write().unwrap().remove(&id);
+}
+pub(crate) fn is_gc_thread() -> bool {
+    let id = std::thread::current().id();
+    GC_THREADS.read().unwrap().contains(&id)
+}
+
 pub struct VMCollection {}
 
 impl Collection<JuliaVM> for VMCollection {
@@ -84,18 +105,28 @@ impl Collection<JuliaVM> for VMCollection {
 
     fn spawn_gc_thread(_tls: VMThread, ctx: GCThreadContext<JuliaVM>) {
         // Just drop the join handle. The thread will run until the process quits.
-        let _ = std::thread::spawn(move || {
-            use mmtk::util::opaque_pointer::*;
-            use mmtk::util::Address;
-            let worker_tls = VMWorkerThread(VMThread(OpaquePointer::from_address(unsafe {
-                Address::from_usize(thread_id::get())
-            })));
-            match ctx {
-                GCThreadContext::Worker(w) => {
-                    mmtk::memory_manager::start_worker(&SINGLETON, worker_tls, w)
+        let _ = std::thread::Builder::new()
+            .name("MMTk Worker".to_string())
+            .spawn(move || {
+                use mmtk::util::opaque_pointer::*;
+                use mmtk::util::Address;
+
+                // Remember this GC thread
+                register_gc_thread();
+
+                // Start the worker loop
+                let worker_tls = VMWorkerThread(VMThread(OpaquePointer::from_address(unsafe {
+                    Address::from_usize(thread_id::get())
+                })));
+                match ctx {
+                    GCThreadContext::Worker(w) => {
+                        mmtk::memory_manager::start_worker(&SINGLETON, worker_tls, w)
+                    }
                 }
-            }
-        });
+
+                // The GC thread quits somehow. Unresgister this GC thread
+                unregister_gc_thread();
+            });
     }
 
     fn schedule_finalization(_tls: VMWorkerThread) {}

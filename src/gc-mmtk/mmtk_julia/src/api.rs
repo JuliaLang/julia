@@ -104,6 +104,9 @@ pub extern "C" fn mmtk_gc_init(
     // Make sure we initialize MMTk here
     lazy_static::initialize(&SINGLETON);
 
+    // Hijack the panic hook to make sure that if we crash in the GC threads, the process aborts.
+    crate::set_panic_hook();
+
     // Assert to make sure our fastpath allocation is correct.
     {
         // If the assertion failed, check the allocation fastpath in Julia
