@@ -23,6 +23,8 @@ New language features
   - actual running time for the task (`Base.Experimental.task_running_time_ns`), and
   - wall-time for the task (`Base.Experimental.task_wall_time_ns`).
 - Support for Unicode 16 ([#56925]).
+  - The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
+    is now a valid operator with arrow precedence. ([JuliaLang/JuliaSyntax.jl#525])
 
 Language changes
 ----------------
