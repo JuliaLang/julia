@@ -778,7 +778,7 @@ void jl_init_threading(void)
     }
 
     jl_all_tls_states_size = nthreads + nthreadsi + ngcthreads;
-    jl_n_threads_per_pool = (int*)malloc_s(jl_n_threadpools * sizeof(int));
+    jl_n_threads_per_pool = (int*)calloc_s(jl_n_threadpools * sizeof(int));
     jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = nthreadsi;
     jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = nthreads;
     assert(jl_all_tls_states_size > 0);
