@@ -344,7 +344,7 @@ end
     @test only(node.down).first == lidict[8]
 end
 
-# FIXME: Issue #57103: heap snapshots is not currently supported in MMTk
+# FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
 @static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
     tmpdir = mktempdir()
