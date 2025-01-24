@@ -636,8 +636,6 @@ If `timeout` is specified, cancel the `wait` when it expires and return
 millisecond.
 """
 function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
-    timeout == 0.0 || timeout ≥ 1e-3 || throw(ArgumentError("timeout must be ≥ 1 millisecond"))
-
     ct = current_task()
     Base._wait2(c, ct, first)
     token = Base.unlockall(c.lock)
