@@ -444,10 +444,9 @@ end
 function pipe_reader end
 function pipe_writer end
 
-for f in (:flush, :iswritable)
+for f in (:flush, :closewrite, :iswritable)
     @eval $(f)(io::AbstractPipe) = $(f)(pipe_writer(io)::IO)
 end
-closewrite(io::AbstractPipe) = close(pipe_writer(io)::IO)
 write(io::AbstractPipe, byte::UInt8) = write(pipe_writer(io)::IO, byte)
 write(to::IO, from::AbstractPipe) = write(to, pipe_reader(from))
 unsafe_write(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_write(pipe_writer(io)::IO, p, nb)::Union{Int,UInt}
