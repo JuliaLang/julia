@@ -1793,8 +1793,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                         arraylist_push(&s->ccallable_list, (void*)reloc_offset);
                     } else {
                         for (size_t i = 0; i < jl_entrypoint_list->len; i++) {
-                            jl_value_t* val = (jl_value_t*)jl_entrypoint_list->items[i];
-                            if ((jl_value_t *)m->ccallable == val) {
+                            jl_value_t *val = (jl_value_t*)jl_entrypoint_list->items[i];
+                            if (m == ((jl_method_instance_t*)val)->def.method) {
                                 arraylist_push(&s->ccallable_list, (void*)reloc_offset);
                                 break;
                             }
