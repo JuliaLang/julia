@@ -755,7 +755,7 @@ end
 # """
 
 src = """
-ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")
+Tuple[(x,y) for x in 1:2, y in 1:3]
 """
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")

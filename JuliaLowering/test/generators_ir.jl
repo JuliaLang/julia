@@ -307,12 +307,57 @@ Detailed provenance:
 4   (return %₃)
 
 ########################################
-# Typed comprehension lowers to generator with collect
-T[x for x in xs]
+# Simple typed comprehension lowers to for loop
+T[(x,y) for x in xs, y in ys]
 #---------------------
-1   TestMod.T
-2   TestMod.xs
-3   (call top.Generator top.identity %₂)
-4   (call top.collect %₁ %₃)
-5   (return %₄)
+1   TestMod.xs
+2   TestMod.ys
+3   (call top.product %₁ %₂)
+4   (call top.IteratorSize %₃)
+5   (call core.isa %₄ top.SizeUnknown)
+6   TestMod.T
+7   (call top._array_for %₆ %₃ %₄)
+8   (call top.LinearIndices %₇)
+9   (= slot₁/idx (call top.first %₈))
+10  (= slot₃/next (call top.iterate %₂))
+11  slot₃/next
+12  (call core.=== %₁₁ core.nothing)
+13  (call top.not_int %₁₂)
+14  (gotoifnot %₁₃ label₅₀)
+15  slot₃/next
+16  (= slot₄/y (call core.getfield %₁₅ 1))
+17  (call core.getfield %₁₅ 2)
+18  (= slot₂/next (call top.iterate %₁))
+19  slot₂/next
+20  (call core.=== %₁₉ core.nothing)
+21  (call top.not_int %₂₀)
+22  (gotoifnot %₂₁ label₄₄)
+23  slot₄/y
+24  (= slot₆/y %₂₃)
+25  slot₂/next
+26  (= slot₅/x (call core.getfield %₂₅ 1))
+27  (call core.getfield %₂₅ 2)
+28  slot₅/x
+29  slot₆/y
+30  (call core.tuple %₂₈ %₂₉)
+31  (gotoifnot %₅ label₃₄)
+32  (call top.push! %₇ %₃₀)
+33  (goto label₃₆)
+34  slot₁/idx
+35  (call top.setindex! %₇ %₃₀ %₃₄)
+36  slot₁/idx
+37  (= slot₁/idx (call top.add_int %₃₆ 1))
+38  (= slot₂/next (call top.iterate %₁ %₂₇))
+39  slot₂/next
+40  (call core.=== %₃₉ core.nothing)
+41  (call top.not_int %₄₀)
+42  (gotoifnot %₄₁ label₄₄)
+43  (goto label₂₃)
+44  (= slot₃/next (call top.iterate %₂ %₁₇))
+45  slot₃/next
+46  (call core.=== %₄₅ core.nothing)
+47  (call top.not_int %₄₆)
+48  (gotoifnot %₄₇ label₅₀)
+49  (goto label₁₅)
+50  (return %₇)
 

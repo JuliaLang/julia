@@ -752,6 +752,13 @@ function find_return(ex::SyntaxTree)
     end
 end
 
+function check_no_return(ex)
+    r = find_return(ex)
+    if !isnothing(r)
+        throw(LoweringError(r, "`return` not allowed inside comprehension or generator"))
+    end
+end
+
 # Return true for nested tuples of the same identifiers
 function similar_tuples_or_identifiers(a, b)
     if kind(a) == K"tuple" && kind(b) == K"tuple"
@@ -785,10 +792,7 @@ end
 function expand_generator(ctx, ex)
     @chk numchildren(ex) >= 2
     body = ex[1]
-    body_ret = find_return(body)
-    if !isnothing(body_ret)
-        throw(LoweringError(body_ret, "`return` not allowed inside comprehension or generator"))
-    end
+    check_no_return(body)
     if numchildren(ex) > 2
         # Uniquify outer vars by NameKey
         outervars_by_key = Dict{NameKey,typeof(ex)}()
@@ -869,6 +873,57 @@ function expand_generator(ctx, ex)
         end
     end
     body
+end
+
+function expand_comprehension_to_loops(ctx, ex)
+    @assert kind(ex) == K"typed_comprehension"
+    element_type = ex[1]
+    gen = ex[2]
+    @assert kind(gen) == K"generator"
+    body = gen[1]
+    check_no_return(body)
+    # TODO: check_no_break_continue
+    iterspecs = gen[2]
+    @assert kind(iterspecs) == K"iteration"
+    new_iterspecs = SyntaxList(ctx)
+    iters = SyntaxList(ctx)
+    iter_defs = SyntaxList(ctx)
+    for iterspec in children(iterspecs)
+        iter = emit_assign_tmp(iter_defs, ctx, iterspec[2], "iter")
+        push!(iters, iter)
+        push!(new_iterspecs, @ast ctx iterspec [K"in" iterspec[1] iter])
+    end
+    # Lower to nested for loops
+    # layer = new_scope_layer(ctx)
+    idx = new_local_binding(ctx, iterspecs, "idx")
+    @ast ctx ex [K"block"
+        iter_defs...
+        full_iter := if length(iters) == 1
+            iters[1]
+        else
+            [K"call"
+                "product"::K"top"
+                iters...
+            ]
+        end
+        iter_size := [K"call" "IteratorSize"::K"top" full_iter]
+        size_unknown := [K"call" "isa"::K"core" iter_size "SizeUnknown"::K"top"]
+        result    := [K"call" "_array_for"::K"top" element_type full_iter iter_size]
+        [K"=" idx [K"call" "first"::K"top" [K"call" "LinearIndices"::K"top" result]]]
+        [K"for" [K"iteration" Iterators.reverse(new_iterspecs)...]
+            [K"block"
+                val := body
+                # TODO: inbounds setindex
+                [K"if" size_unknown
+                    [K"call" "push!"::K"top" result val]
+                    [K"call" "setindex!"::K"top" result val idx]
+                ]
+                #[K"call" "println"::K"top" [K"call" "typeof"::K"core" idx]]
+                [K"=" idx [K"call" "add_int"::K"top" idx 1::K"Integer"]]
+            ]
+        ]
+        result
+    ]
 end
 
 #-------------------------------------------------------------------------------
@@ -3560,12 +3615,17 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"typed_comprehension"
         @chk numchildren(ex) == 2
         @chk kind(ex[2]) == K"generator"
-        # TODO: Hack for early lowering of selected typed_comprehension
-        @ast ctx ex [K"call"
-            "collect"::K"top"
-            expand_forms_2(ctx, ex[1])
-            expand_forms_2(ctx, ex[2])
-        ]
+        if numchildren(ex[2]) == 2 && kind(ex[2][2]) == K"iteration"
+            # Hack to lower simple typed comprehensions to loops very early,
+            # greatly reducing the number of functions and load on the compiler
+            expand_forms_2(ctx, expand_comprehension_to_loops(ctx, ex))
+        else
+            @ast ctx ex [K"call"
+                "collect"::K"top"
+                expand_forms_2(ctx, ex[1])
+                expand_forms_2(ctx, ex[2])
+            ]
+        end
     elseif k == K"generator"
         expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"->" || k == K"do"

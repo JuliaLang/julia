@@ -49,4 +49,10 @@ collect(x for x in 1:3 for x in 1:2)
 collect((z=y; y=100; z) for y in 1:3 for x in 1:2)
 """) == [1, 1, 2, 2, 3, 3]
 
+# Simple typed comprehension lowered to for loops
+@test JuliaLowering.include_string(test_mod, """
+Tuple{Int,Int}[(x,y) for x in 1:2, y in 1:3]
+""") == [(1,1) (1,2) (1,3)
+         (2,1) (2,2) (2,3)]
+
 end
