@@ -152,6 +152,8 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // heap-size-hint
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
+                        0, // task_metrics
+                        -1, // timeout_for_safepoint_straggler_s
     };
     jl_options_initialized = 1;
 }
@@ -310,12 +312,15 @@ static const char opts_hidden[]  =
     " --output-asm <name>                           Generate an assembly file (.s)\n"
     " --output-incremental={yes|no*}                Generate an incremental output file (rather than\n"
     "                                               complete)\n"
+    " --timeout-for-safepoint-straggler <seconds>   If this value is set, then we will dump the backtrace for a thread\n"
+    "                                               that fails to reach a safepoint within the specified time\n"
     " --trace-compile={stderr|name}                 Print precompile statements for methods compiled\n"
     "                                               during execution or save to stderr or a path. Methods that\n"
     "                                               were recompiled are printed in yellow or with a trailing\n"
     "                                               comment if color is not supported\n"
     " --trace-compile-timing                        If --trace-compile is enabled show how long each took to\n"
     "                                               compile in ms\n"
+    " --task-metrics={yes|no*}                      Enable collection of per-task timing data.\n"
     " --image-codegen                               Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
     " --trim={no*|safe|unsafe|unsafe-warn}\n"
@@ -344,9 +349,11 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_warn_scope,
            opt_inline,
            opt_polly,
+           opt_timeout_for_safepoint_straggler,
            opt_trace_compile,
            opt_trace_compile_timing,
            opt_trace_dispatch,
+           opt_task_metrics,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -424,9 +431,11 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "warn-scope",      required_argument, 0, opt_warn_scope },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
+        { "timeout-for-safepoint-straggler", required_argument, 0, opt_timeout_for_safepoint_straggler },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
         { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
+        { "task-metrics",    required_argument, 0, opt_task_metrics },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
@@ -966,6 +975,13 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
             break;
+        case opt_timeout_for_safepoint_straggler:
+            errno = 0;
+            long timeout = strtol(optarg, &endptr, 10);
+            if (errno != 0 || optarg == endptr || timeout < 1 || timeout > INT16_MAX)
+                jl_errorf("julia: --timeout-for-safepoint-straggler=<seconds>; seconds must be an integer between 1 and %d", INT16_MAX);
+            jl_options.timeout_for_safepoint_straggler_s = (int16_t)timeout;
+            break;
         case opt_trim:
             if (optarg == NULL || !strcmp(optarg,"safe"))
                 jl_options.trim = JL_TRIM_SAFE;
@@ -977,6 +993,14 @@ restart_switch:
                 jl_options.trim = JL_TRIM_UNSAFE_WARN;
             else
                 jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
+            break;
+        case opt_task_metrics:
+            if (!strcmp(optarg, "no"))
+                jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_OFF;
+            else if (!strcmp(optarg, "yes"))
+                jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_ON;
+            else
+                jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"

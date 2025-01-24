@@ -228,7 +228,7 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp libgmpxx
 JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_NGHTTP2) += libnghttp2
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MBEDTLS) += libmbedtls libmbedcrypto libmbedx509
+JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENSSL) += libcrypto libssl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUV) += libuv
@@ -279,6 +279,10 @@ ifeq ($(USE_SYSTEM_LAPACK),0)
 JL_PRIVATE_LIBS-0 += libgfortblas
 endif
 endif
+endif
+
+ifneq (${MMTK_PLAN},None)
+JL_PRIVATE_LIBS-0 += libmmtk_julia
 endif
 
 # Note that we disable MSYS2's path munging here, as otherwise

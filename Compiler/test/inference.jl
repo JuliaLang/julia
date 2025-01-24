@@ -2295,11 +2295,18 @@ let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance)
     @test tmerge(MustAlias(2, AliasableField{Any}, 1, Int), Const(nothing)) === Union{Int,Nothing}
     @test tmerge(Const(nothing), MustAlias(2, AliasableField{Any}, 1, Any)) === Any
     @test tmerge(Const(nothing), MustAlias(2, AliasableField{Any}, 1, Int)) === Union{Int,Nothing}
+    tmerge(Const(AbstractVector{<:Any}), Const(AbstractVector{T} where {T}))  # issue #56913
     @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Const(Bool)) === Const(true)
     @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Type{Bool}) === Const(true)
     @test isa_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Type{Bool}) === Const(false)
     @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Bool), Int, Int) === Int
     @test ifelse_tfunc(MustAlias(2, AliasableField{Any}, 1, Int), Int, Int) === Union{}
+end
+
+@testset "issue #56913: `BoundsError` in type inference" begin
+    R = UnitRange{Int}
+    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, Vararg{R}})
+    @test Type{AbstractVector} == Base.infer_return_type(Base.promote_typeof, Tuple{R, R, Vector{Any}, R, Vararg{R}})
 end
 
 maybeget_mustalias_tmerge(x::AliasableField) = x.f
@@ -2727,6 +2734,26 @@ vacond(cnd, va...) = cnd ? va : 0
     vacond(isa(x, Tuple{Int,Int}), x, x)
 end |> only == Union{Int,Tuple{Any,Any}}
 
+let A = Core.Const(true)
+    B = Core.InterConditional(2, Tuple, Union{})
+    C = Core.InterConditional(2, Any, Union{})
+    L = ipo_lattice(Compiler.NativeInterpreter())
+    @test !⊑(L, A, B)
+    @test ⊑(L, B, A)
+    @test tmerge(L, A, B) == C
+    @test ⊑(L, A, C)
+end
+function tail_is_ntuple((@nospecialize t::Tuple))
+    if unknown
+        t isa Tuple
+    else
+        tail_is_ntuple(t)
+    end
+end
+tail_is_ntuple_val((@nospecialize t::Tuple)) = Val(tail_is_ntuple(t))
+@test Base.return_types(tail_is_ntuple, (Tuple,)) |> only === Bool
+@test Base.return_types(tail_is_ntuple_val, (Tuple,)) |> only === Val{true}
+
 # https://github.com/JuliaLang/julia/issues/47435
 is_closed_ex(e::InvalidStateException) = true
 is_closed_ex(e) = false
@@ -3031,14 +3058,13 @@ end
 
 # issue #28279
 # ensure that lowering doesn't move these into statement position, which would require renumbering
-using Base: +, -
-function f28279(b::Bool)
+@eval function f28279(b::Bool)
     let i = 1
-        while i > b
-            i -= 1
+        while $(>)(i, b)
+            i = $(-)(i, 1)
         end
         if b end
-        return i + 1
+        return $(+)(i, 1)
     end
 end
 code28279 = code_lowered(f28279, (Bool,))[1].code
@@ -4104,6 +4130,22 @@ end == [Union{Some{Float64}, Some{Int}, Some{UInt8}}]
         end
         return a
     end == Union{Int32,Int64}
+
+    @test Base.infer_return_type((Vector{Any},)) do args
+        codeinst = first(args)
+        if codeinst isa Core.MethodInstance
+            mi = codeinst
+        else
+            codeinst::Core.CodeInstance
+            def = codeinst.def
+            if isa(def, Core.ABIOverride)
+                mi = def.def
+            else
+                mi = def::Core.MethodInstance
+            end
+        end
+        return mi
+    end == Core.MethodInstance
 end
 
 callsig_backprop_basic(::Int) = nothing
@@ -4437,7 +4479,7 @@ let x = Tuple{Int,Any}[
         #=20=# (0, Core.ReturnNode(Core.SlotNumber(3)))
     ]
     (;handler_at, handlers) = Compiler.compute_trycatch(last.(x))
-    @test map(x->x[1] == 0 ? 0 : handlers[x[1]].enter_idx, handler_at) == first.(x)
+    @test map(x->x[1] == 0 ? 0 : Compiler.get_enter_idx(handlers[x[1]]), handler_at) == first.(x)
 end
 
 @test only(Base.return_types((Bool,)) do y
@@ -6126,3 +6168,23 @@ function func_swapglobal!_must_throw(x)
 end
 @test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
 @test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+
+@eval get_exception() = $(Expr(:the_exception))
+@test Base.infer_return_type() do
+    get_exception()
+end <: Any
+@test @eval Base.infer_return_type((Float64,)) do x
+    out = $(Expr(:the_exception))
+    try
+        out = sin(x)
+    catch
+        out = $(Expr(:the_exception))
+    end
+    return out
+end == Union{Float64,DomainError}
+
+# issue #56628
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}} ]) === Tuple{Int, UnitRange{Int}}
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64 ]) === Tuple{Int, UnitRange{Int}, Float64}
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64, Memory{2} ]) === Union{}
+@test Base.return_types(Tuple{Tuple{Int, Vararg{Pair{Any, Union{}}}}},) do x; Returns(true)(x...); end |> only === Bool

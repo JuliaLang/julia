@@ -1163,9 +1163,6 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                 }
                 if (CI->hasStructRetAttr()) {
                     Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
-                    #if JL_LLVM_VERSION < 170000
-                    assert(cast<PointerType>(CI->getArgOperand(0)->getType())->isOpaqueOrPointeeTypeMatches(getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType()));
-                    #endif
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
                         AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
@@ -1252,38 +1249,20 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                         callee->getName() == "memcmp") {
                         continue;
                     }
-#if JL_LLVM_VERSION >= 160000
                     if (callee->getMemoryEffects().onlyReadsMemory() ||
                         callee->getMemoryEffects().onlyAccessesArgPointees()) {
                         continue;
                     }
-#else
-                    if (callee->hasFnAttribute(Attribute::ReadNone) ||
-                        callee->hasFnAttribute(Attribute::ReadOnly) ||
-                        callee->hasFnAttribute(Attribute::ArgMemOnly)) {
-                        continue;
-                    }
-#endif
                     if (MemTransferInst *MI = dyn_cast<MemTransferInst>(CI)) {
                         MaybeTrackDst(S, MI);
                     }
                 }
-#if JL_LLVM_VERSION >= 160000
                 if (isa<IntrinsicInst>(CI) ||
                     CI->getMemoryEffects().onlyAccessesArgPointees() ||
                     CI->getMemoryEffects().onlyReadsMemory()) {
                     // Intrinsics are never safepoints.
                     continue;
                 }
-#else
-                if (isa<IntrinsicInst>(CI) ||
-                    CI->hasFnAttr(Attribute::ArgMemOnly) ||
-                    CI->hasFnAttr(Attribute::ReadNone)   ||
-                    CI->hasFnAttr(Attribute::ReadOnly)) {
-                    // Intrinsics are never safepoints.
-                    continue;
-                }
-#endif
                 SmallVector<int, 0> CalleeRoots;
                 for (Use &U : CI->args()) {
                     // Find all callee rooted arguments.
@@ -2467,6 +2446,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
 
 bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     initAll(*F.getParent());
+    smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
     if (!pgcstack_getter && !adoptthread_func)
         return CleanupIR(F, nullptr, CFGModified);
@@ -2481,6 +2461,31 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
     PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
     CleanupIR(F, &S, CFGModified);
+
+
+    // We lower the julia.gc_alloc_bytes intrinsic in this pass to insert slowpath/fastpath blocks for MMTk
+    // For now, we do nothing for the Stock GC
+    auto GCAllocBytes = getOrNull(jl_intrinsics::GCAllocBytes);
+
+    if (GCAllocBytes) {
+        for (auto it = GCAllocBytes->user_begin(); it != GCAllocBytes->user_end(); ) {
+            if (auto *CI = dyn_cast<CallInst>(*it)) {
+                *CFGModified = true;
+
+                assert(CI->getCalledOperand() == GCAllocBytes);
+
+                auto newI = lowerGCAllocBytesLate(CI, F);
+                if (newI != CI) {
+                    ++it;
+                    CI->replaceAllUsesWith(newI);
+                    CI->eraseFromParent();
+                    continue;
+                }
+            }
+            ++it;
+        }
+    }
+
     return true;
 }
 

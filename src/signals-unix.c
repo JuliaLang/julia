@@ -308,19 +308,17 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 #else
 #include <poll.h>
 #include <sys/eventfd.h>
+#include <link.h>
 
-int jl_lock_stackwalk(void)
+void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
 {
-    jl_lock_profile();
-    return 0;
+    sigset_t sset, oset;
+    sigemptyset(&sset);
+    sigaddset(&sset, SIGUSR2);
+    pthread_sigmask(SIG_BLOCK, &sset, &oset);
+    f(ctx);
+    pthread_sigmask(SIG_SETMASK, &oset, NULL);
 }
-
-void jl_unlock_stackwalk(int lockret)
-{
-    (void)lockret;
-    jl_unlock_profile();
-}
-
 
 #if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
 int is_write_fault(void *context) {
@@ -435,7 +433,7 @@ JL_NO_ASAN static void segv_handler(int sig, siginfo_t *info, void *context)
 }
 
 pthread_mutex_t in_signal_lock; // shared with jl_delete_thread
-static bt_context_t *signal_context; // protected by in_signal_lock
+static bt_context_t *usr2_signal_context; // protected by in_signal_lock
 static int exit_signal_cond = -1;
 static int signal_caught_cond = -1;
 static int signals_inflight = 0;
@@ -507,7 +505,7 @@ int jl_thread_suspend_and_get_state(int tid, int timeout, bt_context_t *ctx)
     request = jl_atomic_load_acquire(&ptls2->signal_request);
     assert(request == 0 || request == -1); (void) request;
     jl_atomic_store_release(&ptls2->signal_request, 4); // prepare to resume normally, but later code may change this
-    *ctx = *signal_context;
+    *ctx = *usr2_signal_context;
     return 1;
 }
 
@@ -587,8 +585,8 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
     if (!jl_atomic_cmpswap(&ptls->signal_request, &request, -1))
         return;
     if (request == 1) {
-        signal_context = jl_to_bt_context(ctx);
-        // acknowledge that we saw the signal_request and set signal_context
+        usr2_signal_context = jl_to_bt_context(ctx);
+        // acknowledge that we saw the signal_request and set usr2_signal_context
         int err;
         eventfd_t got = 1;
         err = write(signal_caught_cond, &got, sizeof(eventfd_t));
@@ -602,7 +600,7 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx)
         if (err != sizeof(eventfd_t)) abort();
         assert(got == 1);
         request = jl_atomic_exchange(&ptls->signal_request, -1);
-        signal_context = NULL;
+        usr2_signal_context = NULL;
         assert(request == 2 || request == 3 || request == 4);
     }
     int err;
@@ -806,7 +804,7 @@ void trigger_profile_peek(void)
     jl_safe_printf("\n======================================================================================\n");
     jl_safe_printf("Information request received. A stacktrace will print followed by a %.1f second profile\n", profile_peek_duration);
     jl_safe_printf("======================================================================================\n");
-    if (profile_bt_size_max == 0){
+    if (profile_bt_size_max == 0) {
         // If the buffer hasn't been initialized, initialize with default size
         // Keep these values synchronized with Profile.default_init()
         if (jl_profile_init(10000000, 1000000) == -1) {
@@ -821,59 +819,93 @@ void trigger_profile_peek(void)
         profile_autostop_time = jl_hrtime() + (profile_peek_duration * 1e9);
 }
 
-// assumes holding `jl_lock_stackwalk`
-void jl_profile_thread_unix(int tid, bt_context_t *signal_context)
+#if !defined(JL_DISABLE_LIBUNWIND)
+
+static jl_bt_element_t signal_bt_data[JL_MAX_BT_SIZE + 1];
+static size_t signal_bt_size = 0;
+static void do_critical_profile(void *ctx)
 {
-    if (jl_profile_is_buffer_full()) {
-        // Buffer full: Delete the timer
-        jl_profile_stop_timer();
-        return;
+    bt_context_t signal_context;
+    // sample each thread, round-robin style in reverse order
+    // (so that thread zero gets notified last)
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    for (int i = nthreads; i-- > 0; ) {
+        // notify thread to stop
+        if (!jl_thread_suspend_and_get_state(i, 1, &signal_context))
+            continue;
+
+        // do backtrace on thread contexts for critical signals
+        // this part must be signal-handler safe
+        signal_bt_size += rec_backtrace_ctx(signal_bt_data + signal_bt_size,
+                JL_MAX_BT_SIZE / nthreads - 1,
+                &signal_context, NULL);
+        signal_bt_data[signal_bt_size++].uintptr = 0;
+        jl_thread_resume(i);
     }
-    // notify thread to stop
-    if (!jl_thread_suspend_and_get_state(tid, 1, signal_context))
-        return;
-    // unwinding can fail, so keep track of the current state
-    // and restore from the SEGV handler if anything happens.
-    jl_jmp_buf *old_buf = jl_get_safe_restore();
-    jl_jmp_buf buf;
-
-    jl_set_safe_restore(&buf);
-    if (jl_setjmp(buf, 0)) {
-        jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
-    } else {
-        // Get backtrace data
-        profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
-                profile_bt_size_max - profile_bt_size_cur - 1, signal_context, NULL);
-    }
-    jl_set_safe_restore(old_buf);
-
-    jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
-
-    // store threadid but add 1 as 0 is preserved to indicate end of block
-    profile_bt_data_prof[profile_bt_size_cur++].uintptr = ptls2->tid + 1;
-
-    // store task id (never null)
-    profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls2->current_task);
-
-    // store cpu cycle clock
-    profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
-
-    // store whether thread is sleeping (don't ever encode a state as `0` since is preserved to indicate end of block)
-    int state = jl_atomic_load_relaxed(&ptls2->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
-    profile_bt_data_prof[profile_bt_size_cur++].uintptr = state;
-
-    // Mark the end of this block with two 0's
-    profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
-    profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
-
-    // notify thread to resume
-    jl_thread_resume(tid);
 }
+
+static void do_profile(void *ctx)
+{
+    bt_context_t signal_context;
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    int *randperm = profile_get_randperm(nthreads);
+    for (int idx = nthreads; idx-- > 0; ) {
+        // Stop the threads in the random order.
+        int tid = randperm[idx];
+        // do backtrace for profiler
+        if (!profile_running)
+            return;
+        if (jl_profile_is_buffer_full()) {
+            // Buffer full: Delete the timer
+            jl_profile_stop_timer();
+            return;
+        }
+        // notify thread to stop
+        if (!jl_thread_suspend_and_get_state(tid, 1, &signal_context))
+            return;
+        // unwinding can fail, so keep track of the current state
+        // and restore from the SEGV handler if anything happens.
+        jl_jmp_buf *old_buf = jl_get_safe_restore();
+        jl_jmp_buf buf;
+
+        jl_set_safe_restore(&buf);
+        if (jl_setjmp(buf, 0)) {
+            jl_safe_printf("WARNING: profiler attempt to access an invalid memory location\n");
+        }
+        else {
+            // Get backtrace data
+            profile_bt_size_cur += rec_backtrace_ctx((jl_bt_element_t*)profile_bt_data_prof + profile_bt_size_cur,
+                    profile_bt_size_max - profile_bt_size_cur - 1, &signal_context, NULL);
+        }
+        jl_set_safe_restore(old_buf);
+
+        jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+
+        // store threadid but add 1 as 0 is preserved to indicate end of block
+        profile_bt_data_prof[profile_bt_size_cur++].uintptr = ptls2->tid + 1;
+
+        // store task id (never null)
+        profile_bt_data_prof[profile_bt_size_cur++].jlvalue = (jl_value_t*)jl_atomic_load_relaxed(&ptls2->current_task);
+
+        // store cpu cycle clock
+        profile_bt_data_prof[profile_bt_size_cur++].uintptr = cycleclock();
+
+        // store whether thread is sleeping (don't ever encode a state as `0` since is preserved to indicate end of block)
+        int state = jl_atomic_load_relaxed(&ptls2->sleep_check_state) == 0 ? PROFILE_STATE_THREAD_NOT_SLEEPING : PROFILE_STATE_THREAD_SLEEPING;
+        profile_bt_data_prof[profile_bt_size_cur++].uintptr = state;
+
+        // Mark the end of this block with two 0's
+        profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
+        profile_bt_data_prof[profile_bt_size_cur++].uintptr = 0;
+
+        // notify thread to resume
+        jl_thread_resume(tid);
+    }
+}
+#endif
 
 static void *signal_listener(void *arg)
 {
-    static jl_bt_element_t bt_data[JL_MAX_BT_SIZE + 1];
-    static size_t bt_size = 0;
     sigset_t sset;
     int sig, critical, profile;
     jl_sigsetset(&sset);
@@ -1005,28 +1037,10 @@ static void *signal_listener(void *arg)
             }
         }
 
-        int nthreads = jl_atomic_load_acquire(&jl_n_threads);
-        bt_size = 0;
+        signal_bt_size = 0;
 #if !defined(JL_DISABLE_LIBUNWIND)
-        bt_context_t signal_context;
         if (critical) {
-            int lockret = jl_lock_stackwalk();
-            // sample each thread, round-robin style in reverse order
-            // (so that thread zero gets notified last)
-            for (int i = nthreads; i-- > 0; ) {
-                // notify thread to stop
-                if (!jl_thread_suspend_and_get_state(i, 1, &signal_context))
-                    continue;
-
-                // do backtrace on thread contexts for critical signals
-                // this part must be signal-handler safe
-                bt_size += rec_backtrace_ctx(bt_data + bt_size,
-                        JL_MAX_BT_SIZE / nthreads - 1,
-                        &signal_context, NULL);
-                bt_data[bt_size++].uintptr = 0;
-                jl_thread_resume(i);
-            }
-            jl_unlock_stackwalk(lockret);
+            jl_with_stackwalk_lock(do_critical_profile, NULL);
         }
         else if (profile) {
             if (profile_all_tasks) {
@@ -1034,17 +1048,7 @@ static void *signal_listener(void *arg)
                 jl_profile_task();
             }
             else {
-                int lockret = jl_lock_stackwalk();
-                int *randperm = profile_get_randperm(nthreads);
-                for (int idx = nthreads; idx-- > 0; ) {
-                    // Stop the threads in the random order.
-                    int i = randperm[idx];
-                    // do backtrace for profiler
-                    if (profile_running) {
-                        jl_profile_thread_unix(i, &signal_context);
-                    }
-                }
-                jl_unlock_stackwalk(lockret);
+                jl_with_stackwalk_lock(do_profile, NULL);
             }
         }
 #ifndef HAVE_MACH
@@ -1065,11 +1069,12 @@ static void *signal_listener(void *arg)
 //#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L && !HAVE_KEVENT
 //            si_code = info.si_code;
 //#endif
-            jl_exit_thread0(sig, bt_data, bt_size);
+            jl_exit_thread0(sig, signal_bt_data, signal_bt_size);
         }
         else if (critical) {
             // critical in this case actually means SIGINFO request
 #ifndef SIGINFO // SIGINFO already prints something similar automatically
+            int nthreads = jl_atomic_load_acquire(&jl_n_threads);
             int n_threads_running = 0;
             for (int idx = nthreads; idx-- > 0; ) {
                 jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[idx];
@@ -1080,8 +1085,8 @@ static void *signal_listener(void *arg)
 
             jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
             size_t i;
-            for (i = 0; i < bt_size; i += jl_bt_entry_size(bt_data + i)) {
-                jl_print_bt_entry_codeloc(bt_data + i);
+            for (i = 0; i < signal_bt_size; i += jl_bt_entry_size(signal_bt_data + i)) {
+                jl_print_bt_entry_codeloc(signal_bt_data + i);
             }
         }
     }
@@ -1203,7 +1208,7 @@ void jl_install_default_signal_handlers(void)
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = usr2_handler;
-    act.sa_flags = SA_ONSTACK | SA_SIGINFO | SA_RESTART;
+    act.sa_flags = SA_SIGINFO | SA_RESTART;
     if (sigaction(SIGUSR2, &act, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }

@@ -49,6 +49,8 @@ JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled = 0;
 JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time = 0;
 JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time = 0;
 
+JL_DLLEXPORT _Atomic(uint8_t) jl_task_metrics_enabled = 0;
+
 JL_DLLEXPORT void *jl_get_ptls_states(void)
 {
     // mostly deprecated: use current_task instead
@@ -770,6 +772,10 @@ void jl_init_threading(void)
         jl_safe_printf("WARNING: running Julia with %d GC threads on %d CPU cores\n", jl_n_markthreads + 1, cpu);
     }
     int16_t ngcthreads = jl_n_markthreads + jl_n_sweepthreads;
+
+    if (strstr(jl_gc_active_impl(), "MMTk")) {
+        ngcthreads = 0;
+    }
 
     jl_all_tls_states_size = nthreads + nthreadsi + ngcthreads;
     jl_n_threads_per_pool = (int*)malloc_s(2 * sizeof(int));

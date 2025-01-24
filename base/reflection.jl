@@ -131,13 +131,6 @@ isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                              error("Code for this Method is not available.")
-function _uncompressed_ir(m::Method)
-    s = m.source
-    if s isa String
-        s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
-    end
-    return s::CodeInfo
-end
 
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
@@ -462,7 +455,7 @@ internals.
   when looking up methods, use current world age if not specified.
 - `interp::Core.Compiler.AbstractInterpreter = Core.Compiler.NativeInterpreter(world)`:
   optional, controls the abstract interpreter to use, use the native interpreter if not specified.
-- `optimize_until::Union{Integer,AbstractString,Nothing} = nothing`: optional,
+- `optimize_until::Union{Int,String,Nothing} = nothing`: optional,
   controls the optimization passes to run.
   If it is a string, it specifies the name of the pass up to which the optimizer is run.
   If it is an integer, it specifies the number of passes to run.
@@ -506,7 +499,7 @@ function code_ircode_by_type(
     @nospecialize(tt::Type);
     world::UInt=get_world_counter(),
     interp=nothing,
-    optimize_until::Union{Integer,AbstractString,Nothing}=nothing,
+    optimize_until::Union{Int,String,Nothing}=nothing,
 )
     passed_interp = interp
     interp = passed_interp === nothing ? invoke_default_compiler(:_default_interp, world) : interp
@@ -1369,6 +1362,18 @@ macro invoke(ex)
     return esc(out)
 end
 
+apply_gr(gr::GlobalRef, @nospecialize args...) = getglobal(gr.mod, gr.name)(args...)
+apply_gr_kw(@nospecialize(kwargs::NamedTuple), gr::GlobalRef, @nospecialize args...) = Core.kwcall(kwargs, getglobal(gr.mod, gr.name), args...)
+
+function invokelatest_gr(gr::GlobalRef, @nospecialize args...; kwargs...)
+    @inline
+    kwargs = merge(NamedTuple(), kwargs)
+    if isempty(kwargs)
+        return Core._call_latest(apply_gr, gr, args...)
+    end
+    return Core._call_latest(apply_gr_kw, kwargs, gr, args...)
+end
+
 """
     @invokelatest f(args...; kwargs...)
 
@@ -1382,22 +1387,11 @@ It also supports the following syntax:
 - `@invokelatest xs[i]` expands to `Base.invokelatest(getindex, xs, i)`
 - `@invokelatest xs[i] = v` expands to `Base.invokelatest(setindex!, xs, v, i)`
 
-```jldoctest
-julia> @macroexpand @invokelatest f(x; kw=kwv)
-:(Base.invokelatest(f, x; kw = kwv))
-
-julia> @macroexpand @invokelatest x.f
-:(Base.invokelatest(Base.getproperty, x, :f))
-
-julia> @macroexpand @invokelatest x.f = v
-:(Base.invokelatest(Base.setproperty!, x, :f, v))
-
-julia> @macroexpand @invokelatest xs[i]
-:(Base.invokelatest(Base.getindex, xs, i))
-
-julia> @macroexpand @invokelatest xs[i] = v
-:(Base.invokelatest(Base.setindex!, xs, v, i))
-```
+!!! note
+    If `f` is a global, it will be resolved consistently
+    in the (latest) world as the call target. However, all other arguments
+    (as well as `f` itself if it is not a literal global) will be evaluated
+    in the current world age.
 
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
@@ -1411,11 +1405,45 @@ julia> @macroexpand @invokelatest xs[i] = v
 macro invokelatest(ex)
     topmod = _topmod(__module__)
     f, args, kwargs = destructure_callex(topmod, ex)
-    out = Expr(:call, GlobalRef(Base, :invokelatest))
-    isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
-    push!(out.args, f)
-    append!(out.args, args)
-    return esc(out)
+
+    if !isa(f, GlobalRef)
+        out_f = Expr(:call, GlobalRef(Base, :invokelatest))
+        isempty(kwargs) || push!(out_f.args, Expr(:parameters, kwargs...))
+
+        if isexpr(f, :(.))
+            s = gensym()
+            check = quote
+                $s = $(f.args[1])
+                isa($s, Module)
+            end
+            push!(out_f.args, Expr(:(.), s, f.args[2]))
+        else
+            push!(out_f.args, f)
+        end
+        append!(out_f.args, args)
+
+        if @isdefined(s)
+            f = :(GlobalRef($s, $(f.args[2])))
+        elseif !isa(f, Symbol)
+            return esc(out_f)
+        else
+            check = :($(Expr(:isglobal, f)))
+        end
+    end
+
+    out_gr = Expr(:call, GlobalRef(Base, :invokelatest_gr))
+    isempty(kwargs) || push!(out_gr.args, Expr(:parameters, kwargs...))
+    push!(out_gr.args, isa(f, GlobalRef) ? QuoteNode(f) :
+                       isa(f, Symbol) ? QuoteNode(GlobalRef(__module__, f)) :
+                       f)
+    append!(out_gr.args, args)
+
+    if isa(f, GlobalRef)
+        return esc(out_gr)
+    end
+
+    # f::Symbol
+    return esc(:($check ? $out_gr : $out_f))
 end
 
 function destructure_callex(topmod::Module, @nospecialize(ex))

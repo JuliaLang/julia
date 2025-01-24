@@ -83,10 +83,14 @@ const auto &float_func() {
             float_func[sub_float] = true;
             float_func[mul_float] = true;
             float_func[div_float] = true;
+            float_func[min_float] = true;
+            float_func[max_float] = true;
             float_func[add_float_fast] = true;
             float_func[sub_float_fast] = true;
             float_func[mul_float_fast] = true;
             float_func[div_float_fast] = true;
+            float_func[min_float_fast] = true;
+            float_func[max_float_fast] = true;
             float_func[fma_float] = true;
             float_func[muladd_float] = true;
             float_func[eq_float] = true;
@@ -1490,6 +1494,34 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     case sub_float: return math_builder(ctx)().CreateFSub(x, y);
     case mul_float: return math_builder(ctx)().CreateFMul(x, y);
     case div_float: return math_builder(ctx)().CreateFDiv(x, y);
+    case min_float: {
+        assert(x->getType() == y->getType());
+        FunctionCallee minintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::minimum, ArrayRef<Type*>(t));
+        return ctx.builder.CreateCall(minintr, {x, y});
+    }
+    case max_float: {
+        assert(x->getType() == y->getType());
+        FunctionCallee maxintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::maximum, ArrayRef<Type*>(t));
+        return ctx.builder.CreateCall(maxintr, {x, y});
+    }
+    case min_float_fast: {
+        assert(x->getType() == y->getType());
+        FunctionCallee minintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::minimum, ArrayRef<Type*>(t));
+        auto call = ctx.builder.CreateCall(minintr, {x, y});
+        auto fmf = call->getFastMathFlags();
+        fmf.setFast();
+        call->copyFastMathFlags(fmf);
+        return call;
+    }
+    case max_float_fast: {
+        assert(x->getType() == y->getType());
+        FunctionCallee maxintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::maximum, ArrayRef<Type*>(t));
+        auto call = ctx.builder.CreateCall(maxintr, {x, y});
+        auto fmf = call->getFastMathFlags();
+        fmf.setFast();
+        call->copyFastMathFlags(fmf);
+        return call;
+    }
     case add_float_fast: return math_builder(ctx, true)().CreateFAdd(x, y);
     case sub_float_fast: return math_builder(ctx, true)().CreateFSub(x, y);
     case mul_float_fast: return math_builder(ctx, true)().CreateFMul(x, y);

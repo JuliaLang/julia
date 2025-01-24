@@ -264,9 +264,6 @@ static GlobalVariable *emit_plt_thunk(
     SmallVector<Value*, 16> args;
     for (auto &arg : plt->args())
         args.push_back(&arg);
-    #if JL_LLVM_VERSION < 170000
-    assert(cast<PointerType>(ptr->getType())->isOpaqueOrPointeeTypeMatches(functype));
-    #endif
     CallInst *ret = irbuilder.CreateCall(
         functype,
         ptr, ArrayRef<Value*>(args));
@@ -464,10 +461,7 @@ static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
     Value *args[] = {
         literal_pointer_val(ctx, ty),
         literal_pointer_val(ctx, (jl_value_t*)ctx.linfo->def.method->sig),
-        ctx.builder.CreateInBoundsGEP(
-                ctx.types().T_prjlvalue,
-                ctx.spvals_ptr,
-                ConstantInt::get(ctx.types().T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)))
+        emit_ptrgep(ctx, maybe_decay_tracked(ctx, ctx.spvals_ptr), sizeof(jl_svec_t))
     };
     auto call = ctx.builder.CreateCall(prepare_call(jlapplytype_func), ArrayRef<Value*>(args));
     addRetAttr(call, Attribute::getWithAlignment(ctx.builder.getContext(), Align(16)));
@@ -700,14 +694,12 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     }
     else if (sym.fptr != NULL) {
         res = ConstantInt::get(lrt, (uint64_t)sym.fptr);
-        if (ctx.emission_context.imaging_mode)
-            jl_printf(JL_STDERR,"WARNING: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
     else if (sym.f_name != NULL) {
         if (sym.lib_expr) {
             res = runtime_sym_lookup(ctx, getPointerTy(ctx.builder.getContext()), NULL, sym.lib_expr, sym.f_name, ctx.f);
         }
-        else /*if (ctx.emission_context.imaging) */{
+        else {
             res = runtime_sym_lookup(ctx, getPointerTy(ctx.builder.getContext()), sym.f_lib, NULL, sym.f_name, ctx.f);
         }
     } else {
@@ -1880,33 +1872,6 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         JL_GC_POP();
         return mark_julia_type(ctx, obj, true, jl_any_type);
     }
-    else if (is_libjulia_func(jl_alloc_genericmemory)) {
-        ++CCALL_STAT(jl_alloc_genericmemory);
-        assert(lrt == ctx.types().T_prjlvalue);
-        assert(!isVa && !llvmcall && nccallargs == 2);
-        const jl_cgval_t &typ = argv[0];
-        const jl_cgval_t &nel = argv[1];
-        auto arg_typename = [&] JL_NOTSAFEPOINT {
-            auto istyp = argv[0].constant;
-            std::string type_str;
-            if (istyp && jl_is_datatype(istyp) && jl_is_genericmemory_type(istyp)){
-                auto eltype = jl_tparam1(istyp);
-                if (jl_is_datatype(eltype))
-                    type_str = jl_symbol_name(((jl_datatype_t*)eltype)->name->name);
-                else if (jl_is_uniontype(eltype))
-                    type_str = "Union";
-                else
-                    type_str = "<unknown type>";
-            }
-            else
-                type_str = "<unknown type>";
-            return "Memory{" + type_str + "}[]";
-            };
-        auto alloc = ctx.builder.CreateCall(prepare_call(jl_allocgenericmemory), { boxed(ctx,typ), emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_ulong_type)});
-        setName(ctx.emission_context, alloc, arg_typename);
-        JL_GC_POP();
-        return mark_julia_type(ctx, alloc, true, jl_any_type);
-    }
     else if (is_libjulia_func(memcpy) && (rt == (jl_value_t*)jl_nothing_type || jl_is_cpointer_type(rt))) {
         ++CCALL_STAT(memcpy);
         const jl_cgval_t &dst = argv[0];
@@ -2164,8 +2129,6 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         Type *funcptype = functype->getPointerTo(0);
         llvmf = literal_static_pointer_val((void*)(uintptr_t)symarg.fptr, funcptype);
         setName(ctx.emission_context, llvmf, "ccall_fptr");
-        if (ctx.emission_context.imaging_mode)
-            jl_printf(JL_STDERR,"WARNING: literal address used in ccall for %s; code cannot be statically compiled\n", symarg.f_name);
     }
     else if (!ctx.params->use_jlplt) {
         if ((symarg.f_lib && !((symarg.f_lib == JL_EXE_LIBNAME) ||
@@ -2182,7 +2145,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             ++DeferredCCallLookups;
             llvmf = runtime_sym_lookup(ctx, funcptype, NULL, symarg.lib_expr, symarg.f_name, ctx.f);
         }
-        else /*if (ctx.emission_context.imaging) */{
+        else {
             ++DeferredCCallLookups;
             // vararg requires musttail,
             // but musttail is incompatible with noreturn.

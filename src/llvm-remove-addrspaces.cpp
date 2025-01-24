@@ -44,19 +44,7 @@ public:
 
         DstTy = SrcTy;
         if (auto Ty = dyn_cast<PointerType>(SrcTy)) {
-            #if JL_LLVM_VERSION >= 170000
             DstTy = PointerType::get(Ty->getContext(), ASRemapper(Ty->getAddressSpace()));
-            #else
-            if (Ty->isOpaque()) {
-                DstTy = PointerType::get(Ty->getContext(), ASRemapper(Ty->getAddressSpace()));
-            }
-            else {
-                //Remove once opaque pointer transition is complete
-                DstTy = PointerType::get(
-                        remapType(Ty->getNonOpaquePointerElementType()),
-                        ASRemapper(Ty->getAddressSpace()));
-            }
-            #endif
         }
         else if (auto Ty = dyn_cast<FunctionType>(SrcTy)) {
             SmallVector<Type *, 4> Params;
@@ -157,24 +145,8 @@ public:
                     Ops.push_back(NewOp ? cast<Constant>(NewOp) : Op);
                 }
 
-                #if JL_LLVM_VERSION >= 170000
                 if (CE->getOpcode() != Instruction::GetElementPtr)
                     DstV = CE->getWithOperands(Ops, Ty);
-                #else
-                if (CE->getOpcode() == Instruction::GetElementPtr) {
-                    // GEP const exprs need to know the type of the source.
-                    // asserts remapType(typeof arg0) == typeof mapValue(arg0).
-                    Constant *Src = CE->getOperand(0);
-                    auto ptrty = cast<PointerType>(Src->getType()->getScalarType());
-                    //Remove once opaque pointer transition is complete
-                    if (!ptrty->isOpaque()) {
-                        Type *SrcTy = remapType(ptrty->getNonOpaquePointerElementType());
-                        DstV = CE->getWithOperands(Ops, Ty, false, SrcTy);
-                    }
-                }
-                else
-                    DstV = CE->getWithOperands(Ops, Ty);
-                #endif
             }
         }
 

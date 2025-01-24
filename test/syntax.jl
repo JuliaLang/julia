@@ -476,7 +476,7 @@ let err = try
     catch e
         e
     end
-    @test err.line == 7
+    @test err.line in (5, 7)
 end
 
 # PR #17393
@@ -3303,6 +3303,7 @@ const typeof = error
 end
 let ex = :(const $(esc(:x)) = 1; (::typeof($(esc(:foo43993))))() = $(esc(:x)))
     Core.eval(M43993, Expr(:var"hygienic-scope", ex, Core))
+    @Core.latestworld
     @test M43993.x === 1
     @test invokelatest(M43993.foo43993) === 1
 end
@@ -3919,28 +3920,28 @@ module ExtendedIsDefined
     import .Import.x4
     @test x2 == 2 # Resolve the binding
     @eval begin
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x2)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x3)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x4)))
+        @test Core.isdefinedglobal(@__MODULE__, :x1)
+        @test Core.isdefinedglobal(@__MODULE__, :x2)
+        @test Core.isdefinedglobal(@__MODULE__, :x3)
+        @test Core.isdefinedglobal(@__MODULE__, :x4)
 
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x2), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x3), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
+        @test Core.isdefinedglobal(@__MODULE__, :x1, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x2, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x3, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x4, false)
     end
 
     @eval begin
         @Base.Experimental.force_compile
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x2)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x3)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x4)))
+        @test Core.isdefinedglobal(@__MODULE__, :x1)
+        @test Core.isdefinedglobal(@__MODULE__, :x2)
+        @test Core.isdefinedglobal(@__MODULE__, :x3)
+        @test Core.isdefinedglobal(@__MODULE__, :x4)
 
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x2), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x3), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
+        @test Core.isdefinedglobal(@__MODULE__, :x1, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x2, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x3, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x4, false)
     end
 end
 
@@ -3971,11 +3972,12 @@ end
 
 # Module Replacement
 module ReplacementContainer
+    using Test
     module ReplaceMe
         const x = 1
     end
     const Old = ReplaceMe
-    module ReplaceMe
+    @test_warn r"WARNING: replacing module ReplaceMe" @eval module ReplaceMe
         const x = 2
     end
 end
