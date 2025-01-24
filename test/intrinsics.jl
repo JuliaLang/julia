@@ -18,9 +18,25 @@ truncbool(u) = reinterpret(UInt8, reinterpret(Bool, u))
 @testset "runtime intrinsics" begin
     @test Core.Intrinsics.add_int(1, 1) == 2
     @test Core.Intrinsics.sub_int(1, 1) == 0
+
+    @test_throws ErrorException("fpext: output bitsize must be >= input bitsize")    Core.Intrinsics.fpext(Float32, 1.0)
+    @test_throws ErrorException("fpext: output bitsize must be >= input bitsize")    Core.Intrinsics.fpext(Float32, 1.0)
     @test_throws ErrorException("fpext: output bitsize must be >= input bitsize")    Core.Intrinsics.fpext(Int32, 0x0000_0000_0000_0000)
+
     @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Int32, 0x0000_0000)
     @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Int64, 0x0000_0000)
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float16, Float16(1.0))
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Core.BFloat16, Float16(1.0))
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float32, Float16(1.0))
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float32, 1.0f0)
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float64, 1.0)
+
+    let bf16_1 = Core.Intrinsics.bitcast(Core.BFloat16, 0x3f80)
+        @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Core.BFloat16, bf16_1)
+        @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float16, bf16_1)
+        @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float32, bf16_1)
+    end
+
     @test_throws ErrorException("ZExt: output bitsize must be > input bitsize")     Core.Intrinsics.zext_int(Int8, 0x00)
     @test_throws ErrorException("SExt: output bitsize must be > input bitsize")     Core.Intrinsics.sext_int(Int8, 0x00)
     @test_throws ErrorException("ZExt: output bitsize must be > input bitsize")     Core.Intrinsics.zext_int(Int8, 0x0000)
@@ -220,8 +236,7 @@ end
     @test_intrinsic Core.Intrinsics.abs_float Float16(-3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float16(3.3) Float16(-3.3)
     # See <https://github.com/JuliaLang/julia/issues/57130>
-    #broken @test_intrinsic Core.Intrinsics.fpext Float16 Float16(3.3) Float16(3.3)
-    @test_broken Core.Intrinsics.fpext(Float16, Float16(3.3)) === Float16(3.3)
+    @test_intrinsic Core.Intrinsics.fpext Float16 Float16(3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.fpext Float32 Float16(3.3) 3.3007812f0
     @test_intrinsic Core.Intrinsics.fpext Float64 Float16(3.3) 3.30078125
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float32(3.3) Float16(3.3)
