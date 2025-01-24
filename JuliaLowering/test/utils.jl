@@ -125,8 +125,8 @@ function match_ir_test_case(case_str)
                     length(inout) == 1 ? (inout[1], "") :
                     error("Too many sections in IR test case")
     expect_error = startswith(description, "Error")
-    is_todo = startswith(description, "TODO")
-    (; expect_error=expect_error, is_todo=is_todo,
+    is_broken = startswith(description, "FIXME")
+    (; expect_error=expect_error, is_broken=is_broken,
      description=strip(description),
      input=strip(input), output=strip(output))
 end
@@ -152,7 +152,7 @@ function setup_ir_test_module(preamble)
     test_mod
 end
 
-function format_ir_for_test(mod, description, input, expect_error=false, is_todo=false)
+function format_ir_for_test(mod, description, input, expect_error=false, is_broken=false)
     ex = parsestmt(SyntaxTree, input)
     try
         if kind(ex) == K"macrocall" && kind(ex[1]) == K"MacroName" && ex[1].name_val == "@ast_"
@@ -173,7 +173,7 @@ function format_ir_for_test(mod, description, input, expect_error=false, is_todo
             return sprint(io->Base.showerror(io, exc, show_detail=false))
         elseif expect_error && (exc isa MacroExpansionError)
             return sprint(io->Base.showerror(io, exc))
-        elseif is_todo
+        elseif is_broken
             return sprint(io->Base.showerror(io, exc))
         else
             throw("Error in test case \"$description\"")
@@ -184,8 +184,8 @@ end
 function test_ir_cases(filename::AbstractString)
     preamble, cases = read_ir_test_cases(filename)
     test_mod = setup_ir_test_module(preamble)
-    for (expect_error, is_todo, description, input, ref) in cases
-        if is_todo
+    for (expect_error, is_broken, description, input, ref) in cases
+        if is_broken
             continue
         end
         output = format_ir_for_test(test_mod, description, input, expect_error)
@@ -213,9 +213,9 @@ function refresh_ir_test_cases(filename, pattern=nothing)
         println(io, preamble, "\n")
         println(io, "#*******************************************************************************")
     end
-    for (expect_error, is_todo, description, input, ref) in cases
+    for (expect_error, is_broken, description, input, ref) in cases
         if isnothing(pattern) || occursin(pattern, description)
-            ir = format_ir_for_test(test_mod, description, input, expect_error, is_todo)
+            ir = format_ir_for_test(test_mod, description, input, expect_error, is_broken)
             if rstrip(ir) != ref
                 @info "Refreshing test case $(repr(description)) in $filename"
             end

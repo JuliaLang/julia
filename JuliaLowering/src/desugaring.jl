@@ -733,6 +733,145 @@ function expand_fuse_broadcast(ctx, ex)
 end
 
 #-------------------------------------------------------------------------------
+# Expansion of generators and comprehensions
+
+# Return any subexpression which is a 'return` statement, not including any
+# inside quoted sections or method bodies.
+function find_return(ex::SyntaxTree)
+    if kind(ex) == K"return"
+        return ex
+    elseif !is_leaf(ex) && !(kind(ex) in KSet"quote inert meta function ->")
+        for e in children(ex)
+            r = find_return(e)
+            if !isnothing(r)
+                return r
+            end
+        end
+    else
+        return nothing
+    end
+end
+
+# Return true for nested tuples of the same identifiers
+function similar_tuples_or_identifiers(a, b)
+    if kind(a) == K"tuple" && kind(b) == K"tuple"
+        return numchildren(a) == numchildren(b) &&
+            all( ((x,y),)->similar_tuples_or_identifiers(x,y),
+                zip(children(a), children(b)))
+    else
+        is_same_identifier_like(a,b)
+    end
+end
+
+# Return the anonymous function taking an iterated value, for use with the
+# first agument to `Base.Generator`
+function func_for_generator(ctx, body, iter_value_destructuring)
+    if similar_tuples_or_identifiers(iter_value_destructuring, body)
+        # Use Base.identity for generators which are filters such as
+        # `(x for x in xs if f(x))`. This avoids creating a new type.
+        @ast ctx body "identity"::K"top"
+    else
+        @ast ctx body [K"->"
+            [K"tuple"
+                iter_value_destructuring
+            ]
+            [K"block"
+                body
+            ]
+        ]
+    end
+end
+
+function expand_generator(ctx, ex)
+    @chk numchildren(ex) >= 2
+    body = ex[1]
+    body_ret = find_return(body)
+    if !isnothing(body_ret)
+        throw(LoweringError(body_ret, "`return` not allowed inside comprehension or generator"))
+    end
+    if numchildren(ex) > 2
+        # Uniquify outer vars by NameKey
+        outervars_by_key = Dict{NameKey,typeof(ex)}()
+        for iterspecs in ex[2:end-1]
+            for iterspec in children(iterspecs)
+                lhs = iterspec[1]
+                foreach_lhs_var(lhs) do var
+                    @assert kind(var) == K"Identifier" # Todo: K"BindingId"?
+                    outervars_by_key[NameKey(var)] = var
+                end
+            end
+        end
+        outervar_assignments = SyntaxList(ctx)
+        for (k,v) in sort(collect(pairs(outervars_by_key)), by=first)
+            push!(outervar_assignments, @ast ctx v [K"=" v v])
+        end
+        body = @ast ctx ex [K"let"
+            [K"block"
+                outervar_assignments...
+            ]
+            [K"block"
+                body
+            ]
+        ]
+    end
+    for iterspecs_ind in numchildren(ex):-1:2
+        iterspecs = ex[iterspecs_ind]
+        filter_test = nothing
+        if kind(iterspecs) == K"filter"
+            filter_test = iterspecs[2]
+            iterspecs = iterspecs[1]
+        end
+        if kind(iterspecs) != K"iteration"
+            throw(LoweringError("""Expected `K"iteration"` iteration specification in generator"""))
+        end
+        iter_ranges = SyntaxList(ctx)
+        iter_lhss = SyntaxList(ctx)
+        for iterspec in children(iterspecs)
+            @chk kind(iterspec) == K"in"
+            @chk numchildren(iterspec) == 2
+            push!(iter_lhss, iterspec[1])
+            push!(iter_ranges, iterspec[2])
+        end
+        iter_value_destructuring = if numchildren(iterspecs) == 1
+            iterspecs[1][1]
+        else
+            iter_lhss = SyntaxList(ctx)
+            for iterspec in children(iterspecs)
+                push!(iter_lhss, iterspec[1])
+            end
+            @ast ctx iterspecs [K"tuple" iter_lhss...]
+        end
+        iter = if length(iter_ranges) > 1
+            @ast ctx iterspecs [K"call"
+                "product"::K"top"
+                iter_ranges...
+            ]
+        else
+            iter_ranges[1]
+        end
+        if !isnothing(filter_test)
+            iter = @ast ctx ex [K"call"
+                "Filter"::K"top"
+                func_for_generator(ctx, filter_test, iter_value_destructuring)
+                iter
+            ]
+        end
+        body = @ast ctx ex [K"call"
+            "Generator"::K"top"
+            func_for_generator(ctx, body, iter_value_destructuring)
+            iter
+        ]
+        if iterspecs_ind < numchildren(ex)
+            body = @ast ctx ex [K"call"
+                "Flatten"::K"top"
+                body
+            ]
+        end
+    end
+    body
+end
+
+#-------------------------------------------------------------------------------
 # Expansion of array concatenation notation `[a b ; c d]` etc
 
 function expand_vcat(ctx, ex)
@@ -3411,6 +3550,24 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         sig = expand_forms_2(ctx, ex[2], ex)
     elseif k == K"for"
         expand_forms_2(ctx, expand_for(ctx, ex))
+    elseif k == K"comprehension"
+        @chk numchildren(ex) == 1
+        @chk kind(ex[1]) == K"generator"
+        @ast ctx ex [K"call"
+            "collect"::K"top"
+            expand_forms_2(ctx, ex[1])
+        ]
+    elseif k == K"typed_comprehension"
+        @chk numchildren(ex) == 2
+        @chk kind(ex[2]) == K"generator"
+        # TODO: Hack for early lowering of selected typed_comprehension
+        @ast ctx ex [K"call"
+            "collect"::K"top"
+            expand_forms_2(ctx, ex[1])
+            expand_forms_2(ctx, ex[2])
+        ]
+    elseif k == K"generator"
+        expand_forms_2(ctx, expand_generator(ctx, ex))
     elseif k == K"->" || k == K"do"
         expand_forms_2(ctx, expand_arrow(ctx, ex))
     elseif k == K"function"

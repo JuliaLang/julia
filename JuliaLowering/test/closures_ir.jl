@@ -312,6 +312,16 @@ end
 15  (return %₁₄)
 
 ########################################
+# Nested captures of arguments
+function f(x)
+    function g(y)
+        function h(z)
+            (x,y,z)
+        end
+    end
+end
+
+########################################
 # Global method capturing local variables
 begin
     local x = 1
