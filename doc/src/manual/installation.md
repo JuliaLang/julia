@@ -124,3 +124,13 @@ To install Julia via Rust's cargo, run:
 ```sh
 cargo install juliaup
 ```
+
+### [Nix](https://search.nixos.org/packages?channel=unstable&from=0&size=50&sort=relevance&type=packages&query=julia) (Nix Package Manager)
+On non flake, run:
+```sh
+nix-shell julia 
+```
+On flake run: 
+```sh
+nix shell nixpkgs#julia
+```
