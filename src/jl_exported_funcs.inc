@@ -196,6 +196,7 @@
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
+    XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
     XX(jl_cpu_has_fma) \
