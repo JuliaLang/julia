@@ -844,6 +844,7 @@ void jl_start_threads(void)
         // Interactive pool threads get the low IDs, so check if this is a
         // default pool thread.  The master thread is already on CPU 0.
         if (exclusive && i >= ninteractive_threads) {
+            assert(i - ninteractive_threads < cpumasksize);
             mask[i - ninteractive_threads] = 1;
             uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
             mask[i - ninteractive_threads] = 0;
