@@ -1277,7 +1277,9 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                 # then we want to compile and emit this
                 if item.def.primary_world <= this_world <= item.def.deleted_world
                     ci = typeinf_ext(interp, item, SOURCE_MODE_NOT_REQUIRED)
-                    ci isa CodeInstance && !use_const_api(ci) && push!(tocompile, ci)
+                    if ci isa CodeInstance && (!use_const_api(ci) || trim)
+                        push!(tocompile, ci)
+                    end
                 end
             elseif item isa SimpleVector
                 push!(codeinfos, item[1]::Type)
@@ -1292,7 +1294,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
             mi = get_ci_mi(callee)
             def = mi.def
             if use_const_api(callee)
-                src = codeinfo_for_const(interp, mi, code.rettype_const)
+                src = codeinfo_for_const(interp, mi, callee.rettype_const)
             elseif haskey(interp.codegen, callee)
                 src = interp.codegen[callee]
             elseif isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && !trim
