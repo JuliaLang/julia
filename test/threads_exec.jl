@@ -1407,19 +1407,25 @@ end
         function construct()
             Rational{I}(c)
         end
-        prec = precision(BigFloat)
-        worker_count = 10 * Threads.nthreads()
-        task = ConcurrencyUtilities.run_concurrently_in_new_task(construct, worker_count)
-        schedule(task)
-        ok = true
-        while !istaskdone(task)
-            for _ ∈ 1:1000000
-                ok &= precision(BigFloat) === prec
+        function is_racy_rational_from_irrational()
+            worker_count = 10 * Threads.nthreads()
+            task = ConcurrencyUtilities.run_concurrently_in_new_task(construct, worker_count)
+            schedule(task)
+            ok = true
+            while !istaskdone(task)
+                for _ ∈ 1:1000000
+                    ok &= precision(BigFloat) === prec
+                end
+                GC.safepoint()
+                yield()
             end
-            GC.safepoint()
-            yield()
+            fetch(task)
+            ok
         end
-        fetch(task)
+        prec = precision(BigFloat)
+        task = ConcurrencyUtilities.new_task_nonsticky(is_racy_rational_from_irrational)
+        schedule(task)
+        ok = fetch(task)
         setprecision(BigFloat, prec)
         ok
     end
