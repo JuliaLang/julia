@@ -31,7 +31,7 @@ end
 """
     IPv4(host::Integer) -> IPv4
 
-Return an IPv4 object from ip address `host` formatted as an [`Integer`](@ref).
+Return an IPv4 object from IP address `host` formatted as an [`Integer`](@ref).
 
 # Examples
 ```jldoctest
@@ -49,7 +49,17 @@ function IPv4(host::Integer)
     end
 end
 
-# constructor: ("1.2.3.4")
+"""
+    IPv4(str::AbstractString) -> IPv4
+
+Parse an IPv4 address string into an `IPv4` object.
+
+# Examples
+```jldoctest
+julia> IPv4("127.0.0.1")
+ip"127.0.0.1"
+```
+"""
 IPv4(str::AbstractString) = parse(IPv4, str)
 
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
@@ -84,7 +94,7 @@ end
 """
     IPv6(host::Integer) -> IPv6
 
-Return an IPv6 object from ip address `host` formatted as an [`Integer`](@ref).
+Return an IPv6 object from IP address `host` formatted as an [`Integer`](@ref).
 
 # Examples
 ```jldoctest
@@ -104,6 +114,17 @@ function IPv6(host::Integer)
     end
 end
 
+"""
+    IPv6(str::AbstractString) -> IPv6
+
+Parse an IPv6 address string into an `IPv6` object.
+
+# Examples
+```jldoctest
+julia> IPv6("::1")
+ip"::1"
+```
+"""
 IPv6(str::AbstractString) = parse(IPv6, str)
 
 # Suppress leading '0's and "0x"
@@ -119,7 +140,7 @@ end
 
 show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
 # RFC 5952 compliant show function
-# http://tools.ietf.org/html/rfc5952
+# https://tools.ietf.org/html/rfc5952
 function print(io::IO,ip::IPv6)
     i = 8
     m = 0

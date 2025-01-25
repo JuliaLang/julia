@@ -55,10 +55,10 @@ end
 Gets all of the IP addresses of the `host`.
 Uses the operating system's underlying `getaddrinfo` implementation, which may do a DNS lookup.
 
-# Example
+# Examples
 ```julia-repl
 julia> getalladdrinfo("google.com")
-2-element Array{IPAddr,1}:
+2-element Vector{IPAddr}:
  ip"172.217.6.174"
  ip"2607:f8b0:4000:804::200e"
 ```
@@ -90,7 +90,7 @@ function getalladdrinfo(host::String)
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -122,10 +122,20 @@ end
 getalladdrinfo(host::AbstractString) = getalladdrinfo(String(host))
 
 """
-    getaddrinfo(host::AbstractString, IPAddr=IPv4) -> IPAddr
+    getaddrinfo(host::AbstractString, IPAddr) -> IPAddr
 
 Gets the first IP address of the `host` of the specified `IPAddr` type.
-Uses the operating system's underlying getaddrinfo implementation, which may do a DNS lookup.
+Uses the operating system's underlying getaddrinfo implementation, which may do
+a DNS lookup.
+
+# Examples
+```julia-repl
+julia> getaddrinfo("localhost", IPv6)
+ip"::1"
+
+julia> getaddrinfo("localhost", IPv4)
+ip"127.0.0.1"
+```
 """
 function getaddrinfo(host::String, T::Type{<:IPAddr})
     addrs = getalladdrinfo(host)
@@ -137,6 +147,14 @@ function getaddrinfo(host::String, T::Type{<:IPAddr})
     throw(DNSError(host, UV_EAI_NONAME))
 end
 getaddrinfo(host::AbstractString, T::Type{<:IPAddr}) = getaddrinfo(String(host), T)
+
+"""
+    getaddrinfo(host::AbstractString) -> IPAddr
+
+Gets the first available IP address of `host`, which may be either an `IPv4` or
+`IPv6` address. Uses the operating system's underlying getaddrinfo
+implementation, which may do a DNS lookup.
+"""
 function getaddrinfo(host::AbstractString)
     addrs = getalladdrinfo(String(host))
     if !isempty(addrs)
@@ -205,7 +223,7 @@ function getnameinfo(address::Union{IPv4, IPv6})
     finally
         Base.sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we don't get spurious notifications later
@@ -264,16 +282,14 @@ See also [`getipaddrs`](@ref).
 """
 function getipaddr(addr_type::Type{T}) where T<:IPAddr
     addrs = getipaddrs(addr_type)
+    isempty(addrs) && error("No networking interface available")
 
-    if length(addrs) == 0
-        error("No networking interface available")
-    end
-
-    # Prefer the first IPv4 address
+    # When `addr_type` is `IPAddr`, `addrs` contain IP addresses of all types
+    # In that case, we prefer to return the first IPv4
     i = something(findfirst(ip -> ip isa IPv4, addrs), 1)
     return addrs[i]
 end
-getipaddr() = getipaddr(IPv4)
+getipaddr() = getipaddr(IPAddr)
 
 
 """
@@ -291,7 +307,7 @@ The `loopback` keyword argument dictates whether loopback addresses (e.g. `ip"12
 # Examples
 ```julia-repl
 julia> getipaddrs()
-5-element Array{IPAddr,1}:
+5-element Vector{IPAddr}:
  ip"198.51.100.17"
  ip"203.0.113.2"
  ip"2001:db8:8:4:445e:5fff:fe5d:5500"
@@ -299,7 +315,7 @@ julia> getipaddrs()
  ip"fe80::445e:5fff:fe5d:5500"
 
 julia> getipaddrs(IPv6)
-3-element Array{IPv6,1}:
+3-element Vector{IPv6}:
  ip"2001:db8:8:4:445e:5fff:fe5d:5500"
  ip"2001:db8:8:4:c164:402e:7e3c:3668"
  ip"fe80::445e:5fff:fe5d:5500"
@@ -344,7 +360,7 @@ are not guaranteed to be unique beyond their network segment,
 therefore routers do not forward them. Link-local addresses are from
 the address blocks `169.254.0.0/16` or `fe80::/10`.
 
-# Example
+# Examples
 ```julia
 filter(!islinklocaladdr, getipaddrs())
 ```

@@ -107,16 +107,28 @@ end
 
 const ReplaceType = ccall(:jl_apply_cmpswap_type, Any, (Any,), T) where T
 
+@testset "elsize(::Type{<:Ptr})" begin
+    @test Base.elsize(Ptr{Any}) == sizeof(Int)
+    @test Base.elsize(Ptr{NTuple{3,Int8}}) == 3
+    @test Base.elsize(Ptr{Cvoid}) == 0
+    @test Base.elsize(Ptr{Base.RefValue{Any}}) == sizeof(Int)
+    @test Base.elsize(Ptr{Int}) == sizeof(Int)
+    @test_throws MethodError Base.elsize(Ptr)
+    @test_throws ErrorException Base.elsize(Ptr{Ref{Int}})
+    @test_throws ErrorException Base.elsize(Ptr{Ref})
+    @test_throws ErrorException Base.elsize(Ptr{Complex})
+end
+
 # issue #29929
 let p = Ptr{Nothing}(0)
     @test unsafe_store!(p, nothing) === C_NULL
     @test unsafe_load(p) === nothing
-    @test Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent) === nothing
-    @test Core.Intrinsics.atomic_pointerset(p, nothing, :sequentially_consistent) === p
-    @test Core.Intrinsics.atomic_pointerswap(p, nothing, :sequentially_consistent) === nothing
-    @test Core.Intrinsics.atomic_pointermodify(p, (i, j) -> j, nothing, :sequentially_consistent) === Pair(nothing, nothing)
-    @test Core.Intrinsics.atomic_pointerreplace(p, nothing, nothing, :sequentially_consistent, :sequentially_consistent) === ReplaceType{Nothing}((nothing, true))
-    @test Core.Intrinsics.atomic_pointerreplace(p, missing, nothing, :sequentially_consistent, :sequentially_consistent) === ReplaceType{Nothing}((nothing, false))
+    @test unsafe_load(p, :sequentially_consistent) === nothing
+    @test unsafe_store!(p, nothing, :sequentially_consistent) === p
+    @test unsafe_swap!(p, nothing, :sequentially_consistent) === nothing
+    @test unsafe_modify!(p, (i, j) -> j, nothing, :sequentially_consistent) === Pair(nothing, nothing)
+    @test unsafe_replace!(p, nothing, nothing, :sequentially_consistent, :sequentially_consistent) === ReplaceType{Nothing}((nothing, true))
+    @test unsafe_replace!(p, missing, nothing, :sequentially_consistent, :sequentially_consistent) === ReplaceType{Nothing}((nothing, false))
 end
 
 struct GhostStruct end
@@ -135,9 +147,81 @@ macro test_intrinsic(intr, args...)
     end
 end
 
+@testset "Float64 intrinsics" begin
+    # unary
+    @test_intrinsic Core.Intrinsics.abs_float Float64(-3.3) Float64(3.3)
+    @test_intrinsic Core.Intrinsics.neg_float Float64(3.3) Float64(-3.3)
+    @test_intrinsic Core.Intrinsics.fpext Float64 Float64(3.3) Float64(3.3)
+
+    # binary
+    @test_intrinsic Core.Intrinsics.add_float Float64(3.3) Float64(2) Float64(5.3)
+    @test_intrinsic Core.Intrinsics.sub_float Float64(3.3) Float64(2) Float64(1.2999999999999998)
+    @test_intrinsic Core.Intrinsics.mul_float Float64(3.3) Float64(2) Float64(6.6)
+    @test_intrinsic Core.Intrinsics.div_float Float64(3.3) Float64(2) Float64(1.65)
+    @test_intrinsic Core.Intrinsics.max_float Float64(1.0) Float64(2.0) Float64(2.0)
+    @test_intrinsic Core.Intrinsics.min_float Float64(1.0) Float64(2.0) Float64(1.0)
+
+    # ternary
+    @test_intrinsic Core.Intrinsics.fma_float Float64(3.3) Float64(4.4) Float64(5.5) Float64(20.02)
+    @test_intrinsic Core.Intrinsics.muladd_float Float64(3.3) Float64(4.4) Float64(5.5) Float64(20.02)
+
+    # boolean
+    @test_intrinsic Core.Intrinsics.eq_float Float64(3.3) Float64(3.3) true
+    @test_intrinsic Core.Intrinsics.eq_float Float64(3.3) Float64(2) false
+    @test_intrinsic Core.Intrinsics.ne_float Float64(3.3) Float64(3.3) false
+    @test_intrinsic Core.Intrinsics.ne_float Float64(3.3) Float64(2) true
+    @test_intrinsic Core.Intrinsics.le_float Float64(3.3) Float64(3.3) true
+    @test_intrinsic Core.Intrinsics.le_float Float64(3.3) Float64(2) false
+
+    # conversions
+    @test_intrinsic Core.Intrinsics.sitofp Float64 3 Float64(3.0)
+    @test_intrinsic Core.Intrinsics.uitofp Float64 UInt(3) Float64(3.0)
+    @test_intrinsic Core.Intrinsics.fptosi Int Float64(3.3) 3
+    @test_intrinsic Core.Intrinsics.fptoui UInt Float64(3.3) UInt(3)
+end
+
+@testset "Float32 intrinsics" begin
+    # unary
+    @test_intrinsic Core.Intrinsics.abs_float Float32(-3.3) Float32(3.3)
+    @test_intrinsic Core.Intrinsics.neg_float Float32(3.3) Float32(-3.3)
+    @test_intrinsic Core.Intrinsics.fpext Float32 Float32(3.3) Float32(3.3)
+    @test_intrinsic Core.Intrinsics.fpext Float64 Float32(3.3) 3.299999952316284
+    @test_intrinsic Core.Intrinsics.fptrunc Float32 Float64(3.3) Float32(3.3)
+
+    # binary
+    @test_intrinsic Core.Intrinsics.add_float Float32(3.3) Float32(2) Float32(5.3)
+    @test_intrinsic Core.Intrinsics.sub_float Float32(3.3) Float32(2) Float32(1.3)
+    @test_intrinsic Core.Intrinsics.mul_float Float32(3.3) Float32(2) Float32(6.6)
+    @test_intrinsic Core.Intrinsics.div_float Float32(3.3) Float32(2) Float32(1.65)
+    @test_intrinsic Core.Intrinsics.max_float Float32(1.0) Float32(2.0) Float32(2.0)
+    @test_intrinsic Core.Intrinsics.min_float Float32(1.0) Float32(2.0) Float32(1.0)
+
+    # ternary
+    @test_intrinsic Core.Intrinsics.fma_float Float32(3.3) Float32(4.4) Float32(5.5) Float32(20.02)
+    @test_intrinsic Core.Intrinsics.muladd_float Float32(3.3) Float32(4.4) Float32(5.5) Float32(20.02)
+
+    # boolean
+    @test_intrinsic Core.Intrinsics.eq_float Float32(3.3) Float32(3.3) true
+    @test_intrinsic Core.Intrinsics.eq_float Float32(3.3) Float32(2) false
+    @test_intrinsic Core.Intrinsics.ne_float Float32(3.3) Float32(3.3) false
+    @test_intrinsic Core.Intrinsics.ne_float Float32(3.3) Float32(2) true
+    @test_intrinsic Core.Intrinsics.le_float Float32(3.3) Float32(3.3) true
+    @test_intrinsic Core.Intrinsics.le_float Float32(3.3) Float32(2) false
+
+    # conversions
+    @test_intrinsic Core.Intrinsics.sitofp Float32 3 Float32(3.0)
+    @test_intrinsic Core.Intrinsics.uitofp Float32 UInt(3) Float32(3.0)
+    @test_intrinsic Core.Intrinsics.fptosi Int Float32(3.3) 3
+    @test_intrinsic Core.Intrinsics.fptoui UInt Float32(3.3) UInt(3)
+end
+
 @testset "Float16 intrinsics" begin
     # unary
+    @test_intrinsic Core.Intrinsics.abs_float Float16(-3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float16(3.3) Float16(-3.3)
+    # See <https://github.com/JuliaLang/julia/issues/57130>
+    #broken @test_intrinsic Core.Intrinsics.fpext Float16 Float16(3.3) Float16(3.3)
+    @test_broken Core.Intrinsics.fpext(Float16, Float16(3.3)) === Float16(3.3)
     @test_intrinsic Core.Intrinsics.fpext Float32 Float16(3.3) 3.3007812f0
     @test_intrinsic Core.Intrinsics.fpext Float64 Float16(3.3) 3.30078125
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float32(3.3) Float16(3.3)
@@ -148,6 +232,8 @@ end
     @test_intrinsic Core.Intrinsics.sub_float Float16(3.3) Float16(2) Float16(1.301)
     @test_intrinsic Core.Intrinsics.mul_float Float16(3.3) Float16(2) Float16(6.6)
     @test_intrinsic Core.Intrinsics.div_float Float16(3.3) Float16(2) Float16(1.65)
+    @test_intrinsic Core.Intrinsics.max_float Float16(1.0) Float16(2.0) Float16(2.0)
+    @test_intrinsic Core.Intrinsics.min_float Float16(1.0) Float16(2.0) Float16(1.0)
 
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
@@ -162,34 +248,18 @@ end
     @test_intrinsic Core.Intrinsics.le_float Float16(3.3) Float16(2) false
 
     # conversions
-    @test_intrinsic Core.Intrinsics.sitofp Float16 3 Float16(3f0)
-    @test_intrinsic Core.Intrinsics.uitofp Float16 UInt(3) Float16(3f0)
+    @test_intrinsic Core.Intrinsics.sitofp Float16 3 Float16(3.0)
+    @test_intrinsic Core.Intrinsics.uitofp Float16 UInt(3) Float16(3.0)
     @test_intrinsic Core.Intrinsics.fptosi Int Float16(3.3) 3
     @test_intrinsic Core.Intrinsics.fptoui UInt Float16(3.3) UInt(3)
 end
 
-if Sys.ARCH == :aarch64 ||  Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-    # On AArch64 we are following the `_Float16` ABI. Buthe these functions expect `Int16`.
-    # TODO: SHould we have `Chalf == Int16` and `Cfloat16 == Float16`?
-    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (UInt16,), reinterpret(UInt16, x))
-    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (UInt16,), reinterpret(UInt16, x))
-    truncsfhf2(x::Float32) = reinterpret(Float16, ccall("extern __truncsfhf2", llvmcall, UInt16, (Float32,), x))
-    gnu_f2h_ieee(x::Float32) = reinterpret(Float16, ccall("extern __gnu_f2h_ieee", llvmcall, UInt16, (Float32,), x))
-    truncdfhf2(x::Float64) = reinterpret(Float16, ccall("extern __truncdfhf2", llvmcall, UInt16, (Float64,), x))
-else
-    extendhfsf2(x::Float16) = ccall("extern __extendhfsf2", llvmcall, Float32, (Float16,), x)
-    gnu_h2f_ieee(x::Float16) = ccall("extern __gnu_h2f_ieee", llvmcall, Float32, (Float16,), x)
-    truncsfhf2(x::Float32) = ccall("extern __truncsfhf2", llvmcall, Float16, (Float32,), x)
-    gnu_f2h_ieee(x::Float32) = ccall("extern __gnu_f2h_ieee", llvmcall, Float16, (Float32,), x)
-    truncdfhf2(x::Float64) = ccall("extern __truncdfhf2", llvmcall, Float16, (Float64,), x)
-end
-
 @testset "Float16 intrinsics (crt)" begin
-    @test extendhfsf2(Float16(3.3)) == 3.3007812f0
+    gnu_h2f_ieee(x::Float16) = ccall("julia__gnu_h2f_ieee", Float32, (Float16,), x)
+    gnu_f2h_ieee(x::Float32) = ccall("julia__gnu_f2h_ieee", Float16, (Float32,), x)
+
     @test gnu_h2f_ieee(Float16(3.3)) == 3.3007812f0
-    @test truncsfhf2(3.3f0) == Float16(3.3)
     @test gnu_f2h_ieee(3.3f0) == Float16(3.3)
-    @test truncdfhf2(3.3) == Float16(3.3)
 end
 
 using Base.Experimental: @force_compile
@@ -201,8 +271,8 @@ for order in (:not_atomic, :monotonic, :acquire, :release, :acquire_release, :se
     @test (order -> Core.Intrinsics.atomic_fence(order))(order) === nothing
     @test Base.invokelatest(@eval () -> Core.Intrinsics.atomic_fence($(QuoteNode(order)))) === nothing
 end
-@test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) == nothing
-@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) == nothing
+@test Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent) === nothing
+@test (@force_compile; Core.Intrinsics.atomic_pointerref(C_NULL, :sequentially_consistent)) === nothing
 
 primitive type Int256 <: Signed 256 end
 Int256(i::Int) = Core.Intrinsics.sext_int(Int256, i)
@@ -224,44 +294,44 @@ for TT in (Int8, Int16, Int32, Int64, Int128, Int256, Int512, Complex{Int32}, Co
                 @test_throws TypeError Core.Intrinsics.atomic_pointerreplace(p, T(10), S(3), :sequentially_consistent, :sequentially_consistent)
             end
             @test Core.Intrinsics.pointerref(p, 1, 1) === T(10) === r[]
-            if sizeof(r) > 8
-                @test_throws ErrorException("atomic_pointerref: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent)
-                @test_throws ErrorException("atomic_pointerset: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointerset(p, T(1), :sequentially_consistent)
-                @test_throws ErrorException("atomic_pointerswap: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointerswap(p, T(100), :sequentially_consistent)
-                @test_throws ErrorException("atomic_pointermodify: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointermodify(p, add, T(1), :sequentially_consistent)
-                @test_throws ErrorException("atomic_pointermodify: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointermodify(p, swap, S(1), :sequentially_consistent)
-                @test_throws ErrorException("atomic_pointerreplace: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointerreplace(p, T(100), T(2), :sequentially_consistent, :sequentially_consistent)
-                @test_throws ErrorException("atomic_pointerreplace: invalid pointer for atomic operation") Core.Intrinsics.atomic_pointerreplace(p, S(100), T(2), :sequentially_consistent, :sequentially_consistent)
+            if sizeof(r) > 2*sizeof(Int)
+                @test_throws ErrorException("atomic_pointerref: invalid pointer for atomic operation") unsafe_load(p, :sequentially_consistent)
+                @test_throws ErrorException("atomic_pointerset: invalid pointer for atomic operation") unsafe_store!(p, T(1), :sequentially_consistent)
+                @test_throws ErrorException("atomic_pointerswap: invalid pointer for atomic operation") unsafe_swap!(p, T(100), :sequentially_consistent)
+                @test_throws ErrorException("atomic_pointermodify: invalid pointer for atomic operation") unsafe_modify!(p, add, T(1), :sequentially_consistent)
+                @test_throws ErrorException("atomic_pointermodify: invalid pointer for atomic operation") unsafe_modify!(p, swap, S(1), :sequentially_consistent)
+                @test_throws ErrorException("atomic_pointerreplace: invalid pointer for atomic operation") unsafe_replace!(p, T(100), T(2), :sequentially_consistent, :sequentially_consistent)
+                @test_throws ErrorException("atomic_pointerreplace: invalid pointer for atomic operation") unsafe_replace!(p, S(100), T(2), :sequentially_consistent, :sequentially_consistent)
                 @test Core.Intrinsics.pointerref(p, 1, 1) === T(10) === r[]
             else
                 if TT !== Any
-                    @test_throws TypeError Core.Intrinsics.atomic_pointermodify(p, swap, S(4), :sequentially_consistent)
+                    @test_throws TypeError Core.Intrinsics.atomic_pointermodify(p, swap, S(1), :sequentially_consistent)
                     @test_throws TypeError Core.Intrinsics.atomic_pointermodify(p, Returns(S(5)), T(10), :sequentially_consistent)
                 end
-                @test Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent) === T(10)
-                @test Core.Intrinsics.atomic_pointerset(p, T(1), :sequentially_consistent) === p
-                @test Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent) === T(1)
-                @test Core.Intrinsics.atomic_pointerreplace(p, T(1), T(100), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(1), true))
-                @test Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent) === T(100)
-                @test Core.Intrinsics.atomic_pointerreplace(p, T(1), T(1), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(100), false))
-                @test Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent) === T(100)
-                @test Core.Intrinsics.atomic_pointermodify(p, add, T(1), :sequentially_consistent) === Pair{TT,TT}(T(100), T(101))
-                @test Core.Intrinsics.atomic_pointermodify(p, add, T(1), :sequentially_consistent) === Pair{TT,TT}(T(101), T(102))
-                @test Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent) === T(102)
-                @test Core.Intrinsics.atomic_pointerswap(p, T(103), :sequentially_consistent) === T(102)
-                @test Core.Intrinsics.atomic_pointerreplace(p, S(100), T(2), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(103), false))
-                @test Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent) === T(103)
-                @test Core.Intrinsics.atomic_pointermodify(p, Returns(T(105)), nothing, :sequentially_consistent) === Pair{TT,TT}(T(103), T(105))
-                @test Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent) === T(105)
+                @test unsafe_load(p, :sequentially_consistent) === T(10)
+                @test unsafe_store!(p, T(1), :sequentially_consistent) === p
+                @test unsafe_load(p, :sequentially_consistent) === T(1)
+                @test unsafe_replace!(p, T(1), T(100), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(1), true))
+                @test unsafe_load(p, :sequentially_consistent) === T(100)
+                @test unsafe_replace!(p, T(1), T(1), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(100), false))
+                @test unsafe_load(p, :sequentially_consistent) === T(100)
+                @test unsafe_modify!(p, add, T(1), :sequentially_consistent) === Pair{TT,TT}(T(100), T(101))
+                @test unsafe_modify!(p, add, T(1), :sequentially_consistent) === Pair{TT,TT}(T(101), T(102))
+                @test unsafe_load(p, :sequentially_consistent) === T(102)
+                @test unsafe_swap!(p, T(103), :sequentially_consistent) === T(102)
+                @test unsafe_replace!(p, S(100), T(2), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((T(103), false))
+                @test unsafe_load(p, :sequentially_consistent) === T(103)
+                @test unsafe_modify!(p, Returns(T(105)), nothing, :sequentially_consistent) === Pair{TT,TT}(T(103), T(105))
+                @test unsafe_load(p, :sequentially_consistent) === T(105)
             end
             if TT === Any
-                @test Core.Intrinsics.atomic_pointermodify(p, swap, S(105), :sequentially_consistent) === Pair{TT,TT}(T(105), S(105))
-                @test Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent) === S(105)
-                @test Core.Intrinsics.atomic_pointerset(p, S(1), :sequentially_consistent) === p
-                @test Core.Intrinsics.atomic_pointerswap(p, S(100), :sequentially_consistent) === S(1)
-                @test Core.Intrinsics.atomic_pointerreplace(p, T(100), S(2), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((S(100), false))
-                @test Core.Intrinsics.atomic_pointerreplace(p, S(100), T(2), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((S(100), true))
-                @test Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent) === T(2)
+                @test unsafe_modify!(p, swap, S(105), :sequentially_consistent) === Pair{TT,TT}(T(105), S(105))
+                @test unsafe_load(p, :sequentially_consistent) === S(105)
+                @test unsafe_store!(p, S(1), :sequentially_consistent) === p
+                @test unsafe_swap!(p, S(100), :sequentially_consistent) === S(1)
+                @test unsafe_replace!(p, T(100), S(2), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((S(100), false))
+                @test unsafe_replace!(p, S(100), T(2), :sequentially_consistent, :sequentially_consistent) === ReplaceType{TT}((S(100), true))
+                @test unsafe_load(p, :sequentially_consistent) === T(2)
             end
         end)(TT,)
     end
@@ -314,38 +384,51 @@ Base.show(io::IO, a::IntWrap) = print(io, "IntWrap(", a.x, ")")
         @test_throws TypeError Core.Intrinsics.atomic_pointerset(p, S(1), :sequentially_consistent)
         @test_throws TypeError Core.Intrinsics.atomic_pointerswap(p, S(100), :sequentially_consistent)
         @test_throws TypeError Core.Intrinsics.atomic_pointerreplace(p, T(100), S(2), :sequentially_consistent, :sequentially_consistent)
-        r2 = Core.Intrinsics.pointerref(p, 1, 1)
+        r2 = unsafe_load(p, 1)
         @test r2 isa IntWrap && r2.x === 10 === r[].x && r2 !== r[]
         @test_throws TypeError Core.Intrinsics.atomic_pointermodify(p, swap, S(1), :sequentially_consistent)
-        r2 = Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent)
+        r2 = unsafe_load(p, :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 10 === r[].x && r2 !== r[]
-        @test Core.Intrinsics.atomic_pointerset(p, T(1), :sequentially_consistent) === p
-        r2 = Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent)
+        @test unsafe_store!(p, T(1), :sequentially_consistent) === p
+        r2 = unsafe_load(p, :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 1 === r[].x && r2 !== r[]
-        r2, succ = Core.Intrinsics.atomic_pointerreplace(p, T(1), T(100), :sequentially_consistent, :sequentially_consistent)
+        r2, succ = unsafe_replace!(p, T(1), T(100), :sequentially_consistent, :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 1 && r[].x === 100 && r2 !== r[]
         @test succ
-        r2 = Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent)
+        r2 = unsafe_load(p, :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 100 === r[].x && r2 !== r[]
-        r2, succ = Core.Intrinsics.atomic_pointerreplace(p, T(1), T(1), :sequentially_consistent, :sequentially_consistent)
+        r2, succ = unsafe_replace!(p, T(1), T(1), :sequentially_consistent, :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 100 === r[].x && r2 !== r[]
         @test !succ
-        r2 = Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent)
+        r2 = unsafe_load(p, :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 100 === r[].x && r2 !== r[]
-        r2, r3 = Core.Intrinsics.atomic_pointermodify(p, add, T(1), :sequentially_consistent)
+        r2, r3 = unsafe_modify!(p, add, T(1), :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 100 !== r[].x && r2 !== r[]
         @test r3 isa IntWrap && r3.x === 101 === r[].x && r3 !== r[]
-        r2, r3 = Core.Intrinsics.atomic_pointermodify(p, add, T(1), :sequentially_consistent)
+        r2, r3 = unsafe_modify!(p, add, T(1), :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 101 !== r[].x && r2 !== r[]
         @test r3 isa IntWrap && r3.x === 102 === r[].x && r3 !== r[]
-        r2 = Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent)
+        r2 = unsafe_load(p, :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 102 === r[].x && r2 !== r[]
-        r2 = Core.Intrinsics.atomic_pointerswap(p, T(103), :sequentially_consistent)
+        r2 = unsafe_swap!(p, T(103), :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 102 !== r[].x && r[].x == 103 && r2 !== r[]
-        r2, succ = Core.Intrinsics.atomic_pointerreplace(p, S(100), T(2), :sequentially_consistent, :sequentially_consistent)
+        r2, succ = unsafe_replace!(p, S(100), T(2), :sequentially_consistent, :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 103 === r[].x && r2 !== r[]
         @test !succ
-        r2 = Core.Intrinsics.atomic_pointerref(p, :sequentially_consistent)
+        r2 = unsafe_load(p, :sequentially_consistent)
         @test r2 isa IntWrap && r2.x === 103 === r[].x && r2 !== r[]
     end
 end)()
+
+@testset "issue #54548" begin
+    @inline passthrough(ptr::Core.LLVMPtr{T,A}) where {T,A} = Base.llvmcall(("""
+            define ptr addrspace(1) @entry(ptr addrspace(1) %0) #0 {
+            entry:
+                ret ptr addrspace(1) %0
+            }
+
+            attributes #0 = { alwaysinline }""", "entry"),
+        Core.LLVMPtr{T,A}, Tuple{Core.LLVMPtr{T,A}}, ptr)
+    f(gws) = passthrough(Core.bitcast(Core.LLVMPtr{UInt32,1}, gws))
+    f(C_NULL)
+end

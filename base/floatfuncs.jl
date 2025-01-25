@@ -42,87 +42,9 @@ it is the minimum of `maxintfloat(T)` and [`typemax(S)`](@ref).
 maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
 
-isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
+isinteger(x::AbstractFloat) = iszero(x - trunc(x)) # note: x == trunc(x) would be incorrect for x=Inf
 
-"""
-    round([T,] x, [r::RoundingMode])
-    round(x, [r::RoundingMode]; digits::Integer=0, base = 10)
-    round(x, [r::RoundingMode]; sigdigits::Integer, base = 10)
-
-Rounds the number `x`.
-
-Without keyword arguments, `x` is rounded to an integer value, returning a value of type
-`T`, or of the same type of `x` if no `T` is provided. An [`InexactError`](@ref) will be
-thrown if the value is not representable by `T`, similar to [`convert`](@ref).
-
-If the `digits` keyword argument is provided, it rounds to the specified number of digits
-after the decimal place (or before if negative), in base `base`.
-
-If the `sigdigits` keyword argument is provided, it rounds to the specified number of
-significant digits, in base `base`.
-
-The [`RoundingMode`](@ref) `r` controls the direction of the rounding; the default is
-[`RoundNearest`](@ref), which rounds to the nearest integer, with ties (fractional values
-of 0.5) being rounded to the nearest even integer. Note that `round` may give incorrect
-results if the global rounding mode is changed (see [`rounding`](@ref)).
-
-# Examples
-```jldoctest
-julia> round(1.7)
-2.0
-
-julia> round(Int, 1.7)
-2
-
-julia> round(1.5)
-2.0
-
-julia> round(2.5)
-2.0
-
-julia> round(pi; digits=2)
-3.14
-
-julia> round(pi; digits=3, base=2)
-3.125
-
-julia> round(123.456; sigdigits=2)
-120.0
-
-julia> round(357.913; sigdigits=4, base=2)
-352.0
-```
-
-!!! note
-    Rounding to specified digits in bases other than 2 can be inexact when
-    operating on binary floating point numbers. For example, the [`Float64`](@ref)
-    value represented by `1.15` is actually *less* than 1.15, yet will be
-    rounded to 1.2. For example:
-
-    ```jldoctest
-    julia> x = 1.15
-    1.15
-
-    julia> big(1.15)
-    1.149999999999999911182158029987476766109466552734375
-
-    julia> x < 115//100
-    true
-
-    julia> round(x, digits=1)
-    1.2
-    ```
-
-# Extensions
-
-To extend `round` to new numeric types, it is typically sufficient to define `Base.round(x::NewType, r::RoundingMode)`.
-"""
-round(T::Type, x)
-
-function round(::Type{T}, x::AbstractFloat, r::RoundingMode) where {T<:Integer}
-    r != RoundToZero && (x = round(x,r))
-    trunc(T, x)
-end
+# See rounding.jl for docstring.
 
 # NOTE: this relies on the current keyword dispatch behaviour (#9498).
 function round(x::Real, r::RoundingMode=RoundNearest;
@@ -149,12 +71,6 @@ function round(x::Real, r::RoundingMode=RoundNearest;
         end
     end
 end
-
-trunc(x::Real; kwargs...) = round(x, RoundToZero; kwargs...)
-floor(x::Real; kwargs...) = round(x, RoundDown; kwargs...)
-ceil(x::Real; kwargs...)  = round(x, RoundUp; kwargs...)
-
-round(x::Integer, r::RoundingMode) = x
 
 # round x to multiples of 1/invstep
 function _round_invstep(x, invstep, r::RoundingMode)
@@ -304,7 +220,22 @@ true
 function isapprox(x::Number, y::Number;
                   atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
                   nans::Bool=false, norm::Function=abs)
-    x == y || (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x), norm(y)))) || (nans && isnan(x) && isnan(y))
+    x′, y′ = promote(x, y) # to avoid integer overflow
+    x == y ||
+        (isfinite(x) && isfinite(y) && norm(x-y) <= max(atol, rtol*max(norm(x′), norm(y′)))) ||
+         (nans && isnan(x) && isnan(y))
+end
+
+function isapprox(x::Integer, y::Integer;
+                  atol::Real=0, rtol::Real=rtoldefault(x,y,atol),
+                  nans::Bool=false, norm::Function=abs)
+    if norm === abs && atol < 1 && rtol == 0
+        return x == y
+    else
+        # We need to take the difference `max` - `min` when comparing unsigned integers.
+        _x, _y = x < y ? (x, y) : (y, x)
+        return norm(_y - _x) <= max(atol, rtol*max(norm(_x), norm(_y)))
+    end
 end
 
 """
@@ -345,6 +276,9 @@ significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in 
 algorithms. See [`muladd`](@ref).
 """
 function fma end
+function fma_emulated(a::Float16, b::Float16, c::Float16)
+    Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.
+end
 function fma_emulated(a::Float32, b::Float32, c::Float32)::Float32
     ab = Float64(a) * b
     res = ab+c
@@ -417,19 +351,14 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
     s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
     return r+s
 end
-fma_llvm(x::Float32, y::Float32, z::Float32) = fma_float(x, y, z)
-fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 
 # Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
 # onto a broken system libm; if so, use a software emulated fma
-@assume_effects :consistent fma(x::Float32, y::Float32, z::Float32) = Core.Intrinsics.have_fma(Float32) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
-@assume_effects :consistent fma(x::Float64, y::Float64, z::Float64) = Core.Intrinsics.have_fma(Float64) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
-
-function fma(a::Float16, b::Float16, c::Float16)
-    Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.
+@assume_effects :consistent function fma(x::T, y::T, z::T) where {T<:IEEEFloat}
+    Core.Intrinsics.have_fma(T) ? fma_float(x,y,z) : fma_emulated(x,y,z)
 end
 
-# This is necessary at least on 32-bit Intel Linux, since fma_llvm may
+# This is necessary at least on 32-bit Intel Linux, since fma_float may
 # have called glibc, and some broken glibc fma implementations don't
 # properly restore the rounding mode
 Rounding.setrounding_raw(Float32, Rounding.JL_FE_TONEAREST)

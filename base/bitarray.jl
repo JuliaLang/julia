@@ -404,6 +404,7 @@ falses(dims::DimOrInd...) = falses(dims)
 falses(dims::NTuple{N, Union{Integer, OneTo}}) where {N} = falses(map(to_dim, dims))
 falses(dims::NTuple{N, Integer}) where {N} = fill!(BitArray(undef, dims), false)
 falses(dims::Tuple{}) = fill!(BitArray(undef, dims), false)
+falses(dims::NTuple{N, DimOrInd}) where {N} = fill!(similar(BitArray, dims), false)
 
 """
     trues(dims)
@@ -422,6 +423,7 @@ trues(dims::DimOrInd...) = trues(dims)
 trues(dims::NTuple{N, Union{Integer, OneTo}}) where {N} = trues(map(to_dim, dims))
 trues(dims::NTuple{N, Integer}) where {N} = fill!(BitArray(undef, dims), true)
 trues(dims::Tuple{}) = fill!(BitArray(undef, dims), true)
+trues(dims::NTuple{N, DimOrInd}) where {N} = fill!(similar(BitArray, dims), true)
 
 function one(x::BitMatrix)
     m, n = size(x)
@@ -462,7 +464,7 @@ copyto!(dest::BitArray, doffs::Integer, src::Union{BitArray,Array}, soffs::Integ
     _copyto_int!(dest, Int(doffs), src, Int(soffs), Int(n))
 function _copyto_int!(dest::BitArray, doffs::Int, src::Union{BitArray,Array}, soffs::Int, n::Int)
     n == 0 && return dest
-    n < 0 && throw(ArgumentError("Number of elements to copy must be nonnegative."))
+    n < 0 && throw(ArgumentError("Number of elements to copy must be non-negative."))
     soffs < 1 && throw(BoundsError(src, soffs))
     doffs < 1 && throw(BoundsError(dest, doffs))
     soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
@@ -482,7 +484,7 @@ end
 reshape(B::BitArray, dims::Tuple{Vararg{Int}}) = _bitreshape(B, dims)
 function _bitreshape(B::BitArray, dims::NTuple{N,Int}) where N
     prod(dims) == length(B) ||
-        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(B))"))
+        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $(length(B))"))
     Br = BitArray{N}(undef, ntuple(i->0,Val(N))...)
     Br.chunks = B.chunks
     Br.len = prod(dims)
@@ -541,10 +543,8 @@ end
 reinterpret(::Type{Bool}, B::BitArray, dims::NTuple{N,Int}) where {N} = reinterpret(B, dims)
 reinterpret(B::BitArray, dims::NTuple{N,Int}) where {N} = reshape(B, dims)
 
-if nameof(@__MODULE__) === :Base  # avoid method overwrite
 (::Type{T})(x::T) where {T<:BitArray} = copy(x)::T
 BitArray(x::BitArray) = copy(x)
-end
 
 """
     BitArray(itr)
@@ -807,7 +807,7 @@ prepend!(B::BitVector, items) = prepend!(B, BitArray(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, Array(items))
 
 function sizehint!(B::BitVector, sz::Integer)
-    ccall(:jl_array_sizehint, Cvoid, (Any, UInt), B.chunks, num_bit_chunks(sz))
+    sizehint!(B.chunks, num_bit_chunks(sz))
     return B
 end
 
@@ -1791,9 +1791,10 @@ function bit_map!(f::F, dest::BitArray, A::BitArray) where F
     dest_last = destc[len_Ac]
     _msk = _msk_end(A)
     # first zero out the bits mask is going to change
-    destc[len_Ac] = (dest_last & (~_msk))
     # then update bits by `or`ing with a masked RHS
-    destc[len_Ac] |= f(Ac[len_Ac]) & _msk
+    # DO NOT SEPARATE ONTO TO LINES.
+    # Otherwise there will be bugs when Ac aliases destc
+    destc[len_Ac] = (dest_last & (~_msk)) | f(Ac[len_Ac]) & _msk
     dest
 end
 function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
@@ -1812,9 +1813,10 @@ function bit_map!(f::F, dest::BitArray, A::BitArray, B::BitArray) where F
     dest_last = destc[len_Ac]
     _msk = _msk_end(min_bitlen)
     # first zero out the bits mask is going to change
-    destc[len_Ac] = (dest_last & ~(_msk))
     # then update bits by `or`ing with a masked RHS
-    destc[len_Ac] |= f(Ac[end], Bc[end]) & _msk
+    # DO NOT SEPARATE ONTO TO LINES.
+    # Otherwise there will be bugs when Ac or Bc aliases destc
+    destc[len_Ac] = (dest_last & ~(_msk)) | f(Ac[end], Bc[end]) & _msk
     dest
 end
 

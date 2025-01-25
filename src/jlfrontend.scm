@@ -31,8 +31,6 @@
 
 ;; this is overwritten when we run in actual julia
 (define (defined-julia-global v) #f)
-(define (julia-current-file) 'none)
-(define (julia-current-line) 0)
 
 ;; parser entry points
 
@@ -140,7 +138,7 @@
 
 (define (toplevel-only-expr? e)
   (and (pair? e)
-       (or (memq (car e) '(toplevel line module import using export
+       (or (memq (car e) '(toplevel line module export public
                                     error incomplete))
            (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
 
@@ -149,7 +147,7 @@
 (define (expand-toplevel-expr e file line)
   (cond ((or (atom? e) (toplevel-only-expr? e))
          (if (underscore-symbol? e)
-             (error "all-underscore identifier used as rvalue"))
+             (error "all-underscore identifiers are write-only and their values cannot be used in expressions"))
          e)
         (else
          (let ((last *in-expand*))
@@ -181,7 +179,10 @@
      ;; Abuse scm_to_julia here to convert arguments to warn. This is meant for
      ;; `Expr`s but should be good enough provided we're only passing simple
      ;; numbers, symbols and strings.
-     ((lowering-warning (lambda lst (set! warnings (cons (cons 'warn lst) warnings)))))
+     ((lowering-warning (lambda (level group warn_file warn_line . lst)
+        (let ((line (if (= warn_line 0) line warn_line))
+              (file (if (eq? warn_file 'none) file warn_file)))
+          (set! warnings (cons (list* 'warn level group (symbol (string file line)) file line lst) warnings))))))
      (let ((thunk (if stmt
                       (expand-to-thunk-stmt- expr file line)
                       (expand-to-thunk- expr file line))))
@@ -196,28 +197,6 @@
 (define (jl-expand-macroscope expr)
   (error-wrap (lambda ()
                 (julia-expand-macroscope expr))))
-
-;; construct default definitions of `eval` for non-bare modules
-;; called by jl_eval_module_expr
-(define (module-default-defs name file line)
-  (jl-expand-to-thunk
-   (let* ((loc  (if (and (eq? file 'none) (eq? line 0)) '() `((line ,line ,file))))
-          (x    (if (eq? name 'x) 'y 'x))
-          (mex  (if (eq? name 'mapexpr) 'map_expr 'mapexpr)))
-     `(block
-       (= (call eval ,x)
-          (block
-           ,@loc
-           (call (core eval) ,name ,x)))
-       (= (call include ,x)
-          (block
-           ,@loc
-           (call (core _call_latest) (top include) ,name ,x)))
-       (= (call include (:: ,mex (top Function)) ,x)
-          (block
-           ,@loc
-           (call (core _call_latest) (top include) ,mex ,name ,x)))))
-   file line))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

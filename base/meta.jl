@@ -5,8 +5,6 @@ Convenience functions for metaprogramming.
 """
 module Meta
 
-using ..CoreLogging
-
 export quot,
        isexpr,
        isidentifier,
@@ -17,6 +15,8 @@ export quot,
        replace_sourceloc!,
        show_sexpr,
        @dump
+
+public parse
 
 using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
 import Base: isexpr
@@ -187,7 +187,10 @@ expression.
 """
 struct ParseError <: Exception
     msg::String
+    detail::Any
 end
+
+ParseError(msg::AbstractString) = ParseError(msg, nothing)
 
 function _parse_string(text::AbstractString, filename::AbstractString,
                        lineno::Integer, index::Integer, options)
@@ -199,7 +202,7 @@ function _parse_string(text::AbstractString, filename::AbstractString,
 end
 
 """
-    parse(str, start; greedy=true, raise=true, depwarn=true)
+    parse(str, start; greedy=true, raise=true, depwarn=true, filename="none")
 
 Parse the expression string and return an expression (which could later be
 passed to eval for execution). `start` is the code unit index into `str` of the
@@ -211,6 +214,7 @@ return `Expr(:incomplete, "(error message)")`. If `raise` is `true` (default),
 syntax errors other than incomplete expressions will raise an error. If `raise`
 is `false`, `parse` will return an expression that will raise an error upon
 evaluation. If `depwarn` is `false`, deprecation warnings will be suppressed.
+The `filename` argument is used to display diagnostics when an error is raised.
 
 ```jldoctest
 julia> Meta.parse("(α, β) = 3, 5", 1) # start of string
@@ -229,43 +233,50 @@ julia> Meta.parse("(α, β) = 3, 5", 11, greedy=false)
 (3, 13)
 ```
 """
-function parse(str::AbstractString, pos::Integer; greedy::Bool=true, raise::Bool=true,
-               depwarn::Bool=true)
-    ex, pos = _parse_string(str, "none", 1, pos, greedy ? :statement : :atom)
-    if raise && isa(ex,Expr) && ex.head === :error
-        throw(ParseError(ex.args[1]))
+function parse(str::AbstractString, pos::Integer;
+               filename="none", greedy::Bool=true, raise::Bool=true, depwarn::Bool=true)
+    ex, pos = _parse_string(str, String(filename), 1, pos, greedy ? :statement : :atom)
+    if raise && isexpr(ex, :error)
+        err = ex.args[1]
+        if err isa String
+            err = ParseError(err) # For flisp parser
+        end
+        throw(err)
     end
     return ex, pos
 end
 
 """
-    parse(str; raise=true, depwarn=true)
+    parse(str; raise=true, depwarn=true, filename="none")
 
 Parse the expression string greedily, returning a single expression. An error is thrown if
 there are additional characters after the first expression. If `raise` is `true` (default),
 syntax errors will raise an error; otherwise, `parse` will return an expression that will
 raise an error upon evaluation.  If `depwarn` is `false`, deprecation warnings will be
-suppressed.
+suppressed. The `filename` argument is used to display diagnostics when an error is raised.
 
-```jldoctest
+```jldoctest; filter=r"(?<=Expr\\(:error).*|(?<=Expr\\(:incomplete).*"
 julia> Meta.parse("x = 3")
 :(x = 3)
 
-julia> Meta.parse("x = ")
-:($(Expr(:incomplete, "incomplete: premature end of input")))
-
 julia> Meta.parse("1.0.2")
-ERROR: Base.Meta.ParseError("invalid numeric constant \\\"1.0.\\\"")
-Stacktrace:
+ERROR: ParseError:
+# Error @ none:1:1
+1.0.2
+└──┘ ── invalid numeric constant
 [...]
 
 julia> Meta.parse("1.0.2"; raise = false)
-:($(Expr(:error, "invalid numeric constant \"1.0.\"")))
+:(\$(Expr(:error, "invalid numeric constant \"1.0.\"")))
+
+julia> Meta.parse("x = ")
+:(\$(Expr(:incomplete, "incomplete: premature end of input")))
 ```
 """
-function parse(str::AbstractString; raise::Bool=true, depwarn::Bool=true)
-    ex, pos = parse(str, 1, greedy=true, raise=raise, depwarn=depwarn)
-    if isa(ex,Expr) && ex.head === :error
+function parse(str::AbstractString;
+               filename="none", raise::Bool=true, depwarn::Bool=true)
+    ex, pos = parse(str, 1; filename, greedy=true, raise, depwarn)
+    if isexpr(ex, :error)
         return ex
     end
     if pos <= ncodeunits(str)
@@ -353,11 +364,29 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
         x.edges .+= slot_offset
         return x
     end
+    if isa(x, Core.UpsilonNode)
+        if !isdefined(x, :val)
+            return x
+        end
+        return Core.UpsilonNode(
+            _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
+                               slot_offset, statement_offset, boundscheck),
+        )
+    end
+    if isa(x, Core.PhiCNode)
+        _partially_inline!(x.values, slot_replacements, type_signature, static_param_values,
+                           slot_offset, statement_offset, boundscheck)
+    end
     if isa(x, Core.ReturnNode)
+       # Unreachable doesn't have val defined
+       if !isdefined(x, :val)
+          return x
+       else
         return Core.ReturnNode(
             _partially_inline!(x.val, slot_replacements, type_signature, static_param_values,
                                slot_offset, statement_offset, boundscheck),
         )
+       end
     end
     if isa(x, Core.GotoIfNot)
         return Core.GotoIfNot(
@@ -365,6 +394,12 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                                slot_offset, statement_offset, boundscheck),
             x.dest + statement_offset,
         )
+    end
+    if isa(x, Core.EnterNode)
+        if x.catch_dest == 0
+            return x
+        end
+        return Core.EnterNode(x, x.catch_dest + statement_offset)
     end
     if isa(x, Expr)
         head = x.head
@@ -413,8 +448,6 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                                            static_param_values, slot_offset,
                                            statement_offset, boundscheck)
             x.args[2] += statement_offset
-        elseif head === :enter
-            x.args[1] += statement_offset
         elseif head === :isdefined
             arg = x.args[1]
             # inlining a QuoteNode or literal into `Expr(:isdefined, x)` is invalid, replace with true
@@ -439,7 +472,7 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
                 @assert isa(arg, Union{GlobalRef, Symbol})
                 return x
             end
-        elseif !Core.Compiler.is_meta_expr_head(head)
+        elseif !Base.is_meta_expr_head(head)
             partially_inline!(x.args, slot_replacements, type_signature, static_param_values,
                               slot_offset, statement_offset, boundscheck)
         end
@@ -448,5 +481,46 @@ function _partially_inline!(@nospecialize(x), slot_replacements::Vector{Any},
 end
 
 _instantiate_type_in_env(x, spsig, spvals) = ccall(:jl_instantiate_type_in_env, Any, (Any, Any, Ptr{Any}), x, spsig, spvals)
+
+"""
+    Meta.unblock(expr)
+
+Peel away redundant block expressions.
+
+Specifically, the following expressions are stripped by this function:
+- `:block` expressions with a single non-line-number argument.
+- Pairs of `:var"hygienic-scope"` / `:escape` expressions.
+"""
+function unblock(@nospecialize ex)
+    while isexpr(ex, :var"hygienic-scope")
+        isexpr(ex.args[1], :escape) || break
+        ex = ex.args[1].args[1]
+    end
+    isexpr(ex, :block) || return ex
+    exs = filter(ex -> !(isa(ex, LineNumberNode) || isexpr(ex, :line)), ex.args)
+    length(exs) == 1 || return ex
+    return unblock(exs[1])
+end
+
+"""
+    Meta.unescape(expr)
+
+Peel away `:escape` expressions and redundant block expressions (see
+[`unblock`](@ref)).
+"""
+function unescape(@nospecialize ex)
+    ex = unblock(ex)
+    while isexpr(ex, :escape) || isexpr(ex, :var"hygienic-scope")
+       ex = unblock(ex.args[1])
+    end
+    return ex
+end
+
+"""
+    Meta.uncurly(expr)
+
+Turn `T{P...}` into just `T`.
+"""
+uncurly(@nospecialize ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
 end # module

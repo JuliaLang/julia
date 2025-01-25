@@ -1,12 +1,64 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Core.include(Main, "Base.jl")
+# Can be loaded on top of either an existing system image built from
+# `Base_compiler.jl` or standalone, in which case we will build it now.
+let had_compiler = isdefined(Main, :Base)
+if had_compiler; else
+include("Base_compiler.jl")
+end
+
+Core.include(Base, "Base.jl")
+
+had_compiler && ccall(:jl_init_restored_module, Cvoid, (Any,), Base)
+end
 
 using .Base
 
 # Set up Main module
 using Base.MainInclude # ans, err, and sometimes Out
-import Base.MainInclude: eval, include
+
+# These definitions calls Base._include rather than Base.include to get
+# one-frame stacktraces for the common case of using include(fname) in Main.
+
+"""
+    include([mapexpr::Function,] path::AbstractString)
+
+Evaluate the contents of the input source file in the global scope of the containing module.
+Every module (except those defined with `baremodule`) has its own
+definition of `include`, which evaluates the file in that module.
+Returns the result of the last evaluated expression of the input file. During including,
+a task-local include path is set to the directory containing the file. Nested calls to
+`include` will search relative to that path. This function is typically used to load source
+interactively, or to combine files in packages that are broken into multiple source files.
+The argument `path` is normalized using [`normpath`](@ref) which will resolve
+relative path tokens such as `..` and convert `/` to the appropriate path separator.
+
+The optional first argument `mapexpr` can be used to transform the included code before
+it is evaluated: for each parsed expression `expr` in `path`, the `include` function
+actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
+
+Use [`Base.include`](@ref) to evaluate a file into another module.
+
+!!! note
+    Julia's syntax lowering recognizes an explicit call to a literal `include`
+    at top-level and inserts an implicit `@Core.latestworld` to make any include'd
+    definitions visible to subsequent code. Note however that this recognition
+    is *syntactic*. I.e. assigning `const myinclude = include` may require
+    and explicit `@Core.latestworld` call after `myinclude`.
+
+!!! compat "Julia 1.5"
+    Julia 1.5 is required for passing the `mapexpr` argument.
+"""
+const include = Base.IncludeInto(Main)
+
+"""
+    eval(expr)
+
+Evaluate an expression in the global scope of the containing module.
+Every `Module` (except those defined with `baremodule`) has its own 1-argument
+definition of `eval`, which evaluates expressions in that module.
+"""
+const eval = Core.EvalInto(Main)
 
 # Ensure this file is also tracked
 pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
@@ -29,55 +81,36 @@ let
 
     # Stdlibs sorted in dependency, then alphabetical, order by contrib/print_sorted_stdlibs.jl
     # Run with the `--exclude-jlls` option to filter out all JLL packages
-    stdlibs = [
-        # No dependencies
-        :ArgTools,
-        :Artifacts,
-        :Base64,
-        :CRC32c,
-        :FileWatching,
-        :Libdl,
-        :Logging,
-        :Mmap,
-        :NetworkOptions,
-        :SHA,
-        :Serialization,
-        :Sockets,
-        :Unicode,
+    if isdefined(Base.BuildSettings, :INCLUDE_STDLIBS)
+        # e.g. INCLUDE_STDLIBS = "FileWatching,Libdl,Artifacts,SHA,Sockets,LinearAlgebra,Random"
+        stdlibs = Symbol.(split(Base.BuildSettings.INCLUDE_STDLIBS, ","))
+    else
+        # TODO: this is included for compatibility with PackageCompiler, which looks for it.
+        # This should eventually be removed so we only use `BuildSettings`.
+        stdlibs = [
+            # No dependencies
+            :FileWatching, # used by loading.jl -- implicit assumption that init runs
+            :Libdl, # Transitive through LinAlg
+            :Artifacts, # Transitive through LinAlg
+            :SHA, # transitive through Random
+            :Sockets, # used by stream.jl
 
-        # 1-depth packages
-        :LinearAlgebra,
-        :Markdown,
-        :Printf,
-        :Random,
-        :Tar,
+            # Transitive through LingAlg
+            # OpenBLAS_jll
+            # libblastrampoline_jll
 
-        # 2-depth packages
-        :Dates,
-        :Future,
-        :InteractiveUtils,
-        :LibGit2,
-        :UUIDs,
-
-        # 3-depth packages
-        :REPL,
-        :TOML,
-
-        # 4-depth packages
-        :LibCURL,
-
-        # 5-depth packages
-        :Downloads,
-
-        # 6-depth packages
-        :Pkg,
-    ]
+            # 1-depth packages
+            :LinearAlgebra, # Commits type-piracy and GEMM
+            :Random, # Can't be removed due to rand being exported by Base
+        ]
+    end
     # PackageCompiler can filter out stdlibs so it can be empty
     maxlen = maximum(textwidth.(string.(stdlibs)); init=0)
 
     tot_time_stdlib = 0.0
     # use a temp module to avoid leaving the type of this closure in Main
-    m = Module()
+    push!(empty!(LOAD_PATH), "@stdlib")
+    m = Core.Module()
     GC.@preserve m begin
         print_time = @eval m (mod, t) -> (print(rpad(string(mod) * "  ", $maxlen + 3, "─"));
                                           Base.time_print(stdout, t * 10^9); println())
@@ -89,8 +122,9 @@ let
             print_time(stdlib, tt)
         end
         for dep in Base._require_dependencies
-            dep[3] == 0.0 && continue
-            push!(Base._included_files, dep[1:2])
+            mod, path, fsize, mtime = dep[1], dep[2], dep[3], dep[5]
+            (fsize == 0 || mtime == 0.0) && continue
+            push!(Base._included_files, (mod, path))
         end
         empty!(Base._require_dependencies)
         Base._track_dependencies[] = false
@@ -105,6 +139,7 @@ let
     Base.init_load_path() # want to be able to find external packages in userimg.jl
 
     ccall(:jl_clear_implicit_imports, Cvoid, (Any,), Main)
+
     tot_time_userimg = @elapsed (isfile("userimg.jl") && Base.include(Main, "userimg.jl"))
 
     tot_time_base = (Base.end_base_include - Base.start_base_include) * 10.0^(-9)
@@ -124,6 +159,7 @@ end
 
 empty!(Base.TOML_CACHE.d)
 Base.TOML.reinit!(Base.TOML_CACHE.p, "")
+@eval Base BUILDROOT = ""
 @eval Sys begin
     BINDIR = ""
     STDLIB = ""

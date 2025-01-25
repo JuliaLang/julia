@@ -69,6 +69,8 @@ struct GenericCondition{L<:AbstractLock}
     GenericCondition(l::AbstractLock) = new{typeof(l)}(IntrusiveLinkedList{Task}(), l)
 end
 
+show(io::IO, c::GenericCondition) = print(io, GenericCondition, "(", c.lock, ")")
+
 assert_havelock(c::GenericCondition) = assert_havelock(c.lock)
 lock(c::GenericCondition) = lock(c.lock)
 unlock(c::GenericCondition) = unlock(c.lock)
@@ -103,17 +105,16 @@ end
 """
     wait([x])
 
-Block the current task until some event occurs, depending on the type of the argument:
+Block the current task until some event occurs.
 
 * [`Channel`](@ref): Wait for a value to be appended to the channel.
 * [`Condition`](@ref): Wait for [`notify`](@ref) on a condition and return the `val`
-  parameter passed to `notify`. Waiting on a condition additionally allows passing
-  `first=true` which results in the waiter being put _first_ in line to wake up on `notify`
-  instead of the usual first-in-first-out behavior.
+  parameter passed to `notify`. See the `Condition`-specific docstring of `wait` for
+  the exact behavior.
 * `Process`: Wait for a process or process chain to exit. The `exitcode` field of a process
   can be used to determine success or failure.
-* [`Task`](@ref): Wait for a `Task` to finish. If the task fails with an exception, a
-  `TaskFailedException` (which wraps the failed task) is thrown.
+* [`Task`](@ref): Wait for a `Task` to finish. See the `Task`-specific docstring of `wait` for
+  the exact behavior.
 * [`RawFD`](@ref): Wait for changes on a file descriptor (see the `FileWatching` package).
 
 If no argument is passed, the task blocks for an undefined period. A task can only be
@@ -122,14 +123,108 @@ restarted by an explicit call to [`schedule`](@ref) or [`yieldto`](@ref).
 Often `wait` is called within a `while` loop to ensure a waited-for condition is met before
 proceeding.
 """
-function wait(c::GenericCondition; first::Bool=false)
+function wait end
+
+# wait with timeout
+#
+# The behavior of wait changes if a timeout is specified. There are
+# three concurrent entities that can interact:
+# 1. Task W: the task that calls wait w/timeout.
+# 2. Task T: the task created to handle a timeout.
+# 3. Task N: the task that notifies the Condition being waited on.
+#
+# Typical flow:
+# - W enters the Condition's wait queue.
+# - W creates T and stops running (calls wait()).
+# - T, when scheduled, waits on a Timer.
+# - Two common outcomes:
+#   - N notifies the Condition.
+#     - W starts running, closes the Timer, sets waiter_left and returns
+#       the notify'ed value.
+#     - The closed Timer throws an EOFError to T which simply ends.
+#   - The Timer expires.
+#     - T starts running and locks the Condition.
+#     - T confirms that waiter_left is unset and that W is still in the
+#       Condition's wait queue; it then removes W from the wait queue,
+#       sets dosched to true and unlocks the Condition.
+#     - If dosched is true, T schedules W with the special :timed_out
+#       value.
+#     - T ends.
+#     - W runs and returns :timed_out.
+#
+# Some possible interleavings:
+# - N notifies the Condition but the Timer expires and T starts running
+#   before W:
+#   - W closing the expired Timer is benign.
+#   - T will find that W is no longer in the Condition's wait queue
+#     (which is protected by a lock) and will not schedule W.
+# - N notifies the Condition; W runs and calls wait on the Condition
+#   again before the Timer expires:
+#   - W sets waiter_left before leaving. When T runs, it will find that
+#     waiter_left is set and will not schedule W.
+#
+# The lock on the Condition's wait queue and waiter_left together
+# ensure proper synchronization and behavior of the tasks involved.
+
+"""
+    wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
+
+Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notify`.
+
+If the keyword `first` is set to `true`, the waiter will be put _first_
+in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
+
+If `timeout` is specified, cancel the `wait` when it expires and return
+`:timed_out`. The minimum value for `timeout` is 0.001 seconds, i.e. 1
+millisecond.
+"""
+function wait(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
+    timeout == 0.0 || timeout ≥ 1e-3 || throw(ArgumentError("timeout must be ≥ 1 millisecond"))
+
     ct = current_task()
     _wait2(c, ct, first)
     token = unlockall(c.lock)
+
+    timer::Union{Timer, Nothing} = nothing
+    waiter_left::Union{Threads.Atomic{Bool}, Nothing} = nothing
+    if timeout > 0.0
+        timer = Timer(timeout)
+        waiter_left = Threads.Atomic{Bool}(false)
+        # start a task to wait on the timer
+        t = Task() do
+            try
+                wait(timer)
+            catch e
+                # if the timer was closed, the waiting task has been scheduled; do nothing
+                e isa EOFError && return
+            end
+            dosched = false
+            lock(c.lock)
+            # Confirm that the waiting task is still in the wait queue and remove it. If
+            # the task is not in the wait queue, it must have been notified already so we
+            # don't do anything here.
+            if !waiter_left[] && ct.queue == c.waitq
+                dosched = true
+                Base.list_deletefirst!(c.waitq, ct)
+            end
+            unlock(c.lock)
+            # send the waiting task a timeout
+            dosched && schedule(ct, :timed_out)
+        end
+        t.sticky = false
+        Threads._spawn_set_thrpool(t, :interactive)
+        schedule(t)
+    end
+
     try
-        return wait()
+        res = wait()
+        if timer !== nothing
+            close(timer)
+            waiter_left[] = true
+        end
+        return res
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         rethrow()
     finally
         relockall(c.lock, token)
@@ -175,14 +270,17 @@ isempty(c::GenericCondition) = isempty(c.waitq)
 
 Create an edge-triggered event source that tasks can wait for. Tasks that call [`wait`](@ref) on a
 `Condition` are suspended and queued. Tasks are woken up when [`notify`](@ref) is later called on
-the `Condition`. Edge triggering means that only tasks waiting at the time [`notify`](@ref) is
-called can be woken up. For level-triggered notifications, you must keep extra state to keep
+the `Condition`. Waiting on a condition can return a value or raise an error if the optional arguments
+of [`notify`](@ref) are used. Edge triggering means that only tasks waiting at the time [`notify`](@ref)
+is called can be woken up. For level-triggered notifications, you must keep extra state to keep
 track of whether a notification has happened. The [`Channel`](@ref) and [`Threads.Event`](@ref) types do
 this, and can be used for level-triggered events.
 
 This object is NOT thread-safe. See [`Threads.Condition`](@ref) for a thread-safe version.
 """
 const Condition = GenericCondition{AlwaysLockedST}
+
+show(io::IO, ::Condition) = print(io, Condition, "()")
 
 lock(c::GenericCondition{AlwaysLockedST}) =
     throw(ArgumentError("`Condition` is not thread-safe. Please use `Threads.Condition` instead for multi-threaded code."))

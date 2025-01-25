@@ -38,7 +38,7 @@ WeakRef
 # Used by `Base.finalizer` to validate mutability of an object being finalized.
 function _check_mutable(@nospecialize(o)) @noinline
     if !ismutable(o)
-        error("objects of type ", typeof(o), " cannot be finalized")
+        error("objects of type ", typeof(o), " cannot be finalized because they are not mutable")
     end
 end
 
@@ -70,7 +70,6 @@ end
 A finalizer may be registered at object construction. In the following example note that
 we implicitly rely on the finalizer returning the newly created mutable struct `x`.
 
-# Example
 ```julia
 mutable struct MyMutableStruct
     bar
@@ -110,6 +109,8 @@ Module with garbage collection utilities.
 """
 module GC
 
+public gc, enable, @preserve, safepoint, enable_logging, logging_enabled
+
 # mirrored from julia.h
 const GC_AUTO = 0
 const GC_FULL = 1
@@ -119,9 +120,12 @@ const GC_INCREMENTAL = 2
     GC.gc([full=true])
 
 Perform garbage collection. The argument `full` determines the kind of
-collection: A full collection (default) sweeps all objects, which makes the
-next GC scan much slower, while an incremental collection may only sweep
-so-called young objects.
+collection: a full collection (default) traverses all live objects (i.e. full mark)
+and should reclaim memory from all unreachable objects. An incremental collection only
+reclaims memory from young objects which are not reachable.
+
+The GC may decide to perform a full collection even if an incremental collection was
+requested.
 
 !!! warning
     Excessive use will likely lead to poor performance.
@@ -239,11 +243,20 @@ end
     GC.safepoint()
 
 Inserts a point in the program where garbage collection may run.
-This can be useful in rare cases in multi-threaded programs where some threads
-are allocating memory (and hence may need to run GC) but other threads are doing
-only simple operations (no allocation, task switches, or I/O).
-Calling this function periodically in non-allocating threads allows garbage
+
+Safepoints are fast and do not themselves trigger garbage collection.
+However, if another thread has requested the GC to run, reaching a safepoint will
+cause the current thread to block and wait for the GC.
+
+This can be useful in rare cases in multi-threaded programs where some tasks
+are allocating memory (and hence may need to run GC) but other tasks are doing
+only simple operations (no allocation, task switches, or I/O), which do not
+yield control to Julia's runtime, and therefore blocks the GC from running.
+Calling this function periodically in the non-allocating tasks allows garbage
 collection to run.
+
+Note that even though safepoints are fast (typically around 2 clock cycles),
+they can still degrade performance if called in a tight loop.
 
 !!! compat "Julia 1.4"
     This function is available as of Julia 1.4.
@@ -258,5 +271,25 @@ When turned on, print statistics about each GC to stderr.
 function enable_logging(on::Bool=true)
     ccall(:jl_enable_gc_logging, Cvoid, (Cint,), on)
 end
+
+"""
+    GC.logging_enabled()
+
+Return whether GC logging has been enabled via [`GC.enable_logging`](@ref).
+"""
+function logging_enabled()
+    ccall(:jl_is_gc_logging_enabled, Cint, ()) != 0
+end
+
+"""
+    GC.gc_active_impl()
+
+Return a string stating which GC implementation is being used and possibly
+its version according to the list of supported GCs
+"""
+function gc_active_impl()
+    unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ()))
+end
+
 
 end # module GC

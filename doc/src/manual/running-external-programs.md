@@ -41,7 +41,7 @@ hello
 ```
 
 The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). If the external command fails to run
-successfully, the run method throws an [`ErrorException`](@ref).
+successfully, the run method throws an [`ProcessFailedException`](@ref).
 
 If you want to read the output of the external command, [`read`](@ref) or [`readchomp`](@ref)
 can be used instead:
@@ -77,6 +77,18 @@ julia> collect(`echo "foo bar"`)
 
 julia> `echo "foo bar"`[2]
 "foo bar"
+```
+
+You can also pass a `IOBuffer`, and later read from it:
+
+```jldoctest
+julia> io = PipeBuffer(); # PipeBuffer is a type of IOBuffer
+
+julia> run(`echo world`, devnull, io, stderr);
+
+julia> readlines(io)
+1-element Vector{String}:
+ "world"
 ```
 
 ## [Interpolation](@id command-interpolation)
@@ -320,8 +332,8 @@ will attempt to store the data in the kernel's buffers while waiting for a reade
 Another common solution is to separate the reader and writer of the pipeline into separate [`Task`](@ref)s:
 
 ```julia
-writer = @async write(process, "data")
-reader = @async do_compute(read(process, String))
+writer = Threads.@spawn write(process, "data")
+reader = Threads.@spawn do_compute(read(process, String))
 wait(writer)
 fetch(reader)
 ```

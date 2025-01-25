@@ -558,6 +558,11 @@ end # Float16
         @test Ryu.writefixed(1.25e+5, 1, false, false, false, UInt8('.'), true) == "125000"
         @test Ryu.writefixed(1.25e+5, 2, false, false, false, UInt8('.'), true) == "125000"
     end
+
+    @test Ryu.writefixed(100.0-eps(100.0), 0, false, false, true, UInt8('.'), false) == "100."
+    @test Ryu.writefixed(-100.0+eps(-100.0), 0, false, false, true, UInt8('.'), false) == "-100."
+    @test Ryu.writefixed(100.0-eps(100.0), 1, false, false, true, UInt8('.'), false) == "100.0"
+    @test Ryu.writefixed(-100.0+eps(-100.0), 1, false, false, true, UInt8('.'), false) == "-100.0"
 end # fixed
 
 @testset "Ryu.writeexp" begin
