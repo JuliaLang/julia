@@ -137,10 +137,6 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
                 return nothing
             end
             op[] = x
-        elseif isa(val, GlobalRef) && !(isdefined(val.mod, val.name) && isconst(val.mod, val.name))
-            typ = typ_for_val(val, ci, ir, idx, Any[])
-            new_inst = NewInstruction(val, typ)
-            op[] = NewSSAValue(insert_node!(ir, idx, new_inst).id - length(ir.stmts))
         elseif isexpr(val, :static_parameter)
             ty = typ_for_val(val, ci, ir, idx, Any[])
             if isa(ty, Const)

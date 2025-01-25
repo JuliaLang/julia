@@ -647,7 +647,10 @@ enum jl_partition_kind {
     // Undef Constant: This binding partition is a constant declared using `const`, but
     // without a value.
     //  ->restriction is NULL
-    BINDING_KIND_UNDEF_CONST  = 0x9
+    BINDING_KIND_UNDEF_CONST  = 0x9,
+    // Backated constant. A constant that was backdated for compatibility. In all other
+    // ways equivalent to BINDING_KIND_CONST, but prints a warning on access
+    BINDING_KIND_BACKDATED_CONST = 0xa,
 };
 
 #ifdef _P64
@@ -693,7 +696,7 @@ typedef struct _jl_binding_t {
     jl_globalref_t *globalref;  // cached GlobalRef for this binding
     _Atomic(jl_value_t*) value;
     _Atomic(jl_binding_partition_t*) partitions;
-    uint8_t declared:1;
+    uint8_t did_print_backdate_admonition:1;
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
     uint8_t publicp:1; // exportp without publicp is not allowed.
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
@@ -2025,10 +2028,6 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
-STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
-{
-    return (jl_function_t*)jl_get_global(m, jl_symbol(name));
-}
 
 // eq hash tables
 JL_DLLEXPORT jl_genericmemory_t *jl_eqtable_put(jl_genericmemory_t *h JL_ROOTING_ARGUMENT, jl_value_t *key, jl_value_t *val JL_ROOTED_ARGUMENT, int *inserted);
@@ -2590,8 +2589,17 @@ typedef struct {
 } jl_nullable_float32_t;
 
 #define jl_root_task (jl_current_task->ptls->root_task)
-
 JL_DLLEXPORT jl_task_t *jl_get_current_task(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
+
+STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
+{
+    jl_task_t *ct = jl_get_current_task();
+    size_t last_world = ct->world_age;
+    ct->world_age = jl_get_world_counter();
+    jl_value_t *r = jl_get_global(m, jl_symbol(name));
+    ct->world_age = last_world;
+    return (jl_function_t*)r;
+}
 
 // TODO: we need to pin the task while using this (set pure bit)
 JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void) JL_NOTSAFEPOINT;

@@ -933,6 +933,10 @@ EXTERN_INLINE_DECLARE enum jl_partition_kind decode_restriction_kind(jl_ptr_kind
         if (bits == BINDING_KIND_CONST) {
             return BINDING_KIND_UNDEF_CONST;
         }
+    } else {
+        if (bits == BINDING_KIND_DECLARED) {
+            return BINDING_KIND_BACKDATED_CONST;
+        }
     }
 
     return (enum jl_partition_kind)bits;
@@ -956,12 +960,14 @@ STATIC_INLINE jl_ptr_kind_union_t encode_restriction(jl_value_t *val, enum jl_pa
 #ifdef _P64
     if (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED || kind == BINDING_KIND_UNDEF_CONST)
         assert(val == NULL);
-    else if (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_CONST)
+    else if (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_CONST || kind == BINDING_KIND_BACKDATED_CONST)
         assert(val != NULL);
     if (kind == BINDING_KIND_GUARD)
         kind = BINDING_KIND_IMPLICIT;
     else if (kind == BINDING_KIND_UNDEF_CONST)
         kind = BINDING_KIND_CONST;
+    else if (kind == BINDING_KIND_BACKDATED_CONST)
+        kind = BINDING_KIND_DECLARED;
     assert((((uintptr_t)val) & 0x7) == 0);
     return ((jl_ptr_kind_union_t)val) | kind;
 #else
@@ -975,11 +981,11 @@ STATIC_INLINE int jl_bkind_is_some_import(enum jl_partition_kind kind) JL_NOTSAF
 }
 
 STATIC_INLINE int jl_bkind_is_some_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_UNDEF_CONST;
+    return kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_UNDEF_CONST || kind == BINDING_KIND_BACKDATED_CONST;
 }
 
 STATIC_INLINE int jl_bkind_is_defined_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT;
+    return kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_BACKDATED_CONST;
 }
 
 STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
