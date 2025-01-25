@@ -2053,6 +2053,9 @@ extern JL_DLLIMPORT _Atomic(int) jl_n_threads;
 extern JL_DLLIMPORT int jl_n_gcthreads;
 extern int jl_n_markthreads;
 extern int jl_n_sweepthreads;
+
+#define JL_THREADPOOL_ID_INTERACTIVE 0
+#define JL_THREADPOOL_ID_DEFAULT 1
 extern JL_DLLIMPORT int *jl_n_threads_per_pool;
 
 // environment entries
