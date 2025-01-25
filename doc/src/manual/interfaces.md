@@ -737,6 +737,69 @@ yields a `SparseMatStyle`, and anything of higher dimensionality falls back to t
 These rules allow broadcasting to keep the sparse representation for operations that result
 in one or two dimensional outputs, but produce an `Array` for any other dimensionality.
 
+## [IO Stream](@id man-interface-iostream)
+
+| Required methods                          | Brief description                                                                               |
+|:----------------------------------------- |:----------------------------------------------------------------------------------------------- |
+| `unsafe_read(io, ::Ptr{UInt8}, ::UInt)`   | Copy bytes from the `IO` to a pointer. |
+| `unsafe_write(io, ::Ptr{UInt8}, ::UInt)`  | Copy bytes from a pointer to the `IO`. |
+| `eof(io)`                                 | Whether the IO stream is at the end.   |
+
+| Optional methods                          | Brief description                                                                               |
+|:----------------------------------------- |:----------------------------------------------------------------------------------------------- |
+| `read(io, ::Type{UInt8})`                 | Read a byte from the stream.               |
+| `write(io, ::UInt8)`                      | Write a byte to the stream.                |
+| `close(io)`                               | Close the stream.                          |
+| `seek(io, ::Integer)`                     | Seek to a specific position.               |
+| `position(io)`                            | Return the current position of the stream. |
+| `seekstart(io)`                           | Seek to beginning of stream.               |
+| `seekend(io)`                             | Seek to the end of the stream.             |
+
+
+To implement an `IO` object it is required to define the low-level methods `unsafe_read`
+and `unsafe_write` which enable copying of data between the `IO` and a location given by a
+pointer.  Additionally, `eof` is required and should return `true` if reading from the
+`IO` is valid, else `false`.
+
+An `IO` that only defines `unsafe_read`, `unsafe_write` and `eof` can have most `isbits`
+types written or read to or from it, but the `read(io, ::Type{UInt8})` and `write(io,
+::UInt8)` methods must be defined to enable reading and writing individual bytes.
+
+Methods which affect the mutable state of the `IO` stream such as `close` and `seek` are
+optional.
+
+### Example
+The below example implements an `IO` "recorder" which writes all data read from it to
+an extra buffer.  It defines `read` and `write` methods for `UInt8`, so it supports
+reading and writing of any object which can be written or read from an `IOBuffer`.
+```julia
+struct IORecorder{ℐ<:IO} <: IO
+    io::ℐ
+    r::IOBuffer
+end
+
+IORecorder(io::IO) = IORecorder{typeof(io)}(io, IOBuffer())
+
+function Base.read(io::IORecorder, ::Type{UInt8})
+    x = read(io.io, UInt8)
+    write(io.r, x)
+    x
+end
+function Base.unsafe_read(io::IORecorder, p::Ptr{UInt8}, n::UInt)
+    for i ∈ 1:n
+        x = read(io, UInt8)
+        unsafe_store!(p, x, i)
+    end
+    nothing
+end
+
+Base.write(io::IORecorder, x::UInt8) = write(io.io, x)
+Base.unsafe_write(io::IORecorder, p::Ptr{UInt8}, n::UInt) = unsafe_write(io.io, p, n)
+
+Base.eof(io::IORecorder) = eof(io.io)
+
+Base.close(io::IORecorder) = (close(io.io); close(io.r); io)
+=======
 ## [Instance Properties](@id man-instance-properties)
 
 | Methods to implement              | Default definition           | Brief description                                                                     |
@@ -883,4 +946,3 @@ Interval{Float64}(2.0, 3.0)
 
 julia> trunc(x)
 Interval{Float64}(1.0, 2.0)
-```
