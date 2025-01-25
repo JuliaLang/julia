@@ -257,7 +257,7 @@ julia> Base.elsize(rand(Float32, 10))
 elsize(A::AbstractArray) = elsize(typeof(A))
 
 """
-    ndims(A::AbstractArray) -> Integer
+    ndims(A::AbstractArray)::Integer
 
 Return the number of dimensions of `A`.
 
@@ -276,7 +276,7 @@ ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N::Int
 ndims(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 
 """
-    length(collection) -> Integer
+    length(collection)::Integer
 
 Return the number of elements in the collection.
 
@@ -404,8 +404,8 @@ _all_match_first(f::F, inds) where F<:Function = true
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
 
 """
-    lastindex(collection) -> Integer
-    lastindex(collection, d) -> Integer
+    lastindex(collection)::Integer
+    lastindex(collection, d)::Integer
 
 Return the last index of `collection`. If `d` is given, return the last index of `collection` along dimension `d`.
 
@@ -427,8 +427,8 @@ lastindex(a::AbstractArray) = (@inline; last(eachindex(IndexLinear(), a)))
 lastindex(a, d) = (@inline; last(axes(a, d)))
 
 """
-    firstindex(collection) -> Integer
-    firstindex(collection, d) -> Integer
+    firstindex(collection)::Integer
+    firstindex(collection, d)::Integer
 
 Return the first index of `collection`. If `d` is given, return the first index of `collection` along dimension `d`.
 
@@ -3147,7 +3147,7 @@ end
 ## iteration utilities ##
 
 """
-    foreach(f, c...) -> Nothing
+    foreach(f, c...) -> nothing
 
 Call function `f` on each element of iterable `c`.
 For multiple iterable arguments, `f` is called elementwise, and iteration stops when

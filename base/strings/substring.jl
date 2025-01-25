@@ -143,7 +143,7 @@ end
 _isannotated(::SubString{T}) where {T} = _isannotated(T)
 
 """
-    reverse(s::AbstractString) -> AbstractString
+    reverse(s::AbstractString)::AbstractString
 
 Reverses a string. Technically, this function reverses the codepoints in a string and its
 main utility is for reversed-order string processing, especially for reversed

@@ -232,7 +232,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex}) -> SubString
+    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex})::SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
 
@@ -273,7 +273,7 @@ function chopprefix(s::Union{String, SubString{String}},
 end
 
 """
-    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex}) -> SubString
+    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex})::SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
 
@@ -317,7 +317,7 @@ end
 
 
 """
-    chomp(s::AbstractString) -> SubString
+    chomp(s::AbstractString)::SubString
 
 Remove a single trailing newline from a string.
 
@@ -348,8 +348,8 @@ function chomp(s::String)
 end
 
 """
-    lstrip([pred=isspace,] str::AbstractString) -> SubString
-    lstrip(str::AbstractString, chars) -> SubString
+    lstrip([pred=isspace,] str::AbstractString)::SubString
+    lstrip(str::AbstractString, chars)::SubString
 
 Remove leading characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -383,8 +383,8 @@ lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 lstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
 
 """
-    rstrip([pred=isspace,] str::AbstractString) -> SubString
-    rstrip(str::AbstractString, chars) -> SubString
+    rstrip([pred=isspace,] str::AbstractString)::SubString
+    rstrip(str::AbstractString, chars)::SubString
 
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -418,8 +418,8 @@ rstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments
 
 
 """
-    strip([pred=isspace,] str::AbstractString) -> SubString
-    strip(str::AbstractString, chars) -> SubString
+    strip([pred=isspace,] str::AbstractString)::SubString
+    strip(str::AbstractString, chars)::SubString
 
 Remove leading and trailing characters from `str`, either those specified by `chars` or
 those for which the function `pred` returns `true`.
@@ -449,7 +449,7 @@ strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
 ## string padding functions ##
 
 """
-    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
+    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ')::String
 
 Stringify `s` and pad the resulting string on the left with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
@@ -486,7 +486,7 @@ function lpad(
 end
 
 """
-    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
+    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ')::String
 
 Stringify `s` and pad the resulting string on the right with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
@@ -1191,8 +1191,8 @@ end
 end
 
 """
-    bytes2hex(itr) -> String
-    bytes2hex(io::IO, itr)
+    bytes2hex(itr)::String
+    bytes2hex(io::IO, itr)::Nothing
 
 Convert an iterator `itr` of bytes to its hexadecimal string representation, either
 returning a `String` via `bytes2hex(itr)` or writing the string to an `io` stream
