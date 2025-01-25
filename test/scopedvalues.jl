@@ -182,3 +182,16 @@ end
     @test Core.current_scope() === nothing
 end
 nothrow_scope()
+
+# https://github.com/JuliaLang/julia/issues/56062
+@testset "issue #56062" begin
+    ts = Int[]
+    try
+        @with begin
+            return
+        end
+    catch err
+    finally
+        push!(ts, 2)
+    end
+end
