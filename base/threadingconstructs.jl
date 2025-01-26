@@ -440,13 +440,16 @@ function _spawn_set_thrpool(t::Task, tp::Symbol)
 end
 
 """
-    Threads.@spawn [:default|:interactive] expr
+    Threads.@spawn [:default|:interactive] [reserved_stack=0] expr
 
 Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available
 thread in the specified threadpool (`:default` if unspecified). The task is
 allocated to a thread once one becomes available. To wait for the task to
 finish, call [`wait`](@ref) on the result of this macro, or call
 [`fetch`](@ref) to wait and then obtain its return value.
+
+The optional argument `reserved_stack` requests a stack size in bytes
+for the task. See [`Task`](@ref) for details.
 
 Values can be interpolated into `@spawn` via `\$`, which copies the value
 directly into the constructed underlying closure. This allows you to insert
@@ -468,6 +471,9 @@ the variable's value in the current task.
 !!! compat "Julia 1.9"
     A threadpool may be specified as of Julia 1.9.
 
+!!! compat "Julia 1.12"
+    The `reserved_stack` argument is available as of Julia 1.12.
+
 # Examples
 ```julia-repl
 julia> t() = println("Hello from ", Threads.threadid());
@@ -480,23 +486,37 @@ Hello from 4
 ```
 """
 macro spawn(args...)
-    tp = QuoteNode(:default)
-    na = length(args)
-    if na == 2
-        ttype, ex = args
-        if ttype isa QuoteNode
-            ttype = ttype.value
+    default_tp = default_stack = nothing  # guard against setting threadpool multiple times
+    tp = default_tp
+    reserved_stack = default_stack
+    1 <= length(args) <= 3 || throw(ArgumentError("wrong number of arguments in @spawn"))
+    ex = last(args)
+    for arg in args[1:end-1]
+        if arg isa QuoteNode
+            @assert tp == default_tp "cannot set threadpool multiple times"
+            ttype = arg.value
             if ttype !== :interactive && ttype !== :default
                 throw(ArgumentError(LazyString("unsupported threadpool in @spawn: ", ttype)))
             end
             tp = QuoteNode(ttype)
+        elseif arg isa Expr && arg.head == :(=)
+            if arg.args[1] == :reserved_stack
+                @assert reserved_stack == default_stack "cannot set reserved_stack multiple times"
+                reserved_stack = arg.args[2]
+            else
+                throw(ArgumentError(LazyString("unknown argument in @spawn: ", arg.args[1])))
+            end
         else
-            tp = ttype
+            @assert tp == default_tp "cannot set threadpool multiple times"
+            tp = arg
         end
-    elseif na == 1
-        ex = args[1]
-    else
-        throw(ArgumentError("wrong number of arguments in @spawn"))
+    end
+
+    if tp == default_tp
+        tp = QuoteNode(:default)
+    end
+    if reserved_stack == default_stack
+        reserved_stack = 0
     end
 
     letargs = Base._lift_one_interp!(ex)
@@ -505,7 +525,7 @@ macro spawn(args...)
     var = esc(Base.sync_varname)
     quote
         let $(letargs...)
-            local task = Task($thunk)
+            local task = Task($thunk, $(esc(reserved_stack)))
             task.sticky = false
             _spawn_set_thrpool(task, $(esc(tp)))
             if $(Expr(:islocal, var))
