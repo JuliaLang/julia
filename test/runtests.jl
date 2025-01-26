@@ -249,6 +249,11 @@ cd(@__DIR__) do
                         running_tests[test] = now()
                         wrkr = p
                         before = time()
+                        # after 1hr, print a message every 30 minutes to highlight hanging tests
+                        t_hang_notifier = Timer(60*60, interval = 30*60) do t
+                            runtime = (time() - before) / 60
+                            printstyled("Test $test on worker $wrkr has been running for $(round(Int, runtime)) minutes.", color = Base.warn_color())
+                        end
                         resp, duration = try
                                 r = remotecall_fetch(@Base.world(runtests, ∞), wrkr, test, test_path(test); seed=seed)
                                 r, time() - before
@@ -256,6 +261,7 @@ cd(@__DIR__) do
                                 isa(e, InterruptException) && return
                                 Any[CapturedException(e, catch_backtrace())], time() - before
                             end
+                        close(t_hang_notifier)
                         delete!(running_tests, test)
                         push!(results, (test, resp, duration))
                         if length(resp) == 1
