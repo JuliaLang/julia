@@ -40,6 +40,7 @@ macro inline()   Expr(:meta, :inline)   end
 macro noinline() Expr(:meta, :noinline) end
 
 macro _boundscheck() Expr(:boundscheck) end
+macro _propagate_inbounds_meta() Expr(:meta, :inline, :propagate_inbounds) end
 
 # Try to help prevent users from shooting them-selves in the foot
 # with ambiguities by defining a few common and critical operations
