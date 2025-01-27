@@ -1284,7 +1284,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                 # make a best-effort attempt to enqueue the relevant code for the ccallable
                 ptr = ccall(:jl_get_specialization1,
                             #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
-                            sig, get_world_counter(), #= mt_cache =# 0)
+                            sig, this_world, #= mt_cache =# 0)
                 if ptr !== C_NULL
                     mi = unsafe_pointer_to_objref(ptr)
                     ci = typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED)
