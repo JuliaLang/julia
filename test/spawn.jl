@@ -35,6 +35,7 @@ function _tryonce_download_from_cache(desired_url::AbstractString)
             return cache_output_filename
         end
     end
+    @warn "Could not download from cache at $cache_url, falling back to primary source at $desired_url"
     return Downloads.download(desired_url; timeout = 60)
 end
 
@@ -47,6 +48,9 @@ end
 
 if Sys.iswindows()
     busybox = download_from_cache("https://frippery.org/files/busybox/busybox.exe")
+    if filesize(busybox) < 500000 # busybox is 622094 bytes
+        @warn "The busybox executable is too small to be valid" busybox filesize(busybox) read(busybox, String)
+    end
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true
