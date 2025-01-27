@@ -23,22 +23,22 @@ On the other hand, language *interoperability* is extremely useful: we want to e
 ### How does Julia define its public API?
 
 Julia's public [API](https://en.wikipedia.org/wiki/API) is the behavior described in
-documentation of public symbols from `Base` and the standard libraries. Functions,
+documentation of public bindings from `Base` and the standard libraries. Functions,
 types, and constants are not part of the public API if they are not public, even if
 they have docstrings or are described in the documentation. Further, only the documented
-behavior of public symbols is part of the public API. Undocumented behavior of public
-symbols is internal.
+behavior of public bindings is part of the public API. Undocumented behavior of public
+bindings is internal.
 
-Public symbols are those marked with either `public foo` or `export foo`.
+Public bindings are those marked with either `public foo` or `export foo`.
 
 In other words:
 
-- Documented behavior of public symbols is part of the public API.
-- Undocumented behavior of public symbols is not part of the public API.
-- Documented behavior of private symbols is not part of the public API.
-- Undocumented behavior of private symbols is not part of the public API.
+- Documented behavior of public bindings is part of the public API.
+- Undocumented behavior of public bindings is not part of the public API.
+- Documented behavior of private bindings is not part of the public API.
+- Undocumented behavior of private bindings is not part of the public API.
 
-You can get a complete list of the public symbols from a module with `names(MyModule)`.
+You can get a complete list of the public bindings from a module with `names(MyModule)`.
 
 Package authors are encouraged to define their public API similarly.
 
@@ -253,7 +253,7 @@ the variables `A` and `x` were distinct bindings referring to the same mutable `
 ### Can I use `using` or `import` inside a function?
 
 No, you are not allowed to have a `using` or `import` statement inside a function. If you want
-to import a module but only use its symbols inside a specific function or set of functions, you
+to import a module but only use its bindings inside a specific function or set of functions, you
 have two options:
 
 1. Use `import`:
@@ -261,13 +261,13 @@ have two options:
    ```julia
    import Foo
    function bar(...)
-       # ... refer to Foo symbols via Foo.baz ...
+       # ... refer to Foo bindings via Foo.baz ...
    end
    ```
 
    This loads the module `Foo` and defines a variable `Foo` that refers to the module, but does not
-   import any of the other symbols from the module into the current namespace. You refer to the
-   `Foo` symbols by their qualified names `Foo.bar` etc.
+   import any of the other bindings from the module into the current namespace. You refer to the
+   `Foo` bindings by their qualified names `Foo.bar` etc.
 2. Wrap your function in a module:
 
    ```julia
@@ -281,7 +281,7 @@ have two options:
    using Bar
    ```
 
-   This imports all the symbols from `Foo`, but only inside the module `Bar`.
+   This imports all the bindings from `Foo`, but only inside the module `Bar`.
 
 ### What does the `...` operator do?
 
