@@ -28,7 +28,8 @@ mutable struct IdDict{K,V} <: AbstractDict{K,V}
     ht::Memory{Any}
     count::Int
     ndel::Int
-    IdDict{K,V}() where {K, V} = new{K,V}(Memory{Any}(undef, 32), 0, 0)
+    age::UInt
+    IdDict{K,V}() where {K, V} = new{K,V}(Memory{Any}(undef, 32), 0, 0, 0)
 
     function IdDict{K,V}(itr) where {K, V}
         d = IdDict{K,V}()
@@ -43,7 +44,7 @@ mutable struct IdDict{K,V} <: AbstractDict{K,V}
         d
     end
 
-    IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new{K,V}(copy(d.ht), d.count, d.ndel)
+    IdDict{K,V}(d::IdDict{K,V}) where {K, V} = new{K,V}(copy(d.ht), d.count, d.ndel, d.age)
 end
 
 IdDict() = IdDict{Any,Any}()
@@ -60,6 +61,7 @@ empty(d::IdDict, ::Type{K}, ::Type{V}) where {K, V} = IdDict{K,V}()
 
 function rehash!(d::IdDict, newsz = length(d.ht)%UInt)
     d.ht = ccall(:jl_idtable_rehash, Memory{Any}, (Any, Csize_t), d.ht, newsz)
+    d.age += 1
     d
 end
 
@@ -73,7 +75,7 @@ function sizehint!(d::IdDict, newsz)
     rehash!(d, newsz)
 end
 
-function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
+@inline function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where {K, V}
     !isa(key, K) && throw(KeyTypeError(K, key))
     if !(val isa V) # avoid a dynamic call
         val = convert(V, val)::V
@@ -85,6 +87,7 @@ function setindex!(d::IdDict{K,V}, @nospecialize(val), @nospecialize(key)) where
     inserted = RefValue{Cint}(0)
     d.ht = ccall(:jl_eqtable_put, Memory{Any}, (Any, Any, Any, Ptr{Cint}), d.ht, key, val, inserted)
     d.count += inserted[]
+    d.age += 1
     return d
 end
 
@@ -102,6 +105,7 @@ end
 function pop!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
     found = RefValue{Cint}(0)
     val = ccall(:jl_eqtable_pop, Any, (Any, Any, Any, Ptr{Cint}), d.ht, key, default, found)
+    d.age += 1
     if found[] === Cint(0)
         return default
     else
@@ -130,6 +134,7 @@ function empty!(d::IdDict)
     @_gc_preserve_end t
     d.ndel = 0
     d.count = 0
+    d.age += 1
     return d
 end
 
@@ -143,17 +148,12 @@ end
 
 length(d::IdDict) = d.count
 
+isempty(d::IdDict) = length(d) == 0
+
 copy(d::IdDict) = typeof(d)(d)
 
 function get!(d::IdDict{K,V}, @nospecialize(key), @nospecialize(default)) where {K, V}
-    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
-    if val === secret_table_token
-        val = isa(default, V) ? default : convert(V, default)::V
-        setindex!(d, val, key)
-        return val
-    else
-        return val::V
-    end
+    @inline get!(()->default, d, key)
 end
 
 function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
@@ -165,17 +165,47 @@ function get(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
     end
 end
 
+# get (index) for the key
+#     index - where a key is stored, or -pos if not present
+#             and was inserted at pos
+function ht_keyindex2!(d::IdDict{K,V}, @nospecialize(key)) where {K, V}
+    !isa(key, K) && throw(KeyTypeError(K, key))
+    keyindex = RefValue{Cssize_t}(0)
+    d.ht = ccall(:jl_eqtable_keyindex, Memory{Any}, (Memory{Any}, Any, Ptr{Cssize_t}), d.ht, key, keyindex)
+    return keyindex[]
+end
+
+@propagate_inbounds function _setindex!(d::IdDict{K,V}, val::V, key::K, keyindex::Int) where {K, V}
+    d.ht[keyindex] = key
+    d.ht[keyindex+1] = val
+    d.count += 1
+    d.age += 1
+
+    if d.ndel >= ((3*length(d.ht))>>2)
+        rehash!(d, max((length(d.ht)%UInt)>>1, 32))
+        d.ndel = 0
+    end
+    return nothing
+end
+
 function get!(default::Callable, d::IdDict{K,V}, @nospecialize(key)) where {K, V}
-    val = ccall(:jl_eqtable_get, Any, (Any, Any, Any), d.ht, key, secret_table_token)
-    if val === secret_table_token
+    keyindex = ht_keyindex2!(d, key)
+
+    if keyindex < 0
+        age0 = d.age
         val = default()
         if !isa(val, V)
             val = convert(V, val)::V
         end
-        setindex!(d, val, key)
-        return val
-    else
+        if d.age != age0
+            setindex!(d, val, key)
+        else
+            @inbounds _setindex!(d, val, key, -keyindex)
+        end
         return val::V
+    else
+        d.age += 1
+        return @inbounds d.ht[keyindex+1]::V
     end
 end
 
