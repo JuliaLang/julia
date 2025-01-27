@@ -1208,7 +1208,7 @@ void jl_install_default_signal_handlers(void)
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = usr2_handler;
-    act.sa_flags = SA_ONSTACK | SA_SIGINFO | SA_RESTART;
+    act.sa_flags = SA_SIGINFO | SA_RESTART;
     if (sigaction(SIGUSR2, &act, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }

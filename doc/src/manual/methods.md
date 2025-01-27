@@ -587,12 +587,13 @@ In the example above, we see that the "current world" (in which the method `newf
 is one greater than the task-local "runtime world" that was fixed when the execution of `tryeval` started.
 
 Sometimes it is necessary to get around this (for example, if you are implementing the above REPL).
-Fortunately, there is an easy solution: call the function using [`Base.invokelatest`](@ref):
+Fortunately, there is an easy solution: call the function using [`Base.invokelatest`](@ref) or
+the macro version [`Base.@invokelatest`](@ref):
 
 ```jldoctest
 julia> function tryeval2()
            @eval newfun2() = 2
-           Base.invokelatest(newfun2)
+           @invokelatest newfun2()
        end
 tryeval2 (generic function with 1 method)
 

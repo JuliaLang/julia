@@ -1424,17 +1424,17 @@ bi_fintrinsic(_min, min_float)
 float max_float(float x, float y) JL_NOTSAFEPOINT
 {
     float diff = x - y;
-    float argmin = signbit(diff) ? y : x;
+    float argmax = signbit(diff) ? y : x;
     int is_nan = isnan(x) || isnan(y);
-    return is_nan ? diff : argmin;
+    return is_nan ? diff : argmax;
 }
 
 double max_double(double x, double y) JL_NOTSAFEPOINT
 {
     double diff = x - y;
-    double argmin = signbit(diff) ? x : y;
+    double argmax = signbit(diff) ? y : x;
     int is_nan = isnan(x) || isnan(y);
-    return is_nan ? diff : argmin;
+    return is_nan ? diff : argmax;
 }
 
 #define _max(a, b) sizeof(a) == sizeof(float) ? max_float(a, b) : max_double(a, b)

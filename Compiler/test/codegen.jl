@@ -1041,3 +1041,20 @@ struct Vec56937 x::NTuple{8, VecElement{Int}} end
 
 x56937 = Ref(Vec56937(ntuple(_->VecElement(1),8)))
 @test x56937[].x[1] == VecElement{Int}(1) # shouldn't crash
+
+# issue #56996
+let
+   ()->() # trigger various heuristics
+   Base.Experimental.@force_compile
+   default_rng_orig = [] # make a value in a Slot
+   try
+       # overwrite the gc-slots in the exception branch
+       throw(ErrorException("This test is supposed to throw an error"))
+   catch ex
+       # destroy any values that aren't referenced
+       GC.gc()
+       # make sure that default_rng_orig value is still valid
+       @noinline copy!([], default_rng_orig)
+   end
+   nothing
+end

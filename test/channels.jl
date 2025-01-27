@@ -40,16 +40,15 @@ end
     @test fetch(t) == "finished"
 end
 
-@testset "timed wait on Condition" begin
+@testset "wait_with_timeout on Condition" begin
     a = Threads.Condition()
-    @test_throws ArgumentError @lock a wait(a; timeout=0.0005)
-    @test @lock a wait(a; timeout=0.1)==:timed_out
+    @test @lock a Experimental.wait_with_timeout(a; timeout=0.1)==:timed_out
     lock(a)
     @spawn begin
         @lock a notify(a)
     end
     @test try
-        wait(a; timeout=2)
+        Experimental.wait_with_timeout(a; timeout=2)
         true
     finally
         unlock(a)

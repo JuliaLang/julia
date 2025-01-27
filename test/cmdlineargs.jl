@@ -383,29 +383,33 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test p.exitcode == 1 && p.termsignal == 0
     end
 
-    # --gcthreads
-    code = "print(Threads.ngcthreads())"
-    cpu_threads = ccall(:jl_effective_threads, Int32, ())
-    @test string(cpu_threads) ==
-          read(`$exename --threads auto -e $code`, String) ==
-          read(`$exename --threads=auto -e $code`, String) ==
-          read(`$exename -tauto -e $code`, String) ==
-          read(`$exename -t auto -e $code`, String)
-    for nt in (nothing, "1")
-        withenv("JULIA_NUM_GC_THREADS" => nt) do
-            @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+    # FIXME: Issue #57103 --gcthreads does not have the same semantics
+    # for Stock GC and MMTk, so the tests below are specific to the Stock GC
+    @static if Base.USING_STOCK_GC
+        # --gcthreads
+        code = "print(Threads.ngcthreads())"
+        cpu_threads = ccall(:jl_effective_threads, Int32, ())
+        @test string(cpu_threads) ==
+            read(`$exename --threads auto -e $code`, String) ==
+            read(`$exename --threads=auto -e $code`, String) ==
+            read(`$exename -tauto -e $code`, String) ==
+            read(`$exename -t auto -e $code`, String)
+        for nt in (nothing, "1")
+            withenv("JULIA_NUM_GC_THREADS" => nt) do
+                @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+            end
+            withenv("JULIA_NUM_GC_THREADS" => nt) do
+                @test read(`$exename --gcthreads=2,1 -e $code`, String) == "3"
+            end
         end
-        withenv("JULIA_NUM_GC_THREADS" => nt) do
-            @test read(`$exename --gcthreads=2,1 -e $code`, String) == "3"
+
+        withenv("JULIA_NUM_GC_THREADS" => 2) do
+            @test read(`$exename -e $code`, String) == "2"
         end
-    end
 
-    withenv("JULIA_NUM_GC_THREADS" => 2) do
-        @test read(`$exename -e $code`, String) == "2"
-    end
-
-    withenv("JULIA_NUM_GC_THREADS" => "2,1") do
-        @test read(`$exename -e $code`, String) == "3"
+        withenv("JULIA_NUM_GC_THREADS" => "2,1") do
+            @test read(`$exename -e $code`, String) == "3"
+        end
     end
 
     # --machine-file
@@ -1182,6 +1186,10 @@ end
     end
 end
 
+# FIXME: Issue #57103: MMTK currently does not use --heap-size-hint since it only
+# supports setting up a hard limit unlike the Stock GC
+# which takes it as a soft limit. For now, we skip the tests below for MMTk
+@static if Base.USING_STOCK_GC
 @testset "heap size hint" begin
     #heap-size-hint, we reserve 250 MB for non GC memory (llvm, etc.)
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$((500-250)*1024*1024)"
@@ -1200,6 +1208,7 @@ end
     @test abs(Float64(maxmem) - hint)/maxmem < 0.05
 
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=10M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$(1*1024*1024)"
+end
 end
 
 ## `Main.main` entrypoint

@@ -33,9 +33,9 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     if isdefined(ex, :scope)
         scope = ex.scope
         if scope isa Module
-            bpart = Base.lookup_binding_partition(Base.get_world_counter(), GlobalRef(scope, var))
+            bpart = Base.lookup_binding_partition(ex.world, GlobalRef(scope, var))
             kind = Base.binding_kind(bpart)
-            if kind === Base.BINDING_KIND_GLOBAL || kind === Base.BINDING_KIND_CONST || kind == Base.BINDING_KIND_DECLARED
+            if kind === Base.BINDING_KIND_GLOBAL || kind === Base.BINDING_KIND_UNDEF_CONST || kind == Base.BINDING_KIND_DECLARED
                 print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
             elseif kind === Base.BINDING_KIND_FAILED
                 print(io, "\nHint: It looks like two or more modules export different ",

@@ -669,7 +669,7 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     if (decode_restriction_kind(pku) != BINDING_KIND_GUARD && decode_restriction_kind(pku) != BINDING_KIND_FAILED) {
         // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
         pku = jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
-        if (decode_restriction_kind(pku) == BINDING_KIND_CONST || decode_restriction_kind(pku) == BINDING_KIND_CONST_IMPORT) {
+        if (decode_restriction_kind(pku) == BINDING_KIND_CONST || decode_restriction_kind(pku) == BINDING_KIND_BACKDATED_CONST || decode_restriction_kind(pku) == BINDING_KIND_CONST_IMPORT) {
             // Already declared (e.g. on another thread) or imported.
             if (decode_restriction_value(pku) == (jl_value_t*)import)
                 return;
@@ -770,6 +770,12 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                         jl_symbol_name(var));
                 did_warn = 1;
             }
+            if (new_world > bpart->min_world) {
+                // TODO: Invoke invalidation logic here
+                jl_atomic_store_relaxed(&bpart->max_world, new_world - 1);
+                bpart = jl_get_binding_partition(b, new_world);
+                pku = jl_atomic_load_relaxed(&bpart->restriction);
+            }
         } else if (!jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
             if (jl_bkind_is_some_import(decode_restriction_kind(pku))) {
                 jl_errorf("cannot declare %s.%s constant; it was already declared as an import",
@@ -779,15 +785,16 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                         jl_symbol_name(mod->name), jl_symbol_name(var));
             }
         }
-        if (jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction(val, constant_kind))) {
-            jl_gc_wb(bpart, val);
-            break;
+        if (!jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction(val, constant_kind))) {
+            continue;
+        }
+        jl_gc_wb(bpart, val);
+        int needs_backdate = bpart->min_world == 0 && new_world && val;
+        bpart->min_world = new_world;
+        if (needs_backdate) {
+            jl_declare_constant_val3(b, mod, var, val, BINDING_KIND_BACKDATED_CONST, 0);
         }
     }
-    // N.B.: This backdates the first definition of the constant to world age 0 for backwards compatibility
-    // TODO: Mark this specially with a separate partition.
-    if (bpart->min_world != 0)
-        bpart->min_world = new_world;
     JL_GC_POP();
     return bpart;
 }

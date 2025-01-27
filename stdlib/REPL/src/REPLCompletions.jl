@@ -1097,6 +1097,9 @@ function complete_keyword_argument(partial::String, last_idx::Int, context_modul
     last_word = partial[wordrange] # the word to complete
     kwargs = Set{String}()
     for m in methods
+        # if MAX_METHOD_COMPLETIONS is hit a single TextCompletion is return by complete_methods! with an explanation
+        # which can be ignored here
+        m isa TextCompletion && continue
         m::MethodCompletion
         possible_kwargs = Base.kwarg_decl(m.method)
         current_kwarg_candidates = String[]
