@@ -392,6 +392,11 @@ function __init__()
         JuliaSyntax.enable_in_core!()
     end
 
+    printstyled("this should be green\n", color=:green)
+    printstyled(stdout, "this should be green\n", color=:green)
+    printstyled(stderr, "this should be green\n", color=:green)
+    @show stdout get(stdout, :color, nothing)
+
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
 end

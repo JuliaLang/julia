@@ -356,6 +356,7 @@ function ttyhastruecolor()
         (haskey(current_terminfo, :setrgbf) && haskey(current_terminfo, :setrgbb)) ||
         @static if Sys.isunix() get(current_terminfo, :colors, 0) > 256 else false end ||
         @static if Sys.iswindows()
+            @info "ttyhastruecolor" Sys.windows_version() haskey(ENV, "WT_SESSION")
             Sys.windows_version() ≥ v"10.0.14931" || # See <https://devblogs.microsoft.com/commandline/24-bit-color-in-the-windows-console/>
             haskey(ENV, "WT_SESSION") # In case windows version was inaccurate. Windows Terminal supports truecolor.
         else
@@ -374,6 +375,7 @@ function ttyhastruecolor()
 end
 
 function get_have_color()
+    println("get_have_color")
     global have_color
     have_color === nothing && (have_color = ttyhascolor())
     return have_color::Bool
