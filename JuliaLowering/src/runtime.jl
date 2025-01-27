@@ -359,6 +359,17 @@ function var"@islocal"(__context__::MacroContext, ex)
     ]
 end
 
+function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
+    @chk kind(ex) == K"->"
+    @ast __context__ __context__.macrocall [K"opaque_closure"
+        "nothing"::K"core"
+        "nothing"::K"core"
+        "nothing"::K"core"
+        true::K"Bool"
+        ex
+    ]
+end
+
 """
 A non-interpolating quoted expression.
 

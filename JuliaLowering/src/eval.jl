@@ -264,13 +264,18 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
         Expr(:method, c1, cs[2:end]...)
     elseif k == K"newvar"
         Core.NewvarNode(to_lowered_expr(mod, ex[1], ssa_offset))
+    elseif k == K"new_opaque_closure"
+        args = map(e->to_lowered_expr(mod, e, ssa_offset), children(ex))
+        # TODO: put allow_partial back in once we update to the latest julia
+        splice!(args, 4) # allow_partial
+        Expr(:new_opaque_closure, args...)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #
         # call invoke static_parameter `=` method struct_type abstract_type
         # primitive_type global const new splatnew isdefined
         # enter leave pop_exception inbounds boundscheck loopinfo copyast meta
-        # foreigncall new_opaque_closure lambda
+        # lambda
         head = k == K"call"      ? :call       :
                k == K"new"       ? :new        :
                k == K"splatnew"  ? :splatnew   :
@@ -284,6 +289,7 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
                k == K"gc_preserve_begin" ? :gc_preserve_begin :
                k == K"gc_preserve_end"   ? :gc_preserve_end   :
                k == K"foreigncall"       ? :foreigncall       :
+               k == K"opaque_closure_method" ? :opaque_closure_method :
                nothing
         if isnothing(head)
             TODO(ex, "Unhandled form for kind $k")

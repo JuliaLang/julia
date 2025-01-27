@@ -576,11 +576,14 @@ function is_valid_modref(ex)
            (kind(ex[1]) == K"Identifier" || is_valid_modref(ex[1]))
 end
 
+function is_core_nothing(ex)
+    kind(ex) == K"core" && ex.name_val == "nothing"
+end
+
 function is_simple_atom(ctx, ex)
     k = kind(ex)
     # TODO thismodule
-    is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) ||
-        (k == K"core" && ex.name_val == "nothing")
+    is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) || is_core_nothing(ex)
 end
 
 function decl_var(ex)

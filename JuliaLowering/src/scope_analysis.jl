@@ -658,6 +658,13 @@ function analyze_variables!(ctx, ex)
         push!(ctx.method_def_stack, ex[1])
         analyze_variables!(ctx, ex[2])
         pop!(ctx.method_def_stack)
+    elseif k == K"_opaque_closure"
+        push!(ctx.method_def_stack, ex[1])
+        analyze_variables!(ctx, ex[2])
+        analyze_variables!(ctx, ex[3])
+        analyze_variables!(ctx, ex[4])
+        analyze_variables!(ctx, ex[9])
+        pop!(ctx.method_def_stack)
     elseif k == K"lambda"
         lambda_bindings = ex.lambda_bindings
         if !ex.is_toplevel_thunk

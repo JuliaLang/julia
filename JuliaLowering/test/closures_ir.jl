@@ -514,3 +514,60 @@ function f() where {g}
     end
 end
 
+########################################
+# Opaque closure
+let y = 1
+    Base.Experimental.@opaque (x, z::T)->2x + y - z
+end
+#---------------------
+1   1
+2   (= slot₁/y (call core.Box))
+3   slot₁/y
+4   (call core.setfield! %₃ :contents %₁)
+5   TestMod.T
+6   (call core.apply_type core.Tuple core.Any %₅)
+7   (call core.apply_type core.Union)
+8   --- opaque_closure_method  core.nothing 2 false SourceLocation::2:31
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/z slot₄/y(!read)]
+    1   TestMod.-
+    2   TestMod.+
+    3   TestMod.*
+    4   (call %₃ 2 slot₂/x)
+    5   (call core.getfield slot₁/#self# 1)
+    6   (call core.isdefined %₅ :contents)
+    7   (gotoifnot %₆ label₉)
+    8   (goto label₁₁)
+    9   (newvar slot₄/y)
+    10  slot₄/y
+    11  (call core.getfield %₅ :contents)
+    12  (call %₂ %₄ %₁₁)
+    13  (call %₁ %₁₂ slot₃/z)
+    14  (return %₁₃)
+9   slot₁/y
+10  (new_opaque_closure %₆ %₇ core.Any true %₈ %₉)
+11  (return %₁₀)
+
+########################################
+# Opaque closure with `...`
+let
+    Base.Experimental.@opaque (x, ys...)->ys
+end
+#---------------------
+1   (call core.apply_type core.Vararg core.Any)
+2   (call core.apply_type core.Tuple core.Any %₁)
+3   (call core.apply_type core.Union)
+4   --- opaque_closure_method  core.nothing 2 true SourceLocation::2:31
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/ys]
+    1   slot₃/ys
+    2   (return %₁)
+5   (new_opaque_closure %₂ %₃ core.Any true %₄)
+6   (return %₅)
+
+########################################
+# Error: Opaque closure with default args
+Base.Experimental.@opaque (x=1)->2x
+#---------------------
+LoweringError:
+Base.Experimental.@opaque (x=1)->2x
+#                            ╙ ── Default positional arguments cannot be used in an opaque closure
+

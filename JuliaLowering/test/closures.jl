@@ -119,5 +119,20 @@ let
 end
 """)
 
+# Opaque closure
+@test JuliaLowering.include_string(test_mod, """
+let y = 1
+    oc = Base.Experimental.@opaque x->2x + y
+    oc(3)
+end
+""") == 7
+
+# Opaque closure with `...`
+@test JuliaLowering.include_string(test_mod, """
+let
+    oc = Base.Experimental.@opaque (xs...)->xs
+    oc(3,4,5)
+end
+""") == (3,4,5)
 
 end

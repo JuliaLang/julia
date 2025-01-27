@@ -1,11 +1,11 @@
 struct ClosureInfo{GraphType}
     # Global name of the type of the closure
     type_name::SyntaxTree{GraphType}
-    # Names of fields as K"Symbol" nodes, in order
-    field_syms::SyntaxList{GraphType}
+    # Names of fields for use with getfield, in order
+    field_names::SyntaxList{GraphType}
     # Map from the original BindingId of closed-over vars to the index of the
     # associated field in the closure type.
-    field_name_inds::Dict{IdTag,Int}
+    field_inds::Dict{IdTag,Int}
 end
 
 struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
@@ -35,7 +35,7 @@ end
 function captured_var_access(ctx, ex)
     cap_rewrite = ctx.capture_rewriting
     if cap_rewrite isa ClosureInfo
-        field_sym = cap_rewrite.field_syms[cap_rewrite.field_name_inds[ex.var_id]]
+        field_sym = cap_rewrite.field_names[cap_rewrite.field_inds[ex.var_id]]
         @ast ctx ex [K"call"
             "getfield"::K"core"
             binding_ex(ctx, current_lambda_bindings(ctx).self)
@@ -197,7 +197,7 @@ function convert_assignment(ctx, ex)
 end
 
 # Compute fields for a closure type, one field for each captured variable.
-function closure_type_fields(ctx, srcref, closure_binds)
+function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
     capture_ids = Vector{IdTag}()
     for lambda_bindings in closure_binds.lambdas
         for (id, lbinfo) in lambda_bindings.bindings
@@ -208,33 +208,45 @@ function closure_type_fields(ctx, srcref, closure_binds)
     end
     # sort here to avoid depending on undefined Dict iteration order.
     capture_ids = sort!(unique(capture_ids))
-    field_names = Dict{String,IdTag}()
-    for (i, id) in enumerate(capture_ids)
-        binfo = lookup_binding(ctx, id)
-        # We name each field of the closure after the variable which was closed
-        # over, for clarity. Adding a suffix can be necessary when collisions
-        # occur due to macro expansion and generated bindings
-        name0 = binfo.name
-        name = name0
-        i = 1
-        while haskey(field_names, name)
-            name = "$name0#$i"
-            i += 1
-        end
-        field_names[name] = id
-    end
+
     field_syms = SyntaxList(ctx)
-    field_orig_bindings = Vector{IdTag}()
-    field_name_inds = Dict{IdTag,Int}()
+    if is_opaque
+        field_orig_bindings = capture_ids
+        # For opaque closures we don't try to generate sensible names for the
+        # fields as there's no closure type to generate.
+        for (i,id) in enumerate(field_orig_bindings)
+            push!(field_syms, @ast ctx srcref i::K"Integer")
+        end
+    else
+        field_names = Dict{String,IdTag}()
+        for id in capture_ids
+            binfo = lookup_binding(ctx, id)
+            # We name each field of the closure after the variable which was closed
+            # over, for clarity. Adding a suffix can be necessary when collisions
+            # occur due to macro expansion and generated bindings
+            name0 = binfo.name
+            name = name0
+            i = 1
+            while haskey(field_names, name)
+                name = "$name0#$i"
+                i += 1
+            end
+            field_names[name] = id
+        end
+        field_orig_bindings = Vector{IdTag}()
+        for (name,id) in sort!(collect(field_names))
+            push!(field_syms, @ast ctx srcref name::K"Symbol")
+            push!(field_orig_bindings, id)
+        end
+    end
+    field_inds = Dict{IdTag,Int}()
     field_is_box = Vector{Bool}()
-    for (name,id) in sort!(collect(field_names))
-        push!(field_syms, @ast ctx srcref name::K"Symbol")
-        push!(field_orig_bindings, id)
+    for (i,id) in enumerate(field_orig_bindings)
         push!(field_is_box, is_boxed(ctx, id))
-        field_name_inds[id] = lastindex(field_syms)
+        field_inds[id] = i
     end
 
-    return field_syms, field_orig_bindings, field_name_inds, field_is_box
+    return field_syms, field_orig_bindings, field_inds, field_is_box
 end
 
 function closure_name(mod, name_stack)
@@ -389,13 +401,13 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             needs_def = isnothing(closure_info)
             if needs_def
                 closure_binds = ctx.closure_bindings[func_name_id]
-                field_syms, field_orig_bindings, field_name_inds, field_is_box =
-                    closure_type_fields(ctx, ex, closure_binds)
+                field_syms, field_orig_bindings, field_inds, field_is_box =
+                    closure_type_fields(ctx, ex, closure_binds, false)
                 name_str = closure_name(ctx.mod, closure_binds.name_stack)
                 closure_type_def, closure_type_ =
                     type_for_closure(ctx, ex, name_str, field_syms, field_is_box)
                 push!(ctx.toplevel_stmts, closure_type_def)
-                closure_info = ClosureInfo(closure_type_, field_syms, field_name_inds)
+                closure_info = ClosureInfo(closure_type_, field_syms, field_inds)
                 ctx.closure_infos[func_name_id] = closure_info
                 type_params = SyntaxList(ctx)
                 init_closure_args = SyntaxList(ctx)
@@ -464,6 +476,35 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 ::K"TOMBSTONE"
             ]
         end
+    elseif k == K"_opaque_closure"
+        closure_binds = ctx.closure_bindings[ex[1].var_id]
+        field_syms, field_orig_bindings, field_inds, field_is_box =
+            closure_type_fields(ctx, ex, closure_binds, true)
+
+        capture_rewrites = ClosureInfo(ex #=unused=#, field_syms, field_inds)
+
+        ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
+                                    ctx.closure_bindings, capture_rewrites, ctx.lambda_bindings,
+                                    ctx.toplevel_stmts, ctx.closure_infos)
+
+        init_closure_args = SyntaxList(ctx)
+        for id in field_orig_bindings
+            push!(init_closure_args, binding_ex(ctx, id))
+        end
+        @ast ctx ex [K"new_opaque_closure"
+            ex[2] # arg type tuple
+            ex[3] # return_lower_bound
+            ex[4] # return_upper_bound
+            ex[5] # allow_partial
+            [K"opaque_closure_method"
+                "nothing"::K"core"
+                ex[6] # nargs
+                ex[7] # is_va
+                ex[8] # functionloc
+                closure_convert_lambda(ctx2, ex[9])
+            ]
+            init_closure_args...
+        ]
     else
         mapchildren(e->_convert_closures(ctx, e), ctx, ex)
     end

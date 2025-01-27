@@ -2511,6 +2511,63 @@ function expand_arrow(ctx, ex)
     )
 end
 
+function expand_opaque_closure(ctx, ex)
+    arg_types_spec = ex[1]
+    return_lower_bound = ex[2]
+    return_upper_bound = ex[3]
+    allow_partial = ex[4]
+    func_expr = ex[5]
+    @chk kind(func_expr) == K"->"
+    @chk numchildren(func_expr) == 2
+    args = func_expr[1]
+    @chk kind(args) == K"tuple"
+    check_no_parameters(ex, args)
+
+    arg_names = SyntaxList(ctx)
+    arg_types = SyntaxList(ctx)
+    push!(arg_names, new_local_binding(ctx, args, "#self#"; kind=:argument))
+    body_stmts = SyntaxList(ctx)
+    is_va = false
+    for (i, arg) in enumerate(children(args))
+        (aname, atype, default, is_slurp) = expand_function_arg(ctx, body_stmts, arg,
+                                                                i == numchildren(args))
+        is_va |= is_slurp
+        push!(arg_names, aname)
+        push!(arg_types, atype)
+        if !isnothing(default)
+            throw(LoweringError(default, "Default positional arguments cannot be used in an opaque closure"))
+        end
+    end
+
+    nargs = length(arg_names) - 1 # ignoring #self#
+
+    @ast ctx ex [K"_opaque_closure"
+        ssavar(ctx, ex, "opaque_closure_id") # only a placeholder. Must be :local
+        if is_core_nothing(arg_types_spec)
+            [K"curly"
+                "Tuple"::K"core"
+                arg_types...
+            ]
+        else
+            arg_types_spec
+        end
+        is_core_nothing(return_lower_bound) ? [K"curly" "Union"::K"core"] : return_lower_bound
+        is_core_nothing(return_upper_bound) ? "Any"::K"core" : return_upper_bound
+        allow_partial
+        nargs::K"Integer"
+        is_va::K"Bool"
+        ::K"SourceLocation"(func_expr)
+        [K"lambda"(func_expr, is_toplevel_thunk=false)
+            [K"block" arg_names...]
+            [K"block"]
+            [K"block"
+                body_stmts...
+                func_expr[2]
+            ]
+        ]
+    ]
+end
+
 #-------------------------------------------------------------------------------
 # Expand macro definitions
 
@@ -3741,6 +3798,8 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
             "typed_hcat"::K"top"
             expand_forms_2(ctx, children(ex))...
         ]
+    elseif k == K"opaque_closure"
+        expand_forms_2(ctx, expand_opaque_closure(ctx, ex))
     elseif k == K"vcat" || k == K"typed_vcat"
         expand_forms_2(ctx, expand_vcat(ctx, ex))
     elseif k == K"ncat" || k == K"typed_ncat"

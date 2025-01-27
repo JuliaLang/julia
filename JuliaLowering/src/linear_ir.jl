@@ -143,8 +143,8 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
     return is_ssa(ctx, lhs) ||
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
-            # FIXME: add: splatnew isdefined invoke cfunction gc_preserve_begin copyast new_opaque_closure globalref
-            kind(rhs) in KSet"new call foreigncall gc_preserve_begin foreigncall")
+            # FIXME: add: invoke cfunction gc_preserve_begin copyast
+            kind(rhs) in KSet"new splatnew isdefined call foreigncall gc_preserve_begin foreigncall new_opaque_closure")
 end
 
 function contains_nonglobal_binding(ctx, ex)
@@ -579,10 +579,11 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             nothing
         end
-    elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall"
-        # TODO k ∈ cfunction new_opaque_closure cglobal
-        args = if k == K"foreigncall"
-            args_ = SyntaxList(ctx)
+    elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
+            k == K"new_opaque_closure"
+        # TODO k ∈ cfunction cglobal
+        if k == K"foreigncall"
+            args = SyntaxList(ctx)
             # todo: is is_leaf correct here? flisp uses `atom?`
             func = ex[1]
             if kind(func) == K"call" && kind(func[1]) == K"core" && func[1].name_val == "tuple"
@@ -591,11 +592,11 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                 if contains_nonglobal_binding(ctx, func)
                     throw(LoweringError(func, "ccall function name and library expression cannot reference local variables"))
                 end
-                append!(args_, compile_args(ctx, ex[1:1]))
+                append!(args, compile_args(ctx, ex[1:1]))
             elseif is_leaf(func)
-                append!(args_, compile_args(ctx, ex[1:1]))
+                append!(args, compile_args(ctx, ex[1:1]))
             else
-                push!(args_, func)
+                push!(args, func)
             end
             # 2nd to 5th arguments of foreigncall are special. They must be
             # left in place but cannot reference locals.
@@ -607,11 +608,11 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                     throw(LoweringError(argt, "ccall argument types cannot reference local variables"))
                 end
             end
-            append!(args_, ex[2:5])
-            append!(args_, compile_args(ctx, ex[6:end]))
-            args_
+            append!(args, ex[2:5])
+            append!(args, compile_args(ctx, ex[6:end]))
+            args
         else
-            compile_args(ctx, children(ex))
+            args = compile_args(ctx, children(ex))
         end
         callex = makenode(ctx, ex, k, args)
         if in_tail_pos
@@ -779,6 +780,14 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             @assert !needs_value && !in_tail_pos
             nothing
         end
+    elseif k == K"opaque_closure_method"
+        @ast ctx ex [K"opaque_closure_method"
+            ex[1]
+            ex[2]
+            ex[3]
+            ex[4]
+            compile_lambda(ctx, ex[5])
+        ]
     elseif k == K"lambda"
         lam = compile_lambda(ctx, ex)
         if in_tail_pos

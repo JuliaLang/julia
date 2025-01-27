@@ -109,6 +109,14 @@ function print_ir(io::IO, ex, indent="")
             else
                 println(io, " ", string(e[3]))
             end
+        elseif kind(e) == K"opaque_closure_method"
+            @assert numchildren(e) == 5
+            print(io, indent, lno, " --- opaque_closure_method ")
+            for i=1:4
+                print(io, " ", e[i])
+            end
+            println(io)
+            print_ir(io, e[5], indent*added_indent)
         elseif kind(e) == K"code_info"
             println(io, indent, lno, " --- ", e.is_toplevel_thunk ? "thunk" : "code_info")
             print_ir(io, e, indent*added_indent)

@@ -26,6 +26,8 @@ function _register_kinds()
             "loopinfo"
             # Call into foreign code. Emitted by `@ccall`
             "foreigncall"
+            # Special form emitted by `Base.Experimental.@opaque`
+            "opaque_closure"
             # Test whether a variable is defined
             "isdefined"
             # named labels for `@label` and `@goto`
@@ -73,6 +75,8 @@ function _register_kinds()
             # [K"method_defs" name block]
             # The code in `block` defines methods for generic function `name`
             "method_defs"
+            # The code in `block` defines methods for generic function `name`
+            "_opaque_closure"
             # The enclosed statements must be executed at top level
             "toplevel_butfirst"
             "const_if_global"
@@ -114,6 +118,10 @@ function _register_kinds()
             # Result of lowering a `K"lambda"` after bindings have been
             # converted to slot/globalref/SSAValue.
             "code_info"
+            # Internal initializer for opaque closures
+            "new_opaque_closure"
+            # Wrapper for the lambda of around opaque closure methods
+            "opaque_closure_method"
         "END_IR_KINDS"
     ])
 end
