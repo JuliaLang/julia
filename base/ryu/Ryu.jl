@@ -19,7 +19,7 @@ neededdigits(::Type{Float16}) = 9 + 5 + 9
 
 """
     Ryu.writeshortest(x, plus=false, space=false, hash=true, precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'), typed=false, compact=false)
-    Ryu.writeshortest(buf::Vector{UInt8}, pos::Int, x, args...)
+    Ryu.writeshortest(buf::AbstractVector{UInt8}, pos::Int, x, args...)
 
 Convert a float value `x` into its "shortest" decimal string, which can be parsed back to the same value.
 This function allows achieving the `%g` printf format.
@@ -53,7 +53,7 @@ end
 
 """
     Ryu.writefixed(x, precision, plus=false, space=false, hash=false, decchar=UInt8('.'), trimtrailingzeros=false)
-    Ryu.writefixed(buf::Vector{UInt8}, pos::Int, x, args...)
+    Ryu.writefixed(buf::AbstractVector{UInt8}, pos::Int, x, args...)
 
 Convert a float value `x` into a "fixed" size decimal string of the provided precision.
 This function allows achieving the `%f` printf format.
@@ -81,7 +81,7 @@ end
 
 """
     Ryu.writeexp(x, precision, plus=false, space=false, hash=false, expchar=UInt8('e'), decchar=UInt8('.'), trimtrailingzeros=false)
-    Ryu.writeexp(buf::Vector{UInt8}, pos::Int, x, args...)
+    Ryu.writeexp(buf::AbstractVector{UInt8}, pos::Int, x, args...)
 
 Convert a float value `x` into a scientific notation decimal string.
 This function allows achieving the `%e` printf format.
