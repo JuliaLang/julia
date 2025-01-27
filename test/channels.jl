@@ -684,6 +684,85 @@ end
     end
 end
 
+@testset "append!(ch, itr)" begin
+    # buffered channel
+    let c = Channel(3)
+        @test append!(c, 1:3) === c
+        @test Base.n_avail(c) == 3
+        close(c)
+        @test collect(c) == [1, 2, 3]
+        @test Base.n_avail(c) == 0
+        @test_throws InvalidStateException append!(c, 1:3)
+    end
+
+    # append more items than buffer size
+    @test let
+        c = Channel(3) do c
+            append!(c, 1:5)
+        end
+        collect(c) == [1, 2, 3, 4, 5]
+    end
+
+    # unbuffered channel
+    let
+        c = Channel() do c
+            append!(c, 1:3)
+        end
+        wait(c)
+        @test Base.n_avail(c) == 1
+        @test collect(c) == [1, 2, 3]
+        @test Base.n_avail(c) == 0
+        @test_throws InvalidStateException append!(c, 1:3)
+    end
+
+    # appending channels that are buffered and unbuffered
+    let
+        buf_lens = (0, 3, 5, 7)
+        for (b1,b2) in Iterators.product(buf_lens,buf_lens)
+            c1 = Channel(b1) do c
+                append!(c, 1:5)
+            end
+            c2 = Channel(b2) do c
+                append!(c, c1)
+            end
+            r = collect(c2)
+            @test r == [1, 2, 3, 4, 5]
+        end
+    end
+end
+
+
+@testset "take!(ch, n)" begin
+    # take n items from a buffered channel
+    let c = Channel{Int}(3)
+        append!(c, 1:3)
+        @test take!(c, 0) == []
+        @test take!(c, 1) == [1]
+        @test Base.n_avail(c) == 2
+        @test take!(c, 2) == [2, 3]
+        @test Base.n_avail(c) == 0
+
+        @async begin
+            append!(c, 1:3)
+            close(c)
+        end
+        # passing in a buffer that needs to be resized
+        buff = Vector{Int}(undef, 7)
+        @test take!(c, 5, buff) == [1, 2, 3]
+    end
+    let
+        for n in (typemax(Int), Inf, 5)
+            c = Channel() do c
+                append!(c, 1:3)
+            end
+            @test take!(c, n) == [1, 2, 3]
+        end
+    end
+    for n in (-1, 1.5)
+        @test_throws ArgumentError take!(Channel(), n)
+    end
+end
+
 @testset "Task properties" begin
     f() = rand(2,2)
     t = Task(f)
