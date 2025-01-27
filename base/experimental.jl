@@ -126,6 +126,28 @@ macro optlevel(n::Int)
 end
 
 """
+    Experimental.@min_optlevel n::Int
+
+Set the minimum optimization level (equivalent to the `--min-optlevel` command line
+argument) for code in the current module. Submodules inherit the setting of their
+parent module.
+
+Supported values are 0, 1, 2, and 3.
+
+This sets a lower-bound for optimization level, such that the effective optimization
+level, `o` is `@min_optlevel <= o <= @optlevel`, overriding the defaults that come
+from the command line arguments: `--min-optlevel <= o <= -O`.
+
+NOTE: This min optimization level will only be applied to LLVM functions that are compiled
+from this module. If a function defined in this module is *inlined* into a function defined
+outside the module, that function will not inherit this min optimization level. Consider
+whether you need to introduce `@noinline` if you require users to observe your min optlevel.
+"""
+macro min_optlevel(n::Int)
+    return Expr(:meta, :min_optlevel, n)
+end
+
+"""
     Experimental.@max_methods n::Int
 
 Set the maximum number of potentially-matching methods considered when running inference

@@ -659,6 +659,12 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                                 jl_set_module_optlevel(s->module, n);
                             }
                         }
+                        else if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_min_optlevel_sym) {
+                            if (jl_is_long(jl_exprarg(stmt, 1))) {
+                                int n = jl_unbox_long(jl_exprarg(stmt, 1));
+                                jl_set_module_min_optlevel(s->module, n);
+                            }
+                        }
                         else if (jl_exprarg(stmt, 0) == (jl_value_t*)jl_compile_sym) {
                             if (jl_is_long(jl_exprarg(stmt, 1))) {
                                 jl_set_module_compile(s->module, jl_unbox_long(jl_exprarg(stmt, 1)));
