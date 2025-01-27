@@ -385,13 +385,14 @@ end
 26  (call core.apply_type core.Type %₂₅)
 27  (call core.svec %₂₆)
 28  (call core.svec)
-29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 1 =#)))))
-30  --- method core.nothing %₂₉
+29  SourceLocation::1:1
+30  (call core.svec %₂₇ %₂₈ %₂₉)
+31  --- method core.nothing %₃₀
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   (new %₁)
     3   (return %₂)
-31  (return core.nothing)
+32  (return core.nothing)
 
 ########################################
 # Basic struct
@@ -429,13 +430,14 @@ end
 26  TestMod.T
 27  (call core.=== core.Any %₂₆)
 28  (gotoifnot %₂₇ label₃₀)
-29  (goto label₃₆)
+29  (goto label₃₇)
 30  TestMod.X
 31  (call core.apply_type core.Type %₃₀)
 32  (call core.svec %₃₁ core.Any core.Any core.Any)
 33  (call core.svec)
-34  (call core.svec %₃₂ %₃₃ :($(QuoteNode(:(#= line 1 =#)))))
-35  --- method core.nothing %₃₄
+34  SourceLocation::1:1
+35  (call core.svec %₃₂ %₃₃ %₃₄)
+36  --- method core.nothing %₃₅
     slots: [slot₁/#ctor-self# slot₂/a slot₃/b slot₄/c slot₅/tmp]
     1   (call core.fieldtype slot₁/#ctor-self# 2)
     2   slot₃/b
@@ -449,18 +451,19 @@ end
     10  slot₅/tmp
     11  (new slot₁/#ctor-self# slot₂/a %₁₀ slot₄/c)
     12  (return %₁₁)
-36  TestMod.X
-37  (call core.apply_type core.Type %₃₆)
-38  TestMod.T
-39  (call core.svec %₃₇ core.Any %₃₈ core.Any)
-40  (call core.svec)
-41  (call core.svec %₃₉ %₄₀ :($(QuoteNode(:(#= line 1 =#)))))
-42  --- method core.nothing %₄₁
+37  TestMod.X
+38  (call core.apply_type core.Type %₃₇)
+39  TestMod.T
+40  (call core.svec %₃₈ core.Any %₃₉ core.Any)
+41  (call core.svec)
+42  SourceLocation::1:1
+43  (call core.svec %₄₀ %₄₁ %₄₂)
+44  --- method core.nothing %₄₃
     slots: [slot₁/#self#(!read) slot₂/a slot₃/b slot₄/c]
     1   TestMod.X
     2   (new %₁ slot₂/a slot₃/b slot₄/c)
     3   (return %₂)
-43  (return core.nothing)
+45  (return core.nothing)
 
 ########################################
 # Struct with supertype and type params
@@ -519,12 +522,13 @@ end
 50  (call core.UnionAll %₄₂ %₄₉)
 51  (call core.svec %₅₀)
 52  (call core.svec)
-53  (call core.svec %₅₁ %₅₂ :($(QuoteNode(:(#= line 1 =#)))))
-54  --- method core.nothing %₅₃
+53  SourceLocation::1:1
+54  (call core.svec %₅₁ %₅₂ %₅₃)
+55  --- method core.nothing %₅₄
     slots: [slot₁/#ctor-self#]
     1   (new slot₁/#ctor-self#)
     2   (return %₁)
-55  (return core.nothing)
+56  (return core.nothing)
 
 ########################################
 # Struct with const and atomic fields
@@ -562,13 +566,14 @@ end
 26  (call core.apply_type core.Type %₂₅)
 27  (call core.svec %₂₆ core.Any core.Any core.Any)
 28  (call core.svec)
-29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 1 =#)))))
-30  --- method core.nothing %₂₉
+29  SourceLocation::1:1
+30  (call core.svec %₂₇ %₂₈ %₂₉)
+31  --- method core.nothing %₃₀
     slots: [slot₁/#self#(!read) slot₂/a slot₃/b slot₄/c]
     1   TestMod.X
     2   (new %₁ slot₂/a slot₃/b slot₄/c)
     3   (return %₂)
-31  (return core.nothing)
+32  (return core.nothing)
 
 ########################################
 # Documented struct
@@ -610,21 +615,23 @@ end
 26  (call core.apply_type core.Type %₂₅)
 27  (call core.svec %₂₆ core.Any core.Any)
 28  (call core.svec)
-29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 4 =#)))))
-30  --- method core.nothing %₂₉
+29  SourceLocation::4:1
+30  (call core.svec %₂₇ %₂₈ %₂₉)
+31  --- method core.nothing %₃₀
     slots: [slot₁/#self#(!read) slot₂/a slot₃/b]
     1   TestMod.X
     2   (new %₁ slot₂/a slot₃/b)
     3   (return %₂)
-31  JuliaLowering.bind_docs!
-32  (call core.tuple :field_docs)
-33  (call core.apply_type core.NamedTuple %₃₂)
-34  (call core.svec 1 "field a docs" 2 "field b docs")
-35  (call core.tuple %₃₄)
-36  (call %₃₃ %₃₅)
-37  TestMod.X
-38  (call core.kwcall %₃₆ %₃₁ %₃₇ "X docs\n" :($(QuoteNode(:(#= line 4 =#)))))
-39  (return core.nothing)
+32  JuliaLowering.bind_docs!
+33  (call core.tuple :field_docs)
+34  (call core.apply_type core.NamedTuple %₃₃)
+35  (call core.svec 1 "field a docs" 2 "field b docs")
+36  (call core.tuple %₃₅)
+37  (call %₃₄ %₃₆)
+38  TestMod.X
+39  SourceLocation::4:1
+40  (call core.kwcall %₃₇ %₃₂ %₃₈ "X docs\n" %₃₉)
+41  (return core.nothing)
 
 ########################################
 # Struct with outer constructor
@@ -672,8 +679,9 @@ end
 38  (call core.UnionAll %₃₃ %₃₇)
 39  (call core.svec %₃₈ core.Any)
 40  (call core.svec)
-41  (call core.svec %₃₉ %₄₀ :($(QuoteNode(:(#= line 1 =#)))))
-42  --- method core.nothing %₄₁
+41  SourceLocation::1:1
+42  (call core.svec %₃₉ %₄₀ %₄₁)
+43  --- method core.nothing %₄₂
     slots: [slot₁/#ctor-self# slot₂/x slot₃/tmp]
     1   (call core.fieldtype slot₁/#ctor-self# 1)
     2   slot₂/x
@@ -687,21 +695,22 @@ end
     10  slot₃/tmp
     11  (new slot₁/#ctor-self# %₁₀)
     12  (return %₁₁)
-43  TestMod.X
-44  (call core.apply_type core.Type %₄₃)
-45  slot₁/U
-46  (call core.svec %₄₄ %₄₅)
-47  slot₁/U
-48  (call core.svec %₄₇)
-49  (call core.svec %₄₆ %₄₈ :($(QuoteNode(:(#= line 1 =#)))))
-50  --- method core.nothing %₄₉
+44  TestMod.X
+45  (call core.apply_type core.Type %₄₄)
+46  slot₁/U
+47  (call core.svec %₄₅ %₄₆)
+48  slot₁/U
+49  (call core.svec %₄₈)
+50  SourceLocation::1:1
+51  (call core.svec %₄₇ %₄₉ %₅₀)
+52  --- method core.nothing %₅₁
     slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.X
     2   static_parameter₁
     3   (call core.apply_type %₁ %₂)
     4   (new %₃ slot₂/x)
     5   (return %₄)
-51  (return core.nothing)
+53  (return core.nothing)
 
 ########################################
 # Struct with outer constructor where one typevar is constrained by the other
@@ -765,8 +774,9 @@ end
 53  (call core.UnionAll %₄₅ %₅₂)
 54  (call core.svec %₅₃ core.Any)
 55  (call core.svec)
-56  (call core.svec %₅₄ %₅₅ :($(QuoteNode(:(#= line 1 =#)))))
-57  --- method core.nothing %₅₆
+56  SourceLocation::1:1
+57  (call core.svec %₅₄ %₅₅ %₅₆)
+58  --- method core.nothing %₅₇
     slots: [slot₁/#ctor-self# slot₂/v slot₃/tmp]
     1   (call core.fieldtype slot₁/#ctor-self# 1)
     2   slot₂/v
@@ -780,17 +790,18 @@ end
     10  slot₃/tmp
     11  (new slot₁/#ctor-self# %₁₀)
     12  (return %₁₁)
-58  TestMod.X
-59  (call core.apply_type core.Type %₅₈)
-60  TestMod.Vector
-61  slot₂/S
-62  (call core.apply_type %₆₀ %₆₁)
-63  (call core.svec %₅₉ %₆₂)
-64  slot₃/T
-65  slot₂/S
-66  (call core.svec %₆₄ %₆₅)
-67  (call core.svec %₆₃ %₆₆ :($(QuoteNode(:(#= line 1 =#)))))
-68  --- method core.nothing %₆₇
+59  TestMod.X
+60  (call core.apply_type core.Type %₅₉)
+61  TestMod.Vector
+62  slot₂/S
+63  (call core.apply_type %₆₁ %₆₂)
+64  (call core.svec %₆₀ %₆₃)
+65  slot₃/T
+66  slot₂/S
+67  (call core.svec %₆₅ %₆₆)
+68  SourceLocation::1:1
+69  (call core.svec %₆₄ %₆₇ %₆₈)
+70  --- method core.nothing %₆₉
     slots: [slot₁/#self#(!read) slot₂/v]
     1   TestMod.X
     2   static_parameter₁
@@ -798,7 +809,7 @@ end
     4   (call core.apply_type %₁ %₂ %₃)
     5   (new %₄ slot₂/v)
     6   (return %₅)
-69  (return core.nothing)
+71  (return core.nothing)
 
 ########################################
 # User defined inner constructors and helper functions for structs without type params
@@ -829,56 +840,59 @@ end
 2   TestMod.#f##0
 3   (call core.svec %₂)
 4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 3 =#)))))
-6   --- method core.nothing %₅
+5   SourceLocation::3:5
+6   (call core.svec %₃ %₄ %₅)
+7   --- method core.nothing %₆
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   (new %₁ 1)
     3   (return %₂)
-7   (newvar slot₂/f)
-8   (global TestMod.X)
-9   (const TestMod.X)
-10  (call core.svec)
-11  (call core.svec :x)
-12  (call core.svec)
-13  (call core._structtype TestMod :X %₁₀ %₁₁ %₁₂ false 1)
-14  (= slot₁/X %₁₃)
-15  (call core._setsuper! %₁₃ core.Any)
-16  (isdefined TestMod.X)
-17  (gotoifnot %₁₆ label₂₇)
-18  TestMod.X
-19  (call core._equiv_typedef %₁₈ %₁₃)
-20  (gotoifnot %₁₉ label₂₄)
-21  TestMod.X
-22  (= slot₁/X %₂₁)
-23  (goto label₂₆)
-24  slot₁/X
-25  (= TestMod.X %₂₄)
-26  (goto label₂₉)
-27  slot₁/X
-28  (= TestMod.X %₂₇)
-29  slot₁/X
-30  (call core.svec core.Any)
-31  (call core._typebody! %₂₉ %₃₀)
-32  TestMod.#f##0
-33  (= slot₂/f (new %₃₂))
-34  slot₂/f
-35  TestMod.X
-36  (call core.apply_type core.Type %₃₅)
-37  (call core.svec %₃₆ core.Any)
-38  (call core.svec)
-39  (call core.svec %₃₇ %₃₈ :($(QuoteNode(:(#= line 5 =#)))))
-40  --- method core.nothing %₃₉
+8   (newvar slot₂/f)
+9   (global TestMod.X)
+10  (const TestMod.X)
+11  (call core.svec)
+12  (call core.svec :x)
+13  (call core.svec)
+14  (call core._structtype TestMod :X %₁₁ %₁₂ %₁₃ false 1)
+15  (= slot₁/X %₁₄)
+16  (call core._setsuper! %₁₄ core.Any)
+17  (isdefined TestMod.X)
+18  (gotoifnot %₁₇ label₂₈)
+19  TestMod.X
+20  (call core._equiv_typedef %₁₉ %₁₄)
+21  (gotoifnot %₂₀ label₂₅)
+22  TestMod.X
+23  (= slot₁/X %₂₂)
+24  (goto label₂₇)
+25  slot₁/X
+26  (= TestMod.X %₂₅)
+27  (goto label₃₀)
+28  slot₁/X
+29  (= TestMod.X %₂₈)
+30  slot₁/X
+31  (call core.svec core.Any)
+32  (call core._typebody! %₃₀ %₃₁)
+33  TestMod.#f##0
+34  (= slot₂/f (new %₃₃))
+35  slot₂/f
+36  TestMod.X
+37  (call core.apply_type core.Type %₃₆)
+38  (call core.svec %₃₇ core.Any)
+39  (call core.svec)
+40  SourceLocation::5:5
+41  (call core.svec %₃₈ %₃₉ %₄₀)
+42  --- method core.nothing %₄₁
     slots: [slot₁/#ctor-self# slot₂/x]
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/x)
     3   (return %₂)
-41  TestMod.X
-42  (call core.apply_type core.Type %₄₁)
-43  (call core.svec %₄₂ core.Any core.Any)
-44  (call core.svec)
-45  (call core.svec %₄₃ %₄₄ :($(QuoteNode(:(#= line 6 =#)))))
-46  --- method core.nothing %₄₅
+43  TestMod.X
+44  (call core.apply_type core.Type %₄₃)
+45  (call core.svec %₄₄ core.Any core.Any)
+46  (call core.svec)
+47  SourceLocation::6:5
+48  (call core.svec %₄₅ %₄₆ %₄₇)
+49  --- method core.nothing %₄₈
     slots: [slot₁/#ctor-self# slot₂/y slot₃/z slot₄/tmp(!read)]
     1   TestMod.ReallyXIPromise
     2   slot₁/#ctor-self#
@@ -894,20 +908,21 @@ end
     12  (= slot₄/tmp (call core.typeassert %₁₁ %₁))
     13  slot₄/tmp
     14  (return %₁₃)
-47  TestMod.X
-48  (call core.apply_type core.Type %₄₇)
-49  (call core.svec %₄₈ core.Any core.Any core.Any)
-50  (call core.svec)
-51  (call core.svec %₄₉ %₅₀ :($(QuoteNode(:(#= line 10 =#)))))
-52  --- method core.nothing %₅₁
+50  TestMod.X
+51  (call core.apply_type core.Type %₅₀)
+52  (call core.svec %₅₁ core.Any core.Any core.Any)
+53  (call core.svec)
+54  SourceLocation::10:5
+55  (call core.svec %₅₂ %₅₃ %₅₄)
+56  --- method core.nothing %₅₅
     slots: [slot₁/#ctor-self# slot₂/a slot₃/b(!read) slot₄/c(!read)]
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/a)
     3   (return %₂)
-53  TestMod.X
-54  (call core.apply_type core.Type %₅₃)
-55  (call JuliaLowering.bind_docs! %₅₄ "Docs for X constructor\n" %₅₁)
-56  (return core.nothing)
+57  TestMod.X
+58  (call core.apply_type core.Type %₅₇)
+59  (call JuliaLowering.bind_docs! %₅₈ "Docs for X constructor\n" %₅₅)
+60  (return core.nothing)
 
 ########################################
 # User defined inner constructors and helper functions for structs with type params
@@ -933,8 +948,9 @@ end
 2   TestMod.#f##1
 3   (call core.svec %₂)
 4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 5 =#)))))
-6   --- method core.nothing %₅
+5   SourceLocation::5:5
+6   (call core.svec %₃ %₄ %₅)
+7   --- method core.nothing %₆
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   TestMod.A
@@ -942,79 +958,81 @@ end
     4   (call core.apply_type %₁ %₂ %₃)
     5   (new %₄ 1)
     6   (return %₅)
-7   (newvar slot₅/f)
-8   (global TestMod.X)
-9   (const TestMod.X)
-10  (= slot₂/S (call core.TypeVar :S))
-11  (= slot₃/T (call core.TypeVar :T))
-12  slot₂/S
-13  slot₃/T
-14  (call core.svec %₁₂ %₁₃)
-15  (call core.svec :x)
-16  (call core.svec)
-17  (call core._structtype TestMod :X %₁₄ %₁₅ %₁₆ false 1)
-18  (= slot₄/X %₁₇)
-19  (call core._setsuper! %₁₇ core.Any)
-20  (isdefined TestMod.X)
-21  (gotoifnot %₂₀ label₄₁)
-22  TestMod.X
-23  (call core._equiv_typedef %₂₂ %₁₇)
-24  (gotoifnot %₂₃ label₃₈)
-25  TestMod.X
-26  (= slot₄/X %₂₅)
-27  TestMod.X
-28  (call top.getproperty %₂₇ :body)
+8   (newvar slot₅/f)
+9   (global TestMod.X)
+10  (const TestMod.X)
+11  (= slot₂/S (call core.TypeVar :S))
+12  (= slot₃/T (call core.TypeVar :T))
+13  slot₂/S
+14  slot₃/T
+15  (call core.svec %₁₃ %₁₄)
+16  (call core.svec :x)
+17  (call core.svec)
+18  (call core._structtype TestMod :X %₁₅ %₁₆ %₁₇ false 1)
+19  (= slot₄/X %₁₈)
+20  (call core._setsuper! %₁₈ core.Any)
+21  (isdefined TestMod.X)
+22  (gotoifnot %₂₁ label₄₂)
+23  TestMod.X
+24  (call core._equiv_typedef %₂₃ %₁₈)
+25  (gotoifnot %₂₄ label₃₉)
+26  TestMod.X
+27  (= slot₄/X %₂₆)
+28  TestMod.X
 29  (call top.getproperty %₂₈ :body)
-30  (call top.getproperty %₂₉ :parameters)
-31  (call top.indexed_iterate %₃₀ 1)
-32  (= slot₂/S (call core.getfield %₃₁ 1))
-33  (= slot₁/iterstate (call core.getfield %₃₁ 2))
-34  slot₁/iterstate
-35  (call top.indexed_iterate %₃₀ 2 %₃₄)
-36  (= slot₃/T (call core.getfield %₃₅ 1))
-37  (goto label₄₀)
-38  slot₄/X
-39  (= TestMod.X %₃₈)
-40  (goto label₄₃)
-41  slot₄/X
-42  (= TestMod.X %₄₁)
-43  slot₄/X
-44  (call core.svec core.Any)
-45  (call core._typebody! %₄₃ %₄₄)
-46  TestMod.X
-47  TestMod.A
-48  TestMod.B
-49  (call core.apply_type %₄₆ %₄₇ %₄₈)
-50  (call core.apply_type core.Type %₄₉)
-51  (call core.svec %₅₀)
-52  (call core.svec)
-53  (call core.svec %₅₁ %₅₂ :($(QuoteNode(:(#= line 3 =#)))))
-54  --- method core.nothing %₅₃
+30  (call top.getproperty %₂₉ :body)
+31  (call top.getproperty %₃₀ :parameters)
+32  (call top.indexed_iterate %₃₁ 1)
+33  (= slot₂/S (call core.getfield %₃₂ 1))
+34  (= slot₁/iterstate (call core.getfield %₃₂ 2))
+35  slot₁/iterstate
+36  (call top.indexed_iterate %₃₁ 2 %₃₅)
+37  (= slot₃/T (call core.getfield %₃₆ 1))
+38  (goto label₄₁)
+39  slot₄/X
+40  (= TestMod.X %₃₉)
+41  (goto label₄₄)
+42  slot₄/X
+43  (= TestMod.X %₄₂)
+44  slot₄/X
+45  (call core.svec core.Any)
+46  (call core._typebody! %₄₄ %₄₅)
+47  TestMod.X
+48  TestMod.A
+49  TestMod.B
+50  (call core.apply_type %₄₇ %₄₈ %₄₉)
+51  (call core.apply_type core.Type %₅₀)
+52  (call core.svec %₅₁)
+53  (call core.svec)
+54  SourceLocation::3:5
+55  (call core.svec %₅₂ %₅₃ %₅₄)
+56  --- method core.nothing %₅₅
     slots: [slot₁/#ctor-self#]
     1   slot₁/#ctor-self#
     2   (new %₁ 1)
     3   (return %₂)
-55  (= slot₆/U (call core.TypeVar :U))
-56  (= slot₇/V (call core.TypeVar :V))
-57  TestMod.X
-58  slot₆/U
-59  slot₇/V
-60  (call core.apply_type %₅₇ %₅₈ %₅₉)
-61  (call core.apply_type core.Type %₆₀)
-62  (call core.svec %₆₁)
-63  slot₆/U
-64  slot₇/V
-65  (call core.svec %₆₃ %₆₄)
-66  (call core.svec %₆₂ %₆₅ :($(QuoteNode(:(#= line 4 =#)))))
-67  --- method core.nothing %₆₆
+57  (= slot₆/U (call core.TypeVar :U))
+58  (= slot₇/V (call core.TypeVar :V))
+59  TestMod.X
+60  slot₆/U
+61  slot₇/V
+62  (call core.apply_type %₅₉ %₆₀ %₆₁)
+63  (call core.apply_type core.Type %₆₂)
+64  (call core.svec %₆₃)
+65  slot₆/U
+66  slot₇/V
+67  (call core.svec %₆₅ %₆₆)
+68  SourceLocation::4:5
+69  (call core.svec %₆₄ %₆₇ %₆₈)
+70  --- method core.nothing %₆₉
     slots: [slot₁/#ctor-self#]
     1   slot₁/#ctor-self#
     2   (new %₁ 1)
     3   (return %₂)
-68  TestMod.#f##1
-69  (= slot₅/f (new %₆₈))
-70  slot₅/f
-71  (return core.nothing)
+71  TestMod.#f##1
+72  (= slot₅/f (new %₇₁))
+73  slot₅/f
+74  (return core.nothing)
 
 ########################################
 # new() calls with splats; `Any` fields
@@ -1052,14 +1070,15 @@ end
 26  (call core.apply_type core.Type %₂₅)
 27  (call core.svec %₂₆ core.Any)
 28  (call core.svec)
-29  (call core.svec %₂₇ %₂₈ :($(QuoteNode(:(#= line 4 =#)))))
-30  --- method core.nothing %₂₉
+29  SourceLocation::4:5
+30  (call core.svec %₂₇ %₂₈ %₂₉)
+31  --- method core.nothing %₃₀
     slots: [slot₁/#ctor-self# slot₂/xs]
     1   slot₁/#ctor-self#
     2   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
     3   (splatnew %₁ %₂)
     4   (return %₃)
-31  (return core.nothing)
+32  (return core.nothing)
 
 ########################################
 # new() calls with splats; typed fields
@@ -1110,8 +1129,9 @@ end
 39  (call core.svec %₃₈ core.Any)
 40  slot₃/T
 41  (call core.svec %₄₀)
-42  (call core.svec %₃₉ %₄₁ :($(QuoteNode(:(#= line 4 =#)))))
-43  --- method core.nothing %₄₂
+42  SourceLocation::4:5
+43  (call core.svec %₃₉ %₄₁ %₄₂)
+44  --- method core.nothing %₄₃
     slots: [slot₁/#ctor-self# slot₂/xs slot₃/tmp slot₄/tmp]
     1   (call core._apply_iterate top.iterate core.tuple slot₂/xs)
     2   (call core.nfields %₁)
@@ -1144,7 +1164,7 @@ end
     29  slot₄/tmp
     30  (new %₁₁ %₂₀ %₂₉)
     31  (return %₃₀)
-44  (return core.nothing)
+45  (return core.nothing)
 
 ########################################
 # Error: new doesn't accept keywords

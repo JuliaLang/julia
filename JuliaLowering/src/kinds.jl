@@ -60,6 +60,9 @@ function _register_kinds()
             "top"
             "core"
             "lambda"
+            # "A source location literal" - a node which exists only to record
+            # a sourceref
+            "SourceLocation"
             # [K"function_decl" name]
             # Declare a zero-method generic function with global `name` or
             # creates a closure object and assigns it to the local `name`.

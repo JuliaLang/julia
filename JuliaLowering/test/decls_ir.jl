@@ -128,8 +128,9 @@ end
 3   (call core.Typeof %₂)
 4   (call core.svec %₃ core.Any)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::1:10
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read)]
     1   1
     2   (= slot₃/tmp %₁)
@@ -161,8 +162,8 @@ end
     28  (= slot₂/x %₂₇)
     29  slot₂/x
     30  (return %₂₉)
-8   TestMod.f
-9   (return %₈)
+9   TestMod.f
+10  (return %₉)
 
 ########################################
 # Error: global type decls only allowed at top level

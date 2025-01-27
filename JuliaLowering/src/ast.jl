@@ -146,7 +146,7 @@ function makeleaf(ctx, srcref, k::Kind, value; kws...)
         makeleaf(graph, srcref, k; id=value, kws...)
     elseif k == K"symbolic_label"
         makeleaf(graph, srcref, k; name_val=value, kws...)
-    elseif k == K"TOMBSTONE"
+    elseif k == K"TOMBSTONE" || k == K"SourceLocation"
         makeleaf(graph, srcref, k; kws...)
     else
         val = k == K"Integer" ? convert(Int,     value) :

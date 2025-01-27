@@ -11,14 +11,15 @@ end
 3   (call core.Typeof %₂)
 4   (call core.svec %₃ JuliaLowering.MacroContext core.Any)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::1:7
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
     1   (call core.tuple slot₃/ex)
     2   (call JuliaLowering.interpolate_ast (inert (block (call-i ($ ex) + 1))) %₁)
     3   (return %₂)
-8   TestMod.@add_one
-9   (return %₈)
+9   TestMod.@add_one
+10  (return %₉)
 
 ########################################
 # Macro using `__context__`
@@ -31,14 +32,15 @@ end
 3   (call core.Typeof %₂)
 4   (call core.svec %₃ JuliaLowering.MacroContext core.Any)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::1:7
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/__context__ slot₃/ex(!read) slot₄/ctx(!read)]
     1   slot₂/__context__
     2   (= slot₄/ctx %₁)
     3   (return %₁)
-8   TestMod.@foo
-9   (return %₈)
+9   TestMod.@foo
+10  (return %₉)
 
 ########################################
 # Error: Macro with kw args

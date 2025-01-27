@@ -218,6 +218,8 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
         # TODO: Should we even have plain identifiers at this point or should
         # they all effectively be resolved into GlobalRef earlier?
         Symbol(ex.name_val)
+    elseif k == K"SourceLocation"
+        QuoteNode(source_location(LineNumberNode, ex))
     elseif k == K"Symbol"
         QuoteNode(Symbol(ex.name_val))
     elseif k == K"slot"

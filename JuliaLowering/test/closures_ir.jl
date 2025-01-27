@@ -24,8 +24,9 @@ end
 3   TestMod.#f##0
 4   (call core.svec %₃ core.Any)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 3 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::3:14
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/y slot₃/x(!read)]
     1   TestMod.+
     2   (call core.getfield slot₁/#self# :x)
@@ -37,14 +38,14 @@ end
     8   (call core.getfield %₂ :contents)
     9   (call %₁ %₈ slot₂/y)
     10  (return %₉)
-8   1
-9   slot₂/x
-10  (call core.setfield! %₉ :contents %₈)
-11  TestMod.#f##0
-12  slot₂/x
-13  (= slot₁/f (new %₁₁ %₁₂))
-14  slot₁/f
-15  (return %₁₄)
+9   1
+10  slot₂/x
+11  (call core.setfield! %₁₀ :contents %₉)
+12  TestMod.#f##0
+13  slot₂/x
+14  (= slot₁/f (new %₁₂ %₁₃))
+15  slot₁/f
+16  (return %₁₅)
 
 ########################################
 # Closure which sets the value of a captured variable
@@ -71,21 +72,22 @@ end
 3   TestMod.#f##1
 4   (call core.svec %₃ core.Any)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 3 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::3:14
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/y(!read)]
     1   2
     2   (call core.getfield slot₁/#self# :x)
     3   (call core.setfield! %₂ :contents %₁)
     4   (return %₁)
-8   1
-9   slot₂/x
-10  (call core.setfield! %₉ :contents %₈)
-11  TestMod.#f##1
-12  slot₂/x
-13  (= slot₁/f (new %₁₁ %₁₂))
-14  slot₁/f
-15  (return %₁₄)
+9   1
+10  slot₂/x
+11  (call core.setfield! %₁₀ :contents %₉)
+12  TestMod.#f##1
+13  slot₂/x
+14  (= slot₁/f (new %₁₂ %₁₃))
+15  slot₁/f
+16  (return %₁₅)
 
 ########################################
 # Function where arguments are captured into a closure and assigned
@@ -113,19 +115,21 @@ end
 3   TestMod.#f#g##0
 4   (call core.svec %₃)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 2 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::2:14
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read)]
     1   10
     2   (call core.getfield slot₁/#self# :x)
     3   (call core.setfield! %₂ :contents %₁)
     4   (return %₁)
-8   TestMod.f
-9   (call core.Typeof %₈)
-10  (call core.svec %₉ core.Any)
-11  (call core.svec)
-12  (call core.svec %₁₀ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
-13  --- method core.nothing %₁₂
+9   TestMod.f
+10  (call core.Typeof %₉)
+11  (call core.svec %₁₀ core.Any)
+12  (call core.svec)
+13  SourceLocation::1:10
+14  (call core.svec %₁₁ %₁₂ %₁₃)
+15  --- method core.nothing %₁₄
     slots: [slot₁/#self#(!read) slot₂/x slot₃/g(called) slot₄/x(!read)]
     1   (= slot₂/x (call core.Box slot₂/x))
     2   TestMod.#f#g##0
@@ -141,8 +145,8 @@ end
     12  slot₄/x
     13  (call core.getfield %₇ :contents)
     14  (return %₁₃)
-14  TestMod.f
-15  (return %₁₄)
+16  TestMod.f
+17  (return %₁₆)
 
 ########################################
 # Closure where a local `x` is captured but not boxed
@@ -170,18 +174,20 @@ end
 3   TestMod.#f#g##1
 4   (call core.svec %₃)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 2 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::2:14
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/y(!read)]
     1   (call core.getfield slot₁/#self# :x)
     2   (= slot₂/y %₁)
     3   (return %₁)
-8   TestMod.f
-9   (call core.Typeof %₈)
-10  (call core.svec %₉ core.Any)
-11  (call core.svec)
-12  (call core.svec %₁₀ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
-13  --- method core.nothing %₁₂
+9   TestMod.f
+10  (call core.Typeof %₉)
+11  (call core.svec %₁₀ core.Any)
+12  (call core.svec)
+13  SourceLocation::1:10
+14  (call core.svec %₁₁ %₁₂ %₁₃)
+15  --- method core.nothing %₁₄
     slots: [slot₁/#self#(!read) slot₂/x slot₃/g slot₄/z(!read)]
     1   TestMod.#f#g##1
     2   (call core.typeof slot₂/x)
@@ -191,8 +197,8 @@ end
     6   slot₂/x
     7   (= slot₄/z %₆)
     8   (return %₆)
-14  TestMod.f
-15  (return %₁₄)
+16  TestMod.f
+17  (return %₁₆)
 
 ########################################
 # Closure where a static parameter of an outer function is captured
@@ -219,22 +225,24 @@ end
 3   TestMod.#f#g##2
 4   (call core.svec %₃)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 2 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::2:14
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read)]
     1   TestMod.use
     2   (call core.getfield slot₁/#self# :T)
     3   (call %₁ %₂)
     4   (return %₃)
-8   (= slot₁/T (call core.TypeVar :T))
-9   TestMod.f
-10  (call core.Typeof %₉)
-11  slot₁/T
-12  (call core.svec %₁₀ %₁₁)
-13  slot₁/T
-14  (call core.svec %₁₃)
-15  (call core.svec %₁₂ %₁₄ :($(QuoteNode(:(#= line 1 =#)))))
-16  --- method core.nothing %₁₅
+9   (= slot₁/T (call core.TypeVar :T))
+10  TestMod.f
+11  (call core.Typeof %₁₀)
+12  slot₁/T
+13  (call core.svec %₁₁ %₁₂)
+14  slot₁/T
+15  (call core.svec %₁₄)
+16  SourceLocation::1:10
+17  (call core.svec %₁₃ %₁₅ %₁₆)
+18  --- method core.nothing %₁₇
     slots: [slot₁/#self#(!read) slot₂/_(!read) slot₃/g]
     1   TestMod.#f#g##2
     2   static_parameter₁
@@ -244,8 +252,8 @@ end
     6   (= slot₃/g (new %₄ %₅))
     7   slot₃/g
     8   (return %₇)
-17  TestMod.f
-18  (return %₁₇)
+19  TestMod.f
+20  (return %₁₉)
 
 ########################################
 # Closure captures with `isdefined`
@@ -278,8 +286,9 @@ end
 3   TestMod.#f#g##3
 4   (call core.svec %₃)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 2 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::2:14
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (= slot₂/z 3)
     2   (call core.getfield slot₁/#self# :y)
@@ -287,12 +296,13 @@ end
     4   (isdefined slot₂/z)
     5   (call core.tuple true %₃ %₄)
     6   (return %₅)
-8   TestMod.f
-9   (call core.Typeof %₈)
-10  (call core.svec %₉ core.Any)
-11  (call core.svec)
-12  (call core.svec %₁₀ %₁₁ :($(QuoteNode(:(#= line 1 =#)))))
-13  --- method core.nothing %₁₂
+9   TestMod.f
+10  (call core.Typeof %₉)
+11  (call core.svec %₁₀ core.Any)
+12  (call core.svec)
+13  SourceLocation::1:10
+14  (call core.svec %₁₁ %₁₂ %₁₃)
+15  --- method core.nothing %₁₄
     slots: [slot₁/#self#(!read) slot₂/x slot₃/g slot₄/y]
     1   (= slot₄/y (call core.Box))
     2   TestMod.#f#g##3
@@ -308,11 +318,11 @@ end
     12  (call core.isdefined %₁₁ :contents)
     13  (call core.tuple %₁₂ true)
     14  (return %₁₃)
-14  TestMod.f
-15  (return %₁₄)
+16  TestMod.f
+17  (return %₁₆)
 
 ########################################
-# Nested captures of arguments
+# FIXME: Nested captures of arguments
 function f(x)
     function g(y)
         function h(z)
@@ -320,6 +330,19 @@ function f(x)
         end
     end
 end
+#---------------------
+LoweringError:
+function f(x)
+#          ╙ ── Found unexpected binding of kind argument
+    function g(y)
+        function h(z)
+
+Detailed provenance:
+#₈/x
+└─ x
+   └─ x
+      └─ @ :1
+
 
 ########################################
 # Global method capturing local variables
@@ -339,8 +362,9 @@ end
 7   (call core.Typeof %₆)
 8   (call core.svec %₇)
 9   (call core.svec)
-10  (call core.svec %₈ %₉ :($(QuoteNode(:(#= line 3 =#)))))
-11  --- code_info
+10  SourceLocation::3:14
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- code_info
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   TestMod.+
     2   (captured_local 1)
@@ -354,12 +378,12 @@ end
     10  (captured_local 1)
     11  (call core.setfield! %₁₀ :contents %₉)
     12  (return %₉)
-12  slot₁/x
-13  (call core.svec %₁₂)
-14  (call JuliaLowering.replace_captured_locals! %₁₁ %₁₃)
-15  --- method core.nothing %₁₀ %₁₄
-16  TestMod.f
-17  (return %₁₆)
+13  slot₁/x
+14  (call core.svec %₁₃)
+15  (call JuliaLowering.replace_captured_locals! %₁₂ %₁₄)
+16  --- method core.nothing %₁₁ %₁₅
+17  TestMod.f
+18  (return %₁₇)
 
 ########################################
 # Anonymous function syntax with ->
@@ -382,13 +406,14 @@ x -> x*x
 4   TestMod.#->##0
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
-8   --- method core.nothing %₇
+7   SourceLocation::1:1
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.*
     2   (call %₁ slot₂/x slot₂/x)
     3   (return %₂)
-9   (return %₃)
+10  (return %₃)
 
 ########################################
 # Anonymous function syntax with `function`
@@ -413,13 +438,14 @@ end
 4   TestMod.##anon###0
 5   (call core.svec %₄ core.Any)
 6   (call core.svec)
-7   (call core.svec %₅ %₆ :($(QuoteNode(:(#= line 1 =#)))))
-8   --- method core.nothing %₇
+7   SourceLocation::1:10
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.*
     2   (call %₁ slot₂/x slot₂/x)
     3   (return %₂)
-9   (return %₃)
+10  (return %₃)
 
 ########################################
 # `do` blocks
@@ -447,17 +473,18 @@ end
 7   TestMod.#do##0
 8   (call core.svec %₇ core.Any)
 9   (call core.svec)
-10  (call core.svec %₈ %₉ :($(QuoteNode(:(#= line 1 =#)))))
-11  --- method core.nothing %₁₀
+10  SourceLocation::1:13
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
     slots: [slot₁/#self#(!read) slot₂/y]
     1   TestMod.+
     2   (call %₁ slot₂/y 2)
     3   (return %₂)
-12  TestMod.#do##0
-13  (new %₁₂)
-14  TestMod.x
-15  (call core.kwcall %₅ %₁ %₁₃ %₁₄)
-16  (return %₁₅)
+13  TestMod.#do##0
+14  (new %₁₃)
+15  TestMod.x
+16  (call core.kwcall %₅ %₁ %₁₄ %₁₅)
+17  (return %₁₆)
 
 ########################################
 # Error: Attempt to add methods to a function argument

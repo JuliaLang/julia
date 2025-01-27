@@ -2063,45 +2063,60 @@ end
 #-------------------------------------------------------------------------------
 # Expansion of function definitions
 
-function match_function_arg(full_ex)
-    name = nothing
-    type = nothing
-    default = nothing
-    is_slurp = false
-    ex = full_ex
-    while true
-        k = kind(ex)
-        if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
-            name = ex
-            break
-        elseif k == K"::"
-            @chk numchildren(ex) in (1,2)
-            if numchildren(ex) == 1
-                type = ex[1]
-            else
-                name = ex[1]
-                type = ex[2]
-            end
-            break
-        elseif k == K"..."
-            @chk !is_slurp (full_ex,"nested `...` in function argument")
-            @chk numchildren(ex) == 1
-            is_slurp = true
-            ex = ex[1]
-        elseif k == K"="
-            if !isnothing(default)
-                throw(full_ex, "multiple defaults provided with `=` in function argument")
-            end
-            default = ex[2]
-            ex = ex[1]
-        else
-            throw(LoweringError(ex, "Invalid function argument"))
-        end
+function expand_function_arg(ctx, body_stmts, arg, is_last_arg)
+    ex = arg
+
+    if kind(ex) == K"="
+        default = ex[2]
+        ex = ex[1]
+    else
+        default = nothing
     end
-    return (name=name,
-            type=type,
-            default=default,
-            is_slurp=is_slurp)
+
+    if kind(ex) == K"..."
+        if !is_last_arg
+            throw(LoweringError(arg, "`...` may only be used for the last function argument"))
+        end
+        @chk numchildren(ex) == 1
+        slurp_ex = ex
+        ex = ex[1]
+    else
+        slurp_ex = nothing
+    end
+
+    if kind(ex) == K"::"
+        @chk numchildren(ex) in (1,2)
+        if numchildren(ex) == 1
+            type = ex[1]
+            ex = @ast ctx ex "_"::K"Placeholder"
+        else
+            type = ex[2]
+            ex = ex[1]
+        end
+    else
+        type = @ast ctx ex "Any"::K"core"
+    end
+    if !isnothing(slurp_ex)
+        type = @ast ctx slurp_ex [K"curly" "Vararg"::K"core" type]
+    end
+
+    k = kind(ex)
+    if k == K"tuple"
+        # Argument destructuring
+        is_nospecialize = getmeta(arg, :nospecialize, false)
+        name = new_local_binding(ctx, ex, "destructured_arg";
+                                 kind=:argument, is_nospecialize=is_nospecialize)
+        push!(body_stmts, @ast ctx ex [
+            K"local"(meta=CompileHints(:is_destructured_arg, true))
+            [K"=" ex name]
+        ])
+    elseif k == K"Identifier" || k == K"Placeholder"
+        name = ex
+    else
+        throw(LoweringError(ex, "Invalid function argument"))
+    end
+
+    return (name, type, default, !isnothing(slurp_ex))
 end
 
 # Expand `where` clause(s) of a function into (typevar_names, typevar_stmts) where
@@ -2138,7 +2153,7 @@ function method_def_expr(ctx, srcref, callex, method_table,
                 "svec"          ::K"core"
                 typevar_names...
             ]
-            QuoteNode(source_location(LineNumberNode, callex))::K"Value"
+            ::K"SourceLocation"(callex)
         ]
         [K"method"
             method_table
@@ -2350,30 +2365,19 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     first_default = 0
     arg_defaults = SyntaxList(ctx)
     for (i,arg) in enumerate(args)
-        info = match_function_arg(arg)
-        aname = !isnothing(info.name) ? info.name : @ast ctx arg "_"::K"Placeholder"
-        if kind(aname) == K"tuple"
-            # Argument destructuring
-            is_nospecialize = getmeta(arg, :nospecialize, false)
-            n = new_local_binding(ctx, aname, "destructured_arg_$i";
-                                kind=:argument, is_nospecialize=is_nospecialize)
-            push!(body_stmts, @ast ctx aname [
-                K"local"(meta=CompileHints(:is_destructured_arg, true))
-                [K"=" aname n]
-            ])
-            aname = n
-        end
+        (aname, atype, default, is_slurp) = expand_function_arg(ctx, body_stmts, arg,
+                                                                i == length(args))
         push!(arg_names, aname)
 
-        atype = !isnothing(info.type) ? info.type : @ast ctx arg "Any"::K"core"
-        if info.is_slurp
-            if i != length(args)
-                throw(LoweringError(arg, "`...` may only be used for the last function argument"))
-            end
-            atype = @ast ctx arg [K"curly" "Vararg"::K"core" atype]
-        end
-        if isnothing(info.default)
-            if !isempty(arg_defaults) && !info.is_slurp
+        # TODO: Ideally, ensure side effects of evaluating arg_types only
+        # happen once - we should create an ssavar if there's any following
+        # defaults. (flisp lowering doesn't ensure this either). Beware if
+        # fixing this that optional_positional_defs! depends on filtering the
+        # *symbolic* representation of arg_types.
+        push!(arg_types, atype)
+
+        if isnothing(default)
+            if !isempty(arg_defaults) && !is_slurp
                 # TODO: Referring to multiple pieces of syntax in one error message is necessary.
                 # TODO: Poison ASTs with error nodes and continue rather than immediately throwing.
                 #
@@ -2391,14 +2395,8 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             if isempty(arg_defaults)
                 first_default = i
             end
-            push!(arg_defaults, info.default)
+            push!(arg_defaults, default)
         end
-        # TODO: Ideally, ensure side effects of evaluating arg_types only
-        # happen once - we should create an ssavar if there's any following
-        # defaults. (flisp lowering doesn't ensure this either). Beware if
-        # fixing this that optional_positional_defs! depends on filtering the
-        # *symbolic* representation of arg_types.
-        push!(arg_types, atype)
     end
 
     if !isnothing(return_type)
@@ -2471,6 +2469,8 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     ]
 end
 
+#-------------------------------------------------------------------------------
+# Anon function syntax
 function expand_arrow_arglist(ctx, arglist, arrowname)
     k = kind(arglist)
     if k == K"where"
@@ -3288,7 +3288,7 @@ function expand_struct_def(ctx, ex, docs)
                 bind_docs!::K"Value"
                 struct_name
                 isnothing(docs) ? nothing_(ctx, ex) : docs[1]
-                QuoteNode(source_location(LineNumberNode, ex))::K"Value"
+                ::K"SourceLocation"(ex)
                 [K"="
                     "field_docs"::K"Identifier"
                     [K"call" "svec"::K"core" field_docs...]

@@ -17,17 +17,18 @@
 2   TestMod.#->##0
 3   (call core.svec %₂ core.Any)
 4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method core.nothing %₅
+5   SourceLocation::1:2
+6   (call core.svec %₃ %₄ %₅)
+7   --- method core.nothing %₆
     slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.+
     2   (call %₁ slot₂/x 1)
     3   (return %₂)
-7   TestMod.#->##0
-8   (new %₇)
-9   TestMod.xs
-10  (call top.Generator %₈ %₉)
-11  (return %₁₀)
+8   TestMod.#->##0
+9   (new %₈)
+10  TestMod.xs
+11  (call top.Generator %₉ %₁₀)
+12  (return %₁₁)
 
 ########################################
 # Product iteration
@@ -48,27 +49,28 @@
 2   TestMod.#->##1
 3   (call core.svec %₂ core.Any)
 4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method core.nothing %₅
-    slots: [slot₁/#self#(!read) slot₂/destructured_arg_1 slot₃/iterstate slot₄/x slot₅/y]
-    1   (call top.indexed_iterate slot₂/destructured_arg_1 1)
+5   SourceLocation::1:2
+6   (call core.svec %₃ %₄ %₅)
+7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x slot₅/y]
+    1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
     3   (= slot₃/iterstate (call core.getfield %₁ 2))
     4   slot₃/iterstate
-    5   (call top.indexed_iterate slot₂/destructured_arg_1 2 %₄)
+    5   (call top.indexed_iterate slot₂/destructured_arg 2 %₄)
     6   (= slot₅/y (call core.getfield %₅ 1))
     7   TestMod.+
     8   slot₄/x
     9   slot₅/y
     10  (call %₇ %₈ %₉)
     11  (return %₁₀)
-7   TestMod.#->##1
-8   (new %₇)
-9   TestMod.xs
-10  TestMod.ys
-11  (call top.product %₉ %₁₀)
-12  (call top.Generator %₈ %₁₁)
-13  (return %₁₂)
+8   TestMod.#->##1
+9   (new %₈)
+10  TestMod.xs
+11  TestMod.ys
+12  (call top.product %₁₀ %₁₁)
+13  (call top.Generator %₉ %₁₂)
+14  (return %₁₃)
 
 ########################################
 # Use `identity` as the Generator function when possible eg in filters
@@ -89,25 +91,26 @@
 2   TestMod.#->##2
 3   (call core.svec %₂ core.Any)
 4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method core.nothing %₅
-    slots: [slot₁/#self#(!read) slot₂/destructured_arg_1 slot₃/iterstate slot₄/x slot₅/y(!read)]
-    1   (call top.indexed_iterate slot₂/destructured_arg_1 1)
+5   SourceLocation::1:29
+6   (call core.svec %₃ %₄ %₅)
+7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x slot₅/y(!read)]
+    1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
     3   (= slot₃/iterstate (call core.getfield %₁ 2))
     4   slot₃/iterstate
-    5   (call top.indexed_iterate slot₂/destructured_arg_1 2 %₄)
+    5   (call top.indexed_iterate slot₂/destructured_arg 2 %₄)
     6   (= slot₅/y (call core.getfield %₅ 1))
     7   TestMod.f
     8   slot₄/x
     9   (call %₇ %₈)
     10  (return %₉)
-7   TestMod.#->##2
-8   (new %₇)
-9   TestMod.iter
-10  (call top.Filter %₈ %₉)
-11  (call top.Generator top.identity %₁₀)
-12  (return %₁₁)
+8   TestMod.#->##2
+9   (new %₈)
+10  TestMod.iter
+11  (call top.Filter %₉ %₁₀)
+12  (call top.Generator top.identity %₁₁)
+13  (return %₁₂)
 
 ########################################
 # Use of placeholders in iteration vars
@@ -128,15 +131,16 @@
 2   TestMod.#->##3
 3   (call core.svec %₂ core.Any)
 4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method core.nothing %₅
+5   SourceLocation::1:2
+6   (call core.svec %₃ %₄ %₅)
+7   --- method core.nothing %₆
     slots: [slot₁/#self#(!read) slot₂/_(!read)]
     1   (return 1)
-7   TestMod.#->##3
-8   (new %₇)
-9   TestMod.xs
-10  (call top.Generator %₈ %₉)
-11  (return %₁₀)
+8   TestMod.#->##3
+9   (new %₈)
+10  TestMod.xs
+11  (call top.Generator %₉ %₁₀)
+12  (return %₁₁)
 
 ########################################
 # Error: Use of placeholders in body
@@ -165,26 +169,27 @@ LoweringError:
 2   TestMod.#->##5
 3   (call core.svec %₂ core.Any)
 4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method core.nothing %₅
-    slots: [slot₁/#self#(!read) slot₂/destructured_arg_1 slot₃/iterstate slot₄/x(!read) slot₅/y(!read)]
-    1   (call top.indexed_iterate slot₂/destructured_arg_1 1)
+5   SourceLocation::1:2
+6   (call core.svec %₃ %₄ %₅)
+7   --- method core.nothing %₆
+    slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x(!read) slot₅/y(!read)]
+    1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
     3   (= slot₃/iterstate (call core.getfield %₁ 2))
     4   slot₃/iterstate
-    5   (call top.indexed_iterate slot₂/destructured_arg_1 2 %₄)
+    5   (call top.indexed_iterate slot₂/destructured_arg 2 %₄)
     6   (call core.getfield %₅ 1)
     7   (= slot₃/iterstate (call core.getfield %₅ 2))
     8   slot₃/iterstate
-    9   (call top.indexed_iterate slot₂/destructured_arg_1 3 %₈)
+    9   (call top.indexed_iterate slot₂/destructured_arg 3 %₈)
     10  (= slot₅/y (call core.getfield %₉ 1))
     11  TestMod.body
     12  (return %₁₁)
-7   TestMod.#->##5
-8   (new %₇)
-9   TestMod.iter
-10  (call top.Generator %₈ %₉)
-11  (return %₁₀)
+8   TestMod.#->##5
+9   (new %₈)
+10  TestMod.iter
+11  (call top.Generator %₉ %₁₀)
+12  (return %₁₁)
 
 ########################################
 # return permitted in quoted syntax in generator
@@ -205,16 +210,17 @@ LoweringError:
 2   TestMod.#->##6
 3   (call core.svec %₂ core.Any)
 4   (call core.svec)
-5   (call core.svec %₃ %₄ :($(QuoteNode(:(#= line 1 =#)))))
-6   --- method core.nothing %₅
+5   SourceLocation::1:4
+6   (call core.svec %₃ %₄ %₅)
+7   --- method core.nothing %₆
     slots: [slot₁/#self#(!read) slot₂/_(!read)]
     1   (call JuliaLowering.interpolate_ast (inert (return x)))
     2   (return %₁)
-7   TestMod.#->##6
-8   (new %₇)
-9   TestMod.iter
-10  (call top.Generator %₈ %₉)
-11  (return %₁₀)
+8   TestMod.#->##6
+9   (new %₈)
+10  TestMod.iter
+11  (call top.Generator %₉ %₁₀)
+12  (return %₁₁)
 
 ########################################
 # Error: `return` not permitted in generator body
@@ -225,77 +231,64 @@ LoweringError:
 # └──────┘ ── `return` not allowed inside comprehension or generator
 
 ########################################
-# FIXME - error in nested closure conversion: Triply nested generator
-((x,y,z) for x in 1:3 for y in 4:5 for z in 6:7)
-#---------------------
-LoweringError:
-((x,y,z) for x in 1:3 for y in 4:5 for z in 6:7)
-#            ╙ ── Found unexpected binding of kind argument
-
-Detailed provenance:
-#₁₃/x
-└─ x
-   └─ x
-      └─ @ :1
-
-
-########################################
 # Nested case with duplicate iteration variables
 (x for x in 1:3 for x in 1:2)
 #---------------------
 1   --- thunk
-    1   (global TestMod.#->##8)
+    1   (global TestMod.#->##7)
     2   (call core.svec)
     3   (call core.svec)
     4   (call core.svec)
-    5   (call core._structtype TestMod :#->##8 %₂ %₃ %₄ false 0)
+    5   (call core._structtype TestMod :#->##7 %₂ %₃ %₄ false 0)
     6   (call core._setsuper! %₅ core.Function)
-    7   (const TestMod.#->##8)
-    8   (= TestMod.#->##8 %₅)
+    7   (const TestMod.#->##7)
+    8   (= TestMod.#->##7 %₅)
     9   (call core.svec)
     10  (call core._typebody! %₅ %₉)
     11  (return core.nothing)
 2   --- thunk
-    1   (global TestMod.#->#->##1)
+    1   (global TestMod.#->#->##0)
     2   (call core.svec)
     3   (call core.svec)
     4   (call core.svec)
-    5   (call core._structtype TestMod :#->#->##1 %₂ %₃ %₄ false 0)
+    5   (call core._structtype TestMod :#->#->##0 %₂ %₃ %₄ false 0)
     6   (call core._setsuper! %₅ core.Function)
-    7   (const TestMod.#->#->##1)
-    8   (= TestMod.#->#->##1 %₅)
+    7   (const TestMod.#->#->##0)
+    8   (= TestMod.#->#->##0 %₅)
     9   (call core.svec)
     10  (call core._typebody! %₅ %₉)
     11  (return core.nothing)
-3   TestMod.#->#->##1
+3   TestMod.#->#->##0
 4   (call core.svec %₃ core.Any)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::1:2
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/x slot₃/x]
     1   slot₂/x
     2   (= slot₃/x %₁)
     3   slot₃/x
     4   (return %₃)
-8   TestMod.#->##8
-9   (call core.svec %₈ core.Any)
-10  (call core.svec)
-11  (call core.svec %₉ %₁₀ :($(QuoteNode(:(#= line 1 =#)))))
-12  --- method core.nothing %₁₁
+9   TestMod.#->##7
+10  (call core.svec %₉ core.Any)
+11  (call core.svec)
+12  SourceLocation::1:2
+13  (call core.svec %₁₀ %₁₁ %₁₂)
+14  --- method core.nothing %₁₃
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
-    1   TestMod.#->#->##1
+    1   TestMod.#->#->##0
     2   (new %₁)
     3   TestMod.:
     4   (call %₃ 1 2)
     5   (call top.Generator %₂ %₄)
     6   (return %₅)
-13  TestMod.#->##8
-14  (new %₁₃)
-15  TestMod.:
-16  (call %₁₅ 1 3)
-17  (call top.Generator %₁₄ %₁₆)
-18  (call top.Flatten %₁₇)
-19  (return %₁₈)
+15  TestMod.#->##7
+16  (new %₁₅)
+17  TestMod.:
+18  (call %₁₇ 1 3)
+19  (call top.Generator %₁₆ %₁₈)
+20  (call top.Flatten %₁₉)
+21  (return %₂₀)
 
 ########################################
 # Comprehension lowers to generator with collect
@@ -360,4 +353,19 @@ T[(x,y) for x in xs, y in ys]
 48  (gotoifnot %₄₇ label₅₀)
 49  (goto label₁₅)
 50  (return %₇)
+
+########################################
+# FIXME - error in nested closure conversion: Triply nested generator
+((x,y,z) for x in 1:3 for y in 4:5 for z in 6:7)
+#---------------------
+LoweringError:
+((x,y,z) for x in 1:3 for y in 4:5 for z in 6:7)
+#            ╙ ── Found unexpected binding of kind argument
+
+Detailed provenance:
+#₁₃/x
+└─ x
+   └─ x
+      └─ @ :1
+
 

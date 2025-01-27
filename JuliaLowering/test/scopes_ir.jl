@@ -31,13 +31,14 @@ end
 7   (call core.Typeof %₆)
 8   (call core.svec %₇ core.Any)
 9   (call core.svec)
-10  (call core.svec %₈ %₉ :($(QuoteNode(:(#= line 3 =#)))))
-11  --- method core.nothing %₁₀
+10  SourceLocation::3:14
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   (call core.tuple false true true)
     2   (return %₁)
-12  TestMod.f
-13  (return %₁₂)
+13  TestMod.f
+14  (return %₁₃)
 
 ########################################
 # @islocal with global
@@ -78,16 +79,17 @@ end
 3   (call core.Typeof %₂)
 4   (call core.svec %₃ core.Any)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 1 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::1:10
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/z]
     1   (call core.apply_type top.Dict core.Symbol core.Any)
     2   (call %₁)
     3   (gotoifnot true label₅)
     4   (call top.setindex! %₂ slot₂/z :z)
     5   (return %₂)
-8   TestMod.f
-9   (return %₈)
+9   TestMod.f
+10  (return %₉)
 
 ########################################
 # Error: Duplicate function argument names

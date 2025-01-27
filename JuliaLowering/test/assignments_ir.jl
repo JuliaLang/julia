@@ -35,15 +35,16 @@ end
 3   (call core.Typeof %₂)
 4   (call core.svec %₃)
 5   (call core.svec)
-6   (call core.svec %₄ %₅ :($(QuoteNode(:(#= line 3 =#)))))
-7   --- method core.nothing %₆
+6   SourceLocation::3:9
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/c(!read)]
     1   TestMod.d
     2   (= slot₂/c %₁)
     3   (return %₁)
-8   TestMod.b
-9   (= slot₁/a %₈)
-10  (return %₈)
+9   TestMod.b
+10  (= slot₁/a %₉)
+11  (return %₉)
 
 ########################################
 # a.b = ... => setproperty! assignment
