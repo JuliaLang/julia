@@ -806,7 +806,7 @@ end
         prec = 8
         start_pos = 42
         nwritten = 1 + 1 + prec + 4
-        end_pos = start_pos + nwritten - 1
+        end_pos = start_pos + nwritten
         @test Ryu.writeexp(buf, start_pos, xx, prec) == end_pos
         @test String(buf[start_pos:end_pos-1]) == "1.72914286e+03"
     end
