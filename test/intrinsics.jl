@@ -19,9 +19,8 @@ truncbool(u) = reinterpret(UInt8, reinterpret(Bool, u))
     @test Core.Intrinsics.add_int(1, 1) == 2
     @test Core.Intrinsics.sub_int(1, 1) == 0
 
-    @test_throws ErrorException("fpext: output bitsize must be >= input bitsize")    Core.Intrinsics.fpext(Float32, 1.0)
-    @test_throws ErrorException("fpext: output bitsize must be >= input bitsize")    Core.Intrinsics.fpext(Float32, 1.0)
-    @test_throws ErrorException("fpext: output bitsize must be >= input bitsize")    Core.Intrinsics.fpext(Int32, 0x0000_0000_0000_0000)
+    @test_throws ErrorException("fpext: output bitsize must be > input bitsize")    Core.Intrinsics.fpext(Float32, 1.0)
+    @test_throws ErrorException("fpext: output bitsize must be > input bitsize")    Core.Intrinsics.fpext(Float32, 1.0)
 
     @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Int32, 0x0000_0000)
     @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Int64, 0x0000_0000)
@@ -167,7 +166,6 @@ end
     # unary
     @test_intrinsic Core.Intrinsics.abs_float Float64(-3.3) Float64(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float64(3.3) Float64(-3.3)
-    @test_intrinsic Core.Intrinsics.fpext Float64 Float64(3.3) Float64(3.3)
 
     # binary
     @test_intrinsic Core.Intrinsics.add_float Float64(3.3) Float64(2) Float64(5.3)
@@ -200,7 +198,6 @@ end
     # unary
     @test_intrinsic Core.Intrinsics.abs_float Float32(-3.3) Float32(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float32(3.3) Float32(-3.3)
-    @test_intrinsic Core.Intrinsics.fpext Float32 Float32(3.3) Float32(3.3)
     @test_intrinsic Core.Intrinsics.fpext Float64 Float32(3.3) 3.299999952316284
     @test_intrinsic Core.Intrinsics.fptrunc Float32 Float64(3.3) Float32(3.3)
 
@@ -236,7 +233,6 @@ end
     @test_intrinsic Core.Intrinsics.abs_float Float16(-3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float16(3.3) Float16(-3.3)
     # See <https://github.com/JuliaLang/julia/issues/57130>
-    @test_intrinsic Core.Intrinsics.fpext Float16 Float16(3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.fpext Float32 Float16(3.3) 3.3007812f0
     @test_intrinsic Core.Intrinsics.fpext Float64 Float16(3.3) 3.30078125
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float32(3.3) Float16(3.3)

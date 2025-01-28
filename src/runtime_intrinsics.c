@@ -1665,8 +1665,8 @@ static inline void fptrunc(jl_datatype_t *aty, void *pa, jl_datatype_t *ty, void
 static inline void fpext(jl_datatype_t *aty, void *pa, jl_datatype_t *ty, void *pr)
 {
     unsigned isize = jl_datatype_size(aty), osize = jl_datatype_size(ty);
-    if (!(osize >= isize)) {
-        jl_error("fpext: output bitsize must be >= input bitsize");
+    if (!(osize > isize)) {
+        jl_error("fpext: output bitsize must be > input bitsize");
         return;
     }
 
@@ -1676,22 +1676,11 @@ static inline void fpext(jl_datatype_t *aty, void *pa, jl_datatype_t *ty, void *
 
     if (0)
         ;
-
-    fpext_convert(float16, float16);
-    fpext_convert(float16, bfloat16);
     fpext_convert(float16, float32);
     fpext_convert(float16, float64);
-
-    fpext_convert(bfloat16, float16);
-    fpext_convert(bfloat16, bfloat16);
     fpext_convert(bfloat16, float32);
     fpext_convert(bfloat16, float64);
-
-    fpext_convert(float32, float32);
     fpext_convert(float32, float64);
-
-    fpext_convert(float64, float64);
-
     else
         jl_error("fptrunc: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
 #undef fpext_convert
