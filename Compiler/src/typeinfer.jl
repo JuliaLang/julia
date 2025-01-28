@@ -1280,8 +1280,20 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                     ci isa CodeInstance && !use_const_api(ci) && push!(tocompile, ci)
                 end
             elseif item isa SimpleVector
-                push!(codeinfos, item[1]::Type)
-                push!(codeinfos, item[2]::Type)
+                (rt::Type, sig::Type) = item
+                # make a best-effort attempt to enqueue the relevant code for the ccallable
+                ptr = ccall(:jl_get_specialization1,
+                            #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
+                            sig, this_world, #= mt_cache =# 0)
+                if ptr !== C_NULL
+                    mi = unsafe_pointer_to_objref(ptr)
+                    ci = typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED)
+                    ci isa CodeInstance && !use_const_api(ci) && push!(tocompile, ci)
+                end
+                # additionally enqueue the ccallable entrypoint / adapter, which implicitly
+                # invokes the above ci
+                push!(codeinfos, rt)
+                push!(codeinfos, sig)
             end
         end
         while !isempty(tocompile)
