@@ -791,3 +791,74 @@ end
     @test endswith(A, split(B, ' ')[end])
     @test endswith(A, 'g')
 end
+@testset "String Iterator Tests" begin
+    # Test with various types of iterators (String, SubStr, and GenericString)
+    for S in (String, SubStr, Test.GenericString)
+        # Valid iterators (strings, substrings, and characters)
+        @test String(Iterators.map(c -> c+1, "abc")) == "bcd"
+        @test String(Iterators.take("hello world", 5)) == "hello"
+        @test String(Iterators.filter(c -> c != ' ', "hello world")) == "helloworld"
+        @test String(Iterators.drop("hello world", 6)) == "world"
+        
+        # Single character iterators
+        @test String(Iterators.map(c -> 'a', "hello")) == "aaaaa"
+        
+        # Mixed characters and Unicode
+        @test String(Iterators.map(c -> c == ' ' ? ' ' : 'A', "hello world")) == "AAAAA AAAAA"
+        @test String(Iterators.map(c -> '😊', "hello")) == "😊😊😊😊😊"
+
+        # Edge cases: empty string or iterator with no elements
+        @test String(Iterators.take("", 3)) == ""
+        @test String(Iterators.drop("", 3)) == ""
+        
+        # Invalid iterators (non-Char elements in the iterator)
+        @test_throws MethodError String(Iterators.map(c -> 1, "hello"))
+        @test_throws MethodError String(Iterators.filter(c -> c > 128, "hello"))
+
+        # Infinite iterators (should raise MethodError)
+        @test_throws MethodError String(Iterators.cycle("abc"))
+
+        # Ensure valid behavior for non-iterable inputs
+        @test_throws MethodError String(19)
+        @test_throws MethodError String(3.14)
+        
+        # Mixed types, ensure correct character handling
+        @test String(Iterators.map(c -> Char(c), "abc")) == "abc"
+        
+        # Nested iterators (iterators within iterators)
+        @test String(Iterators.flatten(Iterators.map(c -> c, ["hello", "world"]))) == "helloworld"
+        @test String(Iterators.flatten(Iterators.map(c -> "hello", 1:3))) == "hellohellohello"
+        
+        # Using an empty generator that produces no values
+        @test String(Iterators.filter(c -> false, "hello")) == ""
+        
+        # Iterators with edge cases (multiple empty spaces, mixed Unicode chars)
+        @test String(Iterators.map(c -> ' ', "hello world")) == "           "
+        @test String(Iterators.map(c -> '😊', "hi there")) == "😊😊😊😊😊😊😊😊"
+        
+        # Checking for correct error handling with invalid iterators
+        @test_throws MethodError String(Iterators.map(c -> [1,2], "hello"))
+    end
+    
+    # Additional tests for infinite iterators
+    @test_throws MethodError String(Iterators.cycle("abc"))
+    
+    # Ensure that String is only created from valid iterators (chars, strings)
+    @test String("valid string") == "valid string"
+    @test String("test") == "test"
+    
+    # Edge case with non-character data in the iterator
+    @test_throws MethodError String(Iterators.map(c -> 42, "hello"))
+    
+    # Nested iterator tests (flattening iterators)
+    @test String(Iterators.flatten(Iterators.map(c -> "abc", 1:3))) == "abcabcabc"
+    @test String(Iterators.flatten(Iterators.map(c -> "😊", 1:2))) == "😊😊"
+    
+    # Edge case with no characters in the iterator
+    @test String(Iterators.filter(c -> false, "hello")) == ""
+    @test String(Iterators.take("hello", 0)) == ""
+    
+    # Performance testing for large input
+    @test String(Iterators.take("a"^1000, 500)) == "a"^500
+    @test String(Iterators.map(c -> 'a', "a"^100000)) == "a"^100000
+end
