@@ -53,7 +53,9 @@ function download_from_cache(desired_url::AbstractString)
 end
 
 if Sys.iswindows()
-    busybox = download_from_cache("https://frippery.org/files/busybox/busybox.exe")
+    # See https://frippery.org/files/busybox/
+    # latest as of 2024-09-20 18:08
+    busybox = download_from_cache("https://frippery.org/files/busybox/busybox-w32-FRP-5467-g9376eebd8.exe")
     busybox_hash_correct(busybox) || error("The busybox executable downloaded has an incorrect hash")
 
     havebb = try # use busybox-w32 on windows, if available
