@@ -209,6 +209,7 @@ function _threadsfor(iter, lbody, schedule)
     quote
         local threadsfor_fun
         $func
+        throw_if_boxed_captures(threadsfor_fun)
         if $(schedule === :greedy || schedule === :dynamic || schedule === :default)
             threading_run(threadsfor_fun, false)
         elseif ccall(:jl_in_threaded_region, Cint, ()) != 0 # :static
@@ -217,6 +218,22 @@ function _threadsfor(iter, lbody, schedule)
             threading_run(threadsfor_fun, true)
         end
         nothing
+    end
+end
+
+function throw_if_boxed_captures(f)
+    T = typeof(f)
+    if any(FT -> FT <: Core.Box, fieldtypes(T))
+        boxed_fields = join((fieldname(T, i) for i in 1:fieldcount(T) if fieldtype(T,i) <: Core.Box), ", ")
+        error("@threads attempted to capture and modify outer local variable(s) $boxed_fields, which would cause a race condition. Consider marking these variables as local inside @threads, interpolating them into the closure with \$, or redesigning your code to avoid a race condition.")
+    end
+    for i ∈ 1:fieldcount(T)
+        # recurse into nested functions. this is required because threadsfor_fun
+        # has a kwarg method, so the Boxed variables are hidden at least one layer
+        # down.
+        if fieldtype(T, i) <: Function
+            throw_if_boxed_captures(getfield(f, i))
+        end
     end
 end
 

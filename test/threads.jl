@@ -567,3 +567,29 @@ let once = OncePerTask{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("expected") once()
 end
+
+# https://github.com/JuliaLang/julia/issues/14948
+@testset "`@threads` capturing boxed variables" begin
+    A = 1
+    function wrong()
+        out = zeros(Int, 10)
+        Threads.@threads for i in 1:10
+            A = i
+            sleep(rand()/10)
+            out[i] = A
+        end
+        out
+    end
+    function not_wrong()
+        out = zeros(Int, 10)
+        Threads.@threads for i in 1:10
+            local A = i
+            sleep(rand()/10)
+            out[i] = A
+        end
+        out
+    end
+
+    @test_throws ErrorException wrong()
+    @test not_wrong() == 1:10
+end

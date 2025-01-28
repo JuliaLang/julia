@@ -92,6 +92,9 @@ Multi-threading changes
   every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
   similar usage with threads or tasks. ([#55793])
 
+* `Threads.@threads` no longer allows the provided closure to contain boxed variable references, as
+these create silent, surprising race conditions.
+
 Build system changes
 --------------------
 
