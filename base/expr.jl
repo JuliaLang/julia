@@ -516,7 +516,7 @@ The following `setting`s are supported.
 - `:foldable`
 - `:removable`
 - `:total`
-
+- `:gc_safe`
 # Extended help
 
 ---
@@ -751,6 +751,13 @@ the following other `setting`s:
     recommended over the use of `:total`.
 
 ---
+## `:gc_safe`
+
+This `setting` can only be applied to `@ccall` expressions. It asserts that the
+`@ccall` is safe to execute concurrently with the garbage collector. This means that it must not
+call into the julia runtime.
+
+---
 ## Negated effects
 
 Effect names may be prefixed by `!` to indicate that the effect should be removed
@@ -759,12 +766,13 @@ the call is generally total, it may however throw.
 """
 macro assume_effects(args...)
     lastex = args[end]
-    override = compute_assumed_settings(args[begin:end-1])
+    override, gc_safe = compute_assumed_settings(args[begin:end-1])
     if is_function_def(unwrap_macrocalls(lastex))
         return esc(pushmeta!(lastex::Expr, form_purity_expr(override)))
     elseif isexpr(lastex, :macrocall) && lastex.args[1] === Symbol("@ccall")
         lastex.args[1] = GlobalRef(Base, Symbol("@ccall_effects"))
         insert!(lastex.args, 3, encode_effects_override(override))
+        insert!(lastex.args, 4, gc_safe)
         return esc(lastex)
     end
     override′ = compute_assumed_setting(override, lastex)
@@ -783,12 +791,19 @@ end
 
 function compute_assumed_settings(settings)
     override = EffectsOverride()
+    gc_safe = false
     for setting in settings
+        # This way of parsing is slightly annoying, but it's to avoid extra complexity for EffectOverride
+        gc_safe2, found = compute_gc_safe(setting)
+        if found
+            gc_safe = gc_safe2
+            continue
+        end
         override = compute_assumed_setting(override, setting)
         override === nothing &&
             throw(ArgumentError("`@assume_effects $setting` not supported"))
     end
-    return override
+    return override, gc_safe
 end
 
 struct EffectsOverride
@@ -834,6 +849,18 @@ function EffectsOverride(
 end
 
 const NUM_EFFECTS_OVERRIDES = 11 # sync with julia.h
+
+function compute_gc_safe(setting)
+    if setting === :gc_safe
+        return (gc_safe=true, found=true)
+    elseif isexpr(setting, :call) && setting.args[1] === :(!)
+        gc_safe2, found2 = compute_gc_safe(setting.args[2])
+        return (gc_safe=(!gc_safe2), found=found2)
+    elseif isa(setting, QuoteNode)
+        return compute_gc_safe(setting.value)
+    end
+    return (gc_safe=false, found=false)
+end
 
 function compute_assumed_setting(override::EffectsOverride, @nospecialize(setting), val::Bool=true)
     if isexpr(setting, :call) && setting.args[1] === :(!)
