@@ -896,3 +896,156 @@ end
 8   (call JuliaLowering.bind_docs! %₇ "some docs\n" %₅)
 9   (return core.nothing)
 
+########################################
+# Keyword function with defaults.
+# Order of methods
+# 1. #f_kw_simple#0(x, y, ::typeof(f_kw_simple), a, b)  (body)
+# 2. Core.kwcall(kws, ::typeof(f_kw_simple))
+# 3. Core.kwcall(kws, ::typeof(f_kw_simple), a)
+# 4. Core.kwcall(kws, ::typeof(f_kw_simple), a, b)      (kwcall body)
+# 5. f_kw_simple()
+# 6. f_kw_simple(a)
+# 7. f_kw_simple(a, b)
+function f_kw_simple(a::Int=1, b::Float64=1.0; x::Char='a', y::Bool=true)
+    (a, b, x, y)
+end
+#---------------------
+1   (method TestMod.f_kw_simple)
+2   (method TestMod.#f_kw_simple#0)
+3   TestMod.#f_kw_simple#0
+4   (call core.Typeof %₃)
+5   TestMod.Char
+6   TestMod.Bool
+7   TestMod.f_kw_simple
+8   (call core.Typeof %₇)
+9   TestMod.Int
+10  TestMod.Float64
+11  (call core.svec %₄ %₅ %₆ %₈ %₉ %₁₀)
+12  (call core.svec)
+13  SourceLocation::1:10
+14  (call core.svec %₁₁ %₁₂ %₁₃)
+15  --- method core.nothing %₁₄
+    slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/#self#(!read) slot₅/a slot₆/b]
+    1   (call core.tuple slot₅/a slot₆/b slot₂/x slot₃/y)
+    2   (return %₁)
+16  (call core.typeof core.kwcall)
+17  TestMod.f_kw_simple
+18  (call core.Typeof %₁₇)
+19  (call core.svec %₁₆ core.NamedTuple %₁₈)
+20  (call core.svec)
+21  SourceLocation::1:10
+22  (call core.svec %₁₉ %₂₀ %₂₁)
+23  --- method core.nothing %₂₂
+    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self#]
+    1   (call slot₁/#self# slot₂/kws slot₃/#self# 1 1.0)
+    2   (return %₁)
+24  (call core.typeof core.kwcall)
+25  TestMod.f_kw_simple
+26  (call core.Typeof %₂₅)
+27  TestMod.Int
+28  (call core.svec %₂₄ core.NamedTuple %₂₆ %₂₇)
+29  (call core.svec)
+30  SourceLocation::1:10
+31  (call core.svec %₂₈ %₂₉ %₃₀)
+32  --- method core.nothing %₃₁
+    slots: [slot₁/#self#(called) slot₂/kws slot₃/#self# slot₄/a]
+    1   (call slot₁/#self# slot₂/kws slot₃/#self# slot₄/a 1.0)
+    2   (return %₁)
+33  (call core.typeof core.kwcall)
+34  TestMod.f_kw_simple
+35  (call core.Typeof %₃₄)
+36  TestMod.Int
+37  TestMod.Float64
+38  (call core.svec %₃₃ core.NamedTuple %₃₅ %₃₆ %₃₇)
+39  (call core.svec)
+40  SourceLocation::1:10
+41  (call core.svec %₃₈ %₃₉ %₄₀)
+42  --- method core.nothing %₄₁
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/b slot₆/if_val(!read) slot₇/if_val(!read)]
+    1   (call core.isdefined slot₂/kws :x)
+    2   (gotoifnot %₁ label₁₃)
+    3   (call core.getfield slot₂/kws :x)
+    4   TestMod.Char
+    5   (call core.isa %₃ %₄)
+    6   (gotoifnot %₅ label₈)
+    7   (goto label₁₁)
+    8   TestMod.Char
+    9   (new core.TypeError :keyword argument :x %₈ %₃)
+    10  (call core.throw %₉)
+    11  (= slot₆/if_val %₃)
+    12  (goto label₁₄)
+    13  (= slot₆/if_val 'a')
+    14  slot₆/if_val
+    15  (call core.isdefined slot₂/kws :y)
+    16  (gotoifnot %₁₅ label₂₇)
+    17  (call core.getfield slot₂/kws :y)
+    18  TestMod.Bool
+    19  (call core.isa %₁₇ %₁₈)
+    20  (gotoifnot %₁₉ label₂₂)
+    21  (goto label₂₅)
+    22  TestMod.Bool
+    23  (new core.TypeError :keyword argument :y %₂₂ %₁₇)
+    24  (call core.throw %₂₃)
+    25  (= slot₇/if_val %₁₇)
+    26  (goto label₂₈)
+    27  (= slot₇/if_val true)
+    28  slot₇/if_val
+    29  (call top.keys slot₂/kws)
+    30  (call core.tuple :x :y)
+    31  (call top.diff_names %₂₉ %₃₀)
+    32  (call top.isempty %₃₁)
+    33  (gotoifnot %₃₂ label₃₅)
+    34  (goto label₃₆)
+    35  (call top.kwerr slot₂/kws slot₃/#self# slot₄/a slot₅/b)
+    36  TestMod.#f_kw_simple#0
+    37  (call %₃₆ %₁₄ %₂₈ slot₃/#self# slot₄/a slot₅/b)
+    38  (return %₃₇)
+43  TestMod.f_kw_simple
+44  (call core.Typeof %₄₃)
+45  (call core.svec %₄₄)
+46  (call core.svec)
+47  SourceLocation::1:10
+48  (call core.svec %₄₅ %₄₆ %₄₇)
+49  --- method core.nothing %₄₈
+    slots: [slot₁/#self#(called)]
+    1   (call slot₁/#self# 1 1.0)
+    2   (return %₁)
+50  TestMod.f_kw_simple
+51  (call core.Typeof %₅₀)
+52  TestMod.Int
+53  (call core.svec %₅₁ %₅₂)
+54  (call core.svec)
+55  SourceLocation::1:10
+56  (call core.svec %₅₃ %₅₄ %₅₅)
+57  --- method core.nothing %₅₆
+    slots: [slot₁/#self#(called) slot₂/a]
+    1   (call slot₁/#self# slot₂/a 1.0)
+    2   (return %₁)
+58  TestMod.f_kw_simple
+59  (call core.Typeof %₅₈)
+60  TestMod.Int
+61  TestMod.Float64
+62  (call core.svec %₅₉ %₆₀ %₆₁)
+63  (call core.svec)
+64  SourceLocation::1:10
+65  (call core.svec %₆₂ %₆₃ %₆₄)
+66  --- method core.nothing %₆₅
+    slots: [slot₁/#self# slot₂/a slot₃/b]
+    1   TestMod.#f_kw_simple#0
+    2   (call %₁ 'a' true slot₁/#self# slot₂/a slot₃/b)
+    3   (return %₂)
+67  TestMod.f_kw_simple
+68  (return %₆₇)
+
+########################################
+# Error: argument unpacking in keywords
+function f_invalid_kw(; (x,y)=10)
+    (x, y)
+end
+#---------------------
+LoweringError:
+function f_invalid_kw(; (x,y)=10)
+#                       └───┘ ── Invalid keyword name
+    (x, y)
+end
+

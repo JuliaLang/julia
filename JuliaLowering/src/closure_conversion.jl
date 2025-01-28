@@ -249,18 +249,6 @@ function closure_type_fields(ctx, srcref, closure_binds, is_opaque)
     return field_syms, field_orig_bindings, field_inds, field_is_box
 end
 
-function closure_name(mod, name_stack)
-    basename = "#$(join(name_stack, "#"))##"
-    i = 0
-    while true
-        name = "$basename$i"
-        if reserve_module_binding(mod, Symbol(name))
-            return name
-        end
-        i += 1
-    end
-end
-
 # Return a thunk which creates a new type for a closure with `field_syms` named
 # fields. The new type will be named `name_str` which must be an unassigned
 # name in the module.
@@ -403,7 +391,8 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 closure_binds = ctx.closure_bindings[func_name_id]
                 field_syms, field_orig_bindings, field_inds, field_is_box =
                     closure_type_fields(ctx, ex, closure_binds, false)
-                name_str = closure_name(ctx.mod, closure_binds.name_stack)
+                name_str = reserve_module_binding_i(ctx.mod,
+                    "#$(join(closure_binds.name_stack, "#"))##")
                 closure_type_def, closure_type_ =
                     type_for_closure(ctx, ex, name_str, field_syms, field_is_box)
                 push!(ctx.toplevel_stmts, closure_type_def)

@@ -236,6 +236,45 @@ end
 
 end
 
+@testset "Keyword functions" begin
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_simple(a::Int=1, b::Float64=1.0; x::Char='a', y::Bool=true)
+        (a, b, x, y)
+    end
+    """)
+
+    @test test_mod.f_kw_simple()               === (1, 1.0, 'a', true)
+    @test test_mod.f_kw_simple(x='b')          === (1, 1.0, 'b', true)
+    @test test_mod.f_kw_simple(y=false)        === (1, 1.0, 'a', false)
+    @test test_mod.f_kw_simple(x='b', y=false) === (1, 1.0, 'b', false)
+
+    @test test_mod.f_kw_simple(20)                 === (20, 1.0, 'a', true)
+    @test test_mod.f_kw_simple(20; x='b')          === (20, 1.0, 'b', true)
+    @test test_mod.f_kw_simple(20; y=false)        === (20, 1.0, 'a', false)
+    @test test_mod.f_kw_simple(20; x='b', y=false) === (20, 1.0, 'b', false)
+
+    @test test_mod.f_kw_simple(20, 2.0)                 === (20, 2.0, 'a', true)
+    @test test_mod.f_kw_simple(20, 2.0; x='b')          === (20, 2.0, 'b', true)
+    @test test_mod.f_kw_simple(20, 2.0; y=false)        === (20, 2.0, 'a', false)
+    @test test_mod.f_kw_simple(20, 2.0; x='b', y=false) === (20, 2.0, 'b', false)
+
+    # Bad defaults throw a type error
+    @test_throws(TypeError(Symbol("keyword argument"), :x, Char, 100),
+                 test_mod.f_kw_simple(x=100))
+    @test_throws(TypeError(Symbol("keyword argument"), :y, Bool, 100),
+                 test_mod.f_kw_simple(y=100))
+
+    # Keywords which aren't present throw an error
+    try
+        test_mod.f_kw_simple(20; not_present=100)
+        @test false
+    catch exc
+        @test exc isa MethodError
+        @test exc.f == Core.kwcall
+        @test exc.args == ((; not_present=100), test_mod.f_kw_simple, 20, 1.0)
+    end
+end
+
 @testset "Broadcast" begin
     @test JuliaLowering.include_string(test_mod, """
     let x = [1,2], y = [3,4], z = [5,6]

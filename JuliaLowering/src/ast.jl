@@ -580,6 +580,10 @@ function is_core_nothing(ex)
     kind(ex) == K"core" && ex.name_val == "nothing"
 end
 
+function is_core_Any(ex)
+    kind(ex) == K"core" && ex.name_val == "Any"
+end
+
 function is_simple_atom(ctx, ex)
     k = kind(ex)
     # TODO thismodule
@@ -603,8 +607,8 @@ function to_symbol(ctx, ex)
     @ast ctx ex ex=>K"Symbol"
 end
 
-function new_scope_layer(ctx, mod_ref::Module=ctx.mod)
-    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, true)
+function new_scope_layer(ctx, mod_ref::Module=ctx.mod; is_macro_expansion=true)
+    new_layer = ScopeLayer(length(ctx.scope_layers)+1, ctx.mod, is_macro_expansion)
     push!(ctx.scope_layers, new_layer)
     new_layer.id
 end

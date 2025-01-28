@@ -362,6 +362,12 @@ function Core.kwcall(kws::NamedTuple, self::typeof(f), a::A=a_default, b::B=b_de
     else
         y = 2
     end
+    if Base.isempty(Base.diff_names(Base.keys(kws), (:x, :y)))
+        nothing
+    else
+        # Else unsupported kws
+        Base.kwerr(kws, self, a, b)
+    end
     f_kw(x, y, self, a, b)
 end
 ```

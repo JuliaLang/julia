@@ -894,7 +894,6 @@ function expand_comprehension_to_loops(ctx, ex)
         push!(new_iterspecs, @ast ctx iterspec [K"in" iterspec[1] iter])
     end
     # Lower to nested for loops
-    # layer = new_scope_layer(ctx)
     idx = new_local_binding(ctx, iterspecs, "idx")
     @ast ctx ex [K"block"
         iter_defs...
@@ -1641,7 +1640,7 @@ function expand_ccall(ctx, ex)
             argt = types_for_conv[i]
         end
         exarg = expand_forms_2(ctx, arg)
-        if kind(raw_argt) == K"core" && raw_argt.name_val == "Any"
+        if is_core_Any(raw_argt)
             push!(unsafe_args, exarg)
         else
             cconverted_arg = emit_assign_tmp(sctx, 
@@ -2102,6 +2101,9 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg)
 
     k = kind(ex)
     if k == K"tuple"
+        if isnothing(body_stmts)
+            throw(LoweringError(ex, "Invalid keyword name"))
+        end
         # Argument destructuring
         is_nospecialize = getmeta(arg, :nospecialize, false)
         name = new_local_binding(ctx, ex, "destructured_arg";
@@ -2140,7 +2142,7 @@ function _split_wheres!(ctx, typevar_names, typevar_stmts, ex)
 end
 
 function method_def_expr(ctx, srcref, callex_srcref, method_table,
-                         typevar_names, arg_names, arg_types, ret_var, body)
+                         typevar_names, arg_names, arg_types, body, ret_var=nothing)
     @ast ctx srcref [K"block"
         # metadata contains svec(types, sparms, location)
         method_metadata := [K"call"(callex_srcref)
@@ -2243,8 +2245,161 @@ function optional_positional_defs!(ctx, method_stmts, srcref, callex,
         push!(method_stmts,
               method_def_expr(ctx, srcref, callex, method_table,
                               trimmed_typevar_names, trimmed_arg_names, trimmed_arg_types,
-                              nothing, body))
+                              body))
     end
+end
+
+function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
+                               typevar_names, typevar_stmts, arg_names,
+                               arg_types, first_default, arg_defaults, keywords, body, ret_var)
+    mangled_name = let n = isnothing(name_str) ? "_" : name_str
+        n = string(startswith(n, '#') ? "" : "#", n, "#")
+        reserve_module_binding_i(ctx.mod, n)
+    end
+    # TODO: Is the layer correct here? Which module should be the parent module
+    # of this body function?
+    layer = new_scope_layer(ctx; is_macro_expansion=false)
+    body_func_name = adopt_scope(@ast(ctx, callex_srcref, mangled_name::K"Identifier"), layer)
+
+    kwcall_arg_names = SyntaxList(ctx)
+    kwcall_arg_types = SyntaxList(ctx)
+    kwcall_body_stmts = SyntaxList(ctx)
+
+    push!(kwcall_arg_names, new_local_binding(ctx, callex_srcref, "#self#"; kind=:argument))
+    push!(kwcall_arg_types,
+        @ast ctx callex_srcref [K"call"
+            "typeof"::K"core"
+            "kwcall"::K"core"
+        ]
+    )
+    kws_arg = new_local_binding(ctx, keywords, "kws"; kind=:argument)
+    push!(kwcall_arg_names, kws_arg)
+    push!(kwcall_arg_types, @ast ctx keywords "NamedTuple"::K"core")
+
+    body_arg_names = SyntaxList(ctx)
+    body_arg_types = SyntaxList(ctx)
+    push!(body_arg_names, new_local_binding(ctx, body_func_name, "#self#"; kind=:argument))
+    push!(body_arg_types, @ast ctx body_func_name [K"function_type" body_func_name])
+
+    kw_defaults = SyntaxList(ctx)
+    kw_name_syms = SyntaxList(ctx)
+    kw_val_vars = SyntaxList(ctx)
+    for (i,arg) in enumerate(children(keywords))
+        (aname, atype, default, is_slurp) =
+            expand_function_arg(ctx, nothing, arg, i == numchildren(keywords))
+        name_sym = @ast ctx aname aname=>K"Symbol"
+        @assert !is_slurp # TODO
+        if isnothing(default)
+            default = @ast ctx arg [K"call"
+                "throw"::K"core"
+                [K"call"
+                    "UndefKeywordError"::K"core"
+                    name_sym
+                ]
+            ]
+        end
+        kw_var = ssavar(ctx, arg, "kw_var") # <- TODO: Use `aname` here, if necessary
+        push!(kw_val_vars, kw_var)
+        push!(kwcall_body_stmts, @ast ctx arg [K"="
+            kw_var
+            [K"if"
+                [K"call" "isdefined"::K"core" kws_arg name_sym]
+                [K"block"
+                    kwval := [K"call" "getfield"::K"core" kws_arg name_sym]
+                    # TODO: if the "declared" type of a KW arg includes something
+                    # from keyword-sparams then don't assert it here, since those
+                    # static parameters don't have values yet. instead, the type
+                    # will be picked up when the underlying method is called.
+                    if !is_core_Any(atype)
+                        [K"if" [K"call" "isa"::K"core" kwval atype]
+                            "nothing"::K"core"
+                            [K"call"
+                                "throw"::K"core"
+                                [K"new" "TypeError"::K"core"
+                                    "keyword argument"::K"Symbol"
+                                    name_sym
+                                    atype
+                                    kwval
+                                ]
+                            ]
+                        ]
+                    end
+                    kwval
+                ]
+                default
+            ]
+        ])
+
+        push!(kw_defaults, default)
+        push!(kw_name_syms, name_sym)
+        push!(body_arg_names, aname)
+        push!(body_arg_types, atype)
+    end
+    append!(body_arg_names, arg_names)
+    append!(body_arg_types, arg_types)
+
+    first_default += length(kwcall_arg_names)
+    append!(kwcall_arg_names, arg_names)
+    append!(kwcall_arg_types, arg_types)
+
+    kwcall_mtable = @ast(ctx, srcref, "nothing"::K"core")
+
+    kwcall_defs = SyntaxList(ctx)
+    if !isempty(arg_defaults)
+        optional_positional_defs!(ctx, kwcall_defs, srcref, callex_srcref,
+                                  kwcall_mtable, typevar_names, typevar_stmts,
+                                  kwcall_arg_names, kwcall_arg_types, first_default, arg_defaults)
+    end
+
+    kwcall_body = @ast ctx keywords [K"block"
+        kwcall_body_stmts...
+        [K"if"
+            [K"call"
+                "isempty"::K"top"
+                [K"call"
+                    "diff_names"::K"top"
+                    [K"call" "keys"::K"top" kws_arg]
+                    [K"tuple" kw_name_syms...]
+                ]
+            ]
+            "nothing"::K"core"
+            if true
+                [K"call" # Report unsupported kws
+                    "kwerr"::K"top"
+                    kws_arg
+                    arg_names...
+                ]
+            else
+                # TODO: kw slurping
+            end
+        ]
+        [K"call"
+            body_func_name
+            kw_val_vars...
+            arg_names...
+        ]
+    ]
+
+    push!(kwcall_defs,
+          method_def_expr(ctx, srcref, callex_srcref, kwcall_mtable,
+                          typevar_names, kwcall_arg_names, kwcall_arg_types, kwcall_body))
+
+    kw_func_method_defs = @ast ctx srcref [K"block"
+        [K"method_defs"
+            body_func_name
+            [K"block"
+                method_def_expr(ctx, srcref, callex_srcref, "nothing"::K"core",
+                                typevar_names, body_arg_names, body_arg_types, body, ret_var)
+            ]
+        ]
+        [K"method_defs"
+            "nothing"::K"core"
+            [K"block"
+                kwcall_defs...
+            ]
+        ]
+    ]
+    body_func_name, kw_func_method_defs, kw_defaults
 end
 
 # Check valid identifier/function names
@@ -2321,6 +2476,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     # the function name.
     name = callex[1]
     bare_func_name = nothing
+    name_str = nothing
     doc_obj = nothing
     self_name = nothing
     if kind(name) == K"::"
@@ -2339,6 +2495,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         if kind(name) == K"Placeholder"
             # Anonymous function. In this case we may use an ssavar for the
             # closure's value.
+            name_str = name.name_val
             name = ssavar(ctx, name, name.name_val)
             bare_func_name = name
         elseif !is_valid_func_name(name)
@@ -2346,16 +2503,27 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         elseif is_identifier_like(name)
             # Add methods to a global `Function` object, or local closure
             # type function f() ...
+            name_str = name.name_val
             bare_func_name = name
         else
             # Add methods to an existing Function
             # function A.B.f() ...
+            if kind(name) == K"." && kind(name[2]) == K"Symbol"
+                name_str = name[2].name_val
+            end
         end
         doc_obj = name # todo: can closures be documented?
         self_type = @ast ctx name [K"function_type" name]
     end
     # Add self argument
     if isnothing(self_name)
+        # TODO: #self# should be symbolic rather than a binding for the cases
+        # where it's reused in `optional_positional_defs!` because it's
+        # probably unsafe to reuse bindings for multiple different methods in
+        # the presence of closure captures or other global binding properties.
+        #
+        # This is reminiscent of the need to renumber SSA vars in certain cases
+        # in the flisp implementation.
         self_name = new_local_binding(ctx, name, "#self#"; kind=:argument)
     end
 
@@ -2365,6 +2533,14 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     push!(arg_names, self_name)
     push!(arg_types, self_type)
     args = callex[2:end]
+    keywords = nothing
+    if !isempty(args) && kind(args[end]) == K"parameters"
+        keywords = args[end]
+        args = args[1:end-1]
+        if numchildren(keywords) == 0
+            keywords = nothing
+        end
+    end
     body_stmts = SyntaxList(ctx)
     first_default = 0
     arg_defaults = SyntaxList(ctx)
@@ -2397,7 +2573,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             end
         else
             if isempty(arg_defaults)
-                first_default = i
+                first_default = i + 1 # Offset for self argument
             end
             push!(arg_defaults, default)
         end
@@ -2419,6 +2595,22 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         ]
     end
 
+    if isnothing(keywords)
+        body_func_name, kw_func_method_defs = (nothing, nothing)
+    else
+        body_func_name, kw_func_method_defs, kw_defaults =
+            keyword_function_defs(ctx, ex, callex, name_str, typevar_names, typevar_stmts,
+                                  arg_names, arg_types, first_default, arg_defaults,
+                                  keywords, body, ret_var)
+        # The non-kw function dispatches to the body method
+        body = @ast ctx ex [K"call" body_func_name
+            kw_defaults...
+            arg_names...
+        ]
+        # ret_var is used only in the body method
+        ret_var = nothing
+    end
+
     method_table_val = nothing # TODO: method overlays
     method_table = isnothing(method_table_val)            ?
                    @ast(ctx, callex, "nothing"::K"core")  :
@@ -2426,7 +2618,6 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     method_stmts = SyntaxList(ctx)
 
     if !isempty(arg_defaults)
-        first_default += 1 # Offset for self argument
         optional_positional_defs!(ctx, method_stmts, ex, callex,
                                   method_table, typevar_names, typevar_stmts,
                                   arg_names, arg_types, first_default, arg_defaults)
@@ -2435,7 +2626,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     # The method with all non-default arguments
     push!(method_stmts,
           method_def_expr(ctx, ex, callex, method_table, typevar_names, arg_names,
-                          arg_types, ret_var, body))
+                          arg_types, body, ret_var))
     if !isnothing(docs)
         method_stmts[end] = @ast ctx docs [K"block"
             method_metadata := method_stmts[end]
@@ -2452,9 +2643,13 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         if !isnothing(bare_func_name)
             [K"function_decl"(bare_func_name) bare_func_name]
         end
+        if !isnothing(body_func_name)
+            [K"function_decl"(body_func_name) body_func_name]
+        end
         [K"scope_block"(scope_type=:hard)
             [K"block"
                 typevar_stmts...
+                kw_func_method_defs
                 [K"method_defs"
                     isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
                     [K"block"
@@ -2840,7 +3035,7 @@ end
 
 # generate call to `convert()` for `(call new ...)` expressions
 function _new_call_convert_arg(ctx, full_struct_type, field_type, field_index, val)
-    if kind(field_type) == K"core" && field_type.name_val == "Any"
+    if is_core_Any(field_type)
         return val
     end
     # kt = kind(field_type)
@@ -2872,9 +3067,7 @@ function default_inner_constructors(ctx, srcref, global_struct_name,
             ]
         ]
     end
-    maybe_non_Any_field_types = filter(field_types) do ft
-        !(kind(ft) == K"core" && ft.name_val == "Any")
-    end
+    maybe_non_Any_field_types = filter(!is_core_Any, field_types)
     converting_ctor = if !isempty(typevar_names) || !isempty(maybe_non_Any_field_types)
         # Definition which takes `Any` for all arguments and uses
         # `Base.convert()` to convert those to the exact field type. Only
@@ -3113,7 +3306,7 @@ function _rewrite_ctor_new_calls(ctx, ex, struct_name, global_struct_name, ctor_
             ]
         ]
     else
-        fields_all_Any = all(kind(ft) == K"core" && ft.name_val == "Any" for ft in field_types)
+        fields_all_Any = all(is_core_Any, field_types)
         if fields_all_Any
             @ast ctx ex [K"block"
                 struct_type := full_struct_type

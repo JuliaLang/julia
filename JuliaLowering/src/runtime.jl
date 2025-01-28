@@ -269,6 +269,25 @@ function reserve_module_binding(mod, name)
     end
 end
 
+# Reserve a global binding named "$basename#$i" in module `mod` for the
+# smallest `i` starting at `0`.
+#
+# TODO: Remove the use of this where possible. Currently this is used within
+# lowering to create unique global names for keyword function bodies and
+# closure types as an alternative to current-julia-module-counter. However, we
+# should defer the it to eval-time to make lowering itself completely
+# non-mutating.
+function reserve_module_binding_i(mod, basename)
+    i = 0
+    while true
+        name = "$basename$i"
+        if reserve_module_binding(mod, Symbol(name))
+            return name
+        end
+        i += 1
+    end
+end
+
 #-------------------------------------------------------------------------------
 # The following are versions of macros from Base which act as "standard syntax
 # extensions" with special semantics known to lowering.
