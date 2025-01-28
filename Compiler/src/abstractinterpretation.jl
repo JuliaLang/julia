@@ -2476,7 +2476,8 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
             (rt, exct), partition = global_assignment_rt_exct(interp, sv, saw_latestworld, GlobalRef(M, s), v)
-            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), GlobalAccessInfo(partition))
+            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom),
+                partition === nothing ? NoCallInfo() : GlobalAccessInfo(partition))
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     end
