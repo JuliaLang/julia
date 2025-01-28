@@ -209,6 +209,7 @@ typedef struct _jl_tls_states_t {
         uint64_t uv_run_leave;
         uint64_t sleep_enter;
         uint64_t sleep_leave;
+        uint64_t woken_up;
     )
 
     // some hidden state (usually just because we don't have the type's size declaration)
