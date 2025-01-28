@@ -2253,8 +2253,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
                                typevar_names, typevar_stmts, arg_names,
                                arg_types, first_default, arg_defaults, keywords, body, ret_var)
     mangled_name = let n = isnothing(name_str) ? "_" : name_str
-        n = string(startswith(n, '#') ? "" : "#", n, "#")
-        reserve_module_binding_i(ctx.mod, n)
+        reserve_module_binding_i(ctx.mod, string(startswith(n, '#') ? "" : "#", n, "#"))
     end
     # TODO: Is the layer correct here? Which module should be the parent module
     # of this body function?

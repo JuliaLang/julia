@@ -258,7 +258,7 @@ end
     @test test_mod.f_kw_simple(20, 2.0; y=false)        === (20, 2.0, 'a', false)
     @test test_mod.f_kw_simple(20, 2.0; x='b', y=false) === (20, 2.0, 'b', false)
 
-    # Bad defaults throw a type error
+    # Bad types for keyword args throw a type error
     @test_throws(TypeError(Symbol("keyword argument"), :x, Char, 100),
                  test_mod.f_kw_simple(x=100))
     @test_throws(TypeError(Symbol("keyword argument"), :y, Bool, 100),
@@ -273,6 +273,15 @@ end
         @test exc.f == Core.kwcall
         @test exc.args == ((; not_present=100), test_mod.f_kw_simple, 20, 1.0)
     end
+
+    # Throwing of UndefKeywordError
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_no_default(; x)
+        x
+    end
+    """)
+    @test test_mod.f_kw_no_default(x = 10) == 10
+    @test_throws UndefKeywordError(:x) test_mod.f_kw_no_default() == 10
 end
 
 @testset "Broadcast" begin
