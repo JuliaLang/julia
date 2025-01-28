@@ -72,6 +72,7 @@ check-libuv: $(LIBUV_BUILDDIR)/build-checked
 
 else # USE_BINARYBUILDER_LIBUV
 
+# For testing, do not merge
+LIBUV_JLL_GH_ORG := staticfloat
 $(eval $(call bb-install,libuv,LIBUV,false))
-
 endif
