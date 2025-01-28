@@ -769,9 +769,9 @@ fake_repl() do stdin_write, stdout_read, repl
                     julia> A = 3\e[201~
              """)
     @test Main.A == 3
-    @test Base.invokelatest(Main.foo, 4)
-    @test Base.invokelatest(Main.T17599, 3).a == 3
-    @test !Base.invokelatest(Main.foo, 2)
+    @test @invokelatest(Main.foo(4))
+    @test @invokelatest(Main.T17599(3)).a == 3
+    @test !@invokelatest(Main.foo(2))
 
     sendrepl2("""\e[200~
             julia> goo(x) = x + 1
@@ -781,7 +781,7 @@ fake_repl() do stdin_write, stdout_read, repl
             4\e[201~
              """)
     @test Main.A == 4
-    @test Base.invokelatest(Main.goo, 4) == 5
+    @test @invokelatest(Main.goo(4)) == 5
 
     # Test prefix removal only active in bracket paste mode
     sendrepl2("julia = 4\n julia> 3 && (A = 1)\n")

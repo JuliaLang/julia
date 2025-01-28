@@ -67,6 +67,9 @@ end
     run_gctest("gc/chunks.jl")
 end
 
+#FIXME: Issue #57103 disabling tests for MMTk, since
+# they rely on information that is specific to the stock GC.
+@static if Base.USING_STOCK_GC
 @testset "GC page metrics" begin
     run_nonzero_page_utilization_test()
     run_pg_size_test()
@@ -76,12 +79,13 @@ end
     issue_54275_test()
 end
 
-@testset "Base.GC docstrings" begin
-    @test isempty(Docs.undocumented_names(GC))
-end
-
 @testset "Full GC reasons" begin
     full_sweep_reasons_test()
+end
+end
+
+@testset "Base.GC docstrings" begin
+    @test isempty(Docs.undocumented_names(GC))
 end
 
 #testset doesn't work here because this needs to run in top level

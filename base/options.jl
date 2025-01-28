@@ -62,6 +62,7 @@ struct JLOptions
     trace_compile_timing::Int8
     trim::Int8
     task_metrics::Int8
+    timeout_for_safepoint_straggler_s::Int16
 end
 
 # This runs early in the sysimage != is not defined yet

@@ -12,7 +12,7 @@ end
 
 if !isdefined(@__MODULE__, Symbol("@verify_error"))
     macro verify_error(arg)
-        arg isa String && return esc(:(print && println(stderr, $arg)))
+        arg isa String && return esc(:(print && println($(GlobalRef(Core, :stderr)), $arg)))
         isexpr(arg, :string) || error("verify_error macro expected a string expression")
         pushfirst!(arg.args, GlobalRef(Core, :stderr))
         pushfirst!(arg.args, :println)
@@ -61,8 +61,14 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             raise_error()
         end
     elseif isa(op, GlobalRef)
-        if !isdefined(op.mod, op.name) || !isconst(op.mod, op.name)
-            @verify_error "Unbound GlobalRef not allowed in value position"
+        force_binding_resolution!(op, min_world(ir.valid_worlds))
+        bpart = lookup_binding_partition(min_world(ir.valid_worlds), op)
+        while is_some_imported(binding_kind(bpart)) && max_world(ir.valid_worlds) <= bpart.max_world
+            imported_binding = partition_restriction(bpart)::Core.Binding
+            bpart = lookup_binding_partition(min_world(ir.valid_worlds), imported_binding)
+        end
+        if !is_defined_const_binding(binding_kind(bpart)) || (bpart.max_world < max_world(ir.valid_worlds))
+            @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
             raise_error()
         end
     elseif isa(op, Expr)
@@ -115,7 +121,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
         if mi !== nothing
             push!(error_args, "\n", "  Method instance: ", mi)
         end
-        error(error_args...)
+        invokelatest(error, error_args...)
     end
     # Verify CFG graph. Must be well formed to construct domtree
     if !(length(ir.cfg.blocks) - 1 <= length(ir.cfg.index) <= length(ir.cfg.blocks))
@@ -366,12 +372,21 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     @verify_error "Assignment should have been removed during SSA conversion"
                     raise_error()
                 elseif stmt.head === :isdefined
-                    if length(stmt.args) > 2 || (length(stmt.args) == 2 && !isa(stmt.args[2], Bool))
+                    if length(stmt.args) > 2
                         @verify_error "malformed isdefined"
                         raise_error()
                     end
                     if stmt.args[1] isa GlobalRef
                         # undefined GlobalRef is OK in isdefined
+                        continue
+                    end
+                elseif stmt.head === :throw_undef_if_not
+                    if length(stmt.args) > 3
+                        @verify_error "malformed throw_undef_if_not"
+                        raise_error()
+                    end
+                    if stmt.args[1] isa GlobalRef
+                        # undefined GlobalRef is OK in throw_undef_if_not
                         continue
                     end
                 elseif stmt.head === :gc_preserve_end
@@ -382,7 +397,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 elseif stmt.head === :foreigncall
                     isforeigncall = true
                 elseif stmt.head === :isdefined && length(stmt.args) == 1 &&
-                        (stmt.args[1] isa GlobalRef || isexpr(stmt.args[1], :static_parameter))
+                        isexpr(stmt.args[1], :static_parameter)
                     # a GlobalRef or static_parameter isdefined check does not evaluate its argument
                     continue
                 elseif stmt.head === :call

@@ -22,9 +22,19 @@ New language features
   The available metrics are:
   - actual running time for the task (`Base.Experimental.task_running_time_ns`), and
   - wall-time for the task (`Base.Experimental.task_wall_time_ns`).
+- Support for Unicode 16 ([#56925]).
+- `Threads.@spawn` now takes a `:samepool` argument to specify the same threadpool as the caller.
+  `Threads.@spawn :samepool foo()` which is shorthand for `Threads.@spawn Threads.threadpool() foo()` ([#57109])
 
 Language changes
 ----------------
+
+ - Julia now defaults to 1 "interactive" thread, in addition to the 1 "default" worker thread. i.e. `-t1,1`
+  This means in default configuration the main task and repl (when in interactive mode), which both run on
+  thread 1, now run within the `interactive` threadpool. Also the libuv IO loop runs on thread 1,
+  helping efficient utilization of the "default" worker threadpool, which is what `Threads.@threads` and a bare
+  `Threads.@spawn` uses. Use `0` to disable the interactive thread i.e. `-t1,0` or `JULIA_NUM_THREADS=1,0`, or
+  `-tauto,0` etc. The zero is explicitly required to disable it, `-t2` will set the equivalent of `-t2,1` ([#57087])
 
  - When methods are replaced with exactly equivalent ones, the old method is no
    longer deleted implicitly simultaneously, although the new method does take
@@ -45,6 +55,9 @@ Language changes
  - Trivial infinite loops (like `while true; end`) are no longer undefined
    behavior. Infinite loops that actually do things (e.g. have side effects
    or sleep) were never and are still not undefined behavior. ([#52999])
+
+ - It is now an error to mark a symbol as both `public` and `export`ed.
+   ([#53664])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -93,6 +106,7 @@ New library functions
 * `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
 * `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`. ([#45793])
 * The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
+* `Sys.detectwsl()` allows to testing if Julia is running inside WSL at runtime. ([#57069])
 
 New library features
 --------------------
@@ -108,9 +122,12 @@ New library features
 * New `ltruncate`, `rtruncate` and `ctruncate` functions for truncating strings to text width, accounting for char widths ([#55351])
 * `isless` (and thus `cmp`, sorting, etc.) is now supported for zero-dimensional `AbstractArray`s ([#55772])
 * `invoke` now supports passing a Method instead of a type signature making this interface somewhat more flexible for certain uncommon use cases ([#56692]).
+* `Timer(f, ...)` will now match the stickiness of the parent task when creating timer tasks, which can be overridden
+  by the new `spawn` kwarg. This avoids the issue where sticky tasks i.e. `@async` make their parent sticky ([#56745])
 * `invoke` now supports passing a CodeInstance instead of a type, which can enable
 certain compiler plugin workflows ([#56660]).
 * `sort` now supports `NTuple`s ([#54494])
+* `map!(f, A)` now stores the results in `A`, like `map!(f, A, A)`. or `A .= f.(A)` ([#40632]).
 
 Standard library changes
 ------------------------
@@ -179,6 +196,15 @@ Standard library changes
 #### SparseArrays
 
 #### Test
+
+* A failing `DefaultTestSet` now prints to screen the random number generator (RNG) of the failed test, to help reproducing a stochastic failure which only depends on the state of the RNG.
+  It is also possible seed a test set by passing the `rng` keyword argument to `@testset`:
+  ```julia
+  using Test, Random
+  @testset rng=Xoshiro(0x2e026445595ed28e, 0x07bb81ac4c54926d, 0x83d7d70843e8bad6, 0xdbef927d150af80b, 0xdbf91ddf2534f850) begin
+      @test rand() == 0.559472630416976
+  end
+  ```
 
 #### Dates
 

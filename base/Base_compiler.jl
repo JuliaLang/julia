@@ -249,10 +249,17 @@ using .Iterators: Flatten, Filter, product  # for generators
 using .Iterators: Stateful    # compat (was formerly used in reinterpretarray.jl)
 include("namedtuple.jl")
 
+include("anyall.jl")
+
 include("ordering.jl")
 using .Order
 
 include("coreir.jl")
+include("invalidation.jl")
+
+# Because lowering inserts direct references, it is mandatory for this binding
+# to exist before we start inferring code.
+function string end
 
 # For OS specific stuff
 # We need to strcat things here, before strings are really defined
@@ -274,7 +281,6 @@ baremodule BuildSettings end
 function process_sysimg_args!()
     let i = 2 # skip file name
         while i <= length(Core.ARGS)
-            Core.println(Core.ARGS[i])
             if Core.ARGS[i] == "--buildsettings"
                 include(BuildSettings, ARGS[i+1])
             elseif Core.ARGS[i] == "--buildroot"

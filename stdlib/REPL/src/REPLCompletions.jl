@@ -639,16 +639,24 @@ function is_call_graph_uncached(sv::CC.InferenceState)
     return is_call_graph_uncached(parent::CC.InferenceState)
 end
 
-isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
-
 # aggressive global binding resolution within `repl_frame`
 function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, bailed::Bool,
                                     sv::CC.InferenceState)
+    # Ignore saw_latestworld
+    partition = CC.abstract_eval_binding_partition!(interp, g, sv)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
-        if isdefined_globalref(g)
-            return CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), Union{}, CC.EFFECTS_TOTAL)
+        if CC.is_defined_const_binding(CC.binding_kind(partition))
+            return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
+                CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL), partition)
+        else
+            b = convert(Core.Binding, g)
+            if CC.binding_kind(partition) == CC.BINDING_KIND_GLOBAL && isdefined(b, :value)
+                return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
+                    CC.RTEffects(Const(b.value), Union{}, CC.EFFECTS_TOTAL), partition)
+            end
         end
-        return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
+        return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
+            CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS), partition)
     end
     return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef, bailed::Bool,
                                               sv::CC.InferenceState)
@@ -714,7 +722,7 @@ function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.A
 end
 
 function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
-    @ccall jl_resolve_globals_in_ir(
+    @ccall jl_resolve_definition_effects_in_ir(
         #=jl_array_t *stmts=# src.code::Any,
         #=jl_module_t *m=# mod::Any,
         #=jl_svec_t *sparam_vals=# Core.svec()::Any,
@@ -1077,7 +1085,7 @@ function complete_keyword_argument(partial::String, last_idx::Int, context_modul
     kwargs_flag == 2 && return fail # one of the previous kwargs is invalid
 
     methods = Completion[]
-    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, kwargs_flag == 1)
+    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : MAX_METHOD_COMPLETIONS, kwargs_flag == 1)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
 
@@ -1089,6 +1097,9 @@ function complete_keyword_argument(partial::String, last_idx::Int, context_modul
     last_word = partial[wordrange] # the word to complete
     kwargs = Set{String}()
     for m in methods
+        # if MAX_METHOD_COMPLETIONS is hit a single TextCompletion is return by complete_methods! with an explanation
+        # which can be ignored here
+        m isa TextCompletion && continue
         m::MethodCompletion
         possible_kwargs = Base.kwarg_decl(m.method)
         current_kwarg_candidates = String[]

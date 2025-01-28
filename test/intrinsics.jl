@@ -147,9 +147,81 @@ macro test_intrinsic(intr, args...)
     end
 end
 
+@testset "Float64 intrinsics" begin
+    # unary
+    @test_intrinsic Core.Intrinsics.abs_float Float64(-3.3) Float64(3.3)
+    @test_intrinsic Core.Intrinsics.neg_float Float64(3.3) Float64(-3.3)
+    @test_intrinsic Core.Intrinsics.fpext Float64 Float64(3.3) Float64(3.3)
+
+    # binary
+    @test_intrinsic Core.Intrinsics.add_float Float64(3.3) Float64(2) Float64(5.3)
+    @test_intrinsic Core.Intrinsics.sub_float Float64(3.3) Float64(2) Float64(1.2999999999999998)
+    @test_intrinsic Core.Intrinsics.mul_float Float64(3.3) Float64(2) Float64(6.6)
+    @test_intrinsic Core.Intrinsics.div_float Float64(3.3) Float64(2) Float64(1.65)
+    @test_intrinsic Core.Intrinsics.max_float Float64(1.0) Float64(2.0) Float64(2.0)
+    @test_intrinsic Core.Intrinsics.min_float Float64(1.0) Float64(2.0) Float64(1.0)
+
+    # ternary
+    @test_intrinsic Core.Intrinsics.fma_float Float64(3.3) Float64(4.4) Float64(5.5) Float64(20.02)
+    @test_intrinsic Core.Intrinsics.muladd_float Float64(3.3) Float64(4.4) Float64(5.5) Float64(20.02)
+
+    # boolean
+    @test_intrinsic Core.Intrinsics.eq_float Float64(3.3) Float64(3.3) true
+    @test_intrinsic Core.Intrinsics.eq_float Float64(3.3) Float64(2) false
+    @test_intrinsic Core.Intrinsics.ne_float Float64(3.3) Float64(3.3) false
+    @test_intrinsic Core.Intrinsics.ne_float Float64(3.3) Float64(2) true
+    @test_intrinsic Core.Intrinsics.le_float Float64(3.3) Float64(3.3) true
+    @test_intrinsic Core.Intrinsics.le_float Float64(3.3) Float64(2) false
+
+    # conversions
+    @test_intrinsic Core.Intrinsics.sitofp Float64 3 Float64(3.0)
+    @test_intrinsic Core.Intrinsics.uitofp Float64 UInt(3) Float64(3.0)
+    @test_intrinsic Core.Intrinsics.fptosi Int Float64(3.3) 3
+    @test_intrinsic Core.Intrinsics.fptoui UInt Float64(3.3) UInt(3)
+end
+
+@testset "Float32 intrinsics" begin
+    # unary
+    @test_intrinsic Core.Intrinsics.abs_float Float32(-3.3) Float32(3.3)
+    @test_intrinsic Core.Intrinsics.neg_float Float32(3.3) Float32(-3.3)
+    @test_intrinsic Core.Intrinsics.fpext Float32 Float32(3.3) Float32(3.3)
+    @test_intrinsic Core.Intrinsics.fpext Float64 Float32(3.3) 3.299999952316284
+    @test_intrinsic Core.Intrinsics.fptrunc Float32 Float64(3.3) Float32(3.3)
+
+    # binary
+    @test_intrinsic Core.Intrinsics.add_float Float32(3.3) Float32(2) Float32(5.3)
+    @test_intrinsic Core.Intrinsics.sub_float Float32(3.3) Float32(2) Float32(1.3)
+    @test_intrinsic Core.Intrinsics.mul_float Float32(3.3) Float32(2) Float32(6.6)
+    @test_intrinsic Core.Intrinsics.div_float Float32(3.3) Float32(2) Float32(1.65)
+    @test_intrinsic Core.Intrinsics.max_float Float32(1.0) Float32(2.0) Float32(2.0)
+    @test_intrinsic Core.Intrinsics.min_float Float32(1.0) Float32(2.0) Float32(1.0)
+
+    # ternary
+    @test_intrinsic Core.Intrinsics.fma_float Float32(3.3) Float32(4.4) Float32(5.5) Float32(20.02)
+    @test_intrinsic Core.Intrinsics.muladd_float Float32(3.3) Float32(4.4) Float32(5.5) Float32(20.02)
+
+    # boolean
+    @test_intrinsic Core.Intrinsics.eq_float Float32(3.3) Float32(3.3) true
+    @test_intrinsic Core.Intrinsics.eq_float Float32(3.3) Float32(2) false
+    @test_intrinsic Core.Intrinsics.ne_float Float32(3.3) Float32(3.3) false
+    @test_intrinsic Core.Intrinsics.ne_float Float32(3.3) Float32(2) true
+    @test_intrinsic Core.Intrinsics.le_float Float32(3.3) Float32(3.3) true
+    @test_intrinsic Core.Intrinsics.le_float Float32(3.3) Float32(2) false
+
+    # conversions
+    @test_intrinsic Core.Intrinsics.sitofp Float32 3 Float32(3.0)
+    @test_intrinsic Core.Intrinsics.uitofp Float32 UInt(3) Float32(3.0)
+    @test_intrinsic Core.Intrinsics.fptosi Int Float32(3.3) 3
+    @test_intrinsic Core.Intrinsics.fptoui UInt Float32(3.3) UInt(3)
+end
+
 @testset "Float16 intrinsics" begin
     # unary
+    @test_intrinsic Core.Intrinsics.abs_float Float16(-3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float16(3.3) Float16(-3.3)
+    # See <https://github.com/JuliaLang/julia/issues/57130>
+    #broken @test_intrinsic Core.Intrinsics.fpext Float16 Float16(3.3) Float16(3.3)
+    @test_broken Core.Intrinsics.fpext(Float16, Float16(3.3)) === Float16(3.3)
     @test_intrinsic Core.Intrinsics.fpext Float32 Float16(3.3) 3.3007812f0
     @test_intrinsic Core.Intrinsics.fpext Float64 Float16(3.3) 3.30078125
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float32(3.3) Float16(3.3)
@@ -160,6 +232,8 @@ end
     @test_intrinsic Core.Intrinsics.sub_float Float16(3.3) Float16(2) Float16(1.301)
     @test_intrinsic Core.Intrinsics.mul_float Float16(3.3) Float16(2) Float16(6.6)
     @test_intrinsic Core.Intrinsics.div_float Float16(3.3) Float16(2) Float16(1.65)
+    @test_intrinsic Core.Intrinsics.max_float Float16(1.0) Float16(2.0) Float16(2.0)
+    @test_intrinsic Core.Intrinsics.min_float Float16(1.0) Float16(2.0) Float16(1.0)
 
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
@@ -174,8 +248,8 @@ end
     @test_intrinsic Core.Intrinsics.le_float Float16(3.3) Float16(2) false
 
     # conversions
-    @test_intrinsic Core.Intrinsics.sitofp Float16 3 Float16(3f0)
-    @test_intrinsic Core.Intrinsics.uitofp Float16 UInt(3) Float16(3f0)
+    @test_intrinsic Core.Intrinsics.sitofp Float16 3 Float16(3.0)
+    @test_intrinsic Core.Intrinsics.uitofp Float16 UInt(3) Float16(3.0)
     @test_intrinsic Core.Intrinsics.fptosi Int Float16(3.3) 3
     @test_intrinsic Core.Intrinsics.fptoui UInt Float16(3.3) UInt(3)
 end
