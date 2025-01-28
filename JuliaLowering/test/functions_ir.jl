@@ -1,4 +1,13 @@
 ########################################
+# Function declaration with no methods
+function f
+end
+#---------------------
+1   (method TestMod.f)
+2   TestMod.f
+3   (return %₂)
+
+########################################
 # Functions with placeholder arg
 function f(x, _, y)
     x + y

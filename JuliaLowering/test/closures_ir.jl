@@ -48,6 +48,31 @@ end
 16  (return %₁₅)
 
 ########################################
+# Closure declaration with no methods
+begin
+    local no_method_f
+    function no_method_f
+    end
+end
+#---------------------
+1   --- thunk
+    1   (global TestMod.#no_method_f##0)
+    2   (call core.svec)
+    3   (call core.svec)
+    4   (call core.svec)
+    5   (call core._structtype TestMod :#no_method_f##0 %₂ %₃ %₄ false 0)
+    6   (call core._setsuper! %₅ core.Function)
+    7   (const TestMod.#no_method_f##0)
+    8   (= TestMod.#no_method_f##0 %₅)
+    9   (call core.svec)
+    10  (call core._typebody! %₅ %₉)
+    11  (return core.nothing)
+2   TestMod.#no_method_f##0
+3   (= slot₁/no_method_f (new %₂))
+4   slot₁/no_method_f
+5   (return %₄)
+
+########################################
 # Closure which sets the value of a captured variable
 let
     x = 1

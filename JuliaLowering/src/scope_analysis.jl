@@ -590,6 +590,21 @@ function current_lambda_bindings(ctx::VariableAnalysisContext)
     ctx.lambda_bindings
 end
 
+function init_closure_bindings!(ctx, fname)
+    func_name_id = fname.var_id
+    @assert lookup_binding(ctx, func_name_id).kind === :local
+    get!(ctx.closure_bindings, func_name_id) do
+        name_stack = Vector{String}()
+        for parentname in ctx.method_def_stack
+            if kind(parentname) == K"BindingId"
+                push!(name_stack, lookup_binding(ctx, parentname).name)
+            end
+        end
+        push!(name_stack, lookup_binding(ctx, func_name_id).name)
+        ClosureBindings(name_stack)
+    end
+end
+
 # Update ctx.bindings and ctx.lambda_bindings metadata based on binding usage
 function analyze_variables!(ctx, ex)
     k = kind(ex)
@@ -617,6 +632,9 @@ function analyze_variables!(ctx, ex)
         name = ex[1]
         if kind(name) == K"BindingId" && lookup_binding(ctx, name).kind == :argument
             throw(LoweringError(name, "Cannot add method to a function argument"))
+        end
+        if lookup_binding(ctx, name.var_id).kind === :local
+            init_closure_bindings!(ctx, name)
         end
         update_binding!(ctx, name, add_assigned=1)
         if has_lambda_binding(ctx, name)
@@ -659,7 +677,9 @@ function analyze_variables!(ctx, ex)
         analyze_variables!(ctx, ex[2])
         pop!(ctx.method_def_stack)
     elseif k == K"_opaque_closure"
-        push!(ctx.method_def_stack, ex[1])
+        name = ex[1]
+        init_closure_bindings!(ctx, name)
+        push!(ctx.method_def_stack, name)
         analyze_variables!(ctx, ex[2])
         analyze_variables!(ctx, ex[3])
         analyze_variables!(ctx, ex[4])
@@ -673,16 +693,7 @@ function analyze_variables!(ctx, ex)
             if kind(func_name) == K"BindingId"
                 func_name_id = func_name.var_id
                 if lookup_binding(ctx, func_name_id).kind === :local
-                    cbinds = get!(ctx.closure_bindings, func_name_id) do
-                        name_stack = Vector{String}()
-                        for fname in ctx.method_def_stack
-                            if kind(fname) == K"BindingId"
-                                push!(name_stack, lookup_binding(ctx, fname).name)
-                            end
-                        end
-                        ClosureBindings(name_stack)
-                    end
-                    push!(cbinds.lambdas, lambda_bindings)
+                    push!(ctx.closure_bindings[func_name_id].lambdas, lambda_bindings)
                 end
             end
         end

@@ -2269,7 +2269,10 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         if !is_valid_func_name(name)
             throw(LoweringError(name, "Invalid function name"))
         end
-        return @ast ctx ex [K"method" name=>K"Symbol"]
+        return @ast ctx ex [K"block"
+            [K"function_decl" name]
+            name
+        ]
     end
 
     typevar_names = SyntaxList(ctx)
@@ -2305,6 +2308,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     else
         throw(LoweringError(name, "Bad function definition"))
     end
+
     # Fixup for `new` constructor sigs if necessary
     callex = rewrite_call(callex)
 
