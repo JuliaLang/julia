@@ -232,7 +232,11 @@ function throw_if_boxed_captures(f)
         # has a kwarg method, so the Boxed variables are hidden at least one layer
         # down.
         if fieldtype(T, i) <: Function
-            throw_if_boxed_captures(getfield(f, i))
+            f_inner = getfield(f, i)
+            if f !== f_inner
+                # don't recurse into self!
+                throw_if_boxed_captures(getfield(f, i))
+            end
         end
     end
 end
