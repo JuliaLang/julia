@@ -3378,7 +3378,7 @@ JL_DLLEXPORT int jl_add_entrypoint(jl_tupletype_t *types)
         return 0;
     JL_GC_PROMISE_ROOTED(mi);
     if (jl_generating_output() && jl_options.trim) {
-        arraylist_push(jl_entrypoint_mis, mi);
+        arraylist_push(jl_entrypoint_list, mi);
     }
     return 1;
 }

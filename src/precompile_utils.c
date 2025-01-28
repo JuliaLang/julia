@@ -370,12 +370,9 @@ static void *jl_precompile_trimmed(size_t world)
     jl_value_t *ccallable = NULL;
     JL_GC_PUSH2(&m, &ccallable);
     jl_method_instance_t *mi;
-    while (1) {
-        mi = (jl_method_instance_t*)arraylist_pop(jl_entrypoint_mis);
-        if (mi == NULL)
-            break;
+    for (size_t i = 0; i < jl_entrypoint_list->len ; i++) {
+        mi = (jl_method_instance_t*)jl_entrypoint_list->items[i];
         assert(jl_is_method_instance(mi));
-
         jl_array_ptr_1d_push(m, (jl_value_t*)mi);
         ccallable = (jl_value_t *)mi->def.method->ccallable;
         if (ccallable)

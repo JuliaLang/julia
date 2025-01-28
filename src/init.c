@@ -44,7 +44,7 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
-arraylist_t *jl_entrypoint_mis;
+arraylist_t *jl_entrypoint_list;
 
 JL_DLLEXPORT size_t jl_page_size;
 
@@ -931,8 +931,8 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     }
 
     if (jl_options.trim) {
-        jl_entrypoint_mis = (arraylist_t *)malloc_s(sizeof(arraylist_t));
-        arraylist_new(jl_entrypoint_mis, 0);
+        jl_entrypoint_list = (arraylist_t *)malloc_s(sizeof(arraylist_t));
+        arraylist_new(jl_entrypoint_list, 0);
     }
 
     if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
