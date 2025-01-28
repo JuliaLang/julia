@@ -552,6 +552,7 @@ function _start()
     append!(ARGS, Core.ARGS)
     # clear any postoutput hooks that were saved in the sysimage
     empty!(Base.postoutput_hooks)
+    Base.Experimental.make_io_thread()
     local ret = 0
     try
         repl_was_requested = exec_options(JLOptions())
