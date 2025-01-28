@@ -370,6 +370,23 @@ end
 
 end # Float16
 
+@testset "writeshortest(::AbstractVector, pos, ...)" begin
+    @testset for Vec in (Vector{UInt8}, Memory{UInt8})
+        buf = Vec(undef, 4)
+        @test Ryu.writeshortest(buf, 1, -0.0) == 5
+        @test String(buf) == "-0.0"
+
+        buf = Vec(undef, 100)
+        xx = 4.7223665f21
+        expected = "4.7223665e21"
+        start_pos = 42
+        nwritten = length(expected)
+        end_pos = start_pos + nwritten
+        @test Ryu.writeshortest(buf, start_pos, xx) == end_pos
+        @test String(buf[start_pos:end_pos-1]) == expected
+    end
+end
+
 @testset "Ryu.writefixed" begin
     @testset "Basic" begin
         @test Ryu.writefixed(todouble(false, 1234, 99999), 0) ==
@@ -563,6 +580,23 @@ end # Float16
     @test Ryu.writefixed(-100.0+eps(-100.0), 0, false, false, true, UInt8('.'), false) == "-100."
     @test Ryu.writefixed(100.0-eps(100.0), 1, false, false, true, UInt8('.'), false) == "100.0"
     @test Ryu.writefixed(-100.0+eps(-100.0), 1, false, false, true, UInt8('.'), false) == "-100.0"
+
+    @testset "writefixed(::AbstractVector, pos, ...)" begin
+        @testset for Vec in (Vector{UInt8}, Memory{UInt8})
+            buf = Vec(undef, 6)
+            @test Ryu.writefixed(buf, 1, 0.0, 4) == 7
+            @test String(buf) == "0.0000"
+
+            buf = Vec(undef, 100)
+            xx = 1729.142857142857
+            prec = 8
+            start_pos = 42
+            nwritten = 4 + 1 + prec
+            end_pos = start_pos + nwritten
+            @test Ryu.writefixed(buf, start_pos, xx, prec) == end_pos
+            @test String(buf[start_pos:end_pos-1]) == "1729.14285714"
+        end
+    end
 end # fixed
 
 @testset "Ryu.writeexp" begin
@@ -759,6 +793,23 @@ end
     @test Ryu.writeexp(0.0, 1, false, false, false, UInt8('e'), UInt8('.'), true) == "0e+00"
     @test Ryu.writeexp(1.0, 1, false, false, false, UInt8('e'), UInt8('.'), true) == "1e+00"
     @test Ryu.writeexp(2.0, 1, false, false, false, UInt8('e'), UInt8('.'), true) == "2e+00"
+end
+
+@testset "writeexp(::AbstractVector, pos, ...)" begin
+    @testset for Vec in (Vector{UInt8}, Memory{UInt8})
+        buf = Vec(undef, 10)
+        @test Ryu.writeexp(buf, 1, 0.0, 4) == 11
+        @test String(buf) == "0.0000e+00"
+
+        buf = Vec(undef, 100)
+        xx = 1729.142857142857
+        prec = 8
+        start_pos = 42
+        nwritten = 1 + 1 + prec + 4
+        end_pos = start_pos + nwritten
+        @test Ryu.writeexp(buf, start_pos, xx, prec) == end_pos
+        @test String(buf[start_pos:end_pos-1]) == "1.72914286e+03"
+    end
 end
 
 end # exp
