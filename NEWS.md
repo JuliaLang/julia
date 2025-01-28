@@ -122,6 +122,9 @@ certain compiler plugin workflows ([#56660]).
 * `sort` now supports `NTuple`s ([#54494])
 * `map!(f, A)` now stores the results in `A`, like `map!(f, A, A)`. or `A .= f.(A)` ([#40632]).
 
+* `match(regex, string, idx)` now supports updating `idx::Ref{Int}` to
+  point at the first character after a successful match ([#51429])
+
 Standard library changes
 ------------------------
 
