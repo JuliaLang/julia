@@ -3,6 +3,8 @@ Julia v1.12 Release Notes
 
 New language features
 ---------------------
+* An underscore `_` as a function argument, e.g. `f(_, y)`, is now shorthand
+  for the "curried" anonymous function `x -> f(x, y)` ([#24990]).
 
 - New option `--trim` creates smaller binaries by removing code that was not proven to be reachable from
   the entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]).
