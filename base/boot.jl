@@ -490,10 +490,13 @@ struct EvalInto <: Function
 end
 (this::EvalInto)(@nospecialize(e)) = eval(this.m, e)
 
-mutable struct Box
-    contents::Any
-    Box(@nospecialize(x)) = new(x)
-    Box() = new()
+mutable struct Box{C}
+    contents::C
+    Box{C}(c) where C = new{C}(c)
+    Box{Any}(@nospecialize(c)) = new{Any}(c)
+    Box(@nospecialize(c)) = new{Any}(c)
+    Box{C}() where C = new{C}()
+    Box() = new{Any}()
 end
 
 # constructors for built-in types
