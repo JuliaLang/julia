@@ -134,71 +134,83 @@ begin
 end
 """)
 
-# Default positional arguments
-@test JuliaLowering.include_string(test_mod, """
-begin
-    function f_def_simple(x=1, y=2, z=x)
-        (x,y,z)
+@testset "Default positional arguments" begin
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_def_simple(x=1, y=2, z=x)
+            (x,y,z)
+        end
+
+        (f_def_simple(), f_def_simple(10), f_def_simple(10,20), f_def_simple(10,20,30))
     end
+    """) == ((1,2,1), (10,2,10), (10,20,10), (10,20,30))
 
-    (f_def_simple(), f_def_simple(10), f_def_simple(10,20), f_def_simple(10,20,30))
-end
-""") == ((1,2,1), (10,2,10), (10,20,10), (10,20,30))
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_def_placeholders(::T=1, _::S=1.0) where {T,S}
+            (T,S)
+        end
 
-@test JuliaLowering.include_string(test_mod, """
-begin
-    function f_def_placeholders(::T=1, _::S=1.0) where {T,S}
-        (T,S)
+        (f_def_placeholders(), f_def_placeholders(1.0), f_def_placeholders(1.0, 1))
     end
+    """) == ((Int,Float64), (Float64,Float64), (Float64,Int))
 
-    (f_def_placeholders(), f_def_placeholders(1.0), f_def_placeholders(1.0, 1))
-end
-""") == ((Int,Float64), (Float64,Float64), (Float64,Int))
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_def_typevars(x, y::S=[1], z::U=2) where {T, S<:AbstractVector{T}, U}
+            (x, y, z, T, S, U)
+        end
 
-@test JuliaLowering.include_string(test_mod, """
-begin
-    function f_def_typevars(x, y::S=[1], z::U=2) where {T, S<:AbstractVector{T}, U}
-        (x, y, z, T, S, U)
+        (f_def_typevars(1), f_def_typevars(1,[1.0]), f_def_typevars(1,[1.0],-1.0))
     end
+    """) == ((1, [1], 2, Int, Vector{Int}, Int),
+             (1, [1.0], 2, Float64, Vector{Float64}, Int),
+             (1, [1.0], -1.0, Float64, Vector{Float64}, Float64))
 
-    (f_def_typevars(1), f_def_typevars(1,[1.0]), f_def_typevars(1,[1.0],-1.0))
-end
-""") == ((1, [1], 2, Int, Vector{Int}, Int),
-         (1, [1.0], 2, Float64, Vector{Float64}, Int),
-         (1, [1.0], -1.0, Float64, Vector{Float64}, Float64))
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_def_slurp(x=1, ys...)
+            (x, ys)
+        end
 
-@test JuliaLowering.include_string(test_mod, """
-begin
-    function f_def_slurp(x=1, ys...)
-        (x, ys)
+        (f_def_slurp(), f_def_slurp(2), f_def_slurp(2,3))
     end
+    """) == ((1, ()),
+             (2, ()),
+             (2, (3,)))
 
-    (f_def_slurp(), f_def_slurp(2), f_def_slurp(2,3))
-end
-""") == ((1, ()),
-         (2, ()),
-         (2, (3,)))
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_def_ret_type(x=1.0)::Int
+            x
+        end
 
-@test JuliaLowering.include_string(test_mod, """
-begin
-    function f_def_slurp_splat(ys...=(1,2)...)
-        ys
+        (f_def_ret_type(), f_def_ret_type(10.0))
     end
+    """) === (1,10)
 
-    (f_def_slurp_splat(), f_def_slurp_splat(10,20))
-end
-""") == ((1,2),
-         (10,20))
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_def_slurp_splat(ys...=(1,2)...)
+            ys
+        end
 
-@test JuliaLowering.include_string(test_mod, """
-begin
-    function f_destructure(x, (y,z)::Tuple{Int,Int}, (w,)...=(4,)...)
-        (x,y,z,w)
+        (f_def_slurp_splat(), f_def_slurp_splat(10,20))
     end
+    """) == ((1,2),
+             (10,20))
 
-    f_destructure(1, (2,3))
+    @test JuliaLowering.include_string(test_mod, """
+    begin
+        function f_def_destructure(x, (y,z)::Tuple{Int,Int}, (w,)...=(4,)...)
+            (x,y,z,w)
+        end
+
+        f_def_destructure(1, (2,3))
+    end
+    """) == (1,2,3,4)
+
 end
-""") == (1,2,3,4)
 
 @testset "Slot flags" begin
 

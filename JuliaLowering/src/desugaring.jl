@@ -2139,11 +2139,11 @@ function _split_wheres!(ctx, typevar_names, typevar_stmts, ex)
     end
 end
 
-function method_def_expr(ctx, srcref, callex, method_table,
-                         docs, typevar_names, arg_names, arg_types, ret_var, body)
+function method_def_expr(ctx, srcref, callex_srcref, method_table,
+                         typevar_names, arg_names, arg_types, ret_var, body)
     @ast ctx srcref [K"block"
         # metadata contains svec(types, sparms, location)
-        method_metadata := [K"call"(callex)
+        method_metadata := [K"call"(callex_srcref)
             "svec"              ::K"core"
             [K"call"
                 "svec"          ::K"core"
@@ -2153,7 +2153,7 @@ function method_def_expr(ctx, srcref, callex, method_table,
                 "svec"          ::K"core"
                 typevar_names...
             ]
-            ::K"SourceLocation"(callex)
+            ::K"SourceLocation"(callex_srcref)
         ]
         [K"method"
             method_table
@@ -2209,7 +2209,7 @@ end
 function optional_positional_defs!(ctx, method_stmts, srcref, callex,
                                    method_table, typevar_names, typevar_stmts,
                                    arg_names, arg_types, first_default,
-                                   arg_defaults, ret_var)
+                                   arg_defaults)
     # Replace placeholder arguments with variables - we need to pass them to
     # the inner method for dispatch even when unused in the inner method body
     def_arg_names = map(arg_names) do arg
@@ -2241,9 +2241,9 @@ function optional_positional_defs!(ctx, method_stmts, srcref, callex,
                                                    typevar_names, typevar_stmts)
         # TODO: Ensure we preserve @nospecialize metadata in args
         push!(method_stmts,
-              method_def_expr(ctx, srcref, callex, method_table, nothing,
+              method_def_expr(ctx, srcref, callex, method_table,
                               trimmed_typevar_names, trimmed_arg_names, trimmed_arg_types,
-                              ret_var, body))
+                              nothing, body))
     end
 end
 
@@ -2429,13 +2429,13 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         first_default += 1 # Offset for self argument
         optional_positional_defs!(ctx, method_stmts, ex, callex,
                                   method_table, typevar_names, typevar_stmts,
-                                  arg_names, arg_types, first_default, arg_defaults, ret_var)
+                                  arg_names, arg_types, first_default, arg_defaults)
     end
 
     # The method with all non-default arguments
     push!(method_stmts,
-          method_def_expr(ctx, ex, callex, method_table, docs,
-                          typevar_names, arg_names, arg_types, ret_var, body))
+          method_def_expr(ctx, ex, callex, method_table, typevar_names, arg_names,
+                          arg_types, ret_var, body))
     if !isnothing(docs)
         method_stmts[end] = @ast ctx docs [K"block"
             method_metadata := method_stmts[end]

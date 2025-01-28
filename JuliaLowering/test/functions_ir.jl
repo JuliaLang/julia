@@ -771,6 +771,45 @@ end
 19  (return %₁₈)
 
 ########################################
+# Function argument destructuring combined with splats, types and and defaults
+function f(x=default_x)::T
+end
+#---------------------
+1   (method TestMod.f)
+2   TestMod.f
+3   (call core.Typeof %₂)
+4   (call core.svec %₃)
+5   (call core.svec)
+6   SourceLocation::1:10
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
+    slots: [slot₁/#self#(called)]
+    1   TestMod.default_x
+    2   (call slot₁/#self# %₁)
+    3   (return %₂)
+9   TestMod.f
+10  (call core.Typeof %₉)
+11  (call core.svec %₁₀ core.Any)
+12  (call core.svec)
+13  SourceLocation::1:10
+14  (call core.svec %₁₁ %₁₂ %₁₃)
+15  --- method core.nothing %₁₄
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/tmp(!read)]
+    1   TestMod.T
+    2   (= slot₃/tmp core.nothing)
+    3   slot₃/tmp
+    4   (call core.isa %₃ %₁)
+    5   (gotoifnot %₄ label₇)
+    6   (goto label₁₀)
+    7   slot₃/tmp
+    8   (call top.convert %₁ %₇)
+    9   (= slot₃/tmp (call core.typeassert %₈ %₁))
+    10  slot₃/tmp
+    11  (return %₁₀)
+16  TestMod.f
+17  (return %₁₆)
+
+########################################
 # Duplicate destructured placeholders ok
 function f((_,), (_,))
 end
