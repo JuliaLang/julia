@@ -2309,3 +2309,42 @@ g_noinline_invoke(x) = f_noinline_invoke(x)
 let src = code_typed1(g_noinline_invoke, (Union{Symbol,Nothing},))
     @test !any(@nospecialize(x)->isa(x,GlobalRef), src.code)
 end
+
+@testset "@outline" begin
+    @testset "basic" begin
+        @test @outline(2) == 2
+        @test @outline(2 + 2) == 4
+
+        x = 10
+        @test @outline(x + 1) == 11
+        @test @outline(x + x) == 20
+
+        negate(x) = -x
+        @test @outline(negate(+(1, 2))) == -3
+    end
+
+    @testset "throw exception" begin
+        @test_throws BoundsError((), 1) @outline(throw(BoundsError((), 1)))
+        a = []
+        @test_throws BoundsError(a, 1) @outline(throw(BoundsError(a, 1)))
+
+        @test_throws AssertionError("false") @outline @assert false
+        @test_throws AssertionError("violated") @outline @assert false "violated"
+
+        x = 10
+        @test_throws AssertionError("x == 0") @outline @assert x == 0
+        @test_throws AssertionError("x: 10") @outline @assert x == 0 "x: $x"
+    end
+
+    @testset "in a function" begin
+        function get_first(tup)
+            if isempty(tup)
+                @outline(throw(BoundsError(tup, 1)))
+            end
+            return first(tup)
+        end
+        @test get_first((1,)) == 1
+        @test get_first((1,2)) == 1
+        @test_throws BoundsError((), 1) get_first(())
+    end
+end
