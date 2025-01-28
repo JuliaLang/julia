@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # This test builds a full system image, so it can take a little while.
 # We make it a separate test target here, so that it can run in parallel
 # with the rest of the tests.

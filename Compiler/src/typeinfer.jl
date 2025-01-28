@@ -106,6 +106,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
     #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
     if isdefined(result, :ci)
         ci = result.ci
+        mi = result.linfo
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
         if last(result.valid_worlds) >= get_world_counter()
@@ -132,7 +133,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
                 end
                 di = inferred_result.debuginfo
                 uncompressed = inferred_result
-                inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result)
+                inferred_result = maybe_compress_codeinfo(interp, mi, inferred_result)
                 result.is_src_volatile = false
             elseif ci.owner === nothing
                 # The global cache can only handle objects that codegen understands
@@ -140,7 +141,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
             end
         end
         if !@isdefined di
-            di = DebugInfo(result.linfo)
+            di = DebugInfo(mi)
         end
         min_world, max_world = first(result.valid_worlds), last(result.valid_worlds)
         ipo_effects = encode_effects(result.ipo_effects)
@@ -149,6 +150,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
             UInt32, Any, Any, Any),
             ci, inferred_result, rettype, exctype, rettype_const, const_flags, min_world, max_world,
             ipo_effects, result.analysis_results, di, edges)
+        if is_cached(caller) # CACHE_MODE_GLOBAL
+            cache_result!(interp, mi, ci)
+        end
         engine_reject(interp, ci)
         if !discard_src && isdefined(interp, :codegen) && uncompressed isa CodeInfo
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
@@ -157,7 +161,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
                 # This is necessary to get decent bootstrapping performance
                 # when compiling the compiler to inject everything eagerly
                 # where codegen can start finding and using it right away
-                mi = result.linfo
                 if mi.def isa Method && isa_compileable_sig(mi)
                     ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, uncompressed)
                 end
@@ -165,6 +168,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         end
     end
     return nothing
+end
+
+function cache_result!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstance)
+    code_cache(interp)[mi] = ci
 end
 
 function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstance, src::CodeInfo)
@@ -200,11 +207,13 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
 end
 
 function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
-    finishinfer!(frame, frame.interp)
+    opt_cache = IdDict{MethodInstance,CodeInstance}()
+    finishinfer!(frame, frame.interp, opt_cache)
     opt = frame.result.src
     if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
         optimize(frame.interp, opt, frame.result)
     end
+    empty!(opt_cache)
     finish!(frame.interp, frame)
     if frame.cycleid != 0
         frames = frame.callstack::Vector{AbsIntState}
@@ -227,10 +236,11 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
         cycle_valid_worlds = intersect(cycle_valid_worlds, caller.world.valid_worlds)
         cycle_valid_effects = merge_effects(cycle_valid_effects, caller.ipo_effects)
     end
+    opt_cache = IdDict{MethodInstance,CodeInstance}()
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         adjust_cycle_frame!(caller, cycle_valid_worlds, cycle_valid_effects)
-        finishinfer!(caller, caller.interp)
+        finishinfer!(caller, caller.interp, opt_cache)
     end
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
@@ -239,6 +249,7 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
             optimize(caller.interp, opt, caller.result)
         end
     end
+    empty!(opt_cache)
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         finish!(caller.interp, caller)
@@ -283,22 +294,6 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     else
         return nothing
     end
-end
-
-function cache_result!(interp::AbstractInterpreter, result::InferenceResult, ci::CodeInstance)
-    @assert isdefined(ci, :inferred)
-    # check if the existing linfo metadata is also sufficient to describe the current inference result
-    # to decide if it is worth caching this right now
-    mi = result.linfo
-    cache = WorldView(code_cache(interp), result.valid_worlds)
-    if haskey(cache, mi)
-        ci = cache[mi]
-        # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
-        @assert isdefined(ci, :inferred)
-        return false
-    end
-    code_cache(interp)[mi] = ci
-    return true
 end
 
 function cycle_fix_limited(@nospecialize(typ), sv::InferenceState)
@@ -428,7 +423,8 @@ const empty_edges = Core.svec()
 
 # inference completed on `me`
 # update the MethodInstance
-function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
+function finishinfer!(me::InferenceState, interp::AbstractInterpreter,
+                      opt_cache::IdDict{MethodInstance, CodeInstance})
     # prepare to run optimization passes on fulltree
     @assert isempty(me.ip)
     # inspect whether our inference had a limited result accuracy,
@@ -481,7 +477,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
                 # disable optimization if we've already obtained very accurate result
                 !result_is_constabi(interp, result)
         if doopt
-            result.src = OptimizationState(me, interp)
+            result.src = OptimizationState(me, interp, opt_cache)
         else
             result.src = me.src # for reflection etc.
         end
@@ -502,9 +498,11 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
             ci, rettype, exctype, rettype_const, const_flags, min_world, max_world,
             encode_effects(result.ipo_effects), result.analysis_results, di, edges)
         if is_cached(me) # CACHE_MODE_GLOBAL
-            cached_result = cache_result!(me.interp, result, ci)
-            if !cached_result
+            already_cached = is_already_cached(me.interp, result, ci)
+            if already_cached
                 me.cache_mode = CACHE_MODE_VOLATILE
+            else
+                opt_cache[result.linfo] = ci
             end
         end
     end
@@ -549,6 +547,19 @@ end
         const_flags = 0x0
     end
     return ResultForCache(rettype, exctype, rettype_const, const_flags)
+end
+
+function is_already_cached(interp::AbstractInterpreter, result::InferenceResult, ci::CodeInstance)
+    # check if the existing linfo metadata is also sufficient to describe the current inference result
+    # to decide if it is worth caching this right now
+    mi = result.linfo
+    cache = WorldView(code_cache(interp), result.valid_worlds)
+    if haskey(cache, mi)
+        # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
+        @assert isdefined(cache[mi], :inferred)
+        return true
+    end
+    return false
 end
 
 # record the backedges
