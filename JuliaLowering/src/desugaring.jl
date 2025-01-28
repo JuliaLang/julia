@@ -2453,14 +2453,16 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             [K"function_decl"(bare_func_name) bare_func_name]
         end
         [K"scope_block"(scope_type=:hard)
-            [K"method_defs"
-                isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
-                [K"block"
-                    typevar_stmts...
-                    if !isnothing(method_table_val)
-                        [K"=" method_table method_table_val]
-                    end
-                    method_stmts...
+            [K"block"
+                typevar_stmts...
+                [K"method_defs"
+                    isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
+                    [K"block"
+                        if !isnothing(method_table_val)
+                            [K"=" method_table method_table_val]
+                        end
+                        method_stmts...
+                    ]
                 ]
             ]
         ]
