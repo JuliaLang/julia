@@ -28,6 +28,8 @@ New language features
 
 Language changes
 ----------------
+* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
+is considered a bug fix ([#47102])
 
  - Julia now defaults to 1 "interactive" thread, in addition to the 1 "default" worker thread. i.e. `-t1,1`
   This means in default configuration the main task and repl (when in interactive mode), which both run on
