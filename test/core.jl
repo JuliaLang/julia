@@ -8398,3 +8398,13 @@ f_call_me() = invoke(f_invoke_me, f_invoke_me_ci)
 f_invalidate_me() = 2
 @test_throws ErrorException invoke(f_invoke_me, f_invoke_me_ci)
 @test_throws ErrorException f_call_me()
+
+function genenerate_closure(argtypes::Vector{Any})
+    local argtypesi
+    @inline function closure()
+        argtypesi = @noinline copy(argtypes)
+        return length(argtypesi)
+    end
+    return closure
+end
+@test genenerate_closure(Any[]) isa Core.Closure

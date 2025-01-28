@@ -561,7 +561,7 @@ function should_send_whole_type(s, t::DataType)
         name = tn.mt.name
         mod = tn.module
         isanonfunction = mod === Main && # only Main
-            t.super === Function && # only Functions
+            t.super === Core.Closure && # only Functions
             unsafe_load(unsafe_convert(Ptr{UInt8}, tn.name)) == UInt8('#') && # hidden type
             (!isdefined(mod, name) || t != typeof(getglobal(mod, name))) # XXX: 95% accurate test for this being an inner function
             # TODO: more accurate test? (tn.name !== "#" name)
