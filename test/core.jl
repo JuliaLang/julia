@@ -8233,6 +8233,7 @@ end
 let M = @__MODULE__
     Core.eval(M, :(global a_typed_global))
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
+    @Core.latestworld
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
     @test Core.eval(M, :(global a_typed_global::$(Union{Tuple{Integer},Tuple{Nothing}}))) === nothing

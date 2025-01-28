@@ -1969,7 +1969,7 @@ precompile_test_harness("Issue #50538") do load_path
         """
         module I50538
         const newglobal = try
-            Base.newglobal = false
+            eval(Expr(:global, GlobalRef(Base, :newglobal)))
         catch ex
             ex isa ErrorException || rethrow()
             ex

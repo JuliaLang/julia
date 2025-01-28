@@ -279,38 +279,42 @@ extern void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
 
 static jl_module_t *jl_binding_dbgmodule(jl_binding_t *b, jl_module_t *m, jl_sym_t *var) JL_GLOBALLY_ROOTED;
 
-// get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc)
+// Checks that the binding in general is currently writable, but does not perform any checks on the
+// value to be written into the binding.
+JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module_t *m, jl_sym_t *s)
 {
-    jl_binding_t *b = jl_get_module_binding(m, var, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
 retry:
     if (decode_restriction_kind(pku) != BINDING_KIND_GLOBAL && !jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
         if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
             if (decode_restriction_kind(pku) != BINDING_KIND_DECLARED) {
-                check_safe_newbinding(m, var);
-                if (!alloc)
-                    jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
-                              "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
-                              "Hint: Declare it using `global %s` inside `%s` before attempting assignment.",
-                              jl_symbol_name(m->name), jl_symbol_name(var),
-                              jl_symbol_name(var), jl_symbol_name(m->name));
+                jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
+                            "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
+                            "Hint: Declare it using `global %s` inside `%s` before attempting assignment.",
+                            jl_symbol_name(m->name), jl_symbol_name(s),
+                            jl_symbol_name(s), jl_symbol_name(m->name));
             }
             jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)jl_any_type, BINDING_KIND_GLOBAL);
             if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku))
                 goto retry;
             jl_gc_wb_knownold(bpart, jl_any_type);
         } else {
-            jl_module_t *from = jl_binding_dbgmodule(b, m, var);
+            jl_module_t *from = jl_binding_dbgmodule(b, m, s);
             if (from == m)
                 jl_errorf("cannot assign a value to imported variable %s.%s",
-                          jl_symbol_name(from->name), jl_symbol_name(var));
+                          jl_symbol_name(from->name), jl_symbol_name(s));
             else
                 jl_errorf("cannot assign a value to imported variable %s.%s from module %s",
-                          jl_symbol_name(from->name), jl_symbol_name(var), jl_symbol_name(m->name));
+                          jl_symbol_name(from->name), jl_symbol_name(s), jl_symbol_name(m->name));
         }
     }
+}
+
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var)
+{
+    jl_binding_t *b = jl_get_module_binding(m, var, 1);
+    jl_check_binding_currently_writable(b, m, var);
     return b;
 }
 
@@ -1066,7 +1070,7 @@ JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
-    jl_binding_t *bp = jl_get_binding_wr(m, var, 0);
+    jl_binding_t *bp = jl_get_binding_wr(m, var);
     jl_checked_assignment(bp, m, var, val);
 }
 
@@ -1186,7 +1190,9 @@ void jl_binding_deprecation_warning(jl_module_t *m, jl_sym_t *s, jl_binding_t *b
     }
 }
 
-jl_value_t *jl_check_binding_wr(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED, int reassign)
+// For a generally writable binding (checked using jl_check_binding_currently_writable in this world age), check whether
+// we can actually write the value `rhs` to it.
+jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED)
 {
     JL_GC_PUSH1(&rhs); // callee-rooted
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
@@ -1219,7 +1225,7 @@ jl_value_t *jl_check_binding_wr(jl_binding_t *b JL_PROPAGATES_ROOT, jl_module_t 
 
 JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
-    if (jl_check_binding_wr(b, mod, var, rhs, 1) != NULL) {
+    if (jl_check_binding_assign_value(b, mod, var, rhs) != NULL) {
         jl_atomic_store_release(&b->value, rhs);
         jl_gc_wb(b, rhs);
     }
@@ -1227,7 +1233,7 @@ JL_DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_module_t *mod, jl_sy
 
 JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs)
 {
-    jl_check_binding_wr(b, mod, var, rhs, 0);
+    jl_check_binding_assign_value(b, mod, var, rhs);
     jl_value_t *old = jl_atomic_exchange(&b->value, rhs);
     jl_gc_wb(b, rhs);
     if (__unlikely(old == NULL))
@@ -1237,7 +1243,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_swap(jl_binding_t *b, jl_module_t *mod, jl_s
 
 JL_DLLEXPORT jl_value_t *jl_checked_replace(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *expected, jl_value_t *rhs)
 {
-    jl_value_t *ty = jl_check_binding_wr(b, mod, var, rhs, 0);
+    jl_value_t *ty = jl_check_binding_assign_value(b, mod, var, rhs);
     return replace_value(ty, &b->value, (jl_value_t*)b, expected, rhs, 1, mod, var);
 }
 
@@ -1256,7 +1262,7 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl
 
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs )
 {
-    jl_check_binding_wr(b, mod, var, rhs, 0);
+    jl_check_binding_assign_value(b, mod, var, rhs);
     jl_value_t *old = NULL;
     if (jl_atomic_cmpswap(&b->value, &old, rhs))
         jl_gc_wb(b, rhs);

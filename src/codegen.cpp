@@ -930,12 +930,12 @@ static const auto jlgetbindingorerror_func = new JuliaFunction<>{
     },
     nullptr,
 };
-static const auto jlgetbindingwrorerror_func = new JuliaFunction<>{
-    XSTR(jl_get_binding_wr),
+static const auto jlcheckbpwritable_func = new JuliaFunction<>{
+    XSTR(jl_check_binding_currently_writable),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
-        return FunctionType::get(T_pjlvalue,
-                {T_pjlvalue, T_pjlvalue, getInt32Ty(C)}, false);
+        return FunctionType::get(getVoidTy(C),
+                {T_pjlvalue, T_pjlvalue, T_pjlvalue}, false);
     },
     nullptr,
 };
@@ -2098,8 +2098,6 @@ static Type *julia_type_to_llvm(jl_codectx_t &ctx, jl_value_t *jt, bool *isboxed
 static jl_returninfo_t get_specsig_function(jl_codectx_t &ctx, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure, bool gcstack_arg,
         ArrayRef<const char*> ArgNames=None, unsigned nreq=0);
 static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval = -1);
-static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
-                                     jl_binding_t **pbnd, bool assign, bool alloc);
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa);
 static jl_cgval_t emit_sparam(jl_codectx_t &ctx, size_t i);
 static Value *emit_condition(jl_codectx_t &ctx, const jl_cgval_t &condV, const Twine &msg);
@@ -3498,19 +3496,17 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                                 bool issetglobal, bool isreplaceglobal, bool isswapglobal, bool ismodifyglobal, bool issetglobalonce,
                                 const jl_cgval_t *modifyop, bool alloc)
 {
-    jl_binding_t *bnd = NULL;
-    Value *bp = global_binding_pointer(ctx, mod, sym, &bnd, true, alloc);
+    jl_binding_t *bnd = jl_get_module_binding(mod, sym, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-    if (bp == NULL)
-        return jl_cgval_t();
+    Value *bp = julia_binding_gv(ctx, bnd);
     if (bpart) {
         jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-        if (!jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
+        if (decode_restriction_kind(pku) == BINDING_KIND_GLOBAL) {
             jl_value_t *ty = decode_restriction_value(pku);
             if (ty != nullptr) {
                 const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
                 if (!ismodifyglobal) {
-                    // TODO: use typeassert in jl_check_binding_wr too
+                    // TODO: use typeassert in jl_check_binding_assign_value too
                     emit_typecheck(ctx, rval, ty, "typeassert");
                     rval = update_julia_type(ctx, rval, ty);
                     if (rval.typ == jl_bottom_type)
@@ -3545,6 +3541,8 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     }
     Value *m = literal_pointer_val(ctx, (jl_value_t*)mod);
     Value *s = literal_pointer_val(ctx, (jl_value_t*)sym);
+    ctx.builder.CreateCall(prepare_call(jlcheckbpwritable_func),
+        { bp, m, s });
     if (issetglobal) {
         ctx.builder.CreateCall(prepare_call(jlcheckassign_func),
                 { bp, m, s, mark_callee_rooted(ctx, boxed(ctx, rval)) });
@@ -5989,85 +5987,6 @@ static void emit_hasnofield_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_datatyp
     ctx.builder.CreateUnreachable();
     ifok->insertInto(ctx.f);
     ctx.builder.SetInsertPoint(ifok);
-}
-
-// returns a jl_ppvalue_t location for the global variable m.s
-// if the reference currently bound or assign == true,
-//   pbnd will also be assigned with the binding address
-static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t *s,
-                                     jl_binding_t **pbnd, bool assign, bool alloc)
-{
-    jl_binding_t *b = jl_get_module_binding(m, s, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition_all(b, ctx.min_world, ctx.max_world);
-    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-    if (assign) {
-        if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
-            // not yet declared
-            b = NULL;
-    }
-    else {
-        if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
-            // try to look this up now
-            b = jl_get_binding(m, s);
-            bpart = jl_get_binding_partition_all(b, ctx.min_world, ctx.max_world);
-        }
-        pku = jl_walk_binding_inplace_all(&b, &bpart, ctx.min_world, ctx.max_world);
-    }
-    if (!b || !bpart) {
-        // var not found. switch to delayed lookup.
-        Constant *initnul = Constant::getNullValue(ctx.types().T_pjlvalue);
-        GlobalVariable *bindinggv = new GlobalVariable(*ctx.f->getParent(), ctx.types().T_pjlvalue,
-                false, GlobalVariable::PrivateLinkage, initnul, "jl_binding_ptr"); // LLVM has bugs with nameless globals
-        LoadInst *cachedval = ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, bindinggv, Align(sizeof(void*)));
-        setName(ctx.emission_context, cachedval, jl_symbol_name(m->name) + StringRef(".") + jl_symbol_name(s) + ".cached");
-        cachedval->setOrdering(AtomicOrdering::Unordered);
-        BasicBlock *have_val = BasicBlock::Create(ctx.builder.getContext(), "found");
-        BasicBlock *not_found = BasicBlock::Create(ctx.builder.getContext(), "notfound");
-        BasicBlock *currentbb = ctx.builder.GetInsertBlock();
-        auto iscached = ctx.builder.CreateICmpNE(cachedval, initnul);
-        setName(ctx.emission_context, iscached, "iscached");
-        ctx.builder.CreateCondBr(iscached, have_val, not_found);
-        not_found->insertInto(ctx.f);
-        ctx.builder.SetInsertPoint(not_found);
-        Value *bval = nullptr;
-        if (assign) {
-            bval = ctx.builder.CreateCall(prepare_call(jlgetbindingwrorerror_func),
-                    { literal_pointer_val(ctx, (jl_value_t*)m),
-                    literal_pointer_val(ctx, (jl_value_t*)s),
-                    ConstantInt::get(getInt32Ty(ctx.builder.getContext()), alloc)});
-        } else {
-            bval = ctx.builder.CreateCall(prepare_call(jlgetbindingorerror_func),
-                    { literal_pointer_val(ctx, (jl_value_t*)m),
-                    literal_pointer_val(ctx, (jl_value_t*)s)});
-        }
-        setName(ctx.emission_context, bval, jl_symbol_name(m->name) + StringRef(".") + jl_symbol_name(s) + ".found");
-        ctx.builder.CreateAlignedStore(bval, bindinggv, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
-        ctx.builder.CreateBr(have_val);
-        have_val->insertInto(ctx.f);
-        ctx.builder.SetInsertPoint(have_val);
-        PHINode *p = ctx.builder.CreatePHI(ctx.types().T_pjlvalue, 2);
-        p->addIncoming(cachedval, currentbb);
-        p->addIncoming(bval, not_found);
-        setName(ctx.emission_context, p, jl_symbol_name(m->name) + StringRef(".") + jl_symbol_name(s));
-        return p;
-    }
-    if (assign) {
-        if (decode_restriction_kind(pku) != BINDING_KIND_GLOBAL && !jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
-            // this will fail at runtime, so defer to the runtime to create the error
-            ctx.builder.CreateCall(prepare_call(jlgetbindingwrorerror_func),
-                    { literal_pointer_val(ctx, (jl_value_t*)m),
-                      literal_pointer_val(ctx, (jl_value_t*)s),
-                      ConstantInt::get(getInt32Ty(ctx.builder.getContext()), alloc) });
-            CreateTrap(ctx.builder);
-            return NULL;
-        }
-    }
-    else {
-        if (b->deprecated)
-            cg_bdw(ctx, s, b);
-    }
-    *pbnd = b;
-    return julia_binding_gv(ctx, b);
 }
 
 static jl_cgval_t emit_checked_var(jl_codectx_t &ctx, Value *bp, jl_sym_t *name, jl_value_t *scope, bool isvol, MDNode *tbaa)
@@ -10184,7 +10103,7 @@ static void init_jit_functions(void)
     add_named_global(jltypeerror_func, &jl_type_error);
     add_named_global(jlcheckassign_func, &jl_checked_assignment);
     add_named_global(jlgetbindingorerror_func, &jl_get_binding_or_error);
-    add_named_global(jlgetbindingwrorerror_func, &jl_get_binding_wr);
+    add_named_global(jlcheckbpwritable_func, &jl_check_binding_currently_writable);
     add_named_global(jlboundp_func, &jl_boundp);
     for (auto it : builtin_func_map())
         add_named_global(it.second, it.first);
