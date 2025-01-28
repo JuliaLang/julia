@@ -444,6 +444,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     // This also helps limit the impact other libraries can cause on our file handle.
     if ((err = uv_dup(fd, &fd)))
         jl_errorf("error initializing %s in uv_dup: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
+    assert(fd != -1); // This avoids a bug in clang's static analyzer, if an error did not occur, fd != -1
     switch(uv_guess_handle(fd)) {
     case UV_TTY:
         handle = malloc_s(sizeof(uv_tty_t));

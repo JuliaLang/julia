@@ -182,15 +182,17 @@ static intptr_t get_anon_hdl(void) JL_NOTSAFEPOINT
     pid_t pid = getpid();
     // `shm_open` can't be mapped exec on mac
 #  ifndef _OS_DARWIN_
+    int shm_open_errno;
     do {
         snprintf(shm_name, sizeof(shm_name),
                  "julia-codegen-%d-%d", (int)pid, rand());
         fd = shm_open(shm_name, O_RDWR | O_CREAT | O_EXCL, S_IRWXU);
+        shm_open_errno = errno; // check_fd_or_close trashes errno, so save beforehand
         if (check_fd_or_close(fd)) {
             shm_unlink(shm_name);
             return fd;
         }
-    } while (errno == EEXIST);
+    } while (shm_open_errno == EEXIST);
 #  endif
     FILE *tmpf = tmpfile();
     if (tmpf) {
