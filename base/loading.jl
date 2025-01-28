@@ -2850,6 +2850,12 @@ function include_string(mapexpr::Function, mod::Module, code::AbstractString,
             # Wrap things to be eval'd in a :toplevel expr to carry line
             # information as part of the expr.
             line_and_ex.args[2] = ex
+            show_eval = JLOptions().show_eval
+            if show_eval == 2 # show everything
+                println("eval: ", line_and_ex)
+            elseif show_eval == 1 # show top location only
+                println("eval: ", line_and_ex.args[1])
+            end
             result = Core.eval(mod, line_and_ex)
         end
         return result
