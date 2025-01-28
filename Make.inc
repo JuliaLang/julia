@@ -849,6 +849,9 @@ MMTK_BUILD ?= release
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX
 JCFLAGS += -DMMTK_PLAN_IMMIX
+else ifeq (${MMTK_PLAN},StickyImmix)
+JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX
+JCFLAGS += -DMMTK_PLAN_STICKYIMMIX
 else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN)")
 endif
