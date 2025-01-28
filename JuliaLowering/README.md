@@ -298,6 +298,100 @@ passes. See `kinds.jl` for a list of these internal forms.
 This pass is implemented in `desugaring.jl`. It's quite large because Julia has
 many special syntax features.
 
+### Desugaring of function definitions
+
+Desugaring of function definitions is particularly complex because of the cross
+product of features which need to work together consistently:
+
+* Positional arguments (with and without defaults, with and without types)
+* Keyword arguments (with and without defaults, with and without types)
+* Type parameters with `where` syntax
+* Argument slurping syntax with `...`
+* Fancy arguments (argument destructuring)
+
+The combination of positional arguments with defaults and keyword arguments is
+particularly complex. Here's an example.  Suppose we're given the function
+definition
+
+```julia
+function f(a::A=a_default, b::B=b_default; x::X=x_default,y::Y=y_default)
+    body
+end
+```
+
+This generates
+* One method of `f` for each number of positional arguments which can be
+  called when `f` is called without keyword args
+* One overload of `Core.kwcall(kws, ::typeof(f), ...)` for each number of
+  positional arguments (when called with a nonzero number of keyword args; the
+  tuple `kws` being constructed by the caller)
+* One internal method for the body of the function (we can call it `f_kw`
+  though it will be named something like `#f#18`)
+
+First, partially expanding the kw definitions this roughly looks like
+
+```julia
+function f_kw(x::X, y::X, f_self::typeof(f), a::A, b::B)
+    body
+end
+
+function f(a::A=a_default, b::B=b_default)
+    f_kw(x_default, y_default, var"#self#", a, b)
+end
+
+function Core.kwcall(kws::NamedTuple, self::typeof(f), a::A=a_default, b::B=b_default)
+    if Core.isdefined(kws, :x)
+        x_tmp = Core.getfield(kws, :x)
+        if x_tmp isa X
+            nothing
+        else
+            Core.throw($(Expr(:new, Core.TypeError, Symbol("keyword argument"), :x, X, x_tmp)))
+        end
+        x = x_tmp
+    else
+        x = 1
+    end
+    if Core.isdefined(kws, :y)
+        y_tmp = Core.getfield(kws, :y)
+        if y_tmp isa Y
+            nothing
+        else
+            Core.throw($(Expr(:new, Core.TypeError, Symbol("keyword argument"), :y, Y, y_tmp)))
+        end
+        y = y_tmp
+    else
+        y = 2
+    end
+    f_kw(x, y, self, a, b)
+end
+```
+
+We can then pass this to function expansion for default arguments which expands
+each of the above into three more methods. For example, for the first
+definition we conceptually expand `f(a::A=a_default, b::B=b_default)` into the
+methods
+
+```julia
+# The body
+function f(a::A, b::B)
+    f_kw(x_default, y_default, var"#self#", a, b)
+end
+
+# And two methods for the different numbers of default args
+function f(a::A)
+    var"#self#"(a, b_default)
+end
+
+function f()
+    var"#self#"(a_default, b_default)
+end
+```
+
+In total, this expands a single "function definition" into seven methods.
+
+Note that the above is only a sketch! There's more fiddly details when `where`
+syntax comes in
+
 ## Pass 3: Scope analysis / binding resolution
 
 This pass replaces variables with bindings of kind `K"BindingId"`,
@@ -707,10 +801,13 @@ odd mixture of imperative and declarative lowered code.
 
 ## Bugs in Julia's lowering
 
-List of bugs which should be fixed upstream in flisp implementation
+Subset of bugs which exist in upstream in flisp implementation, but which are fixed here
 * `f()[begin]` has the side effect `f()` twice.
 * `a[(begin=1; a=2)]` gives a weird error
 * `function A.ccall() ; end` allows `ccall` as a name but it's not allowed without the `A.`
+* `a .< b .< c` expands to `(a .< b) .& (b .< c)` where the scope of the `&` is
+  the expansion module but should be `top.&` to avoid scope-dependence
+  (especially in the presence of macros)
 
 ## Notes on Racket's hygiene
 
