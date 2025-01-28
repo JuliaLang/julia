@@ -29,6 +29,13 @@ New language features
 Language changes
 ----------------
 
+ - Julia now defaults to 1 "interactive" thread, in addition to the 1 "default" worker thread. i.e. `-t1,1`
+  This means in default configuration the main task and repl (when in interactive mode), which both run on
+  thread 1, now run within the `interactive` threadpool. Also the libuv IO loop runs on thread 1,
+  helping efficient utilization of the "default" worker threadpool, which is what `Threads.@threads` and a bare
+  `Threads.@spawn` uses. Use `0` to disable the interactive thread i.e. `-t1,0` or `JULIA_NUM_THREADS=1,0`, or
+  `-tauto,0` etc. The zero is explicitly required to disable it, `-t2` will set the equivalent of `-t2,1` ([#57087])
+
  - When methods are replaced with exactly equivalent ones, the old method is no
    longer deleted implicitly simultaneously, although the new method does take
    priority and become more specific than the old method. Thus if the new

@@ -941,7 +941,7 @@ While the streaming I/O API is synchronous, the underlying implementation is ful
 
 Consider the printed output from the following:
 
-```jldoctest
+```
 julia> @sync for i in 1:3
            Threads.@spawn write(stdout, string(i), " Foo ", " Bar ")
        end
@@ -954,7 +954,7 @@ yields to other tasks while waiting for that part of the I/O to complete.
 `print` and `println` "lock" the stream during a call. Consequently changing `write` to `println`
 in the above example results in:
 
-```jldoctest
+```
 julia> @sync for i in 1:3
            Threads.@spawn println(stdout, string(i), " Foo ", " Bar ")
        end
@@ -965,7 +965,7 @@ julia> @sync for i in 1:3
 
 You can lock your writes with a `ReentrantLock` like this:
 
-```jldoctest
+```
 julia> l = ReentrantLock();
 
 julia> @sync for i in 1:3
