@@ -6282,9 +6282,13 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             dest = emit_static_alloca(ctx, nbytes, Align(align));
             setName(ctx.emission_context, dest, "unionalloca");
         }
-        if (dest) {
-            AllocaInst *phi = cast<AllocaInst>(dest->clone());
-            phi->insertAfter(dest);
+        if (dest || nroots > 0) {
+            Value *unboxed_phi = Constant::getNullValue(ctx.types().T_prjlvalue);
+            if (dest) {
+                AllocaInst *phi = cast<AllocaInst>(dest->clone());
+                phi->insertAfter(dest);
+                unboxed_phi = cast<Value>(phi);
+            }
             PHINode *Tindex_phi = PHINode::Create(getInt8Ty(ctx.builder.getContext()), jl_array_nrows(edges), "tindex_phi");
             Tindex_phi->insertInto(BB, InsertPt);
             PHINode *ptr_phi = PHINode::Create(ctx.types().T_prjlvalue, jl_array_nrows(edges), "ptr_phi");
@@ -6292,11 +6296,13 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             Value *isboxed = ctx.builder.CreateICmpNE(
                     ctx.builder.CreateAnd(Tindex_phi, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
                     ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
-            ctx.builder.CreateMemCpy(phi, Align(min_align), dest, dest->getAlign(), nbytes, false);
-            ctx.builder.CreateLifetimeEnd(dest);
+            if (dest) {
+                ctx.builder.CreateMemCpy(unboxed_phi, Align(min_align), dest, dest->getAlign(), nbytes, false);
+                ctx.builder.CreateLifetimeEnd(dest);
+            }
             Value *ptr = ctx.builder.CreateSelect(isboxed,
-                decay_derived(ctx, ptr_phi),
-                decay_derived(ctx, phi));
+                    decay_derived(ctx, ptr_phi),
+                    decay_derived(ctx, unboxed_phi));
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, best_tbaa(ctx.tbaa(), phiType),
                 roots.empty() ? ArrayRef<Value*>() : ArrayRef((Value *const *)&roots.front(), roots.size()));
             val.Vboxed = ptr_phi;
@@ -9603,7 +9609,7 @@ static jl_llvm_functions_t
                 if (retvalinfo.TIndex) {
                     tindex = retvalinfo.TIndex;
                     data = Constant::getNullValue(ctx.types().T_prjlvalue);
-                    if (retvalinfo.V == NULL) {
+                    if (retvalinfo.V == NULL && retvalinfo.inline_roots.empty()) {
                         // treat this as a simple Ghosts
                         sret = NULL;
                     }
@@ -9867,7 +9873,9 @@ static jl_llvm_functions_t
                 val = mark_julia_const(ctx, val.constant); // be over-conservative at making sure `.typ` is set concretely, not tindex
             if (!jl_is_uniontype(phiType) || !TindexN) {
                 if (VN) {
-                    assert(roots.empty() && !dest);
+                    // TODO: This assertion is broken... why?
+                    assert(roots.empty());
+                    assert(!dest);
                     Value *V;
                     if (val.typ == (jl_value_t*)jl_bottom_type) {
                         V = undef_value_for_type(VN->getType());
@@ -9927,6 +9935,9 @@ static jl_llvm_functions_t
                 //auto tracked = split_value_size((jl_datatype_t*)phiType).second;
                 //assert(roots.size() == tracked);
 
+                //fprintf(stderr, "ϕ type (w/ %zu roots): ", roots.size());
+                //jl_(phiType);
+
                 // TODO: should this be computing a certain number of incoming roots...?
                 SmallVector<Value*,0> incomingroots(0);
                 if (roots.size())
@@ -9946,7 +9957,7 @@ static jl_llvm_functions_t
                     else {
                         if (VN)
                             V = Constant::getNullValue(ctx.types().T_prjlvalue);
-                        if (dest) {
+                        if (dest || !roots.empty()) {
                             Align align = Align(julia_alignment(val.typ));
                             if (roots.size())
                                 split_value_into(ctx, val, align, dest, align, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), incomingroots);
@@ -9965,7 +9976,7 @@ static jl_llvm_functions_t
                     if (!RTindex) {
                         assert(new_union.isboxed && new_union.Vboxed && "convert_julia_type failed");
                         RTindex = compute_tindex_unboxed(ctx, new_union, phiType, true);
-                        if (dest) {
+                        if (dest || !roots.empty()) {
                             // If dest is not set, this is a ghost union, the recipient of which
                             // is often not prepared to handle a boxed representation of the ghost.
                             RTindex = ctx.builder.CreateOr(RTindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER));
@@ -9974,15 +9985,13 @@ static jl_llvm_functions_t
                     }
                     if (VN)
                         V = new_union.Vboxed ? new_union.Vboxed : Constant::getNullValue(ctx.types().T_prjlvalue);
-                    if (dest) { // basically, if !ghost union
+                    if (dest || !roots.empty()) { // basically, if !ghost union
                         if (new_union.Vboxed != nullptr) {
                             Value *isboxed = ctx.builder.CreateICmpNE( // if UNION_BOX_MARKER is set, we won't select this slot anyways
                                     ctx.builder.CreateAnd(RTindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), UNION_BOX_MARKER)),
                                     ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
                             skip = skip ? ctx.builder.CreateOr(isboxed, skip) : isboxed;
                         }
-                        // TODO: think this through in detail...
-                        //emit_unionmove(ctx, dest, ctx.tbaa().tbaa_arraybuf, nullptr, nullptr, new_union, skip);
                         emit_unionmove(ctx, dest, ctx.tbaa().tbaa_arraybuf, incomingroots, new_union, skip);
                     }
                 }

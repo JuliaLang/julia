@@ -1155,9 +1155,12 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     Type *T_prjlvalue = ctx.types().T_prjlvalue;
     if (!x.inline_roots.empty()) {
         auto sizes = split_value_size(typ);
-        if (sizes.first > 0)
+        if (sizes.first > 0) {
+            assert(x.V);
             emit_memcpy(ctx, dst, dst_ai, x.V, src_ai, sizes.first, align_dst, align_src, isVolatileStore);
+        }
         for (size_t i = 0; i < sizes.second; i++) {
+            assert(i < x.inline_roots.size());
             Value *unbox = x.inline_roots[i];
             roots_ai.decorateInst(ctx.builder.CreateAlignedStore(unbox, emit_ptrgep(ctx, inline_roots_ptr, i * sizeof(void*)), Align(sizeof(void*)), isVolatileStore));
         }
@@ -1222,17 +1225,20 @@ static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align
     Type *T_prjlvalue = ctx.types().T_prjlvalue;
     if (!x.inline_roots.empty()) {
         auto sizes = split_value_size(typ);
-        if (sizes.first > 0)
+        if (sizes.first > 0) {
+            assert(x.V);
             emit_memcpy(ctx, dst, dst_ai, x.V, src_ai, sizes.first, align_dst, align_src);
-        for (size_t i = 0; i < sizes.second; i++)
+        }
+        for (size_t i = 0; i < sizes.second; i++) {
+            assert(i < x.inline_roots.size());
+            assert(i < inline_roots.size());
             inline_roots[i] = x.inline_roots[i];
+        }
         return;
     }
     if (inline_roots.empty()) {
         emit_unbox_store(ctx, x, dst, ctx.tbaa().tbaa_stack, align_dst);
         return;
-    } else {
-        //assert(!x.inline_roots.empty());
     }
     Value *src = data_pointer(ctx, value_to_pointer(ctx, x));
     assert(src);
@@ -3914,9 +3920,10 @@ static Value *boxed(jl_codectx_t &ctx, const jl_cgval_t &vinfo, bool is_promotab
 // copy src to dest, if src is justbits. if skip is true, the value of dest is undefined
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, Value *roots, MDNode *tbaa_roots, const jl_cgval_t &src, Value *skip, bool isVolatile=false)
 {
-    if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
+    if (AllocaInst *ai = dyn_cast_or_null<AllocaInst>(dest))
         // TODO: make this a lifetime_end & dereferenceable annotation?
         ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai, ai->getAlign());
+    // TODO: overwrite roots ?
     if (src.constant) {
         jl_value_t *typ = jl_typeof(src.constant);
         // TODO: This needs some serious revision, I remember...
@@ -3977,10 +3984,12 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, Val
                         } else {
                             if (nroots || needs_recombine) {
                                 assert(roots != nullptr);
-                                jl_cgval_t refined_src = jl_cgval_t(src, (jl_value_t*)jt, nullptr);
-                                split_value_into(ctx, refined_src, Align(alignment),
-                                                 dest, Align(alignment), jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst),
-                                                 roots, jl_aliasinfo_t::fromTBAA(ctx, tbaa_roots));
+                                if (!(nbytes > 0 && src.V == NULL)) {
+                                    jl_cgval_t refined_src = jl_cgval_t(src, (jl_value_t*)jt, nullptr);
+                                    split_value_into(ctx, refined_src, Align(alignment),
+                                                     dest, Align(alignment), jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst),
+                                                     roots, jl_aliasinfo_t::fromTBAA(ctx, tbaa_roots));
+                                }
                             } else {
                                 emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst), src_ptr,
                                             jl_aliasinfo_t::fromTBAA(ctx, src.tbaa), nbytes, Align(alignment), Align(alignment), isVolatile);
@@ -4021,7 +4030,7 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, Val
 //static void split_value_into(jl_codectx_t &ctx, const jl_cgval_t &x, Align align_src, Value *dst, Align align_dst, jl_aliasinfo_t const &dst_ai, MutableArrayRef<Value*> inline_roots)
 static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, MutableArrayRef<Value*> roots, const jl_cgval_t &src, Value *skip, bool isVolatile=false)
 {
-    if (AllocaInst *ai = dyn_cast<AllocaInst>(dest))
+    if (AllocaInst *ai = dyn_cast_or_null<AllocaInst>(dest))
         // TODO: make this a lifetime_end & dereferenceable annotation?
         ctx.builder.CreateAlignedStore(UndefValue::get(ai->getAllocatedType()), ai, ai->getAlign());
     if (src.constant) {
@@ -4093,10 +4102,12 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, Mut
                             return;
                         } else {
                             if (nroots || needs_recombine) {
-                                jl_cgval_t refined_src = jl_cgval_t(src, (jl_value_t*)jt, nullptr);
-                                split_value_into(ctx, refined_src, Align(alignment),
-                                                 dest, Align(alignment), jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst),
-                                                 incomingroots);
+                                if (!(nbytes > 0 && src.V == NULL)) {
+                                    jl_cgval_t refined_src = jl_cgval_t(src, (jl_value_t*)jt, nullptr);
+                                    split_value_into(ctx, refined_src, Align(alignment),
+                                                     dest, Align(alignment), jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst),
+                                                     incomingroots);
+                                }
                             } else {
                                 emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dst), src_ptr,
                                             jl_aliasinfo_t::fromTBAA(ctx, src.tbaa), nbytes, Align(alignment), Align(alignment), isVolatile);
