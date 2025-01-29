@@ -77,6 +77,10 @@ function _node_id(graph::SyntaxGraph, ex)
     # Fallback to give a comprehensible error message for use with the @ast macro
     error("Attempt to use `$(repr(ex))` of type `$(typeof(ex))` as an AST node. Try annotating with `::K\"your_intended_kind\"?`")
 end
+function _node_id(graph::SyntaxGraph, ex::AbstractVector{<:SyntaxTree})
+    # Fallback to give a comprehensible error message for use with the @ast macro
+    error("Attempt to use vector as an AST node. Did you mean to splat this? (content: `$(repr(ex))`)")
+end
 
 _node_ids(graph::SyntaxGraph) = ()
 _node_ids(graph::SyntaxGraph, ::Nothing, cs...) = _node_ids(graph, cs...)

@@ -2062,7 +2062,7 @@ end
 #-------------------------------------------------------------------------------
 # Expansion of function definitions
 
-function expand_function_arg(ctx, body_stmts, arg, is_last_arg)
+function expand_function_arg(ctx, body_stmts, arg, is_last_arg, is_kw)
     ex = arg
 
     if kind(ex) == K"="
@@ -2074,7 +2074,8 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg)
 
     if kind(ex) == K"..."
         if !is_last_arg
-            throw(LoweringError(arg, "`...` may only be used for the last function argument"))
+            typmsg = is_kw ? "keyword" : "positional"
+            throw(LoweringError(arg, "`...` may only be used for the last $typmsg argument"))
         end
         @chk numchildren(ex) == 1
         slurp_ex = ex
@@ -2092,6 +2093,9 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg)
             type = ex[2]
             ex = ex[1]
         end
+        if is_kw && !isnothing(slurp_ex)
+            throw(LoweringError(slurp_ex, "keyword argument with `...` may not be given a type"))
+        end
     else
         type = @ast ctx ex "Any"::K"core"
     end
@@ -2100,10 +2104,7 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg)
     end
 
     k = kind(ex)
-    if k == K"tuple"
-        if isnothing(body_stmts)
-            throw(LoweringError(ex, "Invalid keyword name"))
-        end
+    if k == K"tuple" && !is_kw
         # Argument destructuring
         is_nospecialize = getmeta(arg, :nospecialize, false)
         name = new_local_binding(ctx, ex, "destructured_arg";
@@ -2115,7 +2116,7 @@ function expand_function_arg(ctx, body_stmts, arg, is_last_arg)
     elseif k == K"Identifier" || k == K"Placeholder"
         name = ex
     else
-        throw(LoweringError(ex, "Invalid function argument"))
+        throw(LoweringError(ex, is_kw ? "Invalid keyword name" : "Invalid function argument"))
     end
 
     return (name, type, default, !isnothing(slurp_ex))
@@ -2249,6 +2250,7 @@ function optional_positional_defs!(ctx, method_stmts, srcref, callex,
     end
 end
 
+# Generate body function and `Core.kwcall` overloads for functions taking keywords.
 function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
                                typevar_names, typevar_stmts, arg_names,
                                arg_types, first_default, arg_defaults, keywords, body, ret_var)
@@ -2283,11 +2285,23 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
     kw_defaults = SyntaxList(ctx)
     kw_name_syms = SyntaxList(ctx)
     kw_val_vars = SyntaxList(ctx)
+    has_kw_slurp = false
     for (i,arg) in enumerate(children(keywords))
         (aname, atype, default, is_slurp) =
-            expand_function_arg(ctx, nothing, arg, i == numchildren(keywords))
+            expand_function_arg(ctx, nothing, arg, i == numchildren(keywords), true)
         name_sym = @ast ctx aname aname=>K"Symbol"
-        @assert !is_slurp # TODO
+        push!(body_arg_names, aname)
+
+        if is_slurp
+            if !isnothing(default)
+                throw(LoweringError(arg, "keyword argument with `...` cannot have a default value"))
+            end
+            has_kw_slurp = true
+            push!(body_arg_types, @ast ctx arg [K"call" "pairs"::K"top" "NamedTuple"::K"core"])
+            continue
+        end
+
+        push!(body_arg_types, atype)
         if isnothing(default)
             default = @ast ctx arg [K"call"
                 "throw"::K"core"
@@ -2299,6 +2313,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
         end
         kw_var = ssavar(ctx, arg, "kw_var") # <- TODO: Use `aname` here, if necessary
         push!(kw_val_vars, kw_var)
+        # Extract the value and check the type of each expected keyword argument
         push!(kwcall_body_stmts, @ast ctx arg [K"="
             kw_var
             [K"if"
@@ -2331,8 +2346,6 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
 
         push!(kw_defaults, default)
         push!(kw_name_syms, name_sym)
-        push!(body_arg_names, aname)
-        push!(body_arg_types, atype)
     end
     append!(body_arg_names, arg_names)
     append!(body_arg_types, arg_types)
@@ -2350,31 +2363,53 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
                                   kwcall_arg_names, kwcall_arg_types, first_default, arg_defaults)
     end
 
+    # The "main kwcall overload" unpacks keywords and checks their consistency
+    # before dispatching to the user's code in the body method.
     kwcall_body = @ast ctx keywords [K"block"
+        # Unpack kws
         kwcall_body_stmts...
-        [K"if"
-            [K"call"
-                "isempty"::K"top"
-                [K"call"
-                    "diff_names"::K"top"
-                    [K"call" "keys"::K"top" kws_arg]
-                    [K"tuple" kw_name_syms...]
-                ]
+        if has_kw_slurp
+            # Slurp remaining keywords into last arg
+            remaining_kws := [K"call"
+                "pairs"::K"top"
+                if isempty(kw_name_syms)
+                    kws_arg
+                else
+                    [K"call"
+                        "structdiff"::K"top"
+                        kws_arg
+                        [K"curly"
+                            "NamedTuple"::K"core"
+                            [K"tuple" kw_name_syms...]
+                        ]
+                    ]
+                end
             ]
-            "nothing"::K"core"
-            if true
-                [K"call" # Report unsupported kws
+        else
+            # Check that there's no unexpected keywords
+            [K"if"
+                [K"call"
+                    "isempty"::K"top"
+                    [K"call"
+                        "diff_names"::K"top"
+                        [K"call" "keys"::K"top" kws_arg]
+                        [K"tuple" kw_name_syms...]
+                    ]
+                ]
+                "nothing"::K"core"
+                [K"call"
                     "kwerr"::K"top"
                     kws_arg
                     arg_names...
                 ]
-            else
-                # TODO: kw slurping
-            end
-        ]
+            ]
+        end
         [K"call"
             body_func_name
             kw_val_vars...
+            if has_kw_slurp
+                remaining_kws
+            end
             arg_names...
         ]
     ]
@@ -2541,11 +2576,11 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         end
     end
     body_stmts = SyntaxList(ctx)
-    first_default = 0
+    first_default = 0 # index into arg_names/arg_types
     arg_defaults = SyntaxList(ctx)
     for (i,arg) in enumerate(args)
         (aname, atype, default, is_slurp) = expand_function_arg(ctx, body_stmts, arg,
-                                                                i == length(args))
+                                                                i == length(args), false)
         push!(arg_names, aname)
 
         # TODO: Ideally, ensure side effects of evaluating arg_types only
@@ -2568,7 +2603,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
                 #     one with a [default value]($(first(arg_defaults)))
                 # """
                 #
-                throw(LoweringError(args[first_default], "optional positional arguments must occur at end"))
+                throw(LoweringError(args[first_default-1], "optional positional arguments must occur at end"))
             end
         else
             if isempty(arg_defaults)
@@ -2727,7 +2762,7 @@ function expand_opaque_closure(ctx, ex)
     is_va = false
     for (i, arg) in enumerate(children(args))
         (aname, atype, default, is_slurp) = expand_function_arg(ctx, body_stmts, arg,
-                                                                i == numchildren(args))
+                                                                i == numchildren(args), false)
         is_va |= is_slurp
         push!(arg_names, aname)
         push!(arg_types, atype)
@@ -3148,12 +3183,6 @@ function default_outer_constructor(ctx, srcref, global_struct_name,
         ]
         [K"new" [K"curly" global_struct_name typevar_names...] field_names...]
     ]
-end
-
-function _new_call(ctx, ex, typevar_names, field_names, field_types)
-    if has_keywords(ex)
-        throw(LoweringError(""))
-    end
 end
 
 function _is_new_call(ex)

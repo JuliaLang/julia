@@ -274,6 +274,22 @@ end
         @test exc.args == ((; not_present=100), test_mod.f_kw_simple, 20, 1.0)
     end
 
+    # Slurping of keyword args
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_slurp_all(; kws...)
+        kws
+    end
+    """)
+    @test values(test_mod.f_kw_slurp_all(x = 1, y = 2)) === (x=1, y=2)
+
+    # Slurping of keyword args
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_slurp_some(; x=1, y=2, kws...)
+        kws
+    end
+    """)
+    @test values(test_mod.f_kw_slurp_some(z=3, x = 1, y = 2, w=4)) === (z=3, w=4)
+
     # Throwing of UndefKeywordError
     JuliaLowering.include_string(test_mod, """
     function f_kw_no_default(; x)

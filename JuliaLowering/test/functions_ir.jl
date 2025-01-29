@@ -121,7 +121,7 @@ end
 #---------------------
 LoweringError:
 function f(xs..., y)
-#          └───┘ ── `...` may only be used for the last function argument
+#          └───┘ ── `...` may only be used for the last positional argument
     body
 end
 
@@ -639,14 +639,14 @@ end
 18  (return %₁₇)
 
 ########################################
-# Error: Default positional args after a slurp
-function f(x=1, ys..., z=2)
+# Error: Default positional args before non-default arg
+function f(x=1, ys, z=2)
     ys
 end
 #---------------------
 LoweringError:
-function f(x=1, ys..., z=2)
-#              └────┘ ── `...` may only be used for the last function argument
+function f(x=1, ys, z=2)
+#          └─┘ ── optional positional arguments must occur at end
     ys
 end
 
@@ -1038,14 +1038,150 @@ end
 68  (return %₆₇)
 
 ########################################
+# Keyword slurping - simple forwarding of all kws
+function f_kw_slurp_simple(; kws...)
+    kws
+end
+#---------------------
+1   (method TestMod.#f_kw_slurp_simple#0)
+2   (method TestMod.f_kw_slurp_simple)
+3   TestMod.#f_kw_slurp_simple#0
+4   (call core.Typeof %₃)
+5   (call top.pairs core.NamedTuple)
+6   TestMod.f_kw_slurp_simple
+7   (call core.Typeof %₆)
+8   (call core.svec %₄ %₅ %₇)
+9   (call core.svec)
+10  SourceLocation::1:10
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self#(!read)]
+    1   slot₂/kws
+    2   (return %₁)
+13  (call core.typeof core.kwcall)
+14  TestMod.f_kw_slurp_simple
+15  (call core.Typeof %₁₄)
+16  (call core.svec %₁₃ core.NamedTuple %₁₅)
+17  (call core.svec)
+18  SourceLocation::1:10
+19  (call core.svec %₁₆ %₁₇ %₁₈)
+20  --- method core.nothing %₁₉
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self#]
+    1   (call top.pairs slot₂/kws)
+    2   TestMod.#f_kw_slurp_simple#0
+    3   (call %₂ %₁ slot₃/#self#)
+    4   (return %₃)
+21  TestMod.f_kw_slurp_simple
+22  (call core.Typeof %₂₁)
+23  (call core.svec %₂₂)
+24  (call core.svec)
+25  SourceLocation::1:10
+26  (call core.svec %₂₃ %₂₄ %₂₅)
+27  --- method core.nothing %₂₆
+    slots: [slot₁/#self#]
+    1   TestMod.#f_kw_slurp_simple#0
+    2   (call %₁ slot₁/#self#)
+    3   (return %₂)
+28  TestMod.f_kw_slurp_simple
+29  (return %₂₈)
+
+########################################
+# Keyword slurping
+function f_kw_slurp(; x=x_default, kws...)
+    kws
+end
+#---------------------
+1   (method TestMod.#f_kw_slurp#0)
+2   (method TestMod.f_kw_slurp)
+3   TestMod.#f_kw_slurp#0
+4   (call core.Typeof %₃)
+5   (call top.pairs core.NamedTuple)
+6   TestMod.f_kw_slurp
+7   (call core.Typeof %₆)
+8   (call core.svec %₄ core.Any %₅ %₇)
+9   (call core.svec)
+10  SourceLocation::1:10
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/kws slot₄/#self#(!read)]
+    1   slot₃/kws
+    2   (return %₁)
+13  (call core.typeof core.kwcall)
+14  TestMod.f_kw_slurp
+15  (call core.Typeof %₁₄)
+16  (call core.svec %₁₃ core.NamedTuple %₁₅)
+17  (call core.svec)
+18  SourceLocation::1:10
+19  (call core.svec %₁₆ %₁₇ %₁₈)
+20  --- method core.nothing %₁₉
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/if_val(!read)]
+    1   (call core.isdefined slot₂/kws :x)
+    2   (gotoifnot %₁ label₆)
+    3   (call core.getfield slot₂/kws :x)
+    4   (= slot₄/if_val %₃)
+    5   (goto label₈)
+    6   TestMod.x_default
+    7   (= slot₄/if_val %₆)
+    8   slot₄/if_val
+    9   (call core.tuple :x)
+    10  (call core.apply_type core.NamedTuple %₉)
+    11  (call top.structdiff slot₂/kws %₁₀)
+    12  (call top.pairs %₁₁)
+    13  TestMod.#f_kw_slurp#0
+    14  (call %₁₃ %₈ %₁₂ slot₃/#self#)
+    15  (return %₁₄)
+21  TestMod.f_kw_slurp
+22  (call core.Typeof %₂₁)
+23  (call core.svec %₂₂)
+24  (call core.svec)
+25  SourceLocation::1:10
+26  (call core.svec %₂₃ %₂₄ %₂₅)
+27  --- method core.nothing %₂₆
+    slots: [slot₁/#self#]
+    1   TestMod.#f_kw_slurp#0
+    2   TestMod.x_default
+    3   (call %₁ %₂ slot₁/#self#)
+    4   (return %₃)
+28  TestMod.f_kw_slurp
+29  (return %₂₈)
+
+########################################
 # Error: argument unpacking in keywords
-function f_invalid_kw(; (x,y)=10)
-    (x, y)
+function f_kw_destruct(; (x,y)=10)
 end
 #---------------------
 LoweringError:
-function f_invalid_kw(; (x,y)=10)
-#                       └───┘ ── Invalid keyword name
-    (x, y)
+function f_kw_destruct(; (x,y)=10)
+#                        └───┘ ── Invalid keyword name
+end
+
+########################################
+# Error: keyword slurping combined with a default
+function f_kw_slurp_default(; kws...=def)
+end
+#---------------------
+LoweringError:
+function f_kw_slurp_default(; kws...=def)
+#                             └────────┘ ── keyword argument with `...` cannot have a default value
+end
+
+########################################
+# Error: keyword slurping combined with type
+function f_kw_slurp_type(; kws::T...)
+end
+#---------------------
+LoweringError:
+function f_kw_slurp_type(; kws::T...)
+#                          └───────┘ ── keyword argument with `...` may not be given a type
+end
+
+########################################
+# Error: keyword slurping on non-final argument
+function f_kw_slurp_not_last(; kws..., x=1)
+end
+#---------------------
+LoweringError:
+function f_kw_slurp_not_last(; kws..., x=1)
+#                              └────┘ ── `...` may only be used for the last keyword argument
 end
 
