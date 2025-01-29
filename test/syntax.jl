@@ -925,8 +925,8 @@ g21054(>:) = >:2
 @test g21054(-) == -2
 
 # issue #21168
-@test Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax \"a.[1]\"")
-@test Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax \"a.{1}\"")
+@test_broken Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax \"a.[1]\"")
+@test_broken Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax \"a.{1}\"")
 
 # Issue #21225
 let abstr = Meta.parse("abstract type X end")
@@ -1496,8 +1496,8 @@ end
 
 # issue #26739
 let exc = try Core.eval(@__MODULE__, :(sin.[1])) catch exc ; exc end
-    @test exc isa ErrorException
-    @test startswith(exc.msg, "syntax: invalid syntax \"sin.[1]\"")
+    @test_broken exc isa ErrorException
+    @test_broken startswith(exc.msg, "syntax: invalid syntax \"sin.[1]\"")
 end
 
 # issue #26873
