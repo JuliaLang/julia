@@ -961,7 +961,7 @@ end
 40  SourceLocation::1:10
 41  (call core.svec %₃₈ %₃₉ %₄₀)
 42  --- method core.nothing %₄₁
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/b slot₆/if_val(!read) slot₇/if_val(!read)]
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/a slot₅/b slot₆/kwtmp]
     1   (call core.isdefined slot₂/kws :x)
     2   (gotoifnot %₁ label₁₃)
     3   (call core.getfield slot₂/kws :x)
@@ -972,10 +972,10 @@ end
     8   TestMod.Char
     9   (new core.TypeError :keyword argument :x %₈ %₃)
     10  (call core.throw %₉)
-    11  (= slot₆/if_val %₃)
+    11  (= slot₆/kwtmp %₃)
     12  (goto label₁₄)
-    13  (= slot₆/if_val 'a')
-    14  slot₆/if_val
+    13  (= slot₆/kwtmp 'a')
+    14  slot₆/kwtmp
     15  (call core.isdefined slot₂/kws :y)
     16  (gotoifnot %₁₅ label₂₇)
     17  (call core.getfield slot₂/kws :y)
@@ -986,10 +986,10 @@ end
     22  TestMod.Bool
     23  (new core.TypeError :keyword argument :y %₂₂ %₁₇)
     24  (call core.throw %₂₃)
-    25  (= slot₇/if_val %₁₇)
+    25  (= slot₆/kwtmp %₁₇)
     26  (goto label₂₈)
-    27  (= slot₇/if_val true)
-    28  slot₇/if_val
+    27  (= slot₆/kwtmp true)
+    28  slot₆/kwtmp
     29  (call top.keys slot₂/kws)
     30  (call core.tuple :x :y)
     31  (call top.diff_names %₂₉ %₃₀)
@@ -1080,8 +1080,10 @@ end
 27  --- method core.nothing %₂₆
     slots: [slot₁/#self#]
     1   TestMod.#f_kw_slurp_simple#0
-    2   (call %₁ slot₁/#self#)
-    3   (return %₂)
+    2   (call core.NamedTuple)
+    3   (call top.pairs %₂)
+    4   (call %₁ %₃ slot₁/#self#)
+    5   (return %₄)
 28  TestMod.f_kw_slurp_simple
 29  (return %₂₈)
 
@@ -1114,15 +1116,15 @@ end
 18  SourceLocation::1:10
 19  (call core.svec %₁₆ %₁₇ %₁₈)
 20  --- method core.nothing %₁₉
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/if_val(!read)]
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp]
     1   (call core.isdefined slot₂/kws :x)
     2   (gotoifnot %₁ label₆)
     3   (call core.getfield slot₂/kws :x)
-    4   (= slot₄/if_val %₃)
+    4   (= slot₄/kwtmp %₃)
     5   (goto label₈)
     6   TestMod.x_default
-    7   (= slot₄/if_val %₆)
-    8   slot₄/if_val
+    7   (= slot₄/kwtmp %₆)
+    8   slot₄/kwtmp
     9   (call core.tuple :x)
     10  (call core.apply_type core.NamedTuple %₉)
     11  (call top.structdiff slot₂/kws %₁₀)
@@ -1140,8 +1142,10 @@ end
     slots: [slot₁/#self#]
     1   TestMod.#f_kw_slurp#0
     2   TestMod.x_default
-    3   (call %₁ %₂ slot₁/#self#)
-    4   (return %₃)
+    3   (call core.NamedTuple)
+    4   (call top.pairs %₃)
+    5   (call %₁ %₂ %₄ slot₁/#self#)
+    6   (return %₅)
 28  TestMod.f_kw_slurp
 29  (return %₂₈)
 

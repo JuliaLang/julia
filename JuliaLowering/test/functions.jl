@@ -290,6 +290,7 @@ end
     end
     """)
     @test values(test_mod.f_kw_slurp_all(x = 1, y = 2)) === (x=1, y=2)
+    @test values(test_mod.f_kw_slurp_all()) === (;)
 
     # Slurping of keyword args
     JuliaLowering.include_string(test_mod, """
@@ -298,6 +299,8 @@ end
     end
     """)
     @test values(test_mod.f_kw_slurp_some(z=3, x = 1, y = 2, w=4)) === (z=3, w=4)
+    @test values(test_mod.f_kw_slurp_some(x = 1)) === (;)
+    @test values(test_mod.f_kw_slurp_some()) === (;)
 
     # Throwing of UndefKeywordError
     JuliaLowering.include_string(test_mod, """

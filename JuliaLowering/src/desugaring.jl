@@ -2265,7 +2265,6 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
 
     kwcall_arg_names = SyntaxList(ctx)
     kwcall_arg_types = SyntaxList(ctx)
-    kwcall_body_stmts = SyntaxList(ctx)
 
     push!(kwcall_arg_names, new_local_binding(ctx, callex_srcref, "#self#"; kind=:argument))
     push!(kwcall_arg_types,
@@ -2283,10 +2282,11 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
     push!(body_arg_names, new_local_binding(ctx, body_func_name, "#self#"; kind=:argument))
     push!(body_arg_types, @ast ctx body_func_name [K"function_type" body_func_name])
 
+    kw_values = SyntaxList(ctx)
     kw_defaults = SyntaxList(ctx)
     kw_name_syms = SyntaxList(ctx)
-    kw_val_vars = SyntaxList(ctx)
     has_kw_slurp = false
+    kwtmp = new_local_binding(ctx, keywords, "kwtmp")
     for (i,arg) in enumerate(children(keywords))
         (aname, atype, default, is_slurp) =
             expand_function_arg(ctx, nothing, arg, i == numchildren(keywords), true)
@@ -2299,10 +2299,12 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
             end
             has_kw_slurp = true
             push!(body_arg_types, @ast ctx arg [K"call" "pairs"::K"top" "NamedTuple"::K"core"])
+            push!(kw_defaults, @ast ctx arg [K"call" "pairs"::K"top" [K"call" "NamedTuple"::K"core"]])
             continue
+        else
+            push!(body_arg_types, atype)
         end
 
-        push!(body_arg_types, atype)
         if isnothing(default)
             default = @ast ctx arg [K"call"
                 "throw"::K"core"
@@ -2312,11 +2314,10 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
                 ]
             ]
         end
-        kw_var = ssavar(ctx, arg, "kw_var") # <- TODO: Use `aname` here, if necessary
-        push!(kw_val_vars, kw_var)
-        # Extract the value and check the type of each expected keyword argument
-        push!(kwcall_body_stmts, @ast ctx arg [K"="
-            kw_var
+        push!(kw_defaults, default)
+
+        # Extract the keyword argument value and check the type
+        push!(kw_values, @ast ctx arg [K"block"
             [K"if"
                 [K"call" "isdefined"::K"core" kws_arg name_sym]
                 [K"block"
@@ -2339,13 +2340,17 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
                             ]
                         ]
                     end
-                    kwval
+                    # Compiler performance hack: we reuse the kwtmp slot in all
+                    # keyword if blocks rather than using the if block in value
+                    # position. This cuts down on the number of slots required
+                    # https://github.com/JuliaLang/julia/pull/44333
+                    [K"=" kwtmp kwval]
                 ]
-                default
+                [K"=" kwtmp default]
             ]
+            kwtmp
         ])
 
-        push!(kw_defaults, default)
         push!(kw_name_syms, name_sym)
     end
     append!(body_arg_names, arg_names)
@@ -2357,9 +2362,9 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
 
     kwcall_mtable = @ast(ctx, srcref, "nothing"::K"core")
 
-    kwcall_defs = SyntaxList(ctx)
+    kwcall_method_defs = SyntaxList(ctx)
     if !isempty(arg_defaults)
-        optional_positional_defs!(ctx, kwcall_defs, srcref, callex_srcref,
+        optional_positional_defs!(ctx, kwcall_method_defs, srcref, callex_srcref,
                                   kwcall_mtable, typevar_names, typevar_stmts,
                                   kwcall_arg_names, kwcall_arg_types, first_default, arg_defaults)
     end
@@ -2372,11 +2377,18 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
         arg_names
     end
 
+    kw_val_vars = SyntaxList(ctx)
+    kw_val_stmts = SyntaxList(ctx)
+    for val in kw_values
+        v = emit_assign_tmp(kw_val_stmts, ctx, val, "kwval")
+        push!(kw_val_vars, v)
+    end
+
     # The "main kwcall overload" unpacks keywords and checks their consistency
     # before dispatching to the user's code in the body method.
     kwcall_body = @ast ctx keywords [K"block"
         # Unpack kws
-        kwcall_body_stmts...
+        kw_val_stmts...
         if has_kw_slurp
             # Slurp remaining keywords into last arg
             remaining_kws := [K"call"
@@ -2423,7 +2435,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
         ]
     ]
 
-    push!(kwcall_defs,
+    push!(kwcall_method_defs,
           method_def_expr(ctx, srcref, callex_srcref, kwcall_mtable,
                           typevar_names, kwcall_arg_names, kwcall_arg_types, kwcall_body))
 
@@ -2438,11 +2450,12 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
         [K"method_defs"
             "nothing"::K"core"
             [K"block"
-                kwcall_defs...
+                kwcall_method_defs...
             ]
         ]
     ]
 
+    # Body for call with no keywords
     body_for_positional_args_only = @ast ctx srcref [K"call" body_func_name
         kw_defaults...
         positional_forwarding_args...

@@ -648,7 +648,7 @@ end
 39  SourceLocation::2:14
 40  (call core.svec %₃₇ %₃₈ %₃₉)
 41  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/#f_kw_closure#0(!read) slot₅/if_val(!read)]
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/#f_kw_closure#0(!read)]
     1   (call core.isdefined slot₂/kws :x)
     2   (gotoifnot %₁ label₁₃)
     3   (call core.getfield slot₂/kws :x)
@@ -659,11 +659,11 @@ end
     8   TestMod.X
     9   (new core.TypeError :keyword argument :x %₈ %₃)
     10  (call core.throw %₉)
-    11  (= slot₅/if_val %₃)
+    11  (= slot₄/kwtmp %₃)
     12  (goto label₁₅)
     13  TestMod.x_default
-    14  (= slot₅/if_val %₁₃)
-    15  slot₅/if_val
+    14  (= slot₄/kwtmp %₁₃)
+    15  slot₄/kwtmp
     16  (call top.keys slot₂/kws)
     17  (call core.tuple :x)
     18  (call top.diff_names %₁₆ %₁₇)
@@ -675,8 +675,8 @@ end
     24  (call core.isdefined %₂₃ :contents)
     25  (gotoifnot %₂₄ label₂₇)
     26  (goto label₂₉)
-    27  (newvar slot₄/#f_kw_closure#0)
-    28  slot₄/#f_kw_closure#0
+    27  (newvar slot₅/#f_kw_closure#0)
+    28  slot₅/#f_kw_closure#0
     29  (call core.getfield %₂₃ :contents)
     30  (call %₂₉ %₁₅ slot₃/#self#)
     31  (return %₃₀)
