@@ -107,7 +107,7 @@ end
 g265() = [f265(x) for x in 1:3.]
 wc265 = get_world_counter()
 wc265_41332a = Task(tls_world_age)
-@test tls_world_age() == wc265
+@test tls_world_age() == wc265 + 2
 (function ()
     global wc265_41332b = Task(tls_world_age)
     @eval f265(::Any) = 1.0
@@ -115,24 +115,24 @@ wc265_41332a = Task(tls_world_age)
     global wc265_41332d = Task(tls_world_age)
     nothing
 end)()
-@test wc265 + 4 == get_world_counter() == tls_world_age()
+@test wc265 + 10 == get_world_counter() == tls_world_age()
 schedule(wc265_41332a)
 schedule(wc265_41332b)
 schedule(wc265_41332c)
 schedule(wc265_41332d)
-@test wc265 == fetch(wc265_41332a)
-@test wc265 + 2 == fetch(wc265_41332b)
-@test wc265 + 4 == fetch(wc265_41332c)
-@test wc265 + 2 == fetch(wc265_41332d)
+@test wc265 + 1 == fetch(wc265_41332a)
+@test wc265 + 8 == fetch(wc265_41332b)
+@test wc265 + 10 == fetch(wc265_41332c)
+@test wc265 + 8 == fetch(wc265_41332d)
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
 wc265 = get_world_counter()
 @test put_n_take!(get_world_counter, ()) == wc265
-@test put_n_take!(tls_world_age, ()) == wc265
+@test put_n_take!(tls_world_age, ()) + 3 == wc265
 f265(::Int) = 1
 @test put_n_take!(get_world_counter, ()) == wc265 + 1 == get_world_counter() == tls_world_age()
-@test put_n_take!(tls_world_age, ()) == wc265
+@test put_n_take!(tls_world_age, ()) + 3 == wc265
 
 @test g265() == Int[1, 1, 1]
 @test Core.Compiler.return_type(f265, Tuple{Any,}) == Union{Float64, Int}
@@ -162,12 +162,12 @@ let ex = t265.exception
     @test ex isa MethodError
     @test ex.f == h265
     @test ex.args == ()
-    @test ex.world == wc265
+    @test ex.world == wc265-3
     str = sprint(showerror, ex)
     wc = get_world_counter()
     cmps = """
         MethodError: no method matching h265()
-        The applicable method may be too new: running in world age $wc265, while current world is $wc."""
+        The applicable method may be too new: running in world age $(wc265-3), while current world is $wc."""
     @test startswith(str, cmps)
     cmps = "\n  h265() (method too new to be called from this world context.)\n   $loc_h265"
     @test occursin(cmps, str)
@@ -500,3 +500,12 @@ end
 end
 
 @test_throws ErrorException("Generated function result with `edges == nothing` and `max_world == typemax(UInt)` must have `min_world == 1`") generated_no_edges()
+
+# Test that backdating of constants is working for structs
+before_backdate_age = Base.tls_world_age()
+struct FooBackdated
+    x::Vector{FooBackdated}
+
+    FooBackdated() = new(FooBackdated[])
+end
+@test Base.invoke_in_world(before_backdate_age, isdefined, @__MODULE__, :FooBackdated)

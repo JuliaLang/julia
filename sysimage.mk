@@ -39,6 +39,7 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/error.jl \
 		base/essentials.jl \
 		base/expr.jl \
+		base/exports.jl \
 		base/generator.jl \
 		base/int.jl \
 		base/indices.jl \
