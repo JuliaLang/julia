@@ -302,6 +302,19 @@ end
     @test values(test_mod.f_kw_slurp_some(x = 1)) === (;)
     @test values(test_mod.f_kw_slurp_some()) === (;)
 
+    # Keyword defaults which depend on other keywords.
+    JuliaLowering.include_string(test_mod, """
+    begin
+        aaa = :outer
+        function f_kw_default_dependencies(; x=1, y=x, bbb=aaa, aaa=:aaa_kw, ccc=aaa)
+            (x, y, bbb, aaa, ccc)
+        end
+    end
+    """)
+    @test values(test_mod.f_kw_default_dependencies()) === (1, 1, :outer, :aaa_kw, :aaa_kw)
+    @test values(test_mod.f_kw_default_dependencies(x = 10)) === (10, 10, :outer, :aaa_kw, :aaa_kw)
+    @test values(test_mod.f_kw_default_dependencies(x = 10, aaa=:blah)) === (10, 10, :outer, :blah, :blah)
+
     # Throwing of UndefKeywordError
     JuliaLowering.include_string(test_mod, """
     function f_kw_no_default(; x)

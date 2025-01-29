@@ -2250,6 +2250,15 @@ function optional_positional_defs!(ctx, method_stmts, srcref, callex,
     end
 end
 
+function scope_nest(ctx, names, values, body)
+    for (name, value) in Iterators.reverse(zip(names, values))
+        body = @ast ctx name [K"let" [K"block" [K"=" name value]]
+            body
+        ]
+    end
+    body
+end
+
 # Generate body function and `Core.kwcall` overloads for functions taking keywords.
 function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
                                typevar_names, typevar_stmts, arg_names,
@@ -2284,12 +2293,14 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
 
     kw_values = SyntaxList(ctx)
     kw_defaults = SyntaxList(ctx)
+    kw_names = SyntaxList(ctx)
     kw_name_syms = SyntaxList(ctx)
     has_kw_slurp = false
     kwtmp = new_local_binding(ctx, keywords, "kwtmp")
     for (i,arg) in enumerate(children(keywords))
         (aname, atype, default, is_slurp) =
             expand_function_arg(ctx, nothing, arg, i == numchildren(keywords), true)
+        push!(kw_names, aname)
         name_sym = @ast ctx aname aname=>K"Symbol"
         push!(body_arg_names, aname)
 
@@ -2364,6 +2375,8 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
 
     kwcall_method_defs = SyntaxList(ctx)
     if !isempty(arg_defaults)
+        # Construct kwcall overloads which forward default positional args on
+        # to the main kwcall overload.
         optional_positional_defs!(ctx, kwcall_method_defs, srcref, callex_srcref,
                                   kwcall_mtable, typevar_names, typevar_stmts,
                                   kwcall_arg_names, kwcall_arg_types, first_default, arg_defaults)
@@ -2377,18 +2390,26 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
         arg_names
     end
 
-    kw_val_vars = SyntaxList(ctx)
-    kw_val_stmts = SyntaxList(ctx)
-    for val in kw_values
-        v = emit_assign_tmp(kw_val_stmts, ctx, val, "kwval")
-        push!(kw_val_vars, v)
+    #--------------------------------------------------
+    # Construct the "main kwcall overload" which unpacks keywords and checks
+    # their consistency before dispatching to the user's code in the body
+    # method.
+    defaults_depend_on_kw_names = any(val->contains_identifier(val, kw_names), kw_defaults)
+    defaults_have_assign = any(val->contains_unquoted(e->kind(e) == K"=", val), kw_defaults)
+    use_ssa_kw_temps = !defaults_depend_on_kw_names && !defaults_have_assign
+
+    if use_ssa_kw_temps
+        kw_val_stmts = SyntaxList(ctx)
+        kw_val_vars = SyntaxList(ctx)
+        for val in kw_values
+            v = emit_assign_tmp(kw_val_stmts, ctx, val, "kwval")
+            push!(kw_val_vars, v)
+        end
+    else
+        kw_val_vars = kw_names
     end
 
-    # The "main kwcall overload" unpacks keywords and checks their consistency
-    # before dispatching to the user's code in the body method.
-    kwcall_body = @ast ctx keywords [K"block"
-        # Unpack kws
-        kw_val_stmts...
+    kwcall_body_tail = @ast ctx keywords [K"block"
         if has_kw_slurp
             # Slurp remaining keywords into last arg
             remaining_kws := [K"call"
@@ -2434,7 +2455,14 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
             positional_forwarding_args...
         ]
     ]
-
+    kwcall_body = if use_ssa_kw_temps
+        @ast ctx keywords [K"block"
+            kw_val_stmts...
+            kwcall_body_tail
+        ]
+    else
+        scope_nest(ctx, kw_names, kw_values, kwcall_body_tail)
+    end
     push!(kwcall_method_defs,
           method_def_expr(ctx, srcref, callex_srcref, kwcall_mtable,
                           typevar_names, kwcall_arg_names, kwcall_arg_types, kwcall_body))
@@ -2455,11 +2483,21 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
         ]
     ]
 
+    #--------------------------------------------------
     # Body for call with no keywords
-    body_for_positional_args_only = @ast ctx srcref [K"call" body_func_name
-        kw_defaults...
-        positional_forwarding_args...
-    ]
+    body_for_positional_args_only = if defaults_depend_on_kw_names
+        scope_nest(ctx, kw_names, kw_defaults,
+            @ast ctx srcref [K"call" body_func_name
+                kw_names...
+                positional_forwarding_args...
+            ]
+        )
+    else
+        @ast ctx srcref [K"call" body_func_name
+            kw_defaults...
+            positional_forwarding_args...
+        ]
+    end
 
     body_func_name, kw_func_method_defs, body_for_positional_args_only
 end
