@@ -274,6 +274,15 @@ end
         @test exc.args == ((; not_present=100), test_mod.f_kw_simple, 20, 1.0)
     end
 
+    # Slurping of positional args with keywords
+    JuliaLowering.include_string(test_mod, """
+    function f_pos_slurp_with_kws(z, args...; x=1,y=2)
+        args
+    end
+    """)
+    @test test_mod.f_pos_slurp_with_kws(3, 2, 1; x = 100) === (2,1)
+    @test test_mod.f_pos_slurp_with_kws(3, 2, 1) === (2,1)
+
     # Slurping of keyword args
     JuliaLowering.include_string(test_mod, """
     function f_kw_slurp_all(; kws...)

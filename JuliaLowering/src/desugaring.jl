@@ -2253,7 +2253,8 @@ end
 # Generate body function and `Core.kwcall` overloads for functions taking keywords.
 function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
                                typevar_names, typevar_stmts, arg_names,
-                               arg_types, first_default, arg_defaults, keywords, body, ret_var)
+                               arg_types, has_slurp, first_default, arg_defaults,
+                               keywords, body, ret_var)
     mangled_name = let n = isnothing(name_str) ? "_" : name_str
         reserve_module_binding_i(ctx.mod, string(startswith(n, '#') ? "" : "#", n, "#"))
     end
@@ -2363,6 +2364,14 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
                                   kwcall_arg_names, kwcall_arg_types, first_default, arg_defaults)
     end
 
+    positional_forwarding_args = if has_slurp
+        a = copy(arg_names)
+        a[end] = @ast ctx a[end] [K"..." a[end]]
+        a
+    else
+        arg_names
+    end
+
     # The "main kwcall overload" unpacks keywords and checks their consistency
     # before dispatching to the user's code in the body method.
     kwcall_body = @ast ctx keywords [K"block"
@@ -2400,7 +2409,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
                 [K"call"
                     "kwerr"::K"top"
                     kws_arg
-                    arg_names...
+                    positional_forwarding_args...
                 ]
             ]
         end
@@ -2410,7 +2419,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
             if has_kw_slurp
                 remaining_kws
             end
-            arg_names...
+            positional_forwarding_args...
         ]
     ]
 
@@ -2433,7 +2442,13 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
             ]
         ]
     ]
-    body_func_name, kw_func_method_defs, kw_defaults
+
+    body_for_positional_args_only = @ast ctx srcref [K"call" body_func_name
+        kw_defaults...
+        positional_forwarding_args...
+    ]
+
+    body_func_name, kw_func_method_defs, body_for_positional_args_only
 end
 
 # Check valid identifier/function names
@@ -2576,11 +2591,13 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         end
     end
     body_stmts = SyntaxList(ctx)
+    has_slurp = false
     first_default = 0 # index into arg_names/arg_types
     arg_defaults = SyntaxList(ctx)
     for (i,arg) in enumerate(args)
         (aname, atype, default, is_slurp) = expand_function_arg(ctx, body_stmts, arg,
                                                                 i == length(args), false)
+        has_slurp |= is_slurp
         push!(arg_names, aname)
 
         # TODO: Ideally, ensure side effects of evaluating arg_types only
@@ -2632,15 +2649,11 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     if isnothing(keywords)
         body_func_name, kw_func_method_defs = (nothing, nothing)
     else
-        body_func_name, kw_func_method_defs, kw_defaults =
+        # Rewrite `body` here so that the positional-only versions dispatch there.
+        body_func_name, kw_func_method_defs, body =
             keyword_function_defs(ctx, ex, callex, name_str, typevar_names, typevar_stmts,
-                                  arg_names, arg_types, first_default, arg_defaults,
+                                  arg_names, arg_types, has_slurp, first_default, arg_defaults,
                                   keywords, body, ret_var)
-        # The non-kw function dispatches to the body method
-        body = @ast ctx ex [K"call" body_func_name
-            kw_defaults...
-            arg_names...
-        ]
         # ret_var is used only in the body method
         ret_var = nothing
     end
