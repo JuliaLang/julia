@@ -4,7 +4,7 @@
 # Cross Platform tests for spawn. #
 ###################################
 
-using Random, Sockets
+using Random, Sockets, SHA
 using Downloads: Downloads, download
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
@@ -21,6 +21,8 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 
+busybox_hash_correct(file) = bytes2hex(open(SHA.sha256, file)) == "ed2f95da9555268e93c7af52feb48e148534ee518b9128f65dda9a2767b61b9e"
+
 function _tryonce_download_from_cache(desired_url::AbstractString)
     cache_url = "https://cache.julialang.org/$(desired_url)"
     cache_output_filename = joinpath(mktempdir(), "busybox")
@@ -32,9 +34,14 @@ function _tryonce_download_from_cache(desired_url::AbstractString)
     )
     if cache_response isa Downloads.Response
         if Downloads.status_ok(cache_response.proto, cache_response.status)
-            return cache_output_filename
+            if busybox_hash_correct(cache_output_filename)
+                return cache_output_filename
+            else
+                @warn "The busybox executable downloaded from the cache has an incorrect hash" cache_output_filename bytes2hex(open(SHA.sha256, cache_output_filename))
+            end
         end
     end
+    @warn "Could not download from cache at $cache_url, falling back to primary source at $desired_url"
     return Downloads.download(desired_url; timeout = 60)
 end
 
@@ -46,7 +53,11 @@ function download_from_cache(desired_url::AbstractString)
 end
 
 if Sys.iswindows()
-    busybox = download_from_cache("https://frippery.org/files/busybox/busybox.exe")
+    # See https://frippery.org/files/busybox/
+    # latest as of 2024-09-20 18:08
+    busybox = download_from_cache("https://frippery.org/files/busybox/busybox-w32-FRP-5467-g9376eebd8.exe")
+    busybox_hash_correct(busybox) || error("The busybox executable downloaded has an incorrect hash")
+
     havebb = try # use busybox-w32 on windows, if available
         success(`$busybox`)
         true

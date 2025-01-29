@@ -621,6 +621,16 @@ let a = Ref(0)
     @test a[] == 1
 end
 
+@testset "Timer properties" begin
+    t = Timer(1.0, interval = 0.5)
+    @test t.timeout == 1.0
+    @test t.interval == 0.5
+    close(t)
+    @test !isopen(t)
+    @test t.timeout == 1.0
+    @test t.interval == 0.5
+end
+
 # trying to `schedule` a finished task
 let t = @async nothing
     wait(t)

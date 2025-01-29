@@ -752,11 +752,11 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Test removal of prefix in single statement paste
     sendrepl2("\e[200~julia> A = 2\e[201~\n")
-    @test Main.A == 2
+    @test @world(Main.A, ∞) == 2
 
     # Test removal of prefix in single statement paste
     sendrepl2("\e[200~In [12]: A = 2.2\e[201~\n")
-    @test Main.A == 2.2
+    @test @world(Main.A, ∞) == 2.2
 
     # Test removal of prefix in multiple statement paste
     sendrepl2("""\e[200~
@@ -768,7 +768,7 @@ fake_repl() do stdin_write, stdout_read, repl
 
                     julia> A = 3\e[201~
              """)
-    @test Main.A == 3
+    @test @world(Main.A, ∞) == 3
     @test @invokelatest(Main.foo(4))
     @test @invokelatest(Main.T17599(3)).a == 3
     @test !@invokelatest(Main.foo(2))
@@ -780,12 +780,12 @@ fake_repl() do stdin_write, stdout_read, repl
             julia> A = 4
             4\e[201~
              """)
-    @test Main.A == 4
+    @test @world(Main.A, ∞) == 4
     @test @invokelatest(Main.goo(4)) == 5
 
     # Test prefix removal only active in bracket paste mode
     sendrepl2("julia = 4\n julia> 3 && (A = 1)\n")
-    @test Main.A == 1
+    @test @world(Main.A, ∞) == 1
 
     # Test that indentation corresponding to the prompt is removed
     s = sendrepl2("""\e[200~julia> begin\n           α=1\n           β=2\n       end\n\e[201~""")
@@ -820,8 +820,8 @@ fake_repl() do stdin_write, stdout_read, repl
             julia> B = 2
             2\e[201~
              """)
-    @test Main.A == 1
-    @test Main.B == 2
+    @test @world(Main.A, ∞) == 1
+    @test @world(Main.B, ∞) == 2
     end # redirect_stdout
 
     # Close repl
