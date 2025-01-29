@@ -1,6 +1,7 @@
 module CompilerDevTools
 
 using Compiler
+using Compiler: argextype, widenconst
 using Core.IR
 using Base: isexpr
 
@@ -53,15 +54,18 @@ function Compiler.optimize(interp::SplitCacheInterp, opt::Compiler.OptimizationS
     for inst in ir.stmts
         stmt = inst[:stmt]
         isexpr(stmt, :call) || continue
-        stmt.args[1] === override && continue
+        f = stmt.args[1]
+        f === override && continue
+        if isa(f, GlobalRef)
+            T = widenconst(argextype(f, ir))
+            T <: Core.Builtin && continue
+        end
         insert!(stmt.args, 1, override)
         insert!(stmt.args, 3, interp.owner)
     end
 end
 
 with_new_compiler(f, args...; owner::SplitCacheOwner = SplitCacheOwner()) = with_new_compiler(f, owner, args...)
-
-with_new_compiler(f::Core.Builtin, ::SplitCacheOwner, args...) = f(args...)
 
 function with_new_compiler(f, owner::SplitCacheOwner, args...)
     mi = lookup_method_instance(f, args...)
