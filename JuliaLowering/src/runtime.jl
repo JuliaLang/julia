@@ -98,6 +98,30 @@ function interpolate_ast(ex, values...)
     end
 end
 
+function eval_closure_type(mod, closure_type_name, field_names, field_is_box)
+    type_params = Core.TypeVar[]
+    field_types = []
+    for (name, isbox) in zip(field_names, field_is_box)
+        if !isbox
+            T = Core.TypeVar(Symbol(name, "_type"))
+            push!(type_params, T)
+            push!(field_types, T)
+        else
+            push!(field_types, Core.Box)
+        end
+    end
+    type = Core._structtype(mod, closure_type_name,
+                            Core.svec(type_params...),
+                            Core.svec(field_names...),
+                            Core.svec(),
+                            false,
+                            length(field_names))
+    Core._setsuper!(type, Core.Function)
+    Base.eval(mod, :(const $closure_type_name = $type))
+    Core._typebody!(type, Core.svec(field_types...))
+    type
+end
+
 # Interpolate captured local variables into the CodeInfo for a global method
 function replace_captured_locals!(codeinfo, locals)
     for (i, ex) in enumerate(codeinfo.code)

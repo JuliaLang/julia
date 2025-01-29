@@ -910,8 +910,8 @@ function f_kw_simple(a::Int=1, b::Float64=1.0; x::Char='a', y::Bool=true)
     (a, b, x, y)
 end
 #---------------------
-1   (method TestMod.f_kw_simple)
-2   (method TestMod.#f_kw_simple#0)
+1   (method TestMod.#f_kw_simple#0)
+2   (method TestMod.f_kw_simple)
 3   TestMod.#f_kw_simple#0
 4   (call core.Typeof %₃)
 5   TestMod.Char

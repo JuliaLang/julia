@@ -755,7 +755,14 @@ end
 # """
 
 src = """
-Tuple[(x,y) for x in 1:2, y in 1:3]
+let
+    function recursive_a()
+        recursive_b()
+    end
+    function recursive_b()
+        recursive_a()
+    end
+end
 """
 
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")

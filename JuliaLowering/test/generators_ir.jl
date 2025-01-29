@@ -2,56 +2,38 @@
 # Simple 1D generator
 (x+1 for x in xs)
 #---------------------
-1   --- thunk
-    1   (global TestMod.#->##0)
-    2   (call core.svec)
-    3   (call core.svec)
-    4   (call core.svec)
-    5   (call core._structtype TestMod :#->##0 %₂ %₃ %₄ false 0)
-    6   (call core._setsuper! %₅ core.Function)
-    7   (const TestMod.#->##0)
-    8   (= TestMod.#->##0 %₅)
-    9   (call core.svec)
-    10  (call core._typebody! %₅ %₉)
-    11  (return core.nothing)
-2   TestMod.#->##0
-3   (call core.svec %₂ core.Any)
-4   (call core.svec)
-5   SourceLocation::1:2
-6   (call core.svec %₃ %₄ %₅)
-7   --- method core.nothing %₆
+1   (call core.svec)
+2   (call core.svec)
+3   (call JuliaLowering.eval_closure_type TestMod :#->##0 %₁ %₂)
+4   TestMod.#->##0
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   SourceLocation::1:2
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/x]
     1   TestMod.+
     2   (call %₁ slot₂/x 1)
     3   (return %₂)
-8   TestMod.#->##0
-9   (new %₈)
-10  TestMod.xs
-11  (call top.Generator %₉ %₁₀)
-12  (return %₁₁)
+10  TestMod.#->##0
+11  (new %₁₀)
+12  TestMod.xs
+13  (call top.Generator %₁₁ %₁₂)
+14  (return %₁₃)
 
 ########################################
 # Product iteration
 (x+y for x in xs, y in ys)
 #---------------------
-1   --- thunk
-    1   (global TestMod.#->##1)
-    2   (call core.svec)
-    3   (call core.svec)
-    4   (call core.svec)
-    5   (call core._structtype TestMod :#->##1 %₂ %₃ %₄ false 0)
-    6   (call core._setsuper! %₅ core.Function)
-    7   (const TestMod.#->##1)
-    8   (= TestMod.#->##1 %₅)
-    9   (call core.svec)
-    10  (call core._typebody! %₅ %₉)
-    11  (return core.nothing)
-2   TestMod.#->##1
-3   (call core.svec %₂ core.Any)
-4   (call core.svec)
-5   SourceLocation::1:2
-6   (call core.svec %₃ %₄ %₅)
-7   --- method core.nothing %₆
+1   (call core.svec)
+2   (call core.svec)
+3   (call JuliaLowering.eval_closure_type TestMod :#->##1 %₁ %₂)
+4   TestMod.#->##1
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   SourceLocation::1:2
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x slot₅/y]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
@@ -64,36 +46,27 @@
     9   slot₅/y
     10  (call %₇ %₈ %₉)
     11  (return %₁₀)
-8   TestMod.#->##1
-9   (new %₈)
-10  TestMod.xs
-11  TestMod.ys
-12  (call top.product %₁₀ %₁₁)
-13  (call top.Generator %₉ %₁₂)
-14  (return %₁₃)
+10  TestMod.#->##1
+11  (new %₁₀)
+12  TestMod.xs
+13  TestMod.ys
+14  (call top.product %₁₂ %₁₃)
+15  (call top.Generator %₁₁ %₁₄)
+16  (return %₁₅)
 
 ########################################
 # Use `identity` as the Generator function when possible eg in filters
 ((x,y) for (x,y) in iter if f(x))
 #---------------------
-1   --- thunk
-    1   (global TestMod.#->##2)
-    2   (call core.svec)
-    3   (call core.svec)
-    4   (call core.svec)
-    5   (call core._structtype TestMod :#->##2 %₂ %₃ %₄ false 0)
-    6   (call core._setsuper! %₅ core.Function)
-    7   (const TestMod.#->##2)
-    8   (= TestMod.#->##2 %₅)
-    9   (call core.svec)
-    10  (call core._typebody! %₅ %₉)
-    11  (return core.nothing)
-2   TestMod.#->##2
-3   (call core.svec %₂ core.Any)
-4   (call core.svec)
-5   SourceLocation::1:29
-6   (call core.svec %₃ %₄ %₅)
-7   --- method core.nothing %₆
+1   (call core.svec)
+2   (call core.svec)
+3   (call JuliaLowering.eval_closure_type TestMod :#->##2 %₁ %₂)
+4   TestMod.#->##2
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   SourceLocation::1:29
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x slot₅/y(!read)]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
@@ -105,42 +78,33 @@
     8   slot₄/x
     9   (call %₇ %₈)
     10  (return %₉)
-8   TestMod.#->##2
-9   (new %₈)
-10  TestMod.iter
-11  (call top.Filter %₉ %₁₀)
-12  (call top.Generator top.identity %₁₁)
-13  (return %₁₂)
+10  TestMod.#->##2
+11  (new %₁₀)
+12  TestMod.iter
+13  (call top.Filter %₁₁ %₁₂)
+14  (call top.Generator top.identity %₁₃)
+15  (return %₁₄)
 
 ########################################
 # Use of placeholders in iteration vars
 (1 for _ in xs)
 #---------------------
-1   --- thunk
-    1   (global TestMod.#->##3)
-    2   (call core.svec)
-    3   (call core.svec)
-    4   (call core.svec)
-    5   (call core._structtype TestMod :#->##3 %₂ %₃ %₄ false 0)
-    6   (call core._setsuper! %₅ core.Function)
-    7   (const TestMod.#->##3)
-    8   (= TestMod.#->##3 %₅)
-    9   (call core.svec)
-    10  (call core._typebody! %₅ %₉)
-    11  (return core.nothing)
-2   TestMod.#->##3
-3   (call core.svec %₂ core.Any)
-4   (call core.svec)
-5   SourceLocation::1:2
-6   (call core.svec %₃ %₄ %₅)
-7   --- method core.nothing %₆
+1   (call core.svec)
+2   (call core.svec)
+3   (call JuliaLowering.eval_closure_type TestMod :#->##3 %₁ %₂)
+4   TestMod.#->##3
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   SourceLocation::1:2
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/_(!read)]
     1   (return 1)
-8   TestMod.#->##3
-9   (new %₈)
-10  TestMod.xs
-11  (call top.Generator %₉ %₁₀)
-12  (return %₁₁)
+10  TestMod.#->##3
+11  (new %₁₀)
+12  TestMod.xs
+13  (call top.Generator %₁₁ %₁₂)
+14  (return %₁₃)
 
 ########################################
 # Error: Use of placeholders in body
@@ -154,24 +118,15 @@ LoweringError:
 # 1D generator with destructuring
 (body for (x,_,y) in iter)
 #---------------------
-1   --- thunk
-    1   (global TestMod.#->##5)
-    2   (call core.svec)
-    3   (call core.svec)
-    4   (call core.svec)
-    5   (call core._structtype TestMod :#->##5 %₂ %₃ %₄ false 0)
-    6   (call core._setsuper! %₅ core.Function)
-    7   (const TestMod.#->##5)
-    8   (= TestMod.#->##5 %₅)
-    9   (call core.svec)
-    10  (call core._typebody! %₅ %₉)
-    11  (return core.nothing)
-2   TestMod.#->##5
-3   (call core.svec %₂ core.Any)
-4   (call core.svec)
-5   SourceLocation::1:2
-6   (call core.svec %₃ %₄ %₅)
-7   --- method core.nothing %₆
+1   (call core.svec)
+2   (call core.svec)
+3   (call JuliaLowering.eval_closure_type TestMod :#->##5 %₁ %₂)
+4   TestMod.#->##5
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   SourceLocation::1:2
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/destructured_arg slot₃/iterstate slot₄/x(!read) slot₅/y(!read)]
     1   (call top.indexed_iterate slot₂/destructured_arg 1)
     2   (= slot₄/x (call core.getfield %₁ 1))
@@ -185,42 +140,33 @@ LoweringError:
     10  (= slot₅/y (call core.getfield %₉ 1))
     11  TestMod.body
     12  (return %₁₁)
-8   TestMod.#->##5
-9   (new %₈)
-10  TestMod.iter
-11  (call top.Generator %₉ %₁₀)
-12  (return %₁₁)
+10  TestMod.#->##5
+11  (new %₁₀)
+12  TestMod.iter
+13  (call top.Generator %₁₁ %₁₂)
+14  (return %₁₃)
 
 ########################################
 # return permitted in quoted syntax in generator
 (:(return x) for _ in iter)
 #---------------------
-1   --- thunk
-    1   (global TestMod.#->##6)
-    2   (call core.svec)
-    3   (call core.svec)
-    4   (call core.svec)
-    5   (call core._structtype TestMod :#->##6 %₂ %₃ %₄ false 0)
-    6   (call core._setsuper! %₅ core.Function)
-    7   (const TestMod.#->##6)
-    8   (= TestMod.#->##6 %₅)
-    9   (call core.svec)
-    10  (call core._typebody! %₅ %₉)
-    11  (return core.nothing)
-2   TestMod.#->##6
-3   (call core.svec %₂ core.Any)
-4   (call core.svec)
-5   SourceLocation::1:4
-6   (call core.svec %₃ %₄ %₅)
-7   --- method core.nothing %₆
+1   (call core.svec)
+2   (call core.svec)
+3   (call JuliaLowering.eval_closure_type TestMod :#->##6 %₁ %₂)
+4   TestMod.#->##6
+5   (call core.svec %₄ core.Any)
+6   (call core.svec)
+7   SourceLocation::1:4
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
     slots: [slot₁/#self#(!read) slot₂/_(!read)]
     1   (call JuliaLowering.interpolate_ast (inert (return x)))
     2   (return %₁)
-8   TestMod.#->##6
-9   (new %₈)
-10  TestMod.iter
-11  (call top.Generator %₉ %₁₀)
-12  (return %₁₁)
+10  TestMod.#->##6
+11  (new %₁₀)
+12  TestMod.iter
+13  (call top.Generator %₁₁ %₁₂)
+14  (return %₁₃)
 
 ########################################
 # Error: `return` not permitted in generator body
@@ -234,47 +180,29 @@ LoweringError:
 # Nested case with duplicate iteration variables
 (x for x in 1:3 for x in 1:2)
 #---------------------
-1   --- thunk
-    1   (global TestMod.#->##7)
-    2   (call core.svec)
-    3   (call core.svec)
-    4   (call core.svec)
-    5   (call core._structtype TestMod :#->##7 %₂ %₃ %₄ false 0)
-    6   (call core._setsuper! %₅ core.Function)
-    7   (const TestMod.#->##7)
-    8   (= TestMod.#->##7 %₅)
-    9   (call core.svec)
-    10  (call core._typebody! %₅ %₉)
-    11  (return core.nothing)
-2   --- thunk
-    1   (global TestMod.#->#->##0)
-    2   (call core.svec)
-    3   (call core.svec)
-    4   (call core.svec)
-    5   (call core._structtype TestMod :#->#->##0 %₂ %₃ %₄ false 0)
-    6   (call core._setsuper! %₅ core.Function)
-    7   (const TestMod.#->#->##0)
-    8   (= TestMod.#->#->##0 %₅)
-    9   (call core.svec)
-    10  (call core._typebody! %₅ %₉)
-    11  (return core.nothing)
-3   TestMod.#->#->##0
-4   (call core.svec %₃ core.Any)
+1   (call core.svec)
+2   (call core.svec)
+3   (call JuliaLowering.eval_closure_type TestMod :#->##7 %₁ %₂)
+4   (call core.svec)
 5   (call core.svec)
-6   SourceLocation::1:2
-7   (call core.svec %₄ %₅ %₆)
-8   --- method core.nothing %₇
+6   (call JuliaLowering.eval_closure_type TestMod :#->#->##0 %₄ %₅)
+7   TestMod.#->#->##0
+8   (call core.svec %₇ core.Any)
+9   (call core.svec)
+10  SourceLocation::1:2
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
     slots: [slot₁/#self#(!read) slot₂/x slot₃/x]
     1   slot₂/x
     2   (= slot₃/x %₁)
     3   slot₃/x
     4   (return %₃)
-9   TestMod.#->##7
-10  (call core.svec %₉ core.Any)
-11  (call core.svec)
-12  SourceLocation::1:2
-13  (call core.svec %₁₀ %₁₁ %₁₂)
-14  --- method core.nothing %₁₃
+13  TestMod.#->##7
+14  (call core.svec %₁₃ core.Any)
+15  (call core.svec)
+16  SourceLocation::1:2
+17  (call core.svec %₁₄ %₁₅ %₁₆)
+18  --- method core.nothing %₁₇
     slots: [slot₁/#self#(!read) slot₂/x(!read)]
     1   TestMod.#->#->##0
     2   (new %₁)
@@ -282,13 +210,13 @@ LoweringError:
     4   (call %₃ 1 2)
     5   (call top.Generator %₂ %₄)
     6   (return %₅)
-15  TestMod.#->##7
-16  (new %₁₅)
-17  TestMod.:
-18  (call %₁₇ 1 3)
-19  (call top.Generator %₁₆ %₁₈)
-20  (call top.Flatten %₁₉)
-21  (return %₂₀)
+19  TestMod.#->##7
+20  (new %₁₉)
+21  TestMod.:
+22  (call %₂₁ 1 3)
+23  (call top.Generator %₂₀ %₂₂)
+24  (call top.Flatten %₂₃)
+25  (return %₂₄)
 
 ########################################
 # Comprehension lowers to generator with collect

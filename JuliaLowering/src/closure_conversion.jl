@@ -257,50 +257,13 @@ function type_for_closure(ctx::ClosureConversionCtx, srcref, name_str, field_sym
     # need to be serialized there during precompile.
     mod = ctx.mod
     type_binding = new_global_binding(ctx, srcref, name_str, mod)
-    typevar_stmts = SyntaxList(ctx)
-    type_params = SyntaxList(ctx)
-    field_types = SyntaxList(ctx)
-    for (name, isbox) in zip(field_syms, field_is_box)
-        if !isbox
-            typevar_name = "$(name.name_val)_type"
-            tv = ssavar(ctx, name)
-            push!(typevar_stmts, @ast ctx name [K"=" tv [K"call" "TypeVar"::K"core" typevar_name::K"Symbol"]])
-            push!(type_params, tv)
-            push!(field_types, tv)
-        else
-            push!(field_types, @ast ctx name "Box"::K"core")
-        end
-    end
-    type_ex = @ast ctx srcref [K"lambda"(is_toplevel_thunk=true, lambda_bindings=LambdaBindings())
-        [K"block"]
-        [K"block"]
-        [K"block"
-            [K"global" type_binding]
-            typevar_stmts...
-            closure_type := [K"call"
-                "_structtype"::K"core"
-                mod::K"Value"
-                name_str::K"Symbol"
-                [K"call" "svec"::K"core" type_params...]
-                [K"call"
-                    "svec"::K"core"
-                    field_syms...
-                ]
-                [K"call" "svec"::K"core"]
-                false::K"Bool"
-                length(field_syms)::K"Integer"
-            ]
-            [K"call" "_setsuper!"::K"core" closure_type "Function"::K"core"]
-            # TODO: Need K"const_decl" or whatever when we upgrade to the latest Julia.
-            [K"const" type_binding]
-            [K"=" type_binding closure_type]
-            [K"call"
-                "_typebody!"::K"core"
-                closure_type
-                [K"call" "svec"::K"core" field_types...]
-            ]
-            "nothing"::K"core"
-        ]
+    type_ex = @ast ctx srcref [K"call"
+        #"_call_latest"::K"core"
+        eval_closure_type::K"Value"
+        ctx.mod::K"Value"
+        name_str::K"Symbol"
+        [K"call" "svec"::K"core" field_syms...]
+        [K"call" "svec"::K"core" [f::K"Bool" for f in field_is_box]...]
     ]
     type_ex, type_binding
 end
@@ -417,12 +380,11 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                     else
                         [K"call" "apply_type"::K"core" closure_type_ type_params...]
                     end
-                    [K"=" func_name
-                        [K"new"
-                            closure_type
-                            init_closure_args...
-                        ]
+                    closure_val := [K"new"
+                        closure_type
+                        init_closure_args...
                     ]
+                    convert_assignment(ctx, [K"=" func_name closure_val])
                     ::K"TOMBSTONE"
                 ]
             else

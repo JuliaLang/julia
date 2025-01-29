@@ -70,6 +70,20 @@ begin
 end
 """) == (true, false, (true, true, true, false))
 
+# Mutually recursive closures (closure capturing a closure)
+@test JuliaLowering.include_string(test_mod, """
+let
+    function recursive_a(n)
+        here = (:a, n)
+        n <= 0 ? here  : (here, recursive_b(n-1))
+    end
+    function recursive_b(n)
+        ((:b, n), recursive_a(n-1))
+    end
+    recursive_a(2)
+end
+""") == ((:a, 2), ((:b, 1), (:a, 0)))
+
 # Global method capturing local variables
 JuliaLowering.include_string(test_mod, """
 begin

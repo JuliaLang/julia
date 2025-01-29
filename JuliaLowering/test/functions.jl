@@ -282,6 +282,17 @@ end
     """)
     @test test_mod.f_kw_no_default(x = 10) == 10
     @test_throws UndefKeywordError(:x) test_mod.f_kw_no_default() == 10
+
+    # Closure with keywords
+    cl = JuliaLowering.include_string(test_mod, """
+    let y = 1
+        function f_kw_closure(; x=10)
+            x + y
+        end
+    end
+    """)
+    @test cl() == 11
+    @test cl(x = 20) == 21
 end
 
 @testset "Broadcast" begin

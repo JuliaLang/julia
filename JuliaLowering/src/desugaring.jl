@@ -2639,11 +2639,11 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     end
 
     @ast ctx ex [K"block"
-        if !isnothing(bare_func_name)
-            [K"function_decl"(bare_func_name) bare_func_name]
-        end
         if !isnothing(body_func_name)
             [K"function_decl"(body_func_name) body_func_name]
+        end
+        if !isnothing(bare_func_name)
+            [K"function_decl"(bare_func_name) bare_func_name]
         end
         [K"scope_block"(scope_type=:hard)
             [K"block"
@@ -2660,12 +2660,9 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
                 ]
             ]
         ]
-        if !isnothing(bare_func_name)
-            # K"function_decl" ensures this name is defined
-            bare_func_name
-        else
-            "nothing"::K"core"
-        end
+        [K"unnecessary" 
+            isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
+        ]
     ]
 end
 
