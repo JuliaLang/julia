@@ -4,8 +4,6 @@ using Base: get_world_counter, inferencebarrier
 using CompilerDevTools
 using CompilerDevTools: lookup_method_instance, SplitCacheOwner, SplitCacheInterp
 
-@activate Compiler
-
 !@isdefined(cache_version) && (cache_version = 1)
 new_cache_version() = SplitCacheOwner(global cache_version += 1)
 
