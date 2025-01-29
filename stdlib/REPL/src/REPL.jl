@@ -1431,7 +1431,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, ';')
-                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
+                LineEdit.check_show_hint(s)
             end
         end,
         '?' => function (s::MIState,o...)
@@ -1442,7 +1442,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, '?')
-                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
+                LineEdit.check_show_hint(s)
             end
         end,
         ']' => function (s::MIState,o...)
@@ -1465,8 +1465,8 @@ function setup_interface(
                                         transition(s, mode) do
                                             LineEdit.state(s, mode).input_buffer = buf
                                         end
-                                        if !isempty(s) && @invokelatest(LineEdit.check_for_hint(s))
-                                            @invokelatest(LineEdit.refresh_line(s))
+                                        if !isempty(s)
+                                            @invokelatest(LineEdit.check_show_hint(s))
                                         end
                                         break
                                     end
@@ -1479,7 +1479,7 @@ function setup_interface(
                 Base.errormonitor(t_replswitch)
             else
                 edit_insert(s, ']')
-                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
+                LineEdit.check_show_hint(s)
             end
         end,
 
