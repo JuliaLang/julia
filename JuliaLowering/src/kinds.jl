@@ -84,7 +84,11 @@ function _register_kinds()
             "label"
             "trycatchelse"
             "tryfinally"
-            "unnecessary"
+            # The contained block of code causes no side effects and can be
+            # removed by a later lowering pass if its value isn't used.
+            # (That is, it's removable in the same sense as
+            #  `@assume_effects :removable`.)
+            "removable"
             "decl"
             # [K"captured_local" index]
             # A local variable captured into a global method. Contains the

@@ -184,7 +184,7 @@ function tuple_to_assignments(ctx, ex)
     @ast ctx ex [K"block"
         stmts...
         end_stmts...
-        [K"unnecessary" [K"tuple" elements...]]
+        [K"removable" [K"tuple" elements...]]
     ]
 end
 
@@ -378,7 +378,7 @@ function expand_property_destruct(ctx, ex)
             ]
         ]))
     end
-    push!(stmts, @ast ctx rhs1 [K"unnecessary" rhs1])
+    push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
     makenode(ctx, ex, K"block", stmts)
 end
 
@@ -419,7 +419,7 @@ function expand_tuple_destruct(ctx, ex)
         emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
     end
     _destructure(ctx, ex, stmts, lhs, rhs1)
-    push!(stmts, @ast ctx rhs1 [K"unnecessary" rhs1])
+    push!(stmts, @ast ctx rhs1 [K"removable" rhs1])
     makenode(ctx, ex, K"block", stmts)
 end
 
@@ -647,7 +647,7 @@ function expand_setindex(ctx, ex)
             rhs
             idxs...
         ])
-        [K"unnecessary" rhs]
+        [K"removable" rhs]
     ]
 end
 
@@ -1200,7 +1200,7 @@ function expand_assignment(ctx, ex)
         expand_forms_2(ctx,
             @ast ctx ex [K"block"
                 stmts...
-                [K"unnecessary" rr]
+                [K"removable" rr]
             ]
         )
     elseif is_identifier_like(lhs)
@@ -1224,7 +1224,7 @@ function expand_assignment(ctx, ex)
         @ast ctx ex [K"block"
             stmts...
             [K"call" "setproperty!"::K"top" a b rhs]
-            [K"unnecessary" rhs]
+            [K"removable" rhs]
         ]
     elseif kl == K"tuple"
         if has_parameters(lhs)
@@ -2167,7 +2167,7 @@ function method_def_expr(ctx, srcref, callex_srcref, method_table,
                 ret_var  # might be `nothing` and hence removed
             ]
         ]
-        [K"unnecessary" method_metadata]
+        [K"removable" method_metadata]
     ]
 end
 
@@ -2660,7 +2660,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
                 ]
             ]
         ]
-        [K"unnecessary" 
+        [K"removable" 
             isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
         ]
     ]
