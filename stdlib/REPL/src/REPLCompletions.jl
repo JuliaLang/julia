@@ -2,13 +2,18 @@
 
 module REPLCompletions
 
-export completions, shell_completions, bslash_completions, completion_text
+export completions, shell_completions, bslash_completions, completion_text, named_completion
 
 using Core: Const
-const CC = Core.Compiler
+# We want to insulate the REPLCompletion module from any changes the user may
+# make to the compiler, since it runs by default and the system becomes unusable
+# if it breaks.
+const CC = Base.Compiler
 using Base.Meta
 using Base: propertynames, something, IdSet
 using Base.Filesystem: _readdirx
+
+using ..REPL.LineEdit: NamedCompletion
 
 abstract type Completion end
 
@@ -54,8 +59,10 @@ struct MethodCompletion <: Completion
 end
 
 struct BslashCompletion <: Completion
-    bslash::String
+    completion::String # what is actually completed, for example "\trianglecdot"
+    name::String # what is displayed, for example "◬ \trianglecdot"
 end
+BslashCompletion(completion::String) = BslashCompletion(completion, completion)
 
 struct ShellCompletion <: Completion
     text::String
@@ -111,12 +118,20 @@ _completion_text(c::PackageCompletion) = c.package
 _completion_text(c::PropertyCompletion) = sprint(Base.show_sym, c.property)
 _completion_text(c::FieldCompletion) = sprint(Base.show_sym, c.field)
 _completion_text(c::MethodCompletion) = repr(c.method)
-_completion_text(c::BslashCompletion) = c.bslash
 _completion_text(c::ShellCompletion) = c.text
 _completion_text(c::DictCompletion) = c.key
 _completion_text(c::KeywordArgumentCompletion) = c.kwarg*'='
 
 completion_text(c) = _completion_text(c)::String
+
+named_completion(c::BslashCompletion) = NamedCompletion(c.completion, c.name)
+
+function named_completion(c)
+    text = completion_text(c)::String
+    return NamedCompletion(text, text)
+end
+
+named_completion_completion(c) = named_completion(c).completion::String
 
 const Completions = Tuple{Vector{Completion}, UnitRange{Int}, Bool}
 
@@ -624,18 +639,26 @@ function is_call_graph_uncached(sv::CC.InferenceState)
     return is_call_graph_uncached(parent::CC.InferenceState)
 end
 
-isdefined_globalref(g::GlobalRef) = !iszero(ccall(:jl_globalref_boundp, Cint, (Any,), g))
-
 # aggressive global binding resolution within `repl_frame`
-function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef,
+function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, bailed::Bool,
                                     sv::CC.InferenceState)
+    # Ignore saw_latestworld
+    partition = CC.abstract_eval_binding_partition!(interp, g, sv)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
-        if isdefined_globalref(g)
-            return CC.RTEffects(Const(ccall(:jl_get_globalref_value, Any, (Any,), g)), Union{}, CC.EFFECTS_TOTAL)
+        if CC.is_defined_const_binding(CC.binding_kind(partition))
+            return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
+                CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL), partition)
+        else
+            b = convert(Core.Binding, g)
+            if CC.binding_kind(partition) == CC.BINDING_KIND_GLOBAL && isdefined(b, :value)
+                return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
+                    CC.RTEffects(Const(b.value), Union{}, CC.EFFECTS_TOTAL), partition)
+            end
         end
-        return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
+        return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
+            CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS), partition)
     end
-    return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef,
+    return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef, bailed::Bool,
                                               sv::CC.InferenceState)
 end
 
@@ -699,7 +722,7 @@ function CC.const_prop_argument_heuristic(interp::REPLInterpreter, arginfo::CC.A
 end
 
 function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
-    @ccall jl_resolve_globals_in_ir(
+    @ccall jl_resolve_definition_effects_in_ir(
         #=jl_array_t *stmts=# src.code::Any,
         #=jl_module_t *m=# mod::Any,
         #=jl_svec_t *sparam_vals=# Core.svec()::Any,
@@ -981,12 +1004,10 @@ function bslash_completions(string::String, pos::Int, hint::Bool=false)
         end
         # return possible matches; these cannot be mixed with regular
         # Julian completions as only latex / emoji symbols contain the leading \
-        if startswith(s, "\\:") # emoji
-            namelist = Iterators.filter(k -> startswith(k, s), keys(emoji_symbols))
-        else # latex
-            namelist = Iterators.filter(k -> startswith(k, s), keys(latex_symbols))
-        end
-        return (true, (Completion[BslashCompletion(name) for name in sort!(collect(namelist))], slashpos:pos, true))
+        symbol_dict = startswith(s, "\\:") ? emoji_symbols : latex_symbols
+        namelist = Iterators.filter(k -> startswith(k, s), keys(symbol_dict))
+        completions = Completion[BslashCompletion(name, "$(symbol_dict[name]) $name") for name in sort!(collect(namelist))]
+        return (true, (completions, slashpos:pos, true))
     end
     return (false, (Completion[], 0:-1, false))
 end
@@ -1064,7 +1085,7 @@ function complete_keyword_argument(partial::String, last_idx::Int, context_modul
     kwargs_flag == 2 && return fail # one of the previous kwargs is invalid
 
     methods = Completion[]
-    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, kwargs_flag == 1)
+    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : MAX_METHOD_COMPLETIONS, kwargs_flag == 1)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
 
@@ -1076,6 +1097,9 @@ function complete_keyword_argument(partial::String, last_idx::Int, context_modul
     last_word = partial[wordrange] # the word to complete
     kwargs = Set{String}()
     for m in methods
+        # if MAX_METHOD_COMPLETIONS is hit a single TextCompletion is return by complete_methods! with an explanation
+        # which can be ignored here
+        m isa TextCompletion && continue
         m::MethodCompletion
         possible_kwargs = Base.kwarg_decl(m.method)
         current_kwarg_candidates = String[]
@@ -1096,7 +1120,7 @@ function complete_keyword_argument(partial::String, last_idx::Int, context_modul
         complete_keyval!(suggestions, last_word)
     end
 
-    return sort!(suggestions, by=completion_text), wordrange
+    return sort!(suggestions, by=named_completion_completion), wordrange
 end
 
 function get_loading_candidates(pkgstarts::String, project_file::String)
@@ -1295,7 +1319,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         complete_identifiers!(suggestions, context_module, string, name,
                               pos, separatorpos, startpos;
                               shift)
-        return sort!(unique!(completion_text, suggestions), by=completion_text), (separatorpos+1):pos, true
+        return sort!(unique!(named_completion, suggestions), by=named_completion_completion), (separatorpos+1):pos, true
     elseif inc_tag === :cmd
         # TODO: should this call shell_completions instead of partially reimplementing it?
         let m = match(r"[\t\n\r\"`><=*?|]| (?!\\)", reverse(partial)) # fuzzy shell_parse in reverse
@@ -1493,7 +1517,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     complete_identifiers!(suggestions, context_module, string, name,
                           pos, separatorpos, startpos;
                           comp_keywords, complete_modules_only, shift)
-    return sort!(unique!(completion_text, suggestions), by=completion_text), namepos:pos, true
+    return sort!(unique!(named_completion, suggestions), by=named_completion_completion), namepos:pos, true
 end
 
 function shell_completions(string, pos, hint::Bool=false)

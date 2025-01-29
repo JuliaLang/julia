@@ -31,7 +31,6 @@
 
 ;; this is overwritten when we run in actual julia
 (define (defined-julia-global v) #f)
-(define (nothrow-julia-global v) #f)
 
 ;; parser entry points
 
@@ -139,7 +138,7 @@
 
 (define (toplevel-only-expr? e)
   (and (pair? e)
-       (or (memq (car e) '(toplevel line module import using export public
+       (or (memq (car e) '(toplevel line module export public
                                     error incomplete))
            (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
 

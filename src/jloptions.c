@@ -130,6 +130,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0,    // worker
                         NULL, // cookie
                         JL_OPTIONS_HANDLE_SIGNALS_ON,
+                        JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_NO,
                         JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES,
                         JL_OPTIONS_USE_COMPILED_MODULES_YES,
                         JL_OPTIONS_USE_PKGIMAGES_YES,
@@ -150,7 +151,9 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
                         0, // trace_compile_timing
-                        0, // trim
+                        JL_TRIM_NO, // trim
+                        0, // task_metrics
+                        -1, // timeout_for_safepoint_straggler_s
     };
     jl_options_initialized = 1;
 }
@@ -303,17 +306,21 @@ static const char opts_hidden[]  =
     "                                               functions\n\n"
 
     // compiler debugging and experimental (see the devdocs for tips on using these options)
+    " --experimental                                Enable the use of experimental (alpha) features\n"
     " --output-unopt-bc <name>                      Generate unoptimized LLVM bitcode (.bc)\n"
     " --output-bc <name>                            Generate LLVM bitcode (.bc)\n"
     " --output-asm <name>                           Generate an assembly file (.s)\n"
     " --output-incremental={yes|no*}                Generate an incremental output file (rather than\n"
     "                                               complete)\n"
+    " --timeout-for-safepoint-straggler <seconds>   If this value is set, then we will dump the backtrace for a thread\n"
+    "                                               that fails to reach a safepoint within the specified time\n"
     " --trace-compile={stderr|name}                 Print precompile statements for methods compiled\n"
     "                                               during execution or save to stderr or a path. Methods that\n"
     "                                               were recompiled are printed in yellow or with a trailing\n"
     "                                               comment if color is not supported\n"
     " --trace-compile-timing                        If --trace-compile is enabled show how long each took to\n"
     "                                               compile in ms\n"
+    " --task-metrics={yes|no*}                      Enable collection of per-task timing data.\n"
     " --image-codegen                               Force generate code in imaging mode\n"
     " --permalloc-pkgimg={yes|no*}                  Copy the data section of package images into memory\n"
     " --trim={no*|safe|unsafe|unsafe-warn}\n"
@@ -342,9 +349,11 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_warn_scope,
            opt_inline,
            opt_polly,
+           opt_timeout_for_safepoint_straggler,
            opt_trace_compile,
            opt_trace_compile_timing,
            opt_trace_dispatch,
+           opt_task_metrics,
            opt_math_mode,
            opt_worker,
            opt_bind_to,
@@ -372,6 +381,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_gc_threads,
            opt_permalloc_pkgimg,
            opt_trim,
+           opt_experimental_features,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
     static const struct option longopts[] = {
@@ -421,12 +431,15 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "warn-scope",      required_argument, 0, opt_warn_scope },
         { "inline",          required_argument, 0, opt_inline },
         { "polly",           required_argument, 0, opt_polly },
+        { "timeout-for-safepoint-straggler", required_argument, 0, opt_timeout_for_safepoint_straggler },
         { "trace-compile",   required_argument, 0, opt_trace_compile },
         { "trace-compile-timing",  no_argument, 0, opt_trace_compile_timing },
         { "trace-dispatch",  required_argument, 0, opt_trace_dispatch },
+        { "task-metrics",    required_argument, 0, opt_task_metrics },
         { "math-mode",       required_argument, 0, opt_math_mode },
         { "handle-signals",  required_argument, 0, opt_handle_signals },
         // hidden command line options
+        { "experimental",    no_argument,       0, opt_experimental_features },
         { "worker",          optional_argument, 0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       0, 1 },
@@ -570,6 +583,9 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --banner={yes|no|auto|short} (%s)", optarg);
             break;
+        case opt_experimental_features:
+            jl_options.use_experimental_features = JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_YES;
+            break;
         case opt_sysimage_native_code:
             if (!strcmp(optarg,"yes"))
                 jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES;
@@ -607,8 +623,13 @@ restart_switch:
             break;
         case 't': // threads
             errno = 0;
-            jl_options.nthreadpools = 1;
-            long nthreads = -1, nthreadsi = 0;
+            jl_options.nthreadpools = 2;
+            // By default:
+            // default threads = -1 (== "auto")
+            long nthreads = -1;
+            // interactive threads = 1, or 0 if generating output
+            long nthreadsi = jl_generating_output() ? 0 : 1;
+
             if (!strncmp(optarg, "auto", 4)) {
                 jl_options.nthreads = -1;
                 if (optarg[4] == ',') {
@@ -617,10 +638,9 @@ restart_switch:
                     else {
                         errno = 0;
                         nthreadsi = strtol(&optarg[5], &endptr, 10);
-                        if (errno != 0 || endptr == &optarg[5] || *endptr != 0 || nthreadsi < 1 || nthreadsi >= INT16_MAX)
-                            jl_errorf("julia: -t,--threads=auto,<m>; m must be an integer >= 1");
+                        if (errno != 0 || endptr == &optarg[5] || *endptr != 0 || nthreadsi < 0 || nthreadsi >= INT16_MAX)
+                            jl_errorf("julia: -t,--threads=auto,<m>; m must be an integer >= 0");
                     }
-                    jl_options.nthreadpools++;
                 }
             }
             else {
@@ -634,17 +654,18 @@ restart_switch:
                         errno = 0;
                         char *endptri;
                         nthreadsi = strtol(&endptr[1], &endptri, 10);
-                        if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nthreadsi < 1 || nthreadsi >= INT16_MAX)
-                            jl_errorf("julia: -t,--threads=<n>,<m>; n and m must be integers >= 1");
+                        // Allow 0 for interactive
+                        if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nthreadsi < 0 || nthreadsi >= INT16_MAX)
+                            jl_errorf("julia: -t,--threads=<n>,<m>; m must be an integer ≥ 0");
+                        if (nthreadsi == 0)
+                            jl_options.nthreadpools = 1;
                     }
-                    jl_options.nthreadpools++;
                 }
                 jl_options.nthreads = nthreads + nthreadsi;
             }
             int16_t *ntpp = (int16_t *)malloc_s(jl_options.nthreadpools * sizeof(int16_t));
             ntpp[0] = (int16_t)nthreads;
-            if (jl_options.nthreadpools == 2)
-                ntpp[1] = (int16_t)nthreadsi;
+            ntpp[1] = (int16_t)nthreadsi;
             jl_options.nthreads_per_pool = ntpp;
             break;
         case 'p': // procs
@@ -959,6 +980,13 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --permalloc-pkgimg={yes|no} (%s)", optarg);
             break;
+        case opt_timeout_for_safepoint_straggler:
+            errno = 0;
+            long timeout = strtol(optarg, &endptr, 10);
+            if (errno != 0 || optarg == endptr || timeout < 1 || timeout > INT16_MAX)
+                jl_errorf("julia: --timeout-for-safepoint-straggler=<seconds>; seconds must be an integer between 1 and %d", INT16_MAX);
+            jl_options.timeout_for_safepoint_straggler_s = (int16_t)timeout;
+            break;
         case opt_trim:
             if (optarg == NULL || !strcmp(optarg,"safe"))
                 jl_options.trim = JL_TRIM_SAFE;
@@ -971,12 +999,24 @@ restart_switch:
             else
                 jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
             break;
+        case opt_task_metrics:
+            if (!strcmp(optarg, "no"))
+                jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_OFF;
+            else if (!strcmp(optarg, "yes"))
+                jl_options.task_metrics = JL_OPTIONS_TASK_METRICS_ON;
+            else
+                jl_errorf("julia: invalid argument to --task-metrics={yes|no} (%s)", optarg);
+            break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
                       "This is a bug, please report it.", c);
         }
     }
     parsing_args_done:
+    if (!jl_options.use_experimental_features) {
+        if (jl_options.trim != JL_TRIM_NO)
+            jl_errorf("julia: --trim is an experimental feature, you must enable it with --experimental");
+    }
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
     int proc_args = *argcp < optind ? *argcp : optind;

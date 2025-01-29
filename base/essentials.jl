@@ -93,7 +93,7 @@ f(y) = [x for x in y]
 
 # Examples
 
-```julia
+```julia-repl
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -184,11 +184,8 @@ end
 _nameof(m::Module) = ccall(:jl_module_name, Ref{Symbol}, (Any,), m)
 
 function _is_internal(__module__)
-    if ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module === Core.Compiler ||
-       _nameof(__module__) === :Base
-        return true
-    end
-    return false
+    return _nameof(__module__) === :Base ||
+      _nameof(ccall(:jl_base_relative_to, Any, (Any,), __module__)::Module) === :Compiler
 end
 
 # can be used in place of `@assume_effects :total` (supposed to be used for bootstrapping)
@@ -470,10 +467,18 @@ Evaluate an expression with values interpolated into it using `eval`.
 If two arguments are provided, the first is the module to evaluate in.
 """
 macro eval(ex)
-    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), __module__, Expr(:quote, ex)))
+    return Expr(:let, Expr(:(=), :eval_local_result,
+            Expr(:escape, Expr(:call, GlobalRef(Core, :eval), __module__, Expr(:quote, ex)))),
+        Expr(:block,
+            Expr(:var"latestworld-if-toplevel"),
+            :eval_local_result))
 end
 macro eval(mod, ex)
-    return Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))
+    return Expr(:let, Expr(:(=), :eval_local_result,
+            Expr(:escape, Expr(:call, GlobalRef(Core, :eval), mod, Expr(:quote, ex)))),
+        Expr(:block,
+            Expr(:var"latestworld-if-toplevel"),
+            :eval_local_result))
 end
 
 # use `@eval` here to directly form `:new` expressions avoid implicit `convert`s
@@ -1045,6 +1050,7 @@ call obsolete versions of a function `f`.
     Prior to Julia 1.9, this function was not exported, and was called as `Base.invokelatest`.
 """
 function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
+    @inline
     kwargs = merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_latest(f, args...)
@@ -1079,6 +1085,7 @@ of [`invokelatest`](@ref).
     world age refers to system state unrelated to the main Julia session.
 """
 function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
+    @inline
     kwargs = Base.merge(NamedTuple(), kwargs)
     if isempty(kwargs)
         return Core._call_in_world(world, f, args...)
@@ -1259,11 +1266,14 @@ arbitrary code in fixed worlds. `world` may be `UnitRange`, in which case the ma
 will error unless the binding is valid and has the same value across the entire world
 range.
 
+As a special case, the world `∞` always refers to the latest world, even if that world
+is newer than the world currently running.
+
 The `@world` macro is primarily used in the printing of bindings that are no longer
 available in the current world.
 
 ## Example
-```
+```julia-repl
 julia> struct Foo; a::Int; end
 Foo
 
@@ -1283,6 +1293,9 @@ julia> fold
     This functionality requires at least Julia 1.12.
 """
 macro world(sym, world)
+    if world == :∞
+        world = Expr(:call, get_world_counter)
+    end
     if isa(sym, Symbol)
         return :($(_resolve_in_world)($(esc(world)), $(QuoteNode(GlobalRef(__module__, sym)))))
     elseif isa(sym, GlobalRef)

@@ -812,7 +812,6 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pr) 
     runtime_nbits = 16; \
     float R = OP(A, B); \
     *(uint16_t*)pr = float_to_half(R); \
-    *(uint16_t*)pr = float_to_half(R); \
 }
 
 #define bi_intrinsic_bfloat(OP, name) \
@@ -902,7 +901,6 @@ static void jl_##name##16(unsigned runtime_nbits, void *pa, void *pb, void *pc, 
     float C = half_to_float(c); \
     runtime_nbits = 16; \
     float R = OP(A, B, C); \
-    *(uint16_t*)pr = float_to_half(R); \
     *(uint16_t*)pr = float_to_half(R); \
 }
 
@@ -1398,12 +1396,49 @@ bi_iintrinsic_fast(LLVMURem, rem, urem_int, u)
 bi_iintrinsic_fast(jl_LLVMSMod, smod, smod_int,  )
 #define frem(a, b) \
     fp_select2(a, b, fmod)
-
 un_fintrinsic(neg_float,neg_float)
 bi_fintrinsic(add,add_float)
 bi_fintrinsic(sub,sub_float)
 bi_fintrinsic(mul,mul_float)
 bi_fintrinsic(div,div_float)
+
+float min_float(float x, float y) JL_NOTSAFEPOINT
+{
+    float diff = x - y;
+    float argmin = signbit(diff) ? x : y;
+    int is_nan = isnan(x) || isnan(y);
+    return is_nan ? diff : argmin;
+}
+
+double min_double(double x, double y) JL_NOTSAFEPOINT
+{
+    double diff = x - y;
+    double argmin = signbit(diff) ? x : y;
+    int is_nan = isnan(x) || isnan(y);
+    return is_nan ? diff : argmin;
+}
+
+#define _min(a, b) sizeof(a) == sizeof(float) ? min_float(a, b) : min_double(a, b)
+bi_fintrinsic(_min, min_float)
+
+float max_float(float x, float y) JL_NOTSAFEPOINT
+{
+    float diff = x - y;
+    float argmax = signbit(diff) ? y : x;
+    int is_nan = isnan(x) || isnan(y);
+    return is_nan ? diff : argmax;
+}
+
+double max_double(double x, double y) JL_NOTSAFEPOINT
+{
+    double diff = x - y;
+    double argmax = signbit(diff) ? y : x;
+    int is_nan = isnan(x) || isnan(y);
+    return is_nan ? diff : argmax;
+}
+
+#define _max(a, b) sizeof(a) == sizeof(float) ? max_float(a, b) : max_double(a, b)
+bi_fintrinsic(_max, max_float)
 
 // ternary operators //
 // runtime fma is broken on windows, define julia_fma(f) ourself with fma_emulated as reference.
@@ -1574,7 +1609,6 @@ bi_iintrinsic_cnvtb_fast(LLVMAShr, ashr_op, ashr_int, , 1)
 //un_iintrinsic_fast(LLVMByteSwap, bswap_op, bswap_int, u)
 un_iintrinsic_slow(LLVMByteSwap, bswap_int, u)
 //#define ctpop_op(a) __builtin_ctpop(a)
-#if JL_LLVM_VERSION >= 170000
 //uu_iintrinsic_fast(LLVMPopcount, ctpop_op, ctpop_int, u)
 uu_iintrinsic_slow(LLVMPopcount, ctpop_int, u)
 //#define ctlz_op(a) __builtin_ctlz(a)
@@ -1583,16 +1617,6 @@ uu_iintrinsic_slow(LLVMCountl_zero, ctlz_int, u)
 //#define cttz_op(a) __builtin_cttz(a)
 //uu_iintrinsic_fast(LLVMCountr_zero, cttz_op, cttz_int, u)
 uu_iintrinsic_slow(LLVMCountr_zero, cttz_int, u)
-#else
-//uu_iintrinsic_fast(LLVMCountPopulation, ctpop_op, ctpop_int, u)
-uu_iintrinsic_slow(LLVMCountPopulation, ctpop_int, u)
-//#define ctlz_op(a) __builtin_ctlz(a)
-//uu_iintrinsic_fast(LLVMCountLeadingZeros, ctlz_op, ctlz_int, u)
-uu_iintrinsic_slow(LLVMCountLeadingZeros, ctlz_int, u)
-//#define cttz_op(a) __builtin_cttz(a)
-//uu_iintrinsic_fast(LLVMCountTrailingZeros, cttz_op, cttz_int, u)
-uu_iintrinsic_slow(LLVMCountTrailingZeros, cttz_int, u)
-#endif
 #define not_op(a) ~a
 un_iintrinsic_fast(LLVMFlipAllBits, not_op, not_int, u)
 

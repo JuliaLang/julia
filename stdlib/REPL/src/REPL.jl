@@ -33,9 +33,9 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     if isdefined(ex, :scope)
         scope = ex.scope
         if scope isa Module
-            bpart = Base.lookup_binding_partition(Base.get_world_counter(), GlobalRef(scope, var))
+            bpart = Base.lookup_binding_partition(ex.world, GlobalRef(scope, var))
             kind = Base.binding_kind(bpart)
-            if kind === Base.BINDING_KIND_GLOBAL || kind === Base.BINDING_KIND_CONST || kind == Base.BINDING_KIND_DECLARED
+            if kind === Base.BINDING_KIND_GLOBAL || kind === Base.BINDING_KIND_UNDEF_CONST || kind == Base.BINDING_KIND_DECLARED
                 print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
             elseif kind === Base.BINDING_KIND_FAILED
                 print(io, "\nHint: It looks like two or more modules export different ",
@@ -44,8 +44,8 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 "with the module it should come from.")
             elseif kind === Base.BINDING_KIND_GUARD
                 print(io, "\nSuggestion: check for spelling errors or missing imports.")
-            else
-                print(io, "\nSuggestion: this global was defined as `$(bpart.restriction.globalref)` but not assigned a value.")
+            elseif Base.is_some_imported(kind)
+                print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
             end
         elseif scope === :static_parameter
             print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
@@ -343,9 +343,9 @@ __repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_fi
 
 function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Cint}(1))
     if !isexpr(ast, :toplevel)
-        ast = __repl_entry_lower_with_loc(mod, ast, toplevel_file, toplevel_line)
+        ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
         check_for_missing_packages_and_run_hooks(ast)
-        return __repl_entry_eval_expanded_with_loc(mod, ast, toplevel_file, toplevel_line)
+        return invokelatest(__repl_entry_eval_expanded_with_loc, mod, ast, toplevel_file, toplevel_line)
     end
     local value=nothing
     for i = 1:length(ast.args)
@@ -843,7 +843,7 @@ function complete_line(c::REPLCompletionProvider, s::PromptState, mod::Module; h
     full = LineEdit.input_string(s)
     ret, range, should_complete = completions(full, lastindex(partial), mod, c.modifiers.shift, hint)
     c.modifiers = LineEdit.Modifiers()
-    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
+    return unique!(LineEdit.NamedCompletion[named_completion(x) for x in ret]), partial[range], should_complete
 end
 
 function complete_line(c::ShellCompletionProvider, s::PromptState; hint::Bool=false)
@@ -851,14 +851,14 @@ function complete_line(c::ShellCompletionProvider, s::PromptState; hint::Bool=fa
     partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
     ret, range, should_complete = shell_completions(full, lastindex(partial), hint)
-    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
+    return unique!(LineEdit.NamedCompletion[named_completion(x) for x in ret]), partial[range], should_complete
 end
 
 function complete_line(c::LatexCompletions, s; hint::Bool=false)
     partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)::String
     ret, range, should_complete = bslash_completions(full, lastindex(partial), hint)[2]
-    return unique!(String[completion_text(x) for x in ret]), partial[range], should_complete
+    return unique!(LineEdit.NamedCompletion[named_completion(x) for x in ret]), partial[range], should_complete
 end
 
 with_repl_linfo(f, repl) = f(outstream(repl))
@@ -1884,16 +1884,26 @@ function get_usings!(usings, ex)
     return usings
 end
 
+function create_global_out!(mod)
+    if !isdefinedglobal(mod, :Out)
+        out = Dict{Int, Any}()
+        @eval mod begin
+            const Out = $(out)
+            export Out
+        end
+        return out
+    end
+    return getglobal(mod, Out)
+end
+
 function capture_result(n::Ref{Int}, @nospecialize(x))
     n = n[]
     mod = Base.MainInclude
-    if !isdefined(mod, :Out)
-        @eval mod global Out
-        @eval mod export Out
-        setglobal!(mod, :Out, Dict{Int, Any}())
-    end
-    if x !== getglobal(mod, :Out) && x !== nothing # remove this?
-        getglobal(mod, :Out)[n] = x
+    # TODO: This invokelatest is only required due to backdated constants
+    # and should be removed after
+    out = isdefinedglobal(mod, :Out) ? invokelatest(getglobal, mod, :Out) : invokelatest(create_global_out!, mod)
+    if x !== out && x !== nothing # remove this?
+        out[n] = x
     end
     nothing
 end

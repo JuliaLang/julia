@@ -75,6 +75,13 @@ ifndef JULIA_VAGRANT_BUILD
 endif
 endif
 
+TOP_LEVEL_PKGS := Compiler
+
+TOP_LEVEL_PKG_LINK_TARGETS := $(addprefix $(build_datarootdir)/julia/,$(TOP_LEVEL_PKGS))
+
+# Generate symlinks for top level pkgs in usr/share/julia/
+$(foreach module, $(TOP_LEVEL_PKGS), $(eval $(call symlink_target,$$(JULIAHOME)/$(module),$$(build_datarootdir)/julia,$(module))))
+
 julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/deps
 
@@ -103,10 +110,10 @@ julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.in
 julia-cli-release julia-cli-debug: julia-cli-% : julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/cli $*
 
-julia-sysimg-ji : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
+julia-sysimg-ji : $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-ji JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
 
-julia-sysimg-bc : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
+julia-sysimg-bc : $(TOP_LEVEL_PKG_LINK_TARGETS) julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-bc JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
 
 julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia-src-%
@@ -221,7 +228,7 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp libgmpxx
 JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_NGHTTP2) += libnghttp2
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MBEDTLS) += libmbedtls libmbedcrypto libmbedx509
+JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENSSL) += libcrypto libssl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUV) += libuv
@@ -272,6 +279,10 @@ ifeq ($(USE_SYSTEM_LAPACK),0)
 JL_PRIVATE_LIBS-0 += libgfortblas
 endif
 endif
+endif
+
+ifneq (${MMTK_PLAN},None)
+JL_PRIVATE_LIBS-0 += libmmtk_julia
 endif
 
 # Note that we disable MSYS2's path munging here, as otherwise

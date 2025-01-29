@@ -66,14 +66,13 @@ void jl_module_run_initializer(jl_module_t *m)
 {
     JL_TIMING(INIT_MODULE, INIT_MODULE);
     jl_timing_show_module(m, JL_TIMING_DEFAULT_BLOCK);
-    jl_function_t *f = jl_module_get_initializer(m);
-    if (f == NULL)
-        return;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_apply(&f, 1);
+        jl_function_t *f = jl_module_get_initializer(m);
+        if (f != NULL)
+            jl_apply(&f, 1);
         ct->world_age = last_age;
     }
     JL_CATCH {
@@ -157,7 +156,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     else {
         jl_binding_t *b = jl_get_module_binding(parent_module, name, 1);
         jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
-        jl_ptr_kind_union_t pku = encode_restriction(NULL, BINDING_KIND_CONST);
+        jl_ptr_kind_union_t pku = encode_restriction(NULL, BINDING_KIND_UNDEF_CONST);
         jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)newm, BINDING_KIND_CONST);
         if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku)) {
             if (decode_restriction_kind(pku) != BINDING_KIND_CONST) {
@@ -303,38 +302,6 @@ static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f
     return args[0];
 }
 
-void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty)
-{
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-    jl_ptr_kind_union_t new_pku = encode_restriction(ty, BINDING_KIND_GLOBAL);
-    while (1) {
-        if (decode_restriction_kind(pku) != BINDING_KIND_GLOBAL) {
-            if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
-                if (jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku))
-                    break;
-                continue;
-            } else {
-                jl_errorf("cannot set type for imported global %s.%s.",
-                        jl_symbol_name(mod->name), jl_symbol_name(sym));
-            }
-        }
-        if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
-            jl_errorf("cannot set type for imported constant %s.%s.",
-                    jl_symbol_name(mod->name), jl_symbol_name(sym));
-        }
-        jl_value_t *old_ty = decode_restriction_value(pku);
-        JL_GC_PROMISE_ROOTED(old_ty);
-        if (!jl_types_equal(ty, old_ty)) {
-            jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
-                    jl_symbol_name(mod->name), jl_symbol_name(sym));
-        }
-        if (jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku))
-            break;
-    }
-    jl_gc_wb(bpart, ty);
-}
-
 extern void check_safe_newbinding(jl_module_t *m, jl_sym_t *var);
 void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
     // create uninitialized mutable binding for "global x" decl sometimes or probably
@@ -350,17 +317,49 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type) {
         gm = m;
         gs = (jl_sym_t*)arg;
     }
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
     jl_binding_t *b = jl_get_module_binding(gm, gs, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-    while (decode_restriction_kind(pku) == BINDING_KIND_GUARD || decode_restriction_kind(pku) == BINDING_KIND_FAILED) {
-        check_safe_newbinding(gm, gs);
-        if (jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction(NULL, BINDING_KIND_DECLARED)))
-            break;
+    jl_binding_partition_t *bpart = NULL;
+    jl_ptr_kind_union_t new_pku = encode_restriction(set_type, set_type == NULL ? BINDING_KIND_DECLARED : BINDING_KIND_GLOBAL);
+    while (1) {
+        bpart = jl_get_binding_partition(b, new_world);
+        jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+        if (decode_restriction_kind(pku) != BINDING_KIND_GLOBAL) {
+            if (jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
+                if (decode_restriction_kind(pku) == BINDING_KIND_DECLARED && !set_type)
+                    goto done;
+                check_safe_newbinding(gm, gs);
+                if (jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku)) {
+                    break;
+                }
+                continue;
+            } else if (set_type) {
+                if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
+                    jl_errorf("cannot set type for imported constant %s.%s.",
+                            jl_symbol_name(gm->name), jl_symbol_name(gs));
+                } else {
+                    jl_errorf("cannot set type for imported global %s.%s.",
+                            jl_symbol_name(gm->name), jl_symbol_name(gs));
+                }
+            }
+        }
+        if (!set_type)
+            goto done;
+        jl_value_t *old_ty = decode_restriction_value(pku);
+        JL_GC_PROMISE_ROOTED(old_ty);
+        if (!jl_types_equal(set_type, old_ty)) {
+            jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
+                    jl_symbol_name(gm->name), jl_symbol_name(gs));
+        }
+        goto done;
     }
-    if (set_type) {
-        jl_binding_set_type(b, gm, gs, set_type);
-    }
+    if (set_type)
+        jl_gc_wb(bpart, set_type);
+    bpart->min_world = new_world;
+    jl_atomic_store_release(&jl_world_counter, new_world);
+done:
+    JL_UNLOCK(&world_counter_lock);
 }
 
 void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type)
@@ -496,7 +495,7 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
     *forced_compile = jl_has_meta(body, jl_force_compile_sym);
 }
 
-size_t jl_require_world = ~(size_t)0;
+extern size_t jl_require_world;
 static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Require);
@@ -640,7 +639,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instan
     jl_code_instance_t *ci = jl_new_codeinst(mi, (jl_value_t*)jl_uninferred_sym,
         (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, jl_nothing,
         (jl_value_t*)src, 0, src->min_world, src->max_world,
-        0, NULL, 1, NULL, NULL);
+        0, NULL, NULL, NULL);
     return ci;
 }
 
@@ -670,7 +669,7 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     if (decode_restriction_kind(pku) != BINDING_KIND_GUARD && decode_restriction_kind(pku) != BINDING_KIND_FAILED) {
         // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
         pku = jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
-        if (decode_restriction_kind(pku) == BINDING_KIND_CONST || decode_restriction_kind(pku) == BINDING_KIND_CONST_IMPORT) {
+        if (decode_restriction_kind(pku) == BINDING_KIND_CONST || decode_restriction_kind(pku) == BINDING_KIND_BACKDATED_CONST || decode_restriction_kind(pku) == BINDING_KIND_CONST_IMPORT) {
             // Already declared (e.g. on another thread) or imported.
             if (decode_restriction_value(pku) == (jl_value_t*)import)
                 return;
@@ -740,17 +739,22 @@ static void jl_eval_errorf(jl_module_t *m, const char *filename, int lineno, con
     JL_GC_POP();
 }
 
-JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val, enum jl_partition_kind constant_kind)
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
+    jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val,
+    enum jl_partition_kind constant_kind, size_t new_world)
 {
     JL_GC_PUSH1(&val);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    if (!b) {
+        b = jl_get_module_binding(mod, var, 1);
+    }
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     int did_warn = 0;
     while (1) {
-        if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
+        enum jl_partition_kind kind = decode_restriction_kind(pku);
+        if (jl_bkind_is_some_constant(kind)) {
             if (!val) {
-                JL_GC_POP();
-                return bpart;
+                break;
             }
             jl_value_t *old = decode_restriction_value(pku);
             JL_GC_PROMISE_ROOTED(old);
@@ -767,6 +771,12 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, j
                         jl_symbol_name(var));
                 did_warn = 1;
             }
+            if (new_world > bpart->min_world) {
+                // TODO: Invoke invalidation logic here
+                jl_atomic_store_relaxed(&bpart->max_world, new_world - 1);
+                bpart = jl_get_binding_partition(b, new_world);
+                pku = jl_atomic_load_relaxed(&bpart->restriction);
+            }
         } else if (!jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
             if (jl_bkind_is_some_import(decode_restriction_kind(pku))) {
                 jl_errorf("cannot declare %s.%s constant; it was already declared as an import",
@@ -776,18 +786,51 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b, j
                         jl_symbol_name(mod->name), jl_symbol_name(var));
             }
         }
-        if (jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction(val, constant_kind))) {
-            jl_gc_wb(bpart, val);
-            break;
+        if (!jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction(val, constant_kind))) {
+            continue;
+        }
+        jl_gc_wb(bpart, val);
+        size_t prev_min_world = bpart->min_world;
+        bpart->min_world = new_world;
+        int need_backdate = 0;
+        if (new_world && val) {
+            if (prev_min_world == 0) {
+                need_backdate = 1;
+            } else if (kind == BINDING_KIND_DECLARED) {
+                jl_binding_partition_t *prev_bpart = jl_get_binding_partition(b, prev_min_world-1);
+                jl_ptr_kind_union_t prev_pku = jl_atomic_load_relaxed(&prev_bpart->restriction);
+                if (prev_bpart->min_world == 0 && decode_restriction_kind(prev_pku) == BINDING_KIND_GUARD) {
+                    // Just keep it simple and use one backdated const entry for both previous guard partition
+                    // ranges.
+                    jl_atomic_store_relaxed(&prev_bpart->max_world, new_world-1);
+                    need_backdate = 1;
+                }
+            }
+        }
+        if (need_backdate) {
+            jl_declare_constant_val3(b, mod, var, val, BINDING_KIND_BACKDATED_CONST, 0);
         }
     }
     JL_GC_POP();
     return bpart;
 }
 
+JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(
+    jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val,
+    enum jl_partition_kind constant_kind)
+{
+    JL_LOCK(&world_counter_lock);
+    size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    jl_binding_partition_t *bpart = jl_declare_constant_val3(b, mod, var, val, constant_kind, new_world);
+    if (bpart->min_world == new_world)
+        jl_atomic_store_release(&jl_world_counter, new_world);
+    JL_UNLOCK(&world_counter_lock);
+    return bpart;
+}
+
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val)
 {
-    return jl_declare_constant_val2(b, mod, var, val, BINDING_KIND_CONST);
+    return jl_declare_constant_val2(b, mod, var, val, val ? BINDING_KIND_CONST : BINDING_KIND_UNDEF_CONST);
 }
 
 JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val)
@@ -870,6 +913,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     else if (head == jl_using_sym) {
         jl_sym_t *name = NULL;
         jl_module_t *from = eval_import_from(m, ex, "using");
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         size_t i = 0;
         if (from) {
             i = 1;
@@ -909,6 +953,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                     jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
                     name = NULL;
                     jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "using");
+                    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
                     assert(name);
                     check_macro_rename(name, asname, "using");
                     // `using A: B as C` syntax
@@ -920,11 +965,13 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 "syntax: malformed \"using\" statement");
         }
         JL_GC_POP();
+        ct->world_age = last_age;
         return jl_nothing;
     }
     else if (head == jl_import_sym) {
         jl_sym_t *name = NULL;
         jl_module_t *from = eval_import_from(m, ex, "import");
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         size_t i = 0;
         if (from) {
             i = 1;
@@ -968,6 +1015,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 "syntax: malformed \"import\" statement");
         }
         JL_GC_POP();
+        ct->world_age = last_age;
         return jl_nothing;
     }
     else if (head == jl_export_sym || head == jl_public_sym) {
@@ -1001,8 +1049,15 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         jl_value_t *res = jl_nothing;
         int i;
         for (i = 0; i < jl_array_nrows(ex->args); i++) {
-            res = jl_toplevel_eval_flex(m, jl_array_ptr_ref(ex->args, i), fast, 0, toplevel_filename, toplevel_lineno);
+            root = jl_array_ptr_ref(ex->args, i);
+            if (jl_needs_lowering(root)) {
+                ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+                root = jl_expand_with_loc_warn(root, m, *toplevel_filename, *toplevel_lineno);
+            }
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+            res = jl_toplevel_eval_flex(m, root, fast, 1, toplevel_filename, toplevel_lineno);
         }
+        ct->world_age = last_age;
         JL_GC_POP();
         return res;
     }
@@ -1042,15 +1097,12 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_get_module_compile(m) != JL_OPTIONS_COMPILE_MIN)) {
         // use codegen
         mfunc = jl_method_instance_for_thunk(thk, m);
-        jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
-        // Don't infer blocks containing e.g. method definitions, since it's probably not
-        // worthwhile and also unsound (see #24316).
-        // TODO: This is still not correct since an `eval` can happen elsewhere, but it
-        // helps in common cases.
+        jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, 0);
+        // Don't infer blocks containing e.g. method definitions, since it's probably not worthwhile.
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
-            (void)jl_type_infer(mfunc, world, SOURCE_MODE_NOT_REQUIRED);
+            (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
         ct->world_age = last_age;
@@ -1058,10 +1110,12 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     else {
         // use interpreter
         assert(thk);
-        if (has_opaque) {
-            jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
-        }
+        if (has_opaque)
+            jl_resolve_definition_effects_in_ir((jl_array_t*)thk->code, m, NULL, 0);
+        size_t world = jl_atomic_load_acquire(&jl_world_counter);
+        ct->world_age = world;
         result = jl_interpret_toplevel_thunk(m, thk);
+        ct->world_age = last_age;
     }
 
     JL_GC_POP();
@@ -1071,8 +1125,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 {
     const char *filename = jl_filename;
-    int lieno = jl_lineno;
-    return jl_toplevel_eval_flex(m, v, 1, 0, &filename, &lieno);
+    int lineno = jl_lineno;
+    return jl_toplevel_eval_flex(m, v, 1, 0, &filename, &lineno);
 }
 
 // Check module `m` is open for `eval/include`, or throw an error.
@@ -1111,9 +1165,12 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     jl_value_t *v = NULL;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
+    jl_task_t *ct = jl_current_task;
     jl_lineno = 1;
     jl_filename = "none";
+    size_t last_age = ct->world_age;
     JL_TRY {
+        ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
         v = jl_toplevel_eval(m, ex);
     }
     JL_CATCH {
@@ -1123,23 +1180,10 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     }
     jl_lineno = last_lineno;
     jl_filename = last_filename;
+    ct->world_age = last_age;
     assert(v);
     return v;
 }
-
-JL_DLLEXPORT jl_value_t *jl_infer_thunk(jl_code_info_t *thk, jl_module_t *m)
-{
-    jl_method_instance_t *li = jl_method_instance_for_thunk(thk, m);
-    JL_GC_PUSH1(&li);
-    jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
-    jl_task_t *ct = jl_current_task;
-    jl_code_instance_t *ci = jl_type_infer(li, ct->world_age, SOURCE_MODE_NOT_REQUIRED);
-    JL_GC_POP();
-    if (ci)
-        return ci->rettype;
-    return (jl_value_t*)jl_any_type;
-}
-
 
 //------------------------------------------------------------------------------
 // Code loading: combined parse+eval for include()
@@ -1169,14 +1213,14 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
     jl_task_t *ct = jl_current_task;
     int last_lineno = jl_lineno;
     const char *last_filename = jl_filename;
-    size_t last_age = ct->world_age;
     int lineno = 0;
     jl_lineno = 0;
     const char *filename_str = jl_string_data(filename);
     jl_filename = filename_str;
-    int err = 0;
 
     JL_TRY {
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         for (size_t i = 0; i < jl_expr_nargs(ast); i++) {
             expression = jl_exprarg(ast, i);
             if (jl_is_linenode(expression)) {
@@ -1185,28 +1229,26 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
                 jl_lineno = lineno;
                 continue;
             }
+            ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
             expression = jl_expand_with_loc_warn(expression, module,
                                                  jl_string_data(filename), lineno);
-            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+            ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }
+        ct->world_age = last_age;
     }
     JL_CATCH {
-        result = jl_box_long(jl_lineno); // (ab)use result to root error line
-        err = 1;
-        goto finally; // skip jl_restore_excstack
-    }
-finally:
-    ct->world_age = last_age;
-    jl_lineno = last_lineno;
-    jl_filename = last_filename;
-    if (err) {
+        result = jl_box_long(lineno); // (ab)use result to root error line
+        jl_lineno = last_lineno;
+        jl_filename = last_filename;
         if (jl_loaderror_type == NULL)
             jl_rethrow();
         else
             jl_rethrow_other(jl_new_struct(jl_loaderror_type, filename, result,
                                            jl_current_exception(ct)));
     }
+    jl_lineno = last_lineno;
+    jl_filename = last_filename;
     JL_GC_POP();
     return result;
 }
@@ -1288,6 +1330,21 @@ JL_DLLEXPORT jl_value_t *jl_prepend_cwd(jl_value_t *str)
     strcpy(path + sz + 1, fstr);
     return jl_cstr_to_string(path);
 }
+
+JL_DLLEXPORT jl_value_t *jl_prepend_string(jl_value_t *prefix, jl_value_t *str)
+{
+    char path[1024];
+    const char *pstr = (const char*)jl_string_data(prefix);
+    size_t sz = strlen(pstr);
+    const char *fstr = (const char*)jl_string_data(str);
+    if (strlen(fstr) + sz >= sizeof(path)) {
+        jl_errorf("use a bigger buffer for jl_fullpath");
+    }
+    strcpy(path, pstr);
+    strcpy(path + sz, fstr);
+    return jl_cstr_to_string(path);
+}
+
 
 #ifdef __cplusplus
 }

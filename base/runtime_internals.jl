@@ -20,7 +20,7 @@ Base
 """
 parentmodule(m::Module) = (@_total_meta; ccall(:jl_module_parent, Ref{Module}, (Any,), m))
 
-is_root_module(m::Module) = parentmodule(m) === m || (isdefined(Main, :Base) && m === Main.Base)
+is_root_module(m::Module) = parentmodule(m) === m || m === Compiler || (isdefined(Main, :Base) && m === Main.Base)
 
 """
     moduleroot(m::Module) -> Module
@@ -228,21 +228,28 @@ const BINDING_KIND_IMPORTED     = 0x5
 const BINDING_KIND_FAILED       = 0x6
 const BINDING_KIND_DECLARED     = 0x7
 const BINDING_KIND_GUARD        = 0x8
+const BINDING_KIND_UNDEF_CONST  = 0x9
+const BINDING_KIND_BACKDATED_CONST = 0xa
 
-is_some_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT)
+is_defined_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_BACKDATED_CONST)
+is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == BINDING_KIND_UNDEF_CONST)
 is_some_imported(kind::UInt8) = (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED)
-is_some_guard(kind::UInt8) = (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED)
+is_some_guard(kind::UInt8) = (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED || kind == BINDING_KIND_UNDEF_CONST)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
 end
 
-function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
+function convert(::Type{Core.Binding}, gr::Core.GlobalRef)
     if isdefined(gr, :binding)
-        b = gr.binding
+        return gr.binding
     else
-        b = ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), gr.mod, gr.name, true)
+        return ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), gr.mod, gr.name, true)
     end
+end
+
+function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
+    b = convert(Core.Binding, gr)
     return lookup_binding_partition(world, b)
 end
 
@@ -418,7 +425,11 @@ end
 """
     isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
 
-Determine whether a field `s` is declared `const` in a given type `t`.
+Determine whether a field `s` is const in a given type `t`
+in the sense that a read from said field is consistent
+for egal objects. Note in particular that out-of-bounds
+fields are considered const under this definition (because
+they always throw).
 """
 function isconst(@nospecialize(t::Type), s::Symbol)
     @_foldable_meta
@@ -1391,6 +1402,17 @@ end
 hasgenerator(m::Method) = isdefined(m, :generator)
 hasgenerator(m::Core.MethodInstance) = hasgenerator(m.def::Method)
 
+function _uncompressed_ir(m::Method)
+    s = m.source
+    if s isa String
+        s = ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Ptr{Cvoid}, Any), m, C_NULL, s)
+    end
+    return s::CodeInfo
+end
+
+_uncompressed_ir(codeinst::CodeInstance, s::String) =
+    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
+
 """
     Base.generating_output([incremental::Bool])::Bool
 
@@ -1556,3 +1578,9 @@ function specialize_method(match::Core.MethodMatch; kwargs...)
 end
 
 hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Bottom
+
+###########
+# scoping #
+###########
+
+_topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module

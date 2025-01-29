@@ -42,6 +42,7 @@ typeof(error).name.max_methods = UInt8(2)
 Raise an `ErrorException` with the given message.
 """
 error(s::AbstractString) = throw(ErrorException(s))
+error() = throw(ErrorException(""))
 
 """
     error(msg...)

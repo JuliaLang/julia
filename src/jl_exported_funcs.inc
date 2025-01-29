@@ -196,6 +196,7 @@
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
+    XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
     XX(jl_cpu_has_fma) \
@@ -240,7 +241,6 @@
     XX(jl_has_typevar_from_unionall) \
     XX(jl_hrtime) \
     XX(jl_idtable_rehash) \
-    XX(jl_infer_thunk) \
     XX(jl_init) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
@@ -389,7 +389,7 @@
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
-    XX(jl_resolve_globals_in_ir) \
+    XX(jl_resolve_definition_effects_in_ir) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \
@@ -450,7 +450,6 @@
     XX(jl_tagged_gensym) \
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
-    XX(jl_task_stack_buffer) \
     XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
@@ -517,6 +516,7 @@
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
+    YY(jl_emit_codeinst_to_jit) \
     YY(jl_extern_c) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
@@ -542,6 +542,7 @@
     YY(jl_dump_emitted_mi_name) \
     YY(jl_dump_llvm_opt) \
     YY(jl_dump_fptr_asm) \
+    YY(jl_emit_native) \
     YY(jl_get_function_id) \
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \

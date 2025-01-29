@@ -149,26 +149,48 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
                 // Use system mutexes rather than spin locking to minimize wasted CPU time
                 // while we wait for other threads reach a safepoint.
                 // This is particularly important when run under rr.
-                uv_mutex_lock(&safepoint_lock);
-                if (!jl_atomic_load_relaxed(&ptls2->gc_state))
-                    uv_cond_wait(&safepoint_cond_begin, &safepoint_lock);
-                uv_mutex_unlock(&safepoint_lock);
+                if (jl_options.timeout_for_safepoint_straggler_s == -1) { // timeout was not specified: no need to dump the backtrace
+                    uv_mutex_lock(&safepoint_lock);
+                    if (!jl_atomic_load_relaxed(&ptls2->gc_state)) {
+                        uv_cond_wait(&safepoint_cond_begin, &safepoint_lock);
+                    }
+                    uv_mutex_unlock(&safepoint_lock);
+                }
+                else {
+                    const int64_t timeout = jl_options.timeout_for_safepoint_straggler_s * 1000000000; // convert to nanoseconds
+                    int ret = 0;
+                    uv_mutex_lock(&safepoint_lock);
+                    if (!jl_atomic_load_relaxed(&ptls2->gc_state)) {
+                        ret = uv_cond_timedwait(&safepoint_cond_begin, &safepoint_lock, timeout);
+                    }
+                    uv_mutex_unlock(&safepoint_lock);
+                    // If we woke up because of a timeout, print the backtrace of the straggler
+                    if (ret == UV_ETIMEDOUT) {
+                        jl_safe_printf("===== Thread %d failed to reach safepoint after %d seconds, printing backtrace below =====\n", ptls2->tid + 1, jl_options.timeout_for_safepoint_straggler_s);
+                        // Try to record the backtrace of the straggler using `jl_try_record_thread_backtrace`
+                        jl_ptls_t ptls = jl_current_task->ptls;
+                        size_t bt_size = jl_try_record_thread_backtrace(ptls2, ptls->bt_data, JL_MAX_BT_SIZE);
+                        // Print the backtrace of the straggler
+                        for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(ptls->bt_data + i)) {
+                            jl_print_bt_entry_codeloc(ptls->bt_data + i);
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-int jl_safepoint_start_gc(void)
+int jl_safepoint_start_gc(jl_task_t *ct)
 {
     // The thread should have just set this before entry
-    assert(jl_atomic_load_relaxed(&jl_current_task->ptls->gc_state) == JL_GC_STATE_WAITING);
+    assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_WAITING);
     uv_mutex_lock(&safepoint_lock);
     uv_cond_broadcast(&safepoint_cond_begin);
     // make sure we are permitted to run GC now (we might be required to stop instead)
-    jl_task_t *ct = jl_current_task;
     while (jl_atomic_load_relaxed(&ct->ptls->suspend_count)) {
         uv_mutex_unlock(&safepoint_lock);
-        jl_safepoint_wait_thread_resume();
+        jl_safepoint_wait_thread_resume(ct);
         uv_mutex_lock(&safepoint_lock);
     }
     // In case multiple threads enter the GC at the same time, only allow
@@ -178,7 +200,7 @@ int jl_safepoint_start_gc(void)
     uint32_t running = 0;
     if (!jl_atomic_cmpswap(&jl_gc_running, &running, 1)) {
         uv_mutex_unlock(&safepoint_lock);
-        jl_safepoint_wait_gc();
+        jl_safepoint_wait_gc(ct);
         return 0;
     }
     // Foreign thread adoption disables the GC and waits for it to finish, however, that may
@@ -213,9 +235,8 @@ void jl_safepoint_end_gc(void)
     uv_cond_broadcast(&safepoint_cond_end);
 }
 
-void jl_set_gc_and_wait(void) // n.b. not used on _OS_DARWIN_
+void jl_set_gc_and_wait(jl_task_t *ct) // n.b. not used on _OS_DARWIN_
 {
-    jl_task_t *ct = jl_current_task;
     // reading own gc state doesn't need atomic ops since no one else
     // should store to it.
     int8_t state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
@@ -223,18 +244,19 @@ void jl_set_gc_and_wait(void) // n.b. not used on _OS_DARWIN_
     uv_mutex_lock(&safepoint_lock);
     uv_cond_broadcast(&safepoint_cond_begin);
     uv_mutex_unlock(&safepoint_lock);
-    jl_safepoint_wait_gc();
+    jl_safepoint_wait_gc(ct);
     jl_atomic_store_release(&ct->ptls->gc_state, state);
-    jl_safepoint_wait_thread_resume(); // block in thread-suspend now if requested, after clearing the gc_state
+    jl_safepoint_wait_thread_resume(ct); // block in thread-suspend now if requested, after clearing the gc_state
 }
 
 // this is the core of jl_set_gc_and_wait
-void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT
+void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT
 {
-    jl_task_t *ct = jl_current_task; (void)ct;
-    JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
-    // The thread should have set this is already
-    assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_UNSAFE);
+    if (ct) {
+        JL_TIMING_SUSPEND_TASK(GC_SAFEPOINT, ct);
+        // The thread should have set this is already
+        assert(jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_UNSAFE);
+    }
     // Use normal volatile load in the loop for speed until GC finishes.
     // Then use an acquire load to make sure the GC result is visible on this thread.
     while (jl_atomic_load_relaxed(&jl_gc_running) || jl_atomic_load_acquire(&jl_gc_running)) {
@@ -249,9 +271,8 @@ void jl_safepoint_wait_gc(void) JL_NOTSAFEPOINT
 }
 
 // equivalent to jl_set_gc_and_wait, but waiting on resume-thread lock instead
-void jl_safepoint_wait_thread_resume(void)
+void jl_safepoint_wait_thread_resume(jl_task_t *ct)
 {
-    jl_task_t *ct = jl_current_task;
     // n.b. we do not permit a fast-path here that skips the lock acquire since
     // we otherwise have no synchronization point to ensure that this thread
     // will observe the change to the safepoint, even though the other thread
@@ -333,7 +354,7 @@ int jl_safepoint_suspend_thread(int tid, int waitstate)
             // It will be unable to reenter helping with GC because we have
             // changed its safepoint page.
             uv_mutex_unlock(&safepoint_lock);
-            jl_set_gc_and_wait();
+            jl_set_gc_and_wait(jl_current_task);
             uv_mutex_lock(&safepoint_lock);
         }
         while (jl_atomic_load_acquire(&ptls2->suspend_count) != 0) {

@@ -1,6 +1,16 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Core.include(Main, "Base.jl")
+# Can be loaded on top of either an existing system image built from
+# `Base_compiler.jl` or standalone, in which case we will build it now.
+let had_compiler = isdefined(Main, :Base)
+if had_compiler; else
+include("Base_compiler.jl")
+end
+
+Core.include(Base, "Base.jl")
+
+had_compiler && ccall(:jl_init_restored_module, Cvoid, (Any,), Base)
+end
 
 using .Base
 
@@ -28,6 +38,13 @@ it is evaluated: for each parsed expression `expr` in `path`, the `include` func
 actually evaluates `mapexpr(expr)`.  If it is omitted, `mapexpr` defaults to [`identity`](@ref).
 
 Use [`Base.include`](@ref) to evaluate a file into another module.
+
+!!! note
+    Julia's syntax lowering recognizes an explicit call to a literal `include`
+    at top-level and inserts an implicit `@Core.latestworld` to make any include'd
+    definitions visible to subsequent code. Note however that this recognition
+    is *syntactic*. I.e. assigning `const myinclude = include` may require
+    and explicit `@Core.latestworld` call after `myinclude`.
 
 !!! compat "Julia 1.5"
     Julia 1.5 is required for passing the `mapexpr` argument.

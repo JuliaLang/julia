@@ -343,9 +343,7 @@ end
     @test_throws StringIndexError get(utf8_str, 2, 'X')
 end
 
-#=
-# issue #7764
-let
+@testset "issue #7764" begin
     srep = repeat("Σβ",2)
     s="Σβ"
     ss=SubString(s,1,lastindex(s))
@@ -358,16 +356,15 @@ let
     @test iterate(srep, 7) == ('β',9)
 
     @test srep[7] == 'β'
-    @test_throws BoundsError srep[8]
+    @test_throws StringIndexError srep[8]
 end
-=#
 
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'
 @test last('\x00':'\x7f') === '\x7f'
 
-# make sure substrings do not accept code unit if it is not start of codepoint
-let s = "x\u0302"
+@testset "make sure substrings do not accept code unit if it is not start of codepoint" begin
+    s = "x\u0302"
     @test s[1:2] == s
     @test_throws BoundsError s[0:3]
     @test_throws BoundsError s[1:4]
@@ -433,6 +430,8 @@ end
 
     @test Symbol(gstr) === Symbol("12")
 
+    @test eltype(gstr) == Char
+    @test firstindex(gstr) == 1
     @test sizeof(gstr) == 2
     @test ncodeunits(gstr) == 2
     @test length(gstr) == 2
@@ -1076,8 +1075,8 @@ let s = "∀x∃y", u = codeunits(s)
     @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
 end
 
-# issue #24388
-let v = unsafe_wrap(Vector{UInt8}, "abc")
+@testset "issue #24388" begin
+    v = unsafe_wrap(Vector{UInt8}, "abc")
     s = String(v)
     @test_throws BoundsError v[1]
     push!(v, UInt8('x'))
@@ -1093,8 +1092,8 @@ let v = [0x40,0x41,0x42]
     @test String(view(v, 2:3)) == "AB"
 end
 
-# issue #54369
-let v = Base.StringMemory(3)
+@testset "issue #54369" begin
+    v = Base.StringMemory(3)
     v .= [0x41,0x42,0x43]
     s = String(v)
     @test s == "ABC"
@@ -1116,8 +1115,8 @@ let rng = MersenneTwister(1), strs = ["∀εa∀aε"*String(rand(rng, UInt8, 100
     end
 end
 
-# conversion of SubString to the same type, issue #25525
-let x = SubString("ab", 1, 1)
+@testset "conversion of SubString to the same type, issue #25525" begin
+    x = SubString("ab", 1, 1)
     y = convert(SubString{String}, x)
     @test y === x
     chop("ab") === chop.(["ab"])[1]
@@ -1170,6 +1169,9 @@ end
     apple_uint8 = Vector{UInt8}("Apple")
     @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
 
+    apple_uint8 = Array{UInt8}("Apple")
+    @test apple_uint8 == [0x41, 0x70, 0x70, 0x6c, 0x65]
+
     Base.String(::tstStringType) = "Test"
     abstract_apple = tstStringType(apple_uint8)
     @test hash(abstract_apple, UInt(1)) == hash("Test", UInt(1))
@@ -1195,6 +1197,7 @@ end
     @test codeunit(l) == UInt8
     @test codeunit(l,2) == 0x2b
     @test isvalid(l, 1)
+    @test lastindex(l) == lastindex("1+2")
     @test Base.infer_effects((Any,)) do a
         throw(lazy"a is $a")
     end |> Core.Compiler.is_foldable
@@ -1418,5 +1421,22 @@ end
         @test transcode(String, transcode(Int32, transcode(UInt8, str))) == str
         @test transcode(String, transcode(UInt32, transcode(UInt8, str))) == str
         @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+    end
+end
+
+if Sys.iswindows()
+    @testset "cwstring" begin
+        # empty string
+        str_0 = ""
+        # string with embedded NUL character
+        str_1 = "Au\000B"
+        # string with terminating NUL character
+        str_2 = "Wordu\000"
+        # "Regular" string with UTF-8 characters of differing byte counts
+        str_3 = "aܣ𒀀"
+        @test Base.cwstring(str_0) == UInt16[0x0000]
+        @test_throws ArgumentError Base.cwstring(str_1)
+        @test_throws ArgumentError Base.cwstring(str_2)
+        @test Base.cwstring(str_3) == UInt16[0x0061, 0x0723, 0xd808, 0xdc00, 0x0000]
     end
 end

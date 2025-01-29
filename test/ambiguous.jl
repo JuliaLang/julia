@@ -97,7 +97,7 @@ ambig(x::Union{Char, Int16}) = 's'
 
 # Automatic detection of ambiguities
 
-const allowed_undefineds = Set([])
+const allowed_undefineds = Set([GlobalRef(Base, :active_repl)])
 
 let Distributed = get(Base.loaded_modules,
                       Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
@@ -192,8 +192,7 @@ end
 
     # some ambiguities involving Union{} type parameters may be expected, but not required
     let ambig = Set(detect_ambiguities(Core; recursive=true, ambiguous_bottom=true))
-        @test !isempty(ambig)
-        @test length(ambig) < 30
+        @test isempty(ambig)
     end
 
     STDLIB_DIR = Sys.STDLIB
@@ -349,10 +348,6 @@ end
     # TODO: review this list and remove everything between test_broken and test
     let need_to_handle_undef_sparam =
             Set{Method}(detect_unbound_args(Core; recursive=true))
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler.eltype, Tuple{Type{Tuple{Any}}}))
-        @test_broken isempty(need_to_handle_undef_sparam)
-        pop!(need_to_handle_undef_sparam, which(Core.Compiler._cat, Tuple{Any, AbstractArray}))
-        pop!(need_to_handle_undef_sparam, first(methods(Core.Compiler.same_names)))
         @test isempty(need_to_handle_undef_sparam)
     end
     let need_to_handle_undef_sparam =

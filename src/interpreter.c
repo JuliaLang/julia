@@ -135,9 +135,30 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     size_t i;
     for (i = 1; i < nargs; i++)
         argv[i-1] = eval_value(args[i], s);
-    jl_method_instance_t *meth = (jl_method_instance_t*)args[0];
-    assert(jl_is_method_instance(meth));
-    jl_value_t *result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, meth);
+    jl_value_t *c = args[0];
+    assert(jl_is_code_instance(c) || jl_is_method_instance(c));
+    jl_value_t *result = NULL;
+    if (jl_is_code_instance(c)) {
+        jl_code_instance_t *codeinst = (jl_code_instance_t*)c;
+        assert(jl_atomic_load_relaxed(&codeinst->min_world) <= jl_current_task->world_age &&
+               jl_current_task->world_age <= jl_atomic_load_relaxed(&codeinst->max_world));
+        jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        if (!invoke) {
+            jl_compile_codeinst(codeinst);
+            invoke = jl_atomic_load_acquire(&codeinst->invoke);
+        }
+        if (invoke) {
+            result = invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, codeinst);
+
+        } else {
+            if (codeinst->owner != jl_nothing) {
+                jl_error("Failed to invoke or compile external codeinst");
+            }
+            result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, jl_get_ci_mi(codeinst));
+        }
+    } else {
+        result = jl_invoke(argv[0], nargs == 2 ? NULL : &argv[1], nargs - 2, (jl_method_instance_t*)c);
+    }
     JL_GC_POP();
     return result;
 }
@@ -230,22 +251,15 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
     else if (head == jl_isdefined_sym) {
         jl_value_t *sym = args[0];
         int defined = 0;
-        int allow_import = 1;
-        if (nargs == 2) {
-            assert(jl_is_bool(args[1]) && "malformed IR");
-            allow_import = args[1] == jl_true;
-        }
+        assert(nargs == 1 && "malformed IR");
         if (jl_is_slotnumber(sym) || jl_is_argument(sym)) {
             ssize_t n = jl_slot_number(sym);
             if (src == NULL || n > jl_source_nslots(src) || n < 1 || s->locals == NULL)
                 jl_error("access to invalid slot number");
             defined = s->locals[n - 1] != NULL;
         }
-        else if (jl_is_globalref(sym)) {
-            defined = jl_boundp(jl_globalref_mod(sym), jl_globalref_name(sym), allow_import);
-        }
-        else if (jl_is_symbol(sym)) {
-            defined = jl_boundp(s->module, (jl_sym_t*)sym, allow_import);
+        else if (jl_is_globalref(sym) || jl_is_symbol(sym)) {
+            jl_error("[Internal Error]: :isdefined on globalref should use `isdefinedglobal`");
         }
         else if (jl_is_expr(sym) && ((jl_expr_t*)sym)->head == jl_static_parameter_sym) {
             ssize_t n = jl_unbox_long(jl_exprarg(sym, 0));
@@ -463,8 +477,6 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         s->ip = ip;
         if (ip >= ns)
             jl_error("`body` expression must terminate in `return`. Use `block` instead.");
-        if (toplevel)
-            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         jl_value_t *stmt = jl_array_ptr_ref(stmts, ip);
         assert(!jl_is_phinode(stmt));
         size_t next_ip = ip + 1;
@@ -527,16 +539,17 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             s->locals[jl_source_nslots(s->src) + ip] = jl_box_ulong(jl_excstack_state(ct));
             if (jl_enternode_scope(stmt)) {
-                jl_value_t *old_scope = ct->scope;
-                JL_GC_PUSH1(&old_scope);
-                jl_value_t *new_scope = eval_value(jl_enternode_scope(stmt), s);
-                ct->scope = new_scope;
+                jl_value_t *scope = eval_value(jl_enternode_scope(stmt), s);
+                // GC preserve the scope, since it is not rooted in the `jl_handler_t *`
+                // and may be removed from jl_current_task by any nested block and then
+                // replaced later
+                JL_GC_PUSH1(&scope);
+                ct->scope = scope;
                 if (!jl_setjmp(__eh.eh_ctx, 1)) {
                     ct->eh = &__eh;
                     eval_body(stmts, s, next_ip, toplevel);
                     jl_unreachable();
                 }
-                ct->scope = old_scope;
                 JL_GC_POP();
             }
             else {
@@ -572,25 +585,11 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     s->locals[n - 1] = rhs;
                 }
                 else {
-                    jl_module_t *modu;
-                    jl_sym_t *sym;
-                    // Plain assignment is allowed to create bindings at
-                    // toplevel and only for the current module
-                    int alloc = toplevel;
-                    if (jl_is_globalref(lhs)) {
-                        modu = jl_globalref_mod(lhs);
-                        sym = jl_globalref_name(lhs);
-                        alloc &= modu == s->module;
-                    }
-                    else {
-                        assert(jl_is_symbol(lhs));
-                        modu = s->module;
-                        sym = (jl_sym_t*)lhs;
-                    }
-                    JL_GC_PUSH1(&rhs);
-                    jl_binding_t *b = jl_get_binding_wr(modu, sym, alloc);
-                    jl_checked_assignment(b, modu, sym, rhs);
-                    JL_GC_POP();
+                    // This is an unmodeled error. Our frontend only generates
+                    // legal `=` expressions, but since GlobalRef used to be legal
+                    // here, give a loud error in case any package is modifying
+                    // internals.
+                    jl_error("Invalid IR: Assignment LHS not a Slot");
                 }
             }
             else if (head == jl_leave_sym) {
@@ -610,8 +609,11 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     // equivalent to jl_pop_handler(hand_n_leave), longjmping
                     // to the :enter code above instead, which handles cleanup
                     jl_handler_t *eh = ct->eh;
-                    while (--hand_n_leave > 0)
+                    while (--hand_n_leave > 0) {
+                        // pop GC frames for any skipped handlers
+                        ct->gcstack = eh->gcstack;
                         eh = eh->prev;
+                    }
                     // leave happens during normal control flow, but we must
                     // longjmp to pop the eval_body call for each enter.
                     s->continue_at = next_ip;
@@ -642,6 +644,9 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
                     jl_eval_const_decl(s->module, jl_exprarg(stmt, 0), val);
                     s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
+                }
+                else if (head == jl_latestworld_sym) {
+                    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
                 }
                 else if (jl_is_toplevel_only_expr(stmt)) {
                     jl_toplevel_eval(s->module, stmt);
@@ -761,7 +766,7 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
 {
     interpreter_state *s;
-    jl_method_instance_t *mi = codeinst->def;
+    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
     jl_code_info_t *src = NULL;
@@ -887,10 +892,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->mi = NULL;
     s->ci = NULL;
     JL_GC_ENABLEFRAME(s);
-    jl_task_t *ct = jl_current_task;
-    size_t last_age = ct->world_age;
     jl_value_t *r = eval_body(stmts, s, 0, 1);
-    ct->world_age = last_age;
     JL_GC_POP();
     return r;
 }

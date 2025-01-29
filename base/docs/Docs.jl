@@ -75,18 +75,23 @@ const META    = gensym(:meta)
 const METAType = IdDict{Any,Any}
 
 function meta(m::Module; autoinit::Bool=true)
-    if !isdefined(m, META) || getfield(m, META) === nothing
-        autoinit ? initmeta(m) : return nothing
+    if !isdefinedglobal(m, META)
+        return autoinit ? invokelatest(initmeta, m) : nothing
     end
-    return getfield(m, META)::METAType
+    # TODO: This `invokelatest` is not technically required, but because
+    # of the automatic constant backdating is currently required to avoid
+    # a warning.
+    return invokelatest(getglobal, m, META)::METAType
 end
 
 function initmeta(m::Module)
-    if !isdefined(m, META) || getfield(m, META) === nothing
-        Core.eval(m, :($META = $(METAType())))
+    if !isdefinedglobal(m, META)
+        val = METAType()
+        Core.eval(m, :(const $META = $val))
         push!(modules, m)
+        return val
     end
-    nothing
+    return getglobal(m, META)
 end
 
 function signature!(tv::Vector{Any}, expr::Expr)
@@ -750,15 +755,16 @@ include("utils.jl")
 # Swap out the bootstrap macro with the real one.
 Core.atdoc!(docm)
 
-function loaddocs(docs::Vector{Core.SimpleVector})
-    for (mod, ex, str, file, line) in docs
+function loaddocs(docs::Base.CoreDocs.DocLinkedList)
+    while isdefined(docs, :doc)
+        (mod, ex, str, file, line) = docs.doc
         data = Dict{Symbol,Any}(:path => string(file), :linenumber => line)
         doc = docstr(str, data)
         lno = LineNumberNode(line, file)
         docstring = docm(lno, mod, doc, ex, false) # expand the real @doc macro now
         Core.eval(mod, Expr(:var"hygienic-scope", docstring, Docs, lno))
+        docs = docs.next
     end
-    empty!(docs)
     nothing
 end
 

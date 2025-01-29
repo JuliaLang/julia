@@ -1280,23 +1280,26 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         sv = try
             if ocachepath !== nothing
                 @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint), ocachepath, depmods, false, pkg.name, ignore_native)
+                ccall(:jl_restore_package_image_from_file, Ref{SimpleVector}, (Cstring, Any, Cint, Cstring, Cint),
+                    ocachepath, depmods, #=completeinfo=#false, pkg.name, ignore_native)
             else
                 @debug "Loading cache file $path for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring), path, depmods, false, pkg.name)
+                ccall(:jl_restore_incremental, Ref{SimpleVector}, (Cstring, Any, Cint, Cstring),
+                    path, depmods, #=completeinfo=#false, pkg.name)
             end
         finally
             lock(require_lock)
         end
-        if isa(sv, Exception)
-            return sv
-        end
+
+        edges = sv[3]::Vector{Any}
+        ext_edges = sv[4]::Union{Nothing,Vector{Any}}
+        StaticData.insert_backedges(edges, ext_edges)
 
         restored = register_restored_modules(sv, pkg, path)
 
         for M in restored
             M = M::Module
-            if parentmodule(M) === M && PkgId(M) == pkg
+            if is_root_module(M) && PkgId(M) == pkg
                 register && register_root_module(M)
                 if timing_imports
                     elapsed_time = time_ns() - t_before
@@ -1386,10 +1389,10 @@ function register_restored_modules(sv::SimpleVector, pkg::PkgId, path::String)
     restored = sv[1]::Vector{Any}
     for M in restored
         M = M::Module
-        if isdefined(M, Base.Docs.META) && getfield(M, Base.Docs.META) !== nothing
+        if isdefinedglobal(M, Base.Docs.META)
             push!(Base.Docs.modules, M)
         end
-        if parentmodule(M) === M
+        if is_root_module(M)
             push!(loaded_modules_order, M)
             push!(get!(Vector{Module}, loaded_precompiles, pkg), M)
         end
@@ -1433,6 +1436,7 @@ function run_module_init(mod::Module, i::Int=1)
 end
 
 function run_package_callbacks(modkey::PkgId)
+    @assert modkey != precompilation_target
     run_extension_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
@@ -1562,7 +1566,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
             push!(trigger_ids, trigger_id)
-            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id) || (trigger_id == precompilation_target)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -1575,6 +1579,7 @@ end
 loading_extension::Bool = false
 loadable_extensions::Union{Nothing,Vector{PkgId}} = nothing
 precompiling_extension::Bool = false
+precompilation_target::Union{Nothing,PkgId} = nothing
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
     succeeded = try
@@ -1585,9 +1590,14 @@ function run_extension_callbacks(extid::ExtensionId)
         true
     catch
         # Try to continue loading if loading an extension errors
-        errs = current_exceptions()
-        @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
+        if JLOptions().incremental != 0
+            # during incremental precompilation, this should be fail-fast
+            rethrow()
+        else
+            errs = current_exceptions()
+            @error "Error during loading of extension $(extid.id.name) of $(extid.parentid.name), \
                 use `Base.retry_load_extensions()` to retry." exception=errs
+        end
         false
     finally
         global loading_extension = false
@@ -1821,7 +1831,7 @@ function compilecache_path(pkg::PkgId;
     path = nothing
     isnothing(sourcepath) && error("Cannot locate source for $(repr("text/plain", pkg))")
     for path_to_try in cachepaths
-        staledeps = stale_cachefile(sourcepath, path_to_try, ignore_loaded = true, requested_flags=flags)
+        staledeps = stale_cachefile(sourcepath, path_to_try; ignore_loaded, requested_flags=flags)
         if staledeps === true
             continue
         end
@@ -2239,15 +2249,22 @@ const include_callbacks = Any[]
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", because they are explicitly loaded, and the process should try to avoid invalidating them
 const _require_dependencies = Any[] # a list of (mod, abspath, fsize, hash, mtime) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
-function _include_dependency(mod::Module, _path::AbstractString; track_content=true,
-                             path_may_be_dir=false)
+
+function _include_dependency(mod::Module, _path::AbstractString; track_content::Bool=true,
+                             path_may_be_dir::Bool=false)
+    _include_dependency!(_require_dependencies, _track_dependencies[], mod, _path, track_content, path_may_be_dir)
+end
+
+function _include_dependency!(dep_list::Vector{Any}, track_dependencies::Bool,
+                              mod::Module, _path::AbstractString,
+                              track_content::Bool, path_may_be_dir::Bool)
     prev = source_path(nothing)
     if prev === nothing
         path = abspath(_path)
     else
         path = normpath(joinpath(dirname(prev), _path))
     end
-    if !_track_dependencies[]
+    if !track_dependencies[]
         if !path_may_be_dir && !isfile(path)
             throw(SystemError("opening file $(repr(path))", Libc.ENOENT))
         elseif path_may_be_dir && !Filesystem.isreadable(path)
@@ -2258,9 +2275,9 @@ function _include_dependency(mod::Module, _path::AbstractString; track_content=t
             if track_content
                 hash = isdir(path) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r")
                 # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
-                push!(_require_dependencies, (mod, path, filesize(path), hash, -1.0))
+                push!(dep_list, (mod, path, filesize(path), hash, -1.0))
             else
-                push!(_require_dependencies, (mod, path, UInt64(0), UInt32(0), mtime(path)))
+                push!(dep_list, (mod, path, UInt64(0), UInt32(0), mtime(path)))
             end
         end
     end
@@ -2347,6 +2364,18 @@ function require(into::Module, mod::Symbol)
     return invoke_in_world(world, __require, into, mod)
 end
 
+function check_for_hint(into, mod)
+    return begin
+        if isdefined(into, mod) && getfield(into, mod) isa Module
+            true, "."
+        elseif isdefined(parentmodule(into), mod) && getfield(parentmodule(into), mod) isa Module
+            true, ".."
+        else
+            false, ""
+        end
+    end
+end
+
 function __require(into::Module, mod::Symbol)
     if into === __toplevel__ && generating_output(#=incremental=#true)
         error("`using/import $mod` outside of a Module detected. Importing a package outside of a module \
@@ -2360,15 +2389,7 @@ function __require(into::Module, mod::Symbol)
         if uuidkey_env === nothing
             where = PkgId(into)
             if where.uuid === nothing
-                hint, dots = begin
-                    if isdefined(into, mod) && getfield(into, mod) isa Module
-                        true, "."
-                    elseif isdefined(parentmodule(into), mod) && getfield(parentmodule(into), mod) isa Module
-                        true, ".."
-                    else
-                        false, ""
-                    end
-                end
+                hint, dots = invokelatest(check_for_hint, into, mod)
                 hint_message = hint ? ", maybe you meant `import/using $(dots)$(mod)`" : ""
                 install_message = if mod != :Pkg
                     start_sentence = hint ? "Otherwise, run" : "Run"
@@ -2635,7 +2656,7 @@ function __require_prelocked(pkg::PkgId, env)
                 parallel_precompile_attempted = true
                 unlock(require_lock)
                 try
-                    Precompilation.precompilepkgs([pkg.name]; _from_loading=true)
+                    Precompilation.precompilepkgs([pkg.name]; _from_loading=true, ignore_loaded=false)
                 finally
                     lock(require_lock)
                 end
@@ -2796,9 +2817,6 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}=noth
     return newm
     end
 end
-
-
-
 
 # relative-path load
 
@@ -3077,6 +3095,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         Base.track_nested_precomp($(_pkg_str(vcat(Base.precompilation_stack, pkg))))
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
+        Base.precompilation_target = $(_pkg_str(pkg))
         Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))))
         """)
@@ -3326,6 +3345,10 @@ mutable struct CacheHeaderIncludes
     const modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
+function CacheHeaderIncludes(dep_tuple::Tuple{Module, String, Int64, UInt32, Float64})
+    return CacheHeaderIncludes(PkgId(dep_tuple[1]), dep_tuple[2:end]..., String[])
+end
+
 function replace_depot_path(path::AbstractString, depots::Vector{String}=normalize_depots_for_relocation())
     for depot in depots
         if startswith(path, string(depot, Filesystem.pathsep())) || path == depot
@@ -3361,18 +3384,23 @@ function resolve_depot(inc::AbstractString)
     return :no_depot_found
 end
 
-
-function _parse_cache_header(f::IO, cachefile::AbstractString)
-    flags = read(f, UInt8)
-    modules = Vector{Pair{PkgId, UInt64}}()
+function read_module_list(f::IO, has_buildid_hi::Bool)
+    modules = Vector{Pair{PkgId, UInt128}}()
     while true
         n = read(f, Int32)
         n == 0 && break
         sym = String(read(f, n)) # module name
         uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
-        build_id = read(f, UInt64) # build UUID (mostly just a timestamp)
+        build_id_hi = UInt128(has_buildid_hi ? read(f, UInt64) : UInt64(0)) << 64
+        build_id = (build_id_hi | read(f, UInt64)) # build id (checksum + time - not a UUID)
         push!(modules, PkgId(uuid, sym) => build_id)
     end
+    return modules
+end
+
+function _parse_cache_header(f::IO, cachefile::AbstractString)
+    flags = read(f, UInt8)
+    modules = read_module_list(f, false)
     totbytes = Int64(read(f, UInt64)) # total bytes for file dependencies + preferences
     # read the list of requirements
     # and split the list into include and requires statements
@@ -3431,16 +3459,7 @@ function _parse_cache_header(f::IO, cachefile::AbstractString)
     totbytes -= 8
     @assert totbytes == 0 "header of cache file appears to be corrupt (totbytes == $(totbytes))"
     # read the list of modules that are required to be present during loading
-    required_modules = Vector{Pair{PkgId, UInt128}}()
-    while true
-        n = read(f, Int32)
-        n == 0 && break
-        sym = String(read(f, n)) # module name
-        uuid = UUID((read(f, UInt64), read(f, UInt64))) # pkg UUID
-        build_id = UInt128(read(f, UInt64)) << 64
-        build_id |= read(f, UInt64)
-        push!(required_modules, PkgId(uuid, sym) => build_id)
-    end
+    required_modules = read_module_list(f, true)
     l = read(f, Int32)
     clone_targets = read(f, l)
 
@@ -3835,9 +3854,9 @@ const compilecache_pidlock_stale_age = 10
 function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilecache_pidlock_stale_age)
     if @isdefined(mkpidlock_hook) && @isdefined(trymkpidlock_hook) && @isdefined(parse_pidfile_hook)
         pidfile = compilecache_pidfile_path(pkg)
-        cachefile = invokelatest(trymkpidlock_hook, f, pidfile; stale_age)
+        cachefile = @invokelatest trymkpidlock_hook(f, pidfile; stale_age)
         if cachefile === false
-            pid, hostname, age = invokelatest(parse_pidfile_hook, pidfile)
+            pid, hostname, age = @invokelatest parse_pidfile_hook(pidfile)
             verbosity = isinteractive() ? CoreLogging.Info : CoreLogging.Debug
             if isempty(hostname) || hostname == gethostname()
                 @logmsg verbosity "Waiting for another process (pid: $pid) to finish precompiling $(repr("text/plain", pkg)). Pidfile: $pidfile"
@@ -3846,7 +3865,7 @@ function maybe_cachefile_lock(f, pkg::PkgId, srcpath::String; stale_age=compilec
             end
             # wait until the lock is available, but don't actually acquire it
             # returning nothing indicates a process waited for another
-            return invokelatest(mkpidlock_hook, Returns(nothing), pidfile; stale_age)
+            return @invokelatest mkpidlock_hook(Returns(nothing), pidfile; stale_age)
         end
         return cachefile
     else
@@ -3864,6 +3883,56 @@ function list_reasons(reasons::Dict{String,Int})
     return "(cache misses: $(join(("$k ($v)" for (k,v) in reasons), ", ")))"
 end
 list_reasons(::Nothing) = ""
+
+function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::String, reasons::Union{Dict{String,Int},Nothing}=nothing)
+    for chi in includes
+        f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
+        if startswith(f, string("@depot", Filesystem.pathsep()))
+            @debug("Rejecting stale cache file $cachefile because its depot could not be resolved")
+            record_reason(reasons, "nonresolveable depot")
+            return true
+        end
+        if !ispath(f)
+            _f = fixup_stdlib_path(f)
+            if _f != f && isfile(_f) && startswith(_f, Sys.STDLIB)
+                continue
+            end
+            @debug "Rejecting stale cache file $cachefile because file $f does not exist"
+            record_reason(reasons, "missing sourcefile")
+            return true
+        end
+        if ftime_req >= 0.0
+            # this is an include_dependency for which we only recorded the mtime
+            ftime = mtime(f)
+            is_stale = ( ftime != ftime_req ) &&
+                       ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
+                       ( ftime != ceil(ftime_req) ) &&            # PR: #47433 Compensate for CirceCI's truncating of timestamps in its caching
+                       ( ftime != trunc(ftime_req, digits=6) ) && # Issue #20837, PR #20840: compensate for GlusterFS truncating mtimes to microseconds
+                       ( ftime != 1.0 )  &&                       # PR #43090: provide compatibility with Nix mtime.
+                       !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
+            if is_stale
+                @debug "Rejecting stale cache file $cachefile because mtime of include_dependency $f has changed (mtime $ftime, before $ftime_req)"
+                record_reason(reasons, "include_dependency mtime change")
+                return true
+            end
+        else
+            fstat = stat(f)
+            fsize = filesize(fstat)
+            if fsize != fsize_req
+                @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
+                record_reason(reasons, "include_dependency fsize change")
+                return true
+            end
+            hash = isdir(fstat) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
+            if hash != hash_req
+                @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
+                record_reason(reasons, "include_dependency fhash change")
+                return true
+            end
+        end
+    end
+    return false
+end
 
 # returns true if it "cachefile.ji" is stale relative to "modpath.jl" and build_id for modkey
 # otherwise returns the list of dependencies to also check
@@ -3933,10 +4002,11 @@ end
             record_reason(reasons, "for different pkgid")
             return true
         end
-        id_build = (UInt128(checksum) << 64) | id.second
+        id_build = id.second
+        id_build = (UInt128(checksum) << 64) | (id_build % UInt64)
         if build_id != UInt128(0)
             if id_build != build_id
-                @debug "Ignoring cache file $cachefile for $modkey ($((UUID(id_build)))) since it does not provide desired build_id ($((UUID(build_id))))"
+                @debug "Ignoring cache file $cachefile for $modkey ($(UUID(id_build))) since it does not provide desired build_id ($((UUID(build_id))))"
                 record_reason(reasons, "for different buildid")
                 return true
             end
@@ -4024,51 +4094,8 @@ end
                     return true
                 end
             end
-            for chi in includes
-                f, fsize_req, hash_req, ftime_req = chi.filename, chi.fsize, chi.hash, chi.mtime
-                if startswith(f, string("@depot", Filesystem.pathsep()))
-                    @debug("Rejecting stale cache file $cachefile because its depot could not be resolved")
-                    record_reason(reasons, "nonresolveable depot")
-                    return true
-                end
-                if !ispath(f)
-                    _f = fixup_stdlib_path(f)
-                    if _f != f && isfile(_f) && startswith(_f, Sys.STDLIB)
-                        continue
-                    end
-                    @debug "Rejecting stale cache file $cachefile because file $f does not exist"
-                    record_reason(reasons, "missing sourcefile")
-                    return true
-                end
-                if ftime_req >= 0.0
-                    # this is an include_dependency for which we only recorded the mtime
-                    ftime = mtime(f)
-                    is_stale = ( ftime != ftime_req ) &&
-                               ( ftime != floor(ftime_req) ) &&           # Issue #13606, PR #13613: compensate for Docker images rounding mtimes
-                               ( ftime != ceil(ftime_req) ) &&            # PR: #47433 Compensate for CirceCI's truncating of timestamps in its caching
-                               ( ftime != trunc(ftime_req, digits=6) ) && # Issue #20837, PR #20840: compensate for GlusterFS truncating mtimes to microseconds
-                               ( ftime != 1.0 )  &&                       # PR #43090: provide compatibility with Nix mtime.
-                               !( 0 < (ftime_req - ftime) < 1e-6 )        # PR #45552: Compensate for Windows tar giving mtimes that may be incorrect by up to one microsecond
-                    if is_stale
-                        @debug "Rejecting stale cache file $cachefile because mtime of include_dependency $f has changed (mtime $ftime, before $ftime_req)"
-                        record_reason(reasons, "include_dependency mtime change")
-                        return true
-                    end
-                else
-                    fstat = stat(f)
-                    fsize = filesize(fstat)
-                    if fsize != fsize_req
-                        @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
-                        record_reason(reasons, "include_dependency fsize change")
-                        return true
-                    end
-                    hash = isdir(fstat) ? _crc32c(join(readdir(f))) : open(_crc32c, f, "r")
-                    if hash != hash_req
-                        @debug "Rejecting stale cache file $cachefile because hash of $f has changed (hash $hash, before $hash_req)"
-                        record_reason(reasons, "include_dependency fhash change")
-                        return true
-                    end
-                end
+            if any_includes_stale(includes, cachefile, reasons)
+                return true
             end
         end
 
@@ -4148,6 +4175,17 @@ macro __DIR__()
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end
 
+function prepare_compiler_stub_image!()
+    ccall(:jl_add_to_module_init_list, Cvoid, (Any,), Compiler)
+    register_root_module(Compiler)
+    filter!(mod->mod !== Compiler, loaded_modules_order)
+end
+
+function expand_compiler_path(tup)
+    (tup[1], joinpath(Sys.BINDIR, DATAROOTDIR, tup[2]), tup[3:end]...)
+end
+compiler_chi(tup::Tuple) = CacheHeaderIncludes(expand_compiler_path(tup))
+
 """
     precompile(f, argtypes::Tuple{Vararg{Any}})
 
@@ -4167,8 +4205,8 @@ function precompile(@nospecialize(argt::Type))
 end
 
 # Variants that work for `invoke`d calls for which the signature may not be sufficient
-precompile(mi::Core.MethodInstance, world::UInt=get_world_counter()) =
-    (ccall(:jl_compile_method_instance, Cvoid, (Any, Any, UInt), mi, C_NULL, world); return true)
+precompile(mi::MethodInstance, world::UInt=get_world_counter()) =
+    (ccall(:jl_compile_method_instance, Cvoid, (Any, Ptr{Cvoid}, UInt), mi, C_NULL, world); return true)
 
 """
     precompile(f, argtypes::Tuple{Vararg{Any}}, m::Method)
@@ -4183,7 +4221,7 @@ end
 
 function precompile(@nospecialize(argt::Type), m::Method)
     atype, sparams = ccall(:jl_type_intersection_with_env, Any, (Any, Any), argt, m.sig)::SimpleVector
-    mi = Core.Compiler.specialize_method(m, atype, sparams)
+    mi = Base.Compiler.specialize_method(m, atype, sparams)
     return precompile(mi)
 end
 

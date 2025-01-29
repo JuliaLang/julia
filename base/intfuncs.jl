@@ -97,6 +97,9 @@ end
 Least common (positive) multiple (or zero if any argument is zero).
 The arguments may be integer and rational numbers.
 
+``a`` is a multiple of ``b`` if there exists an integer ``m`` such
+that ``a=mb``.
+
 !!! compat "Julia 1.4"
     Rational arguments require Julia 1.4 or later.
 
@@ -150,7 +153,16 @@ gcd(a::T, b::T) where T<:Real = throw(MethodError(gcd, (a,b)))
 lcm(a::T, b::T) where T<:Real = throw(MethodError(lcm, (a,b)))
 
 gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
-lcm(abc::AbstractArray{<:Real}) = reduce(lcm, abc; init=one(eltype(abc)))
+function lcm(abc::AbstractArray{<:Real})
+    # Using reduce with init=one(eltype(abc)) is buggy for Rationals.
+    l = length(abc)
+    if l == 0
+        eltype(abc) <: Integer && return one(eltype(abc))
+        throw(ArgumentError("lcm has no identity for $(eltype(abc))"))
+    end
+    l == 1 && return abs(only(abc))
+    return reduce(lcm, abc)
+end
 
 function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
@@ -1205,6 +1217,8 @@ julia> binomial(-5, 3)
 # External links
 * [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
 """
+binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
+
 Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:Integer
     n0, k0 = n, k
     k < 0 && return zero(T)
@@ -1233,7 +1247,6 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     end
     copysign(x, sgn)
 end
-binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
 
 """
     binomial(x::Number, k::Integer)

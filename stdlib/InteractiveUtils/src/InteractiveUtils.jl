@@ -11,7 +11,8 @@ Base.Experimental.@optlevel 1
 
 export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, varinfo,
     versioninfo, subtypes, supertypes, @which, @edit, @less, @functionloc, @code_warntype,
-    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard, @trace_compile, @trace_dispatch
+    @code_typed, @code_lowered, @code_llvm, @code_native, @time_imports, clipboard, @trace_compile, @trace_dispatch,
+    @activate
 
 import Base.Docs.apropos
 
@@ -165,6 +166,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
+    println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
     println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
       $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
