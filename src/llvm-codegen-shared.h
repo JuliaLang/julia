@@ -545,3 +545,12 @@ void ConstantUses<U>::forward()
     }
 }
 }
+
+namespace debugir {
+
+// Attaches debug info to M, assuming it is parsed from Directory/Filename.
+// Returns a module for display in debugger devoid of any debug info.
+std::unique_ptr<llvm::Module>
+createDebugInfo(llvm::Module &M, std::string Directory, std::string Filename);
+
+} // namespace debugir

@@ -10565,6 +10565,23 @@ extern "C" void jl_init_llvm(void)
         jl_ExecutionEngine->enablePerfJITEventListener();
 #endif
 #endif
+    const char *debuginfo_mode = getenv("JULIA_DEBUGINFO"); // JULIA_DEBUGINFO="LLVM-IR" JULIA_DUMP_IR="path/to/dir"
+    if (debuginfo_mode) {
+        if (strcasecmp(debuginfo_mode, "julia-source") == 0)
+            jl_ExecutionEngine->get_debuginfo_mode() = jl_debuginfo_emission_mode_t::julia_source;
+        else if (strcasecmp(debuginfo_mode, "llvm-ir") == 0)
+            jl_ExecutionEngine->get_debuginfo_mode() = jl_debuginfo_emission_mode_t::llvm_ir;
+        else if (strcmp(debuginfo_mode, "") != 0)
+            fprintf(stderr, "warning: unexpected argument to 'JULIA_DEBUGINFO' env var: \"%s\"\n", debuginfo_mode);
+    }
+
+    const char *dump_debugir_directory = getenv("JULIA_DUMP_IR");
+    if (dump_debugir_directory && strcmp(dump_debugir_directory, "") != 0) {
+        llvm::SmallString<PATH_MAX> AbsoluteFileName{};
+        llvm::sys::fs::expand_tilde(Twine(dump_debugir_directory), AbsoluteFileName);
+        llvm::sys::fs::make_absolute(AbsoluteFileName);
+        jl_ExecutionEngine->get_dump_debugir_directory() = AbsoluteFileName.str();
+    }
 
     cl::PrintOptionValues();
 }
