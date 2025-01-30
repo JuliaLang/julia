@@ -100,6 +100,7 @@ Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
 
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
+    cub = ncodeunits(b)
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
@@ -1291,12 +1292,16 @@ julia> String(Iterators.map(c -> c+1, "Hello, world"))
 julia> String(Iterators.take("Hello, world", 5))
 "Hello"  # Takes the first 5 characters of the string and converts it to a string.
 """
-String(x) = String_iterator(x, IteratorSize(x))
-String_iterator(x, ::IsInfinite) = throw(MethodError(String, (x,)))
-String_iterator(x, ::IteratorSize) = begin
-    collected = collect(x)
-    if !(isa(collected, AbstractVector) && all(x -> isa(x, Char), collected))
+String(x) = _string_iterator(x, IteratorSize(x))
+_string_iterator(x, ::IsInfinite) = throw(MethodError(String, (x,)))
+_string_iterator(x, ::IteratorSize) = begin
+    try
+        collected = collect(Char, x)
+        if ndims(collected) != 1
+            throw(MethodError(String, (x,)))
+        end
+        return String(collected)
+    catch e
         throw(MethodError(String, (x,)))
     end
-    return String(collected::AbstractVector{<:AbstractChar})
 end
