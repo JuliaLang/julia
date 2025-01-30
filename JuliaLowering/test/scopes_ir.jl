@@ -113,12 +113,12 @@ end
 
 ########################################
 # Error: Static parameter name not unique
-function f() where T where T
+function f(::T) where T where T
 end
 #---------------------
 LoweringError:
-function f() where T where T
-#                  ╙ ── function static parameter name not unique
+function f(::T) where T where T
+#                     ╙ ── function static parameter name not unique
 end
 
 ########################################
@@ -194,38 +194,38 @@ end
 
 ########################################
 # Error: Conflicting static parameter and local
-function f() where T
+function f(::T) where T
     local T
 end
 #---------------------
 LoweringError:
-function f() where T
+function f(::T) where T
     local T
 #   └─────┘ ── local variable name `T` conflicts with a static parameter
 end
 
 ########################################
 # Error: Conflicting static parameter and global
-function f() where T
+function f(::T) where T
     global T
 end
 #---------------------
 LoweringError:
-function f() where T
+function f(::T) where T
     global T
 #   └──────┘ ── global variable name `T` conflicts with a static parameter
 end
 
 ########################################
 # Error: Conflicting static parameter and local in nested scope
-function f() where T
+function f(::T) where T
     let
         local T
     end
 end
 #---------------------
 LoweringError:
-function f() where T
+function f(::T) where T
     let
         local T
 #       └─────┘ ── local variable name `T` conflicts with a static parameter
@@ -234,14 +234,14 @@ end
 
 ########################################
 # Error: Conflicting static parameter and global in nested scope
-function f() where T
+function f(::T) where T
     let
         global T
     end
 end
 #---------------------
 LoweringError:
-function f() where T
+function f(::T) where T
     let
         global T
 #       └──────┘ ── global variable name `T` conflicts with a static parameter
@@ -250,14 +250,14 @@ end
 
 ########################################
 # Error: Conflicting static parameter and implicit local
-function f() where T
+function f(::T) where T
     let
         T = rhs
     end
 end
 #---------------------
 LoweringError:
-function f() where T
+function f(::T) where T
     let
         T = rhs
 #       ╙ ── local variable name `T` conflicts with a static parameter

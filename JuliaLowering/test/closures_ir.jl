@@ -438,13 +438,13 @@ end
 
 ########################################
 # Error: Static parameter clashing with closure name
-function f() where {g}
+function f(::g) where {g}
     function g()
     end
 end
 #---------------------
 LoweringError:
-function f() where {g}
+function f(::g) where {g}
     function g()
 #            ╙ ── local variable name `g` conflicts with a static parameter
     end

@@ -315,6 +315,29 @@ end
     @test values(test_mod.f_kw_default_dependencies(x = 10)) === (10, 10, :outer, :aaa_kw, :aaa_kw)
     @test values(test_mod.f_kw_default_dependencies(x = 10, aaa=:blah)) === (10, 10, :outer, :blah, :blah)
 
+    # Keywords with static parameters
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_sparams(x::X, y::Y; a::A, b::B) where {X,Y,A,B}
+        (X,Y,A,B)
+    end
+    """)
+    @test values(test_mod.f_kw_sparams(1, 1.0; a="a", b='b')) === (Int, Float64, String, Char)
+
+    # Keywords with static parameters, where some keyword types can be inferred
+    # based on the positional parameters and others cannot.
+    JuliaLowering.include_string(test_mod, """
+    function f_kw_type_errors(x::X; a::F, b::X) where {X<:Integer,F<:AbstractFloat}
+        (X,F)
+    end
+    """)
+    @test values(test_mod.f_kw_type_errors(1; a=1.0, b=10)) === (Int, Float64)
+    # The following is a keyword TypeError because we can infer `X` based on
+    # the positional parameters and use that to check the type of `b`.
+    @test_throws TypeError values(test_mod.f_kw_type_errors(1; a=1.0, b="str"))
+    # The following is only a method error as we can't infer `F` prior to
+    # dispatching to the body function.
+    @test_throws MethodError values(test_mod.f_kw_type_errors(1; a="str", b=10))
+
     # Throwing of UndefKeywordError
     JuliaLowering.include_string(test_mod, """
     function f_kw_no_default(; x)

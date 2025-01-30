@@ -2125,18 +2125,23 @@ end
 # Expand `where` clause(s) of a function into (typevar_names, typevar_stmts) where
 # - `typevar_names` are the names of the type's type parameters
 # - `typevar_stmts` are a list of statements to define a `TypeVar` for each parameter
-#   name in `typevar_names`, to be emitted prior to uses of `typevar_names`.
-#   There is exactly one statement from each typevar.
-function _split_wheres!(ctx, typevar_names, typevar_stmts, ex)
+#   name in `typevar_names`, with exactly one per `typevar_name`. Some of these
+#   may already have been emitted.
+# - `new_typevar_stmts` is the list of statements which needs to to be emitted
+#   prior to uses of `typevar_names`.
+function _split_wheres!(ctx, typevar_names, typevar_stmts, new_typevar_stmts, ex)
     if kind(ex) == K"where" && numchildren(ex) == 2
         vars_kind = kind(ex[2])
         if vars_kind == K"_typevars"
-            append!(typevar_names, children(ex[2]))
+            append!(typevar_names, children(ex[2][1]))
+            append!(typevar_stmts, children(ex[2][2]))
         else
             params = vars_kind == K"braces" ? ex[2][1:end] : ex[2:2]
-            expand_typevars!(ctx, typevar_names, typevar_stmts, params)
+            n_existing = length(new_typevar_stmts)
+            expand_typevars!(ctx, typevar_names, new_typevar_stmts, params)
+            append!(typevar_stmts, view(new_typevar_stmts, n_existing+1:length(new_typevar_stmts)))
         end
-        _split_wheres!(ctx, typevar_names, typevar_stmts, ex[1])
+        _split_wheres!(ctx, typevar_names, typevar_stmts, new_typevar_stmts, ex[1])
     else
         ex
     end
@@ -2172,11 +2177,19 @@ function method_def_expr(ctx, srcref, callex_srcref, method_table,
     ]
 end
 
-function trim_used_typevars(ctx, arg_types, typevar_names, typevar_stmts)
+# Select static parameters which are used in function arguments `arg_types`, or
+# transitively used.
+#
+# The transitive usage check probably doesn't guarentee that the types are
+# inferrable during dispatch as they may only be part of the bounds of another
+# type. Thus we might get false positives here but we shouldn't get false
+# negatives.
+function select_used_typevars(arg_types, typevar_names, typevar_stmts)
     n_typevars = length(typevar_names)
     @assert n_typevars == length(typevar_stmts)
     # Filter typevar names down to those which are directly used in the arg list
-    typevar_used = [contains_identifier(tn, arg_types) for tn in typevar_names]
+    typevar_used = Bool[any(contains_identifier(argtype, tn) for argtype in arg_types)
+                        for tn in typevar_names]
     # _Or_ used transitively via other typevars. The following code
     # computes this by incrementally coloring the graph of dependencies
     # between type vars.
@@ -2196,6 +2209,24 @@ function trim_used_typevars(ctx, arg_types, typevar_names, typevar_stmts)
             end
         end
     end
+    typevar_used
+end
+
+function check_all_typevars_used(arg_types, typevar_names, typevar_stmts)
+    selected = select_used_typevars(arg_types, typevar_names, typevar_stmts)
+    unused_typevar = findfirst(s->!s, selected)
+    if !isnothing(unused_typevar)
+        # Type variables which may be statically determined to be unused in
+        # any function argument and therefore can't be inferred during
+        # dispatch.
+        throw(LoweringError(typevar_names[unused_typevar],
+                            "Method definition declares type variable but does not use it in the type of any function parameter"))
+    end
+end
+
+# Return `typevar_names` which are used directly or indirectly in `arg_types`.
+function trim_used_typevars(ctx, arg_types, typevar_names, typevar_stmts)
+    typevar_used = select_used_typevars(arg_types, typevar_names, typevar_stmts)
     trimmed_typevar_names = SyntaxList(ctx)
     for (used,tn) in zip(typevar_used, typevar_names)
         if used
@@ -2291,6 +2322,9 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
     push!(body_arg_names, new_local_binding(ctx, body_func_name, "#self#"; kind=:argument))
     push!(body_arg_types, @ast ctx body_func_name [K"function_type" body_func_name])
 
+    non_positional_typevars = typevar_names[map(!,
+        select_used_typevars(arg_types, typevar_names, typevar_stmts))]
+
     kw_values = SyntaxList(ctx)
     kw_defaults = SyntaxList(ctx)
     kw_names = SyntaxList(ctx)
@@ -2333,11 +2367,19 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
                 [K"call" "isdefined"::K"core" kws_arg name_sym]
                 [K"block"
                     kwval := [K"call" "getfield"::K"core" kws_arg name_sym]
-                    # TODO: if the "declared" type of a KW arg includes something
-                    # from keyword-sparams then don't assert it here, since those
-                    # static parameters don't have values yet. instead, the type
-                    # will be picked up when the underlying method is called.
-                    if !is_core_Any(atype)
+                    if is_core_Any(atype) || contains_identifier(atype, non_positional_typevars)
+                        # <- Do nothing in this branch because `atype` includes
+                        # something from the typevars and those static
+                        # parameters don't have values yet. Instead, the type
+                        # will be picked up when the body method is called and
+                        # result in a MethodError during dispatch rather than
+                        # the `TypeError` below.
+                        #
+                        # In principle we could probably construct the
+                        # appropriate UnionAll here in some simple cases but
+                        # the fully general case probably requires simulating
+                        # the runtime's dispatch machinery.
+                    else
                         [K"if" [K"call" "isa"::K"core" kwval atype]
                             "nothing"::K"core"
                             [K"call"
@@ -2468,14 +2510,19 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
     else
         scope_nest(ctx, kw_names, kw_values, kwcall_body_tail)
     end
+    main_kwcall_typevars = trim_used_typevars(ctx, kwcall_arg_types, typevar_names, typevar_stmts)
     push!(kwcall_method_defs,
           method_def_expr(ctx, srcref, callex_srcref, kwcall_mtable,
-                          typevar_names, kwcall_arg_names, kwcall_arg_types, kwcall_body))
+                          main_kwcall_typevars, kwcall_arg_names, kwcall_arg_types, kwcall_body))
+
+    # Check kws of body method
+    check_all_typevars_used(body_arg_types, typevar_names, typevar_stmts)
 
     kw_func_method_defs = @ast ctx srcref [K"block"
         [K"method_defs"
             body_func_name
             [K"block"
+                # TODO: nkw
                 method_def_expr(ctx, srcref, callex_srcref, "nothing"::K"core",
                                 typevar_names, body_arg_names, body_arg_types, body, ret_var)
             ]
@@ -2537,6 +2584,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
 
     typevar_names = SyntaxList(ctx)
     typevar_stmts = SyntaxList(ctx)
+    new_typevar_stmts = SyntaxList(ctx)
     if kind(name) == K"where"
         # `where` vars end up in two places
         # 1. Argument types - the `T` in `x::T` becomes a `TypeVar` parameter in
@@ -2545,7 +2593,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         # 2. In the method body - either explicitly or implicitly via the method
         #    return type or default arguments - where `T` turns up as the *name* of
         #    a special slot of kind ":static_parameter"
-        name = _split_wheres!(ctx, typevar_names, typevar_stmts, name)
+        name = _split_wheres!(ctx, typevar_names, typevar_stmts, new_typevar_stmts, name)
     end
 
     return_type = nothing
@@ -2704,12 +2752,20 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
 
     if isnothing(keywords)
         body_func_name, kw_func_method_defs = (nothing, nothing)
+        # NB: This check seems good as it statically catches any useless
+        # typevars which can't be inferred. However it wasn't previously an
+        # error so we might need to reduce it to a warning?
+        check_all_typevars_used(arg_types, typevar_names, typevar_stmts)
+        main_typevar_names = typevar_names
     else
         # Rewrite `body` here so that the positional-only versions dispatch there.
         body_func_name, kw_func_method_defs, body =
             keyword_function_defs(ctx, ex, callex, name_str, typevar_names, typevar_stmts,
                                   arg_names, arg_types, has_slurp, first_default, arg_defaults,
                                   keywords, body, ret_var)
+        # The main function (but without keywords) needs its typevars trimmed,
+        # as some of them may be for the keywords only.
+        main_typevar_names = trim_used_typevars(ctx, arg_types, typevar_names, typevar_stmts)
         # ret_var is used only in the body method
         ret_var = nothing
     end
@@ -2728,7 +2784,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
 
     # The method with all non-default arguments
     push!(method_stmts,
-          method_def_expr(ctx, ex, callex, method_table, typevar_names, arg_names,
+          method_def_expr(ctx, ex, callex, method_table, main_typevar_names, arg_names,
                           arg_types, body, ret_var))
     if !isnothing(docs)
         method_stmts[end] = @ast ctx docs [K"block"
@@ -2751,7 +2807,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         end
         [K"scope_block"(scope_type=:hard)
             [K"block"
-                typevar_stmts...
+                new_typevar_stmts...
                 kw_func_method_defs
                 [K"method_defs"
                     isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
@@ -3151,7 +3207,7 @@ function _new_call_convert_arg(ctx, full_struct_type, field_type, field_index, v
 end
 
 function default_inner_constructors(ctx, srcref, global_struct_name,
-                                    typevar_names, field_names, field_types)
+                                    typevar_names, typevar_stmts, field_names, field_types)
     # TODO: Consider using srcref = @HERE ?
     exact_ctor = if isempty(typevar_names)
         # Definition with exact types for all arguments
@@ -3188,7 +3244,7 @@ function default_inner_constructors(ctx, srcref, global_struct_name,
                                      typevar_names...
                                  ]
                              ]
-                             [K"_typevars" typevar_names...]
+                             [K"_typevars" [K"block" typevar_names...] [K"block" typevar_stmts...]]
                          ]
                      end
                 ]
@@ -3236,7 +3292,7 @@ end
 #     end
 #
 function default_outer_constructor(ctx, srcref, global_struct_name,
-                                   typevar_names, field_names, field_types)
+                                   typevar_names, typevar_stmts, field_names, field_types)
     @ast ctx srcref [K"function"
         [K"where"
             [K"call" 
@@ -3248,7 +3304,7 @@ function default_outer_constructor(ctx, srcref, global_struct_name,
                 [K"::" [K"curly" "Type"::K"core" global_struct_name]]
                 [[K"::" n t] for (n,t) in zip(field_names, field_types)]...
             ]
-            [K"_typevars" typevar_names...]
+            [K"_typevars" [K"block" typevar_names...] [K"block" typevar_stmts...]]
         ]
         [K"new" [K"curly" global_struct_name typevar_names...] field_names...]
     ]
@@ -3617,7 +3673,7 @@ function expand_struct_def(ctx, ex, docs)
                 # Default constructors
                 if isempty(inner_defs)
                     default_inner_constructors(ctx, ex, global_struct_name,
-                                               typevar_names, field_names_2, field_types)
+                                               typevar_names, typevar_stmts, field_names_2, field_types)
                 else
                     map!(inner_defs, inner_defs) do def
                         rewrite_new_calls(ctx, def, struct_name, global_struct_name,
@@ -3627,7 +3683,7 @@ function expand_struct_def(ctx, ex, docs)
                 end
                 if need_outer_constructor
                     default_outer_constructor(ctx, ex, global_struct_name,
-                                              typevar_names, field_names_2, field_types)
+                                              typevar_names, typevar_stmts, field_names_2, field_types)
                 end
             ]
         ]
@@ -3672,7 +3728,7 @@ function expand_wheres(ctx, ex)
     elseif kind(rhs) == K"_typevars"
         # Eg, `S{X,Y} where {X, Y}` but with X and Y
         # already allocated `TypeVar`s
-        for r in reverse(children(rhs))
+        for r in reverse(children(rhs[1]))
             body = @ast ctx ex [K"call" "UnionAll"::K"core" r body]
         end
     else
@@ -3688,7 +3744,7 @@ function expand_curly(ctx, ex)
     check_no_parameters(ex, "unexpected semicolon in type parameter list")
     check_no_assignment(children(ex), "misplace assignment in type parameter list")
 
-    stmts = SyntaxList(ctx)
+    typevar_stmts = SyntaxList(ctx)
     type_args = SyntaxList(ctx)
     implicit_typevars = SyntaxList(ctx)
 
@@ -3702,7 +3758,7 @@ function expand_curly(ctx, ex)
             typevar = k == K"<:" ?
                 bounds_to_TypeVar(ctx, e, (name, nothing, e[1])) :
                 bounds_to_TypeVar(ctx, e, (name, e[1], nothing))
-            arg = emit_assign_tmp(stmts, ctx, typevar)
+            arg = emit_assign_tmp(typevar_stmts, ctx, typevar)
             push!(implicit_typevars, arg)
         else
             arg = e
@@ -3713,8 +3769,8 @@ function expand_curly(ctx, ex)
     type = @ast ctx ex [K"call" "apply_type"::K"core" type_args...]
     if !isempty(implicit_typevars)
         type = @ast ctx ex [K"block"
-            stmts...
-            [K"where" type [K"_typevars" implicit_typevars...]]
+            typevar_stmts...
+            [K"where" type [K"_typevars" [K"block" implicit_typevars...] [K"block" typevar_stmts...]]]
         ]
     end
 

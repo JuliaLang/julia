@@ -39,7 +39,7 @@ function _show_provtree(io::IO, prov, indent)
     printstyled(io, "@ $fn:$line\n", color=:light_black)
 end
 
-function showprov(io::IO, exs::Vector)
+function showprov(io::IO, exs::AbstractVector)
     for (i,ex) in enumerate(Iterators.reverse(exs))
         sr = sourceref(ex)
         if i > 1

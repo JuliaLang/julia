@@ -675,6 +675,14 @@ function Base.pushfirst!(v::SyntaxList, ex::SyntaxTree)
     pushfirst!(v.ids, ex._id)
 end
 
+function Base.similar(v::SyntaxList, size::Tuple=Base.size(v.ids))
+    SyntaxList(v.graph, zeros(NodeId, size))
+end
+
+function Base.isassigned(v::SyntaxList, i::Integer)
+    v.ids[i] > 0
+end
+
 function Base.append!(v::SyntaxList, exs)
     for e in exs
         push!(v, e)

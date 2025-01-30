@@ -185,6 +185,49 @@ end
 17  (return %₁₆)
 
 ########################################
+# Static parameter which is used only in the bounds of another static parameter
+# See https://github.com/JuliaLang/julia/issues/49275
+function f(x, y::S) where {T, S<:AbstractVector{T}}
+    (T,S)
+end
+#---------------------
+1   (method TestMod.f)
+2   (= slot₂/T (call core.TypeVar :T))
+3   TestMod.AbstractVector
+4   slot₂/T
+5   (call core.apply_type %₃ %₄)
+6   (= slot₁/S (call core.TypeVar :S %₅))
+7   TestMod.f
+8   (call core.Typeof %₇)
+9   slot₁/S
+10  (call core.svec %₈ core.Any %₉)
+11  slot₂/T
+12  slot₁/S
+13  (call core.svec %₁₁ %₁₂)
+14  SourceLocation::1:10
+15  (call core.svec %₁₀ %₁₃ %₁₄)
+16  --- method core.nothing %₁₅
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/y(!read)]
+    1   static_parameter₁
+    2   static_parameter₂
+    3   (call core.tuple %₁ %₂)
+    4   (return %₃)
+17  TestMod.f
+18  (return %₁₇)
+
+########################################
+# Error: Static parameter which is unused
+function f(::T) where {T,S}
+    (T,S)
+end
+#---------------------
+LoweringError:
+function f(::T) where {T,S}
+#                        ╙ ── Method definition declares type variable but does not use it in the type of any function parameter
+    (T,S)
+end
+
+########################################
 # Return types
 function f(x)::Int
     if x
@@ -1153,6 +1196,115 @@ end
     6   (return %₅)
 28  TestMod.f_kw_slurp
 29  (return %₂₈)
+
+########################################
+# Static parameters used in keywords, with and without the static parameter
+# being present in positional argument types.
+# 
+# Here the wrong type for `b` will get a `TypeError` but `A` will need to rely
+# on a MethodError.
+function f_kw_sparams(x::X; a::A=a_def, b::X=b_def) where {X,A}
+    (X,A)
+end
+#---------------------
+1   (method TestMod.#f_kw_sparams#0)
+2   (method TestMod.f_kw_sparams)
+3   (= slot₂/X (call core.TypeVar :X))
+4   (= slot₁/A (call core.TypeVar :A))
+5   TestMod.#f_kw_sparams#0
+6   (call core.Typeof %₅)
+7   slot₁/A
+8   slot₂/X
+9   TestMod.f_kw_sparams
+10  (call core.Typeof %₉)
+11  slot₂/X
+12  (call core.svec %₆ %₇ %₈ %₁₀ %₁₁)
+13  slot₂/X
+14  slot₁/A
+15  (call core.svec %₁₃ %₁₄)
+16  SourceLocation::1:10
+17  (call core.svec %₁₂ %₁₅ %₁₆)
+18  --- method core.nothing %₁₇
+    slots: [slot₁/#self#(!read) slot₂/a(!read) slot₃/b(!read) slot₄/#self#(!read) slot₅/x(!read)]
+    1   static_parameter₁
+    2   static_parameter₂
+    3   (call core.tuple %₁ %₂)
+    4   (return %₃)
+19  (call core.typeof core.kwcall)
+20  TestMod.f_kw_sparams
+21  (call core.Typeof %₂₀)
+22  slot₂/X
+23  (call core.svec %₁₉ core.NamedTuple %₂₁ %₂₂)
+24  slot₂/X
+25  (call core.svec %₂₄)
+26  SourceLocation::1:10
+27  (call core.svec %₂₃ %₂₅ %₂₆)
+28  --- method core.nothing %₂₇
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/x slot₅/kwtmp slot₆/a(!read) slot₇/b(!read)]
+    1   (newvar slot₆/a)
+    2   (newvar slot₇/b)
+    3   (call core.isdefined slot₂/kws :a)
+    4   (gotoifnot %₃ label₈)
+    5   (call core.getfield slot₂/kws :a)
+    6   (= slot₅/kwtmp %₅)
+    7   (goto label₁₀)
+    8   TestMod.a_def
+    9   (= slot₅/kwtmp %₈)
+    10  slot₅/kwtmp
+    11  (call core.isdefined slot₂/kws :b)
+    12  (gotoifnot %₁₁ label₂₃)
+    13  (call core.getfield slot₂/kws :b)
+    14  static_parameter₁
+    15  (call core.isa %₁₃ %₁₄)
+    16  (gotoifnot %₁₅ label₁₈)
+    17  (goto label₂₁)
+    18  static_parameter₁
+    19  (new core.TypeError :keyword argument :b %₁₈ %₁₃)
+    20  (call core.throw %₁₉)
+    21  (= slot₅/kwtmp %₁₃)
+    22  (goto label₂₅)
+    23  TestMod.b_def
+    24  (= slot₅/kwtmp %₂₃)
+    25  slot₅/kwtmp
+    26  (call top.keys slot₂/kws)
+    27  (call core.tuple :a :b)
+    28  (call top.diff_names %₂₆ %₂₇)
+    29  (call top.isempty %₂₈)
+    30  (gotoifnot %₂₉ label₃₂)
+    31  (goto label₃₃)
+    32  (call top.kwerr slot₂/kws slot₃/#self# slot₄/x)
+    33  TestMod.#f_kw_sparams#0
+    34  (call %₃₃ %₁₀ %₂₅ slot₃/#self# slot₄/x)
+    35  (return %₃₄)
+29  TestMod.f_kw_sparams
+30  (call core.Typeof %₂₉)
+31  slot₂/X
+32  (call core.svec %₃₀ %₃₁)
+33  slot₂/X
+34  (call core.svec %₃₃)
+35  SourceLocation::1:10
+36  (call core.svec %₃₂ %₃₄ %₃₅)
+37  --- method core.nothing %₃₆
+    slots: [slot₁/#self# slot₂/x]
+    1   TestMod.#f_kw_sparams#0
+    2   TestMod.a_def
+    3   TestMod.b_def
+    4   (call %₁ %₂ %₃ slot₁/#self# slot₂/x)
+    5   (return %₄)
+38  TestMod.f_kw_sparams
+39  (return %₃₈)
+
+########################################
+# Error: Static parameter which is unused in keyword body arg types
+function f_kw_sparams(x::X; a::A) where {X,Y,A}
+    (X,A)
+end
+#---------------------
+LoweringError:
+function f_kw_sparams(x::X; a::A) where {X,Y,A}
+#                                          ╙ ── Method definition declares type variable but does not use it in the type of any function parameter
+    (X,A)
+end
 
 ########################################
 # Error: argument unpacking in keywords
