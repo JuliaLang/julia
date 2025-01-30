@@ -102,15 +102,56 @@ function compiled_conv(::Type{T}, x) where T
     t = Core.Intrinsics.trunc_int(T, x)
     z = Core.Intrinsics.zext_int(typeof(x), t)
     s = Core.Intrinsics.sext_int(typeof(x), t)
-    fpt = Core.Intrinsics.fptrunc(T, x)
-    fpe = Core.Intrinsics.fpext(typeof(x), fpt)
-    return (t, z, s, fpt, fpe)
+    return (t, z, s)
 end
 @test compiled_conv(UInt32, Int64(0x8000_0000)) ==
-    (0x80000000, Int64(0x80000000), -Int64(0x80000000), 0x00000000, 0)
+    (0x80000000, Int64(0x80000000), -Int64(0x80000000))
 @test compiled_conv(UInt32, UInt64(0xC000_BA98_8765_4321)) ==
-    (0x87654321, 0x0000000087654321, 0xffffffff87654321, 0xc005d4c4, 0xc000ba9880000000)
+    (0x87654321, 0x0000000087654321, 0xffffffff87654321)
 @test_throws ErrorException compiled_conv(Bool, im)
+
+function compiled_fptrunc(::Type{T}, x) where T
+    return Core.Intrinsics.fptrunc(T, x)
+
+end
+#           1.234
+#           0 01111111 00111011111001110110110
+#   float32 0 01111111 00111011111001110110110
+#   float16 0    01111 0011101111              (truncated/rtz)
+#   float16 0    01111 0011110000              (round-to-nearest)
+#  bfloat16 0 01111111 0011110                 (round-to-nearest)
+@test compiled_fptrunc(Float16, 1.234) === reinterpret(Float16, 0b0_01111_0011110000)
+# On arm64, LLVM gives an assertion failure when compiling this:
+# LLVM ERROR: Cannot select: 0x106c8e570: bf16 = fp_round 0x106c8df50, TargetConstant:i64<0>, intrinsics.jl:114
+#   0x106c8df50: f64,ch = CopyFromReg 0x104545960, Register:f64 %1
+#     0x106c8dee0: f64 = Register %1
+#   0x106c8e3b0: i64 = TargetConstant<0>
+# In function: julia_compiled_fptrunc_3480
+# @test compiled_fptrunc(Core.BFloat16, 1.234) === reinterpret(Core.BFloat16, 0b0_01111111_0011110)
+@test compiled_fptrunc(Float32, 1.234) === 1.234f0
+@test_throws ErrorException compiled_fptrunc(Float64, 1.234f0)
+@test_throws ErrorException compiled_fptrunc(Int32, 1.234)
+@test_throws ErrorException compiled_fptrunc(Float32, 1234)
+
+function compiled_fpext(::Type{T}, x) where T
+    return Core.Intrinsics.fpext(T, x)
+end
+#           1.234
+#   float16 0    01111 0011110000
+#           0 01111111 00111100000000000000000 = 1.234375
+
+#           1.234
+#   float32 0 01111111    00111011111001110110110
+#   float64 0 01111111111 0011101111100111011011000000000000000000000000000000
+#                         3be76c
+@test compiled_fpext(Float32, reinterpret(Float16, 0b0_01111_0011110000)) === 1.234375f0
+@test compiled_fpext(Float64, reinterpret(Float16, 0b0_01111_0011110000)) === 1.234375
+@test compiled_fpext(Float64, 1.234f0) === 0x1.3be76cp0
+@test_throws ErrorException compiled_fpext(Float16, Float16(1.0))
+@test_throws ErrorException compiled_fpext(Float16, 1.0f0)
+@test_throws ErrorException compiled_fpext(Float32, 1.0f0)
+@test_throws ErrorException compiled_fpext(Float32, 1.0)
+@test_throws ErrorException compiled_fpext(Float64, 1.0)
 
 let f = Core.Intrinsics.ashr_int
     @test f(Int8(-17), 1) == -9
@@ -158,7 +199,7 @@ macro test_intrinsic(intr, args...)
             $intr($(inputs...))
         end
         @test f() === Base.invokelatest($intr, $(inputs...))
-        @test f() == $output
+        @test f() === $output
     end
 end
 

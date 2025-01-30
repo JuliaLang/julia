@@ -2454,6 +2454,9 @@ const _SPECIAL_BUILTINS = Any[
     Core._apply_iterate,
 ]
 
+# Types compatible with fpext/fptrunc
+const _FLOAT_TYPES = Any[Core.BFloat16, Float16, Float32, Float64]
+
 function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     # consistent if the first arg is immutable
     na = length(argtypes)
@@ -2867,6 +2870,17 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         if !(isprimitivetype(ty) && isprimitivetype(xty))
             return ErrorException
         end
+
+        # fpext and fptrunc have further restrictions on the allowed types.
+        if f === Intrinsics.fpext &&
+            !(ty in _FLOAT_TYPES && xty in _FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
+            return ErrorException
+        end
+        if f === Intrinsics.fptrunc &&
+            !(ty in _FLOAT_TYPES && xty in _FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
+            return ErrorException
+        end
+
         return Union{}
     end
 

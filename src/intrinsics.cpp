@@ -672,16 +672,23 @@ static jl_cgval_t generic_cast(
     uint32_t nb = jl_datatype_size(jlto);
     Type *to = bitstype_to_llvm((jl_value_t*)jlto, ctx.builder.getContext(), true);
     Type *vt = bitstype_to_llvm(v.typ, ctx.builder.getContext(), true);
-    if (toint)
-        to = INTT(to, DL);
-    else
-        to = FLOATT(to);
-    if (fromint)
-        vt = INTT(vt, DL);
-    else
-        vt = FLOATT(vt);
+
+    // fptrunc fpext depend on the specific floating point format to work
+    // correctly, and so do not pun their argument types.
+    if (!(f == fpext || f == fptrunc)) {
+        if (toint)
+            to = INTT(to, DL);
+        else
+            to = FLOATT(to);
+        if (fromint)
+            vt = INTT(vt, DL);
+        else
+            vt = FLOATT(vt);
+    }
+
     if (!to || !vt)
         return emit_runtime_call(ctx, f, argv, 2);
+
     Value *from = emit_unbox(ctx, vt, v, v.typ);
     if (!CastInst::castIsValid(Op, from, to))
         return emit_runtime_call(ctx, f, argv, 2);
