@@ -291,6 +291,7 @@
     XX(jl_load_) \
     XX(jl_load_and_lookup) \
     XX(jl_load_dynamic_library) \
+    XX(jl_find_dynamic_library_by_addr) \
     XX(jl_load_file_string) \
     XX(jl_lookup_code_address) \
     XX(jl_lseek) \
