@@ -1843,19 +1843,21 @@ end
 #-------------------------------------------------------------------------------
 # Expand for loops
 
+# Extract the variable names assigned to from a "fancy assignment left hand
+# side" such as nested tuple destructuring.
 function foreach_lhs_var(f::Function, ex)
     k = kind(ex)
     if k == K"Identifier" || k == K"BindingId"
         f(ex)
-    elseif k == K"Placeholder"
-        # Ignored
-    elseif k == K"tuple"
+    elseif k == K"::" && numchildren(ex) == 2
+        foreach_lhs_var(f, ex[1])
+    elseif k == K"tuple" || k == K"parameters"
         for e in children(ex)
             foreach_lhs_var(f, e)
         end
-    else
-        TODO(ex, "LHS vars")
     end
+    # k == K"Placeholder" ignored, along with everything else - we assume
+    # validation is done elsewhere.
 end
 
 function expand_for(ctx, ex)
@@ -1874,7 +1876,6 @@ function expand_for(ctx, ex)
         lhs = iterspec[1]
         if kind(lhs) != K"outer"
             foreach_lhs_var(lhs) do var
-                @chk kind(var) == K"Identifier"
                 push!(copied_vars, @ast ctx var [K"=" var var])
             end
         end

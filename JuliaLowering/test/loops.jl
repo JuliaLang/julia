@@ -45,10 +45,7 @@ let
 end
 """) == [2,4]
 
-# TODO: Test soft scope rules
-
 end
-
 
 @testset "for loops" begin
 
@@ -144,6 +141,19 @@ let
 end
 """) == 2
 
+# Fancy for loop left hand side - unpacking and scoping
+@test JuliaLowering.include_string(test_mod, """
+let
+    a = []
+    i = 100
+    j = 200
+    for (i,j) in [('a', 'b'), (1,2)]
+        push!(a, (i,j))
+    end
+    (a, i, j)
+end
+""") == ([('a', 'b'), (1,2)], 100, 200)
+
 end
 
 
@@ -162,6 +172,7 @@ end
 """) == [(1,3), (1,4), (2,3), (2,4)]
 
 @testset "break/continue" begin
+
 @test JuliaLowering.include_string(test_mod, """
 let
     a = []
@@ -198,6 +209,8 @@ let
     a
 end
 """) == [(1,2), (1,4), (2,2), (2,4)]
+
+
 end
 
 

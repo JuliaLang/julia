@@ -41,6 +41,16 @@ end
 8   (return core.nothing)
 
 ########################################
+# let syntax with named tuple on lhs creates locals for the unpacked vars
+let (; x,y) = rhs
+end
+#---------------------
+1   TestMod.rhs
+2   (= slot₁/x (call top.getproperty %₁ :x))
+3   (= slot₂/y (call top.getproperty %₁ :y))
+4   (return core.nothing)
+
+########################################
 # Let syntax with the same name creates nested bindings
 let x = f(x), x = g(x)
 end

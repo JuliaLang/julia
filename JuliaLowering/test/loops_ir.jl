@@ -73,6 +73,47 @@ end
 17  (return core.nothing)
 
 ########################################
+# Syntax sugar for nested for loop
+for x in xs, y in ys
+    x = 10 # Copy of x; does not overwrite x iteration var
+end
+#---------------------
+1   TestMod.xs
+2   (= slot₂/next (call top.iterate %₁))
+3   slot₂/next
+4   (call core.=== %₃ core.nothing)
+5   (call top.not_int %₄)
+6   (gotoifnot %₅ label₃₄)
+7   slot₂/next
+8   (= slot₃/x (call core.getfield %₇ 1))
+9   (call core.getfield %₇ 2)
+10  TestMod.ys
+11  (= slot₁/next (call top.iterate %₁₀))
+12  slot₁/next
+13  (call core.=== %₁₂ core.nothing)
+14  (call top.not_int %₁₃)
+15  (gotoifnot %₁₄ label₂₈)
+16  slot₃/x
+17  (= slot₄/x %₁₆)
+18  slot₁/next
+19  (= slot₅/y (call core.getfield %₁₈ 1))
+20  (call core.getfield %₁₈ 2)
+21  (= slot₄/x 10)
+22  (= slot₁/next (call top.iterate %₁₀ %₂₀))
+23  slot₁/next
+24  (call core.=== %₂₃ core.nothing)
+25  (call top.not_int %₂₄)
+26  (gotoifnot %₂₅ label₂₈)
+27  (goto label₁₆)
+28  (= slot₂/next (call top.iterate %₁ %₉))
+29  slot₂/next
+30  (call core.=== %₂₉ core.nothing)
+31  (call top.not_int %₃₀)
+32  (gotoifnot %₃₁ label₃₄)
+33  (goto label₇)
+34  (return core.nothing)
+
+########################################
 # Error: break outside for/while
 break
 #---------------------
