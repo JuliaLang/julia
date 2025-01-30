@@ -2030,3 +2030,19 @@ let code = Any[
     ir = Compiler.domsort_ssa!(ir, domtree)
     Compiler.verify_ir(ir)
 end
+
+# https://github.com/JuliaLang/julia/issues/57141
+# don't eliminate `setfield!` when the field is to be used
+let src = code_typed1(()) do
+        f = function ()
+            ref = Ref{Any}()
+            ref[] = 0
+            @assert isdefined(ref, :x)
+            inner() = ref[] + 1
+            (inner(), ref[])
+        end
+        first(f())
+    end
+    ex = src.code[2]
+    @test isexpr(ex, :call) && argextype(ex.args[1], src) === Const(setfield!)
+end
