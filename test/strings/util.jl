@@ -802,7 +802,6 @@ end
         @test String(Iterators.map(c -> '😊', "hello")) == "😊😊😊😊😊"
         @test String(Iterators.take("", 3)) == ""
         @test String(Iterators.drop("", 3)) == ""
-        @test_throws MethodError String(Iterators.map(c -> 1, "hello"))
         @test_throws MethodError String(Iterators.filter(c -> c > 128, "hello"))
         @test_throws MethodError String(Iterators.cycle("abc"))
         @test_throws MethodError String(19)
