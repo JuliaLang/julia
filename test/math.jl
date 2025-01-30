@@ -21,9 +21,16 @@ end
     @test clamp(3.0, 1, 3) == 3.0
     @test clamp(4.0, 1, 3) == 3.0
 
-    @test clamp(NaN, 1, 2) === NaN
-    @test clamp(0, NaN, 2) === NaN
+    @test clamp(NaN, 0, 1) === NaN
+    @test clamp(NaN, 1, 0) === NaN
+    @test clamp(0, NaN, 1) === NaN
+    @test clamp(1, NaN, 0) === NaN
     @test clamp(0, 1, NaN) === NaN
+    @test clamp(1, 0, NaN) === NaN
+    @test clamp(NaN, NaN, 0) === NaN
+    @test clamp(NaN, 0, NaN) === NaN
+    @test clamp(0, NaN, NaN) === NaN
+    @test clamp(NaN, NaN, NaN) === NaN
 
     @test clamp.([0, 1, 2, 3, 4], 1.0, 3.0) == [1.0, 1.0, 2.0, 3.0, 3.0]
     @test clamp.([0 1; 2 3], 1.0, 3.0) == [1.0 1.0; 2.0 3.0]
