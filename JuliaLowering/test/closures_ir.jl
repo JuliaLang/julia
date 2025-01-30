@@ -648,38 +648,39 @@ end
 39  SourceLocation::2:14
 40  (call core.svec %₃₇ %₃₈ %₃₉)
 41  --- code_info
-    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/#f_kw_closure#0(!read)]
-    1   (call core.isdefined slot₂/kws :x)
-    2   (gotoifnot %₁ label₁₃)
-    3   (call core.getfield slot₂/kws :x)
-    4   TestMod.X
-    5   (call core.isa %₃ %₄)
-    6   (gotoifnot %₅ label₈)
-    7   (goto label₁₁)
-    8   TestMod.X
-    9   (new core.TypeError :keyword argument :x %₈ %₃)
-    10  (call core.throw %₉)
-    11  (= slot₄/kwtmp %₃)
-    12  (goto label₁₅)
-    13  TestMod.x_default
-    14  (= slot₄/kwtmp %₁₃)
-    15  slot₄/kwtmp
-    16  (call top.keys slot₂/kws)
-    17  (call core.tuple :x)
-    18  (call top.diff_names %₁₆ %₁₇)
-    19  (call top.isempty %₁₈)
-    20  (gotoifnot %₁₉ label₂₂)
-    21  (goto label₂₃)
-    22  (call top.kwerr slot₂/kws slot₃/#self#)
-    23  (captured_local 1)
-    24  (call core.isdefined %₂₃ :contents)
-    25  (gotoifnot %₂₄ label₂₇)
-    26  (goto label₂₉)
-    27  (newvar slot₅/#f_kw_closure#0)
-    28  slot₅/#f_kw_closure#0
-    29  (call core.getfield %₂₃ :contents)
-    30  (call %₂₉ %₁₅ slot₃/#self#)
-    31  (return %₃₀)
+    slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/kwtmp slot₅/x(!read) slot₆/#f_kw_closure#0(!read)]
+    1   (newvar slot₅/x)
+    2   (call core.isdefined slot₂/kws :x)
+    3   (gotoifnot %₂ label₁₄)
+    4   (call core.getfield slot₂/kws :x)
+    5   TestMod.X
+    6   (call core.isa %₄ %₅)
+    7   (gotoifnot %₆ label₉)
+    8   (goto label₁₂)
+    9   TestMod.X
+    10  (new core.TypeError :keyword argument :x %₉ %₄)
+    11  (call core.throw %₁₀)
+    12  (= slot₄/kwtmp %₄)
+    13  (goto label₁₆)
+    14  TestMod.x_default
+    15  (= slot₄/kwtmp %₁₄)
+    16  slot₄/kwtmp
+    17  (call top.keys slot₂/kws)
+    18  (call core.tuple :x)
+    19  (call top.diff_names %₁₇ %₁₈)
+    20  (call top.isempty %₁₉)
+    21  (gotoifnot %₂₀ label₂₃)
+    22  (goto label₂₄)
+    23  (call top.kwerr slot₂/kws slot₃/#self#)
+    24  (captured_local 1)
+    25  (call core.isdefined %₂₄ :contents)
+    26  (gotoifnot %₂₅ label₂₈)
+    27  (goto label₃₀)
+    28  (newvar slot₆/#f_kw_closure#0)
+    29  slot₆/#f_kw_closure#0
+    30  (call core.getfield %₂₄ :contents)
+    31  (call %₃₀ %₁₆ slot₃/#self#)
+    32  (return %₃₁)
 42  slot₂/#f_kw_closure#0
 43  (call core.svec %₄₂)
 44  (call JuliaLowering.replace_captured_locals! %₄₁ %₄₃)
