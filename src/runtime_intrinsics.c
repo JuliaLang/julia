@@ -161,8 +161,11 @@ static inline uint16_t float_to_half(float param) JL_NOTSAFEPOINT
     uint32_t f;
     memcpy(&f, &param, sizeof(float));
     if (isnan(param)) {
-        uint32_t t = 0x8000 ^ (0x8000 & ((uint16_t)(f >> 0x10)));
-        return t ^ ((uint16_t)(f >> 0xd));
+        // Match the behaviour of arm64's fcvt or x86's vcvtps2ph by quieting
+        // all NaNs (avoids creating infinities), preserving the sign, and using
+        // the upper bits of the payload.
+        //      sign              exp      quiet    payload
+        return (f>>16 & 0x8000) | 0x7c00 | 0x0200 | (f>>13 & 0x03ff);
     }
     int i = ((f & ~0x007fffff) >> 23);
     uint8_t sh = shifttable[i];

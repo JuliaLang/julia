@@ -203,6 +203,18 @@ macro test_intrinsic(intr, args...)
     end
 end
 
+macro test_intrinsic_pred(intr, args...)
+    p = args[end]
+    inputs = args[1:end-1]
+    quote
+        function f()
+            $intr($(inputs...))
+        end
+        @test $(p)(Base.invokelatest($intr, $(inputs...)))
+        @test $(p)(f())
+    end
+end
+
 @testset "Float64 intrinsics" begin
     # unary
     @test_intrinsic Core.Intrinsics.abs_float Float64(-3.3) Float64(3.3)
@@ -269,6 +281,19 @@ end
     @test_intrinsic Core.Intrinsics.fptoui UInt Float32(3.3) UInt(3)
 end
 
+function f16(sign, exp, sig)
+    x = (sign&1)<<15 | (exp&((1<<5)-1))<<10 | sig&((1<<10)-1)
+    return reinterpret(Float16, UInt16(x))
+end
+function f32(sign, exp, sig)
+    x = (sign&1)<<31 | (exp&((1<<8)-1))<<23 | sig&((1<<23)-1)
+    return reinterpret(Float32, UInt32(x))
+end
+function f64(sign, exp, sig)
+    x = (sign&1)<<31 | (exp&((1<<11)-1))<<52 | sig&((1<<52)-1)
+    return reinterpret(Float64, UInt64(x))
+end
+
 @testset "Float16 intrinsics" begin
     # unary
     @test_intrinsic Core.Intrinsics.abs_float Float16(-3.3) Float16(3.3)
@@ -278,6 +303,37 @@ end
     @test_intrinsic Core.Intrinsics.fpext Float64 Float16(3.3) 3.30078125
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float32(3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float64(3.3) Float16(3.3)
+
+    # float_to_half/bfloat_to_float special cases
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 Inf32 Inf16
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 -Inf32 -Inf16
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 Inf64 Inf16
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 -Inf64 -Inf16
+
+    # LLVM gives us three things that may happen to NaNs in an fptrunc on
+    # "normal" platforms (x86, ARM):
+    # - Return a canonical NaN (quiet, all-zero payload)
+    # - Copy high bits of payload to output, and:
+    #   - Set the quiet bit
+    #   - Leave the quiet bit as-is.  This option isn't possible if doing so
+    #     would result in an infinity (all-zero payload and quiet bit clear)
+    #
+    # We'll just test a NaN is returned at all.
+    #
+    # Refer to #49353 and https://llvm.org/docs/LangRef.html#floatnan
+
+    # Canonical NaN
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 NaN32 isnan
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 NaN isnan
+    # Quiet NaN
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f32(0, 0xff, 1<<22 | 1<<13) isnan
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, 1<<51 | 1<<42) isnan
+    # Signalling NaN that can be propagated to Float16
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f32(0, 0xff, 1<<13) isnan
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, 1<<42) isnan
+    # Signalling NaN that cannot be propagated to Float16
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f32(0, 0xff, 1) isnan
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, 1) isnan
 
     # binary
     @test_intrinsic Core.Intrinsics.add_float Float16(3.3) Float16(2) Float16(5.3)
