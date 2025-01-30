@@ -594,8 +594,43 @@ function is_simple_atom(ctx, ex)
     is_literal(k) || k == K"Symbol" || k == K"Value" || is_ssa(ctx, ex) || is_core_nothing(ex)
 end
 
+function is_identifier_like(ex)
+    k = kind(ex)
+    k == K"Identifier" || k == K"BindingId" || k == K"Placeholder"
+end
+
 function decl_var(ex)
     kind(ex) == K"::" ? ex[1] : ex
+end
+
+# Given the signature of a `function`, return the symbol that will ultimately
+# be assigned to in local/global scope, if any.
+function assigned_function_name(ex)
+    while kind(ex) == K"where"
+        # f() where T
+        ex = ex[1]
+    end
+    if kind(ex) == K"::" && numchildren(ex) == 2
+        # f()::T
+        ex = ex[1]
+    end
+    if kind(ex) != K"call"
+        throw(LoweringError(ex, "Expected call syntax in function signature"))
+    end
+    ex = ex[1]
+    if kind(ex) == K"curly"
+        # f{T}()
+        ex = ex[1]
+    end
+    if kind(ex) == K"::" || kind(ex) == K"."
+        # (obj::CallableType)(args)
+        # A.b.c(args)
+        nothing
+    elseif is_identifier_like(ex)
+        ex
+    else
+        throw(LoweringError(ex, "Unexpected name in function signature"))
+    end
 end
 
 # Remove empty parameters block, eg, in the arg list of `f(x, y;)`

@@ -17,12 +17,46 @@ end
 """) == (1, 2)
 
 JuliaLowering.include_string(test_mod, """
-    x = 101
-    y = 202
+x = 101
+y = 202
 """)
 @test test_mod.x == 101
 @test test_mod.y == 202
 @test JuliaLowering.include_string(test_mod, "x + y") == 303
+
+@test JuliaLowering.include_string(test_mod, """
+begin
+    local x = 1
+    local x = 2
+    let (x,y) = (:x,:y)
+        (y,x)
+    end
+end
+""") === (:y,:x)
+
+# Types on left hand side of type decls refer to the outer scope
+# (In the flisp implementation they refer to the inner scope, but this seems
+# like a bug.)
+@test JuliaLowering.include_string(test_mod, """
+let x::Int = 10.0
+    local Int = Float64
+    x
+end
+""") === 10
+
+# Closures in let syntax can only capture values from the outside
+# (In the flisp implementation it captures from inner scope, but this is
+# inconsistent with let assignment where the rhs refers to the outer scope and
+# thus seems like a bug.)
+@test JuliaLowering.include_string(test_mod, """
+begin
+    local y = :outer_y
+    let f() = y
+        local y = :inner_y
+        f()
+    end
+end
+""") === :outer_y
 
 # wrap expression in scope block of `scope_type`
 function wrapscope(ex, scope_type)

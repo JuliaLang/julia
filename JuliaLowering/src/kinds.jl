@@ -21,6 +21,7 @@ function _register_kinds()
             "meta"
             # TODO: Use `meta` for inbounds and loopinfo etc?
             "inbounds"
+            "boundscheck"
             "inline"
             "noinline"
             "loopinfo"
@@ -30,6 +31,11 @@ function _register_kinds()
             "opaque_closure"
             # Test whether a variable is defined
             "isdefined"
+            # [K"throw_undef_if_not" var cond]
+            # This form is used internally in Core.Compiler but might be
+            # emitted by packages such as Diffractor. In principle it needs to
+            # be passed through lowering in a similar way to `isdefined`
+            "throw_undef_if_not"
             # named labels for `@label` and `@goto`
             "symbolic_label"
             # Goto named label
@@ -53,8 +59,11 @@ function _register_kinds()
             # Various heads harvested from flisp lowering.
             # (TODO: May or may not need all these - assess later)
             "break_block"
+            # Like block, but introduces a lexical scope; used during scope resolution.
             "scope_block"
-            "local_def" # TODO: Replace with K"local" plus BindingFlags attribute?
+            # [K"always_defined" x] is an assertion that variable `x` is assigned before use
+            # ('local-def in flisp implementation is K"local" plus K"always_defined"
+            "always_defined"
             "_while"
             "_do_while"
             "_typevars" # used for supplying already-allocated `TypeVar`s to `where`

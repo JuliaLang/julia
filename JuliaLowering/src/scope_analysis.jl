@@ -36,7 +36,7 @@ function _find_scope_vars!(ctx, assignments, locals, destructured_args, globals,
     elseif is_leaf(ex) || is_quoted(k) ||
             k in KSet"scope_block lambda module toplevel"
         return
-    elseif k == K"local" || k == K"local_def"
+    elseif k == K"local"
         if getmeta(ex, :is_destructured_arg, false)
             push!(destructured_args, ex[1])
         else
@@ -433,7 +433,7 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
             end
         end
         ex_out
-    elseif k == K"local_def"
+    elseif k == K"always_defined"
         id = lookup_var(ctx, NameKey(ex[1]))
         update_binding!(ctx, id; is_always_defined=true)
         makeleaf(ctx, ex, K"TOMBSTONE")

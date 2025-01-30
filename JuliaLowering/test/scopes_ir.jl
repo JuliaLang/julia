@@ -3,6 +3,111 @@ using Base: @locals
 
 #*******************************************************************************
 ########################################
+# let syntax with decl in binding list
+let x::T = rhs
+    local T = 1
+    T # <- This is a different `T` from the T in `x::T`
+end
+#---------------------
+1   TestMod.rhs
+2   TestMod.T
+3   (newvar slot₁/T)
+4   (= slot₃/tmp %₁)
+5   slot₃/tmp
+6   (call core.isa %₅ %₂)
+7   (gotoifnot %₆ label₉)
+8   (goto label₁₂)
+9   slot₃/tmp
+10  (call top.convert %₂ %₉)
+11  (= slot₃/tmp (call core.typeassert %₁₀ %₂))
+12  slot₃/tmp
+13  (= slot₂/x %₁₂)
+14  (= slot₁/T 1)
+15  slot₁/T
+16  (return %₁₅)
+
+########################################
+# let syntax with tuple on lhs
+let (x,y) = rhs
+end
+#---------------------
+1   TestMod.rhs
+2   (call top.indexed_iterate %₁ 1)
+3   (= slot₂/x (call core.getfield %₂ 1))
+4   (= slot₁/iterstate (call core.getfield %₂ 2))
+5   slot₁/iterstate
+6   (call top.indexed_iterate %₁ 2 %₅)
+7   (= slot₃/y (call core.getfield %₆ 1))
+8   (return core.nothing)
+
+########################################
+# Let syntax with the same name creates nested bindings
+let x = f(x), x = g(x)
+end
+#---------------------
+1   TestMod.f
+2   TestMod.x
+3   (call %₁ %₂)
+4   (= slot₁/x %₃)
+5   TestMod.g
+6   slot₁/x
+7   (call %₅ %₆)
+8   (= slot₂/x %₇)
+9   (return core.nothing)
+
+########################################
+# let syntax with a function definition in the binding list creates a closure
+let f() = body
+end
+#---------------------
+1   (call core.svec)
+2   (call core.svec)
+3   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₁ %₂)
+4   TestMod.#f##0
+5   (call core.svec %₄)
+6   (call core.svec)
+7   SourceLocation::1:5
+8   (call core.svec %₅ %₆ %₇)
+9   --- method core.nothing %₈
+    slots: [slot₁/#self#(!read)]
+    1   TestMod.body
+    2   (return %₁)
+10  TestMod.#f##0
+11  (new %₁₀)
+12  (= slot₁/f %₁₁)
+13  (return core.nothing)
+
+########################################
+# Error: Invalid `let` var with K"::"
+let f[]::T = rhs
+end
+#---------------------
+LoweringError:
+let f[]::T = rhs
+#   └─┘ ── Invalid assignment location in let syntax
+end
+
+########################################
+# Error: Invalid `let` var
+let f[] = rhs
+end
+#---------------------
+LoweringError:
+let f[] = rhs
+#   └─┘ ── Invalid assignment location in let syntax
+end
+
+########################################
+# Error: Invalid function def in `let`
+let (obj::Callable)() = rhs
+end
+#---------------------
+LoweringError:
+let (obj::Callable)() = rhs
+#   └───────────────┘ ── Function signature does not define a local function name
+end
+
+########################################
 # @islocal with locals and undefined vars
 let x = 1
     @islocal(a), @islocal(x)

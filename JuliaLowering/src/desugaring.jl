@@ -20,11 +20,6 @@ end
 
 #-------------------------------------------------------------------------------
 
-function is_identifier_like(ex)
-    k = kind(ex)
-    k == K"Identifier" || k == K"BindingId" || k == K"Placeholder"
-end
-
 # Return true when `x` and `y` are "the same identifier", but also works with
 # bindings (and hence ssa vars). See also `is_identifier_like()`
 function is_same_identifier_like(ex::SyntaxTree, y::SyntaxTree)
@@ -1394,22 +1389,71 @@ function expand_let(ctx, ex)
         elseif kb == K"=" && numchildren(binding) == 2
             lhs = binding[1]
             rhs = binding[2]
-            if is_sym_decl(lhs)
+            kl = kind(lhs)
+            if kl == K"Identifier" || kl == K"BindingId"
                 blk = @ast ctx binding [K"block"
                     tmp := rhs
                     [K"scope_block"(ex, scope_type=scope_type)
-                        # TODO: Use single child for scope_block?
-                        [K"local_def"(lhs) lhs] # TODO: Use K"local" with attr?
-                        [K"="(rhs)
-                            decl_var(lhs)
-                            tmp
-                        ]
+                        [K"local"(lhs) lhs]
+                        [K"always_defined" lhs]
+                        [K"="(binding) lhs tmp]
+                        blk
+                    ]
+                ]
+            elseif kl == K"::"
+                var = lhs[1]
+                if !(kind(var) in KSet"Identifier BindingId")
+                    throw(LoweringError(var, "Invalid assignment location in let syntax"))
+                end
+                blk = @ast ctx binding [K"block"
+                    tmp := rhs
+                    type := lhs[2]
+                    [K"scope_block"(ex, scope_type=scope_type)
+                        [K"local"(lhs) [K"::" var type]]
+                        [K"always_defined" var]
+                        [K"="(binding) var tmp]
+                        blk
+                    ]
+                ]
+            elseif kind(lhs) == K"tuple"
+                lhs_locals = SyntaxList(ctx)
+                foreach_lhs_var(lhs) do var
+                    push!(lhs_locals, @ast ctx var [K"local" var])
+                    push!(lhs_locals, @ast ctx var [K"always_defined" var])
+                end
+                blk = @ast ctx binding [K"block"
+                    tmp := rhs
+                    [K"scope_block"(ex, scope_type=scope_type)
+                        lhs_locals...
+                        [K"="(binding) lhs tmp]
                         blk
                     ]
                 ]
             else
-                TODO("Functions and multiple assignment")
+                throw(LoweringError(lhs, "Invalid assignment location in let syntax"))
             end
+        elseif kind(binding) == K"function"
+            sig = binding[1]
+            func_name = assigned_function_name(sig)
+            if isnothing(func_name)
+                # Some valid function syntaxes define methods on existing types and
+                # don't really make sense with let:
+                #    let A.f() = 1 ... end
+                #    let (obj::Callable)() = 1 ... end
+                throw(LoweringError(sig, "Function signature does not define a local function name"))
+            end
+            blk = @ast ctx binding [K"block"
+                [K"scope_block"(ex, scope_type=scope_type)
+                    [K"local"(func_name) func_name]
+                    [K"always_defined" func_name]
+                    binding
+                    [K"scope_block"(ex, scope_type=scope_type)
+                        # The inside of the block is isolated from the closure,
+                        # which itself can only capture values from the outside.
+                        blk
+                    ]
+                ]
+            ]
         else
             throw(LoweringError(binding, "Invalid binding in let"))
             continue
@@ -1801,10 +1845,14 @@ end
 
 function foreach_lhs_var(f::Function, ex)
     k = kind(ex)
-    if k == K"Identifier"
+    if k == K"Identifier" || k == K"BindingId"
         f(ex)
     elseif k == K"Placeholder"
         # Ignored
+    elseif k == K"tuple"
+        for e in children(ex)
+            foreach_lhs_var(f, e)
+        end
     else
         TODO(ex, "LHS vars")
     end
@@ -3091,7 +3139,8 @@ function expand_abstract_or_primitive_type(ctx, ex)
     @ast ctx ex [K"block"
         [K"scope_block"(scope_type=:hard)
             [K"block"
-                [K"local_def" name]
+                [K"local" name]
+                [K"always_defined" name]
                 typevar_stmts...
                 [K"="
                     newtype_var
@@ -3624,7 +3673,8 @@ function expand_struct_def(ctx, ex, docs)
             [K"block"
                 [K"global" global_struct_name]
                 [K"const" global_struct_name]
-                [K"local_def" struct_name]
+                [K"local" struct_name]
+                [K"always_defined" struct_name]
                 typevar_stmts...
                 [K"="
                     newtype_var

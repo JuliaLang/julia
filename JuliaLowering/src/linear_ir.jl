@@ -268,17 +268,18 @@ function _actually_return(ctx, ex)
 end
 
 function emit_return(ctx, srcref, ex)
+    # todo: Mark implicit returns
     if isnothing(ex)
         return
     elseif isempty(ctx.handler_token_stack)
         _actually_return(ctx, ex)
         return
     end
-    # FIXME: What's this !is_ssa(ctx, ex) here about?
+    # TODO: What's this !is_ssa(ctx, ex) here about?
     x = if is_simple_atom(ctx, ex) && !(is_ssa(ctx, ex) && !isempty(ctx.finally_handlers))
         ex
     elseif !isempty(ctx.finally_handlers)
-        # TODO: Why does flisp lowering create a mutable variable here even
+        # todo: Why does flisp lowering create a mutable variable here even
         # though we don't mutate it?
         # tmp = ssavar(ctx, srcref, "returnval_via_finally") # <- can we use this?
         tmp = new_local_binding(ctx, srcref, "returnval_via_finally")
@@ -293,8 +294,6 @@ function emit_return(ctx, srcref, ex)
         emit(ctx, @ast ctx srcref [K"leave" ctx.handler_token_stack...])
         _actually_return(ctx, x)
     end
-    # Should we return `x` here? The flisp code does, but that doesn't seem
-    # useful as any returned value cannot be used?
     return nothing
 end
 
@@ -563,12 +562,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
     k = kind(ex)
     if k == K"BindingId" || is_literal(k) || k == K"quote" || k == K"inert" ||
             k == K"top" || k == K"core" || k == K"Value" || k == K"Symbol" ||
-            k == K"Placeholder" || k == K"SourceLocation"
-        # TODO: other kinds: copyast $ globalref thismodule cdecl stdcall fastcall thiscall llvmcall
-        if needs_value && k == K"Placeholder"
-            # TODO: ensure outterref, globalref work here
-            throw(LoweringError(ex, "all-underscore identifiers are write-only and their values cannot be used in expressions"))
-        end
+            k == K"SourceLocation"
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value
@@ -579,6 +573,14 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             nothing
         end
+    elseif k == K"Placeholder"
+        if needs_value
+            throw(LoweringError(ex, "all-underscore identifiers are write-only and their values cannot be used in expressions"))
+        end
+        nothing
+    elseif k == K"TOMBSTONE"
+        @chk !needs_value (ex,"TOMBSTONE encountered in value position")
+        nothing
     elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
             k == K"new_opaque_closure"
         # TODO k ∈ cfunction cglobal
@@ -704,9 +706,6 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         else
             nothing
         end
-    elseif k == K"TOMBSTONE"
-        @chk !needs_value (ex,"TOMBSTONE encountered in value position")
-        nothing
     elseif k == K"if" || k == K"elseif"
         @chk numchildren(ex) <= 3
         has_else = numchildren(ex) > 2
@@ -828,7 +827,8 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
         emit(ctx, ex)
         nothing
-    elseif k == K"isdefined" || k == K"captured_local" # TODO || k == K"throw_undef_if_not" (See upstream #53875)
+    elseif k == K"isdefined" || k == K"captured_local" || k == K"throw_undef_if_not" ||
+            k == K"boundscheck"
         if in_tail_pos
             emit_return(ctx, ex)
         elseif needs_value

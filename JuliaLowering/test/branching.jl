@@ -9,18 +9,6 @@ Base.eval(test_mod, quote
     using JuliaSyntax
 end)
 
-Base.eval(test_mod, quote
-    function var"@label"(__context__::JuliaLowering.MacroContext, ex)
-        @chk kind(ex) == JuliaSyntax.K"Identifier"
-        @ast __context__ ex ex=>JuliaSyntax.K"symbolic_label"
-    end
-
-    function var"@goto"(__context__::JuliaLowering.MacroContext, ex)
-        @chk kind(ex) == JuliaSyntax.K"Identifier"
-        @ast __context__ ex ex=>JuliaSyntax.K"symbolic_goto"
-    end
-end)
-
 #-------------------------------------------------------------------------------
 @testset "Tail position" begin
 
