@@ -2454,7 +2454,9 @@ end
 @test_throws MethodError @m37134()(1.0) == 62
 
 macro n37134()
-    :($(esc(Expr(:tuple, Expr(:..., :x))))->$(esc(:x)))
+    quote
+        ((x...,)) -> (x)
+    end |> esc
 end
 @test @n37134()(2,1) === (2,1)
 
