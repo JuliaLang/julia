@@ -2222,4 +2222,37 @@ precompile_test_harness("No package module") do load_path
         String(take!(io)))
 end
 
+precompile_test_harness("Constprop CodeInstance invalidation") do load_path
+    write(joinpath(load_path, "DefineTheMethod.jl"),
+        """
+        module DefineTheMethod
+            export the_method
+            the_method_val(::Val{x}) where {x} = x
+            the_method_val(::Val{1}) = 0xdeadbeef
+            the_method_val(::Val{2}) = 2
+            the_method_val(::Val{3}) = 3
+            the_method_val(::Val{4}) = 4
+            the_method_val(::Val{5}) = 5
+            Base.@constprop :aggressive the_method(x) = the_method_val(Val{x}())
+            the_method(2)
+        end
+        """)
+    Base.compilecache(Base.PkgId("DefineTheMethod"))
+    write(joinpath(load_path, "CallTheMethod.jl"),
+        """
+        module CallTheMethod
+            using DefineTheMethod
+            call_the_method() = the_method(1)
+            call_the_method()
+        end
+        """)
+    Base.compilecache(Base.PkgId("CallTheMethod"))
+    @eval using DefineTheMethod
+    @eval using CallTheMethod
+    @eval DefineTheMethod.the_method_val(::Val{1}) = Int(0)
+    invokelatest() do
+        @test Int(0) == CallTheMethod.call_the_method()
+    end
+end
+
 finish_precompile_test!()
