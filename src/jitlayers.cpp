@@ -463,7 +463,7 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
                 }
                 if (!preal_decl.empty()) {
                     // merge and/or rename this prototype to the real function
-                    if (Function *specfun = cast<Function>(mod->getNamedValue(preal_decl))) {
+                    if (Function *specfun = cast_or_null<Function>(mod->getNamedValue(preal_decl))) {
                         if (proto.decl != specfun) {
                             proto.decl->replaceAllUsesWith(specfun);
                             if (!proto.decl->isDeclaration() && specfun->isDeclaration())
@@ -505,7 +505,7 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
                     assert(ocinvokeDecl != "jl_fptr_args");
                     assert(ocinvokeDecl != "jl_fptr_sparam");
                     // merge and/or rename this prototype to the real function
-                    if (Function *specfun = cast<Function>(mod->getNamedValue(ocinvokeDecl))) {
+                    if (Function *specfun = cast_or_null<Function>(mod->getNamedValue(ocinvokeDecl))) {
                         if (proto.oc != specfun) {
                             proto.oc->replaceAllUsesWith(specfun);
                             proto.oc->eraseFromParent();

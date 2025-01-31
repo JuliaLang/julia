@@ -487,7 +487,7 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
         }
         if (!preal_decl.empty()) {
             // merge and/or rename this prototype to the real function
-            if (Function *specfun = cast<Function>(mod->getNamedValue(preal_decl))) {
+            if (Function *specfun = cast_or_null<Function>(mod->getNamedValue(preal_decl))) {
                 if (proto.decl != specfun) {
                     proto.decl->replaceAllUsesWith(specfun);
                     if (proto.decl->hasFnAttribute(Attribute::InlineHint))
@@ -512,7 +512,7 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
             assert(ocinvokeDecl != "jl_fptr_const_return");
             assert(ocinvokeDecl != "jl_fptr_sparam");
             // merge and/or rename this prototype to the real function
-            if (Function *specfun = cast<Function>(mod->getNamedValue(ocinvokeDecl))) {
+            if (Function *specfun = cast_or_null<Function>(mod->getNamedValue(ocinvokeDecl))) {
                 if (proto.oc != specfun) {
                     proto.oc->replaceAllUsesWith(specfun);
                     if (proto.oc->hasFnAttribute(Attribute::InlineHint))

@@ -2412,9 +2412,15 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
         instr = store;
     }
     else if (ismodifyfield && modifyop && !needlock && Order != AtomicOrdering::NotAtomic && !isboxed && realelty == elty && !intcast && elty->isIntegerTy() && !jl_type_hasptr(jltype)) {
-        // emit this only if we have a possiblity of optimizing it
+        // emit this only if we have a possibility of optimizing it
         if (Order == AtomicOrdering::Unordered)
             Order = AtomicOrdering::Monotonic;
+        if (jl_is_pointerfree(rhs.typ) && !rhs.isghost && (rhs.constant || rhs.isboxed || rhs.ispointer())) {
+            // if this value can be loaded from memory, do that now so that it is sequenced before the atomicmodify
+            // and the IR is less dependent on what was emitted before now to create this rhs.
+            // Inlining should do okay to clean this up later if there are parts we don't need.
+            rhs = jl_cgval_t(emit_unbox(ctx, julia_type_to_llvm(ctx, rhs.typ), rhs, rhs.typ), rhs.typ, NULL);
+        }
         bool gcstack_arg = JL_FEAT_TEST(ctx,gcstack_arg);
         Function *op = emit_modifyhelper(ctx, cmpop, *modifyop, jltype, elty, rhs, fname, gcstack_arg);
         std::string intr_name = "julia.atomicmodify.i";
@@ -2434,9 +2440,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             Args.push_back(ctx.pgcstack);
         auto oldnew = ctx.builder.CreateCall(intr, Args);
         oldnew->addParamAttr(0, Attribute::getWithAlignment(oldnew->getContext(), Align(alignment)));
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
-        ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
-        ai.decorateInst(oldnew);
+        //jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
+        //ai.noalias = MDNode::concatenate(aliasscope, ai.noalias);
+        //ai.decorateInst(oldnew);
         oldval = mark_julia_type(ctx, ctx.builder.CreateExtractValue(oldnew, 0), isboxed, jltype);
         rhs = mark_julia_type(ctx, ctx.builder.CreateExtractValue(oldnew, 1), isboxed, jltype);
     }

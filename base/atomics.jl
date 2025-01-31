@@ -310,7 +310,7 @@ atomic_and!(x::Atomic, v) = (@atomic :acquire_release x.value & v).first
 atomic_or!(x::Atomic, v) = (@atomic :acquire_release x.value | v).first
 atomic_xor!(x::Atomic, v) = (@atomic :acquire_release x.value ⊻ v).first
 atomic_nand!(x::Atomic, v) = (@atomic :acquire_release x.value nand v).first
-atomic_xchg!(x::Atomic, v) = (@atomic :acquire_release x.value ((old,new)->new) v).first
+atomic_xchg!(x::Atomic, v) = (@atomicswap :acquire_release x.value = v)
 atomic_min!(x::Atomic, v) = (@atomic :acquire_release x.value min v).first
 atomic_max!(x::Atomic, v) = (@atomic :acquire_release x.value max v).first
 

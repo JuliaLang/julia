@@ -112,6 +112,7 @@ std::pair<Value *, Value *> insertRMWCmpXchgLoop(
   std::prev(BB->end())->eraseFromParent();
   Builder.SetInsertPoint(BB);
   LoadInst *InitLoaded = Builder.CreateAlignedLoad(ResultTy, Addr, AddrAlign);
+  InitLoaded->setOrdering(AtomicOrdering::Unordered); // n.b. the original LLVM pass is missing this call so is actually mildly UB
   Builder.CreateBr(LoopBB);
 
   // Start the main loop block now that we've taken care of the preliminaries.
