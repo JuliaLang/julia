@@ -73,7 +73,10 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
 
 JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMOrcThreadSafeModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
 {
-    return 0;
+    // Assume we were able to register the ccallable with the JIT. The
+    // fact that we didn't is not observable since we cannot compile
+    // anything else.
+    return 1;
 }
 
 JL_DLLEXPORT void jl_teardown_codegen_fallback(void) JL_NOTSAFEPOINT
