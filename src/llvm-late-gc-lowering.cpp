@@ -2446,6 +2446,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
 
 bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     initAll(*F.getParent());
+    smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
     if (!pgcstack_getter && !adoptthread_func)
         return CleanupIR(F, nullptr, CFGModified);
@@ -2460,6 +2461,31 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
     PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
     CleanupIR(F, &S, CFGModified);
+
+
+    // We lower the julia.gc_alloc_bytes intrinsic in this pass to insert slowpath/fastpath blocks for MMTk
+    // For now, we do nothing for the Stock GC
+    auto GCAllocBytes = getOrNull(jl_intrinsics::GCAllocBytes);
+
+    if (GCAllocBytes) {
+        for (auto it = GCAllocBytes->user_begin(); it != GCAllocBytes->user_end(); ) {
+            if (auto *CI = dyn_cast<CallInst>(*it)) {
+                *CFGModified = true;
+
+                assert(CI->getCalledOperand() == GCAllocBytes);
+
+                auto newI = lowerGCAllocBytesLate(CI, F);
+                if (newI != CI) {
+                    ++it;
+                    CI->replaceAllUsesWith(newI);
+                    CI->eraseFromParent();
+                    continue;
+                }
+            }
+            ++it;
+        }
+    }
+
     return true;
 }
 

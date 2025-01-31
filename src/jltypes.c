@@ -910,7 +910,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
         if (jl_options.depwarn) {
             if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
                 jl_error("Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.");
-            jl_printf(JL_STDERR, "WARNING: Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.\n");
+            jl_printf(JL_STDERR, "WARNING: Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.\nTo make this warning an error, and hence obtain a stack trace, use `julia --depwarn=error`.\n");
         }
         jl_vararg_t *vm = (jl_vararg_t*)body;
         int T_has_tv = vm->T && jl_has_typevar(vm->T, v);
@@ -3638,7 +3638,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(18,
+                        jl_perm_symsvec(17,
                             "def",
                             "owner",
                             "next",
@@ -3653,10 +3653,10 @@ void jl_init_types(void) JL_GC_DISABLED
                             //"absolute_max",
                             "ipo_purity_bits",
                             "analysis_results",
-                            "specsigflags", "precompile", "relocatability",
+                            "specsigflags", "precompile",
                             "invoke", "specptr"), // function object decls
-                        jl_svec(18,
-                            jl_method_instance_type,
+                        jl_svec(17,
+                            jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_ulong_type,
@@ -3672,13 +3672,12 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_bool_type,
                             jl_bool_type,
-                            jl_uint8_type,
                             jl_any_type, jl_any_type), // fptrs
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 2, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b000001000011100011 }; // Set fields 1, 2, 6-8, 13 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b110110111100011100 }; // Set fields 3-5, 9-12, 14-15, 17-18 as atomic
+    const static uint32_t code_instance_constfields[1]  = { 0b00001000011100011 }; // Set fields 1, 2, 6-8, 13 as const
+    const static uint32_t code_instance_atomicfields[1] = { 0b11110111100011100 }; // Set fields 3-5, 9-12, 14-17 as atomic
     // Fields 4-5 are only operated on by construction and deserialization, so are effectively const at runtime
     // Fields ipo_purity_bits and analysis_results are not currently threadsafe or reliable, as they get mutated after optimization, but are not declared atomic
     // and there is no way to tell (during inference) if their value is finalized yet (to wait for them to be narrowed if applicable)
@@ -3854,8 +3853,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
     //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
     jl_svecset(jl_method_instance_type->types, 4, jl_code_instance_type);
+    jl_svecset(jl_code_instance_type->types, 15, jl_voidpointer_type);
     jl_svecset(jl_code_instance_type->types, 16, jl_voidpointer_type);
-    jl_svecset(jl_code_instance_type->types, 17, jl_voidpointer_type);
     jl_svecset(jl_binding_type->types, 0, jl_globalref_type);
     jl_svecset(jl_binding_partition_type->types, 3, jl_binding_partition_type);
 
@@ -3952,6 +3951,7 @@ void post_boot_hooks(void)
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_nulldebuginfo = (jl_debuginfo_t*)core("NullDebugInfo");
+    jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
 
     jl_init_box_caches();
 

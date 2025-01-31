@@ -2622,7 +2622,7 @@ end
 # issue #8338
 let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
-    @test invokelatest(f8338, 2) == 8
+    @test (@invokelatest f8338(2)) == 8
 end
 
 # call overloading (#2403)
@@ -4502,6 +4502,15 @@ for T in (Any, ValueWrapper)
         @test all(i -> !isassigned(ary, i), 6:15)
         @test all(i -> isassigned(ary, i), 16:length(ary))
         @test all(i -> isassigned(ary, i), 1:5)
+    end
+end
+
+#test grow_end ccall directly since it's used in the C source
+for ET in [Nothing, Int, Union{Int, Nothing}, Any]
+    for n in [0, 1, 10]
+        arr = Vector{ET}(undef, n)
+        ccall(:jl_array_grow_end, Cvoid, (Any, UInt), arr, 1)
+        @test length(arr) == n+1
     end
 end
 
@@ -8224,6 +8233,7 @@ end
 let M = @__MODULE__
     Core.eval(M, :(global a_typed_global))
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
+    @Core.latestworld
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
     @test Core.eval(M, :(global a_typed_global::$(Union{Tuple{Integer},Tuple{Nothing}}))) === nothing

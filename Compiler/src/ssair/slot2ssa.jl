@@ -137,10 +137,6 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
                 return nothing
             end
             op[] = x
-        elseif isa(val, GlobalRef) && !(isdefined(val.mod, val.name) && isconst(val.mod, val.name))
-            typ = typ_for_val(val, ci, ir, idx, Any[])
-            new_inst = NewInstruction(val, typ)
-            op[] = NewSSAValue(insert_node!(ir, idx, new_inst).id - length(ir.stmts))
         elseif isexpr(val, :static_parameter)
             ty = typ_for_val(val, ci, ir, idx, Any[])
             if isa(ty, Const)
@@ -801,9 +797,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                         has_pinode[id] = false
                         enter_idx = idx
                         while (handler = gethandler(handler_info, enter_idx)) !== nothing
-                            (; enter_idx) = handler
-                            leave_block = block_for_inst(cfg, (code[enter_idx]::EnterNode).catch_dest)
-                            cidx = findfirst((; slot)::NewPhiCNode2->slot_id(slot)==id, new_phic_nodes[leave_block])
+                            enter_idx = get_enter_idx(handler)
+                            enter_node = code[enter_idx]::EnterNode
+                            leave_block = block_for_inst(cfg, enter_node.catch_dest)
+                            cidx = findfirst((; slot)::NewPhiCNode2->slot_id(slot)==id,
+                                new_phic_nodes[leave_block])
                             if cidx !== nothing
                                 node = thisdef ? UpsilonNode(thisval) : UpsilonNode()
                                 if incoming_vals[id] === UNDEF_TOKEN

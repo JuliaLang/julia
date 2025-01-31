@@ -1187,7 +1187,7 @@ let s, c, r
                     REPL.REPLCompletions.next_cache_update = 0
                 end
                 c,r = test_scomplete(s)
-                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
+                timedwait(()->REPL.REPLCompletions.next_cache_update != 0, 5) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test "tmp-executable" in c
                 @test r == 1:9
@@ -1221,7 +1221,7 @@ let s, c, r
                     REPL.REPLCompletions.next_cache_update = 0
                 end
                 c,r = test_scomplete(s)
-                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
+                timedwait(()->REPL.REPLCompletions.next_cache_update != 0, 5) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"

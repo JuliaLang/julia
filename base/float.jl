@@ -122,13 +122,16 @@ significand_mask(::Type{Float16}) = 0x03ff
 mantissa(x::T) where {T} = reinterpret(Unsigned, x) & significand_mask(T)
 
 for T in (Float16, Float32, Float64)
-    @eval significand_bits(::Type{$T}) = $(trailing_ones(significand_mask(T)))
-    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - significand_bits(T) - 1)
-    @eval exponent_bias(::Type{$T}) = $(Int(exponent_one(T) >> significand_bits(T)))
+    sb = trailing_ones(significand_mask(T))
+    em = exponent_mask(T)
+    eb = Int(exponent_one(T) >> sb)
+    @eval significand_bits(::Type{$T}) = $(sb)
+    @eval exponent_bits(::Type{$T}) = $(sizeof(T)*8 - sb - 1)
+    @eval exponent_bias(::Type{$T}) = $(eb)
     # maximum float exponent
-    @eval exponent_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)) - exponent_bias(T) - 1)
+    @eval exponent_max(::Type{$T}) = $(Int(em >> sb) - eb - 1)
     # maximum float exponent without bias
-    @eval exponent_raw_max(::Type{$T}) = $(Int(exponent_mask(T) >> significand_bits(T)))
+    @eval exponent_raw_max(::Type{$T}) = $(Int(em >> sb))
 end
 
 """
