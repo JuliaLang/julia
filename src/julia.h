@@ -1611,6 +1611,11 @@ STATIC_INLINE int jl_is_primitivetype(void *v) JL_NOTSAFEPOINT
     return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->isprimitivetype);
 }
 
+STATIC_INLINE int jl_is_bitstype(void *v) JL_NOTSAFEPOINT
+{
+    return (jl_is_datatype(v) && ((jl_datatype_t*)(v))->isbitstype);
+}
+
 STATIC_INLINE int jl_is_structtype(void *v) JL_NOTSAFEPOINT
 {
     return (jl_is_datatype(v) &&

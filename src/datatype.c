@@ -371,6 +371,11 @@ int jl_datatype_isinlinealloc(jl_datatype_t *ty, int pointerfree)
     return 0;
 }
 
+JL_DLLEXPORT int jl_datatype_has_padding(jl_datatype_t *dt)
+{
+    return jl_is_datatype(dt) && dt->layout && dt->layout->flags.haspadding;
+}
+
 static unsigned union_isinlinable(jl_value_t *ty, int pointerfree, size_t *nbytes, size_t *align, int asfield)
 {
     if (jl_is_uniontype(ty)) {

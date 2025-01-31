@@ -392,10 +392,14 @@ JL_DLLEXPORT BFLOAT16_TYPE julia__truncdfbf2(double param) JL_NOTSAFEPOINT
 JL_DLLEXPORT jl_value_t *jl_bitcast(jl_value_t *ty, jl_value_t *v)
 {
     JL_TYPECHK(bitcast, datatype, ty);
-    if (!jl_is_concrete_type(ty) || !jl_is_primitivetype(ty))
-        jl_error("bitcast: target type not a leaf primitive type");
-    if (!jl_is_primitivetype(jl_typeof(v)))
-        jl_error("bitcast: value not a primitive type");
+    if (!jl_is_concrete_type(ty) || !jl_is_bitstype(ty))
+        jl_error("bitcast: target type not a leaf bits type");
+    if (!jl_is_bitstype(jl_typeof(v)))
+        jl_error("bitcast: value not a bits type");
+    if (jl_datatype_has_padding((jl_datatype_t*)(ty)))
+        jl_error("bitcast: target type has padding. Can only bitcast to packed types.");
+    if (jl_datatype_has_padding((jl_datatype_t*)(jl_typeof(v))))
+        jl_error("bitcast: value struct has padding. Can only bitcast from packed types.");
     if (jl_datatype_size(jl_typeof(v)) != jl_datatype_size(ty))
         jl_error("bitcast: argument size does not match size of target type");
     if (ty == jl_typeof(v))
