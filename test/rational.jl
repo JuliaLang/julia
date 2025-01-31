@@ -648,41 +648,25 @@ end
         @test gcd(a, T(0)//T(1)) === a
         @test lcm(a, T(0)//T(1)) === T(0)//T(1)
         @test gcdx(a, T(0)//T(1)) === (a, T(1), T(0))
+
         @test gcdx(T(1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
-        @test gcdx(T(1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
         @test gcdx(T(0)//T(1), T(0)//T(1)) === (T(0)//T(1), T(0), T(0))
 
         if T <: Signed
             @test gcdx(T(-1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
             @test gcdx(T(1)//T(0), T(-1)//T(0)) === (T(1)//T(0), T(1), T(1))
             @test gcdx(T(-1)//T(0), T(-1)//T(0)) === (T(1)//T(0), T(1), T(1))
-            @test gcdx(T(-1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
-            @test gcdx(T(0)//T(1), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
         end
 
         @test gcdx(T(1)//T(3), T(2)) === (T(1)//T(3), T(1), T(0))
         @test lcm(T(1)//T(3), T(1)) === T(1)//T(1)
-        @test lcm(T(3)//T(1), T(1)//T(0)) === T(1)//T(0)
-        @test lcm(T(0)//T(1), T(1)//T(0)) === T(0)//T(1)
-
-        @test lcm(T(1)//T(0), T(1)//T(2)) === T(1)//T(0)
-        @test lcm(T(1)//T(2), T(1)//T(0)) === T(1)//T(0)
-        @test lcm(T(1)//T(0), T(1)//T(1)) === T(1)//T(0)
-        @test lcm(T(1)//T(1), T(1)//T(0)) === T(1)//T(0)
         @test lcm(T(1)//T(0), T(1)//T(0)) === T(1)//T(0)
-        @test lcm(T(1)//T(0), T(0)//T(1)) === T(0)//T(1)
         @test lcm(T(0)//T(1), T(0)//T(1)) === T(0)//T(1)
 
         if T <: Signed
-            @test lcm(T(-1)//T(0), T(1)//T(2)) === T(-1)//T(0)
-            @test lcm(T(1)//T(2), T(-1)//T(0)) === T(-1)//T(0)
-            @test lcm(T(-1)//T(0), T(1)//T(1)) === T(-1)//T(0)
-            @test lcm(T(1)//T(1), T(-1)//T(0)) === T(-1)//T(0)
             @test lcm(T(-1)//T(0), T(1)//T(0)) === T(1)//T(0)
             @test lcm(T(1)//T(0), T(-1)//T(0)) === T(1)//T(0)
             @test lcm(T(-1)//T(0), T(-1)//T(0)) === T(1)//T(0)
-            @test lcm(T(-1)//T(0), T(0)//T(1)) === T(0)//T(1)
-            @test lcm(T(0)//T(1), T(-1)//T(0)) === T(0)//T(1)
         end
 
         @test gcd([T(5), T(2), T(1)//T(2)]) === T(1)//T(2)
@@ -690,9 +674,14 @@ end
 
         @test lcm([T(5), T(2), T(1)//T(2)]) === T(10)//T(1)
         @test lcm(T(5), T(2), T(1)//T(2)) === T(10)//T(1)
+
+        @test_throws ArgumentError gcd(T(1)//T(1), T(1)//T(0))
+        @test_throws ArgumentError gcd(T(1)//T(0), T(0)//T(1))
+
+        @test_throws ArgumentError lcm(T(1)//T(1), T(1)//T(0))
+        @test_throws ArgumentError lcm(T(1)//T(0), T(1)//T(1))
     end
 end
-
 @testset "gcdx for 1 and 3+ arguments" begin
     # one-argument
     @test gcdx(7) == (7, 1)
