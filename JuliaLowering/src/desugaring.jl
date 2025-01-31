@@ -3908,6 +3908,16 @@ function expand_import(ctx, ex)
     ]
 end
 
+# Expand `public` or `export`
+function expand_public(ctx, ex)
+    @ast ctx ex [K"call"
+        module_public::K"Value"
+        ctx.mod::K"Value"
+        (kind(ex) == K"export")::K"Bool"
+        (e.name_val::K"String" for e in children(ex))...
+    ]
+end
+
 #-------------------------------------------------------------------------------
 # Expand module definitions
 
@@ -4148,7 +4158,7 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
     elseif k == K"import" || k == K"using"
         expand_import(ctx, ex)
     elseif k == K"export" || k == K"public"
-        TODO(ex)
+        expand_public(ctx, ex)
     elseif k == K"abstract" || k == K"primitive"
         expand_forms_2(ctx, expand_abstract_or_primitive_type(ctx, ex))
     elseif k == K"struct"

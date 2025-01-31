@@ -193,6 +193,12 @@ function module_import(into_mod::Module, is_using::Bool,
     nothing
 end
 
+function module_public(mod::Module, is_exported::Bool, identifiers...)
+    for ident in identifiers
+        @ccall jl_module_public(mod::Module, Symbol(ident)::Symbol, is_exported::Cint)::Cvoid
+    end
+end
+
 # Return the current exception. In JuliaLowering we use this rather than the
 # special form `K"the_exception"` to reduces the number of special forms.
 Base.@assume_effects :removable :nothrow function current_exception()

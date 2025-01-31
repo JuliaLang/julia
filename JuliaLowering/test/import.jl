@@ -14,6 +14,17 @@ JuliaLowering.include_string(test_mod, """
 @test test_mod.st2 === JuliaLowering.SyntaxTree
 @test test_mod.parsestmt === JuliaSyntax.parsestmt
 
+JuliaLowering.include_string(test_mod, """
+x = 1
+y = 2
+export x
+public y
+""")
+@test Base.isexported(test_mod, :x)
+@test Base.ispublic(test_mod, :x)
+@test Base.ispublic(test_mod, :y)
+@test !Base.isexported(test_mod, :y)
+
 C = JuliaLowering.include_string(test_mod, """
 module C
     module D

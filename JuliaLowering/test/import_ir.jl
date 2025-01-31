@@ -45,3 +45,17 @@ function f()
 #   └─────────┘ ── this syntax is only allowed in top level code
 end
 
+########################################
+# Export
+export a, b, c
+#---------------------
+1   (call JuliaLowering.module_public TestMod true "a" "b" "c")
+2   (return %₁)
+
+########################################
+# Public
+public a, b, c
+#---------------------
+1   (call JuliaLowering.module_public TestMod false "a" "b" "c")
+2   (return %₁)
+
