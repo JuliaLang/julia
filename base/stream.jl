@@ -1559,6 +1559,24 @@ function wait_readnb(s::BufferStream, nb::Int)
     end
 end
 
+function readavailable(this::BufferStream)
+    bytes = lock(this.cond) do
+        wait_readnb(this, 1)
+        buf = this.buffer
+        @assert buf.seekable == false
+        take!(buf)
+    end
+    return bytes
+end
+
+function read(stream::BufferStream)
+    bytes = lock(stream.cond) do
+        wait_readnb(stream, typemax(Int))
+        take!(stream.buffer)
+    end
+    return bytes
+end
+
 show(io::IO, s::BufferStream) = print(io, "BufferStream(bytes waiting=", bytesavailable(s.buffer), ", isopen=", isopen(s), ")")
 
 function readuntil(s::BufferStream, c::UInt8; keep::Bool=false)
