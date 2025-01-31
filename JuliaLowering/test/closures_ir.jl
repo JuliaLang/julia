@@ -423,20 +423,6 @@ end
 19  (return %₁₈)
 
 ########################################
-# Error: Attempt to add methods to a function argument
-function f(g)
-    function g()
-    end
-end
-#---------------------
-LoweringError:
-function f(g)
-    function g()
-#            ╙ ── Cannot add method to a function argument
-    end
-end
-
-########################################
 # Error: Static parameter clashing with closure name
 function f(::g) where {g}
     function g()

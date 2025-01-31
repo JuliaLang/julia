@@ -380,6 +380,36 @@ function f(::T) where T
 end
 
 ########################################
+# Error: Attempt to add methods to a function argument
+function f(g)
+    function g()
+    end
+end
+#---------------------
+LoweringError:
+function f(g)
+    function g()
+#            ╙ ── Cannot add method to a function argument
+    end
+end
+
+########################################
+# Error: Global method definition inside function scope
+function f()
+    global global_method
+    function global_method()
+    end
+end
+#---------------------
+LoweringError:
+function f()
+    global global_method
+    function global_method()
+#            └───────────┘ ── Global method definition needs to be placed at the top level, or use `eval()`
+    end
+end
+
+########################################
 # @isdefined with defined variables
 let x = 1
     @isdefined x

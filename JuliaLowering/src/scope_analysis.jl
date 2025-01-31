@@ -539,6 +539,19 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
             throw(LoweringError(ex, "Unknown syntax assertion"))
         end
         makeleaf(ctx, ex, K"TOMBSTONE")
+    elseif k == K"function_decl"
+        resolved = mapchildren(e->_resolve_scopes(ctx, e), ctx, ex)
+        name = resolved[1]
+        if kind(name) == K"BindingId"
+            bk = lookup_binding(ctx, name).kind
+            if bk == :argument
+                throw(LoweringError(name, "Cannot add method to a function argument"))
+            elseif bk == :global && !ctx.scope_stack[end].in_toplevel_thunk
+                throw(LoweringError(name, 
+                    "Global method definition needs to be placed at the top level, or use `eval()`"))
+            end
+        end
+        resolved
     elseif k == K"const_if_global"
         id = _resolve_scopes(ctx, ex[1])
         if lookup_binding(ctx, id).kind == :global
@@ -630,9 +643,6 @@ function analyze_variables!(ctx, ex)
         analyze_variables!(ctx, ex[2])
     elseif k == K"function_decl"
         name = ex[1]
-        if kind(name) == K"BindingId" && lookup_binding(ctx, name).kind == :argument
-            throw(LoweringError(name, "Cannot add method to a function argument"))
-        end
         if lookup_binding(ctx, name.var_id).kind === :local
             init_closure_bindings!(ctx, name)
         end
