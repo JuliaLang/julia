@@ -2678,7 +2678,9 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
                 farg2 = ssa_def_slot(fargs[2], sv)
                 if farg2 isa SlotNumber
                     refined = form_partially_defined_struct(argtypes[2], argtypes[3])
-                    refinements = SlotRefinement(farg2, refined)
+                    if refined !== nothing
+                        refinements = SlotRefinement(farg2, refined)
+                    end
                 end
             end
         end
