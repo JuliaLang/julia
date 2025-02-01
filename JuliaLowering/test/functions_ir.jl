@@ -991,8 +991,9 @@ end
 14  (call core.svec %₁₁ %₁₂ %₁₃)
 15  --- method core.nothing %₁₄
     slots: [slot₁/#self#(!read) slot₂/x slot₃/y slot₄/#self#(!read) slot₅/a slot₆/b]
-    1   (call core.tuple slot₅/a slot₆/b slot₂/x slot₃/y)
-    2   (return %₁)
+    1   (meta :nkw 2)
+    2   (call core.tuple slot₅/a slot₆/b slot₂/x slot₃/y)
+    3   (return %₂)
 16  (call core.typeof core.kwcall)
 17  TestMod.f_kw_simple
 18  (call core.Typeof %₁₇)
@@ -1123,8 +1124,9 @@ end
 11  (call core.svec %₈ %₉ %₁₀)
 12  --- method core.nothing %₁₁
     slots: [slot₁/#self#(!read) slot₂/all_kws slot₃/#self#(!read)]
-    1   slot₂/all_kws
-    2   (return %₁)
+    1   (meta :nkw 1)
+    2   slot₂/all_kws
+    3   (return %₂)
 13  (call core.typeof core.kwcall)
 14  TestMod.f_kw_slurp_simple
 15  (call core.Typeof %₁₄)
@@ -1174,8 +1176,9 @@ end
 11  (call core.svec %₈ %₉ %₁₀)
 12  --- method core.nothing %₁₁
     slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/non_x_kws(!read) slot₄/#self#(!read)]
-    1   TestMod.all_kws
-    2   (return %₁)
+    1   (meta :nkw 2)
+    2   TestMod.all_kws
+    3   (return %₂)
 13  (call core.typeof core.kwcall)
 14  TestMod.f_kw_slurp
 15  (call core.Typeof %₁₄)
@@ -1248,10 +1251,11 @@ end
 17  (call core.svec %₁₂ %₁₅ %₁₆)
 18  --- method core.nothing %₁₇
     slots: [slot₁/#self#(!read) slot₂/a(!read) slot₃/b(!read) slot₄/#self#(!read) slot₅/x(!read)]
-    1   static_parameter₁
-    2   static_parameter₂
-    3   (call core.tuple %₁ %₂)
-    4   (return %₃)
+    1   (meta :nkw 2)
+    2   static_parameter₁
+    3   static_parameter₂
+    4   (call core.tuple %₂ %₃)
+    5   (return %₄)
 19  (call core.typeof core.kwcall)
 20  TestMod.f_kw_sparams
 21  (call core.Typeof %₂₀)

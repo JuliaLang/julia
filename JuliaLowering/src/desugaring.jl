@@ -2684,7 +2684,12 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
             [K"block"
                 # TODO: nkw
                 method_def_expr(ctx, srcref, callex_srcref, "nothing"::K"core",
-                                typevar_names, body_arg_names, body_arg_types, body, ret_var)
+                                typevar_names, body_arg_names, body_arg_types,
+                                [K"block"
+                                    [K"meta" "nkw"::K"Symbol" numchildren(keywords)::K"Integer"]
+                                    body
+                                ],
+                                ret_var)
             ]
         ]
         [K"method_defs"
