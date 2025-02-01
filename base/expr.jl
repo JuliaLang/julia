@@ -1654,3 +1654,46 @@ end
 function quoted(@nospecialize(x))
     return is_self_quoting(x) ? x : QuoteNode(x)
 end
+
+# Implementation of generated functions
+function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
+    ci = ccall(:jl_expand, Any, (Any, Any), ex, defmod)
+    if !isa(ci, CodeInfo)
+        if isa(ci, Expr) && ci.head === :error
+            error("syntax: $(ci.args[1])")
+        end
+        error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.")
+    end
+    ci.isva = isva
+    code = ci.code
+    bindings = IdSet{Core.Binding}()
+    for i = 1:length(code)
+        stmt = code[i]
+        if isa(stmt, GlobalRef)
+            push!(bindings, convert(Core.Binding, stmt))
+        end
+    end
+    if !isempty(bindings)
+        ci.edges = Core.svec(bindings...)
+    end
+    return ci
+end
+
+# invoke and wrap the results of @generated expression
+function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecialize args...)
+    # args is (spvals..., argtypes...)
+    body = g.gen(args...)
+    file = source.file
+    file isa Symbol || (file = :none)
+    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
+               Expr(:var"scope-block",
+                    Expr(:block,
+                         LineNumberNode(Int(source.line), source.file),
+                         Expr(:meta, :push_loc, file, :var"@generated body"),
+                         Expr(:return, body),
+                         Expr(:meta, :pop_loc))))
+    spnames = g.spnames
+    return generated_body_to_codeinfo(spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
+        typename(typeof(g.gen)).module,
+        source.isva)
+end

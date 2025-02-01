@@ -55,6 +55,13 @@ module Rebinding
     @test f_return_delete_me_indirect() == 3
     Base.delete_binding(@__MODULE__, :delete_me)
     @test_throws UndefVarError f_return_delete_me_indirect()
+
+    # + via generated function
+    const delete_me = 4
+    @generated f_generated_return_delete_me() = return :(delete_me)
+    @test f_generated_return_delete_me() == 4
+    Base.delete_binding(@__MODULE__, :delete_me)
+    @test_throws UndefVarError f_generated_return_delete_me()
 end
 
 module RebindingPrecompile
