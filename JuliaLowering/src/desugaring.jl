@@ -4236,6 +4236,14 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         throw(LoweringError(ex, "`...` expression outside call"))
     elseif is_leaf(ex)
         ex
+    elseif k == K"return"
+        if numchildren(ex) == 0
+            @ast ctx ex [K"return" "nothing"::K"core"]
+        elseif numchildren(ex) == 1
+            mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
+        else
+            throw(LoweringError(ex, "More than one argument to return"))
+        end
     else
         mapchildren(e->expand_forms_2(ctx,e), ctx, ex)
     end

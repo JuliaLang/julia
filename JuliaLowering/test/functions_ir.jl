@@ -897,6 +897,28 @@ end
 10  (return %₉)
 
 ########################################
+# Function return without arguments
+function f()
+    return
+    after_return # <- distinguish output from implicit return
+end
+#---------------------
+1   (method TestMod.f)
+2   TestMod.f
+3   (call core.Typeof %₂)
+4   (call core.svec %₃)
+5   (call core.svec)
+6   SourceLocation::1:10
+7   (call core.svec %₄ %₅ %₆)
+8   --- method core.nothing %₇
+    slots: [slot₁/#self#(!read)]
+    1   (return core.nothing)
+    2   TestMod.after_return
+    3   (return %₂)
+9   TestMod.f
+10  (return %₉)
+
+########################################
 # Binding docs to functions
 """
 some docs
