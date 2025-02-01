@@ -230,12 +230,8 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
         Core.SSAValue(ex.var_id + ssa_offset)
     elseif k == K"return"
         Core.ReturnNode(to_lowered_expr(mod, ex[1], ssa_offset))
-    elseif is_quoted(k)
-        if k == K"inert"
-            ex[1]
-        else
-            TODO(ex, "Convert SyntaxTree to Expr")
-        end
+    elseif k == K"inert"
+        ex[1]
     elseif k == K"code_info"
         funcname = ex.is_toplevel_thunk ?
             "top-level scope" :
@@ -269,6 +265,11 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
         # TODO: put allow_partial back in once we update to the latest julia
         splice!(args, 4) # allow_partial
         Expr(:new_opaque_closure, args...)
+    elseif k == K"meta"
+        args = Any[to_lowered_expr(mod, e, ssa_offset) for e in children(ex)]
+        # Unpack K"Symbol" QuoteNode as `Expr(:meta)` requires an identifier here.
+        args[1] = args[1].value
+        Expr(:meta, args...)
     else
         # Allowed forms according to https://docs.julialang.org/en/v1/devdocs/ast/
         #

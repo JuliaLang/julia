@@ -9,6 +9,8 @@ function _register_kinds()
         "BEGIN_EXTENSION_KINDS"
             # atomic fields or accesses (see `@atomic`)
             "atomic"
+            # Flag for @generated parts of a functon
+            "generated"
             # Temporary rooting of identifiers (GC.@preserve)
             "gc_preserve_begin"
             "gc_preserve_end"
@@ -46,6 +48,8 @@ function _register_kinds()
             # Catch-all for additional syntax extensions without the need to
             # extend `Kind`. Known extensions include:
             #   locals, islocal
+            # The content of an assertion is not considered to be quoted, so
+            # use K"Symbol" or K"inert" inside where necessary.
             "extension"
         "END_EXTENSION_KINDS"
 

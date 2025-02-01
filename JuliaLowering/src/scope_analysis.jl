@@ -56,7 +56,8 @@ function _find_scope_vars!(ctx, assignments, locals, destructured_args, globals,
         if kv == K"Identifier"
             _insert_if_not_present!(assignments, NameKey(v), v)
         elseif kv == K"BindingId"
-            if !lookup_binding(ctx, v).is_ssa
+            binfo = lookup_binding(ctx, v)
+            if !binfo.is_ssa && binfo.kind != :global
                 TODO(v, "BindingId as function name")
             end
         else
@@ -697,7 +698,7 @@ function analyze_variables!(ctx, ex)
         pop!(ctx.method_def_stack)
     elseif k == K"lambda"
         lambda_bindings = ex.lambda_bindings
-        if !ex.is_toplevel_thunk
+        if !ex.is_toplevel_thunk && !isempty(ctx.method_def_stack)
             # Record all lambdas for the same closure type in one place
             func_name = last(ctx.method_def_stack)
             if kind(func_name) == K"BindingId"
@@ -718,12 +719,16 @@ function analyze_variables!(ctx, ex)
 end
 
 function resolve_scopes(ctx::ScopeResolutionContext, ex)
-    thunk = @ast ctx ex [K"lambda"(is_toplevel_thunk=true)
-        [K"block"]
-        [K"block"]
-        ex
-    ]
-    _resolve_scopes(ctx, thunk)
+    if kind(ex) != K"lambda"
+        # Wrap in a top level thunk if we're not already expanding a lambda.
+        # (Maybe this should be done elsewhere?)
+        ex = @ast ctx ex [K"lambda"(is_toplevel_thunk=true)
+            [K"block"]
+            [K"block"]
+            ex
+        ]
+    end
+    _resolve_scopes(ctx, ex)
 end
 
 """

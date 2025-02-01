@@ -398,6 +398,69 @@ In total, this expands a single "function definition" into seven methods.
 Note that the above is only a sketch! There's more fiddly details when `where`
 syntax comes in
 
+### Desugaring of generated functions
+
+A brief description of how this works. Let's consider the generated function
+
+```julia
+function gen(x::NTuple{N}, y) where {N,T}
+    shared = :shared
+    # Unnecessary use of @generated, but it shows what's going on.
+    if @generated
+        quote
+            maybe_gen = ($x, $N)
+        end
+    else
+        maybe_gen = (typeof(x), N)
+    end
+    (shared, maybe_gen)
+end
+```
+
+This is desugared into the following two function definitions. First, a code
+generator which will generate code for the body of the function, given the
+static parameters `N`, `T` and the positional arguments `x`, `y`.
+(`var"#self#"::Type{typeof(gen)}` is also provided by the Julia runtime to
+complete the full signature of `gen`, though the user won't normally use this.)
+
+```julia
+function var"#gen@generator#0"(__context__::JuilaSyntax.MacroContext, N, T, var"#self#", x, y)
+    gen_stuff = quote
+        maybe_gen = ($x, $N)
+    end
+    quote
+        shared = :shared
+        $gen_stuff
+        (shared, maybe_gen)
+    end
+end
+```
+
+Second, the non-generated version, using the `if @generated` else branches, and
+containing mostly normal code.
+
+```julia
+function gen(x::NTuple{N}, y) where {N,T}
+    $(Expr(:meta, :generated,
+        Expr(:call, JuliaLowering.GeneratedFunctionStub,
+             :var"#gen@generator#0", sourceref_of_gen,
+             :(Core.svec(:var"#self", :x, :y))
+             :(Core.svec(:N, :T)))))
+    shared = :shared
+    maybe_gen = (typeof(x), N)
+    (shared, maybe_gen)
+end
+```
+
+The one extra thing added here is the `Expr(:meta, :generated)` which is an
+expression creating a callable wrapper for the user's generator, to be
+evaluated at top level. This wrapper will then be invoked by the runtime
+whenever the user calls `gen` with a new signature and it's expected that a
+`CodeInfo` be returned from it. `JuliaLowering.GeneratedFunctionStub` differs
+from `Core.GeneratedFunctionStub` in that it contains extra provenance
+information (the `sourcref_of_gen`) and expects a `SyntaxTree` to be returned
+by the user's generator code.
+
 ## Pass 3: Scope analysis / binding resolution
 
 This pass replaces variables with bindings of kind `K"BindingId"`,

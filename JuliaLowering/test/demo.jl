@@ -754,14 +754,42 @@ end
 # end
 # """
 
-src = """
-let
-    function recursive_a()
-        recursive_b()
+function gen_stuff(ctx, N, x)
+    JuliaLowering.@ast ctx ctx.macrocall [K"tuple"
+        (i::K"Integer" for i in 1:N)...
+    ]
+end
+
+src = raw"""
+function gen(x::NTuple{N}) where {N}
+    nongen_stuff = :nongen
+    if @generated
+        quote
+            maybe_gen_stuff = ($N, $x)
+        end
+    else
+        maybe_gen_stuff = :nongen_2
     end
-    function recursive_b()
-        recursive_a()
+    (nongen_stuff, maybe_gen_stuff)
+end
+"""
+
+src = raw"""
+begin
+    function partially_gen(x::NTuple{N,T}) where {N,T}
+        shared = :shared_stuff
+        if @generated
+            quote
+                unshared = ($x, $N, $T)
+            end
+        else
+            # Uuuum. How do we test both sides of this branch??
+            unshared = :nongen # (typeof(x), N, T)
+        end
+        (shared, unshared)
     end
+
+    partially_gen((1,2,3,4,5))
 end
 """
 

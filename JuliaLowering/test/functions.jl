@@ -359,6 +359,39 @@ end
     @test cl(x = 20) == 21
 end
 
+@testset "Generated functions" begin
+    @test JuliaLowering.include_string(test_mod, raw"""
+    begin
+        @generated function f_gen(x::NTuple{N,T}) where {N,T}
+            quote
+                ($x, $N, $T)
+            end
+        end
+
+        f_gen((1,2,3,4,5))
+    end
+    """) == (NTuple{5,Int}, 5, Int)
+
+    @test JuliaLowering.include_string(test_mod, raw"""
+    begin
+        function f_partially_gen(x::NTuple{N,T}) where {N,T}
+            shared = :shared_stuff
+            if @generated
+                quote
+                    unshared = ($x, $N, $T)
+                end
+            else
+                # Uuuum. How do we actually test both sides of this branch???
+                unshared = :nongen # (typeof(x), N, T)
+            end
+            (shared, unshared)
+        end
+
+        f_partially_gen((1,2,3,4,5))
+    end
+    """) == (:shared_stuff, (NTuple{5,Int}, 5, Int))
+end
+
 @testset "Broadcast" begin
     @test JuliaLowering.include_string(test_mod, """
     let x = [1,2], y = [3,4], z = [5,6]

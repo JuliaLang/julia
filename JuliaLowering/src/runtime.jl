@@ -67,7 +67,7 @@ function interpolate_ast(ex, values...)
     # hacky though.
     #
     # Perhaps we should use a ScopedValue for this instead or get it from
-    # the macro __context__? Nothing feels great here.
+    # the macro __context__? None of the options feel great here.
     graph = nothing
     for vals in values
         for v in vals
@@ -255,6 +255,91 @@ function bind_docs!(type::Type, docstr, lineno::LineNumberNode; field_docs=Core.
     Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), Union{})
 end
 
+# An alternative to Core.GeneratedFunctionStub which works on SyntaxTree rather
+# than Expr.
+struct GeneratedFunctionStub
+    gen
+    srcref
+    argnames::Core.SimpleVector
+    spnames::Core.SimpleVector
+end
+
+# Call the `@generated` code generator function and wrap the results of the
+# expression into a CodeInfo.
+#
+# `args` passed into stub by the Julia runtime are (parent_func, static_params..., arg_types...)
+function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
+    # Some of the lowering pipeline from lower() and the pass-specific setup is
+    # re-implemented here because generated functions are very much (but not
+    # entirely) like macro expansion.
+    #
+    # TODO: Reduce duplication where possible.
+
+    mod = parentmodule(g.gen)
+
+    # Attributes from parsing
+    graph = ensure_attributes(SyntaxGraph(), kind=Kind, syntax_flags=UInt16, source=SourceAttrType,
+                              value=Any, name_val=String)
+
+    # Attributes for macro expansion
+    graph = ensure_attributes(graph,
+                              var_id=IdTag,
+                              scope_layer=LayerId,
+                              __macro_ctx__=Nothing,
+                              meta=CompileHints,
+                              # Additional attribute for resolve_scopes, for
+                              # adding our custom lambda below
+                              is_toplevel_thunk=Bool
+                              )
+
+    # Macro expansion
+    layers = ScopeLayer[ScopeLayer(1, mod, false)]
+    ctx1 = MacroExpansionContext(graph, Bindings(), layers, layers[1])
+
+    # Run code generator - this acts like a macro expander and like a macro
+    # expander it gets a MacroContext.
+    mctx = MacroContext(syntax_graph(ctx1), g.srcref, layers[1])
+    ex0 = g.gen(mctx, args...)
+    if ex0 isa SyntaxTree
+        if !is_compatible_graph(ctx1, ex0)
+            # If the macro has produced syntax outside the macro context, copy it over.
+            # TODO: Do we expect this always to happen?  What is the API for access
+            # to the macro expansion context?
+            ex0 = copy_ast(ctx1, ex0)
+        end
+    else
+        ex0 = @ast ctx ex expanded::K"Value"
+    end
+    # Expand any macros emitted by the generator
+    ex1 = expand_forms_1(ctx1, reparent(ctx1, ex0))
+    ctx1 = MacroExpansionContext(delete_attributes(graph, :__macro_ctx__),
+                                 ctx1.bindings, ctx1.scope_layers, ctx1.current_layer)
+    ex1 = reparent(ctx1, ex1)
+
+    # Desugaring
+    ctx2, ex2 = expand_forms_2(  ctx1, ex1)
+
+    # Wrap expansion in a non-toplevel lambda and run scope resolution
+    ex2 = @ast ctx2 source [K"lambda"(is_toplevel_thunk=false)
+        [K"block"
+            (string(n)::K"Identifier" for n in g.argnames)...
+        ]
+        [K"block"
+            (string(n)::K"Identifier" for n in g.spnames)...
+        ]
+        ex2
+    ]
+    ctx3, ex3 = resolve_scopes(  ctx2, ex2)
+
+
+    # Rest of lowering
+    ctx4, ex4 = convert_closures(ctx3, ex3)
+    ctx5, ex5 = linearize_ir(    ctx4, ex4)
+    ci = to_lowered_expr(mod, ex5)
+    @assert ci isa Core.CodeInfo
+    return ci
+end
+
 #-------------------------------------------------------------------------------
 # The following functions are used by lowering to inspect Julia's state.
 
@@ -394,6 +479,25 @@ end
 
 function Base.var"@isdefined"(__context__::MacroContext, ex)
     @ast __context__ __context__.macrocall [K"isdefined" ex]
+end
+
+function Base.var"@generated"(__context__::MacroContext)
+    @ast __context__ __context__.macrocall [K"generated"]
+end
+function Base.var"@generated"(__context__::MacroContext, ex)
+    if kind(ex) != K"function"
+        throw(LoweringError(ex, "Expected a function argument to `@generated`"))
+    end
+    @ast __context__ __context__.macrocall [K"function"
+        ex[1]
+        [K"if" [K"generated"]
+            ex[2]
+            [K"block"
+                [K"meta" "generated_only"::K"Symbol"]
+                [K"return"]
+            ]
+        ]
+    ]
 end
 
 # The following `@islocal` and `@inert` are macros for special syntax known to

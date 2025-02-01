@@ -2213,7 +2213,7 @@ function method_def_expr(ctx, srcref, callex_srcref, method_table,
             ::K"SourceLocation"(callex_srcref)
         ]
         [K"method"
-            method_table
+            isnothing(method_table) ? "nothing"::K"core" : method_table
             method_metadata
             [K"lambda"(body, is_toplevel_thunk=false)
                 [K"block" arg_names...]
@@ -2283,6 +2283,117 @@ function trim_used_typevars(ctx, arg_types, typevar_names, typevar_stmts)
         end
     end
     return trimmed_typevar_names
+end
+
+function is_if_generated(ex)
+    kind(ex) == K"if" && kind(ex[1]) == K"generated"
+end
+
+# Return true if a function body contains a code generator from `@generated` in
+# the form `[K"if" [K"generated"] ...]`
+function is_generated(ex)
+    if is_if_generated(ex)
+        return true
+    elseif is_quoted(ex) || kind(ex) == K"function"
+        return false
+    else
+        return any(is_generated, children(ex))
+    end
+end
+
+function split_generated(ctx, ex, gen_part)
+    if is_leaf(ex)
+        ex
+    elseif is_if_generated(ex)
+        gen_part ? @ast(ctx, ex, [K"$" ex[2]]) : ex[3]
+    else
+        mapchildren(e->split_generated(ctx, e, gen_part), ctx, ex)
+    end
+end
+
+# Split @generated function body into two parts:
+# * The code generator
+# * The non-generated function body
+function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_name_str, body, arg_names, typevar_names)
+    gen_body = if is_if_generated(body)
+        body[2] # Simple case - don't need interpolation when the whole body is generated
+    else
+        expand_quote(ctx, @ast ctx body [K"block" split_generated(ctx, body, true)])
+    end
+    gen_name_str = reserve_module_binding_i(ctx.mod,
+                        "#$(isnothing(func_name_str) ? "_" : func_name_str)@generator#")
+    gen_name = new_global_binding(ctx, body, gen_name_str, ctx.mod)
+
+    # Set up the arguments for the code generator
+    gen_arg_names = SyntaxList(ctx)
+    gen_arg_types = SyntaxList(ctx)
+    # Self arg
+    push!(gen_arg_names, new_local_binding(ctx, callex_srcref, "#self#"; kind=:argument))
+    push!(gen_arg_types, @ast ctx callex_srcref [K"function_type" gen_name])
+    # Macro expansion context arg
+    if kind(func_name) != K"Identifier"
+        TODO(func_name, "Which scope do we adopt for @generated generator `__context__` in this case?")
+    end
+    push!(gen_arg_names, adopt_scope(@ast(ctx, callex_srcref, "__context__"::K"Identifier"), func_name))
+    push!(gen_arg_types, @ast(ctx, callex_srcref, MacroContext::K"Value"))
+    # Trailing arguments to the generator are provided by the Julia runtime. They are:
+    # static_parameters... parent_function arg_types...
+    first_trailing_arg = length(gen_arg_names) + 1
+    append!(gen_arg_names, typevar_names)
+    append!(gen_arg_names, arg_names)
+    # Apply nospecialize to all arguments to prevent so much codegen and add
+    # Core.Any type for them
+    for i in first_trailing_arg:length(gen_arg_names)
+        gen_arg_names[i] = setmeta(gen_arg_names[i]; nospecialize=true)
+        push!(gen_arg_types, @ast ctx gen_arg_names[i] "Any"::K"core")
+    end
+    # Code generator definition
+    gen_func_method_defs = @ast ctx srcref [K"method_defs"
+        gen_name
+        method_def_expr(ctx, srcref, callex_srcref, nothing, SyntaxList(ctx), gen_arg_names,
+                        gen_arg_types, gen_body, nothing)
+    ]
+
+    # Extract non-generated body
+    nongen_body = @ast ctx body [K"block"
+        # The Julia runtime associates the code generator with the
+        # non-generated method by adding this meta to the body. This feels like
+        # a hack though since the generator ultimately gets attached to the
+        # method rather than the CodeInfo which we're putting it inside.
+        [K"meta"
+            "generated"::K"Symbol"
+            # The following is code to be evaluated at top level and will wrap
+            # whatever code comes from the user's generator into an appropriate
+            # K"lambda" (+ K"with_static_parameters") suitable for lowering
+            # into a CodeInfo.
+            #
+            # todo: As isolated top-level code, we don't actually want to apply
+            # the normal scope rules of the surrounding function ... it should
+            # technically have scope resolved at top level.
+            [K"new"
+                GeneratedFunctionStub::K"Value" # Use stub type from JuliaLowering
+                gen_name
+                # Truncate provenance to just the source file range, as this
+                # will live permanently in the IR and we probably don't want
+                # the full provenance tree and intermediate expressions
+                # (TODO: More truncation. We certainly don't want to store the
+                #  source file either.)
+                sourceref(srcref)::K"Value"
+                [K"call"
+                    "svec"::K"core"
+                    "#self#"::K"Symbol"
+                    (n.name_val::K"Symbol"(n) for n in arg_names[2:end])...
+                ]
+                [K"call"
+                    "svec"::K"core"
+                    (n.name_val::K"Symbol"(n) for n in typevar_names)...
+                ]
+            ]
+        ]
+        split_generated(ctx, body, false)
+    ]
+
+    return gen_name, gen_func_method_defs, nongen_body
 end
 
 # Generate a method for every number of allowed optional arguments
@@ -2799,6 +2910,14 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         ]
     end
 
+    gen_func_name = nothing
+    gen_func_method_defs = nothing
+    if is_generated(body)
+        gen_func_name, gen_func_method_defs, body =
+            expand_function_generator(ctx, ex, callex, name, name_str, body, arg_names, typevar_names)
+
+    end
+
     if isnothing(keywords)
         body_func_name, kw_func_method_defs = (nothing, nothing)
         # NB: This check seems good as it statically catches any useless
@@ -2848,6 +2967,9 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     end
 
     @ast ctx ex [K"block"
+        if !isnothing(gen_func_name)
+            [K"function_decl"(gen_func_name) gen_func_name]
+        end
         if !isnothing(body_func_name)
             [K"function_decl"(body_func_name) body_func_name]
         end
@@ -2857,6 +2979,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         [K"scope_block"(scope_type=:hard)
             [K"block"
                 new_typevar_stmts...
+                gen_func_method_defs
                 kw_func_method_defs
                 [K"method_defs"
                     isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
@@ -3651,7 +3774,7 @@ function expand_struct_def(ctx, ex, docs)
                 typevar_in_bounds = any(type_params[i+1:end]) do param
                     # Check the bounds of subsequent type params
                     (_,lb,ub) = analyze_typevar(ctx, param)
-                    # TODO: flisp lowering tests `lb` here so we also do. But
+                    # todo: flisp lowering tests `lb` here so we also do. But
                     # in practice this doesn't seem to constrain `typevar_name`
                     # and the generated constructor doesn't work?
                     (!isnothing(ub) && contains_identifier(ub, typevar_name)) ||

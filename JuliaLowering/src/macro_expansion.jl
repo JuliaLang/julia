@@ -66,7 +66,7 @@ end
 #--------------------------------------------------
 struct MacroContext <: AbstractLoweringContext
     graph::SyntaxGraph
-    macrocall::SyntaxTree
+    macrocall::Union{SyntaxTree,LineNumberNode,SourceRef}
     scope_layer::ScopeLayer
 end
 

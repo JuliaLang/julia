@@ -796,11 +796,22 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         end
     elseif k == K"gc_preserve_begin"
         makenode(ctx, ex, k, compile_args(ctx, children(ex)))
-    elseif k == K"gc_preserve_end"
+    elseif k == K"gc_preserve_end" || k == K"global" || k == K"const"
         if needs_value
-            throw(LoweringError(ex, "misplaced label in value position"))
+            throw(LoweringError(ex, "misplaced kind $k in value position"))
         end
         emit(ctx, ex)
+        nothing
+    elseif k == K"meta"
+        emit(ctx, ex)
+        if needs_value
+            val = @ast ctx ex "nothing"::K"core"
+            if in_tail_pos
+                emit_return(ctx, val)
+            else
+                val
+            end
+        end
     elseif k == K"_while"
         end_label = make_label(ctx, ex)
         top_label = emit_label(ctx, ex)
@@ -821,12 +832,6 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         if needs_value
             compile(ctx, nothing_(ctx, ex), needs_value, in_tail_pos)
         end
-    elseif k == K"global" || k == K"const"
-        if needs_value
-            throw(LoweringError(ex, "misplaced declaration"))
-        end
-        emit(ctx, ex)
-        nothing
     elseif k == K"isdefined" || k == K"captured_local" || k == K"throw_undef_if_not" ||
             k == K"boundscheck"
         if in_tail_pos
@@ -957,7 +962,12 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
             end
         end
     elseif k == K"meta"
-        TODO(ex, "_renumber $k")
+        # Somewhat-hack for Expr(:meta, :generated, gen) which has
+        # weird top-level semantics for `gen`, but we still need to translate
+        # the binding it contains to a globalref.
+        mapchildren(ctx, ex) do e
+            _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, e)
+        end
     elseif is_literal(k) || is_quoted(k)
         ex
     elseif k == K"label"
@@ -968,8 +978,6 @@ function _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, ex)
         mapchildren(ctx, ex) do e
             _renumber(ctx, ssa_rewrites, slot_rewrites, label_table, e)
         end
-        # TODO: foreigncall error check:
-        # "ccall function name and library expression cannot reference local variables"
     end
 end
 
