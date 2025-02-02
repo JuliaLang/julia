@@ -1554,8 +1554,8 @@ end
             (range(10, stop=20, length=5), 1, 5),
             (range(10.3, step=-2, length=7), 7, 1),
            ]
-        @test minimum(r) === r[imin]
-        @test maximum(r) === r[imax]
+        @test minimum(r) === minimum(r, init=typemax(eltype(r))) === r[imin]
+        @test maximum(r) === maximum(r, init=typemin(eltype(r))) === r[imax]
         @test imin === argmin(r)
         @test imax === argmax(r)
         @test extrema(r) === (r[imin], r[imax])
