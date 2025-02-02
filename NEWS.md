@@ -133,6 +133,11 @@ certain compiler plugin workflows ([#56660]).
 Standard library changes
 ------------------------
 
+* The `init` keyword argument in `reduce(op, itr; init)` and other reduction functions with implementation-defined
+  associativity (`mapreduce`, `maximum`, `minimum`, `sum`, `prod`, `any`, and `all`)
+  is now guaranteed to be used for non-empty collections one or more times. This ensures that all calls
+  to the reducing function `op` have one argument that is either `init` or the result from a
+  previous `op` evaluation. Previously `init` was explicitly allowed to be omitted from the reduction entirely.
 * `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
 * `fd` returns a `RawFD` instead of an `Int` ([#55080]).
 
