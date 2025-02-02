@@ -889,6 +889,26 @@ _os_ptr_munge(uintptr_t ptr)
 
 extern bt_context_t *jl_to_bt_context(void *sigctx);
 
+JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
+{
+    int16_t tid = ptls2->tid;
+    jl_task_t *t = NULL;
+    bt_context_t *context = NULL;
+    bt_context_t c;
+    int lockret = jl_lock_stackwalk();
+    if (!jl_thread_suspend_and_get_state(tid, 0, &c)) {
+        jl_unlock_stackwalk(lockret);
+        return 0;
+    }
+    jl_unlock_stackwalk(lockret);
+    // thread is stopped, safe to read the task it was running before we stopped it
+    t = jl_atomic_load_relaxed(&ptls2->current_task);
+    context = &c;
+    size_t bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
+    jl_thread_resume(tid);
+    return bt_size;
+}
+
 JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
 {
     int16_t tid = INT16_MAX;

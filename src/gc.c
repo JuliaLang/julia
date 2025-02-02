@@ -245,8 +245,22 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
             // We're currently also using atomic store release in mutator threads
             // (in jl_gc_state_set), but we may want to use signals to flush the
             // memory operations on those threads lazily instead.
-            while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state))
+            const int64_t timeout = jl_options.timeout_for_safepoint_straggler_s * 1000000000; // convert to nanoseconds
+            uint64_t t0 = jl_hrtime();
+            while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state)) {
                 jl_cpu_pause(); // yield?
+                if ((jl_hrtime() - t0) > timeout) {
+                    jl_safe_printf("===== Thread %d failed to reach safepoint after %d seconds, printing backtrace below =====\n", ptls2->tid + 1, jl_options.timeout_for_safepoint_straggler_s);
+                    // Try to record the backtrace of the straggler using `jl_try_record_thread_backtrace`
+                    jl_ptls_t ptls = jl_current_task->ptls;
+                    size_t bt_size = jl_try_record_thread_backtrace(ptls2, ptls->bt_data, JL_MAX_BT_SIZE);
+                    // Print the backtrace of the straggler
+                    for (size_t i = 0; i < bt_size; i += jl_bt_entry_size(ptls->bt_data + i)) {
+                        jl_print_bt_entry_codeloc(-1, ptls->bt_data + i);
+                    }
+                    t0 = jl_hrtime();
+                }
+            }
         }
     }
 }
