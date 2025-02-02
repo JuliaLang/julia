@@ -41,11 +41,15 @@ static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
 
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
-static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals,
+static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
                                    int binding_effects, int eager_resolve)
 {
     if (jl_is_symbol(expr)) {
         jl_error("Found raw symbol in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.");
+    }
+    if (jl_is_globalref(expr)) {
+        jl_maybe_add_binding_backedge((jl_globalref_t*)expr, module, binding_edge);
+        return expr;
     }
     if (!jl_is_expr(expr)) {
         return expr;
@@ -60,10 +64,10 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     }
     // These exprs are not fully linearized
     if (e->head == jl_assign_sym) {
-        jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_effects, eager_resolve));
+        jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_edge, binding_effects, eager_resolve));
         return expr;
     } else if (e->head == jl_new_opaque_closure_sym) {
-        jl_exprargset(e, 4, resolve_definition_effects(jl_exprarg(e, 4), module, sparam_vals, binding_effects, eager_resolve));
+        jl_exprargset(e, 4, resolve_definition_effects(jl_exprarg(e, 4), module, sparam_vals, binding_edge, binding_effects, eager_resolve));
         return expr;
     }
     size_t nargs = jl_array_nrows(e->args);
@@ -202,13 +206,13 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     return expr;
 }
 
-JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
+JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
                               int binding_effects)
 {
     size_t i, l = jl_array_nrows(stmts);
     for (i = 0; i < l; i++) {
         jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
-        jl_array_ptr_set(stmts, i, resolve_definition_effects(stmt, m, sparam_vals, binding_effects, 0));
+        jl_array_ptr_set(stmts, i, resolve_definition_effects(stmt, m, sparam_vals, binding_edge, binding_effects, 0));
     }
 }
 
@@ -622,7 +626,7 @@ JL_DLLEXPORT jl_code_info_t *jl_expand_and_resolve(jl_value_t *ex, jl_module_t *
     JL_GC_PUSH1(&func);
     if (jl_is_code_info(func)) {
         jl_array_t *stmts = (jl_array_t*)func->code;
-        jl_resolve_definition_effects_in_ir(stmts, module, sparam_vals, 1);
+        jl_resolve_definition_effects_in_ir(stmts, module, sparam_vals, NULL, 1);
     }
     JL_GC_POP();
     return func;
@@ -702,7 +706,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
         if (jl_is_code_info(ex)) {
             func = (jl_code_info_t*)ex;
             jl_array_t *stmts = (jl_array_t*)func->code;
-            jl_resolve_definition_effects_in_ir(stmts, def->module, mi->sparam_vals, 1);
+            jl_resolve_definition_effects_in_ir(stmts, def->module, mi->sparam_vals, NULL, 1);
         }
         else {
             // Lower the user's expression and resolve references to the type parameters
@@ -925,7 +929,7 @@ JL_DLLEXPORT void jl_method_set_source(jl_method_t *m, jl_code_info_t *src)
             }
         }
         else {
-            st = resolve_definition_effects(st, m->module, sparam_vars, 1, 0);
+            st = resolve_definition_effects(st, m->module, sparam_vars, (jl_value_t*)m, 1, 0);
         }
         jl_array_ptr_set(copy, i, st);
     }

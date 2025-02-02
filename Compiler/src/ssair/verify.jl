@@ -67,7 +67,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             imported_binding = partition_restriction(bpart)::Core.Binding
             bpart = lookup_binding_partition(min_world(ir.valid_worlds), imported_binding)
         end
-        if !is_defined_const_binding(binding_kind(bpart)) || (bpart.max_world < max_world(ir.valid_worlds))
+        if (!is_defined_const_binding(binding_kind(bpart)) || (bpart.max_world < max_world(ir.valid_worlds))) &&
+                (op.mod !== Core) && (op.mod !== Base)
+            # Core and Base are excluded because the frontend uses them for intrinsics, etc.
+            # TODO: Decide which way to go with these.
             @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
             raise_error()
         end

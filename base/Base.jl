@@ -31,6 +31,10 @@ let os = ccall(:jl_get_UNAME, Any, ())
     end
 end
 
+# subarrays
+include("subarray.jl")
+include("views.jl")
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")

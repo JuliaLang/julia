@@ -35,9 +35,6 @@ function foreach_module_mtable(visit, m::Module, world::UInt)
                         visit(mt) || return false
                     end
                 end
-            elseif isa(v, Module) && v !== m && parentmodule(v) === m && _nameof(v) === name
-                # this is the original/primary binding for the submodule
-                foreach_module_mtable(visit, v, world) || return false
             elseif isa(v, Core.MethodTable) && v.module === m && v.name === name
                 # this is probably an external method table here, so let's
                 # assume so as there is no way to precisely distinguish them
@@ -48,49 +45,46 @@ function foreach_module_mtable(visit, m::Module, world::UInt)
     return true
 end
 
-function foreach_reachable_mtable(visit, world::UInt)
-    visit(TYPE_TYPE_MT) || return
-    visit(NONFUNCTION_MT) || return
-    for mod in loaded_modules_array()
-        foreach_module_mtable(visit, mod, world)
+function foreachgr(visit, src::CodeInfo)
+    stmts = src.code
+    for i = 1:length(stmts)
+        stmt = stmts[i]
+        isa(stmt, GlobalRef) && visit(stmt)
+        for ur in Compiler.userefs(stmt)
+            arg = ur[]
+            isa(arg, GlobalRef) && visit(arg)
+        end
     end
 end
 
-function should_invalidate_code_for_globalref(gr::GlobalRef, src::CodeInfo)
-    found_any = false
-    labelchangemap = nothing
+function anygr(visit, src::CodeInfo)
     stmts = src.code
-    isgr(g::GlobalRef) = gr.mod == g.mod && gr.name === g.name
-    isgr(g) = false
     for i = 1:length(stmts)
         stmt = stmts[i]
-        if isgr(stmt)
-            found_any = true
+        if isa(stmt, GlobalRef)
+            visit(stmt) && return true
             continue
         end
         for ur in Compiler.userefs(stmt)
             arg = ur[]
-            # If any of the GlobalRefs in this stmt match the one that
-            # we are about, we need to move out all GlobalRefs to preserve
-            # effect order, in case we later invalidate a different GR
-            if isa(arg, GlobalRef)
-                if isgr(arg)
-                    @assert !isa(stmt, PhiNode)
-                    found_any = true
-                    break
-                end
-            end
+            isa(arg, GlobalRef) && visit(arg) && return true
         end
     end
-    return found_any
+    return false
 end
 
-function scan_edge_list(ci::Core.CodeInstance, bpart::Core.BindingPartition)
+function should_invalidate_code_for_globalref(gr::GlobalRef, src::CodeInfo)
+    isgr(g::GlobalRef) = gr.mod == g.mod && gr.name === g.name
+    isgr(g) = false
+    return anygr(isgr, src)
+end
+
+function scan_edge_list(ci::Core.CodeInstance, binding::Core.Binding)
     isdefined(ci, :edges) || return false
     edges = ci.edges
     i = 1
     while i <= length(edges)
-        if isassigned(edges, i) && edges[i] === bpart
+        if isassigned(edges, i) && edges[i] === binding
             return true
         end
         i += 1
@@ -98,33 +92,91 @@ function scan_edge_list(ci::Core.CodeInstance, bpart::Core.BindingPartition)
     return false
 end
 
+function invalidate_method_for_globalref!(gr::GlobalRef, method::Method, invalidated_bpart::Core.BindingPartition, new_max_world::UInt)
+    if isdefined(method, :source)
+        src = _uncompressed_ir(method)
+        binding = convert(Core.Binding, gr)
+        old_stmts = src.code
+        invalidate_all = should_invalidate_code_for_globalref(gr, src)
+        for mi in specializations(method)
+            isdefined(mi, :cache) || continue
+            ci = mi.cache
+            while true
+                if ci.max_world > new_max_world && (invalidate_all || scan_edge_list(ci, binding))
+                    ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), ci, new_max_world)
+                end
+                isdefined(ci, :next) || break
+                ci = ci.next
+            end
+        end
+    end
+end
+
 function invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPartition, new_max_world::UInt)
     try
         valid_in_valuepos = false
-        foreach_reachable_mtable(new_max_world) do mt::Core.MethodTable
+        foreach_module_mtable(gr.mod, new_max_world) do mt::Core.MethodTable
             for method in MethodList(mt)
-                if isdefined(method, :source)
-                    src = _uncompressed_ir(method)
-                    old_stmts = src.code
-                    invalidate_all = should_invalidate_code_for_globalref(gr, src)
-                    for mi in specializations(method)
-                        isdefined(mi, :cache) || continue
-                        ci = mi.cache
-                        while true
-                            if ci.max_world > new_max_world && (invalidate_all || scan_edge_list(ci, invalidated_bpart))
-                                ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), ci, new_max_world)
-                            end
-                            isdefined(ci, :next) || break
-                            ci = ci.next
-                        end
-                    end
-                end
+                invalidate_method_for_globalref!(gr, method, invalidated_bpart, new_max_world)
             end
             return true
+        end
+        b = convert(Core.Binding, gr)
+        if isdefined(b, :backedges)
+            for edge in b.backedges
+                if isa(edge, CodeInstance)
+                    ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), edge, new_max_world)
+                else
+                    invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
+                end
+            end
         end
     catch err
         bt = catch_backtrace()
         invokelatest(Base.println, "Internal Error during invalidation:")
         invokelatest(Base.display_error, err, bt)
     end
+end
+
+gr_needs_backedge_in_module(gr::GlobalRef, mod::Module) = gr.mod !== mod
+
+# N.B.: This needs to match jl_maybe_add_binding_backedge
+function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeInstance})
+    method = isa(edge, Method) ? edge : edge.def.def::Method
+    gr_needs_backedge_in_module(b.globalref, method.module) || return
+    if !isdefined(b, :backedges)
+        b.backedges = Any[]
+    end
+    !isempty(b.backedges) && b.backedges[end] === edge && return
+    push!(b.backedges, edge)
+end
+
+function binding_was_invalidated(b::Core.Binding)
+    # At least one partition is required for invalidation
+    !isdefined(b, :partitions) && return false
+    b.partitions.min_world > unsafe_load(cglobal(:jl_require_world, UInt))
+end
+
+function scan_new_method!(methods_with_invalidated_source::IdSet{Method}, method::Method)
+    isdefined(method, :source) || return
+    src = _uncompressed_ir(method)
+    mod = method.module
+    foreachgr(src) do gr::GlobalRef
+        b = convert(Core.Binding, gr)
+        binding_was_invalidated(b) && push!(methods_with_invalidated_source, method)
+        maybe_add_binding_backedge!(b, method)
+    end
+end
+
+function scan_new_methods(extext_methods::Vector{Any}, internal_methods::Vector{Any})
+    methods_with_invalidated_source = IdSet{Method}()
+    for method in internal_methods
+        if isa(method, Method)
+           scan_new_method!(methods_with_invalidated_source, method)
+        end
+    end
+    for tme::Core.TypeMapEntry in extext_methods
+        scan_new_method!(methods_with_invalidated_source, tme.func::Method)
+    end
+    return methods_with_invalidated_source
 end

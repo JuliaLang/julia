@@ -489,10 +489,12 @@ Represents access to a global through runtime reflection, rather than as a manif
 perform such accesses.
 """
 struct GlobalAccessInfo <: CallInfo
+    b::Core.Binding
     bpart::Core.BindingPartition
 end
-GlobalAccessInfo(::Nothing) = NoCallInfo()
-add_edges_impl(edges::Vector{Any}, info::GlobalAccessInfo) =
-    push!(edges, info.bpart)
+GlobalAccessInfo(::Core.Binding, ::Nothing) = NoCallInfo()
+function add_edges_impl(edges::Vector{Any}, info::GlobalAccessInfo)
+    push!(edges, info.b)
+end
 
 @specialize

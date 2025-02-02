@@ -231,8 +231,6 @@ include("indices.jl")
 include("genericmemory.jl")
 include("array.jl")
 include("abstractarray.jl")
-include("subarray.jl")
-include("views.jl")
 include("baseext.jl")
 
 include("c.jl")
