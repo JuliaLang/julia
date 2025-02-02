@@ -77,11 +77,12 @@ function repl_workload()
     cd("complete_path\t\t$CTRL_C
     println("done")
     """
+    
+    JULIA_PROMPT = styled"{repl_prompt_julia:julia> }"
+    PKG_PROMPT = styled"{repl_prompt_pkg:pkg> }"
+    SHELL_PROMPT = styled"{repl_prompt_shell:shell> }"
+    HELP_PROMPT = styled"{repl_prompt_help:help?> }"
 
-    JULIA_PROMPT = "julia> "
-    PKG_PROMPT = "pkg> "
-    SHELL_PROMPT = "shell> "
-    HELP_PROMPT = "help?> "
 
     blackhole = Sys.isunix() ? "/dev/null" : "nul"
 

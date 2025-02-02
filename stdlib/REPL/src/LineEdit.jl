@@ -5,10 +5,13 @@ module LineEdit
 import ..REPL
 using ..REPL: AbstractREPL, Options
 
+import StyledStrings: Face, loadface!, @styled_str
+
 using ..Terminals
 import ..Terminals: raw!, width, height, clear_line, beep
 
-import Base: ensureroom, show, AnyDict, position
+import Base: ensureroom, show, AnyDict, position,
+                        AnnotatedString, annotations
 using Base: something
 
 using InteractiveUtils: InteractiveUtils
@@ -42,15 +45,9 @@ end
 
 mutable struct Prompt <: TextInterface
     # A string or function to be printed as the prompt.
-    prompt::Union{String,Function}
-    # A string or function to be printed before the prompt. May not change the length of the prompt.
-    # This may be used for changing the color, issuing other terminal escape codes, etc.
-    prompt_prefix::Union{String,Function}
-    # Same as prefix except after the prompt
-    prompt_suffix::Union{String,Function}
-    output_prefix::Union{String,Function}
-    output_prefix_prefix::Union{String,Function}
-    output_prefix_suffix::Union{String,Function}
+    prompt::Union{AnnotatedString{String},String,Function}
+    # used for things like IPython mode
+    output_prefix::Union{AnnotatedString{String},String,Function}
     keymap_dict::Dict{Char,Any}
     repl::Union{AbstractREPL,Nothing}
     complete::CompletionProvider
@@ -204,36 +201,31 @@ complete_line(c::CompletionProvider, s, ::Module; hint::Bool=false) = complete_l
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
 
-
 function beep(s::PromptState, duration::Real=options(s).beep_duration,
-              blink::Real=options(s).beep_blink,
-              maxduration::Real=options(s).beep_maxduration;
-              colors=options(s).beep_colors,
+    blink::Real=options(s).beep_blink,
+    maxduration::Real=options(s).beep_maxduration;
+              beep_face=options(s).beep_face,
               use_current::Bool=options(s).beep_use_current)
     isinteractive() || return # some tests fail on some platforms
     s.beeping = min(s.beeping + duration, maxduration)
-    let colors = Base.copymutable(colors)
-        errormonitor(@async begin
-            trylock(s.refresh_lock) || return
-            try
-                orig_prefix = s.p.prompt_prefix
-                use_current && push!(colors, prompt_string(orig_prefix))
-                i = 0
-                while s.beeping > 0.0
-                    prefix = colors[mod1(i+=1, end)]
-                    s.p.prompt_prefix = prefix
-                    refresh_multi_line(s, beeping=true)
-                    sleep(blink)
-                    s.beeping -= blink
-                end
-                s.p.prompt_prefix = orig_prefix
-                refresh_multi_line(s, beeping=true)
-                s.beeping = 0.0
-            finally
-                unlock(s.refresh_lock)
+    errormonitor(@async begin
+        trylock(s.refresh_lock) || return
+        try
+            og_prompt = s.p.prompt
+            beep_prompt = styled"{$beep_face:$(prompt_string(og_prompt))}"
+            s.p.prompt = beep_prompt
+            refresh_multi_line(s, beeping=true)
+            while s.beeping > 0.0
+                sleep(blink)
+                s.beeping -= blink
             end
-        end)
-    end
+            s.p.prompt = og_prompt
+            refresh_multi_line(s, beeping=true)
+            s.beeping = 0.0
+        finally
+            unlock(s.refresh_lock)
+        end
+    end)
     nothing
 end
 
@@ -596,7 +588,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     regstart, regstop = region(buf)
     written = 0
     # Write out the prompt string
-    lindent = write_prompt(termbuf, prompt, hascolor(terminal))::Int
+    lindent = write_prompt(termbuf, prompt)::Int
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
     miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !(Base.ispty(Terminals.pipe_reader(terminal)))::Bool) : false
 
@@ -694,11 +686,10 @@ function highlight_region(lwrite::Union{String,SubString{String}}, regstart::Int
 end
 
 function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
-    outbuf = IOBuffer()
-    termbuf = TerminalBuffer(outbuf)
+    termbuf = TerminalBuffer(terminal)
     ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
     # Output the entire refresh at once
-    write(terminal, take!(outbuf))
+    write(terminal, take!(termbuf))
     flush(terminal)
     return ret
 end
@@ -984,7 +975,7 @@ function edit_insert(s::PromptState, c::StringLike)
         termbuf = terminal(s)
         w = width(termbuf)
         offset = s.ias.curs_row == 1 || s.indent < 0 ?
-            sizeof(prompt_string(s.p.prompt)::String) : s.indent
+            sizeof(prompt_string(s.p.prompt)::Union{String,AnnotatedString}) : s.indent
         offset += position(buf) - beginofline(buf) # size of current line
         spinner = '\0'
         delayup = !eof(buf) || old_wait
@@ -1648,27 +1639,21 @@ refresh_line(s::BufferLike, termbuf::AbstractTerminal) = refresh_multi_line(term
 default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
-write_prompt(terminal::AbstractTerminal, s::PromptState, color::Bool) = write_prompt(terminal, s.p, color)
-function write_prompt(terminal::AbstractTerminal, p::Prompt, color::Bool)
-    prefix = prompt_string(p.prompt_prefix)
-    suffix = prompt_string(p.prompt_suffix)
-    write(terminal, prefix)
-    color && write(terminal, Base.text_colors[:bold])
-    width = write_prompt(terminal, p.prompt, color)
-    color && write(terminal, Base.text_colors[:normal])
-    write(terminal, suffix)
-    return width
+write_prompt(terminal::AbstractTerminal, s::PromptState) = write_prompt(terminal, s.p)
+
+# returns the width of the written prompt
+function write_prompt(io::IO, p::Union{AbstractString,Function,Prompt})
+    @static Sys.iswindows() && _reset_console_mode()
+    promptstr = prompt_string(p)::AbstractString
+    write(io, promptstr)
+    return textwidth(promptstr)
 end
 
-function write_output_prefix(io::IO, p::Prompt, color::Bool)
-    prefix = prompt_string(p.output_prefix_prefix)
-    suffix = prompt_string(p.output_prefix_suffix)
-    print(io, prefix)
-    color && write(io, Base.text_colors[:bold])
-    width = write_prompt(io, p.output_prefix, color)
-    color && write(io, Base.text_colors[:normal])
-    print(io, suffix)
-    return width
+function write_output_prefix(io::IO, p::Prompt)
+    @static Sys.iswindows() && _reset_console_mode()
+    promptstr = prompt_string(p.output_prefix)::String
+    write(io, promptstr)
+    return textwidth(promptstr)
 end
 
 # On Windows, when launching external processes, we cannot control what assumption they make on the
@@ -1701,13 +1686,6 @@ function _reset_console_mode()
 end
 end
 
-# returns the width of the written prompt
-function write_prompt(terminal::Union{IO, AbstractTerminal}, s::Union{AbstractString,Function}, color::Bool)
-    @static Sys.iswindows() && _reset_console_mode()
-    promptstr = prompt_string(s)::String
-    write(terminal, promptstr)
-    return textwidth(promptstr)
-end
 
 ### Keymap Support
 
@@ -2174,7 +2152,7 @@ end
 
 input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
 
-write_prompt(terminal, s::PrefixSearchState, color::Bool) = write_prompt(terminal, s.histprompt.parent_prompt, color)
+write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)
 prompt_string(s::PrefixSearchState) = prompt_string(s.histprompt.parent_prompt.prompt)
 
 terminal(s::PrefixSearchState) = s.terminal
@@ -2748,7 +2726,7 @@ end
 activate(m::ModalInterface, s::MIState, termbuf::AbstractTerminal, term::TextTerminal) =
     activate(mode(s), s, termbuf, term)
 
-commit_changes(t::UnixTerminal, termbuf::TerminalBuffer) = (write(t, take!(termbuf.out_stream)); nothing)
+commit_changes(t::UnixTerminal, termbuf::TerminalBuffer) = (write(t, take!(termbuf)); nothing)
 
 function transition(f::Function, s::MIState, newmode::Union{TextInterface,Symbol})
     cancel_beep(s)
@@ -2763,8 +2741,8 @@ function transition(f::Function, s::MIState, newmode::Union{TextInterface,Symbol
     if !haskey(s.mode_state, newmode)
         s.mode_state[newmode] = init_state(terminal(s), newmode)
     end
-    termbuf = TerminalBuffer(IOBuffer())
     t = terminal(s)
+    termbuf = TerminalBuffer(t)
     s.mode_state[mode(s)] = deactivate(mode(s), state(s), termbuf, t)
     s.current_mode = newmode
     f()
@@ -2796,11 +2774,7 @@ const default_keymap_dict = keymap([default_keymap, escape_defaults])
 
 function Prompt(prompt
     ;
-    prompt_prefix = "",
-    prompt_suffix = "",
     output_prefix = "",
-    output_prefix_prefix = "",
-    output_prefix_suffix = "",
     keymap_dict = default_keymap_dict,
     repl = nothing,
     complete = EmptyCompletionProvider(),
@@ -2809,8 +2783,8 @@ function Prompt(prompt
     hist = EmptyHistoryProvider(),
     sticky = false)
 
-    return Prompt(prompt, prompt_prefix, prompt_suffix, output_prefix, output_prefix_prefix, output_prefix_suffix,
-                   keymap_dict, repl, complete, on_enter, on_done, hist, sticky)
+    return Prompt(prompt, output_prefix, keymap_dict, repl, complete, on_enter,
+                    on_done, hist, sticky)
 end
 
 run_interface(::Prompt) = nothing
