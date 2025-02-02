@@ -97,7 +97,7 @@ ambig(x::Union{Char, Int16}) = 's'
 
 # Automatic detection of ambiguities
 
-const allowed_undefineds = Set([])
+const allowed_undefineds = Set([GlobalRef(Base, :active_repl)])
 
 let Distributed = get(Base.loaded_modules,
                       Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),

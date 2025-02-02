@@ -610,13 +610,17 @@ precompile_test_harness(false) do dir
     @eval using UseBaz
     @test haskey(Base.loaded_modules, Base.PkgId("UseBaz"))
     @test haskey(Base.loaded_modules, Base.PkgId("Baz"))
-    @test Base.invokelatest(UseBaz.biz) === 1
-    @test Base.invokelatest(UseBaz.buz) === 2
-    @test UseBaz.generating == 0
-    @test UseBaz.incremental == 0
+    invokelatest() do
+        @test UseBaz.biz() === 1
+        @test UseBaz.buz() === 2
+        @test UseBaz.generating == 0
+        @test UseBaz.incremental == 0
+    end
     @eval using Baz
-    @test Base.invokelatest(Baz.baz) === 1
-    @test Baz === UseBaz.Baz
+    invokelatest() do
+        @test Baz.baz() === 1
+        @test Baz === UseBaz.Baz
+    end
 
     # should not throw if the cachefile does not exist
     @test !isfile("DoesNotExist.ji")
@@ -1094,6 +1098,17 @@ precompile_test_harness("invoke") do dir
               f44320(::Any) = 2
               g44320() = invoke(f44320, Tuple{Any}, 0)
               g44320()
+              # Issue #57115
+              f57115(@nospecialize(::Any)) = error("unimplemented")
+              function g57115(@nospecialize(x))
+                  if @noinline rand(Bool)
+                      # Add an 'invoke' edge from 'foo' to 'bar'
+                      Core.invoke(f57115, Tuple{Any}, x)
+                  else
+                      # ... and also an identical 'call' edge
+                      @noinline f57115(x)
+                  end
+              end
 
               # Adding new specializations should not invalidate `invoke`s
               function getlast(itr)
@@ -1110,6 +1125,8 @@ precompile_test_harness("invoke") do dir
           """
           module $CallerModule
               using $InvokeModule
+              import $InvokeModule: f57115, g57115
+
               # involving external modules
               callf(x) = f(x)
               callg(x) = x < 5 ? g(x) : invoke(g, Tuple{Real}, x)
@@ -1130,6 +1147,8 @@ precompile_test_harness("invoke") do dir
 
               # Issue #44320
               f44320(::Real) = 3
+              # Issue #57115
+              f57115(::Int) = 1
 
               call_getlast(x) = getlast(x)
 
@@ -1150,6 +1169,7 @@ precompile_test_harness("invoke") do dir
                   @noinline internalnc(3)
                   @noinline call_getlast([1,2,3])
               end
+              precompile(g57115, (Any,))
 
               # Now that we've precompiled, invalidate with a new method that overrides the `invoke` dispatch
               $InvokeModule.h(x::Integer) = -1
@@ -1216,6 +1236,30 @@ precompile_test_harness("invoke") do dir
 
     m = only(methods(M.g44320))
     @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
+
+    m = only(methods(M.g57115))
+    mi = m.specializations::Core.MethodInstance
+
+    f_m = get_method_for_type(M.f57115, Any)
+    f_mi = f_m.specializations::Core.MethodInstance
+
+    # Make sure that f57115(::Any) has a 'call' backedge to 'g57115'
+    has_f_call_backedge = false
+    i = 1
+    while i ≤ length(f_mi.backedges)
+        if f_mi.backedges[i] isa DataType
+            # invoke edge - skip
+            i += 2
+        else
+            caller = f_mi.backedges[i]::Core.CodeInstance
+            if caller.def === mi
+                has_f_call_backedge = true
+                break
+            end
+            i += 1
+        end
+    end
+    @test has_f_call_backedge
 
     m = which(MI.getlast, (Any,))
     @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
@@ -1925,7 +1969,7 @@ precompile_test_harness("Issue #50538") do load_path
         """
         module I50538
         const newglobal = try
-            Base.newglobal = false
+            eval(Expr(:global, GlobalRef(Base, :newglobal)))
         catch ex
             ex isa ErrorException || rethrow()
             ex
@@ -2176,6 +2220,39 @@ precompile_test_harness("No package module") do load_path
     @test occursin(
         "`using/import Printf` outside of a Module detected. Importing a package outside of a module is not allowed during package precompilation.",
         String(take!(io)))
+end
+
+precompile_test_harness("Constprop CodeInstance invalidation") do load_path
+    write(joinpath(load_path, "DefineTheMethod.jl"),
+        """
+        module DefineTheMethod
+            export the_method
+            the_method_val(::Val{x}) where {x} = x
+            the_method_val(::Val{1}) = 0xdeadbeef
+            the_method_val(::Val{2}) = 2
+            the_method_val(::Val{3}) = 3
+            the_method_val(::Val{4}) = 4
+            the_method_val(::Val{5}) = 5
+            Base.@constprop :aggressive the_method(x) = the_method_val(Val{x}())
+            the_method(2)
+        end
+        """)
+    Base.compilecache(Base.PkgId("DefineTheMethod"))
+    write(joinpath(load_path, "CallTheMethod.jl"),
+        """
+        module CallTheMethod
+            using DefineTheMethod
+            call_the_method() = the_method(1)
+            call_the_method()
+        end
+        """)
+    Base.compilecache(Base.PkgId("CallTheMethod"))
+    @eval using DefineTheMethod
+    @eval using CallTheMethod
+    @eval DefineTheMethod.the_method_val(::Val{1}) = Int(0)
+    invokelatest() do
+        @test Int(0) == CallTheMethod.call_the_method()
+    end
 end
 
 finish_precompile_test!()

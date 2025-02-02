@@ -434,7 +434,7 @@ struct IRCode
     function IRCode(stmts::InstructionStream, cfg::CFG, debuginfo::DebugInfoStream,
                     argtypes::Vector{Any}, meta::Vector{Expr}, sptypes::Vector{VarState},
                     valid_worlds=WorldRange(typemin(UInt), typemax(UInt)))
-        return new(stmts, argtypes, sptypes, debuginfo, cfg, NewNodeStream(), meta)
+        return new(stmts, argtypes, sptypes, debuginfo, cfg, NewNodeStream(), meta, valid_worlds)
     end
     function IRCode(ir::IRCode, stmts::InstructionStream, cfg::CFG, new_nodes::NewNodeStream)
         di = ir.debuginfo
@@ -1462,7 +1462,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         result[result_idx][:stmt] = GotoNode(label)
         result_idx += 1
     elseif isa(stmt, GlobalRef)
-        total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE
+        total_flags = IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW
         flag = result[result_idx][:flag]
         if has_flag(flag, total_flags)
             ssa_rename[idx] = stmt

@@ -39,26 +39,16 @@ function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visi
         verify_method_graph(codeinst, stack, visiting)
         minvalid = codeinst.min_world
         maxvalid = codeinst.max_world
-        if maxvalid ≥ minvalid
-            if get_world_counter() == maxvalid
-                # if this callee is still valid, add all the backedges
-                Base.Compiler.store_backedges(codeinst, codeinst.edges)
-            end
-            if get_world_counter() == maxvalid
-                maxvalid = typemax(UInt)
-                @atomic :monotonic codeinst.max_world = maxvalid
-            end
-            if external
-                caller = get_ci_mi(codeinst)
-                @assert isdefined(codeinst, :inferred) # See #53586, #53109
-                inferred = @ccall jl_rettype_inferred(
-                    codeinst.owner::Any, caller::Any, minvalid::UInt, maxvalid::UInt)::Any
-                if inferred !== nothing
-                    # We already got a code instance for this world age range from
-                    # somewhere else - we don't need this one.
-                else
-                    @ccall jl_mi_cache_insert(caller::Any, codeinst::Any)::Cvoid
-                end
+        if maxvalid ≥ minvalid && external
+            caller = get_ci_mi(codeinst)
+            @assert isdefined(codeinst, :inferred) # See #53586, #53109
+            inferred = @ccall jl_rettype_inferred(
+                codeinst.owner::Any, caller::Any, minvalid::UInt, maxvalid::UInt)::Any
+            if inferred !== nothing
+                # We already got a code instance for this world age range from
+                # somewhere else - we don't need this one.
+            else
+                @ccall jl_mi_cache_insert(caller::Any, codeinst::Any)::Cvoid
             end
         end
     end
@@ -196,9 +186,14 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     while length(stack) ≥ depth
         child = pop!(stack)
         if maxworld ≠ 0
-            @atomic  :monotonic child.min_world = minworld
+            @atomic :monotonic child.min_world = minworld
         end
-        @atomic :monotonic child.max_world = maxworld
+        if maxworld == current_world
+            Base.Compiler.store_backedges(child, child.edges)
+            @atomic :monotonic child.max_world = typemax(UInt)
+        else
+            @atomic :monotonic child.max_world = maxworld
+        end
         @assert visiting[child] == length(stack) + 1
         delete!(visiting, child)
         invalidations = _jl_debug_method_invalidation[]

@@ -352,34 +352,6 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     abort();
 }
 
-JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *ptid)
-{
-    size_t off = 0;
-#ifndef _OS_WINDOWS_
-    jl_ptls_t ptls0 = jl_atomic_load_relaxed(&jl_all_tls_states)[0];
-    if (ptls0->root_task == task) {
-        // See jl_init_root_task(). The root task of the main thread
-        // has its buffer enlarged by an artificial 3000000 bytes, but
-        // that means that the start of the buffer usually points to
-        // inaccessible memory. We need to correct for this.
-        off = ROOT_TASK_STACK_ADJUSTMENT;
-    }
-#endif
-    jl_ptls_t ptls2 = task->ptls;
-    *ptid = -1;
-    if (ptls2) {
-        *ptid = jl_atomic_load_relaxed(&task->tid);
-#ifdef COPY_STACKS
-        if (task->ctx.copy_stack) {
-            *size = ptls2->stacksize;
-            return (char *)ptls2->stackbase - *size;
-        }
-#endif
-    }
-    *size = task->ctx.bufsz - off;
-    return (void *)((char *)task->ctx.stkbuf + off);
-}
-
 JL_DLLEXPORT void jl_active_task_stack(jl_task_t *task,
                                        char **active_start, char **active_end,
                                        char **total_start, char **total_end)

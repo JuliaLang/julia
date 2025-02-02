@@ -2734,6 +2734,26 @@ vacond(cnd, va...) = cnd ? va : 0
     vacond(isa(x, Tuple{Int,Int}), x, x)
 end |> only == Union{Int,Tuple{Any,Any}}
 
+let A = Core.Const(true)
+    B = Core.InterConditional(2, Tuple, Union{})
+    C = Core.InterConditional(2, Any, Union{})
+    L = ipo_lattice(Compiler.NativeInterpreter())
+    @test !⊑(L, A, B)
+    @test ⊑(L, B, A)
+    @test tmerge(L, A, B) == C
+    @test ⊑(L, A, C)
+end
+function tail_is_ntuple((@nospecialize t::Tuple))
+    if unknown
+        t isa Tuple
+    else
+        tail_is_ntuple(t)
+    end
+end
+tail_is_ntuple_val((@nospecialize t::Tuple)) = Val(tail_is_ntuple(t))
+@test Base.return_types(tail_is_ntuple, (Tuple,)) |> only === Bool
+@test Base.return_types(tail_is_ntuple_val, (Tuple,)) |> only === Val{true}
+
 # https://github.com/JuliaLang/julia/issues/47435
 is_closed_ex(e::InvalidStateException) = true
 is_closed_ex(e) = false
@@ -6162,3 +6182,9 @@ end <: Any
     end
     return out
 end == Union{Float64,DomainError}
+
+# issue #56628
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}} ]) === Tuple{Int, UnitRange{Int}}
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64 ]) === Tuple{Int, UnitRange{Int}, Float64}
+@test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64, Memory{2} ]) === Union{}
+@test Base.return_types(Tuple{Tuple{Int, Vararg{Pair{Any, Union{}}}}},) do x; Returns(true)(x...); end |> only === Bool

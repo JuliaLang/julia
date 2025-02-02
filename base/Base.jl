@@ -128,6 +128,8 @@ include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 
+const USING_STOCK_GC = occursin("stock", GC.gc_active_impl())
+
 # These used to be in build_h.jl and are retained for backwards compatibility.
 # NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
 const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
@@ -401,6 +403,7 @@ end
 # we know whether the .ji can just give the Base copy or not.
 # TODO: We may want to do this earlier to avoid TOCTOU issues.
 const _compiler_require_dependencies = Any[]
+@Core.latestworld
 for i = 1:length(_included_files)
     isassigned(_included_files, i) || continue
     (mod, file) = _included_files[i]

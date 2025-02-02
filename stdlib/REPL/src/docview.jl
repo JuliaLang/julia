@@ -301,10 +301,11 @@ function summarize(binding::Binding, sig)
     if defined(binding)
         binding_res = resolve(binding)
         if !isa(binding_res, Module)
+            varstr = "$(binding.mod).$(binding.var)"
             if Base.ispublic(binding.mod, binding.var)
-                println(io, "No documentation found for public symbol.\n")
+                println(io, "No documentation found for public binding `$varstr`.\n")
             else
-                println(io, "No documentation found for private symbol.\n")
+                println(io, "No documentation found for private binding `$varstr`.\n")
             end
         end
         summarize(io, binding_res, binding)
@@ -661,13 +662,17 @@ function fielddoc(binding::Binding, field::Symbol)
     for mod in modules
         dict = meta(mod; autoinit=false)
         isnothing(dict) && continue
-        if haskey(dict, binding)
-            multidoc = dict[binding]
-            if haskey(multidoc.docs, Union{})
-                fields = multidoc.docs[Union{}].data[:fields]
-                if haskey(fields, field)
-                    doc = fields[field]
-                    return isa(doc, Markdown.MD) ? doc : Markdown.parse(doc)
+        multidoc = get(dict, binding, nothing)
+        if multidoc !== nothing
+            structdoc = get(multidoc.docs, Union{}, nothing)
+            if structdoc !== nothing
+                fieldsdoc = get(structdoc.data, :fields, nothing)
+                if fieldsdoc !== nothing
+                    fielddoc = get(fieldsdoc, field, nothing)
+                    if fielddoc !== nothing
+                        return isa(fielddoc, Markdown.MD) ?
+                            fielddoc : Markdown.parse(fielddoc)
+                    end
                 end
             end
         end

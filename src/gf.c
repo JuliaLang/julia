@@ -292,7 +292,8 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
 {
     jl_sym_t *sname = jl_symbol(name);
     if (dt == NULL) {
-        jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type);
+        // Builtins are specially considered available from world 0
+        jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
         jl_set_const(jl_core_module, sname, f);
         dt = (jl_datatype_t*)jl_typeof(f);
     }
@@ -3034,19 +3035,19 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     return codeinst;
 }
 
-jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+JL_DLLEXPORT jl_value_t *jl_fptr_const_return(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     return m->rettype_const;
 }
 
-jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+JL_DLLEXPORT jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     jl_fptr_args_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr1);
     assert(invoke && "Forgot to set specptr for jl_fptr_args!");
     return invoke(f, args, nargs);
 }
 
-jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
+JL_DLLEXPORT jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
     jl_svec_t *sparams = jl_get_ci_mi(m)->sparam_vals;
     assert(sparams != jl_emptysvec);
@@ -3790,10 +3791,8 @@ jl_value_t *jl_gf_invoke_by_method(jl_method_t *method, jl_value_t *gf, jl_value
     return _jl_invoke(gf, args, nargs - 1, mfunc, world);
 }
 
-// Return value is rooted globally
-jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st)
+jl_sym_t *jl_gf_supertype_name(jl_sym_t *name)
 {
-    // type name is function name prefixed with #
     size_t l = strlen(jl_symbol_name(name));
     char *prefixed;
     prefixed = (char*)malloc_s(l+2);
@@ -3801,6 +3800,14 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     strcpy(&prefixed[1], jl_symbol_name(name));
     jl_sym_t *tname = jl_symbol(prefixed);
     free(prefixed);
+    return tname;
+}
+
+// Return value is rooted globally
+jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, size_t new_world)
+{
+    // type name is function name prefixed with #
+    jl_sym_t *tname = jl_gf_supertype_name(name);
     jl_datatype_t *ftype = (jl_datatype_t*)jl_new_datatype(
             tname, module, st, jl_emptysvec, jl_emptysvec, jl_emptysvec, jl_emptysvec,
             0, 0, 0);
@@ -3808,7 +3815,7 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     JL_GC_PUSH1(&ftype);
     ftype->name->mt->name = name;
     jl_gc_wb(ftype->name->mt, name);
-    jl_set_const(module, tname, (jl_value_t*)ftype);
+    jl_declare_constant_val3(NULL, module, tname, (jl_value_t*)ftype, BINDING_KIND_CONST, new_world);
     jl_value_t *f = jl_new_struct(ftype);
     ftype->instance = f;
     jl_gc_wb(ftype, f);
@@ -3816,9 +3823,9 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     return (jl_function_t*)f;
 }
 
-jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module)
+jl_function_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world)
 {
-    return jl_new_generic_function_with_supertype(name, module, jl_function_type);
+    return jl_new_generic_function_with_supertype(name, module, jl_function_type, new_world);
 }
 
 struct ml_matches_env {

@@ -368,6 +368,7 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
     for i in 1:length(split_argtypes)
         arg_n = split_argtypes[i]::Vector{Any}
         sig_n = argtypes_to_type(arg_n)
+        sig_n === Bottom && continue
         mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
         mt === nothing && return FailedMethodMatch("Could not identify method table for call")
         mt = mt::MethodTable
@@ -614,7 +615,7 @@ function abstract_call_method(interp::AbstractInterpreter,
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType ||
         return Future(MethodCallResult(Any, Any, Effects(), nothing, false, false))
-    all(@nospecialize(x) -> valid_as_lattice(unwrapva(x), true), sigtuple.parameters) ||
+    all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), sigtuple.parameters) ||
         return Future(MethodCallResult(Union{}, Any, EFFECTS_THROWS, nothing, false, false)) # catch bad type intersections early
 
     if is_nospecializeinfer(method)
@@ -2840,6 +2841,7 @@ function abstract_call_unknown(interp::AbstractInterpreter, @nospecialize(ft),
     end
     # non-constant function, but the number of arguments is known and the `f` is not a builtin or intrinsic
     atype = argtypes_to_type(arginfo.argtypes)
+    atype === Bottom && return Future(CallMeta(Union{}, Union{}, EFFECTS_THROWS, NoCallInfo())) # accidentally unreachable
     return abstract_call_gf_by_type(interp, nothing, arginfo, si, atype, sv, max_methods)::Future
 end
 
@@ -3454,10 +3456,10 @@ world_range(ir::IRCode) = ir.valid_worlds
 world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
-function force_binding_resolution!(g::GlobalRef)
+function force_binding_resolution!(g::GlobalRef, world::UInt)
     # Force resolution of the binding
     # TODO: This will go away once we switch over to fully partitioned semantics
-    ccall(:jl_globalref_boundp, Cint, (Any,), g)
+    ccall(:jl_force_binding_resolution, Cvoid, (Any, Csize_t), g, world)
     return nothing
 end
 
@@ -3475,7 +3477,7 @@ function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode,
             # This method is surprisingly hot. For performance, don't ask the runtime to resolve
             # the binding unless necessary - doing so triggers an additional lookup, which though
             # not super expensive is hot enough to show up in benchmarks.
-            force_binding_resolution!(g)
+            force_binding_resolution!(g, min_world(worlds))
             return abstract_eval_globalref_type(g, src, false)
         end
         # return Union{}
@@ -3488,7 +3490,7 @@ function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode,
 end
 
 function lookup_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
-    force_binding_resolution!(g)
+    force_binding_resolution!(g, get_inference_world(interp))
     partition = lookup_binding_partition(get_inference_world(interp), g)
     update_valid_age!(sv, WorldRange(partition.min_world, partition.max_world))
     partition
@@ -3522,6 +3524,11 @@ function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Co
     end
 
     if is_defined_const_binding(kind)
+        if kind == BINDING_KIND_BACKDATED_CONST
+            # Infer this as guard. We do not want a later const definition to retroactively improve
+            # inference results in an earlier world.
+            return RTEffects(Any, UndefVarError, generic_getglobal_effects)
+        end
         rt = Const(partition_restriction(partition))
         return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL, inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE))
     end
@@ -3537,7 +3544,8 @@ function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_
     partition = abstract_eval_binding_partition!(interp, g, sv)
     ret = abstract_eval_partition_load(interp, partition)
     if ret.rt !== Union{} && ret.exct === UndefVarError && InferenceParams(interp).assume_bindings_static
-        if isdefined(g, :binding) && isdefined(g.binding, :value)
+        b = convert(Core.Binding, g)
+        if isdefined(b, :value)
             ret = RTEffects(ret.rt, Union{}, Effects(generic_getglobal_effects, nothrow=true))
         end
         # We do not assume in general that assigned global bindings remain assigned.
@@ -3785,13 +3793,22 @@ function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
     slottypes = frame.slottypes
     rt = widenreturn(rt, BestguessInfo(interp, bestguess, nargs, slottypes, currstate))
     # narrow representation of bestguess slightly to prepare for tmerge with rt
-    if rt isa InterConditional && bestguess isa Const
+    if rt isa InterConditional && bestguess isa Const && bestguess.val isa Bool
         slot_id = rt.slot
         old_id_type = widenconditional(slottypes[slot_id])
         if bestguess.val === true && rt.elsetype !== Bottom
             bestguess = InterConditional(slot_id, old_id_type, Bottom)
         elseif bestguess.val === false && rt.thentype !== Bottom
             bestguess = InterConditional(slot_id, Bottom, old_id_type)
+        end
+    # or narrow representation of rt slightly to prepare for tmerge with bestguess
+    elseif bestguess isa InterConditional && rt isa Const && rt.val isa Bool
+        slot_id = bestguess.slot
+        old_id_type = widenconditional(slottypes[slot_id])
+        if rt.val === true && bestguess.elsetype !== Bottom
+            rt = InterConditional(slot_id, old_id_type, Bottom)
+        elseif rt.val === false && bestguess.thentype !== Bottom
+            rt = InterConditional(slot_id, Bottom, old_id_type)
         end
     end
     # copy limitations to return value

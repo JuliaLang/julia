@@ -23,9 +23,18 @@ New language features
   - actual running time for the task (`Base.Experimental.task_running_time_ns`), and
   - wall-time for the task (`Base.Experimental.task_wall_time_ns`).
 - Support for Unicode 16 ([#56925]).
+- `Threads.@spawn` now takes a `:samepool` argument to specify the same threadpool as the caller.
+  `Threads.@spawn :samepool foo()` which is shorthand for `Threads.@spawn Threads.threadpool() foo()` ([#57109])
 
 Language changes
 ----------------
+
+ - Julia now defaults to 1 "interactive" thread, in addition to the 1 "default" worker thread. i.e. `-t1,1`
+  This means in default configuration the main task and repl (when in interactive mode), which both run on
+  thread 1, now run within the `interactive` threadpool. Also the libuv IO loop runs on thread 1,
+  helping efficient utilization of the "default" worker threadpool, which is what `Threads.@threads` and a bare
+  `Threads.@spawn` uses. Use `0` to disable the interactive thread i.e. `-t1,0` or `JULIA_NUM_THREADS=1,0`, or
+  `-tauto,0` etc. The zero is explicitly required to disable it, `-t2` will set the equivalent of `-t2,1` ([#57087])
 
  - When methods are replaced with exactly equivalent ones, the old method is no
    longer deleted implicitly simultaneously, although the new method does take
@@ -97,6 +106,7 @@ New library functions
 * `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
 * `insertdims(array; dims)` allows to insert singleton dimensions into an array which is the inverse operation to `dropdims`. ([#45793])
 * The new `Fix` type is a generalization of `Fix1/Fix2` for fixing a single argument ([#54653]).
+* `Sys.detectwsl()` allows to testing if Julia is running inside WSL at runtime. ([#57069])
 
 New library features
 --------------------
@@ -118,6 +128,7 @@ New library features
 certain compiler plugin workflows ([#56660]).
 * `sort` now supports `NTuple`s ([#54494])
 * `map!(f, A)` now stores the results in `A`, like `map!(f, A, A)`. or `A .= f.(A)` ([#40632]).
+* `Timer` now has readable `timeout` and `interval` properties, and a more descriptive show method ([#57081])
 
 Standard library changes
 ------------------------

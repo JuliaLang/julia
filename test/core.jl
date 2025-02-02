@@ -2622,7 +2622,7 @@ end
 # issue #8338
 let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
-    @test invokelatest(f8338, 2) == 8
+    @test (@invokelatest f8338(2)) == 8
 end
 
 # call overloading (#2403)
@@ -8233,6 +8233,7 @@ end
 let M = @__MODULE__
     Core.eval(M, :(global a_typed_global))
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
+    @Core.latestworld
     @test Core.get_binding_type(M, :a_typed_global) === Tuple{Union{Integer,Nothing}}
     @test Core.eval(M, :(global a_typed_global::$(Tuple{Union{Integer,Nothing}}))) === nothing
     @test Core.eval(M, :(global a_typed_global::$(Union{Tuple{Integer},Tuple{Nothing}}))) === nothing

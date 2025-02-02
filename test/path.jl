@@ -314,7 +314,7 @@
     @testset "uripath" begin
         host = if Sys.iswindows()
             ""
-        elseif ispath("/proc/sys/fs/binfmt_misc/WSLInterop")
+        elseif Sys.detectwsl()
             distro = get(ENV, "WSL_DISTRO_NAME", "") # See <https://patrickwu.space/wslconf/>
             "wsl%24/$distro" # See <https://github.com/microsoft/terminal/pull/14993> and <https://learn.microsoft.com/en-us/windows/wsl/filesystems>
         else

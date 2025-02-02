@@ -77,9 +77,12 @@ mutable struct MIState
     last_action::Symbol
     current_action::Symbol
     async_channel::Channel{Function}
+    line_modify_lock::Base.ReentrantLock
+    hint_generation_lock::Base.ReentrantLock
+    n_keys_pressed::Int
 end
 
-MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}())
+MIState(i, mod, c, a, m) = MIState(i, mod, mod, c, a, m, String[], 0, Char[], 0, :none, :none, Channel{Function}(), Base.ReentrantLock(), Base.ReentrantLock(), 0)
 
 const BufferLike = Union{MIState,ModeState,IOBuffer}
 const State = Union{MIState,ModeState}
@@ -400,47 +403,82 @@ function complete_line_named(args...; kwargs...)::Tuple{Vector{NamedCompletion},
     end
 end
 
-function check_for_hint(s::MIState)
+# checks for a hint and shows it if appropriate.
+# to allow the user to type even if hint generation is slow, the
+# hint is generated on a worker thread, and only shown if the user hasn't
+# pressed a key since the hint generation was requested
+function check_show_hint(s::MIState)
     st = state(s)
+
+    this_key_i = s.n_keys_pressed
+    next_key_pressed() = @lock s.line_modify_lock s.n_keys_pressed > this_key_i
+    function lock_clear_hint()
+        @lock s.line_modify_lock begin
+            next_key_pressed() || s.aborted || clear_hint(st) && refresh_line(s)
+        end
+    end
+
     if !options(st).hint_tab_completes || !eof(buffer(st))
         # only generate hints if enabled and at the end of the line
         # TODO: maybe show hints for insertions at other positions
         # Requires making space for them earlier in refresh_multi_line
-        return clear_hint(st)
+        lock_clear_hint()
+        return
     end
+    t_completion = Threads.@spawn :default begin
+        named_completions, partial, should_complete = nothing, nothing, nothing
 
-    named_completions, partial, should_complete = try
-        complete_line_named(st.p.complete, st, s.active_module; hint = true)
-    catch
-        @debug "error completing line for hint" exception=current_exceptions()
-        return clear_hint(st)
-    end
-    completions = map(x -> x.completion, named_completions)
-
-    isempty(completions) && return clear_hint(st)
-    # Don't complete for single chars, given e.g. `x` completes to `xor`
-    if length(partial) > 1 && should_complete
-        singlecompletion = length(completions) == 1
-        p = singlecompletion ? completions[1] : common_prefix(completions)
-        if singlecompletion || p in completions # i.e. complete `@time` even though `@time_imports` etc. exists
-            # The completion `p` and the input `partial` may not share the same initial
-            # characters, for instance when completing to subscripts or superscripts.
-            # So, in general, make sure that the hint starts at the correct position by
-            # incrementing its starting position by as many characters as the input.
-            startind = 1 # index of p from which to start providing the hint
-            maxind = ncodeunits(p)
-            for _ in partial
-                startind = nextind(p, startind)
-                startind > maxind && break
-            end
-            if startind ≤ maxind # completion on a complete name returns itself so check that there's something to hint
-                hint = p[startind:end]
-                st.hint = hint
-                return true
+        # only allow one task to generate hints at a time and check around lock
+        # if the user has pressed a key since the hint was requested, to skip old completions
+        next_key_pressed() && return
+        @lock s.hint_generation_lock begin
+            next_key_pressed() && return
+            named_completions, partial, should_complete = try
+                complete_line_named(st.p.complete, st, s.active_module; hint = true)
+            catch
+                lock_clear_hint()
+                return
             end
         end
+        next_key_pressed() && return
+
+        completions = map(x -> x.completion, named_completions)
+        if isempty(completions)
+            lock_clear_hint()
+            return
+        end
+        # Don't complete for single chars, given e.g. `x` completes to `xor`
+        if length(partial) > 1 && should_complete
+            singlecompletion = length(completions) == 1
+            p = singlecompletion ? completions[1] : common_prefix(completions)
+            if singlecompletion || p in completions # i.e. complete `@time` even though `@time_imports` etc. exists
+                # The completion `p` and the input `partial` may not share the same initial
+                # characters, for instance when completing to subscripts or superscripts.
+                # So, in general, make sure that the hint starts at the correct position by
+                # incrementing its starting position by as many characters as the input.
+                startind = 1 # index of p from which to start providing the hint
+                maxind = ncodeunits(p)
+                for _ in partial
+                    startind = nextind(p, startind)
+                    startind > maxind && break
+                end
+                if startind ≤ maxind # completion on a complete name returns itself so check that there's something to hint
+                    hint = p[startind:end]
+                    next_key_pressed() && return
+                    @lock s.line_modify_lock begin
+                        if !s.aborted
+                            state(s).hint = hint
+                            refresh_line(s)
+                        end
+                    end
+                    return
+                end
+            end
+        end
+        lock_clear_hint()
     end
-    return clear_hint(st)
+    Base.errormonitor(t_completion)
+    return
 end
 
 function clear_hint(s::ModeState)
@@ -2569,7 +2607,7 @@ AnyDict(
     "^_" => (s::MIState,o...)->edit_undo!(s),
     "\e_" => (s::MIState,o...)->edit_redo!(s),
     # Show hints at what tab complete would do by default
-    "*" => (s::MIState,data,c::StringLike)->(edit_insert(s, c); check_for_hint(s) && refresh_line(s)),
+    "*" => (s::MIState,data,c::StringLike)->(edit_insert(s, c); check_show_hint(s)),
     "^U" => (s::MIState,o...)->edit_kill_line_backwards(s),
     "^K" => (s::MIState,o...)->edit_kill_line_forwards(s),
     "^Y" => (s::MIState,o...)->edit_yank(s),
@@ -2875,10 +2913,9 @@ keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 
 function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_state(term, prompt))
     Base.reseteof(term)
-    l = Base.ReentrantLock()
     t1 = Threads.@spawn :interactive while true
         wait(s.async_channel)
-        status = @lock l begin
+        status = @lock s.line_modify_lock begin
             fcn = take!(s.async_channel)
             fcn(s)
         end
@@ -2893,7 +2930,8 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         # and we want to not block typing when the repl task thread is busy
         t2 = Threads.@spawn :interactive while true
             eof(term) || peek(term) # wait before locking but don't consume
-            @lock l begin
+            @lock s.line_modify_lock begin
+                s.n_keys_pressed += 1
                 kmap = keymap(s, prompt)
                 fcn = match_input(kmap, s)
                 kdata = keymap_data(s, prompt)

@@ -684,9 +684,11 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc :@m2_11993),
-    macro_doc = Markdown.parse("`$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993` is a macro.")
+    varstr = "$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993"
+    docstr = Markdown.Code("", "$curmod_prefix@m2_11993")
+    macro_doc = Markdown.parse("`$varstr` is a macro.")
     @test docstring_startswith(d, doc"""
-    No documentation found for private symbol.
+    No documentation found for private binding $docstr.
 
     $macro_doc""")
 end
@@ -901,7 +903,7 @@ Binding `$(curmod_prefix)Undocumented.bindingdoesnotexist` does not exist.
 @test docstrings_equal(@doc(Undocumented.bindingdoesnotexist), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public symbol.
+No documentation found for public binding `$(curmod_prefix)Undocumented.A`.
 
 # Summary
 ```
@@ -917,7 +919,7 @@ $(curmod_prefix)Undocumented.C
 @test docstrings_equal(@doc(Undocumented.A), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public symbol.
+No documentation found for public binding `$(curmod_prefix)Undocumented.B`.
 
 # Summary
 ```
@@ -937,7 +939,7 @@ $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 @test docstrings_equal(@doc(Undocumented.B), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public symbol.
+No documentation found for public binding `$(curmod_prefix)Undocumented.C`.
 
 # Summary
 ```
@@ -952,7 +954,7 @@ $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
 @test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.D`.
 
 # Summary
 ```
@@ -974,7 +976,7 @@ $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_pre
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public symbol.
+No documentation found for public binding `$(curmod_prefix)Undocumented.at0`.
 
 # Summary
 
@@ -994,7 +996,7 @@ $(curmod_prefix)Undocumented.st4{T<:Number, N}
 @test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.at1`.
 
 # Summary
 
@@ -1017,7 +1019,7 @@ $(curmod_prefix)Undocumented.at1{T>:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.at1), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.at_`.
 
 # Summary
 
@@ -1036,7 +1038,7 @@ $(curmod_prefix)Undocumented.st4{Int64, N}
 @test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public symbol.
+No documentation found for public binding `$(curmod_prefix)Undocumented.pt2`.
 
 # Summary
 
@@ -1053,7 +1055,7 @@ $(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_prefix)Un
 @test docstrings_equal(@doc(Undocumented.pt2), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.st3`.
 
 # Summary
 
@@ -1076,7 +1078,7 @@ $(curmod_prefix)Undocumented.st3{T<:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.st3), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.st4`.
 
 # Summary
 
@@ -1098,7 +1100,7 @@ $(curmod_prefix)Undocumented.st4{T, N} <: $(curmod_prefix)Undocumented.at0{T, N}
 @test docstrings_equal(@doc(Undocumented.st4), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.st5`.
 
 # Summary
 
@@ -1119,7 +1121,7 @@ $(curmod_prefix)Undocumented.st5{T>:Int64, N} <: $(curmod_prefix)Undocumented.at
 @test docstrings_equal(@doc(Undocumented.st5), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.mt6`.
 
 # Summary
 
@@ -1140,7 +1142,7 @@ $(curmod_prefix)Undocumented.mt6{T<:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.mt6), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.ut7`.
 
 # Summary
 
@@ -1154,7 +1156,7 @@ No documentation found for private symbol.
 @test docstrings_equal(@doc(Undocumented.ut7), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.ut8`.
 
 # Summary
 
@@ -1170,7 +1172,7 @@ No documentation found for private symbol.
 @test docstrings_equal(@doc(Undocumented.ut8), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.ut9`.
 
 # Summary
 
@@ -1189,7 +1191,7 @@ let d = @doc(Undocumented.f)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)),"""
-    No documentation found for private symbol.
+    No documentation found for private binding `$(curmod_prefix)Undocumented.f`.
 
     `$(curmod_prefix)Undocumented.f` is a `Function`.
     """)
@@ -1199,7 +1201,7 @@ let d = @doc(Undocumented.undocumented)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)), """
-    No documentation found for private symbol.
+    No documentation found for private binding `$(curmod_prefix)Undocumented.undocumented`.
 
     `$(curmod_prefix)Undocumented.undocumented` is a `Function`.
     """)

@@ -257,6 +257,10 @@ using .Order
 include("coreir.jl")
 include("invalidation.jl")
 
+# Because lowering inserts direct references, it is mandatory for this binding
+# to exist before we start inferring code.
+function string end
+
 # For OS specific stuff
 # We need to strcat things here, before strings are really defined
 function strcat(x::String, y::String)

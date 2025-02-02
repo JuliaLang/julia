@@ -798,6 +798,7 @@ end
 
 @testset "`::AbstractString` constraint on the path argument to `include`" begin
     for m ∈ (NotPkgModule, evalfile("testhelpers/just_module.jl"))
+        @Core.latestworld
         let i = m.include
             @test !applicable(i, (nothing,))
             @test !applicable(i, (identity, nothing,))

@@ -440,10 +440,11 @@ function _spawn_set_thrpool(t::Task, tp::Symbol)
 end
 
 """
-    Threads.@spawn [:default|:interactive] expr
+    Threads.@spawn [:default|:interactive|:samepool] expr
 
 Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available
-thread in the specified threadpool (`:default` if unspecified). The task is
+thread in the specified threadpool: `:default`, `:interactive`, or `:samepool`
+to use the same as the caller. `:default` is used if unspecified. The task is
 allocated to a thread once one becomes available. To wait for the task to
 finish, call [`wait`](@ref) on the result of this macro, or call
 [`fetch`](@ref) to wait and then obtain its return value.
@@ -468,6 +469,9 @@ the variable's value in the current task.
 !!! compat "Julia 1.9"
     A threadpool may be specified as of Julia 1.9.
 
+!!! compat "Julia 1.12"
+    The same threadpool may be specified as of Julia 1.12.
+
 # Examples
 ```julia-repl
 julia> t() = println("Hello from ", Threads.threadid());
@@ -486,7 +490,7 @@ macro spawn(args...)
         ttype, ex = args
         if ttype isa QuoteNode
             ttype = ttype.value
-            if ttype !== :interactive && ttype !== :default
+            if !in(ttype, (:interactive, :default, :samepool))
                 throw(ArgumentError(LazyString("unsupported threadpool in @spawn: ", ttype)))
             end
             tp = QuoteNode(ttype)
@@ -507,7 +511,11 @@ macro spawn(args...)
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
-            _spawn_set_thrpool(task, $(esc(tp)))
+            local tp = $(esc(tp))
+            if tp == :samepool
+                tp = Threads.threadpool()
+            end
+            _spawn_set_thrpool(task, tp)
             if $(Expr(:islocal, var))
                 put!($var, task)
             end

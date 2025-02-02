@@ -196,6 +196,7 @@
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
+    XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
     XX(jl_cpu_has_fma) \
@@ -449,7 +450,6 @@
     XX(jl_tagged_gensym) \
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
-    XX(jl_task_stack_buffer) \
     XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \

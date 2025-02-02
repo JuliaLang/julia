@@ -72,20 +72,19 @@ typedef struct _jl_tls_states_t *jl_ptls_t;
 #endif
 #include "gc-interface.h"
 #include "julia_atomics.h"
-#include "julia_threads.h"
 #include "julia_assert.h"
+
+// the common fields are hidden before the pointer, but the following macro is
+// used to indicate which types below are subtypes of jl_value_t
+#define JL_DATA_TYPE
+typedef struct _jl_value_t jl_value_t;
+#include "julia_threads.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // core data types ------------------------------------------------------------
-
-// the common fields are hidden before the pointer, but the following macro is
-// used to indicate which types below are subtypes of jl_value_t
-#define JL_DATA_TYPE
-
-typedef struct _jl_value_t jl_value_t;
 
 struct _jl_taggedvalue_bits {
     uintptr_t gc:2;
@@ -484,9 +483,6 @@ typedef struct _jl_abi_override_t {
     jl_method_instance_t *def;
 } jl_abi_override_t;
 
-// all values are callable as Functions
-typedef jl_value_t jl_function_t;
-
 typedef struct {
     JL_DATA_TYPE
     jl_sym_t *name;
@@ -651,7 +647,10 @@ enum jl_partition_kind {
     // Undef Constant: This binding partition is a constant declared using `const`, but
     // without a value.
     //  ->restriction is NULL
-    BINDING_KIND_UNDEF_CONST  = 0x9
+    BINDING_KIND_UNDEF_CONST  = 0x9,
+    // Backated constant. A constant that was backdated for compatibility. In all other
+    // ways equivalent to BINDING_KIND_CONST, but prints a warning on access
+    BINDING_KIND_BACKDATED_CONST = 0xa,
 };
 
 #ifdef _P64
@@ -697,7 +696,7 @@ typedef struct _jl_binding_t {
     jl_globalref_t *globalref;  // cached GlobalRef for this binding
     _Atomic(jl_value_t*) value;
     _Atomic(jl_binding_partition_t*) partitions;
-    uint8_t declared:1;
+    uint8_t did_print_backdate_admonition:1;
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
     uint8_t publicp:1; // exportp without publicp is not allowed.
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
@@ -2002,14 +2001,14 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
+JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module_t *m, jl_sym_t *s);
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import);
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_globalref_is_const(jl_globalref_t *gr);
-JL_DLLEXPORT int jl_globalref_boundp(jl_globalref_t *gr);
 JL_DLLEXPORT jl_value_t *jl_get_globalref_value(jl_globalref_t *gr);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
@@ -2030,10 +2029,6 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m);
-STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
-{
-    return (jl_function_t*)jl_get_global(m, jl_symbol(name));
-}
 
 // eq hash tables
 JL_DLLEXPORT jl_genericmemory_t *jl_eqtable_put(jl_genericmemory_t *h JL_ROOTING_ARGUMENT, jl_value_t *key, jl_value_t *val JL_ROOTED_ARGUMENT, int *inserted);
@@ -2058,6 +2053,9 @@ extern JL_DLLIMPORT _Atomic(int) jl_n_threads;
 extern JL_DLLIMPORT int jl_n_gcthreads;
 extern int jl_n_markthreads;
 extern int jl_n_sweepthreads;
+
+#define JL_THREADPOOL_ID_INTERACTIVE 0
+#define JL_THREADPOOL_ID_DEFAULT 1
 extern JL_DLLIMPORT int *jl_n_threads_per_pool;
 
 // environment entries
@@ -2263,12 +2261,8 @@ JL_DLLEXPORT void jl_sigatomic_end(void);
 
 // tasks and exceptions -------------------------------------------------------
 
-typedef struct _jl_timing_block_t jl_timing_block_t;
-typedef struct _jl_timing_event_t jl_timing_event_t;
-typedef struct _jl_excstack_t jl_excstack_t;
-
 // info describing an exception handler
-typedef struct _jl_handler_t {
+struct _jl_handler_t {
     jl_jmp_buf eh_ctx;
     jl_gcframe_t *gcstack;
     jl_value_t *scope;
@@ -2278,68 +2272,7 @@ typedef struct _jl_handler_t {
     sig_atomic_t defer_signal;
     jl_timing_block_t *timing_stack;
     size_t world_age;
-} jl_handler_t;
-
-#define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
-
-typedef struct _jl_task_t {
-    JL_DATA_TYPE
-    jl_value_t *next; // invasive linked list for scheduler
-    jl_value_t *queue; // invasive linked list for scheduler
-    jl_value_t *tls;
-    jl_value_t *donenotify;
-    jl_value_t *result;
-    jl_value_t *scope;
-    jl_function_t *start;
-    _Atomic(uint8_t) _state;
-    uint8_t sticky; // record whether this Task can be migrated to a new thread
-    uint16_t priority;
-    _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
-    uint8_t pad0[3];
-    // === 64 bytes (cache line)
-    uint64_t rngState[JL_RNG_SIZE];
-    // flag indicating whether or not to record timing metrics for this task
-    uint8_t metrics_enabled;
-    uint8_t pad1[3];
-    // timestamp this task first entered the run queue
-    _Atomic(uint64_t) first_enqueued_at;
-    // timestamp this task was most recently scheduled to run
-    _Atomic(uint64_t) last_started_running_at;
-    // time this task has spent running; updated when it yields or finishes.
-    _Atomic(uint64_t) running_time_ns;
-    // === 64 bytes (cache line)
-    // timestamp this task finished (i.e. entered state DONE or FAILED).
-    _Atomic(uint64_t) finished_at;
-
-// hidden state:
-
-    // id of owning thread - does not need to be defined until the task runs
-    _Atomic(int16_t) tid;
-    // threadpool id
-    int8_t threadpoolid;
-    // Reentrancy bits
-    // Bit 0: 1 if we are currently running inference/codegen
-    // Bit 1-2: 0-3 counter of how many times we've reentered inference
-    // Bit 3: 1 if we are writing the image and inference is illegal
-    uint8_t reentrant_timing;
-    // 2 bytes of padding on 32-bit, 6 bytes on 64-bit
-    // uint16_t padding2_32;
-    // uint48_t padding2_64;
-    // saved gc stack top for context switches
-    jl_gcframe_t *gcstack;
-    size_t world_age;
-    // quick lookup for current ptls
-    jl_ptls_t ptls; // == jl_all_tls_states[tid]
-#ifdef USE_TRACY
-    const char *name;
-#endif
-    // saved exception stack
-    jl_excstack_t *excstack;
-    // current exception handler
-    jl_handler_t *eh;
-    // saved thread state
-    jl_ucontext_t ctx; // pointer into stkbuf, if suspended
-} jl_task_t;
+};
 
 #define JL_TASK_STATE_RUNNABLE 0
 #define JL_TASK_STATE_DONE     1
@@ -2657,8 +2590,17 @@ typedef struct {
 } jl_nullable_float32_t;
 
 #define jl_root_task (jl_current_task->ptls->root_task)
-
 JL_DLLEXPORT jl_task_t *jl_get_current_task(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
+
+STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
+{
+    jl_task_t *ct = jl_get_current_task();
+    size_t last_world = ct->world_age;
+    ct->world_age = jl_get_world_counter();
+    jl_value_t *r = jl_get_global(m, jl_symbol(name));
+    ct->world_age = last_world;
+    return (jl_function_t*)r;
+}
 
 // TODO: we need to pin the task while using this (set pure bit)
 JL_DLLEXPORT jl_jmp_buf *jl_get_safe_restore(void) JL_NOTSAFEPOINT;

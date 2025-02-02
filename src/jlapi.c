@@ -910,26 +910,29 @@ static NOINLINE int true_main(int argc, char *argv[])
 {
     jl_set_ARGS(argc, argv);
 
+
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_get_world_counter();
+
     jl_function_t *start_client = jl_base_module ?
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
-    jl_task_t *ct = jl_current_task;
     if (start_client) {
         int ret = 1;
         JL_TRY {
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_get_world_counter();
             jl_value_t *r = jl_apply(&start_client, 1);
             if (jl_typeof(r) != (jl_value_t*)jl_int32_type)
                 jl_type_error("typeassert", (jl_value_t*)jl_int32_type, r);
             ret = jl_unbox_int32(r);
-            ct->world_age = last_age;
         }
         JL_CATCH {
             jl_no_exc_handler(jl_current_exception(ct), ct);
         }
+        ct->world_age = last_age;
         return ret;
     }
+    ct->world_age = last_age;
 
     // run program if specified, otherwise enter REPL
     if (argc > 0) {
