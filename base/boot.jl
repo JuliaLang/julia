@@ -777,27 +777,6 @@ struct GeneratedFunctionStub
     spnames::SimpleVector
 end
 
-# invoke and wrap the results of @generated expression
-function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
-    # args is (spvals..., argtypes...)
-    body = g.gen(args...)
-    file = source.file
-    file isa Symbol || (file = :none)
-    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
-               Expr(:var"scope-block",
-                    Expr(:block,
-                         source,
-                         Expr(:meta, :push_loc, file, :var"@generated body"),
-                         Expr(:return, body),
-                         Expr(:meta, :pop_loc))))
-    spnames = g.spnames
-    if spnames === svec()
-        return lam
-    else
-        return Expr(Symbol("with-static-parameters"), lam, spnames...)
-    end
-end
-
 # If the generator is a subtype of this trait, inference caches the generated unoptimized
 # code, sacrificing memory space to improve the performance of subsequent inferences.
 # This tradeoff is not appropriate in general cases (e.g., for `GeneratedFunctionStub`s

@@ -1099,6 +1099,20 @@ void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *inv
     JL_GC_POP();
 }
 
+JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge)
+{
+    if (!b->backedges) {
+        b->backedges = jl_alloc_vec_any(0);
+        jl_gc_wb(b, b->backedges);
+    } else if (jl_array_len(b->backedges) > 0 &&
+               jl_array_ptr_ref(b->backedges, jl_array_len(b->backedges)-1) == edge) {
+        // Optimization: Deduplicate repeated insertion of the same edge (e.g. during
+        // definition of a method that contains many references to the same global)
+        return;
+    }
+    jl_array_ptr_1d_push(b->backedges, edge);
+}
+
 // Called for all GlobalRefs found in lowered code. Adds backedges for cross-module
 // GlobalRefs.
 JL_DLLEXPORT void jl_maybe_add_binding_backedge(jl_globalref_t *gr, jl_module_t *defining_module, jl_value_t *edge)
@@ -1114,16 +1128,7 @@ JL_DLLEXPORT void jl_maybe_add_binding_backedge(jl_globalref_t *gr, jl_module_t 
     jl_binding_t *b = gr->binding;
     if (!b)
         b = jl_get_module_binding(gr->mod, gr->name, 1);
-    if (!b->backedges) {
-        b->backedges = jl_alloc_vec_any(0);
-        jl_gc_wb(b, b->backedges);
-    } else if (jl_array_len(b->backedges) > 0 &&
-               jl_array_ptr_ref(b->backedges, jl_array_len(b->backedges)-1) == edge) {
-        // Optimization: Deduplicate repeated insertion of the same edge (e.g. during
-        // definition of a method that contains many references to the same global)
-        return;
-    }
-    jl_array_ptr_1d_push(b->backedges, edge);
+    jl_add_binding_backedge(b, edge);
 }
 
 JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)

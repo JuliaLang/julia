@@ -93,26 +93,28 @@ function scan_edge_list(ci::Core.CodeInstance, binding::Core.Binding)
 end
 
 function invalidate_method_for_globalref!(gr::GlobalRef, method::Method, invalidated_bpart::Core.BindingPartition, new_max_world::UInt)
+    invalidate_all = false
+    binding = convert(Core.Binding, gr)
     if isdefined(method, :source)
         src = _uncompressed_ir(method)
-        binding = convert(Core.Binding, gr)
         old_stmts = src.code
         invalidate_all = should_invalidate_code_for_globalref(gr, src)
-        for mi in specializations(method)
-            isdefined(mi, :cache) || continue
-            ci = mi.cache
-            while true
-                if ci.max_world > new_max_world && (invalidate_all || scan_edge_list(ci, binding))
-                    ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), ci, new_max_world)
-                end
-                isdefined(ci, :next) || break
-                ci = ci.next
+    end
+    for mi in specializations(method)
+        isdefined(mi, :cache) || continue
+        ci = mi.cache
+        while true
+            if ci.max_world > new_max_world && (invalidate_all || scan_edge_list(ci, binding))
+                ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), ci, new_max_world)
             end
+            isdefined(ci, :next) || break
+            ci = ci.next
         end
     end
 end
 
 function invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPartition, new_max_world::UInt)
+    b = convert(Core.Binding, gr)
     try
         valid_in_valuepos = false
         foreach_module_mtable(gr.mod, new_max_world) do mt::Core.MethodTable

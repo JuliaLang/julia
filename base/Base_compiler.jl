@@ -234,13 +234,13 @@ include("abstractarray.jl")
 include("baseext.jl")
 
 include("c.jl")
-include("ntuple.jl")
 include("abstractset.jl")
 include("bitarray.jl")
 include("bitset.jl")
 include("abstractdict.jl")
 include("iddict.jl")
 include("idset.jl")
+include("ntuple.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators

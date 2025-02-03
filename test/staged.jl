@@ -381,7 +381,7 @@ let
     @test length(ir.cfg.blocks) == 1
 end
 
-function generate_lambda_ex(world::UInt, source::LineNumberNode,
+function generate_lambda_ex(world::UInt, source::Method,
                             argnames, spnames, @nospecialize body)
     stub = Core.GeneratedFunctionStub(identity, Core.svec(argnames...), Core.svec(spnames...))
     return stub(world, source, body)
@@ -389,7 +389,7 @@ end
 
 # Test that `Core.CachedGenerator` works as expected
 struct Generator54916 <: Core.CachedGenerator end
-function (::Generator54916)(world::UInt, source::LineNumberNode, args...)
+function (::Generator54916)(world::UInt, source::Method, args...)
     return generate_lambda_ex(world, source,
         (:doit54916, :func, :arg), (), :(func(arg)))
 end
@@ -432,7 +432,7 @@ function overdubbee54341(a, b)
     a + b
 end
 const overdubee_codeinfo54341 = code_lowered(overdubbee54341, Tuple{Any, Any})[1]
-function overdub_generator54341(world::UInt, source::LineNumberNode, selftype, fargtypes)
+function overdub_generator54341(world::UInt, source::Method, selftype, fargtypes)
     if length(fargtypes) != 2
         return generate_lambda_ex(world, source,
             (:overdub54341, :args), (), :(error("Wrong number of arguments")))
