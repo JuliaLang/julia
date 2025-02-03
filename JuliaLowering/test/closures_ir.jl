@@ -587,16 +587,17 @@ end
 14  (call core.svec %₁₁ %₁₂ %₁₃)
 15  --- method core.nothing %₁₄
     slots: [slot₁/#self#(!read) slot₂/x slot₃/#self#(!read) slot₄/y(!read)]
-    1   TestMod.+
-    2   (call core.getfield slot₁/#self# :y)
-    3   (call core.isdefined %₂ :contents)
-    4   (gotoifnot %₃ label₆)
-    5   (goto label₈)
-    6   (newvar slot₄/y)
-    7   slot₄/y
-    8   (call core.getfield %₂ :contents)
-    9   (call %₁ slot₂/x %₈)
-    10  (return %₉)
+    1   (meta :nkw 1)
+    2   TestMod.+
+    3   (call core.getfield slot₁/#self# :y)
+    4   (call core.isdefined %₃ :contents)
+    5   (gotoifnot %₄ label₇)
+    6   (goto label₉)
+    7   (newvar slot₄/y)
+    8   slot₄/y
+    9   (call core.getfield %₃ :contents)
+    10  (call %₂ slot₂/x %₉)
+    11  (return %₁₀)
 16  TestMod.#f_kw_closure##0
 17  (call core.svec %₁₆)
 18  (call core.svec)
