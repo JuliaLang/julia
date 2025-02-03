@@ -94,3 +94,78 @@ Value* LateLowerGCFrame::lowerGCAllocBytesLate(CallInst *target, Function &F)
     }
     return target;
 }
+
+void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified) {
+    auto T_size = F.getParent()->getDataLayout().getIntPtrType(F.getContext());
+    for (auto CI : WriteBarriers) {
+        auto parent = CI->getArgOperand(0);
+        if (std::all_of(CI->op_begin() + 1, CI->op_end(),
+                    [parent, &S](Value *child) { return parent == child || IsPermRooted(child, S); })) {
+            CI->eraseFromParent();
+            continue;
+        }
+        if (CFGModified) {
+            *CFGModified = true;
+        }
+
+        IRBuilder<> builder(CI);
+        builder.SetCurrentDebugLocation(CI->getDebugLoc());
+
+        // FIXME: Currently we call write barrier with the src object (parent).
+        // This works fine for object barrier for generational plans (such as stickyimmix), which does not use the target object at all.
+        // But for other MMTk plans, we need to be careful.
+        const bool INLINE_WRITE_BARRIER = true;
+        if (CI->getCalledOperand() == write_barrier_func) {
+            if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+                if (INLINE_WRITE_BARRIER) {
+                    auto i8_ty = Type::getInt8Ty(F.getContext());
+                    auto intptr_ty = T_size;
+
+                    // intptr_t addr = (intptr_t) (void*) src;
+                    // uint8_t* meta_addr = (uint8_t*) (SIDE_METADATA_BASE_ADDRESS + (addr >> 6));
+                    intptr_t metadata_base_address = reinterpret_cast<intptr_t>(MMTK_SIDE_LOG_BIT_BASE_ADDRESS);
+                    auto metadata_base_val = ConstantInt::get(intptr_ty, metadata_base_address);
+                    auto metadata_base_ptr = ConstantExpr::getIntToPtr(metadata_base_val, PointerType::get(i8_ty, 0));
+
+                    auto parent_val = builder.CreatePtrToInt(parent, intptr_ty);
+                    auto shr = builder.CreateLShr(parent_val, ConstantInt::get(intptr_ty, 6));
+                    auto metadata_ptr = builder.CreateGEP(i8_ty, metadata_base_ptr, shr);
+
+                    // intptr_t shift = (addr >> 3) & 0b111;
+                    auto shift = builder.CreateAnd(builder.CreateLShr(parent_val, ConstantInt::get(intptr_ty, 3)), ConstantInt::get(intptr_ty, 7));
+                    auto shift_i8 = builder.CreateTruncOrBitCast(shift, i8_ty);
+
+                    // uint8_t byte_val = *meta_addr;
+                    auto load_i8 = builder.CreateAlignedLoad(i8_ty, metadata_ptr, Align());
+
+                    // if (((byte_val >> shift) & 1) == 1) {
+                    auto shifted_load_i8 = builder.CreateLShr(load_i8, shift_i8);
+                    auto masked = builder.CreateAnd(shifted_load_i8, ConstantInt::get(i8_ty, 1));
+                    auto is_unlogged = builder.CreateICmpEQ(masked, ConstantInt::get(i8_ty, 1));
+
+                    // object_reference_write_slow_call((void*) src, (void*) slot, (void*) target);
+                    MDBuilder MDB(F.getContext());
+                    SmallVector<uint32_t, 2> Weights{1, 9};
+                    if (S) {
+                        if (!S->DT) {
+                            S->DT = &GetDT();
+                        }
+                        DomTreeUpdater dtu = DomTreeUpdater(S->DT, llvm::DomTreeUpdater::UpdateStrategy::Lazy);
+                        auto mayTriggerSlowpath = SplitBlockAndInsertIfThen(is_unlogged, CI, false, MDB.createBranchWeights(Weights), &dtu);
+                        builder.SetInsertPoint(mayTriggerSlowpath);
+                    } else {
+                        auto mayTriggerSlowpath = SplitBlockAndInsertIfThen(is_unlogged, CI, false, MDB.createBranchWeights(Weights));
+                        builder.SetInsertPoint(mayTriggerSlowpath);
+                    }
+                    builder.CreateCall(getOrDeclare(jl_intrinsics::queueGCRoot), { parent });
+                } else {
+                    Function *wb_func = getOrDeclare(jl_intrinsics::queueGCRoot);
+                    builder.CreateCall(wb_func, { parent });
+                }
+            }
+        } else {
+            assert(false);
+        }
+        CI->eraseFromParent();
+    }
+}
