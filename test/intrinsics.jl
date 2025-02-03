@@ -290,7 +290,7 @@ function f32(sign, exp, sig)
     return reinterpret(Float32, UInt32(x))
 end
 function f64(sign, exp, sig)
-    x = (sign&1)<<31 | (exp&((1<<11)-1))<<52 | sig&((1<<52)-1)
+    x = Int64(sign&1)<<31 | Int64(exp&((1<<11)-1))<<52 | sig&((Int64(1)<<52)-1)
     return reinterpret(Float64, UInt64(x))
 end
 
@@ -327,10 +327,10 @@ end
     @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 NaN isnan
     # Quiet NaN
     @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f32(0, 0xff, 1<<22 | 1<<13) isnan
-    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, 1<<51 | 1<<42) isnan
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, Int64(1)<<51 | Int64(1)<<42) isnan
     # Signalling NaN that can be propagated to Float16
     @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f32(0, 0xff, 1<<13) isnan
-    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, 1<<42) isnan
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, Int64(1)<<42) isnan
     # Signalling NaN that cannot be propagated to Float16
     @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f32(0, 0xff, 1) isnan
     @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, 1) isnan
