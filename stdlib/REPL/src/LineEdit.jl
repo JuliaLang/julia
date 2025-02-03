@@ -595,10 +595,19 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     line_pos = buf_pos
     regstart, regstop = region(buf)
     written = 0
+    @static if Sys.iswindows()
+        writer = Terminals.pipe_writer(terminal)
+        if writer isa Base.TTY && !Base.ispty(writer)::Bool
+            _reset_console_mode(writer.handle)
+        end
+    end
     # Write out the prompt string
     lindent = write_prompt(termbuf, prompt, hascolor(terminal))::Int
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
-    miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !(Base.ispty(Terminals.pipe_reader(terminal)))::Bool) : false
+    miscountnl = @static if Sys.iswindows()
+        reader = Terminals.pipe_reader(terminal)
+        reader isa Base.TTY && !Base.ispty(reader)::Bool
+    else false end
 
     # Now go through the buffer line by line
     seek(buf, 0)
@@ -1676,34 +1685,39 @@ end
 # not leave the console mode in a corrupt state.
 # FIXME: remove when pseudo-tty are implemented for child processes
 if Sys.iswindows()
-function _console_mode()
-    hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), -11 % UInt32) # STD_OUTPUT_HANDLE
-    dwMode = Ref{UInt32}()
-    ccall(:GetConsoleMode, stdcall, Int32, (Ref{Cvoid}, Ref{UInt32}), hOutput, dwMode)
-    return dwMode[]
-end
-const default_console_mode_ref = Ref{UInt32}()
-const default_console_mode_assigned = Ref(false)
-function get_default_console_mode()
-    if default_console_mode_assigned[] == false
-        default_console_mode_assigned[] = true
-        default_console_mode_ref[] = _console_mode()
+
+#= Get/SetConsoleMode flags =#
+const ENABLE_PROCESSED_OUTPUT            = UInt32(0x0001)
+const ENABLE_WRAP_AT_EOL_OUTPUT          = UInt32(0x0002)
+const ENABLE_VIRTUAL_TERMINAL_PROCESSING = UInt32(0x0004)
+const DISABLE_NEWLINE_AUTO_RETURN        = UInt32(0x0008)
+const ENABLE_LVB_GRID_WORLDWIDE          = UInt32(0x0010)
+
+#= libuv flags =#
+const UV_TTY_SUPPORTED = 0
+const UV_TTY_UNSUPPORTED = 1
+
+function _reset_console_mode(handle::Ptr{Cvoid})
+    # Query libuv to see whether it expects the console to support virtual terminal sequences
+    vterm_state = Ref{Cint}()
+    ccall(:uv_tty_get_vterm_state, Cint, (Ref{Cint},), vterm_state)
+
+    mode::UInt32 = ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT
+    if vterm_state[] == UV_TTY_SUPPORTED
+        mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING
     end
-    return default_console_mode_ref[]
+
+    # Expected to fail (benignly) with ERROR_INVALID_HANDLE if the provided handle does not
+    # allow setting the console mode
+    ccall(:SetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, UInt32), handle, mode)
+
+    return nothing
 end
-function _reset_console_mode()
-    mode = _console_mode()
-    if mode !== get_default_console_mode()
-        hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), -11 % UInt32) # STD_OUTPUT_HANDLE
-        ccall(:SetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, UInt32), hOutput, default_console_mode_ref[])
-    end
-    nothing
-end
+
 end
 
 # returns the width of the written prompt
 function write_prompt(terminal::Union{IO, AbstractTerminal}, s::Union{AbstractString,Function}, color::Bool)
-    @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)::String
     write(terminal, promptstr)
     return textwidth(promptstr)
