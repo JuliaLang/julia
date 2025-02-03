@@ -267,9 +267,8 @@ function exec_options(opts)
         let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
             Core.eval(MainInclude, :(const Distributed = $Distributed))
             Core.eval(Main, :(using Base.MainInclude.Distributed))
+            invokelatest(Distributed.process_opts, opts)
         end
-
-        invokelatest(Main.Distributed.process_opts, opts)
     end
 
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
