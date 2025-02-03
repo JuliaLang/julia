@@ -2031,12 +2031,24 @@ let code = Any[
     Compiler.verify_ir(ir)
 end
 
+# https://github.com/JuliaLang/julia/issues/57141
+# don't eliminate `setfield!` when the field is to be used
 let src = code_typed1(()) do
-        a = Ref{Any}()
-        setfield!(a, :x, 2)
-        invokelatest(identity, a)
-        isdefined(a, :x) && return 1.0
-        a[]
+        ref = Ref{Any}()
+        ref[] = 0
+        @assert isdefined(ref, :x)
+        inner() = ref[] + 1
+        (inner(), ref[])
     end
-    @test count(iscall((src, isdefined)), src.code) == 0
+    @test count(iscall((src, setfield!)), src.code) == 1
 end
+
+# optimize `isdefined` away in the presence of a dominating `setfield!`
+let src = code_typed1(()) do
+    a = Ref{Any}()
+    setfield!(a, :x, 2)
+    invokelatest(identity, a)
+    isdefined(a, :x) && return 1.0
+    a[]
+end
+@test count(iscall((src, isdefined)), src.code) == 0
