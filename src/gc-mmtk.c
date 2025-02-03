@@ -1,5 +1,6 @@
 #include "gc-common.h"
 #include "gc-tls-mmtk.h"
+#include "gc-wb-mmtk.h"
 #include "mmtkMutator.h"
 #include "threading.h"
 
@@ -861,10 +862,22 @@ STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
 }
 
+inline void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
+        intptr_t addr = (intptr_t) obj;
+        uint8_t* meta_addr = (uint8_t*) side_metadata_base + (addr >> 6);
+        intptr_t shift = (addr >> 3) & 0b111;
+        while(1) {
+            uint8_t old_val = *meta_addr;
+            uint8_t new_val = old_val | (1 << shift);
+            if (jl_atomic_cmpswap((_Atomic(uint8_t)*)meta_addr, &old_val, new_val)) {
+                break;
+            }
+        }
+}
+
 STATIC_INLINE void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
-    // FIXME: Similarly, for now, we do nothing
-    // but when supporting moving, this is where we set the valid object (VO) bit
-    // and log (old gen) bit
+    if (MMTK_NEEDS_WRITE_BARRIER == MMTK_OBJECT_BARRIER) {
+        mmtk_set_side_metadata(MMTK_SIDE_LOG_BIT_BASE_ADDRESS, obj);
 }
 
 JL_DLLEXPORT jl_value_t *jl_mmtk_gc_alloc_default(jl_ptls_t ptls, int osize, size_t align, void *ty)
@@ -1128,7 +1141,9 @@ _Atomic(int) gc_stack_free_idx = 0;
 
 JL_DLLEXPORT void jl_gc_queue_root(const struct _jl_value_t *ptr) JL_NOTSAFEPOINT
 {
-    mmtk_unreachable();
+    jl_task_t *ct = jl_current_task;
+    jl_ptls_t ptls = ct->ptls;
+    mmtk_object_reference_write_slow(&ptls->gc_tls.mmtk_mutator, parent, (const void*) 0);
 }
 
 JL_DLLEXPORT void jl_gc_queue_multiroot(const struct _jl_value_t *root, const void *stored,
@@ -1209,6 +1224,82 @@ JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p)
 {
     return NULL;
 }
+
+JL_DLLEXPORT void jl_genericmemory_copyto(jl_genericmemory_t *dest, char* destdata,
+                                          jl_genericmemory_t *src, char* srcdata,
+                                          size_t n) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typetagof(dest);
+    if (dt != (jl_datatype_t*)jl_typetagof(src))
+        jl_exceptionf(jl_argumenterror_type, "jl_genericmemory_copyto requires source and dest to have same type");
+    const jl_datatype_layout_t *layout = dt->layout;
+    if (layout->flags.arrayelem_isboxed) {
+        _Atomic(void*) * dest_p = (_Atomic(void*)*)destdata;
+        _Atomic(void*) * src_p = (_Atomic(void*)*)srcdata;
+        jl_value_t *owner = jl_genericmemory_owner(dest);
+        jl_gc_wb(owner, NULL);
+        if (__unlikely(jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED)) {
+            jl_value_t *src_owner = jl_genericmemory_owner(src);
+            ssize_t done = 0;
+            if (jl_astaggedvalue(src_owner)->bits.gc != GC_OLD_MARKED) {
+                if (dest_p < src_p || dest_p > src_p + n) {
+                    for (; done < n; done++) { // copy forwards
+                        void *val = jl_atomic_load_relaxed(src_p + done);
+                        jl_atomic_store_release(dest_p + done, val);
+                        // `val` is young or old-unmarked
+                        if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
+                            jl_gc_queue_root(owner);
+                            break;
+                        }
+                    }
+                    src_p += done;
+                    dest_p += done;
+                } else {
+                    for (; done < n; done++) { // copy backwards
+                        void *val = jl_atomic_load_relaxed(src_p + n - done - 1);
+                        jl_atomic_store_release(dest_p + n - done - 1, val);
+                        // `val` is young or old-unmarked
+                        if (val && !(jl_astaggedvalue(val)->bits.gc & GC_MARKED)) {
+                            jl_gc_queue_root(owner);
+                            break;
+                        }
+                    }
+                }
+                n -= done;
+            }
+        }
+        return memmove_refs(dest_p, src_p, n);
+    }
+    size_t elsz = layout->size;
+    char *src_p = srcdata;
+    int isbitsunion = layout->flags.arrayelem_isunion;
+    if (isbitsunion) {
+        char *sourcetypetagdata = jl_genericmemory_typetagdata(src);
+        char *desttypetagdata = jl_genericmemory_typetagdata(dest);
+        memmove(desttypetagdata+(size_t)destdata, sourcetypetagdata+(size_t)srcdata, n);
+        srcdata = (char*)src->ptr + elsz*(size_t)srcdata;
+        destdata = (char*)dest->ptr + elsz*(size_t)destdata;
+    }
+    if (layout->first_ptr != -1) {
+        memmove_refs((_Atomic(void*)*)destdata, (_Atomic(void*)*)srcdata, n * elsz / sizeof(void*));
+        jl_value_t *owner = jl_genericmemory_owner(dest);
+        if (__unlikely(jl_astaggedvalue(owner)->bits.gc == GC_OLD_MARKED)) {
+            jl_value_t *src_owner = jl_genericmemory_owner(src);
+            if (jl_astaggedvalue(src_owner)->bits.gc != GC_OLD_MARKED) {
+                dt = (jl_datatype_t*)jl_tparam1(dt);
+                for (size_t done = 0; done < n; done++) { // copy forwards
+                    char* s = (char*)src_p+done*elsz;
+                    if (*((jl_value_t**)s+layout->first_ptr) != NULL)
+                        jl_gc_queue_multiroot(owner, s, dt);
+                }
+            }
+        }
+    }
+    else {
+        memmove(destdata, srcdata, n * elsz);
+    }
+}
+
 
 #ifdef __cplusplus
 }
