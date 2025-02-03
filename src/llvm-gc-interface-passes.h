@@ -417,4 +417,29 @@ private:
     bool shouldRunFinalGC();
 };
 
+// Enable this optimization only on LLVM 4.0+ since this cause LLVM to optimize
+// constant store loop to produce a `memset_pattern16` with a global variable
+// that's initialized by `addrspacecast`. Such a global variable is not supported by the backend.
+// This is not a problem on 4.0+ since that transformation (in loop-idiom) is disabled
+// for NI pointers.
+static SmallVector<int, 1> *FindRefinements(Value *V, State *S)
+{
+    if (!S)
+        return nullptr;
+    auto it = S->AllPtrNumbering.find(V);
+    if (it == S->AllPtrNumbering.end())
+        return nullptr;
+    auto rit = S->Refinements.find(it->second);
+    return rit != S->Refinements.end() && !rit->second.empty() ? &rit->second : nullptr;
+}
+
+inline bool IsPermRooted(Value *V, State *S)
+{
+    if (isa<Constant>(V))
+        return true;
+    if (auto *RefinePtr = FindRefinements(V, S))
+        return RefinePtr->size() == 1 && (*RefinePtr)[0] == -2;
+    return false;
+}
+
 #endif // LLVM_GC_PASSES_H
