@@ -2030,3 +2030,13 @@ let code = Any[
     ir = Compiler.domsort_ssa!(ir, domtree)
     Compiler.verify_ir(ir)
 end
+
+let src = code_typed1(()) do
+        a = Ref{Any}()
+        setfield!(a, :x, 2)
+        invokelatest(identity, a)
+        isdefined(a, :x) && return 1.0
+        a[]
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
+end
