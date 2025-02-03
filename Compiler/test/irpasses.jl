@@ -2044,5 +2044,5 @@ let src = code_typed1(()) do
         first(f())
     end
     ex = src.code[2]
-    @test isexpr(ex, :call) && argextype(ex.args[1], src) === Const(setfield!)
+    @test count(iscall((src, setfield!)), src.code) == 1
 end
