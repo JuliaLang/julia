@@ -67,7 +67,7 @@ function is_effect_free(ex)
     k = kind(ex)
     # TODO: metas
     is_literal(k) || is_identifier_like(ex) || k == K"Symbol" ||
-        k == K"inert" || k == K"top" || k == K"core"
+        k == K"inert" || k == K"top" || k == K"core" || k == K"Value"
     # flisp also includes `a.b` with simple `a`, but this seems like a bug
     # because this calls the user-defined getproperty?
 end
@@ -90,96 +90,122 @@ end
 # Destructuring
 
 # Convert things like `(x,y,z) = (a,b,c)` to assignments, eliminating the
-# tuple. Includes support for slurping/splatting.
+# tuple. Includes support for slurping/splatting. This function assumes that
+# `_tuple_sides_match` returns true, so the following have already been
+# checked:
+#   * There's max one `...` on the left hand side
+#   * There's max one `...` on the right hand side, in the last place, or
+#     matched with an lhs... in the last place. (required so that
+#     pairwise-matching terms from the right is valid)
+#   * Neither side has any key=val terms or parameter blocks
 #
-# If lhss and rhss are the list of terms on each side, this function assumes
-# the following have been checked:
-#   * There's only one `...` on the left hand side
-#   * Neither side has any key=val terms
-#   * _tuple_sides_match returns true
+# Tuple elimination must act /as if/ the right hand side tuple was first
+# constructed followed by destructuring. In particular, any side effects due to
+# evaluating the individual terms in the right hand side tuple must happen in
+# order.
 function tuple_to_assignments(ctx, ex)
     lhs = ex[1]
     rhs = ex[2]
+
+    # Tuple elimination aims to turn assignments between tuples into lists of assignments.
+    #
+    # However, there's a complex interplay of side effects due to the
+    # individual assignments and these can be surprisingly complicated to
+    # model. For example `(x[i], y) = (f(), g)` can contain the following
+    # surprises:
+    # * `tmp = f()` calls `f` which might throw, or modify the bindings for
+    #   `x` or `y`.
+    # * `x[i] = tmp` is lowered to `setindex!` which might throw or modify the
+    #   bindings for `x` or `y`.
+    # * `g` might throw an `UndefVarError`
+    #
+    # Thus for correctness we introduce temporaries for all right hand sides
+    # with observable side effects and ensure they're evaluated in order.
+    n_lhs = numchildren(lhs)
+    n_rhs = numchildren(rhs)
     stmts = SyntaxList(ctx)
-    end_stmts = SyntaxList(ctx)
-    elements = SyntaxList(ctx)
-    assigned = SyntaxList(ctx)
+    rhs_tmps = SyntaxList(ctx)
+    for i in 1:n_rhs
+        rh = rhs[i]
+        r = if kind(rh) == K"..."
+            rh[1]
+        else
+            rh
+        end
+        k = kind(r)
+        if is_literal(k) || k == K"Symbol" || k == K"inert" || k == K"top" ||
+                k == K"core" || k == K"Value"
+            # Effect-free and nothrow right hand sides do not need a temporary
+            # (we require nothrow because the order of rhs terms is observable
+            #  due to sequencing, thus identifiers are not allowed)
+        else
+            # Example rhs which need a temporary
+            # * `f()` - arbitrary side effects to any binding
+            # * `z`   - might throw UndefVarError
+            tmp = emit_assign_tmp(stmts, ctx, r)
+            rh = kind(rh) == K"..." ? @ast(ctx, rh, [K"..." tmp]) : tmp
+        end
+        push!(rhs_tmps, rh)
+    end
 
     il = 0
     ir = 0
-    while il < numchildren(lhs)
+    while il < n_lhs
         il += 1
         ir += 1
         lh = lhs[il]
         if kind(lh) == K"..."
-            TODO(lhs, "... in tuple lhs")
-            n_lhs = numchildren(lhs)
-            n_rhs = numchildren(rhs)
-            if il == n_lhs
-                # Simple case: exactly one `...` at end of lhs. Examples:
-                #   (x, ys...) = (a,b,c)
-                #   (ys...)    = ()
-                rhs_tmp = emit_assign_tmp(stmts, ctx,
-                    @ast(ctx, rhs, [K"tuple" rhs[ir:end]...]),
-                    "rhs_tmp"
-                )
-                push!(stmts, @ast ctx ex [K"=" lh[1] rhs_tmp])
-                push!(elements, @ast ctx rhs_tmp [K"..." rhs_tmp])
+            # Exactly one lhs `...` occurs in the middle somewhere, with a
+            # general rhs which has at least as many non-`...` terms or one
+            # `...` term at the end.
+            # Examples:
+            #   (x, ys..., z) = (a, b, c, d)
+            #   (x, ys..., z) = (a, bs...)
+            #   (xs..., y)    = (a, bs...)
+            #   (xs...) = (a, b, c)
+            # in this case we can pairwise-match arguments from the end
+            # backward and emit a general tuple assignment for the middle.
+            jl = n_lhs
+            jr = n_rhs
+            while jl > il && jr > ir
+                if kind(lhs[jl]) == K"..." || kind(rhs_tmps[jr]) == K"..."
+                    break
+                end
+                jl -= 1
+                jr -= 1
+            end
+            middle = emit_assign_tmp(stmts, ctx,
+                @ast(ctx, rhs, [K"tuple" rhs_tmps[ir:jr]...]),
+                "rhs_tmp"
+            )
+            if il == jl
+                # (x, ys...) = (a,b,c)
+                # (x, ys...) = (a,bs...)
+                # (ys...)    = ()
+                push!(stmts, @ast ctx ex [K"=" lh[1] middle])
+            else
+                # (x, ys..., z) = (a, b, c, d)
+                # (x, ys..., z) = (a, bs...)
+                # (xs..., y)    = (a, bs...)
+                push!(stmts, @ast ctx ex [K"=" [K"tuple" lhs[il:jl]...] middle])
+            end
+            # Continue with the remainder of the list of non-splat terms
+            il = jl
+            ir = jr
+        else
+            rh = rhs_tmps[ir]
+            if kind(rh) == K"..."
+                push!(stmts, @ast ctx ex [K"=" [K"tuple" lhs[il:end]...] rh[1]])
                 break
             else
-                # Exactly one lhs `...` occurs in the middle somewhere, with a
-                # general rhs which has one `...` term or at least as many
-                # non-`...` terms.
-                # Examples:
-                #   (x, ys..., z) = (a, b, c, d)
-                #   (x, ys..., z) = (a, bs...)
-                #   (xs..., y)    = (a, bs...)
-                # in this case we pairwise-match arguments from the end
-                # backward, with rhs splats falling back to the general case.
-                jl = n_lhs + 1
-                jr = n_rhs + 1
-                while jl > il && jr > ir
-                    if kind(lhs[jl-1]) == K"..." || kind(rhs[jr-1]) == K"..."
-                        break
-                    end
-                    jl -= 1
-                    jr -= 1
-                end
-                rhs[jr]
-            end
-            continue
-        end
-        rh = rhs[ir] # In other cases `rhs[ir]` must exist
-        if kind(rh) == K"..."
-            @assert ir == numchildren(rhs) # _tuple_sides_match ensures this
-            rh_tmp = emit_assign_tmp(stmts, ctx, rh[1])
-            push!(end_stmts, @ast ctx ex [K"=" [K"tuple" lhs[il:end]...] rh_tmp])
-            push!(elements, @ast ctx rh [K"..." rh_tmp])
-            break
-        else
-            if is_identifier_like(lh) && is_effect_free(rh) &&
-                    !any(contains_identifier(rhs[j], lh) for j in ir+1:lastindex(rhs))
-                    !any(contains_identifier(a, rh) for a in assigned)
-                # Overwrite `lh` directly if that won't cause conflicts with
-                # other symbols
                 push!(stmts, @ast ctx ex [K"=" lh rh])
-                push!(assigned, lh)
-                push!(elements, rh)
-            else
-                # In other cases we need a temporary and we'll overwrite `lh` at the end.
-                tmp = ssavar(ctx, rh)
-                push!(stmts,     @ast ctx ex [K"=" tmp rh])
-                # `push!(assigned, lh)` is not required when we assign `lh` later.
-                push!(end_stmts, @ast ctx ex [K"=" lh  tmp])
-                push!(elements, tmp)
             end
         end
     end
 
     @ast ctx ex [K"block"
         stmts...
-        end_stmts...
-        [K"removable" [K"tuple" elements...]]
+        [K"removable" [K"tuple" rhs_tmps...]]
     ]
 end
 
@@ -354,12 +380,7 @@ function expand_property_destruct(ctx, ex)
     @assert kind(params) == K"parameters"
     rhs = ex[2]
     stmts = SyntaxList(ctx)
-    rhs1 = if is_ssa(ctx, rhs) || (is_identifier_like(rhs) &&
-                                   !any(is_same_identifier_like(l, rhs) for l in children(params)))
-        rhs
-    else
-        emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
-    end
+    rhs1 = emit_assign_tmp(stmts, ctx, expand_forms_2(ctx, rhs))
     for prop in children(params)
         propname = kind(prop) == K"Identifier"                           ? prop    :
                    kind(prop) == K"::" && kind(prop[1]) == K"Identifier" ? prop[1] :

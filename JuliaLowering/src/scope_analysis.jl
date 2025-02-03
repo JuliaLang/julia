@@ -58,7 +58,7 @@ function _find_scope_vars!(ctx, assignments, locals, destructured_args, globals,
         elseif kv == K"BindingId"
             binfo = lookup_binding(ctx, v)
             if !binfo.is_ssa && binfo.kind != :global
-                TODO(v, "BindingId as function name")
+                @assert false "allow local BindingId as function name?"
             end
         else
             @assert false

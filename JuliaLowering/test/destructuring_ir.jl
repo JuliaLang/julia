@@ -147,28 +147,11 @@ let
 end
 #---------------------
 1   TestMod.a
-2   (= slot₁/x %₁)
-3   TestMod.b
-4   (= slot₂/y %₃)
-5   TestMod.a
-6   TestMod.b
-7   (call core.tuple %₅ %₆)
-8   (return %₇)
-
-########################################
-# Destructuring with simple tuple elimination and non effect-free rhs
-let
-    (x, y) = (f(), b)
-end
-#---------------------
-1   TestMod.f
-2   (call %₁)
-3   TestMod.b
-4   (= slot₂/y %₃)
-5   (= slot₁/x %₂)
-6   TestMod.b
-7   (call core.tuple %₂ %₆)
-8   (return %₇)
+2   TestMod.b
+3   (= slot₁/x %₁)
+4   (= slot₂/y %₂)
+5   (call core.tuple %₁ %₂)
+6   (return %₅)
 
 ########################################
 # Destructuring with tuple elimination where variables are repeated
@@ -178,14 +161,41 @@ end
 #---------------------
 1   slot₂/y
 2   TestMod.a
-3   (= slot₂/y %₂)
-4   slot₁/x
-5   (= slot₃/z %₄)
-6   (= slot₁/x %₁)
-7   TestMod.a
-8   slot₁/x
-9   (call core.tuple %₁ %₇ %₈)
-10  (return %₉)
+3   slot₁/x
+4   (= slot₁/x %₁)
+5   (= slot₂/y %₂)
+6   (= slot₃/z %₃)
+7   (call core.tuple %₁ %₂ %₃)
+8   (return %₇)
+
+########################################
+# Destructuring with simple tuple elimination and rhs with side effects
+let
+    (x, y) = (f(), b)
+end
+#---------------------
+1   TestMod.f
+2   (call %₁)
+3   TestMod.b
+4   (= slot₁/x %₂)
+5   (= slot₂/y %₃)
+6   (call core.tuple %₂ %₃)
+7   (return %₆)
+
+########################################
+# Destructuring with simple tuple elimination and lhs with side effects
+let
+    (x[10], y[20]) = (1,2)
+end
+#---------------------
+1   1
+2   TestMod.x
+3   (call top.setindex! %₂ %₁ 10)
+4   2
+5   TestMod.y
+6   (call top.setindex! %₅ %₄ 20)
+7   (call core.tuple 1 2)
+8   (return %₇)
 
 ########################################
 # Destructuring with tuple elimination and trailing rhs ...
@@ -194,14 +204,98 @@ let
 end
 #---------------------
 1   TestMod.a
-2   (= slot₁/x %₁)
-3   TestMod.rhs
-4   (call top.indexed_iterate %₃ 1)
+2   TestMod.rhs
+3   (= slot₁/x %₁)
+4   (call top.indexed_iterate %₂ 1)
 5   (= slot₂/y (call core.getfield %₄ 1))
-6   TestMod.a
-7   (call core.tuple %₆)
-8   (call core._apply_iterate top.iterate core.tuple %₇ %₃)
+6   (call core.tuple %₁)
+7   (call core._apply_iterate top.iterate core.tuple %₆ %₂)
+8   (return %₇)
+
+########################################
+# Destructuring with with non-trailing rhs `...` does not use tuple elimination
+# (though we could do it for the `x = a` part here)
+let
+    (x, y, z) = (a, rhs..., b)
+end
+#---------------------
+1   TestMod.a
+2   (call core.tuple %₁)
+3   TestMod.rhs
+4   TestMod.b
+5   (call core.tuple %₄)
+6   (call core._apply_iterate top.iterate core.tuple %₂ %₃ %₅)
+7   (call top.indexed_iterate %₆ 1)
+8   (= slot₂/x (call core.getfield %₇ 1))
+9   (= slot₁/iterstate (call core.getfield %₇ 2))
+10  slot₁/iterstate
+11  (call top.indexed_iterate %₆ 2 %₁₀)
+12  (= slot₃/y (call core.getfield %₁₁ 1))
+13  (= slot₁/iterstate (call core.getfield %₁₁ 2))
+14  slot₁/iterstate
+15  (call top.indexed_iterate %₆ 3 %₁₄)
+16  (= slot₄/z (call core.getfield %₁₅ 1))
+17  (return %₆)
+
+########################################
+# Destructuring with tuple elimination and final ... on lhs
+let
+    (x, ys...) = (a,b,c)
+end
+#---------------------
+1   TestMod.a
+2   TestMod.b
+3   TestMod.c
+4   (= slot₁/x %₁)
+5   (call core.tuple %₂ %₃)
+6   (= slot₂/ys %₅)
+7   (call core.tuple %₁ %₂ %₃)
+8   (return %₇)
+
+########################################
+# Destructuring with tuple elimination, slurping, and completely effect free right hand sides
+let
+    (x, ys...) = (1,2,3)
+end
+#---------------------
+1   (= slot₁/x 1)
+2   (call core.tuple 2 3)
+3   (= slot₂/ys %₂)
+4   (call core.tuple 1 2 3)
+5   (return %₄)
+
+########################################
+# Destructuring with tuple elimination and non-final ... on lhs
+let
+    (x, ys..., z) = (a,b,c)
+end
+#---------------------
+1   TestMod.a
+2   TestMod.b
+3   TestMod.c
+4   (= slot₁/x %₁)
+5   (call core.tuple %₂)
+6   (= slot₂/ys %₅)
+7   (= slot₃/z %₃)
+8   (call core.tuple %₁ %₂ %₃)
 9   (return %₈)
+
+########################################
+# Destructuring with tuple elimination but not in value position never creates
+# the tuple
+let
+    (x, ys...) = (a,b,c)
+    nothing
+end
+#---------------------
+1   TestMod.a
+2   TestMod.b
+3   TestMod.c
+4   (= slot₁/x %₁)
+5   (call core.tuple %₂ %₃)
+6   (= slot₂/ys %₅)
+7   TestMod.nothing
+8   (return %₇)
 
 ########################################
 # Property destructuring
@@ -211,10 +305,8 @@ end
 #---------------------
 1   TestMod.rhs
 2   (= slot₁/x (call top.getproperty %₁ :x))
-3   TestMod.rhs
-4   (= slot₂/y (call top.getproperty %₃ :y))
-5   TestMod.rhs
-6   (return %₅)
+3   (= slot₂/y (call top.getproperty %₁ :y))
+4   (return %₁)
 
 ########################################
 # Property destructuring with colliding symbolic lhs/rhs
@@ -231,13 +323,14 @@ end
 ########################################
 # Property destructuring with nontrivial rhs
 let
-    (; x) = f()
+    (; x, y) = f()
 end
 #---------------------
 1   TestMod.f
 2   (call %₁)
 3   (= slot₁/x (call top.getproperty %₂ :x))
-4   (return %₂)
+4   (= slot₂/y (call top.getproperty %₂ :y))
+5   (return %₂)
 
 ########################################
 # Property destructuring with type decl
@@ -261,8 +354,7 @@ end
 14  (= slot₂/tmp (call core.typeassert %₁₂ %₁₃))
 15  slot₂/tmp
 16  (= slot₁/x %₁₅)
-17  TestMod.rhs
-18  (return %₁₇)
+17  (return %₂)
 
 ########################################
 # Error: Property destructuring with frankentuple

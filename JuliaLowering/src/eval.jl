@@ -293,7 +293,7 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
                k == K"opaque_closure_method" ? :opaque_closure_method :
                nothing
         if isnothing(head)
-            TODO(ex, "Unhandled form for kind $k")
+            throw(LoweringError(ex, "Unhandled form for kind $k"))
         end
         Expr(head, map(e->to_lowered_expr(mod, e, ssa_offset), children(ex))...)
     end
