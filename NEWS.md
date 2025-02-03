@@ -56,7 +56,7 @@ Language changes
    behavior. Infinite loops that actually do things (e.g. have side effects
    or sleep) were never and are still not undefined behavior. ([#52999])
 
- - It is now an error to mark a symbol as both `public` and `export`ed.
+ - It is now an error to mark a binding as both `public` and `export`ed.
    ([#53664])
 
 Compiler/Runtime improvements
