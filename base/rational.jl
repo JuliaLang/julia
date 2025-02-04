@@ -571,7 +571,7 @@ function gcd(x::Rational, y::Rational)
     unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
 end
 function lcm(x::Rational, y::Rational)
-    if (isinf(x) && !isinf(y)) || (!isinf(x) && isinf(y))
+    isinf(x) != isinf(y)
         throw(ArgumentError("lcm is not defined"))
     end
     return unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.den))
