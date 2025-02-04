@@ -203,7 +203,13 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
     if is_literal(k)
         ex.value
     elseif k == K"core"
-        GlobalRef(Core, Symbol(ex.name_val))
+        name = ex.name_val
+        if name == "cglobal"
+            # cglobal isn't a true name within core - instead it's a builtin
+            :cglobal
+        else
+            GlobalRef(Core, Symbol(name))
+        end
     elseif k == K"top"
         GlobalRef(Base, Symbol(ex.name_val))
     elseif k == K"globalref"

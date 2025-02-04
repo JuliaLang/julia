@@ -517,6 +517,13 @@ end
 #-------------------------------------------------------------------------------
 # Predicates and accessors working on expression trees
 
+# For historical reasons, `cglobal` and `ccall` are their own special
+# quasi-identifier-like syntax but with special handling inside lowering which
+# means they can't be used as normal identifiers.
+function is_ccall_or_cglobal(name::AbstractString)
+    return name == "ccall" || name == "cglobal"
+end
+
 function is_quoted(ex)
     kind(ex) in KSet"Symbol quote top core globalref break inert
                      meta inbounds inline noinline loopinfo"
@@ -580,12 +587,16 @@ function is_valid_modref(ex)
            (kind(ex[1]) == K"Identifier" || is_valid_modref(ex[1]))
 end
 
+function is_core_ref(ex, name)
+    kind(ex) == K"core" && ex.name_val == name
+end
+
 function is_core_nothing(ex)
-    kind(ex) == K"core" && ex.name_val == "nothing"
+    is_core_ref(ex, "nothing")
 end
 
 function is_core_Any(ex)
-    kind(ex) == K"core" && ex.name_val == "Any"
+    is_core_ref(ex, "Any")
 end
 
 function is_simple_atom(ctx, ex)

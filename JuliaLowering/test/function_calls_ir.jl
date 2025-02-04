@@ -369,11 +369,9 @@ ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
 #---------------------
 1   TestMod.Cstring
 2   (call top.cconvert %₁ "asdfg")
-3   TestMod.libc
-4   (call core.tuple :strlen %₃)
-5   (call top.unsafe_convert %₁ %₂)
-6   (foreigncall %₄ TestMod.Csize_t (call core.svec TestMod.Cstring) 0 :ccall %₅ %₂)
-7   (return %₆)
+3   (call top.unsafe_convert %₁ %₂)
+4   (foreigncall (call core.tuple :strlen TestMod.libc) TestMod.Csize_t (call core.svec TestMod.Cstring) 0 :ccall %₃ %₂)
+5   (return %₄)
 
 ########################################
 # ccall with a calling convention
@@ -458,7 +456,7 @@ end
 LoweringError:
 let libc = "libc"
     ccall((:strlen, libc), Csize_t, (Cstring,), "asdfg")
-#         └─────────────┘ ── ccall function name and library expression cannot reference local variables
+#         └─────────────┘ ── function name and library expression cannot reference local variables
 end
 
 ########################################
@@ -516,4 +514,66 @@ ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 LoweringError:
 ccall(:foo, Csize_t, (Cstring..., Cstring...), "asdfg", "blah")
 #                     └────────┘ ── only the trailing ccall argument type should have `...`
+
+########################################
+# cglobal special support for (sym, lib) tuple
+cglobal((:sym, lib), Int)
+#---------------------
+1   TestMod.Int
+2   (call core.cglobal (call core.tuple :sym TestMod.lib) %₁)
+3   (return %₂)
+
+########################################
+# cglobal - non-tuple expressions in first arg are lowered as normal
+cglobal(f(), Int)
+#---------------------
+1   TestMod.f
+2   (call %₁)
+3   TestMod.Int
+4   (call core.cglobal %₂ %₃)
+5   (return %₄)
+
+########################################
+# Error: assigning to `cglobal`
+cglobal = 10
+#---------------------
+LoweringError:
+cglobal = 10
+└─────┘ ── invalid assignment location
+
+########################################
+# Error: assigning to `ccall`
+ccall = 10
+#---------------------
+LoweringError:
+ccall = 10
+└───┘ ── invalid assignment location
+
+########################################
+# Error: assigning to `var"ccall"`
+var"ccall" = 10
+#---------------------
+LoweringError:
+var"ccall" = 10
+#   └───┘ ── invalid assignment location
+
+########################################
+# Error: Invalid function name ccall
+function ccall()
+end
+#---------------------
+LoweringError:
+function ccall()
+#        └───┘ ── Invalid function name
+end
+
+########################################
+# Error: Invalid function name ccall
+function A.ccall()
+end
+#---------------------
+LoweringError:
+function A.ccall()
+#        └─────┘ ── Invalid function name
+end
 

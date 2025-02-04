@@ -1607,7 +1607,7 @@ function expand_kw_call(ctx, srcref, farg, args, kws)
 end
 
 function expand_ccall(ctx, ex)
-    @assert kind(ex) == K"call" && is_same_identifier_like(ex[1], "ccall")
+    @assert kind(ex) == K"call" && is_core_ref(ex[1], "ccall")
     if numchildren(ex) < 4
         throw(LoweringError(ex, "too few arguments to ccall"))
     end
@@ -1806,7 +1806,7 @@ end
 
 function expand_call(ctx, ex)
     farg = ex[1]
-    if is_same_identifier_like(farg, "ccall")
+    if is_core_ref(farg, "ccall")
         return expand_ccall(ctx, ex)
     end
     args = copy(ex[2:end])
@@ -2741,7 +2741,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
 end
 
 # Check valid identifier/function names
-function is_valid_func_name(ex)
+function is_invalid_func_name(ex)
     k = kind(ex)
     if k == K"Identifier"
         name = ex.name_val
@@ -2749,9 +2749,9 @@ function is_valid_func_name(ex)
         # `function A.f(x,y) ...`
         name = ex[2].name_val
     else
-        return false
+        return true
     end
-    return name != "ccall" && name != "cglobal"
+    return is_ccall_or_cglobal(name)
 end
 
 function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=identity)
@@ -2759,7 +2759,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     name = ex[1]
     if numchildren(ex) == 1 && is_identifier_like(name)
         # Function declaration with no methods
-        if !is_valid_func_name(name)
+        if is_invalid_func_name(name)
             throw(LoweringError(name, "Invalid function name"))
         end
         return @ast ctx ex [K"block"
@@ -2837,7 +2837,7 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
             name_str = name.name_val
             name = ssavar(ctx, name, name.name_val)
             bare_func_name = name
-        elseif !is_valid_func_name(name)
+        elseif is_invalid_func_name(name)
             throw(LoweringError(name, "Invalid function name"))
         elseif is_identifier_like(name)
             # Add methods to a global `Function` object, or local closure

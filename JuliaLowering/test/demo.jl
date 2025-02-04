@@ -793,6 +793,10 @@ begin
 end
 """
 
+src = """
+cglobal(:jl_uv_stdin, Ptr{Cvoid})
+"""
+
 ex = parsestmt(SyntaxTree, src, filename="foo.jl")
 ex = ensure_attributes(ex, var_id=Int)
 #ex = softscope_test(ex)

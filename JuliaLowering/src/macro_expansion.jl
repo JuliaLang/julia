@@ -202,8 +202,16 @@ need to be dealt with before other lowering.
 """
 function expand_forms_1(ctx::MacroExpansionContext, ex::SyntaxTree)
     k = kind(ex)
-    if k == K"Identifier" && all(==('_'), ex.name_val)
-        @ast ctx ex ex=>K"Placeholder"
+    if k == K"Identifier"
+        name_str = ex.name_val
+        if all(==('_'), name_str)
+            @ast ctx ex ex=>K"Placeholder"
+        elseif is_ccall_or_cglobal(name_str)
+            @ast ctx ex name_str::K"core"
+        else
+            layerid = get(ex, :scope_layer, ctx.current_layer.id)
+            makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)
+        end
     elseif k == K"Identifier" || k == K"MacroName" || k == K"StringMacroName"
         layerid = get(ex, :scope_layer, ctx.current_layer.id)
         makeleaf(ctx, ex, ex, kind=K"Identifier", scope_layer=layerid)

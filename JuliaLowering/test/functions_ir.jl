@@ -333,26 +333,6 @@ end
 9   (return core.nothing)
 
 ########################################
-# Error: Invalid function name ccall
-function ccall()
-end
-#---------------------
-LoweringError:
-function ccall()
-#        └───┘ ── Invalid function name
-end
-
-########################################
-# Error: Invalid function name ccall
-function A.ccall()
-end
-#---------------------
-LoweringError:
-function A.ccall()
-#        └─────┘ ── Invalid function name
-end
-
-########################################
 # Error: Invalid dotop function name
 function (.+)(x,y)
 end

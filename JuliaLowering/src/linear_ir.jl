@@ -174,6 +174,19 @@ function compile_args(ctx, args)
     return args_out
 end
 
+# Compile the (sym,lib) argument to ccall/cglobal
+function compile_C_library_symbol(ctx, ex)
+    if kind(ex) == K"call" && kind(ex[1]) == K"core" && ex[1].name_val == "tuple"
+        # Tuples like core.tuple(:funcname, mylib_name) are allowed and are
+        # kept inline, but may only reference globals.
+        check_no_local_bindings(ctx, ex,
+            "function name and library expression cannot reference local variables")
+        ex
+    else
+        only(compile_args(ctx, (ex,)))
+    end
+end
+
 function emit(ctx::LinearIRContext, ex)
     push!(ctx.code, ex)
     return ex
@@ -588,18 +601,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             k == K"new_opaque_closure" || k == K"cfunction"
         if k == K"foreigncall"
             args = SyntaxList(ctx)
-            # todo: is is_leaf correct here? flisp uses `atom?`
-            func = ex[1]
-            if kind(func) == K"call" && kind(func[1]) == K"core" && func[1].name_val == "tuple"
-                # Tuples like core.tuple(:funcname, mylib_name) are allowed,
-                # but may only reference globals.
-                check_no_local_bindings(ctx, func, "ccall function name and library expression cannot reference local variables")
-                append!(args, compile_args(ctx, ex[1:1]))
-            elseif is_leaf(func)
-                append!(args, compile_args(ctx, ex[1:1]))
-            else
-                push!(args, func)
-            end
+            push!(args, compile_C_library_symbol(ctx, ex[1]))
             # 2nd to 5th arguments of foreigncall are special. They must be
             # left in place but cannot reference locals.
             check_no_local_bindings(ctx, ex[2], "ccall return type cannot reference local variables")
@@ -621,8 +623,12 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
                 check_no_local_bindings(ctx, arg,
                     "cfunction argument cannot reference local variables")
             end
+        elseif k == K"call" && is_core_ref(ex[1], "cglobal")
+            args = SyntaxList(ctx)
+            push!(args, ex[1])
+            push!(args, compile_C_library_symbol(ctx, ex[2]))
+            append!(args, compile_args(ctx, ex[3:end]))
         else
-            # TODO: cglobal
             args = compile_args(ctx, children(ex))
         end
         callex = makenode(ctx, ex, k, args)
