@@ -116,8 +116,7 @@ mutable struct Timer
     function Timer(timeout::Real; interval::Real = 0.0)
         timeout ≥ 0 || throw(ArgumentError("timer cannot have negative timeout of $timeout seconds"))
         interval ≥ 0 || throw(ArgumentError("timer cannot have negative repeat interval of $interval seconds"))
-        # libuv has a tendency to timeout 1 ms early, so we need +1 on the timeout (in milliseconds), unless it is zero
-        timeoutms = ceil(UInt64, timeout * 1000) + !iszero(timeout)
+        timeoutms = ceil(UInt64, timeout * 1000)
         intervalms = ceil(UInt64, interval * 1000)
         loop = eventloop()
 
@@ -139,7 +138,7 @@ end
 function getproperty(t::Timer, f::Symbol)
     if f == :timeout
         t.timeout_ms == 0 && return 0.0
-        return (t.timeout_ms - 1) / 1000 # remove the +1ms compensation from the constructor
+        return t.timeout_ms / 1000
     elseif f == :interval
         return t.interval_ms / 1000
     else
