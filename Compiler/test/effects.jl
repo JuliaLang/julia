@@ -443,12 +443,34 @@ end |> Compiler.is_consistent
 @test Base.infer_effects((Tuple{Int,Int},Int)) do t, i
     getfield(t, i, false)
 end |> Compiler.is_nothrow
+
+# getfield can throw when bounds checking is turned off when name is a symbol
 @test Base.infer_effects((Tuple{Int,Int},Symbol)) do t, i
     getfield(t, i, false)
-end |> Compiler.is_nothrow
+end |> !Compiler.is_nothrow
 @test Base.infer_effects((Tuple{Int,Int},String)) do t, i
     getfield(t, i, false) # invalid name type
 end |> !Compiler.is_nothrow
+
+# check for :noub tainted when bounds checking off
+let e = Base.infer_effects((Tuple{Int, Int}, Int)) do t, i
+        getfield(t, i)
+    end
+    @test !Compiler.is_nothrow(e)
+    @test Compiler.is_noub(e)
+end
+let e = Base.infer_effects((Tuple{Int, Int}, Int)) do t, i
+        getfield(t, i, false)
+    end
+    @test Compiler.is_nothrow(e)
+    @test !Compiler.is_noub(e)
+end
+let e = Base.infer_effects((Tuple{Int, Int}, Int)) do t, i
+        getfield(t, 2, false)
+    end
+    @test Compiler.is_nothrow(e)
+    @test Compiler.is_noub(e)
+end
 
 @test Base.infer_effects((Some{Any},)) do some
     getfield(some, 1, :not_atomic)
@@ -1348,6 +1370,15 @@ let; Base.Experimental.@force_compile; func52843(); end
 # pointerref nothrow for invalid pointer
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{Vector{Int64}}}, Int, Int])
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.pointerref, Any[Type{Ptr{T}} where T, Int, Int])
+
+let e = Base.infer_effects(Core.Intrinsics.pointerref, (Ptr{Int}, Int, Int))
+    @test !Compiler.is_noub(e)
+    @test !Compiler.is_consistent(e)
+end
+let e = Base.infer_effects(unsafe_load, (Ptr{Int},))
+    @test !Compiler.is_noub(e)
+    @test !Compiler.is_consistent(e)
+end
 
 # post-opt :consistent-cy analysis correctness
 # https://github.com/JuliaLang/julia/issues/53508
