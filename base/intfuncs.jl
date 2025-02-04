@@ -96,6 +96,7 @@ end
 
 Least common (positive) multiple (or zero if any argument is zero).
 The arguments may be integer and rational numbers.
+
 ``a`` is a multiple of ``b`` if there exists an integer ``m`` such
 that ``a=mb``.
 
