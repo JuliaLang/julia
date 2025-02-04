@@ -1285,4 +1285,10 @@ end
     @test eltype(A) == eltype(T)
 end
 
+@testset "structure of dense matrices" begin
+    # A is neither triangular nor symmetric/Hermitian
+    A = [1 im 2; -im 0  3; 2 3 im]
+    @test factorize(A) isa LU{ComplexF64, Matrix{ComplexF64}, Vector{Int}}
+end
+
 end # module TestDense
