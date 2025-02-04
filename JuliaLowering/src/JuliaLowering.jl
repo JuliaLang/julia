@@ -29,6 +29,7 @@ _include("scope_analysis.jl")
 _include("closure_conversion.jl")
 _include("linear_ir.jl")
 _include("runtime.jl")
+_include("syntax_macros.jl")
 
 _include("eval.jl")
 

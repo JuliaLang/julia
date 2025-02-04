@@ -1,10 +1,20 @@
-# Runtime support functionality.
+# Runtime support for
+# 1. Functions called by the code emitted from lowering
+# 2. Introspecting Julia's state during lowering
 #
-# Lowering generates code which uses these functions and types but it doesn't
-# call them directly.
-#
-# These should probably move to `Core` at some point?
+# These should probably all move to `Core` at some point.
 
+#-------------------------------------------------------------------------------
+# Functions/types used by code emitted from lowering, but not called by it directly
+
+# Return the current exception. In JuliaLowering we use this rather than the
+# special form `K"the_exception"` to reduces the number of special forms.
+Base.@assume_effects :removable :nothrow function current_exception()
+    @ccall jl_current_exception(current_task()::Any)::Any
+end
+
+#--------------------------------------------------
+# Supporting functions for AST interpolation (`quote`)
 struct InterpolationContext{Graph} <: AbstractLoweringContext
     graph::Graph
     values::Tuple
@@ -98,6 +108,8 @@ function interpolate_ast(ex, values...)
     end
 end
 
+#--------------------------------------------------
+# Functions called by closure conversion
 function eval_closure_type(mod, closure_type_name, field_names, field_is_box)
     type_params = Core.TypeVar[]
     field_types = []
@@ -131,6 +143,9 @@ function replace_captured_locals!(codeinfo, locals)
     end
     codeinfo
 end
+
+#--------------------------------------------------
+# Functions which create modules or mutate their bindings
 
 # Construct new bare module including only the "default names"
 #
@@ -199,12 +214,8 @@ function module_public(mod::Module, is_exported::Bool, identifiers...)
     end
 end
 
-# Return the current exception. In JuliaLowering we use this rather than the
-# special form `K"the_exception"` to reduces the number of special forms.
-Base.@assume_effects :removable :nothrow function current_exception()
-    @ccall jl_current_exception(current_task()::Any)::Any
-end
-
+#--------------------------------------------------
+# Docsystem integration
 function _bind_func_docs!(f, docstr, method_metadata::Core.SimpleVector)
     mod = parentmodule(f)
     bind = Base.Docs.Binding(mod, nameof(f))
@@ -254,6 +265,9 @@ function bind_docs!(type::Type, docstr, lineno::LineNumberNode; field_docs=Core.
     end
     Docs.doc!(mod, bind, Base.Docs.docstr(docstr, metadata), Union{})
 end
+
+#--------------------------------------------------
+# Runtime support infrastructure for `@generated`
 
 # An alternative to Core.GeneratedFunctionStub which works on SyntaxTree rather
 # than Expr.
@@ -340,8 +354,9 @@ function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospec
     return ci
 end
 
+
 #-------------------------------------------------------------------------------
-# The following functions are used by lowering to inspect Julia's state.
+# The following functions are called directly by lowering to inspect Julia's state.
 
 # Get the binding for `name` if one is already resolved in module `mod`. Note
 # that we cannot use `isdefined(::Module, ::Symbol)` here, because that causes
@@ -389,9 +404,9 @@ end
 #
 # TODO: Remove the use of this where possible. Currently this is used within
 # lowering to create unique global names for keyword function bodies and
-# closure types as an alternative to current-julia-module-counter. However, we
-# should defer the it to eval-time to make lowering itself completely
-# non-mutating.
+# closure types as a more local alternative to current-julia-module-counter.
+# However, we should ideally defer it to eval-time to make lowering itself
+# completely non-mutating.
 function reserve_module_binding_i(mod, basename)
     i = 0
     while true
@@ -401,183 +416,5 @@ function reserve_module_binding_i(mod, basename)
         end
         i += 1
     end
-end
-
-#-------------------------------------------------------------------------------
-# The following are versions of macros from Base which act as "standard syntax
-# extensions" with special semantics known to lowering.
-#
-# In order to implement these here without getting into bootstrapping
-# difficulties, we just write them as plain old macro-named functions and add
-# the required __context__ argument ourselves.
-#
-# TODO: @inline, @noinline, @inbounds, @simd, @ccall, @isdefined
-#
-# TODO: Eventually we should move these to proper `macro` definitions and use
-# JuliaLowering.include() or something, then we'll be in the fun little
-# world of bootstrapping but it shouldn't be too painful :)
-
-function _apply_nospecialize(ctx, ex)
-    k = kind(ex)
-    if k == K"Identifier" || k == K"Placeholder" || k == K"tuple"
-        setmeta(ex; nospecialize=true)
-    elseif k == K"..." || k == K"::" || k == K"="
-        if k == K"::" && numchildren(ex) == 1
-            ex = @ast ctx ex [K"::" "_"::K"Placeholder" ex[1]]
-        end
-        mapchildren(c->_apply_nospecialize(ctx, c), ctx, ex, 1:1)
-    else
-        throw(LoweringError(ex, "Invalid function argument"))
-    end
-end
-
-function Base.var"@nospecialize"(__context__::MacroContext, ex)
-    _apply_nospecialize(__context__, ex)
-end
-
-function Base.GC.var"@preserve"(__context__::MacroContext, exs...)
-    idents = exs[1:end-1]
-    for e in idents
-        if kind(e) != K"Identifier"
-            throw(MacroExpansionError(e, "Preserved variable must be a symbol"))
-        end
-    end
-    @ast __context__ __context__.macrocall [K"block"
-        [K"="
-            "s"::K"Identifier"
-            [K"gc_preserve_begin"
-                idents...
-            ]
-        ]
-        [K"="
-            "r"::K"Identifier"
-            exs[end]
-        ]
-        [K"gc_preserve_end" "s"::K"Identifier"]
-        "r"::K"Identifier"
-    ]
-end
-
-function Base.var"@atomic"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier" || kind(ex) == K"::" (ex, "Expected identifier or declaration")
-    @ast __context__ __context__.macrocall [K"atomic" ex]
-end
-
-function Base.var"@label"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier"
-    @ast __context__ ex ex=>K"symbolic_label"
-end
-
-function Base.var"@goto"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier"
-    @ast __context__ ex ex=>K"symbolic_goto"
-end
-
-function Base.var"@locals"(__context__::MacroContext)
-    @ast __context__ __context__.macrocall [K"extension" "locals"::K"Symbol"]
-end
-
-function Base.var"@isdefined"(__context__::MacroContext, ex)
-    @ast __context__ __context__.macrocall [K"isdefined" ex]
-end
-
-function Base.var"@generated"(__context__::MacroContext)
-    @ast __context__ __context__.macrocall [K"generated"]
-end
-function Base.var"@generated"(__context__::MacroContext, ex)
-    if kind(ex) != K"function"
-        throw(LoweringError(ex, "Expected a function argument to `@generated`"))
-    end
-    @ast __context__ __context__.macrocall [K"function"
-        ex[1]
-        [K"if" [K"generated"]
-            ex[2]
-            [K"block"
-                [K"meta" "generated_only"::K"Symbol"]
-                [K"return"]
-            ]
-        ]
-    ]
-end
-
-# The following `@islocal` and `@inert` are macros for special syntax known to
-# lowering which don't exist in Base but arguably should.
-#
-# For now we have our own versions
-function var"@islocal"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"Identifier"
-    @ast __context__ __context__.macrocall [K"extension"
-        "islocal"::K"Symbol"
-        ex
-    ]
-end
-
-function Base.Experimental.var"@opaque"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"->"
-    @ast __context__ __context__.macrocall [K"opaque_closure"
-        "nothing"::K"core"
-        "nothing"::K"core"
-        "nothing"::K"core"
-        true::K"Bool"
-        ex
-    ]
-end
-
-"""
-A non-interpolating quoted expression.
-
-For example,
-
-```julia
-@inert quote
-    \$x
-end
-```
-
-does not take `x` from the surrounding scope - instead it leaves the
-interpolation `\$x` intact as part of the expression tree.
-
-TODO: What is the correct way for `@inert` to work? ie which of the following
-should work?
-
-```julia
-@inert quote
-   body
-end
-
-@inert begin
-   body
-end
-
-@inert x
-
-@inert \$x
-```
-
-The especially tricky cases involve nested interpolation ...
-```julia
-quote
-    @inert \$x
-end
-
-@inert quote
-    quote
-        \$x
-    end
-end
-
-@inert quote
-    quote
-        \$\$x
-    end
-end
-```
-
-etc. Needs careful thought - we should probably just copy what lisp does with
-quote+quasiquote 😅
-"""
-function var"@inert"(__context__::MacroContext, ex)
-    @chk kind(ex) == K"quote"
-    @ast __context__ __context__.macrocall [K"inert" ex]
 end
 
