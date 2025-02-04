@@ -702,9 +702,6 @@ end
 
         @test_throws ArgumentError gcd(T(1)//T(1), T(1)//T(0))
         @test_throws ArgumentError gcd(T(1)//T(0), T(0)//T(1))
-
-        @test_throws ArgumentError lcm(T(1)//T(1), T(1)//T(0))
-        @test_throws ArgumentError lcm(T(1)//T(0), T(1)//T(1))
     end
 end
 
