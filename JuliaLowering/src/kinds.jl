@@ -29,6 +29,8 @@ function _register_kinds()
             "loopinfo"
             # Call into foreign code. Emitted by `@ccall`
             "foreigncall"
+            # Special form for constructing a function callable from C
+            "cfunction"
             # Special form emitted by `Base.Experimental.@opaque`
             "opaque_closure"
             # Test whether a variable is defined

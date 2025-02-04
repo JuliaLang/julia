@@ -143,13 +143,16 @@ function is_valid_ir_rvalue(ctx, lhs, rhs)
     return is_ssa(ctx, lhs) ||
            is_valid_ir_argument(ctx, rhs) ||
            (kind(lhs) == K"BindingId" &&
-            # FIXME: add: invoke cfunction gc_preserve_begin copyast
-            kind(rhs) in KSet"new splatnew isdefined call foreigncall gc_preserve_begin foreigncall new_opaque_closure")
+            # FIXME: add: invoke ?
+            kind(rhs) in KSet"new splatnew cfunction isdefined call foreigncall gc_preserve_begin foreigncall new_opaque_closure")
 end
 
-function contains_nonglobal_binding(ctx, ex)
-    contains_unquoted(ex) do e
+function check_no_local_bindings(ctx, ex, msg)
+    contains_nonglobal_binding = contains_unquoted(ex) do e
         kind(e) == K"BindingId" && lookup_binding(ctx, e).kind !== :global
+    end
+    if contains_nonglobal_binding
+        throw(LoweringError(ex, msg))
     end
 end
 
@@ -582,8 +585,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
         @chk !needs_value (ex,"TOMBSTONE encountered in value position")
         nothing
     elseif k == K"call" || k == K"new" || k == K"splatnew" || k == K"foreigncall" ||
-            k == K"new_opaque_closure"
-        # TODO k ∈ cfunction cglobal
+            k == K"new_opaque_closure" || k == K"cfunction"
         if k == K"foreigncall"
             args = SyntaxList(ctx)
             # todo: is is_leaf correct here? flisp uses `atom?`
@@ -591,9 +593,7 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             if kind(func) == K"call" && kind(func[1]) == K"core" && func[1].name_val == "tuple"
                 # Tuples like core.tuple(:funcname, mylib_name) are allowed,
                 # but may only reference globals.
-                if contains_nonglobal_binding(ctx, func)
-                    throw(LoweringError(func, "ccall function name and library expression cannot reference local variables"))
-                end
+                check_no_local_bindings(ctx, func, "ccall function name and library expression cannot reference local variables")
                 append!(args, compile_args(ctx, ex[1:1]))
             elseif is_leaf(func)
                 append!(args, compile_args(ctx, ex[1:1]))
@@ -602,18 +602,27 @@ function compile(ctx::LinearIRContext, ex, needs_value, in_tail_pos)
             end
             # 2nd to 5th arguments of foreigncall are special. They must be
             # left in place but cannot reference locals.
-            if contains_nonglobal_binding(ctx, ex[2])
-                throw(LoweringError(ex[2], "ccall return type cannot reference local variables"))
-            end
+            check_no_local_bindings(ctx, ex[2], "ccall return type cannot reference local variables")
             for argt in children(ex[3])
-                if contains_nonglobal_binding(ctx, argt)
-                    throw(LoweringError(argt, "ccall argument types cannot reference local variables"))
-                end
+                check_no_local_bindings(ctx, argt,
+                    "ccall argument types cannot reference local variables")
             end
             append!(args, ex[2:5])
             append!(args, compile_args(ctx, ex[6:end]))
             args
+        elseif k == K"cfunction"
+            # Arguments of cfunction must be left in place except for argument
+            # 2 (fptr)
+            args = copy(children(ex))
+            args[2] = only(compile_args(ctx, args[2:2]))
+            check_no_local_bindings(ctx, ex[3],
+                "cfunction return type cannot reference local variables")
+            for arg in children(ex[4])
+                check_no_local_bindings(ctx, arg,
+                    "cfunction argument cannot reference local variables")
+            end
         else
+            # TODO: cglobal
             args = compile_args(ctx, children(ex))
         end
         callex = makenode(ctx, ex, k, args)

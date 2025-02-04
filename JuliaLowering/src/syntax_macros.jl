@@ -75,6 +75,47 @@ function Base.var"@generated"(__context__::MacroContext, ex)
     ]
 end
 
+function Base.var"@cfunction"(__context__::MacroContext, callable, return_type, arg_types)
+    if kind(arg_types) != K"tuple"
+        throw(MacroExpansionError(arg_types, "@cfunction argument types must be a literal tuple"))
+    end
+    arg_types_svec = @ast __context__ arg_types [K"call"
+        "svec"::K"core"
+        children(arg_types)...
+    ]
+    if kind(callable) == K"$"
+        fptr = callable[1]
+        typ = Base.CFunction
+    else
+        # Kinda weird semantics here - without `$`, the callable is a top level
+        # expression which will be evaluated by `jl_resolve_globals_in_ir`,
+        # implicitly within the module where the `@cfunction` is expanded into.
+        #
+        # TODO: The existing flisp implementation is arguably broken because it
+        # ignores macro hygiene when `callable` is the result of a macro
+        # expansion within a different module. For now we've inherited this
+        # brokenness.
+        #
+        # Ideally we'd fix this by bringing the scoping rules for this
+        # expression back into lowering. One option may be to wrap the
+        # expression in a form which pushes it to top level - maybe as a whole
+        # separate top level thunk like closure lowering - then use the
+        # K"captured_local" mechanism to interpolate it back in. This scheme
+        # would make the complicated scope semantics explicit and let them be
+        # dealt with in the right place in the frontend rather than putting the
+        # rules into the runtime itself.
+        fptr = @ast __context__ callable QuoteNode(Expr(callable))::K"Value"
+        typ = Ptr{Cvoid}
+    end
+    @ast __context__ __context__.macrocall [K"cfunction"
+        typ::K"Value"
+        fptr
+        return_type
+        arg_types_svec
+        "ccall"::K"Symbol"
+    ]
+end
+
 function Base.GC.var"@preserve"(__context__::MacroContext, exs...)
     idents = exs[1:end-1]
     for e in idents

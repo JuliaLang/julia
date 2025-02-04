@@ -290,6 +290,7 @@ function to_lowered_expr(mod, ex, ssa_offset=0)
                k == K"gc_preserve_begin" ? :gc_preserve_begin :
                k == K"gc_preserve_end"   ? :gc_preserve_end   :
                k == K"foreigncall"       ? :foreigncall       :
+               k == K"cfunction"         ? :cfunction         :
                k == K"opaque_closure_method" ? :opaque_closure_method :
                nothing
         if isnothing(head)

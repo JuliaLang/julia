@@ -320,6 +320,53 @@ JuxtTest.@emit_juxt
 4   (return %₃)
 
 ########################################
+# @cfunction expansion with global generic function as function argument
+@cfunction(callable, Int, (Int, Float64))
+#---------------------
+1   (cfunction Ptr{Nothing} :(:callable) TestMod.Int (call core.svec TestMod.Int TestMod.Float64) :ccall)
+2   (return %₁)
+
+########################################
+# @cfunction expansion with closed-over callable argument
+@cfunction($close_over, Int, (Int, Float64))
+#---------------------
+1   TestMod.close_over
+2   (cfunction Base.CFunction %₁ TestMod.Int (call core.svec TestMod.Int TestMod.Float64) :ccall)
+3   (return %₂)
+
+########################################
+# Error: Bad arg types to @cfunction
+@cfunction(f, Int, NotATuple)
+#---------------------
+MacroExpansionError while expanding @cfunction in module Main.TestMod:
+@cfunction(f, Int, NotATuple)
+#                  └───────┘ ── @cfunction argument types must be a literal tuple
+
+########################################
+# Error: Locals used in @cfunction return type
+let T=Float64
+    @cfunction(f, T, (Float64,))
+end
+#---------------------
+LoweringError:
+let T=Float64
+    @cfunction(f, T, (Float64,))
+#                 ╙ ── cfunction return type cannot reference local variables
+end
+
+########################################
+# Error: Locals used in @cfunction arg type
+let T=Float64
+    @cfunction(f, Float64, (Float64,T))
+end
+#---------------------
+LoweringError:
+let T=Float64
+    @cfunction(f, Float64, (Float64,T))
+#                                   ╙ ── cfunction argument cannot reference local variables
+end
+
+########################################
 # Error: unary & syntax
 &x
 #---------------------
