@@ -969,7 +969,7 @@ void jl_init_heartbeat(void)
 int jl_inside_heartbeat_thread(void)
 {
     uv_thread_t curr_uvtid = uv_thread_self();
-    return curr_uvtid == heartbeat_uvtid;
+    return uv_thread_equal(&curr_uvtid, &heartbeat_uvtid);
 }
 
 // enable/disable heartbeats
