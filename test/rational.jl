@@ -654,7 +654,7 @@ end
         @test_throws ArgumentError gcdx(T(1)//T(0), T(1)//T(1))
         @test_throws ArgumentError gcdx(T(1)//T(1), T(1)//T(0))
         @test gcdx(T(1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
-        @test_throws ArgumentError (T(1)//T(0), T(0)//T(1))
+        @test_throws ArgumentError gcdx(T(1)//T(0), T(0)//T(1))
         @test gcdx(T(0)//T(1), T(0)//T(1)) === (T(0)//T(1), T(0), T(0))
 
         if T <: Signed
