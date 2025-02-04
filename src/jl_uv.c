@@ -754,6 +754,7 @@ STATIC_INLINE void write_to_safe_crash_log(char *buf) JL_NOTSAFEPOINT
 }
 
 extern int jl_inside_heartbeat_thread(void);
+extern int jl_inside_waiting_for_the_world(void);
 
 JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 {
@@ -774,7 +775,7 @@ JL_DLLEXPORT void jl_safe_printf(const char *fmt, ...)
     // order is important here: we want to ensure that the threading infra
     // has been initialized before we start trying to print to the
     // safe crash log file
-    if (jl_sig_fd != 0 && (jl_inside_signal_handler() || jl_inside_heartbeat_thread())) {
+    if (jl_sig_fd != 0 && (jl_inside_signal_handler() || jl_inside_heartbeat_thread() || jl_inside_waiting_for_the_world())) {
         write_to_safe_crash_log(buf);
     }
     if (write(STDERR_FILENO, buf, strlen(buf)) < 0) {

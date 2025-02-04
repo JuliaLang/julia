@@ -226,6 +226,14 @@ NOINLINE uintptr_t gc_get_stack_ptr(void)
 
 #define should_timeout() 0
 
+uv_thread_t safepoint_waiter;
+
+int jl_inside_waiting_for_the_world(void)
+{
+    uv_thread_t self = uv_thread_self();
+    return uv_thread_equal(&safepoint_waiter, &self);
+}
+
 void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
 {
     JL_TIMING(GC, GC_Stop);
@@ -234,6 +242,7 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
     TracyCZoneColor(ctx, 0x696969);
 #endif
     assert(gc_n_threads);
+    safepoint_waiter = uv_thread_self();
     if (gc_n_threads > 1)
         jl_wake_libuv();
     for (int i = 0; i < gc_n_threads; i++) {
@@ -263,6 +272,7 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
             }
         }
     }
+    memset(&safepoint_waiter, 0, sizeof(safepoint_waiter));
 }
 
 // malloc wrappers, aligned allocation
