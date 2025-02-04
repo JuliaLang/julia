@@ -566,7 +566,7 @@ float(::Type{Rational{T}}) where {T<:Integer} = float(T)
 
 function gcd(x::Rational, y::Rational)
     if (isinf(x) && !isinf(y)) || (!isinf(x) && isinf(y))
-        throw(ArgumentError("lcm is not defined"))
+        throw(ArgumentError("lcm is not defined between infinite and finite numbers"))
     end
     return unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
 end
