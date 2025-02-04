@@ -568,7 +568,7 @@ function gcd(x::Rational, y::Rational)
     isinf(x) != isinf(y)
         throw(ArgumentError("lcm is not defined between infinite and finite numbers"))
     end
-    return unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
+    unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
 end
 function lcm(x::Rational, y::Rational)
     if (isinf(x) && !isinf(y)) || (!isinf(x) && isinf(y))
