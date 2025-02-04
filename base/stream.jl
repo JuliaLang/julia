@@ -1571,7 +1571,7 @@ end
 
 function read(stream::BufferStream)
     bytes = lock(stream.cond) do
-        wait_readnb(stream, typemax(Int))
+        wait_close(stream)
         take!(stream.buffer)
     end
     return bytes
