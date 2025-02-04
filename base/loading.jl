@@ -2273,7 +2273,11 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
 
     deps_eltype = sprint(show, eltype(concrete_deps); context = :module=>nothing)
     deps = deps_eltype * "[" * join(deps_strs, ",") * "]"
-    trace = isassigned(PRECOMPILE_TRACE_COMPILE) ? `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])` : ``
+    trace = if isassigned(PRECOMPILE_TRACE_COMPILE)
+        `--trace-compile=$(PRECOMPILE_TRACE_COMPILE[]) --trace-compile-timing`
+    else
+        ``
+    end
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd) $(opts)
                               --startup-file=no --history-file=no --warn-overwrite=yes
                               --color=$(have_color === nothing ? "auto" : have_color ? "yes" : "no")
