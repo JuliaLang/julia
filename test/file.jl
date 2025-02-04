@@ -2033,19 +2033,10 @@ end
         @test !Sys.isexecutable(fpath)
         @test Sys.isreadable(fpath)
         @test !Sys.iswritable(fpath)
-        chmod(fpath, 0o244)
+        chmod(fpath, 0o222)
         @test !Sys.isexecutable(fpath)
-        @test !Sys.isreadable(fpath) skip=Sys.iswindows()
-        @test Sys.iswritable(fpath) skip=Sys.iswindows()
-
-        # Ensure that, on Windows, where inheritance is default,
-        # chmod still behaves as we expect.
-        if Sys.iswindows()
-            chmod(subdir, 0o666)
-            @test !Sys.isexecutable(fpath)
-            @test Sys.isreadable(fpath)
-            @test_skip Sys.iswritable(fpath)
-        end
+        @test !Sys.isreadable(fpath)
+        @test Sys.iswritable(fpath)
 
         # Reset permissions to all at the end, so it can be deleted properly.
         chmod(dir, 0o777; recursive=true)
