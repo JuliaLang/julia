@@ -649,7 +649,7 @@ end
         @test lcm(a, T(0)//T(1)) === T(0)//T(1)
         @test gcdx(a, T(0)//T(1)) === (a, T(1), T(0))
 
-        @test_throws ArgumentError gcdx(T(1)//T(0), T(1)//T(2)) 
+        @test_throws ArgumentError gcdx(T(1)//T(0), T(1)//T(2))
         @test_throws ArgumentError gcdx(T(1)//T(2), T(1)//T(0))
         @test_throws ArgumentError gcdx(T(1)//T(0), T(1)//T(1))
         @test_throws ArgumentError gcdx(T(1)//T(1), T(1)//T(0))
