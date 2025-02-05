@@ -41,6 +41,8 @@ JL_DLLEXPORT jl_genericmemory_t *jl_alloc_genericmemory_unchecked(jl_ptls_t ptls
     m = (jl_genericmemory_t*)jl_gc_alloc(ptls, tot, mtype);
     if (pooled) {
         data = (char*)m + JL_SMALL_BYTE_ALIGNMENT;
+        // Data is inlined and ptr is an internal pointer. We pin the object so the ptr will not be invalid.
+        OBJ_PIN(m);
     }
     else {
         int isaligned = 1; // jl_gc_managed_malloc is always aligned
@@ -111,6 +113,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_string_to_genericmemory(jl_value_t *str)
     m->length = jl_string_len(str);
     m->ptr = jl_string_data(str);
     jl_genericmemory_data_owner_field(m) = str;
+    OBJ_PIN(str);
     return m;
 }
 
@@ -166,7 +169,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     m->length = nel;
     jl_genericmemory_data_owner_field(m) = own_buffer ? (jl_value_t*)m : NULL;
     if (own_buffer) {
-        // FIXME: PTR_PIN(m);
+        OBJ_PIN(m);
         int isaligned = 0;  // TODO: allow passing memalign'd buffers
         jl_gc_track_malloced_genericmemory(ct->ptls, m, isaligned);
         size_t allocated_bytes = memory_block_usable_size(data, isaligned);

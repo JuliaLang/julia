@@ -4085,6 +4085,8 @@ JL_DLLEXPORT void jl_gc_schedule_foreign_sweepfunc(jl_ptls_t ptls, jl_value_t *o
     arraylist_push(&ptls->gc_tls.sweep_objs, obj);
 }
 
+// added for MMTk integration
+
 void jl_gc_notify_image_load(const char* img_data, size_t len)
 {
     // Do nothing
@@ -4097,6 +4099,14 @@ void jl_gc_notify_image_alloc(const char* img_data, size_t len)
 
 JL_DLLEXPORT const char* jl_gc_active_impl(void) {
     return "Built with stock GC";
+}
+
+JL_DLLEXPORT unsigned char jl_gc_pin_object(void* obj) {
+    return 0;
+}
+
+JL_DLLEXPORT unsigned char jl_gc_pin_pointer(void* ptr) {
+    return 0;
 }
 
 JL_DLLEXPORT void jl_gc_preserve_begin_hook(int n, ...) JL_NOTSAFEPOINT

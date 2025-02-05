@@ -313,6 +313,14 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     errno = last_errno;
 }
 
+JL_DLLEXPORT unsigned char jl_gc_pin_object(void* obj) {
+    return mmtk_pin_object(obj);
+}
+
+JL_DLLEXPORT unsigned char jl_gc_pin_pointer(void* ptr) {
+    return mmtk_pin_pointer(ptr);
+}
+
 JL_DLLEXPORT void jl_gc_notify_thread_yield(jl_ptls_t ptls, void* ctx) {
     if (ctx == NULL) {
         // Save the context for the thread as it was running at the time of the call
@@ -496,35 +504,292 @@ static void add_node_to_tpinned_roots_buffer(RootsWorkClosure* closure, RootsWor
     }
 }
 
+// staticdata_utils.c
+extern jl_array_t *internal_methods;
+extern jl_array_t *newly_inferred;
+// task.c
+extern jl_function_t* task_done_hook_func;
+
+#define TRACE_GLOBALLY_ROOTED(r) add_node_to_roots_buffer(closure, buf, buf_len, r)
+
+// This is a list of global variables that are marked with JL_GLOBALLY_ROOTED. We need to make sure that they
+// won't be moved. Otherwise, when we access those objects from the C global variables, we may see moved references.
+void trace_full_globally_rooted(RootsWorkClosure* closure, RootsWorkBuffer* buf, size_t* buf_len)
+{
+
+    TRACE_GLOBALLY_ROOTED(cmpswap_names);
+    TRACE_GLOBALLY_ROOTED(jl_typeinf_func);
+    TRACE_GLOBALLY_ROOTED(_jl_debug_method_invalidation);
+    // Max 4096
+    for (size_t i = 0; i < N_CALL_CACHE; i++) {
+        TRACE_GLOBALLY_ROOTED(call_cache[i]);
+    }
+    // julia_internal.h
+    TRACE_GLOBALLY_ROOTED(jl_type_type_mt);
+    TRACE_GLOBALLY_ROOTED(jl_nonfunction_mt);
+    TRACE_GLOBALLY_ROOTED(jl_kwcall_mt);
+    TRACE_GLOBALLY_ROOTED(jl_opaque_closure_method);
+    TRACE_GLOBALLY_ROOTED(jl_nulldebuginfo);
+    TRACE_GLOBALLY_ROOTED(_jl_debug_method_invalidation);
+    TRACE_GLOBALLY_ROOTED(jl_module_init_order);
+    // TRACE_GLOBALLY_ROOTED(jl_current_modules); -- we cannot trace a htable_t. So we trace each module.
+    for (size_t i = 0; i < jl_current_modules.size; i += 2) {
+        if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
+            TRACE_GLOBALLY_ROOTED(jl_current_modules.table[i]);
+        }
+    }
+    for (size_t i = 0; i < N_CALL_CACHE; i++) {
+        jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
+        TRACE_GLOBALLY_ROOTED(v);
+    }
+    TRACE_GLOBALLY_ROOTED(jl_precompile_toplevel_module);
+    TRACE_GLOBALLY_ROOTED(jl_global_roots_list);
+    TRACE_GLOBALLY_ROOTED(jl_global_roots_keyset);
+    TRACE_GLOBALLY_ROOTED(precompile_field_replace);
+    // julia.h
+    TRACE_GLOBALLY_ROOTED(jl_typeofbottom_type);
+    TRACE_GLOBALLY_ROOTED(jl_datatype_type);
+    TRACE_GLOBALLY_ROOTED(jl_uniontype_type);
+    TRACE_GLOBALLY_ROOTED(jl_unionall_type);
+    TRACE_GLOBALLY_ROOTED(jl_tvar_type);
+
+    TRACE_GLOBALLY_ROOTED(jl_any_type);
+    TRACE_GLOBALLY_ROOTED(jl_type_type);
+    TRACE_GLOBALLY_ROOTED(jl_typename_type);
+    TRACE_GLOBALLY_ROOTED(jl_type_typename);
+    TRACE_GLOBALLY_ROOTED(jl_symbol_type);
+    TRACE_GLOBALLY_ROOTED(jl_ssavalue_type);
+    TRACE_GLOBALLY_ROOTED(jl_slotnumber_type);
+    TRACE_GLOBALLY_ROOTED(jl_argument_type);
+    TRACE_GLOBALLY_ROOTED(jl_const_type);
+    TRACE_GLOBALLY_ROOTED(jl_partial_struct_type);
+    TRACE_GLOBALLY_ROOTED(jl_partial_opaque_type);
+    TRACE_GLOBALLY_ROOTED(jl_interconditional_type);
+    TRACE_GLOBALLY_ROOTED(jl_method_match_type);
+    TRACE_GLOBALLY_ROOTED(jl_simplevector_type);
+    TRACE_GLOBALLY_ROOTED(jl_tuple_typename);
+    TRACE_GLOBALLY_ROOTED(jl_vecelement_typename);
+    TRACE_GLOBALLY_ROOTED(jl_anytuple_type);
+    TRACE_GLOBALLY_ROOTED(jl_emptytuple_type);
+    TRACE_GLOBALLY_ROOTED(jl_anytuple_type_type);
+    TRACE_GLOBALLY_ROOTED(jl_vararg_type);
+    TRACE_GLOBALLY_ROOTED(jl_function_type);
+    TRACE_GLOBALLY_ROOTED(jl_builtin_type);
+    TRACE_GLOBALLY_ROOTED(jl_opaque_closure_type);
+    TRACE_GLOBALLY_ROOTED(jl_opaque_closure_typename);
+
+    TRACE_GLOBALLY_ROOTED(jl_bottom_type);
+    TRACE_GLOBALLY_ROOTED(jl_method_instance_type);
+    TRACE_GLOBALLY_ROOTED(jl_code_instance_type);
+    TRACE_GLOBALLY_ROOTED(jl_code_info_type);
+    TRACE_GLOBALLY_ROOTED(jl_debuginfo_type);
+    TRACE_GLOBALLY_ROOTED(jl_method_type);
+    TRACE_GLOBALLY_ROOTED(jl_module_type);
+    TRACE_GLOBALLY_ROOTED(jl_addrspace_type);
+    TRACE_GLOBALLY_ROOTED(jl_addrspacecore_type);
+    TRACE_GLOBALLY_ROOTED(jl_abstractarray_type);
+    TRACE_GLOBALLY_ROOTED(jl_densearray_type);
+    TRACE_GLOBALLY_ROOTED(jl_array_type);
+    TRACE_GLOBALLY_ROOTED(jl_array_typename);
+    TRACE_GLOBALLY_ROOTED(jl_genericmemory_type);
+    TRACE_GLOBALLY_ROOTED(jl_genericmemory_typename);
+    TRACE_GLOBALLY_ROOTED(jl_genericmemoryref_type);
+    TRACE_GLOBALLY_ROOTED(jl_genericmemoryref_typename);
+    TRACE_GLOBALLY_ROOTED(jl_weakref_type);
+    TRACE_GLOBALLY_ROOTED(jl_abstractstring_type);
+    TRACE_GLOBALLY_ROOTED(jl_string_type);
+    TRACE_GLOBALLY_ROOTED(jl_errorexception_type);
+    TRACE_GLOBALLY_ROOTED(jl_argumenterror_type);
+    TRACE_GLOBALLY_ROOTED(jl_loaderror_type);
+    TRACE_GLOBALLY_ROOTED(jl_initerror_type);
+    TRACE_GLOBALLY_ROOTED(jl_typeerror_type);
+    TRACE_GLOBALLY_ROOTED(jl_methoderror_type);
+    TRACE_GLOBALLY_ROOTED(jl_undefvarerror_type);
+    TRACE_GLOBALLY_ROOTED(jl_fielderror_type);
+    TRACE_GLOBALLY_ROOTED(jl_atomicerror_type);
+    TRACE_GLOBALLY_ROOTED(jl_missingcodeerror_type);
+    TRACE_GLOBALLY_ROOTED(jl_lineinfonode_type);
+    TRACE_GLOBALLY_ROOTED(jl_stackovf_exception);
+    TRACE_GLOBALLY_ROOTED(jl_memory_exception);
+    TRACE_GLOBALLY_ROOTED(jl_readonlymemory_exception);
+    TRACE_GLOBALLY_ROOTED(jl_diverror_exception);
+    TRACE_GLOBALLY_ROOTED(jl_undefref_exception);
+    TRACE_GLOBALLY_ROOTED(jl_interrupt_exception);
+    TRACE_GLOBALLY_ROOTED(jl_precompilable_error);
+    TRACE_GLOBALLY_ROOTED(jl_boundserror_type);
+    TRACE_GLOBALLY_ROOTED(jl_an_empty_vec_any);
+    TRACE_GLOBALLY_ROOTED(jl_an_empty_memory_any);
+    TRACE_GLOBALLY_ROOTED(jl_an_empty_string);
+
+    TRACE_GLOBALLY_ROOTED(jl_bool_type);
+    TRACE_GLOBALLY_ROOTED(jl_char_type);
+    TRACE_GLOBALLY_ROOTED(jl_int8_type);
+    TRACE_GLOBALLY_ROOTED(jl_uint8_type);
+    TRACE_GLOBALLY_ROOTED(jl_int16_type);
+    TRACE_GLOBALLY_ROOTED(jl_uint16_type);
+    TRACE_GLOBALLY_ROOTED(jl_int32_type);
+    TRACE_GLOBALLY_ROOTED(jl_uint32_type);
+    TRACE_GLOBALLY_ROOTED(jl_int64_type);
+    TRACE_GLOBALLY_ROOTED(jl_uint64_type);
+    TRACE_GLOBALLY_ROOTED(jl_float16_type);
+    TRACE_GLOBALLY_ROOTED(jl_float32_type);
+    TRACE_GLOBALLY_ROOTED(jl_float64_type);
+    TRACE_GLOBALLY_ROOTED(jl_floatingpoint_type);
+    TRACE_GLOBALLY_ROOTED(jl_number_type);
+    TRACE_GLOBALLY_ROOTED(jl_void_type);  // deprecated
+    TRACE_GLOBALLY_ROOTED(jl_nothing_type);
+    TRACE_GLOBALLY_ROOTED(jl_signed_type);
+    TRACE_GLOBALLY_ROOTED(jl_voidpointer_type);
+    TRACE_GLOBALLY_ROOTED(jl_uint8pointer_type);
+    TRACE_GLOBALLY_ROOTED(jl_pointer_type);
+    TRACE_GLOBALLY_ROOTED(jl_llvmpointer_type);
+    TRACE_GLOBALLY_ROOTED(jl_ref_type);
+    TRACE_GLOBALLY_ROOTED(jl_pointer_typename);
+    TRACE_GLOBALLY_ROOTED(jl_llvmpointer_typename);
+    TRACE_GLOBALLY_ROOTED(jl_namedtuple_typename);
+    TRACE_GLOBALLY_ROOTED(jl_namedtuple_type);
+    TRACE_GLOBALLY_ROOTED(jl_task_type);
+    TRACE_GLOBALLY_ROOTED(jl_pair_type);
+
+    TRACE_GLOBALLY_ROOTED(jl_array_uint8_type);
+    TRACE_GLOBALLY_ROOTED(jl_array_any_type);
+    TRACE_GLOBALLY_ROOTED(jl_array_symbol_type);
+    TRACE_GLOBALLY_ROOTED(jl_array_int32_type);
+    TRACE_GLOBALLY_ROOTED(jl_array_uint32_type);
+    TRACE_GLOBALLY_ROOTED(jl_array_uint64_type);
+    TRACE_GLOBALLY_ROOTED(jl_memory_uint8_type);
+    TRACE_GLOBALLY_ROOTED(jl_memory_uint16_type);
+    TRACE_GLOBALLY_ROOTED(jl_memory_uint32_type);
+    TRACE_GLOBALLY_ROOTED(jl_memory_uint64_type);
+    TRACE_GLOBALLY_ROOTED(jl_memory_any_type);
+    TRACE_GLOBALLY_ROOTED(jl_memoryref_uint8_type);
+    TRACE_GLOBALLY_ROOTED(jl_memoryref_any_type);
+    TRACE_GLOBALLY_ROOTED(jl_expr_type);
+    TRACE_GLOBALLY_ROOTED(jl_binding_type);
+    TRACE_GLOBALLY_ROOTED(jl_binding_partition_type);
+    TRACE_GLOBALLY_ROOTED(jl_globalref_type);
+    TRACE_GLOBALLY_ROOTED(jl_linenumbernode_type);
+    TRACE_GLOBALLY_ROOTED(jl_gotonode_type);
+    TRACE_GLOBALLY_ROOTED(jl_gotoifnot_type);
+    TRACE_GLOBALLY_ROOTED(jl_enternode_type);
+    TRACE_GLOBALLY_ROOTED(jl_returnnode_type);
+    TRACE_GLOBALLY_ROOTED(jl_phinode_type);
+    TRACE_GLOBALLY_ROOTED(jl_pinode_type);
+    TRACE_GLOBALLY_ROOTED(jl_phicnode_type);
+    TRACE_GLOBALLY_ROOTED(jl_upsilonnode_type);
+    TRACE_GLOBALLY_ROOTED(jl_quotenode_type);
+    TRACE_GLOBALLY_ROOTED(jl_newvarnode_type);
+    TRACE_GLOBALLY_ROOTED(jl_intrinsic_type);
+    TRACE_GLOBALLY_ROOTED(jl_methtable_type);
+    TRACE_GLOBALLY_ROOTED(jl_typemap_level_type);
+    TRACE_GLOBALLY_ROOTED(jl_typemap_entry_type);
+
+    TRACE_GLOBALLY_ROOTED(jl_emptysvec);
+    TRACE_GLOBALLY_ROOTED(jl_emptytuple);
+    TRACE_GLOBALLY_ROOTED(jl_true);
+    TRACE_GLOBALLY_ROOTED(jl_false);
+    TRACE_GLOBALLY_ROOTED(jl_nothing);
+    TRACE_GLOBALLY_ROOTED(jl_kwcall_func);
+
+    TRACE_GLOBALLY_ROOTED(jl_libdl_dlopen_func);
+
+    TRACE_GLOBALLY_ROOTED(jl_main_module);
+    TRACE_GLOBALLY_ROOTED(jl_core_module);
+    TRACE_GLOBALLY_ROOTED(jl_base_module);
+    TRACE_GLOBALLY_ROOTED(jl_top_module);
+    TRACE_GLOBALLY_ROOTED(jl_libdl_module);
+
+    // staticdata_utils.c
+    TRACE_GLOBALLY_ROOTED(internal_methods);
+    TRACE_GLOBALLY_ROOTED(newly_inferred);
+    // task.c
+    TRACE_GLOBALLY_ROOTED(task_done_hook_func);
+    // threading.c
+    // TRACE_GLOBALLY_ROOTED(jl_all_tls_states); -- we don't need to pin these. Julia TLS are allocated with calloc.
+}
+
+// These are from gc_mark_roots -- this is not enough for a moving GC. We need to make sure
+// all the globally rooted symbols are traced and will not move. This function is unused.
+// We use trace_full_globally_rooted() instead.
+void trace_partial_globally_rooted(RootsWorkClosure* closure, RootsWorkBuffer* buf, size_t* buf_len)
+{
+    // add module
+    TRACE_GLOBALLY_ROOTED(jl_main_module);
+
+    // buildin values
+    TRACE_GLOBALLY_ROOTED(jl_an_empty_vec_any);
+    TRACE_GLOBALLY_ROOTED(jl_module_init_order);
+    for (size_t i = 0; i < jl_current_modules.size; i += 2) {
+        if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
+            TRACE_GLOBALLY_ROOTED(jl_current_modules.table[i]);
+        }
+    }
+    TRACE_GLOBALLY_ROOTED(jl_anytuple_type_type);
+    for (size_t i = 0; i < N_CALL_CACHE; i++) {
+        jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
+        TRACE_GLOBALLY_ROOTED(v);
+    }
+    TRACE_GLOBALLY_ROOTED(_jl_debug_method_invalidation);
+
+    // constants
+    TRACE_GLOBALLY_ROOTED(jl_emptytuple_type);
+    TRACE_GLOBALLY_ROOTED(cmpswap_names);
+    TRACE_GLOBALLY_ROOTED(jl_global_roots_list);
+    TRACE_GLOBALLY_ROOTED(jl_global_roots_keyset);
+    TRACE_GLOBALLY_ROOTED(precompile_field_replace);
+}
+
 JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
 {
     // Create a new buf
     RootsWorkBuffer buf = (closure->report_nodes_func)((void**)0, 0, 0, closure->data, true);
     size_t len = 0;
 
-    // add module
-    add_node_to_roots_buffer(closure, &buf, &len, jl_main_module);
+    // globally rooted
+    trace_full_globally_rooted(closure, &buf, &len);
 
-    // buildin values
-    add_node_to_roots_buffer(closure, &buf, &len, jl_an_empty_vec_any);
-    add_node_to_roots_buffer(closure, &buf, &len, jl_module_init_order);
-    for (size_t i = 0; i < jl_current_modules.size; i += 2) {
-        if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
-            add_node_to_roots_buffer(closure, &buf, &len, jl_current_modules.table[i]);
-        }
-    }
-    add_node_to_roots_buffer(closure, &buf, &len, jl_anytuple_type_type);
-    for (size_t i = 0; i < N_CALL_CACHE; i++) {
-         jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
-        add_node_to_roots_buffer(closure, &buf, &len, v);
-    }
-    add_node_to_roots_buffer(closure, &buf, &len, _jl_debug_method_invalidation);
+    // Simply pin things in global roots table
+    size_t i;
+    // for (i = 0; i < jl_array_len(jl_global_roots_table); i++) {
+    //     jl_value_t* root = jl_array_ptr_ref(jl_global_roots_table, i);
+    //     add_node_to_roots_buffer(closure, &buf, &len, root);
+    // }
+    // for (i = 0; i < jl_global_roots_list->length; i++) {
+    //     jl_value_t* root = jl_genericmemory_ptr_ref(jl_global_roots_list, i);
+    //     add_node_to_roots_buffer(closure, &buf, &len, root);
+    // }
+    // for (i = 0; i < jl_global_roots_keyset->length; i++) {
+    //     jl_value_t* root = jl_genericmemory_ptr_ref(jl_global_roots_keyset, i);
+    //     add_node_to_roots_buffer(closure, &buf, &len, root);
+    // }
+    // add_node_to_roots_buffer(closure, &buf, &len, jl_global_roots_list);
+    // add_node_to_roots_buffer(closure, &buf, &len, jl_global_roots_keyset);
 
-    // constants
-    add_node_to_roots_buffer(closure, &buf, &len, jl_emptytuple_type);
-    add_node_to_roots_buffer(closure, &buf, &len, cmpswap_names);
+    // // add module
+    // add_node_to_roots_buffer(closure, &buf, &len, jl_main_module);
+
+    // // buildin values
+    // add_node_to_roots_buffer(closure, &buf, &len, jl_an_empty_vec_any);
+    // add_node_to_roots_buffer(closure, &buf, &len, jl_module_init_order);
+    // for (size_t i = 0; i < jl_current_modules.size; i += 2) {
+    //     if (jl_current_modules.table[i + 1] != HT_NOTFOUND) {
+    //         add_node_to_roots_buffer(closure, &buf, &len, jl_current_modules.table[i]);
+    //     }
+    // }
+    // add_node_to_roots_buffer(closure, &buf, &len, jl_anytuple_type_type);
+    // for (size_t i = 0; i < N_CALL_CACHE; i++) {
+    //      jl_typemap_entry_t *v = jl_atomic_load_relaxed(&call_cache[i]);
+    //     add_node_to_roots_buffer(closure, &buf, &len, v);
+    // }
+    // add_node_to_roots_buffer(closure, &buf, &len, _jl_debug_method_invalidation);
+
+    // // constants
+    // add_node_to_roots_buffer(closure, &buf, &len, jl_emptytuple_type);
+    // add_node_to_roots_buffer(closure, &buf, &len, cmpswap_names);
+    // add_node_to_roots_buffer(closure, &buf, &len, precompile_field_replace);
 
     // jl_global_roots_table must be transitively pinned
+    // FIXME: We need to remove transitive pinning of global roots. Otherwise they may pin most of the objects in the heap.
     RootsWorkBuffer tpinned_buf = (closure->report_tpinned_nodes_func)((void**)0, 0, 0, closure->data, true);
     size_t tpinned_len = 0;
     add_node_to_tpinned_roots_buffer(closure, &tpinned_buf, &tpinned_len, jl_global_roots_list);
@@ -789,6 +1054,8 @@ JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref_th(jl_ptls_t ptls, jl_value_t *valu
 {
     jl_weakref_t *wr = (jl_weakref_t*)jl_gc_alloc(ptls, sizeof(void*), jl_weakref_type);
     wr->value = value;  // NOTE: wb not needed here
+    // Note: we are using MMTk's weak ref processing. If we switch to Julia's weak ref processing,
+    // we need to make sure the value and the weak ref won't be moved (e.g. pin them)
     mmtk_add_weak_candidate(wr);
     return wr;
 }

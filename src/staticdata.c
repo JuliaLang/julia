@@ -741,7 +741,9 @@ static int needs_uniquing(jl_value_t *v) JL_NOTSAFEPOINT
 
 static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAFEPOINT
 {
-    if (*addr != newval)
+    if (*addr != newval) {
+        OBJHASH_PIN((void*)addr)
+        OBJHASH_PIN((void*)newval)
         ptrhash_put(&field_replace, (void*)addr, newval);
 }
 
@@ -2523,6 +2525,7 @@ static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
     assert(serialization_queue.items[from_seroder_entry(idx)] == cache);
     cache = cache_rehash_set(cache, sz);
     // redirect all references to the old cache to relocate to the new cache object
+    OBJHASH_PIN((void*)cache)
     ptrhash_put(&serialization_order, cache, idx);
     serialization_queue.items[from_seroder_entry(idx)] = cache;
     return cache;
@@ -3721,6 +3724,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 assert(tag == 0);
                 arraylist_push(&delay_list, obj);
                 arraylist_push(&delay_list, pfld);
+                OBJHASH_PIN(obj)
                 ptrhash_put(&new_dt_objs, (void*)obj, obj); // mark obj as invalid
                 *pfld = (uintptr_t)NULL;
                 continue;
@@ -3755,6 +3759,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                     }
                     static_assert(offsetof(jl_datatype_t, name) == 0, "");
                     newdt->name = dt->name;
+                    OBJHASH_PIN(newdt)
+                    OBJHASH_PIN(dt)
                     ptrhash_put(&new_dt_objs, (void*)newdt, dt);
                 }
                 else {

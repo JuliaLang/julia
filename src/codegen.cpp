@@ -1823,6 +1823,7 @@ struct jl_cgval_t {
         promotion_point(nullptr),
         promotion_ssa(-1)
     {
+        OBJ_PIN(typ); // jl_cgval_t could be in the native heap. We have to pin the object references in it.
         assert(TIndex == nullptr || TIndex->getType() == getInt8Ty(TIndex->getContext()));
     }
     jl_cgval_t(Value *Vptr, bool isboxed, jl_value_t *typ, Value *tindex, MDNode *tbaa, Value* inline_roots) = delete;
@@ -1839,6 +1840,7 @@ struct jl_cgval_t {
         promotion_point(nullptr),
         promotion_ssa(-1)
     {
+        OBJ_PIN(typ); // jl_cgval_t could be in the native heap. We have to pin the object references in it.
         if (Vboxed)
             assert(Vboxed->getType() == JuliaType::get_prjlvalue_ty(Vboxed->getContext()));
         assert(tbaa != nullptr);
@@ -1859,6 +1861,8 @@ struct jl_cgval_t {
         promotion_point(nullptr),
         promotion_ssa(-1)
     {
+        OBJ_PIN(typ); // jl_cgval_t could be in the native heap. We have to pin the object references in it.
+        OBJ_PIN(constant); // jl_cgval_t could be in the native heap. We have to pin the object references in it.
         assert(jl_is_datatype(typ));
         assert(constant);
     }
@@ -1875,6 +1879,8 @@ struct jl_cgval_t {
         promotion_point(v.promotion_point),
         promotion_ssa(v.promotion_ssa)
     {
+        OBJ_PIN(typ); // jl_cgval_t could be in the native heap. We have to pin the object references in it.
+        OBJ_PIN(constant); // jl_cgval_t could be in the native heap. We have to pin the object references in it.
         if (Vboxed)
             assert(Vboxed->getType() == JuliaType::get_prjlvalue_ty(Vboxed->getContext()));
         // this constructor expects we had a badly or equivalently typed version
@@ -1947,6 +1953,7 @@ public:
     std::map<int, jl_varinfo_t> phic_slots;
     std::map<int, std::pair<Value*, Value*> > scope_restore;
     SmallVector<jl_cgval_t, 0> SAvalues;
+    // The vector holds reference to Julia obj ref. We need to pin jl_value_t*.
     SmallVector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, SmallVector<PHINode*,0>, jl_value_t *>, 0> PhiNodes;
     SmallVector<bool, 0> ssavalue_assigned;
     SmallVector<int, 0> ssavalue_usecount;
@@ -6254,6 +6261,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
                 decay_derived(ctx, phi));
             jl_cgval_t val = mark_julia_slot(ptr, phiType, Tindex_phi, best_tbaa(ctx.tbaa(), phiType));
             val.Vboxed = ptr_phi;
+            OBJ_PIN(r); // r will be saved to a data structure in the native heap, make sure it won't be moved by GC.
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, ptr_phi, roots, r));
             ctx.SAvalues[idx] = val;
             ctx.ssavalue_assigned[idx] = true;
@@ -6263,6 +6271,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             PHINode *Tindex_phi = PHINode::Create(getInt8Ty(ctx.builder.getContext()), jl_array_nrows(edges), "tindex_phi");
             Tindex_phi->insertInto(BB, InsertPt);
             jl_cgval_t val = mark_julia_slot(NULL, phiType, Tindex_phi, ctx.tbaa().tbaa_stack);
+            OBJ_PIN(r); // r will be saved to a data structure in the native heap, make sure it won't be moved by GC.
             ctx.PhiNodes.push_back(std::make_tuple(val, BB, dest, (PHINode*)nullptr, roots, r));
             ctx.SAvalues[idx] = val;
             ctx.ssavalue_assigned[idx] = true;
@@ -6313,6 +6322,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
         value_phi->insertInto(BB, InsertPt);
         slot = mark_julia_type(ctx, value_phi, isboxed, phiType);
     }
+    OBJ_PIN(r); // r will be saved to a data structure in the native heap, make sure it won't be moved by GC.
     ctx.PhiNodes.push_back(std::make_tuple(slot, BB, dest, value_phi, roots, r));
     ctx.SAvalues[idx] = slot;
     ctx.ssavalue_assigned[idx] = true;

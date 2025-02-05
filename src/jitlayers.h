@@ -227,6 +227,7 @@ struct jl_codegen_params_t {
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     jl_workqueue_t workqueue;
+     // This map may hold Julia obj ref in the native heap. We need to pin the void*.
     std::map<void*, GlobalVariable*> global_targets;
     jl_array_t *temporary_roots = nullptr;
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
@@ -310,7 +311,7 @@ void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
 
 static inline Constant *literal_static_pointer_val(const void *p, Type *T) JL_NOTSAFEPOINT
 {
-    PTR_PIN((void*)p);
+    PTR_PIN((void*)p); // This may point to non-mmtk heap memory.
     // this function will emit a static pointer into the generated code
     // the generated code will only be valid during the current session,
     // and thus, this should typically be avoided in new API's

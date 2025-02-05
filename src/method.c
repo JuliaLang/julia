@@ -561,6 +561,8 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
     jl_atomic_store_relaxed(&mi->cache, NULL);
     mi->cache_with_orig = 0;
     jl_atomic_store_relaxed(&mi->flags, 0);
+    // jl_method_instance_t needs to be pinned, as it is referenced in a map in JITDebugInfoRegistry
+    OBJ_PIN(mi);
     return mi;
 }
 
