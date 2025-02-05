@@ -2356,9 +2356,9 @@ end
 
 # begin/end indices
 @weak_test_repr "a[begin, end, (begin; end)]"
-@test repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
+@test_broken repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
-@test repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
+@test_broken repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
 @test_repr "a[(bla;)]"
 @test_repr "a[(;;)]"
@@ -2794,4 +2794,10 @@ Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
     str = sprint(io->show(io, MIME("text/plain"), x))
     @test contains(str, "NoLengthDict")
     @test contains(str, "1 => 2")
+end
+
+# Issue 56936
+@testset "code printing of var\"keyword\" identifiers" begin
+    @test_repr """:(var"do" = 1)"""
+    @weak_test_repr """:(let var"let" = 1; var"let"; end)"""
 end

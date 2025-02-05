@@ -1384,3 +1384,14 @@ end |> Compiler.is_nothrow
 @test Base.infer_effects() do
     @ccall unsafecall()::Cvoid
 end == Compiler.EFFECTS_UNKNOWN
+
+# fpext
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Float16])
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float64}, Float16])
+@test Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float64}, Float32])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float16}, Float16])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float16}, Float32])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Float32])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Float64])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Int32}, Float16])
+@test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Int16])
