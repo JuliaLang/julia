@@ -70,6 +70,7 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
     ndel::Int
     count::Int
     age::UInt
+    seed::UInt
     idxfloor::Int  # an index <= the indices of all used slots
     maxprobe::Int
 
@@ -77,14 +78,14 @@ mutable struct Dict{K,V} <: AbstractDict{K,V}
         n = 0
         slots = Memory{UInt8}(undef,n)
         fill!(slots, 0x0)
-        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, max(1, n), 0)
+        new(slots, Memory{K}(undef, n), Memory{V}(undef, n), 0, 0, 0, rand(UInt), max(1, n), 0)
     end
     function Dict{K,V}(d::Dict{K,V}) where V where K
         new(copy(d.slots), copy(d.keys), copy(d.vals), d.ndel, d.count, d.age,
-            d.idxfloor, d.maxprobe)
+            rand(UInt), d.idxfloor, d.maxprobe)
     end
     function Dict{K, V}(slots::Memory{UInt8}, keys::Memory{K}, vals::Memory{V}, ndel::Int, count::Int, age::UInt, idxfloor::Int, maxprobe::Int) where {K, V}
-        new(slots, keys, vals, ndel, count, age, idxfloor, maxprobe)
+        new(slots, keys, vals, ndel, count, age, rand(UInt), idxfloor, maxprobe)
     end
 end
 function Dict{K,V}(kv) where V where K
@@ -121,11 +122,12 @@ empty(a::AbstractDict, ::Type{K}, ::Type{V}) where {K, V} = Dict{K, V}()
 # Gets 7 most significant bits from the hash (hsh), first bit is 1
 _shorthash7(hsh::UInt) = (hsh >> (8sizeof(UInt)-7))%UInt8 | 0x80
 
-# hashindex (key, sz) - computes optimal position and shorthash7
+# hashindex (key, h, sz) - computes optimal position and shorthash7
 #     idx - optimal position in the hash table
+#     seed::UInt - seed value of the dictionary (to prevent random collisions)
 #     sh::UInt8 - short hash (7 highest hash bits)
-function hashindex(key, sz)
-    hsh = hash(key)::UInt
+function hashindex(key, seed, sz)
+    hsh = hash(key, seed)::UInt
     idx = (((hsh % Int) & (sz-1)) + 1)::Int
     return idx, _shorthash7(hsh)
 end
@@ -142,6 +144,7 @@ end
     newsz = _tablesz(newsz)
     h.age += 1
     h.idxfloor = 1
+    h.seed = rand(UInt)
     if h.count == 0
         # TODO: tryresize
         h.slots = Memory{UInt8}(undef, newsz)
@@ -158,6 +161,7 @@ end
     keys = Memory{K}(undef, newsz)
     vals = Memory{V}(undef, newsz)
     age0 = h.age
+    seed = h.seed
     count = 0
     maxprobe = 0
 
@@ -165,7 +169,7 @@ end
         @inbounds if (olds[i] & 0x80) != 0
             k = oldk[i]
             v = oldv[i]
-            index, sh = hashindex(k, newsz)
+            index, sh = hashindex(k, seed, newsz)
             index0 = index
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
@@ -239,7 +243,7 @@ function ht_keyindex(h::Dict{K,V}, key) where V where K
     iter = 0
     maxprobe = h.maxprobe
     maxprobe < sz || throw(AssertionError()) # This error will never trigger, but is needed for terminates_locally to be valid
-    index, sh = hashindex(key, sz)
+    index, sh = hashindex(key, h.seed, sz)
     keys = h.keys
 
     @assume_effects :terminates_locally :noub @inbounds while true
@@ -266,12 +270,12 @@ function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
     if sz == 0 # if Dict was empty resize and then return location to insert
         rehash!(h, 4)
-        index, sh = hashindex(key, length(h.keys))
+        index, sh = hashindex(key, h.seed, length(h.keys))
         return -index, sh
     end
     iter = 0
     maxprobe = h.maxprobe
-    index, sh = hashindex(key, sz)
+    index, sh = hashindex(key, h.seed, sz)
     avail = 0
     keys = h.keys
 
