@@ -9,12 +9,13 @@ struct SplitCacheInterp <: Compiler.AbstractInterpreter
     inf_params::Compiler.InferenceParams
     opt_params::Compiler.OptimizationParams
     inf_cache::Vector{Compiler.InferenceResult}
+    codegen_cache::IdDict{CodeInstance,CodeInfo}
     function SplitCacheInterp(;
         world::UInt = Base.get_world_counter(),
         inf_params::Compiler.InferenceParams = Compiler.InferenceParams(),
         opt_params::Compiler.OptimizationParams = Compiler.OptimizationParams(),
         inf_cache::Vector{Compiler.InferenceResult} = Compiler.InferenceResult[])
-        new(world, inf_params, opt_params, inf_cache)
+        new(world, inf_params, opt_params, inf_cache, IdDict{CodeInstance,CodeInfo}())
     end
 end
 
@@ -23,6 +24,7 @@ Compiler.OptimizationParams(interp::SplitCacheInterp) = interp.opt_params
 Compiler.get_inference_world(interp::SplitCacheInterp) = interp.world
 Compiler.get_inference_cache(interp::SplitCacheInterp) = interp.inf_cache
 Compiler.cache_owner(::SplitCacheInterp) = SplitCacheOwner()
+Compiler.codegen_cache(interp::SplitCacheInterp) = interp.codegen_cache
 
 import Core.OptimizedGenerics.CompilerPlugins: typeinf, typeinf_edge
 @eval @noinline typeinf(::SplitCacheOwner, mi::MethodInstance, source_mode::UInt8) =
@@ -40,6 +42,7 @@ function with_new_compiler(f, args...)
     new_compiler_ci = Core.OptimizedGenerics.CompilerPlugins.typeinf(
         SplitCacheOwner(), mi, Compiler.SOURCE_MODE_ABI
     )
+    Compiler.add_codeinsts_to_jit!(SplitCacheInterp(; world), new_compiler_ci, Compiler.SOURCE_MODE_ABI)
     invoke(f, new_compiler_ci, args...)
 end
 
