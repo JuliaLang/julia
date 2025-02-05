@@ -852,3 +852,4 @@ end
 end
 
 @test NTuple == Base.infer_return_type(reverse, Tuple{NTuple})
+@test Tuple{Vararg{Int}} == Base.infer_return_type(reverse, Tuple{Tuple{Vararg{Int}}})
