@@ -98,7 +98,7 @@ inv(x::Integer) = float(one(x)) / float(x)
 
 
 """
-    mul_hi(a::T, b::T) where {T<:Integer}
+    mul_hi(a::T, b::T) where {T<:Base.BitInteger}
 
 Returns the higher half of the product of `a` and `b`.
 
