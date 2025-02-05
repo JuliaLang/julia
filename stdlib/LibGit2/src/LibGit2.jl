@@ -56,7 +56,7 @@ struct State
 end
 
 """
-    head(pkg::AbstractString) -> String
+    head(pkg::AbstractString)::String
 
 Return current HEAD [`GitHash`](@ref) of
 the `pkg` repo as a string.
@@ -81,7 +81,7 @@ function need_update(repo::GitRepo)
 end
 
 """
-    iscommit(id::AbstractString, repo::GitRepo) -> Bool
+    iscommit(id::AbstractString, repo::GitRepo)::Bool
 
 Check if commit `id` (which is a [`GitHash`](@ref) in string form)
 is in the repository.
@@ -114,7 +114,7 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 """
-    LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=""; cached::Bool=false) -> Bool
+    LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=""; cached::Bool=false)::Bool
 
 Check if there have been any changes to tracked files in the working tree (if
 `cached=false`) or the index (if `cached=true`).
@@ -168,7 +168,7 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
 end
 
 """
-    diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...) -> Vector{AbstractString}
+    diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...)::Vector{AbstractString}
 
 Show which files have changed in the git repository `repo` between branches `branch1`
 and `branch2`.
@@ -224,7 +224,7 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
 end
 
 """
-    is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo) -> Bool
+    is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)::Bool
 
 Return `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 `b`, a [`GitHash`](@ref) in string form.
@@ -727,7 +727,7 @@ function revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractStrin
 end
 
 """
-    merge!(repo::GitRepo; kwargs...) -> Bool
+    merge!(repo::GitRepo; kwargs...)::Bool
 
 Perform a git merge on the repository `repo`, merging commits
 with diverging history into the current branch. Return `true`
@@ -898,7 +898,7 @@ end
 
 
 """
-    authors(repo::GitRepo) -> Vector{Signature}
+    authors(repo::GitRepo)::Vector{Signature}
 
 Return all authors of commits to the `repo` repository.
 
@@ -931,7 +931,7 @@ function authors(repo::GitRepo)
 end
 
 """
-    snapshot(repo::GitRepo) -> State
+    snapshot(repo::GitRepo)::State
 
 Take a snapshot of the current state of the repository `repo`,
 storing the current HEAD, index, and any uncommitted work.

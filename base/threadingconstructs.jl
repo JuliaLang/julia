@@ -6,7 +6,7 @@ export threadid, nthreads, @threads, @spawn,
 public Condition, threadpoolsize, ngcthreads
 
 """
-    Threads.threadid([t::Task]) -> Int
+    Threads.threadid([t::Task])::Int
 
 Get the ID number of the current thread of execution, or the thread of task
 `t`. The master thread has ID `1`.
@@ -37,7 +37,7 @@ threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
 # lower bound on the largest threadid()
 """
-    Threads.maxthreadid() -> Int
+    Threads.maxthreadid()::Int
 
 Get a lower bound on the number of threads (across all thread pools) available
 to the Julia process, with atomic-acquire semantics. The result will always be
@@ -47,7 +47,7 @@ any task you were able to observe before calling `maxthreadid`.
 maxthreadid() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
 
 """
-    Threads.nthreads(:default | :interactive) -> Int
+    Threads.nthreads(:default | :interactive)::Int
 
 Get the current number of threads within the specified thread pool. The threads in `:interactive`
 have id numbers `1:nthreads(:interactive)`, and the threads in `:default` have id numbers in
@@ -89,7 +89,7 @@ function _sym_to_tpid(tp::Symbol)
 end
 
 """
-    Threads.threadpool(tid = threadid()) -> Symbol
+    Threads.threadpool(tid = threadid())::Symbol
 
 Returns the specified thread's threadpool; either `:default`, `:interactive`, or `:foreign`.
 """
@@ -99,7 +99,7 @@ function threadpool(tid = threadid())
 end
 
 """
-    Threads.threadpooldescription(tid = threadid()) -> String
+    Threads.threadpooldescription(tid = threadid())::String
 
 Returns the specified thread's threadpool name with extended description where appropriate.
 """
@@ -117,14 +117,14 @@ function threadpooldescription(tid = threadid())
 end
 
 """
-    Threads.nthreadpools() -> Int
+    Threads.nthreadpools()::Int
 
 Returns the number of threadpools currently configured.
 """
 nthreadpools() = Int(unsafe_load(cglobal(:jl_n_threadpools, Cint)))
 
 """
-    Threads.threadpoolsize(pool::Symbol = :default) -> Int
+    Threads.threadpoolsize(pool::Symbol = :default)::Int
 
 Get the number of threads available to the default thread pool (or to the
 specified thread pool).
@@ -161,7 +161,7 @@ function threadpooltids(pool::Symbol)
 end
 
 """
-    Threads.ngcthreads() -> Int
+    Threads.ngcthreads()::Int
 
 Returns the number of GC threads currently configured.
 This includes both mark threads and concurrent sweep threads.

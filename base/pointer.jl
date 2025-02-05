@@ -184,7 +184,7 @@ function unsafe_store!(p::Ptr, x, i::Integer, order::Symbol)
 end
 
 """
-    unsafe_modify!(p::Ptr{T}, op, x, [order::Symbol]) -> Pair
+    unsafe_modify!(p::Ptr{T}, op, x, [order::Symbol])::Pair
 
 These atomically perform the operations to get and set a memory address after applying
 the function `op`. If supported by the hardware (for example, atomic increment), this may be

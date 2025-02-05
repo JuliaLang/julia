@@ -122,7 +122,7 @@ end
 
 # Merge changes into current head
 """
-    merge!(repo::GitRepo, anns::Vector{GitAnnotated}; kwargs...) -> Bool
+    merge!(repo::GitRepo, anns::Vector{GitAnnotated}; kwargs...)::Bool
 
 Merge changes from the annotated commits (captured as [`GitAnnotated`](@ref) objects)
 `anns` into the HEAD of the repository `repo`. The keyword arguments are:
@@ -163,7 +163,7 @@ end
 # Internal implementation of merge.
 # Returns `true` if merge was successful, otherwise `false`
 """
-    merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool; kwargs...) -> Bool
+    merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool; kwargs...)::Bool
 
 Merge changes from the annotated commits (captured as [`GitAnnotated`](@ref) objects)
 `anns` into the HEAD of the repository `repo`. If `fastforward` is `true`, *only* a
@@ -254,7 +254,7 @@ function merge!(repo::GitRepo, anns::Vector{GitAnnotated}, fastforward::Bool;
 end
 
 """
-    merge_base(repo::GitRepo, one::AbstractString, two::AbstractString) -> GitHash
+    merge_base(repo::GitRepo, one::AbstractString, two::AbstractString)::GitHash
 
 Find a merge base (a common ancestor) between the commits `one` and `two`.
 `one` and `two` may both be in string form. Return the `GitHash` of the merge base.

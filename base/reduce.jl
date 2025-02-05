@@ -1110,7 +1110,7 @@ argmin(itr) = findmin(itr)[2]
 _bool(f) = x->f(x)::Bool
 
 """
-    count([f=identity,] itr; init=0) -> Integer
+    count([f=identity,] itr; init=0)::Integer
 
 Count the number of elements in `itr` for which the function `f` returns `true`.
 If `f` is omitted, count the number of `true` elements in `itr` (which
