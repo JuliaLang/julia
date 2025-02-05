@@ -851,4 +851,4 @@ end
     end
 end
 
-@test NTuple == Core.Compiler.return_type(reverse, Tuple{NTuple})
+@test NTuple == Base.infer_return_type(reverse, Tuple{NTuple})
