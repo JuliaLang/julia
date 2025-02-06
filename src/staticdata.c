@@ -3832,7 +3832,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                     // and we overwrite the name field (field 0) now so preserve it too
                     if (dt->instance) {
                         if (dt->instance == jl_nothing)
-                            dt->instance = jl_gc_permobj(0, newdt);
+                            dt->instance = jl_gc_permobj(0, newdt, 0);
                         newdt->instance = dt->instance;
                     }
                     static_assert(offsetof(jl_datatype_t, name) == 0, "");
