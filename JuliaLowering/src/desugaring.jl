@@ -2369,10 +2369,17 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
         push!(gen_arg_types, @ast ctx gen_arg_names[i] "Any"::K"core")
     end
     # Code generator definition
-    gen_func_method_defs = @ast ctx srcref [K"method_defs"
-        gen_name
-        method_def_expr(ctx, srcref, callex_srcref, nothing, SyntaxList(ctx), gen_arg_names,
-                        gen_arg_types, gen_body, nothing)
+    gen_func_method_defs = @ast ctx srcref [K"block"
+        [K"function_decl" gen_name]
+        [K"scope_block"(scope_type=:hard)
+            [K"method_defs"
+                gen_name
+                [K"block"
+                    method_def_expr(ctx, srcref, callex_srcref, nothing, SyntaxList(ctx),
+                                    gen_arg_names, gen_arg_types, gen_body, nothing)
+                ]
+            ]
+        ]
     ]
 
     # Extract non-generated body
@@ -2414,7 +2421,7 @@ function expand_function_generator(ctx, srcref, callex_srcref, func_name, func_n
         split_generated(ctx, body, false)
     ]
 
-    return gen_name, gen_func_method_defs, nongen_body
+    return gen_func_method_defs, nongen_body
 end
 
 # Generate a method for every number of allowed optional arguments
@@ -2472,8 +2479,8 @@ function scope_nest(ctx, names, values, body)
 end
 
 # Generate body function and `Core.kwcall` overloads for functions taking keywords.
-function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
-                               typevar_names, typevar_stmts, arg_names,
+function keyword_function_defs(ctx, srcref, callex_srcref, name_str, typevar_names,
+                               typevar_stmts, new_typevar_stmts, arg_names,
                                arg_types, has_slurp, first_default, arg_defaults,
                                keywords, body, ret_var)
     mangled_name = let n = isnothing(name_str) ? "_" : name_str
@@ -2700,23 +2707,29 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
     check_all_typevars_used(body_arg_types, typevar_names, typevar_stmts)
 
     kw_func_method_defs = @ast ctx srcref [K"block"
-        [K"method_defs"
-            body_func_name
-            [K"block"
-                # TODO: nkw
-                method_def_expr(ctx, srcref, callex_srcref, "nothing"::K"core",
-                                typevar_names, body_arg_names, body_arg_types,
-                                [K"block"
-                                    [K"meta" "nkw"::K"Symbol" numchildren(keywords)::K"Integer"]
-                                    body
-                                ],
-                                ret_var)
+        [K"function_decl" body_func_name]
+        [K"scope_block"(scope_type=:hard)
+            [K"method_defs"
+                body_func_name
+                [K"block"
+                    new_typevar_stmts...
+                    method_def_expr(ctx, srcref, callex_srcref, "nothing"::K"core",
+                                    typevar_names, body_arg_names, body_arg_types,
+                                    [K"block"
+                                        [K"meta" "nkw"::K"Symbol" numchildren(keywords)::K"Integer"]
+                                        body
+                                    ],
+                                    ret_var)
+                ]
             ]
         ]
-        [K"method_defs"
-            "nothing"::K"core"
-            [K"block"
-                kwcall_method_defs...
+        [K"scope_block"(scope_type=:hard)
+            [K"method_defs"
+                "nothing"::K"core"
+                [K"block"
+                    new_typevar_stmts...
+                    kwcall_method_defs...
+                ]
             ]
         ]
     ]
@@ -2737,7 +2750,7 @@ function keyword_function_defs(ctx, srcref, callex_srcref, name_str,
         ]
     end
 
-    body_func_name, kw_func_method_defs, body_for_positional_args_only
+    kw_func_method_defs, body_for_positional_args_only
 end
 
 # Check valid identifier/function names
@@ -2936,27 +2949,27 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
         ]
     end
 
-    gen_func_name = nothing
     gen_func_method_defs = nothing
     if is_generated(body)
-        gen_func_name, gen_func_method_defs, body =
+        gen_func_method_defs, body =
             expand_function_generator(ctx, ex, callex, name, name_str, body, arg_names, typevar_names)
 
     end
 
     if isnothing(keywords)
-        body_func_name, kw_func_method_defs = (nothing, nothing)
-        # NB: This check seems good as it statically catches any useless
-        # typevars which can't be inferred. However it wasn't previously an
-        # error so we might need to reduce it to a warning?
+        kw_func_method_defs = nothing
+        # NB: The following check seems good as it statically catches any useless
+        # static parameters which can't be bound during method invocation.
+        # However it wasn't previously an error so we might need to reduce it
+        # to a warning?
         check_all_typevars_used(arg_types, typevar_names, typevar_stmts)
         main_typevar_names = typevar_names
     else
         # Rewrite `body` here so that the positional-only versions dispatch there.
-        body_func_name, kw_func_method_defs, body =
+        kw_func_method_defs, body =
             keyword_function_defs(ctx, ex, callex, name_str, typevar_names, typevar_stmts,
-                                  arg_names, arg_types, has_slurp, first_default, arg_defaults,
-                                  keywords, body, ret_var)
+                                  new_typevar_stmts, arg_names, arg_types, has_slurp,
+                                  first_default, arg_defaults, keywords, body, ret_var)
         # The main function (but without keywords) needs its typevars trimmed,
         # as some of them may be for the keywords only.
         main_typevar_names = trim_used_typevars(ctx, arg_types, typevar_names, typevar_stmts)
@@ -2993,28 +3006,22 @@ function expand_function_def(ctx, ex, docs, rewrite_call=identity, rewrite_body=
     end
 
     @ast ctx ex [K"block"
-        if !isnothing(gen_func_name)
-            [K"function_decl"(gen_func_name) gen_func_name]
-        end
-        if !isnothing(body_func_name)
-            [K"function_decl"(body_func_name) body_func_name]
-        end
         if !isnothing(bare_func_name)
+            # Need the main function type created here before running any code
+            # in kw_func_method_defs
             [K"function_decl"(bare_func_name) bare_func_name]
         end
+        gen_func_method_defs
+        kw_func_method_defs
         [K"scope_block"(scope_type=:hard)
-            [K"block"
-                new_typevar_stmts...
-                gen_func_method_defs
-                kw_func_method_defs
-                [K"method_defs"
-                    isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
-                    [K"block"
-                        if !isnothing(method_table_val)
-                            [K"=" method_table method_table_val]
-                        end
-                        method_stmts...
-                    ]
+            [K"method_defs"
+                isnothing(bare_func_name) ? "nothing"::K"core" : bare_func_name
+                [K"block"
+                    new_typevar_stmts...
+                    if !isnothing(method_table_val)
+                        [K"=" method_table method_table_val]
+                    end
+                    method_stmts...
                 ]
             ]
         ]

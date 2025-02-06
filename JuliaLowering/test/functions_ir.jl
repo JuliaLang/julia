@@ -955,8 +955,8 @@ function f_kw_simple(a::Int=1, b::Float64=1.0; x::Char='a', y::Bool=true)
     (a, b, x, y)
 end
 #---------------------
-1   (method TestMod.#f_kw_simple#0)
-2   (method TestMod.f_kw_simple)
+1   (method TestMod.f_kw_simple)
+2   (method TestMod.#f_kw_simple#0)
 3   TestMod.#f_kw_simple#0
 4   (call core.Typeof %₃)
 5   TestMod.Char
@@ -1091,8 +1091,8 @@ function f_kw_slurp_simple(; all_kws...)
     all_kws
 end
 #---------------------
-1   (method TestMod.#f_kw_slurp_simple#0)
-2   (method TestMod.f_kw_slurp_simple)
+1   (method TestMod.f_kw_slurp_simple)
+2   (method TestMod.#f_kw_slurp_simple#0)
 3   TestMod.#f_kw_slurp_simple#0
 4   (call core.Typeof %₃)
 5   (call top.pairs core.NamedTuple)
@@ -1143,8 +1143,8 @@ function f_kw_slurp(; x=x_default, non_x_kws...)
     all_kws
 end
 #---------------------
-1   (method TestMod.#f_kw_slurp#0)
-2   (method TestMod.f_kw_slurp)
+1   (method TestMod.f_kw_slurp)
+2   (method TestMod.#f_kw_slurp#0)
 3   TestMod.#f_kw_slurp#0
 4   (call core.Typeof %₃)
 5   (call top.pairs core.NamedTuple)
@@ -1212,8 +1212,8 @@ function f_kw_sparams(x::X; a::A=a_def, b::X=b_def) where {X,A}
     (X,A)
 end
 #---------------------
-1   (method TestMod.#f_kw_sparams#0)
-2   (method TestMod.f_kw_sparams)
+1   (method TestMod.f_kw_sparams)
+2   (method TestMod.#f_kw_sparams#0)
 3   (= slot₂/X (call core.TypeVar :X))
 4   (= slot₁/A (call core.TypeVar :A))
 5   TestMod.#f_kw_sparams#0
@@ -1236,16 +1236,18 @@ end
     3   static_parameter₂
     4   (call core.tuple %₂ %₃)
     5   (return %₄)
-19  (call core.typeof core.kwcall)
-20  TestMod.f_kw_sparams
-21  (call core.Typeof %₂₀)
-22  slot₂/X
-23  (call core.svec %₁₉ core.NamedTuple %₂₁ %₂₂)
-24  slot₂/X
-25  (call core.svec %₂₄)
-26  SourceLocation::1:10
-27  (call core.svec %₂₃ %₂₅ %₂₆)
-28  --- method core.nothing %₂₇
+19  (= slot₄/X (call core.TypeVar :X))
+20  (= slot₃/A (call core.TypeVar :A))
+21  (call core.typeof core.kwcall)
+22  TestMod.f_kw_sparams
+23  (call core.Typeof %₂₂)
+24  slot₄/X
+25  (call core.svec %₂₁ core.NamedTuple %₂₃ %₂₄)
+26  slot₄/X
+27  (call core.svec %₂₆)
+28  SourceLocation::1:10
+29  (call core.svec %₂₅ %₂₇ %₂₈)
+30  --- method core.nothing %₂₉
     slots: [slot₁/#self#(!read) slot₂/kws slot₃/#self# slot₄/x slot₅/kwtmp slot₆/a(!read) slot₇/b(!read)]
     1   (newvar slot₆/a)
     2   (newvar slot₇/b)
@@ -1282,23 +1284,25 @@ end
     33  TestMod.#f_kw_sparams#0
     34  (call %₃₃ %₁₀ %₂₅ slot₃/#self# slot₄/x)
     35  (return %₃₄)
-29  TestMod.f_kw_sparams
-30  (call core.Typeof %₂₉)
-31  slot₂/X
-32  (call core.svec %₃₀ %₃₁)
-33  slot₂/X
-34  (call core.svec %₃₃)
-35  SourceLocation::1:10
-36  (call core.svec %₃₂ %₃₄ %₃₅)
-37  --- method core.nothing %₃₆
+31  (= slot₆/X (call core.TypeVar :X))
+32  (= slot₅/A (call core.TypeVar :A))
+33  TestMod.f_kw_sparams
+34  (call core.Typeof %₃₃)
+35  slot₆/X
+36  (call core.svec %₃₄ %₃₅)
+37  slot₆/X
+38  (call core.svec %₃₇)
+39  SourceLocation::1:10
+40  (call core.svec %₃₆ %₃₈ %₃₉)
+41  --- method core.nothing %₄₀
     slots: [slot₁/#self# slot₂/x]
     1   TestMod.#f_kw_sparams#0
     2   TestMod.a_def
     3   TestMod.b_def
     4   (call %₁ %₂ %₃ slot₁/#self# slot₂/x)
     5   (return %₄)
-38  TestMod.f_kw_sparams
-39  (return %₃₈)
+42  TestMod.f_kw_sparams
+43  (return %₄₂)
 
 ########################################
 # Error: Static parameter which is unused in keyword body arg types
@@ -1358,8 +1362,8 @@ end
     generator_code(x,y)
 end
 #---------------------
-1   (method TestMod.#f_only_generated@generator#0)
-2   (method TestMod.f_only_generated)
+1   (method TestMod.f_only_generated)
+2   (method TestMod.#f_only_generated@generator#0)
 3   TestMod.#f_only_generated@generator#0
 4   (call core.Typeof %₃)
 5   (call core.svec %₄ JuliaLowering.MacroContext core.Any core.Any core.Any)
@@ -1399,8 +1403,8 @@ function f_partially_generated(x, y)
     (nongen_stuff, maybe_gen_stuff)
 end
 #---------------------
-1   (method TestMod.#f_partially_generated@generator#0)
-2   (method TestMod.f_partially_generated)
+1   (method TestMod.f_partially_generated)
+2   (method TestMod.#f_partially_generated@generator#0)
 3   TestMod.#f_partially_generated@generator#0
 4   (call core.Typeof %₃)
 5   (call core.svec %₄ JuliaLowering.MacroContext core.Any core.Any core.Any)

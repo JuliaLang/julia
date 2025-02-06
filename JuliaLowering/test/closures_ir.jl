@@ -572,12 +572,12 @@ let y = y_init
 end
 #---------------------
 1   TestMod.y_init
-2   (call core.svec :y)
+2   (call core.svec :#f_kw_closure#0)
 3   (call core.svec true)
-4   (call JuliaLowering.eval_closure_type TestMod :##f_kw_closure#0##0 %₂ %₃)
-5   (call core.svec :#f_kw_closure#0)
+4   (call JuliaLowering.eval_closure_type TestMod :#f_kw_closure##0 %₂ %₃)
+5   (call core.svec :y)
 6   (call core.svec true)
-7   (call JuliaLowering.eval_closure_type TestMod :#f_kw_closure##0 %₅ %₆)
+7   (call JuliaLowering.eval_closure_type TestMod :##f_kw_closure#0##0 %₅ %₆)
 8   TestMod.##f_kw_closure#0##0
 9   TestMod.X
 10  TestMod.#f_kw_closure##0
@@ -619,15 +619,15 @@ end
 23  (= slot₂/#f_kw_closure#0 (call core.Box))
 24  slot₁/y
 25  (call core.setfield! %₂₄ :contents %₁)
-26  TestMod.##f_kw_closure#0##0
-27  slot₁/y
+26  TestMod.#f_kw_closure##0
+27  slot₂/#f_kw_closure#0
 28  (new %₂₆ %₂₇)
-29  slot₂/#f_kw_closure#0
-30  (call core.setfield! %₂₉ :contents %₂₈)
-31  TestMod.#f_kw_closure##0
-32  slot₂/#f_kw_closure#0
-33  (new %₃₁ %₃₂)
-34  (= slot₃/f_kw_closure %₃₃)
+29  (= slot₃/f_kw_closure %₂₈)
+30  TestMod.##f_kw_closure#0##0
+31  slot₁/y
+32  (new %₃₀ %₃₁)
+33  slot₂/#f_kw_closure#0
+34  (call core.setfield! %₃₃ :contents %₃₂)
 35  (call core.typeof core.kwcall)
 36  TestMod.#f_kw_closure##0
 37  (call core.svec %₃₅ core.NamedTuple %₃₆)
