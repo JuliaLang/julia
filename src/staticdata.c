@@ -4269,7 +4269,7 @@ JL_DLLEXPORT void _jl_promote_ci_to_current(jl_code_instance_t *ci, size_t valid
 {
     if (jl_atomic_load_relaxed(&ci->max_world) != validated_world)
         return;
-    jl_atomic_store_relaxed(&ci->max_world, (size_t)-1);
+    jl_atomic_store_relaxed(&ci->max_world, ~(size_t)0);
     jl_svec_t *edges = jl_atomic_load_relaxed(&ci->edges);
     for (size_t i = 0; i < jl_svec_len(edges); i++) {
         jl_value_t *edge = jl_svecref(edges, i);
