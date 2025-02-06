@@ -354,9 +354,15 @@ end
         @test hash((), UInt(0)) != hash((), UInt(1))
         @test hash((3,), UInt(0)) != hash((3,), UInt(1))
         let (x, y, z) = (1, 3, 7)
-            h = UInt(9)
-            @test hash((x, y, (z,)), h) != hash((x, (y, z)), h)
-            @test hash(((x,), y, z), h) != hash(((x, y), z), h)
+            xyzs = (
+                (x, y, z),
+                ((x,), y, z),
+                (x, (y,), z),
+                (x, y, (z,)),
+                (x, (y, z)),
+                ((x, y), z),
+            )
+            @test allunique(hash, xyzs)
         end
     end
 
