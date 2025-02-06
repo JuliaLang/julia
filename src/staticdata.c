@@ -745,6 +745,7 @@ static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAF
         OBJHASH_PIN((void*)addr)
         OBJHASH_PIN((void*)newval)
         ptrhash_put(&field_replace, (void*)addr, newval);
+    }
 }
 
 static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DISABLED

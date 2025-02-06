@@ -749,7 +749,7 @@ JL_DLLEXPORT void jl_gc_scan_vm_specific_roots(RootsWorkClosure* closure)
     trace_full_globally_rooted(closure, &buf, &len);
 
     // Simply pin things in global roots table
-    size_t i;
+    // size_t i;
     // for (i = 0; i < jl_array_len(jl_global_roots_table); i++) {
     //     jl_value_t* root = jl_array_ptr_ref(jl_global_roots_table, i);
     //     add_node_to_roots_buffer(closure, &buf, &len, root);

@@ -1664,6 +1664,7 @@ void jl_init_serializer(void)
         if (deser_tag[i]) {
             OBJHASH_PIN(deser_tag[i])
             ptrhash_put(&ser_tag, deser_tag[i], (void*)i);
+        }
     }
 
     i = 2;
