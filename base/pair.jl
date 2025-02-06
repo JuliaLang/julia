@@ -41,7 +41,11 @@ eltype(p::Type{Pair{A, B}}) where {A, B} = Union{A, B}
 iterate(p::Pair, i=1) = i > 2 ? nothing : (getfield(p, i), i + 1)
 indexed_iterate(p::Pair, i::Int, state=1) = (getfield(p, i), i + 1)
 
-const _pairhash_seed = 0x94cb2bb20a28ce96 % UInt
+const _pairhash_seed = if UInt == UInt64
+    0x94cb2bb20a28ce96
+else
+    0x1f60a087
+end::UInt
 hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, hash(_pairhash_seed, h)))
 
 ==(p::Pair, q::Pair) = (p.first==q.first) & (p.second==q.second)
