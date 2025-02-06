@@ -576,12 +576,17 @@ function _eq(t1::Any32, t2::Any32)
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash(::Tuple{}, h::UInt) = h + tuplehash_seed
-hash(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
-function hash(t::Any32, h::UInt)
-    out = h + tuplehash_seed
-    for i = length(t):-1:1
-        out = hash(t[i], out)
+function hash(tup::Tuple, h::UInt)
+    @_terminates_locally_meta
+    f = let h = h
+        function closure_hash_tuple(e)
+            hash(e, h)
+        end
+    end
+    tuph = map(f, tup)
+    out = hash(tuplehash_seed, h)
+    for g = tuph
+        out = hash(g, out)
     end
     return out
 end

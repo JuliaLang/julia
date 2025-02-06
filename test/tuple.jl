@@ -349,6 +349,16 @@ end
 end
 
 @testset "comparison and hash" begin
+    @testset "`hash`" begin
+        @test (@inferred hash((1,))) === (@inferred hash((true,)))
+        @test hash((), UInt(0)) != hash((), UInt(1))
+        @test hash((3,), UInt(0)) != hash((3,), UInt(1))
+        let (x, y, z) = (1, 3, 7)
+            h = UInt(9)
+            @test hash((x, y, (z,)), h) != hash((x, (y, z)), h)
+        end
+    end
+
     @test isequal((), ())
     @test isequal((1,2,3), (1,2,3))
     @test !isequal((1,2,3), (1,2,4))
@@ -369,10 +379,6 @@ end
     @test !isless((1,2), (1,2))
     @test !isless((2,1), (1,2))
 
-    @test hash(()) === Base.tuplehash_seed
-    @test hash((1,)) === hash(1, Base.tuplehash_seed)
-    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed))
-
     # Test Any32 methods
     t = ntuple(identity, 32)
     @test isequal((t...,1,2,3), (t...,1,2,3))
@@ -392,8 +398,6 @@ end
     @test isless((t...,1,), (t...,1,2))
     @test !isless((t...,1,2), (t...,1,2))
     @test !isless((t...,2,1), (t...,1,2))
-
-    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,(),UInt(0)])
 end
 
 @testset "functions" begin
