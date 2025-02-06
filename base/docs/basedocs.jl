@@ -2851,8 +2851,7 @@ error if that is not possible (because the index would result in a shift
 out-of-bounds of the underlying memory).
 
 # See also
-- [`Core.memoryrefoffset`](@ref) – Retrieves the offset of a `MemoryRef` within its parent memory.
-- [`length(::GenericMemoryRef)`](@ref) – Gets the total number of elements in a `MemoryRef`.
+`length(GenericMemoryRef.mem)` – Gets the total number of elements in the underlying memory object that a GenericMemoryRef is referencing to.
 """
 memoryref(::Union{GenericMemory,GenericMemoryRef}, ::Integer)
 
