@@ -356,6 +356,7 @@ end
         let (x, y, z) = (1, 3, 7)
             h = UInt(9)
             @test hash((x, y, (z,)), h) != hash((x, (y, z)), h)
+            @test hash(((x,), y, z), h) != hash(((x, y), z), h)
         end
     end
 
