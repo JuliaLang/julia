@@ -240,8 +240,7 @@ function complete_symbol!(suggestions::Vector{Completion},
     return suggestions
 end
 
-completes_module(mod::Module, x::Symbol) =
-    Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getglobal(mod, x), Module)
+completes_module(mod::Module, x::Symbol) = isdefined(mod, x) && isa(getglobal(mod, x), Module)
 
 function add_field_completions!(suggestions::Vector{Completion}, name::String, @nospecialize(t))
     if isa(t, Union)
