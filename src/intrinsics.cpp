@@ -454,6 +454,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : nullptr;
     if ((x.inline_roots.empty() && !x.ispointer()) || c != nullptr) { // already unboxed, but sometimes need conversion
         Value *unboxed = c ? c : x.V;
+        assert(unboxed); // clang-sa doesn't know that !x.ispointer() implies x.V does have a value
         return emit_unboxed_coercion(ctx, to, unboxed);
     }
 
@@ -461,6 +462,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     Value *p = x.constant ? literal_pointer_val(ctx, x.constant) : x.V;
 
     if (jt == (jl_value_t*)jl_bool_type || to->isIntegerTy(1)) {
+        assert(p && x.inline_roots.empty()); // clang-sa doesn't know that x.ispointer() implied these are true
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
         Instruction *unbox_load = ai.decorateInst(ctx.builder.CreateLoad(getInt8Ty(ctx.builder.getContext()), p));
         setName(ctx.emission_context, unbox_load, p->getName() + ".unbox");
@@ -486,6 +488,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         p = combined;
         ai = combined_ai;
     }
+    assert(p); // clang-sa doesn't know that x.ispointer() implied this is true
     Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
     setName(ctx.emission_context, load, p->getName() + ".unbox");
     return ai.decorateInst(load);

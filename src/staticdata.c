@@ -1859,6 +1859,9 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                                 else if (invokeptr_id == -4) {
                                     fptr_id = JL_API_OC_CALL;
                                 }
+                                else if (invokeptr_id == -5) {
+                                    abort();
+                                }
                                 else {
                                     assert(invokeptr_id > 0);
                                     ios_ensureroom(s->fptr_record, invokeptr_id * sizeof(void*));
