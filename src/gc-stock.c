@@ -4085,13 +4085,13 @@ void jl_gc_notify_image_load(const char* img_data, size_t len)
     // Do nothing
 }
 
-JL_DLLEXPORT const char* jl_gc_active_impl(void) {
-    return "Built with stock GC";
-}
-
 void jl_gc_notify_image_alloc(const char* img_data, size_t len)
 {
     // Do nothing
+}
+
+JL_DLLEXPORT const char* jl_gc_active_impl(void) {
+    return "Built with stock GC";
 }
 
 JL_DLLEXPORT void jl_gc_preserve_begin_hook(int n, ...) JL_NOTSAFEPOINT

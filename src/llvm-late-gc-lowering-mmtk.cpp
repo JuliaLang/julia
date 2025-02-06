@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "mmtk.h"
 
 Value* LateLowerGCFrame::lowerGCAllocBytesLate(CallInst *target, Function &F)
 {
@@ -83,6 +84,31 @@ Value* LateLowerGCFrame::lowerGCAllocBytesLate(CallInst *target, Function &F)
 
                 auto v_raw = builder.CreateNSWAdd(result, ConstantInt::get(Type::getInt64Ty(target->getContext()), sizeof(jl_taggedvalue_t)));
                 auto v_as_ptr = builder.CreateIntToPtr(v_raw, smallAllocFunc->getReturnType());
+
+                // Post alloc
+                if (MMTK_NEEDS_VO_BIT) {
+                    auto intptr_ty = Type::getInt64Ty(target->getContext());
+                    auto i8_ty = Type::getInt8Ty(F.getContext());
+                    intptr_t metadata_base_address = reinterpret_cast<intptr_t>(MMTK_SIDE_VO_BIT_BASE_ADDRESS);
+                    auto metadata_base_val = ConstantInt::get(intptr_ty, metadata_base_address);
+                    auto metadata_base_ptr = ConstantExpr::getIntToPtr(metadata_base_val, PointerType::get(i8_ty, 0));
+                    // intptr_t addr = (intptr_t) v;
+                    auto addr = v_raw;
+                    // uint8_t* vo_meta_addr = (uint8_t*) (MMTK_SIDE_VO_BIT_BASE_ADDRESS) + (addr >> 6);
+                    auto shr = builder.CreateLShr(addr, ConstantInt::get(intptr_ty, 6));
+                    auto metadata_ptr = builder.CreateGEP(i8_ty, metadata_base_ptr, shr);
+                    // intptr_t shift = (addr >> 3) & 0b111;
+                    auto shift = builder.CreateAnd(builder.CreateLShr(addr, ConstantInt::get(intptr_ty, 3)), ConstantInt::get(intptr_ty, 7));
+                    // uint8_t byte_val = *vo_meta_addr;
+                    auto byte_val = builder.CreateAlignedLoad(i8_ty, metadata_ptr, Align());
+                    // uint8_t new_val = byte_val | (1 << shift);
+                    auto shifted_val = builder.CreateShl(ConstantInt::get(intptr_ty, 1), shift);
+                    auto shifted_val_i8 = builder.CreateTruncOrBitCast(shifted_val, i8_ty);
+                    auto new_val = builder.CreateOr(byte_val, shifted_val_i8);
+                    // (*vo_meta_addr) = new_val;
+                    builder.CreateStore(new_val, metadata_ptr);
+                }
+
                 builder.CreateBr(next_instr->getParent());
 
                 phiNode->addIncoming(new_call, slowpath);

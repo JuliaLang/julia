@@ -1056,7 +1056,11 @@ struct _jl_gcframe_t {
 
 #define JL_GC_ENCODE_PUSHARGS_NO_TPIN(n)  JL_GC_ENCODE_PUSHARGS(n)
 #define JL_GC_ENCODE_PUSH_NO_TPIN(n)      JL_GC_ENCODE_PUSH(n)
+
 #else
+
+// VO bit is required to support conservative stack scanning and moving.
+#define MMTK_NEEDS_VO_BIT (1)
 
 // We use an extra bit (100) in the nroots value from the frame to indicate that the roots
 // in the frame are/are not transitively pinning.

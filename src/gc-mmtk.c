@@ -40,19 +40,7 @@ static const size_t default_collect_interval = 3200 * 1024 * sizeof(void*);
 static memsize_t max_total_memory = (memsize_t) MAX32HEAP;
 #endif
 
-// ========================================================================= //
-// Defined by the binding
-// ========================================================================= //
 
-extern void mmtk_julia_copy_stack_check(int copy_stack);
-extern void mmtk_gc_init(uintptr_t min_heap_size, uintptr_t max_heap_size, uintptr_t n_gcthreads, uintptr_t header_size, uintptr_t tag);
-extern void mmtk_object_reference_write_post(void* mutator, const void* parent, const void* ptr);
-extern void mmtk_object_reference_write_slow(void* mutator, const void* parent, const void* ptr);
-extern void* mmtk_alloc(void* mutator, size_t size, size_t align, size_t offset, int allocator);
-extern void mmtk_post_alloc(void* mutator, void* refer, size_t bytes, int allocator);
-extern void mmtk_store_obj_size_c(void* obj, size_t size);
-extern const void* MMTK_SIDE_LOG_BIT_BASE_ADDRESS;
-extern const void* MMTK_SIDE_VO_BIT_BASE_ADDRESS;
 
 // ========================================================================= //
 // GC Initialization and Control
@@ -842,7 +830,7 @@ STATIC_INLINE void* bump_alloc_fast(MMTkMutatorContext* mutator, uintptr_t* curs
     }
 }
 
-inline void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
+STATIC_INLINE void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
         intptr_t addr = (intptr_t) obj;
         uint8_t* meta_addr = (uint8_t*) side_metadata_base + (addr >> 6);
         intptr_t shift = (addr >> 3) & 0b111;
@@ -855,12 +843,12 @@ inline void mmtk_set_side_metadata(const void* side_metadata_base, void* obj) {
         }
 }
 
-inline void* mmtk_immix_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
+STATIC_INLINE void* mmtk_immix_alloc_fast(MMTkMutatorContext* mutator, size_t size, size_t align, size_t offset) {
     ImmixAllocator* allocator = &mutator->allocators.immix[MMTK_DEFAULT_IMMIX_ALLOCATOR];
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (intptr_t)allocator->limit, size, align, offset, 0);
 }
 
-inline void mmtk_immix_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
+STATIC_INLINE void mmtk_immix_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
     if (MMTK_NEEDS_VO_BIT) {
         mmtk_set_side_metadata(MMTK_SIDE_VO_BIT_BASE_ADDRESS, obj);
     }
@@ -871,7 +859,7 @@ STATIC_INLINE void* mmtk_immortal_alloc_fast(MMTkMutatorContext* mutator, size_t
     return bump_alloc_fast(mutator, (uintptr_t*)&allocator->cursor, (uintptr_t)allocator->limit, size, align, offset, 1);
 }
 
-inline void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
+STATIC_INLINE void mmtk_immortal_post_alloc_fast(MMTkMutatorContext* mutator, void* obj, size_t size) {
     if (MMTK_NEEDS_VO_BIT) {
         mmtk_set_side_metadata(MMTK_SIDE_VO_BIT_BASE_ADDRESS, obj);
     }
@@ -1097,6 +1085,11 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
 void jl_gc_notify_image_load(const char* img_data, size_t len)
 {
     mmtk_set_vm_space((void*)img_data, len);
+}
+
+void jl_gc_notify_image_alloc(const char* img_data, size_t len)
+{
+    mmtk_immortal_region_post_alloc((void*)img_data, len);
 }
 
 // ========================================================================= //
