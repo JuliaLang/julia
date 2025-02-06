@@ -104,13 +104,13 @@ Returns the higher half of the product of `a` and `b`.
 
 # Examples
 ```jldoctest
-julia> mul_hi(12345678987654321, 123456789)
+julia> Base.mul_hi(12345678987654321, 123456789)
 82624
 
 julia> (widen(12345678987654321) * 123456789) >> 64
 82624
 
-julia> mul_hi(0xff, 0xff)
+julia> Base.mul_hi(0xff, 0xff)
 0xfe
 ```
 """
