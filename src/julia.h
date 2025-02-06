@@ -1225,6 +1225,12 @@ JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz);
 // thread-local allocator of the current thread.
 JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 
+#ifndef MMTK_GC
+#include "gc-wb-stock.h"
+#else
+#include "gc-wb-mmtk.h"
+#endif
+
 JL_DLLEXPORT void jl_gc_safepoint(void);
 JL_DLLEXPORT int jl_safepoint_suspend_thread(int tid, int waitstate);
 JL_DLLEXPORT void jl_safepoint_suspend_all_threads(struct _jl_task_t *ct);
