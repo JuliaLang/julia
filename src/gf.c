@@ -620,7 +620,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     assert(min_world <= max_world && "attempting to set invalid world constraints");
     //assert((!jl_is_method(mi->def.value) || max_world != ~(size_t)0 || min_world <= 1 || edges == NULL || jl_svec_len(edges) != 0) && "missing edges");
     jl_task_t *ct = jl_current_task;
-    jl_code_instance_t *codeinst = (jl_code_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_code_instance_t),
+    jl_code_instance_t *codeinst = (jl_code_instance_t*)jl_gc_alloc_nonmoving(ct->ptls, sizeof(jl_code_instance_t),
             jl_code_instance_type);
     codeinst->def = (jl_value_t*)mi;
     codeinst->owner = owner;
@@ -645,8 +645,6 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_atomic_store_relaxed(&codeinst->next, NULL);
     jl_atomic_store_relaxed(&codeinst->ipo_purity_bits, effects);
     codeinst->analysis_results = analysis_results;
-    // Pin codeinst, as they are referenced by vectors and maps in _jl_codegen_params_t
-    OBJ_PIN(codeinst);
     return codeinst;
 }
 

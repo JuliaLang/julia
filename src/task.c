@@ -1072,10 +1072,8 @@ void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSA
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_task_t *ct = jl_current_task;
-    jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
+    jl_task_t *t = (jl_task_t*)jl_gc_alloc_nonmoving(ct->ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(t, jl_task_tag, 0);
-    // Task cannot be moved, as jl_mutex_t (as globals) references tasks
-    OBJ_PIN(t);
     JL_PROBE_RT_NEW_TASK(ct, t);
     t->ctx.copy_stack = 0;
     if (ssize == 0) {
@@ -1544,10 +1542,8 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     bootstrap_task.value.ptls = ptls;
     if (jl_nothing == NULL) // make a placeholder
         jl_nothing = jl_gc_permobj(0, jl_nothing_type);
-    jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
+    jl_task_t *ct = (jl_task_t*)jl_gc_alloc_nonmoving(ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(ct, jl_task_tag, 0);
-    // Task cannot be moved, as jl_mutex_t (as globals) references tasks
-    OBJ_PIN(ct);
     memset(ct, 0, sizeof(jl_task_t));
     void *stack = stack_lo;
     size_t ssize = (char*)stack_hi - (char*)stack_lo;

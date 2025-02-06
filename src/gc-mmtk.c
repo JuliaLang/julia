@@ -1243,6 +1243,15 @@ inline jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     return v;
 }
 
+inline jl_value_t *jl_gc_alloc_nonmoving_(jl_ptls_t ptls, size_t sz, void *ty)
+{
+    // TODO: Currently we just alloc and pin the object. We may use a
+    // different non moving allocator instead.
+    jl_value_t *v = jl_gc_alloc_(ptls, sz, ty);
+    OBJ_PIN(v);
+    return v;
+}
+
 // allocation wrappers that track allocation and let collection run
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {

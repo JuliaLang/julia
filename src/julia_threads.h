@@ -230,6 +230,7 @@ typedef struct _jl_excstack_t jl_excstack_t;
 typedef struct _jl_handler_t jl_handler_t;
 
 typedef struct _jl_task_t {
+    JL_NON_MOVING // jl_mutex_t (as globals) references tasks
     JL_DATA_TYPE
     jl_value_t *next; // invasive linked list for scheduler
     jl_value_t *queue; // invasive linked list for scheduler

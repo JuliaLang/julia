@@ -62,11 +62,8 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
 {
     jl_task_t *ct = jl_current_task;
     jl_typename_t *tn =
-        (jl_typename_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typename_t),
+        (jl_typename_t*)jl_gc_alloc_nonmoving(ct->ptls, sizeof(jl_typename_t),
                                     jl_typename_type);
-    // Typenames should be pinned since they are used as metadata, and are
-    // read during scan_object
-    OBJ_PIN(tn);
     tn->name = name;
     tn->module = module;
     tn->wrapper = NULL;
@@ -98,10 +95,7 @@ jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_module_t *module, jl_dat
 jl_datatype_t *jl_new_uninitialized_datatype(void)
 {
     jl_task_t *ct = jl_current_task;
-    jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc(ct->ptls, sizeof(jl_datatype_t), jl_datatype_type);
-    // Types should be pinned since they are used as metadata, and are
-    // read during scan_object
-    OBJ_PIN(t);
+    jl_datatype_t *t = (jl_datatype_t*)jl_gc_alloc_nonmoving(ct->ptls, sizeof(jl_datatype_t), jl_datatype_type);
     jl_set_typetagof(t, jl_datatype_tag, 0);
     t->hash = 0;
     t->hasfreetypevars = 0;

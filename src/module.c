@@ -75,7 +75,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
 {
     jl_task_t *ct = jl_current_task;
     const jl_uuid_t uuid_zero = {0, 0};
-    jl_module_t *m = (jl_module_t*)jl_gc_alloc(ct->ptls, sizeof(jl_module_t),
+    jl_module_t *m = (jl_module_t*)jl_gc_alloc_nonmoving(ct->ptls, sizeof(jl_module_t),
                                                jl_module_type);
     jl_set_typetagof(m, jl_module_tag, 0);
     assert(jl_is_symbol(name));
@@ -110,7 +110,6 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
         jl_module_public(m, name, 1);
         JL_GC_POP();
     }
-    OBJ_PIN(m); // modules are referenced in jl_current_modules (htable). They cannot move.
     return m;
 }
 
