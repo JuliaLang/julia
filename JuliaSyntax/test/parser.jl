@@ -293,6 +293,10 @@ tests = [
         "(a,b)->c" =>  "(-> (tuple-p a b) c)"
         "(a;b=1)->c" =>  "(-> (tuple-p a (parameters (= b 1))) c)"
         "x::T->c"  =>  "(-> (tuple (::-i x T)) c)"
+        "\$a->b"   =>  "(-> (tuple (\$ a)) b)"
+        "\$(a)->b" =>  "(-> (tuple (\$ (parens a))) b)"
+        # FIXME "&(a)->b"  =>  "(-> (tuple-p (& (parens a))) b)"
+        # FIXME "::(a)->b" =>  "(-> (tuple-p (:: (parens a))) b)"
         # `where` combined with `->` still parses strangely. However:
         # * It's extra hard to add a tuple around the `x` in this syntax corner case.
         # * The user already needs to add additional, ugly, parens to get this

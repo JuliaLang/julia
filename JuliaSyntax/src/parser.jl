@@ -1461,7 +1461,7 @@ end
 # $a   ==>  ($ a)
 #
 # flisp: parse-unary-prefix
-function parse_unary_prefix(ps::ParseState)
+function parse_unary_prefix(ps::ParseState, has_unary_prefix=false)
     mark = position(ps)
     t = peek_token(ps)
     k = kind(t)
@@ -1480,7 +1480,7 @@ function parse_unary_prefix(ps::ParseState)
                 # $a   ==>  ($ a)
                 # $$a  ==>  ($ ($ a))
                 # $&a  ==>  ($ (& a))
-                parse_unary_prefix(ps)
+                parse_unary_prefix(ps, true)
             end
             # Only need PREFIX_OP_FLAG for ::
             f = k == K"::" ? PREFIX_OP_FLAG : EMPTY_FLAGS
@@ -1488,7 +1488,7 @@ function parse_unary_prefix(ps::ParseState)
         end
     else
         # .&(x,y)  ==>  (call .& x y)
-        parse_atom(ps)
+        parse_atom(ps, true, has_unary_prefix)
     end
 end
 
@@ -3066,7 +3066,7 @@ end
 # *very* overloaded!
 #
 # flisp: parse-paren / parse-paren-
-function parse_paren(ps::ParseState, check_identifiers=true)
+function parse_paren(ps::ParseState, check_identifiers=true, has_unary_prefix=false)
     ps = ParseState(ps, range_colon_enabled=true,
                     space_sensitive=false,
                     where_enabled=true,
@@ -3100,7 +3100,7 @@ function parse_paren(ps::ParseState, check_identifiers=true)
         opts = parse_brackets(ps, K")") do had_commas, had_splat, num_semis, num_subexprs
             is_tuple = had_commas || (had_splat && num_semis >= 1) ||
                        (initial_semi && (num_semis == 1 || num_subexprs > 0)) ||
-                       (peek(ps, 2) == K"->" && peek_behind(ps).kind != K"where")
+                       (peek(ps, 2) == K"->" && (peek_behind(ps).kind != K"where" && !has_unary_prefix))
             return (needs_parameters=is_tuple,
                     is_tuple=is_tuple,
                     is_block=num_semis > 0)
@@ -3475,7 +3475,7 @@ end
 # the syntactic operators or closing tokens.
 #
 # flisp: parse-atom
-function parse_atom(ps::ParseState, check_identifiers=true)
+function parse_atom(ps::ParseState, check_identifiers=true, has_unary_prefix=false)
     bump_trivia(ps)
     mark = position(ps)
     leading_kind = peek(ps)
@@ -3634,7 +3634,7 @@ function parse_atom(ps::ParseState, check_identifiers=true)
             bump(ps, remap_kind=K"Identifier")
         end
     elseif leading_kind == K"(" # parens or tuple
-        parse_paren(ps, check_identifiers)
+        parse_paren(ps, check_identifiers, has_unary_prefix)
     elseif leading_kind == K"[" # cat expression
         bump(ps, TRIVIA_FLAG)
         ckind, cflags = parse_cat(ps, K"]", ps.end_symbol)
