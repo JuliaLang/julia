@@ -560,12 +560,17 @@ static_assert(ARRAY_CACHE_ALIGN_THRESHOLD > GC_MAX_SZCLASS, "");
  * safepoints will be caught by the GC analyzer.
  */
 JL_DLLEXPORT jl_value_t *jl_gc_alloc(jl_ptls_t ptls, size_t sz, void *ty);
+JL_DLLEXPORT jl_value_t *jl_gc_alloc_nonmoving(jl_ptls_t ptls, size_t sz, void *ty);
 // On GCC, only inline when sz is constant
 #ifdef __GNUC__
 #  define jl_gc_alloc(ptls, sz, ty)  \
     (__builtin_constant_p(sz) ?      \
      jl_gc_alloc_(ptls, sz, ty) :    \
      (jl_gc_alloc)(ptls, sz, ty))
+#  define jl_gc_alloc_nonmoving(ptls, sz, ty)  \
+    (__builtin_constant_p(sz) ?      \
+     jl_gc_alloc_nonmoving_(ptls, sz, ty) :    \
+     (jl_gc_alloc_nonmoving)(ptls, sz, ty))
 #else
 #  define jl_gc_alloc(ptls, sz, ty) jl_gc_alloc_(ptls, sz, ty)
 #endif
