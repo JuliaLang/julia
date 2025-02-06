@@ -1,7 +1,7 @@
 name = "JuliaSyntax"
 uuid = "70703baa-626e-46a2-a12c-08ffd08c73b4"
 authors = ["Claire Foster <aka.c42f@gmail.com> and contributors"]
-version = "1.0.0"
+version = "1.0.1"
 
 [compat]
 Serialization = "1.0"
