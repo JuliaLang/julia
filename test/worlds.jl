@@ -107,7 +107,7 @@ end
 g265() = [f265(x) for x in 1:3.]
 wc265 = get_world_counter()
 wc265_41332a = Task(tls_world_age)
-@test tls_world_age() == wc265 + 2
+@test tls_world_age() == wc265 + 1
 (function ()
     global wc265_41332b = Task(tls_world_age)
     @eval f265(::Any) = 1.0
@@ -115,15 +115,15 @@ wc265_41332a = Task(tls_world_age)
     global wc265_41332d = Task(tls_world_age)
     nothing
 end)()
-@test wc265 + 10 == get_world_counter() == tls_world_age()
+@test wc265 + 12 == get_world_counter() == tls_world_age()
 schedule(wc265_41332a)
 schedule(wc265_41332b)
 schedule(wc265_41332c)
 schedule(wc265_41332d)
 @test wc265 + 1 == fetch(wc265_41332a)
-@test wc265 + 8 == fetch(wc265_41332b)
-@test wc265 + 10 == fetch(wc265_41332c)
-@test wc265 + 8 == fetch(wc265_41332d)
+@test wc265 + 10 == fetch(wc265_41332b)
+@test wc265 + 12 == fetch(wc265_41332c)
+@test wc265 + 10 == fetch(wc265_41332d)
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
@@ -509,3 +509,18 @@ struct FooBackdated
     FooBackdated() = new(FooBackdated[])
 end
 @test Base.invoke_in_world(before_backdate_age, isdefined, @__MODULE__, :FooBackdated)
+
+# Test that ambiguous binding intersect the using'd binding's world ranges
+module AmbigWorldTest
+    using Test
+    module M1; export x; end
+    module M2; export x; end
+    using .M1, .M2
+    Core.eval(M1, :(x=1))
+    Core.eval(M2, :(x=2))
+    @test_throws UndefVarError x
+    @test convert(Core.Binding, GlobalRef(@__MODULE__, :x)).partitions.min_world == max(
+        convert(Core.Binding, GlobalRef(M1, :x)).partitions.min_world,
+        convert(Core.Binding, GlobalRef(M2, :x)).partitions.min_world
+    )
+end

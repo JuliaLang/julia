@@ -2652,10 +2652,10 @@ using ..Mod
 end
 @test Mod3.f(10) == 21
 @test !isdefined(Mod3, :func)
-@test_throws ErrorException("invalid method definition in Mod3: function Mod3.f must be explicitly imported to be extended") Core.eval(Mod3, :(f(x::Int) = x))
+@test_throws ErrorException("invalid method definition in Mod3: function Mod.f must be explicitly imported to be extended") Core.eval(Mod3, :(f(x::Int) = x))
 @test !isdefined(Mod3, :always_undef) # resolve this binding now in Mod3
-@test_throws ErrorException("invalid method definition in Mod3: exported function Mod.always_undef does not exist") Core.eval(Mod3, :(always_undef(x::Int) = x))
-@test_throws ErrorException("cannot declare Mod3.always_undef constant; it was already declared as an import") Core.eval(Mod3, :(const always_undef = 3))
+@test Core.eval(Mod3, :(always_undef(x::Int) = x)) == invokelatest(getglobal, Mod3, :always_undef)
+@test Core.eval(Mod3, :(const always_undef = 3)) == invokelatest(getglobal, Mod3, :always_undef)
 @test_throws ErrorException("cannot declare Mod3.f constant; it was already declared as an import") Core.eval(Mod3, :(const f = 3))
 @test_throws ErrorException("cannot declare Mod.maybe_undef constant; it was already declared global") Core.eval(Mod, :(const maybe_undef = 3))
 
@@ -4046,3 +4046,9 @@ function fs56711()
     return f
 end
 @test !@isdefined(x_should_not_be_defined)
+
+# Test that importing twice is allowed without warning
+@test_nowarn @eval baremodule ImportTwice
+    import ..Base
+    using .Base: zero, zero
+end

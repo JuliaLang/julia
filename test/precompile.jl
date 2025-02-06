@@ -657,7 +657,7 @@ precompile_test_harness(false) do dir
     @test Base.stale_cachefile(relFooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
 
     @eval using FooBar
-    fb_uuid = Base.module_build_id(FooBar)
+    fb_uuid = invokelatest(()->Base.module_build_id(FooBar))
     sleep(2); touch(FooBar_file)
     insert!(DEPOT_PATH, 1, dir2)
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
@@ -667,9 +667,11 @@ precompile_test_harness(false) do dir
     @test isfile(joinpath(cachedir2, "FooBar1.ji"))
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test Base.stale_cachefile(FooBar1_file, joinpath(cachedir2, "FooBar1.ji")) isa Tsc
-    @test fb_uuid == Base.module_build_id(FooBar)
-    fb_uuid1 = Base.module_build_id(FooBar1)
-    @test fb_uuid != fb_uuid1
+    invokelatest() do
+        @test fb_uuid == Base.module_build_id(FooBar)
+        fb_uuid1 = Base.module_build_id(FooBar1)
+        @test fb_uuid != fb_uuid1
+    end
 
     # test checksum
     open(joinpath(cachedir2, "FooBar1.ji"), "a") do f
@@ -778,45 +780,48 @@ precompile_test_harness("code caching") do dir
     Base.compilecache(pkgid)
     @test Base.isprecompiled(pkgid)
     @eval using $Cache_module
-    M = getfield(@__MODULE__, Cache_module)
-    # Test that this cache file "owns" all the roots
+    M = invokelatest(getfield, @__MODULE__, Cache_module)
     Mid = rootid(M)
-    for name in (:f, :fpush, :callboth)
-        func = getfield(M, name)
-        m = only(collect(methods(func)))
-        @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
-    end
-    # Check that we can cache external CodeInstances:
-    # length(::Vector) has an inferred specialization for `Vector{X}`
-    msize = which(length, (Vector{<:Any},))
-    hasspec = false
-    for mi in Base.specializations(msize)
-        if mi.specTypes == Tuple{typeof(length),Vector{Cacheb8321416e8a3e2f1.X}}
-            if (isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) &&
-                mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing)
-                hasspec = true
-                break
+    invokelatest() do
+        # Test that this cache file "owns" all the roots
+        for name in (:f, :fpush, :callboth)
+            func = getfield(M, name)
+            m = only(collect(methods(func)))
+            @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
+        end
+        # Check that we can cache external CodeInstances:
+        # length(::Vector) has an inferred specialization for `Vector{X}`
+        msize = which(length, (Vector{<:Any},))
+        hasspec = false
+        for mi in Base.specializations(msize)
+            if mi.specTypes == Tuple{typeof(length),Vector{Cacheb8321416e8a3e2f1.X}}
+                if (isdefined(mi, :cache) && isa(mi.cache, Core.CodeInstance) &&
+                    mi.cache.max_world == typemax(UInt) && mi.cache.inferred !== nothing)
+                    hasspec = true
+                    break
+                end
             end
         end
+        @test hasspec
+
+        # Check that internal methods and their roots are accounted appropriately
+        minternal = which(M.getelsize, (Vector,))
+        mi = minternal.specializations::Core.MethodInstance
+        @test mi.specTypes == Tuple{typeof(M.getelsize),Vector{Int32}}
+        ci = mi.cache
+        @test (codeunits(ci.inferred::String)[end]) === 0x01
+        @test ci.inferred !== nothing
+        # ...and that we can add "untracked" roots & non-relocatable CodeInstances to them too
+        Base.invokelatest() do
+            M.getelsize(M.X2[])
+        end
+        mispecs = minternal.specializations::Core.SimpleVector
+        @test mispecs[1] === mi
+        mi = mispecs[2]::Core.MethodInstance
+        mi.specTypes == Tuple{typeof(M.getelsize),Vector{M.X2}}
+        ci = mi.cache
+        @test (codeunits(ci.inferred::String)[end]) == 0x00
     end
-    @test hasspec
-    # Check that internal methods and their roots are accounted appropriately
-    minternal = which(M.getelsize, (Vector,))
-    mi = minternal.specializations::Core.MethodInstance
-    @test mi.specTypes == Tuple{typeof(M.getelsize),Vector{Int32}}
-    ci = mi.cache
-    @test (codeunits(ci.inferred::String)[end]) === 0x01
-    @test ci.inferred !== nothing
-    # ...and that we can add "untracked" roots & non-relocatable CodeInstances to them too
-    Base.invokelatest() do
-        M.getelsize(M.X2[])
-    end
-    mispecs = minternal.specializations::Core.SimpleVector
-    @test mispecs[1] === mi
-    mi = mispecs[2]::Core.MethodInstance
-    mi.specTypes == Tuple{typeof(M.getelsize),Vector{M.X2}}
-    ci = mi.cache
-    @test (codeunits(ci.inferred::String)[end]) == 0x00
     # PkgA loads PkgB, and both add roots to the same `push!` method (both before and after loading B)
     Cache_module2 = :Cachea1544c83560f0c99
     write(joinpath(dir, "$Cache_module2.jl"),
@@ -835,24 +840,26 @@ precompile_test_harness("code caching") do dir
           """)
     Base.compilecache(Base.PkgId(string(Cache_module2)))
     @eval using $Cache_module2
-    M2 = getfield(@__MODULE__, Cache_module2)
-    M2id = rootid(M2)
-    dest = []
-    Base.invokelatest() do  # use invokelatest to see the results of loading the compile
-        M2.f(dest)
-        M.fpush(dest)
-        M2.g(dest)
-        @test dest == [M2.Y(), M.X(), M2.Z()]
-        @test M2.callf() == [M2.Y()]
-        @test M2.callg() == [M2.Z()]
-        @test M.fpush(M.X[]) == [M.X()]
+    invokelatest() do
+        M2 = getfield(@__MODULE__, Cache_module2)
+        M2id = rootid(M2)
+        dest = []
+        Base.invokelatest() do  # use invokelatest to see the results of loading the compile
+            M2.f(dest)
+            M.fpush(dest)
+            M2.g(dest)
+            @test dest == [M2.Y(), M.X(), M2.Z()]
+            @test M2.callf() == [M2.Y()]
+            @test M2.callg() == [M2.Z()]
+            @test M.fpush(M.X[]) == [M.X()]
+        end
+        mT = which(push!, (Vector{T} where T, Any))
+        groups = group_roots(mT)
+        @test Memory{M2.Y} ∈ groups[M2id]
+        @test Memory{M2.Z} ∈ groups[M2id]
+        @test Memory{M.X} ∈ groups[Mid]
+        @test Memory{M.X} ∉ groups[M2id]
     end
-    mT = which(push!, (Vector{T} where T, Any))
-    groups = group_roots(mT)
-    @test Memory{M2.Y} ∈ groups[M2id]
-    @test Memory{M2.Z} ∈ groups[M2id]
-    @test Memory{M.X} ∈ groups[Mid]
-    @test Memory{M.X} ∉ groups[M2id]
     # backedges of external MethodInstances
     # Root gets used by RootA and RootB, and both consumers end up inferring the same MethodInstance from Root
     # Do both callers get listed as backedges?
@@ -895,31 +902,33 @@ precompile_test_harness("code caching") do dir
     Base.compilecache(Base.PkgId(string(RootB)))
     @eval using $RootA
     @eval using $RootB
-    MA = getfield(@__MODULE__, RootA)
-    MB = getfield(@__MODULE__, RootB)
-    M = getfield(MA, RootModule)
-    m = which(M.f, (Any,))
-    for mi in Base.specializations(m)
-        mi === nothing && continue
-        mi = mi::Core.MethodInstance
-        if mi.specTypes.parameters[2] === Int8
-            # external callers
-            mods = Module[]
-            for be in mi.backedges
-                push!(mods, ((be.def::Core.MethodInstance).def::Method).module) # XXX
+    invokelatest() do
+        MA = getfield(@__MODULE__, RootA)
+        MB = getfield(@__MODULE__, RootB)
+        M = getfield(MA, RootModule)
+        m = which(M.f, (Any,))
+        for mi in Base.specializations(m)
+            mi === nothing && continue
+            mi = mi::Core.MethodInstance
+            if mi.specTypes.parameters[2] === Int8
+                # external callers
+                mods = Module[]
+                for be in mi.backedges
+                    push!(mods, ((be.def::Core.MethodInstance).def::Method).module) # XXX
+                end
+                @test MA ∈ mods
+                @test MB ∈ mods
+                @test length(mods) == 2
+            elseif mi.specTypes.parameters[2] === Int16
+                # internal callers
+                meths = Method[]
+                for be in mi.backedges
+                    push!(meths, (be.def::Method).def) # XXX
+                end
+                @test which(M.g1, ()) ∈ meths
+                @test which(M.g2, ()) ∈ meths
+                @test length(meths) == 2
             end
-            @test MA ∈ mods
-            @test MB ∈ mods
-            @test length(mods) == 2
-        elseif mi.specTypes.parameters[2] === Int16
-            # internal callers
-            meths = Method[]
-            for be in mi.backedges
-                push!(meths, (be.def::Method).def) # XXX
-            end
-            @test which(M.g1, ()) ∈ meths
-            @test which(M.g2, ()) ∈ meths
-            @test length(meths) == 2
         end
     end
 
@@ -1005,65 +1014,67 @@ precompile_test_harness("code caching") do dir
         Base.compilecache(Base.PkgId(string(pkg)))
     end
     @eval using $StaleA
-    MA = getfield(@__MODULE__, StaleA)
+    MA = invokelatest(getfield, @__MODULE__, StaleA)
     Base.eval(MA, :(nbits(::UInt8) = 8))
     @eval using $StaleC
     invalidations = Base.StaticData.debug_method_invalidation(true)
     @eval using $StaleB
     Base.StaticData.debug_method_invalidation(false)
-    MB = getfield(@__MODULE__, StaleB)
-    MC = getfield(@__MODULE__, StaleC)
-    world = Base.get_world_counter()
-    m = only(methods(MA.use_stale))
-    mi = m.specializations::Core.MethodInstance
-    @test hasvalid(mi, world)   # it was re-inferred by StaleC
-    m = only(methods(MA.build_stale))
-    mis = filter(!isnothing, collect(m.specializations::Core.SimpleVector))
-    @test length(mis) == 2
-    for mi in mis
-        mi = mi::Core.MethodInstance
-        if mi.specTypes.parameters[2] == Int
-            @test mi.cache.max_world < world
-        else
-            # The variant for String got "healed" by recompilation in StaleC
-            @test mi.specTypes.parameters[2] == String
-            @test mi.cache.max_world == typemax(UInt)
+    invokelatest() do
+        MB = getfield(@__MODULE__, StaleB)
+        MC = getfield(@__MODULE__, StaleC)
+        world = Base.get_world_counter()
+        m = only(methods(MA.use_stale))
+        mi = m.specializations::Core.MethodInstance
+        @test hasvalid(mi, world)   # it was re-inferred by StaleC
+        m = only(methods(MA.build_stale))
+        mis = filter(!isnothing, collect(m.specializations::Core.SimpleVector))
+        @test length(mis) == 2
+        for mi in mis
+            mi = mi::Core.MethodInstance
+            if mi.specTypes.parameters[2] == Int
+                @test mi.cache.max_world < world
+            else
+                # The variant for String got "healed" by recompilation in StaleC
+                @test mi.specTypes.parameters[2] == String
+                @test mi.cache.max_world == typemax(UInt)
+            end
         end
-    end
-    m = only(methods(MB.useA))
-    mi = m.specializations::Core.MethodInstance
-    @test !hasvalid(mi, world)      # invalidated by the stale(x::String) method in StaleC
-    m = only(methods(MC.call_buildstale))
-    mi = m.specializations::Core.MethodInstance
-    @test hasvalid(mi, world)       # was compiled with the new method
+        m = only(methods(MB.useA))
+        mi = m.specializations::Core.MethodInstance
+        @test !hasvalid(mi, world)      # invalidated by the stale(x::String) method in StaleC
+        m = only(methods(MC.call_buildstale))
+        mi = m.specializations::Core.MethodInstance
+        @test hasvalid(mi, world)       # was compiled with the new method
 
-    # Reporting test (ensure SnoopCompile works)
-    @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
-    m = only(methods(MB.call_nbits))
-    for mi in Base.specializations(m)
-        hv = hasvalid(mi, world)
-        @test mi.specTypes.parameters[end] === Integer ? !hv : hv
-    end
+        # Reporting test (ensure SnoopCompile works)
+        @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
+        m = only(methods(MB.call_nbits))
+        for mi in Base.specializations(m)
+            hv = hasvalid(mi, world)
+            @test mi.specTypes.parameters[end] === Integer ? !hv : hv
+        end
 
-    idxs = findall(==("verify_methods"), invalidations)
-    idxsbits = filter(idxs) do i
-        mi = invalidations[i-1]
-        mi.def.def === m
-    end
-    idx = only(idxsbits)
-    tagbad = invalidations[idx+1]
-    @test isa(tagbad, Core.CodeInstance)
-    j = findfirst(==(tagbad), invalidations)
-    @test invalidations[j-1] == "insert_backedges_callee"
-    @test isa(invalidations[j-2], Type)
-    @test isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
-    m = only(methods(MB.useA2))
-    mi = only(Base.specializations(m))
-    @test !hasvalid(mi, world)
-    @test any(x -> x isa Core.CodeInstance && x.def === mi, invalidations)
+        idxs = findall(==("verify_methods"), invalidations)
+        idxsbits = filter(idxs) do i
+            mi = invalidations[i-1]
+            mi.def.def === m
+        end
+        idx = only(idxsbits)
+        tagbad = invalidations[idx+1]
+        @test isa(tagbad, Core.CodeInstance)
+        j = findfirst(==(tagbad), invalidations)
+        @test invalidations[j-1] == "insert_backedges_callee"
+        @test isa(invalidations[j-2], Type)
+        @test isa(invalidations[j+1], Vector{Any}) # [nbits(::UInt8)]
+        m = only(methods(MB.useA2))
+        mi = only(Base.specializations(m))
+        @test !hasvalid(mi, world)
+        @test any(x -> x isa Core.CodeInstance && x.def === mi, invalidations)
 
-    m = only(methods(MB.map_nbits))
-    @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
+        m = only(methods(MB.map_nbits))
+        @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
+    end
 end
 
 precompile_test_harness("invoke") do dir
@@ -1181,88 +1192,90 @@ precompile_test_harness("invoke") do dir
           """)
     Base.compilecache(Base.PkgId(string(CallerModule)))
     @eval using $InvokeModule: $InvokeModule
-    MI = getfield(@__MODULE__, InvokeModule)
+    MI = invokelatest(getfield, @__MODULE__, InvokeModule)
     @eval $MI.getlast(a::UnitRange) = a.stop
     @eval using $CallerModule
-    M = getfield(@__MODULE__, CallerModule)
+    invokelatest() do
+        M = getfield(@__MODULE__, CallerModule)
 
-    get_method_for_type(func, @nospecialize(T)) = which(func, (T,)) # return the method func(::T)
-    function nvalid(mi::Core.MethodInstance)
-        isdefined(mi, :cache) || return 0
-        ci = mi.cache
-        n = Int(ci.max_world == typemax(UInt))
-        while isdefined(ci, :next)
-            ci = ci.next
-            n += ci.max_world == typemax(UInt)
-        end
-        return n
-    end
-
-    for func in (M.f, M.g, M.internal, M.fnc, M.gnc, M.internalnc)
-        m = get_method_for_type(func, Real)
-        mi = m.specializations::Core.MethodInstance
-        @test length(mi.backedges) == 2 || length(mi.backedges) == 4 # internalnc might have a constprop edge
-        @test mi.backedges[1] === Tuple{typeof(func), Real}
-        @test isa(mi.backedges[2], Core.CodeInstance)
-        if length(mi.backedges) == 4
-            @test mi.backedges[3] === Tuple{typeof(func), Real}
-            @test isa(mi.backedges[4], Core.CodeInstance)
-            @test mi.backedges[2] !== mi.backedges[4]
-            @test mi.backedges[2].def === mi.backedges[4].def
-        end
-        @test mi.cache.max_world == typemax(mi.cache.max_world)
-    end
-    for func in (M.q, M.qnc)
-        m = get_method_for_type(func, Integer)
-        mi = m.specializations::Core.MethodInstance
-        @test length(mi.backedges) == 2
-        @test mi.backedges[1] === Tuple{typeof(func), Integer}
-        @test isa(mi.backedges[2], Core.CodeInstance)
-        @test mi.cache.max_world == typemax(mi.cache.max_world)
-    end
-
-    m = get_method_for_type(M.h, Real)
-    @test nvalid(m.specializations::Core.MethodInstance) == 0
-    m = get_method_for_type(M.hnc, Real)
-    @test nvalid(m.specializations::Core.MethodInstance) == 0
-    m = only(methods(M.callq))
-    @test nvalid(m.specializations::Core.MethodInstance) == 0
-    m = only(methods(M.callqnc))
-    @test nvalid(m.specializations::Core.MethodInstance) == 1
-    m = only(methods(M.callqi))
-    @test (m.specializations::Core.MethodInstance).specTypes == Tuple{typeof(M.callqi), Int}
-    m = only(methods(M.callqnci))
-    @test (m.specializations::Core.MethodInstance).specTypes == Tuple{typeof(M.callqnci), Int}
-
-    m = only(methods(M.g44320))
-    @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
-
-    m = only(methods(M.g57115))
-    mi = m.specializations::Core.MethodInstance
-
-    f_m = get_method_for_type(M.f57115, Any)
-    f_mi = f_m.specializations::Core.MethodInstance
-
-    # Make sure that f57115(::Any) has a 'call' backedge to 'g57115'
-    has_f_call_backedge = false
-    i = 1
-    while i ≤ length(f_mi.backedges)
-        if f_mi.backedges[i] isa DataType
-            # invoke edge - skip
-            i += 2
-        else
-            caller = f_mi.backedges[i]::Core.CodeInstance
-            if caller.def === mi
-                has_f_call_backedge = true
-                break
+        get_method_for_type(func, @nospecialize(T)) = which(func, (T,)) # return the method func(::T)
+        function nvalid(mi::Core.MethodInstance)
+            isdefined(mi, :cache) || return 0
+            ci = mi.cache
+            n = Int(ci.max_world == typemax(UInt))
+            while isdefined(ci, :next)
+                ci = ci.next
+                n += ci.max_world == typemax(UInt)
             end
-            i += 1
+            return n
         end
-    end
-    @test has_f_call_backedge
 
-    m = which(MI.getlast, (Any,))
-    @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
+        for func in (M.f, M.g, M.internal, M.fnc, M.gnc, M.internalnc)
+            m = get_method_for_type(func, Real)
+            mi = m.specializations::Core.MethodInstance
+            @test length(mi.backedges) == 2 || length(mi.backedges) == 4 # internalnc might have a constprop edge
+            @test mi.backedges[1] === Tuple{typeof(func), Real}
+            @test isa(mi.backedges[2], Core.CodeInstance)
+            if length(mi.backedges) == 4
+                @test mi.backedges[3] === Tuple{typeof(func), Real}
+                @test isa(mi.backedges[4], Core.CodeInstance)
+                @test mi.backedges[2] !== mi.backedges[4]
+                @test mi.backedges[2].def === mi.backedges[4].def
+            end
+            @test mi.cache.max_world == typemax(mi.cache.max_world)
+        end
+        for func in (M.q, M.qnc)
+            m = get_method_for_type(func, Integer)
+            mi = m.specializations::Core.MethodInstance
+            @test length(mi.backedges) == 2
+            @test mi.backedges[1] === Tuple{typeof(func), Integer}
+            @test isa(mi.backedges[2], Core.CodeInstance)
+            @test mi.cache.max_world == typemax(mi.cache.max_world)
+        end
+
+        m = get_method_for_type(M.h, Real)
+        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        m = get_method_for_type(M.hnc, Real)
+        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        m = only(methods(M.callq))
+        @test nvalid(m.specializations::Core.MethodInstance) == 0
+        m = only(methods(M.callqnc))
+        @test nvalid(m.specializations::Core.MethodInstance) == 1
+        m = only(methods(M.callqi))
+        @test (m.specializations::Core.MethodInstance).specTypes == Tuple{typeof(M.callqi), Int}
+        m = only(methods(M.callqnci))
+        @test (m.specializations::Core.MethodInstance).specTypes == Tuple{typeof(M.callqnci), Int}
+
+        m = only(methods(M.g44320))
+        @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
+
+        m = only(methods(M.g57115))
+        mi = m.specializations::Core.MethodInstance
+
+        f_m = get_method_for_type(M.f57115, Any)
+        f_mi = f_m.specializations::Core.MethodInstance
+
+        # Make sure that f57115(::Any) has a 'call' backedge to 'g57115'
+        has_f_call_backedge = false
+        i = 1
+        while i ≤ length(f_mi.backedges)
+            if f_mi.backedges[i] isa DataType
+                # invoke edge - skip
+                i += 2
+            else
+                caller = f_mi.backedges[i]::Core.CodeInstance
+                if caller.def === mi
+                    has_f_call_backedge = true
+                    break
+                end
+                i += 1
+            end
+        end
+        @test has_f_call_backedge
+
+        m = which(MI.getlast, (Any,))
+        @test (m.specializations::Core.MethodInstance).cache.max_world == typemax(UInt)
+    end
 
     # Precompile specific methods for arbitrary arg types
     invokeme(x) = 1
@@ -1359,7 +1372,6 @@ precompile_test_harness("package_callbacks") do dir
               """)
         Base.compilecache(Base.PkgId("$(Test2_module)"))
 
-        @test !Base.isbindingresolved(Main, Test2_module)
         Base.require(Main, Test2_module)
         @test take!(loaded_modules) == Test1_module
         @test take!(loaded_modules) == Test2_module
@@ -1454,13 +1466,15 @@ end
         end
         try
             @eval using $ModuleB
-            uuid = Base.module_build_id(Base.root_module(Main, ModuleB))
-            for wid in test_workers
-                @test Distributed.remotecall_eval(Main, wid, quote
-                        Base.module_build_id(Base.root_module(Main, $(QuoteNode(ModuleB))))
-                    end) == uuid
-                if wid != myid() # avoid world-age errors on the local proc
-                    @test remotecall_fetch(g, wid) == wid
+            invokelatest() do
+                uuid = Base.module_build_id(Base.root_module(Main, ModuleB))
+                for wid in test_workers
+                    @test Distributed.remotecall_eval(Main, wid, quote
+                            Base.module_build_id(Base.root_module(Main, $(QuoteNode(ModuleB))))
+                        end) == uuid
+                    if wid != myid() # avoid world-age errors on the local proc
+                        @test remotecall_fetch(g, wid) == wid
+                    end
                 end
             end
         finally
@@ -1612,7 +1626,9 @@ precompile_test_harness("Issue #29936") do load_path
           end
           """)
     @eval using Foo29936
-    @test [("Plan", Foo29936.m), ("Plan", Foo29936.h),] isa Vector{Tuple{String,Val}}
+    invokelatest() do
+        @test [("Plan", Foo29936.m), ("Plan", Foo29936.h),] isa Vector{Tuple{String,Val}}
+    end
 end
 
 precompile_test_harness("Issue #25971") do load_path
@@ -1795,8 +1811,10 @@ precompile_test_harness("Recursive types") do load_path
         """)
     Base.compilecache(Base.PkgId("RecursiveTypeDef"))
     (@eval (using RecursiveTypeDef))
-    a = Base.invokelatest(RecursiveTypeDef.A{Float64,2,String}, (3, 3))
-    @test isa(a, AbstractArray)
+    invokelatest() do
+        a = Base.invokelatest(RecursiveTypeDef.A{Float64,2,String}, (3, 3))
+        @test isa(a, AbstractArray)
+    end
 end
 
 @testset "issue 46778" begin
@@ -1820,7 +1838,9 @@ precompile_test_harness("Module tparams") do load_path
         """)
     Base.compilecache(Base.PkgId("ModuleTparams"))
     (@eval (using ModuleTparams))
-    @test ModuleTparams.the_struct === Base.invokelatest(ModuleTparams.ParamStruct{ModuleTparams.TheTParam})
+    invokelatest() do
+        @test ModuleTparams.the_struct === Base.invokelatest(ModuleTparams.ParamStruct{ModuleTparams.TheTParam})
+    end
 end
 
 precompile_test_harness("PkgCacheInspector") do load_path
@@ -1894,7 +1914,9 @@ precompile_test_harness("DynamicExpressions") do load_path
         """)
     Base.compilecache(Base.PkgId("Float16MWE"))
     @eval using Float16MWE
-    @test @invokelatest(Float16MWE.doconvert(Float16MWE.Node{Float16}, -1.2)) === Float16(-1.2)
+    invokelatest() do
+        @test Float16MWE.doconvert(Float16MWE.Node{Float16}, -1.2) === Float16(-1.2)
+    end
 end
 
 precompile_test_harness("BadInvalidations") do load_path
@@ -1909,7 +1931,9 @@ precompile_test_harness("BadInvalidations") do load_path
     Base.compilecache(Base.PkgId("BadInvalidations"))
     @eval Base a_method_to_overwrite_in_test() = inferencebarrier(2)
     @eval using BadInvalidations
-    @test Base.invokelatest(BadInvalidations.getval) === 2
+    invokelatest() do
+        @test BadInvalidations.getval() === 2
+    end
 end
 
 # https://github.com/JuliaLang/julia/issues/48074
@@ -1945,7 +1969,7 @@ precompile_test_harness("Issue #48391") do load_path
         """)
     ji, ofile = Base.compilecache(Base.PkgId("I48391"))
     @eval using I48391
-    x = Base.invokelatest(I48391.SurrealFinite)
+    x = invokelatest(()->I48391.SurrealFinite())
     @test Base.invokelatest(isless, x, x) === "good"
     @test_throws ErrorException isless(x, x)
 end
@@ -1985,13 +2009,17 @@ precompile_test_harness("Issue #50538") do load_path
         """)
     ji, ofile = Base.compilecache(Base.PkgId("I50538"))
     @eval using I50538
-    @test I50538.newglobal.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
-    @test I50538.newtype.msg == "Evaluation into the closed module `Base` breaks incremental compilation because the side effects will not be permanent. This is likely due to some other module mutating `Base` with `eval` during precompilation - don't do this."
-    @test_throws(ErrorException("cannot set type for global I50538.undefglobal. It already has a value or is already set to a different type."),
-                 Core.eval(I50538, :(global undefglobal::Int)))
-    Core.eval(I50538, :(global undefglobal::Any))
-    @test Core.get_binding_type(I50538, :undefglobal) === Any
-    @test !isdefined(I50538, :undefglobal)
+    invokelatest() do
+        @test I50538.newglobal.msg == "Creating a new global in closed module `Base` (`newglobal`) breaks incremental compilation because the side effects will not be permanent."
+        @test I50538.newtype.msg == "Evaluation into the closed module `Base` breaks incremental compilation because the side effects will not be permanent. This is likely due to some other module mutating `Base` with `eval` during precompilation - don't do this."
+        @test_throws(ErrorException("cannot set type for global I50538.undefglobal. It already has a value or is already set to a different type."),
+                    Core.eval(I50538, :(global undefglobal::Int)))
+        Core.eval(I50538, :(global undefglobal::Any))
+        invokelatest() do
+            @test Core.get_binding_type(I50538, :undefglobal) === Any
+            @test !isdefined(I50538, :undefglobal)
+        end
+    end
 end
 
 precompile_test_harness("Test flags") do load_path
@@ -2040,14 +2068,15 @@ precompile_test_harness("No backedge precompile") do load_path
     write(joinpath(load_path, "NoBackEdges.jl"),
           """
           module NoBackEdges
-          using Core.Intrinsics: add_int
-          f(a::Int, b::Int) = add_int(a, b)
+          @eval f(a::Int, b::Int) = \$(Core.Intrinsics.add_int)(a, b)
           precompile(f, (Int, Int))
           end
           """)
     ji, ofile = Base.compilecache(Base.PkgId("NoBackEdges"))
     @eval using NoBackEdges
-    @test first(methods(NoBackEdges.f)).specializations.cache.max_world === typemax(UInt)
+    invokelatest() do
+        @test first(methods(NoBackEdges.f)).specializations.cache.max_world === typemax(UInt)
+    end
 end
 
 # Test precompilation of generated functions that return opaque closures
@@ -2078,7 +2107,7 @@ precompile_test_harness("Generated Opaque") do load_path
         """)
     Base.compilecache(Base.PkgId("GeneratedOpaque"))
     @eval using GeneratedOpaque
-    let oc = invokelatest(GeneratedOpaque.oc_re_generated_no_partial)
+    let oc = invokelatest(()->GeneratedOpaque.oc_re_generated_no_partial())
         @test oc.source.specializations.cache.max_world === typemax(UInt)
         @test oc() === 1
     end
@@ -2143,9 +2172,10 @@ precompile_test_harness("Binding Unique") do load_path
 
     @eval using UniqueBinding1
     @eval using UniqueBinding2
-
-    @test UniqueBinding2.thebinding === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding1, :x, true)
-    @test UniqueBinding2.thebinding2 === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding2, :thebinding, true)
+    invokelatest() do
+        @test UniqueBinding2.thebinding === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding1, :x, true)
+        @test UniqueBinding2.thebinding2 === ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), UniqueBinding2, :thebinding, true)
+    end
 end
 
 precompile_test_harness("Detecting importing outside of a package module") do load_path

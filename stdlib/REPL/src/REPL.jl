@@ -72,7 +72,6 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
 end
 
 function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
-    Base.isbindingresolved(m, var) || return false
     (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
     active_mod = Base.active_module()
     print(io, "\nHint: ")

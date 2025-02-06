@@ -1021,18 +1021,24 @@ end
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
 function isvisible(sym::Symbol, parent::Module, from::Module)
-    owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), parent, sym)
-    from_owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), from, sym)
-    return owner !== C_NULL && from_owner === owner &&
-        !isdeprecated(parent, sym) &&
-        isdefinedglobal(from, sym) # if we're going to return true, force binding resolution
+    isdeprecated(parent, sym) && return false
+    isdefinedglobal(from, sym) || return false
+    parent_binding = convert(Core.Binding, GlobalRef(parent, sym))
+    from_binding = convert(Core.Binding, GlobalRef(from, sym))
+    while true
+        from_binding === parent_binding && return true
+        partition = lookup_binding_partition(tls_world_age(), from_binding)
+        is_some_imported(binding_kind(partition)) || break
+        from_binding = partition_restriction(partition)::Core.Binding
+    end
+    return false
 end
 
 function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
     if globname !== nothing
         globname_str = string(globname::Symbol)
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
-                isbindingresolved(tn.module, globname) && isdefinedglobal(tn.module, globname) &&
+                isdefinedglobal(tn.module, globname) &&
                 isconcretetype(tn.wrapper) && isa(getglobal(tn.module, globname), tn.wrapper))
             return true
         end
@@ -3383,16 +3389,16 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     elseif kind == BINDING_KIND_FAILED
         print(io, "ambiguous binding - guard entry")
     elseif kind == BINDING_KIND_DECLARED
-        print(io, "undefined, but declared using `global` - guard entry")
+        print(io, "weak global binding declared using `global` (implicit type Any)")
     elseif kind == BINDING_KIND_IMPLICIT
         print(io, "implicit `using` from ")
-        print(io, partition_restriction(partition))
+        print(io, partition_restriction(partition).globalref)
     elseif kind == BINDING_KIND_EXPLICIT
         print(io, "explicit `using` from ")
-        print(io, partition_restriction(partition))
+        print(io, partition_restriction(partition).globalref)
     elseif kind == BINDING_KIND_IMPORTED
         print(io, "explicit `import` from ")
-        print(io, partition_restriction(partition))
+        print(io, partition_restriction(partition).globalref)
     else
         @assert kind == BINDING_KIND_GLOBAL
         print(io, "global variable with type ")

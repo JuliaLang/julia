@@ -171,12 +171,8 @@ module UnboundAmbig55868
     using .B
     export C, D
 end
-@test !Base.isbindingresolved(UnboundAmbig55868, :C)
-@test !Base.isbindingresolved(UnboundAmbig55868, :D)
 @test isempty(detect_unbound_args(UnboundAmbig55868))
 @test isempty(detect_ambiguities(UnboundAmbig55868))
-@test !Base.isbindingresolved(UnboundAmbig55868, :C)
-@test !Base.isbindingresolved(UnboundAmbig55868, :D)
 
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails

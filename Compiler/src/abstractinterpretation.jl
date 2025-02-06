@@ -3464,14 +3464,7 @@ world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
 world_range(ci::CodeInstance) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
-function force_binding_resolution!(g::GlobalRef, world::UInt)
-    # Force resolution of the binding
-    # TODO: This will go away once we switch over to fully partitioned semantics
-    ccall(:jl_force_binding_resolution, Cvoid, (Any, Csize_t), g, world)
-    return nothing
-end
-
-function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact}, retry_after_resolve::Bool=true)
+function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
     worlds = world_range(src)
     partition = lookup_binding_partition(min_world(worlds), g)
     partition.max_world < max_world(worlds) && return Any
@@ -3480,25 +3473,18 @@ function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode,
         partition = lookup_binding_partition(min_world(worlds), imported_binding)
         partition.max_world < max_world(worlds) && return Any
     end
-    if is_some_guard(binding_kind(partition))
-        if retry_after_resolve
-            # This method is surprisingly hot. For performance, don't ask the runtime to resolve
-            # the binding unless necessary - doing so triggers an additional lookup, which though
-            # not super expensive is hot enough to show up in benchmarks.
-            force_binding_resolution!(g, min_world(worlds))
-            return abstract_eval_globalref_type(g, src, false)
-        end
+    kind = binding_kind(partition)
+    if is_some_guard(kind)
         # return Union{}
         return Any
     end
-    if is_some_const_binding(binding_kind(partition))
+    if is_some_const_binding(kind)
         return Const(partition_restriction(partition))
     end
-    return partition_restriction(partition)
+    return kind == BINDING_KIND_DECLARED ? Any : partition_restriction(partition)
 end
 
 function lookup_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
-    force_binding_resolution!(g, get_inference_world(interp))
     partition = lookup_binding_partition(get_inference_world(interp), g)
     update_valid_age!(sv, WorldRange(partition.min_world, partition.max_world))
     partition
@@ -3541,7 +3527,11 @@ function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Co
         return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL, inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE))
     end
 
-    rt = partition_restriction(partition)
+    if kind == BINDING_KIND_DECLARED
+        rt = Any
+    else
+        rt = partition_restriction(partition)
+    end
     return RTEffects(rt, UndefVarError, generic_getglobal_effects)
 end
 
@@ -3580,7 +3570,7 @@ function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partitio
     elseif is_some_const_binding(kind)
         return Pair{Any,Any}(Bottom, ErrorException)
     end
-    ty = partition_restriction(partition)
+    ty = kind == BINDING_KIND_DECLARED ? Any : partition_restriction(partition)
     wnewty = widenconst(newty)
     if !hasintersect(wnewty, ty)
         return Pair{Any,Any}(Bottom, TypeError)
