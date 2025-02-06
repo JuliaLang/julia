@@ -153,6 +153,16 @@ function _reinit_stdio()
     nothing
 end
 
+##  UV version ##
+
+function uv_version()
+    version_as_hex = ccall(:uv_version, Cuint, ())
+    major = (version_as_hex >> 16) & 0xFF
+    minor = (version_as_hex >> 8) & 0xFF
+    patch = version_as_hex & 0xFF
+    return "$major.$minor.$patch"
+end
+
 """
     stdin::IO
 
