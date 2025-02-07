@@ -132,6 +132,12 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             }
             process_slot(closure, Address::from_ptr(parent_slot));
 
+            let usings_backeges_slot = ::std::ptr::addr_of!((*m).usings_backedges);
+            if PRINT_OBJ_TYPE {
+                println!(" - scan parent: {:?}\n", usings_backeges_slot);
+            }
+            process_slot(closure, Address::from_ptr(usings_backeges_slot));
+
             // m.usings.items may be inlined in the module when the array list size <= AL_N_INLINE (cf. arraylist_new)
             // In that case it may be an mmtk object and not a malloced address.
             // If it is an mmtk object, (*m).usings.items will then be an internal pointer to the module
