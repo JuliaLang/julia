@@ -11,7 +11,7 @@ being used for this purpose alone.
 module Timings
 
 using ..Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
-    @inbounds, copy, backtrace
+    @inbounds, copy, backtrace, _time_ns
 
 # What we record for any given frame we infer during type inference.
 struct InferenceFrameInfo
@@ -52,8 +52,6 @@ end
 Timing(mi_info, start_time, cur_start_time, time, children) = Timing(mi_info, start_time, cur_start_time, time, children, nothing)
 Timing(mi_info, start_time) = Timing(mi_info, start_time, start_time, UInt64(0), Timing[])
 
-_time_ns() = ccall(:jl_hrtime, UInt64, ())
-
 # We keep a stack of the Timings for each of the MethodInstances currently being timed.
 # Since type inference currently operates via a depth-first search (during abstract
 # evaluation), this vector operates like a call stack. The last node in _timings is the
@@ -92,7 +90,7 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = RefValue{Bool}(false)
 
-function finish!(interp::AbstractInterpreter, caller::InferenceState)
+function finish!(interp::AbstractInterpreter, caller::InferenceState, time_before::UInt64)
     result = caller.result
     opt = result.src
     if opt isa OptimizationState
@@ -143,9 +141,12 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         if !@isdefined di
             di = DebugInfo(result.linfo)
         end
-        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
+        time_now = _time_ns()
+        time_self_ns = caller.time_self_ns + (time_now - time_before)
+        time_total = (time_now - caller.time_start) * 1e-9 + caller.time_adjust
+        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Any, Any),
             ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
-            result.analysis_results, di, edges)
+            result.analysis_results, time_total, time_self_ns * 1e-9, di, edges)
         engine_reject(interp, ci)
         if !discard_src && isdefined(interp, :codegen) && uncompressed isa CodeInfo
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
@@ -186,8 +187,8 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     end
     ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
         ci, rettype, exctype, nothing, const_flags, min_world, max_world, ipo_effects, nothing, di, edges)
-    ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
-        ci, nothing, const_flag, min_world, max_world, ipo_effects, nothing, di, edges)
+    ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Any, Any),
+        ci, nothing, const_flag, min_world, max_world, ipo_effects, nothing, 0.0, 0.0, di, edges)
     code_cache(interp)[mi] = ci
     if isdefined(interp, :codegen)
         interp.codegen[ci] = src
@@ -196,13 +197,13 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     return nothing
 end
 
-function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
+function finish_nocycle(::AbstractInterpreter, frame::InferenceState, time_before::UInt64)
     finishinfer!(frame, frame.interp)
     opt = frame.result.src
     if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
         optimize(frame.interp, opt, frame.result)
     end
-    finish!(frame.interp, frame)
+    finish!(frame.interp, frame, time_before)
     if frame.cycleid != 0
         frames = frame.callstack::Vector{AbsIntState}
         @assert frames[end] === frame
@@ -211,7 +212,7 @@ function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
     return nothing
 end
 
-function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cycleid::Int)
+function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cycleid::Int, time_before::UInt64)
     cycle_valid_worlds = WorldRange()
     cycle_valid_effects = EFFECTS_TOTAL
     for frameid = cycleid:length(frames)
@@ -228,17 +229,33 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
         caller = frames[frameid]::InferenceState
         adjust_cycle_frame!(caller, cycle_valid_worlds, cycle_valid_effects)
         finishinfer!(caller, caller.interp)
+        time_now = _time_ns()
+        caller.time_self_ns += (time_now - time_before)
+        time_before = time_now
     end
+    time_adjust = 0.0 # the total and adjusted time of every entry in the cycle are the same
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         opt = caller.result.src
         if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
             optimize(caller.interp, opt, caller.result)
+            time_now = _time_ns()
+            caller.time_self_ns += (time_now - time_before)
+            time_before = time_now
         end
+        time_adjust += caller.time_adjust
+        caller.time_adjust = 0.0
     end
+    cycletop = frames[cycleid]::InferenceState
+    time_start = cycletop.time_start
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
-        finish!(caller.interp, caller)
+        caller.time_start = time_start
+        caller.time_adjust = time_adjust
+        finish!(caller.interp, caller, time_before)
+    end
+    if cycletop.parentid != 0
+        frames[cycletop.parentid].time_adjust += time_adjust
     end
     resize!(frames, cycleid - 1)
     return nothing
@@ -767,9 +784,9 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
     rt = cached_return_type(codeinst)
     exct = codeinst.exctype
     effects = ipo_effects(codeinst)
-    edge = codeinst
     update_valid_age!(caller, WorldRange(min_world(codeinst), max_world(codeinst)))
-    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, edge, edgecycle, edgelimited))
+    caller.time_adjust += reinterpret(Float16, codeinst.time_infer_total)
+    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst, edgecycle, edgelimited))
 end
 
 function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method,

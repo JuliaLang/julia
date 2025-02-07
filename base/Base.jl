@@ -37,9 +37,7 @@ include("views.jl")
 
 # numeric operations
 include("hashing.jl")
-include("rounding.jl")
 include("div.jl")
-include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
 include("rational.jl")
