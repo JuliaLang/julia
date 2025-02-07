@@ -830,6 +830,8 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     for (size_t i = 0; i < module_usings_length(m); i++) {
         jl_queue_for_serialization(s, module_usings_getmod(m, i));
     }
+
+    jl_queue_for_serialization(s, m->usings_backedges);
 }
 
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
@@ -1302,10 +1304,14 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     newm->file = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, file)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->file, s->link_ids_relocs));
+    newm->usings_backedges = NULL;
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings_backedges)));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings_backedges, s->link_ids_relocs));
 
     // write out the usings list
     memset(&newm->usings._space, 0, sizeof(newm->usings._space));
     if (m->usings.items == &m->usings._space[0]) {
+        newm->usings.items = &newm->usings._space[0];
         // Push these relocations here, to keep them in order. This pairs with the `newm->usings.items = ` below.
         arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings.items)));
         arraylist_push(&s->relocs_list, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + item));
@@ -1317,9 +1323,9 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
             newm_data->min_world = data->min_world;
             newm_data->max_world = data->max_world;
             if (s->incremental) {
-                if (data->max_world != (size_t)-1)
+                if (data->max_world != ~(size_t)0)
                     newm_data->max_world = 0;
-                newm_data->min_world = 0;
+                newm_data->min_world = jl_require_world;
             }
             arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[3*i])));
             arraylist_push(&s->relocs_list, (void*)backref_id(s, data->mod, s->link_ids_relocs));
@@ -1334,8 +1340,14 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
         for (i = 0; i < module_usings_length(m); i++) {
             struct _jl_module_using *data = module_usings_getidx(m, i);
             write_pointerfield(s, (jl_value_t*)data->mod);
-            write_uint(s->s, data->min_world);
-            write_uint(s->s, data->max_world);
+            if (s->incremental) {
+                // TODO: Drop dead ones entirely?
+                write_uint(s->s, jl_require_world);
+                write_uint(s->s, data->max_world == ~(size_t)0 ? ~(size_t)0 : 1);
+            } else {
+                write_uint(s->s, data->min_world);
+                write_uint(s->s, data->max_world);
+            }
             static_assert(sizeof(struct _jl_module_using) == 3*sizeof(void*), "_jl_module_using mismatch");
             tot += sizeof(struct _jl_module_using);
         }
@@ -1861,6 +1873,9 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                                 }
                                 else if (invokeptr_id == -4) {
                                     fptr_id = JL_API_OC_CALL;
+                                }
+                                else if (invokeptr_id == -5) {
+                                    abort();
                                 }
                                 else {
                                     assert(invokeptr_id > 0);
@@ -3493,6 +3508,73 @@ extern void export_jl_small_typeof(void);
 // into the native code of the image. See https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
 int IMAGE_NATIVE_CODE_TAINTED = 0;
 
+// TODO: This should possibly be in Julia
+static void jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t *bpart, size_t mod_idx)
+{
+
+    if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
+        return;
+    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
+    enum jl_partition_kind kind = decode_restriction_kind(pku);
+    if (!jl_bkind_is_some_import(kind))
+        return;
+    jl_binding_t *imported_binding = (jl_binding_t*)decode_restriction_value(pku);
+    jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
+    if (!latest_imported_bpart)
+        return;
+    if (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_FAILED) {
+        jl_check_new_binding_implicit(bpart, b, NULL, jl_atomic_load_relaxed(&jl_world_counter));
+        if (bpart->min_world > jl_require_world)
+            goto invalidated;
+    }
+    if (latest_imported_bpart->min_world <= bpart->min_world) {
+        // Imported binding is still valid
+        if ((kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED) &&
+                external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
+            jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
+        }
+        return;
+    }
+    else {
+        // Binding partition was invalidated
+        assert(bpart->min_world == jl_require_world);
+        bpart->min_world = latest_imported_bpart->min_world;
+    }
+invalidated:
+    // We need to go through and re-validate any bindings in the same image that
+    // may have imported us.
+    if (b->backedges) {
+        for (size_t i = 0; i < jl_array_len(b->backedges); i++) {
+            jl_value_t *edge = jl_array_ptr_ref(b->backedges, i);
+            if (!jl_is_binding(edge))
+                continue;
+            jl_binding_t *bedge = (jl_binding_t*)edge;
+            if (!jl_atomic_load_relaxed(&bedge->partitions))
+                continue;
+            jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx);
+        }
+    }
+    if (b->exportp) {
+        jl_module_t *mod = b->globalref->mod;
+        jl_sym_t *name = b->globalref->name;
+        JL_LOCK(&mod->lock);
+        if (mod->usings_backedges) {
+            for (size_t i = 0; i < jl_array_len(mod->usings_backedges); i++) {
+                jl_module_t *edge = (jl_module_t*)jl_array_ptr_ref(mod->usings_backedges, i);
+                jl_binding_t *importee = jl_get_module_binding(edge, name, 0);
+                if (!importee)
+                    continue;
+                if (!jl_atomic_load_relaxed(&importee->partitions))
+                    continue;
+                JL_UNLOCK(&mod->lock);
+                jl_validate_binding_partition(importee, jl_atomic_load_relaxed(&importee->partitions), mod_idx);
+                JL_LOCK(&mod->lock);
+            }
+        }
+        JL_UNLOCK(&mod->lock);
+    }
+}
+
 static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods, jl_array_t **internal_methods,
@@ -3755,7 +3837,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                     // and we overwrite the name field (field 0) now so preserve it too
                     if (dt->instance) {
                         if (dt->instance == jl_nothing)
-                            dt->instance = jl_gc_permobj(0, newdt);
+                            dt->instance = jl_gc_permobj(0, newdt, 0);
                         newdt->instance = dt->instance;
                     }
                     static_assert(offsetof(jl_datatype_t, name) == 0, "");
@@ -3930,6 +4012,16 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 memcpy(newitems, mod->usings.items, mod->usings.len * sizeof(void*));
                 mod->usings.items = newitems;
             }
+            size_t mod_idx = external_blob_index((jl_value_t*)mod);
+            if (s.incremental) {
+                // Rebuild cross-image usings backedges
+                for (size_t i = 0; i < module_usings_length(mod); ++i) {
+                    struct _jl_module_using *data = module_usings_getidx(mod, i);
+                    if (external_blob_index((jl_value_t*)data->mod) != mod_idx) {
+                        jl_add_usings_backedge(data->mod, mod);
+                    }
+                }
+            }
             // Move the binding bits back to their correct place
 #ifdef _P64
             jl_svec_t *table = jl_atomic_load_relaxed(&mod->bindings);
@@ -3939,16 +4031,39 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                     continue;
                 jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
                 while (bpart) {
-                    jl_atomic_store_relaxed(&bpart->restriction,
-                        encode_restriction((jl_value_t*)jl_atomic_load_relaxed(&bpart->restriction), bpart->reserved));
+                    jl_ptr_kind_union_t pku = encode_restriction(
+                        (jl_value_t*)jl_atomic_load_relaxed(&bpart->restriction),
+                        (enum jl_partition_kind)bpart->reserved);
+                    jl_atomic_store_relaxed(&bpart->restriction, pku);
                     bpart->reserved = 0;
                     bpart = jl_atomic_load_relaxed(&bpart->next);
                 }
             }
+
 #endif
         }
         else {
             abort();
+        }
+    }
+    if (s.incremental) {
+        // This needs to be done in a second pass after the binding partitions
+        // have the proper ABI again.
+        for (size_t i = 0; i < s.fixup_objs.len; i++) {
+            uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
+            jl_value_t *obj = (jl_value_t*)(image_base + item);
+            if (jl_is_module(obj)) {
+                jl_module_t *mod = (jl_module_t*)obj;
+                size_t mod_idx = external_blob_index((jl_value_t*)mod);
+                jl_svec_t *table = jl_atomic_load_relaxed(&mod->bindings);
+                for (size_t i = 0; i < jl_svec_len(table); i++) {
+                    jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
+                    if ((jl_value_t*)b == jl_nothing)
+                        continue;
+                    jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
+                    jl_validate_binding_partition(b, bpart, mod_idx);
+                }
+            }
         }
     }
     arraylist_free(&s.fixup_types);
@@ -4273,6 +4388,34 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, 0);
 
     return mod;
+}
+
+JL_DLLEXPORT void _jl_promote_ci_to_current(jl_code_instance_t *ci, size_t validated_world) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&ci->max_world) != validated_world)
+        return;
+    jl_atomic_store_relaxed(&ci->max_world, ~(size_t)0);
+    jl_svec_t *edges = jl_atomic_load_relaxed(&ci->edges);
+    for (size_t i = 0; i < jl_svec_len(edges); i++) {
+        jl_value_t *edge = jl_svecref(edges, i);
+        if (!jl_is_code_instance(edge))
+            continue;
+        _jl_promote_ci_to_current(ci, validated_world);
+    }
+}
+
+JL_DLLEXPORT void jl_promote_ci_to_current(jl_code_instance_t *ci, size_t validated_world)
+{
+    size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
+    // No need to acquire the lock if we've been invalidated anyway
+    if (current_world > validated_world)
+        return;
+    JL_LOCK(&world_counter_lock);
+    current_world = jl_atomic_load_relaxed(&jl_world_counter);
+    if (current_world == validated_world) {
+        _jl_promote_ci_to_current(ci, validated_world);
+    }
+    JL_UNLOCK(&world_counter_lock);
 }
 
 #ifdef __cplusplus
