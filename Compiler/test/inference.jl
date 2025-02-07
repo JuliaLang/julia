@@ -4811,7 +4811,7 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     𝕃 = Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
     form_partially_defined_struct = Compiler.form_partially_defined_struct
-    M = Partials_inference
+    M = _Partials_inference
     Partial, Partial2, Partial3 = M.Partial, M.Partial2, M.Partial3
 
     @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]))
