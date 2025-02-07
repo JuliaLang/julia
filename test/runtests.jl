@@ -112,7 +112,7 @@ cd(@__DIR__) do
     @everywhere include("testdefs.jl")
 
     if use_revise
-        Base.invokelatest(revise_trackall)
+        @invokelatest revise_trackall()
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
@@ -120,7 +120,8 @@ cd(@__DIR__) do
         Running parallel tests with:
           getpid() = $(getpid())
           nworkers() = $(nworkers())
-          nthreads() = $(Threads.threadpoolsize())
+          nthreads(:interactive) = $(Threads.threadpoolsize(:interactive))
+          nthreads(:default) = $(Threads.threadpoolsize(:default))
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
           Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
           Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
@@ -250,7 +251,7 @@ cd(@__DIR__) do
                         wrkr = p
                         before = time()
                         resp, duration = try
-                                r = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                                r = remotecall_fetch(@Base.world(runtests, ∞), wrkr, test, test_path(test); seed=seed)
                                 r, time() - before
                             catch e
                                 isa(e, InterruptException) && return
@@ -310,7 +311,7 @@ cd(@__DIR__) do
             t == "SharedArrays" && (isolate = false)
             before = time()
             resp, duration = try
-                    r = Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                    r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
                     r, time() - before
                 catch e
                     isa(e, InterruptException) && rethrow()

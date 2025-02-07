@@ -51,9 +51,9 @@ namespace JuliaType {
 
     static inline auto get_jlfunc_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T_prjlvalue,  // function
+                T_prjlvalue, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C)}, // nargs
             false);
@@ -61,21 +61,21 @@ namespace JuliaType {
 
     static inline auto get_jlfunc2_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T_prjlvalue,  // function
+                T_prjlvalue, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C), // nargs
-                T_prjlvalue},  // linfo
+                T_prjlvalue}, // linfo
             false);
     }
 
     static inline auto get_jlfunc3_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         auto T = get_pjlvalue_ty(C, Derived);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T,  // function
+                T, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C)}, // nargs
             false);
@@ -83,13 +83,12 @@ namespace JuliaType {
 
     static inline auto get_jlfuncparams_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T_prjlvalue,  // function
+                T_prjlvalue, // function
                 T_pprjlvalue, // args[]
-                llvm::Type::getInt32Ty(C),
-                T_pprjlvalue,  // linfo->sparam_vals
-                }, // nargs
+                llvm::Type::getInt32Ty(C), // nargs
+                T_prjlvalue}, // linfo->sparam_vals
             false);
     }
 

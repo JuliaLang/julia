@@ -544,8 +544,9 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
             # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
             i += 1
             continue
-        elseif isa(item, Core.BindingPartition)
+        elseif isa(item, Core.Binding)
             i += 1
+            maybe_add_binding_backedge!(item, caller)
             continue
         end
         if isa(item, CodeInstance)
@@ -560,12 +561,11 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
                 ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
                 i += 2
                 continue
-            end
-            # `invoke` edge
-            if isa(callee, Method)
+            elseif isa(callee, Method)
                 # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
                 i += 2
                 continue
+            # `invoke` edge
             elseif isa(callee, CodeInstance)
                 callee = get_ci_mi(callee)
             end
@@ -1266,6 +1266,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
     tocompile = Vector{CodeInstance}()
     codeinfos = []
     # first compute the ABIs of everything
+    latest = true # whether this_world == world_counter()
     for this_world in reverse(sort!(worlds))
         interp = NativeInterpreter(this_world)
         for i = 1:length(methods)
@@ -1278,11 +1279,23 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                 # then we want to compile and emit this
                 if item.def.primary_world <= this_world <= item.def.deleted_world
                     ci = typeinf_ext(interp, item, SOURCE_MODE_NOT_REQUIRED)
-                    ci isa CodeInstance && !use_const_api(ci) && push!(tocompile, ci)
+                    ci isa CodeInstance && push!(tocompile, ci)
                 end
-            elseif item isa SimpleVector
-                push!(codeinfos, item[1]::Type)
-                push!(codeinfos, item[2]::Type)
+            elseif item isa SimpleVector && latest
+                (rt::Type, sig::Type) = item
+                # make a best-effort attempt to enqueue the relevant code for the ccallable
+                ptr = ccall(:jl_get_specialization1,
+                            #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
+                            sig, this_world, #= mt_cache =# 0)
+                if ptr !== C_NULL
+                    mi = unsafe_pointer_to_objref(ptr)::MethodInstance
+                    ci = typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED)
+                    ci isa CodeInstance && push!(tocompile, ci)
+                end
+                # additionally enqueue the ccallable entrypoint / adapter, which implicitly
+                # invokes the above ci
+                push!(codeinfos, rt)
+                push!(codeinfos, sig)
             end
         end
         while !isempty(tocompile)
@@ -1293,7 +1306,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
             mi = get_ci_mi(callee)
             def = mi.def
             if use_const_api(callee)
-                src = codeinfo_for_const(interp, mi, code.rettype_const)
+                src = codeinfo_for_const(interp, mi, callee.rettype_const)
             elseif haskey(interp.codegen, callee)
                 src = interp.codegen[callee]
             elseif isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && !trim
@@ -1315,6 +1328,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                 println("warning: failed to get code for ", mi)
             end
         end
+        latest = false
     end
     return codeinfos
 end

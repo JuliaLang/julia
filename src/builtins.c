@@ -1395,7 +1395,7 @@ JL_CALLABLE(jl_f_setglobal)
         jl_atomic_error("setglobal!: module binding cannot be written non-atomically");
     else if (order >= jl_memory_order_seq_cst)
         jl_fence();
-    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
     jl_checked_assignment(b, mod, var, args[2]); // release store
     if (order >= jl_memory_order_seq_cst)
         jl_fence();
@@ -1430,7 +1430,7 @@ JL_CALLABLE(jl_f_swapglobal)
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("swapglobal!: module binding cannot be written non-atomically");
     // is seq_cst already, no fence needed
-    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
     return jl_checked_swap(b, mod, var, args[2]);
 }
 
@@ -1448,7 +1448,7 @@ JL_CALLABLE(jl_f_modifyglobal)
     JL_TYPECHK(modifyglobal!, symbol, (jl_value_t*)var);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("modifyglobal!: module binding cannot be written non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
     // is seq_cst already, no fence needed
     return jl_checked_modify(b, mod, var, args[2], args[3]);
 }
@@ -1477,7 +1477,7 @@ JL_CALLABLE(jl_f_replaceglobal)
         jl_atomic_error("replaceglobal!: module binding cannot be written non-atomically");
     if (failure_order == jl_memory_order_notatomic)
         jl_atomic_error("replaceglobal!: module binding cannot be accessed non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
     // is seq_cst already, no fence needed
     return jl_checked_replace(b, mod, var, args[2], args[3]);
 }
@@ -1506,7 +1506,7 @@ JL_CALLABLE(jl_f_setglobalonce)
         jl_atomic_error("setglobalonce!: module binding cannot be written non-atomically");
     if (failure_order == jl_memory_order_notatomic)
         jl_atomic_error("setglobalonce!: module binding cannot be accessed non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
     // is seq_cst already, no fence needed
     jl_value_t *old = jl_checked_assignonce(b, mod, var, args[2]);
     return old == NULL ? jl_true : jl_false;
@@ -2197,11 +2197,13 @@ static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layou
 
 JL_CALLABLE(jl_f__typebody)
 {
-    JL_NARGS(_typebody!, 1, 2);
-    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
+    JL_NARGS(_typebody!, 2, 3);
+    jl_value_t *prev = args[0];
+    jl_value_t *tret = args[1];
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[1]);
     JL_TYPECHK(_typebody!, datatype, (jl_value_t*)dt);
-    if (nargs == 2) {
-        jl_value_t *ft = args[1];
+    if (nargs == 3) {
+        jl_value_t *ft = args[2];
         JL_TYPECHK(_typebody!, simplevector, ft);
         size_t nf = jl_svec_len(ft);
         for (size_t i = 0; i < nf; i++) {
@@ -2212,29 +2214,52 @@ JL_CALLABLE(jl_f__typebody)
                                  (jl_value_t*)jl_type_type, elt);
             }
         }
-        if (dt->types != NULL) {
-            if (!equiv_field_types((jl_value_t*)dt->types, ft))
-                jl_errorf("invalid redefinition of type %s", jl_symbol_name(dt->name->name));
-        }
-        else {
-            dt->types = (jl_svec_t*)ft;
-            jl_gc_wb(dt, ft);
-            // If a supertype can reference the same type, then we may not be
-            // able to compute the layout of the object before needing to
-            // publish it, so we must assume it cannot be inlined, if that
-            // check passes, then we also still need to check the fields too.
-            if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1))) {
-                int mayinlinealloc = 1;
-                size_t i;
-                for (i = 0; i < nf; i++) {
-                    jl_value_t *fld = jl_svecref(ft, i);
-                    if (references_name(fld, dt->name, 1, 1)) {
-                        mayinlinealloc = 0;
-                        break;
+        // Optimization: To avoid lots of unnecessary churning, lowering contains an optimization
+        // that re-uses the typevars of an existing definition (if any exists) for compute the field
+        // types. If such a previous type exists, there are two possibilities:
+        //  1. The field types are identical, we don't need to do anything and can proceed with the
+        //     old type as if it was the new one.
+        //  2. The field types are not identical, in which case we need to rename the typevars
+        //     back to their equivalents in the new type before proceeding.
+        if (prev == jl_false) {
+            if (dt->types != NULL)
+                jl_errorf("Internal Error: Expected type fields to be unset");
+        } else {
+            jl_datatype_t *prev_dt = (jl_datatype_t*)jl_unwrap_unionall(prev);
+            JL_TYPECHK(_typebody!, datatype, (jl_value_t*)prev_dt);
+            if (equiv_field_types((jl_value_t*)prev_dt->types, ft)) {
+                tret = prev;
+                goto have_type;
+            } else {
+                if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
+                    jl_errorf("Internal Error: Types should not have been considered equivalent");
+                for (size_t i = 0; i < nf; i++) {
+                    jl_value_t *elt = jl_svecref(ft, i);
+                    for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
+                        // Only the last svecset matters for semantics, but we re-use the GC root
+                        elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
+                        jl_svecset(ft, i, elt);
                     }
                 }
-                dt->name->mayinlinealloc = mayinlinealloc;
             }
+        }
+        dt->types = (jl_svec_t*)ft;
+        jl_gc_wb(dt, ft);
+        // If a supertype can reference the same type, then we may not be
+        // able to compute the layout of the object before needing to
+        // publish it, so we must assume it cannot be inlined, if that
+        // check passes, then we also still need to check the fields too.
+        if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1))) {
+            int mayinlinealloc = 1;
+            size_t i;
+            for (i = 0; i < nf; i++) {
+                jl_value_t *fld = jl_svecref(ft, i);
+                if (references_name(fld, dt->name, 1, 1)) {
+                    mayinlinealloc = 0;
+                    break;
+                }
+            }
+            dt->name->mayinlinealloc = mayinlinealloc;
         }
     }
 
@@ -2248,7 +2273,8 @@ JL_CALLABLE(jl_f__typebody)
 
     if (jl_is_structtype(dt))
         jl_compute_field_offsets(dt);
-    return jl_nothing;
+have_type:
+    return tret;
 }
 
 // this is a heuristic for allowing "redefining" a type to something identical

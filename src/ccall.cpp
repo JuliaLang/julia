@@ -461,10 +461,7 @@ static Value *runtime_apply_type_env(jl_codectx_t &ctx, jl_value_t *ty)
     Value *args[] = {
         literal_pointer_val(ctx, ty),
         literal_pointer_val(ctx, (jl_value_t*)ctx.linfo->def.method->sig),
-        ctx.builder.CreateInBoundsGEP(
-                ctx.types().T_prjlvalue,
-                ctx.spvals_ptr,
-                ConstantInt::get(ctx.types().T_size, sizeof(jl_svec_t) / sizeof(jl_value_t*)))
+        emit_ptrgep(ctx, maybe_decay_tracked(ctx, ctx.spvals_ptr), sizeof(jl_svec_t))
     };
     auto call = ctx.builder.CreateCall(prepare_call(jlapplytype_func), ArrayRef<Value*>(args));
     addRetAttr(call, Attribute::getWithAlignment(ctx.builder.getContext(), Align(16)));
@@ -1972,6 +1969,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     JL_GC_POP();
     return retval;
 }
+
+static inline Constant *literal_static_pointer_val(const void *p, Type *T);
 
 jl_cgval_t function_sig_t::emit_a_ccall(
         jl_codectx_t &ctx,

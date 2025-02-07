@@ -46,92 +46,6 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     return ret
 end
 
-# high-level, more convenient method lookup functions
-
-function visit(f, mt::Core.MethodTable)
-    mt.defs !== nothing && visit(f, mt.defs)
-    nothing
-end
-function visit(f, mc::Core.TypeMapLevel)
-    function avisit(f, e::Memory{Any})
-        for i in 2:2:length(e)
-            isassigned(e, i) || continue
-            ei = e[i]
-            if ei isa Memory{Any}
-                for j in 2:2:length(ei)
-                    isassigned(ei, j) || continue
-                    visit(f, ei[j])
-                end
-            else
-                visit(f, ei)
-            end
-        end
-    end
-    if mc.targ !== nothing
-        avisit(f, mc.targ::Memory{Any})
-    end
-    if mc.arg1 !== nothing
-        avisit(f, mc.arg1::Memory{Any})
-    end
-    if mc.tname !== nothing
-        avisit(f, mc.tname::Memory{Any})
-    end
-    if mc.name1 !== nothing
-        avisit(f, mc.name1::Memory{Any})
-    end
-    mc.list !== nothing && visit(f, mc.list)
-    mc.any !== nothing && visit(f, mc.any)
-    nothing
-end
-function visit(f, d::Core.TypeMapEntry)
-    while d !== nothing
-        f(d.func)
-        d = d.next
-    end
-    nothing
-end
-struct MethodSpecializations
-    specializations::Union{Nothing, Core.MethodInstance, Core.SimpleVector}
-end
-"""
-    specializations(m::Method) → itr
-
-Return an iterator `itr` of all compiler-generated specializations of `m`.
-"""
-specializations(m::Method) = MethodSpecializations(isdefined(m, :specializations) ? m.specializations : nothing)
-function iterate(specs::MethodSpecializations)
-    s = specs.specializations
-    s === nothing && return nothing
-    isa(s, Core.MethodInstance) && return (s, nothing)
-    return iterate(specs, 0)
-end
-iterate(specs::MethodSpecializations, ::Nothing) = nothing
-function iterate(specs::MethodSpecializations, i::Int)
-    s = specs.specializations::Core.SimpleVector
-    n = length(s)
-    i >= n && return nothing
-    item = nothing
-    while i < n && item === nothing
-        item = s[i+=1]
-    end
-    item === nothing && return nothing
-    return (item, i)
-end
-length(specs::MethodSpecializations) = count(Returns(true), specs)
-
-function length(mt::Core.MethodTable)
-    n = 0
-    visit(mt) do m
-        n += 1
-    end
-    return n::Int
-end
-isempty(mt::Core.MethodTable) = (mt.defs === nothing)
-
-uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
-                             isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
-                             error("Code for this Method is not available.")
-
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
@@ -1362,6 +1276,18 @@ macro invoke(ex)
     return esc(out)
 end
 
+apply_gr(gr::GlobalRef, @nospecialize args...) = getglobal(gr.mod, gr.name)(args...)
+apply_gr_kw(@nospecialize(kwargs::NamedTuple), gr::GlobalRef, @nospecialize args...) = Core.kwcall(kwargs, getglobal(gr.mod, gr.name), args...)
+
+function invokelatest_gr(gr::GlobalRef, @nospecialize args...; kwargs...)
+    @inline
+    kwargs = merge(NamedTuple(), kwargs)
+    if isempty(kwargs)
+        return Core._call_latest(apply_gr, gr, args...)
+    end
+    return Core._call_latest(apply_gr_kw, kwargs, gr, args...)
+end
+
 """
     @invokelatest f(args...; kwargs...)
 
@@ -1375,22 +1301,11 @@ It also supports the following syntax:
 - `@invokelatest xs[i]` expands to `Base.invokelatest(getindex, xs, i)`
 - `@invokelatest xs[i] = v` expands to `Base.invokelatest(setindex!, xs, v, i)`
 
-```jldoctest
-julia> @macroexpand @invokelatest f(x; kw=kwv)
-:(Base.invokelatest(f, x; kw = kwv))
-
-julia> @macroexpand @invokelatest x.f
-:(Base.invokelatest(Base.getproperty, x, :f))
-
-julia> @macroexpand @invokelatest x.f = v
-:(Base.invokelatest(Base.setproperty!, x, :f, v))
-
-julia> @macroexpand @invokelatest xs[i]
-:(Base.invokelatest(Base.getindex, xs, i))
-
-julia> @macroexpand @invokelatest xs[i] = v
-:(Base.invokelatest(Base.setindex!, xs, v, i))
-```
+!!! note
+    If `f` is a global, it will be resolved consistently
+    in the (latest) world as the call target. However, all other arguments
+    (as well as `f` itself if it is not a literal global) will be evaluated
+    in the current world age.
 
 !!! compat "Julia 1.7"
     This macro requires Julia 1.7 or later.
@@ -1404,11 +1319,45 @@ julia> @macroexpand @invokelatest xs[i] = v
 macro invokelatest(ex)
     topmod = _topmod(__module__)
     f, args, kwargs = destructure_callex(topmod, ex)
-    out = Expr(:call, GlobalRef(Base, :invokelatest))
-    isempty(kwargs) || push!(out.args, Expr(:parameters, kwargs...))
-    push!(out.args, f)
-    append!(out.args, args)
-    return esc(out)
+
+    if !isa(f, GlobalRef)
+        out_f = Expr(:call, GlobalRef(Base, :invokelatest))
+        isempty(kwargs) || push!(out_f.args, Expr(:parameters, kwargs...))
+
+        if isexpr(f, :(.))
+            s = gensym()
+            check = quote
+                $s = $(f.args[1])
+                isa($s, Module)
+            end
+            push!(out_f.args, Expr(:(.), s, f.args[2]))
+        else
+            push!(out_f.args, f)
+        end
+        append!(out_f.args, args)
+
+        if @isdefined(s)
+            f = :(GlobalRef($s, $(f.args[2])))
+        elseif !isa(f, Symbol)
+            return esc(out_f)
+        else
+            check = :($(Expr(:isglobal, f)))
+        end
+    end
+
+    out_gr = Expr(:call, GlobalRef(Base, :invokelatest_gr))
+    isempty(kwargs) || push!(out_gr.args, Expr(:parameters, kwargs...))
+    push!(out_gr.args, isa(f, GlobalRef) ? QuoteNode(f) :
+                       isa(f, Symbol) ? QuoteNode(GlobalRef(__module__, f)) :
+                       f)
+    append!(out_gr.args, args)
+
+    if isa(f, GlobalRef)
+        return esc(out_gr)
+    end
+
+    # f::Symbol
+    return esc(:($check ? $out_gr : $out_f))
 end
 
 function destructure_callex(topmod::Module, @nospecialize(ex))

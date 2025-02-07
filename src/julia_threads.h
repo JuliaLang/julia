@@ -218,6 +218,76 @@ typedef struct _jl_tls_states_t {
 #endif
 } jl_tls_states_t;
 
+#define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
+
+// all values are callable as Functions
+typedef jl_value_t jl_function_t;
+
+typedef struct _jl_timing_block_t jl_timing_block_t;
+typedef struct _jl_timing_event_t jl_timing_event_t;
+typedef struct _jl_excstack_t jl_excstack_t;
+
+typedef struct _jl_handler_t jl_handler_t;
+
+typedef struct _jl_task_t {
+    JL_DATA_TYPE
+    jl_value_t *next; // invasive linked list for scheduler
+    jl_value_t *queue; // invasive linked list for scheduler
+    jl_value_t *tls;
+    jl_value_t *donenotify;
+    jl_value_t *result;
+    jl_value_t *scope;
+    jl_function_t *start;
+    _Atomic(uint8_t) _state;
+    uint8_t sticky; // record whether this Task can be migrated to a new thread
+    uint16_t priority;
+    _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
+    uint8_t pad0[3];
+    // === 64 bytes (cache line)
+    uint64_t rngState[JL_RNG_SIZE];
+    // flag indicating whether or not to record timing metrics for this task
+    uint8_t metrics_enabled;
+    uint8_t pad1[3];
+    // timestamp this task first entered the run queue
+    _Atomic(uint64_t) first_enqueued_at;
+    // timestamp this task was most recently scheduled to run
+    _Atomic(uint64_t) last_started_running_at;
+    // time this task has spent running; updated when it yields or finishes.
+    _Atomic(uint64_t) running_time_ns;
+    // === 64 bytes (cache line)
+    // timestamp this task finished (i.e. entered state DONE or FAILED).
+    _Atomic(uint64_t) finished_at;
+
+// hidden state:
+
+    // id of owning thread - does not need to be defined until the task runs
+    _Atomic(int16_t) tid;
+    // threadpool id
+    int8_t threadpoolid;
+    // Reentrancy bits
+    // Bit 0: 1 if we are currently running inference/codegen
+    // Bit 1-2: 0-3 counter of how many times we've reentered inference
+    // Bit 3: 1 if we are writing the image and inference is illegal
+    uint8_t reentrant_timing;
+    // 2 bytes of padding on 32-bit, 6 bytes on 64-bit
+    // uint16_t padding2_32;
+    // uint48_t padding2_64;
+    // saved gc stack top for context switches
+    jl_gcframe_t *gcstack;
+    size_t world_age;
+    // quick lookup for current ptls
+    jl_ptls_t ptls; // == jl_all_tls_states[tid]
+#ifdef USE_TRACY
+    const char *name;
+#endif
+    // saved exception stack
+    jl_excstack_t *excstack;
+    // current exception handler
+    jl_handler_t *eh;
+    // saved thread state
+    jl_ucontext_t ctx; // pointer into stkbuf, if suspended
+} jl_task_t;
+
 JL_DLLEXPORT void *jl_get_ptls_states(void);
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`

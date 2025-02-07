@@ -344,6 +344,8 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+# FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
+@static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
     tmpdir = mktempdir()
 
@@ -373,6 +375,7 @@ end
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)
+end
 end
 
 @testset "PageProfile" begin

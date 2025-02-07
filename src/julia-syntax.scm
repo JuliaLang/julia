@@ -433,7 +433,7 @@
                                  (inert ,loc)))
                           ,body))))
        (if (or (symbol? name) (globalref? name))
-           `(block ,@generator (method ,name) ,mdef (unnecessary ,name))  ;; return the function
+           `(block ,@generator (method ,name) (latestworld-if-toplevel) ,mdef (unnecessary ,name))  ;; return the function
            (if (not (null? generator))
                `(block ,@generator ,mdef)
                mdef))))))
@@ -531,6 +531,7 @@
       `(call (core ifelse) (false) (false) (block
         ;; forward-declare function so its type can occur in the signature of the inner method below
         ,@(if (or (symbol? name) (globalref? name)) `((method ,name)) '())
+        (latestworld-if-toplevel)
 
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
@@ -1001,7 +1002,9 @@
                      (default-inner-ctors name field-names field-types params bounds locs)
                      defs))
           (min-initialized (min (ctors-min-initialized defs) (length fields)))
-          (prev (make-ssavalue)))
+          (hasprev (make-ssavalue))
+          (prev (make-ssavalue))
+          (newdef (make-ssavalue)))
      (let ((dups (has-dups field-names)))
        (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
      (for-each (lambda (v)
@@ -1022,22 +1025,21 @@
                         (call (core svec) ,@attrs)
                         ,mut ,min-initialized))
          (call (core _setsuper!) ,name ,super)
-         (if (call (core isdefinedglobal) (thismodule) (inert ,name) (false))
-             (block
-              (= ,prev (globalref (thismodule) ,name))
-              (if (call (core _equiv_typedef) ,prev ,name)
-                  ;; if this is compatible with an old definition, use the existing type object
-                  ;; and its parameters
-                  (block (= ,name ,prev)
-                         ,@(if (pair? params)
-                               `((= (tuple ,@params) (|.|
-                                                      ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
-                                                              prev
-                                                              params)
-                                                      (quote parameters))))
-                               '())))))
-         (call (core _typebody!) ,name (call (core svec) ,@(insert-struct-shim field-types name)))
-         (const (globalref (thismodule) ,name) ,name)
+         (= ,hasprev (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false)) (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name)))
+         (= ,prev (if ,hasprev (globalref (thismodule) ,name) (false)))
+         (if ,hasprev
+            ;; if this is compatible with an old definition, use the old parameters, but the
+            ;; new object. This will fail to capture recursive cases, but the call to typebody!
+            ;; below is permitted to choose either type definition to put into the binding table
+            (block ,@(if (pair? params)
+                          `((= (tuple ,@params) (|.|
+                                                ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
+                                                        prev
+                                                        params)
+                                                (quote parameters))))
+                          '())))
+         (= ,newdef (call (core _typebody!) ,prev ,name (call (core svec) ,@(insert-struct-shim field-types name))))
+         (const (globalref (thismodule) ,name) ,newdef)
          (latestworld)
          (null)))
        ;; "inner" constructors
@@ -1083,7 +1085,7 @@
        (toplevel-only abstract_type)
        (= ,name (call (core _abstracttype) (thismodule) (inert ,name) (call (core svec) ,@params)))
        (call (core _setsuper!) ,name ,super)
-       (call (core _typebody!) ,name)
+       (call (core _typebody!) (false) ,name)
        (if (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false))
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
@@ -1104,7 +1106,7 @@
        (toplevel-only primitive_type)
        (= ,name (call (core _primitivetype) (thismodule) (inert ,name) (call (core svec) ,@params) ,n))
        (call (core _setsuper!) ,name ,super)
-       (call (core _typebody!) ,name)
+       (call (core _typebody!) (false) ,name)
        (if (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false))
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
@@ -1478,6 +1480,7 @@
             `(block
               (= ,rr (where ,type-ex ,@params))
               (,(if allow-local 'assign-const-if-global 'const) ,name ,rr)
+              (latestworld-if-toplevel)
               ,rr)))
       (expand-forms
        `(const (= ,name ,type-ex)))))
@@ -1515,6 +1518,7 @@
                            (scope-block (block (hardscope)
                             (local (= ,(cadr arg) ,rr))
                             ,.(map (lambda (v) `(,(car e) (globalref (thismodule) ,v) ,v)) (filter-not-underscore (lhs-vars (cadr arg))))
+                            (latestworld)
                             ,rr))))))))
             (else (error "expected assignment after \"const\"")))))))
 
@@ -2473,7 +2477,7 @@
                         (error "Opaque closure argument type may not be specified both in the method signature and separately"))
                     (if (or (varargexpr? lastarg) (vararg? lastarg))
                         '(true) '(false))))
-            (meth (caddr (caddr (expand-forms F)))) ;; `method` expr
+            (meth  (cadddr (caddr (expand-forms F)))) ;; `method` expr
             (lam       (cadddr meth))
             (sig-block (caddr meth))
             (sig-block (if (and (pair? sig-block) (eq? (car sig-block) 'block))
@@ -3154,6 +3158,11 @@
                  (else `(globalref (thismodule) ,e)))))
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel symbolicgoto symboliclabel toplevel-only)))
          e)
+        ((eq? (car e) 'isglobal)
+         (let ((val (and scope (get (scope:table scope) (cadr e) #f))))
+           (cond (val `(false))
+                 ((underscore-symbol? (cadr e)) `(false))
+                 (else `(true)))))
         ((eq? (car e) 'global)
          (check-valid-name (cadr e))
          e)
@@ -3518,7 +3527,7 @@ f(x) = yt(x)
                             (false) ,(length fields)))
                 (call (core _setsuper!) ,s ,super)
                 (const (globalref (thismodule) ,name) ,s)
-                (call (core _typebody!) ,s (call (core svec) ,@types))
+                (call (core _typebody!) (false) ,s (call (core svec) ,@types))
                 (return (null)))))))))
 
 (define (type-for-closure name fields super)
@@ -3532,7 +3541,7 @@ f(x) = yt(x)
                           (false) ,(length fields)))
               (call (core _setsuper!) ,s ,super)
               (const (globalref (thismodule) ,name) ,s)
-              (call (core _typebody!) ,s
+              (call (core _typebody!) (false) ,s
                     (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
               (return (null)))))))))
 
@@ -3634,8 +3643,8 @@ f(x) = yt(x)
                    rhs1))
          (ex   `(= ,var ,rhs)))
     (if (eq? rhs1 rhs0)
-        `(block ,ex ,rhs0)
-        `(block (= ,rhs1 ,rhs0)
+        `(block (globaldecl ,var) ,ex ,rhs0)
+        `(block (globaldecl ,var) (= ,rhs1 ,rhs0)
                 ,ex
                 ,rhs1))))
 
@@ -3683,11 +3692,17 @@ f(x) = yt(x)
      (else
        (error (string "invalid assignment location \"" (deparse var) "\"")))))
 
+(define (sig-type-expr namemap name expr)
+  (let ((newname (get namemap name expr)))
+    (if (symbol? newname)
+      `(globalref (thismodule) ,newname)
+      newname)))
+
 (define (rename-sig-types ex namemap)
   (pattern-replace
    (pattern-set
     (pattern-lambda (call (core (-/ Typeof)) name)
-                    (get namemap name __)))
+                    (sig-type-expr namemap name __)))
    ex))
 
 ;; replace leading (function) argument type with `typ`
@@ -3787,7 +3802,7 @@ f(x) = yt(x)
   (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
-         global globalref assign-const-if-global thismodule
+         global globalref assign-const-if-global isglobal thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
          error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
 
@@ -4242,7 +4257,7 @@ f(x) = yt(x)
                                      (contains (lambda (x) (eq? x 'kwftype)) sig))
                                     (renamemap (map cons closure-param-names closure-param-syms))
                                     (arg-defs (replace-vars
-                                               (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
+                                               (fix-function-arg-type sig `(globalref (thismodule) ,type-name) iskw namemap closure-param-syms)
                                                renamemap)))
                                (append (map (lambda (gs tvar)
                                               (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
@@ -4270,8 +4285,8 @@ f(x) = yt(x)
                                                                 `(call (core _typeof_captured_variable) ,ve)))
                                                           capt-vars var-exprs)))))
                            `(new ,(if (null? P)
-                                      type-name
-                                      `(call (core apply_type) ,type-name ,@P))
+                                      `(globalref (thismodule) ,type-name)
+                                      `(call (core apply_type) (globalref (thismodule) ,type-name) ,@P))
                                  ,@var-exprs))))
                    (if (pair? moved-vars)
                        (set-car! (lam:vinfo lam)
@@ -4290,6 +4305,7 @@ f(x) = yt(x)
                          `(toplevel-butfirst
                            ,(convert-assignment name mk-closure fname lam interp opaq parsed-method-stack globals locals)
                            ,@typedef
+                           (latestworld)
                            ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                            ,@sp-inits
                            ,@mk-method
@@ -4610,9 +4626,7 @@ f(x) = yt(x)
           tests))
     (define (emit-assignment-or-setglobal lhs rhs)
       (if (globalref? lhs)
-        (begin
-          (emit `(global ,lhs))
-          (emit `(call (top setglobal!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs)))
+        (emit `(call (top setglobal!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs))
         (emit `(= ,lhs ,rhs))))
     (define (emit-assignment lhs rhs)
       (if rhs
@@ -4930,13 +4944,17 @@ f(x) = yt(x)
                  #f))
             ((global) ; keep global declarations as statements
              (if value (error "misplaced \"global\" declaration"))
-             (emit e))
+             (emit e)
+             (if (null? (cadr lam))
+               (emit `(latestworld))))
             ((globaldecl)
              (if value (error "misplaced \"global\" declaration"))
-             (if (atom? (caddr e)) (emit e)
+             (if (or (length= e 2) (atom? (caddr e))) (emit e)
               (let ((rr (make-ssavalue)))
                 (emit `(= ,rr ,(caddr e)))
-                (emit `(globaldecl ,(cadr e) ,rr)))))
+                (emit `(globaldecl ,(cadr e) ,rr))))
+             (if (null? (cadr lam))
+               (emit `(latestworld))))
             ((local-def) #f)
             ((local) #f)
             ((moved-local)

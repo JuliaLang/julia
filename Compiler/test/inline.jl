@@ -149,7 +149,7 @@ end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
     @test !any(src.code) do x
-        x isa Expr && x.head === :invoke && x.args[2] !== Core.GlobalRef(Base, :throw_boundserror)
+        x isa Expr && x.head === :invoke && !(x.args[2] in (Core.GlobalRef(Base, :throw_boundserror), Base.throw_boundserror))
     end
 end
 
@@ -313,7 +313,7 @@ end
 const _a_global_array = [1]
 f_inline_global_getindex() = _a_global_array[1]
 let ci = code_typed(f_inline_global_getindex, Tuple{})[1].first
-    @test any(x->(isexpr(x, :call) && x.args[1] === GlobalRef(Base, :memoryrefget)), ci.code)
+    @test any(x->(isexpr(x, :call) && x.args[1] in (GlobalRef(Base, :memoryrefget), Base.memoryrefget)), ci.code)
 end
 
 # Issue #29114 & #36087 - Inlining of non-tuple splats

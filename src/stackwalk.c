@@ -1249,6 +1249,36 @@ return 0;
 #endif
 }
 
+typedef struct {
+    int16_t old;
+    bt_context_t *c;
+    int success;
+} suspend_t;
+static void suspend(void *ctx)
+{
+    suspend_t *suspenddata = (suspend_t*)ctx;
+    suspenddata->success = jl_thread_suspend_and_get_state(suspenddata->old, 1, suspenddata->c);
+}
+
+JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
+{
+    int16_t tid = ptls2->tid;
+    jl_task_t *t = NULL;
+    bt_context_t *context = NULL;
+    bt_context_t c;
+    suspend_t suspenddata = {tid, &c};
+    jl_with_stackwalk_lock(suspend, &suspenddata);
+    if (!suspenddata.success) {
+        return 0;
+    }
+    // thread is stopped, safe to read the task it was running before we stopped it
+    t = jl_atomic_load_relaxed(&ptls2->current_task);
+    context = &c;
+    size_t bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
+    jl_thread_resume(tid);
+    return bt_size;
+}
+
 JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
 {
     int16_t tid = INT16_MAX;
@@ -1270,15 +1300,14 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
     bt_context_t c;
     int16_t old;
     for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, tid) && old != tid; old = -1) {
-        int lockret = jl_lock_stackwalk();
         // if this task is already running somewhere, we need to stop the thread it is running on and query its state
-        if (!jl_thread_suspend_and_get_state(old, 1, &c)) {
-            jl_unlock_stackwalk(lockret);
+        suspend_t suspenddata = {old, &c};
+        jl_with_stackwalk_lock(suspend, &suspenddata);
+        if (!suspenddata.success) {
             if (jl_atomic_load_relaxed(&t->tid) != old)
                 continue;
             return result;
         }
-        jl_unlock_stackwalk(lockret);
         if (jl_atomic_load_relaxed(&t->tid) == old) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[old];
             if (ptls2->previous_task == t || // we might print the wrong stack here, since we can't know whether we executed the swapcontext yet or not, but it at least avoids trying to access the state inside uc_mcontext which might not be set yet

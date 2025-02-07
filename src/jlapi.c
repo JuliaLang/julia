@@ -438,6 +438,46 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
 }
 
 /**
+ * @brief Call a Julia function with three arguments.
+ *
+ * A specialized case of `jl_call` for simpler scenarios.
+ *
+ * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param a A pointer to `jl_value_t` representing the first argument.
+ * @param b A pointer to `jl_value_t` representing the second argument.
+ * @param c A pointer to `jl_value_t` representing the third argument.
+ * @param d A pointer to `jl_value_t` representing the fourth argument.
+ * @return A pointer to `jl_value_t` representing the result of the function call.
+ */
+JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f, jl_value_t *a,
+                                  jl_value_t *b, jl_value_t *c,
+                                  jl_value_t *d)
+{
+    jl_value_t *v;
+    jl_task_t *ct = jl_current_task;
+    JL_TRY {
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, 5);
+        argv[0] = f;
+        argv[1] = a;
+        argv[2] = b;
+        argv[3] = c;
+        argv[4] = d;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
+        v = jl_apply(argv, 5);
+        ct->world_age = last_age;
+        JL_GC_POP();
+        _jl_exception_clear(ct);
+    }
+    JL_CATCH {
+        ct->ptls->previous_exception = jl_current_exception(ct);
+        v = NULL;
+    }
+    return v;
+}
+
+/**
  * @brief Get a field from a Julia object.
  *
  * @param o A pointer to `jl_value_t` representing the Julia object.
@@ -910,26 +950,29 @@ static NOINLINE int true_main(int argc, char *argv[])
 {
     jl_set_ARGS(argc, argv);
 
+
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_get_world_counter();
+
     jl_function_t *start_client = jl_base_module ?
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
-    jl_task_t *ct = jl_current_task;
     if (start_client) {
         int ret = 1;
         JL_TRY {
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_get_world_counter();
             jl_value_t *r = jl_apply(&start_client, 1);
             if (jl_typeof(r) != (jl_value_t*)jl_int32_type)
                 jl_type_error("typeassert", (jl_value_t*)jl_int32_type, r);
             ret = jl_unbox_int32(r);
-            ct->world_age = last_age;
         }
         JL_CATCH {
             jl_no_exc_handler(jl_current_exception(ct), ct);
         }
+        ct->world_age = last_age;
         return ret;
     }
+    ct->world_age = last_age;
 
     // run program if specified, otherwise enter REPL
     if (argc > 0) {

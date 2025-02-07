@@ -229,7 +229,7 @@ export
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
-    nfields, throw, tuple, ===, isdefined, eval,
+    nfields, throw, tuple, ===, isdefined,
     # access to globals
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
@@ -383,9 +383,10 @@ struct StackOverflowError  <: Exception end
 struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
+    world::UInt
     scope # a Module or Symbol or other object describing the context where this variable was looked for (e.g. Main or :local or :static_parameter)
-    UndefVarError(var::Symbol) = new(var)
-    UndefVarError(var::Symbol, @nospecialize scope) = new(var, scope)
+    UndefVarError(var::Symbol) = new(var, ccall(:jl_get_tls_world_age, UInt, ()))
+    UndefVarError(var::Symbol, @nospecialize scope) = new(var, ccall(:jl_get_tls_world_age, UInt, ()), scope)
 end
 struct ConcurrencyViolationError <: Exception
     msg::AbstractString
@@ -717,7 +718,8 @@ macro __doc__(x)
 end
 
 isbasicdoc(@nospecialize x) = (isa(x, Expr) && x.head === :.) || isa(x, Union{QuoteNode, Symbol})
-iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(ex.args[1]) : (isa(ex, Expr) && ex.head === :call)
+firstarg(arg1, args...) = arg1
+iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(firstarg(ex.args...)) : (isa(ex, Expr) && ex.head === :call)
 iscallexpr(ex) = false
 function ignoredoc(source, mod, str, expr)
     (isbasicdoc(expr) || iscallexpr(expr)) && return Expr(:escape, nothing)
@@ -773,27 +775,6 @@ struct GeneratedFunctionStub
     gen
     argnames::SimpleVector
     spnames::SimpleVector
-end
-
-# invoke and wrap the results of @generated expression
-function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
-    # args is (spvals..., argtypes...)
-    body = g.gen(args...)
-    file = source.file
-    file isa Symbol || (file = :none)
-    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
-               Expr(:var"scope-block",
-                    Expr(:block,
-                         source,
-                         Expr(:meta, :push_loc, file, :var"@generated body"),
-                         Expr(:return, body),
-                         Expr(:meta, :pop_loc))))
-    spnames = g.spnames
-    if spnames === svec()
-        return lam
-    else
-        return Expr(Symbol("with-static-parameters"), lam, spnames...)
-    end
 end
 
 # If the generator is a subtype of this trait, inference caches the generated unoptimized

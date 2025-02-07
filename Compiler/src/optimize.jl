@@ -1286,7 +1286,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
     argtypes = sv.slottypes
-    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes, WorldRange(ci.min_world, ci.max_world))
+    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes, world_range(ci))
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)

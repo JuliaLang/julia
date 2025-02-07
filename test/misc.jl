@@ -1218,8 +1218,8 @@ end
 @test readlines(`$(Base.julia_cmd()) --startup-file=no -e 'foreach(println, names(Main))'`) == ["Base","Core","Main"]
 
 # issue #26310
-@test_warn "could not import" Core.eval(@__MODULE__, :(import .notdefined_26310__))
-@test_warn "could not import" Core.eval(Main,        :(import ........notdefined_26310__))
+@test_warn "undeclared at import time" Core.eval(@__MODULE__, :(import .notdefined_26310__))
+@test_warn "undeclared at import time" Core.eval(Main,        :(import ........notdefined_26310__))
 @test_nowarn Core.eval(Main, :(import .Main))
 @test_nowarn Core.eval(Main, :(import ....Main))
 
@@ -1453,7 +1453,8 @@ end
 @test_throws ErrorException finalizer(x->nothing, 1)
 @test_throws ErrorException finalizer(C_NULL, 1)
 
-
+# FIXME: Issue #57103 Test is specific to Stock GC
+@static if Base.USING_STOCK_GC
 @testset "GC utilities" begin
     GC.gc()
     GC.gc(true); GC.gc(false)
@@ -1472,6 +1473,7 @@ end
         end
         @test occursin("GC: pause", read(tmppath, String))
     end
+end
 end
 
 @testset "fieldtypes Module" begin

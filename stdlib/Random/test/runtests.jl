@@ -370,9 +370,10 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
             a8  = rand!(rng..., GenericArray{T}(undef, 2, 3), cc)                ::GenericArray{T, 2}
             a9  = rand!(rng..., OffsetArray(Array{T}(undef, 5), 9), cc)          ::OffsetArray{T, 1}
             a10 = rand!(rng..., OffsetArray(Array{T}(undef, 2, 3), (-2, 4)), cc) ::OffsetArray{T, 2}
+            a11 = rand!(rng..., Memory{T}(undef, 5), cc)                         ::Memory{T}
             @test size(a1) == (5,)
             @test size(a2) == size(a3) == (2, 3)
-            for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8..., a9..., a10...]
+            for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8..., a9..., a10..., a11...]
                 if C isa Type
                     @test a isa C
                 else
@@ -392,6 +393,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
             (T <: Tuple || T <: Pair) && continue
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Vector{T}(undef, 5),
+                      Memory{T}(undef, 5),
                       Matrix{T}(undef, 2, 3),
                       GenericArray{T}(undef, 5),
                       GenericArray{T}(undef, 2, 3),

@@ -189,6 +189,8 @@ add_tfunc(add_float, 2, 2, math_tfunc, 2)
 add_tfunc(sub_float, 2, 2, math_tfunc, 2)
 add_tfunc(mul_float, 2, 2, math_tfunc, 8)
 add_tfunc(div_float, 2, 2, math_tfunc, 10)
+add_tfunc(min_float, 2, 2, math_tfunc, 1)
+add_tfunc(max_float, 2, 2, math_tfunc, 1)
 add_tfunc(fma_float, 3, 3, math_tfunc, 8)
 add_tfunc(muladd_float, 3, 3, math_tfunc, 8)
 
@@ -198,6 +200,8 @@ add_tfunc(add_float_fast, 2, 2, math_tfunc, 2)
 add_tfunc(sub_float_fast, 2, 2, math_tfunc, 2)
 add_tfunc(mul_float_fast, 2, 2, math_tfunc, 8)
 add_tfunc(div_float_fast, 2, 2, math_tfunc, 10)
+add_tfunc(min_float_fast, 2, 2, math_tfunc, 1)
+add_tfunc(max_float_fast, 2, 2, math_tfunc, 1)
 
 # bitwise operators
 # -----------------
@@ -1105,7 +1109,7 @@ function _getfield_tfunc_const(@nospecialize(sv), name::Const)
     if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
         return Const(getfield(sv, nv))
     end
-    if isconst(typeof(sv), nv)
+    if !isa(sv, Module) && isconst(typeof(sv), nv)
         if isdefined(sv, nv)
             return Const(getfield(sv, nv))
         end
@@ -2450,6 +2454,9 @@ const _SPECIAL_BUILTINS = Any[
     Core._apply_iterate,
 ]
 
+# Types compatible with fpext/fptrunc
+const CORE_FLOAT_TYPES = Union{Core.BFloat16, Float16, Float32, Float64}
+
 function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     # consistent if the first arg is immutable
     na = length(argtypes)
@@ -2863,6 +2870,17 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         if !(isprimitivetype(ty) && isprimitivetype(xty))
             return ErrorException
         end
+
+        # fpext and fptrunc have further restrictions on the allowed types.
+        if f === Intrinsics.fpext &&
+            !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
+            return ErrorException
+        end
+        if f === Intrinsics.fptrunc &&
+            !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
+            return ErrorException
+        end
+
         return Union{}
     end
 
@@ -3012,24 +3030,28 @@ function abstract_applicable(interp::AbstractInterpreter, argtypes::Vector{Any},
     isvarargtype(argtypes[2]) && return Future(CallMeta(Bool, ArgumentError, EFFECTS_THROWS, NoCallInfo()))
     argtypes = argtypes[2:end]
     atype = argtypes_to_type(argtypes)
-    matches = find_method_matches(interp, argtypes, atype; max_methods)
-    info = NoCallInfo()
-    if isa(matches, FailedMethodMatch)
-        rt = Bool # too many matches to analyze
+    if atype === Union{}
+        rt = Union{} # accidentally unreachable code
     else
-        (; valid_worlds, applicable) = matches
-        update_valid_age!(sv, valid_worlds)
-        napplicable = length(applicable)
-        if napplicable == 0
-            rt = Const(false) # never any matches
-        elseif !fully_covering(matches) || any_ambig(matches)
-            # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
-            rt = Bool
+        matches = find_method_matches(interp, argtypes, atype; max_methods)
+        info = NoCallInfo()
+        if isa(matches, FailedMethodMatch)
+            rt = Bool # too many matches to analyze
         else
-            rt = Const(true) # has applicable matches
-        end
-        if rt !== Bool
-            info = VirtualMethodMatchInfo(matches.info)
+            (; valid_worlds, applicable) = matches
+            update_valid_age!(sv, valid_worlds)
+            napplicable = length(applicable)
+            if napplicable == 0
+                rt = Const(false) # never any matches
+            elseif !fully_covering(matches) || any_ambig(matches)
+                # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
+                rt = Bool
+            else
+                rt = Const(true) # has applicable matches
+            end
+            if rt !== Bool
+                info = VirtualMethodMatchInfo(matches.info)
+            end
         end
     end
     return Future(CallMeta(rt, Union{}, EFFECTS_TOTAL, info))
