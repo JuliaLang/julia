@@ -1480,6 +1480,7 @@
             `(block
               (= ,rr (where ,type-ex ,@params))
               (,(if allow-local 'assign-const-if-global 'const) ,name ,rr)
+              (latestworld-if-toplevel)
               ,rr)))
       (expand-forms
        `(const (= ,name ,type-ex)))))
