@@ -126,8 +126,13 @@ function match_ir_test_case(case_str)
                     error("Too many sections in IR test case")
     expect_error = startswith(description, "Error")
     is_broken = startswith(description, "FIXME")
+    method_filter = begin
+        mf = match(r"\[method_filter: *(.*)\]", description)
+        isnothing(mf) ? nothing : strip(mf[1])
+    end
     (; expect_error=expect_error, is_broken=is_broken,
      description=strip(description),
+     method_filter=method_filter,
      input=strip(input), output=strip(output))
 end
 
@@ -152,8 +157,8 @@ function setup_ir_test_module(preamble)
     test_mod
 end
 
-function format_ir_for_test(mod, description, input, expect_error=false, is_broken=false)
-    ex = parsestmt(SyntaxTree, input)
+function format_ir_for_test(mod, case)
+    ex = parsestmt(SyntaxTree, case.input)
     try
         if kind(ex) == K"macrocall" && kind(ex[1]) == K"MacroName" && ex[1].name_val == "@ast_"
             # Total hack, until @ast_ can be implemented in terms of new-style
@@ -161,22 +166,22 @@ function format_ir_for_test(mod, description, input, expect_error=false, is_brok
             ex = JuliaLowering.eval(mod, Expr(ex))
         end
         x = JuliaLowering.lower(mod, ex)
-        if expect_error
-            error("Expected a lowering error in test case \"$description\"")
+        if case.expect_error
+            error("Expected a lowering error in test case \"$(case.description)\"")
         end
-        ir = strip(sprint(JuliaLowering.print_ir, x))
+        ir = strip(sprint(JuliaLowering.print_ir, x, case.method_filter))
         return replace(ir, string(mod)=>"TestMod")
     catch exc
         if exc isa InterruptException
             rethrow()
-        elseif expect_error && (exc isa LoweringError)
+        elseif case.expect_error && (exc isa LoweringError)
             return sprint(io->Base.showerror(io, exc, show_detail=false))
-        elseif expect_error && (exc isa MacroExpansionError)
+        elseif case.expect_error && (exc isa MacroExpansionError)
             return sprint(io->Base.showerror(io, exc))
-        elseif is_broken
+        elseif case.is_broken
             return sprint(io->Base.showerror(io, exc))
         else
-            throw("Error in test case \"$description\"")
+            throw("Error in test case \"$(case.description)\"")
         end
     end
 end
@@ -184,17 +189,17 @@ end
 function test_ir_cases(filename::AbstractString)
     preamble, cases = read_ir_test_cases(filename)
     test_mod = setup_ir_test_module(preamble)
-    for (expect_error, is_broken, description, input, ref) in cases
-        if is_broken
+    for case in cases
+        if case.is_broken
             continue
         end
-        output = format_ir_for_test(test_mod, description, input, expect_error)
-        @testset "$description" begin
-            if output != ref
+        output = format_ir_for_test(test_mod, case)
+        @testset "$(case.description)" begin
+            if output != case.output
                 # Do additional error dumping, as @test will not format errors in a nice way
-                @error "Test \"$description\" failed" output=Text(output) ref=Text(ref)
+                @error "Test \"$(case.description)\" failed" output=Text(output) ref=Text(case.output)
             end
-            @test output == ref
+            @test output == case.output
         end
     end
 end
@@ -213,20 +218,20 @@ function refresh_ir_test_cases(filename, pattern=nothing)
         println(io, preamble, "\n")
         println(io, "#*******************************************************************************")
     end
-    for (expect_error, is_broken, description, input, ref) in cases
-        if isnothing(pattern) || occursin(pattern, description)
-            ir = format_ir_for_test(test_mod, description, input, expect_error, is_broken)
-            if rstrip(ir) != ref
-                @info "Refreshing test case $(repr(description)) in $filename"
+    for case in cases
+        if isnothing(pattern) || occursin(pattern, case.description)
+            ir = format_ir_for_test(test_mod, case)
+            if rstrip(ir) != case.output
+                @info "Refreshing test case $(repr(case.description)) in $filename"
             end
         else
-            ir = ref
+            ir = case.output
         end
         println(io,
             """
             ########################################
-            $(comment_description(description))
-            $(strip(input))
+            $(comment_description(case.description))
+            $(strip(case.input))
             #---------------------
             $ir
             """

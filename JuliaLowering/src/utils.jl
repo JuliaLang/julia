@@ -75,7 +75,46 @@ function subscript_str(i)
              "5"=>"₅", "6"=>"₆", "7"=>"₇", "8"=>"₈", "9"=>"₉")
 end
 
-function print_ir(io::IO, ex, indent="")
+function _deref_ssa(stmts, ex)
+    while kind(ex) == K"SSAValue"
+        ex = stmts[ex.var_id]
+    end
+    ex
+end
+
+function _find_method_lambda(ex, name)
+    @assert kind(ex) == K"code_info"
+    # Heuristic search through outer thunk for the method in question.
+    method_found = false
+    stmts = children(ex[1])
+    for e in stmts
+        if kind(e) == K"method" && numchildren(e) >= 2
+            sig = _deref_ssa(stmts, e[2])
+            @assert kind(sig) == K"call"
+            arg_types = _deref_ssa(stmts, sig[2])
+            @assert kind(arg_types) == K"call"
+            self_type = _deref_ssa(stmts, arg_types[2])
+            if kind(self_type) == K"globalref" && occursin(name, self_type.name_val)
+                return e[3]
+            end
+        end
+    end
+end
+
+function print_ir(io::IO, ex, method_filter=nothing)
+    @assert kind(ex) == K"code_info"
+    if !isnothing(method_filter)
+        filtered = _find_method_lambda(ex, method_filter)
+        if isnothing(filtered)
+            @warn "Method not found with method filter $method_filter"
+        else
+            ex = filtered
+        end
+    end
+    _print_ir(io, ex, "")
+end
+
+function _print_ir(io::IO, ex, indent)
     added_indent = "    "
     @assert (kind(ex) == K"lambda" || kind(ex) == K"code_info") && kind(ex[1]) == K"block"
     if !ex.is_toplevel_thunk && kind(ex) == K"code_info"
@@ -105,7 +144,7 @@ function print_ir(io::IO, ex, indent="")
             print(io, indent, lno, " --- method ", string(e[1]), " ", string(e[2]))
             if kind(e[3]) == K"lambda" || kind(e[3]) == K"code_info"
                 println(io)
-                print_ir(io, e[3], indent*added_indent)
+                _print_ir(io, e[3], indent*added_indent)
             else
                 println(io, " ", string(e[3]))
             end
@@ -116,10 +155,10 @@ function print_ir(io::IO, ex, indent="")
                 print(io, " ", e[i])
             end
             println(io)
-            print_ir(io, e[5], indent*added_indent)
+            _print_ir(io, e[5], indent*added_indent)
         elseif kind(e) == K"code_info"
             println(io, indent, lno, " --- ", e.is_toplevel_thunk ? "thunk" : "code_info")
-            print_ir(io, e, indent*added_indent)
+            _print_ir(io, e, indent*added_indent)
         else
             code = string(e)
             println(io, indent, lno, " ", code)
