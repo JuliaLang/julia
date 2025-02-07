@@ -55,4 +55,22 @@ Tuple{Int,Int}[(x,y) for x in 1:2, y in 1:3]
 """) == [(1,1) (1,2) (1,3)
          (2,1) (2,2) (2,3)]
 
+# Triply nested comprehension
+@test JuliaLowering.include_string(test_mod, """
+[(x,y,z) for x in 1:3 for y in 4:5 for z in 6:7]
+""") == [
+    (1, 4, 6)
+    (1, 4, 7)
+    (1, 5, 6)
+    (1, 5, 7)
+    (2, 4, 6)
+    (2, 4, 7)
+    (2, 5, 6)
+    (2, 5, 7)
+    (3, 4, 6)
+    (3, 4, 7)
+    (3, 5, 6)
+    (3, 5, 7)
+]
+
 end

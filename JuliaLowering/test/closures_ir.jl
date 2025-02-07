@@ -285,7 +285,8 @@ end
 19  (return %₁₈)
 
 ########################################
-# FIXME: Nested captures of arguments
+# Nested captures - here `g` captures `x` because it is needed to initialize
+# the closure `h` which captures both `x` and `y`.
 function f(x)
     function g(y)
         function h(z)
@@ -294,18 +295,58 @@ function f(x)
     end
 end
 #---------------------
-LoweringError:
-function f(x)
-#          ╙ ── Found unexpected binding of kind argument
-    function g(y)
-        function h(z)
-
-Detailed provenance:
-#₈/x
-└─ x
-   └─ x
-      └─ @ :1
-
+1   (method TestMod.f)
+2   (call core.svec :x)
+3   (call core.svec false)
+4   (call JuliaLowering.eval_closure_type TestMod :#f#g##4 %₂ %₃)
+5   (call core.svec :x :y)
+6   (call core.svec false false)
+7   (call JuliaLowering.eval_closure_type TestMod :#f#g#h##0 %₅ %₆)
+8   TestMod.#f#g#h##0
+9   (call core.svec %₈ core.Any)
+10  (call core.svec)
+11  SourceLocation::3:18
+12  (call core.svec %₉ %₁₀ %₁₁)
+13  --- method core.nothing %₁₂
+    slots: [slot₁/#self#(!read) slot₂/z]
+    1   (call core.getfield slot₁/#self# :x)
+    2   (call core.getfield slot₁/#self# :y)
+    3   (call core.tuple %₁ %₂ slot₂/z)
+    4   (return %₃)
+14  TestMod.#f#g##4
+15  (call core.svec %₁₄ core.Any)
+16  (call core.svec)
+17  SourceLocation::2:14
+18  (call core.svec %₁₅ %₁₆ %₁₇)
+19  --- method core.nothing %₁₈
+    slots: [slot₁/#self#(!read) slot₂/y(!read) slot₃/h]
+    1   TestMod.#f#g#h##0
+    2   (call core.getfield slot₁/#self# :x)
+    3   (call core.typeof %₂)
+    4   (call core.typeof slot₂/y)
+    5   (call core.apply_type %₁ %₃ %₄)
+    6   (call core.getfield slot₁/#self# :x)
+    7   (new %₅ %₆ slot₂/y)
+    8   (= slot₃/h %₇)
+    9   slot₃/h
+    10  (return %₉)
+20  TestMod.f
+21  (call core.Typeof %₂₀)
+22  (call core.svec %₂₁ core.Any)
+23  (call core.svec)
+24  SourceLocation::1:10
+25  (call core.svec %₂₂ %₂₃ %₂₄)
+26  --- method core.nothing %₂₅
+    slots: [slot₁/#self#(!read) slot₂/x(!read) slot₃/g]
+    1   TestMod.#f#g##4
+    2   (call core.typeof slot₂/x)
+    3   (call core.apply_type %₁ %₂)
+    4   (new %₃ slot₂/x)
+    5   (= slot₃/g %₄)
+    6   slot₃/g
+    7   (return %₆)
+27  TestMod.f
+28  (return %₂₇)
 
 ########################################
 # Global method capturing local variables

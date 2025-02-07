@@ -710,6 +710,20 @@ function analyze_variables!(ctx, ex)
         end
         ctx2 = VariableAnalysisContext(ctx.graph, ctx.bindings, ctx.mod, lambda_bindings,
                                        ctx.method_def_stack, ctx.closure_bindings)
+        # Add any captured bindings to the enclosing lambda, if necessary.
+        for (id,lbinfo) in pairs(lambda_bindings.bindings)
+            if lbinfo.is_captured
+                outer_lbinfo = lookup_lambda_binding(ctx.lambda_bindings, id)
+                if isnothing(outer_lbinfo)
+                    # Inner lambda captures a variable. If it's not yet present
+                    # in the outer lambda, the outer lambda must capture it as
+                    # well so that the closure associated to the inner lambda
+                    # can be initialized when `function_decl` is hit.
+                    init_lambda_binding(ctx.lambda_bindings, id, is_captured=true, is_read=true)
+                end
+            end
+        end
+
         # TODO: Types of any assigned captured vars will also be used and might be captured.
         foreach(e->analyze_variables!(ctx2, e), ex[3:end])
     else

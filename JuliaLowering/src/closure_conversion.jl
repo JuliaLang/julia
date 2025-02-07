@@ -391,8 +391,13 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                 ctx.closure_infos[func_name_id] = closure_info
                 type_params = SyntaxList(ctx)
                 init_closure_args = SyntaxList(ctx)
-                for (id,boxed) in zip(field_orig_bindings, field_is_box)
+                for (id, boxed) in zip(field_orig_bindings, field_is_box)
                     field_val = binding_ex(ctx, id)
+                    if is_self_captured(ctx, field_val)
+                        # Access from outer closure if necessary but do not
+                        # unbox to feed into the inner nested closure.
+                        field_val = captured_var_access(ctx, field_val)
+                    end
                     push!(init_closure_args, field_val)
                     if !boxed
                         push!(type_params, @ast ctx ex [K"call"

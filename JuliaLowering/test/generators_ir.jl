@@ -282,18 +282,3 @@ T[(x,y) for x in xs, y in ys]
 49  (goto label₁₅)
 50  (return %₇)
 
-########################################
-# FIXME - error in nested closure conversion: Triply nested generator
-((x,y,z) for x in 1:3 for y in 4:5 for z in 6:7)
-#---------------------
-LoweringError:
-((x,y,z) for x in 1:3 for y in 4:5 for z in 6:7)
-#            ╙ ── Found unexpected binding of kind argument
-
-Detailed provenance:
-#₁₃/x
-└─ x
-   └─ x
-      └─ @ :1
-
-

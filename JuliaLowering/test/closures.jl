@@ -110,6 +110,22 @@ end
 @test f_closure_local_var_types(2.0) == 1.0
 @test_throws MethodError f_closure_local_var_types("hi")
 
+# Multiply nested closures. In this case g_nest needs to capture `x` in order
+# to construct an instance of `h_nest()` inside it.
+@test JuliaLowering.include_string(test_mod, """
+begin
+    function f_nest(x)
+        function g_nest(y)
+            function h_nest(z)
+                (x,y,z)
+            end
+        end
+    end
+
+    f_nest(1)(2)(3)
+end
+""") === (1,2,3)
+
 # Anon function syntax
 @test JuliaLowering.include_string(test_mod, """
 begin
