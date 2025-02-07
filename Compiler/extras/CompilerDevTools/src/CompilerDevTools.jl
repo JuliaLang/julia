@@ -28,7 +28,7 @@ Compiler.codegen_cache(interp::SplitCacheInterp) = interp.codegen_cache
 
 import Core.OptimizedGenerics.CompilerPlugins: typeinf, typeinf_edge
 @eval @noinline typeinf(::SplitCacheOwner, mi::MethodInstance, source_mode::UInt8) =
-    Base.invoke_in_world(which(typeinf, Tuple{SplitCacheOwner, MethodInstance, UInt8}).primary_world, Compiler.typeinf_ext, SplitCacheInterp(; world=Base.tls_world_age()), mi, source_mode)
+    Base.invoke_in_world(which(typeinf, Tuple{SplitCacheOwner, MethodInstance, UInt8}).primary_world, Compiler.typeinf_ext_toplevel, SplitCacheInterp(; world=Base.tls_world_age()), mi, source_mode)
 
 @eval @noinline function typeinf_edge(::SplitCacheOwner, mi::MethodInstance, parent_frame::Compiler.InferenceState, world::UInt, source_mode::UInt8)
     # TODO: This isn't quite right, we're just sketching things for now
@@ -42,7 +42,6 @@ function with_new_compiler(f, args...)
     new_compiler_ci = Core.OptimizedGenerics.CompilerPlugins.typeinf(
         SplitCacheOwner(), mi, Compiler.SOURCE_MODE_ABI
     )
-    Compiler.add_codeinsts_to_jit!(SplitCacheInterp(; world), new_compiler_ci, Compiler.SOURCE_MODE_ABI)
     invoke(f, new_compiler_ci, args...)
 end
 

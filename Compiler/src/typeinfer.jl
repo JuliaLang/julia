@@ -1231,7 +1231,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     source_mode == SOURCE_MODE_ABI || return
     ci isa CodeInstance && !ci_has_invoke(ci) || return
     codegen = codegen_cache(interp)
-    codegen !== nothing || return
+    codegen === nothing && return
     inspected = IdSet{CodeInstance}()
     tocompile = Vector{CodeInstance}()
     push!(tocompile, ci)
@@ -1263,12 +1263,16 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     end
 end
 
-# This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
-function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
-    interp = NativeInterpreter(world)
+function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
     ci = typeinf_ext(interp, mi, source_mode)
     add_codeinsts_to_jit!(interp, ci, source_mode)
     return ci
+end
+
+# This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
+function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
+    interp = NativeInterpreter(world)
+    return typeinf_ext_toplevel(interp, mi, source_mode)
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
