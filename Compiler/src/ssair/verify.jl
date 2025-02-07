@@ -61,7 +61,6 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             raise_error()
         end
     elseif isa(op, GlobalRef)
-        force_binding_resolution!(op, min_world(ir.valid_worlds))
         bpart = lookup_binding_partition(min_world(ir.valid_worlds), op)
         while is_some_imported(binding_kind(bpart)) && max_world(ir.valid_worlds) <= bpart.max_world
             imported_binding = partition_restriction(bpart)::Core.Binding

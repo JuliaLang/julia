@@ -2144,6 +2144,9 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     gc_heap_snapshot_record_module_to_binding(mb_parent, bindings, bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->parent);
     gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->parent, &nptr);
+    gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->usings_backedges);
+    gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->usings_backedges, &nptr);
+    gc_heap_snapshot_record_binding_partition_edge((jl_value_t*)mb_parent, mb_parent->usings_backedges);
     size_t nusings = module_usings_length(mb_parent);
     if (nusings > 0) {
         // this is only necessary because bindings for "using" modules
@@ -3928,16 +3931,18 @@ void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
     return p;
 }
 
-jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT
+jl_value_t *jl_gc_permobj(size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT
 {
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    unsigned align = (sz == 0 ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
+    if (align == 0) {
+        align = ((sz == 0) ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
                                                  sizeof(void*) * 2 : 16));
+    }
     jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
                                                               sizeof(void*) % align);
-    uintptr_t tag = (uintptr_t)ty;
-    o->header = tag | GC_OLD_MARKED;
-    return jl_valueof(o);
+    jl_value_t* v = jl_valueof(o);
+    jl_set_typeof(v, (void*)(((uintptr_t)(ty) | GC_OLD_MARKED)));
+    return v;
 }
 
 JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)
