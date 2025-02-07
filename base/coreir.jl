@@ -38,17 +38,17 @@ exact number of elements is unknown (`defined` then has a length of `length(fiel
 Core.PartialStruct
 
 function Core.PartialStruct(@nospecialize(typ), fields::Vector{Any})
-    ndefined = lastindex(fields)
-    fields[end] === Vararg && (ndefined -= 1)
+    ndef = lastindex(fields)
+    fields[end] === Vararg && (ndef -= 1)
     t = typ
     (isa(t, UnionAll) || isa(t, Union)) && (t = argument_datatype(t))
     nfields = isa(t, DataType) ? datatype_fieldcount(t) : nothing
-    if nfields === nothing || nfields == ndefined
-        defined = trues(ndefined)
+    if nfields === nothing || nfields == ndef
+        defined = trues(ndef)
     else
-        @assert nfields ≥ ndefined
+        @assert nfields ≥ ndef
         defined = falses(nfields)
-        for i in 1:ndefined
+        for i in 1:ndef
             defined[i] = true
         end
     end

@@ -655,10 +655,10 @@ end
         typea::Union{PartialStruct, Const}
         typeb::Union{PartialStruct, Const}
         defined = defined_fields(typea, typeb)
-        ndefined = _count(defined)
-        ndefined == 0 && return nothing
+        ndef = _count(defined)
+        ndef == 0 && return nothing
         fields = []
-        anyrefine = ndefined > datatype_min_ninitialized(aty)
+        anyrefine = ndef > datatype_min_ninitialized(aty)
         for (i, def) in enumerate(defined)
             def || continue
             ai = getfield_tfunc(𝕃, typea, Const(i))
