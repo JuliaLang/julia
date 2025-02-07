@@ -3,7 +3,7 @@
 # Both MMTK_MOVING and MMTK_PLAN should be specified in the Make.user file.
 # At this point, since we only support non-moving this is always set to 0
 # FIXME: change it to `?:` when introducing moving plans
-MMTK_MOVING := 0
+MMTK_MOVING ?= 0
 MMTK_VARS := MMTK_PLAN=$(MMTK_PLAN) MMTK_MOVING=$(MMTK_MOVING)
 
 ifneq ($(USE_BINARYBUILDER_MMTK_JULIA),1)
