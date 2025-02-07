@@ -20,12 +20,15 @@ import
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
         uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask
 
+import .Core: AbstractFloat
+import .Base: Rational, Float16, Float32, Float64, Bool
+
 using .Base.Libc
 import ..Rounding: Rounding,
     rounding_raw, setrounding_raw, rounds_to_nearest, rounds_away_from_zero,
     tie_breaker_is_to_even, correct_rounding_requires_increment
 
-import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp
+import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp, BigInt
 
 import ..FastMath.sincos_fast
 
