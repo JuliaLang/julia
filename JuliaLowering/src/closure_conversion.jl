@@ -90,29 +90,26 @@ end
 # global and for converting the return value of a function call to the declared
 # return type.
 function convert_for_type_decl(ctx, srcref, ex, type, do_typeassert)
-    # Require that the caller make `type` "simple", for now (can generalize
-    # later if necessary)
-    kt = kind(type)
-    @assert (kt == K"Identifier" || kt == K"BindingId" || is_literal(kt))
     # Use a slot to permit union-splitting this in inference
     tmp = new_local_binding(ctx, srcref, "tmp", is_always_defined=true)
 
     @ast ctx srcref [K"block"
+        type_tmp := type
         # [K"=" type_ssa renumber_assigned_ssavalues(type)]
         [K"=" tmp ex]
         [K"if"
-            [K"call" "isa"::K"core" tmp type]
+            [K"call" "isa"::K"core" tmp type_tmp]
             "nothing"::K"core"
             [K"="
                 tmp
                 if do_typeassert
                     [K"call"
                         "typeassert"::K"core"
-                        [K"call" "convert"::K"top" type tmp]
-                        type
+                        [K"call" "convert"::K"top" type_tmp tmp]
+                        type_tmp
                     ]
                 else
-                    [K"call" "convert"::K"top" type tmp]
+                    [K"call" "convert"::K"top" type_tmp tmp]
                 end
             ]
         ]

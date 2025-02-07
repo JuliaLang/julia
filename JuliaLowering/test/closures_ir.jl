@@ -677,6 +677,40 @@ end
 47  (return %₄₆)
 
 ########################################
+# Closure capturing a typed local must also capture the type expression
+# [method_filter: #f_captured_typed_local##0]
+let T=Blah
+    x::T = 1.0
+    function f_captured_typed_local()
+        x = 2.0
+    end
+    f_captured_typed_local()
+    x
+end
+#---------------------
+slots: [slot₁/#self#(!read) slot₂/T(!read) slot₃/tmp(!read)]
+1   2.0
+2   (call core.getfield slot₁/#self# :x)
+3   (call core.getfield slot₁/#self# :T)
+4   (call core.isdefined %₃ :contents)
+5   (gotoifnot %₄ label₇)
+6   (goto label₉)
+7   (newvar slot₂/T)
+8   slot₂/T
+9   (call core.getfield %₃ :contents)
+10  (= slot₃/tmp %₁)
+11  slot₃/tmp
+12  (call core.isa %₁₁ %₉)
+13  (gotoifnot %₁₂ label₁₅)
+14  (goto label₁₈)
+15  slot₃/tmp
+16  (call top.convert %₉ %₁₅)
+17  (= slot₃/tmp (call core.typeassert %₁₆ %₉))
+18  slot₃/tmp
+19  (call core.setfield! %₂ :contents %₁₈)
+20  (return %₁)
+
+########################################
 # Error: Closure outside any top level context
 # (Should only happen in a user-visible way when lowering code emitted
 #  from a `@generated` function code generator.)

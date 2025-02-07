@@ -126,6 +126,62 @@ begin
 end
 """) === (1,2,3)
 
+# Closure with return type must capture the return type
+@test JuliaLowering.include_string(test_mod, """
+let T = Int
+    function f_captured_return_type()::T
+        2.0
+    end
+    f_captured_return_type()
+end
+""") === 2
+
+# Capturing a typed local
+@test JuliaLowering.include_string(test_mod, """
+let T = Int
+    x::T = 1.0
+    function f_captured_typed_local()
+        x = 2.0
+    end
+    f_captured_typed_local()
+    x
+end
+""") === 2
+
+# Capturing a typed local where the type is a nontrivial expression
+@test begin
+    res = JuliaLowering.include_string(test_mod, """
+    let T = Int, V=Vector
+        x::V{T} = [1,2]
+        function f_captured_typed_local_composite()
+            x = [100.0, 200.0]
+        end
+        f_captured_typed_local_composite()
+        x
+    end
+    """)
+    res == [100, 200] && eltype(res) == Int
+end
+
+# Evil case where we mutate `T` which is the type of `x`, such that x is
+# eventually set to a Float64.
+#
+# Completely dynamic types for variables should be disallowed somehow?? For
+# example, by emitting the expression computing the type of `x` alongside the
+# newvar node. However, for now we verify that this potentially evil behavior
+# is compatible with the existing implementation :)
+@test JuliaLowering.include_string(test_mod, """
+let T = Int
+    x::T = 1.0
+    function f_captured_mutating_typed_local()
+        x = 2
+    end
+    T = Float64
+    f_captured_mutating_typed_local()
+    x
+end
+""") === 2.0
+
 # Anon function syntax
 @test JuliaLowering.include_string(test_mod, """
 begin

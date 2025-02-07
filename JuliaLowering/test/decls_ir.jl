@@ -4,20 +4,18 @@ local x::T = 1
 #---------------------
 1   (newvar slot₁/x)
 2   1
-3   (= slot₂/tmp %₂)
-4   slot₂/tmp
-5   TestMod.T
-6   (call core.isa %₄ %₅)
+3   TestMod.T
+4   (= slot₂/tmp %₂)
+5   slot₂/tmp
+6   (call core.isa %₅ %₃)
 7   (gotoifnot %₆ label₉)
-8   (goto label₁₄)
-9   TestMod.T
-10  slot₂/tmp
-11  (call top.convert %₉ %₁₀)
-12  TestMod.T
-13  (= slot₂/tmp (call core.typeassert %₁₁ %₁₂))
-14  slot₂/tmp
-15  (= slot₁/x %₁₄)
-16  (return %₂)
+8   (goto label₁₂)
+9   slot₂/tmp
+10  (call top.convert %₃ %₉)
+11  (= slot₂/tmp (call core.typeassert %₁₀ %₃))
+12  slot₂/tmp
+13  (= slot₁/x %₁₂)
+14  (return %₂)
 
 ########################################
 # const
@@ -133,35 +131,31 @@ end
 8   --- method core.nothing %₇
     slots: [slot₁/#self#(!read) slot₂/x slot₃/tmp(!read) slot₄/tmp(!read)]
     1   1
-    2   (= slot₃/tmp %₁)
-    3   slot₃/tmp
-    4   TestMod.Int
-    5   (call core.isa %₃ %₄)
+    2   TestMod.Int
+    3   (= slot₃/tmp %₁)
+    4   slot₃/tmp
+    5   (call core.isa %₄ %₂)
     6   (gotoifnot %₅ label₈)
-    7   (goto label₁₃)
-    8   TestMod.Int
-    9   slot₃/tmp
-    10  (call top.convert %₈ %₉)
-    11  TestMod.Int
-    12  (= slot₃/tmp (call core.typeassert %₁₀ %₁₁))
-    13  slot₃/tmp
-    14  (= slot₂/x %₁₃)
-    15  2.0
-    16  (= slot₄/tmp %₁₅)
-    17  slot₄/tmp
-    18  TestMod.Int
-    19  (call core.isa %₁₇ %₁₈)
-    20  (gotoifnot %₁₉ label₂₂)
-    21  (goto label₂₇)
-    22  TestMod.Int
+    7   (goto label₁₁)
+    8   slot₃/tmp
+    9   (call top.convert %₂ %₈)
+    10  (= slot₃/tmp (call core.typeassert %₉ %₂))
+    11  slot₃/tmp
+    12  (= slot₂/x %₁₁)
+    13  2.0
+    14  TestMod.Int
+    15  (= slot₄/tmp %₁₃)
+    16  slot₄/tmp
+    17  (call core.isa %₁₆ %₁₄)
+    18  (gotoifnot %₁₇ label₂₀)
+    19  (goto label₂₃)
+    20  slot₄/tmp
+    21  (call top.convert %₁₄ %₂₀)
+    22  (= slot₄/tmp (call core.typeassert %₂₁ %₁₄))
     23  slot₄/tmp
-    24  (call top.convert %₂₂ %₂₃)
-    25  TestMod.Int
-    26  (= slot₄/tmp (call core.typeassert %₂₄ %₂₅))
-    27  slot₄/tmp
-    28  (= slot₂/x %₂₇)
-    29  slot₂/x
-    30  (return %₂₉)
+    24  (= slot₂/x %₂₃)
+    25  slot₂/x
+    26  (return %₂₅)
 9   TestMod.f
 10  (return %₉)
 

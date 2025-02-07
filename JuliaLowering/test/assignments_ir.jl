@@ -81,21 +81,19 @@ end
 1   (newvar slot₁/x)
 2   TestMod.f
 3   (call %₂)
-4   (= slot₂/tmp %₃)
-5   slot₂/tmp
-6   TestMod.T
-7   (call core.isa %₅ %₆)
+4   TestMod.T
+5   (= slot₂/tmp %₃)
+6   slot₂/tmp
+7   (call core.isa %₆ %₄)
 8   (gotoifnot %₇ label₁₀)
-9   (goto label₁₅)
-10  TestMod.T
-11  slot₂/tmp
-12  (call top.convert %₁₀ %₁₁)
-13  TestMod.T
-14  (= slot₂/tmp (call core.typeassert %₁₂ %₁₃))
-15  slot₂/tmp
-16  (= slot₁/x %₁₅)
-17  slot₁/x
-18  (return %₁₇)
+9   (goto label₁₃)
+10  slot₂/tmp
+11  (call top.convert %₄ %₁₀)
+12  (= slot₂/tmp (call core.typeassert %₁₁ %₄))
+13  slot₂/tmp
+14  (= slot₁/x %₁₃)
+15  slot₁/x
+16  (return %₁₅)
 
 ########################################
 # "complex lhs" of `::T` => type-assert, not decl

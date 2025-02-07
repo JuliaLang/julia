@@ -433,6 +433,14 @@ function _resolve_scopes(ctx, ex::SyntaxTree)
                 throw(LoweringError(ex, "type declarations for global variables must be at top level, not inside a function"))
             end
         end
+        id = ex_out[1]
+        if kind(id) != K"Placeholder"
+            binfo = lookup_binding(ctx, id)
+            if !isnothing(binfo.type)
+                throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
+            end
+            update_binding!(ctx, id; type=ex_out[2])
+        end
         ex_out
     elseif k == K"always_defined"
         id = lookup_var(ctx, NameKey(ex[1]))
@@ -624,14 +632,22 @@ function analyze_variables!(ctx, ex)
     k = kind(ex)
     if k == K"BindingId"
         if has_lambda_binding(ctx, ex)
-            # FIXME: Move this after closure conversion so that we don't need
+            # TODO: Move this after closure conversion so that we don't need
             # to model the closure conversion transformations here.
             update_lambda_binding!(ctx, ex, is_read=true)
+        else
+            binfo = lookup_binding(ctx, ex.var_id)
+            if !binfo.is_ssa && binfo.kind != :global
+                # The type of typed locals is invisible in the previous pass,
+                # but is filled in here.
+                init_lambda_binding(ctx.lambda_bindings, ex.var_id, is_captured=true, is_read=true)
+                update_binding!(ctx, ex, is_captured=true)
+            end
         end
     elseif is_leaf(ex) || is_quoted(ex)
         return
     elseif k == K"local" || k == K"global"
-        # Uses of bindings which don't count as uses.
+        # Presence of BindingId within local/global is ignored.
         return
     elseif k == K"="
         lhs = ex[1]
@@ -639,6 +655,12 @@ function analyze_variables!(ctx, ex)
             update_binding!(ctx, lhs, add_assigned=1)
             if has_lambda_binding(ctx, lhs)
                 update_lambda_binding!(ctx, lhs, is_assigned=true)
+            end
+            lhs_binfo = lookup_binding(ctx, lhs)
+            if !isnothing(lhs_binfo.type)
+                # Assignments introduce a variable's type later during closure
+                # conversion, but we must model that explicitly here.
+                analyze_variables!(ctx, lhs_binfo.type)
             end
         end
         analyze_variables!(ctx, ex[2])
@@ -655,17 +677,6 @@ function analyze_variables!(ctx, ex)
         if kind(ex[1]) != K"BindingId" || lookup_binding(ctx, ex[1]).kind !== :local
             analyze_variables!(ctx, ex[1])
         end
-    elseif k == K"decl"
-        @chk numchildren(ex) == 2
-        id = ex[1]
-        if kind(id) != K"Placeholder"
-            binfo = lookup_binding(ctx, id)
-            if !isnothing(binfo.type)
-                throw(LoweringError(ex, "multiple type declarations found for `$(binfo.name)`"))
-            end
-            update_binding!(ctx, id; type=ex[2])
-        end
-        analyze_variables!(ctx, ex[2])
     elseif k == K"const"
         id = ex[1]
         if lookup_binding(ctx, id).kind == :local
@@ -677,7 +688,7 @@ function analyze_variables!(ctx, ex)
         if kind(name) == K"BindingId"
             id = name.var_id
             if has_lambda_binding(ctx, id)
-                # FIXME: Move this after closure conversion so that we don't need
+                # TODO: Move this after closure conversion so that we don't need
                 # to model the closure conversion transformations.
                 update_lambda_binding!(ctx, id, is_called=true)
             end
@@ -710,9 +721,10 @@ function analyze_variables!(ctx, ex)
         end
         ctx2 = VariableAnalysisContext(ctx.graph, ctx.bindings, ctx.mod, lambda_bindings,
                                        ctx.method_def_stack, ctx.closure_bindings)
-        # Add any captured bindings to the enclosing lambda, if necessary.
+        foreach(e->analyze_variables!(ctx2, e), ex[3:end]) # body & return type
         for (id,lbinfo) in pairs(lambda_bindings.bindings)
             if lbinfo.is_captured
+                # Add any captured bindings to the enclosing lambda, if necessary.
                 outer_lbinfo = lookup_lambda_binding(ctx.lambda_bindings, id)
                 if isnothing(outer_lbinfo)
                     # Inner lambda captures a variable. If it's not yet present
@@ -723,9 +735,6 @@ function analyze_variables!(ctx, ex)
                 end
             end
         end
-
-        # TODO: Types of any assigned captured vars will also be used and might be captured.
-        foreach(e->analyze_variables!(ctx2, e), ex[3:end])
     else
         foreach(e->analyze_variables!(ctx, e), children(ex))
     end
