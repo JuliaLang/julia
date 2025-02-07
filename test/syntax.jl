@@ -4081,3 +4081,10 @@ end
 
 # Ambiguous 1-arg anymous vs macrosig
 @test_parseerror "function (@foo(a)) end"
+
+# #57267 - Missing `latestworld` after typealias
+abstract type A57267{S, T} end
+@test_nowarn @eval begin
+    B57267{S} = A57267{S, 1}
+    const C57267 = B57267
+end
