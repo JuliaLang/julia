@@ -2970,6 +2970,9 @@ void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
         attr.addUWTableAttr(llvm::UWTableKind::Default); // force NeedsWinEH
     }
+#ifndef NDEBUG
+    attr.addAttribute(Attribute::StackProtectStrong);
+#endif
     if (jl_fpo_disabled(TT))
         attr.addAttribute("frame-pointer", "all");
     if (!TT.isOSWindows()) {
