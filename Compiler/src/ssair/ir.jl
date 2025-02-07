@@ -581,7 +581,7 @@ function is_relevant_expr(e::Expr)
                       :foreigncall, :isdefined, :copyast,
                       :throw_undef_if_not,
                       :cfunction, :method, :pop_exception,
-                      :leave,
+                      :leave, :const, :globaldecl,
                       :new_opaque_closure)
 end
 

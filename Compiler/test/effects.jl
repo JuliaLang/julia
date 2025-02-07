@@ -378,32 +378,27 @@ let effects = Base.infer_effects(; optimize=false) do
 end
 
 # we should taint `nothrow` if the binding doesn't exist and isn't fixed yet,
-# as the cached effects can be easily wrong otherwise
-# since the inference currently doesn't track "world-age" of global variables
-@eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
 setglobal!_nothrow_undefinedyet() = setglobal!(@__MODULE__, :UNDEFINEDYET, 42)
-let effects = Base.infer_effects() do
-        global_assignment_undefinedyet()
-    end
+let effects = Base.infer_effects(setglobal!_nothrow_undefinedyet)
     @test !Compiler.is_nothrow(effects)
 end
-let effects = Base.infer_effects() do
-        setglobal!_nothrow_undefinedyet()
-    end
+@test_throws ErrorException setglobal!_nothrow_undefinedyet()
+# This declares the binding as ::Any
+@eval global_assignment_undefinedyet() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET)) = 42
+let effects = Base.infer_effects(global_assignment_undefinedyet)
+    @test Compiler.is_nothrow(effects)
+end
+# Again with type mismatch
+global UNDEFINEDYET2::String = "0"
+setglobal!_nothrow_undefinedyet2() = setglobal!(@__MODULE__, :UNDEFINEDYET2, 42)
+@eval global_assignment_undefinedyet2() = $(GlobalRef(@__MODULE__, :UNDEFINEDYET2)) = 42
+let effects = Base.infer_effects(global_assignment_undefinedyet2)
     @test !Compiler.is_nothrow(effects)
 end
-global UNDEFINEDYET::String = "0"
-let effects = Base.infer_effects() do
-        global_assignment_undefinedyet()
-    end
+let effects = Base.infer_effects(setglobal!_nothrow_undefinedyet2)
     @test !Compiler.is_nothrow(effects)
 end
-let effects = Base.infer_effects() do
-        setglobal!_nothrow_undefinedyet()
-    end
-    @test !Compiler.is_nothrow(effects)
-end
-@test_throws Union{ErrorException,TypeError} setglobal!_nothrow_undefinedyet() # TODO: what kind of error should this be?
+@test_throws TypeError setglobal!_nothrow_undefinedyet2()
 
 # Nothrow for setfield!
 mutable struct SetfieldNothrow

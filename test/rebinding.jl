@@ -62,6 +62,26 @@ module Rebinding
     @test f_generated_return_delete_me() == 4
     Base.delete_binding(@__MODULE__, :delete_me)
     @test_throws UndefVarError f_generated_return_delete_me()
+
+    module DeleteMeModule
+        export delete_me_implicit
+        const delete_me_explicit = 5
+        const delete_me_implicit = 6
+    end
+
+    # + via import
+    using .DeleteMeModule: delete_me_explicit
+    f_return_delete_me_explicit() = delete_me_explicit
+    @test f_return_delete_me_explicit() == 5
+    Base.delete_binding(DeleteMeModule, :delete_me_explicit)
+    @test_throws UndefVarError f_return_delete_me_explicit()
+
+    # + via using
+    using .DeleteMeModule
+    f_return_delete_me_implicit() = delete_me_implicit
+    @test f_return_delete_me_implicit() == 6
+    Base.delete_binding(DeleteMeModule, :delete_me_implicit)
+    @test_throws UndefVarError f_return_delete_me_implicit()
 end
 
 module RebindingPrecompile
@@ -77,6 +97,9 @@ module RebindingPrecompile
                 const delete_me_2 = 2
                 const delete_me_3 = 3
                 const delete_me_4 = 4
+                export delete_me_5
+                const delete_me_5 = 5
+                const delete_me_6 = 6
               end
               """)
         Base.compilecache(Base.PkgId("LotsOfBindingsToDelete"))
@@ -88,16 +111,22 @@ module RebindingPrecompile
                 @eval f_use_bindings2() = \$(GlobalRef(LotsOfBindingsToDelete, :delete_me_2))
                 f_use_bindings3() = LotsOfBindingsToDelete.delete_me_3
                 f_use_bindings4() = LotsOfBindingsToDelete.delete_me_4
+                f_use_bindings5() = delete_me_5
+                import LotsOfBindingsToDelete: delete_me_6
+                f_use_bindings6() = delete_me_6
                 # Code Instances for each of these
-                @assert (f_use_bindings1(), f_use_bindings2(), f_use_bindings3(), f_use_bindings4()) ==
-                    (1, 2, 3, 4)
+                @assert (f_use_bindings1(), f_use_bindings2(), f_use_bindings3(),
+                         f_use_bindings4(), f_use_bindings5(), f_use_bindings6()) ==
+                    (1, 2, 3, 4, 5, 6)
               end
               """)
         Base.compilecache(Base.PkgId("UseTheBindings"))
         @eval using LotsOfBindingsToDelete
-        # Delete some bindings before loading the dependent package
-        Base.delete_binding(LotsOfBindingsToDelete, :delete_me_1)
-        Base.delete_binding(LotsOfBindingsToDelete, :delete_me_3)
+        invokelatest() do
+            # Delete some bindings before loading the dependent package
+            Base.delete_binding(LotsOfBindingsToDelete, :delete_me_1)
+            Base.delete_binding(LotsOfBindingsToDelete, :delete_me_3)
+        end
         # Load the dependent package
         @eval using UseTheBindings
         invokelatest() do
@@ -105,13 +134,67 @@ module RebindingPrecompile
             @test UseTheBindings.f_use_bindings2() == 2
             @test_throws UndefVarError UseTheBindings.f_use_bindings3()
             @test UseTheBindings.f_use_bindings4() == 4
+            @test UseTheBindings.f_use_bindings5() == 5
+            @test UseTheBindings.f_use_bindings6() == 6
             # Delete remaining bindings
             Base.delete_binding(LotsOfBindingsToDelete, :delete_me_2)
             Base.delete_binding(LotsOfBindingsToDelete, :delete_me_4)
+            Base.delete_binding(LotsOfBindingsToDelete, :delete_me_5)
+            Base.delete_binding(LotsOfBindingsToDelete, :delete_me_6)
             invokelatest() do
                 @test_throws UndefVarError UseTheBindings.f_use_bindings2()
                 @test_throws UndefVarError UseTheBindings.f_use_bindings4()
+                @test_throws UndefVarError UseTheBindings.f_use_bindings5()
+                @test_throws UndefVarError UseTheBindings.f_use_bindings6()
             end
+        end
+    end
+
+    precompile_test_harness("export change") do load_path
+        write(joinpath(load_path, "Export1.jl"),
+              """
+              module Export1
+                export import_me1
+                const import_me1 = 11
+                export import_me2
+                const import_me2 = 12
+              end
+              """)
+        write(joinpath(load_path, "Export2.jl"),
+              """
+              module Export2
+              end
+              """)
+        write(joinpath(load_path, "ImportTest.jl"),
+              """
+              module ImportTest
+                using Export1, Export2
+                f_use_binding1() = import_me1
+                f_use_binding2() = import_me2
+                @assert f_use_binding1() == 11
+                @assert f_use_binding2() == 12
+
+            end
+              """)
+        @eval using Export1
+        @eval using Export2
+        # Change the import resolution for ImportTest
+        invokelatest() do
+            Core.eval(Export2, :(export import_me1))
+            Core.eval(Export2, :(const import_me1 = 21))
+        end
+        @eval using ImportTest
+        invokelatest() do
+            @test_throws UndefVarError ImportTest.f_use_binding1()
+            @test ImportTest.f_use_binding2() == 12
+        end
+        invokelatest() do
+            Core.eval(Export2, :(export import_me2))
+            Core.eval(Export2, :(const import_me2 = 22))
+        end
+        invokelatest() do
+            # Currently broken
+            # @test_throws UndefVarError ImportTest.f_use_binding2()
         end
     end
 

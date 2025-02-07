@@ -6160,7 +6160,7 @@ end === Int
     swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
 end === Union{}
 
-global swapglobal!_must_throw
+eval(Expr(:const, :swapglobal!_must_throw))
 @newinterp SwapGlobalInterp
 Compiler.InferenceParams(::SwapGlobalInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
 function func_swapglobal!_must_throw(x)

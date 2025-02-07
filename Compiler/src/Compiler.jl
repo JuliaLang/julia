@@ -49,7 +49,7 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstanc
 
 using Base
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
-    BINDING_KIND_GLOBAL, BINDING_KIND_UNDEF_CONST, BINDING_KIND_BACKDATED_CONST,
+    BINDING_KIND_GLOBAL, BINDING_KIND_UNDEF_CONST, BINDING_KIND_BACKDATED_CONST, BINDING_KIND_DECLARED,
     Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
     EffectsOverride, Filter, Generator, IteratorSize, JLOptions, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, SizeUnknown, _NAMEDTUPLE_NAME,

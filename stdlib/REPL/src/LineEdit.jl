@@ -835,7 +835,7 @@ function edit_move_right(m::MIState)
             # Replace word by completion
             prev_pos = position(s)
             push_undo(s)
-            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1])
+            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1].completion)
             refresh_line(state(s))
             return true
         else
@@ -2260,7 +2260,7 @@ function complete_line(s::SearchState, repeats, mod::Module; hint::Bool=false)
     if length(completions) == 1
         prev_pos = position(s)
         push_undo(s)
-        edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1])
+        edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1].completion)
         return true
     end
     return false
