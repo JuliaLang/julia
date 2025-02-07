@@ -4050,3 +4050,34 @@ end
     import ..Base
     using .Base: zero, zero
 end
+
+# PR# 55040 - Macrocall as function sig
+@test :(function @f()() end) == :(function (@f)() end)
+
+function callme end
+macro callmemacro(args...)
+    Expr(:call, esc(:callme), map(esc, args)...)
+end
+function @callmemacro(a::Int)
+    return 1
+end
+@callmemacro(b::Float64) = 2
+function @callmemacro(a::T, b::T) where T <: Int
+    return 3
+end
+function @callmemacro(a::Int, b::Int, c::Int)::Float64
+    return 4
+end
+function @callmemacro(d::String)
+    (a, b, c)
+    # ^ Should not be accidentally parsed as an argument list
+    return 4
+end
+
+@test callme(1) === 1
+@test callme(2.0) === 2
+@test callme(3, 3) === 3
+@test callme(4, 4, 4) === 4.0
+
+# Ambiguous 1-arg anymous vs macrosig
+@test_parseerror "function (@foo(a)) end"

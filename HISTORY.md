@@ -50,6 +50,7 @@ Language changes
 * It is now an error to mark a binding as both `public` and `export`ed ([#53664]).
 * Errors during `getfield` now raise a new `FieldError` exception type instead of the generic
   `ErrorException` ([#54504]).
+* Macros in function-signature-position no longer require parentheses. E.g. `function @main(args) ... end` is now permitted, whereas `function (@main)(args) ... end` was required in prior Julia versions.
 
 Compiler/Runtime improvements
 -----------------------------
