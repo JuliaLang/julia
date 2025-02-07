@@ -2051,7 +2051,7 @@ module _Partials_irpasses
         Partial() = new()
     end
 end
- 
+
 # once `isdefined(p, name)` holds, this information should be kept
 # as a `PartialStruct` over `p` for subsequent constant propagation.
 let src = code_typed1(()) do
