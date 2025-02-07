@@ -136,7 +136,7 @@ struct S6
     S6_f() = new(42)
 
     "some docs"
-    S6() = new(42) # FIXME: call S6_f()
+    S6() = S6_f()
     S6(x) = new(x)
 end
 """) === nothing
@@ -164,7 +164,7 @@ struct S7{S,T}
 
     # Cases where new{...} is called
     S7() = new{Int,Int}(10.0, "y5")
-    S7{UInt8}() = new{UInt8,UInt8}(10.0, "y6") # FIXME: call S7_f()
+    S7{UInt8}() = S7_f()
     S7_f() = new{UInt8,UInt8}(10.0, "y6")
 end
 """) === nothing

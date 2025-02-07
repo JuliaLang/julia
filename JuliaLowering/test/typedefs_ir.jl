@@ -816,7 +816,7 @@ end
 struct X
     x
     f() = new(1)
-    #X() = f() # FIXME: this X() captures `f` (in flisp, as a Box :-/ )
+    X() = f() # this X() captures `f` (in flisp, as a Box :-/ )
     X(x) = new(x)
     X(y,z)::ReallyXIPromise = new(y+z)
     """
@@ -825,7 +825,7 @@ struct X
     X(a,b,c) = new(a)
 end
 #---------------------
-1   (newvar slot₂/f)
+1   (= slot₂/f (call core.Box))
 2   (global TestMod.X)
 3   (const TestMod.X)
 4   (call core.svec)
@@ -855,35 +855,57 @@ end
 28  (call JuliaLowering.eval_closure_type TestMod :#f##0 %₂₆ %₂₇)
 29  TestMod.#f##0
 30  (new %₂₉)
-31  (= slot₂/f %₃₀)
-32  TestMod.#f##0
-33  (call core.svec %₃₂)
-34  (call core.svec)
-35  SourceLocation::3:5
-36  (call core.svec %₃₃ %₃₄ %₃₅)
-37  --- method core.nothing %₃₆
+31  slot₂/f
+32  (call core.setfield! %₃₁ :contents %₃₀)
+33  TestMod.#f##0
+34  (call core.svec %₃₃)
+35  (call core.svec)
+36  SourceLocation::3:5
+37  (call core.svec %₃₄ %₃₅ %₃₆)
+38  --- method core.nothing %₃₇
     slots: [slot₁/#self#(!read)]
     1   TestMod.X
     2   (new %₁ 1)
     3   (return %₂)
-38  TestMod.X
-39  (call core.apply_type core.Type %₃₈)
-40  (call core.svec %₃₉ core.Any)
-41  (call core.svec)
-42  SourceLocation::5:5
-43  (call core.svec %₄₀ %₄₁ %₄₂)
-44  --- method core.nothing %₄₃
+39  TestMod.X
+40  (call core.apply_type core.Type %₃₉)
+41  (call core.svec %₄₀)
+42  (call core.svec)
+43  SourceLocation::4:5
+44  (call core.svec %₄₁ %₄₂ %₄₃)
+45  --- code_info
+    slots: [slot₁/#ctor-self#(!read) slot₂/f(!read)]
+    1   (captured_local 1)
+    2   (call core.isdefined %₁ :contents)
+    3   (gotoifnot %₂ label₅)
+    4   (goto label₇)
+    5   (newvar slot₂/f)
+    6   slot₂/f
+    7   (call core.getfield %₁ :contents)
+    8   (call %₇)
+    9   (return %₈)
+46  slot₂/f
+47  (call core.svec %₄₆)
+48  (call JuliaLowering.replace_captured_locals! %₄₅ %₄₇)
+49  --- method core.nothing %₄₄ %₄₈
+50  TestMod.X
+51  (call core.apply_type core.Type %₅₀)
+52  (call core.svec %₅₁ core.Any)
+53  (call core.svec)
+54  SourceLocation::5:5
+55  (call core.svec %₅₂ %₅₃ %₅₄)
+56  --- method core.nothing %₅₅
     slots: [slot₁/#ctor-self# slot₂/x]
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/x)
     3   (return %₂)
-45  TestMod.X
-46  (call core.apply_type core.Type %₄₅)
-47  (call core.svec %₄₆ core.Any core.Any)
-48  (call core.svec)
-49  SourceLocation::6:5
-50  (call core.svec %₄₇ %₄₈ %₄₉)
-51  --- method core.nothing %₅₀
+57  TestMod.X
+58  (call core.apply_type core.Type %₅₇)
+59  (call core.svec %₅₈ core.Any core.Any)
+60  (call core.svec)
+61  SourceLocation::6:5
+62  (call core.svec %₅₉ %₆₀ %₆₁)
+63  --- method core.nothing %₆₂
     slots: [slot₁/#ctor-self# slot₂/y slot₃/z slot₄/tmp(!read)]
     1   TestMod.ReallyXIPromise
     2   slot₁/#ctor-self#
@@ -899,21 +921,21 @@ end
     12  (= slot₄/tmp (call core.typeassert %₁₁ %₁))
     13  slot₄/tmp
     14  (return %₁₃)
-52  TestMod.X
-53  (call core.apply_type core.Type %₅₂)
-54  (call core.svec %₅₃ core.Any core.Any core.Any)
-55  (call core.svec)
-56  SourceLocation::10:5
-57  (call core.svec %₅₄ %₅₅ %₅₆)
-58  --- method core.nothing %₅₇
+64  TestMod.X
+65  (call core.apply_type core.Type %₆₄)
+66  (call core.svec %₆₅ core.Any core.Any core.Any)
+67  (call core.svec)
+68  SourceLocation::10:5
+69  (call core.svec %₆₆ %₆₇ %₆₈)
+70  --- method core.nothing %₆₉
     slots: [slot₁/#ctor-self# slot₂/a slot₃/b(!read) slot₄/c(!read)]
     1   slot₁/#ctor-self#
     2   (new %₁ slot₂/a)
     3   (return %₂)
-59  TestMod.X
-60  (call core.apply_type core.Type %₅₉)
-61  (call JuliaLowering.bind_docs! %₆₀ "Docs for X constructor\n" %₅₇)
-62  (return core.nothing)
+71  TestMod.X
+72  (call core.apply_type core.Type %₇₁)
+73  (call JuliaLowering.bind_docs! %₇₂ "Docs for X constructor\n" %₆₉)
+74  (return core.nothing)
 
 ########################################
 # User defined inner constructors and helper functions for structs with type params
