@@ -15,6 +15,9 @@ struct ClosureConversionCtx{GraphType} <: AbstractLoweringContext
     closure_bindings::Dict{IdTag,ClosureBindings}
     capture_rewriting::Union{Nothing,ClosureInfo{GraphType},SyntaxList{GraphType}}
     lambda_bindings::LambdaBindings
+    # True if we're in a section of code which preserves top-level sequencing
+    # such that closure types can be emitted inline with other code.
+    is_toplevel_seq_point::Bool
     toplevel_stmts::SyntaxList{GraphType}
     closure_infos::Dict{IdTag,ClosureInfo{GraphType}}
 end
@@ -23,8 +26,8 @@ function ClosureConversionCtx(graph::GraphType, bindings::Bindings,
                               mod::Module, closure_bindings::Dict{IdTag,ClosureBindings},
                               lambda_bindings::LambdaBindings) where {GraphType}
     ClosureConversionCtx{GraphType}(
-        graph, bindings, mod, closure_bindings, nothing, lambda_bindings, SyntaxList(graph),
-        Dict{IdTag,ClosureInfo{GraphType}}())
+        graph, bindings, mod, closure_bindings, nothing,
+        lambda_bindings, false, SyntaxList(graph), Dict{IdTag,ClosureInfo{GraphType}}())
 end
 
 function current_lambda_bindings(ctx::ClosureConversionCtx)
@@ -288,6 +291,28 @@ function is_self_captured(ctx, x)
     !isnothing(lbinfo) && lbinfo.is_captured
 end
 
+# Map the children of `ex` through _convert_closures, lifting any toplevel
+# closure definition statements to occur before the other content of `ex`.
+function map_cl_convert(ctx::ClosureConversionCtx, ex, toplevel_preserving)
+    if ctx.is_toplevel_seq_point && !toplevel_preserving
+        toplevel_stmts = SyntaxList(ctx)
+        ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
+                                    ctx.closure_bindings, ctx.capture_rewriting, ctx.lambda_bindings,
+                                    false, toplevel_stmts, ctx.closure_infos)
+        res = mapchildren(e->_convert_closures(ctx2, e), ctx2, ex)
+        if isempty(toplevel_stmts)
+            res
+        else
+            @ast ctx ex [K"block"
+                toplevel_stmts...
+                res
+            ]
+        end
+    else
+        mapchildren(e->_convert_closures(ctx, e), ctx, ex)
+    end
+end
+
 function _convert_closures(ctx::ClosureConversionCtx, ex)
     k = kind(ex)
     if k == K"BindingId"
@@ -358,7 +383,10 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                     "#$(join(closure_binds.name_stack, "#"))##")
                 closure_type_def, closure_type_ =
                     type_for_closure(ctx, ex, name_str, field_syms, field_is_box)
-                push!(ctx.toplevel_stmts, closure_type_def)
+                if !ctx.is_toplevel_seq_point
+                    push!(ctx.toplevel_stmts, closure_type_def)
+                    closure_type_def = nothing
+                end
                 closure_info = ClosureInfo(closure_type_, field_syms, field_inds)
                 ctx.closure_infos[func_name_id] = closure_info
                 type_params = SyntaxList(ctx)
@@ -375,6 +403,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
                     end
                 end
                 @ast ctx ex [K"block"
+                    closure_type_def
                     closure_type := if isempty(type_params)
                         closure_type_
                     else
@@ -395,7 +424,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             # binding for `func_name` if it doesn't exist.
             @ast ctx ex [K"block"
                 [K"method" func_name]
-                ::K"TOMBSTONE"
+                ::K"TOMBSTONE" # <- function_decl should not be used in value position
             ]
         end
     elseif k == K"function_type"
@@ -410,17 +439,17 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         is_closure = kind(name) == K"BindingId" && lookup_binding(ctx, name).kind === :local
         cap_rewrite = is_closure ? ctx.closure_infos[name.var_id] : nothing
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
-                                    ctx.closure_bindings, cap_rewrite, ctx.lambda_bindings,
-                                    ctx.toplevel_stmts, ctx.closure_infos)
-        body = _convert_closures(ctx2, ex[2])
+                                    ctx.closure_bindings, cap_rewrite, ctx.lambda_bindings, 
+                                    ctx.is_toplevel_seq_point, ctx.toplevel_stmts, ctx.closure_infos)
+        body = map_cl_convert(ctx2, ex[2], false)
         if is_closure
-            # Move methods to top level
-            # FIXME: Probably lots more work to do to make this correct
-            # Especially
-            # * Renumbering SSA vars
-            # * Ensuring that moved locals become slots in the top level thunk
-            push!(ctx.toplevel_stmts, body)
-            @ast ctx ex (::K"TOMBSTONE")
+            if ctx.is_toplevel_seq_point
+                body
+            else
+                # Move methods out to a top-level sequence point.
+                push!(ctx.toplevel_stmts, body)
+                @ast ctx ex (::K"TOMBSTONE")
+            end
         else
             @ast ctx ex [K"block"
                 body
@@ -435,8 +464,8 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
         capture_rewrites = ClosureInfo(ex #=unused=#, field_syms, field_inds)
 
         ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
-                                    ctx.closure_bindings, capture_rewrites, ctx.lambda_bindings,
-                                    ctx.toplevel_stmts, ctx.closure_infos)
+                                    ctx.closure_bindings, capture_rewrites, ctx.lambda_bindings, 
+                                    false, ctx.toplevel_stmts, ctx.closure_infos)
 
         init_closure_args = SyntaxList(ctx)
         for id in field_orig_bindings
@@ -457,17 +486,21 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
             init_closure_args...
         ]
     else
-        mapchildren(e->_convert_closures(ctx, e), ctx, ex)
+        # A small number of kinds are toplevel-preserving in terms of closure
+        # closure definitions will be lifted out into `toplevel_stmts` if they
+        # occur inside `ex`.
+        toplevel_seq_preserving = k == K"if" || k == K"elseif" || k == K"block" ||
+                              k == K"tryfinally" || k == K"trycatchelse"
+        map_cl_convert(ctx, ex, toplevel_seq_preserving)
     end
 end
 
 function closure_convert_lambda(ctx, ex)
     @assert kind(ex) == K"lambda"
-    body_stmts = SyntaxList(ctx)
-    toplevel_stmts = ex.is_toplevel_thunk ? body_stmts : ctx.toplevel_stmts
     lambda_bindings = ex.lambda_bindings
     interpolations = nothing
     if isnothing(ctx.capture_rewriting)
+        # Global method which may capture locals
         interpolations = SyntaxList(ctx)
         cap_rewrite = interpolations
     else
@@ -475,13 +508,14 @@ function closure_convert_lambda(ctx, ex)
     end
     ctx2 = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                 ctx.closure_bindings, cap_rewrite, lambda_bindings,
-                                toplevel_stmts, ctx.closure_infos)
+                                ex.is_toplevel_thunk, ctx.toplevel_stmts, ctx.closure_infos)
     lambda_children = SyntaxList(ctx)
     args = ex[1]
     push!(lambda_children, args)
     push!(lambda_children, ex[2])
 
     # Add box initializations for arguments which are captured by an inner lambda
+    body_stmts = SyntaxList(ctx)
     for arg in children(args)
         kind(arg) != K"Placeholder" || continue
         if is_boxed(ctx, arg)
@@ -491,8 +525,7 @@ function closure_convert_lambda(ctx, ex)
             ])
         end
     end
-    # Convert body. Note that _convert_closures may call `push!(body_stmts, e)`
-    # internally for any expressions `e` which need to be moved to top level.
+    # Convert body.
     input_body_stmts = kind(ex[3]) != K"block" ? ex[3:3] : ex[3][1:end]
     for e in input_body_stmts
         push!(body_stmts, _convert_closures(ctx2, e))
@@ -538,5 +571,8 @@ function convert_closures(ctx::VariableAnalysisContext, ex)
     ctx = ClosureConversionCtx(ctx.graph, ctx.bindings, ctx.mod,
                                ctx.closure_bindings, ex.lambda_bindings)
     ex1 = closure_convert_lambda(ctx, ex)
+    if !isempty(ctx.toplevel_stmts)
+        throw(LoweringError(first(ctx.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))
+    end
     ctx, ex1
 end

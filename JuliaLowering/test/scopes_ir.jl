@@ -74,17 +74,17 @@ end
 2   (call core.svec)
 3   (call JuliaLowering.eval_closure_type TestMod :#f##0 %₁ %₂)
 4   TestMod.#f##0
-5   (call core.svec %₄)
-6   (call core.svec)
-7   SourceLocation::1:5
-8   (call core.svec %₅ %₆ %₇)
-9   --- method core.nothing %₈
+5   (new %₄)
+6   (= slot₁/f %₅)
+7   TestMod.#f##0
+8   (call core.svec %₇)
+9   (call core.svec)
+10  SourceLocation::1:5
+11  (call core.svec %₈ %₉ %₁₀)
+12  --- method core.nothing %₁₁
     slots: [slot₁/#self#(!read)]
     1   TestMod.body
     2   (return %₁)
-10  TestMod.#f##0
-11  (new %₁₀)
-12  (= slot₁/f %₁₁)
 13  (return core.nothing)
 
 ########################################

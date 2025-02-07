@@ -25,7 +25,7 @@ function _ast_test_graph()
     ensure_attributes!(graph,
                        kind=Kind, syntax_flags=UInt16,
                        source=Union{SourceRef,NodeId,Tuple,LineNumberNode},
-                       var_id=Int, value=Any, name_val=String)
+                       var_id=Int, value=Any, name_val=String, is_toplevel_thunk=Bool)
 end
 
 function _source_node(graph, src)

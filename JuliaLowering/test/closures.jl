@@ -1,5 +1,4 @@
-
-@testset "Functions" begin
+@testset "Closures" begin
 
 test_mod = Module()
 
@@ -95,6 +94,21 @@ end
 """)
 @test test_mod.f_global_method_capturing_local() == 2
 @test test_mod.f_global_method_capturing_local() == 3
+
+# Closure with multiple methods depending on local variables
+f_closure_local_var_types = JuliaLowering.include_string(test_mod, """
+let T=Int, S=Float64
+    function f_closure_local_var_types(::T)
+        1
+    end
+    function f_closure_local_var_types(::S)
+        1.0
+    end
+end
+""")
+@test f_closure_local_var_types(2) == 1
+@test f_closure_local_var_types(2.0) == 1.0
+@test_throws MethodError f_closure_local_var_types("hi")
 
 # Anon function syntax
 @test JuliaLowering.include_string(test_mod, """
