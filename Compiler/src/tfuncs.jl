@@ -439,7 +439,7 @@ end
                 end
             elseif isa(arg1, PartialStruct)
                 if !isvarargtype(arg1.fields[end])
-                    if 1 ≤ idx ≤ length(arg1.fields)
+                    if is_field_defined(arg1, idx)
                         return Const(true)
                     end
                 end
@@ -1143,8 +1143,8 @@ end
         sty = unwrap_unionall(s)::DataType
         if isa(name, Const)
             nv = _getfield_fieldindex(sty, name)
-            if isa(nv, Int) && 1 <= nv <= length(s00.fields)
-                return unwrapva(s00.fields[nv])
+            if isa(nv, Int) && is_field_defined(s00, nv)
+                return unwrapva(get_defined_field(s00, nv))
             end
         end
         s00 = s

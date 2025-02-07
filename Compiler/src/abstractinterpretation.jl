@@ -2148,23 +2148,16 @@ function form_partially_defined_struct(@nospecialize(obj), @nospecialize(name))
     isabstracttype(objt) && return nothing
     fldidx = try_compute_fieldidx(objt, name.val)
     fldidx === nothing && return nothing
+    isa(obj, PartialStruct) && return define_field(obj, fldidx, fieldtype(objt0, fldidx))
     nminfld = datatype_min_ninitialized(objt)
-    if ismutabletype(objt)
-        # A mutable struct can have non-contiguous undefined fields, but `PartialStruct` cannot
-        # model such a state. So here `PartialStruct` can be used to represent only the
-        # objects where the field following the minimum initialized fields is also defined.
-        if fldidx ≠ nminfld+1
-            # if it is already represented as a `PartialStruct`, we can add one more
-            # `isdefined`-field information on top of those implied by its `fields`
-            if !(obj isa PartialStruct && fldidx == length(obj.fields)+1)
-                return nothing
-            end
-        end
-    else
-        fldidx > nminfld || return nothing
-    end
-    return PartialStruct(fallback_lattice, objt0, Any[obj isa PartialStruct && i≤length(obj.fields) ?
-        obj.fields[i] : fieldtype(objt0,i) for i = 1:fldidx])
+    fldidx > nminfld || return nothing
+    fields = Any[fieldtype(objt0, i) for i in 1:nminfld]
+    nmaxfld = something(datatype_fieldcount(objt), fldidx)
+    defined = falses(nmaxfld)
+    for i in 1:nminfld defined[i] = true end
+    defined[fldidx] = true
+    push!(fields, fieldtype(objt0, fldidx))
+    return PartialStruct(fallback_lattice, objt0, defined, fields)
 end
 
 function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any}, call::CallMeta)

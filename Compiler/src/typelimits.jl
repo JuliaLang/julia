@@ -326,6 +326,71 @@ function n_initialized(t::Const)
     return something(findfirst(i::Int->!isdefined(t.val,i), 1:nf), nf+1)-1
 end
 
+defined_fields(pstruct::PartialStruct) = pstruct.defined
+
+function defined_field_index(pstruct::PartialStruct, fi)
+    i = 0
+    for iter in 1:fi
+        iter ≤ length(pstruct.defined) && pstruct.defined[iter] && (i += 1)
+    end
+    i
+end
+
+get_defined_field(pstruct::PartialStruct, fi) = pstruct.fields[defined_field_index(pstruct, fi)]
+is_field_defined(pstruct::PartialStruct, fi) = get(pstruct.defined, fi, false)
+
+function define_field(pstruct::PartialStruct, fi, @nospecialize(ft))
+    n = length(pstruct.defined)
+    if fi ≤ n && pstruct.defined[fi]
+        # XXX: merge new information?
+        # `setfield!(..., rand()); setfield!(..., 2.0)`
+        return nothing
+    end
+    defined = falses(max(fi, n))
+    for i in 1:n
+        defined[i] = pstruct.defined[i]
+    end
+    fields = copy(pstruct.fields)
+    defined[fi] = true
+    i = defined_field_index(pstruct, fi)
+    insert!(fields, i + 1, ft)
+    PartialStruct(fallback_lattice, pstruct.typ, defined, fields)
+end
+
+# needed while we are missing functions such as broadcasting or ranges
+
+function _bitvector(nt::NTuple)
+    bv = BitVector(undef, length(nt))
+    i = 1
+    while i ≤ length(nt)
+        bv[i] = nt[i]
+        i += 1
+    end
+    bv
+end
+
+function _count(bv::BitVector)
+    n = 0
+    for val in bv
+        n += val
+    end
+    n
+end
+
+#-
+
+function defined_fields(t::Const)
+    nf = nfields(t.val)
+    _bitvector(ntuple(i -> isdefined(t.val, i), nf))
+end
+
+function defined_fields(x, y)
+    xdef = defined_fields(x)
+    ydef = defined_fields(y)
+    n = min(length(xdef), length(ydef))
+    _bitvector(ntuple(i -> xdef[i] & ydef[i], n))
+end
+
 # A simplified type_more_complex query over the extended lattice
 # (assumes typeb ⊑ typea)
 @nospecializeinfer function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
@@ -333,15 +398,14 @@ end
     typea === typeb && return true
     if typea isa PartialStruct
         aty = widenconst(typea)
-        if typeb isa Const
-            @assert length(typea.fields) ≤ n_initialized(typeb) "typeb ⊑ typea is assumed"
-        elseif typeb isa PartialStruct
-            @assert length(typea.fields) ≤ length(typeb.fields) "typeb ⊑ typea is assumed"
-        else
-            return false
-        end
-        for i = 1:length(typea.fields)
-            ai = unwrapva(typea.fields[i])
+        isa(typeb, Const) || isa(typeb, PartialStruct) || return false
+        @assert all(x & y == x for (x, y) in zip(defined_fields(typea), defined_fields(typeb))) "typeb ⊑ typea is assumed"
+        fi = 0
+        nf = length(typea.defined)
+        for i = 1:nf
+            typea.defined[i] || continue
+            fi += 1
+            ai = unwrapva(typea.fields[fi])
             bi = fieldtype(aty, i)
             is_lattice_equal(𝕃, ai, bi) && continue
             tni = _typename(widenconst(ai))
@@ -588,21 +652,15 @@ end
     aty = widenconst(typea)
     bty = widenconst(typeb)
     if aty === bty && !isType(aty)
-        if typea isa PartialStruct
-            if typeb isa PartialStruct
-                nflds = min(length(typea.fields), length(typeb.fields))
-            else
-                nflds = min(length(typea.fields), n_initialized(typeb::Const))
-            end
-        elseif typeb isa PartialStruct
-            nflds = min(n_initialized(typea::Const), length(typeb.fields))
-        else
-            nflds = min(n_initialized(typea::Const), n_initialized(typeb::Const))
-        end
-        nflds == 0 && return nothing
-        fields = Vector{Any}(undef, nflds)
-        anyrefine = nflds > datatype_min_ninitialized(aty)
-        for i = 1:nflds
+        typea::Union{PartialStruct, Const}
+        typeb::Union{PartialStruct, Const}
+        defined = defined_fields(typea, typeb)
+        ndefined = _count(defined)
+        ndefined == 0 && return nothing
+        fields = []
+        anyrefine = ndefined > datatype_min_ninitialized(aty)
+        for (i, def) in enumerate(defined)
+            def || continue
             ai = getfield_tfunc(𝕃, typea, Const(i))
             bi = getfield_tfunc(𝕃, typeb, Const(i))
             ft = fieldtype(aty, i)
@@ -632,13 +690,19 @@ end
                     tyi = ft
                 end
             end
-            fields[i] = tyi
+            push!(fields, tyi)
             if !anyrefine
                 anyrefine = has_nontrivial_extended_info(𝕃, tyi) || # extended information
                             ⋤(𝕃, tyi, ft) # just a type-level information, but more precise than the declared type
             end
         end
-        anyrefine && return PartialStruct(𝕃, aty, fields)
+        if isa(typea, PartialStruct) && isa(typeb, PartialStruct) &&
+            isvarargtype(typea.fields[end]) && isvarargtype(typeb.fields[end])
+            # XXX: If it may be more precise than `Vararg` (e.g. `Vararg{T}`),
+            # handle that in the main loop above to get a more accurate type.
+            push!(fields, Vararg)
+        end
+        anyrefine && return PartialStruct(𝕃, aty, defined, fields)
     end
     return nothing
 end

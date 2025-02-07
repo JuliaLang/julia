@@ -4783,10 +4783,36 @@ end
     @test a == Tuple
 end
 
+module _Partials_inference
+    mutable struct Partial
+        x::String
+        y::Integer
+        z::Any
+        Partial(args...) = new(args...)
+    end
+
+    struct Partial2
+        x::String
+        y::Integer
+        z::Any
+        Partial2(args...) = new(args...)
+    end
+
+    struct Partial3
+        x::Int
+        y::String
+        z::Float64
+        Partial3(args...) = new(args...)
+    end
+end
+
 let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     ⊔ = Compiler.join(Compiler.fallback_lattice)
     𝕃 = Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
+    form_partially_defined_struct = Compiler.form_partially_defined_struct
+    M = Partials_inference
+    Partial, Partial2, Partial3 = M.Partial, M.Partial2, M.Partial3
 
     @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]))
     @test !(Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
@@ -4807,6 +4833,56 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
     t = t ⊔ Const((false, false, 0))
     @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
+
+    t = PartialStruct(𝕃, Tuple{Int, Int}, Any[Const(1), Int])
+    @test t.defined == [true, true]
+    t = PartialStruct(𝕃, Partial, Any[String, Const(2)])
+    @test t.defined == [true, true, false]
+    @test t ⊑ t && t ⊔ t === t
+
+    t1 = PartialStruct(𝕃, Partial, Any[String, Const(3)])
+    t2 = PartialStruct(𝕃, Partial, Any[Const("x"), Int])
+    @test !(t1 ⊑ t2) && !(t2 ⊑ t1)
+    t3 = t1 ⊔ t2
+    @test t3.fields == Any[String, Int]
+
+    t1 = PartialStruct(𝕃, Partial, BitVector([false, true, true]), Any[Int, Const(3)])
+    @test t1 ⊑ t1 && t1 ⊔ t1 === t1
+    t2 = PartialStruct(𝕃, Partial, BitVector([true, false, true]), Any[Const("x"), Int])
+    t3 = t1 ⊔ t2
+    @test t3.defined == [false, false, true] && t3.fields == Any[Int]
+
+    t1 = PartialStruct(𝕃, Tuple, Any[Int, String, Vararg])
+    @test t1.defined == [true, true]
+    @test t1 ⊑ t1 && t1 ⊔ t1 == t1
+    t2 = PartialStruct(𝕃, Tuple, Any[Int, Any])
+    @test !(t1 ⊑ t2) && !(t2 ⊑ t1)
+    t3 = t1 ⊔ t2
+    @test t3.defined == [true, true] && t3.fields == Any[Int, Any]
+    t2 = PartialStruct(𝕃, Tuple, Any[Int, Any, Vararg])
+    @test t1 ⊑ t2
+    @test t1 ⊔ t2 === t2
+
+    t = PartialStruct(𝕃, Partial, Any[String, Const(2)])
+    @test form_partially_defined_struct(t, Const(:x)) === nothing
+    t′ = form_partially_defined_struct(t, Const(:z))
+    @test t′ == PartialStruct(𝕃, Partial, Any[String, Const(2), Any])
+
+    t = PartialStruct(𝕃, Partial2, Any[String, Const(2)])
+    @test form_partially_defined_struct(t, Const(:x)) === nothing
+    t′ = form_partially_defined_struct(t, Const(:z))
+    @test t′ == PartialStruct(𝕃, Partial2, Any[String, Const(2), Any])
+
+    @test form_partially_defined_struct(Partial3, Const(:x)) === nothing
+    t = form_partially_defined_struct(Partial3, Const(:y))
+    @test t == PartialStruct(𝕃, Partial3, Any[Int, String])
+    t = form_partially_defined_struct(Partial3, Const(:z))
+    @test t == PartialStruct(𝕃, Partial3, BitVector([true, false, true]), Any[Int, Float64])
+    t = form_partially_defined_struct(t, Const(:y))
+    @test t == PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
+    t = PartialStruct(𝕃, Partial3, Any[Int, String])
+    t′ = form_partially_defined_struct(t, Const(:z))
+    @test t′ == PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
 end
 
 # Test that a function-wise `@max_methods` works as expected

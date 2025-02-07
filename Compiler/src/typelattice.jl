@@ -431,9 +431,17 @@ end
                     return false
                 end
             end
-            for i in 1:length(b.fields)
-                af = a.fields[i]
-                bf = b.fields[i]
+            length(a.defined) ≥ length(b.defined) || return false
+            n = length(b.defined)
+            ai = bi = 0
+            for i in 1:n
+                ai += a.defined[i]
+                bi += b.defined[i]
+                !a.defined[i] && b.defined[i] && return false
+                !b.defined[i] && continue
+                # Field is defined for both `a` and `b`
+                af = a.fields[ai]
+                bf = b.fields[bi]
                 if i == length(b.fields)
                     if isvarargtype(af)
                         # If `af` is vararg, so must bf by the <: above
@@ -468,10 +476,11 @@ end
                 n_initialized(a) ≥ length(b.fields) || return false
             end
             nf = nfields(a.val)
+            bi = 0
             for i in 1:nf
-                isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
-                i > length(b.fields) && break # `a` has more information than `b` that is partially initialized struct
-                bfᵢ = b.fields[i]
+                !isdefined(a.val, i) && b.defined[i] && return false
+                !b.defined[i] && continue
+                bfᵢ = b.fields[bi += 1]
                 if i == nf
                     bfᵢ = unwrapva(bfᵢ)
                 end
@@ -541,6 +550,7 @@ end
     if isa(a, PartialStruct)
         isa(b, PartialStruct) || return false
         length(a.fields) == length(b.fields) || return false
+        a.defined == b.defined || return false
         widenconst(a) == widenconst(b) || return false
         a.fields === b.fields && return true # fast path
         for i in 1:length(a.fields)
@@ -751,5 +761,12 @@ function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), fields::Vecto
     for i = 1:length(fields)
         assert_nested_slotwrapper(fields[i])
     end
-    return Core._PartialStruct(typ, fields)
+    return PartialStruct(typ, fields)
+end
+
+function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), defined::BitVector, fields::Vector{Any})
+    for i = 1:length(fields)
+        assert_nested_slotwrapper(fields[i])
+    end
+    return Core._PartialStruct(typ, defined, fields)
 end
