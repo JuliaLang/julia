@@ -143,16 +143,48 @@ struct InliningState{Interp<:AbstractInterpreter}
     edges::Vector{Any}
     world::UInt
     interp::Interp
+    opt_cache::IdDict{MethodInstance,CodeInstance}
 end
-function InliningState(sv::InferenceState, interp::AbstractInterpreter)
-    return InliningState(sv.edges, frame_world(sv), interp)
+function InliningState(sv::InferenceState, interp::AbstractInterpreter,
+                       opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
+    return InliningState(sv.edges, frame_world(sv), interp, opt_cache)
 end
-function InliningState(interp::AbstractInterpreter)
-    return InliningState(Any[], get_inference_world(interp), interp)
+function InliningState(interp::AbstractInterpreter,
+                       opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
+    return InliningState(Any[], get_inference_world(interp), interp, opt_cache)
+end
+
+struct OptimizerCache{CodeCache}
+    wvc::WorldView{CodeCache}
+    owner
+    opt_cache::IdDict{MethodInstance,CodeInstance}
+    function OptimizerCache(
+        wvc::WorldView{CodeCache},
+        owner,
+        opt_cache::IdDict{MethodInstance,CodeInstance}) where CodeCache
+        @nospecialize owner
+        new{CodeCache}(wvc, owner, opt_cache)
+    end
+end
+function get((; wvc, owner, opt_cache)::OptimizerCache, mi::MethodInstance, default)
+    if haskey(opt_cache, mi)
+        codeinst = opt_cache[mi]
+        if (codeinst.min_world ≤ wvc.worlds.min_world &&
+            wvc.worlds.max_world ≤ codeinst.max_world &&
+            codeinst.owner === owner)
+            @assert isdefined(codeinst, :inferred) && codeinst.inferred === nothing
+            return codeinst
+        end
+    end
+    return get(wvc, mi, default)
 end
 
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
-code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.world)
+function code_cache(state::InliningState)
+    cache = WorldView(code_cache(state.interp), state.world)
+    owner = cache_owner(state.interp)
+    return OptimizerCache(cache, owner, state.opt_cache)
+end
 
 mutable struct OptimizationState{Interp<:AbstractInterpreter}
     linfo::MethodInstance
@@ -168,13 +200,15 @@ mutable struct OptimizationState{Interp<:AbstractInterpreter}
     bb_vartables::Vector{Union{Nothing,VarTable}}
     insert_coverage::Bool
 end
-function OptimizationState(sv::InferenceState, interp::AbstractInterpreter)
-    inlining = InliningState(sv, interp)
+function OptimizationState(sv::InferenceState, interp::AbstractInterpreter,
+                           opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
+    inlining = InliningState(sv, interp, opt_cache)
     return OptimizationState(sv.linfo, sv.src, nothing, sv.stmt_info, sv.mod,
                              sv.sptypes, sv.slottypes, inlining, sv.cfg,
                              sv.unreachable, sv.bb_vartables, sv.insert_coverage)
 end
-function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter)
+function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractInterpreter,
+                           opt_cache::IdDict{MethodInstance,CodeInstance}=IdDict{MethodInstance,CodeInstance}())
     # prepare src for running optimization passes if it isn't already
     nssavalues = src.ssavaluetypes
     if nssavalues isa Int
@@ -194,7 +228,7 @@ function OptimizationState(mi::MethodInstance, src::CodeInfo, interp::AbstractIn
     mod = isa(def, Method) ? def.module : def
     # Allow using the global MI cache, but don't track edges.
     # This method is mostly used for unit testing the optimizer
-    inlining = InliningState(interp)
+    inlining = InliningState(interp, opt_cache)
     cfg = compute_basic_blocks(src.code)
     unreachable = BitSet()
     bb_vartables = Union{VarTable,Nothing}[]
@@ -999,7 +1033,7 @@ end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
+    @timeit "optimizer" ir = run_passes_ipo_safe(interp, opt, caller)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
     return finish(interp, opt, ir, caller)
 end
@@ -1019,11 +1053,9 @@ matchpass(optimize_until::Int, stage, _) = optimize_until == stage
 matchpass(optimize_until::String, _, name) = optimize_until == name
 matchpass(::Nothing, _, _) = false
 
-function run_passes_ipo_safe(
-    ci::CodeInfo,
-    sv::OptimizationState,
-    optimize_until = nothing,  # run all passes by default
-)
+function run_passes_ipo_safe(interp::AbstractInterpreter, sv::OptimizationState, result::InferenceResult;
+                             optimize_until = nothing)  # run all passes by default
+    ci = sv.src
     __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
     @pass "convert"   ir = convert_to_ircode(ci, sv)
@@ -1031,20 +1063,62 @@ function run_passes_ipo_safe(
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "compact 1" ir = compact!(ir)
     @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
-    # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
-    if made_changes
-        @pass "compact 3" ir = compact!(ir, true)
-    end
+    @pass "ADCE"      ir, changed = adce_pass!(ir, sv.inlining)
+    @pass "compact 3" changed && (
+                      ir = compact!(ir, true))
+    @pass "optinf"    optinf_worthwhile(ir) && (
+                      ir = optinf!(ir, interp, sv, result))
     if is_asserts()
-        @timeit "verify 3" begin
+        @timeit "verify" begin
             verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp), sv.linfo)
             verify_linetable(ir.debuginfo, length(ir.stmts))
         end
     end
     @label __done__  # used by @pass
+    return ir
+end
+
+# If the optimizer derives new type information (as implied by `IR_FLAG_REFINED`),
+# and this new type information is available for the arguments of a call expression,
+# further optimizations may be possible by performing irinterp on the optimized IR.
+function optinf_worthwhile(ir::IRCode)
+    @assert isempty(ir.new_nodes) "expected compacted IRCode"
+    for i = 1:length(ir.stmts)
+        inst = ir[SSAValue(i)]
+        if has_flag(inst, IR_FLAG_REFINED)
+            if isexpr(inst[:stmt], :call)
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function optinf!(ir::IRCode, interp::AbstractInterpreter, sv::OptimizationState, result::InferenceResult)
+    ci = sv.src
+    spec_info = SpecInfo(ci)
+    world = get_inference_world(interp)
+    min_world, max_world = first(result.valid_worlds), last(result.valid_worlds)
+    irsv = IRInterpretationState(interp, spec_info, ir, result.linfo, ir.argtypes,
+                                 world, min_world, max_world)
+    rt, (nothrow, noub) = ir_abstract_constant_propagation(interp, irsv)
+    if irsv.new_call_inferred
+        ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+        ir = compact!(ir)
+        effects = result.effects
+        if nothrow
+            effects = Effects(effects; nothrow=true)
+        end
+        if noub
+            effects = Effects(effects; noub=ALWAYS_TRUE)
+        end
+        result.effects = effects
+        result.exc_result = refine_exception_type(result.exc_result, effects)
+        ⋤ = strictneqpartialorder(ipo_lattice(interp))
+        result.result = rt ⋤ result.result ? rt : result.result
+    end
     return ir
 end
 

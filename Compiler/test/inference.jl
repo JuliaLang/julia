@@ -3521,7 +3521,7 @@ f31974(n::Int) = f31974(1:n)
 @test code_typed(f31974, Tuple{Int}) !== nothing
 
 f_overly_abstract_complex() = Complex(Ref{Number}(1)[])
-@test Base.return_types(f_overly_abstract_complex, Tuple{}) == [Complex]
+@test Base.infer_return_type(f_overly_abstract_complex, Tuple{}) == Complex{Int}
 
 # Issue 26724
 const IntRange = AbstractUnitRange{<:Integer}
@@ -6182,6 +6182,34 @@ end <: Any
     end
     return out
 end == Union{Float64,DomainError}
+
+# opt inf
+@test Base.infer_return_type((Vector{Any},)) do argtypes
+    box = Core.Box()
+    box.contents = argtypes
+    return length(box.contents)
+end == Int
+@test Base.infer_return_type((Vector{Any},)) do argtypes
+    local argtypesi
+    function cls()
+        argtypesi = @noinline copy(argtypes)
+        return length(argtypesi)
+    end
+    return @inline cls()
+end == Int
+# assert that we cache `rettype_const` correctly if the post-opt inference derives it
+function func_opt_inf()
+    x = Ref{Any}()
+    x[] = true
+    _func_opt_inf(x[], 1.0, 2.0)
+end
+_func_opt_inf(c, a, b) = c ? sin(a) : (@info("fallback"); cos(b))
+@test fully_eliminated(func_opt_inf)
+@test func_opt_inf() == sin(1.0) # generate cache for `func_opt_inf`
+let mi = only(methods(func_opt_inf, ())).specializations
+    ci = mi.cache
+    @test ci.rettype_const == sin(1.0)
+end
 
 # issue #56628
 @test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}} ]) === Tuple{Int, UnitRange{Int}}

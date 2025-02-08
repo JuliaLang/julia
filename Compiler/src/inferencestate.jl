@@ -825,6 +825,7 @@ mutable struct IRInterpretationState
     callstack #::Vector{AbsIntState}
     frameid::Int
     parentid::Int
+    new_call_inferred::Bool
 
     function IRInterpretationState(interp::AbstractInterpreter,
         spec_info::SpecInfo, ir::IRCode, mi::MethodInstance, argtypes::Vector{Any},
@@ -850,7 +851,7 @@ mutable struct IRInterpretationState
         edges = Any[]
         callstack = AbsIntState[]
         return new(spec_info, ir, mi, WorldWithRange(world, valid_worlds), curridx, argtypes_refined, ir.sptypes, tpdum,
-                ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0)
+                ssa_refined, lazyreachability, tasks, edges, callstack, 0, 0, #=new_call_inferred=#false)
     end
 end
 
