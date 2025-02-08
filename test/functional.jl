@@ -348,6 +348,7 @@ end
             @test f() == 'a'
         end
         @testset "Dummy-proofing" begin
+            @test_throws TypeError Fix{Int}
             @test_throws TypeError Fix{1, <:Any, <:Any, Union{}}
             @test_throws Exception Fix{-1}
             @test_throws ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, but got 0") Fix{0}(>, 1)
