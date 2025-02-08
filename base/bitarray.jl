@@ -842,13 +842,13 @@ function _resizefirst_int!(B::BitVector, n::Int)
     end
     Bc = B.chunks
     k0 = length(Bc)
-    k1 = Base.num_bit_chunks(n)
+    k1 = num_bit_chunks(n)
     if k1 > k0
-        Base._growend!(Bc, k1 - k0)
+        _growend!(Bc, k1 - k0)
         Bc[end] = UInt64(0)
     end
     B.len = n
-    Base.copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
+    copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
     return B
 end
 
