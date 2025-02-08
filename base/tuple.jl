@@ -581,7 +581,7 @@ function hash(tup::Tuple, h::UInt)
     tuph = map(x -> hash(x,h), tup)
     out = xor(tuplehash_seed, h)
     for g = tuph
-        out -= 3g
+        out = 3*out - g
     end
     return out
 end
