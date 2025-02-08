@@ -831,6 +831,27 @@ function _resize_int!(B::BitVector, n::Int)
     return B
 end
 
+resizefirst!(B::BitVector, n::Integer) = _resizefirst_int!(B, Int(n))
+function _resizefirst_int!(B::BitVector, n::Int)
+    n0 = length(B)
+    n == n0 && return B
+    n >= 0 || throw(BoundsError(B, n))
+    if n < n0
+        deleteat!(B, 1:n0-n)
+        return B
+    end
+    Bc = B.chunks
+    k0 = length(Bc)
+    k1 = Base.num_bit_chunks(n)
+    if k1 > k0
+        Base._growend!(Bc, k1 - k0)
+        Bc[end] = UInt64(0)
+    end
+    B.len = n
+    Base.copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
+    return B
+end
+
 function pop!(B::BitVector)
     isempty(B) && throw(ArgumentError("argument must not be empty"))
     item = B[end]
