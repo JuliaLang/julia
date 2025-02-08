@@ -348,9 +348,11 @@ end
             @test f() == 'a'
         end
         @testset "Dummy-proofing" begin
+            @test_throws TypeError Fix{1, <:Any, <:Any, Union{}}
+            @test_throws Exception Fix{-1}
             @test_throws ArgumentError("expected `N` in `Fix{N}` to be integer greater than 0, but got 0") Fix{0}(>, 1)
-            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int`, but got `0.5::Float64`") Fix{0.5}(>, 1)
-            @test_throws ArgumentError("expected type parameter in `Fix` to be `Int`, but got `1::UInt64`") Fix{UInt64(1)}(>, 1)
+            @test_throws TypeError Fix{0.5}
+            @test_throws TypeError Fix{UInt64(1)}
         end
         @testset "Specialize to structs not in `Base`" begin
             struct MyStruct
