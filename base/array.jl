@@ -1486,6 +1486,50 @@ function resize!(a::Vector, nl::Integer)
 end
 
 """
+    resizefirst!(a::Vector, n::Integer) -> Vector
+
+Resize a to contain n elements, inserting the new elements at the start of the
+collection. If n is smaller than the current collection length, the last n
+elements will be retained. If n is larger, the new elements are not guaranteed
+to be initialized.
+
+# Examples
+```jldoctest
+julia> resizefirst!([6, 5, 4, 3, 2, 1], 3)
+3-element Vector{Int64}:
+ 3
+ 2
+ 1
+
+julia> a = resizefirst!([6, 5, 4, 3, 2, 1], 8);
+
+julia> length(a)
+8
+
+julia> a[3:8]
+6-element Vector{Int64}:
+ 6
+ 5
+ 4
+ 3
+ 2
+ 1
+```
+"""
+function resizefirst!(a::Vector, nl::Integer)
+    l = length(a)
+    if nl > l
+        Base._growbeg!(a, nl-l)
+    elseif nl != l
+        if nl < 0
+            _throw_argerror("new length must be ≥ 0")
+        end
+        Base._deletebeg!(a, l-nl)
+    end
+    return a
+end
+
+"""
     sizehint!(s, n; first::Bool=false, shrink::Bool=true) -> s
 
 Suggest that collection `s` reserve capacity for at least `n` elements. That is, if
