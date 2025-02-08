@@ -580,7 +580,7 @@ function hash(tup::Tuple, h::UInt)
     @_terminates_locally_meta
     f = Fix2(hash, h)
     tuph = map(f, tup)
-    out = hash(tuplehash_seed, h)
+    out = tuplehash_seed - 3h
     for g = tuph
         out -= 3g
     end
