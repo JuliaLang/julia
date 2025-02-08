@@ -466,9 +466,6 @@ Constant *literal_pointer_val_slot(jl_codegen_params_t &params, Module *M, jl_va
         if (addr->smalltag) {
             // some common builtin datatypes have a special pool for accessing them by smalltag id
             Constant *tag = ConstantInt::get(getInt32Ty(M->getContext()), addr->smalltag << 4);
-            #ifdef __clang_analyzer__
-            [[clang::suppress]] // Workaround https://github.com/llvm/llvm-project/issues/119415
-            #endif
             Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(M->getContext()), prepare_global_in(M, jl_small_typeof_var), tag);
             if (smallp->getType()->getPointerAddressSpace() != 0)
                 smallp = ConstantExpr::getAddrSpaceCast(smallp, getPointerTy(M->getContext()));
