@@ -186,7 +186,7 @@ timesofar("promotions")
 
     @test_throws BoundsError size(trues(5), 0)
 
-    @testset "reshape and resize!" begin
+    @testset "reshape, resize! and resizefirst!" begin
         b1 = bitrand(n1, n2)
         @check_bit_operation reshape(b1, (n2,n1)) BitMatrix
         @test_throws DimensionMismatch reshape(b1, (1,n1))
@@ -204,6 +204,17 @@ timesofar("promotions")
         @check_bit_operation resize!(b1, v1 ÷ 2) BitVector
         gr(b) = (resize!(b, v1)[(v1÷2):end] .= 1; b)
         @check_bit_operation gr(b1) BitVector
+
+        b1 = bitrand(v1)
+        @test_throws BoundsError resizefirst!(b1, -1)
+        @check_bit_operation resizefirst!(b1, v1 ÷ 2) BitVector
+        gr(b) = (resizefirst!(b, v1)[1:(v1÷2)] .= 1; b)
+        @check_bit_operation gr(b1) BitVector
+
+        b1 = bitrand(v1)
+        b2 = copy(b1)
+        @test resizefirst!(b1, v1+100)[end-v1+1:end] == b2
+        @test resize!(b1, v1+200)[end-100-v1+1:end-100] == b2
     end
 
     @testset "sizeof (issue #7515)" begin
