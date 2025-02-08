@@ -578,8 +578,7 @@ end
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
 function hash(tup::Tuple, h::UInt)
     @_terminates_locally_meta
-    f = Fix2(hash, h)
-    tuph = map(f, tup)
+    tuph = map(x -> hash(x,h), tup)
     out = xor(tuplehash_seed, h)
     for g = tuph
         out -= 3g
