@@ -1519,12 +1519,12 @@ julia> a[3:8]
 function resizefirst!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
-        Base._growbeg!(a, nl-l)
+        _growbeg!(a, nl-l)
     elseif nl != l
         if nl < 0
             _throw_argerror("new length must be ≥ 0")
         end
-        Base._deletebeg!(a, l-nl)
+        _deletebeg!(a, l-nl)
     end
     return a
 end
