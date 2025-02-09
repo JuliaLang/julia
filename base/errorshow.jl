@@ -299,13 +299,17 @@ function showerror(io::IO, ex::MethodError)
         if is_arg_types
             print(io, "no method matching invoke ")
         else
-            print(io, "no method matching ")
+            print(io, "no method")
         end
         buf = IOBuffer()
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
         show_signature_function(iob, Core.Typeof(f))
+        if occursin(r"var\"#\d+#\d+\"", string(ft))
+            print(io, " of the anonymous function ", ft)
+        end
         show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
-        str = String(take!(buf))
+        str = String(take!(buf)) # function name + arguments
+        print(io, " matching ")
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
@@ -372,6 +376,10 @@ function showerror(io::IO, ex::MethodError)
         show_method_candidates(io, ex, kwargs)
     catch ex
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
+    end
+    # if the function has only on method, print a Tip about the number of arguments to be used
+    if f isa Function && length(methods(f)) == 1
+        print(io, "\n\nTip: the function `$f` was called with ", length(arg_types_param), " arguments, but has only one method accepting ", length(methods(f)[1].sig.parameters)-1, " argument.\n")
     end
     nothing
 end
