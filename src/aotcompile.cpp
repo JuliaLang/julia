@@ -2351,6 +2351,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
     // emit this function into a new llvm module
     dump->F = nullptr;
     dump->TSM = nullptr;
+    jl_value_t *compiler = params.compiler;
     if (src && jl_is_code_info(src)) {
         auto ctx = jl_ExecutionEngine->makeContext();
         orc::ThreadSafeModule m = jl_create_ts_module(name_from_method_instance(mi), ctx);
@@ -2380,7 +2381,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                 jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
                 if (mi == nullptr)
                     continue;
-                jl_code_instance_t *codeinst = jl_type_infer(mi, latestworld, SOURCE_MODE_NOT_REQUIRED);
+                jl_code_instance_t *codeinst = jl_type_infer(compiler, mi, latestworld, SOURCE_MODE_NOT_REQUIRED);
                 if (codeinst == nullptr || compiled_functions.count(codeinst))
                     continue;
                 orc::ThreadSafeModule decl_m = jl_create_ts_module("extern", ctx);

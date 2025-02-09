@@ -3290,7 +3290,7 @@ static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
     jl_value_t *codeinst = jl_rettype_inferred(compiler, mi, world, world);
     if (codeinst == jl_nothing) {
         (void)jl_type_infer(compiler, mi, world, SOURCE_MODE_NOT_REQUIRED);
-        codeinst = jl_rettype_inferred_native(compiler, mi, world, world);
+        codeinst = jl_rettype_inferred(compiler, mi, world, world);
     }
     if (codeinst != jl_nothing) {
         if (jl_atomic_load_relaxed(&((jl_code_instance_t*)codeinst)->invoke) == jl_fptr_const_return)
