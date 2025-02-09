@@ -576,14 +576,11 @@ function _eq(t1::Any32, t2::Any32)
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
+const tuplehash_seed_final = UInt === UInt64 ? 0xf1bcd1f144b8c946 : 0x3c87fd81
 function hash(tup::Tuple, h::UInt)
-    @_terminates_locally_meta
-    tuph = map(x -> hash(x,h), tup)
-    out = xor(tuplehash_seed, h)
-    for g = tuph
-        out = 3*out - g
-    end
-    return out
+    init = xor(h, tuplehash_seed)
+    a = foldr(hash, tup; init)
+    xor(a, tuplehash_seed_final)
 end
 
 <(::Tuple{}, ::Tuple{}) = false
