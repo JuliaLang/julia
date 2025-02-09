@@ -62,6 +62,11 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_eval_global_expr(module, e, 1);
         return jl_nothing;
     }
+    if (e->head == jl_globaldecl_sym && binding_effects) {
+        assert(jl_expr_nargs(e) == 1);
+        jl_declare_global(module, jl_exprarg(e, 0), NULL, 1);
+        return jl_nothing;
+    }
     // These exprs are not fully linearized
     if (e->head == jl_assign_sym) {
         jl_exprargset(e, 1, resolve_definition_effects(jl_exprarg(e, 1), module, sparam_vals, binding_edge, binding_effects, eager_resolve));
@@ -180,26 +185,24 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_value_t *fe = jl_exprarg(e, 0);
         jl_module_t *fe_mod = jl_globalref_mod(fe);
         jl_sym_t *fe_sym = jl_globalref_name(fe);
-        if (jl_binding_resolved_p(fe_mod, fe_sym)) {
-            // look at some known called functions
-            jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
-            if (jl_get_binding_value_if_const(b) == jl_builtin_tuple) {
-                size_t j;
-                for (j = 1; j < nargs; j++) {
-                    if (!jl_is_quotenode(jl_exprarg(e, j)))
-                        break;
+        // look at some known called functions
+        jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
+        if (jl_get_binding_value_if_const(b) == jl_builtin_tuple) {
+            size_t j;
+            for (j = 1; j < nargs; j++) {
+                if (!jl_is_quotenode(jl_exprarg(e, j)))
+                    break;
+            }
+            if (j == nargs) {
+                jl_value_t *val = NULL;
+                JL_TRY {
+                    val = jl_interpret_toplevel_expr_in(module, (jl_value_t*)e, NULL, sparam_vals);
                 }
-                if (j == nargs) {
-                    jl_value_t *val = NULL;
-                    JL_TRY {
-                        val = jl_interpret_toplevel_expr_in(module, (jl_value_t*)e, NULL, sparam_vals);
-                    }
-                    JL_CATCH {
-                        val = NULL; // To make the analyzer happy see #define JL_TRY
-                    }
-                    if (val)
-                        return val;
+                JL_CATCH {
+                    val = NULL; // To make the analyzer happy see #define JL_TRY
                 }
+                if (val)
+                    return val;
             }
         }
     }
@@ -1052,9 +1055,11 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, 
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
-    jl_ptr_kind_union_t pku = jl_walk_binding_inplace(&b, &bpart, new_world);
+    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     jl_value_t *gf = NULL;
-    if (!jl_bkind_is_some_guard(decode_restriction_kind(pku))) {
+    enum jl_partition_kind kind = decode_restriction_kind(pku);
+    if (!jl_bkind_is_some_guard(kind) && kind != BINDING_KIND_DECLARED && kind != BINDING_KIND_IMPLICIT) {
+        pku = jl_walk_binding_inplace(&b, &bpart, new_world);
         if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
             gf = decode_restriction_value(pku);
             JL_GC_PROMISE_ROOTED(gf);

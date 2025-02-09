@@ -119,7 +119,7 @@ end
 # issue #38819
 
 module NoDocStrings end
-@test meta(NoDocStrings) === getfield(NoDocStrings, Base.Docs.META)
+@test meta(NoDocStrings) === invokelatest(getfield, NoDocStrings, Base.Docs.META)
 
 # General tests for docstrings.
 

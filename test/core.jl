@@ -63,20 +63,7 @@ mutable struct ABCDconst
     c
     const d::Union{Int,Nothing}
 end
-@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
-    mutable struct ABCDconst
-        const a
-        const b::Int
-        c
-        d::Union{Int,Nothing}
-    end)
-@test_throws(ErrorException("invalid redefinition of constant $(nameof(curmod)).ABCDconst"),
-    mutable struct ABCDconst
-        a
-        b::Int
-        c
-        d::Union{Int,Nothing}
-    end)
+
 let abcd = ABCDconst(1, 2, 3, 4)
     @test (1, 2, 3, 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
     @test_throws(ErrorException("setfield!: const field .a of type ABCDconst cannot be changed"),
@@ -113,6 +100,21 @@ let abcd = ABCDconst(1, 2, 3, 4)
         abcd.d = nothing)
     @test (1, 2, "not constant", 4) === (abcd.a, abcd.b, abcd.c, abcd.d)
 end
+const orig_ABCDconst = ABCDconst
+mutable struct ABCDconst
+    const a
+    const b::Int
+    c
+    d::Union{Int,Nothing}
+end
+@test ABCDconst !== orig_ABCDconst
+mutable struct ABCDconst
+    a
+    b::Int
+    c
+    d::Union{Int,Nothing}
+end
+@test ABCDconst !== orig_ABCDconst
 # Issue #52686
 struct A52686{T} end
 struct B52686{T, S}
@@ -1210,15 +1212,11 @@ let A = [1]
     @test x == 1
 end
 
-# Make sure that `Module` is not resolved to `Core.Module` during sysimg generation
-# so that users can define their own binding named `Module` in Main.
-@test success(`$(Base.julia_cmd()) -e '@assert !Base.isbindingresolved(Main, :Module)'`)
-
 # Module() constructor
 @test names(Module(:anonymous), all = true, imported = true) == [:anonymous]
 @test names(Module(:anonymous, false), all = true, imported = true) == [:anonymous]
-@test Module(:anonymous, false, true).Core == Core
-@test_throws UndefVarError Module(:anonymous, false, false).Core
+@test invokelatest(getfield, Module(:anonymous, false, true), :Core) == Core
+@test_throws UndefVarError invokelatest(getfield, Module(:anonymous, false, false), :Core)
 
 # exception from __init__()
 let didthrow =
@@ -3885,11 +3883,13 @@ end
 struct NInitializedTestType
     a
 end
+const orig_NInitializedTestType = NInitializedTestType
 
-@test_throws ErrorException @eval struct NInitializedTestType
+struct NInitializedTestType
     a
     NInitializedTestType() = new()
 end
+@test orig_NInitializedTestType !== NInitializedTestType
 
 # issue #12394
 mutable struct Empty12394 end
@@ -5578,76 +5578,94 @@ struct A16424
     x
     y
 end
+const orig_A16424 = A16424
 
 struct A16424  # allowed
     x
     y
 end
+@test A16424 === orig_A16424
 
-@test_throws ErrorException @eval struct A16424
+struct A16424
     x
     z
 end
+@test A16424 !== orig_A16424
+const A16424 = orig_A16424
 
-@test_throws ErrorException @eval struct A16424
+struct A16424
     x
     y::Real
 end
+@test A16424 !== orig_A16424
+const A16424 = orig_A16424
 
 struct B16424{T}
     a
 end
+const orig_B16424 = B16424
 
 struct B16424{T}
     a
 end
+@test B16424 === orig_B16424
 
-@test_throws ErrorException @eval struct B16424{S}
+struct B16424{S}
     a
 end
+@test B16424 !== orig_B16424
 
 struct C16424{T,S}
     x::T
     y::S
 end
+const orig_C16424 = C16424
 
 struct C16424{T,S}
     x::T
     y::S
 end
+@test C16424 === orig_C16424
 
-@test_throws ErrorException @eval struct C16424{T,S}
+struct C16424{T,S}
     x::S
     y::T
 end
+@test C16424 !== orig_C16424
 
 struct D16424{T<:Real,S<:T}
     x::Vector{S}
     y::Vector{T}
 end
+const orig_D16424 = D16424
 
 struct D16424{T<:Real,S<:T}
     x::Vector{S}
     y::Vector{T}
 end
+@test D16424 === orig_D16424
 
-@test_throws ErrorException struct D16424{T<:Real,S<:Real}
+struct D16424{T<:Real,S<:Real}
     x::Vector{S}
     y::Vector{T}
 end
+@test D16424 !== orig_D16424
 
 # issue #20999, allow more type redefinitions
 struct T20999
     x::Array{T} where T<:Real
 end
+const orig_T20999 = T20999
 
 struct T20999
     x::Array{T} where T<:Real
 end
+@test T20999 === orig_T20999
 
-@test_throws ErrorException struct T20999
+struct T20999
     x::Array{T} where T<:Integer
 end
+@test T20999 !== orig_T20999
 
 # issue #54757, type redefinitions with recursive reference in supertype
 struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
@@ -5655,20 +5673,40 @@ struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Unio
     y::Union{A,T54757{A,N}}
     z::T54757{A}
 end
+const orig_T54757 = T54757
 
 struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A,N}},Vararg{Y,N}} where {X,Y<:T54757}, N}
     x::A
     y::Union{A,T54757{A,N}}
     z::T54757{A}
 end
+# The type is identical - either answer is semantically allowed here
+# However, knowing that the type is identical would require reasoning about the purity of the
+# field definitions exprs, which we do not do. Thus, simply check that this doesn't error and
+# then reset to the original for the next test.
+const T54757 = orig_T54757
 
-@test_throws ErrorException struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A}},Vararg{Y,N}} where {X,Y<:T54757}, N}
+struct T54757{A>:Int,N} <: AbstractArray{Tuple{X,Tuple{Vararg},Union{T54757{Union{X,Integer}},T54757{A}},Vararg{Y,N}} where {X,Y<:T54757}, N}
     x::A
     y::Union{A,T54757{A,N}}
     z::T54757{A}
 end
+@test orig_T54757 !== T54757
 
+# Type redefinition with multiple tvars and reference in the field types
+struct DictLike{K, V} <: AbstractDict{K, V}
+    self::DictLike{K, V}
+end
+const orig_DictLike = DictLike
 
+struct DictLike{K, V} <: AbstractDict{K, V}
+    self::DictLike{K, V}
+end
+# It is semantically allowable to re-use the old type, but we need to
+# make sure in either case that the field type matches the definition
+@test fieldtype(DictLike, 1) === DictLike
+
+# initialization of Vector{Core.TypeofBottom}
 let a = Vector{Core.TypeofBottom}(undef, 2)
     @test a[1] == Union{}
     @test a == [Union{}, Union{}]
@@ -7676,29 +7714,35 @@ struct S36104{K,V}   # check that redefining it works
     S36104{K,V}() where {K,V} = new()
     S36104{K,V}(x::S36104) where {K,V} = new(x)
 end
-# with a gensymmed unionall
-struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+
+# with a gensymmed unionall (#39778)
+struct Symmetric39778{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
-struct Symmetric{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
+const orig_Symmetric39778 = Symmetric39778
+struct Symmetric39778{T,S<:AbstractMatrix{<:T}} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
-@test_throws ErrorException begin
-    struct Symmetric{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
-        data::S
-        uplo::Char
-    end
+@test Symmetric39778 === orig_Symmetric39778
+struct Symmetric39778{T,S<:AbstractMatrix{T}} <: AbstractMatrix{T}
+    data::S
+    uplo::Char
 end
-end
+@test Symmetric39778 !== orig_Symmetric39778
+
+end # module M36104
+
 @test fieldtypes(M36104.T36104) == (Vector{M36104.T36104},)
 @test_throws ErrorException("expected") @eval(struct X36104; x::error("expected"); end)
 @test !@isdefined(X36104)
 struct X36104; x::Int; end
 @test fieldtypes(X36104) == (Int,)
 primitive type P36104 8 end
-@test_throws ErrorException("invalid redefinition of constant $(nameof(curmod)).P36104") @eval(primitive type P36104 16 end)
+const orig_P36104 = P36104
+primitive type P36104 16 end
+@test P36104 !== orig_P36104
 
 # Malformed invoke
 f_bad_invoke(x::Int) = invoke(x, (Any,), x)

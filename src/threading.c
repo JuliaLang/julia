@@ -336,7 +336,17 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #endif
     if (jl_get_pgcstack() != NULL)
         abort();
-    jl_ptls_t ptls = (jl_ptls_t)calloc(1, sizeof(jl_tls_states_t));
+    jl_ptls_t ptls;
+#if defined(_OS_WINDOWS_)
+    ptls = _aligned_malloc(sizeof(jl_tls_states_t), alignof(jl_tls_states_t));
+    if (ptls == NULL)
+        abort();
+#else
+    if (posix_memalign((void**)&ptls, alignof(jl_tls_states_t), sizeof(jl_tls_states_t)))
+        abort();
+#endif
+    memset(ptls, 0, sizeof(jl_tls_states_t));
+
 #ifndef _OS_WINDOWS_
     pthread_setspecific(jl_task_exit_key, (void*)ptls);
 #endif

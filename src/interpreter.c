@@ -634,9 +634,12 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     s->locals[jl_source_nslots(s->src) + s->ip] = res;
                 }
                 else if (head == jl_globaldecl_sym) {
-                    jl_value_t *val = eval_value(jl_exprarg(stmt, 1), s);
-                    s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
-                    jl_declare_global(s->module, jl_exprarg(stmt, 0), val);
+                    jl_value_t *val = NULL;
+                    if (jl_expr_nargs(stmt) >= 2) {
+                        val = eval_value(jl_exprarg(stmt, 1), s);
+                        s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
+                    }
+                    jl_declare_global(s->module, jl_exprarg(stmt, 0), val, 1);
                     s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
                 }
                 else if (head == jl_const_sym) {
