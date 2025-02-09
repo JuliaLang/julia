@@ -1292,16 +1292,4 @@ julia> String(Iterators.map(c -> c+1, "Hello, world"))
 julia> String(Iterators.take("Hello, world", 5))
 "Hello"  # Takes the first 5 characters of the string and converts it to a string.
 """
-String(x) = _string_iterator(x, IteratorSize(x))
-_string_iterator(x, ::IsInfinite) = throw(MethodError(String, (x,)))
-_string_iterator(x, ::IteratorSize) = begin
-    try
-        collected = collect(Char, x)
-        if ndims(collected) != 1
-            throw(MethodError(String, (x,)))
-        end
-        return String(collected)
-    catch e
-        throw(MethodError(String, (x,)))
-    end
-end
+String(x) = sprint(io -> foreach(c -> write(io, Char(c)::Char), x))
