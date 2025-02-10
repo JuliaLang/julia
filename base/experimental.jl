@@ -660,7 +660,7 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
             # don't do anything here.
             if !waiter_left[] && ct.queue === c.waitq
                 dosched = true
-                Base.list_deletefirst!(c.waitq::IntrusiveLinkedList{Task}, ct)
+                Base.list_deletefirst!(c.waitq, ct)
             end
             unlock(c.lock)
             # send the waiting task a timeout

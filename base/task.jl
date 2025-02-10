@@ -495,7 +495,7 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
         for i in findall(remaining_mask)
             waiter = waiter_tasks[i]
             donenotify = tasks[i].donenotify::ThreadSynchronizer
-            @lock donenotify Base.list_deletefirst!(donenotify.waitq::IntrusiveLinkedList{Task}, waiter)
+            @lock donenotify Base.list_deletefirst!(donenotify.waitq, waiter)
         end
         done_tasks = tasks[done_mask]
         if throwexc && exception
