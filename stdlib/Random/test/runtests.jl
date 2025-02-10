@@ -1251,7 +1251,9 @@ end
 end
 
 @testset "Float32 RNG typo" begin
-    @test length(unique(rand(Float32, 14))) > 10
+    for T in (Float16, Float32, Float64)
+        @test length(unique(rand(T, 14))) > 10
+    end
 end
 
 @testset "Docstrings" begin
