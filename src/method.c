@@ -1050,10 +1050,11 @@ JL_DLLEXPORT void jl_check_gf(jl_value_t *gf, jl_sym_t *name)
         jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
 }
 
-JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, jl_sym_t *name)
+JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
 {
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    jl_binding_t *b = jl_get_binding_for_method_def(mod, name, new_world);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     jl_value_t *gf = NULL;
