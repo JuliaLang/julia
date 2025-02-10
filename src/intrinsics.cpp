@@ -790,7 +790,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
-            Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            Value *thePtr = emit_unbox(ctx, PointerType::getUnqual(ptrty->getContext()), e, e.typ);
             thePtr = ctx.builder.CreateInBoundsGEP(ptrty, thePtr, im1);
             auto load = typed_load(ctx, thePtr, nullptr, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, AtomicOrdering::NotAtomic, false, align_nb);
             setName(ctx.emission_context, load.V, "pointerref");
@@ -982,7 +982,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t>
         Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
-            Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            Value *thePtr = emit_unbox(ctx, PointerType::getUnqual(ptrty->getContext()), e, e.typ);
             auto load = typed_load(ctx, thePtr, nullptr, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, llvm_order, false, nb);
             setName(ctx.emission_context, load.V, "atomic_pointerref");
             return load;
@@ -1076,7 +1076,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
         assert(!isboxed);
         Value *thePtr;
         if (!type_is_ghost(ptrty))
-            thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            thePtr = emit_unbox(ctx, PointerType::getUnqual(ptrty->getContext()), e, e.typ);
         else
             thePtr = nullptr; // could use any value here, since typed_store will not use it
         jl_cgval_t ret = typed_store(ctx, thePtr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,

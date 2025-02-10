@@ -884,11 +884,11 @@ static void emit_table(Module &M, Type *T_size, ArrayRef<Constant*> vars, String
     uint32_t nvars = vars.size();
     SmallVector<Constant*,0> castvars(nvars);
     for (size_t i = 0; i < nvars; i++)
-        castvars[i] = ConstantExpr::getBitCast(vars[i], T_size->getPointerTo());
+        castvars[i] = ConstantExpr::getBitCast(vars[i], PointerType::getUnqual(T_size->getContext()));
     auto gv = new GlobalVariable(M, T_size, true, GlobalValue::ExternalLinkage, ConstantInt::get(T_size, nvars), name + "_count" + suffix);
     gv->setVisibility(GlobalValue::HiddenVisibility);
     gv->setDSOLocal(true);
-    ArrayType *vars_type = ArrayType::get(T_size->getPointerTo(), nvars);
+    ArrayType *vars_type = ArrayType::get(PointerType::getUnqual(T_size->getContext()), nvars);
     gv = new GlobalVariable(M, vars_type, false,
                             GlobalVariable::ExternalLinkage,
                             ConstantArray::get(vars_type, castvars),
@@ -962,7 +962,7 @@ void CloneCtx::emit_metadata()
     {
         SmallVector<uint32_t, 0> idxs;
         SmallVector<Constant*, 0> fptrs;
-        Type *Tfptr = T_size->getPointerTo();
+        Type *Tfptr = PointerType::getUnqual(T_size->getContext());
         for (uint32_t i = 0; i < ntargets; i++) {
             auto tgt = linearized[i];
             auto &spec = specs[i];
