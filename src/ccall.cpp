@@ -2115,7 +2115,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     if (res == Intrinsic::MatchIntrinsicTypes_Match) {
                         bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
                         if (matchvararg) {
+#if JL_LLVM_VERSION >= 200000
+                            Function *intrinsic = Intrinsic::getOrInsertDeclaration(jl_Module, ID, overloadTys);
+#else
                             Function *intrinsic = Intrinsic::getDeclaration(jl_Module, ID, overloadTys);
+#endif
                             assert(intrinsic->getFunctionType() == functype);
                             if (intrinsic->getName() == f_name || Intrinsic::getBaseName(ID) == f_name)
                                 llvmf = intrinsic;
