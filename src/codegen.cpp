@@ -83,20 +83,6 @@
 
 using namespace llvm;
 
-static bool jl_fpo_disabled(const Triple &TT) {
-#ifdef JL_DISABLE_FPO
-    return true;
-#endif
-#ifdef _COMPILER_MSAN_ENABLED_
-    // MSAN doesn't support FPO
-    return true;
-#endif
-    if (TT.isOSLinux() || TT.isOSWindows() || TT.isOSFreeBSD() || TT.isOSOpenBSD()) {
-        return true;
-    }
-    return false;
-}
-
 static bool jl_floattemp_var_needed(const Triple &TT) {
 #ifdef JL_NEED_FLOATTEMP_VAR
     return true;
@@ -2970,8 +2956,7 @@ void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
         attr.addUWTableAttr(llvm::UWTableKind::Default); // force NeedsWinEH
     }
-    if (jl_fpo_disabled(TT))
-        attr.addAttribute("frame-pointer", "all");
+    attr.addAttribute("frame-pointer", "all");
     if (!TT.isOSWindows()) {
 #if !defined(_COMPILER_ASAN_ENABLED_)
         // ASAN won't like us accessing undefined memory causing spurious issues,

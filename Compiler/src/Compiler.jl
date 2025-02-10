@@ -72,7 +72,7 @@ using Base.Order
 
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
     getindex, haskey, in, isempty, isready, iterate, iterate, last, length, max_world,
-    min_world, popfirst!, push!, resize!, setindex!, size
+    min_world, popfirst!, push!, resize!, setindex!, size, intersect
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!

@@ -693,7 +693,7 @@ julia> procstate === fetch(@async global_state())
 true
 ```
 """
-mutable struct OncePerProcess{T, F}
+mutable struct OncePerProcess{T, F} <: Function
     value::Union{Nothing,T}
     @atomic state::UInt8 # 0=initial, 1=hasrun, 2=error
     @atomic allow_compile_time::Bool
@@ -801,7 +801,7 @@ julia> threadvec === thread_state[Threads.threadid()]
 true
 ```
 """
-mutable struct OncePerThread{T, F}
+mutable struct OncePerThread{T, F} <: Function
     @atomic xs::AtomicMemory{T} # values
     @atomic ss::AtomicMemory{UInt8} # states: 0=initial, 1=hasrun, 2=error, 3==concurrent
     const initializer::F
@@ -926,7 +926,7 @@ Making lazy task value...done.
 false
 ```
 """
-mutable struct OncePerTask{T, F}
+mutable struct OncePerTask{T, F} <: Function
     const initializer::F
 
     OncePerTask{T}(initializer::F) where {T, F} = new{T,F}(initializer)
