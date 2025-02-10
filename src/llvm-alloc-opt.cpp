@@ -427,12 +427,12 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
         }
         break;
     }
-    CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert);
+    CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert->getIterator());
 }
 
 void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
 {
-    CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig);
+    CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig->getIterator());
     BasicBlock *def_bb = orig->getParent();
     std::set<BasicBlock*> bbs{def_bb};
     auto &DT = getDomTree();
@@ -630,7 +630,7 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
     auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
     assert(newF->getFunctionType() == newfType);
     newF->setCallingConv(call->getCallingConv());
-    auto newCall = CallInst::Create(newF, args, "", call);
+    auto newCall = CallInst::Create(newF, args, "", call->getIterator());
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
     newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), getFnAttrs(old_attrs),
@@ -795,7 +795,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
             SmallVector<Value *, 4> IdxOperands(gep->idx_begin(), gep->idx_end());
             auto new_gep = GetElementPtrInst::Create(gep->getSourceElementType(),
                                                      new_i, IdxOperands,
-                                                     gep->getName(), gep);
+                                                     gep->getName(), gep->getIterator());
             new_gep->setIsInBounds(gep->isInBounds());
             new_gep->takeName(gep);
             new_gep->copyMetadata(*gep);
@@ -1238,7 +1238,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 bundle = OperandBundleDef("jl_roots", std::move(operands));
                 break;
             }
-            auto new_call = CallInst::Create(call, bundles, call);
+            auto new_call = CallInst::Create(call, bundles, call->getIterator());
             new_call->takeName(call);
             call->replaceAllUsesWith(new_call);
             call->eraseFromParent();
