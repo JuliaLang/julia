@@ -96,8 +96,6 @@ void jl_init_threadinginfra(void)
 }
 
 
-void JL_NORETURN jl_finish_task(jl_task_t *ct);
-
 // thread function: used by all mutator threads except the main thread
 void jl_threadfun(void *arg)
 {
@@ -118,8 +116,23 @@ void jl_threadfun(void *arg)
     // free the thread argument here
     free(targ);
 
-    (void)jl_gc_unsafe_enter(ptls);
-    jl_finish_task(ct); // noreturn
+    jl_function_t *wait_forever = (jl_function_t *)jl_get_global(jl_base_module, jl_symbol("wait_forever"));
+    if (wait_forever == NULL)
+        jl_error("root task cannot find wait_forever");
+    jl_value_t *args[1] = {wait_forever};
+
+    for (; ;) {
+        if (!ct->ptls->in_pure_callback)
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        JL_TRY {
+            jl_apply(args, 1);
+        }
+        JL_CATCH {
+            jl_no_exc_handler(jl_current_exception(ct), ct);
+        }
+    }
+    jl_gc_debug_critical_error();
+    abort();
 }
 
 
@@ -376,8 +389,15 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             continue;
         }
 
-        jl_cpu_pause();
+        // the place seems empty; switch to the root task to wait
         jl_ptls_t ptls = ct->ptls;
+        if (ct != ptls->root_task) {
+            if (ct->_state == JL_TASK_STATE_RUNNABLE && ct->queue == jl_nothing)
+                ; // TODO: Why are we here at all? And should we enq_work?
+            jl_switchto(&ptls->root_task);
+            continue;
+        }
+
         if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid) && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
             // acquire sleep-check lock
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
