@@ -1250,6 +1250,12 @@ end
     @test length(xs) == 3
 end
 
+@testset "float32 bug" begin
+    a = rand(Float32, 4)
+    @test a[1] != a[2]
+    @test a[3] != a[4]
+end
+
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Random))
 end
