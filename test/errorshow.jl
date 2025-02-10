@@ -1268,5 +1268,4 @@ let err_str
     f56325 = x->x+1
     err_str = @except_str f56325(1,2) MethodError
     @test occursin("MethodError: no method of the anonymous function", err_str)
-    @test occursin("was called with 2 arguments, but has only one method accepting 1 argument.", err_str)
 end

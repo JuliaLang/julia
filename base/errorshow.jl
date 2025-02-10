@@ -377,10 +377,6 @@ function showerror(io::IO, ex::MethodError)
     catch ex
         @error "Error showing method candidates, aborted" exception=ex,catch_backtrace()
     end
-    # if the function has only on method, print a Tip about the number of arguments to be used
-    if f isa Function && length(methods(f)) == 1
-        print(io, "\n\nTip: the function `$f` was called with ", length(arg_types_param), " arguments, but has only one method accepting ", length(methods(f)[1].sig.parameters)-1, " argument.\n")
-    end
     nothing
 end
 
