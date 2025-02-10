@@ -1425,7 +1425,7 @@ end
         prec = precision(BigFloat)
         task = ConcurrencyUtilities.new_task_nonsticky(is_racy_rational_from_irrational)
         schedule(task)
-        ok = fetch(task)
+        ok = fetch(task)::Bool
         setprecision(BigFloat, prec)
         ok
     end
