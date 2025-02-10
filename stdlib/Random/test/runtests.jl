@@ -1250,10 +1250,8 @@ end
     @test length(xs) == 3
 end
 
-@testset "float32 bug" begin
-    a = rand(Float32, 4)
-    @test a[1] != a[2]
-    @test a[3] != a[4]
+@testset "Float32 RNG typo" begin
+    @test length(unique(rand(Float32, 14))) > 10
 end
 
 @testset "Docstrings" begin
