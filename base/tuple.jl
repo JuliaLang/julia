@@ -577,10 +577,19 @@ end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
 const tuplehash_seed_final = UInt === UInt64 ? 0xf1bcd1f144b8c946 : 0x3c87fd81
+function tuplehash_fold(::Tuple{}, h::UInt)
+    h
+end
+function tuplehash_fold(tup::Tuple{Any, Vararg}, h::UInt)
+    f = first(tup)
+    t = tail(tup)
+    g = hash(f, h)::UInt
+    tuplehash_fold(t, g)::UInt
+end
 function hash(tup::Tuple, h::UInt)
     init = xor(h, tuplehash_seed)
-    a = foldr(hash, tup; init)
-    xor(a, tuplehash_seed_final)
+    a = tuplehash_fold(tup, init)
+    xor(a, tuplehash_seed_final)::UInt
 end
 
 <(::Tuple{}, ::Tuple{}) = false
