@@ -1158,7 +1158,7 @@ function ensure_rescheduled(othertask::Task)
     # if the current task was queued,
     # also need to return it to the runnable state
     # before throwing an error
-    list_deletefirst!(W::IntrusiveLinkedList{Task}, ct)
+    list_deletefirst!(W, ct)
     nothing
 end
 
