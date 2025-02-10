@@ -767,7 +767,7 @@ std::pair<uint32_t,GlobalVariable*> CloneCtx::get_reloc_slot(Function *F) const
 }
 
 template<typename Stack>
-static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, Instruction *insert_before)
+static Value *rewrite_inst_use(const Stack& stack, Type *T_size, Value *replace, InsertPosition& insert_before)
 {
     SmallVector<Constant*, 8> args;
     uint32_t nlevel = stack.size();
@@ -828,9 +828,9 @@ static void replaceUsesWithLoad(Function &F, Type *T_size, I2GV should_replace, 
             GlobalVariable *slot = should_replace(*use_i);
             if (!slot)
                 continue;
-            Instruction *insert_before = use_i;
+            InsertPosition insert_before = use_i->getIterator();
             if (auto phi = dyn_cast<PHINode>(use_i))
-                insert_before = phi->getIncomingBlock(*info.use)->getTerminator();
+                insert_before = phi->getIncomingBlock(*info.use)->getTerminator()->getIterator();
             Instruction *ptr = new LoadInst(F.getType(), slot, "", false, insert_before);
             ptr->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             ptr->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(ptr->getContext(), None));

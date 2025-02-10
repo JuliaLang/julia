@@ -238,7 +238,7 @@ struct JuliaLICM : public JuliaPassContext {
                     });
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
-                        auto CI = CallInst::Create(call, {}, exit_pts[i]);
+                        auto CI = CallInst::Create(call, {}, exit_pts[i]->getIterator());
                         exit_pts[i] = CI;
                         createNewInstruction(CI, call, MSSAU);
                         LLVM_DEBUG(dbgs() << "Cloned and sunk gc_preserve_end: " << *CI << "\n");
