@@ -364,6 +364,13 @@ end
             )
             @test allunique(hash, xyzs)
         end
+        @testset "homogeneous and heterogeneous" begin
+            @test (@inferred hash((0, 1))) === (@inferred hash((0, 0x1)))
+            @test (
+                (@inferred hash((0, 1, 2))) === (@inferred hash((0, 1, 0x2))) ===
+                (@inferred hash((0, 0x1, 2))) === (@inferred hash((0x0, 1, 2)))
+            )
+        end
     end
 
     @test isequal((), ())
