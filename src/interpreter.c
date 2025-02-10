@@ -93,8 +93,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
         if (!jl_is_symbol(fname)) {
             jl_error("method: invalid declaration");
         }
-        jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
-        return jl_declare_const_gf(b, modu, fname);
+        return jl_declare_const_gf(modu, fname);
     }
 
     jl_value_t *atypes = NULL, *meth = NULL, *fname = NULL;
