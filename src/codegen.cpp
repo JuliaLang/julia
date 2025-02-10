@@ -76,6 +76,7 @@
 #include "llvm/Support/Path.h" // for llvm::sys::path
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
+#include <llvm/CodeGen/MachineModuleInfo.h>
 
 #ifdef USE_ITTAPI
 #include "ittapi/ittnotify.h"
@@ -10565,17 +10566,29 @@ namespace llvm {
     class MachineBasicBlock;
     class MachineFunction;
     raw_ostream& operator<<(raw_ostream &OS, const MachineBasicBlock &MBB);
-    void printMIR(raw_ostream &OS, const MachineFunction &MF);
+#if JL_LLVM_VERSION >= 200000
+    void printMIR(raw_ostream &OS, const MachineModuleInfo &MMI,
+                const MachineFunction &MF);
+#else
+void printMIR(raw_ostream &OS, const MachineFunction &MF);
+#endif
 }
 extern "C" void jl_dump_llvm_mbb(void *v)
 {
     errs() << *(llvm::MachineBasicBlock*)v;
 }
+#if JL_LLVM_VERSION >= 200000
+extern "C" void jl_dump_llvm_mfunction(void *m, void *v)
+{
+    llvm::printMIR(errs(), *(llvm::MachineModuleInfo*)v,
+                *(llvm::MachineFunction*)v);
+}
+#else
 extern "C" void jl_dump_llvm_mfunction(void *v)
 {
     llvm::printMIR(errs(), *(llvm::MachineFunction*)v);
 }
-
+#endif
 
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;
