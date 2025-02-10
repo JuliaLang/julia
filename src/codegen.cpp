@@ -1478,17 +1478,6 @@ static const auto gc_preserve_end_func = new JuliaFunction<> {
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), {Type::getTokenTy(C)}, false); },
     nullptr,
 };
-static const auto except_enter_func = new JuliaFunction<>{
-    "julia.except_enter",
-    [](LLVMContext &C) {
-         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
-         auto RT = StructType::get(getInt32Ty(C), getPointerTy(C));
-         return FunctionType::get(RT, {T_pjlvalue}, false); },
-    [](LLVMContext &C) { return AttributeList::get(C,
-            Attributes(C, {Attribute::ReturnsTwice}),
-            AttributeSet(),
-            None); },
-};
 static const auto pointer_from_objref_func = new JuliaFunction<>{
     "julia.pointer_from_objref",
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pjlvalue_ty(C),
@@ -6576,7 +6565,6 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         return;
     }
     else if (head == jl_leave_sym) {
-        int hand_n_leave = 0;
         Value *scope_to_restore = nullptr, *token = nullptr;
         SmallVector<AllocaInst*> handler_to_end;
         for (size_t i = 0; i < jl_expr_nargs(ex); ++i) {
@@ -6607,11 +6595,10 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
                 handler_to_end.push_back(ctx.eh_buffers[enter_stmt]);
                 // We're not actually setting up the exception frames for these, so
                 // we don't need to exit them.
-                hand_n_leave += 1;
                 scope_to_restore = nullptr; // restored by exception handler
             }
         }
-        ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave)});
+        ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), handler_to_end.size())});
         auto *handler_sz64 = ConstantInt::get(Type::getInt64Ty(ctx.builder.getContext()),
                   sizeof(jl_handler_t));
         for (AllocaInst *handler : handler_to_end) {
@@ -10403,7 +10390,6 @@ static void init_jit_functions(void)
     add_named_global(gc_preserve_begin_func, (void*)NULL);
     add_named_global(gc_preserve_end_func, (void*)NULL);
     add_named_global(pointer_from_objref_func, (void*)NULL);
-    add_named_global(except_enter_func, (void*)NULL);
     add_named_global(julia_call, (void*)NULL);
     add_named_global(julia_call2, (void*)NULL);
     add_named_global(jllockvalue_func, &jl_lock_value);

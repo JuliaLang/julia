@@ -29,10 +29,6 @@ struct PropagateJuliaAddrspacesPass : PassInfoMixin<PropagateJuliaAddrspacesPass
     static bool isRequired() { return true; }
 };
 
-struct LowerExcHandlersPass : PassInfoMixin<LowerExcHandlersPass> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
 
 struct GCInvariantVerifierPass : PassInfoMixin<GCInvariantVerifierPass> {
     bool Strong;
