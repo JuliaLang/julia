@@ -495,7 +495,7 @@ function _wait_multiple(waiting_tasks, throwexc=false, all=false, failfast=false
         for i in findall(remaining_mask)
             waiter = waiter_tasks[i]
             donenotify = tasks[i].donenotify::ThreadSynchronizer
-            @lock donenotify Base.list_deletefirst!(donenotify.waitq, waiter)
+            @lock donenotify Base.list_deletefirst!(donenotify.waitq::IntrusiveLinkedList{Task}, waiter)
         end
         done_tasks = tasks[done_mask]
         if throwexc && exception
@@ -1158,7 +1158,7 @@ function ensure_rescheduled(othertask::Task)
     # if the current task was queued,
     # also need to return it to the runnable state
     # before throwing an error
-    list_deletefirst!(W, ct)
+    list_deletefirst!(W::IntrusiveLinkedList{Task}, ct)
     nothing
 end
 
