@@ -312,7 +312,7 @@ bool LowerPTLS::run(bool *CFGModified)
                 assert(sizeof(jl_pgcstack_key_t) == sizeof(uintptr_t));
                 FT_pgcstack_getter = FunctionType::get(FT_pgcstack_getter->getReturnType(), {T_size}, false);
             }
-            T_pgcstack_getter = FT_pgcstack_getter->getPointerTo();
+            T_pgcstack_getter = PointerType::getUnqual(FT_pgcstack_getter->getContext());
             T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
             if (imaging_mode) {
                 pgcstack_func_slot = create_hidden_global(T_pgcstack_getter, "jl_pgcstack_func_slot");

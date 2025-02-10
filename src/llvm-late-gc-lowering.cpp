@@ -1968,7 +1968,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     AllocaInst *Frame = nullptr;
     unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
     if (T_prjlvalue) {
-        T_pprjlvalue = T_prjlvalue->getPointerTo();
+        T_pprjlvalue = PointerType::getUnqual(T_prjlvalue->getContext());
         Frame = new AllocaInst(T_prjlvalue, allocaAddressSpace,
             ConstantInt::get(T_int32, maxframeargs), "jlcallframe", StartOff->getIterator());
     }
@@ -2159,7 +2159,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
-                    Builder.CreateAddrSpaceCast(Frame, T_prjlvalue->getPointerTo(0)));
+                    Builder.CreateAddrSpaceCast(Frame, PointerType::getUnqual(T_prjlvalue->getContext())));
                 ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
                 if (callee == call2_func) {
                     // move trailing arg to the end now

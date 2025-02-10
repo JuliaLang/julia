@@ -123,7 +123,7 @@ static Value *stringConstPtr(
     // Doesn't need to be aligned, we shouldn't operate on these like julia objects
     GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, Align(1), "_j_str_" + StringRef(ctxt.data(), ctxt.size()), *M);
     // AddrSpaceCast in case globals are in non-0 AS
-    return irbuilder.CreateAddrSpaceCast(gv, gv->getValueType()->getPointerTo(0));
+    return irbuilder.CreateAddrSpaceCast(gv, PointerType::getUnqual(gv->getContext()));
 }
 
 
@@ -1336,7 +1336,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
         Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
         bool allunboxed = is_uniontype_allunboxed(p.typ);
         Type *expr_type = justtag ? ctx.types().T_size : ctx.types().T_pjlvalue;
-        Value *datatype_or_p = Constant::getNullValue(expr_type->getPointerTo());
+        Value *datatype_or_p = Constant::getNullValue(PointerType::getUnqual(expr_type->getContext()));
         unsigned counter = 0;
         for_each_uniontype_small(
             [&](unsigned idx, jl_datatype_t *jt) {

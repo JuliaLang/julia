@@ -34,19 +34,19 @@ namespace JuliaType {
     }
 
     static inline llvm::PointerType* get_pjlvalue_ty(llvm::LLVMContext &C, unsigned addressSpace=0) {
-        return llvm::PointerType::get(get_jlvalue_ty(C), addressSpace);
+        return llvm::PointerType::get(C, addressSpace);
     }
 
     static inline llvm::PointerType* get_prjlvalue_ty(llvm::LLVMContext &C) {
-        return llvm::PointerType::get(get_jlvalue_ty(C), AddressSpace::Tracked);
+        return llvm::PointerType::get(C, AddressSpace::Tracked);
     }
 
     static inline llvm::PointerType* get_ppjlvalue_ty(llvm::LLVMContext &C) {
-        return llvm::PointerType::get(get_pjlvalue_ty(C), 0);
+        return llvm::PointerType::get(C, 0);
     }
 
     static inline llvm::PointerType* get_pprjlvalue_ty(llvm::LLVMContext &C) {
-        return llvm::PointerType::get(get_prjlvalue_ty(C), 0);
+        return llvm::PointerType::get(C, 0);
     }
 
     static inline auto get_jlfunc_ty(llvm::LLVMContext &C) {
@@ -94,10 +94,6 @@ namespace JuliaType {
 
     static inline auto get_voidfunc_ty(llvm::LLVMContext &C) {
         return llvm::FunctionType::get(llvm::Type::getVoidTy(C), /*isVarArg*/false);
-    }
-
-    static inline auto get_pvoidfunc_ty(llvm::LLVMContext &C) {
-        return get_voidfunc_ty(C)->getPointerTo();
     }
 }
 
@@ -228,7 +224,7 @@ static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_s
     else {
         Function *F = M->getFunction("julia.safepoint");
         if (!F) {
-            FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {T_size->getPointerTo()}, false);
+            FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {PointerType::getUnqual(T_size->getContext())}, false);
             F = Function::Create(FT, Function::ExternalLinkage, "julia.safepoint", M);
             F->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
         }
