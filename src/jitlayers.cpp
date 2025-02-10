@@ -14,6 +14,7 @@
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
 #include <llvm/ExecutionEngine/Orc/DebugObjectManagerPlugin.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
+#include "llvm/ExecutionEngine/Orc/AbsoluteSymbols.h"
 #if JL_LLVM_VERSION >= 180000
 #include <llvm/ExecutionEngine/Orc/Debugging/DebugInfoSupport.h>
 #include <llvm/ExecutionEngine/Orc/Debugging/PerfSupportPlugin.h>
