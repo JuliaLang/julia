@@ -1203,6 +1203,12 @@ function wait()
     return result
 end
 
+function wait_forever()
+    while true
+        wait()
+    end
+end
+
 if Sys.iswindows()
     pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
 else
