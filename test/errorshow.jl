@@ -1263,10 +1263,9 @@ end
 f33793(x::Float32, y::Float32) = 1
 @test_throws "\nClosest candidates are:\n  f33793(!Matched::Float32, !Matched::Float32)\n" f33793(Float64(0.0), Float64(0.0))
 
-# https://github.com/JuliaLang/julia/issues/56325
+# https://github.com/JuliaLang/julia/issues/56325 adding tip
 let err_str
-    f56325 = x->x+1
+    f56325(x)=x+1
     err_str = @except_str f56325(1,2) MethodError
-    @test occursin("MethodError: no method of the anonymous function", err_str)
     @test occursin("was called with 2 arguments, but has only one method accepting 1 argument.", err_str)
 end
