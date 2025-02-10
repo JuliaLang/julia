@@ -577,9 +577,7 @@ end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
 const tuplehash_seed_final = UInt === UInt64 ? 0xf1bcd1f144b8c946 : 0x3c87fd81
-function tuplehash_fold(::Tuple{}, h::UInt)
-    h
-end
+tuplehash_fold(::Tuple{}, h::UInt) = h
 function tuplehash_fold(tup::Tuple{Any, Vararg}, h::UInt)
     f = first(tup)
     t = tail(tup)
