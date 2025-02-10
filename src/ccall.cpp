@@ -2099,7 +2099,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             }
             else if (f_name.starts_with("llvm.")) {
                 // compute and verify auto-mangling for intrinsic name
+#if JL_LLVM_VERSION >= 200000
+                auto ID = Intrinsic::lookupIntrinsicID(f_name);
+#else
                 auto ID = Function::lookupIntrinsicID(f_name);
+#endif
                 if (ID != Intrinsic::not_intrinsic) {
                     // Accumulate an array of overloaded types for the given intrinsic
                     // and compute the new name mangling schema
