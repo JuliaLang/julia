@@ -1252,7 +1252,11 @@ end
 
 @testset "Float32 RNG typo" begin
     for T in (Float16, Float32, Float64)
-        @test length(unique(rand(T, 14))) > 10
+        # Make sure generated numbers are sufficiently diverse
+        # for both SIMD and non-SIMD RNG code paths for all types.
+        @test length(unique!(rand(T, 7))) > 3
+        @test length(unique!(rand(T, 14))) > 10
+        @test length(unique!(rand(T, 34))) > 20
     end
 end
 
