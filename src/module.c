@@ -229,7 +229,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     m->compile = -1;
     m->infer = -1;
     m->max_methods = -1;
-    m->file = name; // Using the name as a placeholder is better than nothing
+    m->file = jl_empty_sym;
     m->line = 0;
     m->hash = parent == NULL ? bitmix(name->hash, jl_module_type->hash) :
         bitmix(name->hash, parent->hash);
