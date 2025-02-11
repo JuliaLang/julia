@@ -214,6 +214,8 @@ end
 Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ptr{BigFloat}) = error("not compatible with mpfr")
 Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ref{BigFloat}) = error("not compatible with mpfr")
 Base.cconvert(::Type{Ref{BigFloat}}, x::BigFloat) = x.d # BigFloatData is the Ref type for BigFloat
+Base.cconvert(::Type{Ref{BigFloat}}, x::Number) = convert(BigFloat, x).d # avoid default conversion to Ref(BigFloat(x))
+Base.cconvert(::Type{Ref{BigFloat}}, x::Ref{BigFloat}) = x[].d
 function Base.unsafe_convert(::Type{Ref{BigFloat}}, x::BigFloatData)
     d = getfield(x, :d)
     p = Base.unsafe_convert(Ptr{Limb}, d)
