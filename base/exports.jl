@@ -70,6 +70,9 @@ export
     OrdinalRange,
     Pair,
     PartialQuickSort,
+    OncePerProcess,
+    OncePerTask,
+    OncePerThread,
     PermutedDimsArray,
     QuickSort,
     Rational,
@@ -815,6 +818,7 @@ export
     @invoke,
     invokelatest,
     @invokelatest,
+    @world,
 
 # loading source files
     __precompile__,

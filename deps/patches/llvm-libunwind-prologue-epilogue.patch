@@ -14,7 +14,7 @@ index 1c3175dff50a..78a658ccbc27 100644
 @@ -310,6 +310,50 @@ int CompactUnwinder_x86_64<A>::stepWithCompactEncodingRBPFrame(
    uint32_t savedRegistersLocations =
        EXTRACT_BITS(compactEncoding, UNWIND_X86_64_RBP_FRAME_REGISTERS);
- 
+
 +  // If we have not stored EBP yet
 +  if (functionStart == registers.getIP()) {
 +    uint64_t rsp = registers.getSP();

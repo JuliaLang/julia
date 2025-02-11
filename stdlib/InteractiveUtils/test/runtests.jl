@@ -547,9 +547,9 @@ if Sys.ARCH === :x86_64 || occursin(ix86, string(Sys.ARCH))
     output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
     @test !occursin(rgx, output)
 
-    code_native(buf, linear_foo, ())
-    output = String(take!(buf))
-    @test occursin(rgx, output)
+    code_native(buf, linear_foo, (), debuginfo = :none)
+    output = replace(String(take!(buf)), r"#[^\r\n]+" => "")
+    @test !occursin(rgx, output)
 
     @testset "binary" begin
         # check the RET instruction (opcode: C3)
@@ -708,7 +708,7 @@ let
         length((@code_lowered sum(1:10)).code)
 end
 
-@testset "@time_imports" begin
+@testset "@time_imports, @trace_compile, @trace_dispatch" begin
     mktempdir() do dir
         cd(dir) do
             try
@@ -717,7 +717,16 @@ end
                 write(foo_file,
                     """
                     module Foo3242
-                    foo() = 1
+                    function foo()
+                        Base.Experimental.@force_compile
+                        foo(1)
+                    end
+                    foo(x) = x
+                    function bar()
+                        Base.Experimental.@force_compile
+                        bar(1)
+                    end
+                    bar(x) = x
                     end
                     """)
 
@@ -734,6 +743,27 @@ end
 
                 @test occursin("ms  Foo3242", String(buf))
 
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stderr(f) do
+                    @trace_compile @eval Foo3242.foo()
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("ms =# precompile(", String(buf))
+
+                fname = tempname()
+                f = open(fname, "w")
+                redirect_stderr(f) do
+                    @trace_dispatch @eval Foo3242.bar()
+                end
+                close(f)
+                buf = read(fname)
+                rm(fname)
+
+                @test occursin("precompile(", String(buf))
             finally
                 filter!((≠)(dir), LOAD_PATH)
             end
@@ -789,7 +819,30 @@ end
 end
 
 @test Base.infer_effects(sin, (Int,)) == InteractiveUtils.@infer_effects sin(42)
+@test Base.infer_return_type(sin, (Int,)) == InteractiveUtils.@infer_return_type sin(42)
+@test Base.infer_exception_type(sin, (Int,)) == InteractiveUtils.@infer_exception_type sin(42)
+@test first(InteractiveUtils.@code_ircode sin(42)) isa Core.Compiler.IRCode
+@test first(InteractiveUtils.@code_ircode optimize_until="Inlining" sin(42)) isa Core.Compiler.IRCode
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(InteractiveUtils))
+end
+
+# issue https://github.com/JuliaIO/ImageMagick.jl/issues/235
+module OuterModule
+    module InternalModule
+        struct MyType
+            x::Int
+        end
+
+        Base.@deprecate_binding MyOldType MyType
+
+        export MyType
+    end
+    using .InternalModule
+    export MyType, MyOldType
+end # module
+@testset "Subtypes and deprecations" begin
+    using .OuterModule
+    @test_nowarn subtypes(Integer);
 end

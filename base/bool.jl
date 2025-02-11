@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Bool
+
 # promote Bool to any other numeric type
 promote_rule(::Type{Bool}, ::Type{T}) where {T<:Number} = T
 
@@ -184,3 +186,5 @@ end
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
 rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
 mod(x::Bool, y::Bool) = rem(x,y)
+
+Bool(x::Real) = x==0 ? false : x==1 ? true : throw(InexactError(:Bool, Bool, x))

@@ -2,7 +2,12 @@
 
 # macro wrappers for various reflection functions
 
-import Base: typesof, insert!, replace_ref_begin_end!, infer_effects
+using Base: typesof, insert!, replace_ref_begin_end!,
+    infer_return_type, infer_exception_type, infer_effects, code_ircode
+
+# defined in Base so it's possible to time all imports, including InteractiveUtils and its deps
+# via. `Base.@time_imports` etc.
+import Base: @time_imports, @trace_compile, @trace_dispatch
 
 separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 
@@ -221,37 +226,19 @@ macro which(ex0::Symbol)
     return :(which($__module__, $ex0))
 end
 
-for fname in [:code_warntype, :code_llvm, :code_native, :infer_effects]
-    @eval begin
-        macro ($fname)(ex0...)
-            gen_call_with_extracted_types_and_kwargs(__module__, $(Expr(:quote, fname)), ex0)
-        end
+for fname in [:code_warntype, :code_llvm, :code_native,
+              :infer_return_type, :infer_effects, :infer_exception_type]
+    @eval macro ($fname)(ex0...)
+        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0)
     end
 end
 
-macro code_typed(ex0...)
-    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_typed, ex0)
-    quote
-        local results = $thecall
-        length(results) == 1 ? results[1] : results
-    end
-end
-
-macro code_lowered(ex0...)
-    thecall = gen_call_with_extracted_types_and_kwargs(__module__, :code_lowered, ex0)
-    quote
-        local results = $thecall
-        length(results) == 1 ? results[1] : results
-    end
-end
-
-macro time_imports(ex)
-    quote
-        try
-            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
-            $(esc(ex))
-        finally
-            Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
+for fname in [:code_typed, :code_lowered, :code_ircode]
+    @eval macro ($fname)(ex0...)
+        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0)
+        quote
+            local results = $thecall
+            length(results) == 1 ? results[1] : results
         end
     end
 end
@@ -409,3 +396,97 @@ julia> @time_imports using CSV
 
 """
 :@time_imports
+
+"""
+    @trace_compile
+
+A macro to execute an expression and show any methods that were compiled (or recompiled in yellow),
+like the julia args `--trace-compile=stderr --trace-compile-timing` but specifically for a call.
+
+```julia-repl
+julia> @trace_compile rand(2,2) * rand(2,2)
+#=   39.1 ms =# precompile(Tuple{typeof(Base.rand), Int64, Int64})
+#=  102.0 ms =# precompile(Tuple{typeof(Base.:(*)), Array{Float64, 2}, Array{Float64, 2}})
+2×2 Matrix{Float64}:
+ 0.421704  0.864841
+ 0.211262  0.444366
+```
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_compile
+
+"""
+    @trace_dispatch
+
+A macro to execute an expression and report methods that were compiled via dynamic dispatch,
+like the julia arg `--trace-dispatch=stderr` but specifically for a call.
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12
+
+"""
+:@trace_dispatch
+
+"""
+    @activate Component
+
+Activate a newly loaded copy of an otherwise builtin component. The `Component`
+to be activated will be resolved using the ordinary rules of module resolution
+in the current environment.
+
+When using `@activate`, additional options for a component may be specified in
+square brackets `@activate Compiler[:option1, :option]`
+
+Currently `@activate Compiler` is the only available component that may be
+activatived.
+
+For `@activate Compiler`, the following options are available:
+1. `:reflection` - Activate the compiler for reflection purposes only.
+                   The ordinary reflection functionality in `Base` and `InteractiveUtils`.
+                   Will use the newly loaded compiler. Note however, that these reflection
+                   functions will still interact with the ordinary native cache (both loading
+                   and storing). An incorrect compiler implementation may thus corrupt runtime
+                   state if reflection is used. Use external packages like `Cthulhu.jl`
+                   introspecting compiler behavior with a separated cache partition.
+
+2. `:codegen`   - Activate the compiler for internal codegen purposes. The new compiler
+                  will be invoked whenever the runtime requests compilation.
+
+`@activate Compiler` without options is equivalent to `@activate Compiler[:reflection]`.
+
+"""
+macro activate(what)
+    options = Symbol[]
+    if Meta.isexpr(what, :ref)
+        Component = what.args[1]
+        for i = 2:length(what.args)
+            arg = what.args[i]
+            if !isa(arg, QuoteNode) || !isa(arg.value, Symbol)
+                error("Usage Error: Option $arg is not a symbol")
+            end
+            push!(options, arg.value)
+        end
+    else
+        Component = what
+    end
+    if !isa(Component, Symbol)
+        error("Usage Error: Component $Component is not a symbol")
+    end
+    allowed_components = (:Compiler,)
+    if !(Component in allowed_components)
+        error("Usage Error: Component $Component is not recognized. Expected one of $allowed_components")
+    end
+    s = gensym()
+    if Component === :Compiler && isempty(options)
+        push!(options, :reflection)
+    end
+    options = map(options) do opt
+        Expr(:kw, opt, true)
+    end
+    Expr(:toplevel,
+        esc(:(import $Component as $s)),
+        esc(:($s.activate!(;$(options...)))))
+end

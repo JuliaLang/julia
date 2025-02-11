@@ -28,7 +28,7 @@ module FastMath
 export @fastmath
 
 import Core.Intrinsics: sqrt_llvm_fast, neg_float_fast,
-    add_float_fast, sub_float_fast, mul_float_fast, div_float_fast,
+    add_float_fast, sub_float_fast, mul_float_fast, div_float_fast, min_float_fast, max_float_fast,
     eq_float_fast, ne_float_fast, lt_float_fast, le_float_fast
 import Base: afoldl
 
@@ -168,6 +168,9 @@ add_fast(x::T, y::T) where {T<:FloatTypes} = add_float_fast(x, y)
 sub_fast(x::T, y::T) where {T<:FloatTypes} = sub_float_fast(x, y)
 mul_fast(x::T, y::T) where {T<:FloatTypes} = mul_float_fast(x, y)
 div_fast(x::T, y::T) where {T<:FloatTypes} = div_float_fast(x, y)
+max_fast(x::T, y::T) where {T<:FloatTypes} = max_float_fast(x, y)
+min_fast(x::T, y::T) where {T<:FloatTypes} = min_float_fast(x, y)
+minmax_fast(x::T, y::T) where {T<:FloatTypes} = (min_fast(x, y), max_fast(x, y))
 
 @fastmath begin
     cmp_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(x==y, 0, ifelse(x<y, -1, +1))
@@ -236,11 +239,6 @@ ComplexTypes = Union{ComplexF32, ComplexF64}
 
     ne_fast(x::T, y::T) where {T<:ComplexTypes} = !(x==y)
 
-    # Note: we use the same comparison for min, max, and minmax, so
-    # that the compiler can convert between them
-    max_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, y, x)
-    min_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, x, y)
-    minmax_fast(x::T, y::T) where {T<:FloatTypes} = ifelse(y > x, (x,y), (y,x))
 end
 
 # fall-back implementations and type promotion

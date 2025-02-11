@@ -31,10 +31,10 @@ json_repr(io::IO, val::Integer; indent::Int=0) = print(io, val)
 json_repr(io::IO, val::Float64; indent::Int=0) = print(io, val)
 function json_repr(io::IO, val::AbstractVector; indent::Int=0)
     print(io, '[')
-    for elt in val
+    for i in eachindex(val)
         print(io, '\n', ' '^(indent + 2))
-        json_repr(io, elt; indent=indent+2)
-        elt === last(val) || print(io, ',')
+        json_repr(io, val[i]; indent=indent+2)
+        i == lastindex(val) || print(io, ',')
     end
     print(io, '\n', ' '^indent, ']')
 end

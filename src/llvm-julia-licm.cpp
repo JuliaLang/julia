@@ -342,11 +342,7 @@ struct JuliaLICM : public JuliaPassContext {
             }
         }
         if (changed && SE) {
-#if JL_LLVM_VERSION >= 160000
             SE->forgetLoopDispositions();
-#else
-            SE->forgetLoopDispositions(L);
-#endif
         }
 #ifdef JL_VERIFY_PASSES
         assert(!verifyLLVMIR(*L));

@@ -649,49 +649,49 @@ end
         @test lcm(a, T(0)//T(1)) === T(0)//T(1)
         @test gcdx(a, T(0)//T(1)) === (a, T(1), T(0))
 
-        @test gcdx(T(1)//T(0), T(1)//T(2)) === (T(1)//T(0), T(1), T(0))
-        @test gcdx(T(1)//T(2), T(1)//T(0)) === (T(1)//T(0), T(0), T(1))
-        @test gcdx(T(1)//T(0), T(1)//T(1)) === (T(1)//T(0), T(1), T(0))
-        @test gcdx(T(1)//T(1), T(1)//T(0)) === (T(1)//T(0), T(0), T(1))
+        @test_throws ArgumentError gcdx(T(1)//T(0), T(1)//T(2))
+        @test_throws ArgumentError gcdx(T(1)//T(2), T(1)//T(0))
+        @test_throws ArgumentError gcdx(T(1)//T(0), T(1)//T(1))
+        @test_throws ArgumentError gcdx(T(1)//T(1), T(1)//T(0))
         @test gcdx(T(1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
-        @test gcdx(T(1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
+        @test_throws ArgumentError gcdx(T(1)//T(0), T(0)//T(1))
         @test gcdx(T(0)//T(1), T(0)//T(1)) === (T(0)//T(1), T(0), T(0))
 
         if T <: Signed
-            @test gcdx(T(-1)//T(0), T(1)//T(2)) === (T(1)//T(0), T(1), T(0))
-            @test gcdx(T(1)//T(2), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
-            @test gcdx(T(-1)//T(0), T(1)//T(1)) === (T(1)//T(0), T(1), T(0))
-            @test gcdx(T(1)//T(1), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+            @test_throws ArgumentError gcdx(T(-1)//T(0), T(1)//T(2))
+            @test_throws ArgumentError gcdx(T(1)//T(2), T(-1)//T(0))
+            @test_throws ArgumentError gcdx(T(-1)//T(0), T(1)//T(1))
+            @test_throws ArgumentError gcdx(T(1)//T(1), T(-1)//T(0))
             @test gcdx(T(-1)//T(0), T(1)//T(0)) === (T(1)//T(0), T(1), T(1))
             @test gcdx(T(1)//T(0), T(-1)//T(0)) === (T(1)//T(0), T(1), T(1))
             @test gcdx(T(-1)//T(0), T(-1)//T(0)) === (T(1)//T(0), T(1), T(1))
-            @test gcdx(T(-1)//T(0), T(0)//T(1)) === (T(1)//T(0), T(1), T(0))
-            @test gcdx(T(0)//T(1), T(-1)//T(0)) === (T(1)//T(0), T(0), T(1))
+            @test_throws ArgumentError gcdx(T(-1)//T(0), T(0)//T(1))
+            @test_throws ArgumentError gcdx(T(0)//T(1), T(-1)//T(0))
         end
 
         @test gcdx(T(1)//T(3), T(2)) === (T(1)//T(3), T(1), T(0))
         @test lcm(T(1)//T(3), T(1)) === T(1)//T(1)
-        @test lcm(T(3)//T(1), T(1)//T(0)) === T(3)//T(1)
-        @test lcm(T(0)//T(1), T(1)//T(0)) === T(0)//T(1)
+        @test_throws ArgumentError lcm(T(3)//T(1), T(1)//T(0))
+        @test_throws ArgumentError lcm(T(0)//T(1), T(1)//T(0))
 
-        @test lcm(T(1)//T(0), T(1)//T(2)) === T(1)//T(2)
-        @test lcm(T(1)//T(2), T(1)//T(0)) === T(1)//T(2)
-        @test lcm(T(1)//T(0), T(1)//T(1)) === T(1)//T(1)
-        @test lcm(T(1)//T(1), T(1)//T(0)) === T(1)//T(1)
+        @test_throws ArgumentError lcm(T(1)//T(0), T(1)//T(2))
+        @test_throws ArgumentError lcm(T(1)//T(2), T(1)//T(0))
+        @test_throws ArgumentError lcm(T(1)//T(0), T(1)//T(1))
+        @test_throws ArgumentError lcm(T(1)//T(1), T(1)//T(0))
         @test lcm(T(1)//T(0), T(1)//T(0)) === T(1)//T(0)
-        @test lcm(T(1)//T(0), T(0)//T(1)) === T(0)//T(1)
+        @test_throws ArgumentError lcm(T(1)//T(0), T(0)//T(1))
         @test lcm(T(0)//T(1), T(0)//T(1)) === T(0)//T(1)
 
         if T <: Signed
-            @test lcm(T(-1)//T(0), T(1)//T(2)) === T(1)//T(2)
-            @test lcm(T(1)//T(2), T(-1)//T(0)) === T(1)//T(2)
-            @test lcm(T(-1)//T(0), T(1)//T(1)) === T(1)//T(1)
-            @test lcm(T(1)//T(1), T(-1)//T(0)) === T(1)//T(1)
+            @test_throws ArgumentError lcm(T(-1)//T(0), T(1)//T(2))
+            @test_throws ArgumentError lcm(T(1)//T(2), T(-1)//T(0))
+            @test_throws ArgumentError lcm(T(-1)//T(0), T(1)//T(1))
+            @test_throws ArgumentError lcm(T(1)//T(1), T(-1)//T(0))
             @test lcm(T(-1)//T(0), T(1)//T(0)) === T(1)//T(0)
             @test lcm(T(1)//T(0), T(-1)//T(0)) === T(1)//T(0)
             @test lcm(T(-1)//T(0), T(-1)//T(0)) === T(1)//T(0)
-            @test lcm(T(-1)//T(0), T(0)//T(1)) === T(0)//T(1)
-            @test lcm(T(0)//T(1), T(-1)//T(0)) === T(0)//T(1)
+            @test_throws ArgumentError lcm(T(-1)//T(0), T(0)//T(1))
+            @test_throws ArgumentError lcm(T(0)//T(1), T(-1)//T(0))
         end
 
         @test gcd([T(5), T(2), T(1)//T(2)]) === T(1)//T(2)
@@ -699,7 +699,26 @@ end
 
         @test lcm([T(5), T(2), T(1)//T(2)]) === T(10)//T(1)
         @test lcm(T(5), T(2), T(1)//T(2)) === T(10)//T(1)
+
+        @test_throws ArgumentError gcd(T(1)//T(1), T(1)//T(0))
+        @test_throws ArgumentError gcd(T(1)//T(0), T(0)//T(1))
     end
+end
+
+@testset "gcdx for 1 and 3+ arguments" begin
+    # one-argument
+    @test gcdx(7) == (7, 1)
+    @test gcdx(-7) == (7, -1)
+    @test gcdx(1//4) == (1//4, 1)
+
+    # 3+ arguments
+    @test gcdx(2//3) == gcdx(2//3) == (2//3, 1)
+    @test gcdx(15, 12, 20) == (1, 7, -7, -1)
+    @test gcdx(60//4, 60//5, 60//3) == (1//1, 7, -7, -1)
+    abcd = (105, 1638, 2145, 3185)
+    d, uvwp... = gcdx(abcd...)
+    @test d == sum(abcd .* uvwp) # u*a + v*b + w*c + p*d == gcd(a, b, c, d)
+    @test (@inferred gcdx(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)) isa NTuple{11, Int}
 end
 
 @testset "Binary operations with Integer" begin

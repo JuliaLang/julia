@@ -84,6 +84,12 @@ function Base.floor(dt::DateTime, p::TimePeriod)
     return epochms2datetime(milliseconds - mod(milliseconds, value(Millisecond(p))))
 end
 
+function Base.floor(t::Time, p::TimePeriod)
+    value(p) < 1 && throw(DomainError(p))
+    nanoseconds = value(t)
+    return Time(Nanosecond(nanoseconds - mod(nanoseconds, value(Nanosecond(p)))))
+end
+
 """
     floor(x::Period, precision::T) where T <: Union{TimePeriod, Week, Day} -> T
 

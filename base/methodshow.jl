@@ -378,7 +378,6 @@ function url(m::Method)
     line = m.line
     line <= 0 || occursin(r"In\[[0-9]+\]"a, file) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
-    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release
@@ -386,8 +385,10 @@ function url(m::Method)
         else
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
-    elseif root_module_exists(libgit2_id)
-        LibGit2 = root_module(libgit2_id)
+    end
+    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
+    LibGit2 = maybe_root_module(libgit2_id)
+    if LibGit2 isa Module
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
@@ -404,11 +405,10 @@ function url(m::Method)
                 end
             end
         catch
-            return fileurl(file)
+            # oops, this was a bad idea
         end
-    else
-        return fileurl(file)
     end
+    return fileurl(file)
 end
 
 function show(io::IO, ::MIME"text/html", m::Method)

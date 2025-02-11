@@ -4,7 +4,7 @@ version = "1.11.0"
 
 [deps]
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
-JuliaSyntaxHighlighting = "dc6e5ff7-fb65-4e79-a425-ec3bc9c03011"
+JuliaSyntaxHighlighting = "ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"
 StyledStrings = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
 
 [extras]

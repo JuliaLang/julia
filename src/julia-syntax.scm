@@ -433,7 +433,7 @@
                                  (inert ,loc)))
                           ,body))))
        (if (or (symbol? name) (globalref? name))
-           `(block ,@generator (method ,name) ,mdef (unnecessary ,name))  ;; return the function
+           `(block ,@generator (method ,name) (latestworld-if-toplevel) ,mdef (unnecessary ,name))  ;; return the function
            (if (not (null? generator))
                `(block ,@generator ,mdef)
                mdef))))))
@@ -531,6 +531,7 @@
       `(call (core ifelse) (false) (false) (block
         ;; forward-declare function so its type can occur in the signature of the inner method below
         ,@(if (or (symbol? name) (globalref? name)) `((method ,name)) '())
+        (latestworld-if-toplevel)
 
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
@@ -963,6 +964,19 @@
         (ctors-min-initialized (car expr))
         (ctors-min-initialized (cdr expr)))))
 
+(define (insert-struct-shim field-types name)
+  (map (lambda (x)
+      (expr-replace (lambda (y)
+                      (and (length= y 3) (eq? (car y) '|.|)
+                            (or (equal? (caddr y) `(quote ,name))
+                                (equal? (caddr y) `(inert ,name)))))
+                    x
+                    (lambda (y)
+                      `(call (core struct_name_shim)
+                              ,(cadr y) ,(caddr y)
+                              (thismodule) ,name))))
+        field-types))
+
 (define (struct-def-expr- name params bounds super fields0 mut)
   (receive
    (fields defs) (separate eventually-decl? fields0)
@@ -988,7 +1002,9 @@
                      (default-inner-ctors name field-names field-types params bounds locs)
                      defs))
           (min-initialized (min (ctors-min-initialized defs) (length fields)))
-          (prev (make-ssavalue)))
+          (hasprev (make-ssavalue))
+          (prev (make-ssavalue))
+          (newdef (make-ssavalue)))
      (let ((dups (has-dups field-names)))
        (if dups (error (string "duplicate field name: \"" (car dups) "\" is not unique"))))
      (for-each (lambda (v)
@@ -1009,24 +1025,22 @@
                         (call (core svec) ,@attrs)
                         ,mut ,min-initialized))
          (call (core _setsuper!) ,name ,super)
-         (if (isdefined (globalref (thismodule) ,name) (false))
-             (block
-              (= ,prev (globalref (thismodule) ,name))
-              (if (call (core _equiv_typedef) ,prev ,name)
-                  ;; if this is compatible with an old definition, use the existing type object
-                  ;; and its parameters
-                  (block (= ,name ,prev)
-                         ,@(if (pair? params)
-                               `((= (tuple ,@params) (|.|
-                                                      ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
-                                                              prev
-                                                              params)
-                                                      (quote parameters))))
-                               '()))
-                  ;; otherwise do an assignment to trigger an error
-                  (const (globalref (thismodule) ,name) ,name)))
-             (const (globalref (thismodule) ,name) ,name))
-         (call (core _typebody!) ,name (call (core svec) ,@field-types))
+         (= ,hasprev (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false)) (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name)))
+         (= ,prev (if ,hasprev (globalref (thismodule) ,name) (false)))
+         (if ,hasprev
+            ;; if this is compatible with an old definition, use the old parameters, but the
+            ;; new object. This will fail to capture recursive cases, but the call to typebody!
+            ;; below is permitted to choose either type definition to put into the binding table
+            (block ,@(if (pair? params)
+                          `((= (tuple ,@params) (|.|
+                                                ,(foldl (lambda (_ x) `(|.| ,x (quote body)))
+                                                        prev
+                                                        params)
+                                                (quote parameters))))
+                          '())))
+         (= ,newdef (call (core _typebody!) ,prev ,name (call (core svec) ,@(insert-struct-shim field-types name))))
+         (const (globalref (thismodule) ,name) ,newdef)
+         (latestworld)
          (null)))
        ;; "inner" constructors
        (scope-block
@@ -1071,11 +1085,12 @@
        (toplevel-only abstract_type)
        (= ,name (call (core _abstracttype) (thismodule) (inert ,name) (call (core svec) ,@params)))
        (call (core _setsuper!) ,name ,super)
-       (call (core _typebody!) ,name)
-       (if (&& (isdefined (globalref (thismodule) ,name) (false))
+       (call (core _typebody!) (false) ,name)
+       (if (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false))
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
            (const (globalref (thismodule) ,name) ,name))
+       (latestworld)
        (null))))))
 
 (define (primitive-type-def-expr n name params super)
@@ -1091,11 +1106,12 @@
        (toplevel-only primitive_type)
        (= ,name (call (core _primitivetype) (thismodule) (inert ,name) (call (core svec) ,@params) ,n))
        (call (core _setsuper!) ,name ,super)
-       (call (core _typebody!) ,name)
-       (if (&& (isdefined (globalref (thismodule) ,name) (false))
+       (call (core _typebody!) (false) ,name)
+       (if (&& (call (core isdefinedglobal) (thismodule) (inert ,name) (false))
                (call (core _equiv_typedef) (globalref (thismodule) ,name) ,name))
            (null)
            (const (globalref (thismodule) ,name) ,name))
+       (latestworld)
        (null))))))
 
 ;; take apart a type signature, e.g. T{X} <: S{Y}
@@ -1464,6 +1480,7 @@
             `(block
               (= ,rr (where ,type-ex ,@params))
               (,(if allow-local 'assign-const-if-global 'const) ,name ,rr)
+              (latestworld-if-toplevel)
               ,rr)))
       (expand-forms
        `(const (= ,name ,type-ex)))))
@@ -1501,6 +1518,7 @@
                            (scope-block (block (hardscope)
                             (local (= ,(cadr arg) ,rr))
                             ,.(map (lambda (v) `(,(car e) (globalref (thismodule) ,v) ,v)) (filter-not-underscore (lhs-vars (cadr arg))))
+                            (latestworld)
                             ,rr))))))))
             (else (error "expected assignment after \"const\"")))))))
 
@@ -2459,7 +2477,7 @@
                         (error "Opaque closure argument type may not be specified both in the method signature and separately"))
                     (if (or (varargexpr? lastarg) (vararg? lastarg))
                         '(true) '(false))))
-            (meth (caddr (caddr (expand-forms F)))) ;; `method` expr
+            (meth  (cadddr (caddr (expand-forms F)))) ;; `method` expr
             (lam       (cadddr meth))
             (sig-block (caddr meth))
             (sig-block (if (and (pair? sig-block) (eq? (car sig-block) 'block))
@@ -2733,6 +2751,9 @@
                  ((and (eq? (identifier-name f) '^) (length= e 4) (integer? (cadddr e)))
                   (expand-forms
                    `(call (top literal_pow) ,f ,(caddr e) (call (call (core apply_type) (top Val) ,(cadddr e))))))
+                 ((eq? f 'include)
+                  (let ((r (make-ssavalue)))
+                    `(block (= ,r ,(map expand-forms e)) (latestworld-if-toplevel) ,r)))
                  (else
                   (map expand-forms e))))
          (map expand-forms e)))
@@ -3137,6 +3158,11 @@
                  (else `(globalref (thismodule) ,e)))))
         ((or (not (pair? e)) (quoted? e) (memq (car e) '(toplevel symbolicgoto symboliclabel toplevel-only)))
          e)
+        ((eq? (car e) 'isglobal)
+         (let ((val (and scope (get (scope:table scope) (cadr e) #f))))
+           (cond (val `(false))
+                 ((underscore-symbol? (cadr e)) `(false))
+                 (else `(true)))))
         ((eq? (car e) 'global)
          (check-valid-name (cadr e))
          e)
@@ -3501,7 +3527,7 @@ f(x) = yt(x)
                             (false) ,(length fields)))
                 (call (core _setsuper!) ,s ,super)
                 (const (globalref (thismodule) ,name) ,s)
-                (call (core _typebody!) ,s (call (core svec) ,@types))
+                (call (core _typebody!) (false) ,s (call (core svec) ,@types))
                 (return (null)))))))))
 
 (define (type-for-closure name fields super)
@@ -3515,7 +3541,7 @@ f(x) = yt(x)
                           (false) ,(length fields)))
               (call (core _setsuper!) ,s ,super)
               (const (globalref (thismodule) ,name) ,s)
-              (call (core _typebody!) ,s
+              (call (core _typebody!) (false) ,s
                     (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
               (return (null)))))))))
 
@@ -3617,8 +3643,8 @@ f(x) = yt(x)
                    rhs1))
          (ex   `(= ,var ,rhs)))
     (if (eq? rhs1 rhs0)
-        `(block ,ex ,rhs0)
-        `(block (= ,rhs1 ,rhs0)
+        `(block (globaldecl ,var) ,ex ,rhs0)
+        `(block (globaldecl ,var) (= ,rhs1 ,rhs0)
                 ,ex
                 ,rhs1))))
 
@@ -3666,11 +3692,17 @@ f(x) = yt(x)
      (else
        (error (string "invalid assignment location \"" (deparse var) "\"")))))
 
+(define (sig-type-expr namemap name expr)
+  (let ((newname (get namemap name expr)))
+    (if (symbol? newname)
+      `(globalref (thismodule) ,newname)
+      newname)))
+
 (define (rename-sig-types ex namemap)
   (pattern-replace
    (pattern-set
     (pattern-lambda (call (core (-/ Typeof)) name)
-                    (get namemap name __)))
+                    (sig-type-expr namemap name __)))
    ex))
 
 ;; replace leading (function) argument type with `typ`
@@ -3770,7 +3802,7 @@ f(x) = yt(x)
   (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
-         global globalref assign-const-if-global thismodule
+         global globalref assign-const-if-global isglobal thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
          error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
 
@@ -4047,7 +4079,9 @@ f(x) = yt(x)
                     (if (and (vinfo:asgn vi) (vinfo:capt vi))
                         `(call (core isdefined) ,sym (inert contents))
                         e))
-                   (else e))))
+                   (else (if (globalref? sym)
+                      `(call (core isdefinedglobal) ,(cadr sym) (inert ,(caddr sym)))
+                      e)))))
           ((_opaque_closure)
            (let* ((isva  (car (cddddr e)))
                   (nargs (cadr (cddddr e)))
@@ -4114,7 +4148,8 @@ f(x) = yt(x)
                                      `(lambda ,(cadr lam2)
                                         (,(clear-capture-bits (car vis))
                                          ,@(cdr vis))
-                                        ,body)))))
+                                        ,body)))
+                          (latestworld)))
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '() #f parsed-method-stack)))
                                (top-stmts (cdr exprs))
@@ -4122,7 +4157,8 @@ f(x) = yt(x)
                           `(toplevel-butfirst
                             (block ,@sp-inits
                                    (method ,(cadr e) ,(cl-convert sig fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)
-                                           ,(julia-bq-macro newlam)))
+                                           ,(julia-bq-macro newlam))
+                                   (latestworld))
                             ,@top-stmts))))
 
                  ;; local case - lift to a new type at top level
@@ -4221,7 +4257,7 @@ f(x) = yt(x)
                                      (contains (lambda (x) (eq? x 'kwftype)) sig))
                                     (renamemap (map cons closure-param-names closure-param-syms))
                                     (arg-defs (replace-vars
-                                               (fix-function-arg-type sig type-name iskw namemap closure-param-syms)
+                                               (fix-function-arg-type sig `(globalref (thismodule) ,type-name) iskw namemap closure-param-syms)
                                                renamemap)))
                                (append (map (lambda (gs tvar)
                                               (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
@@ -4246,11 +4282,11 @@ f(x) = yt(x)
                                     (filter identity (map (lambda (v ve)
                                                             (if (is-var-boxed? v lam)
                                                                 #f
-                                                                `(call (core typeof) ,ve)))
+                                                                `(call (core _typeof_captured_variable) ,ve)))
                                                           capt-vars var-exprs)))))
                            `(new ,(if (null? P)
-                                      type-name
-                                      `(call (core apply_type) ,type-name ,@P))
+                                      `(globalref (thismodule) ,type-name)
+                                      `(call (core apply_type) (globalref (thismodule) ,type-name) ,@P))
                                  ,@var-exprs))))
                    (if (pair? moved-vars)
                        (set-car! (lam:vinfo lam)
@@ -4260,16 +4296,20 @@ f(x) = yt(x)
                    (if (or exists (and short (pair? alldefs)))
                        `(toplevel-butfirst
                          (null)
+                         ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                          ,@sp-inits
-                         ,@mk-method)
+                         ,@mk-method
+                         (latestworld))
                        (begin
                          (put! defined name #t)
                          `(toplevel-butfirst
                            ,(convert-assignment name mk-closure fname lam interp opaq parsed-method-stack globals locals)
                            ,@typedef
+                           (latestworld)
                            ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
                            ,@sp-inits
-                           ,@mk-method))))))))
+                           ,@mk-method
+                           (latestworld)))))))))
           ((lambda)  ;; happens inside (thunk ...) and generated function bodies
            (for-each (lambda (vi) (vinfo:set-asgn! vi #t))
                      (list-tail (car (lam:vinfo e)) (length (lam:args e))))
@@ -4334,7 +4374,6 @@ f(x) = yt(x)
 
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
-      (and (globalref? e) (nothrow-julia-global (cadr e) (caddr e)))
       (and (pair? e)
            (memq (car e) '(quote inert top core
                                  slot static_parameter)))))
@@ -4436,15 +4475,16 @@ f(x) = yt(x)
     (define (pop-handler-list src-tokens dest-tokens lab)
       (if (eq? src-tokens dest-tokens)
           #f
-          (let loop ((s src-tokens)
-                     (l '()))
-            (if (not (pair? s))
-                (if (null? lab)
-                  (error "Attempt to jump into catch block")
-                  (error (string "cannot goto label \"" lab "\" inside try/catch block"))))
-            (if (eq? (cdr s) dest-tokens)
-                (cons (car s) l)
-                (loop (cdr s) (cons (car s) l))))))
+          (reverse
+            (let loop ((s src-tokens)
+                       (l '()))
+              (if (not (pair? s))
+                  (if (null? lab)
+                    (error "Attempt to jump into catch block")
+                    (error (string "cannot goto label \"" lab "\" inside try/catch block"))))
+              (if (eq? (cdr s) dest-tokens)
+                  (cons (car s) l)
+                  (loop (cdr s) (cons (car s) l)))))))
     (define (emit-return tail x)
       (define (emit- x)
         (let* ((tmp (if ((if (null? catch-token-stack) valid-ir-return? simple-atom?) x)
@@ -4501,6 +4541,7 @@ f(x) = yt(x)
           ((struct_type)       "\"struct\" expression")
           ((method)            "method definition")
           ((set_binding_type!) (string "type declaration for global \"" (deparse (cadr e)) "\""))
+          ((latestworld)       "World age increment")
           (else                (string "\"" h "\" expression"))))
       (if (not (null? (cadr lam)))
           (error (string (head-to-text (car e)) " not at top level"))))
@@ -4583,14 +4624,18 @@ f(x) = yt(x)
                                  (cdr cnd)
                                  (list cnd))))))
           tests))
+    (define (emit-assignment-or-setglobal lhs rhs)
+      (if (globalref? lhs)
+        (emit `(call (top setglobal!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs))
+        (emit `(= ,lhs ,rhs))))
     (define (emit-assignment lhs rhs)
       (if rhs
           (if (valid-ir-rvalue? lhs rhs)
-              (emit `(= ,lhs ,rhs))
+              (emit-assignment-or-setglobal lhs rhs)
               (let ((rr (make-ssavalue)))
                 (emit `(= ,rr ,rhs))
-                (emit `(= ,lhs ,rr))))
-          (emit `(= ,lhs (null)))) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
+                (emit-assignment-or-setglobal lhs rr)))
+          (emit-assignment-or-setglobal lhs `(null))) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
       #f)
     ;; the interpreter loop. `break-labels` keeps track of the labels to jump to
     ;; for all currently closing break-blocks.
@@ -4669,7 +4714,7 @@ f(x) = yt(x)
                                        rhs (make-ssavalue))))
                            (if (not (eq? rr rhs))
                                (emit `(= ,rr ,rhs)))
-                           (emit `(= ,lhs ,rr))
+                           (emit-assignment-or-setglobal lhs rr)
                            (if tail (emit-return tail rr))
                            rr)
                          (emit-assignment lhs rhs))))))
@@ -4854,10 +4899,14 @@ f(x) = yt(x)
                  ;; separate trycatch and tryfinally blocks earlier.
                  (mark-label catch)
                  (if finally
-                     (begin (enter-finally-block catchcode #f) ;; enter block via exception
+                     (begin (set! finally-handler last-finally-handler)
+                            (set! catch-token-stack (cons handler-token catch-token-stack))
+                            (compile (caddr e) break-labels #f #f) ;; enter block via exception
+                            (emit '(call (top rethrow)))
+                            (emit-return tail '(null)) ; unreachable
+                            (set! catch-token-stack (cdr catch-token-stack))
                             (mark-label endl) ;; non-exceptional control flow enters here
-                            (set! finally-handler last-finally-handler)
-                            (compile (caddr e) break-labels #f #f)
+                            (compile (renumber-assigned-ssavalues (caddr e)) break-labels #f #f)
                             ;; emit actions to be taken at exit of finally
                             ;; block, depending on the tag variable `finally`
                             (let loop ((actions (caddr my-finally-handler)))
@@ -4895,13 +4944,17 @@ f(x) = yt(x)
                  #f))
             ((global) ; keep global declarations as statements
              (if value (error "misplaced \"global\" declaration"))
-             (emit e))
+             (emit e)
+             (if (null? (cadr lam))
+               (emit `(latestworld))))
             ((globaldecl)
              (if value (error "misplaced \"global\" declaration"))
-             (if (atom? (caddr e)) (emit e)
+             (if (or (length= e 2) (atom? (caddr e))) (emit e)
               (let ((rr (make-ssavalue)))
                 (emit `(= ,rr ,(caddr e)))
-                (emit `(globaldecl ,(cadr e) ,rr)))))
+                (emit `(globaldecl ,(cadr e) ,rr))))
+             (if (null? (cadr lam))
+               (emit `(latestworld))))
             ((local-def) #f)
             ((local) #f)
             ((moved-local)
@@ -4948,7 +5001,12 @@ f(x) = yt(x)
                      (else  (emit temp)))))
 
             ;; top level expressions
-            ((thunk module)
+            ((thunk)
+             (check-top-level e)
+             (emit e)
+             (if tail (emit-return tail '(null)))
+             '(null))
+            ((module)
              (check-top-level e)
              (emit e)
              (if tail (emit-return tail '(null)))
@@ -4964,10 +5022,17 @@ f(x) = yt(x)
                (if tail (emit-return tail val))
                val))
 
+            ((latestworld-if-toplevel)
+             (if (null? (cadr lam))
+               (emit `(latestworld)))
+             '(null))
+
             ;; other top level expressions
-            ((import using export public)
+            ((import using export public latestworld)
              (check-top-level e)
-             (emit e)
+             (if (not (eq? (car e) 'latestworld))
+              (emit e))
+             (emit `(latestworld))
              (let ((have-ret? (and (pair? code) (pair? (car code)) (eq? (caar code) 'return))))
                (if (and tail (not have-ret?))
                    (emit-return tail '(null))))

@@ -19,6 +19,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/Analysis/CFG.h>
+#include <llvm/Analysis/DomTreeUpdater.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
@@ -312,7 +313,6 @@ struct State {
     SmallVector<SmallVector<int, 0>> CalleeRoots;
     // We don't bother doing liveness on Allocas that were not mem2reg'ed.
     // they just get directly sunk into the root array.
-    SmallVector<AllocaInst *, 0> Allocas;
     DenseMap<AllocaInst *, unsigned> ArrayAllocas;
     DenseMap<AllocaInst *, AllocaInst *> ShadowAllocas;
     SmallVector<std::pair<StoreInst *, unsigned>, 0> TrackedStores;
@@ -329,12 +329,13 @@ public:
 
 private:
     CallInst *pgcstack;
+    Function *smallAllocFunc;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const ArrayRef<int> &SafepointsSoFar,
                       SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
-    void NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses);
-    void NoteUse(State &S, BBState &BBS, Value *V) {
-        NoteUse(S, BBS, V, BBS.UpExposedUses);
+    void NoteUse(State &S, BBState &BBS, Value *V, LargeSparseBitVector &Uses, Function &F);
+    void NoteUse(State &S, BBState &BBS, Value *V, Function &F) {
+        NoteUse(S, BBS, V, BBS.UpExposedUses, F);
     }
 
     void LiftPhi(State &S, PHINode *Phi);
@@ -348,16 +349,17 @@ private:
     SmallVector<int, 0> NumberAll(State &S, Value *V);
     SmallVector<int, 0> NumberAllBase(State &S, Value *Base);
 
-    void NoteOperandUses(State &S, BBState &BBS, User &UI);
+    void NoteOperandUses(State &S, BBState &BBS, Instruction &UI);
     void MaybeTrackDst(State &S, MemTransferInst *MI);
     void MaybeTrackStore(State &S, StoreInst *I);
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
     void ComputeLiveSets(State &S);
-    SmallVector<int, 0> ColorRoots(const State &S);
+    std::pair<SmallVector<int, 0>, int> ColorRoots(const State &S);
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
-    void PlaceGCFrameStores(State &S, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame);
-    void PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
+    void PlaceGCFrameStores(State &S, unsigned MinColorRoot, ArrayRef<int> Colors, int PreAssignedColors, Value *GCFrame);
+    void PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
+    void PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAssignedColors, State &S, std::map<Value *, std::pair<int, int>>);
     void CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified);
     bool CleanupIR(Function &F, State *S, bool *CFGModified);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
@@ -366,6 +368,7 @@ private:
     void RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRef<int> CalleeRoots);
     Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V);
     Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V);
+    Value* lowerGCAllocBytesLate(CallInst *target, Function &F);
 };
 
 // The final GC lowering pass. This pass lowers platform-agnostic GC

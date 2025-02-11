@@ -199,16 +199,15 @@ end
 
 function typejoin_union_tuple(T::DataType)
     @_foldable_meta
-    u = Base.unwrap_unionall(T)
-    p = (u::DataType).parameters
-    lr = length(p)::Int
+    p = T.parameters
+    lr = length(p)
     if lr == 0
         return Tuple{}
     end
     c = Vector{Any}(undef, lr)
     for i = 1:lr
         pi = p[i]
-        U = Core.Compiler.unwrapva(pi)
+        U = unwrapva(pi)
         if U === Union{}
             ci = Union{}
         elseif U isa Union
@@ -218,7 +217,7 @@ function typejoin_union_tuple(T::DataType)
         else
             ci = promote_typejoin_union(U)
         end
-        if i == lr && Core.Compiler.isvarargtype(pi)
+        if i == lr && isvarargtype(pi)
             c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
         else
             c[i] = ci
@@ -493,12 +492,6 @@ fld1(x::Real, y::Real) = fld1(promote(x,y)...)
 max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
-
-if isdefined(Core, :Compiler)
-    const _return_type = Core.Compiler.return_type
-else
-    _return_type(@nospecialize(f), @nospecialize(t)) = Any
-end
 
 function TupleOrBottom(tt...)
     any(p -> p === Union{}, tt) && return Union{}

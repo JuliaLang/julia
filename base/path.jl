@@ -613,3 +613,56 @@ relpath(path::AbstractString, startpath::AbstractString) =
 for f in (:isdirpath, :splitdir, :splitdrive, :splitext, :normpath, :abspath)
     @eval $f(path::AbstractString) = $f(String(path))
 end
+
+# RFC3986 Section 2.1
+percent_escape(s) = '%' * join(map(b -> uppercase(string(b, base=16)), codeunits(s)), '%')
+# RFC3986 Section 2.3
+encode_uri_component(s) = replace(s, r"[^A-Za-z0-9\-_.~/]+" => percent_escape)
+
+"""
+    uripath(path::AbstractString)
+
+Encode `path` as a URI as per [RFC8089: The "file" URI
+Scheme](https://www.rfc-editor.org/rfc/rfc8089), [RFC3986: Uniform Resource
+Identifier (URI): Generic Syntax](https://www.rfc-editor.org/rfc/rfc3986), and
+the [Freedesktop File URI spec](https://www.freedesktop.org/wiki/Specifications/file-uri-spec/).
+
+## Examples
+
+```julia-repl
+julia> uripath("/home/user/example file.jl") # On a unix machine
+"file://<hostname>/home/user/example%20file.jl"
+
+juila> uripath("C:\\Users\\user\\example file.jl") # On a windows machine
+"file:///C:/Users/user/example%20file.jl"
+```
+"""
+function uripath end
+
+@static if Sys.iswindows()
+    function uripath(path::String)
+        path = abspath(path)
+        if startswith(path, "\\\\") # UNC path, RFC8089 Appendix E.3
+            unixpath = join(eachsplit(path, path_separator_re, keepempty=false), '/')
+            string("file://", encode_uri_component(unixpath)) # RFC8089 Section 2
+        else
+            drive, localpath = splitdrive(path) # Assuming that non-UNC absolute paths on Windows always have a drive component
+            unixpath = join(eachsplit(localpath, path_separator_re, keepempty=false), '/')
+            encdrive = replace(encode_uri_component(drive), "%3A" => ':', "%7C" => '|') # RFC8089 Appendices D.2, E.2.1, and E.2.2
+            string("file:///", encdrive, '/', encode_uri_component(unixpath)) # RFC8089 Section 2
+        end
+    end
+else
+    function uripath(path::String)
+        localpath = join(eachsplit(abspath(path), path_separator_re, keepempty=false), '/')
+        host = if ispath("/proc/sys/fs/binfmt_misc/WSLInterop") # WSL sigil
+            distro = get(ENV, "WSL_DISTRO_NAME", "") # See <https://patrickwu.space/wslconf/>
+            "wsl\$/$distro" # See <https://github.com/microsoft/terminal/pull/14993> and <https://learn.microsoft.com/en-us/windows/wsl/filesystems>
+        else
+            gethostname() # Freedesktop File URI Spec, Hostnames section
+        end
+        string("file://", encode_uri_component(host), '/', encode_uri_component(localpath)) # RFC8089 Section 2
+    end
+end
+
+uripath(path::AbstractString) = uripath(String(path))

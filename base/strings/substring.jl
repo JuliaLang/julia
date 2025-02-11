@@ -272,6 +272,7 @@ end
 
 function repeat(s::Union{String, SubString{String}}, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
+    r = UInt(r)::UInt
     r == 0 && return ""
     r == 1 && return String(s)
     n = sizeof(s)

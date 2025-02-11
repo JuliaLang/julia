@@ -116,7 +116,7 @@ VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public a, b, c"))
 
 ### Standalone `using` and `import`
 
-Possibly the most common way of loading a module is `using ModuleName`. This [loads](@ref
+For interactive use, the most common way of loading a module is `using ModuleName`. This [loads](@ref
 code-loading) the code associated with `ModuleName`, and brings
 
 1. the module name
@@ -171,6 +171,13 @@ Importantly, the module name `NiceStuff` will *not* be in the namespace. If you 
 ```jldoctest module_manual
 julia> using .NiceStuff: nice, DOG, NiceStuff
 ```
+
+When two or more packages/modules export a name and that name does not refer to the
+same thing in each of the packages, and the packages are loaded via `using` without
+an explicit list of names, it is an error to reference that name without qualification.
+It is thus recommended that code intended to be forward-compatible with future versions
+of its dependencies and of Julia, e.g., code in released packages, list the names it
+uses from each loaded package, e.g., `using Foo: Foo, f` rather than `using Foo`.
 
 Julia has two forms for seemingly the same thing because only `import ModuleName: f` allows adding methods to `f`
 *without a module path*.
@@ -283,14 +290,14 @@ julia> module B
 B
 ```
 
-The statement `using .A, .B` works, but when you try to call `f`, you get a warning
+The statement `using .A, .B` works, but when you try to call `f`, you get an error with a hint
 
 ```jldoctest module_manual
 julia> using .A, .B
 
 julia> f
-WARNING: both B and A export "f"; uses of it in module Main must be qualified
 ERROR: UndefVarError: `f` not defined in `Main`
+Hint: It looks like two or more modules export different bindings with this name, resulting in ambiguity. Try explicitly importing it from a particular module, or qualifying the name with the module it should come from.
 ```
 
 Here, Julia cannot decide which `f` you are referring to, so you have to make a choice. The following solutions are commonly used:

@@ -28,8 +28,15 @@ export
 """
     StatStruct
 
-A struct which stores the information from `stat`.
-The following fields of this struct is considered public API:
+A struct which stores information about a file. Usually
+constructed by calling [`stat`](@ref) on a path.
+
+This struct is used internally as the foundation of a number of utility
+functions. Some return specific parts of the information stored in it
+directly, such as [`filesize`](@ref), [`mtime`](@ref) and [`ctime`](@ref). Others add
+some logic on top using bit-manipulation, such as [`isfifo`](@ref), [`ischardev`](@ref), and [`issetuid`](@ref).
+
+The following fields of this struct are considered public API:
 
 | Name    | Type                            | Description                                                        |
 |:--------|:--------------------------------|:-------------------------------------------------------------------|
@@ -63,6 +70,7 @@ struct StatStruct
     blocks  :: Int64
     mtime   :: Float64
     ctime   :: Float64
+    ioerrno :: Int32
 end
 
 @eval function Base.:(==)(x::StatStruct, y::StatStruct) # do not include `desc` in equality or hash
@@ -80,22 +88,23 @@ end
     end)
 end
 
-StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-StatStruct(buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct("", buf)
-StatStruct(desc::Union{AbstractString, OS_HANDLE}, buf::Union{Vector{UInt8},Ptr{UInt8}}) = StatStruct(
+StatStruct() = StatStruct("", 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, Base.UV_ENOENT)
+StatStruct(buf::Union{Memory{UInt8},Vector{UInt8},Ptr{UInt8}}, ioerrno::Int32) = StatStruct("", buf, ioerrno)
+StatStruct(desc::Union{AbstractString, OS_HANDLE}, buf::Union{Memory{UInt8},Vector{UInt8},Ptr{UInt8}}, ioerrno::Int32) = StatStruct(
     desc isa OS_HANDLE ? desc : String(desc),
-    ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_nlink,   UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_uid,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_gid,     UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_rdev,    UInt32,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_size,    UInt64,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_blksize, UInt64,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf),
-    ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf),
-    ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_nlink,   UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_uid,     UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_gid,     UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt32) : ccall(:jl_stat_rdev,    UInt32,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt64) : ccall(:jl_stat_size,    UInt64,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt64) : ccall(:jl_stat_blksize, UInt64,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(UInt64) : ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(Float64) : ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf),
+    ioerrno != 0 ? zero(Float64) : ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
+    ioerrno
 )
 
 function iso_datetime_with_relative(t, tnow)
@@ -130,35 +139,41 @@ end
 function show_statstruct(io::IO, st::StatStruct, oneline::Bool)
     print(io, oneline ? "StatStruct(" : "StatStruct for ")
     show(io, st.desc)
-    oneline || print(io, "\n  ")
-    print(io, " size: ", st.size, " bytes")
-    oneline || print(io, "\n")
-    print(io, " device: ", st.device)
-    oneline || print(io, "\n ")
-    print(io, " inode: ", st.inode)
-    oneline || print(io, "\n  ")
-    print(io, " mode: 0o", string(filemode(st), base = 8, pad = 6), " (", filemode_string(st), ")")
-    oneline || print(io, "\n ")
-    print(io, " nlink: ", st.nlink)
-    oneline || print(io, "\n   ")
-    print(io, " uid: $(st.uid)")
-    username = getusername(st.uid)
-    username === nothing || print(io, " (", username, ")")
-    oneline || print(io, "\n   ")
-    print(io, " gid: ", st.gid)
-    groupname = getgroupname(st.gid)
-    groupname === nothing || print(io, " (", groupname, ")")
-    oneline || print(io, "\n  ")
-    print(io, " rdev: ", st.rdev)
-    oneline || print(io, "\n ")
-    print(io, " blksz: ", st.blksize)
-    oneline || print(io, "\n")
-    print(io, " blocks: ", st.blocks)
-    tnow = round(UInt, time())
-    oneline || print(io, "\n ")
-    print(io, " mtime: ", iso_datetime_with_relative(st.mtime, tnow))
-    oneline || print(io, "\n ")
-    print(io, " ctime: ", iso_datetime_with_relative(st.ctime, tnow))
+    code = st.ioerrno
+    if code != 0
+        print(io, oneline ? " " : "\n ")
+        print(io, Base.uverrorname(code), ": ", Base.struverror(code))
+    else
+        oneline || print(io, "\n  ")
+        print(io, " size: ", st.size, " bytes")
+        oneline || print(io, "\n")
+        print(io, " device: ", st.device)
+        oneline || print(io, "\n ")
+        print(io, " inode: ", st.inode)
+        oneline || print(io, "\n  ")
+        print(io, " mode: 0o", string(filemode(st), base = 8, pad = 6), " (", filemode_string(st), ")")
+        oneline || print(io, "\n ")
+        print(io, " nlink: ", st.nlink)
+        oneline || print(io, "\n   ")
+        print(io, " uid: $(st.uid)")
+        username = getusername(st.uid)
+        username === nothing || print(io, " (", username, ")")
+        oneline || print(io, "\n   ")
+        print(io, " gid: ", st.gid)
+        groupname = getgroupname(st.gid)
+        groupname === nothing || print(io, " (", groupname, ")")
+        oneline || print(io, "\n  ")
+        print(io, " rdev: ", st.rdev)
+        oneline || print(io, "\n ")
+        print(io, " blksz: ", st.blksize)
+        oneline || print(io, "\n")
+        print(io, " blocks: ", st.blocks)
+        tnow = round(UInt, time())
+        oneline || print(io, "\n ")
+        print(io, " mtime: ", iso_datetime_with_relative(st.mtime, tnow))
+        oneline || print(io, "\n ")
+        print(io, " ctime: ", iso_datetime_with_relative(st.ctime, tnow))
+    end
     oneline && print(io, ")")
     return nothing
 end
@@ -168,18 +183,13 @@ show(io::IO, ::MIME"text/plain", st::StatStruct) = show_statstruct(io, st, false
 
 # stat & lstat functions
 
+checkstat(s::StatStruct) = Int(s.ioerrno) in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL) ? s : uv_error(string("stat(", repr(s.desc), ")"), s.ioerrno)
+
 macro stat_call(sym, arg1type, arg)
     return quote
-        stat_buf = zeros(UInt8, Int(ccall(:jl_sizeof_stat, Int32, ())))
+        stat_buf = fill!(Memory{UInt8}(undef, Int(ccall(:jl_sizeof_stat, Int32, ()))), 0x00)
         r = ccall($(Expr(:quote, sym)), Int32, ($(esc(arg1type)), Ptr{UInt8}), $(esc(arg)), stat_buf)
-        if !(r in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL))
-            uv_error(string("stat(", repr($(esc(arg))), ")"), r)
-        end
-        st = StatStruct($(esc(arg)), stat_buf)
-        if ispath(st) != (r == 0)
-            error("stat returned zero type for a valid path")
-        end
-        return st
+        return checkstat(StatStruct($(esc(arg)), stat_buf, r))
     end
 end
 
@@ -197,10 +207,12 @@ if RawFD !== OS_HANDLE
 end
 
 """
-    stat(file)
-    stat(joinpath...)
+    stat(path)
+    stat(path_elements...)
 
 Return a structure whose fields contain information about the file.
+If multiple arguments are given, they are joined by [`joinpath`](@ref).
+
 The fields of the structure are:
 
 | Name    | Type                            | Description                                                        |
@@ -223,13 +235,14 @@ stat(path) = (path2 = joinpath(path); path2 isa typeof(path) ? error("stat not i
 stat(path...) = stat(joinpath(path...))
 
 """
-    lstat(file)
-    lstat(joinpath...)
+    lstat(path)
+    lstat(path_elements...)
 
-Like [`stat`](@ref), but for symbolic links gets the info for the link
-itself rather than the file it refers to.
-This function must be called on a file path rather than a file object or a file
-descriptor.
+Like [`stat`](@ref), but for symbolic links gets the info
+for the link itself rather than the file it refers to.
+
+This function must be called on a file path rather
+than a file object or a file descriptor.
 """
 lstat(path) = (path2 = joinpath(path); path2 isa typeof(path) ? error("lstat not implemented for $(typeof(path))") : lstat(path2))
 lstat(path...) = lstat(joinpath(path...))
@@ -282,9 +295,14 @@ const filemode_table = (
 )
 
 """
-    filemode(file)
+    filemode(path)
+    filemode(path_elements...)
+    filemode(stat_struct)
 
-Equivalent to `stat(file).mode`.
+Return the mode of the file located at `path`,
+or the mode indicated by the file descriptor `stat_struct`.
+
+Equivalent to `stat(path).mode` or `stat_struct.mode`.
 """
 filemode(st::StatStruct) = st.mode
 filemode_string(st::StatStruct) = filemode_string(st.mode)
@@ -305,23 +323,38 @@ function filemode_string(mode)
 end
 
 """
-    filesize(path...)
+    filesize(path)
+    filesize(path_elements...)
+    filesize(stat_struct)
 
-Equivalent to `stat(file).size`.
+Return the size of the file located at `path`,
+or the size indicated by file descriptor `stat_struct`.
+
+Equivalent to `stat(path).size` or `stat_struct.size`.
 """
 filesize(st::StatStruct) = st.size
 
 """
-    mtime(file)
+    mtime(path)
+    mtime(path_elements...)
+    mtime(stat_struct)
 
-Equivalent to `stat(file).mtime`.
+Return the unix timestamp of when the file at `path` was last modified,
+or the last modified timestamp indicated by the file descriptor `stat_struct`.
+
+Equivalent to `stat(path).mtime` or `stat_struct.mtime`.
 """
 mtime(st::StatStruct) = st.mtime
 
 """
-    ctime(file)
+    ctime(path)
+    ctime(path_elements...)
+    ctime(stat_struct)
 
-Equivalent to `stat(file).ctime`.
+Return the unix timestamp of when the metadata of the file at `path` was last modified,
+or the last modified metadata timestamp indicated by the file descriptor `stat_struct`.
+
+Equivalent to `stat(path).ctime` or `stat_struct.ctime`.
 """
 ctime(st::StatStruct) = st.ctime
 
@@ -329,12 +362,14 @@ ctime(st::StatStruct) = st.ctime
 
 """
     ispath(path) -> Bool
+    ispath(path_elements...) -> Bool
 
 Return `true` if a valid filesystem entity exists at `path`,
 otherwise returns `false`.
+
 This is the generalization of [`isfile`](@ref), [`isdir`](@ref) etc.
 """
-ispath(st::StatStruct) = filemode(st) & 0xf000 != 0x0000
+ispath(st::StatStruct) = st.ioerrno == 0
 function ispath(path::String)
     # We use `access()` and `F_OK` to determine if a given path exists. `F_OK` comes from `unistd.h`.
     F_OK = 0x00
@@ -348,22 +383,27 @@ ispath(path::AbstractString) = ispath(String(path))
 
 """
     isfifo(path) -> Bool
+    isfifo(path_elements...) -> Bool
+    isfifo(stat_struct) -> Bool
 
-Return `true` if `path` is a FIFO, `false` otherwise.
+Return `true` if the file at `path` or file descriptor `stat_struct` is FIFO, `false` otherwise.
 """
 isfifo(st::StatStruct) = filemode(st) & 0xf000 == 0x1000
 
 """
     ischardev(path) -> Bool
+    ischardev(path_elements...) -> Bool
+    ischardev(stat_struct) -> Bool
 
-Return `true` if `path` is a character device, `false` otherwise.
+Return `true` if the path `path` or file descriptor `stat_struct` refer to a character device, `false` otherwise.
 """
 ischardev(st::StatStruct) = filemode(st) & 0xf000 == 0x2000
 
 """
     isdir(path) -> Bool
+    isdir(path_elements...) -> Bool
 
-Return `true` if `path` is a directory, `false` otherwise.
+Return `true` if `path` points to a directory, `false` otherwise.
 
 # Examples
 ```jldoctest
@@ -380,15 +420,18 @@ isdir(st::StatStruct) = filemode(st) & 0xf000 == 0x4000
 
 """
     isblockdev(path) -> Bool
+    isblockdev(path_elements...) -> Bool
+    isblockdev(stat_struct) -> Bool
 
-Return `true` if `path` is a block device, `false` otherwise.
+Return `true` if the path `path` or file descriptor `stat_struct` refer to a block device, `false` otherwise.
 """
 isblockdev(st::StatStruct) = filemode(st) & 0xf000 == 0x6000
 
 """
     isfile(path) -> Bool
+    isfile(path_elements...) -> Bool
 
-Return `true` if `path` is a regular file, `false` otherwise.
+Return `true` if `path` points to a regular file, `false` otherwise.
 
 # Examples
 ```jldoctest
@@ -414,15 +457,17 @@ isfile(st::StatStruct) = filemode(st) & 0xf000 == 0x8000
 
 """
     islink(path) -> Bool
+    islink(path_elements...) -> Bool
 
-Return `true` if `path` is a symbolic link, `false` otherwise.
+Return `true` if `path` points to a symbolic link, `false` otherwise.
 """
 islink(st::StatStruct) = filemode(st) & 0xf000 == 0xa000
 
 """
     issocket(path) -> Bool
+    issocket(path_elements...) -> Bool
 
-Return `true` if `path` is a socket, `false` otherwise.
+Return `true` if `path` points to a socket, `false` otherwise.
 """
 issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
 
@@ -430,29 +475,37 @@ issocket(st::StatStruct) = filemode(st) & 0xf000 == 0xc000
 
 """
     issetuid(path) -> Bool
+    issetuid(path_elements...) -> Bool
+    issetuid(stat_struct) -> Bool
 
-Return `true` if `path` has the setuid flag set, `false` otherwise.
+Return `true` if the file at `path` or file descriptor `stat_struct` have the setuid flag set, `false` otherwise.
 """
 issetuid(st::StatStruct) = (filemode(st) & 0o4000) > 0
 
 """
     issetgid(path) -> Bool
+    issetgid(path_elements...) -> Bool
+    issetgid(stat_struct) -> Bool
 
-Return `true` if `path` has the setgid flag set, `false` otherwise.
+Return `true` if the file at `path` or file descriptor `stat_struct` have the setgid flag set, `false` otherwise.
 """
 issetgid(st::StatStruct) = (filemode(st) & 0o2000) > 0
 
 """
     issticky(path) -> Bool
+    issticky(path_elements...) -> Bool
+    issticky(stat_struct) -> Bool
 
-Return `true` if `path` has the sticky bit set, `false` otherwise.
+Return `true` if the file at `path` or file descriptor `stat_struct` have the sticky bit set, `false` otherwise.
 """
 issticky(st::StatStruct) = (filemode(st) & 0o1000) > 0
 
 """
-    uperm(file)
+    uperm(path)
+    uperm(path_elements...)
+    uperm(stat_struct)
 
-Get the permissions of the owner of the file as a bitfield of
+Return a bitfield of the owner permissions for the file at `path` or file descriptor `stat_struct`.
 
 | Value | Description        |
 |:------|:-------------------|
@@ -460,22 +513,52 @@ Get the permissions of the owner of the file as a bitfield of
 | 02    | Write Permission   |
 | 04    | Read Permission    |
 
-For allowed arguments, see [`stat`](@ref).
+The fact that a bitfield is returned means that if the permission
+is read+write, the bitfield is "110", which maps to the decimal
+value of 0+2+4=6. This is reflected in the printing of the
+returned `UInt8` value.
+
+See also [`gperm`](@ref) and [`operm`](@ref).
+
+```jldoctest
+julia> touch("dummy_file");  # Create test-file without contents
+
+julia> uperm("dummy_file")
+0x06
+
+julia> bitstring(ans)
+"00000110"
+
+julia> has_read_permission(path) = uperm(path) & 0b00000100 != 0;  # Use bit mask to check specific bit
+
+julia> has_read_permission("dummy_file")
+true
+
+julia> rm("dummy_file")     # Clean up test-file
+```
 """
 uperm(st::StatStruct) = UInt8((filemode(st) >> 6) & 0x7)
 
 """
-    gperm(file)
+    gperm(path)
+    gperm(path_elements...)
+    gperm(stat_struct)
 
 Like [`uperm`](@ref) but gets the permissions of the group owning the file.
+
+See also [`operm`](@ref).
 """
 gperm(st::StatStruct) = UInt8((filemode(st) >> 3) & 0x7)
 
 """
-    operm(file)
+    operm(path)
+    operm(path_elements...)
+    operm(stat_struct)
 
-Like [`uperm`](@ref) but gets the permissions for people who neither own the file nor are a member of
-the group owning the file
+Like [`uperm`](@ref) but gets the permissions for people who neither own the
+file nor are a member of the group owning the file.
+
+See also [`gperm`](@ref).
 """
 operm(st::StatStruct) = UInt8((filemode(st)     ) & 0x7)
 
@@ -511,7 +594,7 @@ function samefile(a::StatStruct, b::StatStruct)
 end
 
 """
-    samefile(path_a::AbstractString, path_b::AbstractString)
+    samefile(path_a, path_b)
 
 Check if the paths `path_a` and `path_b` refer to the same existing file or directory.
 """
@@ -519,6 +602,7 @@ samefile(a::AbstractString, b::AbstractString) = samefile(stat(a), stat(b))
 
 """
     ismount(path) -> Bool
+    ismount(path_elements...) -> Bool
 
 Return `true` if `path` is a mount point, `false` otherwise.
 """

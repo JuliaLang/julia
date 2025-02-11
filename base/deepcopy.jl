@@ -120,11 +120,14 @@ function _deepcopy_memory_t(@nospecialize(x::Memory), T, stackdict::IdDict)
     end
     return dest
 end
-@eval function deepcopy_internal(x::Array{T, N}, stackdict::IdDict) where {T, N}
+function deepcopy_internal(x::Array{T, N}, stackdict::IdDict) where {T, N}
     if haskey(stackdict, x)
         return stackdict[x]::typeof(x)
     end
-    stackdict[x] = $(Expr(:new, :(Array{T, N}), :(deepcopy_internal(x.ref, stackdict)), :(x.size)))
+    y = stackdict[x] = Array{T, N}(undef, ntuple(Returns(0), Val{N}()))
+    setfield!(y, :ref, deepcopy_internal(x.ref, stackdict))
+    setfield!(y, :size, x.size)
+    y
 end
 function deepcopy_internal(x::GenericMemoryRef, stackdict::IdDict)
     if haskey(stackdict, x)

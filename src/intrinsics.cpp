@@ -83,10 +83,14 @@ const auto &float_func() {
             float_func[sub_float] = true;
             float_func[mul_float] = true;
             float_func[div_float] = true;
+            float_func[min_float] = true;
+            float_func[max_float] = true;
             float_func[add_float_fast] = true;
             float_func[sub_float_fast] = true;
             float_func[mul_float_fast] = true;
             float_func[div_float_fast] = true;
+            float_func[min_float_fast] = true;
+            float_func[max_float_fast] = true;
             float_func[fma_float] = true;
             float_func[muladd_float] = true;
             float_func[eq_float] = true;
@@ -441,15 +445,16 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         // up being dead code, and type inference knows that the other
         // branch's type is the only one that matters.
         if (type_is_ghost(to)) {
-            return NULL;
+            return nullptr;
         }
         CreateTrap(ctx.builder);
         return UndefValue::get(to); // type mismatch error
     }
 
-    Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : NULL;
-    if (!x.ispointer() || c) { // already unboxed, but sometimes need conversion
+    Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : nullptr;
+    if ((x.inline_roots.empty() && !x.ispointer()) || c != nullptr) { // already unboxed, but sometimes need conversion
         Value *unboxed = c ? c : x.V;
+        assert(unboxed); // clang-sa doesn't know that !x.ispointer() implies x.V does have a value
         return emit_unboxed_coercion(ctx, to, unboxed);
     }
 
@@ -457,6 +462,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     Value *p = x.constant ? literal_pointer_val(ctx, x.constant) : x.V;
 
     if (jt == (jl_value_t*)jl_bool_type || to->isIntegerTy(1)) {
+        assert(p && x.inline_roots.empty()); // clang-sa doesn't know that x.ispointer() implied these are true
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
         Instruction *unbox_load = ai.decorateInst(ctx.builder.CreateLoad(getInt8Ty(ctx.builder.getContext()), p));
         setName(ctx.emission_context, unbox_load, p->getName() + ".unbox");
@@ -473,28 +479,18 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     }
 
     unsigned alignment = julia_alignment(jt);
-    Type *ptype = to->getPointerTo();
-    if (p->getType() != ptype && isa<AllocaInst>(p)) {
-        // LLVM's mem2reg can't handle coercion if the load/store type does
-        // not match the type of the alloca. As such, it is better to
-        // perform the load using the alloca's type and then perform the
-        // appropriate coercion manually.
-        AllocaInst *AI = cast<AllocaInst>(p);
-        Type *AllocType = AI->getAllocatedType();
-        const DataLayout &DL = jl_Module->getDataLayout();
-        if (!AI->isArrayAllocation() &&
-                (AllocType->isFloatingPointTy() || AllocType->isIntegerTy() || AllocType->isPointerTy()) &&
-                (to->isFloatingPointTy() || to->isIntegerTy() || to->isPointerTy()) &&
-                DL.getTypeSizeInBits(AllocType) == DL.getTypeSizeInBits(to)) {
-            Instruction *load = ctx.builder.CreateAlignedLoad(AllocType, p, Align(alignment));
-            setName(ctx.emission_context, load, p->getName() + ".unbox");
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
-            return emit_unboxed_coercion(ctx, to, ai.decorateInst(load));
-        }
+    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
+    if (!x.inline_roots.empty()) {
+        assert(x.typ == jt);
+        AllocaInst *combined = emit_static_alloca(ctx, to, Align(alignment));
+        auto combined_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
+        recombine_value(ctx, x, combined, combined_ai, Align(alignment), false);
+        p = combined;
+        ai = combined_ai;
     }
+    assert(p); // clang-sa doesn't know that x.ispointer() implied this is true
     Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
     setName(ctx.emission_context, load, p->getName() + ".unbox");
-    jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
     return ai.decorateInst(load);
 }
 
@@ -508,18 +504,25 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
         return;
     }
 
+    auto dest_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
+
+    if (!x.inline_roots.empty()) {
+        recombine_value(ctx, x, dest, dest_ai, alignment, isVolatile);
+        return;
+    }
+
     if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
         assert(x.V);
         Value *unboxed = zext_struct(ctx, x.V);
         StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, alignment);
         store->setVolatile(isVolatile);
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
-        ai.decorateInst(store);
+        dest_ai.decorateInst(store);
         return;
     }
 
     Value *src = data_pointer(ctx, x);
-    emit_memcpy(ctx, dest, jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest), src, jl_aliasinfo_t::fromTBAA(ctx, x.tbaa), jl_datatype_size(x.typ), Align(alignment), Align(julia_alignment(x.typ)), isVolatile);
+    auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
+    emit_memcpy(ctx, dest, dest_ai, src, src_ai, jl_datatype_size(x.typ), Align(alignment), Align(julia_alignment(x.typ)), isVolatile);
 }
 
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
@@ -672,16 +675,23 @@ static jl_cgval_t generic_cast(
     uint32_t nb = jl_datatype_size(jlto);
     Type *to = bitstype_to_llvm((jl_value_t*)jlto, ctx.builder.getContext(), true);
     Type *vt = bitstype_to_llvm(v.typ, ctx.builder.getContext(), true);
-    if (toint)
-        to = INTT(to, DL);
-    else
-        to = FLOATT(to);
-    if (fromint)
-        vt = INTT(vt, DL);
-    else
-        vt = FLOATT(vt);
+
+    // fptrunc fpext depend on the specific floating point format to work
+    // correctly, and so do not pun their argument types.
+    if (!(f == fpext || f == fptrunc)) {
+        if (toint)
+            to = INTT(to, DL);
+        else
+            to = FLOATT(to);
+        if (fromint)
+            vt = INTT(vt, DL);
+        else
+            vt = FLOATT(vt);
+    }
+
     if (!to || !vt)
         return emit_runtime_call(ctx, f, argv, 2);
+
     Value *from = emit_unbox(ctx, vt, v, v.typ);
     if (!CastInst::castIsValid(Op, from, to))
         return emit_runtime_call(ctx, f, argv, 2);
@@ -832,10 +842,9 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
     Value *im1 = ctx.builder.CreateSub(idx, ConstantInt::get(ctx.types().T_size, 1));
     setName(ctx.emission_context, im1, "pointerset_idx");
 
-    Value *thePtr;
+    Value *thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
     if (ety == (jl_value_t*)jl_any_type) {
         // unsafe_store to Ptr{Any} is allowed to implicitly drop GC roots.
-        thePtr = emit_unbox(ctx, ctx.types().T_size->getPointerTo(), e, e.typ);
         auto gep = ctx.builder.CreateInBoundsGEP(ctx.types().T_size, thePtr, im1);
         setName(ctx.emission_context, gep, "pointerset_ptr");
         auto val = ctx.builder.CreatePtrToInt(emit_pointer_from_objref(ctx, boxed(ctx, x)), ctx.types().T_size);
@@ -844,8 +853,10 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_data);
         ai.decorateInst(store);
     }
+    else if (!x.inline_roots.empty()) {
+        recombine_value(ctx, e, thePtr, jl_aliasinfo_t(), Align(align_nb), false);
+    }
     else if (x.ispointer()) {
-        thePtr = emit_unbox(ctx, getPointerTy(ctx.builder.getContext()), e, e.typ);
         uint64_t size = jl_datatype_size(ety);
         im1 = ctx.builder.CreateMul(im1, ConstantInt::get(ctx.types().T_size,
                     LLT_ALIGN(size, jl_datatype_align(ety))));
@@ -859,7 +870,6 @@ static jl_cgval_t emit_pointerset(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
-            thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
             thePtr = ctx.builder.CreateInBoundsGEP(ptrty, thePtr, im1);
             typed_store(ctx, thePtr, x, jl_cgval_t(), ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
                         AtomicOrdering::NotAtomic, AtomicOrdering::NotAtomic, align_nb, nullptr, true, false, false, false, false, false, nullptr, "atomic_pointerset", nullptr, nullptr);
@@ -1494,6 +1504,34 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     case sub_float: return math_builder(ctx)().CreateFSub(x, y);
     case mul_float: return math_builder(ctx)().CreateFMul(x, y);
     case div_float: return math_builder(ctx)().CreateFDiv(x, y);
+    case min_float: {
+        assert(x->getType() == y->getType());
+        FunctionCallee minintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::minimum, ArrayRef<Type*>(t));
+        return ctx.builder.CreateCall(minintr, {x, y});
+    }
+    case max_float: {
+        assert(x->getType() == y->getType());
+        FunctionCallee maxintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::maximum, ArrayRef<Type*>(t));
+        return ctx.builder.CreateCall(maxintr, {x, y});
+    }
+    case min_float_fast: {
+        assert(x->getType() == y->getType());
+        FunctionCallee minintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::minimum, ArrayRef<Type*>(t));
+        auto call = ctx.builder.CreateCall(minintr, {x, y});
+        auto fmf = call->getFastMathFlags();
+        fmf.setFast();
+        call->copyFastMathFlags(fmf);
+        return call;
+    }
+    case max_float_fast: {
+        assert(x->getType() == y->getType());
+        FunctionCallee maxintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::maximum, ArrayRef<Type*>(t));
+        auto call = ctx.builder.CreateCall(maxintr, {x, y});
+        auto fmf = call->getFastMathFlags();
+        fmf.setFast();
+        call->copyFastMathFlags(fmf);
+        return call;
+    }
     case add_float_fast: return math_builder(ctx, true)().CreateFAdd(x, y);
     case sub_float_fast: return math_builder(ctx, true)().CreateFSub(x, y);
     case mul_float_fast: return math_builder(ctx, true)().CreateFMul(x, y);

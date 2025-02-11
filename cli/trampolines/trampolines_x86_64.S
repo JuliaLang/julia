@@ -6,9 +6,9 @@
 #define XX(name) \
 DEBUGINFO(name); \
 .global CNAME(name); \
+CNAME(name)##:; \
 .cfi_startproc; \
 SEH_START1(name); \
-CNAME(name)##:; \
 SEH_START2(); \
     CET_START(); \
     mov CNAMEADDR(name)(%rip),%r11; \

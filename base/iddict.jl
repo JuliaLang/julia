@@ -126,7 +126,7 @@ function empty!(d::IdDict)
     d.ht = Memory{Any}(undef, 32)
     ht = d.ht
     t = @_gc_preserve_begin ht
-    memset(unsafe_convert(Ptr{Cvoid}, ht), 0, sizeof(ht))
+    memset(unsafe_convert(Ptr{Cvoid}, ht), 0, sizeof(ht) % UInt)
     @_gc_preserve_end t
     d.ndel = 0
     d.count = 0

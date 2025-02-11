@@ -31,7 +31,7 @@ For example, to read a simple byte array, we could do:
 
 ```julia-repl
 julia> x = zeros(UInt8, 4)
-4-element Array{UInt8,1}:
+4-element Vector{UInt8}:
  0x00
  0x00
  0x00
@@ -39,7 +39,7 @@ julia> x = zeros(UInt8, 4)
 
 julia> read!(stdin, x)
 abcd
-4-element Array{UInt8,1}:
+4-element Vector{UInt8}:
  0x61
  0x62
  0x63
@@ -52,7 +52,7 @@ example, we could have written the above as:
 ```julia-repl
 julia> read(stdin, 4)
 abcd
-4-element Array{UInt8,1}:
+4-element Vector{UInt8}:
  0x61
  0x62
  0x63
@@ -151,7 +151,7 @@ julia> f = open("hello.txt")
 IOStream(<file hello.txt>)
 
 julia> readlines(f)
-1-element Array{String,1}:
+1-element Vector{String}:
  "Hello, World!"
 ```
 
@@ -367,7 +367,7 @@ julia> task = Threads.@spawn open("foo.txt", "w") do io
 julia> wait(task)
 
 julia> readlines("foo.txt")
-1-element Array{String,1}:
+1-element Vector{String}:
  "Hello, World!"
 ```
 

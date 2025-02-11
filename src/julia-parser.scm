@@ -1329,13 +1329,13 @@
 
 (define (valid-func-sig? paren sig)
   (and (pair? sig)
-       (or (eq? (car sig) 'call)
-           (eq? (car sig) 'tuple)
+       (or (memq (car sig) '(call tuple))
+           (and (not paren) (eq? (car sig) 'macrocall))
            (and paren (eq? (car sig) 'block))
            (and paren (eq? (car sig) '...))
            (and (eq? (car sig) '|::|)
                 (pair? (cadr sig))
-                (eq? (car (cadr sig)) 'call))
+                (memq (car (cadr sig)) '(call macrocall)))
            (and (eq? (car sig) 'where)
                 (valid-func-sig? paren (cadr sig))))))
 

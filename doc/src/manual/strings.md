@@ -1207,6 +1207,10 @@ last backslash escapes a quote, since these backslashes appear before a quote.
 
 ## [Annotated Strings](@id man-annotated-strings)
 
+!!! note
+    The API for AnnotatedStrings is considered experimental and is subject to change between
+    Julia versions.
+
 It is sometimes useful to be able to hold metadata relating to regions of a
 string. A [`AnnotatedString`](@ref Base.AnnotatedString) wraps another string and
 allows for regions of it to be annotated with labelled values (`:label => value`).
@@ -1226,7 +1230,7 @@ to keep the string annotations.
 
 ```jldoctest
 julia> str = Base.AnnotatedString("hello there",
-               [(1:5, :word => :greeting), (7:11, :label => 1)])
+               [(1:5, :word, :greeting), (7:11, :label, 1)])
 "hello there"
 
 julia> length(str)
@@ -1238,7 +1242,7 @@ julia> lpad(str, 14)
 julia> typeof(lpad(str, 7))
 Base.AnnotatedString{String}
 
-julia> str2 = Base.AnnotatedString(" julia", [(2:6, :face => :magenta)])
+julia> str2 = Base.AnnotatedString(" julia", [(2:6, :face, :magenta)])
 " julia"
 
 julia> Base.annotatedstring(str, str2)

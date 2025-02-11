@@ -291,18 +291,18 @@ reindex(idxs::Tuple{Slice, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
 
 # Re-index into parent vectors with one subindex
 reindex(idxs::Tuple{AbstractVector, Vararg{Any}}, subidxs::Tuple{Any, Vararg{Any}}) =
-    (@_propagate_inbounds_meta; (maybeview(idxs[1], subidxs[1]), reindex(tail(idxs), tail(subidxs))...))
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1]], reindex(tail(idxs), tail(subidxs))...))
 
 # Parent matrices are re-indexed with two sub-indices
 reindex(idxs::Tuple{AbstractMatrix, Vararg{Any}}, subidxs::Tuple{Any, Any, Vararg{Any}}) =
-    (@_propagate_inbounds_meta; (maybeview(idxs[1], subidxs[1], subidxs[2]), reindex(tail(idxs), tail(tail(subidxs)))...))
+    (@_propagate_inbounds_meta; (idxs[1][subidxs[1], subidxs[2]], reindex(tail(idxs), tail(tail(subidxs)))...))
 
 # In general, we index N-dimensional parent arrays with N indices
 @generated function reindex(idxs::Tuple{AbstractArray{T,N}, Vararg{Any}}, subidxs::Tuple{Vararg{Any}}) where {T,N}
     if length(subidxs.parameters) >= N
         subs = [:(subidxs[$d]) for d in 1:N]
         tail = [:(subidxs[$d]) for d in N+1:length(subidxs.parameters)]
-        :(@_propagate_inbounds_meta; (maybeview(idxs[1], $(subs...)), reindex(tail(idxs), ($(tail...),))...))
+        :(@_propagate_inbounds_meta; (idxs[1][$(subs...)], reindex(tail(idxs), ($(tail...),))...))
     else
         :(throw(ArgumentError("cannot re-index SubArray with fewer indices than dimensions\nThis should not occur; please submit a bug report.")))
     end
@@ -342,7 +342,7 @@ end
 
 # We can avoid a multiplication if the first parent index is a Colon or AbstractUnitRange,
 # or if all the indices are scalars, i.e. the view is for a single value only
-FastContiguousSubArray{T,N,P,I<:Union{Tuple{Union{Slice, AbstractUnitRange}, Vararg{Any}},
+FastContiguousSubArray{T,N,P,I<:Union{Tuple{AbstractUnitRange, Vararg{Any}},
                                       Tuple{Vararg{ScalarIndex}}}} = SubArray{T,N,P,I,true}
 
 @inline _reindexlinear(V::FastContiguousSubArray, i::Int) = V.offset1 + i

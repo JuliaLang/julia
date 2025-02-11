@@ -23,22 +23,32 @@ mutable struct Refxy{T}
 end
 
 modname = String(nameof(@__MODULE__))
-@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
+const orig_Refxy = Refxy
+const orig_ARefxy = ARefxy
+mutable struct ARefxy{T}
     @atomic x::T
     @atomic y::T
 end
-@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
+@test orig_ARefxy !== ARefxy
+const ARefxy = orig_ARefxy
+mutable struct ARefxy{T}
     x::T
     y::T
 end
-@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
+@test orig_ARefxy !== ARefxy
+const ARefxy = orig_ARefxy
+mutable struct ARefxy{T}
     x::T
     @atomic y::T
 end
-@test_throws ErrorException("invalid redefinition of constant $modname.Refxy") @eval mutable struct Refxy{T}
+@test orig_ARefxy !== ARefxy
+const ARefxy = orig_ARefxy
+mutable struct Refxy{T}
     x::T
     @atomic y::T
 end
+@test orig_Refxy !== Refxy
+const Refxy = orig_Refxy
 
 copy(r::Union{Refxy,ARefxy}) = typeof(r)(r.x, r.y)
 function add(x::T, y)::T where {T}; x + y; end

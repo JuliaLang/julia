@@ -49,6 +49,13 @@ Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
 Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
 Rational(n::Integer) = unsafe_rational(n, one(n))
 
+"""
+    divgcd(x::Integer, y::Integer)
+
+Returns `(x÷gcd(x,y), y÷gcd(x,y))`.
+
+See also [`div`](@ref), [`gcd`](@ref).
+"""
 function divgcd(x::TX, y::TY)::Tuple{TX, TY} where {TX<:Integer, TY<:Integer}
     g = gcd(uabs(x), uabs(y))
     div(x,g), div(y,g)
@@ -557,8 +564,18 @@ end
 
 float(::Type{Rational{T}}) where {T<:Integer} = float(T)
 
-gcd(x::Rational, y::Rational) = unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
-lcm(x::Rational, y::Rational) = unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.den))
+function gcd(x::Rational, y::Rational)
+    if isinf(x) != isinf(y)
+        throw(ArgumentError("lcm is not defined between infinite and finite numbers"))
+    end
+    unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
+end
+function lcm(x::Rational, y::Rational)
+    if isinf(x) != isinf(y)
+        throw(ArgumentError("lcm is not defined"))
+    end
+    return unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.den))
+end
 function gcdx(x::Rational, y::Rational)
     c = gcd(x, y)
     if iszero(c.num)
