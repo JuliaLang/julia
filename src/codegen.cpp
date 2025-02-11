@@ -5908,6 +5908,7 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
     if (ctx.params->trim != JL_TRIM_NO) {
         // TODO: Implement the last-minute call resolution that used to be here
         //       in inference instead.
+        failed_dispatch = 1;
     }
 
     if (failed_dispatch && trim_may_error(ctx.params->trim)) {
