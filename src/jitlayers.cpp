@@ -1258,7 +1258,7 @@ public:
             }
             (void) code_size;
             (void) data_size;
-            jl_atomic_fetch_add_relaxed(this->jit_bytes_size, graph_size)
+            jl_atomic_fetch_add_relaxed(this->jit_bytes_size, graph_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, graph_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, code_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITDataSize, data_size);
