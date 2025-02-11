@@ -1276,7 +1276,7 @@ end
 
 function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
     ci = typeinf_ext(interp, mi, source_mode)
-    add_codeinsts_to_jit!(interp, ci, source_mode)
+    @inline add_codeinsts_to_jit!(interp, ci, source_mode)
     return ci
 end
 
