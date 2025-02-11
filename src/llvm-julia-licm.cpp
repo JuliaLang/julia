@@ -241,7 +241,7 @@ struct JuliaLICM : public JuliaPassContext {
 #if JL_LLVM_VERSION >= 200000
                         auto CI = CallInst::Create(call, {}, exit_pts[i]->getIterator());
 #else
-                        auto CI = CallInst::Create(call, {}, "", exit_pts[i]);
+                        auto CI = CallInst::Create(call, {}, exit_pts[i]);
 #endif
                         exit_pts[i] = CI;
                         createNewInstruction(CI, call, MSSAU);
