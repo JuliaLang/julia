@@ -297,25 +297,25 @@ for f in (Ambig8.f, Ambig8.g)
     @test_throws MethodError f(0)
     @test_throws MethodError f(pi)
     let ambig = Ref{Int32}(0)
-        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, 0, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test ms isa Vector
         @test length(ms) == 2
         @test ambig[] == 1
     end
     let ambig = Ref{Int32}(0)
-        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, 0, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test ms isa Vector
         @test length(ms) == 2
         @test ambig[] == 1
     end
     let ambig = Ref{Int32}(0)
-        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, 0, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test ms isa Vector
         @test length(ms) == 3
         @test ambig[] == 1
     end
     let ambig = Ref{Int32}(0)
-        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+        ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, 0, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test ms isa Vector
         @test length(ms) == 3
         @test ambig[] == 1
@@ -382,7 +382,7 @@ f35983(::Type, ::Type) = 2
 @test length(Base.methods(f35983, (Any, Any))) == 2
 @test first(Base.methods(f35983, (Any, Any))).sig == Tuple{typeof(f35983), Type, Type}
 let ambig = Ref{Int32}(0)
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, 0, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ms isa Vector
     @test length(ms) == 1
     @test ambig[] == 0
@@ -391,7 +391,7 @@ f35983(::Type{Int16}, ::Any) = 3
 @test length(Base.methods_including_ambiguous(f35983, (Type, Type))) == 2
 @test length(Base.methods(f35983, (Type, Type))) == 1
 let ambig = Ref{Int32}(0)
-    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    ms = Base._methods_by_ftype(Tuple{typeof(f35983), Type, Type}, nothing, -1, 0, Base.get_world_counter(), true, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ms isa Vector
     @test length(ms) == 2
     @test ambig[] == 1
@@ -399,7 +399,7 @@ end
 
 struct B38280 <: Real; val; end
 let ambig = Ref{Int32}(0)
-    ms = Base._methods_by_ftype(Tuple{Type{B38280}, Any}, nothing, 1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
+    ms = Base._methods_by_ftype(Tuple{Type{B38280}, Any}, nothing, 1, 0, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
     @test ms isa Vector
     @test length(ms) == 1
     @test ambig[] == 1
@@ -410,7 +410,7 @@ fnoambig(::Int,::Any) = 2
 fnoambig(::Any,::Int) = 3
 fnoambig(::Any,::Any) = 4
 let has_ambig = Ref(Int32(0))
-    ms = Base._methods_by_ftype(Tuple{typeof(fnoambig), Any, Any}, nothing, 4, Base.get_world_counter(), false, Ref(typemin(UInt)), Ref(typemax(UInt)), has_ambig)
+    ms = Base._methods_by_ftype(Tuple{typeof(fnoambig), Any, Any}, nothing, 4, 0, Base.get_world_counter(), false, Ref(typemin(UInt)), Ref(typemax(UInt)), has_ambig)
     @test ms isa Vector
     @test length(ms) == 4
     @test has_ambig[] == 0

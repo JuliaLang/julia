@@ -58,20 +58,20 @@ end
 CachedMethodTable(table::T) where T = CachedMethodTable{T}(IdDict{MethodMatchKey, Union{Nothing,MethodLookupResult}}(), table)
 
 """
-    findall(sig::Type, view::MethodTableView; limit::Int=-1) ->
+    findall(sig::Type, view::MethodTableView; limit::Int=-1, concrete_method_limit::Int=0) ->
         matches::MethodLookupResult or nothing
 
 Find all methods in the given method table `view` that are applicable to the given signature `sig`.
 If no applicable methods are found, an empty result is returned.
-If the number of applicable methods exceeded the specified `limit`, `nothing` is returned.
+If the number of applicable methods exceeded the specified `limit` and `concrete_method_limit`, `nothing` is returned.
 Note that the default setting `limit=-1` does not limit the number of applicable methods.
 `overlayed` indicates if any of the matching methods comes from an overlayed method table.
 """
-findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=-1) =
-    _findall(sig, nothing, table.world, limit)
+findall(@nospecialize(sig::Type), table::InternalMethodTable; limit::Int=-1, concrete_method_limit::Int=0) =
+    _findall(sig, nothing, table.world, limit, concrete_method_limit)
 
-function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=-1)
-    result = _findall(sig, table.mt, table.world, limit)
+function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int=-1, concrete_method_limit::Int=0)
+    result = _findall(sig, table.mt, table.world, limit, concrete_method_limit)
     result === nothing && return nothing
     nr = length(result)
     if nr ≥ 1 && result[nr].fully_covers
@@ -79,7 +79,7 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
         return result
     end
     # fall back to the internal method table
-    fallback_result = _findall(sig, nothing, table.world, limit)
+    fallback_result = _findall(sig, nothing, table.world, limit, concrete_method_limit)
     fallback_result === nothing && return nothing
     # merge the fallback match results with the internal method table
     return MethodLookupResult(
@@ -90,25 +90,25 @@ function findall(@nospecialize(sig::Type), table::OverlayMethodTable; limit::Int
         result.ambig | fallback_result.ambig)
 end
 
-function _findall(@nospecialize(sig::Type), mt::Union{Nothing,MethodTable}, world::UInt, limit::Int)
+function _findall(@nospecialize(sig::Type), mt::Union{Nothing,MethodTable}, world::UInt, limit::Int, concrete_method_limit::Int)
     _min_val = RefValue{UInt}(typemin(UInt))
     _max_val = RefValue{UInt}(typemax(UInt))
     _ambig = RefValue{Int32}(0)
-    ms = _methods_by_ftype(sig, mt, limit, world, false, _min_val, _max_val, _ambig)
+    ms = _methods_by_ftype(sig, mt, limit, concrete_method_limit, world, false, _min_val, _max_val, _ambig)
     isa(ms, Vector) || return nothing
     return MethodLookupResult(ms, WorldRange(_min_val[], _max_val[]), _ambig[] != 0)
 end
 
-function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=-1)
+function findall(@nospecialize(sig::Type), table::CachedMethodTable; limit::Int=-1, concrete_method_limit::Int=0)
     if isconcretetype(sig)
         # as for concrete types, we cache result at on the next level
-        return findall(sig, table.table; limit)
+        return findall(sig, table.table; limit, concrete_method_limit)
     end
     key = MethodMatchKey(sig, limit)
     if haskey(table.cache, key)
         return table.cache[key]
     else
-        return table.cache[key] = findall(sig, table.table; limit)
+        return table.cache[key] = findall(sig, table.table; limit, concrete_method_limit)
     end
 end
 

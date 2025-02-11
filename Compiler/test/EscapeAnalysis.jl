@@ -1417,8 +1417,8 @@ end
             max = Ref{UInt}(typemax(UInt))
             has_ambig = Ref{Int32}(0)
             mt = ccall(:jl_matching_methods, Any,
-                (Any, Any, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ref{Int32}),
-                t, mt, lim, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
+                (Any, Any, Cint, Cint, Cint, UInt, Ptr{UInt}, Ptr{UInt}, Ref{Int32}),
+                t, mt, lim, #= concrete_lim =# 0, ambig, world, min, max, has_ambig)::Union{Array{Any,1}, Bool}
             return mt, has_ambig[]
         end
         for i in findall(isnew, result.ir.stmts.stmt)

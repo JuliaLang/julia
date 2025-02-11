@@ -1139,7 +1139,7 @@ function isambiguous(m1::Method, m2::Method; ambiguous_bottom::Bool=false)
         min = Ref{UInt}(typemin(UInt))
         max = Ref{UInt}(typemax(UInt))
         has_ambig = Ref{Int32}(0)
-        ms = collect(Core.MethodMatch, _methods_by_ftype(ti, nothing, -1, world, true, min, max, has_ambig)::Vector)
+        ms = collect(Core.MethodMatch, _methods_by_ftype(ti, nothing, -1, -1, world, true, min, max, has_ambig)::Vector)
         has_ambig[] == 0 && return false
         if !ambiguous_bottom
             filter!(ms) do m::Core.MethodMatch
