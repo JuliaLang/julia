@@ -224,6 +224,7 @@ function cld end
 function fld end
 
 # Lazy strings
+import Core: String
 include("strings/lazy.jl")
 
 # array structures

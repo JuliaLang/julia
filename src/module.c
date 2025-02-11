@@ -588,10 +588,10 @@ JL_DLLEXPORT jl_value_t *jl_reresolve_binding_value_seqcst(jl_binding_t *b)
 
 // get binding for adding a method
 // like jl_get_binding_wr, but has different error paths and messages
-JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
+JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var, size_t new_world)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     enum jl_partition_kind kind = decode_restriction_kind(pku);
     if (kind == BINDING_KIND_GLOBAL || kind == BINDING_KIND_DECLARED || jl_bkind_is_some_constant(decode_restriction_kind(pku)))
@@ -601,7 +601,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
         return b;
     }
     jl_binding_t *ownerb = b;
-    pku = jl_walk_binding_inplace(&ownerb, &bpart, jl_current_task->world_age);
+    pku = jl_walk_binding_inplace(&ownerb, &bpart, new_world);
     jl_value_t *f = NULL;
     if (jl_bkind_is_some_constant(decode_restriction_kind(pku)))
         f = decode_restriction_value(pku);
@@ -613,7 +613,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
         jl_module_t *from = jl_binding_dbgmodule(b, m, var);
         // we must have implicitly imported this with using, so call jl_binding_dbgmodule to try to get the name of the module we got this from
         jl_errorf("invalid method definition in %s: exported function %s.%s does not exist",
-                    jl_symbol_name(m->name), from ? jl_symbol_name(from->name) : "<null>", jl_symbol_name(var));
+                    jl_module_debug_name(m), jl_module_debug_name(from), jl_symbol_name(var));
     }
     int istype = f && jl_is_type(f);
     if (!istype) {
@@ -626,13 +626,25 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
             //       or we might want to drop this error entirely
             jl_module_t *from = jl_binding_dbgmodule(b, m, var);
             jl_errorf("invalid method definition in %s: function %s.%s must be explicitly imported to be extended",
-                        jl_symbol_name(m->name), from ? jl_symbol_name(from->name) : "<null>", jl_symbol_name(var));
+                        jl_module_debug_name(m), jl_module_debug_name(from), jl_symbol_name(var));
         }
     }
-    else if (strcmp(jl_symbol_name(var), "=>") == 0 && (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_EXPLICIT)) {
+    else if (kind != BINDING_KIND_IMPORTED) {
+        int should_error = strcmp(jl_symbol_name(var), "=>") == 0;
         jl_module_t *from = jl_binding_dbgmodule(b, m, var);
-        jl_errorf("invalid method definition in %s: function %s.%s must be explicitly imported to be extended",
-                    jl_symbol_name(m->name), from ? jl_symbol_name(from->name) : "<null>", jl_symbol_name(var));
+        if (should_error)
+            jl_errorf("invalid method definition in %s: function %s.%s must be explicitly imported to be extended",
+                        jl_module_debug_name(m), jl_module_debug_name(from), jl_symbol_name(var));
+        else
+            jl_printf(JL_STDERR, "WARNING: Constructor for type \"%s\" was extended in `%s` without explicit qualification or import.\n"
+                                 "  NOTE: Assumed \"%s\" refers to `%s.%s`. This behavior is deprecated and may differ in future versions.`\n"
+                                 "  NOTE: This behavior may have differed in Julia versions prior to 1.12.\n"
+                                 "  Hint: If you intended to create a new generic function of the same name, use `function %s end`.\n"
+                                 "  Hint: To silence the warning, qualify `%s` as `%s.%s` or explicitly `import %s: %s`\n",
+                jl_symbol_name(var), jl_module_debug_name(m),
+                jl_symbol_name(var), jl_module_debug_name(from), jl_symbol_name(var),
+                jl_symbol_name(var), jl_symbol_name(var), jl_module_debug_name(from), jl_symbol_name(var),
+                jl_module_debug_name(from), jl_symbol_name(var));
     }
     return ownerb;
 }

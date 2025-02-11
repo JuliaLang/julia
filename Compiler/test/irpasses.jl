@@ -2062,3 +2062,14 @@ let src = code_typed1(()) do
     end
     @test count(iscall((src, isdefined)), src.code) == 2
 end
+
+# optimize `isdefined` away in the presence of a dominating `setfield!`
+let src = code_typed1(()) do
+        a = Ref{Any}()
+        setfield!(a, :x, 2)
+        invokelatest(identity, a)
+        isdefined(a, :x) && return 1.0
+        a[]
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
+end
