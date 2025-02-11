@@ -138,7 +138,7 @@ function fixup_stdlib_path(path::String)
             path = npath == npath′ ? path : npath′
         end
         if isdefined(@__MODULE__, :Core) && isdefined(Core, :Compiler)
-            compiler_folder = dirname(string(methods(Core.Compiler.eval)[1].file))
+            compiler_folder = dirname(String(Base.moduleloc(Core.Compiler).file))
             if dirname(path) == compiler_folder
                 return abspath(Sys.STDLIB, "..", "..", "Compiler", "src", basename(path))
             end
