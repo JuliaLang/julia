@@ -282,7 +282,25 @@ endif
 endif
 
 ifneq (${MMTK_PLAN},None)
+# Make sure we use the right version of $MMTK_PLAN, $MMTK_MOVING and $MMTK_BUILD
+# if we use the BinaryBuilder version of mmtk-julia
+ifeq ($(USE_BINARYBUILDER_MMTK_JULIA),1)
+ifeq (${MMTK_PLAN},Immix)
+LIB_PATH_PLAN = immix
+else ifeq (${MMTK_PLAN},StickyImmix)
+LIB_PATH_PLAN = sticky
+endif
+
+ifeq ($(MMTK_MOVING), 0)
+LIB_PATH_MOVING := non_moving
+else
+LIB_PATH_MOVING := moving
+endif
+
+JL_PRIVATE_LIBS-0 += $(LIB_PATH_PLAN)/$(LIB_PATH_MOVING)/$(MMTK_BUILD)/libmmtk_julia
+else
 JL_PRIVATE_LIBS-0 += libmmtk_julia
+endif
 endif
 
 # Note that we disable MSYS2's path munging here, as otherwise

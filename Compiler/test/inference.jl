@@ -6160,7 +6160,7 @@ end === Int
     swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
 end === Union{}
 
-global swapglobal!_must_throw
+eval(Expr(:const, :swapglobal!_must_throw))
 @newinterp SwapGlobalInterp
 Compiler.InferenceParams(::SwapGlobalInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
 function func_swapglobal!_must_throw(x)
@@ -6188,3 +6188,9 @@ end == Union{Float64,DomainError}
 @test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64 ]) === Tuple{Int, UnitRange{Int}, Float64}
 @test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64, Memory{2} ]) === Union{}
 @test Base.return_types(Tuple{Tuple{Int, Vararg{Pair{Any, Union{}}}}},) do x; Returns(true)(x...); end |> only === Bool
+
+# issue #57292
+f57292(xs::Union{Tuple{String}, Int}...) = getfield(xs...)
+g57292(xs::String...) = getfield(("abc",), 1, :not_atomic, xs...)
+@test Base.infer_return_type(f57292) == String
+@test Base.infer_return_type(g57292) == String

@@ -29,8 +29,22 @@ end
 end
 
 @testset "non-loaded packages in doc search" begin
-    str = get_help_io("Profile")
-    @test occursin("Couldn't find Profile, but a loadable package with that name exists.", str)
+    temp_package = mktempdir()
+    write(joinpath(temp_package, "Project.toml"),
+        """
+        name = "FooPackage"
+        uuid = "2e6e0b2d-0e7f-4b7f-9f3b-6f3f3f3f3f3f"
+        """)
+    mkpath(joinpath(temp_package, "src"))
+    write(joinpath(temp_package, "src", "FooPackage.jl"),
+        """
+        module FooPackage
+        end
+        """)
+    push!(LOAD_PATH, temp_package)
+    str = get_help_io("FooPackage")
+    @test occursin("Couldn't find FooPackage, but a loadable package with that name exists.", str)
+    @test pop!(LOAD_PATH) == temp_package
 end
 
 @testset "Check @var_str also completes to var\"\" in REPL.doc_completions()" begin

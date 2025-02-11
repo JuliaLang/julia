@@ -224,6 +224,7 @@ function cld end
 function fld end
 
 # Lazy strings
+import Core: String
 include("strings/lazy.jl")
 
 # array structures
@@ -231,18 +232,16 @@ include("indices.jl")
 include("genericmemory.jl")
 include("array.jl")
 include("abstractarray.jl")
-include("subarray.jl")
-include("views.jl")
 include("baseext.jl")
 
 include("c.jl")
-include("ntuple.jl")
 include("abstractset.jl")
 include("bitarray.jl")
 include("bitset.jl")
 include("abstractdict.jl")
 include("iddict.jl")
 include("idset.jl")
+include("ntuple.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators

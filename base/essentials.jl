@@ -726,6 +726,7 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
 
 """
 function reinterpret(::Type{Out}, x) where {Out}
+    @inline
     if isprimitivetype(Out) && isprimitivetype(typeof(x))
         return bitcast(Out, x)
     end

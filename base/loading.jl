@@ -1293,7 +1293,9 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
 
         edges = sv[3]::Vector{Any}
         ext_edges = sv[4]::Union{Nothing,Vector{Any}}
-        StaticData.insert_backedges(edges, ext_edges)
+        extext_methods = sv[5]::Vector{Any}
+        internal_methods = sv[6]::Vector{Any}
+        StaticData.insert_backedges(edges, ext_edges, extext_methods, internal_methods)
 
         restored = register_restored_modules(sv, pkg, path)
 
@@ -3076,7 +3078,10 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         cpu_target = nothing
     end
     push!(opts, "--output-ji", output)
-    isassigned(PRECOMPILE_TRACE_COMPILE) && push!(opts, "--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])")
+    if isassigned(PRECOMPILE_TRACE_COMPILE)
+        push!(opts, "--trace-compile=$(PRECOMPILE_TRACE_COMPILE[])")
+        push!(opts, "--trace-compile-timing")
+    end
 
     io = open(pipeline(addenv(`$(julia_cmd(;cpu_target)::Cmd)
                                $(flags)

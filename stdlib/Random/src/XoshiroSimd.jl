@@ -46,7 +46,7 @@ simdThreshold(::Type{Bool}) = 640
     ui = (x>>>32) % UInt32
     li = x % UInt32
     u = _uint2float(ui, Float32)
-    l = _uint2float(ui, Float32)
+    l = _uint2float(li, Float32)
     (UInt64(reinterpret(UInt32, u)) << 32) | UInt64(reinterpret(UInt32, l))
 end
 @inline function _bits2float(x::UInt64, ::Type{Float16})

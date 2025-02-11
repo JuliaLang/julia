@@ -134,7 +134,7 @@ let code = Any[
         Expr(:boundscheck),
         Compiler.GotoIfNot(SSAValue(1), 6),
         # block 2
-        Expr(:call, GlobalRef(Base, :size), Compiler.Argument(3)),
+        Expr(:call, size, Compiler.Argument(3)),
         Compiler.ReturnNode(),
         # block 3
         Core.PhiNode(),

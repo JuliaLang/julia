@@ -212,6 +212,16 @@ struct jl_codegen_call_target_t {
     bool specsig;
 };
 
+// reification of a call to jl_jit_abi_convert, so that it isn't necessary to parse the Modules to recover this info
+struct cfunc_decl_t {
+    jl_value_t *declrt;
+    jl_value_t *sigt;
+    size_t nargs;
+    bool specsig;
+    llvm::GlobalVariable *theFptr;
+    llvm::GlobalVariable *cfuncdata;
+};
+
 typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>, 0> jl_workqueue_t;
 
 typedef std::list<std::tuple<std::string, std::string, unsigned int>> CallFrames;
@@ -227,6 +237,7 @@ struct jl_codegen_params_t {
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     jl_workqueue_t workqueue;
+    SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
     jl_array_t *temporary_roots = nullptr;
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
@@ -288,6 +299,11 @@ jl_llvm_functions_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params);
 
+jl_llvm_functions_t jl_emit_codedecls(
+        orc::ThreadSafeModule &M,
+        jl_code_instance_t *codeinst,
+        jl_codegen_params_t &params);
+
 enum CompilationPolicy {
     Default = 0,
     Extern = 1,
@@ -295,6 +311,13 @@ enum CompilationPolicy {
 
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
     jl_codegen_params_t &params);
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void *jl_jit_abi_convert(jl_task_t *ct, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, _Atomic(void*) *fptr, _Atomic(size_t) *last_world, void *data);
+std::string emit_abi_dispatcher(Module *M, jl_codegen_params_t &params, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, jl_code_instance_t *codeinst, Value *invoke);
+std::string emit_abi_converter(Module *M, jl_codegen_params_t &params, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, jl_code_instance_t *codeinst, Value *target, bool target_specsig);
+std::string emit_abi_constreturn(Module *M, jl_codegen_params_t &params, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, jl_value_t *rettype_const);
+std::string emit_abi_constreturn(Module *M, jl_codegen_params_t &params, bool specsig, jl_code_instance_t *codeinst);
 
 Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, Module *M, jl_codegen_params_t &params) JL_NOTSAFEPOINT;
 void emit_specsig_to_fptr1(
@@ -307,6 +330,8 @@ Function *get_or_emit_fptr1(StringRef Name, Module *M) JL_NOTSAFEPOINT;
 void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT;
 
 void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
+
+Constant *literal_pointer_val_slot(jl_codegen_params_t &params, Module *M, jl_value_t *p);
 
 static inline Constant *literal_static_pointer_val(const void *p, Type *T) JL_NOTSAFEPOINT
 {
