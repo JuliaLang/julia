@@ -1464,17 +1464,6 @@ static const auto gc_preserve_end_func = new JuliaFunction<> {
     [](LLVMContext &C) { return FunctionType::get(getVoidTy(C), {Type::getTokenTy(C)}, false); },
     nullptr,
 };
-static const auto except_enter_func = new JuliaFunction<>{
-    "julia.except_enter",
-    [](LLVMContext &C) {
-         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
-         auto RT = StructType::get(getInt32Ty(C), getPointerTy(C));
-         return FunctionType::get(RT, {T_pjlvalue}, false); },
-    [](LLVMContext &C) { return AttributeList::get(C,
-            Attributes(C, {Attribute::ReturnsTwice}),
-            AttributeSet(),
-            None); },
-};
 static const auto pointer_from_objref_func = new JuliaFunction<>{
     "julia.pointer_from_objref",
     [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pjlvalue_ty(C),
@@ -1931,6 +1920,7 @@ public:
     SmallVector<jl_varinfo_t, 0> slots;
     std::map<int, jl_varinfo_t> phic_slots;
     std::map<int, std::pair<Value*, Value*> > scope_restore;
+    std::map<jl_value_t*, AllocaInst*> eh_buffers;
     SmallVector<jl_cgval_t, 0> SAvalues;
     SmallVector<std::tuple<jl_cgval_t, BasicBlock *, AllocaInst *, PHINode *, SmallVector<PHINode*,0>, jl_value_t *>, 0> PhiNodes;
     SmallVector<bool, 0> ssavalue_assigned;
@@ -6561,8 +6551,8 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
         return;
     }
     else if (head == jl_leave_sym) {
-        int hand_n_leave = 0;
         Value *scope_to_restore = nullptr, *token = nullptr;
+        SmallVector<AllocaInst*> handler_to_end;
         for (size_t i = 0; i < jl_expr_nargs(ex); ++i) {
             jl_value_t *arg = args[i];
             if (arg == jl_nothing)
@@ -6588,13 +6578,18 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
                 ctx.builder.CreateCall(prepare_call(gc_preserve_end_func), {token});
             }
             if (jl_enternode_catch_dest(enter_stmt)) {
+                handler_to_end.push_back(ctx.eh_buffers[enter_stmt]);
                 // We're not actually setting up the exception frames for these, so
                 // we don't need to exit them.
-                hand_n_leave += 1;
                 scope_to_restore = nullptr; // restored by exception handler
             }
         }
-        ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), hand_n_leave)});
+        ctx.builder.CreateCall(prepare_call(jlleave_noexcept_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), handler_to_end.size())});
+        auto *handler_sz64 = ConstantInt::get(Type::getInt64Ty(ctx.builder.getContext()),
+                  sizeof(jl_handler_t));
+        for (AllocaInst *handler : handler_to_end) {
+            ctx.builder.CreateLifetimeEnd(handler, handler_sz64);
+        }
         if (scope_to_restore) {
             Value *scope_ptr = get_scope_field(ctx);
             jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe).decorateInst(
@@ -9759,13 +9754,22 @@ static jl_llvm_functions_t
                 ctx.ssavalue_assigned[cursor] = true;
                 // Actually enter the exception frame
                 auto ct = get_current_task(ctx);
-                CallInst *sj = ctx.builder.CreateCall(prepare_call(except_enter_func), {ct});
+                auto *handler_sz64 = ConstantInt::get(Type::getInt64Ty(ctx.builder.getContext()),
+                  sizeof(jl_handler_t));
+                AllocaInst* ehbuff = emit_static_alloca(ctx, sizeof(jl_handler_t), Align(16));
+                ctx.eh_buffers[stmt] = ehbuff;
+                ctx.builder.CreateLifetimeStart(ehbuff, handler_sz64);
+                ctx.builder.CreateCall(prepare_call(jlenter_func), {ct, ehbuff});
+                CallInst *sj;
+                if (ctx.emission_context.TargetTriple.isOSWindows())
+                    sj = ctx.builder.CreateCall(prepare_call(setjmp_func), {ehbuff});
+                else
+                    sj = ctx.builder.CreateCall(prepare_call(setjmp_func), {ehbuff, ConstantInt::get(Type::getInt32Ty(ctx.builder.getContext()), 0)});
                 // We need to mark this on the call site as well. See issue #6757
                 sj->setCanReturnTwice();
-                Value *isz = ctx.builder.CreateICmpEQ(ctx.builder.CreateExtractValue(sj, 0), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-                Value *ehbuf = ctx.builder.CreateExtractValue(sj, 1);
+                Value *isz = ctx.builder.CreateICmpEQ(sj, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
                 BasicBlock *tryblk = BasicBlock::Create(ctx.builder.getContext(), "try", f);
-                BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_pop", f);
+                BasicBlock *catchpop = BasicBlock::Create(ctx.builder.getContext(), "catch_enter", f);
                 BasicBlock *handlr = NULL;
                 handlr = BB[lname];
                 workstack.push_back(lname - 1);
@@ -9774,11 +9778,12 @@ static jl_llvm_functions_t
                 ctx.builder.SetInsertPoint(catchpop);
                 {
                     ctx.builder.CreateCall(prepare_call(jlleave_func), {get_current_task(ctx), ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 1)});
+                    ctx.builder.CreateLifetimeEnd(ehbuff, handler_sz64);
                     ctx.builder.CreateBr(handlr);
                 }
                 ctx.builder.SetInsertPoint(tryblk);
                 auto ehptr = emit_ptrgep(ctx, ct, offsetof(jl_task_t, eh));
-                ctx.builder.CreateAlignedStore(ehbuf, ehptr, ctx.types().alignof_ptr);
+                ctx.builder.CreateAlignedStore(ehbuff, ehptr, ctx.types().alignof_ptr);
             }
             // For the two-arg version of :enter, twiddle the scope
             if (jl_enternode_scope(stmt)) {
@@ -10354,7 +10359,6 @@ static void init_jit_functions(void)
     add_named_global(gc_preserve_begin_func, (void*)NULL);
     add_named_global(gc_preserve_end_func, (void*)NULL);
     add_named_global(pointer_from_objref_func, (void*)NULL);
-    add_named_global(except_enter_func, (void*)NULL);
     add_named_global(julia_call, (void*)NULL);
     add_named_global(julia_call2, (void*)NULL);
     add_named_global(jllockvalue_func, &jl_lock_value);
