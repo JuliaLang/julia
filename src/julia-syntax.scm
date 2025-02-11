@@ -113,8 +113,8 @@
 
 ;; replace `begin` and `end` for the closest ref expression, so doesn't go inside nested refs
 (define (replace-beginend ex a n tuples last)
-  (cond ((eq? ex 'end)                (end-val a n tuples last))
-        ((eq? ex 'begin)              (begin-val a n tuples last))
+  (cond ((equal? ex '(begin))         (begin-val a n tuples last))
+        ((equal? ex '(end))           (end-val a n tuples last))
         ((or (atom? ex) (quoted? ex)) ex)
         ((eq? (car ex) 'ref)
          ;; inside ref only replace within the first argument
@@ -1612,7 +1612,7 @@
              (idxs (cddr lhs))
              (rhs  (caddr e)))
          (let* ((reuse (and (pair? a)
-                            (contains (lambda (x) (eq? x 'end))
+                            (contains (lambda (x) (equal? x '(end)))
                                       idxs)))
                 (arr   (if reuse (make-ssavalue) a))
                 (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
@@ -1870,7 +1870,9 @@
   (let ((a    (cadr e))
         (idxs (cddr e)))
     (let* ((reuse (and (pair? a)
-                       (contains (lambda (x) (or (eq? x 'begin) (eq? x 'end)))
+                       (contains (lambda (x)
+                                   (or (equal? x '(begin))
+                                       (equal? x '(end))))
                                  idxs)))
            (arr   (if reuse (make-ssavalue) a))
            (stmts (if reuse `((= ,arr ,a)) '())))
