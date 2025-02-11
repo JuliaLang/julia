@@ -578,6 +578,7 @@ end
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
 const tuplehash_seed_final = UInt === UInt64 ? 0xf1bcd1f144b8c946 : 0x3c87fd81
 function tuplehash_fold_nonrecursive(tup::Tuple, h::UInt)
+    @_terminates_locally_meta
     for e ∈ tup
         h = hash(e, h)::UInt
     end
