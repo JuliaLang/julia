@@ -3,7 +3,7 @@
 ; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,OPAQUE
 
 ; CHECK: @jl_gvar_base = hidden constant i64 0
-; CHECK: @jl_gvar_offsets = hidden constant [0 x i32] zeroinitializer
+; CHECK: @jl_gvar_offsets = hidden constant [0 x i64] zeroinitializer
 ; CHECK: @jl_fvar_idxs = hidden constant [1 x i32] zeroinitializer
 ; CHECK: @jl_gvar_idxs = hidden constant [0 x i32] zeroinitializer
 ; OPAQUE: @subtarget_cloned_gv = hidden global ptr null
@@ -18,7 +18,7 @@
 
 @jl_fvars = global [1 x i64*] [i64* bitcast (i32 (i32)* @subtarget_cloned to i64*)], align 8
 @jl_gvar_base = hidden constant i64 zeroinitializer, align 8
-@jl_gvar_offsets = hidden constant [0 x i32] zeroinitializer, align 8
+@jl_gvar_offsets = hidden constant [0 x i64] zeroinitializer, align 8
 @jl_fvar_idxs = hidden constant [1 x i32] [i32 0], align 8
 @jl_gvar_idxs = hidden constant [0 x i32] zeroinitializer, align 8
 @subtarget_cloned_gv = hidden global i64* bitcast (i32 (i32)* @subtarget_cloned to i64*), align 8
