@@ -933,4 +933,6 @@ mutable struct OncePerTask{T, F} <: Function
     OncePerTask{T,F}(initializer::F) where {T, F} = new{T,F}(initializer)
     OncePerTask(initializer) = new{Base.promote_op(initializer), typeof(initializer)}(initializer)
 end
-@inline (once::OncePerTask)() = get!(once.initializer, task_local_storage(), once)
+@inline function (once::OncePerTask{T})() where {T}
+    get!(once.initializer, task_local_storage(), once)::T
+end
