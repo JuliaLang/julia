@@ -814,7 +814,7 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
 #if JL_LLVM_VERSION >= 200000
                                                      gep->getName(), gep->getIterator());
 #else
-                                                    gep->getName(), gep);
+                                                     gep->getName(), gep);
 #endif
             new_gep->setIsInBounds(gep->isInBounds());
             new_gep->takeName(gep);
