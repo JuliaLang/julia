@@ -32,7 +32,7 @@ function kill_timer(delay)
         # **DON'T COPY ME.**
         # The correct way to handle timeouts is to close the handle:
         # e.g. `close(stdout_read); close(stdin_write)`
-        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue, test_task)
+        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue::IntrusiveLinkedList{Task}, test_task)
         schedule(test_task, "hard kill repl test"; error=true)
         print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
     end
