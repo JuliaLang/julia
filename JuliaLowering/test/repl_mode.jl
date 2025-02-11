@@ -19,17 +19,19 @@ function is_incomplete(prompt_state)
     end
 end
 
-function eval_ish(mod, ex, do_eval)
+function eval_ish(mod, ex, do_eval, do_print_ir)
     k = kind(ex)
     if k == K"toplevel"
         x = nothing
         for e in children(ex)
-            x = eval_ish(mod, e, do_eval)
+            x = eval_ish(mod, e, do_eval, do_print_ir)
         end
         return x
     end
     linear_ir = JuliaLowering.lower(mod, ex)
-    JuliaLowering.print_ir(stdout, linear_ir)
+    if do_print_ir
+        JuliaLowering.print_ir(stdout, linear_ir)
+    end
     if do_eval
         println(stdout, "#----------------------")
         expr_form = JuliaLowering.to_lowered_expr(mod, linear_ir)
@@ -37,22 +39,30 @@ function eval_ish(mod, ex, do_eval)
     end
 end
 
+PRINT_IR::Bool = true
 DO_EVAL::Bool = false
-function opts(; do_eval=false)
+function opts(; do_eval=false, print_ir=false)
     global DO_EVAL = do_eval
+    global PRINT_IR = print_ir
 end
 
 function handle_input(str)
-    global DO_EVAL
+    global DO_EVAL, PRINT_IR
     if str == "DO_EVAL"
         DO_EVAL = true
         return
     elseif str == "!DO_EVAL"
         DO_EVAL = false
         return
+    elseif str == "PRINT_IR"
+        PRINT_IR = true
+        return
+    elseif str == "!PRINT_IR"
+        PRINT_IR = false
+        return
     end
     ex = parseall(SyntaxTree, str; filename="REPL")
-    eval_ish(Main, ex, DO_EVAL)
+    eval_ish(Main, ex, DO_EVAL, PRINT_IR)
 end
 
 function init()
@@ -69,3 +79,4 @@ function __init__()
 end
 
 end
+
