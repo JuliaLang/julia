@@ -1357,7 +1357,6 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_pjlvalue = PointerType::get(C, 0);
         auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
-        auto T_ppjlvalue = PointerType::get(C, 0);
         auto T_derived = PointerType::get(C, AddressSpace::Derived);
         return FunctionType::get(T_prjlvalue,
             {
@@ -2352,7 +2351,13 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty, Align align)
 {
     ++EmittedAllocas;
-    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), nullptr, align, "", /*InsertBefore=*/ctx.topalloca->getIterator());
+    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), nullptr, align, "",
+#if JL_LLVM_VERSION >= 200000
+                /*InsertBefore=*/ctx.topalloca->getIterator()
+#else
+                /*InsertBefore=*/ctx.topalloca
+#endif
+    );
 }
 
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, unsigned nb, Align align)
@@ -8309,7 +8314,6 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         union_alloca_type((jl_uniontype_t*)jlrettype, allunbox, props.union_bytes, props.union_align, props.union_minalign);
         if (props.union_bytes) {
             props.cc = jl_returninfo_t::Union;
-            Type *AT = ArrayType::get(getInt8Ty(M->getContext()), props.union_bytes);
             fsig.push_back(PointerType::getUnqual(M->getContext()));
             argnames.push_back("union_bytes_return");
             Type *pair[] = { T_prjlvalue, getInt8Ty(M->getContext()) };
