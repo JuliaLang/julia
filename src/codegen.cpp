@@ -10594,7 +10594,7 @@ namespace llvm {
     void printMIR(raw_ostream &OS, const MachineModuleInfo &MMI,
                 const MachineFunction &MF);
 #else
-void printMIR(raw_ostream &OS, const MachineFunction &MF);
+    void printMIR(raw_ostream &OS, const MachineFunction &MF);
 #endif
 }
 extern "C" void jl_dump_llvm_mbb(void *v)
