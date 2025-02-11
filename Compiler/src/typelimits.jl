@@ -326,35 +326,35 @@ function n_initialized(t::Const)
     return something(findfirst(i::Int->!isdefined(t.val,i), 1:nf), nf+1)-1
 end
 
-defined_fields(pstruct::PartialStruct) = pstruct.defined
+defined_fields(pstruct::PartialStruct) = _bitvector(ntuple(i -> !pstruct.undef[i], length(pstruct.undef)))
 
 function defined_field_index(pstruct::PartialStruct, fi)
     i = 0
     for iter in 1:fi
-        iter ≤ length(pstruct.defined) && pstruct.defined[iter] && (i += 1)
+        iter ≤ length(pstruct.undef) && !pstruct.undef[iter] && (i += 1)
     end
     i
 end
 
 get_defined_field(pstruct::PartialStruct, fi) = pstruct.fields[defined_field_index(pstruct, fi)]
-is_field_defined(pstruct::PartialStruct, fi) = get(pstruct.defined, fi, false)
+is_field_defined(pstruct::PartialStruct, fi) = !get(pstruct.undef, fi, true)
 
 function define_field(pstruct::PartialStruct, fi, @nospecialize(ft))
-    n = length(pstruct.defined)
-    if fi ≤ n && pstruct.defined[fi]
+    n = length(pstruct.undef)
+    if fi ≤ n && !pstruct.undef[fi]
         # XXX: merge new information?
         # `setfield!(..., rand()); setfield!(..., 2.0)`
         return nothing
     end
-    defined = falses(max(fi, n))
+    undef = trues(max(fi, n))
     for i in 1:n
-        defined[i] = pstruct.defined[i]
+        undef[i] = pstruct.undef[i]
     end
     fields = copy(pstruct.fields)
-    defined[fi] = true
+    undef[fi] = false
     i = defined_field_index(pstruct, fi)
     insert!(fields, i + 1, ft)
-    PartialStruct(fallback_lattice, pstruct.typ, defined, fields)
+    PartialStruct(fallback_lattice, pstruct.typ, undef, fields)
 end
 
 # needed while we are missing functions such as broadcasting or ranges
@@ -401,9 +401,9 @@ end
         isa(typeb, Const) || isa(typeb, PartialStruct) || return false
         @assert all(x & y == x for (x, y) in zip(defined_fields(typea), defined_fields(typeb))) "typeb ⊑ typea is assumed"
         fi = 0
-        nf = length(typea.defined)
+        nf = length(typea.undef)
         for i = 1:nf
-            typea.defined[i] || continue
+            !typea.undef[i] || continue
             fi += 1
             ai = unwrapva(typea.fields[fi])
             bi = fieldtype(aty, i)
@@ -702,7 +702,7 @@ end
             # handle that in the main loop above to get a more accurate type.
             push!(fields, Vararg)
         end
-        anyrefine && return PartialStruct(𝕃, aty, defined, fields)
+        anyrefine && return PartialStruct(𝕃, aty, _bitvector(ntuple(i -> !defined[i], length(defined))), fields)
     end
     return nothing
 end

@@ -431,14 +431,14 @@ end
                     return false
                 end
             end
-            length(a.defined) ≥ length(b.defined) || return false
-            n = length(b.defined)
+            length(a.undef) ≥ length(b.undef) || return false
+            n = length(b.undef)
             ai = bi = 0
             for i in 1:n
-                ai += a.defined[i]
-                bi += b.defined[i]
-                !a.defined[i] && b.defined[i] && return false
-                !b.defined[i] && continue
+                ai += !a.undef[i]
+                bi += !b.undef[i]
+                a.undef[i] && !b.undef[i] && return false
+                b.undef[i] && continue
                 # Field is defined for both `a` and `b`
                 af = a.fields[ai]
                 bf = b.fields[bi]
@@ -478,8 +478,8 @@ end
             nf = nfields(a.val)
             bi = 0
             for i in 1:nf
-                !isdefined(a.val, i) && b.defined[i] && return false
-                !b.defined[i] && continue
+                !isdefined(a.val, i) && !b.undef[i] && return false
+                b.undef[i] && continue
                 bfᵢ = b.fields[bi += 1]
                 if i == nf
                     bfᵢ = unwrapva(bfᵢ)
@@ -550,7 +550,7 @@ end
     if isa(a, PartialStruct)
         isa(b, PartialStruct) || return false
         length(a.fields) == length(b.fields) || return false
-        a.defined == b.defined || return false
+        a.undef == b.undef || return false
         widenconst(a) == widenconst(b) || return false
         a.fields === b.fields && return true # fast path
         for i in 1:length(a.fields)
@@ -764,9 +764,9 @@ function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), fields::Vecto
     return PartialStruct(typ, fields)
 end
 
-function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), defined::BitVector, fields::Vector{Any})
+function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), undef::BitVector, fields::Vector{Any})
     for i = 1:length(fields)
         assert_nested_slotwrapper(fields[i])
     end
-    return Core._PartialStruct(typ, defined, fields)
+    return Core._PartialStruct(typ, undef, fields)
 end
