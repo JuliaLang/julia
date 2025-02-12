@@ -129,6 +129,9 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
 function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
+    if isa(src, OptimizationState)
+        src = something(src.ir, src.src)
+    end
     if isa(src, MaybeCompressed)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable
@@ -226,10 +229,13 @@ include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
-    (; linfo, src) = opt
-    src = ir_to_codeinf!(src, opt.ir::IRCode)
-    src.edges = Core.svec(opt.inlining.edges...)
+    (; linfo, src, ir) = opt
+    if ir === nothing
+        return src
+    end
+    src = ir_to_codeinf!(src, ir::IRCode)
     opt.ir = nothing
+    opt.src = src
     maybe_validate_code(linfo, src, "optimized")
     return src
 end
