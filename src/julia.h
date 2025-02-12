@@ -744,7 +744,8 @@ typedef struct _jl_binding_t {
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
     uint8_t publicp:1; // exportp without publicp is not allowed.
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
-    uint8_t padding:3;
+    uint8_t did_print_implicit_import_admonition:1;
+    uint8_t padding:2;
 } jl_binding_t;
 
 typedef struct {
