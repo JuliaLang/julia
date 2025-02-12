@@ -1274,16 +1274,49 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     end
 end
 
-function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
-    ci = typeinf_ext(interp, mi, source_mode)
-    @inline add_codeinsts_to_jit!(interp, ci, source_mode)
-    return ci
-end
+# function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
+#     ci = typeinf_ext(interp, mi, source_mode)
+#     @inline add_codeinsts_to_jit!(interp, ci, source_mode)
+#     return ci
+# end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
 function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
     interp = NativeInterpreter(world)
-    return typeinf_ext_toplevel(interp, mi, source_mode)
+    ci = typeinf_ext(interp, mi, source_mode)
+    source_mode == SOURCE_MODE_ABI || return
+    ci isa CodeInstance && !ci_has_invoke(ci) || return
+    codegen = codegen_cache(interp)
+    codegen === nothing && return
+    inspected = IdSet{CodeInstance}()
+    tocompile = Vector{CodeInstance}()
+    push!(tocompile, ci)
+    while !isempty(tocompile)
+        # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
+        callee = pop!(tocompile)
+        ci_has_invoke(callee) && continue
+        callee in inspected && continue
+        src = get(codegen, callee, nothing)
+        if !isa(src, CodeInfo)
+            src = @atomic :monotonic callee.inferred
+            if isa(src, String)
+                src = _uncompressed_ir(callee, src)
+            end
+            if !isa(src, CodeInfo)
+                newcallee = typeinf_ext(interp, callee.def, source_mode)
+                if newcallee isa CodeInstance
+                    callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
+                    push!(tocompile, newcallee)
+                #else
+                #    println("warning: could not get source code for ", callee.def)
+                end
+                continue
+            end
+        end
+        push!(inspected, callee)
+        collectinvokes!(tocompile, src)
+        ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
+    end
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
