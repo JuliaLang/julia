@@ -131,13 +131,17 @@ function fixup_stdlib_path(path::String)
     # The file defining Base.Sys gets included after this file is included so make sure
     # this function is valid even in this intermediary state
     if isdefined(@__MODULE__, :Sys)
-        BUILD_STDLIB_PATH = Sys.BUILD_STDLIB_PATH::String
-        STDLIB = Sys.STDLIB::String
-        if BUILD_STDLIB_PATH != STDLIB
+        if Sys.BUILD_STDLIB_PATH != Sys.STDLIB
             # BUILD_STDLIB_PATH gets defined in sysinfo.jl
             npath = normpath(path)
-            npath′ = replace(npath, normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
-            return npath == npath′ ? path : npath′
+            npath′ = replace(npath, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
+            path = npath == npath′ ? path : npath′
+        end
+        if isdefined(@__MODULE__, :Core) && isdefined(Core, :Compiler)
+            compiler_folder = dirname(String(Base.moduleloc(Core.Compiler).file))
+            if dirname(path) == compiler_folder
+                return abspath(Sys.STDLIB, "..", "..", "Compiler", "src", basename(path))
+            end
         end
     end
     return path
