@@ -2307,6 +2307,7 @@ precompile_test_harness("llvmcall validation") do load_path
     @eval using LLVMCall
     invokelatest() do
         @test LLVMCall.do_llvmcall2() == UInt32(0)
+        @test first(methods(LLVMCall.do_llvmcall)).specializations.cache.max_world === typemax(UInt)
     end
 end
 
