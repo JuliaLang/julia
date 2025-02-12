@@ -1284,10 +1284,10 @@ end
 function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
     interp = NativeInterpreter(world)
     ci = typeinf_ext(interp, mi, source_mode)
-    source_mode == SOURCE_MODE_ABI || return
-    ci isa CodeInstance && !ci_has_invoke(ci) || return
+    source_mode == SOURCE_MODE_ABI || return ci
+    ci isa CodeInstance && !ci_has_invoke(ci) || return ci
     codegen = codegen_cache(interp)
-    codegen === nothing && return
+    codegen === nothing && return ci
     inspected = IdSet{CodeInstance}()
     tocompile = Vector{CodeInstance}()
     push!(tocompile, ci)
@@ -1317,6 +1317,7 @@ function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt
         collectinvokes!(tocompile, src)
         ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
     end
+    return ci
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
