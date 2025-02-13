@@ -135,7 +135,10 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     }
 
     int is_parent__toplevel__ = jl_is__toplevel__mod(parent_module);
-    jl_module_t *newm = jl_new_module(name, is_parent__toplevel__ ? NULL : parent_module);
+    // If we have `Base`, don't also try to import `Core` - the `Base` exports are a superset.
+    // While we allow multiple imports of the same binding from different modules, various error printing
+    // performs reflection on which module a binding came from and we'd prefer users see "Base" here.
+    jl_module_t *newm = jl_new_module_(name, is_parent__toplevel__ ? NULL : parent_module, std_imports && jl_base_module != NULL ? 0 : 1, 1);
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
     JL_LOCK(&jl_modules_mutex);
