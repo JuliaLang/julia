@@ -458,6 +458,7 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
     b->publicp = 0;
     b->deprecated = 0;
     b->did_print_backdate_admonition = 0;
+    b->did_print_implicit_import_admonition = 0;
     JL_GC_PUSH1(&b);
     b->globalref = jl_new_globalref(mod, name, b);
     jl_gc_wb(b, b->globalref);
@@ -537,6 +538,7 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 
 static NOINLINE void print_backdate_admonition(jl_binding_t *b) JL_NOTSAFEPOINT
 {
+    b->did_print_backdate_admonition = 1;
     jl_safe_printf(
         "WARNING: Detected access to binding `%s.%s` in a world prior to its definition world.\n"
         "  Julia 1.12 has introduced more strict world age semantics for global bindings.\n"
@@ -544,7 +546,6 @@ static NOINLINE void print_backdate_admonition(jl_binding_t *b) JL_NOTSAFEPOINT
         "  !!! This code will error in future versions of Julia.\n"
         "Hint: Add an appropriate `invokelatest` around the access to this binding.\n",
         jl_symbol_name(b->globalref->mod->name), jl_symbol_name(b->globalref->name));
-    b->did_print_backdate_admonition = 1;
 }
 
 static inline void check_backdated_binding(jl_binding_t *b, enum jl_partition_kind kind) JL_NOTSAFEPOINT
@@ -696,10 +697,12 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
     else if (kind != BINDING_KIND_IMPORTED) {
         int should_error = strcmp(jl_symbol_name(var), "=>") == 0;
         jl_module_t *from = jl_binding_dbgmodule(b, m, var);
-        if (should_error)
+        if (should_error) {
             jl_errorf("invalid method definition in %s: function %s.%s must be explicitly imported to be extended",
                         jl_module_debug_name(m), jl_module_debug_name(from), jl_symbol_name(var));
-        else
+        }
+        else if (!b->did_print_implicit_import_admonition) {
+            b->did_print_implicit_import_admonition = 1;
             jl_printf(JL_STDERR, "WARNING: Constructor for type \"%s\" was extended in `%s` without explicit qualification or import.\n"
                                  "  NOTE: Assumed \"%s\" refers to `%s.%s`. This behavior is deprecated and may differ in future versions.`\n"
                                  "  NOTE: This behavior may have differed in Julia versions prior to 1.12.\n"
@@ -709,6 +712,7 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
                 jl_symbol_name(var), jl_module_debug_name(from), jl_symbol_name(var),
                 jl_symbol_name(var), jl_symbol_name(var), jl_module_debug_name(from), jl_symbol_name(var),
                 jl_module_debug_name(from), jl_symbol_name(var));
+        }
     }
     return ownerb;
 }
