@@ -1257,6 +1257,17 @@ first_byte(stream::ParseStream) = first(stream.tokens).next_byte # Use sentinel 
 last_byte(stream::ParseStream) = _next_byte(stream)-1
 any_error(stream::ParseStream) = any_error(stream.diagnostics)
 
+# Return last non-whitespace byte which was parsed
+function last_non_whitespace_byte(stream::ParseStream)
+    for i = length(stream.tokens):-1:1
+        tok = stream.tokens[i]
+        if !(kind(tok) in KSet"Comment Whitespace NewlineWs ErrorEofMultiComment")
+            return tok.next_byte - 1
+        end
+    end
+    return first_byte(stream) - 1
+end
+
 function Base.empty!(stream::ParseStream)
     t = last(stream.tokens)
     empty!(stream.tokens)
