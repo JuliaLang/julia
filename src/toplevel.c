@@ -157,32 +157,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
     else {
-        jl_binding_t *b = jl_get_module_binding(parent_module, name, 1);
-        jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
-        jl_ptr_kind_union_t pku = encode_restriction(NULL, BINDING_KIND_UNDEF_CONST);
-        jl_ptr_kind_union_t new_pku = encode_restriction((jl_value_t*)newm, BINDING_KIND_CONST);
-        if (!jl_atomic_cmpswap(&bpart->restriction, &pku, new_pku)) {
-            if (decode_restriction_kind(pku) != BINDING_KIND_CONST) {
-                jl_declare_constant_val(b, parent_module, name, (jl_value_t*)newm);
-            } else {
-                // As a special exception allow binding replacement of modules
-                if (!jl_is_module(decode_restriction_value(pku))) {
-                    jl_errorf("invalid redefinition of constant %s", jl_symbol_name(name));
-                }
-                if (jl_generating_output())
-                    jl_errorf("cannot replace module %s during compilation", jl_symbol_name(name));
-                jl_printf(JL_STDERR, "WARNING: replacing module %s.\n", jl_symbol_name(name));
-                pku = jl_atomic_exchange(&bpart->restriction, new_pku);
-            }
-            jl_gc_wb(bpart, newm);
-            if (decode_restriction_value(pku) != NULL && jl_is_module(decode_restriction_value(pku))) {
-                // create a hidden gc root for the old module
-                JL_LOCK(&jl_modules_mutex);
-                uintptr_t *refcnt = (uintptr_t*)ptrhash_bp(&jl_current_modules, decode_restriction_value(pku));
-                *refcnt += 1;
-                JL_UNLOCK(&jl_modules_mutex);
-            }
-        }
+        jl_declare_constant_val(NULL, parent_module, name, (jl_value_t*)newm);
     }
 
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
@@ -332,29 +307,27 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
         global_type = (jl_value_t*)jl_any_type;
     while (1) {
         bpart = jl_get_binding_partition(b, new_world);
-        jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-        enum jl_partition_kind kind = decode_restriction_kind(pku);
+        enum jl_partition_kind kind = bpart->kind;
         if (kind != BINDING_KIND_GLOBAL) {
             if (jl_bkind_is_some_guard(kind) || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_IMPLICIT) {
-                if (decode_restriction_kind(pku) == new_kind) {
+                if (kind == new_kind) {
                     if (!set_type)
                         goto done;
                     goto check_type;
                 }
                 check_safe_newbinding(gm, gs);
                 if (bpart->min_world == new_world) {
-                    if (jl_atomic_cmpswap(&bpart->restriction, &pku, encode_restriction(global_type, new_kind))) {
-                        break;
-                    }
-                    if (set_type)
-                        jl_gc_wb(bpart, set_type);
+                    bpart->kind = new_kind;
+                    bpart->restriction = global_type;
+                    if (global_type)
+                        jl_gc_wb(bpart, global_type);
                     continue;
                 } else {
                     jl_replace_binding_locked(b, bpart, global_type, new_kind, new_world);
                 }
                 break;
             } else if (set_type) {
-                if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
+                if (jl_bkind_is_some_constant(kind)) {
                     jl_errorf("cannot set type for constant %s.%s.",
                             jl_symbol_name(gm->name), jl_symbol_name(gs));
                 } else {
@@ -366,7 +339,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
         if (set_type)
         {
 check_type: ;
-            jl_value_t *old_ty = decode_restriction_value(pku);
+            jl_value_t *old_ty = bpart->restriction;
             JL_GC_PROMISE_ROOTED(old_ty);
             if (!jl_types_equal(set_type, old_ty)) {
                 jl_errorf("cannot set type for global %s.%s. It already has a value or is already set to a different type.",
@@ -682,14 +655,13 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     // TODO: this is a bit race-y with what error message we might print
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-    enum jl_partition_kind kind = decode_restriction_kind(pku);
+    enum jl_partition_kind kind = bpart->kind;
     if (kind != BINDING_KIND_GUARD && kind != BINDING_KIND_FAILED && kind != BINDING_KIND_DECLARED && kind != BINDING_KIND_IMPLICIT) {
         // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
-        pku = jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
-        if (decode_restriction_kind(pku) == BINDING_KIND_CONST || decode_restriction_kind(pku) == BINDING_KIND_BACKDATED_CONST || decode_restriction_kind(pku) == BINDING_KIND_CONST_IMPORT) {
+         jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
+        if (bpart->kind == BINDING_KIND_CONST || bpart->kind == BINDING_KIND_BACKDATED_CONST || bpart->kind == BINDING_KIND_CONST_IMPORT) {
             // Already declared (e.g. on another thread) or imported.
-            if (decode_restriction_value(pku) == (jl_value_t*)import)
+            if (bpart->restriction == (jl_value_t*)import)
                 return;
         }
         jl_errorf("importing %s into %s conflicts with an existing global",
