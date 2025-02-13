@@ -1118,14 +1118,14 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
 static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
     SmallSetVector<AllocaInst *, 8> allocas;
     if (AllocaInst *OneSRet = dyn_cast<AllocaInst>(SRetArg)) {
-        allocas.insert(OneSRet); // We found the alloca directly
-    } else { // Look throught instructions until we find it
+        allocas.insert(OneSRet); // Found it directly
+    } else {
         SmallSetVector<Value *, 8> worklist;
         worklist.insert(SRetArg);
         while (!worklist.empty()) {
             Value *V = worklist.pop_back_val();
             if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
-                allocas.insert(Alloca);
+                allocas.insert(Alloca); // Found a candidate
             } else if (PHINode *Phi = dyn_cast<PHINode>(V)) {
                 for (Value *Incoming : Phi->incoming_values()) {
                     worklist.insert(Incoming);
