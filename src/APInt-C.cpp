@@ -352,7 +352,7 @@ void LLVMFPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty, integerPart *p
     else {
         APFloat a(Val);
         bool isVeryExact;
-        APFloat::roundingMode rounding_mode = APFloat::rmNearestTiesToEven;
+        APFloat::roundingMode rounding_mode = RoundingMode::TowardZero;
         unsigned nbytes = alignTo(onumbits, integerPartWidth) / host_char_bit;
         integerPart *parts = (integerPart*)alloca(nbytes);
         APFloat::opStatus status = a.convertToInteger(MutableArrayRef<integerPart>(parts, nbytes), onumbits, isSigned, rounding_mode, &isVeryExact);
