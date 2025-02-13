@@ -676,17 +676,23 @@ static jl_cgval_t generic_cast(
     Type *to = bitstype_to_llvm((jl_value_t*)jlto, ctx.builder.getContext(), true);
     Type *vt = bitstype_to_llvm(v.typ, ctx.builder.getContext(), true);
 
-    // fptrunc fpext depend on the specific floating point format to work
-    // correctly, and so do not pun their argument types.
+    // fptrunc and fpext depend on the specific floating point
+    // format to work correctly, and so do not pun their argument types.
     if (!(f == fpext || f == fptrunc)) {
-        if (toint)
-            to = INTT(to, DL);
-        else
-            to = FLOATT(to);
-        if (fromint)
-            vt = INTT(vt, DL);
-        else
-            vt = FLOATT(vt);
+        // uitofp/sitofp require a specific float type argument
+        if (!(f == uitofp || f == sitofp)){
+            if (toint)
+                to = INTT(to, DL);
+            else
+                to = FLOATT(to);
+        }
+        // fptoui/fptosi require a specific float value argument
+        if (!(f == fptoui || f == fptosi)) {
+            if (fromint)
+                vt = INTT(vt, DL);
+            else
+                vt = FLOATT(vt);
+        }
     }
 
     if (!to || !vt)
