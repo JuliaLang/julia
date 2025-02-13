@@ -93,7 +93,7 @@ top:
 ; Confirm that `invariant.load` on other loads survive
 define void @gc_keep_invariant(float addrspace(1)* %0) {
 top:
-; CHECK-LABEL: @gc_drop_aliasing
+; CHECK-LABEL: @gc_keep_invariant
     %pgcstack = call {}*** @julia.get_pgcstack()
     %1 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
