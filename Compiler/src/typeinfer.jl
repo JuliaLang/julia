@@ -1272,7 +1272,7 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
         collectinvokes!(tocompile, src)
         ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
     end
-    ci
+    return ci
 end
 
 function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
