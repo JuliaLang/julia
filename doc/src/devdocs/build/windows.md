@@ -167,7 +167,7 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
     2. Clone the Julia sources:
 
         ```sh
-        git clone https://github.com/JuliaLang/julia.git
+        git clone https://github.com/JuliaLang/julia.git &&
         cd julia
         ```
 
