@@ -42,6 +42,8 @@ truncbool(u) = reinterpret(UInt8, reinterpret(Bool, u))
     @test_throws ErrorException("SExt: output bitsize must be > input bitsize")     Core.Intrinsics.sext_int(Int8, 0x0000)
     @test_throws ErrorException("Trunc: output bitsize must be < input bitsize")    Core.Intrinsics.trunc_int(Int8, 0x00)
     @test_throws ErrorException("Trunc: output bitsize must be < input bitsize")    Core.Intrinsics.trunc_int(Int16, 0x00)
+
+    @test_throws ErrorException("add_float: runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64") Core.Intrinsics.add_float(1, 2)
 end
 
 # issue #4581
