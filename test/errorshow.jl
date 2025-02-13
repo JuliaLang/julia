@@ -1267,5 +1267,5 @@ f33793(x::Float32, y::Float32) = 1
 let err_str
     f56325 = x->x+1
     err_str = @except_str f56325(1,2) MethodError
-    @test occursin("MethodError: no method of the anonymous function", err_str)
+    @test occursin("The anonymous function", err_str)
 end
