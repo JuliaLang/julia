@@ -307,7 +307,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
         global_type = (jl_value_t*)jl_any_type;
     while (1) {
         bpart = jl_get_binding_partition(b, new_world);
-        enum jl_partition_kind kind = bpart->kind;
+        enum jl_partition_kind kind = jl_binding_kind(bpart);
         if (kind != BINDING_KIND_GLOBAL) {
             if (jl_bkind_is_some_guard(kind) || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_IMPLICIT) {
                 if (kind == new_kind) {
@@ -317,7 +317,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                 }
                 check_safe_newbinding(gm, gs);
                 if (bpart->min_world == new_world) {
-                    bpart->kind = new_kind;
+                    bpart->kind = new_kind | (bpart->kind & 0xf0);
                     bpart->restriction = global_type;
                     if (global_type)
                         jl_gc_wb(bpart, global_type);
@@ -655,11 +655,11 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
     // TODO: this is a bit race-y with what error message we might print
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    enum jl_partition_kind kind = bpart->kind;
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (kind != BINDING_KIND_GUARD && kind != BINDING_KIND_FAILED && kind != BINDING_KIND_DECLARED && kind != BINDING_KIND_IMPLICIT) {
         // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
          jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
-        if (bpart->kind == BINDING_KIND_CONST || bpart->kind == BINDING_KIND_BACKDATED_CONST || bpart->kind == BINDING_KIND_CONST_IMPORT) {
+        if (jl_binding_kind(bpart) == BINDING_KIND_CONST || jl_binding_kind(bpart) == BINDING_KIND_BACKDATED_CONST || jl_binding_kind(bpart) == BINDING_KIND_CONST_IMPORT) {
             // Already declared (e.g. on another thread) or imported.
             if (bpart->restriction == (jl_value_t*)import)
                 return;

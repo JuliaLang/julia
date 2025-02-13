@@ -3114,7 +3114,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
         jl_binding_t *bnd = jl_get_module_binding(ctx.module, sym, 0);
         jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
         jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
-        if (bpart && jl_bkind_is_some_constant(bpart->kind))
+        if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
             return bpart->restriction;
         return NULL;
     }
@@ -3140,7 +3140,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
         jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
         jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
         jl_value_t *v = NULL;
-        if (bpart && jl_bkind_is_some_constant(bpart->kind))
+        if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
             v = bpart->restriction;
         if (v) {
             if (bnd->deprecated)
@@ -3167,7 +3167,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                         jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
                         jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
                         jl_value_t *v = NULL;
-                        if (bpart && jl_bkind_is_some_constant(bpart->kind))
+                        if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
                             v = bpart->restriction;
                         if (v) {
                             if (bnd->deprecated)
@@ -3418,14 +3418,14 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
     // bpart was updated in place - this will change with full partition
-    if (jl_bkind_is_some_guard(bpart->kind)) {
+    if (jl_bkind_is_some_guard(jl_binding_kind(bpart))) {
         // Redo the lookup at runtime
         return emit_globalref_runtime(ctx, bnd, mod, name);
     } else {
         while (true) {
             if (!bpart)
                 break;
-            if (!jl_bkind_is_some_import(bpart->kind))
+            if (!jl_bkind_is_some_import(jl_binding_kind(bpart)))
                 break;
             if (bnd->deprecated) {
                 cg_bdw(ctx, name, bnd);
@@ -3436,7 +3436,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
                 break;
         }
         if (bpart) {
-            enum jl_partition_kind kind = bpart->kind;
+            enum jl_partition_kind kind = jl_binding_kind(bpart);
             if (jl_bkind_is_some_constant(kind) && kind != BINDING_KIND_BACKDATED_CONST) {
                 jl_value_t *constval = bpart->restriction;
                 if (!constval) {
@@ -3447,7 +3447,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
             }
         }
     }
-    if (!bpart || bpart->kind != BINDING_KIND_GLOBAL) {
+    if (!bpart || jl_binding_kind(bpart) != BINDING_KIND_GLOBAL) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
     Value *bp = julia_binding_gv(ctx, bnd);
@@ -3470,7 +3470,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
     Value *bp = julia_binding_gv(ctx, bnd);
     if (bpart) {
-        if (bpart->kind == BINDING_KIND_GLOBAL) {
+        if (jl_binding_kind(bpart) == BINDING_KIND_GLOBAL) {
             jl_value_t *ty = bpart->restriction;
             if (ty != nullptr) {
                 const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
@@ -4156,7 +4156,7 @@ static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_
     Value *isnull = NULL;
     jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
     jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-    enum jl_partition_kind kind = bpart ? bpart->kind : BINDING_KIND_GUARD;
+    enum jl_partition_kind kind = bpart ? jl_binding_kind(bpart) : BINDING_KIND_GUARD;
     if (kind == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(kind)) {
         if (jl_get_binding_value_if_const(bnd))
             return mark_julia_const(ctx, jl_true);
