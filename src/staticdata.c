@@ -4390,7 +4390,7 @@ JL_DLLEXPORT void _jl_promote_ci_to_current(jl_code_instance_t *ci, size_t valid
         jl_value_t *edge = jl_svecref(edges, i);
         if (!jl_is_code_instance(edge))
             continue;
-        _jl_promote_ci_to_current(ci, validated_world);
+        _jl_promote_ci_to_current((jl_code_instance_t *)edge, validated_world);
     }
 }
 
