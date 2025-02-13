@@ -42,7 +42,7 @@ have its own `Make.user` file to override the global `Make.user` file
 in the top-level folder. After modifying the `Make.user` file if necessary,
 build using: `make -C <build-directory>`.
 
-If everything works correctly, there will be you will be a symlink to
+If everything works correctly, there will be a symlink to
 the julia executable in the build directory which can be run as:
 ```sh
 ./julia
@@ -56,9 +56,9 @@ moving the `julia` directory earlier in the PATH). Note that most of
 the instructions above apply to unix systems.
 
 To run julia from anywhere you can:
-- add an alias (in `bash`: `echo "alias julia='/path/to/install/folder/usr/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
+- add an alias (in `bash`: `echo "alias julia='<build-directory>/usr/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
 
-- add a soft link to the `julia` executable in the `/path/to/build/dir/usr/bin` directory to `/usr/local/bin` (or any suitable directory already in your path), or
+- add a soft link to the `julia` executable in the `<build-directory>/usr/bin` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
 - add the `julia` directory to your executable path for this shell session (in `bash`: `export PATH="$(pwd):$PATH"` ; in `csh` or `tcsh`:
 `set path= ( $path $cwd )` ), or
