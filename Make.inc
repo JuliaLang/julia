@@ -81,7 +81,7 @@ WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
 # Use stock if MMTK_PLAN hasn't been defined
-MMTK_PLAN ?= None
+MMTK_PLAN ?= StickyImmix
 
 # Enable DTrace support
 WITH_DTRACE := 0
@@ -844,6 +844,9 @@ MMTK_BUILD ?= release
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX
 JCFLAGS += -DMMTK_PLAN_IMMIX
+else ifeq (${MMTK_PLAN},StickyImmix)
+JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX
+JCFLAGS += -DMMTK_PLAN_STICKYIMMIX
 else
 $(error "Unsupported MMTk plan: $(MMTK_PLAN)")
 endif

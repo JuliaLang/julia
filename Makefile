@@ -291,10 +291,10 @@ else ifeq (${MMTK_PLAN},StickyImmix)
 LIB_PATH_PLAN = sticky
 endif
 
-ifeq ($(MMTK_MOVING), 0)
-LIB_PATH_MOVING := non_moving
-else
+ifeq ($(MMTK_MOVING), 1)
 LIB_PATH_MOVING := moving
+else
+LIB_PATH_MOVING := non_moving
 endif
 
 JL_PRIVATE_LIBS-0 += $(LIB_PATH_PLAN)/$(LIB_PATH_MOVING)/$(MMTK_BUILD)/libmmtk_julia
