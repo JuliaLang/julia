@@ -130,7 +130,7 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
     if isa(src, OptimizationState)
-        src = something(src.ir, src.src)
+        src = src.src
     end
     if isa(src, MaybeCompressed)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
