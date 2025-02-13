@@ -177,28 +177,6 @@ ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m,
 # `Base.deprecate`, not the @deprecated macro:
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 
-"""
-    isbindingresolved(m::Module, s::Symbol) -> Bool
-
-Returns whether the binding of a symbol in a module is resolved.
-
-See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
-
-```jldoctest
-julia> module Mod
-           foo() = 17
-       end
-Mod
-
-julia> Base.isbindingresolved(Mod, :foo)
-true
-
-julia> Base.isbindingresolved(Mod, :bar)
-false
-```
-"""
-isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
-
 function binding_module(m::Module, s::Symbol)
     p = ccall(:jl_get_module_of_binding, Ptr{Cvoid}, (Any, Any), m, s)
     p == C_NULL && return m
@@ -234,7 +212,7 @@ const BINDING_KIND_BACKDATED_CONST = 0xa
 is_defined_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == BINDING_KIND_UNDEF_CONST)
 is_some_imported(kind::UInt8) = (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED)
-is_some_guard(kind::UInt8) = (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED || kind == BINDING_KIND_UNDEF_CONST)
+is_some_guard(kind::UInt8) = (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_FAILED || kind == BINDING_KIND_UNDEF_CONST)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
@@ -412,8 +390,13 @@ parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
 
 """
     isconst(m::Module, s::Symbol) -> Bool
+    isconst(g::GlobalRef)
 
-Determine whether a global is declared `const` in a given module `m`.
+Determine whether a global is `const` in a given module `m`, either
+because it was declared constant or because it was imported from a
+constant binding. Note that constant-ness is specific to a particular
+world age, so the result of this function may not be assumed to hold
+after a world age update.
 """
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
@@ -1584,3 +1567,90 @@ hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Botto
 ###########
 
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
+
+
+# high-level, more convenient method lookup functions
+
+function visit(f, mt::Core.MethodTable)
+    mt.defs !== nothing && visit(f, mt.defs)
+    nothing
+end
+function visit(f, mc::Core.TypeMapLevel)
+    function avisit(f, e::Memory{Any})
+        for i in 2:2:length(e)
+            isassigned(e, i) || continue
+            ei = e[i]
+            if ei isa Memory{Any}
+                for j in 2:2:length(ei)
+                    isassigned(ei, j) || continue
+                    visit(f, ei[j])
+                end
+            else
+                visit(f, ei)
+            end
+        end
+    end
+    if mc.targ !== nothing
+        avisit(f, mc.targ::Memory{Any})
+    end
+    if mc.arg1 !== nothing
+        avisit(f, mc.arg1::Memory{Any})
+    end
+    if mc.tname !== nothing
+        avisit(f, mc.tname::Memory{Any})
+    end
+    if mc.name1 !== nothing
+        avisit(f, mc.name1::Memory{Any})
+    end
+    mc.list !== nothing && visit(f, mc.list)
+    mc.any !== nothing && visit(f, mc.any)
+    nothing
+end
+function visit(f, d::Core.TypeMapEntry)
+    while d !== nothing
+        f(d.func)
+        d = d.next
+    end
+    nothing
+end
+struct MethodSpecializations
+    specializations::Union{Nothing, Core.MethodInstance, Core.SimpleVector}
+end
+"""
+    specializations(m::Method) → itr
+
+Return an iterator `itr` of all compiler-generated specializations of `m`.
+"""
+specializations(m::Method) = MethodSpecializations(isdefined(m, :specializations) ? m.specializations : nothing)
+function iterate(specs::MethodSpecializations)
+    s = specs.specializations
+    s === nothing && return nothing
+    isa(s, Core.MethodInstance) && return (s, nothing)
+    return iterate(specs, 0)
+end
+iterate(specs::MethodSpecializations, ::Nothing) = nothing
+function iterate(specs::MethodSpecializations, i::Int)
+    s = specs.specializations::Core.SimpleVector
+    n = length(s)
+    i >= n && return nothing
+    item = nothing
+    while i < n && item === nothing
+        item = s[i+=1]
+    end
+    item === nothing && return nothing
+    return (item, i)
+end
+length(specs::MethodSpecializations) = count(Returns(true), specs)
+
+function length(mt::Core.MethodTable)
+    n = 0
+    visit(mt) do m
+        n += 1
+    end
+    return n::Int
+end
+isempty(mt::Core.MethodTable) = (mt.defs === nothing)
+
+uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
+                             isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
+                             error("Code for this Method is not available.")

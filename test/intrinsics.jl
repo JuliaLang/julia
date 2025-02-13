@@ -66,7 +66,7 @@ end
 # test functionality of non-power-of-2 primitive type constants
 primitive type Int24 24 end
 Int24(x::Int) = Core.Intrinsics.trunc_int(Int24, x)
-Int(x::Int24) = Core.Intrinsics.zext_int(Int, x)
+Base.Int(x::Int24) = Core.Intrinsics.zext_int(Int, x)
 let x, y, f
     x = Int24(Int(0x12345678)) # create something (via truncation)
     @test Int(0x345678) === Int(x)
