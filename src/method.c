@@ -485,8 +485,12 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
             is_flag_stmt = 1;
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym)
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
-        else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym))
-            li->has_fcall = 1;
+        else {
+            if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_assign_sym)
+                st = jl_exprarg(st, 1);
+            if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym))
+                li->has_fcall = 1;
+        }
         if (is_flag_stmt)
             jl_array_uint32_set(li->ssaflags, j, 0);
         else {
