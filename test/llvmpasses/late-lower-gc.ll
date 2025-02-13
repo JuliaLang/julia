@@ -90,6 +90,22 @@ top:
     ret void
 }
 
+; Confirm that `invariant.load` on other loads survive
+define void @gc_keep_invariant(float addrspace(1)* %0) {
+top:
+; CHECK-LABEL: @gc_drop_aliasing
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %1 = bitcast {}*** %pgcstack to {}**
+    %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
+
+; CHECK: %current_task = getelementptr inbounds ptr, ptr %0, i64 -12
+; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds i8, ptr %current_task,
+; CHECK-NEXT: [[ptls_load:%.*]] = load ptr, ptr [[ptls_field]], align 8, !tbaa !0
+    %2 = load float, float addrspace(1)* %0, align 4, !invariant.load
+; CHECK-NEXT: = load float, float addrspace(1)* %0, align 4, !invariant.load
+    ret void
+}
+
 define i32 @callee_root({} addrspace(10)* %v0, {} addrspace(10)* %v1) {
 top:
 ; CHECK-LABEL: @callee_root
