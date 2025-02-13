@@ -892,6 +892,7 @@ Base.@constprop :aggressive generic_matmatmul!(C::AbstractVecOrMat, tA, tB, A::A
         @inbounds for n in BxN, k in BxK
             # Balpha = B[k,n] * alpha, but we skip the multiplication in case isone(alpha)
             Balpha = _rmul_alpha(B[k,n])
+            !ismissing(Balpha) && iszero(Balpha) && continue
             @simd for m in AxM
                 C[m,n] = muladd(A[m,k], Balpha, C[m,n])
             end
