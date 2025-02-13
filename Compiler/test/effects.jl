@@ -1401,3 +1401,29 @@ end == Compiler.EFFECTS_UNKNOWN
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Float64])
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Int32}, Float16])
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Int16])
+
+# Float intrinsics require float arguments
+@test Base.infer_effects((Int16,)) do x
+    return Core.Intrinsics.abs_float(x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int32, Int32)) do x, y
+    return Core.Intrinsics.add_float(x, y)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int32, Int32)) do x, y
+    return Core.Intrinsics.add_float(x, y)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64, Int64, Int64)) do x, y, z
+    return Core.Intrinsics.fma_float(x, y, z)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.fptoui(UInt32, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.fptosi(Int32, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.sitofp(Int64, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((UInt64,)) do x
+    return Core.Intrinsics.uitofp(Int64, x)
+end |> !Compiler.is_nothrow
