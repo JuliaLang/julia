@@ -1147,7 +1147,7 @@ static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
         }
     }
     assert(allocas.size() > 0);
-    assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst* SRetAlloca){
+    assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst* SRetAlloca) JL_NOTSAFEPOINT {
             return (SRetAlloca->getArraySize() == allocas[0]->getArraySize() &&
             SRetAlloca->getAllocatedType() == allocas[0]->getAllocatedType());
         }
