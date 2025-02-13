@@ -36,14 +36,8 @@ function isTypeDataType(@nospecialize t)
     isType(t) && return false
     # Could be Union{} at runtime
     t === Core.TypeofBottom && return false
-    if t.name === Tuple.name
-        # If we have a Union parameter, could have been redistributed at runtime,
-        # e.g. `Tuple{Union{Int, Float64}, Int}` is a DataType, but
-        # `Union{Tuple{Int, Int}, Tuple{Float64, Int}}` is typeequal to it and
-        # is not.
-        return all(isTypeDataType, t.parameters)
-    end
-    return true
+    # Return true if `t` is not covariant
+    return t.name !== Tuple.name
 end
 
 has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isType(x)
