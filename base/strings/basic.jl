@@ -196,12 +196,7 @@ getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
 function get(s::AbstractString, i::Integer, default)
-# TODO: use ternary once @inbounds is expression-like
-    if checkbounds(Bool, s, i)
-        @inbounds return s[i]
-    else
-        return default
-    end
+    checkbounds(Bool, s, i) ? (@inbounds s[i]) : default
 end
 
 ## bounds checking ##

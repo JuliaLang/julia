@@ -2285,4 +2285,29 @@ precompile_test_harness("Constprop CodeInstance invalidation") do load_path
     end
 end
 
+precompile_test_harness("llvmcall validation") do load_path
+    write(joinpath(load_path, "LLVMCall.jl"),
+        """
+        module LLVMCall
+        using Base: llvmcall
+        @noinline do_llvmcall() = llvmcall("ret i32 0", UInt32, Tuple{})
+        do_llvmcall2() = do_llvmcall()
+        do_llvmcall2()
+        end
+        """)
+    # Also test with --pkgimages=no
+    testcode = """
+        insert!(LOAD_PATH, 1, $(repr(load_path)))
+        insert!(DEPOT_PATH, 1, $(repr(load_path)))
+        using LLVMCall
+        LLVMCall.do_llvmcall2()
+    """
+    @test readchomp(`$(Base.julia_cmd()) --pkgimages=no -E $(testcode)`) == repr(UInt32(0))
+    # Now the regular way
+    @eval using LLVMCall
+    invokelatest() do
+        @test LLVMCall.do_llvmcall2() == UInt32(0)
+    end
+end
+
 finish_precompile_test!()
