@@ -1434,10 +1434,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         if (!jl_is_primitivetype(xinfo.typ))
             return emit_runtime_call(ctx, f, argv, nargs);
         Type *xtyp = bitstype_to_llvm(xinfo.typ, ctx.builder.getContext(), true);
-        if (float_func()[f])
-            xtyp = FLOATT(xtyp);
-        else
+        if (float_func()[f]) {
+            if (!xtyp->isFloatingPointTy())
+                return emit_runtime_call(ctx, f, argv, nargs);
+        }
+        else {
             xtyp = INTT(xtyp, DL);
+        }
         if (!xtyp)
             return emit_runtime_call(ctx, f, argv, nargs);
         ////Bool are required to be in the range [0,1]
