@@ -10,6 +10,7 @@ being used for this purpose alone.
 """
 module Timings
 
+using ..Core
 using ..Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
     @inbounds, copy, backtrace
 
