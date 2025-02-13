@@ -123,9 +123,9 @@ UV_HEADERS += uv/*.h
 endif
 PUBLIC_HEADERS := $(BUILDDIR)/julia_version.h $(wildcard $(SRCDIR)/support/*.h) $(addprefix $(SRCDIR)/,work-stealing-queue.h gc-interface.h gc-tls-common.h julia.h julia_assert.h julia_threads.h julia_fasttls.h julia_locks.h julia_atomics.h jloptions.h)
 ifneq (${MMTK_PLAN},None)
-	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-mmtk.h)
+	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-mmtk.h gc-wb-mmtk.h)
 else
-	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-stock.h)
+	PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,gc-tls-stock.h gc-wb-stock.h)
 endif
 ifeq ($(OS),WINNT)
 PUBLIC_HEADERS += $(addprefix $(SRCDIR)/,win32_ucontext.h)
