@@ -35,15 +35,17 @@ end
 function _incomplete_tag(n::SyntaxNode, codelen)
     i,c = _first_error(n)
     if isnothing(c) || last_byte(c) < codelen || codelen == 0
-        return :none
-    elseif first_byte(c) <= codelen
-        if kind(c) == K"ErrorEofMultiComment" && last_byte(c) == codelen
+        if kind(c) == K"ErrorEofMultiComment"
             # This is the one weird case where the token itself is an
             # incomplete error
             return :comment
         else
             return :none
         end
+    elseif first_byte(c) <= codelen && kind(c) != K"ErrorInvalidEscapeSequence"
+        # "ErrorInvalidEscapeSequence" may be incomplete, so we don't include it
+        # here as a hard error.
+        return :none
     end
     if kind(c) == K"error" && numchildren(c) > 0
         for cc in children(c)
@@ -56,7 +58,7 @@ function _incomplete_tag(n::SyntaxNode, codelen)
         return :other
     end
     kp = kind(c.parent)
-    if kp == K"string"
+    if kp == K"string" || kp == K"var"
         return :string
     elseif kp == K"cmdstring"
         return :cmd
@@ -170,7 +172,6 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
             end
         end
         parse!(stream; rule=options)
-        pos_before_trivia = last_byte(stream)
         if options === :statement
             bump_trivia(stream; skip_newlines=false)
             if peek(stream) == K"NewlineWs"
@@ -179,8 +180,9 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
         end
 
         if any_error(stream)
+            pos_before_comments = last_non_whitespace_byte(stream)
             tree = build_tree(SyntaxNode, stream, first_line=lineno, filename=filename)
-            tag = _incomplete_tag(tree, pos_before_trivia)
+            tag = _incomplete_tag(tree, pos_before_comments)
             if _has_v1_10_hooks
                 exc = ParseError(stream, filename=filename, first_line=lineno,
                                  incomplete_tag=tag)
@@ -245,6 +247,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
                     # EXIT last_offset=$last_offset
                     #-#-#-
                     """)
+            flush(_debug_log[])
         end
 
         # Rewrap result in an svec for use by the C code
@@ -257,6 +260,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
                     # $exc
                     #-#-#-
                     """)
+            flush(_debug_log[])
         end
         @error("""JuliaSyntax parser failed — falling back to flisp!
                   This is not your fault. Please submit a bug report to https://github.com/JuliaLang/JuliaSyntax.jl/issues""",
@@ -283,6 +287,8 @@ else
     # prevent this.
     Base.Meta.ParseError(e::JuliaSyntax.ParseError) = e
 end
+
+_default_system_parser = _has_v1_6_hooks ? Core._parse : nothing
 
 """
     enable_in_core!([enable=true; freeze_world_age=true, debug_filename=nothing])
@@ -313,7 +319,8 @@ function enable_in_core!(enable=true; freeze_world_age = true,
         world_age = freeze_world_age ? Base.get_world_counter() : typemax(UInt)
         _set_core_parse_hook(fix_world_age(core_parser_hook, world_age))
     else
-        _set_core_parse_hook(Core.Compiler.fl_parse)
+        @assert !isnothing(_default_system_parser)
+        _set_core_parse_hook(_default_system_parser)
     end
     nothing
 end
