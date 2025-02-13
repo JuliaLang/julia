@@ -2182,7 +2182,15 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 CI->replaceAllUsesWith(NewCall);
                 UpdatePtrNumbering(CI, NewCall, S);
             } else {
-                if (CI->getFnAttr("julia.gc_safe").isValid()) {
+                SmallVector<OperandBundleDef,2> bundles;
+                CI->getOperandBundlesAsDefs(bundles);
+                bool gc_transition = false;
+                for (auto &bundle: bundles)
+                    if (bundle.getTag() == "gc-transition")
+                        gc_transition = true;
+
+                // In theory LLVM wants us to lower this using RewriteStatepointsForGC
+                if (gc_transition) {
                     // Insert the operations to switch to gc_safe if necessary.
                     IRBuilder<> builder(CI);
                     Value *pgcstack = getOrAddPGCstack(F);

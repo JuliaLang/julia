@@ -1296,8 +1296,6 @@ std::string generate_func_sig(const char *fname)
         RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::NonNull);
     if (rt == jl_bottom_type)
         FnAttrs = FnAttrs.addAttribute(LLVMCtx, Attribute::NoReturn);
-    if (gc_safe)
-        FnAttrs = FnAttrs.addAttribute(LLVMCtx, "julia.gc_safe");
 
     assert(attributes.isEmpty());
     attributes = AttributeList::get(LLVMCtx, FnAttrs, RetAttrs, paramattrs);
@@ -2164,11 +2162,16 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
     }
 
-    OperandBundleDef OpBundle("jl_roots", gc_uses);
+    // Potentially we could drop `jl_roots(gc_uses)` in the presence of `gc-transition(gc_uses)`
+    SmallVector<OperandBundleDef, 2> bundles;
+    if (!gc_uses.empty())
+        bundles.push_back(OperandBundleDef("jl_roots", gc_uses));
+    if (gc_safe)
+        bundles.push_back(OperandBundleDef("gc-transition", ArrayRef<Value*> {}));
     // the actual call
     CallInst *ret = ctx.builder.CreateCall(functype, llvmf,
             argvals,
-            ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
+            bundles);
     ((CallInst*)ret)->setAttributes(attributes);
 
     if (cc != CallingConv::C)
