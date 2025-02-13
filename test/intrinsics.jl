@@ -231,6 +231,8 @@ end
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float64(3.3) Float64(4.4) Float64(5.5) Float64(20.02)
     @test_intrinsic Core.Intrinsics.muladd_float Float64(3.3) Float64(4.4) Float64(5.5) Float64(20.02)
+    @test_intrinsic Core.Intrinsics.fma_float 0x1.0000000000001p0 1.25 0x1p-54 0x1.4000000000002p0
+    @test 0x1.0000000000001p0*1.25+0x1p-54 === 0x1.4000000000001p0 # for comparison
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float64(3.3) Float64(3.3) true
@@ -245,6 +247,10 @@ end
     @test_intrinsic Core.Intrinsics.uitofp Float64 UInt(3) Float64(3.0)
     @test_intrinsic Core.Intrinsics.fptosi Int Float64(3.3) 3
     @test_intrinsic Core.Intrinsics.fptoui UInt Float64(3.3) UInt(3)
+
+    # #57384
+    @test_intrinsic Core.Intrinsics.fptosi Int 1.5 1
+    @test_intrinsic Core.Intrinsics.fptosi Int128 1.5 Int128(1)
 end
 
 @testset "Float32 intrinsics" begin
@@ -265,6 +271,9 @@ end
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float32(3.3) Float32(4.4) Float32(5.5) Float32(20.02)
     @test_intrinsic Core.Intrinsics.muladd_float Float32(3.3) Float32(4.4) Float32(5.5) Float32(20.02)
+    @test_intrinsic Core.Intrinsics.fma_float Float32(0x1.000002p0) 1.25f0 Float32(0x1p-25) Float32(0x1.400004p0)
+    @test Float32(0x1.000002p0)*1.25f0+Float32(0x1p-25) === Float32(0x1.400002p0) # for comparison
+
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float32(3.3) Float32(3.3) true
@@ -357,6 +366,8 @@ end
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
     @test_intrinsic Core.Intrinsics.muladd_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
+    @test_intrinsic Core.Intrinsics.fma_float Float16(0x1.004p0) Float16(1.25) Float16(0x1p-12) Float16(0x1.408p0)
+    @test Float16(0x1.004p0)*Float16(1.25)+Float16(0x1p-12) === Float16(0x1.404p0) # for comparison
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(3.3) true
