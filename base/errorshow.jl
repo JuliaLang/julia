@@ -299,17 +299,13 @@ function showerror(io::IO, ex::MethodError)
         if is_arg_types
             print(io, "no method matching invoke ")
         else
-            print(io, "no method")
+            print(io, "no method matching ")
         end
         buf = IOBuffer()
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
         show_signature_function(iob, Core.Typeof(f))
-        if occursin(r"var\"#\d+#\d+\"", string(ft))
-            print(io, " of the anonymous function ", ft)
-        end
         show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
-        str = String(take!(buf)) # function name + arguments
-        print(io, " matching ")
+        str = String(take!(buf))
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
@@ -350,7 +346,9 @@ function showerror(io::IO, ex::MethodError)
         curworld = get_world_counter()
         print(io, "\nThe applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     elseif f isa Function
-        print(io, "\nThe function `$f` exists, but no method is defined for this combination of argument types.")
+        print(io, "\nThe ")
+        isgensym(nameof(f)) && print(io, "anonymous ")
+        print(io, "function `$f` exists, but no method is defined for this combination of argument types.")
     elseif f isa Type
         print(io, "\nThe type `$f` exists, but no method is defined for this combination of argument types when trying to construct it.")
     else
