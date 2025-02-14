@@ -94,7 +94,7 @@ compiled_addi(x, y) = Core.Intrinsics.add_int(x, y)
 @test compiled_addi(true, true) === false
 
 compiled_addf(x, y) = Core.Intrinsics.add_float(x, y)
-@test compiled_addf(C_NULL, C_NULL) === C_NULL
+@test_throws ErrorException compiled_addf(C_NULL, C_NULL) === C_NULL
 @test_throws ErrorException compiled_addf(C_NULL, 1)
 @test compiled_addf(0.5, 5.0e-323) === 0.5
 @test_throws ErrorException compiled_addf(im, im)
