@@ -29,6 +29,7 @@
     XX(jl_bottom_type) \
     XX(jl_boundserror_type) \
     XX(jl_builtin_type) \
+    XX(jl_closure_type) \
     XX(jl_char_type) \
     XX(jl_code_info_type) \
     XX(jl_code_instance_type) \

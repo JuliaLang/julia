@@ -162,6 +162,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_unionall_type);
         INSERT_TAG(jl_typename_type);
         INSERT_TAG(jl_builtin_type);
+        INSERT_TAG(jl_closure_type);
         INSERT_TAG(jl_code_info_type);
         INSERT_TAG(jl_opaque_closure_type);
         INSERT_TAG(jl_task_type);
