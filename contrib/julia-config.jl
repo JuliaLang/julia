@@ -82,7 +82,7 @@ function ldlibs(; framework::Bool=false, rpath::Bool=true)
             return "-L$(shell_escape(private_libDir()))"
         end
     else
-        return "-l$libname -lopenlibm"
+        return "-l$libname -lm"
     end
 end
 
