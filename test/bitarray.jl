@@ -206,9 +206,9 @@ timesofar("promotions")
         @check_bit_operation gr(b1) BitVector
 
         b1 = bitrand(v1)
-        @test_throws BoundsError resizefirst!(b1, -1)
-        @check_bit_operation resizefirst!(b1, v1 ÷ 2) BitVector
-        gr(b) = (resizefirst!(b, v1)[1:(v1÷2)] .= 1; b)
+        @test_throws BoundsError resize!(b1, -1; first=true)
+        @check_bit_operation resize!(b1, v1 ÷ 2; first=true) BitVector
+        gr(b) = (resize!(b, v1; first=true)[1:(v1÷2)] .= 1; b)
         @check_bit_operation gr(b1) BitVector
 
         b1 = bitrand(v1)
