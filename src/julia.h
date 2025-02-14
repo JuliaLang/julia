@@ -834,7 +834,7 @@ typedef struct _jl_methtable_t {
     jl_array_t *backedges; // (sig, caller::CodeInstance) pairs
     jl_mutex_t writelock;
     uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
-    uint8_t frozen; // whether this accepts adding new methods
+    _Atomic(uint8_t) frozen; // whether this accepts adding new methods
 } jl_methtable_t;
 
 typedef struct {
