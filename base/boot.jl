@@ -181,6 +181,7 @@
 #    donenotify::Any
 #    result::Any
 #    scope::Any
+#    compiler::Any
 #    code::Any
 #    @atomic _state::UInt8
 #    sticky::UInt8

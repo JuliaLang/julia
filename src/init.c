@@ -740,7 +740,9 @@ JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
         /* safepoint_on_entry */ 1,
         /* gcstack_arg */ 1,
         /* use_jlplt*/ 1,
-        /* trim */ 0 };
+        /* trim */ 0,
+        /* compiler */ NULL // defaults to jl_nothing, initialized after runtime.
+};
 
 static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&jl_modules_mutex, "jl_modules_mutex");

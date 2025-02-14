@@ -183,6 +183,30 @@ include("bootstrap.jl")
 include("reflection_interface.jl")
 include("opaque_closure.jl")
 
+abstract type AbstractCompiler end
+const CompilerInstance = Union{AbstractCompiler, Nothing}
+const NativeCompiler = Nothing
+
+current_compiler() = ccall(:jl_get_current_task, Ref{Task}, ()).compiler::CompilerInstance
+
+"""
+    abstract_interpreter(::CompilerInstance, world::UInt)
+
+Construct an appropriate abstract interpreter for the given compiler instance.
+"""
+function abstract_interpreter end
+
+abstract_interpreter(::Nothing, world::UInt) = NativeInterpreter(world)
+
+"""
+    compiler_world(::CompilerInstance)
+
+The compiler world to execute this compiler instance in.
+"""
+
+compiler_world(::Nothing) = unsafe_load(cglobal(:jl_typeinf_world, UInt))
+compiler_world(::AbstractCompiler) = get_world_counter() # equivalent to invokelatest
+
 macro __SOURCE_FILE__()
     __source__.file === nothing && return nothing
     return QuoteNode(__source__.file::Symbol)

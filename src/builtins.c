@@ -929,6 +929,25 @@ JL_CALLABLE(jl_f__call_in_world_total)
     return ret;
 }
 
+JL_CALLABLE(jl_f__call_within)
+{
+    JL_NARGSV(_apply_within, 2);
+    jl_task_t *ct = jl_current_task;
+    jl_value_t *last_compiler = ct->compiler;
+    jl_value_t *compiler = args[0];
+    jl_value_t *ret = NULL;
+    JL_TRY {
+        ct->compiler = compiler;
+        ret = jl_apply(&args[1], nargs - 1);
+        ct->compiler = last_compiler;
+    }
+    JL_CATCH {
+        ct->compiler = last_compiler;
+        jl_rethrow();
+    }
+    return ret;
+}
+
 // tuples ---------------------------------------------------------------------
 
 static jl_value_t *arg_tuple(jl_value_t *a1, jl_value_t **args, size_t nargs)
@@ -2536,6 +2555,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_call_latest", jl_f__call_latest);
     add_builtin_func("_call_in_world", jl_f__call_in_world);
     add_builtin_func("_call_in_world_total", jl_f__call_in_world_total);
+    add_builtin_func("_call_within", jl_f__call_within);
     add_builtin_func("_typevar", jl_f__typevar);
     add_builtin_func("_structtype", jl_f__structtype);
     add_builtin_func("_abstracttype", jl_f__abstracttype);

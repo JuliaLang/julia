@@ -497,4 +497,9 @@ function add_edges_impl(edges::Vector{Any}, info::GlobalAccessInfo)
     push!(edges, info.b)
 end
 
+struct WithinCallInfo <: CallInfo
+    compiler::CompilerInstance
+    info::CallInfo
+end
+
 @specialize

@@ -1574,6 +1574,7 @@ static const auto &builtin_func_map() {
           { jl_f__call_latest_addr,       new JuliaFunction<>{XSTR(jl_f__call_latest), get_func_sig, get_func_attrs} },
           { jl_f__call_in_world_addr,     new JuliaFunction<>{XSTR(jl_f__call_in_world), get_func_sig, get_func_attrs} },
           { jl_f__call_in_world_total_addr, new JuliaFunction<>{XSTR(jl_f__call_in_world_total), get_func_sig, get_func_attrs} },
+          { jl_f__call_within_addr, new JuliaFunction<>{XSTR(jl_f__call_within), get_func_sig, get_func_attrs} },
           { jl_f_throw_addr,              new JuliaFunction<>{XSTR(jl_f_throw), get_func_sig, get_func_attrs} },
           { jl_f_throw_methoderror_addr,  new JuliaFunction<>{XSTR(jl_f_throw_methoderror), get_func_sig, get_func_attrs} },
           { jl_f_tuple_addr,              jltuple_func },
@@ -1955,6 +1956,7 @@ public:
     bool use_cache = false;
     bool external_linkage = false;
     const jl_cgparams_t *params = NULL;
+    jl_value_t *compiler = NULL;
 
     SmallVector<std::unique_ptr<Module>, 0> llvmcall_modules;
 
@@ -1966,7 +1968,8 @@ public:
         max_world(max_world),
         use_cache(params.cache),
         external_linkage(params.external_linkage),
-        params(params.params) {
+        params(params.params),
+        compiler(params.compiler) {
     }
 
     jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params, jl_code_instance_t *ci) :
@@ -3191,8 +3194,10 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                         }
                     }
                     size_t last_age = jl_current_task->world_age;
+                    jl_value_t* last_compiler = jl_current_task->compiler;
                     // here we know we're calling specific builtin functions that work in world 1.
                     jl_current_task->world_age = 1;
+                    jl_current_task->compiler = jl_nothing;
                     jl_value_t *result;
                     JL_TRY {
                         result = jl_apply(v, n+1);
@@ -3201,6 +3206,7 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                         result = NULL;
                     }
                     jl_current_task->world_age = last_age;
+                    jl_current_task->compiler = last_compiler;
                     JL_GC_POP();
                     return result;
                 }
@@ -6619,7 +6625,8 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
 
     if (closure_method->source) {
         mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
-        ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.min_world, ctx.max_world);
+        // TODO(VC)
+        ci = (jl_code_instance_t*)jl_rettype_inferred(jl_nothing, mi, ctx.min_world, ctx.max_world);
     }
     else {
         mi = (jl_method_instance_t*)jl_atomic_load_relaxed(&closure_method->specializations);
@@ -10402,6 +10409,9 @@ int jl_is_timing_passes = 0;
 
 extern "C" void jl_init_llvm(void)
 {
+    if (jl_nothing == NULL) // make a placeholder
+        jl_nothing = jl_gc_permobj(0, jl_nothing_type, 0);
+    jl_default_cgparams.compiler = jl_nothing;
     jl_page_size = jl_getpagesize();
     jl_default_debug_info_kind = jl_default_cgparams.debug_info_kind = (int) DICompileUnit::DebugEmissionKind::FullDebug;
     jl_default_cgparams.debug_info_level = (int) jl_options.debug_level;

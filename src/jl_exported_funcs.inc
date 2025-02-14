@@ -137,6 +137,7 @@
     XX(jl_gc_add_finalizer_th) \
     XX(jl_gc_add_ptr_finalizer) \
     XX(jl_gc_add_quiescent) \
+    XX(jl_gc_permobj) \
     XX(jl_gc_allocobj) \
     XX(jl_gc_alloc_typed) \
     XX(jl_gc_big_alloc) \

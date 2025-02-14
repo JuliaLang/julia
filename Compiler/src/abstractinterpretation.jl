@@ -2391,6 +2391,33 @@ function abstract_throw_methoderror(interp::AbstractInterpreter, argtypes::Vecto
     return Future(CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo()))
 end
 
+function abstract_call_within(interp::AbstractInterpreter, (; fargs, argtypes)::ArgInfo, si::StmtInfo,
+                        sv::AbsIntState, max_methods::Int=get_max_methods(interp, sv))
+    if length(argtypes) < 2
+
+        return CallMeta(Union{}, Any, Effects(), NoCallInfo())
+    end
+    CT = argtypes[2]
+    other_compiler = singleton_type(CT)
+    if other_compiler === nothing
+        if CT isa Const
+            other_compiler = CT.val
+        else
+            # Compiler is not a singleton type result may depend on runtime configuration
+            add_remark!(interp, sv, "Skipped call_within since compiler plugin not constant")
+            return CallMeta(Any, Any, Effects(), NoCallInfo())
+        end
+    end
+    # Change world to one where our methods exist.
+    cworld = invokelatest(compiler_world, other_compiler)::UInt
+    other_interp = Core._call_in_world(cworld, abstract_interpreter, other_compiler, get_inference_world(interp))
+    other_fargs = fargs === nothing ? nothing : fargs[3:end]
+    other_arginfo = ArgInfo(other_fargs, argtypes[3:end])
+    call = Core._call_in_world(cworld, abstract_call, other_interp, other_arginfo, si, sv, max_methods)
+    # TODO: Edges? Effects?
+    return CallMeta(call.rt, call.exct, call.effects, WithinCallInfo(other_compiler, call.info))
+end
+
 const generic_getglobal_effects = Effects(EFFECTS_THROWS, consistent=ALWAYS_FALSE, inaccessiblememonly=ALWAYS_FALSE)
 const generic_getglobal_exct = Union{ArgumentError, TypeError, ConcurrencyViolationError, UndefVarError}
 function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, @nospecialize(M), @nospecialize(s))
@@ -2631,6 +2658,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             return abstract_throw(interp, argtypes, sv)
         elseif f === Core.throw_methoderror
             return abstract_throw_methoderror(interp, argtypes, sv)
+        elseif f === Core._call_within
+            return abstract_call_within(interp, arginfo, si, sv, max_methods)
         elseif f === Core.getglobal
             return Future(abstract_eval_getglobal(interp, sv, si.saw_latestworld, argtypes))
         elseif f === Core.setglobal!

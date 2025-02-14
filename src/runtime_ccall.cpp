@@ -369,6 +369,7 @@ void *jl_get_abi_converter(jl_task_t *ct, _Atomic(void*) *fptr, _Atomic(size_t) 
     size_t nargs = jl_nparams(sigt);
     jl_method_instance_t *mi;
     jl_code_instance_t *codeinst;
+    jl_value_t *compiler = jl_nothing; // native
     size_t world;
     // check first, while behind this lock, of the validity of the current contents of this cfunc thunk
     JL_LOCK(&cfun_lock);
@@ -401,7 +402,7 @@ void *jl_get_abi_converter(jl_task_t *ct, _Atomic(void*) *fptr, _Atomic(size_t) 
         }
         JL_UNLOCK(&cfun_lock);
         // next, try to figure out what the target should look like (outside of the lock since this is very slow)
-        codeinst = mi ? jl_type_infer(mi, world, SOURCE_MODE_ABI) : nullptr;
+        codeinst = mi ? jl_type_infer(compiler, mi, world, SOURCE_MODE_ABI) : nullptr;
         // relock for the remainder of the function
         JL_LOCK(&cfun_lock);
     } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart entirely, since jl_world_counter changed thus jl_get_specialization1 might have changed
