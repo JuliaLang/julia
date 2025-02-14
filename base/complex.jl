@@ -1,5 +1,4 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
-
 """
     Complex{T<:Real} <: Number
 
@@ -566,6 +565,19 @@ end
 #     end
 #     return Complex(abs(iz)/r/2, copysign(r,iz))
 # end
+
+struct RootsVector{T<:Union{Real,Complex}} <: AbstractVector{T}
+    z::T
+    n::Int
+    option::Char
+end
+RootsVector(z::Complex, n::Int) = RootsVector(z, n, 'm')
+RootsVector(z::Real, n::Int) = RootsVector(z, n, 's')
+
+Base.size(S::RootsVector) = (S.option == 's') ? (1,) : ((S.option == 'm') && ((S.z != zero(S.z)) ? (typeof(S.z)<:Complex) ? (S.n,) : ((iseven(S.n) && (S.z > zero(S.z)) ? (2,) : (1,))) : (1,)))
+Base.IndexStyle(S::RootsVector) = IndexLinear()
+Base.getindex(S::RootsVector, i::Int) = (typeof(S.z)<:Complex) ? abs(S.z)^(1/S.n)*cis((angle(S.z)+2*pi*(i-1))/S.n) : (isodd(S.n) ? copysign(abs(S.z)^(1/S.n), S.z) : ((S.z > zero(S.z)) ? copysign(abs(S.z)^(1/S.n), (-1)^(i-1)) : NaN))
+# Base.getindex(S::RootsVector, i::Int) = (isa(typeof(S.z), Complex)) ? abs(S.z)^(1/S.n)*cis((angle(S.z)+2*pi*(i-1))/S.n) : (isodd(S.n) ? copysign(abs(S.z)^(1/S.n), S.z) : ((S.z > zero(S.z)) ? copysign(abs(S.z)^(1/S.n), (-1)^(i-1)) : throw(DomainError(S.z, LazyString(:RootsVector," will only return a complex result if called with a complex argument. Try ", :RootsVector,"(Complex(x), n).")))))
 
 """
     cis(x)
