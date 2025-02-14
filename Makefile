@@ -228,7 +228,7 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp libgmpxx
 JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_NGHTTP2) += libnghttp2
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MBEDTLS) += libmbedtls libmbedcrypto libmbedx509
+JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENSSL) += libcrypto libssl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUV) += libuv
@@ -278,6 +278,28 @@ ifeq ($(USE_SYSTEM_BLAS),1)
 ifeq ($(USE_SYSTEM_LAPACK),0)
 JL_PRIVATE_LIBS-0 += libgfortblas
 endif
+endif
+endif
+
+ifneq (${MMTK_PLAN},None)
+# Make sure we use the right version of $MMTK_PLAN, $MMTK_MOVING and $MMTK_BUILD
+# if we use the BinaryBuilder version of mmtk-julia
+ifeq ($(USE_BINARYBUILDER_MMTK_JULIA),1)
+ifeq (${MMTK_PLAN},Immix)
+LIB_PATH_PLAN = immix
+else ifeq (${MMTK_PLAN},StickyImmix)
+LIB_PATH_PLAN = sticky
+endif
+
+ifeq ($(MMTK_MOVING), 0)
+LIB_PATH_MOVING := non_moving
+else
+LIB_PATH_MOVING := moving
+endif
+
+JL_PRIVATE_LIBS-0 += $(LIB_PATH_PLAN)/$(LIB_PATH_MOVING)/$(MMTK_BUILD)/libmmtk_julia
+else
+JL_PRIVATE_LIBS-0 += libmmtk_julia
 endif
 endif
 

@@ -24,19 +24,19 @@ function create_match_context()
     return ctx
 end
 
-THREAD_MATCH_CONTEXTS::Vector{Ptr{Cvoid}} = [C_NULL]
+global THREAD_MATCH_CONTEXTS::Vector{Ptr{Cvoid}} = [C_NULL]
 
-PCRE_COMPILE_LOCK = nothing
+global PCRE_COMPILE_LOCK::Threads.SpinLock
 
 _tid() = Int(ccall(:jl_threadid, Int16, ())) + 1
-_mth() = Int(Core.Intrinsics.atomic_pointerref(cglobal(:jl_n_threads, Cint), :acquire))
+_mth() = Threads.maxthreadid()
 
 function get_local_match_context()
     tid = _tid()
     ctxs = THREAD_MATCH_CONTEXTS
     if length(ctxs) < tid
         # slow path to allocate it
-        l = PCRE_COMPILE_LOCK::Threads.SpinLock
+        l = PCRE_COMPILE_LOCK
         lock(l)
         try
             ctxs = THREAD_MATCH_CONTEXTS

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Tuple
+
 # Document NTuple here where we have everything needed for the doc system
 """
     NTuple{N, T}

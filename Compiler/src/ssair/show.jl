@@ -100,11 +100,17 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         if !(mi isa Core.MethodInstance)
             mi = (mi::Core.CodeInstance).def
         end
+        if isa(mi, Core.ABIOverride)
+            abi = mi.abi
+            mi = mi.def
+        else
+            abi = mi.specTypes
+        end
         show_unquoted(io, stmt.args[2], indent)
         print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
-        sig = mi.specTypes == Tuple ? Core.svec() : Base.unwrap_unionall(mi.specTypes).parameters::Core.SimpleVector
+        sig = abi == Tuple ? Core.svec() : Base.unwrap_unionall(abi).parameters::Core.SimpleVector
         print_arg(i) = sprint(; context=io) do io
             show_unquoted(io, stmt.args[i], indent)
             if (i - 1) <= length(sig)
