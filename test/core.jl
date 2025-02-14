@@ -8130,3 +8130,8 @@ let widen_diagonal(x::UnionAll) = Base.rewrap_unionall(Base.widen_diagonal(Base.
     @test Tuple === widen_diagonal(Union{Tuple{Vararg{S}}, Tuple{Vararg{T}}} where {S, T})
     @test Tuple{Vararg{Val{<:Set}}} == widen_diagonal(Tuple{Vararg{T}} where T<:Val{<:Set})
 end
+
+myfun57023a(::Type{T}) where {T} = (x = @ccall mycfun()::Ptr{T}; x)
+@test only(code_lowered(myfun57023a)).has_fcall
+myfun57023b(::Type{T}) where {T} = (x = @cfunction myfun57023a Ptr{T} (Ref{T},); x)
+@test only(code_lowered(myfun57023b)).has_fcall
