@@ -320,6 +320,8 @@ jl_value_t *jl_get_cfunction_trampoline(
     tramp = trampoline_alloc();
     ((void**)result)[0] = tramp;
     init_trampoline(tramp, nval);
+    OBJHASH_PIN((void*)fobj)
+    OBJHASH_PIN(result)
     ptrhash_put(cache, (void*)fobj, result);
     uv_mutex_unlock(&trampoline_lock);
     return result;

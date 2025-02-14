@@ -307,7 +307,7 @@ CFI_NORETURN
 #endif
 
 /* Rooted by the base module */
-static _Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
+_Atomic(jl_function_t*) task_done_hook_func JL_GLOBALLY_ROOTED = NULL;
 
 void JL_NORETURN jl_finish_task(jl_task_t *ct)
 {
@@ -1072,7 +1072,7 @@ void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSA
 JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion_future, size_t ssize)
 {
     jl_task_t *ct = jl_current_task;
-    jl_task_t *t = (jl_task_t*)jl_gc_alloc(ct->ptls, sizeof(jl_task_t), jl_task_type);
+    jl_task_t *t = (jl_task_t*)jl_gc_alloc_nonmoving(ct->ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(t, jl_task_tag, 0);
     JL_PROBE_RT_NEW_TASK(ct, t);
     t->ctx.copy_stack = 0;
@@ -1105,6 +1105,12 @@ JL_DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, jl_value_t *completion
     t->start = start;
     t->result = jl_nothing;
     t->donenotify = completion_future;
+    // completion_future is a GenericCondition with SpinLock.
+    // I am not sure why we have to pin this. But, if we don't pin it,
+    // it may get moved, and we still use the invalid old reference somehow.
+    // See https://github.com/mmtk/mmtk-julia/issues/179.
+    // TODO: We should understand where we get the invalid reference from.
+    OBJ_PIN(completion_future);
     jl_atomic_store_relaxed(&t->_isexception, 0);
     // Inherit scope from parent task
     t->scope = ct->scope;
@@ -1536,7 +1542,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     bootstrap_task.value.ptls = ptls;
     if (jl_nothing == NULL) // make a placeholder
         jl_nothing = jl_gc_permobj(0, jl_nothing_type, 0);
-    jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
+    jl_task_t *ct = (jl_task_t*)jl_gc_alloc_nonmoving(ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(ct, jl_task_tag, 0);
     memset(ct, 0, sizeof(jl_task_t));
     void *stack = stack_lo;

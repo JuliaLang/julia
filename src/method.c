@@ -559,7 +559,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void)
 {
     jl_task_t *ct = jl_current_task;
     jl_method_instance_t *mi =
-        (jl_method_instance_t*)jl_gc_alloc(ct->ptls, sizeof(jl_method_instance_t),
+        (jl_method_instance_t*)jl_gc_alloc_nonmoving(ct->ptls, sizeof(jl_method_instance_t),
                                            jl_method_instance_type);
     mi->def.value = NULL;
     mi->specTypes = NULL;

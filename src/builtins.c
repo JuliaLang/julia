@@ -344,6 +344,9 @@ static uintptr_t type_object_id_(jl_value_t *v, jl_varidx_t *env) JL_NOTSAFEPOIN
             i++;
             pe = pe->prev;
         }
+        // FIXME: Pinning objects that get hashed
+        // until we implement address space hashing.
+        OBJ_PIN(v);
         uintptr_t bits = jl_astaggedvalue(v)->header;
         if (bits & GC_IN_IMAGE)
             return ((uintptr_t*)v)[-2];
@@ -400,6 +403,10 @@ static uintptr_t immut_id_(jl_datatype_t *dt, jl_value_t *v, uintptr_t h) JL_NOT
         // a few select pointers (notably symbol) also have special hash values
         // which may affect the stability of the objectid hash, even though
         // they don't affect egal comparison
+
+        // FIXME: Pinning objects that get hashed
+        // until we implement address space hashing.
+        PTR_PIN(v); // This has to be a pointer pin -- v could be an internal pointer
         return bits_hash(v, sz) ^ h;
     }
     if (dt == jl_unionall_type)
@@ -460,6 +467,10 @@ static uintptr_t NOINLINE jl_object_id__cold(uintptr_t tv, jl_value_t *v) JL_NOT
         uintptr_t bits = jl_astaggedvalue(v)->header;
         if (bits & GC_IN_IMAGE)
             return ((uintptr_t*)v)[-2];
+
+        // FIXME: Pinning objects that get hashed
+        // until we implement address space hashing.
+        OBJ_PIN(v);
         return inthash((uintptr_t)v);
     }
     return immut_id_(dt, v, dt->hash);

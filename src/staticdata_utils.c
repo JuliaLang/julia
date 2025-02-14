@@ -82,7 +82,7 @@ static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
     return 0;
 }
 
-static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
+jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 // Mutex for newly_inferred
 jl_mutex_t newly_inferred_mutex;
 extern jl_mutex_t world_counter_lock;
@@ -272,6 +272,7 @@ static void jl_collect_new_roots(jl_array_t *roots, jl_array_t *new_ext_cis, uin
         assert(jl_is_code_instance(ci));
         jl_method_t *m = jl_get_ci_mi(ci)->def.method;
         assert(jl_is_method(m));
+        OBJHASH_PIN(m)
         ptrhash_put(&mset, (void*)m, (void*)m);
     }
     int nwithkey;

@@ -42,6 +42,8 @@ void FinalLowerGC::lowerPushGCFrame(CallInst *target, Function &F)
 
     IRBuilder<> builder(target);
     StoreInst *inst = builder.CreateAlignedStore(
+                // FIXME: We should use JL_GC_ENCODE_PUSHARGS_NO_TPIN here.
+                // We need to make sure things are properly pinned before turning this into a non TPIN push.
                 ConstantInt::get(T_size, JL_GC_ENCODE_PUSHARGS(nRoots)),
                 builder.CreateConstInBoundsGEP1_32(T_prjlvalue, gcframe, 0, "frame.nroots"),// GEP of 0 becomes a noop and eats the name
                 Align(sizeof(void*)));

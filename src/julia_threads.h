@@ -230,6 +230,7 @@ typedef struct _jl_excstack_t jl_excstack_t;
 typedef struct _jl_handler_t jl_handler_t;
 
 typedef struct _jl_task_t {
+    JL_NON_MOVING // jl_mutex_t (as globals) references tasks
     JL_DATA_TYPE
     jl_value_t *next; // invasive linked list for scheduler
     jl_value_t *queue; // invasive linked list for scheduler
@@ -274,6 +275,9 @@ typedef struct _jl_task_t {
     // uint48_t padding2_64;
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
+    // GC stack of objects from gc preserve regions
+    // These must always be transitively pinned. Only used by MMTK.
+    jl_gcframe_t *gcpreserve_stack;
     size_t world_age;
     // quick lookup for current ptls
     jl_ptls_t ptls; // == jl_all_tls_states[tid]

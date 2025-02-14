@@ -101,6 +101,10 @@ JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
+// Pinning objects; Returns whether the object has been pinned by this call.
+JL_DLLEXPORT unsigned char jl_gc_pin_object(void* obj);
+// Pinning objects through a potential internal pointer; Returns whether the object has been pinned by this call.
+JL_DLLEXPORT unsigned char jl_gc_pin_pointer(void* ptr);
 // Returns which GC implementation is being used and possibly its version according to the list of supported GCs
 // NB: it should clearly identify the GC by including e.g. ‘stock’ or ‘mmtk’ as a substring.
 JL_DLLEXPORT const char* jl_gc_active_impl(void);
@@ -108,6 +112,16 @@ JL_DLLEXPORT const char* jl_gc_active_impl(void);
 // each GC should implement it but it will most likely not be used by other code in the runtime.
 // It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+// Notifies the GC that the given thread is about to yield for a GC. ctx is the ucontext for the thread
+// if it is already fetched by the caller, otherwise it is NULL.
+JL_DLLEXPORT void jl_gc_notify_thread_yield(jl_ptls_t ptls, void* ctx);
+
+// TODO: The preserve hook functions may be temporary. We should see the performance impact of the change.
+
+// Runtime hook for gc preserve begin. The GC needs to make sure that the preserved objects and its children stay alive and won't move.
+JL_DLLEXPORT void jl_gc_preserve_begin_hook(int n, ...) JL_NOTSAFEPOINT;
+// Runtime hook for gc preserve end. The GC needs to make sure that the preserved objects and its children stay alive and won't move.
+JL_DLLEXPORT void jl_gc_preserve_end_hook(void) JL_NOTSAFEPOINT;
 
 // ========================================================================= //
 // Metrics
@@ -148,6 +162,9 @@ JL_DLLEXPORT uint64_t jl_gc_total_hrtime(void);
 // **must** also set the type of the returning object to be `ty`. The type `ty` may also be used to record
 // an allocation of that type in the allocation profiler.
 struct _jl_value_t *jl_gc_alloc_(struct _jl_tls_states_t * ptls, size_t sz, void *ty);
+// Similar to jl_gc_alloc_, except that the GC needs to make sure the object allocated from this function will
+// not be moved by the GC.
+struct _jl_value_t *jl_gc_alloc_nonmoving_(struct _jl_tls_states_t * ptls, size_t sz, void *ty);
 // Allocates small objects and increments Julia allocation counterst. Size of the object
 // header must be included in the object size. The (possibly unused in some implementations)
 // offset to the arena in which we're allocating is passed in the second parameter, and the
@@ -214,6 +231,10 @@ struct _jl_value_t *jl_gc_permobj(size_t sz, void *ty, unsigned align) JL_NOTSAF
 // The GC may use that information to, for instance, determine that such objects should
 // be treated as marked and belonged to the old generation in nursery collections.
 void jl_gc_notify_image_load(const char* img_data, size_t len);
+// This function notifies the GC about memory addresses that are set when allocating the boot image.
+// The GC may use that information to, for instance, determine that all objects in that chunk of memory should
+// be treated as marked and belonged to the old generation in nursery collections.
+void jl_gc_notify_image_alloc(const char* img_data, size_t len);
 
 // ========================================================================= //
 // Runtime Write-Barriers
