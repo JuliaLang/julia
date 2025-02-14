@@ -2842,7 +2842,7 @@ end
 Compiler.load_irshow!()
 const IRShow = Compiler.IRShow # an alias for compatibility
 
-function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
+function show(io::IO, src::CodeInfo; debuginfo::Symbol=:none)
     # Fix slot names and types in function body
     print(io, "CodeInfo(")
     lambda_io::IOContext = io
