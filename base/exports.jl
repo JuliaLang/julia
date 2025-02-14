@@ -507,7 +507,6 @@ export
     prepend!,
     push!,
     resize!,
-    resizefirst!,
     popfirst!,
     pushfirst!,
 
