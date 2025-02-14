@@ -3876,7 +3876,10 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_string_type->ismutationfree = jl_string_type->isidentityfree = 1;
     jl_symbol_type->ismutationfree = jl_symbol_type->isidentityfree = 1;
     jl_simplevector_type->ismutationfree = jl_simplevector_type->isidentityfree = 1;
+    jl_typename_type->ismutationfree = 1;
     jl_datatype_type->ismutationfree = 1;
+    jl_uniontype_type->ismutationfree = 1;
+    jl_unionall_type->ismutationfree = 1;
     assert(((jl_datatype_t*)jl_array_any_type)->ismutationfree == 0);
     assert(((jl_datatype_t*)jl_array_uint8_type)->ismutationfree == 0);
 
