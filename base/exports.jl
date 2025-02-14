@@ -1110,6 +1110,7 @@ export
     @nospecialize,
     @specialize,
     @polly,
+    @optlevel,
 
     @assert,
     @atomic,
