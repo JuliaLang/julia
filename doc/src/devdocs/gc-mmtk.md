@@ -1,15 +1,15 @@
 # Julia + MMTk
 
-There has been quite a lot of effort to refactor the GC code inside Julia to support external GCs. The first step to enable using different GC algorithms for Julia was the design and implementation of a [GC interface](https://docs.google.com/document/d/1v0jtSrIpdEDNOxj5S9g1jPqSpuAkNWhr_T8ToFC9RLI/edit?usp=sharing). To drive that interface, we added support for building Julia with [MMTk](https://www.mmtk.io). MMTk is a memory management toolkit providing language implementers with a framework to implement flexible and performant GCs. The flexibility comes from the fact that it is possible to switch implementations fairly easily. MMTk supports state-of-the-art high-performance implementations that are continuously added and maintained in the core part of the framework. MMTk is under active development and has been used by other programming languages such as [Java](https://github.com/mmtk/mmtk-openjdk) and [Ruby](https://github.com/ruby/mmtk). To support a language, it is necessary to implement an *MMTk binding*, which contains the code that connects the language to [mmtk-core](https://github.com/mmtk/mmtk-core). The mmtk-julia binding can be found in [this repository](https://github.com/mmtk/mmtk-julia).
+There has been quite a lot of effort to refactor the GC code inside Julia to support external GCs. The first step to enable using different GC algorithms for Julia was the design and implementation of a [GC interface](https://docs.google.com/document/d/1v0jtSrIpdEDNOxj5S9g1jPqSpuAkNWhr_T8ToFC9RLI/edit?usp=sharing). To drive that interface, we added support for building Julia with [MMTk](https://www.mmtk.io) (Memory Management Toolkit). Using Julia + MMTk enables testing different GC implementations, allowing developers to choose a specific implementation when building Julia from source. The connection between Julia and MMTk is done via a *binding*, which links the language runtime with MMTk core. The mmtk-julia binding is written in Rust and can be found in [this repository](https://github.com/mmtk/mmtk-julia).
 
 > [!NOTE]
 > Using a different GC requires building Julia from source. It is not possible to switch implementations at runtime. To see what version of the GC is currently being used, run `versioninfo()` from the Julia REPL and it should show the version under `GC: ...`.
 
 ## Building Julia with MMTk
 
-There are 3 different ways of building Julia with MMTk: building from source using a fixed release of the binding, checking out a custom version in the mmtk-julia [repository](https://github.com/mmtk/mmtk-julia) or using a precompiled binary from Julia's BinaryBuilder. The easiest way is to use the BinaryBuilder binary. Simply set the variable `MMTK_PLAN` to one of the supported plans below and build Julia as usual.
+There are 3 different ways of building Julia with MMTk: building from source using a fixed release of the binding, checking out a custom version in the mmtk-julia [repository](https://github.com/mmtk/mmtk-julia) or using a precompiled binary from Julia's BinaryBuilder. The easiest way is to use the BinaryBuilder binary. First, to enable MMTk as a third-party GC, set the variable `WITH_THIRD_PARTY_GC` to `mmtk`. Then, for example, to use the Immix as the GC, simply set the variable `MMTK_PLAN=Immix` and build Julia as usual.
 
-There are different configurations supported by the following variables, which can be set in a `Make.user` file or as an environment variable.
+There are different configurations supported by the following variables, which can be set in a `Make.user` file or as an environment variable. Note that at this time, setting `MMTK_PLAN=StickyImmix` (to use a generational version of Immix) or `MMTK_MOVING=1` (to enable object movement) will likely cause segmentation faults or other build failures, since we have not added support for these configurations yet. Setting `MMTK_BUILD=debug` will force a debug build of the binding, which will print some logging information that can be used to find errors that are specific to MMTk.
 
 | Variable      |       |        |
 |---------------|--------------|---------------|
@@ -17,10 +17,7 @@ There are different configurations supported by the following variables, which c
 | `MMTK_MOVING`   | 0            | 1             |
 | `MMTK_BUILD`    | release      | debug         |
 
-If only `MMTK_PLAN` is set, then the default is to do a non-moving, release build.
-
-> [!IMPORTANT]
-> While the binding supports building all versions above, we have only integrated non-moving Immix into Julia. Support for the other versions should be added in the near future.
+Note that when setting only `MMTK_PLAN`, then the default is to do a non-moving, release build.
 
 ### Building mmtk-julia from source
 
