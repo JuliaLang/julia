@@ -37,7 +37,7 @@ exact number of elements is unknown (`undef` then has a length of `length(fields
 """
 Core.PartialStruct
 
-function Core.PartialStruct(@nospecialize(typ), undef::BitVector, fields::Vector{Any})
+function Core.PartialStruct(typ::Type, undef::BitVector, fields::Vector{Any})
     @assert length(undef) ≥ length(fields) - (fields[end] === Vararg)
     for i in 1:datatype_min_ninitialized(typ)
         undef[i] = false

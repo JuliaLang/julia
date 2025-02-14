@@ -657,11 +657,15 @@ end
     if aty === bty && !isType(aty)
         typea::Union{PartialStruct, Const}
         typeb::Union{PartialStruct, Const}
-        undefined = maybeundef_fields(typea, typeb)
-        all(undefined) && return nothing
-        nflds = length(undefined)
+        maybeundef = maybeundef_fields(typea, typeb)
+        if all(maybeundef)
+            # We could also preserve information about refined field types
+            # (e.g. to better infer non-throwing `getfield` branches).
+            return nothing
+        end
+        nflds = length(maybeundef)
         fields = Vector{Any}(undef, nflds)
-        anyrefine = refines_definedness_information(aty, undefined)
+        anyrefine = refines_definedness_information(aty, maybeundef)
         for i = 1:nflds
             ai = getfield_tfunc(𝕃, typea, Const(i))
             bi = getfield_tfunc(𝕃, typeb, Const(i))
@@ -704,7 +708,7 @@ end
             # handle that in the main loop above to get a more accurate type.
             push!(fields, Vararg)
         end
-        anyrefine && return PartialStruct(𝕃, aty, undefined, fields)
+        anyrefine && return PartialStruct(𝕃, aty, maybeundef, fields)
     end
     return nothing
 end
