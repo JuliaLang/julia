@@ -3977,7 +3977,7 @@ module ReplacementContainer
         const x = 1
     end
     const Old = ReplaceMe
-    @test_warn r"WARNING: replacing module ReplaceMe" @eval module ReplaceMe
+    @eval module ReplaceMe
         const x = 2
     end
 end

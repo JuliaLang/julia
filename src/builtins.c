@@ -2345,6 +2345,13 @@ JL_CALLABLE(jl_f__equiv_typedef)
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
 }
 
+JL_CALLABLE(jl_f__defaultctors)
+{
+    JL_NARGS(_defaultctors, 2, 2);
+    jl_ctor_def(args[0], args[1]);
+    return jl_nothing;
+}
+
 // IntrinsicFunctions ---------------------------------------------------------
 
 static void (*runtime_fp[num_intrinsics])(void);
@@ -2541,6 +2548,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("_abstracttype", jl_f__abstracttype);
     add_builtin_func("_primitivetype", jl_f__primitivetype);
     add_builtin_func("_setsuper!", jl_f__setsuper);
+    add_builtin_func("_defaultctors", jl_f__defaultctors);
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);

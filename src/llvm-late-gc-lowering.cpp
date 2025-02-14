@@ -2291,7 +2291,7 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
             const LargeSparseBitVector &NowLive = S.LiveSets[*rit];
             // reset slots which are no longer alive
             for (int Idx : *LastLive) {
-                if (Idx >= PreAssignedColors && !HasBitSet(NowLive, Idx)) {
+                if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx)) {
                     PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
                       S.ReverseSafepointNumbering[*rit]);
                 }

@@ -8,6 +8,9 @@
 Greatest common (positive) divisor (or zero if all arguments are zero).
 The arguments may be integer and rational numbers.
 
+``a`` is a divisor of ``b`` if there exists an integer ``m`` such
+that ``ma=b``.
+
 !!! compat "Julia 1.4"
     Rational arguments require Julia 1.4 or later.
 

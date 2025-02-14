@@ -2448,16 +2448,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         if (npointers == 0)
             return;
         uintptr_t nptr = (npointers << 2 | (bits & GC_OLD));
-        if (vt == jl_binding_partition_type) {
-            // BindingPartition has a special union of jl_value_t and flag bits
-            // but is otherwise regular.
-            jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_valueof(o);
-            jl_value_t *val = decode_restriction_value(
-                jl_atomic_load_relaxed(&bpart->restriction));
-            if (val)
-                gc_heap_snapshot_record_binding_partition_edge((jl_value_t*)bpart, val);
-            gc_try_claim_and_push(mq, val, &nptr);
-        }
         assert((layout->nfields > 0 || layout->flags.fielddesc_type == 3) &&
                "opaque types should have been handled specially");
         if (layout->flags.fielddesc_type == 0) {
