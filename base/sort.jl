@@ -1748,7 +1748,10 @@ When calling `sort` on the [`keys`](@ref) or [`values](@ref) of a dictionary, `v
 collected and then sorted in place.
 
 !!! compat "Julia 1.12"
-    Sorting `NTuple`s , keys sets, and values iterators requires Julia 1.12 or later.
+    Sorting `NTuple`s requires Julia 1.12 or later.
+
+!!! compat "Julia 1.13"
+    Sorting keys sets and values iterators requires Julia 1.13 or later.
 
 # Examples
 ```jldoctest
