@@ -177,13 +177,11 @@ function +(x::Bool, y::T)::promote_type(Bool,T) where T<:AbstractFloat
 end
 +(y::AbstractFloat, x::Bool) = x + y
 
-# make `false` a "strong zero": false*NaN == 0.0, false*1//0 == 0//1
-for U in [AbstractFloat, Rational]
-    @eval function *(x::Bool, y::T)::promote_type(Bool,T) where T<:$U
-        return ifelse(x, y, copysign(zero(y), y))
-    end
-    @eval *(y::$U, x::Bool) = x * y
+# make `false` a "strong zero": false*NaN == 0.0
+function *(x::Bool, y::T)::promote_type(Bool,T) where T<:AbstractFloat
+    return ifelse(x, y, copysign(zero(y), y))
 end
+*(y::AbstractFloat, x::Bool) = x * y
 
 div(x::Bool, y::Bool) = y ? x : throw(DivideError())
 rem(x::Bool, y::Bool) = y ? false : throw(DivideError())
