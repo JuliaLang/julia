@@ -161,21 +161,29 @@ void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     target->replaceAllUsesWith(newI);
     target->eraseFromParent();
 }
+bool FinalLowerGC::shouldRunFinalGC(Function &F)
+{
+    bool should_run = 0;
+    should_run |= getOrNull(jl_intrinsics ::newGCFrame) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::getGCFrameSlot) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::pushGCFrame) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::popGCFrame) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::GCAllocBytes) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::queueGCRoot) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::safepoint) != nullptr;
+    should_run |= pgcstack_getter != nullptr;
+    should_run |= adoptthread_func != nullptr;
+    should_run |= pgcstack != nullptr;
+    return should_run;
+}
 
 bool FinalLowerGC::runOnFunction(Function &F)
 {
     initAll(*F.getParent());
-    if (!pgcstack_getter && !adoptthread_func) {
-        LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Skipping function " << F.getName() << "\n");
-        goto verify_skip;
-    }
-
-    // Look for a call to 'julia.get_pgcstack'.
     pgcstack = getPGCstack(F);
-    if (!pgcstack) {
-        LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Skipping function " << F.getName() << " no pgcstack\n");
+    if (!shouldRunFinalGC(F))
         goto verify_skip;
-    }
+
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
