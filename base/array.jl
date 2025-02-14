@@ -1443,11 +1443,15 @@ function _prepend!(a::Vector, ::IteratorSize, iter)
 end
 
 """
-    resize!(a::Vector, n::Integer) -> Vector
+    resize!(a::Vector, n::Integer; first::Bool=false) -> Vector
 
 Resize `a` to contain `n` elements. If `n` is smaller than the current collection
 length, the first `n` elements will be retained. If `n` is larger, the new elements are not
 guaranteed to be initialized.
+
+If `first` is true, then the new elements are inserted at the start of the collection. In
+this case, if `n` is smaller than the current collection length, the last `n` elements will
+be retained.
 
 # Examples
 ```jldoctest
@@ -1472,7 +1476,11 @@ julia> a[1:6]
  1
 ```
 """
-function resize!(a::Vector, nl::Integer)
+function resize!(a::Vector, nl::Integer; first::Bool=false)
+    first ? _resizefirst!(a, nl) : _resize!(a, nl)
+end
+
+function _resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
         _growend!(a, nl-l)
@@ -1485,38 +1493,7 @@ function resize!(a::Vector, nl::Integer)
     return a
 end
 
-"""
-    resizefirst!(a::Vector, n::Integer) -> Vector
-
-Resize a to contain n elements, inserting the new elements at the start of the
-collection. If n is smaller than the current collection length, the last n
-elements will be retained. If n is larger, the new elements are not guaranteed
-to be initialized.
-
-# Examples
-```jldoctest
-julia> resizefirst!([6, 5, 4, 3, 2, 1], 3)
-3-element Vector{Int64}:
- 3
- 2
- 1
-
-julia> a = resizefirst!([6, 5, 4, 3, 2, 1], 8);
-
-julia> length(a)
-8
-
-julia> a[3:8]
-6-element Vector{Int64}:
- 6
- 5
- 4
- 3
- 2
- 1
-```
-"""
-function resizefirst!(a::Vector, nl::Integer)
+function _resizefirst!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
         _growbeg!(a, nl-l)
