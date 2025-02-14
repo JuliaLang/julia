@@ -1,4 +1,4 @@
-Julia v1.12 Release Notes
+Julia v1.13 Release Notes
 ========================
 
 New language features
@@ -24,6 +24,8 @@ New library functions
 
 New library features
 --------------------
+
+`sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 
 Standard library changes
 ------------------------
