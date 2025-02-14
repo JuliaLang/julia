@@ -243,7 +243,7 @@ Base.copyto!(fd::BigFloatData, limbs) = copyto!(getfield(fd, :d), offset_p_limbs
 
 include("rawbigfloats.jl")
 
-rounding_raw(::Type{BigFloat}) = something(Base.ScopedValues.get(CURRENT_ROUNDING_MODE), ROUNDING_MODE[])
+rounding_raw(::Type{BigFloat}) = @something(Base.ScopedValues.get(CURRENT_ROUNDING_MODE), ROUNDING_MODE[])
 setrounding_raw(::Type{BigFloat}, r::MPFRRoundingMode) = ROUNDING_MODE[]=r
 function setrounding_raw(f::Function, ::Type{BigFloat}, r::MPFRRoundingMode)
     Base.ScopedValues.@with(CURRENT_ROUNDING_MODE => r, f())
@@ -1044,7 +1044,7 @@ _convert_precision_from_base(precision::Integer, base::Integer) =
     base == 2 ? precision : ceil(Int, precision * log2(base))
 
 _precision_with_base_2(::Type{BigFloat}) =
-    Int(something(Base.ScopedValues.get(CURRENT_PRECISION), DEFAULT_PRECISION[])) # default precision of the type BigFloat itself
+    Int(@something(Base.ScopedValues.get(CURRENT_PRECISION), DEFAULT_PRECISION[])) # default precision of the type BigFloat itself
 
 """
     setprecision([T=BigFloat,] precision::Int; base=2)
