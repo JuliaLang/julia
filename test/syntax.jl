@@ -4088,3 +4088,7 @@ abstract type A57267{S, T} end
     B57267{S} = A57267{S, 1}
     const C57267 = B57267
 end
+
+# Issue #56904 - lambda linearized twice
+@test (let; try 3; finally try 1; f(() -> x); catch x; end; end; x = 7; end) === 7
+@test (let; try 3; finally try 4; finally try 1; f(() -> x); catch x; end; end; end; x = 7; end) === 7
