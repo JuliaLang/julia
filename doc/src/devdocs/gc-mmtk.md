@@ -7,7 +7,7 @@ There has been quite a lot of effort to refactor the GC code inside Julia to sup
 
 ## Building Julia with MMTk
 
-There are 3 different ways of building Julia with MMTk: building from source using a fixed release of the binding, checking out a custom version in the mmtk-julia [repository](https://github.com/mmtk/mmtk-julia) or using a precompiled binary from Julia's BinaryBuilder. The easiest way is to use the BinaryBuilder binary. Simply set the variable `MMTK_PLAN` to one of the supported plans below and build Julia as usual.
+There are 3 different ways of building Julia with MMTk: building from source using a fixed release of the binding, checking out a custom version in the mmtk-julia [repository](https://github.com/mmtk/mmtk-julia) or using a precompiled binary from Julia's BinaryBuilder. The easiest way is to use the BinaryBuilder binary. First, to enable MMTk as a third-party GC, set the variable `WITH_THIRD_PARTY_GC` to `mmtk`. Then, simply set the variable `MMTK_PLAN` to one of the supported plans below and build Julia as usual.
 
 There are different configurations supported by the following variables, which can be set in a `Make.user` file or as an environment variable.
 
