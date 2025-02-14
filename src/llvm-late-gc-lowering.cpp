@@ -1979,7 +1979,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             // strip all constant alias information, as it might depend on the gc having
             // preserved a gc root, which stops being true after this pass (#32215)
             // similar to RewriteStatepointsForGC::stripNonValidData, but less aggressive
-            if (auto *LI = dyn_cast<Load>(I)){
+            if (auto *LI = dyn_cast<LoadInst>(I)){
                 if (isSpecialPtr(LI->getPointerOperand()->getType()) && LI->getMetadata(LLVMContext::MD_invariant_load))
                     LI->setMetadata(LLVMContext::MD_invariant_load, NULL);
             }
