@@ -3257,7 +3257,6 @@ static bool slot_eq(jl_value_t *e, int sl)
 // --- find volatile variables ---
 
 // assigned in a try block and used outside that try block
-
 static bool local_var_occurs(jl_value_t *e, int sl)
 {
     if (slot_eq(e, sl)) {
@@ -3297,13 +3296,13 @@ static bool have_try_block(jl_array_t *stmts)
     return 0;
 }
 
-// conservative marking of all variables potentially used after a catch block that were assigned before it
+// conservative marking of all variables potentially used after a catch block that were assigned after the try
 static void mark_volatile_vars(jl_array_t *stmts, SmallVectorImpl<jl_varinfo_t> &slots, const std::set<int> &bbstarts)
 {
     if (!have_try_block(stmts))
         return;
     size_t slength = jl_array_dim0(stmts);
-    BitVector assigned_in_block(slots.size()); // conservatively only ignore slots assigned in the same basic block
+    BitVector assigned_in_block(slots.size()); // since we don't have domtree access, conservatively only ignore slots assigned in the same basic block
     for (int j = 0; j < (int)slength; j++) {
         if (bbstarts.count(j + 1))
             assigned_in_block.reset();
