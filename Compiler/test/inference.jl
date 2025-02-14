@@ -4727,7 +4727,7 @@ end
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
-        @test length(c.fields) == 1
+        @test c.undef == a.undef == [0, 1, 1]
     end
     let T = Base.ImmutableDict{Number,Number}
         a = PartialStruct(𝕃, T, Any[T])
@@ -4838,19 +4838,20 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test t.undef == [false, false]
     t = PartialStruct(𝕃, Partial, Any[String, Const(2)])
     @test t.undef == [false, false, true]
+    @test t.fields == Any[String, Const(2), Any]
     @test t ⊑ t && t ⊔ t === t
 
     t1 = PartialStruct(𝕃, Partial, Any[String, Const(3)])
     t2 = PartialStruct(𝕃, Partial, Any[Const("x"), Int])
     @test !(t1 ⊑ t2) && !(t2 ⊑ t1)
     t3 = t1 ⊔ t2
-    @test t3.fields == Any[String, Int]
+    @test t3.fields == Any[String, Int, Any]
 
-    t1 = PartialStruct(𝕃, Partial, BitVector([true, false, false]), Any[Int, Const(3)])
+    t1 = PartialStruct(𝕃, Partial, BitVector([true, false, false]), Any[String, Int, Const(3)])
     @test t1 ⊑ t1 && t1 ⊔ t1 === t1
-    t2 = PartialStruct(𝕃, Partial, BitVector([false, true, false]), Any[Const("x"), Int])
+    t2 = PartialStruct(𝕃, Partial, BitVector([false, true, false]), Any[Const("x"), Int, Any])
     t3 = t1 ⊔ t2
-    @test t3.undef == [true, true, false] && t3.fields == Any[Int]
+    @test t3 === Partial
 
     t1 = PartialStruct(𝕃, Tuple, Any[Int, String, Vararg])
     @test t1.undef == [false, false]
@@ -4877,7 +4878,7 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     t = form_partially_defined_struct(Partial3, Const(:y))
     @test t == PartialStruct(𝕃, Partial3, Any[Int, String])
     t = form_partially_defined_struct(Partial3, Const(:z))
-    @test t == PartialStruct(𝕃, Partial3, BitVector([false, true, false]), Any[Int, Float64])
+    @test t == PartialStruct(𝕃, Partial3, BitVector([false, true, false]), Any[Int, String, Float64])
     t = form_partially_defined_struct(t, Const(:y))
     @test t == PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
     t = PartialStruct(𝕃, Partial3, Any[Int, String])

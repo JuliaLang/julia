@@ -37,22 +37,42 @@ exact number of elements is unknown (`undef` then has a length of `length(fields
 """
 Core.PartialStruct
 
-function Core.PartialStruct(@nospecialize(typ), fields::Vector{Any})
-    ndef = lastindex(fields)
-    fields[end] === Vararg && (ndef -= 1)
-    t = typ
-    (isa(t, UnionAll) || isa(t, Union)) && (t = argument_datatype(t))
-    nfields = isa(t, DataType) ? datatype_fieldcount(t) : nothing
-    if nfields === nothing || nfields == ndef
-        undef = falses(ndef)
-    else
-        @assert nfields ≥ ndef
-        undef = trues(nfields)
-        for i in 1:ndef
-            undef[i] = false
-        end
+function Core.PartialStruct(@nospecialize(typ), undef::BitVector, fields::Vector{Any})
+    @assert length(undef) ≥ length(fields) - (fields[end] === Vararg)
+    for i in 1:datatype_min_ninitialized(typ)
+        undef[i] = false
     end
     Core._PartialStruct(typ, undef, fields)
+end
+
+function get_fieldcount(@nospecialize(t))
+    if isa(t, UnionAll) || isa(t, Union)
+        t = argument_datatype(t)
+        t === nothing && return nothing
+    end
+    isa(t, DataType) || return nothing
+    return datatype_fieldcount(t)
+end
+
+function Core.PartialStruct(@nospecialize(typ), fields::Vector{Any})
+    nf = length(fields)
+    fields[end] === Vararg && (nf -= 1)
+    nflds = get_fieldcount(typ)
+    nflds === nothing && (nflds = nf)
+    undef = trues(nflds)
+
+    # The provided fields (in absence of an `undef` argument)
+    # are assumed to be defined.
+    for i in 1:nf
+        undef[i] = false
+    end
+
+    # Make sure no field is missing.
+    if nflds > nf
+        fields = Any[get(fields, i, fieldtype(typ, i)) for i in 1:nflds]
+    end
+
+    Core.PartialStruct(typ, undef, fields)
 end
 
 (==)(a::PartialStruct, b::PartialStruct) = a.typ === b.typ && a.undef == b.undef && a.fields == b.fields

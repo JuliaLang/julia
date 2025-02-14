@@ -325,16 +325,21 @@ end
             end
         end
         return Conditional(slot,
-            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, elsefields))
+            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, vartyp.undef, thenfields),
+            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, vartyp.undef, elsefields))
     else
         vartyp_widened = widenconst(vartyp)
         thenfields = thentype === Bottom ? nothing : Any[]
         elsefields = elsetype === Bottom ? nothing : Any[]
-        for i in 1:fieldcount(vartyp_widened)
+        nf = fieldcount(vartyp_widened)
+        undef = trues(nf)
+        for i in 1:nf
             if i == fldidx
                 thenfields === nothing || push!(thenfields, thentype)
                 elsefields === nothing || push!(elsefields, elsetype)
+                if thenfields === nothing && elsefields === nothing
+                    undef[i] = false # this field was already accessed
+                end
             else
                 t = fieldtype(vartyp_widened, i)
                 thenfields === nothing || push!(thenfields, t)
@@ -342,8 +347,8 @@ end
             end
         end
         return Conditional(slot,
-            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, elsefields))
+            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, undef, thenfields),
+            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, undef, elsefields))
     end
 end
 
@@ -432,16 +437,12 @@ end
                 end
             end
             length(a.undef) ≥ length(b.undef) || return false
-            n = length(b.undef)
-            ai = bi = 0
-            for i in 1:n
-                ai += !a.undef[i]
-                bi += !b.undef[i]
-                a.undef[i] && !b.undef[i] && return false
-                b.undef[i] && continue
+            for i in 1:length(b.fields)
+                !is_field_defined(a, i) && is_field_defined(b, i) && return false
+                !is_field_defined(b, i) && continue
                 # Field is defined for both `a` and `b`
-                af = a.fields[ai]
-                bf = b.fields[bi]
+                af = a.fields[i]
+                bf = b.fields[i]
                 if i == length(b.fields)
                     if isvarargtype(af)
                         # If `af` is vararg, so must bf by the <: above
@@ -473,14 +474,16 @@ end
             else
                 widea <: wideb || return false
                 # for structs we need to check that `a` has more information than `b` that may be partially initialized
-                n_initialized(a) ≥ length(b.fields) || return false
+                # it may happen that `b` has more information beyond the first undefined field
+                # but in this case we choose `Const` nonetheless.
+                n_initialized(a) ≥ n_initialized(b) || return false
             end
             nf = nfields(a.val)
-            bi = 0
             for i in 1:nf
-                !isdefined(a.val, i) && !b.undef[i] && return false
-                b.undef[i] && continue
-                bfᵢ = b.fields[bi += 1]
+                isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
+                i > length(b.fields) && break # `a` has more information than `b` that is partially initialized struct
+                is_field_defined(b, i) || continue # `a` gives a decisive answer as to whether the field is defined or undefined
+                bfᵢ = b.fields[i]
                 if i == nf
                     bfᵢ = unwrapva(bfᵢ)
                 end
@@ -768,5 +771,5 @@ function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), undef::BitVec
     for i = 1:length(fields)
         assert_nested_slotwrapper(fields[i])
     end
-    return Core._PartialStruct(typ, undef, fields)
+    return PartialStruct(typ, undef, fields)
 end

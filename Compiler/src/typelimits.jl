@@ -326,34 +326,34 @@ function n_initialized(t::Const)
     return something(findfirst(i::Int->!isdefined(t.val,i), 1:nf), nf+1)-1
 end
 
-defined_fields(pstruct::PartialStruct) = _bitvector(ntuple(i -> !pstruct.undef[i], length(pstruct.undef)))
-
-function defined_field_index(pstruct::PartialStruct, fi)
-    i = 0
-    for iter in 1:fi
-        iter ≤ length(pstruct.undef) && !pstruct.undef[iter] && (i += 1)
-    end
-    i
+function n_initialized(pstruct::PartialStruct)
+    i = findfirst(pstruct.undef)
+    i !== nothing && return i - 1
+    length(pstruct.undef)
 end
 
-get_defined_field(pstruct::PartialStruct, fi) = pstruct.fields[defined_field_index(pstruct, fi)]
-is_field_defined(pstruct::PartialStruct, fi) = !get(pstruct.undef, fi, true)
+maybeundef_fields(pstruct::PartialStruct) = pstruct.undef
+is_field_defined(pstruct::PartialStruct, fi) = 1 ≤ fi ≤ length(pstruct.undef) && !pstruct.undef[fi]
+
+refines_definedness_information(pstruct::PartialStruct) = !isvarargtype(pstruct.fields[end]) && refines_definedness_information(pstruct.typ, pstruct.undef)
+function refines_definedness_information(@nospecialize(typ), undef)
+    nflds = length(undef)
+    something(findfirst(undef), nflds + 1) > datatype_min_ninitialized(typ) + 1
+end
+
+# Returns an iterator over contiguously defined fields
+function defined_fields(pstruct::PartialStruct)
+    i = findfirst(pstruct.undef)
+    i === nothing && return pstruct.fields
+    Any[pstruct.fields[i] for i in 1:(i - 1)]
+end
 
 function define_field(pstruct::PartialStruct, fi, @nospecialize(ft))
-    n = length(pstruct.undef)
-    if fi ≤ n && !pstruct.undef[fi]
-        # XXX: merge new information?
-        # `setfield!(..., rand()); setfield!(..., 2.0)`
-        return nothing
-    end
-    undef = trues(max(fi, n))
-    for i in 1:n
-        undef[i] = pstruct.undef[i]
-    end
+    !pstruct.undef[fi] && return nothing # no new information to be gained
+    undef = copy(pstruct.undef)
     fields = copy(pstruct.fields)
     undef[fi] = false
-    i = defined_field_index(pstruct, fi)
-    insert!(fields, i + 1, ft)
+    fields[fi] = ft
     PartialStruct(fallback_lattice, pstruct.typ, undef, fields)
 end
 
@@ -379,16 +379,17 @@ end
 
 #-
 
-function defined_fields(t::Const)
+maybeundef_fields(t::Const) = undefined_fields(t)
+function undefined_fields(t::Const)
     nf = nfields(t.val)
-    _bitvector(ntuple(i -> isdefined(t.val, i), nf))
+    _bitvector(ntuple(i -> !isdefined(t.val, i), nf))
 end
 
-function defined_fields(x, y)
-    xdef = defined_fields(x)
-    ydef = defined_fields(y)
+function maybeundef_fields(x, y)
+    xdef = maybeundef_fields(x)
+    ydef = maybeundef_fields(y)
     n = min(length(xdef), length(ydef))
-    _bitvector(ntuple(i -> xdef[i] & ydef[i], n))
+    _bitvector(ntuple(i -> xdef[i] | ydef[i], n))
 end
 
 # A simplified type_more_complex query over the extended lattice
@@ -398,14 +399,16 @@ end
     typea === typeb && return true
     if typea isa PartialStruct
         aty = widenconst(typea)
-        isa(typeb, Const) || isa(typeb, PartialStruct) || return false
-        @assert all(x & y == x for (x, y) in zip(defined_fields(typea), defined_fields(typeb))) "typeb ⊑ typea is assumed"
-        fi = 0
-        nf = length(typea.undef)
-        for i = 1:nf
-            !typea.undef[i] || continue
-            fi += 1
-            ai = unwrapva(typea.fields[fi])
+        if typeb isa Const
+            @assert n_initialized(typea) ≤ n_initialized(typeb) "typeb ⊑ typea is assumed"
+        elseif typeb isa PartialStruct
+            @assert length(typea.fields) ≤ length(typeb.fields) &&
+                all(!b | a for (a, b) in zip(typea.undef, typeb.undef)) "typeb ⊑ typea is assumed"
+        else
+            return false
+        end
+        for i = 1:length(typea.fields)
+            ai = unwrapva(typea.fields[i])
             bi = fieldtype(aty, i)
             is_lattice_equal(𝕃, ai, bi) && continue
             tni = _typename(widenconst(ai))
@@ -654,13 +657,12 @@ end
     if aty === bty && !isType(aty)
         typea::Union{PartialStruct, Const}
         typeb::Union{PartialStruct, Const}
-        defined = defined_fields(typea, typeb)
-        ndef = _count(defined)
-        ndef == 0 && return nothing
-        fields = []
-        anyrefine = ndef > datatype_min_ninitialized(aty)
-        for (i, def) in enumerate(defined)
-            def || continue
+        undefined = maybeundef_fields(typea, typeb)
+        all(undefined) && return nothing
+        nflds = length(undefined)
+        fields = Vector{Any}(undef, nflds)
+        anyrefine = refines_definedness_information(aty, undefined)
+        for i = 1:nflds
             ai = getfield_tfunc(𝕃, typea, Const(i))
             bi = getfield_tfunc(𝕃, typeb, Const(i))
             ft = fieldtype(aty, i)
@@ -690,7 +692,7 @@ end
                     tyi = ft
                 end
             end
-            push!(fields, tyi)
+            fields[i] = tyi
             if !anyrefine
                 anyrefine = has_nontrivial_extended_info(𝕃, tyi) || # extended information
                             ⋤(𝕃, tyi, ft) # just a type-level information, but more precise than the declared type
@@ -702,7 +704,7 @@ end
             # handle that in the main loop above to get a more accurate type.
             push!(fields, Vararg)
         end
-        anyrefine && return PartialStruct(𝕃, aty, _bitvector(ntuple(i -> !defined[i], length(defined))), fields)
+        anyrefine && return PartialStruct(𝕃, aty, undefined, fields)
     end
     return nothing
 end

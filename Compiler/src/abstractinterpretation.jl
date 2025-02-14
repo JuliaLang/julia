@@ -2151,12 +2151,10 @@ function form_partially_defined_struct(@nospecialize(obj), @nospecialize(name))
     isa(obj, PartialStruct) && return define_field(obj, fldidx, fieldtype(objt0, fldidx))
     nminfld = datatype_min_ninitialized(objt)
     fldidx > nminfld || return nothing
-    fields = Any[fieldtype(objt0, i) for i in 1:nminfld]
+    fields = collect(Any, fieldtypes(objt0))
     nmaxfld = something(datatype_fieldcount(objt), fldidx)
     undef = trues(nmaxfld)
-    for i in 1:nminfld undef[i] = false end
     undef[fldidx] = false
-    push!(fields, fieldtype(objt0, fldidx))
     return PartialStruct(fallback_lattice, objt0, undef, fields)
 end
 
@@ -3137,7 +3135,7 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
                     all(i::Int -> ⊑(𝕃ᵢ, (at.fields::Vector{Any})[i], fieldtype(t, i)), 1:n)
                 end))
             nothrow = isexact
-            rt = PartialStruct(𝕃ᵢ, rt, at.fields::Vector{Any})
+            rt = PartialStruct(𝕃ᵢ, rt, at.undef, at.fields::Vector{Any})
         end
     else
         rt = refine_partial_type(rt)
@@ -3718,8 +3716,7 @@ end
 @nospecializeinfer function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
-        anyrefine = !isvarargtype(rt.fields[end]) &&
-            length(rt.fields) > datatype_min_ninitialized(rt.typ)
+        anyrefine = refines_definedness_information(rt)
         𝕃 = typeinf_lattice(info.interp)
         ⊏ = strictpartialorder(𝕃)
         for i in 1:length(fields)
@@ -3731,7 +3728,7 @@ end
             end
             fields[i] = a
         end
-        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, fields)
+        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, rt.undef, fields)
     end
     if isa(rt, PartialOpaque)
         return rt # XXX: this case was missed in #39512

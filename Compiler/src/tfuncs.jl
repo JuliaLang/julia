@@ -1142,7 +1142,7 @@ end
         if isa(name, Const)
             nv = _getfield_fieldindex(sty, name)
             if isa(nv, Int) && is_field_defined(s00, nv)
-                return unwrapva(get_defined_field(s00, nv))
+                return unwrapva(s00.fields[nv])
             end
         end
         s00 = s
