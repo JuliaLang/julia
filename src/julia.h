@@ -1612,6 +1612,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_quotenode(v)   jl_typetagis(v,jl_quotenode_type)
 #define jl_is_newvarnode(v)  jl_typetagis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typetagis(v,jl_linenumbernode_type)
+#define jl_is_linenumbernode(v) jl_typetagis(v,jl_linenumbernode_type)
 #define jl_is_method_instance(v) jl_typetagis(v,jl_method_instance_type)
 #define jl_is_code_instance(v) jl_typetagis(v,jl_code_instance_type)
 #define jl_is_code_info(v)   jl_typetagis(v,jl_code_info_type)
