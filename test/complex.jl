@@ -921,6 +921,13 @@ end
     end
 end
 
+@testset "eps" begin
+    @test eps(1.0+1.0im) === 3.1401849173675503e-16
+    @test eps(Complex128) === eps(1.0+1.0im)
+    @test eps(Complex64) === 1.6858739f-7
+    @test eps(Float32(1.0)+Float32(1.0)im) === eps(Complex{Float32})
+end
+
 @testset "cis" begin
     @test cis(0.0+1.0im) ≈ 0.367879441171442321595523770161460867445811131031767834507836+0.0im
     @test cis(1.0+0.0im) ≈ 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im
