@@ -168,7 +168,7 @@ The updating versions of all the binary arithmetic and bitwise operators are:
 
 ## [Vectorized "dot" operators](@id man-dot-operators)
 
-For *every* binary operation like `^`, there is a corresponding
+For every binary operation like `^`, there is a corresponding
 "dot" operation `.^` that is *automatically* defined
 to perform `^` element-by-element on arrays. For example,
 `[1, 2, 3] ^ 3` is not defined, since there is no standard
@@ -212,6 +212,25 @@ Combining dot operators with numeric literals can be ambiguous.
 For example, it is not clear whether `1.+x` means `1. + x` or `1 .+ x`.
 Therefore this syntax is disallowed, and spaces must be used around
 the operator in such cases.
+
+There are some exceptions to the above rules: the postfix adjoint operator `'`,
+the infix range operator `:` and the property access operator `.` don't have a
+dotted version (they can still be broadcasted using the function call syntax as
+in `adjoint.(A)`, `(:).(a, b)` and `getproperty.(a, x)`). These operators are
+also unaffected by the `@.` macro. In the case of `'` this can be convenient to
+broadcast vectors along different
+dimensions:
+
+```jldoctest
+julia> x = 1:3;
+
+julia> y = 1:2;
+
+julia> z = @. x'^2 + y^2
+2×3 Matrix{Int64}:
+ 2  5  10
+ 5  8  13
+```
 
 ## Numeric Comparisons
 
