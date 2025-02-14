@@ -1511,6 +1511,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             used_ssas[x.id] -= 1
         end
         ir = complete(compact)
+        # remove any use that has been optimized away by the DCE
+        for (intermediaries, defuse) in values(defuses)
+            filter!(x -> ir[SSAValue(x.idx)][:stmt] !== nothing, defuse.uses)
+        end
         sroa_mutables!(ir, defuses, used_ssas, lazydomtree, inlining)
         return ir
     else

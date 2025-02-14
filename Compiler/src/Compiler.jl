@@ -49,7 +49,8 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstanc
 
 using Base
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
-    BINDING_KIND_GLOBAL, Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
+    BINDING_KIND_GLOBAL, BINDING_KIND_UNDEF_CONST, BINDING_KIND_BACKDATED_CONST, BINDING_KIND_DECLARED,
+    Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
     EffectsOverride, Filter, Generator, IteratorSize, JLOptions, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, SizeUnknown, _NAMEDTUPLE_NAME,
     _array_for, _bits_findnext, _methods_by_ftype, _uniontypes, all, allocatedinline, any,
@@ -58,7 +59,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     datatype_pointerfree, decode_effects_override, diff_names, fieldindex,
     generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars,
     hasgenerator, hasintersect, indexed_iterate, isType, is_file_tracked, is_function_def,
-    is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer,
+    is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_defined_const_binding,
     is_some_const_binding, is_some_guard, is_some_imported, is_valid_intrinsic_elptr,
     isbitsunion, isconcretedispatch, isdispatchelem, isexpr, isfieldatomic, isidentityfree,
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
@@ -66,12 +67,12 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
     structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
-    _uncompressed_ir
+    _uncompressed_ir, maybe_add_binding_backedge!
 using Base.Order
 
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
     getindex, haskey, in, isempty, isready, iterate, iterate, last, length, max_world,
-    min_world, popfirst!, push!, resize!, setindex!, size
+    min_world, popfirst!, push!, resize!, setindex!, size, intersect
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!

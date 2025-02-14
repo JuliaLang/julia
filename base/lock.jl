@@ -252,7 +252,7 @@ function wait_no_relock(c::GenericCondition)
     try
         return wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         rethrow()
     end
 end
@@ -693,7 +693,7 @@ julia> procstate === fetch(@async global_state())
 true
 ```
 """
-mutable struct OncePerProcess{T, F}
+mutable struct OncePerProcess{T, F} <: Function
     value::Union{Nothing,T}
     @atomic state::UInt8 # 0=initial, 1=hasrun, 2=error
     @atomic allow_compile_time::Bool
@@ -801,7 +801,7 @@ julia> threadvec === thread_state[Threads.threadid()]
 true
 ```
 """
-mutable struct OncePerThread{T, F}
+mutable struct OncePerThread{T, F} <: Function
     @atomic xs::AtomicMemory{T} # values
     @atomic ss::AtomicMemory{UInt8} # states: 0=initial, 1=hasrun, 2=error, 3==concurrent
     const initializer::F
@@ -926,11 +926,13 @@ Making lazy task value...done.
 false
 ```
 """
-mutable struct OncePerTask{T, F}
+mutable struct OncePerTask{T, F} <: Function
     const initializer::F
 
     OncePerTask{T}(initializer::F) where {T, F} = new{T,F}(initializer)
     OncePerTask{T,F}(initializer::F) where {T, F} = new{T,F}(initializer)
     OncePerTask(initializer) = new{Base.promote_op(initializer), typeof(initializer)}(initializer)
 end
-@inline (once::OncePerTask)() = get!(once.initializer, task_local_storage(), once)
+@inline function (once::OncePerTask{T})() where {T}
+    get!(once.initializer, task_local_storage(), once)::T
+end

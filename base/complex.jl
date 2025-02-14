@@ -342,7 +342,7 @@ end
 *(x::Real, z::Complex) = Complex(x * real(z), x * imag(z))
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 
-muladd(x::Real, z::Complex, y::Number) = muladd(z, x, y)
+muladd(x::Real, z::Complex, y::Union{Real,Complex}) = muladd(z, x, y)
 muladd(z::Complex, x::Real, y::Real) = Complex(muladd(real(z),x,y), imag(z)*x)
 muladd(z::Complex, x::Real, w::Complex) =
     Complex(muladd(real(z),x,real(w)), muladd(imag(z),x,imag(w)))

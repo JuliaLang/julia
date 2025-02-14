@@ -39,10 +39,12 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/error.jl \
 		base/essentials.jl \
 		base/expr.jl \
+		base/exports.jl \
 		base/generator.jl \
 		base/int.jl \
 		base/indices.jl \
 		base/iterators.jl \
+		base/invalidation.jl \
 		base/namedtuple.jl \
 		base/number.jl \
 		base/operators.jl \

@@ -20,12 +20,15 @@ import
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
         uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask
 
+import .Core: AbstractFloat
+import .Base: Rational, Float16, Float32, Float64, Bool
+
 using .Base.Libc
 import ..Rounding: Rounding,
     rounding_raw, setrounding_raw, rounds_to_nearest, rounds_away_from_zero,
     tie_breaker_is_to_even, correct_rounding_requires_increment
 
-import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp
+import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp, BigInt
 
 import ..FastMath.sincos_fast
 
@@ -211,6 +214,8 @@ end
 Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ptr{BigFloat}) = error("not compatible with mpfr")
 Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ref{BigFloat}) = error("not compatible with mpfr")
 Base.cconvert(::Type{Ref{BigFloat}}, x::BigFloat) = x.d # BigFloatData is the Ref type for BigFloat
+Base.cconvert(::Type{Ref{BigFloat}}, x::Number) = convert(BigFloat, x).d # avoid default conversion to Ref(BigFloat(x))
+Base.cconvert(::Type{Ref{BigFloat}}, x::Ref{BigFloat}) = x[].d
 function Base.unsafe_convert(::Type{Ref{BigFloat}}, x::BigFloatData)
     d = getfield(x, :d)
     p = Base.unsafe_convert(Ptr{Limb}, d)

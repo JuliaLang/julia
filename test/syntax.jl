@@ -377,8 +377,8 @@ add_method_to_glob_fn!()
 @test_parseerror "function finally() end"
 
 # PR #16170
-@test Meta.lower(Main, Meta.parse("true(x) = x")) == Expr(:error, "invalid function name \"true\"")
-@test Meta.lower(Main, Meta.parse("false(x) = x")) == Expr(:error, "invalid function name \"false\"")
+@test Meta.lower(Main, Meta.parse("true(x) = x")) == Expr(:error, "\"true\" is not a valid function argument name")
+@test Meta.lower(Main, Meta.parse("false(x) = x")) == Expr(:error, "\"false\" is not a valid function argument name")
 
 # issue #16355
 @test Meta.lower(Main, :(f(d:Int...) = nothing)) == Expr(:error, "\"d:Int\" is not a valid function argument name")
@@ -925,8 +925,8 @@ g21054(>:) = >:2
 @test g21054(-) == -2
 
 # issue #21168
-@test Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax \"a.[1]\"")
-@test Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax \"a.{1}\"")
+@test_broken Meta.lower(Main, :(a.[1])) == Expr(:error, "invalid syntax \"a.[1]\"")
+@test_broken Meta.lower(Main, :(a.{1})) == Expr(:error, "invalid syntax \"a.{1}\"")
 
 # Issue #21225
 let abstr = Meta.parse("abstract type X end")
@@ -1496,8 +1496,8 @@ end
 
 # issue #26739
 let exc = try Core.eval(@__MODULE__, :(sin.[1])) catch exc ; exc end
-    @test exc isa ErrorException
-    @test startswith(exc.msg, "syntax: invalid syntax \"sin.[1]\"")
+    @test_broken exc isa ErrorException
+    @test_broken startswith(exc.msg, "syntax: invalid syntax \"sin.[1]\"")
 end
 
 # issue #26873
@@ -2650,10 +2650,10 @@ using ..Mod
 end
 @test Mod3.f(10) == 21
 @test !isdefined(Mod3, :func)
-@test_throws ErrorException("invalid method definition in Mod3: function Mod3.f must be explicitly imported to be extended") Core.eval(Mod3, :(f(x::Int) = x))
+@test_throws ErrorException("invalid method definition in Mod3: function Mod.f must be explicitly imported to be extended") Core.eval(Mod3, :(f(x::Int) = x))
 @test !isdefined(Mod3, :always_undef) # resolve this binding now in Mod3
-@test_throws ErrorException("invalid method definition in Mod3: exported function Mod.always_undef does not exist") Core.eval(Mod3, :(always_undef(x::Int) = x))
-@test_throws ErrorException("cannot declare Mod3.always_undef constant; it was already declared as an import") Core.eval(Mod3, :(const always_undef = 3))
+@test Core.eval(Mod3, :(always_undef(x::Int) = x)) == invokelatest(getglobal, Mod3, :always_undef)
+@test Core.eval(Mod3, :(const always_undef = 3)) == invokelatest(getglobal, Mod3, :always_undef)
 @test_throws ErrorException("cannot declare Mod3.f constant; it was already declared as an import") Core.eval(Mod3, :(const f = 3))
 @test_throws ErrorException("cannot declare Mod.maybe_undef constant; it was already declared global") Core.eval(Mod, :(const maybe_undef = 3))
 
@@ -3303,6 +3303,7 @@ const typeof = error
 end
 let ex = :(const $(esc(:x)) = 1; (::typeof($(esc(:foo43993))))() = $(esc(:x)))
     Core.eval(M43993, Expr(:var"hygienic-scope", ex, Core))
+    @Core.latestworld
     @test M43993.x === 1
     @test invokelatest(M43993.foo43993) === 1
 end
@@ -3919,28 +3920,28 @@ module ExtendedIsDefined
     import .Import.x4
     @test x2 == 2 # Resolve the binding
     @eval begin
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x2)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x3)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x4)))
+        @test Core.isdefinedglobal(@__MODULE__, :x1)
+        @test Core.isdefinedglobal(@__MODULE__, :x2)
+        @test Core.isdefinedglobal(@__MODULE__, :x3)
+        @test Core.isdefinedglobal(@__MODULE__, :x4)
 
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x2), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x3), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
+        @test Core.isdefinedglobal(@__MODULE__, :x1, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x2, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x3, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x4, false)
     end
 
     @eval begin
         @Base.Experimental.force_compile
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x2)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x3)))
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x4)))
+        @test Core.isdefinedglobal(@__MODULE__, :x1)
+        @test Core.isdefinedglobal(@__MODULE__, :x2)
+        @test Core.isdefinedglobal(@__MODULE__, :x3)
+        @test Core.isdefinedglobal(@__MODULE__, :x4)
 
-        @test $(Expr(:isdefined, GlobalRef(@__MODULE__, :x1), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x2), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x3), false))
-        @test !$(Expr(:isdefined, GlobalRef(@__MODULE__, :x4), false))
+        @test Core.isdefinedglobal(@__MODULE__, :x1, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x2, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x3, false)
+        @test !Core.isdefinedglobal(@__MODULE__, :x4, false)
     end
 end
 
@@ -3971,11 +3972,12 @@ end
 
 # Module Replacement
 module ReplacementContainer
+    using Test
     module ReplaceMe
         const x = 1
     end
     const Old = ReplaceMe
-    module ReplaceMe
+    @eval module ReplaceMe
         const x = 2
     end
 end
@@ -4042,3 +4044,47 @@ function fs56711()
     return f
 end
 @test !@isdefined(x_should_not_be_defined)
+
+# Test that importing twice is allowed without warning
+@test_nowarn @eval baremodule ImportTwice
+    import ..Base
+    using .Base: zero, zero
+end
+
+# PR# 55040 - Macrocall as function sig
+@test :(function @f()() end) == :(function (@f)() end)
+
+function callme end
+macro callmemacro(args...)
+    Expr(:call, esc(:callme), map(esc, args)...)
+end
+function @callmemacro(a::Int)
+    return 1
+end
+@callmemacro(b::Float64) = 2
+function @callmemacro(a::T, b::T) where T <: Int
+    return 3
+end
+function @callmemacro(a::Int, b::Int, c::Int)::Float64
+    return 4
+end
+function @callmemacro(d::String)
+    (a, b, c)
+    # ^ Should not be accidentally parsed as an argument list
+    return 4
+end
+
+@test callme(1) === 1
+@test callme(2.0) === 2
+@test callme(3, 3) === 3
+@test callme(4, 4, 4) === 4.0
+
+# Ambiguous 1-arg anymous vs macrosig
+@test_parseerror "function (@foo(a)) end"
+
+# #57267 - Missing `latestworld` after typealias
+abstract type A57267{S, T} end
+@test_nowarn @eval begin
+    B57267{S} = A57267{S, 1}
+    const C57267 = B57267
+end

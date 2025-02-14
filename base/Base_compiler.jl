@@ -2,6 +2,7 @@
 
 baremodule Base
 
+using Core
 using Core.Intrinsics, Core.IR
 
 # to start, we're going to use a very simple definition of `include`
@@ -135,6 +136,9 @@ include("coreio.jl")
 
 import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_str, @cmd
 
+# Export list
+include("exports.jl")
+
 # core docsystem
 include("docs/core.jl")
 Core.atdoc!(CoreDocs.docm)
@@ -142,7 +146,6 @@ Core.atdoc!(CoreDocs.docm)
 eval(x) = Core.eval(Base, x)
 eval(m::Module, x) = Core.eval(m, x)
 
-include("exports.jl")
 include("public.jl")
 
 if false
@@ -224,6 +227,7 @@ function cld end
 function fld end
 
 # Lazy strings
+import Core: String
 include("strings/lazy.jl")
 
 # array structures
@@ -231,18 +235,16 @@ include("indices.jl")
 include("genericmemory.jl")
 include("array.jl")
 include("abstractarray.jl")
-include("subarray.jl")
-include("views.jl")
 include("baseext.jl")
 
 include("c.jl")
-include("ntuple.jl")
 include("abstractset.jl")
 include("bitarray.jl")
 include("bitset.jl")
 include("abstractdict.jl")
 include("iddict.jl")
 include("idset.jl")
+include("ntuple.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
@@ -255,6 +257,11 @@ include("ordering.jl")
 using .Order
 
 include("coreir.jl")
+include("invalidation.jl")
+
+# Because lowering inserts direct references, it is mandatory for this binding
+# to exist before we start inferring code.
+function string end
 
 # For OS specific stuff
 # We need to strcat things here, before strings are really defined
@@ -276,7 +283,6 @@ baremodule BuildSettings end
 function process_sysimg_args!()
     let i = 2 # skip file name
         while i <= length(Core.ARGS)
-            Core.println(Core.ARGS[i])
             if Core.ARGS[i] == "--buildsettings"
                 include(BuildSettings, ARGS[i+1])
             elseif Core.ARGS[i] == "--buildroot"

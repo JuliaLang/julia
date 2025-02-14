@@ -55,7 +55,7 @@ let mi = Base.method_instance(basic_caller, (Float64,))
 end
 
 # this redefinition below should invalidate the cache
-const BASIC_CALLER_WORLD = Base.get_world_counter()
+const BASIC_CALLER_WORLD = Base.get_world_counter()+1
 basic_callee(x) = x, x
 @test !isdefined(Base.method_instance(basic_callee, (Float64,)), :cache)
 let mi = Base.method_instance(basic_caller, (Float64,))
