@@ -6467,10 +6467,10 @@ for U in unboxedunions
 
             # resizefirst!
             A = U[initvalue2(F2) for i = 1:len]
-            resizefirst!(A, 1)
+            resize!(A, 1; first=true)
             @test length(A) === 1
             @test A[1] === initvalue2(F2)
-            resizefirst!(A, len)
+            resize!(A, len; first=true)
             @test length(A) === len
             @test A[end] === initvalue2(F2)
             @test typeof(A[end]) === F2
@@ -6663,7 +6663,7 @@ setindex!(A, missing, 2)
 setindex!(A, 0x03, 3)
 setindex!(A, missing, 4)
 setindex!(A, 0x05, 5)
-resizefirst!(A, 6)
+resize!(A, 6; first=true)
 
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === 0x01
@@ -6673,7 +6673,7 @@ resizefirst!(A, 6)
 @test getindex(A, 6) === 0x05
 
 # grow_at_beg 2
-resizefirst!(A, 7)
+resize!(A, 7; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === missing
 @test getindex(A, 3) === 0x01
@@ -6694,7 +6694,7 @@ Base._growat!(A, 2, 1)
 @test getindex(A, 8) === 0x05
 
 # grow_at_beg 9
-resizefirst!(A, 9)
+resize!(A, 9; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === missing
 @test getindex(A, 3) === missing
@@ -6754,7 +6754,7 @@ Base._growat!(A, 2, 3)
 @test getindex(A, 9) === missing
 @test getindex(A, 10) === 0x05
 
-resizefirst!(A, 2)
+resize!(A, 2; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === 0x05
 @test length(A) === 2
