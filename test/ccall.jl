@@ -1969,12 +1969,13 @@ let llvm = sprint(code_llvm, world_counter, ())
 end
 
 function gc_safe_ccall()
-    @ccall gc_safe=true sleep(1::Cint)::Cvoid
+    # jl_rand is marked as JL_NOTSAFEPOINT
+    @ccall gc_safe=true jl_rand()::UInt64
 end
 
 let llvm = sprint(code_llvm, gc_safe_ccall, ())
     # check that the call works
-    @test gc_safe_ccall() isa Nothing
+    @test gc_safe_ccall() isa UInt64
     # check for the gc_safe store
     @test occursin("store atomic i8 2", llvm)
 end
