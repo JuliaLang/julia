@@ -811,7 +811,11 @@ function sizehint!(B::BitVector, sz::Integer)
     return B
 end
 
-resize!(B::BitVector, n::Integer) = _resize_int!(B, Int(n))
+function resize!(B::BitVector, n::Integer; first::Bool=false)
+    first ? _resizefirst!(B, n) : _resize!(B, n)
+end
+
+_resize!(B::BitVector, n::Integer) = _resize_int!(B, Int(n))
 function _resize_int!(B::BitVector, n::Int)
     n0 = length(B)
     n == n0 && return B
@@ -831,7 +835,7 @@ function _resize_int!(B::BitVector, n::Int)
     return B
 end
 
-resizefirst!(B::BitVector, n::Integer) = _resizefirst_int!(B, Int(n))
+_resizefirst!(B::BitVector, n::Integer) = _resizefirst_int!(B, Int(n))
 function _resizefirst_int!(B::BitVector, n::Int)
     n0 = length(B)
     n == n0 && return B
