@@ -186,7 +186,7 @@ timesofar("promotions")
 
     @test_throws BoundsError size(trues(5), 0)
 
-    @testset "reshape, resize!" begin
+    @testset "reshape and resize!" begin
         b1 = bitrand(n1, n2)
         @check_bit_operation reshape(b1, (n2,n1)) BitMatrix
         @test_throws DimensionMismatch reshape(b1, (1,n1))
