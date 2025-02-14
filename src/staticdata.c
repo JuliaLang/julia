@@ -1001,7 +1001,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
     else if (jl_is_binding_partition(v)) {
         jl_binding_partition_t *bpart = (jl_binding_partition_t*)v;
-        jl_queue_for_serialization_(s, decode_restriction_value(jl_atomic_load_relaxed(&bpart->restriction)), 1, immediate);
+        jl_queue_for_serialization_(s, bpart->restriction, 1, immediate);
         jl_queue_for_serialization_(s, get_replaceable_field((jl_value_t**)&bpart->next, 0), 1, immediate);
     }
     else if (layout->nfields > 0) {
@@ -1680,13 +1680,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         }
         else if (jl_is_binding_partition(v)) {
             jl_binding_partition_t *bpart = (jl_binding_partition_t*)v;
-            jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-            jl_value_t *restriction_val = decode_restriction_value(pku);
-            static_assert(offsetof(jl_binding_partition_t, restriction) == 0, "BindingPartition layout mismatch");
-            write_pointerfield(s, restriction_val);
-#ifndef _P64
-            write_uint(f, decode_restriction_kind(pku));
-#endif
+            write_pointerfield(s, bpart->restriction);
             size_t max_world = jl_atomic_load_relaxed(&bpart->max_world);
             if (s->incremental) {
                 if (max_world == ~(size_t)0) {
@@ -1708,13 +1702,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 write_uint(f, max_world);
             }
             write_pointerfield(s, (jl_value_t*)jl_atomic_load_relaxed(&bpart->next));
-#ifdef _P64
-            write_uint(f, decode_restriction_kind(pku)); // This will be moved back into place during deserialization (if necessary)
-            static_assert(sizeof(jl_binding_partition_t) == 5*sizeof(void*), "BindingPartition layout mismatch");
-#else
-            write_uint(f, 0);
-            static_assert(sizeof(jl_binding_partition_t) == 6*sizeof(void*), "BindingPartition layout mismatch");
-#endif
+            write_uint(f, bpart->kind);
         }
         else {
             // Generic object::DataType serialization by field
@@ -3510,11 +3498,10 @@ static void jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_
 
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return;
-    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
-    enum jl_partition_kind kind = decode_restriction_kind(pku);
+    enum jl_partition_kind kind = bpart->kind;
     if (!jl_bkind_is_some_import(kind))
         return;
-    jl_binding_t *imported_binding = (jl_binding_t*)decode_restriction_value(pku);
+    jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
     jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
     if (!latest_imported_bpart)
         return;
@@ -4015,25 +4002,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                     }
                 }
             }
-            // Move the binding bits back to their correct place
-#ifdef _P64
-            jl_svec_t *table = jl_atomic_load_relaxed(&mod->bindings);
-            for (size_t i = 0; i < jl_svec_len(table); i++) {
-                jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
-                if ((jl_value_t*)b == jl_nothing)
-                    continue;
-                jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
-                while (bpart) {
-                    jl_ptr_kind_union_t pku = encode_restriction(
-                        (jl_value_t*)jl_atomic_load_relaxed(&bpart->restriction),
-                        (enum jl_partition_kind)bpart->reserved);
-                    jl_atomic_store_relaxed(&bpart->restriction, pku);
-                    bpart->reserved = 0;
-                    bpart = jl_atomic_load_relaxed(&bpart->next);
-                }
-            }
-
-#endif
         }
         else {
             abort();
@@ -4390,7 +4358,7 @@ JL_DLLEXPORT void _jl_promote_ci_to_current(jl_code_instance_t *ci, size_t valid
         jl_value_t *edge = jl_svecref(edges, i);
         if (!jl_is_code_instance(edge))
             continue;
-        _jl_promote_ci_to_current(ci, validated_world);
+        _jl_promote_ci_to_current((jl_code_instance_t *)edge, validated_world);
     }
 }
 

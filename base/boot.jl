@@ -238,7 +238,9 @@ export
     # method reflection
     applicable, invoke,
     # constants
-    nothing, Main
+    nothing, Main,
+    # backwards compatibility
+    arrayref, arrayset, arraysize, const_arrayref
 
 const getproperty = getfield # TODO: use `getglobal` for modules instead
 const setproperty! = setfield!
@@ -1040,7 +1042,6 @@ const_arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...
 arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Main.Base.setindex!(A, x::T, i...)
 arraysize(a::Array) = a.size
 arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) : 1
-export arrayref, arrayset, arraysize, const_arrayref
 const check_top_bit = check_sign_bit
 
 # For convenience

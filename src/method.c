@@ -1056,13 +1056,12 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
     jl_binding_t *b = jl_get_binding_for_method_def(mod, name, new_world);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
-    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     jl_value_t *gf = NULL;
-    enum jl_partition_kind kind = decode_restriction_kind(pku);
+    enum jl_partition_kind kind = bpart->kind;
     if (!jl_bkind_is_some_guard(kind) && kind != BINDING_KIND_DECLARED && kind != BINDING_KIND_IMPLICIT) {
-        pku = jl_walk_binding_inplace(&b, &bpart, new_world);
-        if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
-            gf = decode_restriction_value(pku);
+        jl_walk_binding_inplace(&b, &bpart, new_world);
+        if (jl_bkind_is_some_constant(bpart->kind)) {
+            gf = bpart->restriction;
             JL_GC_PROMISE_ROOTED(gf);
             jl_check_gf(gf, b->globalref->name);
             JL_UNLOCK(&world_counter_lock);

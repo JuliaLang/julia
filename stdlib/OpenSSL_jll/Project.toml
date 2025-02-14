@@ -1,6 +1,6 @@
 name = "OpenSSL_jll"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.0.15+2"
+version = "3.0.16+0"
 
 [deps]
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"

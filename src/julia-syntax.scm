@@ -4131,8 +4131,9 @@ f(x) = yt(x)
                                     `(toplevel-butfirst
                                       ;; wrap in toplevel-butfirst so it gets moved higher along with
                                       ;; closure type definitions
+                                      (unnecessary ,(cadr e))
                                       ,e
-                                      (thunk (lambda () (() () 0 ()) (block (return ,e))))))))
+                                      (latestworld)))))
                        ((null? cvs)
                         `(block
                           ,@sp-inits

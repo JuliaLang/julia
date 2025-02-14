@@ -706,12 +706,6 @@ enum jl_partition_kind {
     BINDING_KIND_IMPLICIT_RECOMPUTE = 0xb
 };
 
-#ifdef _P64
-// Union of a ptr and a 3 bit field.
-typedef uintptr_t jl_ptr_kind_union_t;
-#else
-typedef struct __attribute__((aligned(8))) { jl_value_t *val; size_t kind; } jl_ptr_kind_union_t;
-#endif
 typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
     JL_DATA_TYPE
     /* union {
@@ -727,11 +721,11 @@ typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
      *
      * This field is updated atomically with both kind and restriction
      */
-    _Atomic(jl_ptr_kind_union_t) restriction;
+    jl_value_t *restriction;
     size_t min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t *) next;
-    size_t reserved; // Reserved for ->kind. Currently this holds the low bits of ->restriction during serialization
+    enum jl_partition_kind kind;
 } jl_binding_partition_t;
 
 typedef struct _jl_binding_t {
@@ -744,7 +738,8 @@ typedef struct _jl_binding_t {
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
     uint8_t publicp:1; // exportp without publicp is not allowed.
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
-    uint8_t padding:3;
+    uint8_t did_print_implicit_import_admonition:1;
+    uint8_t padding:2;
 } jl_binding_t;
 
 typedef struct {

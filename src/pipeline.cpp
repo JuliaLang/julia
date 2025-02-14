@@ -514,7 +514,6 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
         //TODO barrier pass?
         {
             FunctionPassManager FPM;
-            JULIA_PASS(FPM.addPass(LowerExcHandlersPass()));
             JULIA_PASS(FPM.addPass(GCInvariantVerifierPass(false)));
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
