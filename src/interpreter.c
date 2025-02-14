@@ -604,8 +604,11 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     // equivalent to jl_pop_handler(hand_n_leave), longjmping
                     // to the :enter code above instead, which handles cleanup
                     jl_handler_t *eh = ct->eh;
-                    while (--hand_n_leave > 0)
+                    while (--hand_n_leave > 0) {
+                        // pop GC frames for any skipped handlers
+                        ct->gcstack = eh->gcstack;
                         eh = eh->prev;
+                    }
                     // leave happens during normal control flow, but we must
                     // longjmp to pop the eval_body call for each enter.
                     s->continue_at = next_ip;
