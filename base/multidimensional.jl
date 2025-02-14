@@ -1038,18 +1038,24 @@ end
     $(_generate_unsafe_setindex!_body(2))
 end
 
-diff(a::AbstractVector) = diff(a, dims=1)
+struct _Nothing end
+const _nothing = _Nothing()
 
 """
-    diff(A::AbstractVector)
-    diff(A::AbstractArray; dims::Integer)
+    diff(A::AbstractVector; [prepend], [append])
+    diff(A::AbstractArray; dims::Integer, [prepend], [append])
+    diff(A::AbstractRange; [prepend], [append])
 
 Finite difference operator on a vector or a multidimensional array `A`. In the
 latter case the dimension to operate on needs to be specified with the `dims`
-keyword argument.
+keyword argument. It is possible to `prepend` or `append` value(s) to preserve
+the original shape of `A`.
 
 !!! compat "Julia 1.1"
     `diff` for arrays with dimension higher than 2 requires at least Julia 1.1.
+
+!!! compat "Julia 1.11"
+    Support for `prepend` or `append` requires at least Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -1068,21 +1074,58 @@ julia> diff(vec(a))
   4
  -2
  12
+
+julia> diff(a, dims=2, prepend = 0)
+2×2 Matrix{Int64}:
+ 0   2
+ 0  10
+
+julia> diff(a, dims=2, append = 0)
+2×2 Matrix{Int64}:
+  2  0
+ 10  0
 ```
 """
-function diff(a::AbstractArray{T,N}; dims::Integer) where {T,N}
+diff(a::AbstractVector; kw...) = _diff(a; dims=1, kw...)
+diff(a::AbstractArray{T,N}; dims::Integer, kw...) where {T,N} = _diff(a; dims=dims, kw...)
+function diff(r::AbstractRange{T}; dims::Integer=1, prepend = _nothing, append = _nothing) where {T}
+    dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
+    prepend isa _Nothing || append isa _Nothing || throw(ArgumentError("cannot use prepend/append simultaneously"))
+    output = [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
+    if !(prepend isa _Nothing)
+        return vcat([prepend], output)
+    elseif !(append isa _Nothing)
+        return vcat(output, [append])
+    else
+        return output
+    end
+end
+
+# We need to use `_diff`` to distinguish AbstractVector probably because number of optional arguments varies.
+function _diff(a::AbstractArray{T,N}; dims::Integer, prepend = _nothing, append = _nothing) where {T,N}
     require_one_based_indexing(a)
     1 <= dims <= N || throw(ArgumentError("dimension $dims out of range (1:$N)"))
+    prepend isa _Nothing || append isa _Nothing || throw(ArgumentError("cannot use prepend/append simultaneously"))
 
     r = axes(a)
     r0 = ntuple(i -> i == dims ? UnitRange(1, last(r[i]) - 1) : UnitRange(r[i]), N)
-    r1 = ntuple(i -> i == dims ? UnitRange(2, last(r[i])) : UnitRange(r[i]), N)
+    r1 = ntuple(i -> i == dims ? UnitRange(2, last(r[i])    ) : UnitRange(r[i]), N)
 
-    return view(a, r1...) .- view(a, r0...)
-end
-function diff(r::AbstractRange{T}; dims::Integer=1) where {T}
-    dims == 1 || throw(ArgumentError("dimension $dims out of range (1:1)"))
-    return [@inbounds r[i+1] - r[i] for i in firstindex(r):lastindex(r)-1]
+    if !(prepend isa _Nothing)
+        out = similar(a, promote_type(eltype(a), typeof(prepend)))
+        out[r1...] .= view(a, r1...) .- view(a, r0...)
+        r2 = ntuple(i -> i == dims ? UInt(1) : UnitRange(r[i]), N)
+        fill!(view(out, r2...), prepend)
+        return out
+    elseif !(append isa _Nothing)
+        out = similar(a, promote_type(eltype(a), typeof(append)))
+        out[r0...] .= view(a, r1...) .- view(a, r0...)
+        r3 = ntuple(i -> i == dims ? UInt(last(r[i])) : UnitRange(r[i]), N)
+        fill!(view(out, r3...), append)
+        return out
+    else
+        return view(a, r1...) .- view(a, r0...)
+    end
 end
 
 ### from abstractarray.jl
