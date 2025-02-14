@@ -65,6 +65,7 @@ void jl_check_new_binding_implicit(
 
     jl_binding_t *deprecated_impb = NULL;
     jl_binding_t *impb = NULL;
+    jl_binding_partition_t *impbpart = NULL;
 
     size_t min_world = new_bpart->min_world;
     size_t max_world = jl_atomic_load_relaxed(&new_bpart->max_world);
@@ -111,6 +112,14 @@ void jl_check_new_binding_implicit(
             if (impb) {
                 if (tempb->deprecated)
                     continue;
+                if (jl_binding_kind(tempbpart) == BINDING_KIND_GUARD &&
+                    jl_binding_kind(impbpart) != BINDING_KIND_GUARD)
+                    continue;
+                if (jl_binding_kind(impbpart) == BINDING_KIND_GUARD) {
+                    impb = tempb;
+                    impbpart = tempbpart;
+                    continue;
+                }
                 if (eq_bindings(tempbpart, impb, world))
                     continue;
                 // Binding is ambiguous
@@ -132,6 +141,7 @@ void jl_check_new_binding_implicit(
             }
             else {
                 impb = tempb;
+                impbpart = tempbpart;
             }
         }
     }
