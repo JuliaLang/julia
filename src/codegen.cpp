@@ -7715,6 +7715,8 @@ static jl_llvm_functions_t
             Type *RT = Arg->getParamStructRetType();
             TypeSize sz = DL.getTypeAllocSize(RT);
             Align al = DL.getPrefTypeAlign(RT);
+            if (al > MAX_ALIGN)
+                al = Align(MAX_ALIGN);
             param.addAttribute(Attribute::NonNull);
             // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
             param.addDereferenceableAttr(sz);
