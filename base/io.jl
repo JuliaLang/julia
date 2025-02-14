@@ -252,6 +252,9 @@ You can write multiple values with the same `write` call, i.e. the following are
     write(io, x, y...)
     write(io, x) + write(io, y...)
 
+Writing an array `a` writes out consecutively all `length(a)` elements
+of `a[:]`, but no information about its dimension or axes.
+
 # Examples
 Consistent serialization:
 ```jldoctest
@@ -286,12 +289,18 @@ julia> write(io, "Sometimes those members") + write(io, " write documentation.")
 julia> String(take!(io))
 "Sometimes those members write documentation."
 ```
-User-defined plain-data types without `write` methods can be written when wrapped in a `Ref`:
+Arrays:
+```jldoctest
+julia> write(stdout, [0x41 0x42; 0x43 0x44], 0x0a)
+ACBD
+5
+```
+User-defined plain-data types without `write` methods can be written and read
+when wrapped in a `Ref`:
 ```jldoctest
 julia> struct MyStruct; x::Float64; end
 
-julia> io = IOBuffer()
-IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=0, maxsize=Inf, ptr=1, mark=-1)
+julia> io = IOBuffer();
 
 julia> write(io, Ref(MyStruct(42.0)))
 8
@@ -507,10 +516,39 @@ read(filename::AbstractString, args...) = open(io->read(io, args...), convert(St
 read(filename::AbstractString, ::Type{T}) where {T} = open(io->read(io, T), convert(String, filename)::String)
 
 """
-    read!(stream::IO, array::AbstractArray)
-    read!(filename::AbstractString, array::AbstractArray)
+    read!(stream::IO, a::AbstractArray{T})
+    read!(stream::IO, a::Ref{T})
+    read!(filename::AbstractString, a::Union{AbstractArray{T}, Ref{T}})
 
-Read binary data from an I/O stream or file, filling in `array`.
+Read `length(a)` consecutive values of type `T` from an I/O stream or
+file into `a`, returning `a`.
+
+If `a` is an `Array` and `isbitstype(T)` is true, this function reads
+`size(a)` bytes directly into memory. Otherwise, each element of
+`a::AbstractArray{T}` is read with a call to `read(stream, T)`.
+
+The `Ref{T}` variant is not intended for use if `isbitstype(T)` is
+false.
+
+Example:
+```jldoctest
+julia> read!(IOBuffer("Julia"), Vector{UInt8}(undef, 5))
+5-element Vector{UInt8}:
+ 0x4a
+ 0x75
+ 0x6c
+ 0x69
+ 0x61
+
+julia> read!(IOBuffer("Julia"), Matrix{UInt8}(undef, 2, 2))
+2×2 Matrix{UInt8}:
+ 0x4a  0x6c
+ 0x75  0x69
+
+julia> read!(IOBuffer("Julia"), Ref{Complex{UInt8}}(0))
+Base.RefValue{Complex{UInt8}}(0x4a + 0x75im)
+```
+
 """
 function read! end
 
