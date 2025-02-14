@@ -4,10 +4,10 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
-#ifndef MMTK_GC
+#ifndef WITH_THIRD_PARTY_HEAP
 #include "gc-tls-stock.h"
 #else
-#include "gc-tls-mmtk.h"
+#include "gc-tls-third-party.h"
 #endif
 #include "gc-tls-common.h"
 #include "julia_atomics.h"
