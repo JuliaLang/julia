@@ -6465,7 +6465,6 @@ for U in unboxedunions
             @test A[1] === initvalue2(F2)
             @test typeof(A[end]) === F2
 
-            # resizefirst!
             A = U[initvalue2(F2) for i = 1:len]
             resize!(A, 1; first=true)
             @test length(A) === 1
