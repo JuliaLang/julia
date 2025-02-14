@@ -96,13 +96,11 @@ top:
 ; CHECK-LABEL: @gc_keep_invariant
     %pgcstack = call {}*** @julia.get_pgcstack()
     %1 = bitcast {}*** %pgcstack to {}**
-    %current_task = getelementptr inbounds {}*, {}** %0, i64 -12
+    %current_task = getelementptr inbounds {}*, {}** %1, i64 -12
 
-; CHECK: %current_task = getelementptr inbounds ptr, ptr %0, i64 -12
-; CHECK-NEXT: [[ptls_field:%.*]] = getelementptr inbounds i8, ptr %current_task,
-; CHECK-NEXT: [[ptls_load:%.*]] = load ptr, ptr [[ptls_field]], align 8, !tbaa !0
-    %2 = load float, float addrspace(1)* %0, align 4, !invariant.load
-; CHECK-NEXT: = load float, float addrspace(1)* %0, align 4, !invariant.load
+; CHECK: %current_task = getelementptr inbounds ptr, ptr %1, i64 -12
+    %2 = load float, ptr addrspace(1) %0, align 4, !invariant.load !1
+; CHECK-NEXT: %2 = load float, ptr addrspace(1) %0, align 4, !invariant.load
     ret void
 }
 
