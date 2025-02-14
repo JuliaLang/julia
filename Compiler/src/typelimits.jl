@@ -369,14 +369,6 @@ function _bitvector(nt::NTuple)
     bv
 end
 
-function _count(bv::BitVector)
-    n = 0
-    for val in bv
-        n += val
-    end
-    n
-end
-
 #-
 
 maybeundef_fields(t::Const) = undefined_fields(t)
