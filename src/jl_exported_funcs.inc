@@ -42,7 +42,6 @@
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
-    XX(jl_binding_resolved_p) \
     XX(jl_bitcast) \
     XX(jl_boundp) \
     XX(jl_bounds_error) \
@@ -72,6 +71,7 @@
     XX(jl_call1) \
     XX(jl_call2) \
     XX(jl_call3) \
+    XX(jl_call4) \
     XX(jl_calloc) \
     XX(jl_call_in_typeinf_world) \
     XX(jl_capture_interp_frame) \
@@ -127,7 +127,6 @@
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
     XX(jl_expand) \
-    XX(jl_expand_and_resolve) \
     XX(jl_expand_stmt) \
     XX(jl_expand_stmt_with_loc) \
     XX(jl_expand_with_loc) \
@@ -196,6 +195,7 @@
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
+    XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
     XX(jl_cpu_has_fma) \
@@ -213,6 +213,8 @@
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
     XX(jl_get_module_optlevel) \
+    XX(jl_get_module_usings_backedges) \
+    XX(jl_get_module_binding_or_nothing) \
     XX(jl_get_next_task) \
     XX(jl_get_nth_field) \
     XX(jl_get_nth_field_checked) \
@@ -547,6 +549,7 @@
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
+    YY(jl_jit_abi_converter) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \

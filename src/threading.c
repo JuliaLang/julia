@@ -336,7 +336,17 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #endif
     if (jl_get_pgcstack() != NULL)
         abort();
-    jl_ptls_t ptls = (jl_ptls_t)calloc(1, sizeof(jl_tls_states_t));
+    jl_ptls_t ptls;
+#if defined(_OS_WINDOWS_)
+    ptls = _aligned_malloc(sizeof(jl_tls_states_t), alignof(jl_tls_states_t));
+    if (ptls == NULL)
+        abort();
+#else
+    if (posix_memalign((void**)&ptls, alignof(jl_tls_states_t), sizeof(jl_tls_states_t)))
+        abort();
+#endif
+    memset(ptls, 0, sizeof(jl_tls_states_t));
+
 #ifndef _OS_WINDOWS_
     pthread_setspecific(jl_task_exit_key, (void*)ptls);
 #endif
@@ -698,15 +708,15 @@ void jl_init_threading(void)
     // and `jl_n_threads_per_pool`.
     jl_n_threadpools = 2;
     int16_t nthreads = JULIA_NUM_THREADS;
-    int16_t nthreadsi = 0;
+    // if generating output default to 0 interactive threads, otherwise default to 1
+    int16_t nthreadsi = jl_generating_output() ? 0 : 1;
     char *endptr, *endptri;
 
     if (jl_options.nthreads != 0) { // --threads specified
         nthreads = jl_options.nthreads_per_pool[0];
         if (nthreads < 0)
             nthreads = jl_effective_threads();
-        if (jl_options.nthreadpools == 2)
-            nthreadsi = jl_options.nthreads_per_pool[1];
+        nthreadsi = (jl_options.nthreadpools == 1) ? 0 : jl_options.nthreads_per_pool[1];
     }
     else if ((cp = getenv(NUM_THREADS_NAME))) { // ENV[NUM_THREADS_NAME] specified
         if (!strncmp(cp, "auto", 4)) {
@@ -722,13 +732,16 @@ void jl_init_threading(void)
         }
         if (*cp == ',') {
             cp++;
-            if (!strncmp(cp, "auto", 4))
+            if (!strncmp(cp, "auto", 4)) {
                 nthreadsi = 1;
+                cp += 4;
+            }
             else {
                 errno = 0;
                 nthreadsi = strtol(cp, &endptri, 10);
                 if (errno != 0 || endptri == cp || nthreadsi < 0)
-                    nthreadsi = 0;
+                    nthreadsi = 1;
+                cp = endptri;
             }
         }
     }

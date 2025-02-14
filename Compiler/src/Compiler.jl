@@ -49,7 +49,7 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstanc
 
 using Base
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
-    BINDING_KIND_GLOBAL, BINDING_KIND_UNDEF_CONST, BINDING_KIND_BACKDATED_CONST,
+    BINDING_KIND_GLOBAL, BINDING_KIND_UNDEF_CONST, BINDING_KIND_BACKDATED_CONST, BINDING_KIND_DECLARED,
     Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
     EffectsOverride, Filter, Generator, IteratorSize, JLOptions, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, SizeUnknown, _NAMEDTUPLE_NAME,
@@ -67,12 +67,12 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     partition_restriction, quoted, rename_unionall, rewrap_unionall, specialize_method,
     structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
-    _uncompressed_ir
+    _uncompressed_ir, maybe_add_binding_backedge!
 using Base.Order
 
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
     getindex, haskey, in, isempty, isready, iterate, iterate, last, length, max_world,
-    min_world, popfirst!, push!, resize!, setindex!, size
+    min_world, popfirst!, push!, resize!, setindex!, size, intersect
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!

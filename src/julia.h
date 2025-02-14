@@ -616,6 +616,52 @@ typedef struct _jl_weakref_t {
 } jl_weakref_t;
 
 // N.B: Needs to be synced with runtime_internals.jl
+// We track essentially three levels of binding strength:
+//
+// 1. Implicit Bindings (Weakest)
+//   These binding kinds depend solely on the set of using'd packages and are not explicitly
+//   declared:
+//
+//      BINDING_KIND_IMPLICIT
+//      BINDING_KIND_GUARD
+//      BINDING_KIND_FAILED
+//
+// 2. Weakly Declared Bindings (Weak)
+//    The binding was declared using `global`. It is treated as a mutable, `Any` type global
+//    for almost all purposes, except that it receives slightly worse optimizations, since it
+//    may be replaced.
+//
+//      BINDING_KIND_DECLARED
+//
+// 3. Strong Declared Bindings (Weak)
+//    All other bindings are explicitly declared using a keyword or global assignment.
+//   These are considered strongest:
+//
+//      BINDING_KIND_CONST
+//      BINDING_KIND_CONST_IMPORT
+//      BINDING_KIND_EXPLICIT
+//      BINDING_KIND_IMPORTED
+//      BINDING_KIND_GLOBAL
+//      BINDING_KIND_UNDEF_CONST
+//
+// The runtime supports syntactic invalidation (by raising the world age and changing the partition type
+// in the new world age) from any partition kind to any other.
+//
+// However, not all transitions are allowed syntactically. We have the following rules for SYNTACTIC invalidation:
+// 1. It is always syntactically permissable to replace a weaker binding by a stronger binding
+// 2. Implicit bindings can be syntactically changed to other implicit bindings by changing the `using` set.
+// 3. Finally, we syntactically permit replacing one BINDING_KIND_CONST(_IMPORT) by another of a different value.
+//
+// We may make this list more permissive in the future.
+//
+// Finally, BINDING_KIND_BACKDATED_CONST is a special case, and the only case where we may replace an
+// existing partition by a different partition kind in the same world age. As such, it needs special
+// support in inference. Any partition kind that may be replaced by a BINDING_KIND_BACKDATED_CONST
+// must be inferred accordingly. BINDING_KIND_BACKDATED_CONST is intended as a temporary compatibility
+// measure. The following kinds may be replaced by BINDING_KIND_BACKDATED_CONST:
+//  - BINDING_KIND_GUARD
+//  - BINDING_KIND_FAILED
+//  - BINDING_KIND_DECLARED
 enum jl_partition_kind {
     // Constant: This binding partition is a constant declared using `const _ = ...`
     //  ->restriction holds the constant value
@@ -623,7 +669,8 @@ enum jl_partition_kind {
     // Import Constant: This binding partition is a constant declared using `import A`
     //  ->restriction holds the constant value
     BINDING_KIND_CONST_IMPORT = 0x1,
-    // Global: This binding partition is a global variable.
+    // Global: This binding partition is a global variable. It was declared either using
+    // `global x::T` to implicitly through a syntactic global assignment.
     //  -> restriction holds the type restriction
     BINDING_KIND_GLOBAL       = 0x2,
     // Implicit: The binding was implicitly imported from a `using`'d module.
@@ -638,7 +685,9 @@ enum jl_partition_kind {
     // Failed: We attempted to import the binding, but the import was ambiguous
     //  ->restriction is NULL.
     BINDING_KIND_FAILED       = 0x6,
-    // Declared: The binding was declared using `global` or similar
+    // Declared: The binding was declared using `global` or similar. This acts in most ways like
+    // BINDING_KIND_GLOBAL with an `Any` restriction, except that it may be redefined to a stronger
+    // binding like `const` or an explicit import.
     //  ->restriction is NULL.
     BINDING_KIND_DECLARED     = 0x7,
     // Guard: The binding was looked at, but no global or import was resolved at the time
@@ -651,14 +700,12 @@ enum jl_partition_kind {
     // Backated constant. A constant that was backdated for compatibility. In all other
     // ways equivalent to BINDING_KIND_CONST, but prints a warning on access
     BINDING_KIND_BACKDATED_CONST = 0xa,
+
+    // This is not a real binding kind, but can be used to ask for a re-resolution
+    // of the implicit binding kind
+    BINDING_KIND_IMPLICIT_RECOMPUTE = 0xb
 };
 
-#ifdef _P64
-// Union of a ptr and a 3 bit field.
-typedef uintptr_t jl_ptr_kind_union_t;
-#else
-typedef struct __attribute__((aligned(8))) { jl_value_t *val; size_t kind; } jl_ptr_kind_union_t;
-#endif
 typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
     JL_DATA_TYPE
     /* union {
@@ -672,23 +719,13 @@ typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
      *
      * Currently: Low 3 bits hold ->kind on _P64 to avoid needing >8 byte atomics
      *
-     * This field is updated atomically with both kind and restriction. The following
-     * transitions are allowed and modeled by the system:
-     *
-     *  GUARD -> any
-     *  (DECLARED, FAILED) -> any non-GUARD
-     *  IMPLICIT -> {EXPLICIT, IMPORTED} (->restriction unchanged only)
-     *
-     * In addition, we permit (with warning about undefined behavior) changing the restriction
-     * pointer for CONST(_IMPORT).
-     *
-     * All other kind or restriction transitions are disallowed.
+     * This field is updated atomically with both kind and restriction
      */
-    _Atomic(jl_ptr_kind_union_t) restriction;
+    jl_value_t *restriction;
     size_t min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t *) next;
-    size_t reserved; // Reserved for ->kind. Currently this holds the low bits of ->restriction during serialization
+    enum jl_partition_kind kind;
 } jl_binding_partition_t;
 
 typedef struct _jl_binding_t {
@@ -696,11 +733,13 @@ typedef struct _jl_binding_t {
     jl_globalref_t *globalref;  // cached GlobalRef for this binding
     _Atomic(jl_value_t*) value;
     _Atomic(jl_binding_partition_t*) partitions;
+    jl_array_t *backedges;
     uint8_t did_print_backdate_admonition:1;
     uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
     uint8_t publicp:1; // exportp without publicp is not allowed.
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
-    uint8_t padding:3;
+    uint8_t did_print_implicit_import_admonition:1;
+    uint8_t padding:2;
 } jl_binding_t;
 
 typedef struct {
@@ -716,6 +755,7 @@ typedef struct _jl_module_t {
     _Atomic(jl_genericmemory_t*) bindingkeyset; // index lookup by name into bindings
     jl_sym_t *file;
     int32_t line;
+    jl_value_t *usings_backedges;
     // hidden fields:
     arraylist_t usings; /* arraylist of struct jl_module_using */  // modules with all bindings potentially imported
     jl_uuid_t build_id;
@@ -1430,6 +1470,13 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s) JL_NOTSAFEPOINT
 }
 #define jl_symbol_name(s) jl_symbol_name_(s)
 
+STATIC_INLINE const char *jl_module_debug_name(jl_module_t *mod) JL_NOTSAFEPOINT
+{
+    if (!mod)
+        return "<null>";
+    return jl_symbol_name(mod->name);
+}
+
 static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type) JL_NOTSAFEPOINT
 {
     assert(fielddesc_type >= 0 && fielddesc_type <= 2);
@@ -1565,6 +1612,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_quotenode(v)   jl_typetagis(v,jl_quotenode_type)
 #define jl_is_newvarnode(v)  jl_typetagis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typetagis(v,jl_linenumbernode_type)
+#define jl_is_linenumbernode(v) jl_typetagis(v,jl_linenumbernode_type)
 #define jl_is_method_instance(v) jl_typetagis(v,jl_method_instance_type)
 #define jl_is_code_instance(v) jl_typetagis(v,jl_code_instance_type)
 #define jl_is_code_info(v)   jl_typetagis(v,jl_code_info_type)
@@ -1856,7 +1904,7 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b JL_PROPAGATES_ROOT
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT);
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_and_const(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, jl_sym_t *name);
+JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world, jl_code_instance_t **cache);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
@@ -1995,17 +2043,20 @@ JL_DLLEXPORT void jl_set_module_infer(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_max_methods(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
+JL_DLLEXPORT jl_value_t *jl_get_module_usings_backedges(jl_module_t *m);
+JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym_t *s);
+
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
-JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
-JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
+JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module_t *m, jl_sym_t *s);
+JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
+JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, size_t new_world);
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import);
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
-JL_DLLEXPORT int jl_binding_resolved_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_globalref_is_const(jl_globalref_t *gr);
 JL_DLLEXPORT jl_value_t *jl_get_globalref_value(jl_globalref_t *gr);
@@ -2251,6 +2302,9 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t
 JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED, jl_value_t *b JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
                                   jl_value_t *b JL_MAYBE_UNROOTED, jl_value_t *c JL_MAYBE_UNROOTED);
+JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f JL_MAYBE_UNROOTED, jl_value_t *a JL_MAYBE_UNROOTED,
+                                  jl_value_t *b JL_MAYBE_UNROOTED, jl_value_t *c JL_MAYBE_UNROOTED,
+                                  jl_value_t *d JL_MAYBE_UNROOTED);
 
 // async signal handling ------------------------------------------------------
 

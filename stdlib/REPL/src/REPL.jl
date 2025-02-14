@@ -44,8 +44,8 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 "with the module it should come from.")
             elseif kind === Base.BINDING_KIND_GUARD
                 print(io, "\nSuggestion: check for spelling errors or missing imports.")
-            else
-                print(io, "\nSuggestion: this global was defined as `$(bpart.restriction.globalref)` but not assigned a value.")
+            elseif Base.is_some_imported(kind)
+                print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
             end
         elseif scope === :static_parameter
             print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
@@ -72,7 +72,6 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
 end
 
 function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
-    Base.isbindingresolved(m, var) || return false
     (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
     active_mod = Base.active_module()
     print(io, "\nHint: ")
@@ -1431,7 +1430,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, ';')
-                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
+                LineEdit.check_show_hint(s)
             end
         end,
         '?' => function (s::MIState,o...)
@@ -1442,7 +1441,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, '?')
-                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
+                LineEdit.check_show_hint(s)
             end
         end,
         ']' => function (s::MIState,o...)
@@ -1465,8 +1464,8 @@ function setup_interface(
                                         transition(s, mode) do
                                             LineEdit.state(s, mode).input_buffer = buf
                                         end
-                                        if !isempty(s) && @invokelatest(LineEdit.check_for_hint(s))
-                                            @invokelatest(LineEdit.refresh_line(s))
+                                        if !isempty(s)
+                                            @invokelatest(LineEdit.check_show_hint(s))
                                         end
                                         break
                                     end
@@ -1479,7 +1478,7 @@ function setup_interface(
                 Base.errormonitor(t_replswitch)
             else
                 edit_insert(s, ']')
-                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
+                LineEdit.check_show_hint(s)
             end
         end,
 
@@ -1884,16 +1883,26 @@ function get_usings!(usings, ex)
     return usings
 end
 
+function create_global_out!(mod)
+    if !isdefinedglobal(mod, :Out)
+        out = Dict{Int, Any}()
+        @eval mod begin
+            const Out = $(out)
+            export Out
+        end
+        return out
+    end
+    return getglobal(mod, Out)
+end
+
 function capture_result(n::Ref{Int}, @nospecialize(x))
     n = n[]
     mod = Base.MainInclude
-    if !isdefined(mod, :Out)
-        @eval mod global Out
-        @eval mod export Out
-        setglobal!(mod, :Out, Dict{Int, Any}())
-    end
-    if x !== getglobal(mod, :Out) && x !== nothing # remove this?
-        getglobal(mod, :Out)[n] = x
+    # TODO: This invokelatest is only required due to backdated constants
+    # and should be removed after
+    out = isdefinedglobal(mod, :Out) ? invokelatest(getglobal, mod, :Out) : invokelatest(create_global_out!, mod)
+    if x !== out && x !== nothing # remove this?
+        out[n] = x
     end
     nothing
 end

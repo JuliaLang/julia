@@ -798,7 +798,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
-    @test errors_not_signals(`$exename --worker=true`)
+    # shorten the worker timeout as this test relies on it timing out
+    withenv("JULIA_WORKER_TIMEOUT" => "10") do
+        @test errors_not_signals(`$exename --worker=true`)
+    end
 
     # --trace-compile
     let

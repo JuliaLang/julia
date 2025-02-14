@@ -1970,6 +1970,8 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     return retval;
 }
 
+static inline Constant *literal_static_pointer_val(const void *p, Type *T);
+
 jl_cgval_t function_sig_t::emit_a_ccall(
         jl_codectx_t &ctx,
         const native_sym_arg_t &symarg,

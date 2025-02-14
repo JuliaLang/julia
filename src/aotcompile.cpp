@@ -423,7 +423,7 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
                 if (decls.functionObject == "jl_fptr_args") {
                     preal_decl = decls.specFunctionObject;
                 }
-                else if (decls.functionObject != "jl_fptr_sparam" && decls.functionObject != "jl_f_opaque_closure_call") {
+                else if (decls.functionObject != "jl_fptr_sparam" && decls.functionObject != "jl_f_opaque_closure_call" && decls.functionObject != "jl_fptr_const_return") {
                     preal_decl = decls.specFunctionObject;
                     preal_specsig = true;
                 }
@@ -439,6 +439,13 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
         Module *mod = proto.decl->getParent();
         assert(proto.decl->isDeclaration());
         Function *pinvoke = nullptr;
+        if (preal_decl.empty() && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr) {
+            std::string gf_thunk_name = emit_abi_constreturn(mod, params, proto.specsig, codeinst);
+            preal_specsig = proto.specsig;
+            if (invokeName.empty())
+                invokeName = "jl_fptr_const_return";
+            preal_decl = mod->getNamedValue(gf_thunk_name)->getName();
+        }
         if (preal_decl.empty()) {
             if (invokeName.empty() && params.params->trim) {
                 jl_safe_printf("warning: bailed out to invoke when compiling: ");
@@ -483,6 +490,7 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
                 ocinvokeDecl = pinvoke->getName();
             assert(!ocinvokeDecl.empty());
             assert(ocinvokeDecl != "jl_fptr_args");
+            assert(ocinvokeDecl != "jl_fptr_const_return");
             assert(ocinvokeDecl != "jl_fptr_sparam");
             // merge and/or rename this prototype to the real function
             if (Value *specfun = mod->getNamedValue(ocinvokeDecl)) {
@@ -497,6 +505,134 @@ static void resolve_workqueue(jl_codegen_params_t &params, egal_set &method_root
         params.workqueue.clear();
     }
     JL_GC_POP();
+}
+
+/// Link the function in the source module into the destination module if
+/// needed, setting up mapping information.
+/// Similar to orc::cloneFunctionDecl, but more complete for greater correctness
+Function *IRLinker_copyFunctionProto(Module *DstM, Function *SF) {
+  // If there is no linkage to be performed or we are linking from the source,
+  // bring SF over, if we haven't already.
+  if (SF->getParent() == DstM)
+    return SF;
+  if (auto *F = DstM->getNamedValue(SF->getName()))
+      return cast<Function>(F);
+  auto *F = Function::Create(SF->getFunctionType(), SF->getLinkage(),
+                             SF->getAddressSpace(), SF->getName(), DstM);
+  F->copyAttributesFrom(SF);
+  F->IsNewDbgInfoFormat = SF->IsNewDbgInfoFormat;
+
+  // Remove these copied constants since they point to the source module.
+  F->setPersonalityFn(nullptr);
+  F->setPrefixData(nullptr);
+  F->setPrologueData(nullptr);
+  return F;
+}
+
+static Function *aot_abi_converter(jl_codegen_params_t &params, Module *M, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, jl_code_instance_t *codeinst, Module *defM, StringRef func, StringRef specfunc, bool target_specsig)
+{
+    std::string gf_thunk_name;
+    if (!specfunc.empty()) {
+        Value *llvmtarget = IRLinker_copyFunctionProto(M, defM->getFunction(specfunc));
+        gf_thunk_name = emit_abi_converter(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget, target_specsig);
+    }
+    else {
+        Value *llvmtarget = func.empty() ? nullptr : IRLinker_copyFunctionProto(M, defM->getFunction(func));
+        gf_thunk_name = emit_abi_dispatcher(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget);
+    }
+    auto F = M->getFunction(gf_thunk_name);
+    assert(F);
+    return F;
+}
+
+static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_functions_t &compiled_functions)
+{
+    DenseMap<jl_method_instance_t*, jl_code_instance_t*> compiled_mi;
+    for (auto &def : compiled_functions) {
+        jl_code_instance_t *this_code = def.first;
+        jl_method_instance_t *mi = jl_get_ci_mi(this_code);
+        if (this_code->owner == jl_nothing && jl_atomic_load_relaxed(&this_code->max_world) == ~(size_t)0 && this_code->def == (jl_value_t*)mi)
+            compiled_mi[mi] = this_code;
+    }
+    size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
+    for (cfunc_decl_t &cfunc : params.cfuncs) {
+        Module *M = cfunc.theFptr->getParent();
+        jl_value_t *sigt = cfunc.sigt;
+        JL_GC_PROMISE_ROOTED(sigt);
+        jl_value_t *declrt = cfunc.declrt;
+        JL_GC_PROMISE_ROOTED(declrt);
+        Function *unspec = aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, nullptr, nullptr, "", "", false);
+        jl_code_instance_t *codeinst = nullptr;
+        auto assign_fptr = [&params, &cfunc, &codeinst, &unspec](Function *f) {
+            ConstantArray *init = cast<ConstantArray>(cfunc.cfuncdata->getInitializer());
+            SmallVector<Constant*,6> initvals;
+            for (unsigned i = 0; i < init->getNumOperands(); ++i)
+                initvals.push_back(init->getOperand(i));
+            assert(initvals.size() == 6);
+            assert(initvals[0]->isNullValue());
+            if (codeinst) {
+                Constant *llvmcodeinst = literal_pointer_val_slot(params, f->getParent(), (jl_value_t*)codeinst);
+                initvals[0] = llvmcodeinst; // plast_codeinst
+            }
+            assert(initvals[2]->isNullValue());
+            initvals[2] = unspec;
+            cfunc.cfuncdata->setInitializer(ConstantArray::get(init->getType(), initvals));
+            cfunc.theFptr->setInitializer(f);
+        };
+        Module *defM = nullptr;
+        StringRef func;
+        jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+        if (mi) {
+            auto it = compiled_mi.find(mi);
+            if (it != compiled_mi.end()) {
+                codeinst = it->second;
+                JL_GC_PROMISE_ROOTED(codeinst);
+                auto defs = compiled_functions.find(codeinst);
+                defM = std::get<0>(defs->second).getModuleUnlocked();
+                const jl_llvm_functions_t &decls = std::get<1>(defs->second);
+                func = decls.functionObject;
+                StringRef specfunc = decls.specFunctionObject;
+                jl_value_t *astrt = codeinst->rettype;
+                if (astrt != (jl_value_t*)jl_bottom_type &&
+                    jl_type_intersection(astrt, declrt) == jl_bottom_type) {
+                    // Do not warn if the function never returns since it is
+                    // occasionally required by the C API (typically error callbacks)
+                    // even though we're likely to encounter memory errors in that case
+                    jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
+                }
+                if (func == "jl_fptr_const_return") {
+                    std::string gf_thunk_name = emit_abi_constreturn(M, params, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst->rettype_const);
+                    auto F = M->getFunction(gf_thunk_name);
+                    assert(F);
+                    assign_fptr(F);
+                    continue;
+                }
+                else if (func == "jl_fptr_args") {
+                    assert(!specfunc.empty());
+                    if (!cfunc.specsig && jl_subtype(astrt, declrt)) {
+                        assign_fptr(IRLinker_copyFunctionProto(M, defM->getFunction(specfunc)));
+                        continue;
+                    }
+                    assign_fptr(aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst, defM, func, specfunc, false));
+                    continue;
+                }
+                else if (func == "jl_fptr_sparam" || func == "jl_f_opaque_closure_call") {
+                    func = ""; // use jl_invoke instead for these, since we don't declare these prototypes
+                }
+                else {
+                    assert(!specfunc.empty());
+                    if (jl_egal(mi->specTypes, sigt) && jl_egal(declrt, astrt)) {
+                        assign_fptr(IRLinker_copyFunctionProto(M, defM->getFunction(specfunc)));
+                        continue;
+                    }
+                    assign_fptr(aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst, defM, func, specfunc, true));
+                    continue;
+                }
+            }
+        }
+        Function *f = codeinst ? aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst, defM, func, "", false) : unspec;
+        return assign_fptr(f);
+    }
 }
 
 
@@ -651,7 +787,11 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
             orc::ThreadSafeModule result_m = jl_create_ts_module(name_from_method_instance(jl_get_ci_mi(codeinst)),
                     params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                     Triple(clone.getModuleUnlocked()->getTargetTriple()));
-            jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params);
+            jl_llvm_functions_t decls;
+            if (jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
+                decls.functionObject = "jl_fptr_const_return";
+            else
+                decls = jl_emit_codeinst(result_m, codeinst, src, params);
             record_method_roots(method_roots, jl_get_ci_mi(codeinst));
             if (result_m)
                 compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
@@ -671,6 +811,8 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     }
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
     resolve_workqueue(params, method_roots, compiled_functions);
+    // including generating cfunction thunks
+    generate_cfunc_thunks(params, compiled_functions);
     aot_optimize_roots(params, method_roots, compiled_functions);
     params.temporary_roots = nullptr;
     JL_GC_POP();
@@ -728,8 +870,11 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
             else if (func == "jl_fptr_sparam") {
                 func_id = -2;
             }
-            else if (decls.functionObject == "jl_f_opaque_closure_call") {
+            else if (func == "jl_f_opaque_closure_call") {
                 func_id = -4;
+            }
+            else if (func == "jl_fptr_const_return") {
+                func_id = -5;
             }
             else {
                 //Safe b/c context is locked by params
@@ -2201,7 +2346,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
 // for use in reflection from Julia.
 // This is paired with jl_dump_function_ir and jl_dump_function_asm, either of which will free all memory allocated here
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     // emit this function into a new llvm module
     dump->F = nullptr;
@@ -2223,7 +2368,31 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, jl_
             output.imaging_mode = jl_options.image_codegen;
             output.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
             JL_GC_PUSH1(&output.temporary_roots);
-            auto decls = jl_emit_code(m, mi, src, mi->specTypes, src->rettype, output);
+            jl_llvm_functions_t decls = jl_emit_code(m, mi, src, mi->specTypes, src->rettype, output);
+            // while not required, also emit the cfunc thunks, based on the
+            // inferred ABIs of their targets in the current latest world,
+            // since otherwise it is challenging to see all relevant codes
+            jl_compiled_functions_t compiled_functions;
+            size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
+            for (cfunc_decl_t &cfunc : output.cfuncs) {
+                jl_value_t *sigt = cfunc.sigt;
+                JL_GC_PROMISE_ROOTED(sigt);
+                jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
+                if (mi == nullptr)
+                    continue;
+                jl_code_instance_t *codeinst = jl_type_infer(mi, latestworld, SOURCE_MODE_NOT_REQUIRED);
+                if (codeinst == nullptr || compiled_functions.count(codeinst))
+                    continue;
+                orc::ThreadSafeModule decl_m = jl_create_ts_module("extern", ctx);
+                jl_llvm_functions_t decls;
+                if (jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
+                    decls.functionObject = "jl_fptr_const_return";
+                else
+                    decls = jl_emit_codedecls(decl_m, codeinst, output);
+                compiled_functions[codeinst] = {std::move(decl_m), std::move(decls)};
+            }
+            generate_cfunc_thunks(output, compiled_functions);
+            compiled_functions.clear();
             output.temporary_roots = nullptr;
             JL_GC_POP(); // GC the global_targets array contents now since reflection doesn't need it
 

@@ -10,6 +10,7 @@ being used for this purpose alone.
 """
 module Timings
 
+using ..Core
 using ..Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
     @inbounds, copy, backtrace
 
@@ -92,7 +93,7 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = RefValue{Bool}(false)
 
-function finish!(interp::AbstractInterpreter, caller::InferenceState)
+function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt)
     result = caller.result
     opt = result.src
     if opt isa OptimizationState
@@ -108,12 +109,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         ci = result.ci
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
-        if last(result.valid_worlds) >= get_world_counter()
-            # TODO: this should probably come after all store_backedges (after optimizations) for the entire graph in finish_cycle
-            # since we should be requiring that all edges first get their backedges set, as a batch
-            result.valid_worlds = WorldRange(first(result.valid_worlds), typemax(UInt))
-        end
-        if last(result.valid_worlds) == typemax(UInt)
+        if last(result.valid_worlds) >= validation_world
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
             store_backedges(ci, edges)
@@ -202,7 +198,14 @@ function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
     if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
         optimize(frame.interp, opt, frame.result)
     end
-    finish!(frame.interp, frame)
+    validation_world = get_world_counter()
+    finish!(frame.interp, frame, validation_world)
+    if isdefined(frame.result, :ci)
+        # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
+        # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
+        # validity.
+        ccall(:jl_promote_ci_to_current, Cvoid, (Any, UInt), frame.result.ci, validation_world)
+    end
     if frame.cycleid != 0
         frames = frame.callstack::Vector{AbsIntState}
         @assert frames[end] === frame
@@ -236,10 +239,19 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
             optimize(caller.interp, opt, caller.result)
         end
     end
+    validation_world = get_world_counter()
+    cis = CodeInstance[]
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
-        finish!(caller.interp, caller)
+        finish!(caller.interp, caller, validation_world)
+        if isdefined(caller.result, :ci)
+            push!(cis, caller.result.ci)
+        end
     end
+    # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
+    # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
+    # validity.
+    ccall(:jl_promote_cis_to_current, Cvoid, (Ptr{CodeInstance}, Csize_t, UInt), cis, length(cis), validation_world)
     resize!(frames, cycleid - 1)
     return nothing
 end
@@ -544,8 +556,9 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
             # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
             i += 1
             continue
-        elseif isa(item, Core.BindingPartition)
+        elseif isa(item, Core.Binding)
             i += 1
+            maybe_add_binding_backedge!(item, caller)
             continue
         end
         if isa(item, CodeInstance)
@@ -1265,6 +1278,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
     tocompile = Vector{CodeInstance}()
     codeinfos = []
     # first compute the ABIs of everything
+    latest = true # whether this_world == world_counter()
     for this_world in reverse(sort!(worlds))
         interp = NativeInterpreter(this_world)
         for i = 1:length(methods)
@@ -1277,11 +1291,23 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                 # then we want to compile and emit this
                 if item.def.primary_world <= this_world <= item.def.deleted_world
                     ci = typeinf_ext(interp, item, SOURCE_MODE_NOT_REQUIRED)
-                    ci isa CodeInstance && !use_const_api(ci) && push!(tocompile, ci)
+                    ci isa CodeInstance && push!(tocompile, ci)
                 end
-            elseif item isa SimpleVector
-                push!(codeinfos, item[1]::Type)
-                push!(codeinfos, item[2]::Type)
+            elseif item isa SimpleVector && latest
+                (rt::Type, sig::Type) = item
+                # make a best-effort attempt to enqueue the relevant code for the ccallable
+                ptr = ccall(:jl_get_specialization1,
+                            #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
+                            sig, this_world, #= mt_cache =# 0)
+                if ptr !== C_NULL
+                    mi = unsafe_pointer_to_objref(ptr)::MethodInstance
+                    ci = typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED)
+                    ci isa CodeInstance && push!(tocompile, ci)
+                end
+                # additionally enqueue the ccallable entrypoint / adapter, which implicitly
+                # invokes the above ci
+                push!(codeinfos, rt)
+                push!(codeinfos, sig)
             end
         end
         while !isempty(tocompile)
@@ -1292,7 +1318,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
             mi = get_ci_mi(callee)
             def = mi.def
             if use_const_api(callee)
-                src = codeinfo_for_const(interp, mi, code.rettype_const)
+                src = codeinfo_for_const(interp, mi, callee.rettype_const)
             elseif haskey(interp.codegen, callee)
                 src = interp.codegen[callee]
             elseif isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && !trim
@@ -1314,6 +1340,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                 println("warning: failed to get code for ", mi)
             end
         end
+        latest = false
     end
     return codeinfos
 end
