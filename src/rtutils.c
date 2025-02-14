@@ -148,13 +148,22 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *
         }
         jl_errorf("UndefVarError(%s%s%s)", jl_symbol_name(var), s1, s2);
     }
-    JL_GC_PUSH1(&scope);
-    jl_throw(jl_new_struct(jl_undefvarerror_type, var, scope));
+    jl_value_t *active_age = NULL;
+    JL_GC_PUSH2(&scope, &active_age);
+    active_age = jl_box_long(jl_current_task->world_age);
+    jl_throw(jl_new_struct(jl_undefvarerror_type, var, active_age, scope));
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_datatype_t *t, jl_sym_t *var)
 {
     jl_throw(jl_new_struct(jl_fielderror_type, t, var));
+}
+
+JL_DLLEXPORT void JL_NORETURN jl_argument_error(char *str) // == jl_exceptionf(jl_argumenterror_type, "%s", str)
+{
+    jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
+    JL_GC_PUSH1(&msg);
+    jl_throw(jl_new_struct(jl_argumenterror_type, msg));
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)

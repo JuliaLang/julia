@@ -58,11 +58,7 @@
 #include "llvm-version.h"
 
 // for outputting disassembly
-#if JL_LLVM_VERSION >= 170000
 #include <llvm/TargetParser/Triple.h>
-#else
-#include <llvm/ADT/Triple.h>
-#endif
 #include <llvm/AsmParser/Parser.h>
 #include <llvm/Analysis/TargetTransformInfo.h>
 #include <llvm/BinaryFormat/COFF.h>
@@ -505,7 +501,7 @@ jl_value_t *jl_dump_function_ir_impl(jl_llvmf_dump_t *dump, char strip_ir_metada
         auto TSM = std::unique_ptr<orc::ThreadSafeModule>(unwrap(dump->TSM));
         //If TSM is not passed in, then the context MUST be locked externally.
         //RAII will release the lock
-        Optional<orc::ThreadSafeContext::Lock> lock;
+        std::optional<orc::ThreadSafeContext::Lock> lock;
         if (TSM) {
             lock.emplace(TSM->getContext().getLock());
         }
@@ -1107,11 +1103,7 @@ static void jl_dump_asm_internal(
                             const MCOperand &OpI = Inst.getOperand(Op);
                             if (OpI.isImm()) {
                                 int64_t imm = OpI.getImm();
-                                #if JL_LLVM_VERSION >= 170000
                                 if (opinfo.operands()[Op].OperandType == MCOI::OPERAND_PCREL)
-                                #else
-                                if (opinfo.OpInfo[Op].OperandType == MCOI::OPERAND_PCREL)
-                                #endif
                                     imm += Fptr + Index;
                                 const char *name = DisInfo.lookupSymbolName(imm);
                                 if (name)

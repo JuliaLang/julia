@@ -60,11 +60,7 @@ static Value *decay_derived(jl_codectx_t &ctx, Value *V)
     if (T->getPointerAddressSpace() == AddressSpace::Derived)
         return V;
     // Once llvm deletes pointer element types, we won't need it here any more either.
-    #if JL_LLVM_VERSION >= 170000
     Type *NewT = PointerType::get(T, AddressSpace::Derived);
-    #else
-    Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
-    #endif
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -74,11 +70,7 @@ static Value *maybe_decay_tracked(jl_codectx_t &ctx, Value *V)
     Type *T = V->getType();
     if (T->getPointerAddressSpace() != AddressSpace::Tracked)
         return V;
-    #if JL_LLVM_VERSION >= 170000
     Type *NewT = PointerType::get(T, AddressSpace::Derived);
-    #else
-    Type *NewT = PointerType::getWithSamePointeeType(cast<PointerType>(T), AddressSpace::Derived);
-    #endif
     return ctx.builder.CreateAddrSpaceCast(V, NewT);
 }
 
@@ -399,19 +391,17 @@ static llvm::SmallVector<Value*,0> get_gc_roots_for(jl_codectx_t &ctx, const jl_
 
 static void jl_temporary_root(jl_codegen_params_t &ctx, jl_value_t *val);
 static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val);
-static inline Constant *literal_static_pointer_val(const void *p, Type *T);
 
-static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
+static Constant *julia_pgv(jl_codegen_params_t &params, Module *M, const char *cname, void *addr)
 {
     // emit a GlobalVariable for a jl_value_t named "cname"
     // store the name given so we can reuse it (facilitating merging later)
     // so first see if there already is a GlobalVariable for this address
-    GlobalVariable* &gv = ctx.emission_context.global_targets[addr];
-    Module *M = jl_Module;
+    GlobalVariable* &gv = params.global_targets[addr];
     StringRef localname;
     std::string gvname;
     if (!gv) {
-        uint64_t id = jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1); // TODO: use ctx.emission_context.global_targets.size()
+        uint64_t id = jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1); // TODO: use params.global_targets.size()
         raw_string_ostream(gvname) << cname << id;
         localname = StringRef(gvname);
     }
@@ -421,9 +411,9 @@ static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
             gv = cast_or_null<GlobalVariable>(M->getNamedValue(localname));
     }
     if (gv == nullptr)
-        gv = new GlobalVariable(*M, ctx.types().T_pjlvalue,
+        gv = new GlobalVariable(*M, getPointerTy(M->getContext()),
                                 false, GlobalVariable::ExternalLinkage,
-                                NULL, localname);
+                                nullptr, localname);
     // LLVM passes sometimes strip metadata when moving load around
     // since the load at the new location satisfy the same condition as the original one.
     // Mark the global as constant to LLVM code using our own metadata
@@ -434,7 +424,7 @@ static Constant *julia_pgv(jl_codectx_t &ctx, const char *cname, void *addr)
     return gv;
 }
 
-static Constant *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr)
+static Constant *julia_pgv(jl_codegen_params_t &params, Module *M, const char *prefix, jl_sym_t *name, jl_module_t *mod, void *addr)
 {
     // emit a GlobalVariable for a jl_value_t, using the prefix, name, and module to
     // to create a readable name of the form prefixModA.ModB.name#
@@ -459,53 +449,49 @@ static Constant *julia_pgv(jl_codectx_t &ctx, const char *prefix, jl_sym_t *name
     finalname.resize(orig_end + prefix_name.size());
     std::reverse_copy(prefix_name.begin(), prefix_name.end(), finalname.begin() + orig_end);
     std::reverse(finalname.begin(), finalname.end());
-    return julia_pgv(ctx, finalname.c_str(), addr);
+    return julia_pgv(params, M, finalname.c_str(), addr);
 }
 
 static JuliaVariable *julia_const_gv(jl_value_t *val);
-static Constant *literal_pointer_val_slot(jl_codectx_t &ctx, jl_value_t *p)
+Constant *literal_pointer_val_slot(jl_codegen_params_t &params, Module *M, jl_value_t *p)
 {
     // emit a pointer to a jl_value_t* which will allow it to be valid across reloading code
     // also, try to give it a nice name for gdb, for easy identification
     if (JuliaVariable *gv = julia_const_gv(p)) {
         // if this is a known special object, use the existing GlobalValue
-        return prepare_global_in(jl_Module, gv);
+        return prepare_global_in(M, gv);
     }
     if (jl_is_datatype(p)) {
         jl_datatype_t *addr = (jl_datatype_t*)p;
         if (addr->smalltag) {
             // some common builtin datatypes have a special pool for accessing them by smalltag id
-            Constant *tag = ConstantInt::get(getInt32Ty(ctx.builder.getContext()), addr->smalltag << 4);
-            Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(ctx.builder.getContext()), prepare_global_in(jl_Module, jl_small_typeof_var), tag);
-            auto ty = ctx.types().T_ppjlvalue;
-            if (ty->getPointerAddressSpace() == smallp->getType()->getPointerAddressSpace())
-                return ConstantExpr::getBitCast(smallp, ty);
-            else {
-                Constant *newsmallp = ConstantExpr::getAddrSpaceCast(smallp, ty);
-                return ConstantExpr::getBitCast(newsmallp, ty);
-            }
+            Constant *tag = ConstantInt::get(getInt32Ty(M->getContext()), addr->smalltag << 4);
+            Constant *smallp = ConstantExpr::getInBoundsGetElementPtr(getInt8Ty(M->getContext()), prepare_global_in(M, jl_small_typeof_var), tag);
+            if (smallp->getType()->getPointerAddressSpace() != 0)
+                smallp = ConstantExpr::getAddrSpaceCast(smallp, getPointerTy(M->getContext()));
+            return smallp;
         }
         // DataTypes are prefixed with a +
-        return julia_pgv(ctx, "+", addr->name->name, addr->name->module, p);
+        return julia_pgv(params, M, "+", addr->name->name, addr->name->module, p);
     }
     if (jl_is_method(p)) {
         jl_method_t *m = (jl_method_t*)p;
         // functions are prefixed with a -
-        return julia_pgv(ctx, "-", m->name, m->module, p);
+        return julia_pgv(params, M, "-", m->name, m->module, p);
     }
     if (jl_is_method_instance(p)) {
         jl_method_instance_t *linfo = (jl_method_instance_t*)p;
         // Type-inferred functions are also prefixed with a -
         if (jl_is_method(linfo->def.method))
-            return julia_pgv(ctx, "-", linfo->def.method->name, linfo->def.method->module, p);
+            return julia_pgv(params, M, "-", linfo->def.method->name, linfo->def.method->module, p);
     }
     if (jl_is_symbol(p)) {
         jl_sym_t *addr = (jl_sym_t*)p;
         // Symbols are prefixed with jl_sym#
-        return julia_pgv(ctx, "jl_sym#", addr, NULL, p);
+        return julia_pgv(params, M, "jl_sym#", addr, NULL, p);
     }
     // something else gets just a generic name
-    return julia_pgv(ctx, "jl_global#", p);
+    return julia_pgv(params, M, "jl_global#", p);
 }
 
 static size_t dereferenceable_size(jl_value_t *jt)
@@ -578,7 +564,7 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p)
 {
     if (p == NULL)
         return Constant::getNullValue(ctx.types().T_pjlvalue);
-    Value *pgv = literal_pointer_val_slot(ctx, p);
+    Value *pgv = literal_pointer_val_slot(ctx.emission_context, jl_Module, p);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     auto load = ai.decorateInst(maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))),
@@ -618,7 +604,7 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
     // emit a literal_pointer_val to a jl_binding_t
     // binding->value are prefixed with *
     jl_globalref_t *gr = b->globalref;
-    Value *pgv = gr ? julia_pgv(ctx, "*", gr->name, gr->mod, b) : julia_pgv(ctx, "*jl_bnd#", b);
+    Value *pgv = gr ? julia_pgv(ctx.emission_context, jl_Module, "*", gr->name, gr->mod, b) : julia_pgv(ctx.emission_context, jl_Module, "*jl_bnd#", b);
     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
     auto load = ai.decorateInst(ctx.builder.CreateAlignedLoad(ctx.types().T_pjlvalue, pgv, Align(sizeof(void*))));
     setName(ctx.emission_context, load, pgv->getName());
@@ -1010,54 +996,6 @@ static void emit_memcpy_llvm(jl_codectx_t &ctx, Value *dst, jl_aliasinfo_t const
 {
     if (sz == 0)
         return;
-    #if JL_LLVM_VERSION < 170000
-    // If the types are small and simple, use load and store directly.
-    // Going through memcpy can cause LLVM (e.g. SROA) to create bitcasts between float and int
-    // that interferes with other optimizations.
-    // TODO: Restore this for opaque pointers? Needs extra type information from the caller.
-    if (ctx.builder.getContext().supportsTypedPointers() && sz <= 64) {
-        // The size limit is arbitrary but since we mainly care about floating points and
-        // machine size vectors this should be enough.
-        const DataLayout &DL = jl_Module->getDataLayout();
-        auto srcty = cast<PointerType>(src->getType());
-        //TODO unsafe nonopaque pointer
-        auto srcel = srcty->getNonOpaquePointerElementType();
-        auto dstty = cast<PointerType>(dst->getType());
-        //TODO unsafe nonopaque pointer
-        auto dstel = dstty->getNonOpaquePointerElementType();
-        while (srcel->isArrayTy() && srcel->getArrayNumElements() == 1) {
-            src = ctx.builder.CreateConstInBoundsGEP2_32(srcel, src, 0, 0);
-            srcel = srcel->getArrayElementType();
-            srcty = srcel->getPointerTo();
-        }
-        while (dstel->isArrayTy() && dstel->getArrayNumElements() == 1) {
-            dst = ctx.builder.CreateConstInBoundsGEP2_32(dstel, dst, 0, 0);
-            dstel = dstel->getArrayElementType();
-            dstty = dstel->getPointerTo();
-        }
-
-        llvm::Type *directel = nullptr;
-        if (srcel->isSized() && srcel->isSingleValueType() && DL.getTypeStoreSize(srcel) == sz) {
-            directel = srcel;
-            dst = emit_bitcast(ctx, dst, srcty);
-        }
-        else if (dstel->isSized() && dstel->isSingleValueType() &&
-                DL.getTypeStoreSize(dstel) == sz) {
-            directel = dstel;
-            src = emit_bitcast(ctx, src, dstty);
-        }
-        if (directel) {
-            if (isa<Instruction>(src) && !src->hasName())
-                setName(ctx.emission_context, src, "memcpy_refined_src");
-            if (isa<Instruction>(dst) && !dst->hasName())
-                setName(ctx.emission_context, dst, "memcpy_refined_dst");
-            auto val = src_ai.decorateInst(ctx.builder.CreateAlignedLoad(directel, src, MaybeAlign(align_src), is_volatile));
-            dst_ai.decorateInst(ctx.builder.CreateAlignedStore(val, dst, align_dst, is_volatile));
-            ++SkippedMemcpys;
-            return;
-        }
-    }
-    #endif
     ++EmittedMemcpys;
 
     // the memcpy intrinsic does not allow to specify different alias tags
@@ -1408,7 +1346,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
                     ptr = get_pointer_to_constant(ctx.emission_context, ConstantInt::get(expr_type, jt->smalltag << 4), Align(sizeof(jl_value_t*)), StringRef("_j_smalltag_") + jl_symbol_name(jt->name->name), *jl_Module);
                 }
                 else {
-                    ptr = ConstantExpr::getBitCast(literal_pointer_val_slot(ctx, (jl_value_t*)jt), datatype_or_p->getType());
+                    ptr = ConstantExpr::getBitCast(literal_pointer_val_slot(ctx.emission_context, jl_Module, (jl_value_t*)jt), datatype_or_p->getType());
                 }
                 datatype_or_p = ctx.builder.CreateSelect(cmp, ptr, datatype_or_p);
                 setName(ctx.emission_context, datatype_or_p, "typetag_ptr");
@@ -1604,17 +1542,22 @@ static void emit_error(jl_codectx_t &ctx, const Twine &txt)
 }
 
 // DO NOT PASS IN A CONST CONDITION!
-static void error_unless(jl_codectx_t &ctx, Value *cond, const Twine &msg)
+static void error_unless(jl_codectx_t &ctx, Function *F, Value *cond, const Twine &msg)
 {
     ++EmittedConditionalErrors;
     BasicBlock *failBB = BasicBlock::Create(ctx.builder.getContext(), "fail", ctx.f);
     BasicBlock *passBB = BasicBlock::Create(ctx.builder.getContext(), "pass");
     ctx.builder.CreateCondBr(cond, passBB, failBB);
     ctx.builder.SetInsertPoint(failBB);
-    just_emit_error(ctx, prepare_call(jlerror_func), msg);
+    just_emit_error(ctx, F, msg);
     ctx.builder.CreateUnreachable();
     passBB->insertInto(ctx.f);
     ctx.builder.SetInsertPoint(passBB);
+}
+
+static void error_unless(jl_codectx_t &ctx, Value *cond, const Twine &msg)
+{
+    error_unless(ctx, prepare_call(jlerror_func), cond, msg);
 }
 
 static void raise_exception(jl_codectx_t &ctx, Value *exc,
@@ -1940,7 +1883,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
     // actual `isa` calls, this optimization should already have been performed upstream
     // anyway, but having this optimization in codegen might still be beneficial for
     // `typeassert`s if we can make it correct.
-    Optional<bool> known_isa;
+    std::optional<bool> known_isa;
     jl_value_t *intersected_type = type;
     if (x.constant)
         known_isa = jl_isa(x.constant, type);
@@ -3372,7 +3315,7 @@ static Value *emit_genericmemoryptr(jl_codectx_t &ctx, Value *mem, const jl_data
     LoadInst *LI = ctx.builder.CreateAlignedLoad(PPT, addr, Align(sizeof(char*)));
     LI->setOrdering(AtomicOrdering::NotAtomic);
     LI->setMetadata(LLVMContext::MD_nonnull, MDNode::get(ctx.builder.getContext(), None));
-    jl_aliasinfo_t aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+    jl_aliasinfo_t aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
     aliasinfo.decorateInst(LI);
     Value *ptr = LI;
     if (AS) {
@@ -3398,7 +3341,7 @@ static Value *emit_genericmemoryowner(jl_codectx_t &ctx, Value *t)
     return emit_guarded_test(ctx, foreign, t, [&] {
             addr = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_jlgenericmemory, m, 1);
             LoadInst *owner = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, addr, Align(sizeof(void*)));
-            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_const);
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
             ai.decorateInst(owner);
             return ctx.builder.CreateSelect(ctx.builder.CreateIsNull(owner), t, owner);
         });
@@ -3786,11 +3729,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
     for (auto *User : Val->users()) {
         if (isa<GetElementPtrInst>(User)) {
             GetElementPtrInst *Inst = cast<GetElementPtrInst>(User);
-            #if JL_LLVM_VERSION >= 170000
             Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
-            #else
-            Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
-            #endif
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
         else if (isa<IntrinsicInst>(User)) {
@@ -3799,11 +3738,7 @@ static void recursively_adjust_ptr_type(llvm::Value *Val, unsigned FromAS, unsig
         }
         else if (isa<BitCastInst>(User)) {
             BitCastInst *Inst = cast<BitCastInst>(User);
-            #if JL_LLVM_VERSION >= 170000
             Inst->mutateType(PointerType::get(Inst->getType(), ToAS));
-            #else
-            Inst->mutateType(PointerType::getWithSamePointeeType(cast<PointerType>(Inst->getType()), ToAS));
-            #endif
             recursively_adjust_ptr_type(Inst, FromAS, ToAS);
         }
     }
@@ -4490,6 +4425,174 @@ static int compare_cgparams(const jl_cgparams_t *a, const jl_cgparams_t *b)
            (a->use_jlplt == b->use_jlplt);
 }
 #endif
+
+static auto *emit_genericmemory_unchecked(jl_codectx_t &ctx, Value *cg_nbytes, Value *cg_typ)
+{
+    auto ptls = get_current_ptls(ctx);
+    auto call = prepare_call(jl_alloc_genericmemory_unchecked_func);
+    auto *alloc = ctx.builder.CreateCall(call, { ptls, cg_nbytes, cg_typ});
+    alloc->setAttributes(call->getAttributes());
+    alloc->addRetAttr(Attribute::getWithAlignment(alloc->getContext(), Align(JL_HEAP_ALIGNMENT)));
+    call->addRetAttr(Attribute::getWithDereferenceableBytes(call->getContext(), sizeof(jl_genericmemory_t)));
+    return alloc;
+}
+
+static void emit_memory_zeroinit_and_stores(jl_codectx_t &ctx, jl_datatype_t *typ, Value* alloc, Value* nbytes, Value* nel, int zi)
+{
+    auto arg_typename = [&] JL_NOTSAFEPOINT {
+        std::string type_str;
+        auto eltype = jl_tparam1(typ);
+        if (jl_is_datatype(eltype))
+            type_str = jl_symbol_name(((jl_datatype_t*)eltype)->name->name);
+        else if (jl_is_uniontype(eltype))
+            type_str = "Union";
+        else
+            type_str = "<unknown type>";
+        return "Memory{" + type_str + "}[]";
+    };
+    setName(ctx.emission_context, alloc, arg_typename);
+    // set length (jl_alloc_genericmemory_unchecked_func doesn't have it)
+    Value *decay_alloc = decay_derived(ctx, alloc);
+    Value *len_field = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 0);
+    auto len_store = ctx.builder.CreateAlignedStore(nel, len_field, Align(sizeof(void*)));
+    auto aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memorylen);
+    aliasinfo.decorateInst(len_store);
+    // zeroinit pointers and unions
+    if (zi) {
+        Value *memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        auto *load = ctx.builder.CreateAlignedLoad(ctx.types().T_ptr, memory_ptr, Align(sizeof(void*)));
+        aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
+        aliasinfo.decorateInst(load);
+        auto int8t = getInt8Ty(ctx.builder.getContext());
+        ctx.builder.CreateMemSet(load, ConstantInt::get(int8t, 0), nbytes, Align(sizeof(void*)));
+    }
+    return;
+}
+
+
+static jl_cgval_t emit_const_len_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, size_t nel, jl_genericmemory_t *inst)
+{
+    if (nel == 0) {
+        Value *empty_alloc = track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)inst));
+        return mark_julia_type(ctx, empty_alloc, true, typ);
+    }
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)typ)->layout;
+    assert(((jl_datatype_t*)typ)->has_concrete_subtype && layout != NULL);
+    size_t elsz = layout->size;
+    int isboxed = layout->flags.arrayelem_isboxed;
+    int isunion = layout->flags.arrayelem_isunion;
+    int zi = ((jl_datatype_t*)typ)->zeroinit;
+    if (isboxed)
+        elsz = sizeof(void*);
+    size_t nbytes;
+    bool overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
+    if (isunion) {
+        // an extra byte for each isbits union memory element, stored at m->ptr + m->length
+        overflow |= __builtin_add_overflow(nbytes, nel, &nbytes);
+    }
+    // overflow if signed size is too big or nel is too big (the latter matters iff elsz==0)
+    ssize_t tmp=1;
+    overflow |= __builtin_add_overflow(nel, 1, &tmp) || __builtin_add_overflow(nbytes, 1, &tmp);
+    if (overflow)
+        emit_error(ctx, prepare_call(jlargumenterror_func), "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
+
+    auto T_size = ctx.types().T_size;
+    auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
+    auto cg_nbytes = ConstantInt::get(T_size, nbytes);
+    auto cg_nel = ConstantInt::get(T_size, nel);
+    size_t tot = nbytes + LLT_ALIGN(sizeof(jl_genericmemory_t),JL_SMALL_BYTE_ALIGNMENT);
+    // if allocation fits within GC pools
+    int pooled = tot <= GC_MAX_SZCLASS;
+    Value *alloc, *decay_alloc, *memory_ptr;
+    jl_aliasinfo_t aliasinfo;
+    if (pooled) {
+        alloc = emit_allocobj(ctx, tot, cg_typ, false, JL_SMALL_BYTE_ALIGNMENT);
+        decay_alloc = decay_derived(ctx, alloc);
+        memory_ptr = ctx.builder.CreateStructGEP(ctx.types().T_jlgenericmemory, decay_alloc, 1);
+        setName(ctx.emission_context, memory_ptr, "memory_ptr");
+        auto objref = emit_pointer_from_objref(ctx, alloc);
+        Value *memory_data = emit_ptrgep(ctx, objref, JL_SMALL_BYTE_ALIGNMENT);
+        auto *store = ctx.builder.CreateAlignedStore(memory_data, memory_ptr, Align(sizeof(void*)));
+        aliasinfo = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_memoryptr);
+        aliasinfo.decorateInst(store);
+        setName(ctx.emission_context, memory_data, "memory_data");
+    } else { // just use the dynamic length version since the malloc will be slow anyway
+        alloc = emit_genericmemory_unchecked(ctx, cg_nbytes, cg_typ);
+    }
+    emit_memory_zeroinit_and_stores(ctx, typ, alloc, cg_nbytes, cg_nel, zi);
+    return mark_julia_type(ctx, alloc, true, typ);
+}
+
+static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval_t nel, jl_genericmemory_t *inst)
+{
+    emit_typecheck(ctx, nel, (jl_value_t*)jl_long_type, "memorynew");
+    nel = update_julia_type(ctx, nel, (jl_value_t*)jl_long_type);
+    if (nel.typ == jl_bottom_type)
+        return jl_cgval_t();
+
+    const jl_datatype_layout_t *layout = ((jl_datatype_t*)typ)->layout;
+    assert(((jl_datatype_t*)typ)->has_concrete_subtype && layout != NULL);
+    size_t elsz = layout->size;
+    int isboxed = layout->flags.arrayelem_isboxed;
+    int isunion = layout->flags.arrayelem_isunion;
+    int zi = ((jl_datatype_t*)typ)->zeroinit;
+    if (isboxed)
+        elsz = sizeof(void*);
+
+    auto T_size = ctx.types().T_size;
+    BasicBlock *emptymemBB, *nonemptymemBB, *retvalBB;
+    emptymemBB = BasicBlock::Create(ctx.builder.getContext(), "emptymem");
+    nonemptymemBB = BasicBlock::Create(ctx.builder.getContext(), "nonemptymem");
+    retvalBB = BasicBlock::Create(ctx.builder.getContext(), "retval");
+    auto nel_unboxed = emit_unbox(ctx, ctx.types().T_size, nel, (jl_value_t*)jl_long_type);
+    Value *memorynew_empty = ctx.builder.CreateICmpEQ(nel_unboxed, ConstantInt::get(T_size, 0));
+    setName(ctx.emission_context, memorynew_empty, "memorynew_empty");
+    ctx.builder.CreateCondBr(memorynew_empty, emptymemBB, nonemptymemBB);
+    // if nel == 0
+    emptymemBB->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(emptymemBB);
+    auto emptyalloc = track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)inst));
+    ctx.builder.CreateBr(retvalBB);
+    nonemptymemBB->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(nonemptymemBB);
+
+    auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
+    auto cg_elsz = ConstantInt::get(T_size, elsz);
+
+    FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, Intrinsic::smul_with_overflow, ArrayRef<Type*>(T_size));
+    // compute nbytes with possible overflow
+    Value *prod_with_overflow = ctx.builder.CreateCall(intr, {nel_unboxed, cg_elsz});
+    Value *nbytes = ctx.builder.CreateExtractValue(prod_with_overflow, 0);
+    Value *overflow = ctx.builder.CreateExtractValue(prod_with_overflow, 1);
+    if (isunion) {
+        // if isunion, we need to allocate the union selector bytes as well
+        intr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sadd_with_overflow, ArrayRef<Type*>(T_size));
+        Value *add_with_overflow = ctx.builder.CreateCall(intr, {nel_unboxed, nbytes});
+        nbytes = ctx.builder.CreateExtractValue(add_with_overflow, 0);
+        Value *overflow1 = ctx.builder.CreateExtractValue(add_with_overflow, 1);
+        overflow = ctx.builder.CreateOr(overflow, overflow1);
+    }
+    Value *negnel = ctx.builder.CreateICmpSLT(nel_unboxed, ConstantInt::get(T_size, 0));
+    overflow = ctx.builder.CreateOr(overflow, negnel);
+    auto cg_typemax_int = ConstantInt::get(T_size, (((size_t)-1)>>1)-1);
+    Value *tobignel = ctx.builder.CreateICmpSLT(cg_typemax_int, elsz == 0 ? nel_unboxed: nbytes);
+    overflow = ctx.builder.CreateOr(overflow, tobignel);
+    Value *notoverflow = ctx.builder.CreateNot(overflow);
+    error_unless(ctx, prepare_call(jlargumenterror_func), notoverflow, "invalid GenericMemory size: the number of elements is either negative or too large for system address width");
+    // actually allocate the memory
+
+    Value *alloc = emit_genericmemory_unchecked(ctx, nbytes, cg_typ);
+    emit_memory_zeroinit_and_stores(ctx, typ, alloc, nbytes, nel_unboxed, zi);
+    ctx.builder.CreateBr(retvalBB);
+    nonemptymemBB = ctx.builder.GetInsertBlock();
+    // phi node to choose which side of branch
+    retvalBB->insertInto(ctx.f);
+    ctx.builder.SetInsertPoint(retvalBB);
+    auto phi = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 2);
+    phi->addIncoming(emptyalloc, emptymemBB);
+    phi->addIncoming(alloc, nonemptymemBB);
+    return mark_julia_type(ctx, phi, true, typ);
+}
 
 static jl_cgval_t _emit_memoryref(jl_codectx_t &ctx, Value *mem, Value *data, const jl_datatype_layout_t *layout, jl_value_t *typ)
 {

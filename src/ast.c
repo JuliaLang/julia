@@ -178,43 +178,7 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     jl_sym_t *var = scmsym_to_julia(fl_ctx, args[0]);
     jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    return (bpart != NULL && decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction)) == BINDING_KIND_GLOBAL) ? fl_ctx->T : fl_ctx->F;
-}
-
-static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
-{
-    // tells whether a var is defined, in the sense that accessing it is nothrow
-    // can take either a symbol or a module and a symbol
-    jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
-    jl_module_t *mod = ctx->module;
-    jl_sym_t *var = NULL;
-    if (nargs == 1) {
-        (void)tosymbol(fl_ctx, args[0], "nothrow-julia-global");
-        var = scmsym_to_julia(fl_ctx, args[0]);
-    }
-    else {
-        argcount(fl_ctx, "nothrow-julia-global", nargs, 2);
-        value_t argmod = args[0];
-        if (iscvalue(argmod) && cv_class((cvalue_t*)ptr(argmod)) == jl_ast_ctx(fl_ctx)->jvtype) {
-            mod = *(jl_module_t**)cv_data((cvalue_t*)ptr(argmod));
-            JL_GC_PROMISE_ROOTED(mod);
-        } else {
-            if (!iscons(argmod) || !issymbol(car_(argmod)) || scmsym_to_julia(fl_ctx, car_(argmod)) != jl_thismodule_sym) {
-                lerrorf(fl_ctx, fl_ctx->ArgError, "nothrow-julia-global: Unknown globalref module kind");
-            }
-        }
-        (void)tosymbol(fl_ctx, args[1], "nothrow-julia-global");
-        var = scmsym_to_julia(fl_ctx, args[1]);
-    }
-    jl_binding_t *b = jl_get_module_binding(mod, var, 0);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    jl_ptr_kind_union_t pku = jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
-    if (!bpart)
-        return fl_ctx->F;
-    if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
-        return fl_ctx->F;
-    return  (jl_bkind_is_some_constant(decode_restriction_kind(pku)) ?
-        decode_restriction_value(pku) : jl_atomic_load_relaxed(&b->value)) != NULL ? fl_ctx->T : fl_ctx->F;
+    return (bpart != NULL && bpart->kind == BINDING_KIND_GLOBAL) ? fl_ctx->T : fl_ctx->F;
 }
 
 // Used to generate a unique suffix for a given symbol (e.g. variable or type name)
@@ -288,7 +252,6 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global }, // TODO: can we kill this safepoint
-    { "nothrow-julia-global", fl_nothrow_julia_global },
     { "current-julia-module-counter", fl_module_unique_name },
     { "julia-scalar?", fl_julia_scalar },
     { NULL, NULL }
@@ -706,6 +669,8 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
     if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jl_ast_ctx(fl_ctx)->jvtype) {
         return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
     }
+    fl_print(fl_ctx, ios_stderr, e);
+    ios_putc('\n', ios_stderr);
     jl_error("malformed tree");
 }
 
@@ -1402,6 +1367,34 @@ JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *
 JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
 {
     return jl_expand_stmt_with_loc(expr, inmodule, "none", 0);
+}
+
+jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)
+{
+    JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
+    jl_expr_t *expr = jl_exprn(jl_empty_sym, 3);
+    JL_GC_PUSH1(&expr);
+    jl_exprargset(expr, 0, thistype);
+    jl_exprargset(expr, 1, jl_box_long(nfields));
+    jl_exprargset(expr, 2, jl_box_long(nsparams));
+    jl_code_info_t *ci = (jl_code_info_t*)jl_call_scm_on_ast_and_loc("jl-default-outer-ctor-body", (jl_value_t*)expr, inmodule, file, line);
+    JL_GC_POP();
+    assert(jl_is_code_info(ci));
+    return ci;
+}
+
+jl_code_info_t *jl_inner_ctor_body(jl_array_t *fieldkinds, jl_module_t *inmodule, const char *file, int line)
+{
+    JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
+    jl_expr_t *expr = jl_exprn(jl_empty_sym, 0);
+    JL_GC_PUSH1(&expr);
+    expr->args = fieldkinds;
+    jl_code_info_t *ci = (jl_code_info_t*)jl_call_scm_on_ast_and_loc("jl-default-inner-ctor-body", (jl_value_t*)expr, inmodule, file, line);
+    JL_GC_POP();
+    assert(jl_is_code_info(ci));
+    return ci;
 }
 
 

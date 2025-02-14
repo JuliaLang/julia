@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Symbol
+
 """
 The `AbstractString` type is the supertype of all string implementations in
 Julia. Strings are encodings of sequences of [Unicode](https://unicode.org/)
@@ -194,12 +196,7 @@ getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
 function get(s::AbstractString, i::Integer, default)
-# TODO: use ternary once @inbounds is expression-like
-    if checkbounds(Bool, s, i)
-        @inbounds return s[i]
-    else
-        return default
-    end
+    checkbounds(Bool, s, i) ? (@inbounds s[i]) : default
 end
 
 ## bounds checking ##

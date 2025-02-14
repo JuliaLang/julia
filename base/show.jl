@@ -35,7 +35,7 @@ function _isself(ft::DataType)
     isdefined(ftname, :mt) || return false
     name = ftname.mt.name
     mod = parentmodule(ft)  # NOTE: not necessarily the same as ft.name.mt.module
-    return isdefined(mod, name) && ft == typeof(getfield(mod, name))
+    return invokelatest(isdefinedglobal, mod, name) && ft == typeof(invokelatest(getglobal, mod, name))
 end
 
 function show(io::IO, ::MIME"text/plain", f::Function)
@@ -542,8 +542,8 @@ function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
         fallback(io, f)
     elseif compact
         print(io, mt.name)
-    elseif isdefined(mt, :module) && isdefined(mt.module, mt.name) &&
-        getfield(mt.module, mt.name) === f
+    elseif isdefined(mt, :module) && isdefinedglobal(mt.module, mt.name) &&
+            getglobal(mt.module, mt.name) === f
         # this used to call the removed internal function `is_exported_from_stdlib`, which effectively
         # just checked for exports from Core and Base.
         mod = get(io, :module, UsesCoreAndBaseOnly)
@@ -618,7 +618,7 @@ function make_typealias(@nospecialize(x::Type))
     Any === x && return nothing
     x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
-    Core in mods && push!(mods, Base)
+    replace!(mods, Core=>Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     xenv = UnionAll[]
     for p in uniontypes(unwrap_unionall(x))
@@ -1021,19 +1021,25 @@ end
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
 function isvisible(sym::Symbol, parent::Module, from::Module)
-    owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), parent, sym)
-    from_owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), from, sym)
-    return owner !== C_NULL && from_owner === owner &&
-        !isdeprecated(parent, sym) &&
-        isdefined(from, sym) # if we're going to return true, force binding resolution
+    isdeprecated(parent, sym) && return false
+    isdefinedglobal(from, sym) || return false
+    parent_binding = convert(Core.Binding, GlobalRef(parent, sym))
+    from_binding = convert(Core.Binding, GlobalRef(from, sym))
+    while true
+        from_binding === parent_binding && return true
+        partition = lookup_binding_partition(tls_world_age(), from_binding)
+        is_some_imported(binding_kind(partition)) || break
+        from_binding = partition_restriction(partition)::Core.Binding
+    end
+    return false
 end
 
 function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
     if globname !== nothing
         globname_str = string(globname::Symbol)
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
-                isbindingresolved(tn.module, globname) && isdefined(tn.module, globname) &&
-                isconcretetype(tn.wrapper) && isa(getfield(tn.module, globname), tn.wrapper))
+                isdefinedglobal(tn.module, globname) &&
+                isconcretetype(tn.wrapper) && isa(getglobal(tn.module, globname), tn.wrapper))
             return true
         end
     end
@@ -1045,7 +1051,7 @@ function check_world_bounded(tn::Core.TypeName)
     isdefined(bnd, :partitions) || return nothing
     partition = @atomic bnd.partitions
     while true
-        if is_some_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
+        if is_defined_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
             max_world = @atomic partition.max_world
             max_world == typemax(UInt) && return nothing
             return Int(partition.min_world):Int(max_world)
@@ -1353,7 +1359,13 @@ end
 show(io::IO, mi::Core.MethodInstance) = show_mi(io, mi)
 function show(io::IO, codeinst::Core.CodeInstance)
     print(io, "CodeInstance for ")
-    show_mi(io, codeinst.def)
+    def = codeinst.def
+    if isa(def, Core.ABIOverride)
+        show_mi(io, def.def)
+        print(io, " (ABI Overridden)")
+    else
+        show_mi(io, def::MethodInstance)
+    end
 end
 
 function show_mi(io::IO, mi::Core.MethodInstance, from_stackframe::Bool=false)
@@ -1751,9 +1763,15 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
     print(io, cl)
 end
 
+const keyword_syms = Set([
+    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
+    :end, :export, :false, :finally, :for, :function, :global, :if, :import,
+    :let, :local, :macro, :module, :public, :quote, :return, :struct, :true,
+    :try, :using, :while ])
+
 function is_valid_identifier(sym)
-    return isidentifier(sym) || (
-        _isoperator(sym) &&
+    return (isidentifier(sym) && !(sym in keyword_syms)) ||
+        (_isoperator(sym) &&
         !(sym in (Symbol("'"), :(::), :?)) &&
         !is_syntactic_operator(sym)
     )
@@ -2821,7 +2839,7 @@ function show(io::IO, vm::Core.TypeofVararg)
     end
 end
 
-Compiler.include(Compiler.IRShow, "ssair/show.jl") # define `show` for the compiler types
+Compiler.load_irshow!()
 const IRShow = Compiler.IRShow # an alias for compatibility
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
@@ -3144,7 +3162,7 @@ Print to a stream `io`, or return a string `str`, giving a brief description of
 a value. By default returns `string(typeof(x))`, e.g. [`Int64`](@ref).
 
 For arrays, returns a string of size and type info,
-e.g. `10-element Array{Int64,1}`.
+e.g. `10-element Vector{Int64}` or `9×4×5 Array{Float64, 3}`.
 
 # Examples
 ```jldoctest
@@ -3259,7 +3277,9 @@ showindices(io) = nothing
 function showarg(io::IO, r::ReshapedArray, toplevel)
     print(io, "reshape(")
     showarg(io, parent(r), false)
-    print(io, ", ", join(r.dims, ", "))
+    if !isempty(r.dims)
+        print(io, ", ", join(r.dims, ", "))
+    end
     print(io, ')')
     toplevel && print(io, " with eltype ", eltype(r))
     return nothing
@@ -3356,24 +3376,29 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     end
     print(io, " - ")
     kind = binding_kind(partition)
-    if is_some_const_binding(kind)
+    if kind == BINDING_KIND_BACKDATED_CONST
+        print(io, "backdated constant binding to ")
+        print(io, partition_restriction(partition))
+    elseif is_defined_const_binding(kind)
         print(io, "constant binding to ")
         print(io, partition_restriction(partition))
+    elseif kind == BINDING_KIND_UNDEF_CONST
+        print(io, "undefined const binding")
     elseif kind == BINDING_KIND_GUARD
         print(io, "undefined binding - guard entry")
     elseif kind == BINDING_KIND_FAILED
         print(io, "ambiguous binding - guard entry")
     elseif kind == BINDING_KIND_DECLARED
-        print(io, "undefined, but declared using `global` - guard entry")
+        print(io, "weak global binding declared using `global` (implicit type Any)")
     elseif kind == BINDING_KIND_IMPLICIT
         print(io, "implicit `using` from ")
-        print(io, partition_restriction(partition))
+        print(io, partition_restriction(partition).globalref)
     elseif kind == BINDING_KIND_EXPLICIT
         print(io, "explicit `using` from ")
-        print(io, partition_restriction(partition))
+        print(io, partition_restriction(partition).globalref)
     elseif kind == BINDING_KIND_IMPORTED
         print(io, "explicit `import` from ")
-        print(io, partition_restriction(partition))
+        print(io, partition_restriction(partition).globalref)
     else
         @assert kind == BINDING_KIND_GLOBAL
         print(io, "global variable with type ")

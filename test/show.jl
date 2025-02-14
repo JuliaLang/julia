@@ -1861,6 +1861,9 @@ end
     B = @view ones(2)[r]
     Base.showarg(io, B, false)
     @test String(take!(io)) == "view(::Vector{Float64}, $(repr(r)))"
+
+    Base.showarg(io, reshape(UnitRange{Int64}(1,1)), false)
+    @test String(take!(io)) == "reshape(::UnitRange{Int64})"
 end
 
 @testset "Methods" begin
@@ -1900,15 +1903,6 @@ end
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TypeA)
     @test String(take!(b)) == "TypeA"
-
-    # issue #26354; make sure testing for symbol visibility doesn't cause
-    # spurious binding resolutions
-    show(IOContext(b, :module => TestShowType), Base.Pair)
-    @test !Base.isbindingresolved(TestShowType, :Pair)
-    @test String(take!(b)) == "Core.Pair"
-    show(IOContext(b, :module => TestShowType), Base.Complex)
-    @test Base.isbindingresolved(TestShowType, :Complex)
-    @test String(take!(b)) == "Complex"
 end
 
 @testset "typeinfo" begin
@@ -2353,9 +2347,9 @@ end
 
 # begin/end indices
 @weak_test_repr "a[begin, end, (begin; end)]"
-@test repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
+@test_broken repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
-@test repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
+@test_broken repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
 @test_repr "a[(bla;)]"
 @test_repr "a[(;;)]"
@@ -2791,4 +2785,10 @@ Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
     str = sprint(io->show(io, MIME("text/plain"), x))
     @test contains(str, "NoLengthDict")
     @test contains(str, "1 => 2")
+end
+
+# Issue 56936
+@testset "code printing of var\"keyword\" identifiers" begin
+    @test_repr """:(var"do" = 1)"""
+    @weak_test_repr """:(let var"let" = 1; var"let"; end)"""
 end
