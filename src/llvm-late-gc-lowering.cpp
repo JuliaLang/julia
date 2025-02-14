@@ -2330,7 +2330,10 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
         auto pushGcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, 0)});
-        pushGcframe->insertAfter(pgcstack);
+        if (isa<Argument>(pgcstack))
+            pushGcframe->insertAfter(gcframe);
+        else
+            pushGcframe->insertAfter(cast<Instruction>(pgcstack));
 
         // we don't run memsetopt after this, so run a basic approximation of it
         // that removes any redundant memset calls in the prologue since getGCFrameSlot already includes the null store
@@ -2448,9 +2451,6 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     initAll(*F.getParent());
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
-    if (!pgcstack_getter && !adoptthread_func)
-        return CleanupIR(F, nullptr, CFGModified);
-
     pgcstack = getPGCstack(F);
     if (!pgcstack)
         return CleanupIR(F, nullptr, CFGModified);
