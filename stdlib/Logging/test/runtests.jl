@@ -285,7 +285,7 @@ end
             AboveMaxLevel === Logging.AboveMaxLevel
         end
         """)
-    @test m.run()
+    @test invokelatest(m.run)
 end
 
 @testset "custom log macro" begin

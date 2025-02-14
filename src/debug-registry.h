@@ -14,7 +14,7 @@ typedef struct {
     int64_t slide;
 } objfileentry_t;
 
-// Central registry for resolving function addresses to `jl_method_instance_t`s and
+// Central registry for resolving function addresses to `jl_code_instance_t`s and
 // originating `ObjectFile`s (for the DWARF debug info).
 //
 // A global singleton instance is notified by the JIT whenever a new object is emitted,
@@ -32,7 +32,7 @@ public:
             std::unique_lock<std::mutex> lock;
             CResourceT &resource;
 
-            Lock(std::mutex &mutex, CResourceT &resource) JL_NOTSAFEPOINT : lock(mutex), resource(resource) {}
+            Lock(std::mutex &mutex, CResourceT &resource) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER : lock(mutex), resource(resource) {}
             Lock(Lock &&) JL_NOTSAFEPOINT = default;
             Lock &operator=(Lock &&) JL_NOTSAFEPOINT = default;
 
@@ -56,7 +56,7 @@ public:
                 return resource;
             }
 
-            ~Lock() JL_NOTSAFEPOINT = default;
+            ~Lock() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
         };
     private:
 
@@ -68,21 +68,21 @@ public:
 
         Locked(ResourceT resource = ResourceT()) JL_NOTSAFEPOINT : mutex(), resource(std::move(resource)) {}
 
-        LockT operator*() JL_NOTSAFEPOINT {
+        LockT operator*() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
             return LockT(mutex, resource);
         }
 
-        ConstLockT operator*() const JL_NOTSAFEPOINT {
+        ConstLockT operator*() const JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER {
             return ConstLockT(mutex, resource);
         }
 
-        ~Locked() JL_NOTSAFEPOINT = default;
+        ~Locked() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
     };
 
     struct image_info_t {
         uint64_t base;
         jl_image_fptrs_t fptrs;
-        jl_method_instance_t **fvars_linfo;
+        jl_code_instance_t **fvars_cinst;
         size_t fvars_n;
     };
 
@@ -105,6 +105,7 @@ private:
         std::unique_ptr<const llvm::object::ObjectFile> object;
         std::unique_ptr<llvm::DIContext> context;
         LazyObjectInfo() = delete;
+        ~LazyObjectInfo() JL_NOTSAFEPOINT = default;
     };
 
     struct SectionInfo {
@@ -113,6 +114,7 @@ private:
         ptrdiff_t slide;
         uint64_t SectionIndex;
         SectionInfo() = delete;
+        ~SectionInfo() JL_NOTSAFEPOINT = default;
     };
 
     template<typename KeyT, typename ValT>
@@ -122,7 +124,7 @@ private:
     typedef rev_map<uint64_t, objfileentry_t> objfilemap_t;
 
     objectmap_t objectmap{};
-    rev_map<size_t, std::pair<size_t, jl_method_instance_t *>> linfomap{};
+    rev_map<size_t, std::pair<size_t, jl_code_instance_t *>> cimap{};
 
     // Maintain a mapping of unrealized function names -> linfo objects
     // so that when we see it get emitted, we can add a link back to the linfo
@@ -143,10 +145,9 @@ public:
     libc_frames_t libc_frames{};
 
     void add_code_in_flight(llvm::StringRef name, jl_code_instance_t *codeinst, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
-    jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
+    jl_code_instance_t *lookupCodeInstance(size_t pointer) JL_NOTSAFEPOINT;
     void registerJITObject(const llvm::object::ObjectFile &Object,
-                        std::function<uint64_t(const llvm::StringRef &)> getLoadAddress,
-                        std::function<void*(void*)> lookupWriteAddress);
+                        std::function<uint64_t(const llvm::StringRef &)> getLoadAddress) JL_NOTSAFEPOINT;
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;
     void add_image_info(image_info_t info) JL_NOTSAFEPOINT;
     bool get_image_info(uint64_t base, image_info_t *info) const JL_NOTSAFEPOINT;

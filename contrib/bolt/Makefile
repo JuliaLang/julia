@@ -79,22 +79,21 @@ copy_originals: stage1
 
 # I don't think there's any particular reason to have -no-huge-pages here, perhaps slightly more accurate profile data
 # as the final build uses -no-huge-pages
+# We reset the mtime of the files to prevent make from rebuilding targets depending on them.
 bolt_instrument: copy_originals
 	for file in $(FILES_TO_OPTIMIZE); do \
 		abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
+		old_time=$$(stat -c %Y $$abs_file); \
 		$(LLVM_BOLT) "$$abs_file.original" -o $$abs_file --instrument --instrumentation-file-append-pid --instrumentation-file="$(PROFILE_DIR)/$$file-prof" -no-huge-pages; \
 		mkdir -p $$(dirname "$(PROFILE_DIR)/$$file-prof"); \
+		touch -d "@$$old_time" $$abs_file; \
 		printf "\n"; \
 	done && \
 	touch $@
 	@echo $(AFTER_INSTRUMENT_MESSAGE)
 
-# We don't want to rebuild julia-src as then we lose the bolt instrumentation
-# So we have to manually build the sysimage and package image
 finish_stage1: stage1
-	$(MAKE) -C $(STAGE1_BUILD) julia-base-cache && \
-	$(MAKE) -C $(STAGE1_BUILD) -f sysimage.mk sysimg-release && \
-	$(MAKE) -C $(STAGE1_BUILD) -f pkgimage.mk release
+	$(MAKE) -C $(STAGE1_BUILD)
 
 merge_data: bolt_instrument
 	for file in $(FILES_TO_OPTIMIZE); do \
@@ -108,10 +107,13 @@ merge_data: bolt_instrument
 # It tries to reuse old text segments to reduce binary size
 # BOLT doesn't fully support computed gotos https://github.com/llvm/llvm-project/issues/89117, so we cannot use --use-old-text on libjulia-internal
 # That flag saves less than 1 MiB for libjulia-internal so oh well.
+# We reset the mtime of the files to prevent make from rebuilding targets depending on them.
 bolt: merge_data
 	for file in $(FILES_TO_OPTIMIZE); do \
         abs_file=$(STAGE1_BUILD)/usr/lib/$$file; \
+		old_time=$$(stat -c %Y $$abs_file); \
 		$(LLVM_BOLT) "$$abs_file.original" -data "$(PROFILE_DIR)/$$file-prof.merged.fdata" -o $$abs_file $(BOLT_ARGS) $$(if [ "$$file" != $(shell readlink $(STAGE1_BUILD)/usr/lib/libjulia-internal.so) ]; then echo "--use-old-text -split-strategy=cdsplit"; fi); \
+		touch -d "@$$old_time" $$abs_file; \
     done && \
     touch $@
 

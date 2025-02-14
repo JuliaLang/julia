@@ -44,21 +44,21 @@ curl -fsSL https://install.julialang.org | sh -s -- <ARGS>
 
 Here `<ARGS>` should be replaced with one or more of the following arguments:
 - `--yes` (or `-y`): Run the installer in a non-interactive mode. All
-configuration values use their default or a value supplied as a command line
-argument.
+  configuration values use their default or a value supplied as a command line
+  argument.
 - `--default-channel=<NAME>`: Configure the default Juliaup channel. For
-example `--default-channel lts` would install the `lts` channel and configure it
-as the default.
+  example `--default-channel lts` would install the `lts` channel and configure it
+  as the default.
 - `--add-to-path=<yes|no>`: Configure whether Julia should be added to the `PATH`
-environment variable. Valid values are `yes` (default) and `no`.
+  environment variable. Valid values are `yes` (default) and `no`.
 - `--background-selfupdate=<SECONDS>`: Configure an optional CRON job that
-auto-updates Juliaup if `<SECONDS>` has a value larger than 0. The actual value
-controls how often the CRON job will run to check for a new Juliaup version in
-seconds. The default value is 0, i.e. no CRON job will be created.
+  auto-updates Juliaup if `<SECONDS>` has a value larger than 0. The actual value
+  controls how often the CRON job will run to check for a new Juliaup version in
+  seconds. The default value is 0, i.e. no CRON job will be created.
 - `--startup-selfupdate=<MINUTES>`: Configure how often Julia will check for new
-versions of Juliaup when Julia is started. The default is every 1440 minutes.
+  versions of Juliaup when Julia is started. The default is every 1440 minutes.
 - `-p=<PATH>` (or `--path`): Configure where the Julia and Juliaup binaries are
-installed. The default is `~/.juliaup`.
+  installed. The default is `~/.juliaup`.
 
 ## Alternative installation methods
 

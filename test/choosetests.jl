@@ -29,7 +29,7 @@ const TESTNAMES = [
         "channels", "iostream", "secretbuffer", "specificity",
         "reinterpretarray", "syntax", "corelogging", "missing", "asyncmap",
         "smallarrayshrink", "opaque_closure", "filesystem", "download",
-        "scopedvalues", "compileall"
+        "scopedvalues", "compileall", "rebinding"
 ]
 
 const INTERNET_REQUIRED_LIST = [
@@ -44,6 +44,23 @@ const INTERNET_REQUIRED_LIST = [
 ]
 
 const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
+
+function test_path(test)
+    t = split(test, '/')
+    if t[1] in STDLIBS
+        pkgdir = abspath(Base.find_package(String(t[1])), "..", "..")
+        if length(t) == 2
+            return joinpath(pkgdir, "test", t[2])
+        else
+            return joinpath(pkgdir, "test", "runtests")
+        end
+    elseif t[1] == "Compiler"
+        testpath = length(t) >= 2 ? t[2:end] : ("runtests",)
+        return joinpath(@__DIR__, "..", t[1], "test", testpath...)
+    else
+        return joinpath(@__DIR__, test)
+    end
+end
 
 """
 `(; tests, net_on, exit_on_error, seed) = choosetests(choices)` selects a set of tests to be
@@ -154,13 +171,7 @@ function choosetests(choices = [])
                    "strings/io", "strings/types", "strings/annotated"])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
-    filtertests!(tests, "compiler", [
-        "compiler/datastructures", "compiler/inference", "compiler/effects", "compiler/compact",
-        "compiler/validation", "compiler/ssair", "compiler/irpasses", "compiler/tarjan",
-        "compiler/codegen", "compiler/inline", "compiler/contextual", "compiler/invalidation",
-        "compiler/AbstractInterpreter", "compiler/EscapeAnalysis/EscapeAnalysis"])
-    filtertests!(tests, "compiler/EscapeAnalysis", [
-        "compiler/EscapeAnalysis/EscapeAnalysis"])
+    filtertests!(tests, "compiler", ["Compiler"])
     filtertests!(tests, "stdlib", STDLIBS)
     filtertests!(tests, "internet_required", INTERNET_REQUIRED_LIST)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
@@ -207,8 +218,8 @@ function choosetests(choices = [])
 
     new_tests = String[]
     for test in tests
-        if test in STDLIBS
-            testfile = joinpath(STDLIB_DIR, test, "test", "testgroups")
+        if test in STDLIBS || test == "Compiler"
+            testfile = test_path("$test/testgroups")
             if isfile(testfile)
                 testgroups = readlines(testfile)
                 length(testgroups) == 0 && error("no testgroups defined for $test")
@@ -218,7 +229,7 @@ function choosetests(choices = [])
             end
         end
     end
-    filter!(x -> (x != "stdlib" && !(x in STDLIBS)) , tests)
+    filter!(x -> (x != "stdlib" && !(x in STDLIBS) && x != "Compiler") , tests)
     append!(tests, new_tests)
 
     requested_all || explicit_pkg            || filter!(x -> x != "Pkg",            tests)

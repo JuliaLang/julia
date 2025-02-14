@@ -448,7 +448,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
     # pool MethodErrors for these two functions.
     if f === convert && !isempty(arg_types_param)
         at1 = arg_types_param[1]
-        if isType(at1) && !Core.Compiler.has_free_typevars(at1)
+        if isType(at1) && !has_free_typevars(at1)
             push!(funcs, (at1.parameters[1], arg_types_param[2:end]))
         end
     end
@@ -850,7 +850,10 @@ function _simplify_include_frames(trace)
     for i in length(trace):-1:1
         frame::StackFrame, _ = trace[i]
         mod = parentmodule(frame)
-        if first_ignored === nothing
+        if mod === Base && frame.func === :IncludeInto ||
+           mod === Core && frame.func === :EvalInto
+            kept_frames[i] = false
+        elseif first_ignored === nothing
             if mod === Base && frame.func === :_include
                 # Hide include() machinery by default
                 first_ignored = i
@@ -912,9 +915,9 @@ function _collapse_repeated_frames(trace)
             [3] g(x::Int64) <-- useless
             @ Main ./REPL[1]:1
             =#
-            if frame.linfo isa MethodInstance && last_frame.linfo isa MethodInstance &&
-                frame.linfo.def isa Method && last_frame.linfo.def isa Method
-                m, last_m = frame.linfo.def::Method, last_frame.linfo.def::Method
+            m, last_m = StackTraces.frame_method_or_module(frame),
+                        StackTraces.frame_method_or_module(last_frame)
+            if m isa Method && last_m isa Method
                 params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
@@ -941,7 +944,6 @@ function _collapse_repeated_frames(trace)
     return trace[kept_frames]
 end
 
-
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
@@ -962,9 +964,8 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
             if (lkup.from_c && skipC)
                 continue
             end
-            code = lkup.linfo
-            if code isa MethodInstance
-                def = code.def
+            if lkup.linfo isa Union{MethodInstance, CodeInstance}
+                def = StackTraces.frame_method_or_module(lkup)
                 if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
                     # hide kwcall() methods, which are probably internal keyword sorter methods
                     # (we print the internal method instead, after demangling
@@ -1052,7 +1053,7 @@ function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
             print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
             printstyled(io, "a[1, 2]", color=:cyan)
             print(io, " rather than a[1][2]")
-        else isType(T)
+        elseif isType(T)
             Tx = T.parameters[1]
             print(io, "\nYou attempted to index the type $Tx, rather than an instance of the type. Make sure you create the type using its constructor: ")
             printstyled(io, "d = $Tx([...])", color=:cyan)

@@ -18,7 +18,7 @@
 // For variant 1 JL_ELF_TLS_INIT_SIZE is the size of the thread control block (TCB)
 // For variant 2 JL_ELF_TLS_INIT_SIZE is 0
 #if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
-#  if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+#  if defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_RISCV64_)
 #    define JL_ELF_TLS_VARIANT 2
 #    define JL_ELF_TLS_INIT_SIZE 0
 #  elif defined(_CPU_AARCH64_)
@@ -48,6 +48,8 @@ extern "C" {
 JL_DLLEXPORT _Atomic(uint8_t) jl_measure_compile_time_enabled = 0;
 JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_compile_time = 0;
 JL_DLLEXPORT _Atomic(uint64_t) jl_cumulative_recompile_time = 0;
+
+JL_DLLEXPORT _Atomic(uint8_t) jl_task_metrics_enabled = 0;
 
 JL_DLLEXPORT void *jl_get_ptls_states(void)
 {
@@ -334,7 +336,17 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
 #endif
     if (jl_get_pgcstack() != NULL)
         abort();
-    jl_ptls_t ptls = (jl_ptls_t)calloc(1, sizeof(jl_tls_states_t));
+    jl_ptls_t ptls;
+#if defined(_OS_WINDOWS_)
+    ptls = _aligned_malloc(sizeof(jl_tls_states_t), alignof(jl_tls_states_t));
+    if (ptls == NULL)
+        abort();
+#else
+    if (posix_memalign((void**)&ptls, alignof(jl_tls_states_t), sizeof(jl_tls_states_t)))
+        abort();
+#endif
+    memset(ptls, 0, sizeof(jl_tls_states_t));
+
 #ifndef _OS_WINDOWS_
     pthread_setspecific(jl_task_exit_key, (void*)ptls);
 #endif
@@ -401,15 +413,35 @@ jl_ptls_t jl_init_threadtls(int16_t tid)
     return ptls;
 }
 
+static _Atomic(jl_function_t*) init_task_lock_func JL_GLOBALLY_ROOTED = NULL;
+
+static void jl_init_task_lock(jl_task_t *ct)
+{
+    jl_function_t *done = jl_atomic_load_relaxed(&init_task_lock_func);
+    if (done == NULL) {
+        done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("init_task_lock"));
+        if (done != NULL)
+            jl_atomic_store_release(&init_task_lock_func, done);
+    }
+    if (done != NULL) {
+        jl_value_t *args[2] = {done, (jl_value_t*)ct};
+        JL_TRY {
+            jl_apply(args, 2);
+        }
+        JL_CATCH {
+            jl_no_exc_handler(jl_current_exception(ct), ct);
+        }
+    }
+}
+
+
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 {
     // `jl_init_threadtls` puts us in a GC unsafe region, so ensure GC isn't running.
     // we can't use a normal safepoint because we don't have signal handlers yet.
-    // we also can't use jl_safepoint_wait_gc because that assumes we're in a task.
     jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
-    while (jl_atomic_load_acquire(&jl_gc_running)) {
-        jl_cpu_pause();
-    }
+    // pass NULL as a special token to indicate we are running on an unmanaged task
+    jl_safepoint_wait_gc(NULL);
     // this check is coupled with the one in `jl_safepoint_wait_gc`, where we observe if a
     // foreign thread has asked to disable the GC, guaranteeing the order of events.
 
@@ -423,6 +455,8 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     JL_GC_PROMISE_ROOTED(ct);
     uv_random(NULL, NULL, &ct->rngState, sizeof(ct->rngState), 0, NULL);
     jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
+    ct->world_age = jl_get_world_counter(); // root_task sets world_age to 1
+    jl_init_task_lock(ct);
     return &ct->gcstack;
 }
 
@@ -464,6 +498,30 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     // prior unsafe-region (before we let it release the stack memory)
     (void)jl_gc_unsafe_enter(ptls);
     scheduler_delete_thread(ptls);
+    // need to clear pgcstack and eh, but we can clear everything now too
+    jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
+    jl_task_frame_noreturn(ct);
+    if (jl_set_task_tid(ptls->root_task, ptls->tid)) {
+        // the system will probably free this stack memory soon
+        // so prevent any other thread from accessing it later
+        if (ct != ptls->root_task)
+            jl_task_frame_noreturn(ptls->root_task);
+    }
+    else {
+        // Uh oh. The user cleared the sticky bit so it started running
+        // elsewhere, then called pthread_exit on this thread from another
+        // Task, which will free the stack memory of that root task soon. This
+        // is not recoverable. Though we could just hang here, a fatal message
+        // is likely better.
+        jl_safe_printf("fatal: thread exited from wrong Task.\n");
+        abort();
+    }
+    ptls->previous_exception = NULL;
+    // allow the page root_task is on to be freed
+    ptls->root_task = NULL;
+    jl_free_thread_gc_state(ptls);
+    // park in safe-region from here on (this may run GC again)
+    (void)jl_gc_safe_enter(ptls);
     // try to free some state we do not need anymore
 #ifndef _OS_WINDOWS_
     void *signal_stack = ptls->signal_stack;
@@ -502,21 +560,7 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 #else
     pthread_mutex_lock(&in_signal_lock);
 #endif
-    // need to clear pgcstack and eh, but we can clear everything now too
-    jl_task_frame_noreturn(jl_atomic_load_relaxed(&ptls->current_task));
-    if (jl_set_task_tid(ptls->root_task, ptls->tid)) {
-        // the system will probably free this stack memory soon
-        // so prevent any other thread from accessing it later
-        jl_task_frame_noreturn(ptls->root_task);
-    }
-    else {
-        // Uh oh. The user cleared the sticky bit so it started running
-        // elsewhere, then called pthread_exit on this thread. This is not
-        // recoverable. Though we could just hang here, a fatal message is better.
-        jl_safe_printf("fatal: thread exited from wrong Task.\n");
-        abort();
-    }
-    jl_atomic_store_relaxed(&ptls->current_task, NULL); // dead
+    jl_atomic_store_relaxed(&ptls->current_task, NULL); // indicate dead
     // finally, release all of the locks we had grabbed
 #ifdef _OS_WINDOWS_
     jl_unlock_profile_wr();
@@ -529,12 +573,6 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
 #endif
     free(ptls->bt_data);
     small_arraylist_free(&ptls->locks);
-    ptls->previous_exception = NULL;
-    // allow the page root_task is on to be freed
-    ptls->root_task = NULL;
-    jl_free_thread_gc_state(ptls);
-    // then park in safe-region
-    (void)jl_gc_safe_enter(ptls);
 }
 
 //// debugging hack: if we are exiting too fast for error message printing on threads,
@@ -634,6 +672,8 @@ static void jl_check_tls(void)
     asm("mrs %0, tpidr_el0" : "=r"(tp));
 #elif defined(__ARM_ARCH) && __ARM_ARCH >= 7
     asm("mrc p15, 0, %0, c13, c0, 3" : "=r"(tp));
+#elif defined(_CPU_RISCV64_)
+    asm("mv %0, tp" : "=r"(tp));
 #else
 #  error "Cannot emit thread pointer for this architecture."
 #endif
@@ -668,15 +708,15 @@ void jl_init_threading(void)
     // and `jl_n_threads_per_pool`.
     jl_n_threadpools = 2;
     int16_t nthreads = JULIA_NUM_THREADS;
-    int16_t nthreadsi = 0;
+    // if generating output default to 0 interactive threads, otherwise default to 1
+    int16_t nthreadsi = jl_generating_output() ? 0 : 1;
     char *endptr, *endptri;
 
     if (jl_options.nthreads != 0) { // --threads specified
         nthreads = jl_options.nthreads_per_pool[0];
         if (nthreads < 0)
             nthreads = jl_effective_threads();
-        if (jl_options.nthreadpools == 2)
-            nthreadsi = jl_options.nthreads_per_pool[1];
+        nthreadsi = (jl_options.nthreadpools == 1) ? 0 : jl_options.nthreads_per_pool[1];
     }
     else if ((cp = getenv(NUM_THREADS_NAME))) { // ENV[NUM_THREADS_NAME] specified
         if (!strncmp(cp, "auto", 4)) {
@@ -692,13 +732,16 @@ void jl_init_threading(void)
         }
         if (*cp == ',') {
             cp++;
-            if (!strncmp(cp, "auto", 4))
+            if (!strncmp(cp, "auto", 4)) {
                 nthreadsi = 1;
+                cp += 4;
+            }
             else {
                 errno = 0;
                 nthreadsi = strtol(cp, &endptri, 10);
                 if (errno != 0 || endptri == cp || nthreadsi < 0)
-                    nthreadsi = 0;
+                    nthreadsi = 1;
+                cp = endptri;
             }
         }
     }
@@ -743,10 +786,14 @@ void jl_init_threading(void)
     }
     int16_t ngcthreads = jl_n_markthreads + jl_n_sweepthreads;
 
+    if (strstr(jl_gc_active_impl(), "MMTk")) {
+        ngcthreads = 0;
+    }
+
     jl_all_tls_states_size = nthreads + nthreadsi + ngcthreads;
-    jl_n_threads_per_pool = (int*)malloc_s(2 * sizeof(int));
-    jl_n_threads_per_pool[0] = nthreadsi;
-    jl_n_threads_per_pool[1] = nthreads;
+    jl_n_threads_per_pool = (int*)calloc_s(jl_n_threadpools * sizeof(int));
+    jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = nthreadsi;
+    jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = nthreads;
     assert(jl_all_tls_states_size > 0);
     jl_atomic_store_release(&jl_all_tls_states, (jl_ptls_t*)calloc(jl_all_tls_states_size, sizeof(jl_ptls_t)));
     jl_atomic_store_release(&jl_n_threads, jl_all_tls_states_size);
@@ -759,7 +806,10 @@ uv_barrier_t thread_init_done;
 void jl_start_threads(void)
 {
     int nthreads = jl_atomic_load_relaxed(&jl_n_threads);
-    int ngcthreads = jl_n_gcthreads;
+    int ninteractive_threads = jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE];
+    int ndefault_threads = jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT];
+    int nmutator_threads = nthreads - jl_n_gcthreads;
+
     int cpumasksize = uv_cpumask_size();
     char *cp;
     int i, exclusive;
@@ -774,36 +824,43 @@ void jl_start_threads(void)
     if (cp && strcmp(cp, "0") != 0)
         exclusive = 1;
 
-    // exclusive use: affinitize threads, master thread on proc 0, rest
-    // according to a 'compact' policy
+    // exclusive use: affinitize threads, master thread on proc 0, threads in
+    // default pool according to a 'compact' policy
     // non-exclusive: no affinity settings; let the kernel move threads about
     if (exclusive) {
-        if (nthreads > jl_cpu_threads()) {
+        if (ndefault_threads > jl_cpu_threads()) {
             jl_printf(JL_STDERR, "ERROR: Too many threads requested for %s option.\n", MACHINE_EXCLUSIVE_NAME);
             exit(1);
         }
         memset(mask, 0, cpumasksize);
-        mask[0] = 1;
-        uvtid = uv_thread_self();
-        uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
-        mask[0] = 0;
+
+        // If there are no interactive threads, the master thread is in the
+        // default pool and we must affinitize it
+        if (ninteractive_threads == 0) {
+            mask[0] = 1;
+            uvtid = uv_thread_self();
+            uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
+            mask[0] = 0;
+        }
     }
 
     // create threads
     uv_barrier_init(&thread_init_done, nthreads);
 
     // GC/System threads need to be after the worker threads.
-    int nmutator_threads = nthreads - ngcthreads;
-
     for (i = 1; i < nmutator_threads; ++i) {
         jl_threadarg_t *t = (jl_threadarg_t *)malloc_s(sizeof(jl_threadarg_t)); // ownership will be passed to the thread
         t->tid = i;
         t->barrier = &thread_init_done;
         uv_thread_create(&uvtid, jl_threadfun, t);
-        if (exclusive) {
-            mask[i] = 1;
+
+        // Interactive pool threads get the low IDs, so check if this is a
+        // default pool thread.  The master thread is already on CPU 0.
+        if (exclusive && i >= ninteractive_threads) {
+            assert(i - ninteractive_threads < cpumasksize);
+            mask[i - ninteractive_threads] = 1;
             uv_thread_setaffinity(&uvtid, mask, NULL, cpumasksize);
-            mask[i] = 0;
+            mask[i - ninteractive_threads] = 0;
         }
         uv_thread_detach(&uvtid);
     }
@@ -885,15 +942,20 @@ void _jl_mutex_wait(jl_task_t *self, jl_mutex_t *lock, int safepoint)
             jl_profile_lock_acquired(lock);
             return;
         }
-        if (safepoint) {
-            jl_gc_safepoint_(self->ptls);
-        }
         if (jl_running_under_rr(0)) {
             // when running under `rr`, use system mutexes rather than spin locking
+            int8_t gc_state;
+            if (safepoint)
+                gc_state = jl_gc_safe_enter(self->ptls);
             uv_mutex_lock(&tls_lock);
             if (jl_atomic_load_relaxed(&lock->owner))
                 uv_cond_wait(&cond, &tls_lock);
             uv_mutex_unlock(&tls_lock);
+            if (safepoint)
+                jl_gc_safe_leave(self->ptls, gc_state);
+        }
+        else if (safepoint) {
+            jl_gc_safepoint_(self->ptls);
         }
         jl_cpu_suspend();
         owner = jl_atomic_load_relaxed(&lock->owner);

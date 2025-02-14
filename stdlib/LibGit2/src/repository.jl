@@ -518,7 +518,7 @@ function remotes(repo::GitRepo)
     @assert repo.ptr != C_NULL
     @check ccall((:git_remote_list, libgit2), Cint,
                   (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, repo)
-    res = convert(Vector{String}, sa_ref[])
+    res = collect(sa_ref[])
     free(sa_ref)
     return res
 end

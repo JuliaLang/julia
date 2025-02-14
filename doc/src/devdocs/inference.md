@@ -98,16 +98,16 @@ as follows:
 julia> Base.print_statement_costs(stdout, map, (typeof(sqrt), Tuple{Int},)) # map(sqrt, (2,))
 map(f, t::Tuple{Any}) @ Base tuple.jl:281
   0 1 ─ %1  = $(Expr(:boundscheck, true))::Bool
-  0 │   %2  = Base.getfield(_3, 1, %1)::Int64
-  1 │   %3  = Base.sitofp(Float64, %2)::Float64
-  0 │   %4  = Base.lt_float(%3, 0.0)::Bool
+  0 │   %2  =   builtin Base.getfield(_3, 1, %1)::Int64
+  1 │   %3  = intrinsic Base.sitofp(Float64, %2)::Float64
+  0 │   %4  = intrinsic Base.lt_float(%3, 0.0)::Bool
   0 └──       goto #3 if not %4
-  0 2 ─       invoke Base.Math.throw_complex_domainerror(:sqrt::Symbol, %3::Float64)::Union{}
+  0 2 ─          invoke Base.Math.throw_complex_domainerror(:sqrt::Symbol, %3::Float64)::Union{}
   0 └──       unreachable
- 20 3 ─ %8  = Base.Math.sqrt_llvm(%3)::Float64
+ 20 3 ─ %8  = intrinsic Base.Math.sqrt_llvm(%3)::Float64
   0 └──       goto #4
   0 4 ─       goto #5
-  0 5 ─ %11 = Core.tuple(%8)::Tuple{Float64}
+  0 5 ─ %11 =   builtin Core.tuple(%8)::Tuple{Float64}
   0 └──       return %11
 
 ```

@@ -28,7 +28,7 @@ mutable struct Regex <: AbstractPattern
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
-        pattern = String(pattern)
+        pattern = String(pattern)::String
         compile_options = UInt32(compile_options)
         match_options = UInt32(match_options)
         if (compile_options & ~PCRE.COMPILE_MASK) != 0
@@ -69,11 +69,11 @@ Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_COMPILER_OPTS, DEFAULT_M
 
 function compile(regex::Regex)
     if regex.regex == C_NULL
-        if PCRE.PCRE_COMPILE_LOCK === nothing
+        if !isdefinedglobal(PCRE, :PCRE_COMPILE_LOCK)
             regex.regex = PCRE.compile(regex.pattern, regex.compile_options)
             PCRE.jit_compile(regex.regex)
         else
-            l = PCRE.PCRE_COMPILE_LOCK::Threads.SpinLock
+            l = PCRE.PCRE_COMPILE_LOCK
             lock(l)
             try
                 if regex.regex == C_NULL

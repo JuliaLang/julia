@@ -45,14 +45,22 @@ promote_rule(::Type{<:AbstractIrrational}, ::Type{Float16}) = Float16
 promote_rule(::Type{<:AbstractIrrational}, ::Type{Float32}) = Float32
 promote_rule(::Type{<:AbstractIrrational}, ::Type{<:AbstractIrrational}) = Float64
 promote_rule(::Type{<:AbstractIrrational}, ::Type{T}) where {T<:Real} = promote_type(Float64, T)
-promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number} = promote_type(promote_type(S, real(T)), T)
+
+function promote_rule(::Type{S}, ::Type{T}) where {S<:AbstractIrrational,T<:Number}
+    U = promote_type(S, real(T))
+    if S <: U
+        # prevent infinite recursion
+        promote_type(Float64, T)
+    else
+        promote_type(U, T)
+    end
+end
 
 AbstractFloat(x::AbstractIrrational) = Float64(x)::Float64
 Float16(x::AbstractIrrational) = Float16(Float32(x)::Float32)
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
-# XXX this may change `DEFAULT_PRECISION`, thus not effect free
-@assume_effects :total function Rational{T}(x::AbstractIrrational) where T<:Integer
+function _irrational_to_rational(::Type{T}, x::AbstractIrrational) where T<:Integer
     o = precision(BigFloat)
     p = 256
     while true
@@ -66,13 +74,16 @@ Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
         p += 32
     end
 end
-Rational{BigInt}(x::AbstractIrrational) = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(BigInt, x) instead"))
+Rational{T}(x::AbstractIrrational) where {T<:Integer} = _irrational_to_rational(T, x)
+_throw_argument_error_irrational_to_rational_bigint() = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(BigInt, x) instead"))
+Rational{BigInt}(::AbstractIrrational) = _throw_argument_error_irrational_to_rational_bigint()
 
-@assume_effects :total function (t::Type{T})(x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
+function _irrational_to_float(::Type{T}, x::AbstractIrrational, r::RoundingMode) where T<:Union{Float32,Float64}
     setprecision(BigFloat, 256) do
         T(BigFloat(x)::BigFloat, r)
     end
 end
+(::Type{T})(x::AbstractIrrational, r::RoundingMode) where {T<:Union{Float32,Float64}} = _irrational_to_float(T, x, r)
 
 float(::Type{<:AbstractIrrational}) = Float64
 
@@ -110,13 +121,17 @@ end
 <=(x::AbstractFloat, y::AbstractIrrational) = x < y
 
 # Irrational vs Rational
-@assume_effects :total function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where T
+function _rationalize_irrational(::Type{T}, x::AbstractIrrational, tol::Real) where {T<:Integer}
     return rationalize(T, big(x), tol=tol)
 end
-@assume_effects :total function lessrational(rx::Rational{<:Integer}, x::AbstractIrrational)
-    # an @assume_effects :total version of `<` for determining if the rationalization of
-    # an irrational number required rounding up or down
+function rationalize(::Type{T}, x::AbstractIrrational; tol::Real=0) where {T<:Integer}
+    return _rationalize_irrational(T, x, tol)
+end
+function _lessrational(rx::Rational, x::AbstractIrrational)
     return rx < big(x)
+end
+function lessrational(rx::Rational, x::AbstractIrrational)
+    return _lessrational(rx, x)
 end
 function <(x::AbstractIrrational, y::Rational{T}) where T
     T <: Unsigned && x < 0.0 && return true
@@ -216,7 +231,7 @@ function irrational(sym, val, def)
     esym = esc(sym)
     qsym = esc(Expr(:quote, sym))
     bigconvert = isa(def,Symbol) ? quote
-        function Base.BigFloat(::Irrational{$qsym}, r::MPFR.MPFRRoundingMode=MPFR.ROUNDING_MODE[]; precision=precision(BigFloat))
+        function Base.BigFloat(::Irrational{$qsym}, r::MPFR.MPFRRoundingMode=Rounding.rounding_raw(BigFloat); precision=precision(BigFloat))
             c = BigFloat(;precision=precision)
             ccall(($(string("mpfr_const_", def)), :libmpfr),
                   Cint, (Ref{BigFloat}, MPFR.MPFRRoundingMode), c, r)

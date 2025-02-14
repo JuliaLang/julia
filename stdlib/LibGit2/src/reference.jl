@@ -215,7 +215,7 @@ function ref_list(repo::GitRepo)
     sa_ref = Ref(StrArrayStruct())
     @check ccall((:git_reference_list, libgit2), Cint,
                       (Ptr{StrArrayStruct}, Ptr{Cvoid}), sa_ref, repo)
-    res = convert(Vector{String}, sa_ref[])
+    res = collect(sa_ref[])
     free(sa_ref)
     res
 end

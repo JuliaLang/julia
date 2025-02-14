@@ -20,6 +20,7 @@ public
     Generator,
     ImmutableDict,
     OneTo,
+    Pairs,
     LogRange,
     UUID,
 
@@ -27,6 +28,10 @@ public
     Semaphore,
     acquire,
     release,
+
+# arrays
+    has_offset_axes,
+    require_one_based_indexing,
 
 # collections
     IteratorEltype,
@@ -102,6 +107,7 @@ public
     # functions
     reseteof,
     link_pipe!,
+    dup,
 
 # filesystem operations
     rename,

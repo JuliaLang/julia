@@ -107,6 +107,8 @@ if OS_HANDLE != RawFD
     TCPSocket(fd::RawFD) = TCPSocket(Libc._get_osfhandle(fd))
 end
 
+Base.fd(sock::TCPSocket) = Base._fd(sock)
+
 
 mutable struct TCPServer <: LibuvServer
     handle::Ptr{Cvoid}
@@ -138,6 +140,8 @@ function TCPServer(; delay=true)
     iolock_end()
     return tcp
 end
+
+Base.fd(server::TCPServer) = Base._fd(server)
 
 """
     accept(server[, client])
@@ -198,6 +202,8 @@ function UDPSocket()
 end
 
 show(io::IO, stream::UDPSocket) = print(io, typeof(stream), "(", uv_status_string(stream), ")")
+
+Base.fd(sock::UDPSocket) = Base._fd(sock)
 
 function _uv_hook_close(sock::UDPSocket)
     lock(sock.cond)

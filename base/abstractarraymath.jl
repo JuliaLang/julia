@@ -518,6 +518,9 @@ function check(arr, inner, outer)
         # TODO: Currently one based indexing is demanded for inner !== nothing,
         # but not for outer !== nothing. Decide for something consistent.
         Base.require_one_based_indexing(arr)
+        if !all(n -> n isa Integer, inner)
+            throw(ArgumentError("repeat requires integer counts, got inner = $inner"))
+        end
         if any(<(0), inner)
             throw(ArgumentError("no inner repetition count may be negative; got $inner"))
         end
@@ -526,6 +529,9 @@ function check(arr, inner, outer)
         end
     end
     if outer !== nothing
+        if !all(n -> n isa Integer, outer)
+            throw(ArgumentError("repeat requires integer counts, got outer = $outer"))
+        end
         if any(<(0), outer)
             throw(ArgumentError("no outer repetition count may be negative; got $outer"))
         end

@@ -19,6 +19,7 @@
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/SmallSet.h>
 #include <llvm/Analysis/CFG.h>
+#include <llvm/Analysis/DomTreeUpdater.h>
 #include <llvm/Analysis/InstSimplifyFolder.h>
 #include <llvm/IR/Value.h>
 #include <llvm/IR/Constants.h>
@@ -328,6 +329,7 @@ public:
 
 private:
     CallInst *pgcstack;
+    Function *smallAllocFunc;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const ArrayRef<int> &SafepointsSoFar,
                       SmallVector<int, 1> &&RefinedPtr = SmallVector<int, 1>());
@@ -353,10 +355,11 @@ private:
     State LocalScan(Function &F);
     void ComputeLiveness(State &S);
     void ComputeLiveSets(State &S);
-    SmallVector<int, 0> ColorRoots(const State &S);
+    std::pair<SmallVector<int, 0>, int> ColorRoots(const State &S);
     void PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
-    void PlaceGCFrameStores(State &S, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame);
-    void PlaceRootsAndUpdateCalls(SmallVectorImpl<int> &Colors, State &S, std::map<Value *, std::pair<int, int>>);
+    void PlaceGCFrameStores(State &S, unsigned MinColorRoot, ArrayRef<int> Colors, int PreAssignedColors, Value *GCFrame);
+    void PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
+    void PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAssignedColors, State &S, std::map<Value *, std::pair<int, int>>);
     void CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified);
     bool CleanupIR(Function &F, State *S, bool *CFGModified);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
@@ -365,6 +368,7 @@ private:
     void RefineLiveSet(LargeSparseBitVector &LS, State &S, ArrayRef<int> CalleeRoots);
     Value *EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V);
     Value *EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V);
+    Value* lowerGCAllocBytesLate(CallInst *target, Function &F);
 };
 
 // The final GC lowering pass. This pass lowers platform-agnostic GC
