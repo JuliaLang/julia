@@ -1077,7 +1077,6 @@ function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyl
 end
 
 function copyto_unaliased!(::IndexLinear, dest::AbstractArray, ::IndexLinear, src::AbstractArray)
-    @_propagate_inbounds_meta
     copyto!(dest, first(LinearIndices(dest)), src, first(LinearIndices(src)), length(src))
 end
 function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
@@ -1085,7 +1084,7 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, ::IndexSt
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     idf, isf = first(destinds), first(srcinds)
     Δi = idf - isf
-    @boundscheck (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
+    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
         throw(BoundsError(dest, srcinds))
     if deststyle isa IndexLinear
         # IndexStyle(src) is IndexCartesian, as the linear indexing case is handled separately
@@ -1125,7 +1124,6 @@ end
 # to the parent for contiguous linear views
 function copyto!(dest::AbstractArray, dstart::Integer,
         src::AbstractArray, sstart::Integer, n::Integer)
-    @_propagate_inbounds_meta
     # check if the arrays are views that may be unwrapped
     # if yes, try to use the copyto! implementation for the parents
     # if no, then fall back to the default implementation that loops over the arrays
@@ -1136,12 +1134,10 @@ end
 _unwrap_view(A, ind) = A, ind
 # fallback method if neither array is a SubArray, in which case we loop over them
 function __copyto!(dest::A, ::A, dstart, src::B, ::B, sstart, n) where {A,B}
-    @_propagate_inbounds_meta
     _copyto!(dest, dstart, src, sstart, n)
 end
 # Forward the copy to the parent if there is any contiguous, linearly indexed view
 function __copyto!(_, destp, dstart, _, srcp, sstart, n)
-    @_propagate_inbounds_meta
     copyto!(destp, dstart, srcp, sstart, n)
 end
 
@@ -1152,10 +1148,8 @@ function _copyto!(dest::AbstractArray, dstart::Integer,
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    @boundscheck begin
-        (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
-        (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
-    end
+    (checkbounds(Bool, destinds, dstart) && checkbounds(Bool, destinds, dstart+n-1)) || throw(BoundsError(dest, dstart:dstart+n-1))
+    (checkbounds(Bool, srcinds, sstart)  && checkbounds(Bool, srcinds, sstart+n-1))  || throw(BoundsError(src,  sstart:sstart+n-1))
     src′ = unalias(dest, src)
     @inbounds for i = 0:n-1
         dest[dstart+i] = src′[sstart+i]
