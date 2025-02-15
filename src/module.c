@@ -509,28 +509,31 @@ static jl_binding_t *new_binding(jl_module_t *mod, jl_sym_t *name)
 
 extern jl_mutex_t jl_modules_mutex;
 
+static int is_module_open(jl_module_t *m)
+{
+    JL_LOCK(&jl_modules_mutex);
+    int open = ptrhash_has(&jl_current_modules, (void*)m);
+    if (!open && jl_module_init_order != NULL) {
+        size_t i, l = jl_array_len(jl_module_init_order);
+        for (i = 0; i < l; i++) {
+            if (m == (jl_module_t*)jl_array_ptr_ref(jl_module_init_order, i)) {
+                open = 1;
+                break;
+            }
+        }
+    }
+    JL_UNLOCK(&jl_modules_mutex);
+    return open;
+}
+
 extern void check_safe_newbinding(jl_module_t *m, jl_sym_t *var)
 {
     if (jl_current_task->ptls->in_pure_callback)
         jl_errorf("new strong globals cannot be created in a generated function. Declare them outside using `global x::Any`.");
-    if (jl_options.incremental && jl_generating_output()) {
-        JL_LOCK(&jl_modules_mutex);
-        int open = ptrhash_has(&jl_current_modules, (void*)m);
-        if (!open && jl_module_init_order != NULL) {
-            size_t i, l = jl_array_len(jl_module_init_order);
-            for (i = 0; i < l; i++) {
-                if (m == (jl_module_t*)jl_array_ptr_ref(jl_module_init_order, i)) {
-                    open = 1;
-                    break;
-                }
-            }
-        }
-        JL_UNLOCK(&jl_modules_mutex);
-        if (!open) {
-            jl_errorf("Creating a new global in closed module `%s` (`%s`) breaks incremental compilation "
-                      "because the side effects will not be permanent.",
-                      jl_symbol_name(m->name), jl_symbol_name(var));
-        }
+    if (jl_options.incremental && jl_generating_output() && !is_module_open(m)) {
+        jl_errorf("Creating a new global in closed module `%s` (`%s`) breaks incremental compilation "
+                    "because the side effects will not be permanent.",
+                    jl_symbol_name(m->name), jl_symbol_name(var));
     }
 }
 
@@ -876,9 +879,17 @@ static void jl_binding_dep_message(jl_module_t *m, jl_sym_t *name, jl_binding_t 
     JL_GC_POP();
 }
 
+JL_DLLEXPORT void check_safe_import_from(jl_module_t *m)
+{
+    if (jl_options.incremental && jl_generating_output() && m == jl_main_module) {
+        jl_errorf("Any `import` or `using` from `Main` is prohibited during incremental compilation.");
+    }
+}
+
 // NOTE: we use explici since explicit is a C++ keyword
 static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici)
 {
+    check_safe_import_from(from);
     jl_binding_t *b = jl_get_binding(from, s);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     if (b->deprecated) {
@@ -988,6 +999,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
 {
     if (to == from)
         return;
+    check_safe_import_from(from);
     JL_LOCK(&world_counter_lock);
     JL_LOCK(&to->lock);
     for (size_t i = 0; i < module_usings_length(to); i++) {
