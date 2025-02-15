@@ -204,6 +204,12 @@ timesofar("promotions")
         @check_bit_operation resize!(b1, v1 ÷ 2) BitVector
         gr(b) = (resize!(b, v1)[(v1÷2):end] .= 1; b)
         @check_bit_operation gr(b1) BitVector
+
+        b1 = bitrand(v1)
+        @test_throws BoundsError resize!(b1, -1; first=true)
+        b2 = copy(b1)
+        @test resize!(b1, v1+100; first=true)[end-v1+1:end] == b2
+        @test resize!(b1, v1+200)[end-100-v1+1:end-100] == b2
     end
 
     @testset "sizeof (issue #7515)" begin
