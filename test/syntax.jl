@@ -4088,3 +4088,17 @@ abstract type A57267{S, T} end
     B57267{S} = A57267{S, 1}
     const C57267 = B57267
 end
+
+# #57404 - Binding ambiguity resolution ignores guard bindings
+module Ambig57404
+    module A
+        export S
+    end
+    using .A
+    module B
+        const S = 1
+        export S
+    end
+    using .B
+end
+@test Ambig57404.S == 1
