@@ -909,10 +909,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *asname,
     size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
     jl_binding_partition_t *btopart = jl_get_binding_partition(bto, new_world);
     enum jl_partition_kind btokind = jl_binding_kind(btopart);
-    if (btokind == BINDING_KIND_GUARD ||
-        btokind == BINDING_KIND_IMPLICIT ||
-        btokind == BINDING_KIND_FAILED) {
-
+    if (jl_bkind_is_some_implicit(btokind)) {
         jl_binding_partition_t *new_bpart = jl_replace_binding_locked(bto, btopart, (jl_value_t*)b, (explici != 0) ? BINDING_KIND_IMPORTED : BINDING_KIND_EXPLICIT, new_world);
         if (jl_atomic_load_relaxed(&new_bpart->max_world) == ~(size_t)0)
             jl_add_binding_backedge(b, (jl_value_t*)bto);
@@ -1016,7 +1013,7 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
             if (tob) {
                 jl_binding_partition_t *tobpart = jl_get_binding_partition(tob, new_world);
                 enum jl_partition_kind kind = jl_binding_kind(tobpart);
-                if (kind == BINDING_KIND_IMPLICIT || jl_bkind_is_some_guard(kind)) {
+                if (jl_bkind_is_some_implicit(kind)) {
                     jl_replace_binding_locked(tob, tobpart, NULL, BINDING_KIND_IMPLICIT_RECOMPUTE, new_world);
                 }
             }
@@ -1293,6 +1290,10 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     }
     jl_atomic_store_relaxed(&new_bpart->next, old_bpart);
     jl_gc_wb_fresh(new_bpart, old_bpart);
+
+    if (((old_bpart->kind & BINDING_FLAG_EXPORTED) || (kind & BINDING_FLAG_EXPORTED)) && jl_require_world != ~(size_t)0) {
+        jl_atomic_store_release(&b->globalref->mod->export_set_changed_since_require_world, 1);
+    }
 
     jl_atomic_store_release(&b->partitions, new_bpart);
     jl_gc_wb(b, new_bpart);
