@@ -88,6 +88,27 @@ llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
     return nullptr;
 }
 
+llvm::CallInst *JuliaPassContext::getOrAddPGCstack(llvm::Function &F)
+{
+    if (pgcstack_getter || adoptthread_func)
+        for (auto &I : F.getEntryBlock()) {
+            if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
+                Value *callee = callInst->getCalledOperand();
+                if ((pgcstack_getter && callee == pgcstack_getter) ||
+                    (adoptthread_func && callee == adoptthread_func)) {
+                    return callInst;
+                }
+            }
+        }
+    IRBuilder<> builder(&F.getEntryBlock().front());
+    if (pgcstack_getter)
+        return builder.CreateCall(pgcstack_getter);
+    auto FT = FunctionType::get(PointerType::get(F.getContext(), 0), false);
+    auto F2 = Function::Create(FT, Function::ExternalLinkage, "julia.get_pgcstack", F.getParent());
+    pgcstack_getter = F2;
+    return builder.CreateCall( F2);
+}
+
 llvm::Function *JuliaPassContext::getOrNull(
     const jl_intrinsics::IntrinsicDescription &desc) const
 {
