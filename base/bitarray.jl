@@ -817,7 +817,7 @@ function _resize_int!(B::BitVector, n::Int, first::Bool)
     n == n0 && return B
     n >= 0 || throw(BoundsError(B, n))
     if n < n0
-        r = first ? 1:n0-n : n+1:n0
+        r = first ? (1:n0-n) : (n+1:n0)
         deleteat!(B, r)
         return B
     end
