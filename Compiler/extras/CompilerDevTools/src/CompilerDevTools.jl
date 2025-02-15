@@ -9,12 +9,13 @@ struct SplitCacheInterp <: Compiler.AbstractInterpreter
     inf_params::Compiler.InferenceParams
     opt_params::Compiler.OptimizationParams
     inf_cache::Vector{Compiler.InferenceResult}
+    codegen_cache::IdDict{CodeInstance,CodeInfo}
     function SplitCacheInterp(;
         world::UInt = Base.get_world_counter(),
         inf_params::Compiler.InferenceParams = Compiler.InferenceParams(),
         opt_params::Compiler.OptimizationParams = Compiler.OptimizationParams(),
         inf_cache::Vector{Compiler.InferenceResult} = Compiler.InferenceResult[])
-        new(world, inf_params, opt_params, inf_cache)
+        new(world, inf_params, opt_params, inf_cache, IdDict{CodeInstance,CodeInfo}())
     end
 end
 
@@ -23,10 +24,11 @@ Compiler.OptimizationParams(interp::SplitCacheInterp) = interp.opt_params
 Compiler.get_inference_world(interp::SplitCacheInterp) = interp.world
 Compiler.get_inference_cache(interp::SplitCacheInterp) = interp.inf_cache
 Compiler.cache_owner(::SplitCacheInterp) = SplitCacheOwner()
+Compiler.codegen_cache(interp::SplitCacheInterp) = interp.codegen_cache
 
 import Core.OptimizedGenerics.CompilerPlugins: typeinf, typeinf_edge
 @eval @noinline typeinf(::SplitCacheOwner, mi::MethodInstance, source_mode::UInt8) =
-    Base.invoke_in_world(which(typeinf, Tuple{SplitCacheOwner, MethodInstance, UInt8}).primary_world, Compiler.typeinf_ext, SplitCacheInterp(; world=Base.tls_world_age()), mi, source_mode)
+    Base.invoke_in_world(which(typeinf, Tuple{SplitCacheOwner, MethodInstance, UInt8}).primary_world, Compiler.typeinf_ext_toplevel, SplitCacheInterp(; world=Base.tls_world_age()), mi, source_mode)
 
 @eval @noinline function typeinf_edge(::SplitCacheOwner, mi::MethodInstance, parent_frame::Compiler.InferenceState, world::UInt, source_mode::UInt8)
     # TODO: This isn't quite right, we're just sketching things for now
