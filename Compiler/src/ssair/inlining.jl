@@ -975,6 +975,9 @@ function retrieve_ir_for_inlining(mi::MethodInstance, ir::IRCode, preserve_local
     ir.debuginfo.def = mi
     return ir, spec_info, DebugInfo(ir.debuginfo, length(ir.stmts))
 end
+function retrieve_ir_for_inlining(mi::MethodInstance, opt::OptimizationState, preserve_local_sources::Bool)
+    retrieve_ir_for_inlining(mi, ir_to_codeinf!(opt), preserve_local_sources)
+end
 
 function handle_single_case!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(case),
