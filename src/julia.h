@@ -77,6 +77,17 @@ typedef struct _jl_tls_states_t *jl_ptls_t;
 // the common fields are hidden before the pointer, but the following macro is
 // used to indicate which types below are subtypes of jl_value_t
 #define JL_DATA_TYPE
+// Objects of a type that is JL_NON_MOVING should be allocated with
+// jl_gc_alloc_non_moving so they will never be moved by GC.
+// These types may be marked as non moving:
+// 1. Types that are used by the GC when they scan an object such as jl_datatype_t
+//    and jl_typename_t. Those types should never be moved by the GC.
+// 2. Types that are frequently referenced and frequently pinned. If a type
+//    is likely to be pinned, we could just allocate them as non-moving.
+// Having a separate allocation function for non moving types is beneficial,
+// as those objects of non-moving types can be allocated into a different space,
+// rather than being pinned and cause worse heap fragmentation.
+#define JL_NON_MOVING
 typedef struct _jl_value_t jl_value_t;
 #include "julia_threads.h"
 
