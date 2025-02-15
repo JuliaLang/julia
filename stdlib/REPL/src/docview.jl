@@ -29,20 +29,14 @@ function helpmode(io::IO, line::AbstractString, mod::Module=Main)
 end
 helpmode(line::AbstractString, mod::Module=Main) = helpmode(stdout, line, mod)
 
-# A hack to make the line entered at the REPL available at trimdocs without
-# passing the string through the entire mechanism.
-const extended_help_on = Ref{Any}(nothing)
-
 function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing)
     line = strip(line)
     ternary_operator_help = (line == "?" || line == "?:")
     if startswith(line, '?') && !ternary_operator_help
         line = line[2:end]
-        extended_help_on[] = nothing
-        brief = false
+        extended_help = true
     else
-        extended_help_on[] = line
-        brief = true
+        extended_help = String(line)::String
     end
     # interpret anything starting with # or #= as asking for help on comments
     if startswith(line, "#")
@@ -72,7 +66,7 @@ function _helpmode(io::IO, line::AbstractString, mod::Module=Main, internal_acce
         end
     # the following must call repl(io, expr) via the @repl macro
     # so that the resulting expressions are evaluated in the Base.Docs namespace
-    :($REPL.@repl $io $expr $brief $mod $internal_accesses)
+    :($REPL.@repl $io $expr $extended_help $mod $internal_accesses)
 end
 _helpmode(line::AbstractString, mod::Module=Main) = _helpmode(stdout, line, mod)
 
@@ -123,27 +117,20 @@ struct Message  # For direct messages to the terminal
     msg    # AbstractString
     fmt    # keywords to `printstyled`
 end
-Message(msg) = Message(msg, ())
-
 function Markdown.term(io::IO, msg::Message, columns)
     printstyled(io, msg.msg; msg.fmt...)
 end
 
-trimdocs(doc, brief::Bool) = doc
-
-function trimdocs(md::Markdown.MD, brief::Bool)
-    brief || return md
-    md, trimmed = _trimdocs(md, brief)
-    if trimmed
-        line = extended_help_on[]
-        line = isa(line, AbstractString) ? line : ""
-        push!(md.content, Message("Extended help is available with `??$line`", (color=Base.info_color(), bold=true)))
-    end
+add_extended_help!(doc, ::String) = doc
+function add_extended_help!(md::Markdown.MD, extended_help::String)
+    msg = Message("Extended help is available with `help?> ?$extended_help`", (color=Base.info_color(), bold=true))
+    push!(md.content, msg)
     return md
 end
 
-function _trimdocs(md::Markdown.MD, brief::Bool)
-    content, trimmed = [], false
+trimdocs(doc) = doc
+function trimdocs(md::Markdown.MD)
+    content = []
     for c in md.content
         if isa(c, Markdown.Header{1}) && isa(c.text, AbstractArray) && !isempty(c.text)
             item = c.text[1]
@@ -151,22 +138,13 @@ function _trimdocs(md::Markdown.MD, brief::Bool)
                 lowercase(item) ∈ ("extended help",
                                    "extended documentation",
                                    "extended docs")
-                trimmed = true
                 break
             end
         end
-        c, trm = _trimdocs(c, brief)
-        trimmed |= trm
-        push!(content, c)
+        push!(content, trimdocs(c))
     end
-    return Markdown.MD(content, md.meta), trimmed
+    return Markdown.MD(content, md.meta)
 end
-
-_trimdocs(md, brief::Bool) = md, false
-
-
-is_tuple(expr) = false
-is_tuple(expr::Expr) = expr.head == :tuple
 
 struct Logged{F}
     f::F
@@ -180,7 +158,7 @@ end
 (la::Logged)(args...) = la.f(args...)
 
 function log_nonpublic_access(expr::Expr, mod::Module, internal_access::Set{Pair{Module,Symbol}})
-    if expr.head === :. && length(expr.args) == 2 && !is_tuple(expr.args[2])
+    if expr.head === :. && length(expr.args) == 2 && !Meta.isexpr(expr.args[2], :tuple)
         Expr(:call, Logged(getproperty, mod, internal_access), log_nonpublic_access.(expr.args, (mod,), (internal_access,))...)
     elseif expr.head === :call && expr.args[1] === Base.Docs.Binding
         Expr(:call, Logged(Base.Docs.Binding, mod, internal_access), log_nonpublic_access.(expr.args[2:end], (mod,), (internal_access,))...)
@@ -206,10 +184,17 @@ function insert_internal_warning(other, internal_access::Set{Pair{Module,Symbol}
     other
 end
 
-function doc(binding::Binding, sig::Type = Union{})
+function doc(binding::Binding, @nospecialize(sig::Type = Union{});
+             extended_help::Union{Bool,String}=false)
     if defined(binding)
         result = getdoc(resolve(binding), sig)
-        result === nothing || return result
+        if result !== nothing
+            if extended_help isa String
+                result = trimdocs(result)
+                add_extended_help!(result, extended_help)
+            end
+            return result
+        end
     end
     results, groups = DocStr[], MultiDoc[]
     # Lookup `binding` and `sig` for matches in all modules of the docsystem.
@@ -230,7 +215,7 @@ function doc(binding::Binding, sig::Type = Union{})
         # `Binding`, otherwise if it's not an alias then we generate a summary for the
         # `binding` and display that to the user instead.
         alias = aliasof(binding)
-        alias == binding ? summarize(alias, sig) : doc(alias, sig)
+        return alias == binding ? summarize(alias, sig) : doc(alias, sig; extended_help)
     else
         # There was at least one match for `binding` while searching. If there weren't any
         # matches for `sig` then we concatenate *all* the docs from the matching `Binding`s.
@@ -240,7 +225,17 @@ function doc(binding::Binding, sig::Type = Union{})
             end
         end
         # Get parsed docs and concatenate them.
-        md = catdoc(mapany(parsedoc, results)...)
+        docs = mapany(parsedoc, results)
+        if extended_help isa String # in the "brief" documentation mode
+            md = catdoc(docs...)
+            md = trimdocs(md)
+            add_extended_help!(md, extended_help)
+        elseif extended_help # in the extended documentation mode
+            push!(docs, summarize(binding, sig; extended=true)) # add summary docs too in extended help mode
+            md = catdoc(docs...)
+        else # in the simple documentation mode (e.g., called from `@doc`)
+            md = catdoc(docs...)
+        end
         # Save metadata in the generated markdown.
         if isa(md, Markdown.MD)
             md.meta[:results] = results
@@ -252,11 +247,30 @@ function doc(binding::Binding, sig::Type = Union{})
 end
 
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
-doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
-doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
-doc(object, sig...)              = doc(object, Tuple{sig...})
+doc(obj::UnionAll; kws...) = doc(Base.unwrap_unionall(obj); kws...)
+doc(object, @nospecialize(sig::Type=Union{}); kws...) = doc(aliasof(object, typeof(object)), sig; kws...)
 
-function lookup_doc(ex)
+function lookup_doc_ex(@nospecialize(x); extended_help::Union{Bool,String}=false)
+    docex = lookup_doc(x; extended_help)
+    return Core._ensure_doc_expr(docex, @__MODULE__, LineNumberNode(@__LINE__, @__FILE__))
+end
+
+function lookup_doc(@nospecialize(x); extended_help::Union{Bool,String}=false)
+    docs = _lookup_doc(x, extended_help)
+    if isfield(x)
+        return :(let
+            T, field = $(esc(x.args[1])), $(esc(x.args[2]))
+            if T isa DataType
+                fielddoc(T, field)
+            else
+                $docs
+            end
+        end)
+    end
+    return docs
+end
+
+function _lookup_doc(@nospecialize(ex), extended_help::Union{Bool,String}=false)
     if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
         # handle syntactic operators, e.g. +=, ::, .=
         ex = ex.head
@@ -266,7 +280,7 @@ function lookup_doc(ex)
     elseif Meta.isexpr(ex, :incomplete)
         return :($(Markdown.md"No documentation found."))
     elseif !isa(ex, Expr) && !isa(ex, Symbol)
-        return :($(doc)($(typeof)($(esc(ex)))))
+        return :($doc(typeof($(esc(ex))); extended_help=$extended_help))
     end
     if isa(ex, Symbol) && Base.isoperator(ex)
         str = string(ex)
@@ -287,30 +301,42 @@ function lookup_doc(ex)
     binding = esc(bindingexpr(namify(ex)))
     if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
         sig = esc(signature(ex))
-        :($(doc)($binding, $sig))
+        :($doc($binding, $sig; extended_help=$extended_help))
     else
-        :($(doc)($binding))
+        :($doc($binding; extended_help=$extended_help))
     end
 end
 
 # Object Summaries.
 # =================
 
-function summarize(binding::Binding, sig)
+function summarize(binding::Binding, @nospecialize(sig); extended::Bool=false)
     io = IOBuffer()
     if defined(binding)
         binding_res = resolve(binding)
         if !isa(binding_res, Module)
-            varstr = "$(binding.mod).$(binding.var)"
+            varstr = "`$(binding.mod).$(binding.var)`"
             if Base.ispublic(binding.mod, binding.var)
-                println(io, "No documentation found for public binding `$varstr`.\n")
+                if extended
+                    println(io, "Extended information found for public binding $varstr.\n")
+                else
+                    println(io, "No documentation found for public binding $varstr.\n")
+                end
             else
-                println(io, "No documentation found for private binding `$varstr`.\n")
+                if extended
+                    println(io, "Extended information found for private binding $varstr.\n")
+                else
+                    println(io, "No documentation found for private binding $varstr.\n")
+                end
             end
         end
         summarize(io, binding_res, binding)
     else
-        println(io, "No documentation found.\n")
+        if extended
+            println(io, "Extended information found.\n")
+        else
+            println(io, "No documentation found.\n")
+        end
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
         bpart = Base.lookup_binding_partition(Base.tls_world_age(), convert(Core.Binding, GlobalRef(binding.mod, binding.var)))
         if Base.binding_kind(bpart) === Base.BINDING_KIND_GUARD
@@ -560,10 +586,17 @@ function repl_latex(io::IO, s0::String)
 end
 repl_latex(s::String) = repl_latex(stdout, s)
 
-macro repl(ex, brief::Bool=false, mod::Module=Main) repl(ex; brief, mod) end
-macro repl(io, ex, brief, mod, internal_accesses) repl(io, ex; brief, mod, internal_accesses) end
+macro repl(ex, extended_help=false, mod=Main)
+    repl(ex; extended_help, mod)
+end
+macro repl(io, ex, extended_help, mod, internal_accesses)
+    repl(io, ex; extended_help, mod, internal_accesses)
+end
 
-function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing)
+function repl(io::IO, s::Symbol;
+              extended_help::Union{Bool,String}=false,
+              mod::Module=Main,
+              internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing)
     str = string(s)
     quote
         repl_latex($io, $str)
@@ -571,19 +604,20 @@ function repl(io::IO, s::Symbol; brief::Bool=true, mod::Module=Main, internal_ac
         $(if !isdefined(mod, s) && !haskey(keywords, s) && !Base.isoperator(s)
                :(repl_corrections($io, $str, $mod))
           end)
-        $(_repl(s, brief, mod, internal_accesses))
+        $(_repl(s; extended_help, mod, internal_accesses))
     end
 end
 isregex(x) = isexpr(x, :macrocall, 3) && x.args[1] === Symbol("@r_str") && !isempty(x.args[3])
 
-repl(io::IO, ex::Expr; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex, brief, mod, internal_accesses)
-repl(io::IO, str::AbstractString; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = :(apropos($io, $str))
-repl(io::IO, other; brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing) = esc(:(@doc $other)) # TODO: track internal_accesses
-#repl(io::IO, other) = lookup_doc(other) # TODO
+repl(io::IO, ex::Expr; kws...) = isregex(ex) ? :(apropos($io, $ex)) : _repl(ex; kws...)
+repl(io::IO, str::AbstractString; _...) = :(apropos($io, $str))
+repl(io::IO, other; extended_help::Union{Bool,String}=false, _...) = lookup_doc_ex(other; extended_help)
+repl(x; kws...) = repl(stdout, x; kws...)
 
-repl(x; brief::Bool=true, mod::Module=Main) = repl(stdout, x; brief, mod)
-
-function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing)
+function _repl(x;
+               extended_help::Union{Bool,String}=false,
+               mod::Module=Main,
+               internal_accesses::Union{Nothing, Set{Pair{Module,Symbol}}}=nothing)
     if isexpr(x, :call)
         x = x::Expr
         # determine the types of the values
@@ -636,21 +670,9 @@ function _repl(x, brief::Bool=true, mod::Module=Main, internal_accesses::Union{N
             x.args = Any[x.args[1], Expr(:parameters, kwargs...), pargs...]
         end
     end
-    #docs = lookup_doc(x) # TODO
-    docs = esc(:(@doc $x))
-    docs = if isfield(x)
-        quote
-            if isa($(esc(x.args[1])), DataType)
-                fielddoc($(esc(x.args[1])), $(esc(x.args[2])))
-            else
-                $docs
-            end
-        end
-    else
-        docs
-    end
+    docs = lookup_doc_ex(x; extended_help)
     docs = log_nonpublic_access(macroexpand(mod, docs), mod, internal_accesses)
-    :(REPL.trimdocs($docs, $brief))
+    return docs
 end
 
 """
@@ -685,7 +707,6 @@ end
 
 # As with the additional `doc` methods, this converts an object to a `Binding` first.
 fielddoc(object, field::Symbol) = fielddoc(aliasof(object, typeof(object)), field)
-
 
 # Search & Rescue
 # Utilities for correcting user mistakes and (eventually)
