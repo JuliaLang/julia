@@ -2311,4 +2311,25 @@ precompile_test_harness("llvmcall validation") do load_path
     end
 end
 
+precompile_test_harness("BindingReplaceDisallow") do load_path
+    write(joinpath(load_path, "BindingReplaceDisallow.jl"),
+        """
+        module BindingReplaceDisallow
+        const sinreplace = try
+            eval(Expr(:block,
+                Expr(:const, GlobalRef(Base, :sin), 1),
+                nothing))
+        catch ex
+            ex isa ErrorException || rethrow()
+            ex
+        end
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("BindingReplaceDisallow"))
+    @eval using BindingReplaceDisallow
+    invokelatest() do
+        @test BindingReplaceDisallow.sinreplace.msg == "Creating a new global in closed module `Base` (`sin`) breaks incremental compilation because the side effects will not be permanent."
+    end
+end
+
 finish_precompile_test!()
