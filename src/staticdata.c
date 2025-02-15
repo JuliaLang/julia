@@ -3542,7 +3542,8 @@ static void jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_
 
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return;
-    enum jl_partition_kind kind = bpart->kind;
+    size_t raw_kind = bpart->kind;
+    enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & 0x0f);
     if (!jl_bkind_is_some_import(kind))
         return;
     jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
@@ -3551,6 +3552,7 @@ static void jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_
         return;
     if (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_FAILED) {
         jl_check_new_binding_implicit(bpart, b, NULL, jl_atomic_load_relaxed(&jl_world_counter));
+        bpart->kind |= (raw_kind & 0xf0);
         if (bpart->min_world > jl_require_world)
             goto invalidated;
     }
@@ -3581,7 +3583,7 @@ invalidated:
             jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx);
         }
     }
-    if (b->exportp) {
+    if (bpart->kind & BINDING_FLAG_EXPORTED) {
         jl_module_t *mod = b->globalref->mod;
         jl_sym_t *name = b->globalref->name;
         JL_LOCK(&mod->lock);
