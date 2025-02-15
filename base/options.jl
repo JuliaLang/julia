@@ -61,6 +61,7 @@ struct JLOptions
     heap_size_hint::UInt64
     trace_compile_timing::Int8
     trim::Int8
+    show_eval::Int8
     task_metrics::Int8
     timeout_for_safepoint_straggler_s::Int16
 end
