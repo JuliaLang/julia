@@ -209,6 +209,8 @@ const BINDING_KIND_GUARD        = 0x8
 const BINDING_KIND_UNDEF_CONST  = 0x9
 const BINDING_KIND_BACKDATED_CONST = 0xa
 
+const BINDING_FLAG_EXPORTED     = 0x10
+
 is_defined_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == BINDING_KIND_UNDEF_CONST)
 is_some_imported(kind::UInt8) = (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED)

@@ -1061,10 +1061,10 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
     jl_binding_t *b = jl_get_binding_for_method_def(mod, name, new_world);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     jl_value_t *gf = NULL;
-    enum jl_partition_kind kind = bpart->kind;
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (!jl_bkind_is_some_guard(kind) && kind != BINDING_KIND_DECLARED && kind != BINDING_KIND_IMPLICIT) {
         jl_walk_binding_inplace(&b, &bpart, new_world);
-        if (jl_bkind_is_some_constant(bpart->kind)) {
+        if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
             gf = bpart->restriction;
             JL_GC_PROMISE_ROOTED(gf);
             jl_check_gf(gf, b->globalref->name);

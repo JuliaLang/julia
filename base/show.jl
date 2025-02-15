@@ -3374,6 +3374,9 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     else
         print(io, max_world)
     end
+    if (partition.kind & BINDING_FLAG_EXPORTED) != 0
+        print(io, " [exported]")
+    end
     print(io, " - ")
     kind = binding_kind(partition)
     if kind == BINDING_KIND_BACKDATED_CONST
