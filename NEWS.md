@@ -1,4 +1,4 @@
-Julia v1.12 Release Notes
+Julia v1.13 Release Notes
 ========================
 
 New language features
@@ -21,6 +21,8 @@ Build system changes
 
 New library functions
 ---------------------
+
+* `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
 
 New library features
 --------------------
