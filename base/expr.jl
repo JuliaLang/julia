@@ -1694,6 +1694,6 @@ function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecial
                          Expr(:meta, :pop_loc))))
     spnames = g.spnames
     return generated_body_to_codeinfo(spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
-        typename(typeof(g.gen)).module,
+        source.module,
         source.isva)
 end
