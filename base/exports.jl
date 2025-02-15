@@ -738,6 +738,8 @@ export
 # tasks and conditions
     Condition,
     current_task,
+    root_task,
+    isroottask,
     islocked,
     istaskdone,
     istaskstarted,
