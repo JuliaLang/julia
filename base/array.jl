@@ -1477,31 +1477,14 @@ julia> a[1:6]
 ```
 """
 function resize!(a::Vector, nl::Integer; first::Bool=false)
-    first ? _resizefirst!(a, nl) : _resize!(a, nl)
-end
-
-function _resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
-        _growend!(a, nl-l)
+        first ? _growbeg!(a, nl-l) : _growend!(a, nl-l)
     elseif nl != l
         if nl < 0
             _throw_argerror("new length must be ≥ 0")
         end
-        _deleteend!(a, l-nl)
-    end
-    return a
-end
-
-function _resizefirst!(a::Vector, nl::Integer)
-    l = length(a)
-    if nl > l
-        _growbeg!(a, nl-l)
-    elseif nl != l
-        if nl < 0
-            _throw_argerror("new length must be ≥ 0")
-        end
-        _deletebeg!(a, l-nl)
+        first ? _deletebeg!(a, l-nl) : _deleteend!(a, l-nl)
     end
     return a
 end
