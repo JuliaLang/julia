@@ -811,17 +811,14 @@ function sizehint!(B::BitVector, sz::Integer)
     return B
 end
 
-function resize!(B::BitVector, n::Integer; first::Bool=false)
-    first ? _resizefirst!(B, n) : _resize!(B, n)
-end
-
-_resize!(B::BitVector, n::Integer) = _resize_int!(B, Int(n))
-function _resize_int!(B::BitVector, n::Int)
+resize!(B::BitVector, n::Integer; first::Bool=false) = _resize_int!(B, Int(n), first)
+function _resize_int!(B::BitVector, n::Int, first::Bool)
     n0 = length(B)
     n == n0 && return B
     n >= 0 || throw(BoundsError(B, n))
     if n < n0
-        deleteat!(B, n+1:n0)
+        r = first ? 1:n0-n : n+1:n0
+        deleteat!(B, r)
         return B
     end
     Bc = B.chunks
@@ -832,27 +829,7 @@ function _resize_int!(B::BitVector, n::Int)
         Bc[end] = UInt64(0)
     end
     B.len = n
-    return B
-end
-
-_resizefirst!(B::BitVector, n::Integer) = _resizefirst_int!(B, Int(n))
-function _resizefirst_int!(B::BitVector, n::Int)
-    n0 = length(B)
-    n == n0 && return B
-    n >= 0 || throw(BoundsError(B, n))
-    if n < n0
-        deleteat!(B, 1:n0-n)
-        return B
-    end
-    Bc = B.chunks
-    k0 = length(Bc)
-    k1 = num_bit_chunks(n)
-    if k1 > k0
-        _growend!(Bc, k1 - k0)
-        Bc[end] = UInt64(0)
-    end
-    B.len = n
-    copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
+    first && copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
     return B
 end
 
