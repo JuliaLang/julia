@@ -2733,8 +2733,16 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
     offsets = scratch1
     inneroffsets = scratch2
     outdimsprods = cumprod(outdims)
+    AInds = CartesianIndices(A)
     for a ∈ as
-        if isa(a, AbstractArray)
+        if isa(a, AbstractVecOrMat)
+            @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
+            inneroffsets[1] = cat_size(a, 1) - 1
+            inneroffsets[2] = cat_size(a, 2) - 1
+            @inbounds Aj = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
+            A[AInds[Ai]:AInds[Aj]] = a
+            inneroffsets[1] = inneroffsets[2] = 0
+        elseif isa(a, AbstractArray)
             for ai ∈ a
                 @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
                 A[Ai] = ai
