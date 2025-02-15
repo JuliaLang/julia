@@ -2227,3 +2227,24 @@ end
         @test_throws MethodError isreal(G)
     end
 end
+
+@testset "similar/reshape for AbstractOneTo" begin
+    A = [1,2]
+    @testset "reshape" begin
+        @test reshape(A, 2, SizedArrays.SOneTo(1)) == reshape(A, 2, 1)
+        @test reshape(A, Base.OneTo(2), SizedArrays.SOneTo(1)) == reshape(A, 2, 1)
+        @test reshape(A, SizedArrays.SOneTo(1), 2) == reshape(A, 1, 2)
+        @test reshape(A, SizedArrays.SOneTo(1), Base.OneTo(2)) == reshape(A, 1, 2)
+    end
+    @testset "similar" begin
+        b = similar(A, SizedArrays.SOneTo(1), big(2))
+        @test b isa Array{Int, 2}
+        @test size(b) == (1, 2)
+        b = similar(A, SizedArrays.SOneTo(1), Base.OneTo(2))
+        @test b isa Array{Int, 2}
+        @test size(b) == (1, 2)
+        b = similar(A, SizedArrays.SOneTo(1), 2, Base.OneTo(2))
+        @test b isa Array{Int, 3}
+        @test size(b) == (1, 2, 2)
+    end
+end
