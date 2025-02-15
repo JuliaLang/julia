@@ -2148,23 +2148,14 @@ function form_partially_defined_struct(@nospecialize(obj), @nospecialize(name))
     isabstracttype(objt) && return nothing
     fldidx = try_compute_fieldidx(objt, name.val)
     fldidx === nothing && return nothing
+    isa(obj, PartialStruct) && return define_field(obj, fldidx, fieldtype(objt0, fldidx))
     nminfld = datatype_min_ninitialized(objt)
-    if ismutabletype(objt)
-        # A mutable struct can have non-contiguous undefined fields, but `PartialStruct` cannot
-        # model such a state. So here `PartialStruct` can be used to represent only the
-        # objects where the field following the minimum initialized fields is also defined.
-        if fldidx ≠ nminfld+1
-            # if it is already represented as a `PartialStruct`, we can add one more
-            # `isdefined`-field information on top of those implied by its `fields`
-            if !(obj isa PartialStruct && fldidx == length(obj.fields)+1)
-                return nothing
-            end
-        end
-    else
-        fldidx > nminfld || return nothing
-    end
-    return PartialStruct(fallback_lattice, objt0, Any[obj isa PartialStruct && i≤length(obj.fields) ?
-        obj.fields[i] : fieldtype(objt0,i) for i = 1:fldidx])
+    fldidx > nminfld || return nothing
+    fields = collect(Any, fieldtypes(objt0))
+    nmaxfld = something(datatype_fieldcount(objt), fldidx)
+    undef = trues(nmaxfld)
+    undef[fldidx] = false
+    return PartialStruct(fallback_lattice, objt0, undef, fields)
 end
 
 function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any}, call::CallMeta)
@@ -3144,7 +3135,7 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
                     all(i::Int -> ⊑(𝕃ᵢ, (at.fields::Vector{Any})[i], fieldtype(t, i)), 1:n)
                 end))
             nothrow = isexact
-            rt = PartialStruct(𝕃ᵢ, rt, at.fields::Vector{Any})
+            rt = PartialStruct(𝕃ᵢ, rt, at.undef, at.fields::Vector{Any})
         end
     else
         rt = refine_partial_type(rt)
@@ -3725,8 +3716,7 @@ end
 @nospecializeinfer function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
-        anyrefine = !isvarargtype(rt.fields[end]) &&
-            length(rt.fields) > datatype_min_ninitialized(rt.typ)
+        anyrefine = refines_definedness_information(rt)
         𝕃 = typeinf_lattice(info.interp)
         ⊏ = strictpartialorder(𝕃)
         for i in 1:length(fields)
@@ -3738,7 +3728,7 @@ end
             end
             fields[i] = a
         end
-        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, fields)
+        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, rt.undef, fields)
     end
     if isa(rt, PartialOpaque)
         return rt # XXX: this case was missed in #39512
