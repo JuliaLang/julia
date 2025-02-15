@@ -2691,7 +2691,9 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
 
     # copy into final array
     A = cat_similar(as[1], T, ntuple(i -> outdims[i], nd))
-    hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
+    if !any(==(0), outdims)
+        hvncat_fill!(A, currentdims, blockcounts, d1, d2, as)
+    end
     return A
 end
 
@@ -2707,20 +2709,23 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
     outdims = size(A)
     offsets = scratch1
     inneroffsets = scratch2
+    outdimsprods = cumprod(outdims)
+    AInds = CartesianIndices(A)
     for a ∈ as
         if isa(a, AbstractArray)
-            for ai ∈ a
-                @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
-                A[Ai] = ai
-
-                @inbounds for j ∈ 1:N
-                    inneroffsets[j] += 1
-                    inneroffsets[j] < cat_size(a, j) && break
+            if cat_length(a) > 0
+                @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
+                @inbounds for j ∈ 1:cat_ndims(a)
+                    inneroffsets[j] = cat_size(a, j) - 1
+                end
+                @inbounds Aj = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
+                @inbounds A[AInds[Ai]:AInds[Aj]] = a
+                for j ∈ 1:N
                     inneroffsets[j] = 0
                 end
             end
         else
-            @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
+            @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
             A[Ai] = a
         end
 
@@ -2733,13 +2738,11 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
 end
 
 @propagate_inbounds function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int},
-                                              outdims::Tuple{Vararg{Int}}, nd::Int)
+                    outdimsprods::Tuple{Vararg{Int}}, nd::Int)
     Ai = inneroffsets[1] + offsets[1] + 1
     for j ∈ 2:nd
         increment = inneroffsets[j] + offsets[j]
-        for k ∈ 1:j-1
-            increment *= outdims[k]
-        end
+        increment *= outdimsprods[j - 1]
         Ai += increment
     end
     Ai
