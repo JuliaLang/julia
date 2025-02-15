@@ -2732,10 +2732,11 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
     outdims = size(A)
     offsets = scratch1
     inneroffsets = scratch2
+    outdimsprods = cumprod(outdims)
     for a ∈ as
         if isa(a, AbstractArray)
             for ai ∈ a
-                @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
+                @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
                 A[Ai] = ai
 
                 @inbounds for j ∈ 1:N
@@ -2745,7 +2746,7 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
                 end
             end
         else
-            @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdims, N)
+            @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
             A[Ai] = a
         end
 
@@ -2758,13 +2759,11 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
 end
 
 @propagate_inbounds function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int},
-                                              outdims::Tuple{Vararg{Int}}, nd::Int)
+                    outdimsprods::Tuple{Vararg{Int}}, nd::Int)
     Ai = inneroffsets[1] + offsets[1] + 1
     for j ∈ 2:nd
         increment = inneroffsets[j] + offsets[j]
-        for k ∈ 1:j-1
-            increment *= outdims[k]
-        end
+        increment *= outdimsprods[j - 1]
         Ai += increment
     end
     Ai
