@@ -1955,12 +1955,12 @@ function sortperm(A::AbstractArray;
                   scratch::Union{Vector{<:Integer}, Nothing}=nothing,
                   dims...) #to optionally specify dims argument
     if rev === true
-        _sortperm(A; alg, order=ord(lt, by, true, order), scratch, dims...)
+        _sortperm(A, alg, ord(lt, by, true, order), scratch, dims)
     else
-        _sortperm(A; alg, order=ord(lt, by, nothing, order), scratch, dims...)
+        _sortperm(A, alg, ord(lt, by, nothing, order), scratch, dims)
     end
 end
-function _sortperm(A::AbstractArray; alg, order, scratch, dims...)
+function _sortperm(A::AbstractArray, alg, order, scratch, dims)
     if order === Forward && isa(A,Vector) && eltype(A)<:Integer
         n = length(A)
         if n > 1
