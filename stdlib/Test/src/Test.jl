@@ -367,8 +367,7 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
                 quoted_args[i] = :($a)    
             else
                 quoted_args[i] = a
-            end
-            
+            end 
             if b isa Symbol
                 quoted_args[i+2] = QuoteNode(b)
             elseif Meta.isexpr(b, :call)
@@ -376,7 +375,6 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
             else
                 quoted_args[i+2] = b
             end
-            
             i += 2
         end
 
