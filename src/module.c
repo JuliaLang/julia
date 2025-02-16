@@ -221,7 +221,7 @@ jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b, size_t min
     return bpart;
 }
 
-JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_using_core, uint8_t self_name)
+JL_DLLEXPORT jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
 {
     jl_task_t *ct = jl_current_task;
     const jl_uuid_t uuid_zero = {0, 0};
@@ -253,7 +253,11 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
     jl_atomic_store_relaxed(&m->bindings, jl_emptysvec);
     jl_atomic_store_relaxed(&m->bindingkeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
     arraylist_new(&m->usings, 0);
-    JL_GC_PUSH1(&m);
+    return m;
+}
+
+JL_DLLEXPORT void jl_add_default_names(jl_module_t *m, uint8_t default_using_core, uint8_t self_name)
+{
     if (jl_core_module) {
         // Bootstrap: Before jl_core_module is defined, we don't have enough infrastructure
         // for bindings, so Core itself gets special handling in jltypes.c
@@ -262,13 +266,21 @@ JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, ui
         }
         if (self_name) {
             // export own name, so "using Foo" makes "Foo" itself visible
-            jl_set_const(m, name, (jl_value_t*)m);
-            jl_module_public(m, name, 1);
+            jl_set_const(m, m->name, (jl_value_t*)m);
+            jl_module_public(m, m->name, 1);
         }
     }
+}
+
+JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_using_core, uint8_t self_name)
+{
+    jl_module_t *m = jl_new_module__(name, parent);
+    JL_GC_PUSH1(&m);
+    jl_add_default_names(m, default_using_core, self_name);
     JL_GC_POP();
     return m;
 }
+
 
 // Precondition: world_counter_lock is held
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
@@ -1273,6 +1285,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b,
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world)
 {
+    check_safe_newbinding(b->globalref->mod, b->globalref->name);
     assert(jl_atomic_load_relaxed(&b->partitions) == old_bpart);
     jl_atomic_store_release(&old_bpart->max_world, new_world-1);
     jl_binding_partition_t *new_bpart = new_binding_partition();
