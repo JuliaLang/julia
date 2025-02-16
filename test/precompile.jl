@@ -2332,4 +2332,32 @@ precompile_test_harness("BindingReplaceDisallow") do load_path
     end
 end
 
+precompile_test_harness("MainImportDisallow") do load_path
+    write(joinpath(load_path, "MainImportDisallow.jl"),
+        """
+        module MainImportDisallow
+            const importvar = try
+                import Base.Main: cant_get_at_me
+            catch ex
+                ex isa ErrorException || rethrow()
+                ex
+            end
+            const usingmain = try
+                using Base.Main
+            catch ex
+                ex isa ErrorException || rethrow()
+                ex
+            end
+            # Import `Main` is permitted, because it does not look at bindings inside `Main`
+            import Base.Main
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("MainImportDisallow"))
+    @eval using MainImportDisallow
+    invokelatest() do
+        @test MainImportDisallow.importvar.msg == "Any `import` or `using` from `Main` is prohibited during incremental compilation."
+        @test MainImportDisallow.usingmain.msg == "Any `import` or `using` from `Main` is prohibited during incremental compilation."
+    end
+end
+
 finish_precompile_test!()
