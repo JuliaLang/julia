@@ -486,6 +486,11 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
             is_flag_stmt = 1;
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym)
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
+        else if (jl_is_globalref(st)) {
+            jl_globalref_t *gr = (jl_globalref_t*)st;
+            if (jl_object_in_image((jl_value_t*)gr->mod))
+                li->has_image_globalref = 1;
+        }
         else {
             if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_assign_sym)
                 st = jl_exprarg(st, 1);
@@ -593,6 +598,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->max_world = ~(size_t)0;
     src->propagate_inbounds = 0;
     src->has_fcall = 0;
+    src->has_image_globalref = 0;
     src->nospecializeinfer = 0;
     src->constprop = 0;
     src->inlining = 0;
