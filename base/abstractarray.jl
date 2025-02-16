@@ -2390,9 +2390,7 @@ end
 function _typed_hvncat(T::Type, ::Val{N}, xs::Number...) where N
     N < 0 &&
         throw(ArgumentError("concatenation dimension must be non-negative"))
-    A = cat_similar(xs[1], T, (ntuple(Returns(1), Val(N - 1))..., length(xs)))
-    hvncat_fill!(A, false, xs)
-    return A
+    return reshape([xs...], (ntuple(Returns(1), Val(N - 1))..., length(xs)))
 end
 
 function _typed_hvncat(::Type{T}, ::Val{N}, as::AbstractArray...) where {T, N}
@@ -2722,8 +2720,7 @@ function _typed_hvncat_shape(::Type{T}, shape::NTuple{N, Tuple}, row_first, as::
     return A
 end
 
-function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int},
-                              d1::Int, d2::Int, as::Tuple) where {T, N}
+function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::Vector{Int}, d1::Int, d2::Int, as::Tuple) where {T, N}
     N > 1 || throw(ArgumentError("dimensions of the destination array must be at least 2"))
     length(scratch1) == length(scratch2) == N ||
         throw(ArgumentError("scratch vectors must have as many elements as the destination array has dimensions"))
@@ -2731,43 +2728,46 @@ function hvncat_fill!(A::AbstractArray{T, N}, scratch1::Vector{Int}, scratch2::V
     0 < d2 < 3 &&
     d1 != d2 ||
         throw(ArgumentError("d1 and d2 must be either 1 or 2, exclusive."))
-    outdims = size(A)
+    outdimsprod = cumprod(size(A))
     offsets = scratch1
     inneroffsets = scratch2
-    outdimsprods = cumprod(outdims)
-    AInds = CartesianIndices(A)
     for a ∈ as
+        startindex = CartesianIndex(ntuple(i -> offsets[i] + 1, Val(N)))
         if isa(a, AbstractArray)
-            if cat_length(a) > 0
-                @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
-                @inbounds for j ∈ 1:cat_ndims(a)
-                    inneroffsets[j] = cat_size(a, j) - 1
-                end
-                @inbounds Aj = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
-                @inbounds A[AInds[Ai]:AInds[Aj]] = a
-                for j ∈ 1:N
-                    inneroffsets[j] = 0
+            if !isempty(a)
+                if length(a) > 4
+                    endindex = CartesianIndex(ntuple(i -> offsets[i] + cat_size(a, i), Val(N)))
+                    @inbounds A[startindex:endindex] = a
+                else
+                    for ai ∈ a
+                        @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprod, N)
+                        @inbounds A[Ai] = ai
+                        @inbounds for j ∈ 1:N
+                            inneroffsets[j] += 1
+                            inneroffsets[j] < cat_size(a, j) && break
+                            inneroffsets[j] = 0
+                        end
+                    end
                 end
             end
         else
-            @inbounds Ai = hvncat_calcindex(offsets, inneroffsets, outdimsprods, N)
-            A[Ai] = a
+            @inbounds A[startindex] = a
         end
 
-        @inbounds for j ∈ (d1, d2, 3:N...)
-            offsets[j] += cat_size(a, j)
-            offsets[j] < outdims[j] && break
-            offsets[j] = 0
+        @inbounds for i ∈ (d1, d2, 3:N...)
+            offsets[i] += cat_size(a, i)
+            offsets[i] < cat_size(A, i) && break
+            offsets[i] = 0
         end
     end
 end
 
 @propagate_inbounds function hvncat_calcindex(offsets::Vector{Int}, inneroffsets::Vector{Int},
-                    outdimsprods::Tuple{Vararg{Int}}, nd::Int)
+                                                outdimsprod::NTuple{N, Int}, nd::Int) where {N}
     Ai = inneroffsets[1] + offsets[1] + 1
     for j ∈ 2:nd
         increment = inneroffsets[j] + offsets[j]
-        increment *= outdimsprods[j - 1]
+        increment *= outdimsprod[j - 1]
         Ai += increment
     end
     Ai
