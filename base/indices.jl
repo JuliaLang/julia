@@ -214,7 +214,8 @@ end
 # for permutations that leave array elements in the same linear order.
 # those are the permutations that preserve the order of the non-singleton
 # dimensions.
-@inline function setindex_shape_check(X::AbstractArray, I::Integer...)
+function setindex_shape_check(X::AbstractArray, I::Integer...)
+    @inline
     li = ndims(X)
     lj = length(I)
     i = j = 1
