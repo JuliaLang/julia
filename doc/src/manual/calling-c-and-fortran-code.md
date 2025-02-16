@@ -7,8 +7,8 @@ functions can be called directly from Julia without any "glue" code, code genera
 -- even from the interactive prompt. This is accomplished just by making an appropriate call with the
 [`@ccall`](@ref) macro (or the less convenient [`ccall`](@ref) syntax, see the [`ccall` syntax section](@ref ccall-interface)).
 
-The code to be called must be available as a shared library. Most C and Fortran libraries
-are already shipped as pre-compiled shared libraries, but if you are compiling the code yourself using GCC (or
+The code to be called must be available as a shared library. Most C and Fortran libraries ship
+compiled as shared libraries already, but if you are compiling the code yourself using GCC (or
 Clang), you will need to use the `-shared` and `-fPIC` options. The machine instructions generated
 by Julia's JIT are the same as a native C call would be, so the resulting overhead is the same
 as calling a library function from C code. [^1]
