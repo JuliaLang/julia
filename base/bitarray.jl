@@ -826,7 +826,7 @@ function _resize_int!(B::BitVector, n::Int, first::Bool)
     k1 = num_bit_chunks(n)
     if k1 > k0
         if first
-            if (n0 & 63 == 0) && (n & 63 == 0)
+            if (n0 - n) & 63 == 0
                 _growbeg!(Bc, k1 - k0)
             else
                 _growend!(Bc, k1 - k0)
