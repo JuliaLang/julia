@@ -1453,6 +1453,9 @@ If `first` is true, then the new elements are inserted at the start of the colle
 this case, if `n` is smaller than the current collection length, the last `n` elements will
 be retained.
 
+!!! compat "Julia 1.13"
+    The `first` argument was added in Julia 1.13.
+
 # Examples
 ```jldoctest
 julia> resize!([6, 5, 4, 3, 2, 1], 3)
