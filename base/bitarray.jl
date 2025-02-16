@@ -830,6 +830,7 @@ function _resize_int!(B::BitVector, n::Int, first::Bool)
                 _growbeg!(Bc, k1 - k0)
             else
                 _growend!(Bc, k1 - k0)
+                Bc[end] = UInt64(0)
                 copy_chunks!(Bc, 1 + n - n0, Bc, 1, n0)
             end
         else
