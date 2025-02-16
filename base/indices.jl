@@ -214,7 +214,7 @@ end
 # for permutations that leave array elements in the same linear order.
 # those are the permutations that preserve the order of the non-singleton
 # dimensions.
-function setindex_shape_check(X::AbstractArray, I::Integer...)
+@inline function Base.setindex_shape_check(X::AbstractArray, I::Integer...)
     li = ndims(X)
     lj = length(I)
     i = j = 1
@@ -231,7 +231,7 @@ function setindex_shape_check(X::AbstractArray, I::Integer...)
                 jj *= I[j]
             end
             if ii != jj
-                throw_setindex_mismatch(X, I)
+                Base.throw_setindex_mismatch(X, I)
             end
             return
         end
@@ -243,7 +243,7 @@ function setindex_shape_check(X::AbstractArray, I::Integer...)
         elseif jj == 1
             j += 1
         else
-            throw_setindex_mismatch(X, I)
+            Base.throw_setindex_mismatch(X, I)
         end
     end
 end
