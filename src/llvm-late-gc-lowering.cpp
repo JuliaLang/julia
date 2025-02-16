@@ -2181,16 +2181,47 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 NewCall->copyMetadata(*CI);
                 CI->replaceAllUsesWith(NewCall);
                 UpdatePtrNumbering(CI, NewCall, S);
-            } else if (CI->arg_size() == CI->getNumOperands()) {
-                /* No operand bundle to lower */
-                ++it;
-                continue;
             } else {
-                CallInst *NewCall = CallInst::Create(CI, None, CI);
-                NewCall->takeName(CI);
-                NewCall->copyMetadata(*CI);
-                CI->replaceAllUsesWith(NewCall);
-                UpdatePtrNumbering(CI, NewCall, S);
+                SmallVector<OperandBundleDef,2> bundles;
+                CI->getOperandBundlesAsDefs(bundles);
+                bool gc_transition = false;
+                for (auto &bundle: bundles)
+                    if (bundle.getTag() == "gc-transition")
+                        gc_transition = true;
+
+                // In theory LLVM wants us to lower this using RewriteStatepointsForGC
+                if (gc_transition) {
+                    // Insert the operations to switch to gc_safe if necessary.
+                    IRBuilder<> builder(CI);
+                    Value *pgcstack = getOrAddPGCstack(F);
+                    assert(pgcstack);
+                    // We dont use emit_state_set here because safepoints are unconditional for any code that reaches this
+                    // We are basically guaranteed to go from gc_unsafe to gc_safe and back, and both transitions need a safepoint
+                    // We also can't add any BBs here, so just avoiding the branches is good
+                    Value *ptls = get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, pgcstack), tbaa_gcframe);
+                    unsigned offset = offsetof(jl_tls_states_t, gc_state);
+                    Value *gc_state = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), ptls, offset, "gc_state");
+                    LoadInst *last_gc_state = builder.CreateAlignedLoad(Type::getInt8Ty(builder.getContext()), gc_state, Align(sizeof(void*)));
+                    last_gc_state->setOrdering(AtomicOrdering::Monotonic);
+                    builder.CreateAlignedStore(builder.getInt8(JL_GC_STATE_SAFE), gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
+                    MDNode *tbaa = get_tbaa_const(builder.getContext());
+                    emit_gc_safepoint(builder, T_size, ptls, tbaa, false);
+                    builder.SetInsertPoint(CI->getNextNode());
+                    builder.CreateAlignedStore(last_gc_state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
+                    emit_gc_safepoint(builder, T_size, ptls, tbaa, false);
+                }
+                if (CI->arg_size() == CI->getNumOperands()) {
+                    /* No operand bundle to lower */
+                    ++it;
+                    continue;
+                } else {
+                    // remove operand bundle
+                    CallInst *NewCall = CallInst::Create(CI, None, CI);
+                    NewCall->takeName(CI);
+                    NewCall->copyMetadata(*CI);
+                    CI->replaceAllUsesWith(NewCall);
+                    UpdatePtrNumbering(CI, NewCall, S);
+                }
             }
             if (!CI->use_empty()) {
                 CI->replaceAllUsesWith(UndefValue::get(CI->getType()));
