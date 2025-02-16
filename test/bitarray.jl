@@ -214,8 +214,11 @@ timesofar("promotions")
         b1 = bitrand(128)
         b2 = copy(b1)
         @test resize!(b1, 256; first=true)[end-128+1:end] == b2
+        b2 = copy(b1)
         @test resize!(b1, 300; first=true)[end-256+1:end] == b2
+        b2 = copy(b1)
         @test resize!(b1, 340; first=true)[end-300+1:end] == b2
+        b2 = copy(b1)
         @test resize!(b1, 404; first=true)[end-340+1:end] == b2
     end
 
