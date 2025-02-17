@@ -2307,6 +2307,56 @@ precompile_test_harness("llvmcall validation") do load_path
     @eval using LLVMCall
     invokelatest() do
         @test LLVMCall.do_llvmcall2() == UInt32(0)
+        @test first(methods(LLVMCall.do_llvmcall)).specializations.cache.max_world === typemax(UInt)
+    end
+end
+
+precompile_test_harness("BindingReplaceDisallow") do load_path
+    write(joinpath(load_path, "BindingReplaceDisallow.jl"),
+        """
+        module BindingReplaceDisallow
+        const sinreplace = try
+            eval(Expr(:block,
+                Expr(:const, GlobalRef(Base, :sin), 1),
+                nothing))
+        catch ex
+            ex isa ErrorException || rethrow()
+            ex
+        end
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("BindingReplaceDisallow"))
+    @eval using BindingReplaceDisallow
+    invokelatest() do
+        @test BindingReplaceDisallow.sinreplace.msg == "Creating a new global in closed module `Base` (`sin`) breaks incremental compilation because the side effects will not be permanent."
+    end
+end
+
+precompile_test_harness("MainImportDisallow") do load_path
+    write(joinpath(load_path, "MainImportDisallow.jl"),
+        """
+        module MainImportDisallow
+            const importvar = try
+                import Base.Main: cant_get_at_me
+            catch ex
+                ex isa ErrorException || rethrow()
+                ex
+            end
+            const usingmain = try
+                using Base.Main
+            catch ex
+                ex isa ErrorException || rethrow()
+                ex
+            end
+            # Import `Main` is permitted, because it does not look at bindings inside `Main`
+            import Base.Main
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("MainImportDisallow"))
+    @eval using MainImportDisallow
+    invokelatest() do
+        @test MainImportDisallow.importvar.msg == "Any `import` or `using` from `Main` is prohibited during incremental compilation."
+        @test MainImportDisallow.usingmain.msg == "Any `import` or `using` from `Main` is prohibited during incremental compilation."
     end
 end
 

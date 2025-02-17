@@ -1769,6 +1769,7 @@ let getfield_tfunc(@nospecialize xs...) =
         Compiler.getfield_tfunc(Compiler.fallback_lattice, xs...)
     @test getfield_tfunc(Type, Core.Const(:parameters)) !== Union{}
     @test !isa(getfield_tfunc(Type{Tuple{Union{Int, Float64}, Int}}, Core.Const(:name)), Core.Const)
+    @test !isa(getfield_tfunc(Type{Tuple{Any}}, Core.Const(:name)), Core.Const)
 end
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
 
