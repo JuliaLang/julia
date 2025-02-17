@@ -25,7 +25,8 @@ end
 function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{Any}}, extext_methods::Vector{Any}, internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
-    methods_with_invalidated_source = Base.scan_new_methods(extext_methods, internal_methods)
+    backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
+    methods_with_invalidated_source = Base.scan_new_methods(extext_methods, internal_methods, backedges_only)
     stack = CodeInstance[]
     visiting = IdDict{CodeInstance,Int}()
     _insert_backedges(edges, stack, visiting, methods_with_invalidated_source)
