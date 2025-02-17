@@ -1879,8 +1879,14 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
         dt->maybe_subtype_of_cache = 1;
         jl_value_t *uw = jl_unwrap_unionall(p);
         // n.b. the cache for Type ignores parameter normalization except for Typeofwrapper, so it can't be used to make a stable hash value
-        if (!jl_is_datatype(uw) || ((jl_datatype_t*)uw)->name->wrapper != p)
+        if (!jl_is_datatype(uw)) {
             cacheable = 0;
+        }
+        else {
+            jl_datatype_t *dtuw = (jl_datatype_t*)uw;
+            if (!dtuw->isconcretetype || dtuw->name->wrapper != p)
+                cacheable = 0;
+        }
     }
     dt->hash = typekey_hash(dt->name, jl_svec_data(dt->parameters), l, cacheable);
 }
