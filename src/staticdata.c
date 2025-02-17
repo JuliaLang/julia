@@ -90,6 +90,7 @@ External links:
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
 JL_DLLEXPORT size_t jl_require_world = ~(size_t)0;
+JL_DLLEXPORT _Atomic(size_t) jl_first_image_replacement_world = ~(size_t)0;
 
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
@@ -3541,7 +3542,7 @@ extern void export_jl_small_typeof(void);
 int IMAGE_NATIVE_CODE_TAINTED = 0;
 
 // TODO: This should possibly be in Julia
-static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t *bpart, size_t mod_idx, int unchanged_implicit)
+static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t *bpart, size_t mod_idx, int unchanged_implicit, int no_replacement)
 {
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return 1;
@@ -3556,10 +3557,13 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
     if (!jl_bkind_is_some_import(kind))
         return 1;
     jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
+    if (no_replacement)
+        goto add_backedge;
     jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
     if (!latest_imported_bpart)
         return 1;
     if (latest_imported_bpart->min_world <= bpart->min_world) {
+add_backedge:
         // Imported binding is still valid
         if ((kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED) &&
                 external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
@@ -3583,7 +3587,7 @@ invalidated:
             jl_binding_t *bedge = (jl_binding_t*)edge;
             if (!jl_atomic_load_relaxed(&bedge->partitions))
                 continue;
-            jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0);
+            jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0);
         }
     }
     if (bpart->kind & BINDING_FLAG_EXPORTED) {
@@ -3600,7 +3604,7 @@ invalidated:
                 if (!jl_atomic_load_relaxed(&importee->partitions))
                     continue;
                 JL_UNLOCK(&mod->lock);
-                jl_validate_binding_partition(importee, jl_atomic_load_relaxed(&importee->partitions), mod_idx, 0);
+                jl_validate_binding_partition(importee, jl_atomic_load_relaxed(&importee->partitions), mod_idx, 0, 0);
                 JL_LOCK(&mod->lock);
             }
         }
@@ -4070,8 +4074,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         }
     }
     if (s.incremental) {
-        // This needs to be done in a second pass after the binding partitions
-        // have the proper ABI again.
+        int no_replacement = jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0;
         for (size_t i = 0; i < s.fixup_objs.len; i++) {
             uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
             jl_value_t *obj = (jl_value_t*)(image_base + item);
@@ -4079,13 +4082,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 jl_module_t *mod = (jl_module_t*)obj;
                 size_t mod_idx = external_blob_index((jl_value_t*)mod);
                 jl_svec_t *table = jl_atomic_load_relaxed(&mod->bindings);
-                int unchanged_implicit = all_usings_unchanged_implicit(mod);
+                int unchanged_implicit = no_replacement || all_usings_unchanged_implicit(mod);
                 for (size_t i = 0; i < jl_svec_len(table); i++) {
                     jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
                     if ((jl_value_t*)b == jl_nothing)
                         continue;
                     jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
-                    if (!jl_validate_binding_partition(b, bpart, mod_idx, unchanged_implicit)) {
+                    if (!jl_validate_binding_partition(b, bpart, mod_idx, unchanged_implicit, no_replacement)) {
                         unchanged_implicit = all_usings_unchanged_implicit(mod);
                     }
                 }

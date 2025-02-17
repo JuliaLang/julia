@@ -180,26 +180,34 @@ function binding_was_invalidated(b::Core.Binding)
     b.partitions.min_world > unsafe_load(cglobal(:jl_require_world, UInt))
 end
 
-function scan_new_method!(methods_with_invalidated_source::IdSet{Method}, method::Method)
+function scan_new_method!(methods_with_invalidated_source::IdSet{Method}, method::Method, image_backedges_only::Bool)
     isdefined(method, :source) || return
+    if image_backedges_only && !has_image_globalref(method)
+        return
+    end
     src = _uncompressed_ir(method)
     mod = method.module
     foreachgr(src) do gr::GlobalRef
         b = convert(Core.Binding, gr)
-        binding_was_invalidated(b) && push!(methods_with_invalidated_source, method)
+        if binding_was_invalidated(b)
+            # TODO: We could turn this into an addition if condition. For now, use it as a reasonably cheap
+            # additional consistency chekc
+            @assert !image_backedges_only
+            push!(methods_with_invalidated_source, method)
+        end
         maybe_add_binding_backedge!(b, method)
     end
 end
 
-function scan_new_methods(extext_methods::Vector{Any}, internal_methods::Vector{Any})
+function scan_new_methods(extext_methods::Vector{Any}, internal_methods::Vector{Any}, image_backedges_only::Bool)
     methods_with_invalidated_source = IdSet{Method}()
     for method in internal_methods
         if isa(method, Method)
-           scan_new_method!(methods_with_invalidated_source, method)
+           scan_new_method!(methods_with_invalidated_source, method, image_backedges_only)
         end
     end
     for tme::Core.TypeMapEntry in extext_methods
-        scan_new_method!(methods_with_invalidated_source, tme.func::Method)
+        scan_new_method!(methods_with_invalidated_source, tme.func::Method, image_backedges_only)
     end
     return methods_with_invalidated_source
 end
