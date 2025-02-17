@@ -171,9 +171,6 @@ bool FinalLowerGC::shouldRunFinalGC(Function &F)
     should_run |= getOrNull(jl_intrinsics ::GCAllocBytes) != nullptr;
     should_run |= getOrNull(jl_intrinsics ::queueGCRoot) != nullptr;
     should_run |= getOrNull(jl_intrinsics ::safepoint) != nullptr;
-    should_run |= pgcstack_getter != nullptr;
-    should_run |= adoptthread_func != nullptr;
-    should_run |= pgcstack != nullptr;
     return should_run;
 }
 
