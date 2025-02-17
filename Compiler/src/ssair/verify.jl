@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+irshow_was_loaded() = invokelatest(isdefined, Compiler.IRShow, :debuginfo_firstline)
 function maybe_show_ir(ir::IRCode)
-    if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
+    if irshow_was_loaded()
         # ensure we use I/O that does not yield, as this gets called during compilation
         invokelatest(Core.Main.Base.show, Core.stdout, "text/plain", ir)
     else
@@ -104,15 +105,16 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
+_debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream}) = IRShow.debuginfo_firstline(debuginfo)
 function verify_ir(ir::IRCode, print::Bool=true,
                    allow_frontend_forms::Bool=false,
                    𝕃ₒ::AbstractLattice = SimpleInferenceLattice.instance,
                    mi::Union{Nothing,MethodInstance}=nothing)
     function raise_error()
         error_args = Any["IR verification failed."]
-        if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
+        if irshow_was_loaded()
             # ensure we use I/O that does not yield, as this gets called during compilation
-            firstline = invokelatest(IRShow.debuginfo_firstline, ir.debuginfo)
+            firstline = invokelatest(_debuginfo_firstline, ir.debuginfo)
         else
             firstline = nothing
         end

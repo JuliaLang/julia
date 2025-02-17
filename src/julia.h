@@ -312,6 +312,7 @@ typedef struct _jl_code_info_t {
     // various boolean properties:
     uint8_t propagate_inbounds;
     uint8_t has_fcall;
+    uint8_t has_image_globalref;
     uint8_t nospecializeinfer;
     uint8_t isva;
     // uint8 settings
@@ -706,6 +707,9 @@ enum jl_partition_kind {
     BINDING_KIND_IMPLICIT_RECOMPUTE = 0xb
 };
 
+// These are flags that get anded into the above
+static const uint8_t BINDING_FLAG_EXPORTED       = 0x10;
+
 typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
     JL_DATA_TYPE
     /* union {
@@ -716,17 +720,18 @@ typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
      *   // For ->kind in (BINDING_KIND_IMPLICIT, BINDING_KIND_EXPLICIT, BINDING_KIND_IMPORT)
      *   jl_binding_t *imported;
      * } restriction;
-     *
-     * Currently: Low 3 bits hold ->kind on _P64 to avoid needing >8 byte atomics
-     *
-     * This field is updated atomically with both kind and restriction
      */
     jl_value_t *restriction;
     size_t min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t *) next;
-    enum jl_partition_kind kind;
+    size_t kind;
 } jl_binding_partition_t;
+
+STATIC_INLINE enum jl_partition_kind jl_binding_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT
+{
+    return (enum jl_partition_kind)(bpart->kind & 0xf);
+}
 
 typedef struct _jl_binding_t {
     JL_DATA_TYPE
@@ -735,11 +740,10 @@ typedef struct _jl_binding_t {
     _Atomic(jl_binding_partition_t*) partitions;
     jl_array_t *backedges;
     uint8_t did_print_backdate_admonition:1;
-    uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
-    uint8_t publicp:1; // exportp without publicp is not allowed.
-    uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
     uint8_t did_print_implicit_import_admonition:1;
-    uint8_t padding:2;
+    uint8_t publicp:1; // `export` is tracked in partitions, but sets this as well
+    uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
+    uint8_t padding:3;
 } jl_binding_t;
 
 typedef struct {
@@ -767,6 +771,8 @@ typedef struct _jl_module_t {
     int8_t infer;
     uint8_t istopmod;
     int8_t max_methods;
+    // If cleared no binding partition in this module has BINDING_FLAG_EXPORTED and min_world > jl_require_world.
+    _Atomic(int8_t) export_set_changed_since_require_world;
     jl_mutex_t lock;
     intptr_t hash;
 } jl_module_t;
@@ -2258,6 +2264,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_value_t *data);
 JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_value_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ir_flag_has_image_globalref(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT ssize_t jl_ir_nslots(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_value_t *data, size_t i) JL_NOTSAFEPOINT;

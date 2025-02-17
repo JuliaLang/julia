@@ -97,7 +97,7 @@ New library functions
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block ([#53159]).
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait for multiple tasks
   at once ([#53341]).
-* `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
+* `uuid7()` creates an RFC 9562 compliant UUID with version 7 ([#54834]).
 * `insertdims(array; dims)` inserts singleton dimensions into an array --- the inverse operation of
   `dropdims` ([#45793]).
 * A new `Fix` type generalizes `Fix1/Fix2` for fixing a single argument ([#54653]).
