@@ -618,7 +618,7 @@ function make_typealias(@nospecialize(x::Type))
     Any === x && return nothing
     x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
-    Core in mods && push!(mods, Base)
+    replace!(mods, Core=>Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     xenv = UnionAll[]
     for p in uniontypes(unwrap_unionall(x))
@@ -3367,6 +3367,9 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, '∞')
     else
         print(io, max_world)
+    end
+    if (partition.kind & BINDING_FLAG_EXPORTED) != 0
+        print(io, " [exported]")
     end
     print(io, " - ")
     kind = binding_kind(partition)

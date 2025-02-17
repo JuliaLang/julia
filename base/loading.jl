@@ -3157,11 +3157,11 @@ This can be used to reduce package load times. Cache files are stored in
 `DEPOT_PATH[1]/compiled`. See [Module initialization and precompilation](@ref)
 for important notes.
 """
-function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
+function compilecache(pkg::PkgId, internal_stderr::IO = stderr, internal_stdout::IO = stdout; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(), reasons::Union{Dict{String,Int},Nothing}=Dict{String,Int}(), loadable_exts::Union{Vector{PkgId},Nothing}=nothing)
     @nospecialize internal_stderr internal_stdout
     path = locate_package(pkg)
     path === nothing && throw(ArgumentError("$(repr("text/plain", pkg)) not found during precompilation"))
-    return compilecache(pkg, path, internal_stderr, internal_stdout; flags, reasons, loadable_exts)
+    return compilecache(pkg, path, internal_stderr, internal_stdout; flags, cacheflags, reasons, loadable_exts)
 end
 
 const MAX_NUM_PRECOMPILE_FILES = Ref(10)

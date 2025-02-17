@@ -193,10 +193,31 @@ module RebindingPrecompile
             Core.eval(Export2, :(const import_me2 = 22))
         end
         invokelatest() do
-            # Currently broken
-            # @test_throws UndefVarError ImportTest.f_use_binding2()
+            @test_throws UndefVarError ImportTest.f_use_binding2()
         end
     end
 
     finish_precompile_test!()
+end
+
+module Regression
+    using Test
+
+    # Issue #57377
+    module GeoParams57377
+        module B
+            using ...GeoParams57377
+            export S
+            struct S end
+            module C
+                using ..GeoParams57377
+                h() = S()
+                x -> nothing
+            end
+        end
+
+        using .B
+        export S
+    end
+    @test GeoParams57377.B.C.h() == GeoParams57377.B.C.S()
 end

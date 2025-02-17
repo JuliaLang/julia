@@ -113,39 +113,36 @@ function invalidate_method_for_globalref!(gr::GlobalRef, method::Method, invalid
     end
 end
 
-const BINDING_FLAG_EXPORTP = 0x2
-
 function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core.BindingPartition, new_bpart::Union{Core.BindingPartition, Nothing}, new_max_world::UInt)
     gr = b.globalref
-    if is_some_guard(binding_kind(invalidated_bpart))
+    if !is_some_guard(binding_kind(invalidated_bpart))
         # TODO: We may want to invalidate for these anyway, since they have performance implications
-        return
-    end
-    foreach_module_mtable(gr.mod, new_max_world) do mt::Core.MethodTable
-        for method in MethodList(mt)
-            invalidate_method_for_globalref!(gr, method, invalidated_bpart, new_max_world)
+        foreach_module_mtable(gr.mod, new_max_world) do mt::Core.MethodTable
+            for method in MethodList(mt)
+                invalidate_method_for_globalref!(gr, method, invalidated_bpart, new_max_world)
+            end
+            return true
         end
-        return true
-    end
-    if isdefined(b, :backedges)
-        for edge in b.backedges
-            if isa(edge, CodeInstance)
-                ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), edge, new_max_world)
-            elseif isa(edge, Core.Binding)
-                isdefined(edge, :partitions) || continue
-                latest_bpart = edge.partitions
-                latest_bpart.max_world == typemax(UInt) || continue
-                is_some_imported(binding_kind(latest_bpart)) || continue
-                partition_restriction(latest_bpart) === b || continue
-                invalidate_code_for_globalref!(edge, latest_bpart, nothing, new_max_world)
-            else
-                invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
+        if isdefined(b, :backedges)
+            for edge in b.backedges
+                if isa(edge, CodeInstance)
+                    ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), edge, new_max_world)
+                elseif isa(edge, Core.Binding)
+                    isdefined(edge, :partitions) || continue
+                    latest_bpart = edge.partitions
+                    latest_bpart.max_world == typemax(UInt) || continue
+                    is_some_imported(binding_kind(latest_bpart)) || continue
+                    partition_restriction(latest_bpart) === b || continue
+                    invalidate_code_for_globalref!(edge, latest_bpart, nothing, new_max_world)
+                else
+                    invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
+                end
             end
         end
     end
-    if (b.flags & BINDING_FLAG_EXPORTP) != 0
+    if (invalidated_bpart.kind & BINDING_FLAG_EXPORTED != 0) || (new_bpart !== nothing && (new_bpart.kind & BINDING_FLAG_EXPORTED != 0))
         # This binding was exported - we need to check all modules that `using` us to see if they
-        # have an implicit binding to us.
+        # have a binding that is affected by this change.
         usings_backedges = ccall(:jl_get_module_usings_backedges, Any, (Any,), gr.mod)
         if usings_backedges !== nothing
             for user in usings_backedges::Vector{Any}
@@ -154,8 +151,8 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                 isdefined(user_binding, :partitions) || continue
                 latest_bpart = user_binding.partitions
                 latest_bpart.max_world == typemax(UInt) || continue
-                is_some_imported(binding_kind(latest_bpart)) || continue
-                partition_restriction(latest_bpart) === b || continue
+                binding_kind(latest_bpart) in (BINDING_KIND_IMPLICIT, BINDING_KIND_FAILED, BINDING_KIND_GUARD) || continue
+                @atomic :release latest_bpart.max_world = new_max_world
                 invalidate_code_for_globalref!(convert(Core.Binding, user_binding), latest_bpart, nothing, new_max_world)
             end
         end
