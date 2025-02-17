@@ -1294,10 +1294,19 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b,
         new_world);
 }
 
+extern JL_DLLEXPORT _Atomic(size_t) jl_first_image_replacement_world;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world)
 {
     check_safe_newbinding(b->globalref->mod, b->globalref->name);
+
+    // Check if this is a replacing a binding in the system or a package image.
+    // Until the first such replacement, we can fast-path validation.
+    // For these purposes, we consider the `Main` module to be a non-sysimg module.
+    // This is legal, because we special case the `Main` in check_safe_import_from.
+    if (jl_object_in_image((jl_value_t*)b) && b->globalref->mod != jl_main_module && jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0)
+        jl_atomic_store_relaxed(&jl_first_image_replacement_world, new_world);
+
     assert(jl_atomic_load_relaxed(&b->partitions) == old_bpart);
     jl_atomic_store_release(&old_bpart->max_world, new_world-1);
     jl_binding_partition_t *new_bpart = new_binding_partition();
