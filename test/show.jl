@@ -2377,13 +2377,14 @@ end
 
 # begin/end indices
 @weak_test_repr "a[begin, end, (begin; end)]"
-@test_broken repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
+@test repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
-@test_broken repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
+@test repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
 @test_repr "a[(bla;)]"
 @test_repr "a[(;;)]"
 @weak_test_repr "a[x -> f(x)]"
+@test_broken @weak_test_repr """:([1,2,3,4][:end === :end ? end : var"end"])"""
 
 @testset "Base.Iterators" begin
     @test sprint(show, enumerate("test")) == "enumerate(\"test\")"
