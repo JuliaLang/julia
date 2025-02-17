@@ -318,28 +318,26 @@ end
         fields = vartyp.fields
         thenfields = thentype === Bottom ? nothing : copy(fields)
         elsefields = elsetype === Bottom ? nothing : copy(fields)
+        undef = copy(vartyp.undef)
         for i in 1:length(fields)
             if i == fldidx
                 thenfields === nothing || (thenfields[i] = thentype)
                 elsefields === nothing || (elsefields[i] = elsetype)
+                undef[i] = false
             end
         end
         return Conditional(slot,
-            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, vartyp.undef, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, vartyp.undef, elsefields))
+            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, undef, thenfields),
+            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, undef, elsefields))
     else
         vartyp_widened = widenconst(vartyp)
         thenfields = thentype === Bottom ? nothing : Any[]
         elsefields = elsetype === Bottom ? nothing : Any[]
         nf = fieldcount(vartyp_widened)
-        undef = trues(nf)
         for i in 1:nf
             if i == fldidx
                 thenfields === nothing || push!(thenfields, thentype)
                 elsefields === nothing || push!(elsefields, elsetype)
-                if thenfields === nothing && elsefields === nothing
-                    undef[i] = false # this field was already accessed
-                end
             else
                 t = fieldtype(vartyp_widened, i)
                 thenfields === nothing || push!(thenfields, t)
@@ -347,8 +345,8 @@ end
             end
         end
         return Conditional(slot,
-            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, undef, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, undef, elsefields))
+            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, thenfields),
+            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp_widened, elsefields))
     end
 end
 
@@ -439,8 +437,6 @@ end
             length(a.undef) ≥ length(b.undef) || return false
             for i in 1:length(b.fields)
                 !is_field_defined(a, i) && is_field_defined(b, i) && return false
-                !is_field_defined(b, i) && continue
-                # Field is defined for both `a` and `b`
                 af = a.fields[i]
                 bf = b.fields[i]
                 if i == length(b.fields)

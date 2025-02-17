@@ -4807,6 +4807,7 @@ module _Partials_inference
 end
 
 let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
+    ⋢ = !⊑
     ⊔ = Compiler.join(Compiler.fallback_lattice)
     𝕃 = Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
@@ -4843,7 +4844,7 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
 
     t1 = PartialStruct(𝕃, Partial, Any[String, Const(3)])
     t2 = PartialStruct(𝕃, Partial, Any[Const("x"), Int])
-    @test !(t1 ⊑ t2) && !(t2 ⊑ t1)
+    @test t1 ⋢ t2 && t2 ⋢ t1
     t3 = t1 ⊔ t2
     @test t3.fields == Any[String, Int, Any]
 
@@ -4857,7 +4858,7 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test t1.undef == [false, false]
     @test t1 ⊑ t1 && t1 ⊔ t1 == t1
     t2 = PartialStruct(𝕃, Tuple, Any[Int, Any])
-    @test !(t1 ⊑ t2) && !(t2 ⊑ t1)
+    @test t1 ⋢ t2 && t2 ⋢ t1
     t3 = t1 ⊔ t2
     @test t3.undef == [false, false] && t3.fields == Any[Int, Any]
     t2 = PartialStruct(𝕃, Tuple, Any[Int, Any, Vararg])
@@ -4884,6 +4885,14 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     t = PartialStruct(𝕃, Partial3, Any[Int, String])
     t′ = form_partially_defined_struct(t, Const(:z))
     @test t′ == PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
+
+    t1 = PartialStruct(𝕃, Partial3, Any[Int, String])
+    t2 = PartialStruct(𝕃, Partial3, Any[Const(1)])
+    @test t1 ⋢ t2 && t2 ⋢ t1
+    c = @eval Const($(Expr(:new, Partial3, 1)))
+    @test c ⋢ t1 && t1 ⋢ c && c ⊑ t2 && t2 ⋢ c
+    t3 = PartialStruct(𝕃, Partial3, Any[Const(1), Const("x")])
+    @test c ⋢ t3 && t3 ⋢ c
 end
 
 # Test that a function-wise `@max_methods` works as expected
