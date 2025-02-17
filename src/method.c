@@ -138,7 +138,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         return expr;
     }
     if (e->head == jl_foreigncall_sym) {
-        JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects))
+        JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects, gc_safe))
         jl_task_t *ct = jl_current_task;
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);
@@ -172,11 +172,12 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
         if (!jl_is_symbol(cc)) {
             JL_TYPECHK(ccall method definition, tuple, cc);
-            if (jl_nfields(cc) != 2) {
+            if (jl_nfields(cc) != 3) {
                 jl_error("In ccall calling convention, expected two argument tuple or symbol.");
             }
             JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
             JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));
+            JL_TYPECHK(ccall method definition, bool, jl_get_nth_field(cc, 2));
         }
     }
     if (e->head == jl_call_sym && nargs > 0 &&
@@ -485,8 +486,17 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
             is_flag_stmt = 1;
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym)
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
-        else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym))
-            li->has_fcall = 1;
+        else if (jl_is_globalref(st)) {
+            jl_globalref_t *gr = (jl_globalref_t*)st;
+            if (jl_object_in_image((jl_value_t*)gr->mod))
+                li->has_image_globalref = 1;
+        }
+        else {
+            if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_assign_sym)
+                st = jl_exprarg(st, 1);
+            if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym))
+                li->has_fcall = 1;
+        }
         if (is_flag_stmt)
             jl_array_uint32_set(li->ssaflags, j, 0);
         else {
@@ -588,6 +598,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->max_world = ~(size_t)0;
     src->propagate_inbounds = 0;
     src->has_fcall = 0;
+    src->has_image_globalref = 0;
     src->nospecializeinfer = 0;
     src->constprop = 0;
     src->inlining = 0;
@@ -1057,10 +1068,10 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
     jl_binding_t *b = jl_get_binding_for_method_def(mod, name, new_world);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     jl_value_t *gf = NULL;
-    enum jl_partition_kind kind = bpart->kind;
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (!jl_bkind_is_some_guard(kind) && kind != BINDING_KIND_DECLARED && kind != BINDING_KIND_IMPLICIT) {
         jl_walk_binding_inplace(&b, &bpart, new_world);
-        if (jl_bkind_is_some_constant(bpart->kind)) {
+        if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
             gf = bpart->restriction;
             JL_GC_PROMISE_ROOTED(gf);
             jl_check_gf(gf, b->globalref->name);
