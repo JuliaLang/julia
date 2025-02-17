@@ -409,7 +409,7 @@ function g_dict_hash_alloc()
 end
 # Warm up
 f_dict_hash_alloc(); g_dict_hash_alloc();
-@test_skip abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.1 # less that 10% difference
+@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.1 skip=(Sys.isapple()) # less that 10% difference
 @test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.4 # relaxed version of the above, while the above is skipped
 
 # returning an argument shouldn't alloc a new box
