@@ -106,6 +106,12 @@ end
 function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt)
     result = caller.result
     #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
+    if isa(result.src, OptimizationState)
+        opt = result.src
+        if opt.ir !== nothing && is_inlineable(opt.src)
+            opt.ir = cfg_simplify!(opt.ir::IRCode)
+        end
+    end
     if isdefined(result, :ci)
         edges = result_edges(interp, caller)
         ci = result.ci

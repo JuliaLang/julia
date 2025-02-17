@@ -129,9 +129,7 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
 function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
-    if isa(src, OptimizationState)
-        src = src.src
-    end
+    isa(src, OptimizationState) && (src = src.src)
     if isa(src, MaybeCompressed)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable
