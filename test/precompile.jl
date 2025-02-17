@@ -2285,4 +2285,79 @@ precompile_test_harness("Constprop CodeInstance invalidation") do load_path
     end
 end
 
+precompile_test_harness("llvmcall validation") do load_path
+    write(joinpath(load_path, "LLVMCall.jl"),
+        """
+        module LLVMCall
+        using Base: llvmcall
+        @noinline do_llvmcall() = llvmcall("ret i32 0", UInt32, Tuple{})
+        do_llvmcall2() = do_llvmcall()
+        do_llvmcall2()
+        end
+        """)
+    # Also test with --pkgimages=no
+    testcode = """
+        insert!(LOAD_PATH, 1, $(repr(load_path)))
+        insert!(DEPOT_PATH, 1, $(repr(load_path)))
+        using LLVMCall
+        LLVMCall.do_llvmcall2()
+    """
+    @test readchomp(`$(Base.julia_cmd()) --pkgimages=no -E $(testcode)`) == repr(UInt32(0))
+    # Now the regular way
+    @eval using LLVMCall
+    invokelatest() do
+        @test LLVMCall.do_llvmcall2() == UInt32(0)
+        @test first(methods(LLVMCall.do_llvmcall)).specializations.cache.max_world === typemax(UInt)
+    end
+end
+
+precompile_test_harness("BindingReplaceDisallow") do load_path
+    write(joinpath(load_path, "BindingReplaceDisallow.jl"),
+        """
+        module BindingReplaceDisallow
+        const sinreplace = try
+            eval(Expr(:block,
+                Expr(:const, GlobalRef(Base, :sin), 1),
+                nothing))
+        catch ex
+            ex isa ErrorException || rethrow()
+            ex
+        end
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("BindingReplaceDisallow"))
+    @eval using BindingReplaceDisallow
+    invokelatest() do
+        @test BindingReplaceDisallow.sinreplace.msg == "Creating a new global in closed module `Base` (`sin`) breaks incremental compilation because the side effects will not be permanent."
+    end
+end
+
+precompile_test_harness("MainImportDisallow") do load_path
+    write(joinpath(load_path, "MainImportDisallow.jl"),
+        """
+        module MainImportDisallow
+            const importvar = try
+                import Base.Main: cant_get_at_me
+            catch ex
+                ex isa ErrorException || rethrow()
+                ex
+            end
+            const usingmain = try
+                using Base.Main
+            catch ex
+                ex isa ErrorException || rethrow()
+                ex
+            end
+            # Import `Main` is permitted, because it does not look at bindings inside `Main`
+            import Base.Main
+        end
+        """)
+    ji, ofile = Base.compilecache(Base.PkgId("MainImportDisallow"))
+    @eval using MainImportDisallow
+    invokelatest() do
+        @test MainImportDisallow.importvar.msg == "Any `import` or `using` from `Main` is prohibited during incremental compilation."
+        @test MainImportDisallow.usingmain.msg == "Any `import` or `using` from `Main` is prohibited during incremental compilation."
+    end
+end
+
 finish_precompile_test!()
