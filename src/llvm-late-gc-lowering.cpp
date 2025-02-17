@@ -1114,6 +1114,47 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
     }
 }
 
+// Look through instructions to find all possible allocas that might become the sret argument
+static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
+    SmallSetVector<AllocaInst *, 8> allocas;
+    if (AllocaInst *OneSRet = dyn_cast<AllocaInst>(SRetArg)) {
+        allocas.insert(OneSRet); // Found it directly
+    } else {
+        SmallSetVector<Value *, 8> worklist;
+        worklist.insert(SRetArg);
+        while (!worklist.empty()) {
+            Value *V = worklist.pop_back_val();
+            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
+                allocas.insert(Alloca); // Found a candidate
+            } else if (PHINode *Phi = dyn_cast<PHINode>(V)) {
+                for (Value *Incoming : Phi->incoming_values()) {
+                    worklist.insert(Incoming);
+                }
+            } else if (SelectInst *SI = dyn_cast<SelectInst>(SRetArg)) {
+                auto TrueBranch = SI->getTrueValue();
+                auto FalseBranch = SI->getFalseValue();
+                if (TrueBranch && FalseBranch) {
+                    worklist.insert(TrueBranch);
+                    worklist.insert(FalseBranch);
+                } else {
+                    llvm_dump(SI);
+                    assert(false && "Malformed Select");
+                }
+            } else {
+                llvm_dump(V);
+                assert(false && "Unexpected SRet argument");
+            }
+        }
+    }
+    assert(allocas.size() > 0);
+    assert(std::all_of(allocas.begin(), allocas.end(), [&] (AllocaInst* SRetAlloca) JL_NOTSAFEPOINT {
+            return (SRetAlloca->getArraySize() == allocas[0]->getArraySize() &&
+            SRetAlloca->getAllocatedType() == allocas[0]->getAllocatedType());
+        }
+    ));
+    return allocas;
+}
+
 State LateLowerGCFrame::LocalScan(Function &F) {
     State S(F);
     SmallVector<int, 8> PHINumbers;
@@ -1165,9 +1206,11 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
-                        AllocaInst *SRet = dyn_cast<AllocaInst>((CI->arg_begin()[0])->stripInBoundsOffsets());
-                        assert(SRet);
-                        {
+                        SmallSetVector<AllocaInst *, 8>  allocas = FindSretAllocas((CI->arg_begin()[0])->stripInBoundsOffsets());
+                        // We know that with the right optimizations we can forward a sret directly from an argument
+                        // This hasn't been seen without adding IPO effects to julia functions but it's possible we need to handle that too
+                        // If they are tracked.all we can just pass through but if they have a roots bundle it's possible we need to emit some copies ¯\_(ツ)_/¯
+                        for (AllocaInst *SRet : allocas) {
                             if (!(SRet->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
                                 assert(!tracked.derived);
                                 if (tracked.all) {
@@ -1175,36 +1218,23 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                 }
                                 else {
                                     Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
+                                    SmallSetVector<AllocaInst *, 8>  gc_allocas = FindSretAllocas(arg1);
                                     AllocaInst *SRet_gc = nullptr;
-                                    if (PHINode *Phi = dyn_cast<PHINode>(arg1)) {
-                                        for (Value *V : Phi->incoming_values()) {
-                                            if (AllocaInst *Alloca = dyn_cast<AllocaInst>(V->stripInBoundsOffsets())) {
-                                                if (SRet_gc == nullptr) {
-                                                    SRet_gc = Alloca;
-                                                } else if (SRet_gc == Alloca) {
-                                                    continue;
-                                                } else {
-                                                    llvm_dump(Alloca);
-                                                    llvm_dump(SRet_gc);
-                                                    assert(false && "Allocas in Phi node should match");
-                                                }
-                                            } else {
-                                                llvm_dump(V->stripInBoundsOffsets());
-                                                assert(false && "Expected alloca");
-                                            }
-                                        }
-                                    } else {
-                                        SRet_gc = dyn_cast<AllocaInst>(arg1);
+                                    if (gc_allocas.size() == 1) {
+                                        SRet_gc = gc_allocas.pop_back_val();
                                     }
-                                    if (!SRet_gc) {
+                                    else {
                                         llvm_dump(CI);
-                                        llvm_dump(arg1);
-                                        assert(false && "Expected alloca");
+                                        for (AllocaInst *Alloca : gc_allocas) {
+                                            llvm_dump(Alloca);
+                                        }
+                                        assert(false && "Expected single alloca");
                                     }
                                     Type *ElT = SRet_gc->getAllocatedType();
                                     if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
                                         S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
                                     }
+                                    break; // Found our gc roots
                                 }
                             }
                         }
@@ -1400,6 +1430,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
     FixUpRefinements(PHINumbers, S);
     return S;
 }
+
+
 
 static Value *ExtractScalar(Value *V, Type *VTy, bool isptr, ArrayRef<unsigned> Idxs, IRBuilder<> &irbuilder) {
     Type *T_int32 = Type::getInt32Ty(V->getContext());
