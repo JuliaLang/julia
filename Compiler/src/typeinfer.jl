@@ -143,9 +143,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
             result.analysis_results, di, edges)
         engine_reject(interp, ci)
-        if !discard_src && isdefined(interp, :codegen) && uncompressed isa CodeInfo
+        codegen = codegen_cache(interp)
+        if !discard_src && codegen !== nothing && uncompressed isa CodeInfo
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
-            interp.codegen[ci] = uncompressed
+            codegen[ci] = uncompressed
             if bootstrapping_compiler && inferred_result == nothing
                 # This is necessary to get decent bootstrapping performance
                 # when compiling the compiler to inject everything eagerly
@@ -185,8 +186,9 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
         ci, nothing, const_flag, min_world, max_world, ipo_effects, nothing, di, edges)
     code_cache(interp)[mi] = ci
-    if isdefined(interp, :codegen)
-        interp.codegen[ci] = src
+    codegen = codegen_cache(interp)
+    if codegen !== nothing
+        codegen[ci] = src
     end
     engine_reject(interp, ci)
     return nothing
@@ -1168,7 +1170,10 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
 
     ci = result.ci # reload from result in case it changed
     @assert frame.cache_mode != CACHE_MODE_NULL
-    @assert is_result_constabi_eligible(result) || (!isdefined(interp, :codegen) || haskey(interp.codegen, ci))
+    @assert is_result_constabi_eligible(result) || begin
+            codegen = codegen_cache(interp)
+            codegen === nothing || haskey(codegen, ci)
+        end
     @assert is_result_constabi_eligible(result) == use_const_api(ci)
     @assert isdefined(ci, :inferred) "interpreter did not fulfill our expectations"
     if !is_cached(frame) && source_mode == SOURCE_MODE_ABI
@@ -1234,42 +1239,53 @@ function collectinvokes!(wq::Vector{CodeInstance}, ci::CodeInfo)
     end
 end
 
+function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UInt8)
+    source_mode == SOURCE_MODE_ABI || return ci
+    ci isa CodeInstance && !ci_has_invoke(ci) || return ci
+    codegen = codegen_cache(interp)
+    codegen === nothing && return ci
+    inspected = IdSet{CodeInstance}()
+    tocompile = Vector{CodeInstance}()
+    push!(tocompile, ci)
+    while !isempty(tocompile)
+        # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
+        callee = pop!(tocompile)
+        ci_has_invoke(callee) && continue
+        callee in inspected && continue
+        src = get(codegen, callee, nothing)
+        if !isa(src, CodeInfo)
+            src = @atomic :monotonic callee.inferred
+            if isa(src, String)
+                src = _uncompressed_ir(callee, src)
+            end
+            if !isa(src, CodeInfo)
+                newcallee = typeinf_ext(interp, callee.def, source_mode)
+                if newcallee isa CodeInstance
+                    callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
+                    push!(tocompile, newcallee)
+                #else
+                #    println("warning: could not get source code for ", callee.def)
+                end
+                continue
+            end
+        end
+        push!(inspected, callee)
+        collectinvokes!(tocompile, src)
+        ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
+    end
+    return ci
+end
+
+function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
+    ci = typeinf_ext(interp, mi, source_mode)
+    ci = add_codeinsts_to_jit!(interp, ci, source_mode)
+    return ci
+end
+
 # This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
 function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
     interp = NativeInterpreter(world)
-    ci = typeinf_ext(interp, mi, source_mode)
-    if source_mode == SOURCE_MODE_ABI && ci isa CodeInstance && !ci_has_invoke(ci)
-        inspected = IdSet{CodeInstance}()
-        tocompile = Vector{CodeInstance}()
-        push!(tocompile, ci)
-        while !isempty(tocompile)
-            # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
-            callee = pop!(tocompile)
-            ci_has_invoke(callee) && continue
-            callee in inspected && continue
-            src = get(interp.codegen, callee, nothing)
-            if !isa(src, CodeInfo)
-                src = @atomic :monotonic callee.inferred
-                if isa(src, String)
-                    src = _uncompressed_ir(callee, src)
-                end
-                if !isa(src, CodeInfo)
-                    newcallee = typeinf_ext(interp, callee.def, source_mode)
-                    if newcallee isa CodeInstance
-                        callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
-                        push!(tocompile, newcallee)
-                    #else
-                    #    println("warning: could not get source code for ", callee.def)
-                    end
-                    continue
-                end
-            end
-            push!(inspected, callee)
-            collectinvokes!(tocompile, src)
-            ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
-        end
-    end
-    return ci
+    return typeinf_ext_toplevel(interp, mi, source_mode)
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
