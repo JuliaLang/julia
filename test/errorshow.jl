@@ -1263,9 +1263,23 @@ end
 f33793(x::Float32, y::Float32) = 1
 @test_throws "\nClosest candidates are:\n  f33793(!Matched::Float32, !Matched::Float32)\n" f33793(Float64(0.0), Float64(0.0))
 
-# https://github.com/JuliaLang/julia/issues/56325 adding tip
+# issue 56325
 let err_str
-    f56325(x)=x+1
-    err_str = @except_str f56325(1,2) MethodError
-    @test occursin("was called with 2 arguments, but has only one method accepting 1 argument.", err_str)
+    f56325(x::Int64, z::Int64, y::Float64...) = x +z+ sum(y; init=0.0)
+    
+    err_str = @except_str f56325(1) MethodError
+    @test occursin("Hint: no method of `f56325` accepts 1 arguments", err_str)
+    
+    err_str = @except_str f56325(1.0, 1.0) MethodError
+    # here the tip would be misleading bc the MethodError is due to the Float64 arguments
+    @test !occursin("Hint: no method of `f56325` accepts 2 arguments", err_str)
+    
+    g56325(x::Int64, y) = x+y
+    g56325(x::Int64; y=0) = x+y
+    
+    err_str = @except_str g56325() MethodError
+    @test occursin("fewer arguments provided", err_str)
+
+    err_str = @except_str g56325(1,2,3) MethodError
+    @test occursin("more arguments provided", err_str)
 end
