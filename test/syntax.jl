@@ -4198,6 +4198,16 @@ module Ambig57404
 end
 @test Ambig57404.S == 1
 
+# #57269
+@testset """var"begin"/var"end" in array index""" begin
+    @test (let var"end" = 1; (1:10)[var"end"]; end) === 1
+    @test (let var"end" = 1; (1:10)[end]; end) === 10
+    @test (let var"begin" = 2; (1:10)[2var"begin" + 1]; end) === 5
+    @test ((1:10)[end === 10 ? end : begin]) === 10
+    @test_throws ArgumentError (let var"begin" = nothing; (1:10)[var"begin"]; end)
+    @test (let a=[1]; a[end]::Int = 100; end) === 100
+end
+
 # Issue #56904 - lambda linearized twice
 @test (let; try 3; finally try 1; f(() -> x); catch x; end; end; x = 7; end) === 7
 @test (let; try 3; finally try 4; finally try 1; f(() -> x); catch x; end; end; end; x = 7; end) === 7
