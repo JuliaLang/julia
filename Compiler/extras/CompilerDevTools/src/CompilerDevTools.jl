@@ -5,11 +5,7 @@ using Compiler: argextype, widenconst
 using Core.IR
 using Base: isexpr
 
-struct SplitCacheOwner
-    version::Int # use a non-zero value when you don't want to reuse the default cache, e.g. for testing purposes.
-end
-
-SplitCacheOwner() = SplitCacheOwner(0)
+mutable struct SplitCacheOwner end
 
 struct SplitCacheInterp <: Compiler.AbstractInterpreter
     world::UInt
