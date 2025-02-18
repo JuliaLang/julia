@@ -144,7 +144,7 @@ There are differences between `@macroexpand` and [`macroexpand`](@ref).
   expands with respect to the module in which it is called.
 
 This is best seen in the following example:
-```jldoctest
+```julia-repl
 julia> module M
            macro m()
                1
