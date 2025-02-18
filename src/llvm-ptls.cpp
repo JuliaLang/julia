@@ -289,9 +289,6 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
 
             phi->addIncoming(fastTLS, fastTLS->getParent());
             phi->addIncoming(phi_value, phi_value->getParent());
-            if (or_new) {
-                pgcstack->getParent()->getParent()->print(dbgs());
-            }
             return;
         }
         // In imaging mode, we emit the function address as a load of a static

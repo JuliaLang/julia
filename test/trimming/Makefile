@@ -35,17 +35,15 @@ release: hello$(EXE)
 hello.o: $(SRCDIR)/hello.jl $(BUILDSCRIPT)
 	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.so --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(BUILDSCRIPT) $(SRCDIR)/hello.jl --output-exe true
 
-init.o: $(SRCDIR)/init.c
-	$(CC) -c -o $@ $< $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
 
-hello$(EXE): hello.o init.o
-	$(CC) -o $@ $(WHOLE_ARCHIVE) hello.o $(NO_WHOLE_ARCHIVE) init.o $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
+hello$(EXE): hello.o
+	$(CC) -o $@ $(WHOLE_ARCHIVE) hello.o $(NO_WHOLE_ARCHIVE)$(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
 check: hello$(EXE)
 	$(JULIA) --depwarn=error $(SRCDIR)/../runtests.jl $(SRCDIR)/trimming
 
 clean:
-	-rm -f hello$(EXE) init.o hello.o
+	-rm -f hello$(EXE) hello.o
 
 .PHONY: release clean check
 
