@@ -584,10 +584,12 @@ The destructuring feature can also be used within a function argument.
 If a function argument name is written as a tuple (e.g. `(x, y)`) instead of just
 a symbol, then an assignment `(x, y) = argument` will be inserted for you:
 
-```julia-repl
+```jldoctest
 julia> minmax(x, y) = (y < x) ? (y, x) : (x, y)
+minmax (generic function with 1 method)
 
 julia> gap((min, max)) = max - min
+gap (generic function with 1 method)
 
 julia> gap(minmax(10, 2))
 8
@@ -598,7 +600,7 @@ would be a two-argument function, and this example would not work.
 
 Similarly, property destructuring can also be used for function arguments:
 
-```julia-repl
+```jldoctest
 julia> foo((; x, y)) = x + y
 foo (generic function with 1 method)
 
@@ -616,7 +618,7 @@ julia> foo(A(3, 4))
 
 For anonymous functions, destructuring a single argument requires an extra comma:
 
-```julia-repl
+```jldoctest
 julia> map(((x, y),) -> x + y, [(1, 2), (3, 4)])
 2-element Vector{Int64}:
  3
@@ -784,12 +786,15 @@ Optional arguments are actually just a convenient syntax for writing multiple me
 with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
 This can be checked for our `date` function example by calling the `methods` function:
 
-```julia-repl
+```jldoctest date_default_args; filter = r"@ .*"a
 julia> methods(date)
-# 3 methods for generic function "date":
-[1] date(y::Int64) in Main at REPL[1]:1
-[2] date(y::Int64, m::Int64) in Main at REPL[1]:1
-[3] date(y::Int64, m::Int64, d::Int64) in Main at REPL[1]:1
+# 3 methods for generic function "date" from Main:
+ [1] date(y::Int64, m::Int64, d::Int64)
+     @ REPL[2]:1
+ [2] date(y::Int64, m::Int64)
+     @ REPL[2]:1
+ [3] date(y::Int64)
+     @ REPL[2]:1
 ```
 
 ## Keyword Arguments

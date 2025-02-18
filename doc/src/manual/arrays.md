@@ -1160,7 +1160,7 @@ dimension `d`. For example, the builtin `Array` returned by `rand(5,7,2)` has it
 arranged contiguously in column major order. This means that the stride of the first
 dimension — the spacing between elements in the same column — is `1`:
 
-```julia-repl
+```jldoctest strides
 julia> A = rand(5, 7, 2);
 
 julia> stride(A, 1)
@@ -1172,7 +1172,7 @@ as many elements as there are in a single column (`5`). Similarly, jumping betwe
 "pages" (in the third dimension) requires skipping `5*7 == 35` elements. The [`strides`](@ref)
 of this array is the tuple of these three numbers together:
 
-```julia-repl
+```jldoctest strides
 julia> strides(A)
 (1, 5, 35)
 ```
@@ -1185,7 +1185,7 @@ This view `V` refers to the same memory as `A` but is skipping and re-arranging 
 elements. The stride of the first dimension of `V` is `3` because we're only selecting every
 third row from our original array:
 
-```julia-repl
+```jldoctest strides
 julia> V = @view A[1:3:4, 2:2:6, 2:-1:1];
 
 julia> stride(V, 1)
@@ -1196,7 +1196,7 @@ This view is similarly selecting every other column from our original `A` — an
 needs to skip the equivalent of two five-element columns when moving between indices in the
 second dimension:
 
-```julia-repl
+```jldoctest strides
 julia> stride(V, 2)
 10
 ```
@@ -1205,7 +1205,7 @@ The third dimension is interesting because its order is reversed! Thus to get fr
 "page" to the second one it must go _backwards_ in memory, and so its stride in this
 dimension is negative!
 
-```julia-repl
+```jldoctest strides
 julia> stride(V, 3)
 -35
 ```
