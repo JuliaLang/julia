@@ -405,7 +405,8 @@
 
 ;; identify some expressions that are safe to repeat
 (define (effect-free? e)
-  (or (not (pair? e)) (ssavalue? e) (sym-dot? e) (quoted? e) (memq (car e) '(null true false))))
+  (or (not (pair? e)) (ssavalue? e) (sym-dot? e) (quoted? e)
+      (memq (car e) '(null true false begin end))))
 
 ;; get the variable name part of a declaration, x::int => x
 (define (decl-var v)

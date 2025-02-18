@@ -182,7 +182,7 @@
 (define space-sensitive #f)
 ; seeing `for` stops parsing macro arguments and makes a generator
 (define for-generator #f)
-; treat 'end' like a normal symbol instead of a reserved word
+; treat begin/end like special symbols instead of reserved words
 (define end-symbol #f)
 ; treat newline like ordinary whitespace instead of as a potential separator
 (define whitespace-newline #f)
@@ -1624,7 +1624,7 @@
         (parse-imports s word))
        ((do)
         (error "invalid \"do\" syntax"))
-       (else (error "unhandled reserved word")))))))
+       (else (error (string "unhandled reserved word " word))))))))
 
 (define (parse-do s)
   (with-bindings
@@ -2545,6 +2545,10 @@
                     (symbol str)))
                  ((eq? t 'true)  '(true))
                  ((eq? t 'false) '(false))
+                 ;; issue #57269: a[var"begin"] -> 'begin
+                 ;;               a[begin]      -> '(begin)
+                 ((and end-symbol (eq? t 'begin)) '(begin))
+                 ((and end-symbol (eq? t 'end)) '(end))
                  (else t)))
 
           ;; parens or tuple
