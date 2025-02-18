@@ -716,7 +716,10 @@ void jl_init_threading(void)
         nthreads = jl_options.nthreads_per_pool[0];
         if (nthreads < 0)
             nthreads = jl_effective_threads();
-        nthreadsi = (jl_options.nthreadpools == 1) ? 0 : jl_options.nthreads_per_pool[1];
+        if (nthreads == 1) // User asked for 1 thread so lets assume they dont want an interactive thread
+            nthreadsi = 0;
+        else
+            nthreadsi = (jl_options.nthreadpools == 1) ? 0 : jl_options.nthreads_per_pool[1];
     }
     else if ((cp = getenv(NUM_THREADS_NAME))) { // ENV[NUM_THREADS_NAME] specified
         if (!strncmp(cp, "auto", 4)) {
@@ -729,6 +732,8 @@ void jl_init_threading(void)
             if (errno != 0 || endptr == cp || nthreads <= 0)
                 nthreads = 1;
             cp = endptr;
+            if (nthreads == 1) // User asked for 1 thread so lets assume they dont want an interactive thread
+                nthreadsi = 0;
         }
         if (*cp == ',') {
             cp++;
