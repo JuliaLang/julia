@@ -240,8 +240,7 @@ function complete_symbol!(suggestions::Vector{Completion},
     return suggestions
 end
 
-completes_module(mod::Module, x::Symbol) =
-    Base.isbindingresolved(mod, x) && isdefined(mod, x) && isa(getglobal(mod, x), Module)
+completes_module(mod::Module, x::Symbol) = isdefined(mod, x) && isa(getglobal(mod, x), Module)
 
 function add_field_completions!(suggestions::Vector{Completion}, name::String, @nospecialize(t))
     if isa(t, Union)
@@ -726,6 +725,7 @@ function resolve_toplevel_symbols!(src::Core.CodeInfo, mod::Module)
         #=jl_array_t *stmts=# src.code::Any,
         #=jl_module_t *m=# mod::Any,
         #=jl_svec_t *sparam_vals=# Core.svec()::Any,
+        #=jl_value_t *binding_edge=# C_NULL::Ptr{Cvoid},
         #=int binding_effects=# 0::Int)::Cvoid
     return src
 end

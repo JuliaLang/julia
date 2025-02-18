@@ -547,7 +547,7 @@ static void jl_encode_value_(jl_ircode_state *s, jl_value_t *v, int as_literal)
     }
 }
 
-static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t has_fcall,
+static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t has_fcall, uint8_t has_image_globalref,
                                             uint8_t nospecializeinfer, uint8_t isva,
                                             uint8_t inlining, uint8_t constprop, uint8_t nargsmatchesmethod,
                                             jl_array_t *ssaflags)
@@ -555,6 +555,7 @@ static jl_code_info_flags_t code_info_flags(uint8_t propagate_inbounds, uint8_t 
     jl_code_info_flags_t flags;
     flags.bits.propagate_inbounds = propagate_inbounds;
     flags.bits.has_fcall = has_fcall;
+    flags.bits.has_image_globalref = has_image_globalref;
     flags.bits.nospecializeinfer = nospecializeinfer;
     flags.bits.isva = isva;
     flags.bits.inlining = inlining;
@@ -1036,7 +1037,7 @@ JL_DLLEXPORT jl_string_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code)
     };
 
     uint8_t nargsmatchesmethod = code->nargs == m->nargs;
-    jl_code_info_flags_t flags = code_info_flags(code->propagate_inbounds, code->has_fcall,
+    jl_code_info_flags_t flags = code_info_flags(code->propagate_inbounds, code->has_fcall, code->has_image_globalref,
                                                  code->nospecializeinfer, code->isva,
                                                  code->inlining, code->constprop,
                                                  nargsmatchesmethod,
@@ -1134,6 +1135,7 @@ JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t
     code->constprop = flags.bits.constprop;
     code->propagate_inbounds = flags.bits.propagate_inbounds;
     code->has_fcall = flags.bits.has_fcall;
+    code->has_image_globalref = flags.bits.has_image_globalref;
     code->nospecializeinfer = flags.bits.nospecializeinfer;
     code->isva = flags.bits.isva;
     code->purity.bits = read_uint16(s.s);
@@ -1226,6 +1228,16 @@ JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_string_t *data)
     jl_code_info_flags_t flags;
     flags.packed = jl_string_data(data)[ir_offset_flags];
     return flags.bits.has_fcall;
+}
+
+JL_DLLEXPORT uint8_t jl_ir_flag_has_image_globalref(jl_string_t *data)
+{
+    if (jl_is_code_info(data))
+        return ((jl_code_info_t*)data)->has_image_globalref;
+    assert(jl_is_string(data));
+    jl_code_info_flags_t flags;
+    flags.packed = jl_string_data(data)[ir_offset_flags];
+    return flags.bits.has_image_globalref;
 }
 
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_string_t *data)

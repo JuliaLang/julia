@@ -67,7 +67,7 @@ version = "1.11.0"
 
 [[deps.JuliaSyntaxHighlighting]]
 deps = ["StyledStrings"]
-uuid = "dc6e5ff7-fb65-4e79-a425-ec3bc9c03011"
+uuid = "ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"
 version = "1.12.0"
 
 [[deps.LLD_jll]]

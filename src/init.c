@@ -910,6 +910,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
         jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
     } else {
+        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
         post_image_load_hooks();
     }
     jl_start_threads();

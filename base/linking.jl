@@ -3,15 +3,8 @@ module Linking
 
 import Base.Libc: Libdl
 
-# inlined LLD_jll
-# These get calculated in __init__()
-const PATH = Ref("")
-const LIBPATH = Ref("")
-const PATH_list = String[]
-const LIBPATH_list = String[]
-const lld_path = Ref{String}()
+# from LLD_jll
 const lld_exe = Sys.iswindows() ? "lld.exe" : "lld"
-const dsymutil_path = Ref{String}()
 const dsymutil_exe = Sys.iswindows() ? "dsymutil.exe" : "dsymutil"
 
 if Sys.iswindows()
@@ -47,61 +40,51 @@ function adjust_ENV!(env::Dict, PATH::String, LIBPATH::String, adjust_PATH::Bool
     return env
 end
 
-function __init_lld_path()
+const lld_path = OncePerProcess{String}() do
     # Prefer our own bundled lld, but if we don't have one, pick it up off of the PATH
     # If this is an in-tree build, `lld` will live in `tools`.  Otherwise, it'll be in `private_libexecdir`
     for bundled_lld_path in (joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, lld_exe),
                              joinpath(Sys.BINDIR, "..", "tools", lld_exe),
                              joinpath(Sys.BINDIR, lld_exe))
         if isfile(bundled_lld_path)
-            lld_path[] = abspath(bundled_lld_path)
-            return
+            return abspath(bundled_lld_path)
         end
     end
-    lld_path[] = something(Sys.which(lld_exe), lld_exe)
-    return
+    return something(Sys.which(lld_exe), lld_exe)
 end
 
-function __init_dsymutil_path()
-    #Same as with lld but for dsymutil
+const dsymutil_path = OncePerProcess{String}() do
+    # Same as with lld but for dsymutil
     for bundled_dsymutil_path in (joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, dsymutil_exe),
                              joinpath(Sys.BINDIR, "..", "tools", dsymutil_exe),
                              joinpath(Sys.BINDIR, dsymutil_exe))
         if isfile(bundled_dsymutil_path)
-            dsymutil_path[] = abspath(bundled_dsymutil_path)
-            return
+            return abspath(bundled_dsymutil_path)
         end
     end
-    dsymutil_path[] = something(Sys.which(dsymutil_exe), dsymutil_exe)
-    return
+    return something(Sys.which(dsymutil_exe), dsymutil_exe)
 end
 
-const VERBOSE = Ref{Bool}(false)
+PATH() = dirname(lld_path())
 
-function __init__()
-    VERBOSE[] = something(Base.get_bool_env("JULIA_VERBOSE_LINKING", false), false)
-
-    __init_lld_path()
-    __init_dsymutil_path()
-    PATH[] = dirname(lld_path[])
+const LIBPATH = OncePerProcess{String}() do
     if Sys.iswindows()
         # On windows, the dynamic libraries (.dll) are in Sys.BINDIR ("usr\\bin")
-        append!(LIBPATH_list, [abspath(Sys.BINDIR, Base.LIBDIR, "julia"), Sys.BINDIR])
+        LIBPATH_list = [abspath(Sys.BINDIR, Base.LIBDIR, "julia"), Sys.BINDIR]
     else
-        append!(LIBPATH_list, [abspath(Sys.BINDIR, Base.LIBDIR, "julia"), abspath(Sys.BINDIR, Base.LIBDIR)])
+        LIBPATH_list = [abspath(Sys.BINDIR, Base.LIBDIR, "julia"), abspath(Sys.BINDIR, Base.LIBDIR)]
     end
-    LIBPATH[] = join(LIBPATH_list, pathsep)
-    return
+    return join(LIBPATH_list, pathsep)
 end
 
 function lld(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
-    env = adjust_ENV!(copy(ENV), PATH[], LIBPATH[], adjust_PATH, adjust_LIBPATH)
-    return Cmd(Cmd([lld_path[]]); env)
+    env = adjust_ENV!(copy(ENV), PATH(), LIBPATH(), adjust_PATH, adjust_LIBPATH)
+    return Cmd(Cmd([lld_path()]); env)
 end
 
 function dsymutil(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
-    env = adjust_ENV!(copy(ENV), PATH[], LIBPATH[], adjust_PATH, adjust_LIBPATH)
-    return Cmd(Cmd([dsymutil_path[]]); env)
+    env = adjust_ENV!(copy(ENV), PATH(), LIBPATH(), adjust_PATH, adjust_LIBPATH)
+    return Cmd(Cmd([dsymutil_path()]); env)
 end
 
 function ld()
@@ -149,6 +132,8 @@ else
     shlibdir() = libdir()
 end
 
+verbose_linking() = something(Base.get_bool_env("JULIA_VERBOSE_LINKING", false), false)
+
 function link_image_cmd(path, out)
     PRIVATE_LIBDIR = "-L$(private_libdir())"
     SHLIBDIR = "-L$(shlibdir())"
@@ -158,7 +143,7 @@ function link_image_cmd(path, out)
         LIBS = (LIBS..., "-lopenlibm", "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt")
     end
 
-    V = VERBOSE[] ? "--verbose" : ""
+    V = verbose_linking() ? "--verbose" : ""
     `$(ld()) $V $SHARED -o $out $WHOLE_ARCHIVE $path $NO_WHOLE_ARCHIVE $PRIVATE_LIBDIR $SHLIBDIR $LIBS`
 end
 

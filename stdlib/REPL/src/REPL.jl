@@ -72,7 +72,6 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
 end
 
 function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
-    Base.isbindingresolved(m, var) || return false
     (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
     active_mod = Base.active_module()
     print(io, "\nHint: ")
@@ -1431,7 +1430,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, ';')
-                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
+                LineEdit.check_show_hint(s)
             end
         end,
         '?' => function (s::MIState,o...)
@@ -1442,7 +1441,7 @@ function setup_interface(
                 end
             else
                 edit_insert(s, '?')
-                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
+                LineEdit.check_show_hint(s)
             end
         end,
         ']' => function (s::MIState,o...)
@@ -1465,8 +1464,8 @@ function setup_interface(
                                         transition(s, mode) do
                                             LineEdit.state(s, mode).input_buffer = buf
                                         end
-                                        if !isempty(s) && @invokelatest(LineEdit.check_for_hint(s))
-                                            @invokelatest(LineEdit.refresh_line(s))
+                                        if !isempty(s)
+                                            @invokelatest(LineEdit.check_show_hint(s))
                                         end
                                         break
                                     end
@@ -1479,7 +1478,7 @@ function setup_interface(
                 Base.errormonitor(t_replswitch)
             else
                 edit_insert(s, ']')
-                LineEdit.check_for_hint(s) && LineEdit.refresh_line(s)
+                LineEdit.check_show_hint(s)
             end
         end,
 
