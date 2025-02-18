@@ -1033,7 +1033,7 @@ end
         # we may assume that we don't throw
         @assert !boundscheck
         ismod && return false
-        name ⊑ Int || name ⊑ Symbol || return false
+        name ⊑ Int || return false
         sty.name.n_uninitialized == 0 && return true
         nflds === nothing && return false
         for i = (datatype_min_ninitialized(sty)+1):nflds
@@ -1053,10 +1053,10 @@ end
     if isa(s, DataType)
         # Can't say anything about abstract types
         isabstracttype(s) && return false
-        # If all fields are always initialized, and bounds check is disabled,
-        # we can assume we don't throw
+        # If all fields are always initialized, bounds check is disabled, and
+        # name is an integer, we can assume we don't throw.
         if !boundscheck && s.name.n_uninitialized == 0
-            name ⊑ Int || name ⊑ Symbol || return false
+            name ⊑ Int || return false
             return true
         end
         # Else we need to know what the field is
@@ -2427,7 +2427,7 @@ const _ARGMEM_BUILTINS = Any[
 ]
 
 const _INCONSISTENT_INTRINSICS = Any[
-    Intrinsics.pointerref,      # this one is volatile
+    Intrinsics.pointerref,
     Intrinsics.sqrt_llvm_fast,  # this one may differ at runtime (by a few ulps)
     Intrinsics.have_fma,        # this one depends on the runtime environment
     Intrinsics.cglobal,         # cglobal lookup answer changes at runtime
@@ -2484,6 +2484,7 @@ end
 function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospecialize(rt))
     length(argtypes) < 2 && return EFFECTS_THROWS
     obj = argtypes[1]
+    name = argtypes[2]
     if isvarargtype(obj)
         return Effects(EFFECTS_TOTAL;
             consistent=CONSISTENT_IF_INACCESSIBLEMEMONLY,
@@ -2497,18 +2498,16 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     noub = ALWAYS_TRUE
     bcheck = getfield_boundscheck(argtypes)
     nothrow = getfield_nothrow(𝕃, argtypes, bcheck)
-    if !nothrow
-        if bcheck !== :on
-            # If we cannot independently prove inboundsness, taint `:noub`.
-            # The inbounds-ness assertion requires dynamic reachability,
-            # while `:noub` needs to be true for all input values.
-            # However, as a special exception, we do allow literal `:boundscheck`.
-            # `:noub` will be tainted in any caller using `@inbounds`
-            # based on the `:noinbounds` effect.
-            # N.B. We do not taint for `--check-bounds=no` here.
-            # That is handled in concrete evaluation.
-            noub = ALWAYS_FALSE
-        end
+    if !(bcheck === :on || isdefined_tfunc(𝕃, obj, name) === Const(true))
+        # If we cannot independently prove inboundsness, taint `:noub`.
+        # The inbounds-ness assertion requires dynamic reachability,
+        # while `:noub` needs to be true for all input values.
+        # However, as a special exception, we do allow literal `:boundscheck`.
+        # `:noub` will be tainted in any caller using `@inbounds`
+        # based on the `:noinbounds` effect.
+        # N.B. We do not taint for `--check-bounds=no` here.
+        # That is handled in concrete evaluation.
+        noub = ALWAYS_FALSE
     end
     if hasintersect(widenconst(obj), Module)
         # Modeled more precisely in abstract_eval_getglobal
@@ -2938,7 +2937,11 @@ function intrinsic_effects(f::IntrinsicFunction, argtypes::Vector{Any})
     effect_free = !(f === Intrinsics.pointerset) ? ALWAYS_TRUE : ALWAYS_FALSE
     nothrow = intrinsic_nothrow(f, argtypes)
     inaccessiblememonly = ALWAYS_TRUE
-    return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly)
+    noub = ALWAYS_TRUE
+    if f === Intrinsics.pointerref || f === Intrinsics.pointerset
+        noub = ALWAYS_FALSE
+    end
+    return Effects(EFFECTS_TOTAL; consistent, effect_free, nothrow, inaccessiblememonly, noub)
 end
 
 # TODO: this function is a very buggy and poor model of the return_type function
