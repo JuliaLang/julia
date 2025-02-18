@@ -303,4 +303,13 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
     @test hash(5//3) == hash(big(5)//3)
 end
 
+@testset "`Pair`" begin
+    @test (@inferred hash(0 => 1)) === (@inferred hash(false => true))
+    @test hash(0 => 1, UInt(0)) != hash(0 => 1, UInt(1))
+    let (x, y, z) = (1, 3, 7)
+        h = UInt(9)
+        @test hash(x => (y => z), h) != hash((x => y) => z, h)
+    end
+end
+
 @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
