@@ -214,6 +214,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
         }
         if (auto call = dyn_cast<CallInst>(inst)) {
             // TODO handle `memcmp`
+            // TODO handle `memcpy` which is used a lot more often since opaque pointers
             // None of the intrinsics should care if the memory is stack or heap allocated.
             auto callee = call->getCalledOperand();
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
