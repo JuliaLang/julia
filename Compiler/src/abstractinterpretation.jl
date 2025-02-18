@@ -2151,10 +2151,10 @@ function form_partially_defined_struct(@nospecialize(obj), @nospecialize(name))
     isa(obj, PartialStruct) && return define_field(obj, fldidx, fieldtype(objt0, fldidx))
     nminfld = datatype_min_ninitialized(objt)
     fldidx > nminfld || return nothing
-    fields = collect(Any, fieldtypes(objt0))
     nmaxfld = something(datatype_fieldcount(objt), fldidx)
     undef = trues(nmaxfld)
     undef[fldidx] = false
+    fields = Any[fieldtype(objt0, i) for i = 1:nmaxfld]
     return PartialStruct(fallback_lattice, objt0, undef, fields)
 end
 
@@ -3135,7 +3135,7 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
                     all(i::Int -> ⊑(𝕃ᵢ, (at.fields::Vector{Any})[i], fieldtype(t, i)), 1:n)
                 end))
             nothrow = isexact
-            rt = PartialStruct(𝕃ᵢ, rt, at.undef, at.fields::Vector{Any})
+            rt = PartialStruct(𝕃ᵢ, rt, trues(length(at.undef)), at.fields::Vector{Any})
         end
     else
         rt = refine_partial_type(rt)

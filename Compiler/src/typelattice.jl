@@ -319,12 +319,10 @@ end
         thenfields = thentype === Bottom ? nothing : copy(fields)
         elsefields = elsetype === Bottom ? nothing : copy(fields)
         undef = copy(vartyp.undef)
-        for i in 1:length(fields)
-            if i == fldidx
-                thenfields === nothing || (thenfields[i] = thentype)
-                elsefields === nothing || (elsefields[i] = elsetype)
-                undef[i] = false
-            end
+        if 1 ≤ fldidx ≤ length(fields)
+            thenfields === nothing || (thenfields[fldidx] = thentype)
+            elsefields === nothing || (elsefields[fldidx] = elsetype)
+            undef[fldidx] = false
         end
         return Conditional(slot,
             thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, undef, thenfields),
@@ -436,7 +434,7 @@ end
             end
             length(a.undef) ≥ length(b.undef) || return false
             for i in 1:length(b.fields)
-                !is_field_defined(a, i) && is_field_defined(b, i) && return false
+                is_field_defined(a, i) ≥ is_field_defined(b, i) || return false
                 af = a.fields[i]
                 bf = b.fields[i]
                 if i == length(b.fields)
