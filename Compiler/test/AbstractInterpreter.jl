@@ -534,3 +534,17 @@ let interp = DebugInterp()
     end
     @test found
 end
+
+@newinterp InvokeInterp
+struct InvokeOwner end
+codegen = IdDict{CodeInstance, CodeInfo}()
+Compiler.cache_owner(::InvokeInterp) = InvokeOwner()
+Compiler.codegen_cache(::InvokeInterp) = codegen
+let interp = InvokeInterp()
+    source_mode = Compiler.SOURCE_MODE_ABI
+    f = (+)
+    args = (1, 1)
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t, Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
+    ci = Compiler.typeinf_ext_toplevel(interp, mi, source_mode)
+    @test invoke(f, ci, args...) == 2
+end

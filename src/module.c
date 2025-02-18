@@ -782,9 +782,10 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var)
     if (b == NULL)
         return jl_nothing;
     jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
-    if (jl_bkind_is_some_guard(jl_binding_kind(bpart)))
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (jl_bkind_is_some_guard(kind) || kind == BINDING_KIND_DECLARED)
         return jl_nothing;
-    if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
+    if (jl_bkind_is_some_constant(kind)) {
         // TODO: We would like to return the type of the constant, but
         // currently code relies on this returning any to bypass conversion
         // before an attempted assignment to a constant.

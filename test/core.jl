@@ -8463,3 +8463,11 @@ function f57315()
     return 1
 end
 @test_throws UndefVarError(:flag_2, :local) f57315()
+
+# issue #57446
+module GlobalAssign57446
+    using Test
+    global theglobal
+    (@__MODULE__).theglobal = 1
+    @test theglobal == 1
+end
