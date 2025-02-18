@@ -166,3 +166,16 @@ end
 let code = code_typed(with_macro_slot_cross)[1][1].code
     @test !any(x->isa(x, Core.PhiCNode), code)
 end
+
+# https://github.com/JuliaLang/julia/issues/56062
+@testset "issue #56062" begin
+    ts = Int[]
+    try
+        @with begin
+            return
+        end
+    catch err
+    finally
+        push!(ts, 2)
+    end
+end

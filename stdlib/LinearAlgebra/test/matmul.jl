@@ -755,6 +755,7 @@ import LinearAlgebra: Adjoint, Transpose
 (*)(x::RootInt, y::Integer) = x.i * y
 adjoint(x::RootInt) = x
 transpose(x::RootInt) = x
+Base.zero(::RootInt) = RootInt(0)
 
 @test Base.promote_op(*, RootInt, RootInt) === Int
 

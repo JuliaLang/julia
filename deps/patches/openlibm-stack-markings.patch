@@ -1,0 +1,69 @@
+From e2482c959e584d52c032af63d1073d2a4e57c345 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Jakov=20Smoli=C4=87?= <jsmolic@gentoo.org>
+Date: Mon, 5 Aug 2024 00:12:41 +0200
+Subject: [PATCH] Add stack markings for GNU to fmod assembly files (#307)
+
+This adds stack markings to the missing fmod .S files, otherwise the
+final libopenlibm object file gets marked with an executable stack.
+
+Output when compiling from source on Gentoo Linux:
+
+```
+ * QA Notice: The following files contain writable and executable sections
+ *  Files with such sections will not work properly (or at all!) on some
+ *  architectures/operating systems.  A bug should be filed at
+ *  https://bugs.gentoo.org/ to make sure the issue is fixed.
+ *  For more information, see:
+ *
+ *    https://wiki.gentoo.org/wiki/Hardened/GNU_stack_quickstart
+ *
+ *  Please include the following list of files in your report:
+ *  Note: Bugs should be filed for the respective maintainers
+ *  of the package in question and not hardened@gentoo.org.
+ * RWX --- --- usr/lib64/libopenlibm.so.4.0
+```
+---
+ amd64/e_fmod.S  | 5 +++++
+ amd64/e_fmodf.S | 5 +++++
+ amd64/e_fmodl.S | 5 +++++
+ 3 files changed, 15 insertions(+)
+
+diff --git a/amd64/e_fmod.S b/amd64/e_fmod.S
+index 37cae391..d2c8ecd9 100644
+--- a/amd64/e_fmod.S
++++ b/amd64/e_fmod.S
+@@ -49,3 +49,8 @@ ENTRY(fmod)
+ 	fstp	%st
+ 	ret
+ END(fmod)
++
++/* Enable stack protection */
++#if defined(__ELF__)
++.section .note.GNU-stack,"",%progbits
++#endif
+diff --git a/amd64/e_fmodf.S b/amd64/e_fmodf.S
+index 197892e8..b045e735 100644
+--- a/amd64/e_fmodf.S
++++ b/amd64/e_fmodf.S
+@@ -19,3 +19,8 @@ ENTRY(fmodf)
+ 	fstp	%st
+ 	ret
+ END(fmodf)
++
++/* Enable stack protection */
++#if defined(__ELF__)
++.section .note.GNU-stack,"",%progbits
++#endif
+diff --git a/amd64/e_fmodl.S b/amd64/e_fmodl.S
+index 64be92f1..cab539d5 100644
+--- a/amd64/e_fmodl.S
++++ b/amd64/e_fmodl.S
+@@ -45,3 +45,8 @@ ENTRY(fmodl)
+ 	fstp	%st(1)
+ 	ret
+ END(fmodl)
++
++/* Enable stack protection */
++#if defined(__ELF__)
++.section .note.GNU-stack,"",%progbits
++#endif
