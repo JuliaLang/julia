@@ -93,7 +93,7 @@ f(y) = [x for x in y]
 
 # Examples
 
-```julia-repl
+```jldoctest
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 

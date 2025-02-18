@@ -417,7 +417,7 @@ otherwise it searches all recursive dependencies (from the resolved manifest of
 each environment) until it locates the context `where`, and from there
 identifies the dependency with the corresponding name.
 
-```julia-repl
+```jldoctest
 julia> Base.identify_package("Pkg") # Pkg is a dependency of the default environment
 Pkg [44cfe95a-1eb2-52ea-b672-e2afdf69b78f]
 
