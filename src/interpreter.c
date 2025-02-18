@@ -52,7 +52,14 @@ extern void JL_GC_ENABLEFRAME(interpreter_state*) JL_NOTSAFEPOINT;
 
 #else
 
+#ifdef MMTK_GC
+#define JL_GC_ENCODE_PUSHFRAME(n)  ((((size_t)(n))<<3)|2)
+// For roots that are not transitively pinned
+#define JL_GC_ENCODE_PUSHFRAME_NO_TPIN(n)  ((((size_t)(n))<<3)|6)
+#else
 #define JL_GC_ENCODE_PUSHFRAME(n)  ((((size_t)(n))<<2)|2)
+#define JL_GC_ENCODE_PUSHFRAME_NO_TPIN(n)  JL_GC_ENCODE_PUSHFRAME(n)
+#endif
 
 #define JL_GC_PUSHFRAME(frame,locals,n)                                             \
   JL_CPPALLOCA(frame, sizeof(*frame)+(((n)+3)*sizeof(jl_value_t*)));                \
