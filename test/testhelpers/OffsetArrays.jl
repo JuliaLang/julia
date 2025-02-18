@@ -546,9 +546,6 @@ _similar_axes_or_length(A, T, ax::I, ::I) where {I} = similar(A, T, map(_indexle
 _similar_axes_or_length(AT, ax::I, ::I) where {I} = similar(AT, map(_indexlength, ax))
 
 # reshape accepts a single colon
-# this method is limited to AbstractUnitRange{<:Integer} to avoid method overwritten errors if Base defines the same,
-# see https://github.com/JuliaLang/julia/pull/56850
-Base.reshape(A::AbstractArray, inds::Union{Integer, Colon, AbstractUnitRange{<:Integer}}...) = reshape(A, inds)
 function Base.reshape(A::AbstractArray, inds::Tuple{Vararg{OffsetAxis}})
     AR = reshape(no_offset_view(A), map(_indexlength, inds))
     O = OffsetArray(AR, map(_offset, axes(AR), inds))
