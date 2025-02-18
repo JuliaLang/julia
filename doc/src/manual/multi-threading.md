@@ -37,6 +37,7 @@ each threadpool.
 
 !!! compat "Julia 1.12"
     Starting by default with 1 interactive thread, as well as the 1 worker thread, was made as such in Julia 1.12
+    If the number of threads is set to 1 by either doing `-t1` or `JULIA_NUM_THREADS=1` an interactive thread will not be spawned.
 
 Lets start Julia with 4 threads:
 
