@@ -103,7 +103,7 @@ Take the expression `x` and return an equivalent expression with all macros remo
 for executing in module `m`.
 The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
 This is demonstrated in the example below:
-```jldoctest
+```jldoctest; filter = r"#= .*:6 =#"
 julia> module M
            macro m1()
                42
@@ -112,13 +112,13 @@ julia> module M
                :(@m1())
            end
        end
-Main.M
+M
 
 julia> macroexpand(M, :(@m2()), recursive=true)
 42
 
 julia> macroexpand(M, :(@m2()), recursive=false)
-:(#= REPL[1]:6 =# M.@m1)
+:(#= REPL[1]:6 =# @m1)
 ```
 """
 function macroexpand(m::Module, @nospecialize(x); recursive=true)
@@ -156,7 +156,7 @@ julia> module M
                )
            end
        end
-Main.M
+M
 
 julia> macro m()
            2
