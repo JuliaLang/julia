@@ -55,7 +55,8 @@ static inline ws_array_t *ws_queue_push(ws_queue_t *q, void *elt, int32_t eltsz)
     int64_t t = jl_atomic_load_acquire(&q->top);
     ws_array_t *ary = jl_atomic_load_relaxed(&q->array);
     ws_array_t *old_ary = NULL;
-    if (__unlikely(b - t > ary->capacity - 1)) {
+    int64_t size = b - t;
+    if (__unlikely(size > ary->capacity - 1)) {
         ws_array_t *new_ary = create_ws_array(2 * ary->capacity, eltsz);
         for (int i = 0; i < ary->capacity; i++) {
             memcpy(new_ary->buffer + ((t + i) & new_ary->mask) * eltsz, ary->buffer + ((t + i) & ary->mask) * eltsz, eltsz);
@@ -77,9 +78,10 @@ static inline void ws_queue_pop(ws_queue_t *q, void *dest, int32_t eltsz) JL_NOT
     jl_atomic_store_relaxed(&q->bottom, b);
     jl_fence();
     int64_t t = jl_atomic_load_relaxed(&q->top);
-    if (__likely(t <= b)) {
+    int64_t size = b - t + 1;
+    if (__likely(size > 0)) {
         memcpy(dest, ary->buffer + (b & ary->mask) * eltsz, eltsz);
-        if (t == b) {
+        if (size == 1) {
             if (!jl_atomic_cmpswap(&q->top, &t, t + 1))
                 memset(dest, 0, eltsz);
             jl_atomic_store_relaxed(&q->bottom, b + 1);
@@ -96,8 +98,9 @@ static inline void ws_queue_steal_from(ws_queue_t *q, void *dest, int32_t eltsz)
     int64_t t = jl_atomic_load_acquire(&q->top);
     jl_fence();
     int64_t b = jl_atomic_load_acquire(&q->bottom);
-    if (t < b) {
-        ws_array_t *ary = jl_atomic_load_relaxed(&q->array);
+    int64_t size = b - t;
+    if (size > 0) {
+        ws_array_t *ary = jl_atomic_load_acquire(&q->array); // consume in Le
         memcpy(dest, ary->buffer + (t & ary->mask) * eltsz, eltsz);
         if (!jl_atomic_cmpswap(&q->top, &t, t + 1))
             memset(dest, 0, eltsz);
