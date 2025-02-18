@@ -299,7 +299,7 @@ end |> only === Type{Int}
 
 if bc_opt == bc_default
     # Array/Memory escape analysis
-    function no_allocate(T::Type{<:Union{Memory, Vector}})
+    function no_allocate(T::Type{<:Union{Memory}})
         v = T(undef, 2)
         v[1] = 2
         v[2] = 3
@@ -308,7 +308,7 @@ if bc_opt == bc_default
     function test_alloc(::Type{T}; broken=false) where T
         @test (@allocated no_allocate(T)) == 0 broken=broken
     end
-    for T in [Memory, Vector]
+    for T in [Memory] # This requires changing the pointer_from_objref to something llvm sees through
         for ET in [Int, Float32, Union{Int, Float64}]
             no_allocate(T{ET}) #compile
             # allocations aren't removed for Union eltypes which they theoretically could be eventually

@@ -207,3 +207,4 @@ define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
 ; CHECK-NEXT: !10 = distinct !{!10}
 ; CHECK-NEXT: !11 = !{!12, !12, i64 0}
 ; CHECK-NEXT: !12 = !{!"jtbaa_const", !3}
+
