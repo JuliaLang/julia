@@ -3554,10 +3554,10 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return 1;
     size_t raw_kind = bpart->kind;
-    enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & 0x0f);
+    enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & BINDING_KIND_MASK);
     if (!unchanged_implicit && jl_bkind_is_some_implicit(kind)) {
         jl_check_new_binding_implicit(bpart, b, NULL, jl_atomic_load_relaxed(&jl_world_counter));
-        bpart->kind |= (raw_kind & 0xf0);
+        bpart->kind |= (raw_kind & BINDING_FLAG_MASK);
         if (bpart->min_world > jl_require_world)
             goto invalidated;
     }
