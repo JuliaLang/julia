@@ -175,7 +175,7 @@ function choosetests(choices = [])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", ["Compiler"])
-    filtertests!(tests, "compiler_extras", ["Compiler/extras/CompilerDevTools"])
+    filtertests!(tests, "compiler_extras", ["Compiler/extras/CompilerDevTools/testpkg"])
     filtertests!(tests, "stdlib", STDLIBS)
     filtertests!(tests, "internet_required", INTERNET_REQUIRED_LIST)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests
