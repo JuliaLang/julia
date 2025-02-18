@@ -540,6 +540,11 @@ JL_DLLEXPORT jl_value_t *(jl_gc_alloc)(jl_ptls_t ptls, size_t sz, void *ty)
     return jl_gc_alloc_(ptls, sz, ty);
 }
 
+JL_DLLEXPORT jl_value_t *(jl_gc_alloc_nonmoving)(jl_ptls_t ptls, size_t sz, void *ty)
+{
+    return jl_gc_alloc_nonmoving_(ptls, sz, ty);
+}
+
 JL_DLLEXPORT void *jl_malloc(size_t sz)
 {
     return jl_gc_counted_malloc(sz);
