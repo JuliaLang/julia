@@ -635,7 +635,7 @@ typedef struct {
 static void *jl_sysimg_handle = NULL;
 static jl_image_t sysimage;
 
-static inline uintptr_t *sysimg_gvars(const char *base, const int32_t *offsets, size_t idx)
+static inline uintptr_t *sysimg_gvars(const char *base, const ptrdiff_t *offsets, size_t idx)
 {
     return (uintptr_t*)(base + offsets[idx]);
 }
