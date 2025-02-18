@@ -49,5 +49,5 @@ while processing a call, then `Conditional` everywhere else.
 """
 Core.InterConditional
 
-InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
+Core.InterConditional(var::SlotNumber, @nospecialize(thentype), @nospecialize(elsetype)) =
     InterConditional(slot_id(var), thentype, elsetype)

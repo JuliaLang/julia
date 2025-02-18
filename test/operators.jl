@@ -350,6 +350,7 @@ end
 end
 
 @test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]
+@test Core.Compiler.is_terminates(Base.infer_effects(Base.afoldl, Tuple{typeof(+), Vararg{Int, 100}}))
 
 @testset "Returns" begin
     @test @inferred(Returns(1)()   ) === 1

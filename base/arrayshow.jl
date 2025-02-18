@@ -41,7 +41,7 @@ Accept keyword args `c` for alternate single character marker.
 """
 function replace_with_centered_mark(s::AbstractString;c::AbstractChar = '⋅')
     N = textwidth(ANSIIterator(s))
-    return join(setindex!([" " for i=1:N],string(c),ceil(Int,N/2)))
+    return N == 0 ? string(c) : join(setindex!([" " for i=1:N],string(c),ceil(Int,N/2)))
 end
 
 const undef_ref_alignment = (3,3)
@@ -100,7 +100,7 @@ function print_matrix_row(io::IO,
         #= `axes(X)` may not infer, set this in caller =# idxlast::Integer=last(axes(X, 2)))
     for (k, j) = enumerate(cols)
         k > length(A) && break
-        if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
+        if isassigned(X,i,j)
             x = X[i,j]
             a = alignment(io, x)::Tuple{Int,Int}
 

@@ -39,9 +39,16 @@ directory mirror, with all of the necessary Makefiles to build Julia,
 in the specified directory. These builds will share the source files
 in Julia and `deps/srccache`. Each out-of-tree build directory can
 have its own `Make.user` file to override the global `Make.user` file
-in the top-level folder.
+in the top-level folder. After modifying the `Make.user` file if necessary,
+build using: `make -C <build-directory>`.
 
-If everything works correctly, you will see a Julia banner and an
+If everything works correctly, there will be a symlink to
+the julia executable in the build directory which can be run as:
+```sh
+./julia
+```
+The actual executable is in `<build-directory>/usr/bin`.
+After running this, you will see a Julia banner and an
 interactive prompt into which you can enter expressions for
 evaluation. (Errors related to libraries might be caused by old,
 incompatible libraries sitting around in your PATH. In this case, try
@@ -49,9 +56,9 @@ moving the `julia` directory earlier in the PATH). Note that most of
 the instructions above apply to unix systems.
 
 To run julia from anywhere you can:
-- add an alias (in `bash`: `echo "alias julia='/path/to/install/folder/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
+- add an alias (in `bash`: `echo "alias julia='<build-directory>/usr/bin/julia'" >> ~/.bashrc && source ~/.bashrc`), or
 
-- add a soft link to the `julia` executable in the `julia` directory to `/usr/local/bin` (or any suitable directory already in your path), or
+- add a soft link to the `julia` executable in the `<build-directory>/usr/bin` directory to `/usr/local/bin` (or any suitable directory already in your path), or
 
 - add the `julia` directory to your executable path for this shell session (in `bash`: `export PATH="$(pwd):$PATH"` ; in `csh` or `tcsh`:
 `set path= ( $path $cwd )` ), or
@@ -195,7 +202,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 - **[libgit2]**              — Git linkable library, used by Julia's package manager.
 - **[curl]**                 — libcurl provides download and proxy support.
 - **[libssh2]**              — library for SSH transport, used by libgit2 for packages with SSH remotes.
-- **[mbedtls]**              — library used for cryptography and transport layer security, used by libssh2
+- **[OpenSSL]**              — library used for cryptography and transport layer security, used by libgit2 and libssh2.
 - **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings.
 - **[LLVM libunwind]**       — LLVM's fork of [libunwind], a library that determines the call-chain of a program.
 - **[ITTAPI]**               — Intel's Instrumentation and Tracing Technology and Just-In-Time API.
@@ -230,7 +237,7 @@ uses are listed in [`deps/$(libname).version`](https://github.com/JuliaLang/juli
 [utf8proc]:     https://julialang.org/utf8proc/
 [libunwind]:    https://www.nongnu.org/libunwind
 [libssh2]:      https://www.libssh2.org
-[mbedtls]:      https://tls.mbed.org/
+[OpenSSL]:      https://www.openssl.org/
 [pkg-config]:   https://www.freedesktop.org/wiki/Software/pkg-config/
 [powershell]:   https://docs.microsoft.com/en-us/powershell/scripting/wmf/overview
 [which]:        https://carlowood.github.io/which/
@@ -250,7 +257,6 @@ For packaging Julia with LLVM, we recommend either:
  - bundling a Julia-only LLVM library inside the Julia package, or
  - adding the patches to the LLVM package of the distribution.
    * A complete list of patches is available in on [Github](https://github.com/JuliaLang/llvm-project) see the `julia-release/18.x` branch.
-   * The only Julia-specific patch is the lib renaming (`llvm7-symver-jlprefix.patch`), which should _not_ be applied to a system LLVM.
    * The remaining patches are all upstream bug fixes, and have been contributed into upstream LLVM.
 
 Using an unpatched or different version of LLVM will result in errors and/or poor performance.

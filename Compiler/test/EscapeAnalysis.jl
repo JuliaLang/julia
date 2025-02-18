@@ -1527,7 +1527,17 @@ let result = code_escapes() do
     end
     i = last(findall(isnew, result.ir.stmts.stmt))
     @test_broken !has_return_escape(result.state[SSAValue(i)]) # TODO interprocedural alias analysis
-    @test !has_thrown_escape(result.state[SSAValue(i)])
+    @test_broken !has_thrown_escape(result.state[SSAValue(i)]) # IDEA embed const-prop'ed `CodeInstance` for `:invoke`?
+end
+let result = code_escapes((Base.RefValue{Base.RefValue{String}},)) do x
+        out1 = broadcast_noescape2(Ref(Ref("Hi")))
+        out2 = broadcast_noescape2(x)
+        return out1, out2
+    end
+    i = last(findall(isnew, result.ir.stmts.stmt))
+    @test_broken !has_return_escape(result.state[SSAValue(i)]) # TODO interprocedural alias analysis
+    @test_broken !has_thrown_escape(result.state[SSAValue(i)]) # IDEA embed const-prop'ed `CodeInstance` for `:invoke`?
+    @test has_thrown_escape(result.state[Argument(2)])
 end
 @noinline allescape_argument(a) = (global GV = a) # obvious escape
 let result = code_escapes() do

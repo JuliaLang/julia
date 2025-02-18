@@ -847,6 +847,7 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_vararg_t") ||
                    Name.ends_with_insensitive("jl_opaque_closure_t") ||
                    Name.ends_with_insensitive("jl_globalref_t") ||
+                   Name.ends_with_insensitive("jl_abi_override_t") ||
                    // Probably not technically true for these, but let's allow it as a root
                    Name.ends_with_insensitive("jl_ircode_state") ||
                    Name.ends_with_insensitive("typemap_intersection_env") ||
@@ -855,7 +856,6 @@ bool GCChecker::isGCTrackedType(QualType QT) {
                    Name.ends_with_insensitive("jl_stenv_t") ||
                    Name.ends_with_insensitive("jl_varbinding_t") ||
                    Name.ends_with_insensitive("set_world") ||
-                   Name.ends_with_insensitive("jl_ptr_kind_union_t") ||
                    Name.ends_with_insensitive("jl_codectx_t")) {
                  return true;
                }

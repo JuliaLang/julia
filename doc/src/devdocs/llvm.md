@@ -29,7 +29,6 @@ The code for lowering Julia AST to LLVM IR or interpreting it directly is in dir
 | `llvm-gc-invariant-verifier.cpp` | Custom LLVM pass to verify Julia GC invariants                     |
 | `llvm-julia-licm.cpp`            | Custom LLVM pass to hoist/sink Julia-specific intrinsics           |
 | `llvm-late-gc-lowering.cpp`      | Custom LLVM pass to root GC-tracked values                         |
-| `llvm-lower-handlers.cpp`        | Custom LLVM pass to lower try-catch blocks                         |
 | `llvm-multiversioning.cpp`       | Custom LLVM pass to generate sysimg code on multiple architectures |
 | `llvm-propagate-addrspaces.cpp`  | Custom LLVM pass to canonicalize addrspaces                        |
 | `llvm-ptls.cpp`                  | Custom LLVM pass to lower TLS operations                           |

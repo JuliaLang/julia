@@ -1,7 +1,7 @@
 name = "MozillaCACerts_jll"
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 # Keep in sync with `deps/libgit2.version`.
-version = "2024.11.26"
+version = "2024.12.31"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

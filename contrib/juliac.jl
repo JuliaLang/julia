@@ -108,6 +108,7 @@ function compile_products()
         println(stderr, "\nFailed to compile $file")
         exit(1)
     end
+    run(`cc $(cflags) -g -c -o $init_path $initsrc_path`)
 end
 
 function link_products()
@@ -140,3 +141,4 @@ end
 precompile_env()
 compile_products()
 link_products()
+

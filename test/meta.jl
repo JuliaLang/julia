@@ -274,7 +274,7 @@ ci = code_lowered(g, Tuple{Val{true}})[1]
     @eval isdefined_globalref(x) = $(Expr(:isdefined, GlobalRef(Base, :foo)))
     ci = code_lowered(isdefined_globalref, Tuple{Int})[1]
     @test Meta.partially_inline!(copy(ci.code), Any[isdefined_globalref, 1], Tuple{typeof(isdefined_globalref), Int},
-                                 [], 0, 0, :propagate)[1] == Expr(:isdefined, GlobalRef(Base, :foo))
+                                 [], 0, 0, :propagate)[1] == Expr(:call, GlobalRef(Core, :isdefinedglobal), Base, QuoteNode(:foo))
 
     withunreachable(s::String) = sin(s)
     ci = code_lowered(withunreachable, Tuple{String})[1]

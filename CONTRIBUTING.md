@@ -190,7 +190,7 @@ The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issu
 Issues and pull requests should have self explanatory titles such that they can be understood from the list of PRs and Issues.
 i.e. `Add {feature}` and `Fix {bug}` are good, `Fix #12345. Corrects the bug.` is bad.
 
-You can make pull requests for incomplete features to get code review. The convention is to open these a draft PRs and prefix
+You can make pull requests for incomplete features to get code review. The convention is to open these as draft PRs and prefix
 the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready
 for merging. This will prevent accidental merging of work that is in progress.
 
@@ -209,6 +209,7 @@ Add new code to Julia's base libraries as follows (this is the "basic" approach;
 Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git).
 
 #### Running specific tests
+
 There are `make` targets for running specific tests:
 
     make test-bitarray
@@ -346,8 +347,8 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
 
 ### Git Recommendations For Pull Requests
 
- - Avoid working from the `master` branch of your fork, creating a new branch will make it easier if Julia's `master` changes and you need to update your pull request.
- - Try to [squash](https://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code so your pull request is easier to review. A reasonable number of separate well-factored commits is fine, especially for larger changes.
+ - Avoid working from the `master` branch of your fork. Create a new branch as it will make it easier to update your pull request if Julia's `master` changes.
+ - Try to [squash](https://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code, so your pull request is easier to review. A reasonable number of separate well-factored commits is fine, especially for larger changes.
  - If any conflicts arise due to changes in Julia's `master`, prefer updating your pull request branch with `git rebase` versus `git merge` or `git pull`, since the latter will introduce merge commits that clutter the git history with noise that makes your changes more difficult to review.
  - Descriptive commit messages are good.
  - Using `git add -p` or `git add -i` can be useful to avoid accidentally committing unrelated changes.

@@ -97,7 +97,7 @@ ambig(x::Union{Char, Int16}) = 's'
 
 # Automatic detection of ambiguities
 
-const allowed_undefineds = Set([])
+const allowed_undefineds = Set([GlobalRef(Base, :active_repl)])
 
 let Distributed = get(Base.loaded_modules,
                       Base.PkgId(Base.UUID("8ba89e20-285c-5b6f-9357-94700520ee1b"), "Distributed"),
@@ -171,12 +171,8 @@ module UnboundAmbig55868
     using .B
     export C, D
 end
-@test !Base.isbindingresolved(UnboundAmbig55868, :C)
-@test !Base.isbindingresolved(UnboundAmbig55868, :D)
 @test isempty(detect_unbound_args(UnboundAmbig55868))
 @test isempty(detect_ambiguities(UnboundAmbig55868))
-@test !Base.isbindingresolved(UnboundAmbig55868, :C)
-@test !Base.isbindingresolved(UnboundAmbig55868, :D)
 
 # Test that Core and Base are free of ambiguities
 # not using isempty so this prints more information when it fails

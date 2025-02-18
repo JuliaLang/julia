@@ -5,6 +5,13 @@
 #else
 #define JL_X86_64ONLY_VER(x) x
 #endif
+// The code is similar to what is here so the bits can be used as reference
+// https://github.com/llvm/llvm-project/blob/3f7905733820851bc4f65cb4af693c3101cbf20d/llvm/lib/TargetParser/Host.cpp#L1257
+
+// The way the bits here work is an index into the features array. This is a bit array
+// The index works as follows:
+// 32*i + j where i is the index into the array and j is the bit in the array.
+// There is a reference to what each index corresponds to in _get_host_cpu
 
 // X86 features definition
 // EAX=1: ECX
@@ -79,6 +86,7 @@ JL_FEATURE_DEF(avx512vp2intersect, 32 * 4 + 8, 0)
 JL_FEATURE_DEF(serialize, 32 * 4 + 14, 110000)
 JL_FEATURE_DEF(tsxldtrk, 32 * 4 + 16, 110000)
 JL_FEATURE_DEF(pconfig, 32 * 4 + 18, 0)
+// JL_FEATURE_DEF(ibt, 32 * 4 + 20, 0)
 JL_FEATURE_DEF_NAME(amx_bf16, 32 * 4 + 22, 110000, "amx-bf16")
 JL_FEATURE_DEF(avx512fp16, 32 * 4 + 23, 140000)
 JL_FEATURE_DEF_NAME(amx_tile, 32 * 4 + 24, 110000, "amx-tile")
@@ -110,10 +118,28 @@ JL_FEATURE_DEF(clzero, 32 * 8 + 0, 0)
 JL_FEATURE_DEF(wbnoinvd, 32 * 8 + 9, 0)
 
 // EAX=7,ECX=1: EAX
+JL_FEATURE_DEF(sha512, 32 * 9 + 0, 170000)
+JL_FEATURE_DEF(sm3, 32 * 9 + 1, 170000)
+JL_FEATURE_DEF(sm4, 32 * 9 + 2, 170000)
+JL_FEATURE_DEF(raoint, 32 * 9 + 3, 170000)
 JL_FEATURE_DEF(avxvnni, 32 * 9 + 4, 120000)
 JL_FEATURE_DEF(avx512bf16, 32 * 9 + 5, 0)
+JL_FEATURE_DEF(cmpccxadd, 32 * 9 + 7, 160000)
+JL_FEATURE_DEF_NAME(amx_fp16, 32 * 9 + 21, 160000, "amx-fp16")
+JL_FEATURE_DEF(hreset, 32 * 9 + 22, 160000)
+JL_FEATURE_DEF(avxifma, 32 * 9 + 23, 160000)
+
+// EAX=7,ECX=1: EBX
+JL_FEATURE_DEF(avxvnniint8, 32 * 10 + 4, 160000)
+JL_FEATURE_DEF(avxneconvert, 32 * 10 + 5, 160000)
+JL_FEATURE_DEF_NAME(amx_complex, 32 * 10 + 8, 170000, "amx-complex")
+JL_FEATURE_DEF(avxvnniint16, 32 * 10 + 10, 170000)
+JL_FEATURE_DEF(prefetchi, 32 * 10 + 14, 160000)
+JL_FEATURE_DEF(usermsr, 32 * 10 + 15, 170000)
+// JL_FEATURE_DEF(avx10, 32 * 10 + 19, 170000) // TODO: What to do about avx10 and it's mess?
+// JL_FEATURE_DEF(apxf, 32 * 10 + 21, 190000)
 
 // EAX=0x14,ECX=0: EBX
-JL_FEATURE_DEF(ptwrite, 32 * 10 + 4, 0)
+JL_FEATURE_DEF(ptwrite, 32 * 11 + 4, 0)
 
 #undef JL_X86_64ONLY_VER

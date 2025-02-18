@@ -1,6 +1,6 @@
 name = "OpenBLAS_jll"
 uuid = "4536629a-c528-5b80-bd46-f80d51c5b363"
-version = "0.3.28+3"
+version = "0.3.29+0"
 
 [deps]
 # See note in `src/OpenBLAS_jll.jl` about this dependency.

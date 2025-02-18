@@ -1097,3 +1097,10 @@ end
         end
     end
 end
+
+# BigFloatData is the Ref type for BigFloat in ccall:
+@testset "cconvert(Ref{BigFloat}, x)" begin
+    for x in (1.0, big"1.0", Ref(big"1.0"))
+        @test Base.cconvert(Ref{BigFloat}, x) isa Base.MPFR.BigFloatData
+    end
+end

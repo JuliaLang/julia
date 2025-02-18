@@ -51,9 +51,9 @@ namespace JuliaType {
 
     static inline auto get_jlfunc_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T_prjlvalue,  // function
+                T_prjlvalue, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C)}, // nargs
             false);
@@ -61,21 +61,21 @@ namespace JuliaType {
 
     static inline auto get_jlfunc2_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T_prjlvalue,  // function
+                T_prjlvalue, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C), // nargs
-                T_prjlvalue},  // linfo
+                T_prjlvalue}, // linfo
             false);
     }
 
     static inline auto get_jlfunc3_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         auto T = get_pjlvalue_ty(C, Derived);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T,  // function
+                T, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C)}, // nargs
             false);
@@ -83,13 +83,12 @@ namespace JuliaType {
 
     static inline auto get_jlfuncparams_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T_prjlvalue,  // function
+                T_prjlvalue, // function
                 T_pprjlvalue, // args[]
-                llvm::Type::getInt32Ty(C),
-                T_pprjlvalue,  // linfo->sparam_vals
-                }, // nargs
+                llvm::Type::getInt32Ty(C), // nargs
+                T_prjlvalue}, // linfo->sparam_vals
             false);
     }
 
@@ -245,21 +244,17 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
     unsigned offset = offsetof(jl_tls_states_t, gc_state);
     Value *gc_state = builder.CreateConstInBoundsGEP1_32(T_int8, ptls, offset, "gc_state");
     if (old_state == nullptr) {
-        old_state = builder.CreateLoad(T_int8, gc_state);
+        old_state = builder.CreateLoad(T_int8, gc_state, "old_state");
         cast<LoadInst>(old_state)->setOrdering(AtomicOrdering::Monotonic);
     }
     builder.CreateAlignedStore(state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
     if (auto *C = dyn_cast<ConstantInt>(old_state))
-        if (C->isZero())
-            return old_state;
-    if (auto *C = dyn_cast<ConstantInt>(state))
-        if (!C->isZero())
-            return old_state;
+        if (auto *C2 = dyn_cast<ConstantInt>(state))
+            if (C->getZExtValue() == C2->getZExtValue())
+                return old_state;
     BasicBlock *passBB = BasicBlock::Create(builder.getContext(), "safepoint", builder.GetInsertBlock()->getParent());
     BasicBlock *exitBB = BasicBlock::Create(builder.getContext(), "after_safepoint", builder.GetInsertBlock()->getParent());
-    Constant *zero8 = ConstantInt::get(T_int8, 0);
-    builder.CreateCondBr(builder.CreateOr(builder.CreateICmpEQ(old_state, zero8), // if (!old_state || !state)
-                                          builder.CreateICmpEQ(state, zero8)),
+    builder.CreateCondBr(builder.CreateICmpEQ(old_state, state, "is_new_state"), // Safepoint whenever we change the GC state
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());
