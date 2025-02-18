@@ -926,7 +926,7 @@ This can be used to limit the number of compiler-generated specializations durin
 
 # Examples
 
-```julia
+```jldoctest; setup = :(using InteractiveUtils)
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -935,7 +935,7 @@ g (generic function with 1 method)
 
 julia> @code_typed f([1.0])
 CodeInfo(
-1 ─ %1 = invoke Main.g(_2::AbstractArray)::Any
+1 ─ %1 =    invoke g(A::AbstractArray)::Any
 └──      return %1
 ) => Any
 ```
