@@ -4671,7 +4671,7 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
     bool isunion = layout->flags.arrayelem_isunion;
     bool isghost = layout->size == 0;
     if ((!isboxed && isunion) || isghost) {
-        newdata = ctx.builder.CreateAdd(data, offset, "", true, true);
+        newdata = ctx.builder.CreateAdd(data, offset);
         setName(ctx.emission_context, newdata, "memoryref_data+offset");
         if (bc) {
             BasicBlock *failBB, *endBB;
