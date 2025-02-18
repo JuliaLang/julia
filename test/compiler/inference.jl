@@ -2747,7 +2747,7 @@ end |> only == Union{Int,Tuple{Any,Any}}
 let A = Core.Const(true)
     B = Core.InterConditional(2, Tuple, Union{})
     C = Core.InterConditional(2, Any, Union{})
-    L = ipo_lattice(Compiler.NativeInterpreter())
+    L = ipo_lattice(Core.Compiler.NativeInterpreter())
     @test !⊑(L, A, B)
     @test ⊑(L, B, A)
     @test tmerge(L, A, B) == C
