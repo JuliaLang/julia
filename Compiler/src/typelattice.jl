@@ -318,20 +318,21 @@ end
         fields = vartyp.fields
         thenfields = thentype === Bottom ? nothing : copy(fields)
         elsefields = elsetype === Bottom ? nothing : copy(fields)
-        for i in 1:length(fields)
-            if i == fldidx
-                thenfields === nothing || (thenfields[i] = thentype)
-                elsefields === nothing || (elsefields[i] = elsetype)
-            end
+        undef = copy(vartyp.undef)
+        if 1 ≤ fldidx ≤ length(fields)
+            thenfields === nothing || (thenfields[fldidx] = thentype)
+            elsefields === nothing || (elsefields[fldidx] = elsetype)
+            undef[fldidx] = false
         end
         return Conditional(slot,
-            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, thenfields),
-            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, elsefields))
+            thenfields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, undef, thenfields),
+            elsefields === nothing ? Bottom : PartialStruct(fallback_lattice, vartyp.typ, undef, elsefields))
     else
         vartyp_widened = widenconst(vartyp)
         thenfields = thentype === Bottom ? nothing : Any[]
         elsefields = elsetype === Bottom ? nothing : Any[]
-        for i in 1:fieldcount(vartyp_widened)
+        nf = fieldcount(vartyp_widened)
+        for i in 1:nf
             if i == fldidx
                 thenfields === nothing || push!(thenfields, thentype)
                 elsefields === nothing || push!(elsefields, elsetype)
@@ -431,7 +432,9 @@ end
                     return false
                 end
             end
+            length(a.undef) ≥ length(b.undef) || return false
             for i in 1:length(b.fields)
+                is_field_defined(a, i) ≥ is_field_defined(b, i) || return false
                 af = a.fields[i]
                 bf = b.fields[i]
                 if i == length(b.fields)
@@ -465,12 +468,15 @@ end
             else
                 widea <: wideb || return false
                 # for structs we need to check that `a` has more information than `b` that may be partially initialized
-                n_initialized(a) ≥ length(b.fields) || return false
+                # it may happen that `b` has more information beyond the first undefined field
+                # but in this case we choose `Const` nonetheless.
+                n_initialized(a) ≥ n_initialized(b) || return false
             end
             nf = nfields(a.val)
             for i in 1:nf
                 isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
                 i > length(b.fields) && break # `a` has more information than `b` that is partially initialized struct
+                is_field_defined(b, i) || continue # `a` gives a decisive answer as to whether the field is defined or undefined
                 bfᵢ = b.fields[i]
                 if i == nf
                     bfᵢ = unwrapva(bfᵢ)
@@ -541,6 +547,7 @@ end
     if isa(a, PartialStruct)
         isa(b, PartialStruct) || return false
         length(a.fields) == length(b.fields) || return false
+        a.undef == b.undef || return false
         widenconst(a) == widenconst(b) || return false
         a.fields === b.fields && return true # fast path
         for i in 1:length(a.fields)
@@ -751,5 +758,12 @@ function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), fields::Vecto
     for i = 1:length(fields)
         assert_nested_slotwrapper(fields[i])
     end
-    return Core._PartialStruct(typ, fields)
+    return PartialStruct(typ, fields)
+end
+
+function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), undef::BitVector, fields::Vector{Any})
+    for i = 1:length(fields)
+        assert_nested_slotwrapper(fields[i])
+    end
+    return PartialStruct(typ, undef, fields)
 end

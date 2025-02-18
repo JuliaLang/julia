@@ -14,7 +14,8 @@ Core.Const
 """
     struct PartialStruct
         typ
-        fields::Vector{Any} # elements are other type lattice members
+        undef::BitVector # represents whether a given field may be undefined
+        fields::Vector{Any} # i-th element describes the lattice element for the i-th defined field
     end
 
 This extended lattice element is introduced when we have information about an object's
@@ -23,18 +24,63 @@ some elements are known to be constants or a struct whose `Any`-typed field is i
 with `Int` values.
 
 - `typ` indicates the type of the object
-- `fields` holds the lattice elements corresponding to each field of the object
+- `undef` records which fields are possibly undefined
+- `fields` holds the lattice elements corresponding to each defined field of the object
 
-If `typ` is a struct, `fields` represents the fields of the struct that are guaranteed to be
-initialized. For instance, if the length of `fields` of `PartialStruct` representing a
-struct with 4 fields is 3, the 4th field may not be initialized. If the length is 4, all
-fields are guaranteed to be initialized.
+If `typ` is a struct, `undef` represents whether the corresponding field of the struct is guaranteed to be
+initialized. For any defined field (`undef[i] === false`), there is a corresponding `fields` element
+which provides information about the type of the defined field.
 
 If `typ` is a tuple, the last element of `fields` may be `Vararg`. In this case, it is
 guaranteed that the number of elements in the tuple is at least `length(fields)-1`, but the
-exact number of elements is unknown.
+exact number of elements is unknown (`undef` then has a length of `length(fields)-1`).
 """
 Core.PartialStruct
+
+function Core.PartialStruct(typ::Type, undef::BitVector, fields::Vector{Any})
+    @assert length(undef) == length(fields) - (isvarargtype(fields[end]))
+    for i in 1:datatype_min_ninitialized(typ)
+        undef[i] = false
+    end
+    Core._PartialStruct(typ, undef, fields)
+end
+
+function get_fieldcount(@nospecialize(t))
+    if isa(t, UnionAll) || isa(t, Union)
+        t = argument_datatype(t)
+        t === nothing && return nothing
+    end
+    isa(t, DataType) || return nothing
+    return datatype_fieldcount(t)
+end
+
+function Core.PartialStruct(@nospecialize(typ), fields::Vector{Any})
+    nf = length(fields)
+    fields[end] === Vararg && (nf -= 1)
+    nflds = get_fieldcount(typ)
+    nflds === nothing && (nflds = nf)
+    undef = trues(nflds)
+
+    # The provided fields (in absence of an `undef` argument)
+    # are assumed to be defined.
+    for i in 1:nf
+        undef[i] = false
+    end
+
+    # Make sure no field is missing.
+    if nflds > nf
+        fields = Any[get(fields, i, fieldtype(typ, i)) for i in 1:nflds]
+    end
+
+    Core.PartialStruct(typ, undef, fields)
+end
+
+(==)(a::PartialStruct, b::PartialStruct) = a.typ === b.typ && a.undef == b.undef && a.fields == b.fields
+
+function Base.getproperty(pstruct::Core.PartialStruct, name::Symbol)
+    name === :undef && return getfield(pstruct, :undef)::BitVector
+    getfield(pstruct, name)
+end
 
 """
     struct InterConditional
