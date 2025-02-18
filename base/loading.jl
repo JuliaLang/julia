@@ -3288,7 +3288,7 @@ function compilecache(pkg::PkgId, path::String, internal_stderr::IO = stderr, in
     if p.exitcode == 125
         return PrecompilableError()
     else
-        error("Failed to precompile $(repr("text/plain", pkg)) to $(repr(tmppath)).")
+        error("Failed to precompile $(repr("text/plain", pkg)) to $(repr(tmppath)) (exit code $(p.exitcode)).")
     end
 end
 
