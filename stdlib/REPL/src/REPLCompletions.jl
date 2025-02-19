@@ -944,7 +944,7 @@ function get_import_mode(s::String, pos::Int)
     # ^\s*(?:@\w+\s*(?:\(\s*)?)?
 
     # Do not enter import mode unless cursor beyond import keyword
-    beyond_kw(m) = pos >= m.offsets[1] + length(m[1])
+    beyond_kw(m) = pos >= m.offsets[1] + sizeof(m[1])
 
     # match simple cases like `using |` and `import  |`
     mod_import_match_simple = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s*$", s)
