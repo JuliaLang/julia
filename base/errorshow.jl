@@ -346,7 +346,9 @@ function showerror(io::IO, ex::MethodError)
         curworld = get_world_counter()
         print(io, "\nThe applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     elseif f isa Function
-        print(io, "\nThe function `$f` exists, but no method is defined for this combination of argument types.")
+        print(io, "\nThe ")
+        isgensym(nameof(f)) && print(io, "anonymous ")
+        print(io, "function `$f` exists, but no method is defined for this combination of argument types.")
     elseif f isa Type
         print(io, "\nThe type `$f` exists, but no method is defined for this combination of argument types when trying to construct it.")
     else
