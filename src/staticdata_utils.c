@@ -261,51 +261,6 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
     return new_ext_cis;
 }
 
-// New roots for external methods
-static void jl_collect_new_roots(jl_array_t *roots, jl_array_t *new_ext_cis, uint64_t key)
-{
-    htable_t mset;
-    htable_new(&mset, 0);
-    size_t l = new_ext_cis ? jl_array_nrows(new_ext_cis) : 0;
-    for (size_t i = 0; i < l; i++) {
-        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_ext_cis, i);
-        assert(jl_is_code_instance(ci));
-        jl_method_t *m = jl_get_ci_mi(ci)->def.method;
-        assert(jl_is_method(m));
-        ptrhash_put(&mset, (void*)m, (void*)m);
-    }
-    int nwithkey;
-    void *const *table = mset.table;
-    jl_array_t *newroots = NULL;
-    JL_GC_PUSH1(&newroots);
-    for (size_t i = 0; i < mset.size; i += 2) {
-        if (table[i+1] != HT_NOTFOUND) {
-            jl_method_t *m = (jl_method_t*)table[i];
-            assert(jl_is_method(m));
-            nwithkey = nroots_with_key(m, key);
-            if (nwithkey) {
-                jl_array_ptr_1d_push(roots, (jl_value_t*)m);
-                newroots = jl_alloc_vec_any(nwithkey);
-                jl_array_ptr_1d_push(roots, (jl_value_t*)newroots);
-                rle_iter_state rootiter = rle_iter_init(0);
-                uint64_t *rletable = NULL;
-                size_t nblocks2 = 0, nroots = jl_array_nrows(m->roots), k = 0;
-                if (m->root_blocks) {
-                    rletable = jl_array_data(m->root_blocks, uint64_t);
-                    nblocks2 = jl_array_nrows(m->root_blocks);
-                }
-                while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2))
-                    if (rootiter.key == key)
-                        jl_array_ptr_set(newroots, k++, jl_array_ptr_ref(m->roots, rootiter.i));
-                assert(k == nwithkey);
-            }
-        }
-    }
-    JL_GC_POP();
-    htable_free(&mset);
-}
-
-
 // For every method:
 // - if the method is owned by a worklist module, add it to the list of things to be
 //   verified on reloading

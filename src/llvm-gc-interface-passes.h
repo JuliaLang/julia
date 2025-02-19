@@ -411,6 +411,8 @@ private:
 
     // Lowers a `julia.safepoint` intrinsic.
     void lowerSafepoint(CallInst *target, Function &F);
+    // Check if the pass should be run
+    bool shouldRunFinalGC(Function &F);
 };
 
 #endif // LLVM_GC_PASSES_H

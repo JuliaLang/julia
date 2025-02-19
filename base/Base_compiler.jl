@@ -2,6 +2,7 @@
 
 baremodule Base
 
+using Core
 using Core.Intrinsics, Core.IR
 
 # to start, we're going to use a very simple definition of `include`
@@ -135,6 +136,9 @@ include("coreio.jl")
 
 import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_str, @cmd
 
+# Export list
+include("exports.jl")
+
 # core docsystem
 include("docs/core.jl")
 Core.atdoc!(CoreDocs.docm)
@@ -142,7 +146,6 @@ Core.atdoc!(CoreDocs.docm)
 eval(x) = Core.eval(Base, x)
 eval(m::Module, x) = Core.eval(m, x)
 
-include("exports.jl")
 include("public.jl")
 
 if false

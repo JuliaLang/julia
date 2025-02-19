@@ -265,7 +265,7 @@ function exec_options(opts)
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
         let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            Core.eval(MainInclude, :(const Distributed = $Distributed))
+            MainInclude.Distributed = Distributed
             Core.eval(Main, :(using Base.MainInclude.Distributed))
             invokelatest(Distributed.process_opts, opts)
         end
@@ -400,7 +400,7 @@ function load_InteractiveUtils(mod::Module=Main)
         try
             # TODO: we have to use require_stdlib here because it is a dependency of REPL, but we would sort of prefer not to
             let InteractiveUtils = require_stdlib(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-                Core.eval(MainInclude, :(const InteractiveUtils = $InteractiveUtils))
+                MainInclude.InteractiveUtils = InteractiveUtils
             end
         catch ex
             @warn "Failed to import InteractiveUtils into module $mod" exception=(ex, catch_backtrace())
@@ -534,6 +534,10 @@ A variable referring to the last thrown errors, automatically imported to the in
 The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
+
+# Used for memoizing require_stdlib of these modules
+global InteractiveUtils::Module
+global Distributed::Module
 
 # weakly exposes ans and err variables to Main
 export ans, err

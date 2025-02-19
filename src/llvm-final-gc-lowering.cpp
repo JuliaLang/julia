@@ -161,21 +161,26 @@ void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     target->replaceAllUsesWith(newI);
     target->eraseFromParent();
 }
+bool FinalLowerGC::shouldRunFinalGC(Function &F)
+{
+    bool should_run = 0;
+    should_run |= getOrNull(jl_intrinsics ::newGCFrame) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::getGCFrameSlot) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::pushGCFrame) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::popGCFrame) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::GCAllocBytes) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::queueGCRoot) != nullptr;
+    should_run |= getOrNull(jl_intrinsics ::safepoint) != nullptr;
+    return should_run;
+}
 
 bool FinalLowerGC::runOnFunction(Function &F)
 {
     initAll(*F.getParent());
-    if (!pgcstack_getter && !adoptthread_func) {
-        LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Skipping function " << F.getName() << "\n");
-        return false;
-    }
-
-    // Look for a call to 'julia.get_pgcstack'.
     pgcstack = getPGCstack(F);
-    if (!pgcstack) {
-        LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Skipping function " << F.getName() << " no pgcstack\n");
-        return false;
-    }
+    if (!shouldRunFinalGC(F))
+        goto verify_skip;
+
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
     queueRootFunc = getOrDeclare(jl_well_known::GCQueueRoot);
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
@@ -212,8 +217,37 @@ bool FinalLowerGC::runOnFunction(Function &F)
 #undef LOWER_INTRINSIC
         }
     }
-
     return true;
+    // Verify that skipping was in fact correct
+    verify_skip:
+    #ifdef JL_VERIFY_PASSES
+        for (auto &BB : F) {
+            for (auto &I : make_early_inc_range(BB)) {
+                auto *CI = dyn_cast<CallInst>(&I);
+                if (!CI)
+                    continue;
+
+            Value *callee = CI->getCalledOperand();
+            assert(callee);
+            auto IS_INTRINSIC = [&](auto intrinsic) {
+                auto intrinsic2 = getOrNull(intrinsic);
+                if (intrinsic2 == callee) {
+                    errs() << "Final-GC-lowering didn't eliminate all intrinsics'" << F.getName() << "', dumping entire module!\n\n";
+                    errs() << *F.getParent() << "\n";
+                    abort();
+                }
+            };
+            IS_INTRINSIC(jl_intrinsics::newGCFrame);
+            IS_INTRINSIC(jl_intrinsics::pushGCFrame);
+            IS_INTRINSIC(jl_intrinsics::popGCFrame);
+            IS_INTRINSIC(jl_intrinsics::getGCFrameSlot);
+            IS_INTRINSIC(jl_intrinsics::GCAllocBytes);
+            IS_INTRINSIC(jl_intrinsics::queueGCRoot);
+            IS_INTRINSIC(jl_intrinsics::safepoint);
+            }
+        }
+    #endif
+    return false;
 }
 
 PreservedAnalyses FinalLowerGCPass::run(Function &F, FunctionAnalysisManager &AM)
