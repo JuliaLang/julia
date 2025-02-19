@@ -180,6 +180,8 @@ end
 
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
 test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
+# | is reserved in test_complete_pos
+test_complete_pos(s) = map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1)))
 test_complete_context(s, m=@__MODULE__; shift::Bool=true) =
     map_completion_text(@inferred(completions(s,lastindex(s), m, shift)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
@@ -2483,4 +2485,10 @@ end
 let (c, r, res) = test_complete_context("global xxx::Number = Base.", Main)
     @test res
     @test "pi" ∈ c
+end
+
+# #57473
+let (c, r) = test_complete_pos("@tim| using Date")
+    @test "@time" in c
+    @test r == 1:4
 end

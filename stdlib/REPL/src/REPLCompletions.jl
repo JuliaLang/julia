@@ -939,13 +939,16 @@ const superscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k,
 const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(superscripts)) * "]+\\z")
 
 # Aux function to detect whether we're right after a using or import keyword
-function get_import_mode(s::String)
+function get_import_mode(s::String, pos::Int)
     # allow all of these to start with leading whitespace and macros like @eval and @eval(
     # ^\s*(?:@\w+\s*(?:\(\s*)?)?
 
+    # Do not enter import mode unless cursor beyond import keyword
+    beyond_kw(m) = pos >= m.offsets[1] + length(m[1])
+
     # match simple cases like `using |` and `import  |`
     mod_import_match_simple = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s*$", s)
-    if mod_import_match_simple !== nothing
+    if mod_import_match_simple !== nothing && beyond_kw(mod_import_match_simple)
         if mod_import_match_simple[1] == "using"
             return :using_module
         else
@@ -954,7 +957,7 @@ function get_import_mode(s::String)
     end
     # match module import statements like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`
     mod_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+(?:\s*,\s*[\w\.]+)*),?\s*$", s)
-    if mod_import_match !== nothing
+    if mod_import_match !== nothing && beyond_kw(mod_import_match)
         if mod_import_match.captures[1] == "using"
             return :using_module
         else
@@ -963,7 +966,7 @@ function get_import_mode(s::String)
     end
     # now match explicit name import statements like `using Foo: |` and `import Foo: bar, baz|`
     name_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+)\s*:\s*([\w@!\s,]+)$", s)
-    if name_import_match !== nothing
+    if name_import_match !== nothing && beyond_kw(name_import_match)
         if name_import_match[1] == "using"
             return :using_name
         else
@@ -1462,7 +1465,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     separatorpos = something(findprev(isequal('.'), string, pos), 0)
     namepos = max(startpos, separatorpos+1)
     name = string[namepos:pos]
-    import_mode = get_import_mode(string)
+    import_mode = get_import_mode(string, pos)
     if import_mode === :using_module || import_mode === :import_module
         # Given input lines like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`:
         # Let's look only for packages and modules we can reach from here
