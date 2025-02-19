@@ -361,20 +361,8 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
             if res
                 res = op(a, b)
             end
-            if a isa Symbol
-                quoted_args[i] = QuoteNode(a)
-            elseif Meta.isexpr(a, :call)
-                quoted_args[i] = :($a)
-            else
-                quoted_args[i] = a
-            end
-            if b isa Symbol
-                quoted_args[i+2] = QuoteNode(b)
-            elseif Meta.isexpr(b, :call)
-                quoted_args[i+2] = :($b)
-            else
-                quoted_args[i+2] = b
-            end
+            quoted_args[i] = a isa Symbol ? QuoteNode(a) : (a isa Expr ? Expr(:quote, a) : a)
+            quoted_args[i+2] = b isa Symbol ? QuoteNode(b) : (b isa Expr ? Expr(:quote, b) : b)
             i += 2
         end
 
