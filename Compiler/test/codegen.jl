@@ -409,7 +409,7 @@ function g_dict_hash_alloc()
 end
 # Warm up
 f_dict_hash_alloc(); g_dict_hash_alloc();
-@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.4 # relaxed version of the above, while the above is skipped
+@test abs((@allocated f_dict_hash_alloc()) / (@allocated g_dict_hash_alloc()) - 1) < 0.3
 
 # returning an argument shouldn't alloc a new box
 @noinline f33829(x) = (global called33829 = true; x)
