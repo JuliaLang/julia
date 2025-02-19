@@ -1344,6 +1344,10 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings_backedges)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings_backedges, s->link_ids_relocs));
 
+    // After reload, everything that has happened in this process happened semantically at
+    // (for .incremental) or before jl_require_world, so reset this flag.
+    jl_atomic_store_relaxed(&newm->export_set_changed_since_require_world, 0);
+
     // write out the usings list
     memset(&newm->usings._space, 0, sizeof(newm->usings._space));
     if (m->usings.items == &m->usings._space[0]) {
@@ -1372,6 +1376,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
         newm->usings.items = (void**)tot;
         arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings.items)));
         arraylist_push(&s->relocs_list, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + item));
+        newm = NULL; // `write_*(s->s)` below may invalidate `newm`, so defensively set it to NULL
         size_t i;
         for (i = 0; i < module_usings_length(m); i++) {
             struct _jl_module_using *data = module_usings_getidx(m, i);
@@ -1395,10 +1400,6 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
         }
     }
     assert(ios_pos(s->s) - reloc_offset == tot);
-
-    // After reload, everything that has happened in this process happened semantically at
-    // (for .incremental) or before jl_require_world, so reset this flag.
-    jl_atomic_store_relaxed(&newm->export_set_changed_since_require_world, 0);
 }
 
 static void record_memoryref(jl_serializer_state *s, size_t reloc_offset, jl_genericmemoryref_t ref) {
