@@ -145,6 +145,8 @@ julia> nthreads(:interactive)
 julia> nthreads()
 3
 ```
+!!! note
+    Explicitly asking for 1 thread by doing `-t1` or `JULIA_NUM_THREADS=1` does not add an interactive thread.
 
 !!! note
     The zero-argument version of `nthreads` returns the number of threads
