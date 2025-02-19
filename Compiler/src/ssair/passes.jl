@@ -2575,10 +2575,8 @@ function cfg_simplify!(ir::IRCode)
                     (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
                     ssa_rename[i] = SSAValue(compact.result_idx)
                     already_inserted = function (i::Int, val::OldSSAValue)
-                        if val.id in old_bb_stmts
-                            return val.id <= i
-                        end
-                        return bb_rename_pred[phi.edges[i]] < idx
+                        val.id in old_bb_stmts && return false
+                        return 0 < bb_rename_pred[phi.edges[i]] < idx
                     end
                     renamed_values = process_phinode_values(values, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                     edges = Int32[]
