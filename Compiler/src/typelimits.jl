@@ -377,20 +377,6 @@ function define_field(pstruct::PartialStruct, fi, @nospecialize(ft))
     PartialStruct(fallback_lattice, typ, undef, fields)
 end
 
-# needed while we are missing functions such as broadcasting or ranges
-
-function _bitvector(nt::NTuple)
-    bv = BitVector(undef, length(nt))
-    i = 1
-    while i ≤ length(nt)
-        bv[i] = nt[i]
-        i += 1
-    end
-    bv
-end
-
-#-
-
 # A simplified type_more_complex query over the extended lattice
 # (assumes typeb ⊑ typea)
 @nospecializeinfer function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
