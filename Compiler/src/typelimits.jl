@@ -354,27 +354,32 @@ function refines_definedness_information(pstruct::PartialStruct)
     something(findfirst(pstruct.undef), nflds + 1) - 1 > datatype_min_ninitialized(pstruct.typ)
 end
 
-function define_field(pstruct::PartialStruct, fi, @nospecialize(ft))
+function define_field(pstruct::PartialStruct, fi::Int)
     if is_field_initialized(pstruct, fi)
         # no new information to be gained
         return nothing
     end
 
+    new = expand_partialstruct(pstruct, fi)
+    if new === nothing
+        new = PartialStruct(fallback_lattice, pstruct.typ, copy(pstruct.undef), copy(pstruct.fields))
+    end
+    new.undef[fi] = false
+    return new
+end
+
+function expand_partialstruct(pstruct::PartialStruct, until::Int)
     n = length(pstruct.undef)
-    undef = partialstruct_init_undef(pstruct.typ, max(fi, n); all_defined = false)
+    until ≤ n && return nothing
+
+    undef = partialstruct_init_undef(pstruct.typ, until; all_defined = false)
     for i in 1:n
         undef[i] &= pstruct.undef[i]
     end
-    undef[fi] = false
-
-    fields = copy(pstruct.fields)
-    nf = length(fields)
+    nf = length(pstruct.fields)
     typ = pstruct.typ
-    for i in (nf + 1):fi
-        push!(fields, fieldtype(typ, i))
-    end
-    fields[fi] = ft
-    PartialStruct(fallback_lattice, typ, undef, fields)
+    fields = Any[i ≤ nf ? pstruct.fields[i] : fieldtype(typ, i) for i in 1:until]
+    return PartialStruct(fallback_lattice, typ, undef, fields)
 end
 
 # A simplified type_more_complex query over the extended lattice

@@ -2148,7 +2148,7 @@ function form_partially_defined_struct(@nospecialize(obj), @nospecialize(name))
     isabstracttype(objt) && return nothing
     fldidx = try_compute_fieldidx(objt, name.val)
     fldidx === nothing && return nothing
-    isa(obj, PartialStruct) && return define_field(obj, fldidx, fieldtype(objt0, fldidx))
+    isa(obj, PartialStruct) && return define_field(obj, fldidx)
     nminfld = datatype_min_ninitialized(objt)
     fldidx > nminfld || return nothing
     undef = partialstruct_init_undef(objt, fldidx; all_defined = false)
