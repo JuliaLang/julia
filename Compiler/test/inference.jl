@@ -5915,25 +5915,25 @@ end == Val
 @test Base.infer_effects((Any,Any); optimize=false) do a, b
     getfield(PartiallyInitialized1(a, b), :b)
 end |> Compiler.is_nothrow
-@test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
+@test Base.infer_effects((Any,Any,Int,); optimize=false) do a, b, f
     getfield(PartiallyInitialized1(a, b), f, #=boundscheck=#false)
 end |> !Compiler.is_nothrow
 @test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
     getfield(PartiallyInitialized1(a, b, c), :c)
 end |> Compiler.is_nothrow
-@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+@test Base.infer_effects((Any,Any,Any,Int); optimize=false) do a, b, c, f
     getfield(PartiallyInitialized1(a, b, c), f, #=boundscheck=#false)
 end |> Compiler.is_nothrow
 @test Base.infer_effects((Any,Any); optimize=false) do a, b
     getfield(PartiallyInitialized2(a, b), :b)
 end |> Compiler.is_nothrow
-@test Base.infer_effects((Any,Any,Symbol,); optimize=false) do a, b, f
+@test Base.infer_effects((Any,Any,Int,); optimize=false) do a, b, f
     getfield(PartiallyInitialized2(a, b), f, #=boundscheck=#false)
 end |> !Compiler.is_nothrow
 @test Base.infer_effects((Any,Any,Any); optimize=false) do a, b, c
     getfield(PartiallyInitialized2(a, b, c), :c)
 end |> Compiler.is_nothrow
-@test Base.infer_effects((Any,Any,Any,Symbol); optimize=false) do a, b, c, f
+@test Base.infer_effects((Any,Any,Any,Int); optimize=false) do a, b, c, f
     getfield(PartiallyInitialized2(a, b, c), f, #=boundscheck=#false)
 end |> Compiler.is_nothrow
 
