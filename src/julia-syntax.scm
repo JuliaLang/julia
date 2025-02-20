@@ -1527,6 +1527,115 @@
                 (else
                  (error (string "invalid syntax in \"" what "\" declaration"))))))))
 
+(define (expand-assignment e (const? #f))
+  (define lhs (cadr e))
+  (define (function-lhs? lhs)
+    (and (pair? lhs)
+         (or (eq? (car lhs) 'call)
+             (eq? (car lhs) 'where)
+             (and (eq? (car lhs) '|::|)
+                  (pair? (cadr lhs))
+                  (eq? (car (cadr lhs)) 'call)))))
+  (define (assignment-to-function lhs e)  ;; convert '= expr to 'function expr
+    (cons 'function (cdr e)))
+  (cond
+   ((function-lhs? lhs)
+    (expand-forms (assignment-to-function lhs e)))
+   ((and (pair? lhs)
+         (eq? (car lhs) 'curly))
+    (expand-unionall-def (cadr e) (caddr e)))
+   ((assignment? (caddr e))
+    ;; chain of assignments - convert a=b=c to `b=c; a=c`
+    (let loop ((lhss (list lhs))
+               (rhs  (caddr e)))
+      (if (and (assignment? rhs) (not (function-lhs? (cadr rhs))))
+          (loop (cons (cadr rhs) lhss) (caddr rhs))
+          (let ((rr (if (symbol-like? rhs) rhs (make-ssavalue))))
+            (expand-forms
+             `(block ,.(if (eq? rr rhs) '() `((= ,rr ,(if (assignment? rhs)
+                                                          (assignment-to-function (cadr rhs) rhs)
+                                                          rhs))))
+                     ,@(map (lambda (l) `(= ,l ,rr))
+                            lhss)
+                     (unnecessary ,rr)))))))
+   ((or (and (symbol-like? lhs) (valid-name? lhs))
+        (globalref? lhs))
+    (sink-assignment lhs (expand-forms (caddr e))))
+   ((atom? lhs)
+    (error (string "invalid assignment location \"" (deparse lhs) "\"")))
+   (else
+    (case (car lhs)
+      ((|.|)
+       ;; a.b =
+       (let* ((a   (cadr lhs))
+              (b  (caddr lhs))
+              (rhs (caddr e)))
+         (if (and (length= b 2) (eq? (car b) 'tuple))
+             (error (string "invalid syntax \""
+                            (string (deparse a) ".(" (deparse (cadr b)) ") = ...") "\"")))
+         (let ((aa (if (symbol-like? a) a (make-ssavalue)))
+               (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
+                       b (make-ssavalue)))
+               (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
+           `(block
+             ,.(if (eq? aa a)   '() (list (sink-assignment aa (expand-forms a))))
+             ,.(if (eq? bb b)   '() (list (sink-assignment bb (expand-forms b))))
+             ,.(if (eq? rr rhs) '() (list (sink-assignment rr (expand-forms rhs))))
+             (call (top setproperty!) ,aa ,bb ,rr)
+             (unnecessary ,rr)))))
+      ((tuple)
+       (let ((lhss (cdr lhs))
+             (x    (caddr e)))
+         (if (has-parameters? lhss)
+             ;; property destructuring
+             (expand-property-destruct lhss x)
+             ;; multiple assignment
+             (expand-tuple-destruct lhss x))))
+      ((typed_hcat)
+       (error "invalid spacing in left side of indexed assignment"))
+      ((typed_vcat typed_ncat)
+       (error "unexpected \";\" in left side of indexed assignment"))
+      ((ref)
+       ;; (= (ref a . idxs) rhs)
+       (let ((a    (cadr lhs))
+             (idxs (cddr lhs))
+             (rhs  (caddr e)))
+         (let* ((reuse (and (pair? a)
+                            (contains (lambda (x) (eq? x 'end))
+                                      idxs)))
+                (arr   (if reuse (make-ssavalue) a))
+                (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
+                (rrhs (and (pair? rhs) (not (ssavalue? rhs)) (not (quoted? rhs))))
+                (r    (if rrhs (make-ssavalue) rhs))
+                (rini (if rrhs (list (sink-assignment r (expand-forms rhs))) '())))
+           (receive
+               (new-idxs stuff) (process-indices arr idxs)
+             `(block
+               ,@stmts
+               ,.(map expand-forms stuff)
+               ,@rini
+               ,(expand-forms
+                 `(call (top setindex!) ,arr ,r ,@new-idxs))
+               (unnecessary ,r))))))
+      ((|::|)
+       ;; (= (|::| T) rhs) is an error
+       (if (null? (cddr lhs))
+           (error (string "invalid assignment location \"" (deparse lhs) "\"")))
+       ;; (= (|::| x T) rhs)
+       (let ((x (cadr lhs))
+             (T (caddr lhs))
+             (rhs (caddr e)))
+         (let ((e (remove-argument-side-effects x)))
+           (expand-forms
+            `(block ,@(cdr e)
+                    (decl ,(car e) ,T)
+                    (= ,(car e) ,rhs))))))
+      ((vcat ncat)
+       ;; (= (vcat . args) rhs)
+       (error "use \"(a, b) = ...\" to assign multiple values"))
+      (else
+       (error (string "invalid assignment location \"" (deparse lhs) "\"")))))))
+
 ;; convert (lhss...) = (tuple ...) to assignments, eliminating the tuple
 (define (tuple-to-assignments lhss0 x wrap)
   (let loop ((lhss lhss0)
@@ -2498,115 +2607,7 @@
    'global expand-local-or-global-decl
    'local-def expand-local-or-global-decl
 
-   '=
-   (lambda (e)
-     (define lhs (cadr e))
-     (define (function-lhs? lhs)
-       (and (pair? lhs)
-            (or (eq? (car lhs) 'call)
-                (eq? (car lhs) 'where)
-                (and (eq? (car lhs) '|::|)
-                     (pair? (cadr lhs))
-                     (eq? (car (cadr lhs)) 'call)))))
-     (define (assignment-to-function lhs e)  ;; convert '= expr to 'function expr
-       (cons 'function (cdr e)))
-     (cond
-      ((function-lhs? lhs)
-       (expand-forms (assignment-to-function lhs e)))
-      ((and (pair? lhs)
-            (eq? (car lhs) 'curly))
-       (expand-unionall-def (cadr e) (caddr e)))
-      ((assignment? (caddr e))
-       ;; chain of assignments - convert a=b=c to `b=c; a=c`
-       (let loop ((lhss (list lhs))
-                  (rhs  (caddr e)))
-         (if (and (assignment? rhs) (not (function-lhs? (cadr rhs))))
-             (loop (cons (cadr rhs) lhss) (caddr rhs))
-             (let ((rr (if (symbol-like? rhs) rhs (make-ssavalue))))
-               (expand-forms
-                `(block ,.(if (eq? rr rhs) '() `((= ,rr ,(if (assignment? rhs)
-                                                             (assignment-to-function (cadr rhs) rhs)
-                                                             rhs))))
-                        ,@(map (lambda (l) `(= ,l ,rr))
-                               lhss)
-                        (unnecessary ,rr)))))))
-      ((or (and (symbol-like? lhs) (valid-name? lhs))
-           (globalref? lhs))
-       (sink-assignment lhs (expand-forms (caddr e))))
-      ((atom? lhs)
-       (error (string "invalid assignment location \"" (deparse lhs) "\"")))
-      (else
-       (case (car lhs)
-         ((|.|)
-          ;; a.b =
-          (let* ((a   (cadr lhs))
-                 (b  (caddr lhs))
-                 (rhs (caddr e)))
-            (if (and (length= b 2) (eq? (car b) 'tuple))
-                (error (string "invalid syntax \""
-                               (string (deparse a) ".(" (deparse (cadr b)) ") = ...") "\"")))
-            (let ((aa (if (symbol-like? a) a (make-ssavalue)))
-                  (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
-                          b (make-ssavalue)))
-                  (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
-              `(block
-                ,.(if (eq? aa a)   '() (list (sink-assignment aa (expand-forms a))))
-                ,.(if (eq? bb b)   '() (list (sink-assignment bb (expand-forms b))))
-                ,.(if (eq? rr rhs) '() (list (sink-assignment rr (expand-forms rhs))))
-                (call (top setproperty!) ,aa ,bb ,rr)
-                (unnecessary ,rr)))))
-         ((tuple)
-          (let ((lhss (cdr lhs))
-                (x    (caddr e)))
-            (if (has-parameters? lhss)
-                ;; property destructuring
-                (expand-property-destruct lhss x)
-                ;; multiple assignment
-                (expand-tuple-destruct lhss x))))
-         ((typed_hcat)
-          (error "invalid spacing in left side of indexed assignment"))
-         ((typed_vcat typed_ncat)
-          (error "unexpected \";\" in left side of indexed assignment"))
-         ((ref)
-          ;; (= (ref a . idxs) rhs)
-          (let ((a    (cadr lhs))
-                (idxs (cddr lhs))
-                (rhs  (caddr e)))
-            (let* ((reuse (and (pair? a)
-                               (contains (lambda (x) (eq? x 'end))
-                                         idxs)))
-                   (arr   (if reuse (make-ssavalue) a))
-                   (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
-                   (rrhs (and (pair? rhs) (not (ssavalue? rhs)) (not (quoted? rhs))))
-                   (r    (if rrhs (make-ssavalue) rhs))
-                   (rini (if rrhs (list (sink-assignment r (expand-forms rhs))) '())))
-              (receive
-               (new-idxs stuff) (process-indices arr idxs)
-               `(block
-                 ,@stmts
-                 ,.(map expand-forms stuff)
-                 ,@rini
-                 ,(expand-forms
-                   `(call (top setindex!) ,arr ,r ,@new-idxs))
-                 (unnecessary ,r))))))
-         ((|::|)
-          ;; (= (|::| T) rhs) is an error
-          (if (null? (cddr lhs))
-              (error (string "invalid assignment location \"" (deparse lhs) "\"")))
-          ;; (= (|::| x T) rhs)
-          (let ((x (cadr lhs))
-                (T (caddr lhs))
-                (rhs (caddr e)))
-            (let ((e (remove-argument-side-effects x)))
-              (expand-forms
-               `(block ,@(cdr e)
-                       (decl ,(car e) ,T)
-                       (= ,(car e) ,rhs))))))
-         ((vcat ncat)
-          ;; (= (vcat . args) rhs)
-          (error "use \"(a, b) = ...\" to assign multiple values"))
-         (else
-          (error (string "invalid assignment location \"" (deparse lhs) "\"")))))))
+   '= expand-assignment
 
    'abstract
    (lambda (e)
