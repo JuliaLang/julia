@@ -888,11 +888,11 @@ JL_DLLEXPORT void check_safe_import_from(jl_module_t *m)
 }
 
 // NOTE: we use explici since explicit is a C++ keyword
-static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici)
+static void module_import_(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici)
 {
     check_safe_import_from(from);
     jl_binding_t *b = jl_get_binding(from, s);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
     if (b->deprecated) {
         if (jl_get_binding_value(b) == jl_nothing) {
             // silently skip importing deprecated values assigned to nothing (to allow later mutation)
@@ -915,7 +915,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *asname,
 
     jl_binding_t *ownerb = b;
     jl_binding_partition_t *ownerbpart = bpart;
-    jl_walk_binding_inplace(&ownerb, &ownerbpart, jl_current_task->world_age);
+    jl_walk_binding_inplace(&ownerb, &ownerbpart, ct->world_age);
 
     if (jl_bkind_is_some_guard(jl_binding_kind(ownerbpart))) {
         jl_printf(JL_STDERR,
@@ -965,24 +965,24 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *asname,
     JL_UNLOCK(&world_counter_lock);
 }
 
-JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
+JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 {
-    module_import_(to, from, s, s, 1);
+    module_import_(ct, to, from, s, s, 1);
 }
 
-JL_DLLEXPORT void jl_module_import_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname)
+JL_DLLEXPORT void jl_module_import_as(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname)
 {
-    module_import_(to, from, asname, s, 1);
+    module_import_(ct, to, from, asname, s, 1);
 }
 
-JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
+JL_DLLEXPORT void jl_module_use(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 {
-    module_import_(to, from, s, s, 0);
+    module_import_(ct, to, from, s, s, 0);
 }
 
-JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname)
+JL_DLLEXPORT void jl_module_use_as(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname)
 {
-    module_import_(to, from, asname, s, 0);
+    module_import_(ct, to, from, asname, s, 0);
 }
 
 void jl_add_usings_backedge(jl_module_t *from, jl_module_t *to)
