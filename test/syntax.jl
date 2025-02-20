@@ -4102,3 +4102,29 @@ module Ambig57404
     using .B
 end
 @test Ambig57404.S == 1
+
+# #57334
+let
+    x57334 = Ref(1)
+    @test_throws "syntax: `const` left hand side \"x57334[]\" contains non-variables" Core.eval(@__MODULE__, :(const x57334[] = 1))
+end
+
+# #57470
+module M57470
+using ..Test
+@test_throws(
+    "syntax: `global const` declaration not allowed inside function",
+    Core.eval(@__MODULE__, :(function f57470()
+                                 const global x57470 = 1
+                             end)))
+@test_throws(
+    "unsupported `const` declaration on local variable",
+    Core.eval(@__MODULE__, :(let
+                                 const y57470 = 1
+                             end))
+)
+let
+    global const z57470 = 1
+    const global w57470 = 1
+end
+end

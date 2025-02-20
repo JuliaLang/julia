@@ -1444,16 +1444,17 @@
   (filter (lambda (x) (not (underscore-symbol? x))) syms))
 
 ;; Expand `[global] const a::T = val`
-(define (expand-const-decl e (mustassgn #f))
+(define (expand-const-decl e (global #f))
   (if (length= e 3) e
     (let ((arg (cadr e)))
       (if (atom? arg)
-          (if mustassgn
+          ;; (const (global x)) is possible due to parser quirk
+          (if global
             (error "expected assignment after \"const\"")
             e)
           (case (car arg)
             ((global)
-              (expand-const-decl `(const ,(cadr arg)) #t))
+             (expand-const-decl `(const ,(cadr arg)) #t))
             ((=)
               (cond
                 ;; `const f() = ...` - The `const` here is inoperative, but the syntax happened to work in earlier versions, so simply strip `const`.
@@ -1465,16 +1466,28 @@
                 ((and (pair? (cadr arg)) (eq? (caadr arg) 'tuple) (not (has-parameters? (cdr (cadr arg)))))
                   ;; We need this case because `(f(), g()) = (1, 2)` goes through here, which cannot go via the `local` lowering below,
                   ;; because the symbols come out wrong. Sigh... So much effort for such a syntax corner case.
-                  (expand-tuple-destruct (cdr (cadr arg)) (caddr arg) (lambda (assgn) `(,(car e) ,assgn))))
+                  (expand-tuple-destruct (cdr (cadr arg)) (caddr arg)
+                                         (lambda (assgn) `(,(car e) ,(if global `(global ,assgn) assgn)))))
                 (else
-                 (let ((rr (make-ssavalue)))
+                 (unless (const-lhs? (cadr arg))
+                   (error (string "`const` left hand side \"" (deparse (cadr arg)) "\" contains non-variables")))
+                 (let* ((vars (filter-not-underscore (lhs-vars (cadr arg))))
+                        (rr (make-ssavalue))
+                        (temp (map (lambda (v) (make-ssavalue)) vars)))
                    (expand-forms `(block
                            (= ,rr ,(caddr arg))
-                           (scope-block (block (hardscope)
-                            (local (= ,(cadr arg) ,rr))
-                            ,.(map (lambda (v) `(,(car e) (globalref (thismodule) ,v) ,v)) (filter-not-underscore (lhs-vars (cadr arg))))
-                            (latestworld)
-                            ,rr))))))))
+                           (scope-block
+                            (block (hardscope)
+                                   ;; Assign to the original LHS in local scope
+                                   ;; (performs destructuring assignment)
+                                   (local (= ,(cadr arg) ,rr))
+                                   ,.(map (lambda (t v) `(= ,t ,v)) temp vars)))
+                           ,.(map (lambda (t v)
+                                    (let ((v (if global `(globalref (thismodule) ,v) v)))
+                                      `(,(car e) ,v ,t)))
+                                  temp vars)
+                           (latestworld)
+                           ,rr))))))
             (else (error "expected assignment after \"const\"")))))))
 
 (define (expand-atomic-decl e)
@@ -2969,6 +2982,15 @@
 (define (lhs-vars e)
   (map decl-var (lhs-decls e)))
 
+;; Does the assignment LHS only declare new variables (no assignment to (ref ...))
+(define (const-lhs? e)
+  (cond ((symdecl? e)   #t)
+        ((and (pair? e)
+              (or (eq? (car e) 'tuple)
+                  (eq? (car e) 'parameters)))
+         (every const-lhs? (cdr e)))
+        (else #f)))
+
 (define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
   (cond ((eventually-call? e) e)
         ((decl? e)   (decl-var e))
@@ -2995,7 +3017,7 @@
             ;; like v = val, except that if `v` turns out global(either
             ;; implicitly or by explicit `global`), it gains an implicit `const`
             (set! vars (cons (cadr e) vars)))
-          ((=)
+          ((= const)
            (let ((v (decl-var (cadr e))))
              (find-assigned-vars- (caddr e))
              (if (or (ssavalue? v) (globalref? v) (underscore-symbol? v))
@@ -3277,7 +3299,7 @@
            ,(resolve-scopes- (caddr  e) scope)
            ,(resolve-scopes- (cadddr e) scope (method-expr-static-parameters e))))
         (else
-         (if (and (eq? (car e) '=) (symbol? (cadr e))
+         (if (and (memq (car e) '(= const)) (symbol? (cadr e))
                   scope (null? (lam:args (scope:lam scope)))
                   (warn-var?! (cadr e) scope)
                   (= *scopewarn-opt* 1))
@@ -4367,7 +4389,6 @@ f(x) = yt(x)
         (first-line #t)
         (current-loc #f)
         (rett #f)
-        (global-const-error #f)
         (vinfo-table (vinfo-to-table (car (lam:vinfo lam))))
         (arg-map #f)          ;; map arguments to new names if they are assigned
         (label-counter 0)     ;; counter for generating label addresses
@@ -4920,9 +4941,7 @@ f(x) = yt(x)
              (if (local-in? (cadr e) lam)
                  (error (string "unsupported `const` declaration on local variable" (format-loc current-loc)))
                  (if (pair? (cadr lam))
-                     ;; delay this error to allow "misplaced struct" errors to happen first
-                     (if (not global-const-error)
-                         (set! global-const-error current-loc))
+                     (error (string "`global const` declaration not allowed inside function" (format-loc current-loc)))
                      (emit e))))
             ((atomic) (error "misplaced atomic declaration"))
             ((isdefined throw_undef_if_not) (if tail (emit-return tail e) e))
@@ -5054,8 +5073,6 @@ f(x) = yt(x)
                       (let ((pexc (pop-exc-expr src-catch-tokens target-catch-tokens)))
                         (if pexc (set-cdr! point (cons pexc (cdr point)))))))))
               handler-goto-fixups)
-    (if global-const-error
-        (error (string "`global const` declaration not allowed inside function" (format-loc global-const-error))))
     (let* ((stmts (reverse! code))
            (di    (definitely-initialized-vars stmts vi))
            (body  (cons 'block (filter (lambda (e)
