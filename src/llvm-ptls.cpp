@@ -322,13 +322,13 @@ bool LowerPTLS::run(bool *CFGModified)
             need_init = false;
         }
 
-        for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end();) {
+        for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end(); ) {
             auto call = cast<CallInst>(*it);
             ++it;
             auto f = call->getCaller();
             Value *pgcstack = NULL;
-            for (Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end();++arg) {
-                if (arg->hasSwiftSelfAttr()){
+            for (Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end(); ++arg) {
+                if (arg->hasSwiftSelfAttr()) {
                     pgcstack = &*arg;
                     break;
                 }

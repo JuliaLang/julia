@@ -2219,20 +2219,21 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 SmallVector<OperandBundleDef,2> bundles;
                 CI->getOperandBundlesAsDefs(bundles);
                 bool gc_transition = false;
+                Value *ptls;
                 for (auto &bundle: bundles)
-                    if (bundle.getTag() == "gc-transition")
+                    if (bundle.getTag() == "gc-transition") {
                         gc_transition = true;
+                        ptls = bundle.inputs()[0];
+                    }
 
                 // In theory LLVM wants us to lower this using RewriteStatepointsForGC
                 if (gc_transition) {
                     // Insert the operations to switch to gc_safe if necessary.
                     IRBuilder<> builder(CI);
-                    Value *pgcstack = getOrAddPGCstack(F);
-                    assert(pgcstack);
+                    assert(ptls);
                     // We dont use emit_state_set here because safepoints are unconditional for any code that reaches this
                     // We are basically guaranteed to go from gc_unsafe to gc_safe and back, and both transitions need a safepoint
                     // We also can't add any BBs here, so just avoiding the branches is good
-                    Value *ptls = get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, pgcstack), tbaa_gcframe);
                     unsigned offset = offsetof(jl_tls_states_t, gc_state);
                     Value *gc_state = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), ptls, offset, "gc_state");
                     LoadInst *last_gc_state = builder.CreateAlignedLoad(Type::getInt8Ty(builder.getContext()), gc_state, Align(sizeof(void*)));
@@ -2249,7 +2250,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     ++it;
                     continue;
                 } else {
-                    // remove operand bundle
+                    // remove all operand bundles
                     CallInst *NewCall = CallInst::Create(CI, None, CI);
                     NewCall->takeName(CI);
                     NewCall->copyMetadata(*CI);
@@ -2395,7 +2396,10 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
         auto pushGcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::pushGCFrame),
             {gcframe, ConstantInt::get(T_int32, 0)});
-        pushGcframe->insertAfter(pgcstack);
+        if (isa<Argument>(pgcstack))
+             pushGcframe->insertAfter(gcframe);
+         else
+             pushGcframe->insertAfter(cast<Instruction>(pgcstack));
 
         // we don't run memsetopt after this, so run a basic approximation of it
         // that removes any redundant memset calls in the prologue since getGCFrameSlot already includes the null store
@@ -2513,8 +2517,6 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     initAll(*F.getParent());
     smallAllocFunc = getOrDeclare(jl_well_known::GCSmallAlloc);
     LLVM_DEBUG(dbgs() << "GC ROOT PLACEMENT: Processing function " << F.getName() << "\n");
-    if (!pgcstack_getter && !adoptthread_func)
-        return CleanupIR(F, nullptr, CFGModified);
 
     pgcstack = getPGCstack(F);
     if (!pgcstack)
