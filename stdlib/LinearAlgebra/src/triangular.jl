@@ -1528,7 +1528,7 @@ _inner_type_promotion(op, ::Type{TA}, ::Type{TB}) where {TA<:Integer,TB<:Integer
 _inner_type_promotion(op, ::Type{TA}, ::Type{TB}) where {TA,TB} =
     _init_eltype(op, TA, TB)
 ## The general promotion methods
-function *(A::AbstractTriangular, B::AbstractTriangular)
+function mul(A::AbstractTriangular, B::AbstractTriangular)
     TAB = _init_eltype(*, eltype(A), eltype(B))
     if TAB <: BlasFloat && A isa UpperOrLowerTriangular
         lmul!(convert(AbstractArray{TAB}, A), copy_similar(B, TAB))
@@ -1537,9 +1537,9 @@ function *(A::AbstractTriangular, B::AbstractTriangular)
     end
 end
 
-for mat in (:AbstractVector, :AbstractMatrix)
+for (mat, fun) in ((:AbstractVector, :*), (:AbstractMatrix, :mul))
     ### Multiplication with triangle to the left and hence rhs cannot be transposed.
-    @eval function *(A::AbstractTriangular, B::$mat)
+    @eval function $fun(A::AbstractTriangular, B::$mat)
         require_one_based_indexing(B)
         TAB = _init_eltype(*, eltype(A), eltype(B))
         if TAB <: BlasFloat && A isa UpperOrLowerTriangular
@@ -1591,7 +1591,7 @@ for mat in (:AbstractVector, :AbstractMatrix)
 end
 ### Multiplication with triangle to the right and hence lhs cannot be transposed.
 # Only for AbstractMatrix, hence outside the above loop.
-function *(A::AbstractMatrix, B::AbstractTriangular)
+function mul(A::AbstractMatrix, B::AbstractTriangular)
     require_one_based_indexing(A)
     TAB = _init_eltype(*, eltype(A), eltype(B))
     if TAB <: BlasFloat && B isa UpperOrLowerTriangular

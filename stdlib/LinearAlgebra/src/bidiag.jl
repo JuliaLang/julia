@@ -696,13 +696,13 @@ function *(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
     return A.uplo == 'L' ? LowerTriangular(C) : C
 end
 
-function *(A::Diagonal, B::SymTridiagonal)
+function mul(A::Diagonal, B::SymTridiagonal)
     TS = promote_op(*, eltype(A), eltype(B))
     out = Tridiagonal(similar(A, TS, size(A, 1)-1), similar(A, TS, size(A, 1)), similar(A, TS, size(A, 1)-1))
     mul!(out, A, B)
 end
 
-function *(A::SymTridiagonal, B::Diagonal)
+function mul(A::SymTridiagonal, B::Diagonal)
     TS = promote_op(*, eltype(A), eltype(B))
     out = Tridiagonal(similar(A, TS, size(A, 1)-1), similar(A, TS, size(A, 1)), similar(A, TS, size(A, 1)-1))
     mul!(out, A, B)

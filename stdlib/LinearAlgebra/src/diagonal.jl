@@ -285,13 +285,13 @@ function (*)(D::Diagonal, V::AbstractVector)
     return D.diag .* V
 end
 
-(*)(A::AbstractMatrix, D::Diagonal) =
+mul(A::AbstractMatrix, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), A, D)
-(*)(A::HermOrSym, D::Diagonal) =
+mul(A::HermOrSym, D::Diagonal) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), A, D)
-(*)(D::Diagonal, A::AbstractMatrix) =
+mul(D::Diagonal, A::AbstractMatrix) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag))), D, A)
-(*)(D::Diagonal, A::HermOrSym) =
+mul(D::Diagonal, A::HermOrSym) =
     mul!(similar(A, promote_op(*, eltype(A), eltype(D.diag)), size(A)), D, A)
 
 function rmul!(A::AbstractMatrix, D::Diagonal)
@@ -614,13 +614,15 @@ end
 for Tri in (:UpperTriangular, :LowerTriangular)
     UTri = Symbol(:Unit, Tri)
     # 2 args
-    for (fun, f) in zip((:*, :rmul!, :rdiv!, :/), (:identity, :identity, :inv, :inv))
-        @eval $fun(A::$Tri, D::Diagonal) = $Tri($fun(A.data, D))
-        @eval $fun(A::$UTri, D::Diagonal) = $Tri(_setdiag!($fun(A.data, D), $f, D.diag))
+    for (fun, f) in zip((:mul, :rmul!, :rdiv!, :/), (:identity, :identity, :inv, :inv))
+        g = fun == :mul ? :* : fun
+        @eval $fun(A::$Tri, D::Diagonal) = $Tri($g(A.data, D))
+        @eval $fun(A::$UTri, D::Diagonal) = $Tri(_setdiag!($g(A.data, D), $f, D.diag))
     end
-    for (fun, f) in zip((:*, :lmul!, :ldiv!, :\), (:identity, :identity, :inv, :inv))
-        @eval $fun(D::Diagonal, A::$Tri) = $Tri($fun(D, A.data))
-        @eval $fun(D::Diagonal, A::$UTri) = $Tri(_setdiag!($fun(D, A.data), $f, D.diag))
+    for (fun, f) in zip((:mul, :lmul!, :ldiv!, :\), (:identity, :identity, :inv, :inv))
+        g = fun == :mul ? :* : fun
+        @eval $fun(D::Diagonal, A::$Tri) = $Tri($g(D, A.data))
+        @eval $fun(D::Diagonal, A::$UTri) = $Tri(_setdiag!($g(D, A.data), $f, D.diag))
     end
     # 3-arg ldiv!
     @eval ldiv!(C::$Tri, D::Diagonal, A::$Tri) = $Tri(ldiv!(C.data, D, A.data))
@@ -876,8 +878,8 @@ end
 /(u::AdjointAbsVec, D::Diagonal) = (D' \ u')'
 /(u::TransposeAbsVec, D::Diagonal) = transpose(transpose(D) \ transpose(u))
 # disambiguation methods: Call unoptimized version for user defined AbstractTriangular.
-*(A::AbstractTriangular, D::Diagonal) = @invoke *(A::AbstractMatrix, D::Diagonal)
-*(D::Diagonal, A::AbstractTriangular) = @invoke *(D::Diagonal, A::AbstractMatrix)
+mul(A::AbstractTriangular, D::Diagonal) = @invoke mul(A::AbstractMatrix, D::Diagonal)
+mul(D::Diagonal, A::AbstractTriangular) = @invoke mul(D::Diagonal, A::AbstractMatrix)
 
 dot(x::AbstractVector, D::Diagonal, y::AbstractVector) = _mapreduce_prod(dot, x, D, y)
 

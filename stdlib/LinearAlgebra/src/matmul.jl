@@ -101,7 +101,9 @@ julia> [1 1; 0 1] * [1 0; 1 1]
  1  1
 ```
 """
-function (*)(A::AbstractMatrix, B::AbstractMatrix)
+(*)(A::AbstractMatrix, B::AbstractMatrix) = mul(A, B)
+# we add an extra level of indirection to avoid ambiguities in *
+function mul(A::AbstractMatrix, B::AbstractMatrix)
     TS = promote_op(matprod, eltype(A), eltype(B))
     mul!(similar(B, TS, (size(A, 1), size(B, 2))), A, B)
 end
