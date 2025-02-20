@@ -331,8 +331,7 @@ end
         vartyp_widened = widenconst(vartyp)
         thenfields = thentype === Bottom ? nothing : Any[]
         elsefields = elsetype === Bottom ? nothing : Any[]
-        nf = fieldcount(vartyp_widened)
-        for i in 1:nf
+        for i in 1:fieldcount(vartyp_widened)
             if i == fldidx
                 thenfields === nothing || push!(thenfields, thentype)
                 elsefields === nothing || push!(elsefields, elsetype)
@@ -432,12 +431,14 @@ end
                     return false
                 end
             end
-            length(a.undef) ≥ length(b.undef) || return false
-            for i in 1:length(b.fields)
-                is_field_defined(a, i) ≥ is_field_defined(b, i) || return false
-                af = a.fields[i]
-                bf = b.fields[i]
-                if i == length(b.fields)
+            na = length(a.fields)
+            nb = length(b.fields)
+            nmax = max(na, nb)
+            for i in 1:nmax
+                is_field_initialized(a, i) ≥ is_field_initialized(b, i) || return false
+                af = partialstruct_getfield(a, i)
+                bf = partialstruct_getfield(b, i)
+                if i == na || i == nb
                     if isvarargtype(af)
                         # If `af` is vararg, so must bf by the <: above
                         @assert isvarargtype(bf)
@@ -467,16 +468,14 @@ end
                 nfields(a.val) == length(b.fields) || return false
             else
                 widea <: wideb || return false
-                # for structs we need to check that `a` has more information than `b` that may be partially initialized
-                # it may happen that `b` has more information beyond the first undefined field
-                # but in this case we choose `Const` nonetheless.
+                # for structs we need to check that `a` does not have less information than `b` that may be partially initialized
                 n_initialized(a) ≥ n_initialized(b) || return false
             end
             nf = nfields(a.val)
             for i in 1:nf
                 isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
                 i > length(b.fields) && break # `a` has more information than `b` that is partially initialized struct
-                is_field_defined(b, i) || continue # `a` gives a decisive answer as to whether the field is defined or undefined
+                is_field_initialized(b, i) || continue # `a` gives a decisive answer as to whether the field is defined or undefined
                 bfᵢ = b.fields[i]
                 if i == nf
                     bfᵢ = unwrapva(bfᵢ)
@@ -754,11 +753,10 @@ end
 # The ::AbstractLattice argument is unused and simply serves to disambiguate
 # different instances of the compiler that may share the `Core.PartialStruct`
 # type.
-function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), fields::Vector{Any})
-    for i = 1:length(fields)
-        assert_nested_slotwrapper(fields[i])
-    end
-    return PartialStruct(typ, fields)
+
+function Core.PartialStruct(𝕃::AbstractLattice, @nospecialize(typ), fields::Vector{Any}; all_defined::Bool = true)
+    undef = partialstruct_init_undef(typ, fields; all_defined)
+    return PartialStruct(𝕃, typ, undef, fields)
 end
 
 function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), undef::BitVector, fields::Vector{Any})

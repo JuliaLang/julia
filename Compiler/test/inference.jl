@@ -4727,7 +4727,7 @@ end
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
-        @test c.undef == a.undef == [0, 1, 1]
+        @test length(c.fields) == 1 && c.undef == [0]
     end
     let T = Base.ImmutableDict{Number,Number}
         a = PartialStruct(𝕃, T, Any[T])
@@ -4788,21 +4788,28 @@ module _Partials_inference
         x::String
         y::Integer
         z::Any
-        Partial(args...) = new(args...)
+        Partial() = new()
     end
 
     struct Partial2
         x::String
         y::Integer
         z::Any
-        Partial2(args...) = new(args...)
+        Partial2(x) = new(x)
     end
 
     struct Partial3
         x::Int
         y::String
         z::Float64
-        Partial3(args...) = new(args...)
+        Partial3(x, y) = new(x, y)
+    end
+
+    struct Partial4
+        x::Int
+        y::String
+        z::Float64
+        Partial4(x) = new(x)
     end
 end
 
@@ -4813,7 +4820,7 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     Const, PartialStruct = Core.Const, Core.PartialStruct
     form_partially_defined_struct = Compiler.form_partially_defined_struct
     M = _Partials_inference
-    Partial, Partial2, Partial3 = M.Partial, M.Partial2, M.Partial3
+    Partial, Partial2, Partial3, Partial4 = M.Partial, M.Partial2, M.Partial3, M.Partial4
 
     @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]))
     @test !(Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
@@ -4835,22 +4842,26 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     t = t ⊔ Const((false, false, 0))
     @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
 
-    t = PartialStruct(𝕃, Tuple{Int, Int}, Any[Const(1), Int])
-    @test t.undef == [false, false]
+    t = PartialStruct(𝕃, Tuple{Int, Int}, Any[Const(1)])
+    @test t.undef == [false]
+    @test Compiler.is_field_initialized(t, 2)
+    @test Compiler.n_initialized(t) == 2
     t = PartialStruct(𝕃, Partial, Any[String, Const(2)])
-    @test t.undef == [false, false, true]
-    @test t.fields == Any[String, Const(2), Any]
+    @test t.undef == [false, false]
+    @test t.fields == Any[String, Const(2)]
     @test t ⊑ t && t ⊔ t === t
 
     t1 = PartialStruct(𝕃, Partial, Any[String, Const(3)])
-    t2 = PartialStruct(𝕃, Partial, Any[Const("x"), Int])
+    t2 = PartialStruct(𝕃, Partial, Any[Const("x")])
     @test t1 ⋢ t2 && t2 ⋢ t1
     t3 = t1 ⊔ t2
-    @test t3.fields == Any[String, Int, Any]
+    @test t3.fields == Any[String]
 
     t1 = PartialStruct(𝕃, Partial, BitVector([true, false, false]), Any[String, Int, Const(3)])
+    @test Compiler.n_initialized(t1) == 0
     @test t1 ⊑ t1 && t1 ⊔ t1 === t1
-    t2 = PartialStruct(𝕃, Partial, BitVector([false, true, false]), Any[Const("x"), Int, Any])
+    t2 = PartialStruct(𝕃, Partial, BitVector([false, true]), Any[Const("x"), Int])
+    @test Compiler.n_initialized(t2) == 1
     t3 = t1 ⊔ t2
     @test t3 === Partial
 
@@ -4865,6 +4876,10 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test t1 ⊑ t2
     @test t1 ⊔ t2 === t2
 
+    t = PartialStruct(𝕃, Partial, Any[Const("x")])
+    @test form_partially_defined_struct(t, Const(:x)) === nothing
+    t′ = form_partially_defined_struct(t, Const(:z))
+    @test t′ == PartialStruct(𝕃, Partial, BitVector([false, true, false]), Any[Const("x"), Integer, Any])
     t = PartialStruct(𝕃, Partial, Any[String, Const(2)])
     @test form_partially_defined_struct(t, Const(:x)) === nothing
     t′ = form_partially_defined_struct(t, Const(:z))
@@ -4876,22 +4891,19 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test t′ == PartialStruct(𝕃, Partial2, Any[String, Const(2), Any])
 
     @test form_partially_defined_struct(Partial3, Const(:x)) === nothing
-    t = form_partially_defined_struct(Partial3, Const(:y))
-    @test t == PartialStruct(𝕃, Partial3, Any[Int, String])
+    @test form_partially_defined_struct(Partial3, Const(:y)) === nothing
     t = form_partially_defined_struct(Partial3, Const(:z))
-    @test t == PartialStruct(𝕃, Partial3, BitVector([false, true, false]), Any[Int, String, Float64])
-    t = form_partially_defined_struct(t, Const(:y))
     @test t == PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
     t = PartialStruct(𝕃, Partial3, Any[Int, String])
     t′ = form_partially_defined_struct(t, Const(:z))
     @test t′ == PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
 
-    t1 = PartialStruct(𝕃, Partial3, Any[Int, String])
-    t2 = PartialStruct(𝕃, Partial3, Any[Const(1)])
+    t1 = PartialStruct(𝕃, Partial4, Any[Int, String])
+    t2 = PartialStruct(𝕃, Partial4, Any[Const(1)])
     @test t1 ⋢ t2 && t2 ⋢ t1
-    c = @eval Const($(Expr(:new, Partial3, 1)))
+    c = Const(Partial4(1))
     @test c ⋢ t1 && t1 ⋢ c && c ⊑ t2 && t2 ⋢ c
-    t3 = PartialStruct(𝕃, Partial3, Any[Const(1), Const("x")])
+    t3 = PartialStruct(𝕃, Partial4, Any[Const(1), Const("x")])
     @test c ⋢ t3 && t3 ⋢ c
 end
 

@@ -28,8 +28,8 @@ with `Int` values.
 - `fields` holds the lattice elements corresponding to each defined field of the object
 
 If `typ` is a struct, `undef` represents whether the corresponding field of the struct is guaranteed to be
-initialized. For any defined field (`undef[i] === false`), there is a corresponding `fields` element
-which provides information about the type of the defined field.
+initialized. For any defined field, there is a corresponding `fields` element which provides information
+about the type of the defined field.
 
 If `typ` is a tuple, the last element of `fields` may be `Vararg`. In this case, it is
 guaranteed that the number of elements in the tuple is at least `length(fields)-1`, but the
@@ -38,41 +38,28 @@ exact number of elements is unknown (`undef` then has a length of `length(fields
 Core.PartialStruct
 
 function Core.PartialStruct(typ::Type, undef::BitVector, fields::Vector{Any})
-    @assert length(undef) == length(fields) - (isvarargtype(fields[end]))
-    for i in 1:datatype_min_ninitialized(typ)
-        undef[i] = false
-    end
+    @assert length(undef) == length(fields) - isvarargtype(fields[end])
     Core._PartialStruct(typ, undef, fields)
 end
 
-function get_fieldcount(@nospecialize(t))
-    if isa(t, UnionAll) || isa(t, Union)
-        t = argument_datatype(t)
-        t === nothing && return nothing
-    end
-    isa(t, DataType) || return nothing
-    return datatype_fieldcount(t)
+function Core.PartialStruct(@nospecialize(typ), fields::Vector{Any})
+    Core.PartialStruct(typ, partialstruct_init_undef(typ, fields), fields)
 end
 
-function Core.PartialStruct(@nospecialize(typ), fields::Vector{Any})
-    nf = length(fields)
-    fields[end] === Vararg && (nf -= 1)
-    nflds = get_fieldcount(typ)
-    nflds === nothing && (nflds = nf)
-    undef = trues(nflds)
+partialstruct_undef_length(fields) = length(fields) - isvarargtype(fields[end])
 
-    # The provided fields (in absence of an `undef` argument)
-    # are assumed to be defined.
-    for i in 1:nf
+function partialstruct_init_undef(@nospecialize(typ), fields; all_defined = true)
+    n = partialstruct_undef_length(fields)
+    partialstruct_init_undef(typ, n; all_defined)
+end
+
+function partialstruct_init_undef(@nospecialize(typ), n::Integer; all_defined = true)
+    all_defined && return falses(n)
+    undef = trues(n)
+    for i in 1:min(datatype_min_ninitialized(typ), n)
         undef[i] = false
     end
-
-    # Make sure no field is missing.
-    if nflds > nf
-        fields = Any[get(fields, i, fieldtype(typ, i)) for i in 1:nflds]
-    end
-
-    Core.PartialStruct(typ, undef, fields)
+    undef
 end
 
 (==)(a::PartialStruct, b::PartialStruct) = a.typ === b.typ && a.undef == b.undef && a.fields == b.fields
