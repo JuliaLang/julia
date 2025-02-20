@@ -39,18 +39,18 @@ Core.PartialStruct
 
 function Core.PartialStruct(typ::Type, undef::BitVector, fields::Vector{Any})
     @assert length(undef) == length(fields) - isvarargtype(fields[end])
-    Core._PartialStruct(typ, undef, fields)
+    return Core._PartialStruct(typ, undef, fields)
 end
 
 function Core.PartialStruct(@nospecialize(typ), fields::Vector{Any})
-    Core.PartialStruct(typ, partialstruct_init_undef(typ, fields), fields)
+    return Core.PartialStruct(typ, partialstruct_init_undef(typ, fields), fields)
 end
 
 partialstruct_undef_length(fields) = length(fields) - isvarargtype(fields[end])
 
 function partialstruct_init_undef(@nospecialize(typ), fields; all_defined = true)
     n = partialstruct_undef_length(fields)
-    partialstruct_init_undef(typ, n; all_defined)
+    return partialstruct_init_undef(typ, n; all_defined)
 end
 
 function partialstruct_init_undef(@nospecialize(typ), n::Integer; all_defined = true)
@@ -59,14 +59,14 @@ function partialstruct_init_undef(@nospecialize(typ), n::Integer; all_defined = 
     for i in 1:min(datatype_min_ninitialized(typ), n)
         undef[i] = false
     end
-    undef
+    return undef
 end
 
 (==)(a::PartialStruct, b::PartialStruct) = a.typ === b.typ && a.undef == b.undef && a.fields == b.fields
 
 function Base.getproperty(pstruct::Core.PartialStruct, name::Symbol)
     name === :undef && return getfield(pstruct, :undef)::BitVector
-    getfield(pstruct, name)
+    return getfield(pstruct, name)
 end
 
 """

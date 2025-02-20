@@ -661,8 +661,8 @@ end
             nundef = nflds
         end
         nflds == 0 && return nothing
+        _undef = partialstruct_init_undef(aty, nundef; all_defined = false)
         fields = Vector{Any}(undef, nflds)
-        _undef = trues(nundef)
         fldmin = datatype_min_ninitialized(aty)
         n_initialized_merged = min(n_initialized(typea::Union{Const, PartialStruct}), n_initialized(typeb::Union{Const, PartialStruct}))
         anyrefine = n_initialized_merged > fldmin
@@ -703,7 +703,7 @@ end
             if !anyrefine
                 anyrefine = has_nontrivial_extended_info(𝕃, tyi) || # extended information
                             ⋤(𝕃, tyi, ft) || # just a type-level information, but more precise than the declared type
-                            !get(_undef, i, true) && i > fldmin # possibly initialized field is known to be initialized
+                            !get(_undef, i, true) && i > fldmin # possibly uninitialized field is known to be initialized
             end
         end
         anyrefine && return PartialStruct(𝕃, aty, _undef, fields)
