@@ -3,6 +3,8 @@ Julia v1.12 Release Notes
 
 New language features
 ---------------------
+* An underscore `_` as a function argument, e.g. `f(_, y)`, is now shorthand
+  for the "curried" anonymous function `x -> f(x, y)` ([#24990]).
 
 * The `@ccall` macro can now take a `gc_safe` argument, that if set to true allows the runtime to run garbage collection concurrently to the `ccall`
 
