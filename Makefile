@@ -281,7 +281,7 @@ endif
 endif
 endif
 
-ifneq (${MMTK_PLAN},None)
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
 # Make sure we use the right version of $MMTK_PLAN, $MMTK_MOVING and $MMTK_BUILD
 # if we use the BinaryBuilder version of mmtk-julia
 ifeq ($(USE_BINARYBUILDER_MMTK_JULIA),1)
@@ -291,10 +291,10 @@ else ifeq (${MMTK_PLAN},StickyImmix)
 LIB_PATH_PLAN = sticky
 endif
 
-ifeq ($(MMTK_MOVING), 0)
-LIB_PATH_MOVING := non_moving
-else
+ifeq ($(MMTK_MOVING), 1)
 LIB_PATH_MOVING := moving
+else
+LIB_PATH_MOVING := non_moving
 endif
 
 JL_PRIVATE_LIBS-0 += $(LIB_PATH_PLAN)/$(LIB_PATH_MOVING)/$(MMTK_BUILD)/libmmtk_julia
