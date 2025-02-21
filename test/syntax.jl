@@ -345,6 +345,10 @@ end
 # issue #15828
 @test Meta.lower(Main, Meta.parse("x...")) == Expr(:error, "\"...\" expression outside call")
 
+# issue #57153 - malformed "..." expr
+@test Meta.lower(@__MODULE__, :(identity($(Expr(:(...), 1, 2, 3))))) ==
+    (Expr(:error, "wrong number of expressions following \"...\""))
+
 # issue #15830
 @test Meta.lower(Main, Meta.parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
