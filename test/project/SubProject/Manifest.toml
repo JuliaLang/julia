@@ -1,0 +1,68 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.12.0-DEV"
+manifest_format = "2.0"
+project_hash = "620b9377bc807ff657e6618c8ccc24887eb40285"
+
+[[deps.Base64]]
+uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+version = "1.11.0"
+
+[[deps.Devved]]
+path = "Devved"
+uuid = "cbce3a6e-7a3d-4e84-8e6d-b87208df7599"
+version = "0.1.0"
+
+[[deps.Devved2]]
+path = "Devved2"
+uuid = "08f74b90-50f5-462f-80b9-a72b1258a17b"
+version = "0.1.0"
+
+[[deps.InteractiveUtils]]
+deps = ["Markdown"]
+uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+version = "1.11.0"
+
+[[deps.Logging]]
+deps = ["StyledStrings"]
+uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+version = "1.11.0"
+
+[[deps.Markdown]]
+deps = ["Base64"]
+uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
+version = "1.11.0"
+
+[[deps.MyPkg]]
+deps = ["Devved", "Devved2"]
+path = "."
+uuid = "0cafdeb2-d7a2-40d0-8d22-4411fcc2c4ee"
+version = "0.0.0"
+
+[[deps.PackageThatIsSub]]
+deps = ["Devved2", "MyPkg"]
+path = "PackageThatIsSub"
+uuid = "1efb588c-9412-4e40-90a4-710420bd84aa"
+version = "0.1.0"
+
+[[deps.Random]]
+deps = ["SHA"]
+uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+version = "1.11.0"
+
+[[deps.SHA]]
+uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+version = "0.7.0"
+
+[[deps.Serialization]]
+uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
+version = "1.11.0"
+
+[[deps.StyledStrings]]
+uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
+version = "1.11.0"
+
+[[deps.Test]]
+deps = ["InteractiveUtils", "Logging", "Random", "Serialization"]
+uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+version = "1.11.0"

@@ -36,7 +36,7 @@ end
 
 function check_valid(f)
     jsn = try jsn2data(@eval include($f * ".jl"))
-    # Some files cannot be reprsented with julias DateTime (timezones)
+    # Some files cannot be represented with julias DateTime (timezones)
     catch
         return false
     end
@@ -72,11 +72,7 @@ for (root, dirs, files) in walkdir(valid_test_folder)
                 rel = replace(rel, '\\' => '/')
             end
             v = check_valid(splitext(file)[1])
-            if rel in failures
-                @test_broken v
-            else
-                @test v
-            end
+            @test v broken=rel in failures
         end
     end
 end
@@ -145,11 +141,7 @@ for (root, dirs, files) in walkdir(invalid_test_folder)
                 rel = replace(rel, '\\' => '/')
             end
             v = check_invalid(file)
-            if rel in failures
-                @test_broken v
-            else
-                @test v
-            end
+            @test v broken=rel in failures
         end
     end
 end

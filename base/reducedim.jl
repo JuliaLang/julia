@@ -17,59 +17,21 @@ reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a)
 # for reductions that keep 0 dims as 0
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
 
-function reduced_indices(inds::Indices{N}, d::Int) where N
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    if d == 1
-        return (reduced_index(inds[1]), tail(inds)...)::typeof(inds)
-    elseif 1 < d <= N
-        return tuple(inds[1:d-1]..., oftype(inds[d], reduced_index(inds[d])), inds[d+1:N]...)::typeof(inds)
-    else
-        return inds
-    end
+function reduced_indices(axs::Indices{N}, region) where N
+    _check_valid_region(region)
+    ntuple(d -> d in region ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
-function reduced_indices0(inds::Indices{N}, d::Int) where N
-    d < 1 && throw(ArgumentError("dimension must be ≥ 1, got $d"))
-    if d <= N
-        ind = inds[d]
-        rd = isempty(ind) ? ind : reduced_index(inds[d])
-        if d == 1
-            return (rd, tail(inds)...)::typeof(inds)
-        else
-            return tuple(inds[1:d-1]..., oftype(inds[d], rd), inds[d+1:N]...)::typeof(inds)
-        end
-    else
-        return inds
-    end
+function reduced_indices0(axs::Indices{N}, region) where N
+    _check_valid_region(region)
+    ntuple(d -> d in region && !isempty(axs[d]) ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
-function reduced_indices(inds::Indices{N}, region) where N
-    rinds = collect(inds)
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rinds[d] = reduced_index(rinds[d])
-        end
+function _check_valid_region(region)
+    for d in region
+        isa(d, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
+        Int(d) < 1 && throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
     end
-    tuple(rinds...)::typeof(inds)
-end
-
-function reduced_indices0(inds::Indices{N}, region) where N
-    rinds = collect(inds)
-    for i in region
-        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
-        d = Int(i)
-        if d < 1
-            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
-        elseif d <= N
-            rind = rinds[d]
-            rinds[d] = isempty(rind) ? rind : reduced_index(rind)
-        end
-    end
-    tuple(rinds...)::typeof(inds)
 end
 
 ###### Generic reduction functions #####
@@ -146,16 +108,18 @@ for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min
             T = _realtype(f, promote_union(eltype(A)))
             Tr = v0 isa T ? T : typeof(v0)
 
-            # but NaNs and missing need to be avoided as initial values
+            # but NaNs, missing and unordered values need to be avoided as initial values
             if v0 isa Number && isnan(v0)
                 # v0 is NaN
                 v0 = oftype(v0, $initval)
             elseif isunordered(v0)
                 # v0 is missing or a third-party unordered value
                 Tnm = nonmissingtype(Tr)
-                # TODO: Some types, like BigInt, don't support typemin/typemax.
-                # So a Matrix{Union{BigInt, Missing}} can still error here.
-                v0 = $typeextreme(Tnm)
+                if Tnm <: Union{BitInteger, IEEEFloat, BigFloat}
+                    v0 = $typeextreme(Tnm)
+                elseif !all(isunordered, A1)
+                    v0 = mapreduce(f, $f2, Iterators.filter(!isunordered, A1))
+                end
             end
             # v0 may have changed type.
             Tr = v0 isa T ? T : typeof(v0)
@@ -186,12 +150,18 @@ function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray
 
     # but NaNs and missing need to be avoided as initial values
     if v0[1] isa Number && isnan(v0[1])
+        # v0 is NaN
         v0 = oftype(v0[1], Inf), oftype(v0[2], -Inf)
     elseif isunordered(v0[1])
         # v0 is missing or a third-party unordered value
-        # TODO: Some types, like BigInt, don't support typemin/typemax.
-        # So a Matrix{Union{BigInt, Missing}} can still error here.
-        v0 = typemax(nonmissingtype(Tmin)), typemin(nonmissingtype(Tmax))
+        Tminnm = nonmissingtype(Tmin)
+        Tmaxnm = nonmissingtype(Tmax)
+        if Tminnm <: Union{BitInteger, IEEEFloat, BigFloat} &&
+            Tmaxnm <: Union{BitInteger, IEEEFloat, BigFloat}
+            v0 = (typemax(Tminnm), typemin(Tmaxnm))
+        elseif !all(isunordered, A1)
+            v0 = reverse(mapreduce(f, op, Iterators.filter(!isunordered, A1)))
+        end
     end
     # v0 may have changed type.
     Tmin = v0[1] isa T ? T : typeof(v0[1])
@@ -211,8 +181,8 @@ reducedim_init(f, op::typeof(|), A::AbstractArrayOrBroadcasted, region) = reduce
 let
     BitIntFloat = Union{BitInteger, IEEEFloat}
     T = Union{
-        [AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
-        [AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
+        Any[AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
+        Any[AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
 
     global function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::T, region)
         z = zero(f(zero(eltype(A))))
@@ -226,11 +196,8 @@ end
 
 ## generic (map)reduction
 
-has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = false
-has_fast_linear_indexing(a::Array) = true
-has_fast_linear_indexing(::Union{Number,Ref,AbstractChar}) = true  # 0d objects, for Broadcasted
-has_fast_linear_indexing(bc::Broadcast.Broadcasted) =
-    all(has_fast_linear_indexing, bc.args)
+has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = IndexStyle(a) === IndexLinear()
+has_fast_linear_indexing(a::AbstractVector) = true
 
 function check_reducedims(R, A)
     # Check whether R has compatible dimensions w.r.t. A for reduction
@@ -291,8 +258,9 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
         nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
-        for i = 1:nslices
-            @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
+        for i in eachindex(R)
+            r = op(@inbounds(R[i]), mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
+            @inbounds R[i] = r
             ibase += lsiz
         end
         return R
@@ -302,19 +270,20 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
         i1 = first(axes1(R))
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            r = R[i1,IR]
+            @inbounds r = R[i1,IR]
             @simd for i in axes(A, 1)
-                r = op(r, f(A[i, IA]))
+                r = op(r, f(@inbounds(A[i, IA])))
             end
-            R[i1,IR] = r
+            @inbounds R[i1,IR] = r
         end
     else
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             @simd for i in axes(A, 1)
-                R[i,IR] = op(R[i,IR], f(A[i,IA]))
+                v = op(@inbounds(R[i,IR]), f(@inbounds(A[i,IA])))
+                @inbounds R[i,IR] = v
             end
         end
     end
@@ -356,8 +325,8 @@ julia> mapreduce(isodd, |, a, dims=1)
 """
 mapreduce(f, op, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) =
     _mapreduce_dim(f, op, init, A, dims)
-mapreduce(f, op, A::AbstractArrayOrBroadcasted...; kw...) =
-    reduce(op, map(f, A...); kw...)
+mapreduce(f, op, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...; kw...) =
+    reduce(op, map(f, A, B...); kw...)
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
     mapfoldl_impl(f, op, nt, A)
@@ -448,6 +417,8 @@ _count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_s
 Count the number of elements in `A` for which `f` returns `true` over the
 singleton dimensions of `r`, writing the result into `r` in-place.
 
+$(_DOCS_ALIASING_WARNING)
+
 !!! compat "Julia 1.5"
     inplace `count!` was added in Julia 1.5.
 
@@ -526,6 +497,8 @@ sum(f, A::AbstractArray; dims)
 
 Sum elements of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -598,6 +571,8 @@ prod(f, A::AbstractArray; dims)
     prod!(r, A)
 
 Multiply elements of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -676,6 +651,8 @@ maximum(f, A::AbstractArray; dims)
 
 Compute the maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -753,6 +730,8 @@ minimum(f, A::AbstractArray; dims)
 
 Compute the minimum value of `A` over the singleton dimensions of `r`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [1 2; 3 4]
@@ -817,6 +796,8 @@ extrema(f, A::AbstractArray; dims)
     extrema!(r, A)
 
 Compute the minimum and maximum value of `A` over the singleton dimensions of `r`, and write results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 !!! compat "Julia 1.8"
     This method requires Julia 1.8 or later.
@@ -893,6 +874,8 @@ all(::Function, ::AbstractArray; dims)
 
 Test whether all values in `A` along the singleton dimensions of `r` are `true`, and write results to `r`.
 
+$(_DOCS_ALIASING_WARNING)
+
 # Examples
 ```jldoctest
 julia> A = [true false; true false]
@@ -965,6 +948,8 @@ any(::Function, ::AbstractArray; dims)
 
 Test whether any values in `A` along the singleton dimensions of `r` are `true`, and write
 results to `r`.
+
+$(_DOCS_ALIASING_WARNING)
 
 # Examples
 ```jldoctest
@@ -1042,33 +1027,33 @@ function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     zi = zero(eltype(ks))
     if reducedim1(Rval, A)
         i1 = first(axes1(Rval))
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
-            tmpRv = Rval[i1,IR]
-            tmpRi = Rind[i1,IR]
+            @inbounds tmpRv = Rval[i1,IR]
+            @inbounds tmpRi = Rind[i1,IR]
             for i in axes(A,1)
                 k, kss = y::Tuple
-                tmpAv = f(A[i,IA])
+                tmpAv = f(@inbounds(A[i,IA]))
                 if tmpRi == zi || op(tmpRv, tmpAv)
                     tmpRv = tmpAv
                     tmpRi = k
                 end
                 y = iterate(ks, kss)
             end
-            Rval[i1,IR] = tmpRv
-            Rind[i1,IR] = tmpRi
+            @inbounds Rval[i1,IR] = tmpRv
+            @inbounds Rind[i1,IR] = tmpRi
         end
     else
-        @inbounds for IA in CartesianIndices(indsAt)
+        for IA in CartesianIndices(indsAt)
             IR = Broadcast.newindex(IA, keep, Idefault)
             for i in axes(A, 1)
                 k, kss = y::Tuple
-                tmpAv = f(A[i,IA])
-                tmpRv = Rval[i,IR]
-                tmpRi = Rind[i,IR]
+                tmpAv = f(@inbounds(A[i,IA]))
+                @inbounds tmpRv = Rval[i,IR]
+                @inbounds tmpRi = Rind[i,IR]
                 if tmpRi == zi || op(tmpRv, tmpAv)
-                    Rval[i,IR] = tmpAv
-                    Rind[i,IR] = k
+                    @inbounds Rval[i,IR] = tmpAv
+                    @inbounds Rind[i,IR] = k
                 end
                 y = iterate(ks, kss)
             end
@@ -1083,6 +1068,8 @@ end
 Find the minimum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as less than all other values except `missing`.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
@@ -1154,6 +1141,8 @@ end
 Find the maximum of `A` and the corresponding linear index along singleton
 dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 `NaN` is treated as greater than all other values except `missing`.
+
+$(_DOCS_ALIASING_WARNING)
 """
 function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)

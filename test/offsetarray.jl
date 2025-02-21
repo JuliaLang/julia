@@ -383,6 +383,18 @@ v2 = copy(v)
 @test v2[end-1] == 2
 @test v2[end] == 1
 
+# push!(v::AbstractVector, x...)
+v2 = copy(v)
+@test @invoke(push!(v2::AbstractVector, 3)) === v2
+@test v2[axes(v,1)] == v
+@test v2[end] == 3
+@test v2[begin] == v[begin] == v[-2]
+v2 = copy(v)
+@test @invoke(push!(v2::AbstractVector, 5, 6)) == v2
+@test v2[axes(v,1)] == v
+@test v2[end-1] == 5
+@test v2[end] == 6
+
 # append! from array
 v2 = copy(v)
 @test append!(v2, [2, 1]) === v2
@@ -399,11 +411,29 @@ v2 = copy(v)
 @test v2[axes(v, 1)] == v
 @test v2[lastindex(v)+1:end] == [2, 1]
 
+# append!(::AbstractVector, ...)
+# append! from array
+v2 = copy(v)
+@test @invoke(append!(v2::AbstractVector, [2, 1]::Any)) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+# append! from HasLength iterator
+v2 = copy(v)
+@test @invoke(append!(v2::AbstractVector, (v for v in [2, 1])::Any)) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+# append! from SizeUnknown iterator
+v2 = copy(v)
+@test @invoke(append!(v2::AbstractVector, (v for v in [2, 1] if true)::Any)) === v2
+@test v2[axes(v, 1)] == v
+@test v2[lastindex(v)+1:end] == [2, 1]
+
 # other functions
 v = OffsetArray(v0, (-3,))
 @test lastindex(v) == 1
 @test v ≈ v
-@test axes(v') === (Base.OneTo(1), OffsetArrays.IdOffsetRange(Base.OneTo(4), -3))
+@test (@inferred axes(v')[1]) === OffsetArrays.IdOffsetRange(Base.OneTo(1))
+@test (@inferred axes(v')[2]) === OffsetArrays.IdOffsetRange(Base.OneTo(4), -3)
 @test parent(v) == collect(v)
 rv = reverse(v)
 @test axes(rv) == axes(v)
@@ -627,15 +657,15 @@ end
     B = OffsetArray(reshape(1:24, 4, 3, 2), -5, 6, -7)
     for R in (fill(0, -4:-1), fill(0, -4:-1, 7:7), fill(0, -4:-1, 7:7, -6:-6))
         @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(2,3)), axes(R)) == reshape(21:24, axes(R))
-        @test @allocated(maximum!(R, B)) <= 800
+        @test @allocated(maximum!(R, B)) <= 400
         @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(2,3)), axes(R)) == reshape(1:4, axes(R))
-        @test @allocated(minimum!(R, B)) <= 800
+        @test @allocated(minimum!(R, B)) <= 400
     end
     for R in (fill(0, -4:-4, 7:9), fill(0, -4:-4, 7:9, -6:-6))
         @test @inferred(maximum!(R, B)) == reshape(maximum(B, dims=(1,3)), axes(R)) == reshape(16:4:24, axes(R))
-        @test @allocated(maximum!(R, B)) <= 800
+        @test @allocated(maximum!(R, B)) <= 400
         @test @inferred(minimum!(R, B)) == reshape(minimum(B, dims=(1,3)), axes(R)) == reshape(1:4:9, axes(R))
-        @test @allocated(minimum!(R, B)) <= 800
+        @test @allocated(minimum!(R, B)) <= 400
     end
     @test_throws DimensionMismatch maximum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
     @test_throws DimensionMismatch minimum!(fill(0, -4:-1, 7:7, -6:-6, 1:1), B)
@@ -862,4 +892,36 @@ end
     # but the conversion to an OrdinalRange was not defined.
     # this is fixed in #40038, so the evaluation of its CartesianIndices should work
     @test CartesianIndices(A) == CartesianIndices(B)
+end
+
+@testset "overflowing show" begin
+    A = OffsetArray(repeat([1], 1), typemax(Int)-1)
+    b = IOBuffer(maxsize=10)
+    show(b, A)
+    @test String(take!(b)) == "[1]"
+    show(b, (A, A))
+    @test String(take!(b)) == "([1], [1])"
+end
+
+@testset "indexing views (#53249)" begin
+    v = view([1,2,3,4], :)
+    @test v[Base.IdentityUnitRange(2:3)] == OffsetArray(2:3, 2:3)
+end
+
+@testset "mapreduce with OffsetRanges" begin
+    r = 5:100
+    a = OffsetArray(r, 2)
+    b = sum(a, dims=1)
+    @test b[begin] == sum(r)
+end
+
+@testset "reshape" begin
+    A0 = [1 3; 2 4]
+    A = reshape(A0, 2:3, 4:5)
+    @test axes(A) == Base.IdentityUnitRange.((2:3, 4:5))
+
+    B = reshape(A0, -10:-9, 9:10)
+    @test isa(B, OffsetArray{Int,2})
+    @test parent(B) == A0
+    @test axes(B) == Base.IdentityUnitRange.((-10:-9, 9:10))
 end

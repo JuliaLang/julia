@@ -10,6 +10,21 @@ using Dates
     b = Dates.Time(11, 59, 59)
     @test Dates.CompoundPeriod(a - b) == Dates.Hour(12)
 end
+
+struct MonthlyDate <: TimeType
+    instant::Dates.UTInstant{Month}
+end
+struct OtherTime <: Dates.AbstractDateTime
+    instant::Dates.UTInstant{Nanosecond}
+end
+@testset "TimeType arithmetic" begin
+    @test_throws MethodError DateTime(2023, 5, 2) - Date(2023, 5, 1)
+    # check that - between two same-type TimeTypes works by default
+    @test MonthlyDate(Dates.UTInstant(Month(10))) - MonthlyDate(Dates.UTInstant(Month(1))) == Month(9)
+    # ... and between two same-type AbstractDateTimes
+    @test OtherTime(Dates.UTInstant(Nanosecond(2))) - OtherTime(Dates.UTInstant(Nanosecond(1))) == Nanosecond(1)
+end
+
 @testset "Wrapping arithmetic for Months" begin
     # This ends up being trickier than expected because
     # the user might do 2014-01-01 + Month(-14)
@@ -255,6 +270,24 @@ end
         @test dt + Dates.Millisecond(1) == Dates.DateTime(1972, 6, 30, 23, 59, 59, 1)
         @test dt - Dates.Millisecond(1) == Dates.DateTime(1972, 6, 30, 23, 59, 58, 999)
         @test dt + Dates.Millisecond(-1) == Dates.DateTime(1972, 6, 30, 23, 59, 58, 999)
+    end
+    @testset "DateTime-Microsecond arithmetic" begin
+        dt = Dates.DateTime(1999, 12, 27)
+        @test dt + Dates.Microsecond(1) == dt
+        @test dt + Dates.Microsecond(501) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt + Dates.Microsecond(1499) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt - Dates.Microsecond(1) == dt
+        @test dt - Dates.Microsecond(501) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+        @test dt - Dates.Microsecond(1499) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+    end
+    @testset "DateTime-Nanosecond arithmetic" begin
+        dt = Dates.DateTime(1999, 12, 27)
+        @test dt + Dates.Nanosecond(1) == dt
+        @test dt + Dates.Nanosecond(500_001) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt + Dates.Nanosecond(1_499_999) == Dates.DateTime(1999, 12, 27, 0, 0, 0, 1)
+        @test dt - Dates.Nanosecond(1) == dt
+        @test dt - Dates.Nanosecond(500_001) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
+        @test dt - Dates.Nanosecond(1_499_999) == Dates.DateTime(1999, 12, 26, 23, 59, 59, 999)
     end
 end
 @testset "Date arithmetic" begin

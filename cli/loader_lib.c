@@ -125,6 +125,32 @@ static void * lookup_symbol(const void * lib_handle, const char * symbol_name) {
 #endif
 }
 
+#if defined(_OS_WINDOWS_)
+void win32_formatmessage(DWORD code, char *reason, int len) {
+    DWORD res;
+    LPWSTR errmsg;
+    res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                         FORMAT_MESSAGE_FROM_SYSTEM |
+                         FORMAT_MESSAGE_IGNORE_INSERTS |
+                         FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                         NULL, code,
+                         MAKELANGID(LANG_ENGLISH, SUBLANG_ENGLISH_US),
+                         (LPWSTR)&errmsg, 0, NULL);
+    if (!res && (GetLastError() == ERROR_MUI_FILE_NOT_FOUND ||
+                 GetLastError() == ERROR_RESOURCE_TYPE_NOT_FOUND)) {
+      res = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                           FORMAT_MESSAGE_FROM_SYSTEM |
+                           FORMAT_MESSAGE_IGNORE_INSERTS |
+                           FORMAT_MESSAGE_MAX_WIDTH_MASK,
+                           NULL, code,
+                           0, (LPWSTR)&errmsg, 0, NULL);
+    }
+    res = WideCharToMultiByte(CP_UTF8, 0, errmsg, -1, reason, len, NULL, NULL);
+    reason[len - 1] = '\0';
+    LocalFree(errmsg);
+}
+#endif
+
 // Find the location of libjulia.
 char *lib_dir = NULL;
 JL_DLLEXPORT const char * jl_get_libdir()
@@ -135,21 +161,21 @@ JL_DLLEXPORT const char * jl_get_libdir()
     }
 #if defined(_OS_WINDOWS_)
     // On Windows, we use GetModuleFileNameW
-    wchar_t *libjulia_path = utf8_to_wchar(LIBJULIA_NAME);
     HMODULE libjulia = NULL;
 
-    // Get a handle to libjulia.
-    if (!libjulia_path) {
-        jl_loader_print_stderr3("ERROR: Unable to convert path ", LIBJULIA_NAME, " to wide string!\n");
+    // Get a handle to libjulia
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                            (LPCWSTR)jl_get_libdir, &libjulia)) {
+        DWORD err = GetLastError();
+        jl_loader_print_stderr3("ERROR: could not locate library \"", LIBJULIA_NAME, "\"\n");
+
+        char msg[2048];
+        win32_formatmessage(err, msg, sizeof(msg));
+        jl_loader_print_stderr(msg);
         exit(1);
     }
-    libjulia = LoadLibraryW(libjulia_path);
-    if (libjulia == NULL) {
-        jl_loader_print_stderr3("ERROR: Unable to load ", LIBJULIA_NAME, "!\n");
-        exit(1);
-    }
-    free(libjulia_path);
-    libjulia_path = (wchar_t*)malloc(32768 * sizeof(wchar_t)); // max long path length
+
+    wchar_t *libjulia_path = (wchar_t*)malloc(32768 * sizeof(wchar_t)); // max long path length
     if (!GetModuleFileNameW(libjulia, libjulia_path, 32768)) {
         jl_loader_print_stderr("ERROR: GetModuleFileName() failed\n");
         exit(1);
@@ -227,13 +253,13 @@ static void read_wrapper(int fd, char **ret, size_t *ret_len)
     size_t have_read = 0;
     while (1) {
         ssize_t n = read(fd, buf + have_read, len - have_read);
-        have_read += n;
         if (n == 0) break;
         if (n == -1 && errno != EINTR) {
             perror("(julia) libstdcxxprobe read");
             exit(1);
         }
         if (n == -1 && errno == EINTR) continue;
+        have_read += n;
         if (have_read == len) {
             buf = (char *)realloc(buf, 1 + (len *= 2));
             if (!buf) {
@@ -281,6 +307,7 @@ static char *libstdcxxprobe(void)
         // See if the version is compatible
         char *dlerr = dlerror(); // clear out dlerror
         void *sym = dlsym(handle, GLIBCXX_LEAST_VERSION_SYMBOL);
+        (void)sym;
         dlerr = dlerror();
         if (dlerr) {
             // We can't use the library that was found, so don't write anything.
@@ -322,10 +349,16 @@ static char *libstdcxxprobe(void)
             pid_t npid = waitpid(pid, &wstatus, 0);
             if (npid == -1) {
                 if (errno == EINTR) continue;
-                if (errno != EINTR) {
-                    perror("Error during libstdcxxprobe in parent process:\nwaitpid");
-                    exit(1);
+                if (errno == ECHILD) {
+                    // SIGCHLD is set to SIG_IGN or has flag SA_NOCLDWAIT, so the child
+                    // did not become a zombie and wait for `waitpid` - it just exited.
+                    //
+                    // Assume that it exited successfully and use whatever libpath we
+                    // got out of the pipe, if any.
+                    break;
                 }
+                perror("Error during libstdcxxprobe in parent process:\nwaitpid");
+                exit(1);
             }
             else if (!WIFEXITED(wstatus)) {
                 const char *err_str = "Error during libstdcxxprobe in parent process:\n"
@@ -345,13 +378,27 @@ static char *libstdcxxprobe(void)
             free(path);
             return NULL;
         }
+        // Ensure that `path` is zero-terminated.
+        path[pathlen] = '\0';
         return path;
     }
 }
 #endif
 
-void * libjulia_internal = NULL;
+void *libjulia_internal = NULL;
+void *libjulia_codegen = NULL;
 __attribute__((constructor)) void jl_load_libjulia_internal(void) {
+#if defined(_OS_LINUX_)
+    // Julia uses `sigwait()` to handle signals, and all threads are required
+    // to mask the corresponding handlers so that the signals can be waited on.
+    // Here, we setup that masking early, so that it is inherited by any threads
+    // spawned (e.g. by constructors) when loading deps of libjulia-internal.
+
+    sigset_t all_signals, prev_mask;
+    sigfillset(&all_signals);
+    pthread_sigmask(SIG_BLOCK, &all_signals, &prev_mask);
+#endif
+
     // Only initialize this once
     if (libjulia_internal != NULL) {
         return;
@@ -361,46 +408,48 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     const char *lib_dir = jl_get_libdir();
 
     // Pre-load libraries that libjulia-internal needs.
-    int deps_len = strlen(&dep_libs[1]);
     char *curr_dep = &dep_libs[1];
 
-    void *cxx_handle;
+    // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
+    // which are libraries that we want to load in some special, custom way.
+    // The current list is:
+    //   libstdc++
+    //   libjulia-internal
+    //   libjulia-codegen
+    const int NUM_SPECIAL_LIBRARIES = 3;
+    int special_idx = 0;
+    while (1) {
+        // try to find next colon character; if we can't, break out
+        char * colon = strchr(curr_dep, ':');
+        if (colon == NULL)
+            break;
 
-#if defined(_OS_LINUX_)
-    int do_probe = 1;
-    int done_probe = 0;
-    char *probevar = getenv("JULIA_PROBE_LIBSTDCXX");
-    if (probevar) {
-        if (strcmp(probevar, "1") == 0 || strcmp(probevar, "yes") == 0)
-            do_probe = 1;
-        else if (strcmp(probevar, "0") == 0 || strcmp(probevar, "no") == 0)
-            do_probe = 0;
-    }
-    if (do_probe) {
-        char *cxxpath = libstdcxxprobe();
-        if (cxxpath) {
-            cxx_handle = dlopen(cxxpath, RTLD_LAZY);
-            char *dlr = dlerror();
-            if (dlr) {
-                jl_loader_print_stderr("ERROR: Unable to dlopen(cxxpath) in parent!\n");
-                jl_loader_print_stderr3("Message: ", dlr, "\n");
+        // If this library name starts with `@`, don't open it here (but mark it as special)
+        if (curr_dep[0] == '@') {
+            special_idx += 1;
+            if (special_idx > NUM_SPECIAL_LIBRARIES) {
+                jl_loader_print_stderr("ERROR: Too many special library names specified, check LOADER_BUILD_DEP_LIBS and friends!\n");
                 exit(1);
             }
-            free(cxxpath);
-            done_probe = 1;
         }
-    }
-    if (!done_probe) {
-        const static char bundled_path[256] = "\0*libstdc++.so.6";
-        load_library(&bundled_path[2], lib_dir, 1);
-    }
-#endif
 
-    // We keep track of "special" libraries names (ones whose name is prefixed with `@`)
-    // which are libraries that we want to load in some special, custom way, such as
-    // `libjulia-internal` or `libjulia-codegen`.
-    int special_idx = 0;
-    char * special_library_names[2] = {NULL};
+        // Skip to next dep
+        curr_dep = colon + 1;
+    }
+
+    // Assert that we have exactly the right number of special library names
+    if (special_idx != NUM_SPECIAL_LIBRARIES) {
+        jl_loader_print_stderr("ERROR: Too few special library names specified, check LOADER_BUILD_DEP_LIBS and friends!\n");
+        exit(1);
+    }
+
+    // Now that we've asserted that we have the right number of special
+    // libraries, actually run a loop over the deps loading them in-order.
+    // If it's a special library, we do slightly different things, especially
+    // for libstdc++, where we actually probe for a system libstdc++ and
+    // load that if it's newer.
+    special_idx = 0;
+    curr_dep = &dep_libs[1];
     while (1) {
         // try to find next colon character; if we can't, break out
         char * colon = strchr(curr_dep, ':');
@@ -410,16 +459,57 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         // Chop the string at the colon so it's a valid-ending-string
         *colon = '\0';
 
-        // If this library name starts with `@`, don't open it here (but mark it as special)
+        // If this library name starts with `@`, it's a special library
+        // and requires special handling:
         if (curr_dep[0] == '@') {
-            if (special_idx > sizeof(special_library_names)/sizeof(char *)) {
-                jl_loader_print_stderr("ERROR: Too many special library names specified, check LOADER_BUILD_DEP_LIBS and friends!\n");
-                exit(1);
+            // Skip the `@` for future function calls.
+            curr_dep += 1;
+
+            // First special library to be loaded is `libstdc++`; perform probing here.
+            if (special_idx == 0) {
+#if defined(_OS_LINUX_)
+                int do_probe = 1;
+                int probe_successful = 0;
+
+                // Check to see if the user has disabled libstdc++ probing
+                char *probevar = getenv("JULIA_PROBE_LIBSTDCXX");
+                if (probevar) {
+                    if (strcmp(probevar, "1") == 0 || strcmp(probevar, "yes") == 0)
+                        do_probe = 1;
+                    else if (strcmp(probevar, "0") == 0 || strcmp(probevar, "no") == 0)
+                        do_probe = 0;
+                }
+                if (do_probe) {
+                    char *cxxpath = libstdcxxprobe();
+                    if (cxxpath) {
+                        void *cxx_handle = dlopen(cxxpath, RTLD_LAZY);
+                        (void)cxx_handle;
+                        const char *dlr = dlerror();
+                        if (dlr) {
+                            jl_loader_print_stderr("ERROR: Unable to dlopen(cxxpath) in parent!\n");
+                            jl_loader_print_stderr3("Message: ", dlr, "\n");
+                            exit(1);
+                        }
+                        free(cxxpath);
+                        probe_successful = 1;
+                    }
+                }
+                // If the probe rejected the system libstdc++ (or didn't find one!)
+                // just load our bundled libstdc++ as identified by curr_dep;
+                if (!probe_successful) {
+                    load_library(curr_dep, lib_dir, 1);
+                }
+#endif
+            } else if (special_idx == 1) {
+                // This special library is `libjulia-internal`
+                libjulia_internal = load_library(curr_dep, lib_dir, 1);
+            } else if (special_idx == 2) {
+                // This special library is `libjulia-codegen`
+                libjulia_codegen = load_library(curr_dep, lib_dir, 0);
             }
-            special_library_names[special_idx] = curr_dep + 1;
-            special_idx += 1;
-        }
-        else {
+            special_idx++;
+        } else {
+            // Otherwise, just load it as "normal"
             load_library(curr_dep, lib_dir, 1);
         }
 
@@ -427,14 +517,6 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         curr_dep = colon + 1;
     }
 
-    if (special_idx != sizeof(special_library_names)/sizeof(char *)) {
-        jl_loader_print_stderr("ERROR: Too few special library names specified, check LOADER_BUILD_DEP_LIBS and friends!\n");
-        exit(1);
-    }
-
-    // Unpack our special library names.  This is why ordering of library names matters.
-    libjulia_internal = load_library(special_library_names[0], lib_dir, 1);
-    void *libjulia_codegen = load_library(special_library_names[1], lib_dir, 0);
     const char * const * codegen_func_names;
     const char *codegen_liberr;
     if (libjulia_codegen == NULL) {
@@ -470,7 +552,7 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
     }
     // Next, if we're on Linux/FreeBSD, set up fast TLS.
-#if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_)
+#if !defined(_OS_WINDOWS_) && !defined(_OS_OPENBSD_)
     void (*jl_pgcstack_setkey)(void*, void*(*)(void)) = lookup_symbol(libjulia_internal, "jl_pgcstack_setkey");
     if (jl_pgcstack_setkey == NULL) {
         jl_loader_print_stderr("ERROR: Cannot find jl_pgcstack_setkey() function within libjulia-internal!\n");
@@ -478,13 +560,25 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     }
     void *fptr = lookup_symbol(RTLD_DEFAULT, "jl_get_pgcstack_static");
     void *(*key)(void) = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_addr_static");
-    if (fptr != NULL && key != NULL)
-        jl_pgcstack_setkey(fptr, key);
+    _Atomic(char) *semaphore = lookup_symbol(RTLD_DEFAULT, "jl_pgcstack_static_semaphore");
+    if (fptr != NULL && key != NULL && semaphore != NULL) {
+        char already_used = 0;
+        atomic_compare_exchange_strong(semaphore, &already_used, 1);
+        if (already_used == 0) // RMW succeeded - we have exclusive access
+            jl_pgcstack_setkey(fptr, key);
+    }
 #endif
 
     // jl_options must be initialized very early, in case an embedder sets some
     // values there before calling jl_init
     ((void (*)(void))jl_init_options_addr)();
+
+#if defined(_OS_LINUX_)
+    // Restore the original signal mask. `jl_init()` will later setup blocking
+    // for the specific set of signals we `sigwait()` on, and any threads spawned
+    // during loading above will still retain their inherited signal mask.
+    pthread_sigmask(SIG_SETMASK, &prev_mask, NULL);
+#endif
 }
 
 // Load libjulia and run the REPL with the given arguments (in UTF-8 format)

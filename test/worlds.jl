@@ -2,8 +2,7 @@
 
 # tests for accurate updating of method tables
 
-using Base: get_world_counter
-tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
+using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
 # test simple method replacement
@@ -108,7 +107,7 @@ end
 g265() = [f265(x) for x in 1:3.]
 wc265 = get_world_counter()
 wc265_41332a = Task(tls_world_age)
-@test tls_world_age() == wc265
+@test tls_world_age() == wc265 + 1
 (function ()
     global wc265_41332b = Task(tls_world_age)
     @eval f265(::Any) = 1.0
@@ -116,24 +115,24 @@ wc265_41332a = Task(tls_world_age)
     global wc265_41332d = Task(tls_world_age)
     nothing
 end)()
-@test wc265 + 2 == get_world_counter() == tls_world_age()
+@test wc265 + 12 == get_world_counter() == tls_world_age()
 schedule(wc265_41332a)
 schedule(wc265_41332b)
 schedule(wc265_41332c)
 schedule(wc265_41332d)
-@test wc265 == fetch(wc265_41332a)
-@test wc265 + 1 == fetch(wc265_41332b)
-@test wc265 + 2 == fetch(wc265_41332c)
-@test wc265 + 1 == fetch(wc265_41332d)
+@test wc265 + 1 == fetch(wc265_41332a)
+@test wc265 + 10 == fetch(wc265_41332b)
+@test wc265 + 12 == fetch(wc265_41332c)
+@test wc265 + 10 == fetch(wc265_41332d)
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
 wc265 = get_world_counter()
 @test put_n_take!(get_world_counter, ()) == wc265
-@test put_n_take!(tls_world_age, ()) == wc265
+@test put_n_take!(tls_world_age, ()) + 3 == wc265
 f265(::Int) = 1
 @test put_n_take!(get_world_counter, ()) == wc265 + 1 == get_world_counter() == tls_world_age()
-@test put_n_take!(tls_world_age, ()) == wc265
+@test put_n_take!(tls_world_age, ()) + 3 == wc265
 
 @test g265() == Int[1, 1, 1]
 @test Core.Compiler.return_type(f265, Tuple{Any,}) == Union{Float64, Int}
@@ -163,12 +162,12 @@ let ex = t265.exception
     @test ex isa MethodError
     @test ex.f == h265
     @test ex.args == ()
-    @test ex.world == wc265
+    @test ex.world == wc265-3
     str = sprint(showerror, ex)
     wc = get_world_counter()
     cmps = """
         MethodError: no method matching h265()
-        The applicable method may be too new: running in world age $wc265, while current world is $wc."""
+        The applicable method may be too new: running in world age $(wc265-3), while current world is $wc."""
     @test startswith(str, cmps)
     cmps = "\n  h265() (method too new to be called from this world context.)\n   $loc_h265"
     @test occursin(cmps, str)
@@ -233,23 +232,10 @@ function method_instance(f, types=Base.default_tt(f))
     m = which(f, types)
     inst = nothing
     tt = Base.signature_type(f, types)
-    specs = m.specializations
-    if isa(specs, Nothing)
-    elseif isa(specs, Core.SimpleVector)
-        for i = 1:length(specs)
-            mi = specs[i]
-            if mi isa Core.MethodInstance
-                if mi.specTypes <: tt && tt <: mi.specTypes
-                    inst = mi
-                    break
-                end
-            end
-        end
-    else
-        Base.visit(specs) do mi
-            if mi.specTypes === tt
-                inst = mi
-            end
+    for mi in Base.specializations(m)
+        if mi.specTypes <: tt && tt <: mi.specTypes
+            inst = mi
+            break
         end
     end
     return inst
@@ -271,15 +257,13 @@ end
 # avoid adding this to Base
 function equal(ci1::Core.CodeInfo, ci2::Core.CodeInfo)
     return ci1.code == ci2.code &&
-           ci1.codelocs == ci2.codelocs &&
+           ci1.debuginfo == ci2.debuginfo &&
            ci1.ssavaluetypes == ci2.ssavaluetypes &&
            ci1.ssaflags == ci2.ssaflags &&
            ci1.method_for_inference_limit_heuristics == ci2.method_for_inference_limit_heuristics &&
-           ci1.linetable == ci2.linetable &&
            ci1.slotnames == ci2.slotnames &&
            ci1.slotflags == ci2.slotflags &&
-           ci1.slottypes == ci2.slottypes &&
-           ci1.rettype == ci2.rettype
+           ci1.slottypes == ci2.slottypes
 end
 equal(p1::Pair, p2::Pair) = p1.second == p2.second && equal(p1.first, p2.first)
 
@@ -408,3 +392,145 @@ wc_aiw2 = get_world_counter()
 @test Base.invoke_in_world(wc_aiw2, f_inworld, 2) == "world two; x=2"
 @test Base.invoke_in_world(wc_aiw1, g_inworld, 2, y=3) == "world one; x=2, y=3"
 @test Base.invoke_in_world(wc_aiw2, g_inworld, 2, y=3) == "world two; x=2, y=3"
+
+# logging
+mc48954(x, y) = false
+mc48954(x::Int, y::Int) = x == y
+mc48954(x::Symbol, y::Symbol) = x == y
+function mcc48954(container, y)
+    x = container[1]
+    return mc48954(x, y)
+end
+
+mcc48954(Any[1], 1)
+mc48954i = method_instance(mc48954, (Any, Int))
+mcc48954i = method_instance(mcc48954, (Vector{Any}, Int))
+list48954 = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+mc48954(x::AbstractFloat, y::Int) = x == y
+ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+@test list48954 == [
+    mcc48954i,
+    1,
+    mc48954i,
+    "jl_method_table_insert",
+    which(mc48954, (AbstractFloat, Int)),
+    "jl_method_table_insert"
+]
+
+# issue #50091 -- missing invoke edge affecting nospecialized dispatch
+module ExceptionUnwrapping
+@nospecialize
+unwrap_exception(@nospecialize(e)) = e
+unwrap_exception(e::Base.TaskFailedException) = e.task.exception
+@noinline function _summarize_task_exceptions(io::IO, exc, prefix = nothing)
+    _summarize_exception((;prefix,), io, exc)
+    nothing
+end
+@noinline function _summarize_exception(kws, io::IO, e::TaskFailedException)
+    _summarize_task_exceptions(io, e.task, kws.prefix)
+end
+# This is the overload that prints the actual exception that occurred.
+result = Bool[]
+@noinline function _summarize_exception(kws, io::IO, @nospecialize(exc))
+    global result
+    push!(result, unwrap_exception(exc) === exc)
+    if unwrap_exception(exc) !== exc # something uninferrable
+        return _summarize_exception(kws, io, unwrap_exception(exc))
+    end
+end
+struct X; x; end
+end
+let e = ExceptionUnwrapping.X(nothing)
+    @test ExceptionUnwrapping.unwrap_exception(e) === e
+    ExceptionUnwrapping._summarize_task_exceptions(devnull, e)
+    @test ExceptionUnwrapping.result == [true]
+    empty!(ExceptionUnwrapping.result)
+end
+ExceptionUnwrapping.unwrap_exception(e::ExceptionUnwrapping.X) = e.x
+let e = ExceptionUnwrapping.X(nothing)
+    @test !(ExceptionUnwrapping.unwrap_exception(e) === e)
+    ExceptionUnwrapping._summarize_task_exceptions(devnull, e)
+    @test ExceptionUnwrapping.result == [false, true]
+    empty!(ExceptionUnwrapping.result)
+end
+
+fshadow() = 1
+gshadow() = fshadow()
+@test fshadow() === 1
+@test gshadow() === 1
+fshadow_m1 = which(fshadow, ())
+fshadow() = 2
+fshadow() = 3
+@test fshadow() === 3
+@test gshadow() === 3
+fshadow_m3 = which(fshadow, ())
+Base.delete_method(fshadow_m1)
+@test fshadow() === 3
+@test gshadow() === 3
+Base.delete_method(fshadow_m3)
+fshadow_m2 = which(fshadow, ())
+@test fshadow() === 2
+@test gshadow() === 2
+Base.delete_method(fshadow_m2)
+@test_throws MethodError(fshadow, (), Base.tls_world_age()) gshadow()
+@test Base.morespecific(fshadow_m3, fshadow_m2)
+@test Base.morespecific(fshadow_m2, fshadow_m1)
+@test Base.morespecific(fshadow_m3, fshadow_m1)
+@test !Base.morespecific(fshadow_m2, fshadow_m3)
+
+# Generated functions without edges must have min_world = 1.
+# N.B.: If changing this, move this test to precompile and make sure
+# that the specialization survives revalidation.
+function generated_no_edges_gen(world, args...)
+    src = ccall(:jl_new_code_info_uninit, Ref{Core.CodeInfo}, ())
+    src.code = Any[Core.ReturnNode(nothing)]
+    src.slotnames = Symbol[:self]
+    src.slotflags = UInt8[0x00]
+    src.ssaflags = UInt32[0x00]
+    src.ssavaluetypes = 1
+    src.nargs = 1
+    src.min_world = first(Base._methods(generated_no_edges, Tuple{}, -1, world)).method.primary_world
+
+    return src
+end
+
+@eval function generated_no_edges()
+    $(Expr(:meta, :generated, generated_no_edges_gen))
+    $(Expr(:meta, :generated_only))
+end
+
+@test_throws ErrorException("Generated function result with `edges == nothing` and `max_world == typemax(UInt)` must have `min_world == 1`") generated_no_edges()
+
+# Test that backdating of constants is working for structs
+before_backdate_age = Base.tls_world_age()
+struct FooBackdated
+    x::Vector{FooBackdated}
+
+    FooBackdated() = new(FooBackdated[])
+end
+@test Base.invoke_in_world(before_backdate_age, isdefined, @__MODULE__, :FooBackdated)
+
+# Test that ambiguous binding intersect the using'd binding's world ranges
+module AmbigWorldTest
+    using Test
+    module M1; export x; end
+    module M2; export x; end
+    using .M1, .M2
+    Core.eval(M1, :(x=1))
+    Core.eval(M2, :(x=2))
+    @test_throws UndefVarError x
+    @test convert(Core.Binding, GlobalRef(@__MODULE__, :x)).partitions.min_world == max(
+        convert(Core.Binding, GlobalRef(M1, :x)).partitions.min_world,
+        convert(Core.Binding, GlobalRef(M2, :x)).partitions.min_world
+    )
+end
+
+module X57316; module Y57316; end; end
+module A57316; using ..X57316.Y57316, .Y57316.Y57316; end
+module B57316; import ..X57316.Y57316, .Y57316.Y57316; end
+module C57316; import ..X57316.Y57316 as Z, .Z.Y57316 as W; end
+@test X57316.Y57316 === A57316.Y57316 === B57316.Y57316 === C57316.Z === C57316.W
+@test !isdefined(A57316, :X57316)
+@test !isdefined(B57316, :X57316)
+@test !isdefined(C57316, :X57316)
+@test !isdefined(C57316, :Y57316)

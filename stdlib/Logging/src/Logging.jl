@@ -12,7 +12,7 @@ module Logging
 # Doing it this way (rather than with import) makes these symbols accessible to
 # tab completion.
 for sym in [
-    :LogLevel, :BelowMinLevel, :AboveMaxLevel,
+    :LogLevel,
     :AbstractLogger,
     :NullLogger,
     :handle_message, :shouldlog, :min_enabled_level, :catch_exceptions,
@@ -54,9 +54,24 @@ const Warn = Base.CoreLogging.Warn
 Alias for [`LogLevel(2000)`](@ref LogLevel).
 """
 const Error = Base.CoreLogging.Error
+"""
+    BelowMinLevel
+
+Alias for [`LogLevel(-1_000_001)`](@ref LogLevel).
+"""
+const BelowMinLevel = Base.CoreLogging.BelowMinLevel
+"""
+    AboveMaxLevel
+
+Alias for [`LogLevel(1_000_001)`](@ref LogLevel).
+"""
+const AboveMaxLevel = Base.CoreLogging.AboveMaxLevel
 
 using Base.CoreLogging:
-    closed_stream
+    closed_stream, ConsoleLogger, default_metafmt
+
+# Some packages use `Logging.default_logcolor`
+const default_logcolor = Base.CoreLogging.default_logcolor
 
 export
     AbstractLogger,
@@ -80,8 +95,6 @@ export
     Error,
     AboveMaxLevel
 
-include("ConsoleLogger.jl")
-
 # The following are also part of the public API, but not exported:
 #
 # 1. Log levels:
@@ -89,9 +102,5 @@ include("ConsoleLogger.jl")
 #
 # 2. AbstractLogger message related functions:
 #  handle_message, shouldlog, min_enabled_level, catch_exceptions,
-
-function __init__()
-    global_logger(ConsoleLogger())
-end
 
 end

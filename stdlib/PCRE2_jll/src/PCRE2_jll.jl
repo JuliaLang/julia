@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/PCRE2_jll.jl
 baremodule PCRE2_jll
 using Base, Libdl
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -13,9 +12,9 @@ export libpcre2_8
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libpcre2_8_handle = C_NULL
-libpcre2_8_path = ""
+artifact_dir::String = ""
+libpcre2_8_handle::Ptr{Cvoid} = C_NULL
+libpcre2_8_path::String = ""
 
 if Sys.iswindows()
     const libpcre2_8 = "libpcre2-8-0.dll"

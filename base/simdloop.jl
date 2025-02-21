@@ -100,7 +100,7 @@ The object iterated over in a `@simd for` loop should be a one-dimensional range
 By using `@simd`, you are asserting several properties of the loop:
 
 * It is safe to execute iterations in arbitrary or overlapping order, with special consideration for reduction variables.
-* Floating-point operations on reduction variables can be reordered, possibly causing different results than without `@simd`.
+* Floating-point operations on reduction variables can be reordered or contracted, possibly causing different results than without `@simd`.
 
 In many cases, Julia is able to automatically vectorize inner for loops without the use of `@simd`.
 Using `@simd` gives the compiler a little extra leeway to make it possible in more situations. In

@@ -136,7 +136,7 @@ defaultport = rand(2000:4000)
                 write(sock, "Hello World\n")
 
                 # test "locked" println to a socket
-                @Experimental.sync begin
+                Experimental.@sync begin
                     for i in 1:100
                         @async println(sock, "a", 1)
                     end
@@ -223,7 +223,8 @@ end
     end
     @test getnameinfo(ip"192.0.2.1") == "192.0.2.1"
     @test getnameinfo(ip"198.51.100.1") == "198.51.100.1"
-    @test getnameinfo(ip"203.0.113.1") == "203.0.113.1"
+    # Temporarily broken due to a DNS issue. See https://github.com/JuliaLang/julia/issues/55008
+    @test_skip getnameinfo(ip"203.0.113.1") == "203.0.113.1"
     @test getnameinfo(ip"0.1.1.1") == "0.1.1.1"
     @test getnameinfo(ip"::ffff:0.1.1.1") == "::ffff:0.1.1.1"
     @test getnameinfo(ip"::ffff:192.0.2.1") == "::ffff:192.0.2.1"
@@ -307,7 +308,7 @@ end
         bind(a, ip"127.0.0.1", randport)
         bind(b, ip"127.0.0.1", randport + 1)
 
-        @Experimental.sync begin
+        Experimental.@sync begin
             let i = 0
                 for _ = 1:30
                     @async let msg = String(recv(a))
@@ -387,7 +388,7 @@ end
         # connect to it
         client_sock = connect(addr, port)
         test_done = false
-        @Experimental.sync begin
+        Experimental.@sync begin
             @async begin
                 Base.wait_readnb(client_sock, 1)
                 test_done || error("Client disconnected prematurely.")
@@ -452,6 +453,8 @@ end
         catch e
             if isa(e, Base.IOError) && Base.uverrorname(e.code) == "EPERM"
                 @warn "UDP IPv4 broadcast test skipped (permission denied upon send, restrictive firewall?)"
+            elseif Sys.isapple() && isa(e, Base.IOError) && Base.uverrorname(e.code) == "EHOSTUNREACH"
+                @warn "UDP IPv4 broadcast test skipped (local network access not granted?)"
             else
                 rethrow()
             end
@@ -602,6 +605,31 @@ end
     end
 end
 
+@testset "fd() methods" begin
+    function valid_fd(x)
+        if Sys.iswindows()
+            return x isa Base.OS_HANDLE
+        elseif !Sys.iswindows()
+            value = Base.cconvert(Cint, x)
+
+            # 2048 is a bit arbitrary, it depends on the process not having too many
+            # file descriptors open. But select() has a limit of 1024 and people
+            # don't seem to hit it too often so let's hope twice that is safe.
+            return value > 0 && value < 2048
+        end
+    end
+
+    sock = TCPSocket(; delay=false)
+    @test valid_fd(fd(sock))
+
+    sock = UDPSocket()
+    bind(sock, Sockets.localhost, 0)
+    @test valid_fd(fd(sock))
+
+    server = listen(Sockets.localhost, 0)
+    @test valid_fd(fd(server))
+end
+
 @testset "TCPServer constructor" begin
     s = Sockets.TCPServer(; delay=false)
     if ccall(:jl_has_so_reuseport, Int32, ()) == 1
@@ -611,11 +639,26 @@ end
 
 @testset "getipaddrs" begin
     @test getipaddr() in getipaddrs()
-    try
-        getipaddr(IPv6) in getipaddrs(IPv6)
-    catch
-        if !isempty(getipaddrs(IPv6))
-            @test "getipaddr(IPv6) errored when it shouldn't have!"
+
+    has_ipv4 = !isempty(getipaddrs(IPv4))
+    if has_ipv4
+        @test getipaddr(IPv4) in getipaddrs(IPv4)
+    else
+        @test_throws "No networking interface available" getipaddr(IPv4)
+    end
+
+    has_ipv6 = !isempty(getipaddrs(IPv6))
+    if has_ipv6
+        @test getipaddr(IPv6) in getipaddrs(IPv6)
+    else
+        @test_throws "No networking interface available" getipaddr(IPv6)
+    end
+
+    @testset "getipaddr() prefers IPv4 over IPv6" begin
+        if has_ipv4
+            @test getipaddr() isa IPv4
+        else
+            @test getipaddr() isa IPv6
         end
     end
 
@@ -682,3 +725,7 @@ end
 
 
 close(sockets_watchdog_timer)
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Sockets))
+end

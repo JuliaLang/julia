@@ -2,7 +2,7 @@
 
 function GitTree(c::GitCommit)
     tree_out = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_commit_tree, :libgit2), Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), tree_out, c)
+    @check ccall((:git_commit_tree, libgit2), Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), tree_out, c)
     GitTree(repository(c), tree_out[])
 end
 
@@ -35,9 +35,9 @@ function treewalk(f, tree::GitTree, post::Bool = false)
             entry = GitTreeEntry(tree, entry_ptr, false)
             return f(root, entry)
         end, Cint, (Cstring, Ptr{Cvoid}, Ref{Vector{Any}}))
-    err = ccall((:git_tree_walk, :libgit2), Cint,
+    err = ccall((:git_tree_walk, libgit2), Cint,
                 (Ptr{Cvoid}, Cint, Ptr{Cvoid}, Any),
-                tree.ptr, post, cbf, payload)
+                tree, post, cbf, payload)
     if err < 0
         err_class, _ = Error.last_error()
         if err_class != Error.Callback
@@ -58,8 +58,10 @@ Return the filename of the object on disk to which `te` refers.
 """
 function filename(te::GitTreeEntry)
     ensure_initialized()
-    str = ccall((:git_tree_entry_name, :libgit2), Cstring, (Ptr{Cvoid},), te.ptr)
-    str != C_NULL && return unsafe_string(str)
+    GC.@preserve te begin
+        str = ccall((:git_tree_entry_name, libgit2), Cstring, (Ptr{Cvoid},), te.ptr)
+        str != C_NULL && return unsafe_string(str)
+    end
     return nothing
 end
 
@@ -70,7 +72,7 @@ Return the UNIX filemode of the object on disk to which `te` refers as an intege
 """
 function filemode(te::GitTreeEntry)
     ensure_initialized()
-    return ccall((:git_tree_entry_filemode, :libgit2), Cint, (Ptr{Cvoid},), te.ptr)
+    return ccall((:git_tree_entry_filemode, libgit2), Cint, (Ptr{Cvoid},), te)
 end
 
 """
@@ -81,7 +83,7 @@ one of the types which [`objtype`](@ref) returns, e.g. a `GitTree` or `GitBlob`.
 """
 function entrytype(te::GitTreeEntry)
     ensure_initialized()
-    otype = ccall((:git_tree_entry_type, :libgit2), Cint, (Ptr{Cvoid},), te.ptr)
+    otype = ccall((:git_tree_entry_type, libgit2), Cint, (Ptr{Cvoid},), te)
     return objtype(Consts.OBJECT(otype))
 end
 
@@ -93,7 +95,7 @@ Return the [`GitHash`](@ref) of the object to which `te` refers.
 function entryid(te::GitTreeEntry)
     ensure_initialized()
     GC.@preserve te begin
-        oid_ptr = ccall((:git_tree_entry_id, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), te.ptr)
+        oid_ptr = ccall((:git_tree_entry_id, libgit2), Ptr{UInt8}, (Ptr{Cvoid},), te.ptr)
         oid = GitHash(oid_ptr)
     end
     return oid
@@ -101,7 +103,7 @@ end
 
 function count(tree::GitTree)
     ensure_initialized()
-    return ccall((:git_tree_entrycount, :libgit2), Csize_t, (Ptr{Cvoid},), tree.ptr)
+    return ccall((:git_tree_entrycount, libgit2), Csize_t, (Ptr{Cvoid},), tree)
 end
 
 function Base.getindex(tree::GitTree, i::Integer)
@@ -109,9 +111,9 @@ function Base.getindex(tree::GitTree, i::Integer)
         throw(BoundsError(tree, i))
     end
     ensure_initialized()
-    te_ptr = ccall((:git_tree_entry_byindex, :libgit2),
+    te_ptr = ccall((:git_tree_entry_byindex, libgit2),
                    Ptr{Cvoid},
-                   (Ptr{Cvoid}, Csize_t), tree.ptr, i-1)
+                   (Ptr{Cvoid}, Csize_t), tree, i-1)
     return GitTreeEntry(tree, te_ptr, false)
 end
 
@@ -133,7 +135,7 @@ function (::Type{T})(te::GitTreeEntry) where T<:GitObject
     ensure_initialized()
     repo = repository(te)
     obj_ptr_ptr = Ref{Ptr{Cvoid}}(C_NULL)
-    @check ccall((:git_tree_entry_to_object, :libgit2), Cint,
+    @check ccall((:git_tree_entry_to_object, libgit2), Cint,
                   (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Ptr{Cvoid}),
                    obj_ptr_ptr, repo, te)
     return T(repo, obj_ptr_ptr[])
@@ -162,7 +164,7 @@ function _getindex(tree::GitTree, target::AbstractString)
     end
 
     entry = Ref{Ptr{Cvoid}}(C_NULL)
-    err = ccall((:git_tree_entry_bypath, :libgit2), Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring), entry, tree, target)
+    err = ccall((:git_tree_entry_bypath, libgit2), Cint, (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cstring), entry, tree, target)
     err == Int(Error.ENOTFOUND) && return nothing
     err < 0 && throw(Error.GitError(err))
     entry = GitTreeEntry(tree, entry[], true #= N.B.: Most other lookups need false here =#)

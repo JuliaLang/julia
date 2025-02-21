@@ -18,6 +18,21 @@ LIBUV_BUILDDIR := $(BUILDDIR)/$(LIBUV_SRC_DIR)
 ifneq ($(CLDFLAGS)$(SANITIZE_LDFLAGS),)
 $(LIBUV_BUILDDIR)/build-configured: LDFLAGS:=$(LDFLAGS) $(CLDFLAGS) $(SANITIZE_LDFLAGS)
 endif
+
+ifeq ($(OS), emscripten)
+$(LIBUV_BUILDDIR)/build-configured: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
+	mkdir -p $(dir $@)
+	cd $(dir $@) && cmake -E env \
+		CMAKE_C_FLAGS="-pthread" \
+		CMAKE_SHARED_LINKER_FLAGS="-sTOTAL_MEMORY=65536000 -pthread" \
+		CMAKE_EXE_LINKER_FLAGS="-sTOTAL_MEMORY=65536000 -pthread" \
+		emcmake cmake $(dir $<) $(CMAKE_COMMON) -DBUILD_TESTING=OFF
+	echo 1 > $@
+
+$(LIBUV_BUILDDIR)/build-compiled: $(LIBUV_BUILDDIR)/build-configured
+	emmake $(MAKE) -C $(dir $<) $(UV_MFLAGS)
+	echo 1 > $@
+else
 $(LIBUV_BUILDDIR)/build-configured: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracted
 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/aclocal.m4 # touch a few files to prevent autogen from getting called
 	touch -c $(SRCCACHE)/$(LIBUV_SRC_DIR)/Makefile.in
@@ -30,6 +45,7 @@ $(LIBUV_BUILDDIR)/build-configured: $(SRCCACHE)/$(LIBUV_SRC_DIR)/source-extracte
 $(LIBUV_BUILDDIR)/build-compiled: $(LIBUV_BUILDDIR)/build-configured
 	$(MAKE) -C $(dir $<) $(UV_MFLAGS)
 	echo 1 > $@
+endif
 
 $(LIBUV_BUILDDIR)/build-checked: $(LIBUV_BUILDDIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))

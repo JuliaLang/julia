@@ -4,7 +4,6 @@
 
 baremodule CompilerSupportLibraries_jll
 using Base, Libdl, Base.BinaryPlatforms
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -14,15 +13,15 @@ export libgfortran, libstdcxx, libgomp
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libgfortran_handle = C_NULL
-libgfortran_path = ""
-libstdcxx_handle = C_NULL
-libstdcxx_path = ""
-libgomp_handle = C_NULL
-libgomp_path = ""
-libssp_handle = C_NULL
-libssp_path = ""
+artifact_dir::String = ""
+libgcc_s_handle::Ptr{Cvoid} = C_NULL
+libgcc_s_path::String = ""
+libgfortran_handle::Ptr{Cvoid} = C_NULL
+libgfortran_path::String = ""
+libstdcxx_handle::Ptr{Cvoid} = C_NULL
+libstdcxx_path::String = ""
+libgomp_handle::Ptr{Cvoid} = C_NULL
+libgomp_path::String = ""
 
 if Sys.iswindows()
     if arch(HostPlatform()) == "x86_64"
@@ -64,8 +63,7 @@ function __init__()
     global libgomp_handle = dlopen(libgomp)
     global libgomp_path = dlpath(libgomp_handle)
     @static if libc(HostPlatform()) != "musl"
-        global libssp_handle = dlopen(libssp)
-        global libssp_path = dlpath(libssp_handle)
+        dlopen(libssp; throw_error = false)
     end
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libgcc_s_path)

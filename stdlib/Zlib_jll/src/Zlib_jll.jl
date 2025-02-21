@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/Zlib_jll.jl
 baremodule Zlib_jll
 using Base, Libdl
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
@@ -13,9 +12,9 @@ export libz
 # These get calculated in __init__()
 const PATH = Ref("")
 const LIBPATH = Ref("")
-artifact_dir = ""
-libz_handle = C_NULL
-libz_path = ""
+artifact_dir::String = ""
+libz_handle::Ptr{Cvoid} = C_NULL
+libz_path::String = ""
 
 if Sys.iswindows()
     const libz = "libz.dll"
