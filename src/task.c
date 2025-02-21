@@ -447,11 +447,21 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
 #endif
 
     int killed = jl_atomic_load_relaxed(&lastt->_state) != JL_TASK_STATE_RUNNABLE;
-    if (!t->ctx.started && !t->ctx.copy_stack) {
-        // may need to allocate the stack
-        if (t->ctx.stkbuf == NULL) {
-            t->ctx.stkbuf = jl_malloc_stack(&t->ctx.bufsz, t);
-            if (t->ctx.stkbuf == NULL) {
+    if (!t->ctx.started && !t->ctx.copy_stack && t->ctx.stkbuf == NULL) {
+        // need to allocate the stack
+        void *stkbuf = killed && !lastt->ctx.copy_stack && lastt != ptls->root_task && lastt->ctx.bufsz >= t->ctx.bufsz && t->ctx.bufsz <= lastt->ctx.bufsz * 1.5 ? lastt->ctx.stkbuf : NULL;
+        if (stkbuf) {
+            // Directly reuse our current stkbuf for the new task if possible (about the
+            // right size and using the right allocator).
+            // The jl_start_fiber_set call will usually mutate some of that memory just
+            // before we jump to it again, but it shouldn't be too close to our current
+            // frame to matter.
+            t->ctx.bufsz = lastt->ctx.bufsz;
+            lastt->ctx.stkbuf = NULL;
+        }
+        else {
+            stkbuf = jl_malloc_stack(&t->ctx.bufsz, t);
+            if (stkbuf == NULL) {
 #ifdef COPY_STACKS
                 // fall back to stack copying if mmap fails
                 t->ctx.copy_stack = 1;
@@ -462,6 +472,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
 #endif
             }
         }
+        t->ctx.stkbuf = stkbuf;
     }
 
     union {

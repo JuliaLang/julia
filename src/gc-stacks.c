@@ -146,7 +146,8 @@ JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz)
 void jl_release_task_stack(jl_ptls_t ptls, jl_task_t *task)
 {
     // avoid adding an original thread stack to the free list
-    if (task == ptls->root_task && !task->ctx.copy_stack)
+    assert(!task->ctx.copy_stack);
+    if (task == ptls->root_task)
         return;
     void *stkbuf = task->ctx.stkbuf;
     size_t bufsz = task->ctx.bufsz;
