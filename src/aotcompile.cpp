@@ -1992,7 +1992,7 @@ void jl_dump_native_impl(void *native_code,
 
     CodeModel::Model CMModel = CodeModel::Small;
     if (TheTriple.isPPC() || TheTriple.isRISCV() ||
-        (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())) {
+        (TheTriple.isX86() && TheTriple.isArch64Bit() && (TheTriple.isOSLinux() || TheTriple.isOSDarwin()))) {
         // On PPC the small model is limited to 16bit offsets. For very large images the small code model
         CMModel = CodeModel::Medium; //  isn't good enough on x86 so use Medium, it has no cost because only the image goes in .ldata
     }
