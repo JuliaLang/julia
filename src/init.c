@@ -383,6 +383,8 @@ JL_DLLEXPORT void *jl_libjulia_internal_handle;
 JL_DLLEXPORT void *jl_libjulia_handle;
 JL_DLLEXPORT void *jl_RTLD_DEFAULT_handle;
 JL_DLLEXPORT void *jl_exe_handle;
+JL_DLLEXPORT void *jl_base_image_handle; // Used when the sysimage is bundled as an executable or a standalone dylib
+
 #ifdef _OS_WINDOWS_
 void *jl_ntdll_handle;
 void *jl_kernel32_handle;
@@ -782,7 +784,6 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     // so we need to do this once early (before threads)
     rec_backtrace(NULL, 0, 0);
 #endif
-
     libsupport_init();
     jl_safepoint_init();
     jl_page_size = jl_getpagesize();
@@ -869,9 +870,10 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     JL_TIMING(JULIA_INIT, JULIA_INIT);
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
+    // If the image is in memory then jl_base_image_handle must be set before calling init
     if (rel == JL_IMAGE_IN_MEMORY) {
-        jl_set_sysimg_so(jl_exe_handle);
-        jl_options.image_file = jl_options.julia_bin;
+        jl_set_sysimg_so(jl_base_image_handle);
+        jl_options.image_file = jl_options.julia_bin; // XXX: Use dladdr on base_image_handle?
     }
     else if (jl_options.image_file)
         jl_preload_sysimg_so(jl_options.image_file);
