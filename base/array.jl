@@ -2809,14 +2809,14 @@ function indexin(a, b::AbstractArray)
     ]
 end
 
-function _findin(a::Union{AbstractArray, Tuple}, b)
+function _findin(a::Union{AbstractArray, Tuple}, b::AbstractSet)
     ind  = Vector{eltype(keys(a))}()
-    bset = Set(b)
     @inbounds for (i,ai) in pairs(a)
-        ai in bset && push!(ind, i)
+        ai in b && push!(ind, i)
     end
     ind
 end
+_findin(a::Union{AbstractArray, Tuple}, b) = _findin(a, Set(b))
 
 # If two collections are already sorted, _findin can be computed with
 # a single traversal of the two collections. This is much faster than
