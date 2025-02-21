@@ -37,6 +37,7 @@
 #include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/ADCE.h>
+#include "llvm/Transforms/Scalar/AlignmentFromAssumptions.h"
 #include <llvm/Transforms/Scalar/AnnotationRemarks.h>
 #include <llvm/Transforms/Scalar/BDCE.h>
 #include "llvm/Transforms/Scalar/ConstraintElimination.h"
@@ -49,6 +50,7 @@
 #include <llvm/Transforms/Scalar/GVN.h>
 #include <llvm/Transforms/Scalar/IndVarSimplify.h>
 #include <llvm/Transforms/Scalar/InductiveRangeCheckElimination.h>
+#include "llvm/Transforms/Scalar/InferAlignment.h"
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Scalar/JumpThreading.h>
 #include <llvm/Transforms/Scalar/LICM.h>
@@ -59,6 +61,7 @@
 #include <llvm/Transforms/Scalar/LoopLoadElimination.h>
 #include <llvm/Transforms/Scalar/LoopRotation.h>
 #include <llvm/Transforms/Scalar/LoopSimplifyCFG.h>
+#include <llvm/Transforms/Scalar/LoopUnrollAndJamPass.h>
 #include <llvm/Transforms/Scalar/LoopUnrollPass.h>
 #include <llvm/Transforms/Scalar/LowerConstantIntrinsics.h>
 #include <llvm/Transforms/Scalar/LowerExpectIntrinsic.h>
@@ -527,19 +530,22 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
         FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/false, /*UseBlockFrequencyInfo=*/false));
         FPM.addPass(LoopDistributePass());
         FPM.addPass(InjectTLIMappings());
+        FPM.addPass(InferAlignmentPass());
         FPM.addPass(LoopVectorizePass());
         FPM.addPass(LoopLoadEliminationPass());
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
+        FPM.addPass(createFunctionToLoopPassAdaptor(LoopUnrollAndJamPass(O.getSpeedupLevel())));
         FPM.addPass(createFunctionToLoopPassAdaptor(LICMPass(LICMOptions()), /*UseMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
         FPM.addPass(EarlyCSEPass());
         FPM.addPass(CorrelatedValuePropagationPass());
         FPM.addPass(InstCombinePass());
         FPM.addPass(SLPVectorizerPass());
         FPM.addPass(VectorCombinePass());
+        FPM.addPass(InferAlignmentPass());
         invokeVectorizerCallbacks(FPM, PB, O);
-        FPM.addPass(LoopUnrollPass(LoopUnrollOptions(O.getSpeedupLevel(), /*OnlyWhenForced = */ false, /*ForgetSCEV = */false)));
         FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
         FPM.addPass(InstSimplifyPass());
+        FPM.addPass(AlignmentFromAssumptionsPass());
         FPM.addPass(AfterVectorizationMarkerPass());
     }
     FPM.addPass(AfterVectorizationMarkerPass());
