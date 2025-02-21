@@ -2691,8 +2691,7 @@
                           (if (null? run) '()
                               (list `(call (core tuple) ,.(reverse run))))
                           (let ((x (car a)))
-                            (if (and (length= x 2)
-                                     (eq? (car x) '...))
+                            (if (vararg? x)
                                 (if (null? run)
                                     (list* (cadr x)
                                            (tuple-wrap (cdr a) '()))
@@ -2814,7 +2813,10 @@
    '.>>>=   lower-update-op
 
    '|...|
-   (lambda (e) (error "\"...\" expression outside call"))
+   (lambda (e)
+     (if (not (length= e 2))
+         (error "wrong number of expressions following \"...\""))
+     (error "\"...\" expression outside call"))
 
    '$
    (lambda (e) (error "\"$\" expression outside quote"))
