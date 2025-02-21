@@ -1538,6 +1538,9 @@ end
             @test all((t -> ===(t...)), zip(x^y, p[y + 1]))
         end
     end
+    # issue #57464
+    @test Float32(1.1)^typemin(Int)
+    @test Float16(1.1)^typemin(Int)
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.

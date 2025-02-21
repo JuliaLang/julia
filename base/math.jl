@@ -1245,6 +1245,8 @@ end
 function ^(x::Union{Float16,Float32}, n::Integer)
     n == -2 && return (i=inv(x); i*i)
     n == 3 && return x*x*x #keep compatibility with literal_pow
+    # It won't work to do `inv(x)^-n` if `n` is typemin.
+    n == typemin(typeof(n)) && return (x^cld(n,2))*(x^fld(n,2))
     n < 0 && return oftype(x, Base.power_by_squaring(inv(widen(x)),-n))
     oftype(x, Base.power_by_squaring(widen(x),n))
 end
