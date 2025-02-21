@@ -449,7 +449,7 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     int killed = jl_atomic_load_relaxed(&lastt->_state) != JL_TASK_STATE_RUNNABLE;
     if (!t->ctx.started && !t->ctx.copy_stack && t->ctx.stkbuf == NULL) {
         // need to allocate the stack
-        void *stkbuf = killed && !lastt->ctx.copy_stack && lastt != ptls->root_task && lastt->ctx.bufsz >= t->ctx.bufsz && t->ctx.bufsz <= lastt->ctx.bufsz * 1.5 ? lastt->ctx.stkbuf : NULL;
+        void *stkbuf = killed && !lastt->ctx.copy_stack && lastt != ptls->root_task && t->ctx.bufsz <= lastt->ctx.bufsz && lastt->ctx.bufsz <= t->ctx.bufsz * 1.5 ? lastt->ctx.stkbuf : NULL;
         if (stkbuf) {
             // Directly reuse our current stkbuf for the new task if possible (about the
             // right size and using the right allocator).
