@@ -1237,21 +1237,22 @@ let text =
         Long docs
         """,
     md = Markdown.parse(text)
-    @test md == REPL.trimdocs(md, false)
     @test !isa(md.content[end], REPL.Message)
-    mdbrief = REPL.trimdocs(md, true)
-    @test length(mdbrief.content) == 3
+    mdbrief = REPL.trimdocs(md)
+    @test length(mdbrief.content) == 2
     @test isa(mdbrief.content[1], Markdown.Code)
     @test isa(mdbrief.content[2], Markdown.Paragraph)
+    REPL.add_extended_help!(mdbrief, "brief_extended")
+    @test length(mdbrief.content) == 3
     @test isa(mdbrief.content[3], REPL.Message)
-    @test occursin("??", mdbrief.content[3].msg)
+    @test occursin("help?> ?brief_extended", mdbrief.content[3].msg)
 end
 
 # issue #35216: empty and non-strings in H1 headers
 let emptyH1 = Markdown.parse("# "),
     codeH1 = Markdown.parse("# `hello`")
-    @test emptyH1 == REPL.trimdocs(emptyH1, false) == REPL.trimdocs(emptyH1, true)
-    @test codeH1 == REPL.trimdocs(codeH1, false) == REPL.trimdocs(codeH1, true)
+    @test emptyH1 == REPL.trimdocs(emptyH1)
+    @test codeH1 == REPL.trimdocs(codeH1)
 end
 
 module BriefExtended
@@ -1279,18 +1280,21 @@ f_plain() = nothing
 f_html() = nothing
 end # module BriefExtended
 
-buf = IOBuffer()
-md = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f"))
-@test length(md.content) == 2 && isa(md.content[2], REPL.Message)
-buf = IOBuffer()
-md = Base.eval(REPL._helpmode(buf, "?$(@__MODULE__).BriefExtended.f"))
-@test length(md.content) == 1 && length(md.content[1].content[1].content) == 4
-buf = IOBuffer()
-txt = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f_plain"))
-@test !isempty(sprint(show, txt))
-buf = IOBuffer()
-html = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f_html"))
-@test !isempty(sprint(show, html))
+let md = Base.eval(REPL._helpmode(devnull, "$(@__MODULE__).BriefExtended.f"))
+    @test length(md.content) == 2 && isa(md.content[2], REPL.Message)
+end
+let md = Base.eval(REPL._helpmode(devnull, "?$(@__MODULE__).BriefExtended.f"))
+    @test length(md.content) == 2
+    @test occursin("# Extended help", sprint(show, md.content[1]))
+    @test occursin("Long docs", sprint(show, md.content[1]))
+    @test occursin("Extended information found", sprint(show, md.content[2]))
+end
+let txt = Base.eval(REPL._helpmode(devnull, "$(@__MODULE__).BriefExtended.f_plain"))
+    @test !isempty(sprint(show, txt))
+end
+let html = Base.eval(REPL._helpmode(devnull, "$(@__MODULE__).BriefExtended.f_html"))
+    @test !isempty(sprint(show, html))
+end
 
 # PR #27562
 fake_repl() do stdin_write, stdout_read, repl
