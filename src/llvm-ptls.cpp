@@ -5,6 +5,9 @@
 #include "support/dtypes.h"
 #include "passes.h"
 
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/Support/Debug.h"
 #include <llvm-c/Core.h>
 #include <llvm-c/Types.h>
 
@@ -143,7 +146,17 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         return;
     }
     if (or_new) {
-        // pgcstack();
+        // pgcstack = pgstack_intrinsic()
+
+
+        // if (offset != 0)
+        //     pgcstack = tp + offset; // fast
+        // else
+        // pgcstack_getter = load pgcstack_func_slot
+        // if pgcstack_getter == nullptr // Runtime not initialized
+        //      pgcstack = nullptr
+        // else
+        //      pgcstack = pgcstack_getter();
         // if (pgcstack != nullptr)
         //     last_gc_state = emit_gc_unsafe_enter(ctx);
         //     phi = pgcstack;        // fast
@@ -169,17 +182,29 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         if (CFGModified)
             *CFGModified = true;
         // emit slow branch code
-        CallInst *adopt = cast<CallInst>(pgcstack->clone());
         Function *adoptFunc = M->getFunction(XSTR(jl_adopt_thread));
         if (adoptFunc == NULL) {
-            adoptFunc = Function::Create(pgcstack_getter->getFunctionType(),
+            adoptFunc = Function::Create(FunctionType::get(builder.getPtrTy(), { builder.getPtrTy()}, false),
                 pgcstack_getter->getLinkage(), pgcstack_getter->getAddressSpace(),
                 XSTR(jl_adopt_thread), M);
             adoptFunc->copyAttributesFrom(pgcstack_getter);
             adoptFunc->copyMetadata(pgcstack_getter, 0);
         }
-        adopt->setCalledFunction(adoptFunc);
-        adopt->insertBefore(slowTerm);
+        builder.SetInsertPoint(slowTerm);
+        Value* handle = Constant::getNullValue(builder.getPtrTy());
+        if (imaging_mode) {
+            // Adopt thread takes in a handle to the sysimage and this is the easiest way to get it.
+            Function *dladdr = M->getFunction(XSTR(jl_find_dynamic_library_by_addr)); // gets handle to sysimage
+            if (dladdr == NULL) {
+                dladdr = Function::Create(FunctionType::get(builder.getPtrTy(), { builder.getPtrTy()}, false),
+                    pgcstack_getter->getLinkage(), pgcstack_getter->getAddressSpace(),
+                    XSTR(jl_find_dynamic_library_by_addr), M);
+            }
+            auto this_func = builder.GetInsertBlock()->getParent();
+            handle = builder.CreateCall(dladdr, {ConstantExpr::getBitCast(this_func, builder.getPtrTy())});
+        }
+
+        auto adopt = builder.CreateCall(adoptFunc, {handle});
         phi->addIncoming(adopt, slowTerm->getParent());
         // emit fast branch code
         builder.SetInsertPoint(fastTerm->getParent());
@@ -210,17 +235,20 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
 
     if (imaging_mode) {
         IRBuilder<> builder(pgcstack);
+        SmallVector<uint32_t, 2> Weights{9, 1};
+        MDBuilder MDB(pgcstack->getContext());
         if (jl_tls_elf_support) {
             // if (offset != 0)
             //     pgcstack = tp + offset; // fast
             // else
-            //     pgcstack = getter();    // slow
+            //     if pgcstack_getter == null
+            //        pgcstack = null;    // slow
+            //     else
+            //        pgcstack = pgcstack_getter();    // slow
             auto offset = builder.CreateLoad(T_size, pgcstack_offset);
             offset->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             offset->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
             auto cmp = builder.CreateICmpNE(offset, Constant::getNullValue(offset->getType()));
-            MDBuilder MDB(pgcstack->getContext());
-            SmallVector<uint32_t, 2> Weights{9, 1};
             TerminatorInst *fastTerm;
             TerminatorInst *slowTerm;
             SplitBlockAndInsertIfThenElse(cmp, pgcstack, &fastTerm, &slowTerm,
@@ -237,14 +265,30 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             // refresh the basic block in the builder
             builder.SetInsertPoint(pgcstack);
             auto getter = builder.CreateLoad(T_pgcstack_getter, pgcstack_func_slot);
+            auto phi_value = cast<Instruction>(pgcstack);
+            if (or_new) {
+                // if pgcstack_func_slot is not initialized we set pgcstack to null to trigger the slow path
+                TerminatorInst *nonNullTerm;
+                TerminatorInst *nullTerm;
+                auto is_null = builder.CreateICmpEQ(getter, Constant::getNullValue(builder.getPtrTy()));
+                SplitBlockAndInsertIfThenElse(is_null, pgcstack, &nullTerm, &nonNullTerm,
+                                    MDB.createBranchWeights(Weights));
+                builder.SetInsertPoint(pgcstack);
+                auto phi2 = builder.CreatePHI(T_pppjlvalue, 2, "pgcstack");
+                pgcstack->moveBefore(nonNullTerm);
+                phi2->addIncoming(pgcstack, nonNullTerm->getParent());
+                phi2->addIncoming(Constant::getNullValue(T_pppjlvalue), nullTerm->getParent());
+                phi_value = phi2;
+                builder.SetInsertPoint(pgcstack);
+                // Check if pgcstack_func_slot is initialized
+            }
             getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
             getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
             pgcstack->setCalledFunction(pgcstack->getFunctionType(), getter);
             set_pgcstack_attrs(pgcstack);
 
             phi->addIncoming(fastTLS, fastTLS->getParent());
-            phi->addIncoming(pgcstack, pgcstack->getParent());
-
+            phi->addIncoming(phi_value, phi_value->getParent());
             return;
         }
         // In imaging mode, we emit the function address as a load of a static
@@ -252,6 +296,21 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         // This way we can bypass the extra indirection in `jl_get_pgcstack`
         // since we may not know which getter function to use ahead of time.
         auto getter = builder.CreateLoad(T_pgcstack_getter, pgcstack_func_slot);
+        if (or_new) {
+            // if pgcstack_func_slot is not initialized we set pgcstack to null to trigger the slow path
+            TerminatorInst *nonNullTerm;
+            TerminatorInst *nullTerm;
+            auto is_null = builder.CreateICmpEQ(getter, Constant::getNullValue(builder.getPtrTy()));
+            SplitBlockAndInsertIfThenElse(is_null, pgcstack, &nullTerm, &nonNullTerm,
+                                MDB.createBranchWeights(Weights));
+            builder.SetInsertPoint(pgcstack);
+            auto phi2 = builder.CreatePHI(T_pppjlvalue, 2, "pgcstack");
+            pgcstack->moveBefore(nonNullTerm);
+            pgcstack->replaceAllUsesWith(phi2);
+            phi2->addIncoming(pgcstack, nonNullTerm->getParent());
+            phi2->addIncoming(Constant::getNullValue(T_pppjlvalue), nullTerm->getParent());
+            builder.SetInsertPoint(pgcstack);
+        }
         getter->setMetadata(llvm::LLVMContext::MD_tbaa, tbaa_const);
         getter->setMetadata(llvm::LLVMContext::MD_invariant_load, MDNode::get(pgcstack->getContext(), None));
         if (TargetTriple.isOSDarwin()) {

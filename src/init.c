@@ -238,7 +238,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     jl_task_t *ct = jl_get_current_task();
 
     if (ct == NULL && jl_base_module) {
-        ct = container_of(jl_adopt_thread(), jl_task_t, gcstack);
+        ct = container_of(jl_adopt_thread(NULL), jl_task_t, gcstack);
     }
     else if (ct != NULL) {
         // we are about to start tearing everything down, so lets try not to get
