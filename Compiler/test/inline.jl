@@ -4,6 +4,7 @@ using Test
 using Base.Meta
 using Core: ReturnNode
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
