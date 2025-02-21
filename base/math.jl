@@ -1277,6 +1277,7 @@ end
 function ^(x::Float32, n::Integer)
     n == -2 && return (i=inv(x); i*i)
     n == 3 && return x*x*x #keep compatibility with literal_pow
+    n == typemin(typeof(n)) && return (x^cld(n,2))*(x^fld(n,2))
     n < 0 && return Float32(Base.power_by_squaring(inv(Float64(x)),-n))
     Float32(Base.power_by_squaring(Float64(x),n))
 end
