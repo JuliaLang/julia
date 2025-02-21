@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/REPL/docs/src/index.md"
+```
+
 # The Julia REPL
 
 Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into
@@ -7,8 +11,9 @@ shell modes. The REPL can be started by simply calling `julia` with no arguments
 on the executable:
 
 ```@eval
+using REPL
 io = IOBuffer()
-Base.banner(io)
+REPL.banner(io)
 banner = String(take!(io))
 import Markdown
 Markdown.parse("```\n\$ julia\n\n$(banner)\njulia>\n```")
@@ -45,14 +50,16 @@ julia> ans
 
 In Julia mode, the REPL supports something called *prompt pasting*. This activates when pasting text
 that starts with `julia> ` into the REPL. In that case, only expressions starting with `julia> ` (as
-well as the other REPL mode prompts: `shell> `, `help?> `, `pkg>` ) are parsed, but others are
+well as the other REPL mode prompts: `shell> `, `help?> `, `pkg> ` ) are parsed, but others are
 removed. This makes it possible to paste a chunk of text that has been copied from a REPL session
 without having to scrub away prompts and outputs. This feature is enabled by default but can be
 disabled or enabled at will with `REPL.enable_promptpaste(::Bool)`. If it is enabled, you can try it
 out by pasting the code block above this paragraph straight into the REPL. This feature does not
 work on the standard Windows command prompt due to its limitation at detecting when a paste occurs.
 
-Objects are printed at the REPL using the [`show`](@ref) function with a specific [`IOContext`](@ref).
+A non-[`nothing`](@ref) result of executing an expression is displayed by the REPL using the [`show`](@ref) function
+with a specific [`IOContext`](@ref) (via [`display`](@ref), which defaults to calling
+`show(io, MIME("text/plain"), ans)`, which in turn defaults to `show(io, ans)`).
 In particular, the `:limit` attribute is set to `true`.
 Other attributes can receive in certain `show` methods a default value if it's not already set,
 like `:compact`.
@@ -61,7 +68,7 @@ It's possible, as an experimental feature, to specify the attributes used by the
 
 ```julia-repl
 julia> rand(2, 2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.8833    0.329197
  0.719708  0.59114
 
@@ -71,7 +78,7 @@ julia> show(IOContext(stdout, :compact => false), "text/plain", rand(2, 2))
 julia> Base.active_repl.options.iocontext[:compact] = false;
 
 julia> rand(2, 2)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  0.2083967319174056  0.13330606013126012
  0.6244375177790158  0.9777957560761545
 ```
@@ -312,7 +319,7 @@ Users should refer to `LineEdit.jl` to discover the available actions on key inp
 
 ## Tab completion
 
-In both the Julian and help modes of the REPL, one can enter the first few characters of a function
+In the Julian, pkg and help modes of the REPL, one can enter the first few characters of a function
 or type and then press the tab key to get a list all matches:
 
 ```julia-repl
@@ -334,6 +341,13 @@ julia> mapfold[TAB]
 mapfoldl mapfoldr
 ```
 
+When a single complete tab-complete result is available at the end of an input line and 2 or more characters
+have been typed, a hint of the completion will show in a lighter color.
+This can be disabled via `Base.active_repl.options.hint_tab_completes = false`.
+
+!!! compat "Julia 1.11"
+    Tab-complete hinting was added in Julia 1.11
+
 Like other components of the REPL, the search is case-sensitive:
 
 ```julia-repl
@@ -354,13 +368,13 @@ julia> π
 
 julia> e\_1[TAB] = [1,0]
 julia> e₁ = [1,0]
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1
  0
 
 julia> e\^1[TAB] = [1 0]
 julia> e¹ = [1 0]
-1×2 Array{Int64,2}:
+1×2 Matrix{Int64}:
  1  0
 
 julia> \sqrt[TAB]2     # √ is equivalent to the sqrt function
@@ -570,8 +584,9 @@ Main
 
 It is possible to change this contextual module via the function
 `REPL.activate(m)` where `m` is a `Module` or by typing the module in the REPL
-and pressing the keybinding Alt-m (the cursor must be on the module name). The
-active module is shown in the prompt:
+and pressing the keybinding Alt-m with the cursor on the module name (Esc-m on MacOS).
+Pressing the keybinding on an empty prompt toggles the context between the previously active
+non-`Main` module and `Main`. The active module is shown in the prompt (unless it is `Main`):
 
 ```julia-repl
 julia> using REPL
@@ -591,9 +606,13 @@ julia> Core<Alt-m> # using the keybinding to change module
 
 (Core) julia>
 
-(Core) julia> Main<Alt-m> # going back to Main via keybinding
+(Core) julia> <Alt-m> # going back to Main via keybinding
 
 julia>
+
+julia> <Alt-m> # going back to previously-active Core via keybinding
+
+(Core) julia>
 ```
 
 Functions that take an optional module argument often defaults to the REPL

@@ -6,24 +6,6 @@
 #include "../src/julia_fasttls.h"
 
 #ifdef _OS_WINDOWS_
-/* We need to reimplement a bunch of standard library stuff on windows,
- * but we want to make sure that it doesn't conflict with the actual implementations
- * once those get linked into this process. */
-#define fwrite loader_fwrite
-#define fputs loader_fputs
-#define exit loader_exit
-#define strlen loader_strlen
-#define wcslen loader_wcslen
-#define strncat loader_strncat
-#define memcpy loader_memcpy
-#define dirname loader_dirname
-#define strchr loader_strchr
-#define malloc loader_malloc
-#define realloc loader_realloc
-#define free loader_free
-#endif
-
-#ifdef _OS_WINDOWS_
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

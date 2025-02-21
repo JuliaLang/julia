@@ -13,7 +13,7 @@ you add it to `JL_TIMING_OWNERS` (and possibly `JL_TIMING_EVENTS`).
 
 ### Dynamically Enabling and Disabling Zones
 
-The `JULIA_TIMING_SUBSYSTEMS` environment variable allows you to enable or disable zones for a specific Julia run. For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable the `INFERENCE`
+The [`JULIA_TIMING_SUBSYSTEMS`](@ref JULIA_TIMING_SUBSYSTEMS) environment variable allows you to enable or disable zones for a specific Julia run. For instance, setting the variable to `+GC,-INFERENCE` will enable the `GC` zones and disable the `INFERENCE`
 zones.
 
 ## Tracy Profiler
@@ -39,7 +39,13 @@ run(TracyProfiler_jll.tracy())
 !!! note
     On macOS, you may want to set the `TRACY_DPI_SCALE` environment variable to `1.0` if the UI elements in the profiler appear excessively large.
 
-To run a "headless" instance that saves the trace to disk, use `TracyProfiler_jll.capture() -o mytracefile.tracy` instead.
+To run a "headless" instance that saves the trace to disk, use
+
+```julia
+run(`$(TracyProfiler_jll.capture()) -o mytracefile.tracy`)
+```
+
+instead.
 
 For information on using the Tracy UI, refer to the Tracy manual.
 

@@ -14,8 +14,8 @@ function message(c::GitCommit, raw::Bool=false)
     ensure_initialized()
     GC.@preserve c begin
         local msg_ptr::Cstring
-        msg_ptr = raw ? ccall((:git_commit_message_raw, :libgit2), Cstring, (Ptr{Cvoid},), c.ptr) :
-                        ccall((:git_commit_message, :libgit2), Cstring, (Ptr{Cvoid},), c.ptr)
+        msg_ptr = raw ? ccall((:git_commit_message_raw, libgit2), Cstring, (Ptr{Cvoid},), c.ptr) :
+                        ccall((:git_commit_message, libgit2), Cstring, (Ptr{Cvoid},), c.ptr)
         if msg_ptr == C_NULL
             return nothing
         end
@@ -33,7 +33,7 @@ the person who made changes to the relevant file(s). See also [`committer`](@ref
 function author(c::GitCommit)
     ensure_initialized()
     GC.@preserve c begin
-        ptr = ccall((:git_commit_author, :libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
+        ptr = ccall((:git_commit_author, libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
         @assert ptr != C_NULL
         sig = Signature(ptr)
     end
@@ -51,7 +51,7 @@ a `committer` who committed it.
 function committer(c::GitCommit)
     ensure_initialized()
     GC.@preserve c begin
-        ptr = ccall((:git_commit_committer, :libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
+        ptr = ccall((:git_commit_committer, libgit2), Ptr{SignatureStruct}, (Ptr{Cvoid},), c.ptr)
         sig = Signature(ptr)
     end
     return sig
@@ -73,16 +73,18 @@ function commit(repo::GitRepo,
     ensure_initialized()
     commit_id_ptr = Ref(GitHash())
     nparents = length(parents)
-    parentptrs = Ptr{Cvoid}[c.ptr for c in parents]
-    @check ccall((:git_commit_create, :libgit2), Cint,
-                 (Ptr{GitHash}, Ptr{Cvoid}, Ptr{UInt8},
-                  Ptr{SignatureStruct}, Ptr{SignatureStruct},
-                  Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid},
-                  Csize_t, Ptr{Ptr{Cvoid}}),
-                 commit_id_ptr, repo.ptr, isempty(refname) ? C_NULL : refname,
-                 author.ptr, committer.ptr,
-                 C_NULL, msg, tree.ptr,
-                 nparents, nparents > 0 ? parentptrs : C_NULL)
+    GC.@preserve parents begin
+        parentptrs = Ptr{Cvoid}[c.ptr for c in parents]
+        @check ccall((:git_commit_create, libgit2), Cint,
+                     (Ptr{GitHash}, Ptr{Cvoid}, Ptr{UInt8},
+                      Ptr{SignatureStruct}, Ptr{SignatureStruct},
+                      Ptr{UInt8}, Ptr{UInt8}, Ptr{Cvoid},
+                      Csize_t, Ptr{Ptr{Cvoid}}),
+                     commit_id_ptr, repo, isempty(refname) ? C_NULL : refname,
+                     author, committer,
+                     C_NULL, msg, tree,
+                     nparents, nparents > 0 ? parentptrs : C_NULL)
+    end
     return commit_id_ptr[]
 end
 
@@ -146,4 +148,46 @@ function commit(repo::GitRepo, msg::AbstractString;
         close(comm_sig)
     end
     return commit_id
+end
+
+"""
+    parentcount(c::GitCommit)
+
+Get the number of parents of this commit.
+
+See also [`parent`](@ref), [`parent_id`](@ref).
+"""
+parentcount(c::GitCommit) =
+    Int(ccall((:git_commit_parentcount, libgit2), Cuint, (Ptr{Cvoid},), c))
+
+"""
+    parent(c::GitCommit, n)
+
+Get the `n`-th (1-based) parent of the commit.
+
+See also [`parentcount`](@ref), [`parent_id`](@ref).
+"""
+function parent(c::GitCommit, n)
+    ptr_ref = Ref{Ptr{Cvoid}}()
+    @check ccall((:git_commit_parent, libgit2), Cint,
+                 (Ptr{Ptr{Cvoid}}, Ptr{Cvoid}, Cuint), ptr_ref, c, n - 1)
+    return GitCommit(c.owner, ptr_ref[])
+end
+
+"""
+    parent_id(c::GitCommit, n)
+
+Get the oid of the `n`-th (1-based) parent for a commit.
+
+See also [`parentcount`](@ref), [`parent`](@ref).
+"""
+function parent_id(c::GitCommit, n)
+    oid_ptr = ccall((:git_commit_parent_id, libgit2), Ptr{GitHash},
+                    (Ptr{Cvoid}, Cuint), c, n - 1)
+    if oid_ptr == C_NULL
+        # 0-based indexing mimicking the error message from libgit2
+        throw(GitError(Error.Invalid, Error.ENOTFOUND,
+                       "parent $(n - 1) does not exist"))
+    end
+    return unsafe_load(oid_ptr)
 end

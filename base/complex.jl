@@ -178,7 +178,7 @@ complex(x::Real, y::Real) = Complex(x, y)
     complex(T::Type)
 
 Return an appropriate type which can represent a value of type `T` as a complex number.
-Equivalent to `typeof(complex(zero(T)))`.
+Equivalent to `typeof(complex(zero(T)))` if `T` does not contain `Missing`.
 
 # Examples
 ```jldoctest
@@ -187,6 +187,9 @@ Complex{Int64}
 
 julia> complex(Int)
 Complex{Int64}
+
+julia> complex(Union{Int, Missing})
+Union{Missing, Complex{Int64}}
 ```
 """
 complex(::Type{T}) where {T<:Real} = Complex{T}
@@ -339,7 +342,7 @@ end
 *(x::Real, z::Complex) = Complex(x * real(z), x * imag(z))
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 
-muladd(x::Real, z::Complex, y::Number) = muladd(z, x, y)
+muladd(x::Real, z::Complex, y::Union{Real,Complex}) = muladd(z, x, y)
 muladd(z::Complex, x::Real, y::Real) = Complex(muladd(real(z),x,y), imag(z)*x)
 muladd(z::Complex, x::Real, w::Complex) =
     Complex(muladd(real(z),x,real(w)), muladd(imag(z),x,imag(w)))
@@ -567,7 +570,7 @@ end
 """
     cis(x)
 
-More efficient method for `exp(im*x)` by using Euler's formula: ``cos(x) + i sin(x) = \\exp(i x)``.
+More efficient method for `exp(im*x)` by using Euler's formula: ``\\cos(x) + i \\sin(x) = \\exp(i x)``.
 
 See also [`cispi`](@ref), [`sincos`](@ref), [`exp`](@ref), [`angle`](@ref).
 
@@ -622,7 +625,10 @@ end
 
 Compute the phase angle in radians of a complex number `z`.
 
-See also: [`atan`](@ref), [`cis`](@ref).
+Returns a number `-pi ≤ angle(z) ≤ pi`, and is thus discontinuous
+along the negative real axis.
+
+See also: [`atan`](@ref), [`cis`](@ref), [`rad2deg`](@ref).
 
 # Examples
 ```jldoctest
@@ -632,8 +638,11 @@ julia> rad2deg(angle(1 + im))
 julia> rad2deg(angle(1 - im))
 -45.0
 
-julia> rad2deg(angle(-1 - im))
--135.0
+julia> rad2deg(angle(-1 + 1e-20im))
+180.0
+
+julia> rad2deg(angle(-1 - 1e-20im))
+-180.0
 ```
 """
 angle(z::Complex) = atan(imag(z), real(z))
@@ -750,7 +759,7 @@ function log1p(z::Complex{T}) where T
         # allegedly due to Kahan, only modified to handle real(u) <= 0
         # differently to avoid inaccuracy near z==-2 and for correct branch cut
         u = one(float(T)) + z
-        u == 1 ? convert(typeof(u), z) : real(u) <= 0 ? log(u) : log(u)*z/(u-1)
+        u == 1 ? convert(typeof(u), z) : real(u) <= 0 ? log(u) : log(u)*(z/(u-1))
     elseif isnan(zr)
         Complex(zr, zr)
     elseif isfinite(zi)
@@ -1028,24 +1037,22 @@ end
 function atanh(z::Complex{T}) where T
     z = float(z)
     Tf = float(T)
-    Ω = prevfloat(typemax(Tf))
-    θ = sqrt(Ω)/4
-    ρ = 1/θ
     x, y = reim(z)
     ax = abs(x)
     ay = abs(y)
+    θ = sqrt(floatmax(Tf))/4
     if ax > θ || ay > θ #Prevent overflow
         if isnan(y)
             if isinf(x)
                 return Complex(copysign(zero(x),x), y)
             else
-                return Complex(real(1/z), y)
+                return Complex(real(inv(z)), y)
             end
         end
         if isinf(y)
             return Complex(copysign(zero(x),x), copysign(oftype(y,pi)/2, y))
         end
-        return Complex(real(1/z), copysign(oftype(y,pi)/2, y))
+        return Complex(real(inv(z)), copysign(oftype(y,pi)/2, y))
     end
     β = copysign(one(Tf), x)
     z *= β
@@ -1055,16 +1062,15 @@ function atanh(z::Complex{T}) where T
             ξ = oftype(x, Inf)
             η = y
         else
-            ym = ay+ρ
-            ξ = log(sqrt(sqrt(4+y*y))/sqrt(ym))
-            η = copysign(oftype(y,pi)/2 + atan(ym/2), y)/2
+            ξ = log(sqrt(sqrt(muladd(y, y, 4)))/sqrt(ay))
+            η = copysign(oftype(y,pi)/2 + atan(ay/2), y)/2
         end
     else #Normal case
-        ysq = (ay+ρ)^2
+        ysq = ay^2
         if x == 0
             ξ = x
         else
-            ξ = log1p(4x/((1-x)^2 + ysq))/4
+            ξ = log1p(4x/(muladd(1-x, 1-x, ysq)))/4
         end
         η = angle(Complex((1-x)*(1+x)-ysq, 2y))/2
     end
@@ -1088,7 +1094,7 @@ second is used for rounding the imaginary components.
 which rounds to the nearest integer, with ties (fractional values of 0.5)
 being rounded to the nearest even integer.
 
-# Example
+# Examples
 ```jldoctest
 julia> round(3.14 + 4.5im)
 3.0 + 4.0im
