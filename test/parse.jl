@@ -265,6 +265,33 @@ end
 @test tryparse(Float32, "1.23") === 1.23f0
 @test tryparse(Float16, "1.23") === Float16(1.23)
 
+@testset "issue #49689" begin
+    """Test floating-point rounding
+
+        ::Float32           ::Float64
+        17.3286_78f0        17.3286_78_131103516
+        ??                  17.3286_79_084777832
+        ??                  17.3286_79_084777833
+        17.3286_80f0        17.3286_80_03845215
+    """
+    lower_bond = 17.3286_78f0
+    f64_str832 = "17.328679084777832"
+    f64_str833 = "17.328679084777833"
+    upper_bond = 17.3286_80f0
+
+    abs_diff(a, b) = abs(BigFloat(a) - BigFloat(b))
+    # f64_str832
+    @test abs_diff(lower_bond, f64_str832) < abs_diff(f64_str832, upper_bond)
+    @test tryparse(Float32, f64_str832) == lower_bond
+    @test 17.328679084777_832f0 == lower_bond
+
+    # f64_str833
+    @test abs_diff(lower_bond, f64_str833) > abs_diff(f64_str833, upper_bond)
+    @test tryparse(Float32, f64_str833) == upper_bond
+    @test_broken 17.328679084777_833f0 == upper_bond
+    # TODO: fix @test_broken in *nix platforms, add more test
+end
+
 # parsing complex numbers (#22250)
 @testset "complex parsing" begin
     for sign in ('-','+'), Im in ("i","j","im"), s1 in (""," "), s2 in (""," "), s3 in (""," "), s4 in (""," ")
