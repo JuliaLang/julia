@@ -2162,12 +2162,12 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
     }
 
-    // Potentially we could drop `jl_roots(gc_uses)` in the presence of `gc-transition(gc_uses)`
+    // Potentially we could add gc_uses to `gc-transition`, instead of emitting them separately as jl_roots
     SmallVector<OperandBundleDef, 2> bundles;
     if (!gc_uses.empty())
         bundles.push_back(OperandBundleDef("jl_roots", gc_uses));
     if (gc_safe)
-        bundles.push_back(OperandBundleDef("gc-transition", ArrayRef<Value*> {}));
+        bundles.push_back(OperandBundleDef("gc-transition", get_current_ptls(ctx)));
     // the actual call
     CallInst *ret = ctx.builder.CreateCall(functype, llvmf,
             argvals,

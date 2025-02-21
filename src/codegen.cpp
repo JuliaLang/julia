@@ -7002,8 +7002,9 @@ static void allocate_gc_frame(jl_codectx_t &ctx, BasicBlock *b0, bool or_new=fal
     // allocate a placeholder gc instruction
     // this will require the runtime, but it gets deleted later if unused
     ctx.topalloca = ctx.builder.CreateCall(prepare_call(or_new ? jladoptthread_func : jlpgcstack_func));
-    ctx.pgcstack = ctx.topalloca;
-    ctx.pgcstack->setName("pgcstack");
+    ctx.topalloca->setName("pgcstack");
+    if (ctx.pgcstack == nullptr)
+        ctx.pgcstack = ctx.topalloca;
 }
 
 static Value *get_current_task(jl_codectx_t &ctx)
@@ -7150,7 +7151,6 @@ static void emit_specsig_to_specsig(
     ctx.builder.SetInsertPoint(b0);
     DebugLoc noDbg;
     ctx.builder.SetCurrentDebugLocation(noDbg);
-    allocate_gc_frame(ctx, b0);
     Function::arg_iterator AI = gf_thunk->arg_begin();
     SmallVector<jl_cgval_t, 0> myargs(nargs);
     if (cc == jl_returninfo_t::SRet || cc == jl_returninfo_t::Union)
@@ -7158,8 +7158,10 @@ static void emit_specsig_to_specsig(
     if (return_roots)
         ++AI;
     if (JL_FEAT_TEST(ctx,gcstack_arg)) {
+        ctx.pgcstack = AI;
         ++AI; // gcstack_arg
     }
+    allocate_gc_frame(ctx, b0);
     for (size_t i = 0; i < nargs; i++) {
         if (i == 0 && is_for_opaque_closure) {
             // `jt` would be wrong here (it is the captures type), so is not used used for
@@ -7265,6 +7267,10 @@ static void emit_specsig_to_specsig(
         ctx.builder.CreateRet(retval);
         break;
     }
+    }
+    if (ctx.topalloca != ctx.pgcstack && ctx.topalloca->use_empty()) {
+       ctx.topalloca->eraseFromParent();
+       ctx.topalloca = nullptr;
     }
 }
 
@@ -8122,6 +8128,10 @@ static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_va
         CreateTrap(ctx.builder, false);
     else
         ctx.builder.CreateRet(boxed(ctx, retval));
+    if (ctx.topalloca != ctx.pgcstack && ctx.topalloca->use_empty()) {
+       ctx.topalloca->eraseFromParent();
+       ctx.topalloca = nullptr;
+    }
 }
 
 static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module *M, Value *fval, StringRef name, jl_value_t *sig, jl_value_t *jlrettype, bool is_opaque_closure,
@@ -8778,7 +8788,53 @@ static jl_llvm_functions_t
             ctx.spvals_ptr = &*AI++;
         }
     }
-    // step 6. set up GC frame
+    // step 6. set up GC frame and special arguments
+    Function::arg_iterator AI = f->arg_begin();
+    SmallVector<AttributeSet, 0> attrs(f->arg_size()); // function declaration attributes
+
+    if (has_sret) {
+        Argument *Arg = &*AI;
+        ++AI;
+        AttrBuilder param(ctx.builder.getContext(), f->getAttributes().getParamAttrs(Arg->getArgNo()));
+        if (returninfo.cc == jl_returninfo_t::Union) {
+            param.addAttribute(Attribute::NonNull);
+            // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
+            param.addDereferenceableAttr(returninfo.union_bytes);
+            param.addAlignmentAttr(returninfo.union_align);
+        }
+        else {
+            const DataLayout &DL = jl_Module->getDataLayout();
+            Type *RT = Arg->getParamStructRetType();
+            TypeSize sz = DL.getTypeAllocSize(RT);
+            Align al = DL.getPrefTypeAlign(RT);
+            if (al > MAX_ALIGN)
+                al = Align(MAX_ALIGN);
+            param.addAttribute(Attribute::NonNull);
+            // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
+            param.addDereferenceableAttr(sz);
+            param.addAlignmentAttr(al);
+        }
+        attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param); // function declaration attributes
+    }
+    if (returninfo.return_roots) {
+        Argument *Arg = &*AI;
+        ++AI;
+        AttrBuilder param(ctx.builder.getContext(), f->getAttributes().getParamAttrs(Arg->getArgNo()));
+        param.addAttribute(Attribute::NonNull);
+        // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
+        size_t size = returninfo.return_roots * sizeof(jl_value_t*);
+        param.addDereferenceableAttr(size);
+        param.addAlignmentAttr(Align(sizeof(jl_value_t*)));
+        attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param); // function declaration attributes
+    }
+    if (specsig && JL_FEAT_TEST(ctx, gcstack_arg)) {
+        Argument *Arg = &*AI;
+        ctx.pgcstack = Arg;
+        ++AI;
+        AttrBuilder param(ctx.builder.getContext());
+        attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param);
+    }
+
     allocate_gc_frame(ctx, b0);
     Value *last_age = NULL;
     Value *world_age_field = NULL;
@@ -8921,9 +8977,6 @@ static jl_llvm_functions_t
     }
 
     // step 8. move args into local variables
-    Function::arg_iterator AI = f->arg_begin();
-    SmallVector<AttributeSet, 0> attrs(f->arg_size()); // function declaration attributes
-
     auto get_specsig_arg = [&](jl_value_t *argType, Type *llvmArgType, bool isboxed) {
         if (type_is_ghost(llvmArgType)) { // this argument is not actually passed
             return ghostValue(ctx, argType);
@@ -8956,47 +9009,6 @@ static jl_llvm_functions_t
         return theArg;
     };
 
-    if (has_sret) {
-        Argument *Arg = &*AI;
-        ++AI;
-        AttrBuilder param(ctx.builder.getContext(), f->getAttributes().getParamAttrs(Arg->getArgNo()));
-        if (returninfo.cc == jl_returninfo_t::Union) {
-            param.addAttribute(Attribute::NonNull);
-            // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
-            param.addDereferenceableAttr(returninfo.union_bytes);
-            param.addAlignmentAttr(returninfo.union_align);
-        }
-        else {
-            const DataLayout &DL = jl_Module->getDataLayout();
-            Type *RT = Arg->getParamStructRetType();
-            TypeSize sz = DL.getTypeAllocSize(RT);
-            Align al = DL.getPrefTypeAlign(RT);
-            if (al > MAX_ALIGN)
-                al = Align(MAX_ALIGN);
-            param.addAttribute(Attribute::NonNull);
-            // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
-            param.addDereferenceableAttr(sz);
-            param.addAlignmentAttr(al);
-        }
-        attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param); // function declaration attributes
-    }
-    if (returninfo.return_roots) {
-        Argument *Arg = &*AI;
-        ++AI;
-        AttrBuilder param(ctx.builder.getContext(), f->getAttributes().getParamAttrs(Arg->getArgNo()));
-        param.addAttribute(Attribute::NonNull);
-        // The `dereferenceable` below does not imply `nonnull` for non addrspace(0) pointers.
-        size_t size = returninfo.return_roots * sizeof(jl_value_t*);
-        param.addDereferenceableAttr(size);
-        param.addAlignmentAttr(Align(sizeof(jl_value_t*)));
-        attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param); // function declaration attributes
-    }
-    if (specsig && JL_FEAT_TEST(ctx, gcstack_arg)){
-        Argument *Arg = &*AI;
-        ++AI;
-        AttrBuilder param(ctx.builder.getContext());
-        attrs[Arg->getArgNo()] = AttributeSet::get(Arg->getContext(), param);
-    }
     for (i = 0; i < nreq && i < vinfoslen; i++) {
         jl_sym_t *s = slot_symbol(ctx, i);
         jl_varinfo_t &vi = ctx.slots[i];
@@ -9964,7 +9976,7 @@ static jl_llvm_functions_t
         }
     }
 
-    if (ctx.topalloca->use_empty()) {
+    if (ctx.topalloca != ctx.pgcstack && ctx.topalloca->use_empty()) {
         ctx.topalloca->eraseFromParent();
         ctx.topalloca = nullptr;
     }

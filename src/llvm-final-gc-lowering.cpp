@@ -161,16 +161,23 @@ void FinalLowerGC::lowerGCAllocBytes(CallInst *target, Function &F)
     target->replaceAllUsesWith(newI);
     target->eraseFromParent();
 }
-bool FinalLowerGC::shouldRunFinalGC(Function &F)
+
+static bool hasUse(const JuliaPassContext &ctx, const jl_intrinsics::IntrinsicDescription &v)
+{
+    auto Intr = ctx.getOrNull(v);
+    return Intr && !Intr->use_empty();
+}
+
+bool FinalLowerGC::shouldRunFinalGC()
 {
     bool should_run = 0;
-    should_run |= getOrNull(jl_intrinsics ::newGCFrame) != nullptr;
-    should_run |= getOrNull(jl_intrinsics ::getGCFrameSlot) != nullptr;
-    should_run |= getOrNull(jl_intrinsics ::pushGCFrame) != nullptr;
-    should_run |= getOrNull(jl_intrinsics ::popGCFrame) != nullptr;
-    should_run |= getOrNull(jl_intrinsics ::GCAllocBytes) != nullptr;
-    should_run |= getOrNull(jl_intrinsics ::queueGCRoot) != nullptr;
-    should_run |= getOrNull(jl_intrinsics ::safepoint) != nullptr;
+    should_run |= hasUse(*this, jl_intrinsics::newGCFrame);
+    should_run |= hasUse(*this, jl_intrinsics::getGCFrameSlot);
+    should_run |= hasUse(*this, jl_intrinsics::pushGCFrame);
+    should_run |= hasUse(*this, jl_intrinsics::popGCFrame);
+    should_run |= hasUse(*this, jl_intrinsics::GCAllocBytes);
+    should_run |= hasUse(*this, jl_intrinsics::queueGCRoot);
+    should_run |= hasUse(*this, jl_intrinsics::safepoint);
     return should_run;
 }
 
@@ -178,7 +185,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
 {
     initAll(*F.getParent());
     pgcstack = getPGCstack(F);
-    if (!shouldRunFinalGC(F))
+    if (!pgcstack || !shouldRunFinalGC())
         goto verify_skip;
 
     LLVM_DEBUG(dbgs() << "FINAL GC LOWERING: Processing function " << F.getName() << "\n");
@@ -232,7 +239,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
             auto IS_INTRINSIC = [&](auto intrinsic) {
                 auto intrinsic2 = getOrNull(intrinsic);
                 if (intrinsic2 == callee) {
-                    errs() << "Final-GC-lowering didn't eliminate all intrinsics'" << F.getName() << "', dumping entire module!\n\n";
+                    errs() << "Final-GC-lowering didn't eliminate all intrinsics from '" << F.getName() << "', dumping entire module!\n\n";
                     errs() << *F.getParent() << "\n";
                     abort();
                 }

@@ -345,6 +345,10 @@ end
 # issue #15828
 @test Meta.lower(Main, Meta.parse("x...")) == Expr(:error, "\"...\" expression outside call")
 
+# issue #57153 - malformed "..." expr
+@test Meta.lower(@__MODULE__, :(identity($(Expr(:(...), 1, 2, 3))))) ==
+    (Expr(:error, "wrong number of expressions following \"...\""))
+
 # issue #15830
 @test Meta.lower(Main, Meta.parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
@@ -4102,3 +4106,7 @@ module Ambig57404
     using .B
 end
 @test Ambig57404.S == 1
+
+# Issue #56904 - lambda linearized twice
+@test (let; try 3; finally try 1; f(() -> x); catch x; end; end; x = 7; end) === 7
+@test (let; try 3; finally try 4; finally try 1; f(() -> x); catch x; end; end; end; x = 7; end) === 7
