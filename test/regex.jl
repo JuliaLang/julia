@@ -232,6 +232,14 @@
         end
     end
 
+    @testset "continue index" begin
+        s = "a1a2a3"
+        idx = Ref(firstindex(s))
+        @test [match(r"\Ga\d", s, idx).match for i=1:3] == ["a1", "a2", "a3"]
+        @test match(r"\Ga\d", s, idx) === nothing &&
+            idx[] == firstindex(s) + ncodeunits(s)
+    end
+
     @testset "Destructuring dispatch" begin
         handle(::Nothing) = "not found"
         handle((capture,)::RegexMatch) = "found $capture"
