@@ -772,7 +772,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     }
 
     if (!gvars.empty()) {
-        auto offsets = (int32_t*)malloc(sizeof(int32_t) * gvars.size());
+        auto offsets = (ptrdiff_t*)malloc(sizeof(ptrdiff_t) * gvars.size());
         res.gvars_base = (const char*)pointers->header;
         for (size_t i = 0; i < gvars.size(); i++) {
             assert(gvars[i] && "Missing global variable pointer!");
