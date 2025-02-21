@@ -1,0 +1,19 @@
+[[mingw-w64]]
+arch = "x86_64"
+git-tree-sha1 = "b17bda08a19173572926f43a48aad5ef3d845e7c"
+os = "windows"
+lazy = true
+
+    [[mingw-w64.download]]
+    sha256 = "53645e06775a55733580426341395c67dda20a664af83bcda76a1d052b618b59"
+    url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v2.1.24/x86_64-14.2.0-release-posix-seh-msvcrt-rt_v12-rev0.tar.gz"
+
+[[mingw-w64]]
+arch = "i686"
+git-tree-sha1 = "76b9f278e7de1d7dfdfe3a786afbe9c1e29003ea"
+os = "windows"
+lazy = true
+
+    [[mingw-w64.download]]
+    sha256 = "d049bd771e01b02f2ca9274435f0e6f9f4f295bf2af72a8059dd851c52144910"
+    url = "https://github.com/JuliaLang/PackageCompiler.jl/releases/download/v2.1.24/i686-14.2.0-release-posix-dwarf-msvcrt-rt_v12-rev0.tar.gz"
