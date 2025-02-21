@@ -1539,8 +1539,32 @@ end
         end
     end
     # issue #57464
-    @test Float32(1.1)^typemin(Int)
-    @test Float16(1.1)^typemin(Int)
+    @test Float32(1.1)^typemin(Int) == Float32(0.0)
+    @test Float16(1.1)^typemin(Int) == Float16(0.0)
+    @test Float32(1.1)^unsigned(0) === Float32(1.0)
+    @test Float32(1.1)^big(0) === Float32(1.0)
+
+    # By using a limited-precision integer (3 bits) we can trigger issue 57464
+    # for a case where the answer isn't zero.
+    struct Int3 <: Integer
+        x::Int8
+        function Int3(x::Integer)
+            if x < -4 || x > 3
+                Core.throw_inexacterror(:Int3, Int3, x)
+            end
+            return new(x)
+        end
+    end
+    Base.typemin(::Type{Int3}) = Int3(-4)
+    Base.promote_rule(::Type{Int3}, ::Type{Int}) = Int
+    Base.convert(::Type{Int64}, x::Int3) = convert(Int64, x.x)
+    Base.:-(x::Int3) = x.x == -4 ? x : Int3(-x.x)
+    Base.trailing_zeros(x::Int3) = trailing_zeros(x.x)
+    Base.:>>(x::Int3, n::UInt64) = Int3(x.x>>n)
+
+    @test 1.001f0^-3 == 1.001f0^Int3(-3)
+    @test 1.001f0^-4 == 1.001f0^typemin(Int3)
+
 end
 
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.
