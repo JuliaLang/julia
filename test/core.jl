@@ -6465,6 +6465,15 @@ for U in unboxedunions
             @test A[1] === initvalue2(F2)
             @test typeof(A[end]) === F2
 
+            A = U[initvalue2(F2) for i = 1:len]
+            resize!(A, 1; first=true)
+            @test length(A) === 1
+            @test A[1] === initvalue2(F2)
+            resize!(A, len; first=true)
+            @test length(A) === len
+            @test A[end] === initvalue2(F2)
+            @test typeof(A[end]) === F2
+
             # deleteat!
             F = Base.uniontypes(U)[2]
             A = U[rand(F(1):F(len)) for i = 1:len]
@@ -6653,7 +6662,7 @@ setindex!(A, missing, 2)
 setindex!(A, 0x03, 3)
 setindex!(A, missing, 4)
 setindex!(A, 0x05, 5)
-Base._growat!(A, 1, 1)
+resize!(A, 6; first=true)
 
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === 0x01
@@ -6663,7 +6672,7 @@ Base._growat!(A, 1, 1)
 @test getindex(A, 6) === 0x05
 
 # grow_at_beg 2
-Base._growat!(A, 1, 1)
+resize!(A, 7; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === missing
 @test getindex(A, 3) === 0x01
@@ -6684,7 +6693,7 @@ Base._growat!(A, 2, 1)
 @test getindex(A, 8) === 0x05
 
 # grow_at_beg 9
-Base._growat!(A, 1, 1)
+resize!(A, 9; first=true)
 @test getindex(A, 1) === missing
 @test getindex(A, 2) === missing
 @test getindex(A, 3) === missing
@@ -6743,6 +6752,11 @@ Base._growat!(A, 2, 3)
 @test getindex(A, 8) === missing
 @test getindex(A, 9) === missing
 @test getindex(A, 10) === 0x05
+
+resize!(A, 2; first=true)
+@test getindex(A, 1) === missing
+@test getindex(A, 2) === 0x05
+@test length(A) === 2
 
 # grow_at_beg 3
 A = Vector{Union{Missing, UInt8}}(undef, 1048577)
