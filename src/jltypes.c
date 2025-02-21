@@ -3693,9 +3693,9 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_emptysvec, 0, 0, 1);
 
     jl_partial_struct_type = jl_new_datatype(jl_symbol("PartialStruct"), core, jl_any_type, jl_emptysvec,
-                                       jl_perm_symsvec(2, "typ", "fields"),
-                                       jl_svec2(jl_any_type, jl_array_any_type),
-                                       jl_emptysvec, 0, 0, 2);
+                                       jl_perm_symsvec(3, "typ", "undef", "fields"),
+                                       jl_svec(3, jl_any_type, jl_any_type, jl_array_any_type),
+                                       jl_emptysvec, 0, 0, 3);
 
     jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
                                           jl_perm_symsvec(3, "slot", "thentype", "elsetype"),
