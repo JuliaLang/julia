@@ -353,6 +353,7 @@ end
 @deprecate one(i::CartesianIndex)                    oneunit(i)
 @deprecate one(I::Type{CartesianIndex{N}}) where {N} oneunit(I)
 
+import .MPFR: BigFloat
 @deprecate BigFloat(x, prec::Int)                               BigFloat(x; precision=prec)
 @deprecate BigFloat(x, prec::Int, rounding::RoundingMode)       BigFloat(x, rounding; precision=prec)
 @deprecate BigFloat(x::Real, prec::Int)                         BigFloat(x; precision=prec)

@@ -4,10 +4,12 @@
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
-                  convert, show, iterate, promote_rule, to_indices, copy
+                  convert, show, iterate, promote_rule, to_indices, copy,
+                  isassigned
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
+    import Core: Tuple
     using .Base: to_index, fill_to_length, tail, safe_tail
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex,
         ReshapedArray, ReshapedArrayLF, OneTo, Fix1

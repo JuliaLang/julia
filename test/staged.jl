@@ -449,3 +449,31 @@ end
 @test first(only(code_typed((Int,Int)) do x, y; @inline overdub54341(x, y); end)) isa Core.CodeInfo
 @test first(only(code_typed((Int,)) do x; @inline overdub54341(x, 1); end)) isa Core.CodeInfo
 @test_throws "Wrong number of arguments" overdub54341(1, 2, 3)
+
+# Test the module resolution scope of generated methods that are type constructors
+module GeneratedScope57417
+    using Test
+    import ..generate_lambda_ex
+    const x = 1
+    struct Generator; end
+    @generated (::Generator)() = :x
+    f(x::Int) = 1
+    module OtherModule
+        import ..f
+        const x = 2
+        @generated f(::Float64) = :x
+    end
+    import .OtherModule: f
+    @test Generator()() == 1
+    @test f(1.0) == 2
+
+    function g_generator(world::UInt, source::Method, _)
+        return generate_lambda_ex(world, source, (:g,), (), :(return x))
+    end
+
+    @eval function g()
+        $(Expr(:meta, :generated, g_generator))
+        $(Expr(:meta, :generated_only))
+    end
+    @test g() == 1
+end

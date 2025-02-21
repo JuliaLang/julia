@@ -4103,3 +4103,7 @@ module Ambig57404
     using .B
 end
 @test Ambig57404.S == 1
+
+# Issue #56904 - lambda linearized twice
+@test (let; try 3; finally try 1; f(() -> x); catch x; end; end; x = 7; end) === 7
+@test (let; try 3; finally try 4; finally try 1; f(() -> x); catch x; end; end; end; x = 7; end) === 7
