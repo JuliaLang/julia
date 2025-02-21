@@ -22,6 +22,9 @@ FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden 
 		 -Wno-comment -Wpointer-arith -Wundef
 ifeq ($(USEGCC),1) # GCC bug #25509 (void)__attribute__((warn_unused_result))
 FLAGS += -Wno-unused-result
+# GCC is throwing warnings like `warning: 'int __builtin_memcmp_eq(const void*, const void*, long unsigned int)' specified bound 18446744073709551615 exceeds maximum object size 9223372036854775807` in llvm's StringRef.h == seemingly because it doesn't realise the size can't be 0.
+FLAGS += -Wno-stringop-overflow
+FLAGS += -Wno-stringop-overread
 endif
 JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
