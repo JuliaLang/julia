@@ -10315,6 +10315,10 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
+    // Enable VPlan native path for outer loop vectorization
+    clopt = llvmopts.lookup("enable-vplan-native-path");
+    if (clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "1", 1);
 
     clopt = llvmopts.lookup("time-passes");
     if (clopt && clopt->getNumOccurrences() > 0)
