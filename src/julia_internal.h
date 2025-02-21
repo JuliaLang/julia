@@ -1107,6 +1107,7 @@ extern JL_DLLEXPORT ssize_t jl_tls_offset;
 extern JL_DLLEXPORT const int jl_tls_elf_support;
 void jl_init_threading(void);
 void jl_start_threads(void);
+JL_DLLEXPORT void jl_enter_threaded_region(void);
 
 // Whether the GC is running
 extern uv_mutex_t safepoint_lock;
@@ -1500,6 +1501,7 @@ JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_rand(void);
 
 JL_DLLEXPORT extern void *jl_exe_handle;
+JL_DLLEXPORT extern void *jl_base_image_handle;
 JL_DLLEXPORT extern void *jl_libjulia_handle;
 JL_DLLEXPORT extern void *jl_libjulia_internal_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;

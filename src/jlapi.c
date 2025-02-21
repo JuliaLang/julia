@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <pthread.h>
 #include "julia.h"
 #include "options.h"
 #include "julia_assert.h"
@@ -25,6 +26,8 @@ extern "C" {
 #else
 #include <fenv.h>
 #endif
+_Atomic(int) jl_runtime_is_initialized = 0;
+pthread_mutex_t initialization_lock = PTHREAD_MUTEX_INITIALIZER;
 
 /**
  * @brief Check if Julia is already initialized.
@@ -36,7 +39,7 @@ extern "C" {
  */
 JL_DLLEXPORT int jl_is_initialized(void)
 {
-    return jl_main_module != NULL;
+    return jl_atomic_load_acquire(&jl_runtime_is_initialized);
 }
 
 /**
@@ -82,12 +85,14 @@ JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
  * @param image_path The path of a system image file (*.so). Interpreted as relative to julia_bindir
  *                   or the default Julia home directory if not an absolute path.
  */
-JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
-                                     const char *image_path)
+JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir, const char *image_path)
 {
     if (jl_is_initialized())
         return;
     libsupport_init();
+#ifndef __clang_analyzer__
+    pthread_mutex_lock(&initialization_lock);
+#endif
     jl_options.julia_bindir = julia_bindir;
     if (image_path != NULL)
         jl_options.image_file = image_path;
@@ -95,6 +100,10 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
         jl_options.image_file = jl_get_default_sysimg_path();
     julia_init(JL_IMAGE_JULIA_HOME);
     jl_exception_clear();
+    jl_atomic_store_release(&jl_runtime_is_initialized, 1);
+#ifndef __clang_analyzer__
+    pthread_mutex_unlock(&initialization_lock);
+#endif
 }
 
 /**
@@ -1093,8 +1102,11 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 
     // No-op on non-windows
     lock_low32();
-
     libsupport_init();
+
+#ifndef __clang_analyzer__
+    pthread_mutex_lock(&initialization_lock);
+#endif
     int lisp_prompt = (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0);
     if (lisp_prompt) {
         memmove(&argv[1], &argv[2], (argc-2)*sizeof(void*));
@@ -1116,6 +1128,10 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
     }
 
     julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
+    jl_atomic_store_release(&jl_runtime_is_initialized, 1);
+#ifndef __clang_analyzer__
+    pthread_mutex_unlock(&initialization_lock);
+#endif
     if (lisp_prompt) {
         jl_current_task->world_age = jl_get_world_counter();
         jl_lisp_prompt();
@@ -1125,13 +1141,32 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
     jl_atexit_hook(ret);
     return ret;
 }
+
+
+
 int jl_init_runtime_adopt_thread(void* sysimg_handle)
 {
-    //Unimplemented
-    abort();
-    return 0;
+    // Check if we are the main thread
+#ifndef __clang_analyzer__
+    pthread_mutex_lock(&initialization_lock);
+#endif
+    if (jl_is_initialized()) {
+        pthread_mutex_unlock(&initialization_lock);
+        return 0;
+    }
+    //TODO: Implement option parsing
+    assert(sysimg_handle);
+    // This code path assumes that you are either an executable or dylib with the sysimage linked in
+    jl_base_image_handle = sysimg_handle;
+    julia_init(JL_IMAGE_IN_MEMORY);
+    jl_enter_threaded_region(); // This is done to remove the reliance on having
+                                // a specific thread to run IO, allowing for epheremeral threads
+    jl_atomic_store_release(&jl_runtime_is_initialized, 1);
+#ifndef __clang_analyzer__
+    pthread_mutex_unlock(&initialization_lock);
+#endif
+    return 1;
 }
-
 
 #ifdef __cplusplus
 }
