@@ -4216,4 +4216,13 @@ let
     @test x == [0, 2]
 end
 
+# Global const decl inside local scope
+let
+    const global letf_57470(x)::Int = 2+x
+    const global letT_57470{T} = Int64
 end
+@test letf_57470(3) == 5
+@test letT_57470 === Int64
+
+end
+
