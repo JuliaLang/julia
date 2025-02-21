@@ -96,8 +96,6 @@ void jl_init_threadinginfra(void)
 }
 
 
-void JL_NORETURN jl_finish_task(jl_task_t *ct);
-
 // thread function: used by all mutator threads except the main thread
 void jl_threadfun(void *arg)
 {
@@ -118,8 +116,24 @@ void jl_threadfun(void *arg)
     // free the thread argument here
     free(targ);
 
-    (void)jl_gc_unsafe_enter(ptls);
-    jl_finish_task(ct); // noreturn
+    // advance the world age of the root task as needed
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    jl_function_t *wait_forever = (jl_function_t *)jl_get_global(jl_base_module, jl_symbol("wait_forever"));
+    if (wait_forever == NULL)
+        jl_error("root task cannot find wait_forever");
+    jl_value_t *args[1] = {wait_forever};
+
+    for (; ;) {
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        JL_TRY {
+            jl_apply(args, 1);
+        }
+        JL_CATCH {
+            jl_no_exc_handler(jl_current_exception(ct), ct);
+        }
+    }
+    jl_gc_debug_critical_error();
+    abort();
 }
 
 
@@ -376,14 +390,26 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             continue;
         }
 
-        jl_cpu_pause();
         jl_ptls_t ptls = ct->ptls;
-        if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid) && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
+        if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid) && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty)) || ct == ptls->root_task) {
+            // The place seems empty and this thread is on its way to sleeping;
+            // switch to the root task to do that. We don't do this on thread 0
+            // because we didn't start it and don't own it or its root task.
+            if (ptls->tid != 0 && ct != ptls->root_task) {
+                jl_switchto(&ptls->root_task);
+
+                // If we return here, `ct` must be runnable and someone has asked
+                // it to run, so we return it.
+                assert(jl_atomic_load_relaxed(&ct->_state) == JL_TASK_STATE_RUNNABLE);
+                return ct;
+            }
+
             // acquire sleep-check lock
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);
             jl_fence(); // [^store_buffering_1]
             JL_PROBE_RT_SLEEP_CHECK_SLEEP(ptls);
+
             if (!check_empty(checkempty)) { // uses relaxed loads
                 if (set_not_sleeping(ptls)) {
                     JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls);
