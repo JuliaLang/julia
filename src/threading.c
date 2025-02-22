@@ -181,6 +181,11 @@ JL_CONST_FUNC jl_gcframe_t **jl_get_pgcstack(void) JL_NOTSAFEPOINT
     return pgcstack;
 }
 
+JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **jl_pgcstack_default_func(void) JL_NOTSAFEPOINT
+{
+    return NULL;
+}
+
 void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
 {
     // n.b.: this smashes GetLastError
@@ -274,6 +279,11 @@ JL_DLLEXPORT jl_gcframe_t **jl_get_pgcstack(void) JL_GLOBALLY_ROOTED
 #ifndef __clang_gcanalyzer__
     return jl_get_pgcstack_cb();
 #endif
+}
+
+JL_DLLEXPORT jl_gcframe_t **jl_pgcstack_default_func(void) JL_GLOBALLY_ROOTED
+{
+    return NULL;
 }
 
 void jl_pgcstack_getkey(jl_get_pgcstack_func **f, jl_pgcstack_key_t *k)
@@ -433,14 +443,9 @@ static void jl_init_task_lock(jl_task_t *ct)
         }
     }
 }
-// Pass in the handle to the system image. This is used to initialize the runtime correctly in case we are a shared library
-JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void* sysimg_handle)
+
+JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 {
-    if (!jl_is_initialized()) {
-        if (jl_init_runtime_adopt_thread(sysimg_handle) == 1)
-            return &jl_get_current_task()->gcstack;
-        // We lost the race and need to be initialized as usual
-    }
     // `jl_init_threadtls` puts us in a GC unsafe region, so ensure GC isn't running.
     // we can't use a normal safepoint because we don't have signal handlers yet.
     jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
@@ -464,6 +469,23 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void* sysimg_handle)
     return &ct->gcstack;
 }
 
+JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
+{
+    if (!jl_is_initialized()) {
+        void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
+        void *sysimg_handle = jl_find_dynamic_library_by_addr(retaddr, /* throw_err */ 0);
+
+        if (sysimg_handle == NULL) {
+            fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
+                            "       (this should not happen, please file a bug report)\n");
+            abort();
+        }
+
+        assert(0 && "TODO: implement auto-init");
+    }
+
+    return jl_adopt_thread();
+}
 
 void jl_safepoint_suspend_all_threads(jl_task_t *ct)
 {
