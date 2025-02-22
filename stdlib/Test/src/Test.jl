@@ -29,6 +29,7 @@ using Random: AbstractRNG, default_rng
 using InteractiveUtils: gen_call_with_extracted_types
 using Base: typesplit, remove_linenums!
 using Serialization: Serialization
+using Base.ScopedValues: ScopedValue, @with
 
 const DISPLAY_FAILED = (
     :isequal,
@@ -41,7 +42,14 @@ const DISPLAY_FAILED = (
     :contains
 )
 
+
 const FAIL_FAST = Ref{Bool}(false)
+
+function __init__()
+    FAIL_FAST[] = Base.get_bool_env("JULIA_TEST_FAILFAST", false)
+end
+
+
 
 #-----------------------------------------------------------------------
 
@@ -976,7 +984,7 @@ if get_testset_depth() != 0
 end
 ```
 """
-function finish end
+finish(ts::AbstractTestSet) = ts
 
 """
     TestSetException
@@ -1011,7 +1019,6 @@ end
 A simple fallback test set that throws immediately on a failure.
 """
 struct FallbackTestSet <: AbstractTestSet end
-fallback_testset = FallbackTestSet()
 
 struct FallbackTestSetException <: Exception
     msg::String
@@ -1028,8 +1035,6 @@ function record(ts::FallbackTestSet, t::Union{Fail, Error})
     println(t)
     throw(FallbackTestSetException("There was an error during testing"))
 end
-# We don't need to do anything as we don't record anything
-finish(ts::FallbackTestSet) = ts
 
 #-----------------------------------------------------------------------
 
@@ -1087,7 +1092,7 @@ function DefaultTestSet(desc::AbstractString; verbose::Bool = false, showtiming:
         if parent_ts isa DefaultTestSet
             failfast = parent_ts.failfast
         else
-            failfast = false
+            failfast = FAIL_FAST[]
         end
     end
     return DefaultTestSet(String(desc)::String, [], 0, false, verbose, showtiming, time(), nothing, failfast, extract_file(source), rng)
@@ -1118,7 +1123,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TE
         end
     end
     push!(ts.results, t)
-    (FAIL_FAST[] || ts.failfast) && throw(FailFastError())
+    ts.failfast && throw(FailFastError())
     return t
 end
 
@@ -1650,8 +1655,6 @@ macro testset(args...)
         error("Expected function call, begin/end block or for loop as argument to @testset")
     end
 
-    FAIL_FAST[] = Base.get_bool_env("JULIA_TEST_FAILFAST", false)
-
     if tests.head === :for
         return testset_forloop(args, tests, __source__)
     elseif tests.head === :let
@@ -1691,21 +1694,11 @@ function testset_context(args, ex, source)
     else
         error("Malformed `let` expression is given")
     end
-    reverse!(contexts)
-
     test_ex = ex.args[2]
-
-    ex.args[2] = quote
-        $(map(contexts) do context
-            :($push_testset($(ContextTestSet)($(QuoteNode(context)), $context; $options...)))
-        end...)
-        try
-            $(test_ex)
-        finally
-            $(map(_->:($pop_testset()), contexts)...)
-        end
+    for context in contexts
+        test_ex = :($Test.@with_testset($ContextTestSet($(QuoteNode(context)), $context; $options...), $test_ex))
     end
-
+    ex.args[2] = test_ex
     return esc(ex)
 end
 
@@ -1756,7 +1749,7 @@ function testset_beginend_call(args, tests, source)
         else
             $(testsettype)($desc; $options...)
         end
-        push_testset(ts)
+
         # we reproduce the logic of guardseed, but this function
         # cannot be used as it changes slightly the semantic of @testset,
         # by wrapping the body in a function
@@ -1764,11 +1757,13 @@ function testset_beginend_call(args, tests, source)
         local tls_seed_orig = copy(Random.get_tls_seed())
         local tls_seed = isnothing(get_rng(ts)) ? set_rng!(ts, tls_seed_orig) : get_rng(ts)
         try
-            # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
-            copy!(Random.default_rng(), tls_seed)
-            copy!(Random.get_tls_seed(), Random.default_rng())
-            let
-                $(esc(tests))
+            @with_testset ts begin
+                # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
+                copy!(Random.default_rng(), tls_seed)
+                copy!(Random.get_tls_seed(), Random.default_rng())
+                let
+                    $(esc(tests))
+                end
             end
         catch err
             err isa InterruptException && rethrow()
@@ -1776,14 +1771,13 @@ function testset_beginend_call(args, tests, source)
             # error in this test set
             trigger_test_failure_break(err)
             if err isa FailFastError
-                get_testset_depth() > 1 ? rethrow() : failfast_print()
+                get_testset_depth() > 0 ? rethrow() : failfast_print()
             else
                 record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
             end
         finally
             copy!(default_rng(), default_rng_orig)
             copy!(Random.get_tls_seed(), tls_seed_orig)
-            pop_testset()
             ret = finish(ts)
         end
         ret
@@ -1842,22 +1836,17 @@ function testset_forloop(args, testloop, source)
         _check_testset($testsettype, $(QuoteNode(testsettype.args[1])))
         # Trick to handle `break` and `continue` in the test code before
         # they can be handled properly by `finally` lowering.
-        if !first_iteration
-            pop_testset()
-            finish_errored = true
-            push!(arr, finish(ts))
-            finish_errored = false
-            copy!(default_rng(), tls_seed)
-        end
         ts = if ($testsettype === $DefaultTestSet) && $(isa(source, LineNumberNode))
             $(testsettype)($desc; source=$(QuoteNode(source.file)), $options..., rng=tls_seed)
         else
             $(testsettype)($desc; $options...)
         end
-        push_testset(ts)
-        first_iteration = false
         try
-            $(esc(tests))
+            @with_testset ts begin
+                # default RNG is reset to its state from last `seed!()` to ease reproduce a failed test
+                copy!(Random.default_rng(), tls_seed)
+                $(esc(tests))
+            end
         catch err
             err isa InterruptException && rethrow()
             # Something in the test block threw an error. Count that as an
@@ -1866,30 +1855,21 @@ function testset_forloop(args, testloop, source)
             if !isa(err, FailFastError)
                 record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
             end
+        finally
+            copy!(default_rng(), default_rng_orig)
+            copy!(Random.get_tls_seed(), tls_seed_orig)
+            push!(arr, finish(ts))
         end
     end
     quote
         local arr = Vector{Any}()
-        local first_iteration = true
-        local ts
         local rng_option = get($(options), :rng, nothing)
-        local finish_errored = false
         local default_rng_orig = copy(default_rng())
         local tls_seed_orig = copy(Random.get_tls_seed())
         local tls_seed = isnothing(rng_option) ? copy(Random.get_tls_seed()) : rng_option
-        copy!(Random.default_rng(), tls_seed)
-        try
-            let
-                $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
-            end
-        finally
-            # Handle `return` in test body
-            if !first_iteration && !finish_errored
-                pop_testset()
-                push!(arr, finish(ts))
-            end
-            copy!(default_rng(), default_rng_orig)
-            copy!(Random.get_tls_seed(), tls_seed_orig)
+
+        let
+            $(Expr(:for, Expr(:block, [esc(v) for v in loopvars]...), blk))
         end
         arr
     end
@@ -1938,6 +1918,13 @@ end
 #-----------------------------------------------------------------------
 # Various helper methods for test sets
 
+const CURRENT_TESTSET = ScopedValue{AbstractTestSet}(FallbackTestSet())
+const TESTSET_DEPTH = ScopedValue{Int}(0)
+
+macro with_testset(ts, expr)
+    :(@with(CURRENT_TESTSET => $(esc(ts)), TESTSET_DEPTH => get_testset_depth() + 1, $(esc(expr))))
+end
+
 """
     get_testset()
 
@@ -1945,32 +1932,7 @@ Retrieve the active test set from the task's local storage. If no
 test set is active, use the fallback default test set.
 """
 function get_testset()
-    testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    return isempty(testsets) ? fallback_testset : testsets[end]
-end
-
-"""
-    push_testset(ts::AbstractTestSet)
-
-Adds the test set to the `task_local_storage`.
-"""
-function push_testset(ts::AbstractTestSet)
-    testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    push!(testsets, ts)
-    setindex!(task_local_storage(), testsets, :__BASETESTNEXT__)
-end
-
-"""
-    pop_testset()
-
-Pops the last test set added to the `task_local_storage`. If there are no
-active test sets, returns the fallback default test set.
-"""
-function pop_testset()
-    testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    ret = isempty(testsets) ? fallback_testset : pop!(testsets)
-    setindex!(task_local_storage(), testsets, :__BASETESTNEXT__)
-    return ret
+    something(Base.ScopedValues.get(CURRENT_TESTSET))
 end
 
 """
@@ -1979,8 +1941,7 @@ end
 Return the number of active test sets, not including the default test set
 """
 function get_testset_depth()
-    testsets = get(task_local_storage(), :__BASETESTNEXT__, AbstractTestSet[])
-    return length(testsets)
+    something(Base.ScopedValues.get(TESTSET_DEPTH))
 end
 
 _args_and_call((args..., f)...; kwargs...) = (args, kwargs, f(args...; kwargs...))

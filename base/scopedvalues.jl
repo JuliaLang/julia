@@ -104,6 +104,7 @@ function Scope(scope, pair1::Pair{<:ScopedValue}, pair2::Pair{<:ScopedValue}, pa
     # our compiler optimization support works
     return Scope(Scope(scope, pair1...), pair2, pairs...)
 end
+Scope(scope::Scope) = scope
 Scope(::Nothing) = nothing
 
 function Base.show(io::IO, scope::Scope)
