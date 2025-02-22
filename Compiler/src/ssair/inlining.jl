@@ -29,7 +29,8 @@ end
 struct ConstantCase
     val::Any
     edge::CodeInstance
-    ConstantCase(@nospecialize(val), edge::CodeInstance) = new(val, edge)
+    argtypes::Vector{Any}
+    ConstantCase(@nospecialize(val), edge::CodeInstance, argtypes::Vector{Any}) = new(val, edge, argtypes)
 end
 
 struct SomeCase
@@ -539,20 +540,60 @@ function ir_inline_unionsplit!(compact::IncrementalCompact, idx::Int, argexprs::
         nparams = fieldcount(atype)
         @assert nparams == fieldcount(mtype)
         if !(i == ncases && fully_covered && handled_all_cases)
-            for i = 1:nparams
-                aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
-                # If this is always true, we don't need to check for it
-                aft <: mft && continue
-                # Generate isa check
-                isa_expr = Expr(:call, isa, argexprs[i], mft)
-                isa_type = isa_tfunc(optimizer_lattice(interp), argextype(argexprs[i], compact), Const(mft))
-                ssa = insert_node_here!(compact, NewInstruction(isa_expr, isa_type, line))
-                if cond === true
-                    cond = ssa
-                else
-                    and_expr = Expr(:call, and_int, cond, ssa)
-                    and_type = and_int_tfunc(optimizer_lattice(interp), argextype(cond, compact), isa_type)
-                    cond = insert_node_here!(compact, NewInstruction(and_expr, and_type, line))
+            if !isa(case, ConstantCase)
+                for i = 1:nparams
+                    aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
+                    # If this is always true, we don't need to check for it
+                    aft <: mft && continue
+
+                    # Generate isa check
+                    isa_expr = Expr(:call, isa, argexprs[i], mft)
+                    isa_type = isa_tfunc(optimizer_lattice(interp), argextype(argexprs[i], compact), Const(mft))
+                    ssa = insert_node_here!(compact, NewInstruction(isa_expr, isa_type, line))
+                    if cond === true
+                        cond = ssa
+                    else
+                        and_expr = Expr(:call, and_int, cond, ssa)
+                        and_type = and_int_tfunc(optimizer_lattice(interp), argextype(cond, compact), isa_type)
+                        cond = insert_node_here!(compact, NewInstruction(and_expr, and_type, line))
+                    end
+                end
+            else
+                argtypes = case.argtypes
+                if isempty(argtypes) # TODO: Fix the case where this is Any[]
+                    continue
+                end
+                for i = 1:nparams
+                    argex = argexprs[i]
+                    tT, sT = argtypes[i], argextype(argex, compact)
+                    aft, mft = fieldtype(atype, i), fieldtype(mtype, i)
+                    if !(aft <: mft)
+                        # Generate isa check
+                        isa_expr = Expr(:call, isa, argex, mft)
+                        isa_type = isa_tfunc(optimizer_lattice(interp), argextype(argex, compact), Const(mft))
+                        ssa = insert_node_here!(compact, NewInstruction(isa_expr, isa_type, line))
+                        if cond === true
+                            cond = ssa
+                        else
+                            and_expr = Expr(:call, and_int, cond, ssa)
+                            and_type = and_int_tfunc(optimizer_lattice(interp), argextype(cond, compact), isa_type)
+                            cond = insert_node_here!(compact, NewInstruction(and_expr, and_type, line))
+                        end
+                    end
+
+                    if isa(tT, Const) && isa(sT, ConstSet)
+                        # Generate egal check
+                        egal_expr = Expr(:call, ===, argex, tT)
+                        egal_type = egal_tfunc(optimizer_lattice(interp), argextype(argex, compact), tT)
+                        ssa = insert_node_here!(compact, NewInstruction(egal_expr, egal_type, line))
+                        if cond === true
+                            cond = ssa
+                        else
+                            and_expr = Expr(:call, and_int, cond, ssa)
+                            and_type = and_int_tfunc(optimizer_lattice(interp), argextype(cond, compact), egal_type)
+                            cond = insert_node_here!(compact, NewInstruction(and_expr, and_type, line))
+                        end
+                    end
                 end
             end
             insert_node_here!(compact, NewInstruction(GotoIfNot(cond, next_cond_bb), Any, line))
@@ -809,7 +850,7 @@ end
     if code isa CodeInstance
         if use_const_api(code)
             # in this case function can be inlined to a constant
-            return ConstantCase(quoted(code.rettype_const), code)
+            return ConstantCase(quoted(code.rettype_const), code, Any[]) # TODO: argtypes
         end
         return code
     end
@@ -822,7 +863,7 @@ end
         res = inf_result.result
         if isa(res, Const) && is_inlineable_constant(res.val)
             # use constant calling convention
-            return ConstantCase(quoted(res.val), inf_result.ci_as_edge)
+            return ConstantCase(quoted(res.val), inf_result.ci_as_edge, inf_result.argtypes)
         end
     end
     return InferredResult(inf_result.src, effects, inf_result.ci_as_edge)
@@ -1160,7 +1201,7 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
     end
     result = info.result
     if isa(result, ConcreteResult)
-        item = concrete_result_item(result, info, state)
+        item = concrete_result_item(result, info, state, sig.argtypes)
     elseif isa(result, SemiConcreteResult)
         item = semiconcrete_result_item(result, info, flag, state)
     else
@@ -1292,11 +1333,11 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
 end
 
 function handle_any_const_result!(cases::Vector{InliningCase},
-    @nospecialize(result), match::MethodMatch, argtypes::Vector{Any},
+    @nospecialize(result), match::MethodMatch, match_argtypes::Vector{Any}, argtypes::Vector{Any},
     @nospecialize(info::CallInfo), flag::UInt32, state::InliningState;
     allow_typevars::Bool)
     if isa(result, ConcreteResult)
-        return handle_concrete_result!(cases, result, match, info, state)
+        return handle_concrete_result!(cases, result, match, match_argtypes, info, state)
     elseif isa(result, SemiConcreteResult)
         return handle_semi_concrete_result!(cases, result, match, info, flag, state)
     elseif isa(result, ConstPropResult)
@@ -1337,7 +1378,8 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
     local all_result_count = 0
     local joint_effects = EFFECTS_TOTAL
     for i = 1:nunion
-        meth = getsplit(info, i)
+        query = getsplit(info, i)
+        meth = query.results
         if meth.ambig
             # Too many applicable methods
             # Or there is a (partial?) ambiguity
@@ -1364,7 +1406,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
                 handled_all_cases = false
             else
                 handled_all_cases &= handle_any_const_result!(cases,
-                    result, match, argtypes, info, flag, state; allow_typevars=false)
+                    result, match, query.argtypes, argtypes, info, flag, state; allow_typevars=false)
             end
         end
         fully_covered &= split_fully_covered
@@ -1377,10 +1419,11 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
             # we handled everything except one match with unmatched sparams,
             # so try to handle it by bypassing validate_sparams
             (i, j, k) = revisit_idx
-            match = getsplit(info, i)[j]
+            query = getsplit(info, i)
+            match = query.results[j]
             result = getresult(info, k)
             handled_all_cases &= handle_any_const_result!(cases,
-                result, match, argtypes, info, flag, state; allow_typevars=true)
+                result, match, query.argtypes, argtypes, info, flag, state; allow_typevars=true)
         end
         if !fully_covered
             # We will emit an inline MethodError in this case, but that info already came inference, so we must already have the uncovered edge for it
@@ -1463,8 +1506,8 @@ function handle_semi_concrete_result!(cases::Vector{InliningCase}, result::SemiC
 end
 
 function handle_concrete_result!(cases::Vector{InliningCase}, result::ConcreteResult,
-    match::MethodMatch, @nospecialize(info::CallInfo), state::InliningState)
-    case = concrete_result_item(result, info, state)
+    match::MethodMatch, argtypes::Vector{Any}, @nospecialize(info::CallInfo), state::InliningState)
+    case = concrete_result_item(result, info, state, argtypes)
     case === nothing && return false
     push!(cases, InliningCase(match.spec_types, case))
     return true
@@ -1473,13 +1516,13 @@ end
 may_inline_concrete_result(result::ConcreteResult) =
     isdefined(result, :result) && is_inlineable_constant(result.result)
 
-function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallInfo), state::InliningState)
+function concrete_result_item(result::ConcreteResult, @nospecialize(info::CallInfo), state::InliningState, argtypes::Vector{Any})
     if !may_inline_concrete_result(result)
         et = InliningEdgeTracker(state)
         return compileable_specialization(result.edge, result.effects, et, info, state)
     end
     @assert result.effects === EFFECTS_TOTAL
-    return ConstantCase(quoted(result.result), result.edge)
+    return ConstantCase(quoted(result.result), result.edge, argtypes)
 end
 
 function handle_cases!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stmt::Expr,
@@ -1511,7 +1554,7 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
         validate_sparams(mi.sparam_vals) || return nothing
         item = resolve_todo(mi, result.result, info, flag, state)
     elseif isa(result, ConcreteResult)
-        item = concrete_result_item(result, info, state)
+        item = concrete_result_item(result, info, state, Any[]) # TODO argtypes for ConstSplit
     elseif isa(result, SemiConcreteResult)
         item = item = semiconcrete_result_item(result, info, flag, state)
     else
@@ -1529,7 +1572,7 @@ function handle_modifyop!_call!(ir::IRCode, idx::Int, stmt::Expr, info::ModifyOp
     info isa ConstCallInfo && (info = info.call)
     info isa MethodMatchInfo || return nothing
     length(info.edges) == length(info.results) == 1 || return nothing
-    match = info.results[1]::MethodMatch
+    match = info.query.results[1]::MethodMatch
     match.fully_covers || return nothing
     edge = info.edges[1]
     edge === nothing && return nothing
