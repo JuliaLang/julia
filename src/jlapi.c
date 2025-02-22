@@ -1125,13 +1125,6 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
     jl_atexit_hook(ret);
     return ret;
 }
-int jl_init_runtime_adopt_thread(void* sysimg_handle)
-{
-    //Unimplemented
-    abort();
-    return 0;
-}
-
 
 #ifdef __cplusplus
 }
