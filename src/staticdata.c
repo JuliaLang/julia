@@ -3654,9 +3654,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     htable_new(&new_dt_objs, 0);
     arraylist_new(&deser_sym, 0);
 
-    // in --build mode only use sysimg data, not precompiled native code
-    int imaging_mode = jl_generating_output() && !jl_options.incremental;
-    if (imaging_mode || jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES || IMAGE_NATIVE_CODE_TAINTED) {
+    if (jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES || IMAGE_NATIVE_CODE_TAINTED) {
         memset(&image->fptrs, 0, sizeof(image->fptrs));
         image->gvars_base = NULL;
         IMAGE_NATIVE_CODE_TAINTED = 1;
