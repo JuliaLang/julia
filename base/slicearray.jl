@@ -77,7 +77,7 @@ end
 """
     eachslice(A::AbstractArray; dims, drop=true)
 
-Create a sliced object, usually [`Slices`](@ref), that is an array of slices over dimensions 
+Create a sliced object, usually [`Slices`](@ref), that is an array of slices over dimensions
 `dims` of `A`, returning views that select all the data from the other dimensions in `A`.
 `dims` can either be an integer or a tuple of integers.
 
