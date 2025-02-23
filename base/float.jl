@@ -720,7 +720,7 @@ See also: [`Inf`](@ref), [`iszero`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 isinf(x::IEEEFloat) = abs(x) === oftype(x, Inf)
 
-const hx_NaN = hash_uint64(reinterpret(UInt64, NaN))
+const hx_NaN = hash(reinterpret(UInt64, NaN))
 function hash(x::Float64, h::UInt)
     # see comments on trunc and hash(Real, UInt)
     if typemin(Int64) <= x < typemax(Int64)
@@ -736,7 +736,7 @@ function hash(x::Float64, h::UInt)
     elseif isnan(x)
         return hx_NaN ⊻ h # NaN does not have a stable bit pattern
     end
-    return hash_uint64(bitcast(UInt64, x)) - 3h
+    return hash(bitcast(UInt64, x)) - 3h
 end
 
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
@@ -751,7 +751,7 @@ function hash(x::Float16, h::UInt)
     elseif isnan(x)
         return hx_NaN ⊻ h # NaN does not have a stable bit pattern
     end
-    return hash_uint64(bitcast(UInt64, Float64(x))) - 3h
+    return hash(bitcast(UInt64, Float64(x))) - 3h
 end
 
 ## generic hashing for rational values ##

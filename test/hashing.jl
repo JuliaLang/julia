@@ -109,6 +109,9 @@ vals = Any[
 ]
 
 for a in vals, b in vals
+    println(a, ' ', typeof(a), ' ', objectid(a), ' ', hash(a))
+    println(b, ' ', typeof(b), ' ', objectid(b), ' ', hash(b))
+    println()
     @test isequal(a,b) == (hash(a)==hash(b))
 end
 

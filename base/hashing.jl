@@ -25,80 +25,134 @@ julia> hash(10, a) # only use the output of another hash function as the second 
 
 See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 """
-hash(x::Any) = hash(x, zero(UInt))
-hash(w::WeakRef, h::UInt) = hash(w.value, h)
+const RAPID_SEED = UInt64(0xbdd89aa982704029)
+const RAPID_SECRET = tuple(
+    0x2d358dccaa6c78a5,
+    0x8bb84b93962eacc9,
+    0x4b33a62ed433d4a3,
+)
 
-# Types can't be deleted, so marking as total allows the compiler to look up the hash
-hash(T::Type, h::UInt) = hash_uint(3h - @assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T))
+mul_hi64(A::UInt64, B::UInt64) = ((widen(A) * B) >> 64) % UInt64
+rapid_mix(A, B) = mul_hi64(A, B) ⊻ (A * B)
 
-## hashing general objects ##
+load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} = unsafe_load(Ptr{T}(ptr + i - 1))
 
-hash(@nospecialize(x), h::UInt) = hash_uint(3h - objectid(x))
-
-hash(x::Symbol) = objectid(x)
-
-## core data hashing functions ##
-
-function hash_64_64(n::UInt64)
-    a::UInt64 = n
-    a = ~a + a << 21
-    a =  a ⊻ a >> 24
-    a =  a + a << 3 + a << 8
-    a =  a ⊻ a >> 14
-    a =  a + a << 2 + a << 4
-    a =  a ⊻ a >> 28
-    a =  a + a << 31
-    return a
+function read_small(ptr::Ptr{UInt8}, n::Int)
+    return (UInt64(unsafe_load(ptr)) << 56) |
+        (UInt64(unsafe_load(ptr + div(n, 2))) << 32) |
+        UInt64(unsafe_load(ptr + n - 1))
 end
 
-function hash_64_32(n::UInt64)
-    a::UInt64 = n
-    a = ~a + a << 18
-    a =  a ⊻ a >> 31
-    a =  a * 21
-    a =  a ⊻ a >> 11
-    a =  a + a << 6
-    a =  a ⊻ a >> 22
-    return a % UInt32
+function hash(
+        ptr::Ptr{UInt8},
+        n::Int,
+        seed::UInt64,
+        secret::NTuple{3, UInt64}
+    )
+    buflen = UInt64(n)
+    seed = seed ⊻ (rapid_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
+
+    a = zero(UInt64)
+    b = zero(UInt64)
+
+    if buflen ≤ 16
+        if buflen ≥ 4
+            a = (UInt64(load_le(UInt32, ptr, 1)) << 32) |
+                UInt64(load_le(UInt32, ptr, n - 4 + 1))
+
+            delta = (buflen & 24) >>> (buflen >>> 3)
+            b = (UInt64(load_le(UInt32, ptr, delta + 1)) << 32) |
+                UInt64(load_le(UInt32, ptr, n - 4 - delta + 1))
+        elseif buflen > 0
+            a = read_small(ptr, n)
+        end
+    else
+        pos = 1
+        i = buflen
+        if i > 48
+            see1 = seed
+            see2 = seed
+            while i ≥ 48
+                seed = rapid_mix(
+                    load_le(UInt64, ptr, pos) ⊻ secret[1],
+                    load_le(UInt64, ptr, pos + 8) ⊻ seed
+                )
+                see1 = rapid_mix(
+                    load_le(UInt64, ptr, pos + 16) ⊻ secret[2],
+                    load_le(UInt64, ptr, pos + 24) ⊻ see1
+                )
+                see2 = rapid_mix(
+                    load_le(UInt64, ptr, pos + 32) ⊻ secret[3],
+                    load_le(UInt64, ptr, pos + 40) ⊻ see2
+                )
+                pos += 48
+                i -= 48
+            end
+            seed = seed ⊻ see1 ⊻ see2
+        end
+        if i > 16
+            seed = rapid_mix(
+                load_le(UInt64, ptr, pos) ⊻ secret[3],
+                load_le(UInt64, ptr, pos + 8) ⊻ seed ⊻ secret[2]
+            )
+            if i > 32
+                seed = rapid_mix(
+                    load_le(UInt64, ptr, pos + 16) ⊻ secret[3],
+                    load_le(UInt64, ptr, pos + 24) ⊻ seed
+                )
+            end
+        end
+
+        a = load_le(UInt64, ptr, n - 17)
+        b = load_le(UInt64, ptr, n - 9)
+    end
+
+    a = a ⊻ secret[2]
+    b = b ⊻ seed
+    a, b = a * b, mul_hi64(a, b)
+    return rapid_mix(a ⊻ secret[1] ⊻ buflen, b ⊻ secret[2])
 end
 
-function hash_32_32(n::UInt32)
-    a::UInt32 = n
-    a = a + 0x7ed55d16 + a << 12
-    a = a ⊻ 0xc761c23c ⊻ a >> 19
-    a = a + 0x165667b1 + a << 5
-    a = a + 0xd3a2646c ⊻ a << 9
-    a = a + 0xfd7046c5 + a << 3
-    a = a ⊻ 0xb55a4f09 ⊻ a >> 16
-    return a
+
+function hash_64_64(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64})
+    seed = seed ⊻ (rapid_mix(seed ⊻ secret[1], secret[2]) ⊻ 8)
+
+    a = (UInt64(bswap((data >>> 32) % UInt32)) << 32) | UInt64(bswap(data % UInt32))
+    b = (a << 32) | (a >>> 32)
+    a = a ⊻ secret[2]
+    b = b ⊻ seed
+    a, b = a * b, mul_hi64(a, b)
+    return rapid_mix(a ⊻ secret[1] ⊻ 8, b ⊻ secret[2])
 end
+hash_64_32(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64}) =
+    hash_64_64(data, seed, secret) % UInt32
+hash_32_32(data::UInt32, seed::UInt64, secret::NTuple{3, UInt64}) =
+    hash_64_32(UInt64(data), seed, secret)
 
 if UInt === UInt64
-    hash_uint64(x::UInt64) = hash_64_64(x)
-    hash_uint(x::UInt)     = hash_64_64(x)
+    const hash_uint64 = hash_64_64
+    const hash_uint = hash_64_64
 else
-    hash_uint64(x::UInt64) = hash_64_32(x)
-    hash_uint(x::UInt)     = hash_32_32(x)
+    const hash_uint64 = hash_64_32
+    const hash_uint = hash_32_32
 end
 
-## efficient value-based hashing of integers ##
+hash(x::UInt64, h::UInt) = hash_uint64(x, h, RAPID_SECRET)
+hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
+hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
-hash(x::Int64,  h::UInt) = hash_uint64(bitcast(UInt64, x)) - 3h
-hash(x::UInt64, h::UInt) = hash_uint64(x) - 3h
-hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
 
 function hash_integer(n::Integer, h::UInt)
-    h ⊻= hash_uint((n % UInt) ⊻ h)
+    h ⊻= hash((n % UInt) ⊻ h)
     n = abs(n)
     n >>>= sizeof(UInt) << 3
     while n != 0
-        h ⊻= hash_uint((n % UInt) ⊻ h)
+        h ⊻= hash((n % UInt) ⊻ h)
         n >>>= sizeof(UInt) << 3
     end
     return h
 end
 
-## symbol & expression hashing ##
 
 if UInt === UInt64
     hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
@@ -108,12 +162,18 @@ else
     hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x469d72af)
 end
 
-## hashing strings ##
 
-const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
-const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
+# hash(data::Char, h::UInt64) = hash(UInt(Base.bitcast(UInt32, data)), h)
+hash(data::String, h::UInt64) = GC.@preserve data hash(pointer(data), sizeof(data), h, RAPID_SECRET)
 
-@assume_effects :total function hash(s::String, h::UInt)
-    h += memhash_seed
-    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
+
+hash(w::WeakRef, h::UInt64) = rapid(w.value, h)
+function hash(T::Type, h::UInt64)
+    return hash((Base.@assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)), h)
 end
+
+hash(x::Symbol) = objectid(x)
+
+# generic dispatch
+hash(data) = hash(data, RAPID_SEED)
+hash(@nospecialize(data), h::UInt64) = hash(objectid(data), h)
