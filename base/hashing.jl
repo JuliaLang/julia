@@ -1,6 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## hashing a single value ##
+const RAPID_SEED = UInt64(0xbdd89aa982704029)
+const RAPID_SECRET = tuple(
+    0x2d358dccaa6c78a5,
+    0x8bb84b93962eacc9,
+    0x4b33a62ed433d4a3,
+)
 
 """
     hash(x[, h::UInt]) -> UInt
@@ -17,20 +22,17 @@ The hash value may change when a new Julia process is started.
 
 ```jldoctest
 julia> a = hash(10)
-0x95ea2955abd45275
+0x64abb6a0b5357846
 
 julia> hash(10, a) # only use the output of another hash function as the second argument
-0xd42bad54a8575b16
+0xeb3ffc597ad4eafd
 ```
 
 See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 """
-const RAPID_SEED = UInt64(0xbdd89aa982704029)
-const RAPID_SECRET = tuple(
-    0x2d358dccaa6c78a5,
-    0x8bb84b93962eacc9,
-    0x4b33a62ed433d4a3,
-)
+hash(data) = hash(data, RAPID_SEED)
+hash(@nospecialize(data), h::UInt64) = hash(objectid(data), h)
+
 
 mul_hi64(A::UInt64, B::UInt64) = ((widen(A) * B) >> 64) % UInt64
 rapid_mix(A, B) = mul_hi64(A, B) ⊻ (A * B)
@@ -70,7 +72,7 @@ function hash(
     else
         pos = 1
         i = buflen
-        if i > 48
+        for _ in 1:div(buflen, 48)
             see1 = seed
             see2 = seed
             while i ≥ 48
@@ -162,8 +164,8 @@ else
     hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x469d72af)
 end
 
-
-hash(data::String, h::UInt64) = GC.@preserve data hash(pointer(data), sizeof(data), h, RAPID_SECRET)
+# hash(data::String, h::UInt64) = hash(length(data), h)
+hash(data::String, h::UInt64) = @assume_effects :total GC.@preserve data hash(pointer(data), sizeof(data), h, RAPID_SECRET)
 
 hash(w::WeakRef, h::UInt64) = hash(w.value, h)
 function hash(T::Type, h::UInt64)
@@ -171,7 +173,3 @@ function hash(T::Type, h::UInt64)
 end
 
 hash(x::Symbol) = objectid(x)
-
-# generic dispatch
-hash(data) = hash(data, RAPID_SEED)
-hash(@nospecialize(data), h::UInt64) = hash(objectid(data), h)
