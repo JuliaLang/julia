@@ -1249,7 +1249,7 @@ extern "C" JL_DLLEXPORT_CODEGEN int jl_getFunctionInfo_impl(jl_frame_t **frames_
     frames[0].line = -1;
     *frames_out = frames;
 
-    llvm::DIContext *context;
+    llvm::DIContext *context = nullptr;
     object::SectionRef Section;
     int64_t slide;
     uint64_t symsize;
