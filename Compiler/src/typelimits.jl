@@ -326,6 +326,62 @@ function n_initialized(t::Const)
     return something(findfirst(i::Int->!isdefined(t.val,i), 1:nf), nf+1)-1
 end
 
+is_field_initialized(t::Const, i) = isdefined(t.val, i)
+
+function n_initialized(pstruct::PartialStruct)
+    i = findfirst(pstruct.undef)
+    nmin = datatype_min_ninitialized(pstruct.typ)
+    i === nothing && return max(length(pstruct.undef), nmin)
+    n = i::Int - 1
+    @assert n ≥ nmin
+    n
+end
+
+function is_field_initialized(pstruct::PartialStruct, fi)
+    fi ≥ 1 || return false
+    fi ≤ length(pstruct.undef) && return !pstruct.undef[fi]
+    fi ≤ datatype_min_ninitialized(pstruct.typ)
+end
+
+function partialstruct_getfield(pstruct::PartialStruct, fi::Integer)
+    @assert fi > 0
+    fi ≤ length(pstruct.fields) && return pstruct.fields[fi]
+    fieldtype(pstruct.typ, fi)
+end
+
+function refines_definedness_information(pstruct::PartialStruct)
+    nflds = length(pstruct.undef)
+    something(findfirst(pstruct.undef), nflds + 1) - 1 > datatype_min_ninitialized(pstruct.typ)
+end
+
+function define_field(pstruct::PartialStruct, fi::Int)
+    if is_field_initialized(pstruct, fi)
+        # no new information to be gained
+        return nothing
+    end
+
+    new = expand_partialstruct(pstruct, fi)
+    if new === nothing
+        new = PartialStruct(fallback_lattice, pstruct.typ, copy(pstruct.undef), copy(pstruct.fields))
+    end
+    new.undef[fi] = false
+    return new
+end
+
+function expand_partialstruct(pstruct::PartialStruct, until::Int)
+    n = length(pstruct.undef)
+    until ≤ n && return nothing
+
+    undef = partialstruct_init_undef(pstruct.typ, until; all_defined = false)
+    for i in 1:n
+        undef[i] &= pstruct.undef[i]
+    end
+    nf = length(pstruct.fields)
+    typ = pstruct.typ
+    fields = Any[i ≤ nf ? pstruct.fields[i] : fieldtype(typ, i) for i in 1:until]
+    return PartialStruct(fallback_lattice, typ, undef, fields)
+end
+
 # A simplified type_more_complex query over the extended lattice
 # (assumes typeb ⊑ typea)
 @nospecializeinfer function issimplertype(𝕃::AbstractLattice, @nospecialize(typea), @nospecialize(typeb))
@@ -333,10 +389,11 @@ end
     typea === typeb && return true
     if typea isa PartialStruct
         aty = widenconst(typea)
-        if typeb isa Const
-            @assert length(typea.fields) ≤ n_initialized(typeb) "typeb ⊑ typea is assumed"
+        if typeb isa Const || typeb isa PartialStruct
+            @assert n_initialized(typea) ≤ n_initialized(typeb) "typeb ⊑ typea is assumed"
         elseif typeb isa PartialStruct
-            @assert length(typea.fields) ≤ length(typeb.fields) "typeb ⊑ typea is assumed"
+            @assert n_initialized(typea) ≤ n_initialized(typeb) &&
+                all(b < a for (a, b) in zip(typea.undef, typeb.undef)) "typeb ⊑ typea is assumed"
         else
             return false
         end
@@ -591,17 +648,24 @@ end
         if typea isa PartialStruct
             if typeb isa PartialStruct
                 nflds = min(length(typea.fields), length(typeb.fields))
+                nundef = nflds - (isvarargtype(typea.fields[end]) && isvarargtype(typeb.fields[end]))
             else
                 nflds = min(length(typea.fields), n_initialized(typeb::Const))
+                nundef = nflds
             end
         elseif typeb isa PartialStruct
             nflds = min(n_initialized(typea::Const), length(typeb.fields))
+            nundef = nflds
         else
             nflds = min(n_initialized(typea::Const), n_initialized(typeb::Const))
+            nundef = nflds
         end
         nflds == 0 && return nothing
+        _undef = partialstruct_init_undef(aty, nundef; all_defined = false)
         fields = Vector{Any}(undef, nflds)
-        anyrefine = nflds > datatype_min_ninitialized(aty)
+        fldmin = datatype_min_ninitialized(aty)
+        n_initialized_merged = min(n_initialized(typea::Union{Const, PartialStruct}), n_initialized(typeb::Union{Const, PartialStruct}))
+        anyrefine = n_initialized_merged > fldmin
         for i = 1:nflds
             ai = getfield_tfunc(𝕃, typea, Const(i))
             bi = getfield_tfunc(𝕃, typeb, Const(i))
@@ -633,12 +697,16 @@ end
                 end
             end
             fields[i] = tyi
+            if i ≤ nundef
+                _undef[i] = !is_field_initialized(typea, i) || !is_field_initialized(typeb, i)
+            end
             if !anyrefine
                 anyrefine = has_nontrivial_extended_info(𝕃, tyi) || # extended information
-                            ⋤(𝕃, tyi, ft) # just a type-level information, but more precise than the declared type
+                            ⋤(𝕃, tyi, ft) || # just a type-level information, but more precise than the declared type
+                            !get(_undef, i, true) && i > fldmin # possibly uninitialized field is known to be initialized
             end
         end
-        anyrefine && return PartialStruct(𝕃, aty, fields)
+        anyrefine && return PartialStruct(𝕃, aty, _undef, fields)
     end
     return nothing
 end
