@@ -75,7 +75,7 @@ GC_CODEGEN_SRCS += llvm-late-gc-lowering-stock
 endif
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls \
-	llvm-lower-handlers llvm-propagate-addrspaces \
+	llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures pipeline llvm_api \
 	$(GC_CODEGEN_SRCS)
@@ -205,10 +205,10 @@ CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
 CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
 # Add SONAME defines so we can embed proper `dlopen()` calls.
-ADDL_SHIPFLAGS  := "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys.$(SHLIB_EXT)\"" \
-                   "-DJL_LIBJULIA_SONAME=\"$(LIBJULIA_PATH_REL).$(JL_MAJOR_SHLIB_EXT)\""
-ADDL_DEBUGFLAGS := "-DJL_SYSTEM_IMAGE_PATH=\"$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)\"" \
-                   "-DJL_LIBJULIA_SONAME=\"$(LIBJULIA_PATH_REL)-debug.$(JL_MAJOR_SHLIB_EXT)\""
+ADDL_SHIPFLAGS  := -DJL_SYSTEM_IMAGE_PATH=$(call shell_escape,$(call c_escape,$(call normalize_path,$(build_private_libdir_rel)/sys.$(SHLIB_EXT)))) \
+                   -DJL_LIBJULIA_SONAME=$(call shell_escape,$(call c_escape,$(LIBJULIA_PATH_REL).$(JL_MAJOR_SHLIB_EXT)))
+ADDL_DEBUGFLAGS := -DJL_SYSTEM_IMAGE_PATH=$(call shell_escape,$(call c_escape,$(call normalize_path,$(build_private_libdir_rel)/sys-debug.$(SHLIB_EXT)))) \
+                   -DJL_LIBJULIA_SONAME=$(call shell_escape,$(call c_escape,$(LIBJULIA_PATH_REL)-debug.$(JL_MAJOR_SHLIB_EXT)))
 
 SHIPFLAGS         += $(FLAGS) $(ADDL_SHIPFLAGS)
 DEBUGFLAGS        += $(FLAGS) $(ADDL_DEBUGFLAGS)
@@ -360,7 +360,6 @@ $(BUILDDIR)/llvm-final-gc-lowering.o $(BUILDDIR)/llvm-final-gc-lowering.dbg.obj:
 $(BUILDDIR)/llvm-gc-invariant-verifier.o $(BUILDDIR)/llvm-gc-invariant-verifier.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-julia-licm.o $(BUILDDIR)/llvm-julia-licm.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/llvm-alloc-helpers.h $(SRCDIR)/llvm-pass-helpers.h
 $(BUILDDIR)/llvm-late-gc-lowering.o $(BUILDDIR)/llvm-late-gc-lowering.dbg.obj: $(SRCDIR)/llvm-gc-interface-passes.h
-$(BUILDDIR)/llvm-lower-handlers.o $(BUILDDIR)/llvm-lower-handlers.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-multiversioning.o $(BUILDDIR)/llvm-multiversioning.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/processor.h
 $(BUILDDIR)/llvm-pass-helpers.o $(BUILDDIR)/llvm-pass-helpers.dbg.obj: $(SRCDIR)/llvm-pass-helpers.h $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/llvm-propagate-addrspaces.o $(BUILDDIR)/llvm-propagate-addrspaces.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h

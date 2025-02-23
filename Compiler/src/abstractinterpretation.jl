@@ -2665,12 +2665,24 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         pushfirst!(argtypes, ft)
         refinements = nothing
-        if sv isa InferenceState && f === typeassert
-            # perform very limited back-propagation of invariants after this type assertion
-            if rt !== Bottom && isa(fargs, Vector{Any})
+        if sv isa InferenceState
+            if f === typeassert
+                # perform very limited back-propagation of invariants after this type assertion
+                if rt !== Bottom && isa(fargs, Vector{Any})
+                    farg2 = ssa_def_slot(fargs[2], sv)
+                    if farg2 isa SlotNumber
+                        refinements = SlotRefinement(farg2, rt)
+                    end
+                end
+            elseif f === setfield! && length(argtypes) == 4 && isa(argtypes[3], Const)
+                # from there on we know that the struct field will never be undefined,
+                # so we try to encode that information with a `PartialStruct`
                 farg2 = ssa_def_slot(fargs[2], sv)
                 if farg2 isa SlotNumber
-                    refinements = SlotRefinement(farg2, rt)
+                    refined = form_partially_defined_struct(argtypes[2], argtypes[3])
+                    if refined !== nothing
+                        refinements = SlotRefinement(farg2, refined)
+                    end
                 end
             end
         end
@@ -3409,7 +3421,7 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
         abstract_eval_value(interp, x, sstate, sv)
     end
     cconv = e.args[5]
-    if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt16}))
+    if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt16, Bool}))
         override = decode_effects_override(v[2])
         effects = override_effects(effects, override)
     end

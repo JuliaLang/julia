@@ -162,7 +162,7 @@ typedef struct {
     // jl_value_t *data[];
 } jl_svec_t;
 
-JL_EXTENSION typedef struct {
+JL_EXTENSION typedef struct _jl_genericmemory_t {
     JL_DATA_TYPE
     size_t length;
     void *ptr;
@@ -312,6 +312,7 @@ typedef struct _jl_code_info_t {
     // various boolean properties:
     uint8_t propagate_inbounds;
     uint8_t has_fcall;
+    uint8_t has_image_globalref;
     uint8_t nospecializeinfer;
     uint8_t isva;
     // uint8 settings
@@ -706,12 +707,9 @@ enum jl_partition_kind {
     BINDING_KIND_IMPLICIT_RECOMPUTE = 0xb
 };
 
-#ifdef _P64
-// Union of a ptr and a 3 bit field.
-typedef uintptr_t jl_ptr_kind_union_t;
-#else
-typedef struct __attribute__((aligned(8))) { jl_value_t *val; size_t kind; } jl_ptr_kind_union_t;
-#endif
+// These are flags that get anded into the above
+static const uint8_t BINDING_FLAG_EXPORTED       = 0x10;
+
 typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
     JL_DATA_TYPE
     /* union {
@@ -722,17 +720,18 @@ typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
      *   // For ->kind in (BINDING_KIND_IMPLICIT, BINDING_KIND_EXPLICIT, BINDING_KIND_IMPORT)
      *   jl_binding_t *imported;
      * } restriction;
-     *
-     * Currently: Low 3 bits hold ->kind on _P64 to avoid needing >8 byte atomics
-     *
-     * This field is updated atomically with both kind and restriction
      */
-    _Atomic(jl_ptr_kind_union_t) restriction;
+    jl_value_t *restriction;
     size_t min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t *) next;
-    size_t reserved; // Reserved for ->kind. Currently this holds the low bits of ->restriction during serialization
+    size_t kind;
 } jl_binding_partition_t;
+
+STATIC_INLINE enum jl_partition_kind jl_binding_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT
+{
+    return (enum jl_partition_kind)(bpart->kind & 0xf);
+}
 
 typedef struct _jl_binding_t {
     JL_DATA_TYPE
@@ -741,8 +740,8 @@ typedef struct _jl_binding_t {
     _Atomic(jl_binding_partition_t*) partitions;
     jl_array_t *backedges;
     uint8_t did_print_backdate_admonition:1;
-    uint8_t exportp:1; // `public foo` sets `publicp`, `export foo` sets both `publicp` and `exportp`
-    uint8_t publicp:1; // exportp without publicp is not allowed.
+    uint8_t did_print_implicit_import_admonition:1;
+    uint8_t publicp:1; // `export` is tracked in partitions, but sets this as well
     uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
     uint8_t padding:3;
 } jl_binding_t;
@@ -772,6 +771,8 @@ typedef struct _jl_module_t {
     int8_t infer;
     uint8_t istopmod;
     int8_t max_methods;
+    // If cleared no binding partition in this module has BINDING_FLAG_EXPORTED and min_world > jl_require_world.
+    _Atomic(int8_t) export_set_changed_since_require_world;
     jl_mutex_t lock;
     intptr_t hash;
 } jl_module_t;
@@ -1181,38 +1182,6 @@ JL_DLLEXPORT void jl_free_stack(void *stkbuf, size_t bufsz);
 // thread-local allocator of the current thread.
 JL_DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 
-// GC write barriers
-
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
-{
-    // parent and ptr isa jl_value_t*
-    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */ && // parent is old and not in remset
-                   (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) == 0)) // ptr is young
-        jl_gc_queue_root((jl_value_t*)parent);
-}
-
-STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
-{
-    // if ptr is old
-    if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3 /* GC_OLD_MARKED */)) {
-        jl_gc_queue_root((jl_value_t*)ptr);
-    }
-}
-
-STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
-{
-    // 3 == GC_OLD_MARKED
-    // ptr is an immutable object
-    if (__likely(jl_astaggedvalue(parent)->bits.gc != 3))
-        return; // parent is young or in remset
-    if (__likely(jl_astaggedvalue(ptr)->bits.gc == 3))
-        return; // ptr is old and not in remset (thus it does not point to young)
-    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
-    const jl_datatype_layout_t *ly = dt->layout;
-    if (ly->npointers)
-        jl_gc_queue_multiroot((jl_value_t*)parent, ptr, dt);
-}
-
 JL_DLLEXPORT void jl_gc_safepoint(void);
 JL_DLLEXPORT int jl_safepoint_suspend_thread(int tid, int waitstate);
 JL_DLLEXPORT void jl_safepoint_suspend_all_threads(struct _jl_task_t *ct);
@@ -1330,6 +1299,94 @@ STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
     return (jl_value_t*)x;
 }
 #endif
+
+// GC write barriers
+
+STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
+{
+    // parent and ptr isa jl_value_t*
+    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */ && // parent is old and not in remset
+                   (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) == 0)) // ptr is young
+        jl_gc_queue_root((jl_value_t*)parent);
+}
+
+STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
+{
+    // if ptr is old
+    if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3 /* GC_OLD_MARKED */)) {
+        jl_gc_queue_root((jl_value_t*)ptr);
+    }
+}
+
+STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
+{
+    // 3 == GC_OLD_MARKED
+    // ptr is an immutable object
+    if (__likely(jl_astaggedvalue(parent)->bits.gc != 3))
+        return; // parent is young or in remset
+    if (__likely(jl_astaggedvalue(ptr)->bits.gc == 3))
+        return; // ptr is old and not in remset (thus it does not point to young)
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
+    const jl_datatype_layout_t *ly = dt->layout;
+    if (ly->npointers)
+        jl_gc_queue_multiroot((jl_value_t*)parent, ptr, dt);
+}
+
+STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) * dest_p,
+                                          jl_genericmemory_t *src, _Atomic(void*) * src_p,
+                                          size_t* n) JL_NOTSAFEPOINT
+{
+    if (__unlikely(jl_astaggedvalue(dest_owner)->bits.gc == 3 /* GC_OLD_MARKED */ )) {
+        jl_value_t *src_owner = jl_genericmemory_owner(src);
+        size_t done = 0;
+        if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
+            if (dest_p < src_p || dest_p > src_p + (*n)) {
+                for (; done < (*n); done++) { // copy forwards
+                    void *val = jl_atomic_load_relaxed(src_p + done);
+                    jl_atomic_store_release(dest_p + done, val);
+                    // `val` is young or old-unmarked
+                    if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
+                        jl_gc_queue_root(dest_owner);
+                        break;
+                    }
+                }
+                src_p += done;
+                dest_p += done;
+            }
+            else {
+                for (; done < (*n); done++) { // copy backwards
+                    void *val = jl_atomic_load_relaxed(src_p + (*n) - done - 1);
+                    jl_atomic_store_release(dest_p + (*n) - done - 1, val);
+                    // `val` is young or old-unmarked
+                    if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
+                        jl_gc_queue_root(dest_owner);
+                        break;
+                    }
+                }
+            }
+            (*n) -= done;
+        }
+    }
+}
+
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const jl_value_t *owner, jl_genericmemory_t *src, char* src_p,
+                                          size_t n, jl_datatype_t *dt) JL_NOTSAFEPOINT
+{
+    if (__unlikely(jl_astaggedvalue(owner)->bits.gc == 3 /* GC_OLD_MARKED */)) {
+        jl_value_t *src_owner = jl_genericmemory_owner(src);
+        size_t elsz = dt->layout->size;
+        if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
+            dt = (jl_datatype_t*)jl_tparam1(dt);
+            for (size_t done = 0; done < n; done++) { // copy forwards
+                char* s = (char*)src_p+done*elsz;
+                if (*((jl_value_t**)s+dt->layout->first_ptr) != NULL)
+                    jl_gc_queue_multiroot(owner, s, dt);
+            }
+        }
+    }
+}
 
 STATIC_INLINE uint8_t jl_memory_uint8_ref(void *m, size_t i) JL_NOTSAFEPOINT
 {
@@ -1475,6 +1532,13 @@ STATIC_INLINE char *jl_symbol_name_(jl_sym_t *s) JL_NOTSAFEPOINT
 }
 #define jl_symbol_name(s) jl_symbol_name_(s)
 
+STATIC_INLINE const char *jl_module_debug_name(jl_module_t *mod) JL_NOTSAFEPOINT
+{
+    if (!mod)
+        return "<null>";
+    return jl_symbol_name(mod->name);
+}
+
 static inline uint32_t jl_fielddesc_size(int8_t fielddesc_type) JL_NOTSAFEPOINT
 {
     assert(fielddesc_type >= 0 && fielddesc_type <= 2);
@@ -1610,6 +1674,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_quotenode(v)   jl_typetagis(v,jl_quotenode_type)
 #define jl_is_newvarnode(v)  jl_typetagis(v,jl_newvarnode_type)
 #define jl_is_linenode(v)    jl_typetagis(v,jl_linenumbernode_type)
+#define jl_is_linenumbernode(v) jl_typetagis(v,jl_linenumbernode_type)
 #define jl_is_method_instance(v) jl_typetagis(v,jl_method_instance_type)
 #define jl_is_code_instance(v) jl_typetagis(v,jl_code_instance_type)
 #define jl_is_code_info(v)   jl_typetagis(v,jl_code_info_type)
@@ -1901,7 +1966,7 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b JL_PROPAGATES_ROOT
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT);
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_and_const(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, jl_sym_t *name);
+JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world, jl_code_instance_t **cache);
 JL_DLLEXPORT jl_code_info_t *jl_copy_code_info(jl_code_info_t *src);
@@ -2051,7 +2116,7 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
 JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
-JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
+JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, size_t new_world);
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import);
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
@@ -2068,10 +2133,10 @@ JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
-JL_DLLEXPORT void jl_module_use(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
-JL_DLLEXPORT void jl_module_use_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
-JL_DLLEXPORT void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
-JL_DLLEXPORT void jl_module_import_as(jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
+JL_DLLEXPORT void jl_module_use(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s);
+JL_DLLEXPORT void jl_module_use_as(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
+JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s);
+JL_DLLEXPORT void jl_module_import_as(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
@@ -2255,6 +2320,7 @@ JL_DLLEXPORT jl_value_t *jl_compress_ir(jl_method_t *m, jl_code_info_t *code);
 JL_DLLEXPORT jl_code_info_t *jl_uncompress_ir(jl_method_t *m, jl_code_instance_t *metadata, jl_value_t *data);
 JL_DLLEXPORT uint8_t jl_ir_flag_inlining(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_flag_has_fcall(jl_value_t *data) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint8_t jl_ir_flag_has_image_globalref(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT ssize_t jl_ir_nslots(jl_value_t *data) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_ir_slotflag(jl_value_t *data, size_t i) JL_NOTSAFEPOINT;

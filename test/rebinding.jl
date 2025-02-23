@@ -193,10 +193,80 @@ module RebindingPrecompile
             Core.eval(Export2, :(const import_me2 = 22))
         end
         invokelatest() do
-            # Currently broken
-            # @test_throws UndefVarError ImportTest.f_use_binding2()
+            @test_throws UndefVarError ImportTest.f_use_binding2()
         end
     end
 
     finish_precompile_test!()
+end
+
+module Regression
+    using Test
+
+    # Issue #57377
+    module GeoParams57377
+        module B
+            using ...GeoParams57377
+            export S
+            struct S end
+            module C
+                using ..GeoParams57377
+                h() = S()
+                x -> nothing
+            end
+        end
+
+        using .B
+        export S
+    end
+    @test GeoParams57377.B.C.h() == GeoParams57377.B.C.S()
+end
+
+# Test that the validation bypass fast path is not defeated by loading InteractiveUtils
+@test parse(UInt, readchomp(`$(Base.julia_cmd()) -e 'using InteractiveUtils; show(unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)))'`)) == typemax(UInt)
+
+# Test that imported module binding backedges are still added in a new module that has the fast path active
+let test_code =
+    """
+    using Test
+    @assert unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
+    include("precompile_utils.jl")
+
+    precompile_test_harness("rebinding precompile") do load_path
+        write(joinpath(load_path, "LotsOfBindingsToDelete2.jl"),
+              "module LotsOfBindingsToDelete2
+                 const delete_me_6 = 6
+               end")
+        Base.compilecache(Base.PkgId("LotsOfBindingsToDelete2"))
+        write(joinpath(load_path, "UseTheBindings2.jl"),
+              "module UseTheBindings2
+                 import LotsOfBindingsToDelete2: delete_me_6
+                 f_use_bindings6() = delete_me_6
+                 # Code Instances for each of these
+                 @assert (f_use_bindings6(),) == (6,)
+               end")
+        Base.compilecache(Base.PkgId("UseTheBindings2"))
+        @eval using LotsOfBindingsToDelete2
+        @eval using UseTheBindings2
+        invokelatest() do
+            @test UseTheBindings2.f_use_bindings6() == 6
+            Base.delete_binding(LotsOfBindingsToDelete2, :delete_me_6)
+            invokelatest() do
+                @test_throws UndefVarError UseTheBindings2.f_use_bindings6()
+            end
+        end
+    end
+
+    finish_precompile_test!()
+    """
+    @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
+end
+
+# Image Globalref smoke test
+module ImageGlobalRefFlag
+    using Test
+    @eval fimage() = $(GlobalRef(Base, :sin))
+    fnoimage() = x
+    @test Base.has_image_globalref(first(methods(fimage)))
+    @test !Base.has_image_globalref(first(methods(fnoimage)))
 end

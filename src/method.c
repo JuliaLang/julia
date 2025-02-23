@@ -138,7 +138,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         return expr;
     }
     if (e->head == jl_foreigncall_sym) {
-        JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects))
+        JL_NARGSV(ccall method definition, 5); // (fptr, rt, at, nreq, (cc, effects, gc_safe))
         jl_task_t *ct = jl_current_task;
         jl_value_t *rt = jl_exprarg(e, 1);
         jl_value_t *at = jl_exprarg(e, 2);
@@ -172,11 +172,12 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_value_t *cc = jl_quotenode_value(jl_exprarg(e, 4));
         if (!jl_is_symbol(cc)) {
             JL_TYPECHK(ccall method definition, tuple, cc);
-            if (jl_nfields(cc) != 2) {
+            if (jl_nfields(cc) != 3) {
                 jl_error("In ccall calling convention, expected two argument tuple or symbol.");
             }
             JL_TYPECHK(ccall method definition, symbol, jl_get_nth_field(cc, 0));
             JL_TYPECHK(ccall method definition, uint16, jl_get_nth_field(cc, 1));
+            JL_TYPECHK(ccall method definition, bool, jl_get_nth_field(cc, 2));
         }
     }
     if (e->head == jl_call_sym && nargs > 0 &&
@@ -485,8 +486,17 @@ jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ir)
             is_flag_stmt = 1;
         else if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_return_sym)
             jl_array_ptr_set(body, j, jl_new_struct(jl_returnnode_type, jl_exprarg(st, 0)));
-        else if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym))
-            li->has_fcall = 1;
+        else if (jl_is_globalref(st)) {
+            jl_globalref_t *gr = (jl_globalref_t*)st;
+            if (jl_object_in_image((jl_value_t*)gr->mod))
+                li->has_image_globalref = 1;
+        }
+        else {
+            if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_assign_sym)
+                st = jl_exprarg(st, 1);
+            if (jl_is_expr(st) && (((jl_expr_t*)st)->head == jl_foreigncall_sym || ((jl_expr_t*)st)->head == jl_cfunction_sym))
+                li->has_fcall = 1;
+        }
         if (is_flag_stmt)
             jl_array_uint32_set(li->ssaflags, j, 0);
         else {
@@ -588,6 +598,7 @@ JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void)
     src->max_world = ~(size_t)0;
     src->propagate_inbounds = 0;
     src->has_fcall = 0;
+    src->has_image_globalref = 0;
     src->nospecializeinfer = 0;
     src->constprop = 0;
     src->inlining = 0;
@@ -1050,18 +1061,18 @@ JL_DLLEXPORT void jl_check_gf(jl_value_t *gf, jl_sym_t *name)
         jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
 }
 
-JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_binding_t *b, jl_module_t *mod, jl_sym_t *name)
+JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
 {
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
+    jl_binding_t *b = jl_get_binding_for_method_def(mod, name, new_world);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
-    jl_ptr_kind_union_t pku = jl_atomic_load_relaxed(&bpart->restriction);
     jl_value_t *gf = NULL;
-    enum jl_partition_kind kind = decode_restriction_kind(pku);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (!jl_bkind_is_some_guard(kind) && kind != BINDING_KIND_DECLARED && kind != BINDING_KIND_IMPLICIT) {
-        pku = jl_walk_binding_inplace(&b, &bpart, new_world);
-        if (jl_bkind_is_some_constant(decode_restriction_kind(pku))) {
-            gf = decode_restriction_value(pku);
+        jl_walk_binding_inplace(&b, &bpart, new_world);
+        if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
+            gf = bpart->restriction;
             JL_GC_PROMISE_ROOTED(gf);
             jl_check_gf(gf, b->globalref->name);
             JL_UNLOCK(&world_counter_lock);
@@ -1264,6 +1275,135 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     JL_GC_POP();
 
     return m;
+}
+
+void jl_ctor_def(jl_value_t *ty, jl_value_t *functionloc)
+{
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(ty);
+    JL_TYPECHK(ctor_def, datatype, (jl_value_t*)dt);
+    JL_TYPECHK(ctor_def, linenumbernode, functionloc);
+    jl_svec_t *fieldtypes = jl_get_fieldtypes(dt);
+    size_t nfields = jl_svec_len(fieldtypes);
+    size_t nparams = jl_subtype_env_size(ty);
+    jl_module_t *inmodule = dt->name->module;
+    jl_sym_t *file = (jl_sym_t*)jl_linenode_file(functionloc);
+    if (!jl_is_symbol(file))
+        file = jl_empty_sym;
+    int32_t line = jl_linenode_line(functionloc);
+
+    // argdata is svec(svec(types...), svec(typevars...), functionloc)
+    jl_svec_t *argdata = jl_alloc_svec(3);
+    jl_array_t *fieldkinds = NULL;
+    jl_code_info_t *body = NULL;
+    JL_GC_PUSH3(&argdata, &fieldkinds, &body);
+    jl_svecset(argdata, 2, functionloc);
+    jl_svec_t *tvars = jl_alloc_svec(nparams);
+    jl_svecset(argdata, 1, tvars);
+    jl_unionall_t *ua = (jl_unionall_t*)ty;
+    for (size_t i = 0; i < nparams; i++) {
+        assert(jl_is_unionall(ua));
+        jl_svecset(tvars, i, ua->var);
+        ua = (jl_unionall_t*)ua->body;
+    }
+    jl_svec_t *names = dt->name->names;
+
+    // define outer constructor (if all typevars are present (thus not definitely unconstrained) by the fields or other typevars which themselves are constrained)
+    int constrains_all_tvars = 1;
+    for (size_t i = nparams; i > 0; i--) {
+        jl_tvar_t *tv = (jl_tvar_t*)jl_svecref(tvars, i - 1);
+        int constrains_tvar = 0;
+        for (size_t i = 0; i < nfields; i++) {
+            jl_value_t *ft = jl_svecref(fieldtypes, i);
+            if (jl_has_typevar(ft, tv)) {
+                constrains_tvar = 1;
+                break;
+            }
+        }
+        for (size_t j = i; j < nparams; j++) {
+            jl_tvar_t *tv2 = (jl_tvar_t*)jl_svecref(tvars, j);
+            if (jl_has_typevar(tv2->ub, tv)) { // lb doesn't constrain, but jl_has_typevar doesn't have a way to specify that we care about may-constrain and not merely containment
+                constrains_tvar = 1;
+                break;
+            }
+            if (tv2 == tv) {
+                constrains_tvar = 0;
+                break;
+            }
+        }
+        if (!constrains_tvar) {
+            constrains_all_tvars = 0;
+            break;
+        }
+    }
+    if (constrains_all_tvars) {
+        jl_svec_t *atypes = jl_alloc_svec(nfields + 1);
+        jl_svecset(argdata, 0, atypes);
+        jl_svecset(atypes, 0, jl_wrap_Type(ty));
+        for (size_t i = 0; i < nfields; i++) {
+            jl_value_t *ft = jl_svecref(fieldtypes, i);
+            jl_svecset(atypes, i + 1, ft);
+        }
+        body = jl_outer_ctor_body(ty, nfields, nparams, inmodule, jl_symbol_name(file), line);
+        if (names) {
+            jl_array_t *slotnames = body->slotnames;
+            for (size_t i = 0; i < nfields; i++) {
+                jl_array_ptr_set(slotnames, i + 1, jl_svecref(names, i));
+            }
+        }
+        jl_method_def(argdata, NULL, body, inmodule);
+        if (nparams == 0) {
+            int all_Any = 1; // check if all fields are Any and the type is not parameterized, since inner constructor would be the same signature and code
+            for (size_t i = 0; i < nfields; i++) {
+                jl_value_t *ft = jl_svecref(fieldtypes, i);
+                if (ft != (jl_value_t*)jl_any_type) {
+                    all_Any = 0;
+                    break;
+                }
+            }
+            if (all_Any) {
+                JL_GC_POP();
+                return;
+            }
+        }
+    }
+
+    // define inner constructor
+    jl_svec_t *atypes = jl_svec_fill(nfields + 1, (jl_value_t*)jl_any_type);
+    jl_svecset(argdata, 0, atypes);
+    jl_value_t *typedt = (jl_value_t*)jl_wrap_Type((jl_value_t*)dt);
+    jl_svecset(atypes, 0, typedt);
+    fieldkinds = jl_alloc_vec_any(nfields);
+    for (size_t i = 0; i < nfields; i++) {
+        jl_value_t *ft = jl_svecref(fieldtypes, i);
+        int kind = ft == (jl_value_t*)jl_any_type ? -1 : 0;
+        // TODO: if more efficient to do so, we could reference the sparam instead of fieldtype
+        //if (jl_is_typevar(ft)) {
+        //    for (size_t i = 0; i < nparams; i++) {
+        //        if (jl_svecref(tvars, i) == ft) {
+        //            kind = i + 1;
+        //            break; // if repeated, must consider only the innermost
+        //        }
+        //    }
+        //}
+        jl_array_ptr_set(fieldkinds, i, jl_box_long(kind));
+    }
+    // rewrap_unionall(Type{dt}, ty)
+    for (size_t i = nparams; i > 0; i--) {
+        jl_value_t *tv = jl_svecref(tvars, i - 1);
+        typedt = jl_new_struct(jl_unionall_type, tv, typedt);
+        jl_svecset(atypes, 0, typedt);
+    }
+    tvars = jl_emptysvec;
+    jl_svecset(argdata, 1, tvars);
+    body = jl_inner_ctor_body(fieldkinds, inmodule, jl_symbol_name(file), line);
+    if (names) {
+        jl_array_t *slotnames = body->slotnames;
+        for (size_t i = 0; i < nfields; i++) {
+            jl_array_ptr_set(slotnames, i + 1, jl_svecref(names, i));
+        }
+    }
+    jl_method_def(argdata, NULL, body, inmodule);
+    JL_GC_POP();
 }
 
 // root blocks
