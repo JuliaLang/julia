@@ -334,10 +334,25 @@ promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly n
 promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
 promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
 
+# if both the arguments are identical, or if both the orderings in promote_rule
+# are defined to return identical results, we may return the result directly
+promote_result(::Type{T},::Type{T},::Type{T},::Type{T}) where {T} = T
+promote_result(::Type,::Type,::Type{T},::Type{T}) where {T} = T
+# If only one promote_rule is defined, use the definition directly
+promote_result(::Type,::Type,::Type{T},::Type{Bottom}) where {T} = T
+promote_result(::Type,::Type,::Type{Bottom},::Type{T}) where {T} = T
+# if multiple promote_rules are defined, try to promote the results
 promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
 promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
+# avoid recursion if the types don't change under promote_rule, and throw an informative error instead
+function _throw_promote_type_fail(A::Type, B::Type)
+    throw(ArgumentError(LazyString("promote_type(", A, ", ", B, ") failed, as conflicting promote_rule definitions were ",
+    "detected with both ", A, " and ", B, " being possible results.")))
+end
+promote_result(::Type{T},::Type{S},::Type{T},::Type{S}) where {T,S} = _throw_promote_type_fail(T, S)
+promote_result(::Type{T},::Type{S},::Type{S},::Type{T}) where {T,S} = _throw_promote_type_fail(T, S)
 
 """
     promote(xs...)

@@ -8471,3 +8471,26 @@ module GlobalAssign57446
     (@__MODULE__).theglobal = 1
     @test theglobal == 1
 end
+
+@testset "conflicting promote_rule error" begin
+    struct PromoteA end
+    struct PromoteB end
+    struct PromoteC end
+
+    @testset "error with conflicting promote_rules" begin
+        Base.promote_rule(::Type{PromoteA}, ::Type{PromoteB}) = PromoteA
+        Base.promote_rule(::Type{PromoteB}, ::Type{PromoteA}) = PromoteB
+        @test_throws "promote_type(PromoteA, PromoteB) failed" promote_type(PromoteA, PromoteB)
+        @test_throws "promote_type(PromoteB, PromoteA) failed" promote_type(PromoteB, PromoteA)
+    end
+    @testset "unambiguous cases" begin
+        @test promote_type(PromoteA, PromoteA) == PromoteA
+        @test promote_type(PromoteB, PromoteB) == PromoteB
+
+        Base.promote_rule(::Type{PromoteC}, ::Type{PromoteA}) = PromoteC
+        Base.promote_rule(::Type{PromoteB}, ::Type{PromoteC}) = PromoteC
+
+        @test promote_type(PromoteA, PromoteC) == PromoteC
+        @test promote_type(PromoteC, PromoteB) == PromoteC
+    end
+end
