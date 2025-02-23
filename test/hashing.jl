@@ -109,9 +109,6 @@ vals = Any[
 ]
 
 for a in vals, b in vals
-    println(a, ' ', typeof(a), ' ', objectid(a), ' ', hash(a))
-    println(b, ' ', typeof(b), ' ', objectid(b), ' ', hash(b))
-    println()
     @test isequal(a,b) == (hash(a)==hash(b))
 end
 
@@ -252,7 +249,9 @@ end
         )
 
         for a in vals, b in vals
-            @test isequal(a, b) == (Base.hash_64_32(a) == Base.hash_64_32(b))
+            ha = Base.hash_64_32(a, Base.RAPID_SEED, Base.RAPID_SECRET)
+            hb = Base.hash_64_32(b, Base.RAPID_SEED, Base.RAPID_SECRET)
+            @test isequal(a, b) == (ha == hb)
         end
     end
 
@@ -263,7 +262,9 @@ end
         )
 
         for a in vals, b in vals
-            @test isequal(a, b) == (Base.hash_32_32(a) == Base.hash_32_32(b))
+            ha = Base.hash_32_32(a, Base.RAPID_SEED, Base.RAPID_SECRET)
+            hb = Base.hash_32_32(b, Base.RAPID_SEED, Base.RAPID_SECRET)
+            @test isequal(a, b) == (ha == hb)
         end
     end
 end

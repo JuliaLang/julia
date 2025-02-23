@@ -35,12 +35,13 @@ const RAPID_SECRET = tuple(
 mul_hi64(A::UInt64, B::UInt64) = ((widen(A) * B) >> 64) % UInt64
 rapid_mix(A, B) = mul_hi64(A, B) ⊻ (A * B)
 
-load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} = unsafe_load(Ptr{T}(ptr + i - 1))
+load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
+    unsafe_load(convert(Ptr{T}, ptr + i - 1))
 
 function read_small(ptr::Ptr{UInt8}, n::Int)
     return (UInt64(unsafe_load(ptr)) << 56) |
-        (UInt64(unsafe_load(ptr + div(n, 2))) << 32) |
-        UInt64(unsafe_load(ptr + n - 1))
+        (UInt64(unsafe_load(ptr, div(n + 1, 2))) << 32) |
+        UInt64(unsafe_load(ptr, n))
 end
 
 function hash(
