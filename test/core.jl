@@ -8480,8 +8480,8 @@ end
     @testset "error with conflicting promote_rules" begin
         Base.promote_rule(::Type{PromoteA}, ::Type{PromoteB}) = PromoteA
         Base.promote_rule(::Type{PromoteB}, ::Type{PromoteA}) = PromoteB
-        @test_throws "promote_type(PromoteA, PromoteB) failed" promote_type(PromoteA, PromoteB)
-        @test_throws "promote_type(PromoteB, PromoteA) failed" promote_type(PromoteB, PromoteA)
+        @test_throws ArgumentError promote_type(PromoteA, PromoteB)
+        @test_throws ArgumentError promote_type(PromoteB, PromoteA)
     end
     @testset "unambiguous cases" begin
         @test promote_type(PromoteA, PromoteA) == PromoteA
