@@ -72,25 +72,9 @@ void JuliaPassContext::initAll(Module &M)
     T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
 }
 
-llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
+llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
-    if (!pgcstack_getter && !adoptthread_func)
-        return nullptr;
-    for (auto &I : F.getEntryBlock()) {
-        if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
-            Value *callee = callInst->getCalledOperand();
-            if ((pgcstack_getter && callee == pgcstack_getter) ||
-                (adoptthread_func && callee == adoptthread_func)) {
-                return callInst;
-            }
-        }
-    }
-    return nullptr;
-}
-
-llvm::CallInst *JuliaPassContext::getOrAddPGCstack(llvm::Function &F)
-{
-    if (pgcstack_getter || adoptthread_func)
+    if (pgcstack_getter || adoptthread_func) {
         for (auto &I : F.getEntryBlock()) {
             if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
                 Value *callee = callInst->getCalledOperand();
@@ -100,13 +84,14 @@ llvm::CallInst *JuliaPassContext::getOrAddPGCstack(llvm::Function &F)
                 }
             }
         }
-    IRBuilder<> builder(&F.getEntryBlock().front());
-    if (pgcstack_getter)
-        return builder.CreateCall(pgcstack_getter);
-    auto FT = FunctionType::get(PointerType::get(F.getContext(), 0), false);
-    auto F2 = Function::Create(FT, Function::ExternalLinkage, "julia.get_pgcstack", F.getParent());
-    pgcstack_getter = F2;
-    return builder.CreateCall( F2);
+    }
+    if (F.getCallingConv() == CallingConv::Swift) {
+        for (auto &arg : F.args()) {
+            if (arg.hasSwiftSelfAttr())
+                return &arg;
+        }
+    }
+    return nullptr;
 }
 
 llvm::Function *JuliaPassContext::getOrNull(

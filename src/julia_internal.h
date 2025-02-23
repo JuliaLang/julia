@@ -650,6 +650,7 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
 typedef struct {
     uint16_t propagate_inbounds:1;
     uint16_t has_fcall:1;
+    uint16_t has_image_globalref:1;
     uint16_t nospecializeinfer:1;
     uint16_t isva:1;
     uint16_t nargsmatchesmethod:1;

@@ -2691,8 +2691,7 @@
                           (if (null? run) '()
                               (list `(call (core tuple) ,.(reverse run))))
                           (let ((x (car a)))
-                            (if (and (length= x 2)
-                                     (eq? (car x) '...))
+                            (if (vararg? x)
                                 (if (null? run)
                                     (list* (cadr x)
                                            (tuple-wrap (cdr a) '()))
@@ -2814,7 +2813,10 @@
    '.>>>=   lower-update-op
 
    '|...|
-   (lambda (e) (error "\"...\" expression outside call"))
+   (lambda (e)
+     (if (not (length= e 2))
+         (error "wrong number of expressions following \"...\""))
+     (error "\"...\" expression outside call"))
 
    '$
    (lambda (e) (error "\"$\" expression outside quote"))
@@ -4322,11 +4324,10 @@ f(x) = yt(x)
 (define (linearize e)
   (cond ((or (not (pair? e)) (quoted? e)) e)
         ((eq? (car e) 'lambda)
-         (set-car! (cdddr e) (compile-body (cadddr e) (append (car (caddr e))
-                                                              (cadr (caddr e)))
-                                           e)))
-        (else (for-each linearize (cdr e))))
-  e)
+         (list-set e 3 (compile-body (cadddr e)
+                                     (append (car (caddr e))
+                                             (cadr (caddr e))) e)))
+        (else (cons (car e) (map linearize (cdr e))))))
 
 (define (valid-ir-argument? e)
   (or (simple-atom? e)

@@ -90,6 +90,7 @@ External links:
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
 JL_DLLEXPORT size_t jl_require_world = ~(size_t)0;
+JL_DLLEXPORT _Atomic(size_t) jl_first_image_replacement_world = ~(size_t)0;
 
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
@@ -793,6 +794,8 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 {
     jl_queue_for_serialization(s, m->name);
     jl_queue_for_serialization(s, m->parent);
+    if (jl_options.strip_metadata)
+        jl_queue_for_serialization(s, m->file);
     if (jl_options.trim) {
         jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->bindings), 0, 1);
     } else {
@@ -1338,10 +1341,16 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_atomic_load_relaxed(&m->bindingkeyset), s->link_ids_relocs));
     newm->file = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, file)));
-    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->file, s->link_ids_relocs));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_options.strip_metadata ? jl_empty_sym : m->file , s->link_ids_relocs));
+    if (jl_options.strip_metadata)
+        newm->line = 0;
     newm->usings_backedges = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings_backedges)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings_backedges, s->link_ids_relocs));
+
+    // After reload, everything that has happened in this process happened semantically at
+    // (for .incremental) or before jl_require_world, so reset this flag.
+    jl_atomic_store_relaxed(&newm->export_set_changed_since_require_world, 0);
 
     // write out the usings list
     memset(&newm->usings._space, 0, sizeof(newm->usings._space));
@@ -1371,6 +1380,7 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
         newm->usings.items = (void**)tot;
         arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings.items)));
         arraylist_push(&s->relocs_list, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + item));
+        newm = NULL; // `write_*(s->s)` below may invalidate `newm`, so defensively set it to NULL
         size_t i;
         for (i = 0; i < module_usings_length(m); i++) {
             struct _jl_module_using *data = module_usings_getidx(m, i);
@@ -1394,10 +1404,6 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
         }
     }
     assert(ios_pos(s->s) - reloc_offset == tot);
-
-    // After reload, everything that has happened in this process happened semantically at
-    // (for .incremental) or before jl_require_world, so reset this flag.
-    jl_atomic_store_relaxed(&newm->export_set_changed_since_require_world, 0);
 }
 
 static void record_memoryref(jl_serializer_state *s, size_t reloc_offset, jl_genericmemoryref_t ref) {
@@ -2591,7 +2597,7 @@ uint_t bindingkey_hash(size_t idx, jl_value_t *data);
 
 static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
 {
-    jl_svec_t * bindings = jl_atomic_load_relaxed(&m->bindings);
+    jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
     size_t l = jl_svec_len(bindings), i;
     arraylist_t bindings_list;
     arraylist_new(&bindings_list, 0);
@@ -3541,7 +3547,7 @@ extern void export_jl_small_typeof(void);
 int IMAGE_NATIVE_CODE_TAINTED = 0;
 
 // TODO: This should possibly be in Julia
-static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t *bpart, size_t mod_idx, int unchanged_implicit)
+static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t *bpart, size_t mod_idx, int unchanged_implicit, int no_replacement)
 {
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return 1;
@@ -3556,10 +3562,13 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
     if (!jl_bkind_is_some_import(kind))
         return 1;
     jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
+    if (no_replacement)
+        goto add_backedge;
     jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
     if (!latest_imported_bpart)
         return 1;
     if (latest_imported_bpart->min_world <= bpart->min_world) {
+add_backedge:
         // Imported binding is still valid
         if ((kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED) &&
                 external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
@@ -3583,7 +3592,7 @@ invalidated:
             jl_binding_t *bedge = (jl_binding_t*)edge;
             if (!jl_atomic_load_relaxed(&bedge->partitions))
                 continue;
-            jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0);
+            jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0);
         }
     }
     if (bpart->kind & BINDING_FLAG_EXPORTED) {
@@ -3600,7 +3609,7 @@ invalidated:
                 if (!jl_atomic_load_relaxed(&importee->partitions))
                     continue;
                 JL_UNLOCK(&mod->lock);
-                jl_validate_binding_partition(importee, jl_atomic_load_relaxed(&importee->partitions), mod_idx, 0);
+                jl_validate_binding_partition(importee, jl_atomic_load_relaxed(&importee->partitions), mod_idx, 0, 0);
                 JL_LOCK(&mod->lock);
             }
         }
@@ -4070,8 +4079,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         }
     }
     if (s.incremental) {
-        // This needs to be done in a second pass after the binding partitions
-        // have the proper ABI again.
+        int no_replacement = jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0;
         for (size_t i = 0; i < s.fixup_objs.len; i++) {
             uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
             jl_value_t *obj = (jl_value_t*)(image_base + item);
@@ -4079,13 +4087,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 jl_module_t *mod = (jl_module_t*)obj;
                 size_t mod_idx = external_blob_index((jl_value_t*)mod);
                 jl_svec_t *table = jl_atomic_load_relaxed(&mod->bindings);
-                int unchanged_implicit = all_usings_unchanged_implicit(mod);
+                int unchanged_implicit = no_replacement || all_usings_unchanged_implicit(mod);
                 for (size_t i = 0; i < jl_svec_len(table); i++) {
                     jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
                     if ((jl_value_t*)b == jl_nothing)
                         continue;
                     jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
-                    if (!jl_validate_binding_partition(b, bpart, mod_idx, unchanged_implicit)) {
+                    if (!jl_validate_binding_partition(b, bpart, mod_idx, unchanged_implicit, no_replacement)) {
                         unchanged_implicit = all_usings_unchanged_implicit(mod);
                     }
                 }
