@@ -279,29 +279,12 @@ using Base.Threads
 end
 end
 
-# Ensure only LLVM-supported types can be atomic
-@test_throws TypeError Atomic{BigInt}
-@test_throws TypeError Atomic{ComplexF64}
-
-if Sys.ARCH === :i686 || startswith(string(Sys.ARCH), "arm") ||
-   Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-
-    @test_throws TypeError Atomic{Int128}()
-    @test_throws TypeError Atomic{UInt128}()
-end
-
-if Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le
-    @test_throws TypeError Atomic{Float16}()
-    @test_throws TypeError Atomic{Float32}()
-    @test_throws TypeError Atomic{Float64}()
-end
-
 function test_atomic_bools()
     x = Atomic{Bool}(false)
-    # Arithmetic functions are not defined.
-    @test_throws MethodError atomic_add!(x, true)
-    @test_throws MethodError atomic_sub!(x, true)
-    # All the rest are:
+    # Arithmetic functions such as true+true returns Int
+    @test_throws TypeError atomic_add!(x, true)
+    @test_throws TypeError atomic_sub!(x, true)
+    # All the rest are supported:
     for v in [true, false]
         @test x[] == atomic_xchg!(x, v)
         @test v == atomic_cas!(x, v, !v)
@@ -407,10 +390,9 @@ end
 test_fence()
 
 # Test load / store with various types
-let atomictypes = intersect((Int8, Int16, Int32, Int64, Int128,
-                             UInt8, UInt16, UInt32, UInt64, UInt128,
-                             Float16, Float32, Float64),
-                            Base.Threads.atomictypes)
+let atomictypes = (Int8, Int16, Int32, Int64, Int128,
+                   UInt8, UInt16, UInt32, UInt64, UInt128,
+                   Float16, Float32, Float64)
     for T in atomictypes
         var = Atomic{T}()
         var[] = 42
@@ -438,7 +420,7 @@ function test_atomic_cas!(var::Atomic{T}, range::StepRange{Int,Int}) where T
         end
     end
 end
-for T in intersect((Int32, Int64, Float32, Float64), Base.Threads.atomictypes)
+for T in (Int32, Int64, Float32, Float64)
     var = Atomic{T}()
     nloops = 1000
     di = threadpoolsize(:default)
@@ -452,7 +434,7 @@ function test_atomic_xchg!(var::Atomic{T}, i::Int, accum::Atomic{Int}) where T
     old = atomic_xchg!(var, T(i))
     atomic_add!(accum, Int(old))
 end
-for T in intersect((Int32, Int64, Float32, Float64), Base.Threads.atomictypes)
+for T in (Int32, Int64, Float32, Float64)
     accum = Atomic{Int}()
     var = Atomic{T}()
     nloops = 1000
@@ -467,7 +449,7 @@ function test_atomic_float(varadd::Atomic{T}, varmax::Atomic{T}, varmin::Atomic{
     atomic_max!(varmax, T(i))
     atomic_min!(varmin, T(i))
 end
-for T in intersect((Int32, Int64, Float16, Float32, Float64), Base.Threads.atomictypes)
+for T in (Int32, Int64, Float16, Float32, Float64)
     varadd = Atomic{T}()
     varmax = Atomic{T}()
     varmin = Atomic{T}()

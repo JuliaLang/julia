@@ -562,6 +562,7 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             FunctionPassManager FPM;
             JULIA_PASS(FPM.addPass(LateLowerGCPass()));
             JULIA_PASS(FPM.addPass(FinalLowerGCPass()));
+            JULIA_PASS(FPM.addPass(ExpandAtomicModifyPass())); // after LateLowerGCPass so that all IPO is valid
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
         JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native)));
@@ -578,7 +579,8 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
-    } else if (!options.remove_ni) {
+    }
+    else if (!options.remove_ni) {
         JULIA_PASS(MPM.addPass(RemoveNIPass()));
     }
     MPM.addPass(AfterIntrinsicLoweringMarkerPass());
