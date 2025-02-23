@@ -170,11 +170,11 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             *CFGModified = true;
         // emit slow branch code
         CallInst *adopt = cast<CallInst>(pgcstack->clone());
-        Function *adoptFunc = M->getFunction(XSTR(jl_adopt_thread));
+        Function *adoptFunc = M->getFunction(XSTR(jl_autoinit_and_adopt_thread));
         if (adoptFunc == NULL) {
             adoptFunc = Function::Create(pgcstack_getter->getFunctionType(),
                 pgcstack_getter->getLinkage(), pgcstack_getter->getAddressSpace(),
-                XSTR(jl_adopt_thread), M);
+                XSTR(jl_autoinit_and_adopt_thread), M);
             adoptFunc->copyAttributesFrom(pgcstack_getter);
             adoptFunc->copyMetadata(pgcstack_getter, 0);
         }

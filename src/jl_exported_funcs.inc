@@ -40,6 +40,7 @@
     XX(jl_atomic_store_bits) \
     XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
+    XX(jl_autoinit_and_adopt_thread) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
     XX(jl_bitcast) \
@@ -361,6 +362,7 @@
     XX(jl_pathname_for_handle) \
     XX(jl_pchar_to_array) \
     XX(jl_pchar_to_string) \
+    XX(jl_pgcstack_default_func) \
     XX(jl_pointerref) \
     XX(jl_pointerset) \
     XX(jl_pop_handler) \

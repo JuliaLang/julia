@@ -975,9 +975,11 @@ static GlobalVariable *emit_shard_table(Module &M, Type *T_size, Type *T_psize, 
 }
 
 // See src/processor.h for documentation about this table. Corresponds to jl_image_ptls_t.
-static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_psize) {
+static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_ptr) {
+    Function *jl_pgcstack_default_func = Function::Create(
+        FunctionType::get(T_ptr, false), GlobalValue::ExternalLinkage, "jl_pgcstack_default_func", &M);
     std::array<Constant *, 3> ptls_table{
-        new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_pgcstack_func_slot"),
+        new GlobalVariable(M, T_ptr, false, GlobalValue::ExternalLinkage, jl_pgcstack_default_func, "jl_pgcstack_func_slot"),
         new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_pgcstack_key_slot"),
         new GlobalVariable(M, T_size, false, GlobalValue::ExternalLinkage, Constant::getNullValue(T_size), "jl_tls_offset"),
     };
@@ -985,7 +987,7 @@ static GlobalVariable *emit_ptls_table(Module &M, Type *T_size, Type *T_psize) {
         cast<GlobalVariable>(gv)->setVisibility(GlobalValue::HiddenVisibility);
         cast<GlobalVariable>(gv)->setDSOLocal(true);
     }
-    auto ptls_table_arr = ConstantArray::get(ArrayType::get(T_psize, ptls_table.size()), ptls_table);
+    auto ptls_table_arr = ConstantArray::get(ArrayType::get(T_ptr, ptls_table.size()), ptls_table);
     auto ptls_table_gv = new GlobalVariable(M, ptls_table_arr->getType(), false,
                                             GlobalValue::ExternalLinkage, ptls_table_arr, "jl_ptls_table");
     ptls_table_gv->setVisibility(GlobalValue::HiddenVisibility);
@@ -2184,6 +2186,7 @@ void jl_dump_native_impl(void *native_code,
 
         Type *T_size = DL.getIntPtrType(Context);
         Type *T_psize = T_size->getPointerTo();
+        Type *T_ptr = PointerType::get(Context, 0);
 
         auto FT = FunctionType::get(Type::getInt8Ty(Context)->getPointerTo()->getPointerTo(), {}, false);
         auto F = Function::Create(FT, Function::ExternalLinkage, "get_jl_RTLD_DEFAULT_handle_addr", metadataM);
@@ -2226,7 +2229,7 @@ void jl_dump_native_impl(void *native_code,
                                         GlobalVariable::InternalLinkage,
                                         value, "jl_dispatch_target_ids");
             auto shards = emit_shard_table(metadataM, T_size, T_psize, threads);
-            auto ptls = emit_ptls_table(metadataM, T_size, T_psize);
+            auto ptls = emit_ptls_table(metadataM, T_size, T_ptr);
             auto header = emit_image_header(metadataM, threads, nfvars, ngvars);
             auto AT = ArrayType::get(T_size, sizeof(jl_small_typeof) / sizeof(void*));
             auto jl_small_typeof_copy = new GlobalVariable(metadataM, AT, false,
