@@ -142,7 +142,6 @@ hash(x::UInt64, h::UInt) = hash_uint64(x, h, RAPID_SECRET)
 hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
 hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
-
 function hash_integer(n::Integer, h::UInt)
     h ⊻= hash((n % UInt) ⊻ h)
     n = abs(n)
@@ -164,11 +163,9 @@ else
 end
 
 
-# hash(data::Char, h::UInt64) = hash(UInt(Base.bitcast(UInt32, data)), h)
 hash(data::String, h::UInt64) = GC.@preserve data hash(pointer(data), sizeof(data), h, RAPID_SECRET)
 
-
-hash(w::WeakRef, h::UInt64) = rapid(w.value, h)
+hash(w::WeakRef, h::UInt64) = hash(w.value, h)
 function hash(T::Type, h::UInt64)
     return hash((Base.@assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)), h)
 end
