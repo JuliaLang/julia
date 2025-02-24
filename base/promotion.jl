@@ -307,7 +307,8 @@ function promote_type(::Type{T}, ::Type{S}) where {T,S}
     normalized_type(::Type{Typ}) where {Typ} = Typ
     types_are_equal(::Type, ::Type) = false
     types_are_equal(::Type{Typ}, ::Type{Typ}) where {Typ} = true
-    is_bottom(::Type{Typ}) where {Typ} = Typ <: Bottom
+    is_bottom(::Type) = false
+    is_bottom(::Type{Bottom}) = true
     left = T
     right = S
     for _ ∈ 1:1000
