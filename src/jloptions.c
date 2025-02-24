@@ -656,7 +656,7 @@ restart_switch:
                         nthreadsi = strtol(&endptr[1], &endptri, 10);
                         // Allow 0 for interactive
                         if (errno != 0 || endptri == &endptr[1] || *endptri != 0 || nthreadsi < 0 || nthreadsi >= INT16_MAX)
-                            jl_errorf("julia: -t,--threads=<n>,<m>; m must be an integer ≥ 0");
+                            jl_errorf("julia: -t,--threads=<n>,<m>; m must be an integer >= 0");
                         if (nthreadsi == 0)
                             jl_options.nthreadpools = 1;
                     }
