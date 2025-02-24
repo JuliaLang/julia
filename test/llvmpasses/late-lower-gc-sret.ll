@@ -50,8 +50,6 @@ ret:                                              ; preds = %false, %true
 
 declare swiftcc void @sret_call_gc(ptr noalias nocapture noundef sret({ ptr addrspace(10), i64, i64 }), ptr noalias nocapture noundef, ptr nonnull swiftself)
 
-declare ptr @julia.get_pgcstack()
-
 define hidden swiftcc void @sret_gc_root_phi(ptr nonnull swiftself %0, i1 %unpredictable) {
 top:
   ; CHECK-LABEL: @sret_gc_root_phi
