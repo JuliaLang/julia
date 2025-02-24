@@ -305,19 +305,19 @@ promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
     @_terminates_locally_meta
     normalized_type(::Type{Typ}) where {Typ} = Typ
-    types_are_identical(::Type{A}, ::Type{B}) where {A,B} = A == B
+    types_are_equal(::Type{A}, ::Type{B}) where {A,B} = A == B
     is_bottom(::Type{Typ}) where {Typ} = Typ <: Bottom
     left = T
     right = S
     for _ ∈ 1:1000
-        if types_are_identical(left, right) || is_bottom(left) || is_bottom(right)
+        if types_are_equal(left, right) || is_bottom(left) || is_bottom(right)
             break
         end
         # Try `promote_rule` in both orders.
         a = normalized_type(promote_rule(left, right))
         b = normalized_type(promote_rule(right, left))
-        loop_is_detected_1 = types_are_identical(left, a) && types_are_identical(right, b)
-        loop_is_detected_2 = types_are_identical(left, b) && types_are_identical(right, a)
+        loop_is_detected_1 = types_are_equal(left, a) && types_are_equal(right, b)
+        loop_is_detected_2 = types_are_equal(left, b) && types_are_equal(right, a)
         if loop_is_detected_1 || loop_is_detected_2
             let s = LazyString("`promote_type(", T, ", ", S, ")` failed, there are conflicting `promote_rule` definitions for types ", a, ", ", b)
                 throw(ArgumentError(s))
@@ -331,7 +331,7 @@ function promote_type(::Type{T}, ::Type{S}) where {T,S}
         left = a
         right = b
     end
-    if types_are_identical(left, right) || is_bottom(left)
+    if types_are_equal(left, right) || is_bottom(left)
         right
     elseif is_bottom(right)
         left
