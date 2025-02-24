@@ -2841,7 +2841,6 @@ function show(io::IO, vm::Core.TypeofVararg)
 end
 
 Compiler.load_irshow!()
-const IRShow = Compiler.IRShow # an alias for compatibility
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body
