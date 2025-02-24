@@ -90,7 +90,7 @@ function ==(a::StackFrame, b::StackFrame)
 end
 
 function hash(frame::StackFrame, h::UInt)
-    h += 0xf4fbda67fe20ce88 % UInt
+    h ⊻= 0xf4fbda67fe20ce88 % UInt
     h = hash(frame.line, h)
     h = hash(frame.file, h)
     h = hash(frame.func, h)
