@@ -645,24 +645,25 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
     return RUNNING_ON_VALGRIND;
 }
 
-void *system_image_data_unavailable;
-extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(system_image_data_unavailable) jl_system_image_data;
-extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(system_image_data_unavailable) jl_system_image_size;
 static void jl_load_sysimg_so(void)
 {
-    const char *sysimg_data;
     assert(sysimage.fptrs.ptrs); // jl_init_processor_sysimg should already be run
-    if (jl_sysimg_handle == jl_exe_handle &&
-            &jl_system_image_data != JL_WEAK_SYMBOL_DEFAULT(system_image_data_unavailable))
-        sysimg_data = (const char*)&jl_system_image_data;
-    else
-        jl_dlsym(jl_sysimg_handle, "jl_system_image_data", (void **)&sysimg_data, 1);
+
     size_t *plen;
-    if (jl_sysimg_handle == jl_exe_handle &&
-            &jl_system_image_size != JL_WEAK_SYMBOL_DEFAULT(system_image_data_unavailable))
-        plen = (size_t *)&jl_system_image_size;
-    else
+    const char *sysimg_data;
+
+    if (jl_system_image_size == 0) {
+        // in the usual case, the sysimage was not statically linked to libjulia-internal
+        // look up the external sysimage symbols via the dynamic linker
         jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
+        jl_dlsym(jl_sysimg_handle, "jl_system_image_data", (void **)&sysimg_data, 1);
+    } else {
+        // the sysimage was statically linked directly against libjulia-internal
+        // use the internal symbols
+        plen = &jl_system_image_size;
+        sysimg_data = &jl_system_image_data;
+    }
+
     jl_gc_notify_image_load(sysimg_data, *plen);
     jl_restore_system_image_data(sysimg_data, *plen);
 }
