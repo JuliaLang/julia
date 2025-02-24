@@ -62,7 +62,8 @@ struct MethodMatches
     valid_worlds::WorldRange
 end
 any_ambig(result::MethodLookupResult) = result.ambig
-any_ambig(info::MethodMatchInfo) = any_ambig(info.results)
+any_ambig(query::MethodLookupQuery) = any_ambig(query.results)
+any_ambig(info::MethodMatchInfo) = any_ambig(info.query)
 any_ambig(m::MethodMatches) = any_ambig(m.info)
 fully_covering(info::MethodMatchInfo) = info.fullmatch
 fully_covering(m::MethodMatches) = fully_covering(m.info)
@@ -78,7 +79,7 @@ any_ambig(m::UnionSplitMethodMatches) = any_ambig(m.info)
 fully_covering(info::UnionSplitInfo) = all(fully_covering, info.split)
 fully_covering(m::UnionSplitMethodMatches) = fully_covering(m.info)
 
-nmatches(info::MethodMatchInfo) = length(info.results)
+nmatches(info::MethodMatchInfo) = length(info.query.results)
 function nmatches(info::UnionSplitInfo)
     n = 0
     for mminfo in info.split
@@ -379,7 +380,7 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         end
         valid_worlds = intersect(valid_worlds, thismatches.valid_worlds)
         thisfullmatch = any(match::MethodMatch->match.fully_covers, thismatches)
-        thisinfo = MethodMatchInfo(thismatches, mt, sig_n, thisfullmatch)
+        thisinfo = MethodMatchInfo(MethodLookupQuery(thismatches, arg_n, sig_n), mt, thisfullmatch)
         push!(infos, thisinfo)
         for idx = 1:length(thismatches)
             push!(applicable, MethodMatchTarget(thismatches[idx], thisinfo.edges, idx))
@@ -404,7 +405,7 @@ function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(a
         return FailedMethodMatch("Too many methods matched")
     end
     fullmatch = any(match::MethodMatch->match.fully_covers, matches)
-    info = MethodMatchInfo(matches, mt, atype, fullmatch)
+    info = MethodMatchInfo(MethodLookupQuery(matches, Any[], atype), mt, fullmatch)
     applicable = MethodMatchTarget[MethodMatchTarget(matches[idx], info.edges, idx) for idx = 1:length(matches)]
     return MethodMatches(applicable, info, matches.valid_worlds)
 end

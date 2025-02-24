@@ -4,9 +4,9 @@
 # structs/constants #
 #####################
 
-# N.B.: Const/PartialStruct/InterConditional are defined in Core, to allow them to be used
+# N.B.: Const/ConstSet/PartialStruct/InterConditional are defined in Core, to allow them to be used
 # inside the global code cache.
-import Core: Const, InterConditional, PartialStruct
+import Core: Const, InterConditional, PartialStruct, ConstSet
 
 """
     cnd::Conditional
@@ -498,6 +498,8 @@ end
     if isa(a, Const)
         if isa(b, Const)
             return a.val === b.val
+        elseif isa(b, ConstSet)
+            return any(_b -> a == _b, b.vals)
         end
         # TODO: `b` could potentially be a `PartialTypeVar` here, in which case we might be
         # able to return `true` in more cases; in the meantime, just returning this is the
@@ -506,11 +508,25 @@ end
     elseif isa(b, Const)
         if issingletontype(a)
             return a.instance === b.val
+        # elseif isa(a, ConstSet)
+        #     return any(_a -> b == _a, a.vals)
         end
         return false
     elseif isa(a, PartialTypeVar)
         return b === TypeVar || a === b
     elseif isa(b, PartialTypeVar)
+        return false
+    elseif isa(a, ConstSet)
+        if isa(b, ConstSet)
+            for _a in a.vals
+                if !any(_a -> b == _a, a.vals)
+                    return false
+                end
+            end
+            return true
+        end
+        return false
+    elseif isa(b, ConstSet)
         return false
     end
     return ⊑(widenlattice(lattice), a, b)
@@ -579,6 +595,11 @@ end
     if isa(a, PartialTypeVar) || isa(b, PartialTypeVar)
         return false
     end
+    if isa(a, ConstSet) || isa(b, ConstSet)
+        # N.B. Assumes a === b checked above
+        # TODO: ConstSet with different order
+        return false
+    end
     return is_lattice_equal(widenlattice(lattice), a, b)
 end
 
@@ -629,6 +650,24 @@ end
             return Bottom
         end
         return v
+    elseif isa(v, ConstSet)
+        typ = tmeet(widenlattice(lattice), widenconst(v), t)
+        if typ === Bottom
+            return Bottom
+        end
+        vals = Any[]
+        for c in v.vals
+            c′ = tmeet(lattice, c, t)
+            if c′ !== Bottom
+                push!(vals, c′)
+            end
+        end
+        if isempty(vals)
+            return Bottom
+        elseif length(vals) == 1
+            return vals[1]
+        end
+        return Core.ConstSet(typ, vals)
     end
     tmeet(widenlattice(lattice), widenconst(v), t)
 end
@@ -677,6 +716,7 @@ Widens extended lattice element `x` to native `Type` representation.
 widenconst(::AnyConditional) = Bool
 widenconst(a::AnyMustAlias) = widenconst(widenmustalias(a))
 widenconst(c::Const) = (v = c.val; isa(v, Type) ? Type{v} : typeof(v))
+widenconst(c::ConstSet) = c.typ
 widenconst(::PartialTypeVar) = TypeVar
 widenconst(t::Core.PartialStruct) = t.typ
 widenconst(t::PartialOpaque) = t.typ
@@ -752,4 +792,42 @@ function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), fields::Vecto
         assert_nested_slotwrapper(fields[i])
     end
     return Core._PartialStruct(typ, fields)
+end
+
+function Core.ConstSet(@nospecialize(typ), vals::Vector{Any})
+    set = IdSet()
+    for v in vals
+        push!(set, v)
+    end
+    vals = collect(set)
+    return Core._ConstSet(typ, vals)
+end
+    
+function Core.ConstSet(lattice::AbstractLattice,
+                       @nospecialize(a::Union{Core.Const, Core.ConstSet}),
+                       @nospecialize(b::Union{Core.Const, Core.ConstSet}))
+    if a isa Core.ConstSet
+        vals = copy(a.vals)
+        typa = a.typ
+        if b isa Core.ConstSet
+            append!(vals, b.vals)
+            typb = b
+        elseif b isa Core.Const
+            push!(vals, b)
+            typb = widenconst(b)
+        end
+    elseif b isa Core.ConstSet
+        vals = copy(b.vals)
+        typb = b.typ
+        if a isa Core.Const
+            push!(vals, a)
+            typa = widenconst(a)
+        end
+    elseif a isa Core.Const && b isa Core.Const
+        vals = Any[a, b]
+        typa = widenconst(a)
+        typb = widenconst(b)
+    end
+
+    return Core.ConstSet(tmerge(lattice, typa, typb), vals)
 end

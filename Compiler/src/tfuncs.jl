@@ -1153,21 +1153,34 @@ end
 @nospecs function _getfield_tfunc(𝕃::ConstsLattice, s00, name, setfield::Bool)
     if isa(s00, Const)
         sv = s00.val
+        if isa(sv, Module)
+            setfield && return Bottom
+            if isa(nv, Symbol)
+                # In ordinary inference, this case is intercepted early and
+                # re-routed to `getglobal`.
+                return Any
+            end
+            return Bottom
+        end
         if isa(name, Const)
             nv = name.val
-            if isa(sv, Module)
-                setfield && return Bottom
-                if isa(nv, Symbol)
-                    # In ordinary inference, this case is intercepted early and
-                    # re-routed to `getglobal`.
-                    return Any
-                end
-                return Bottom
-            end
             r = _getfield_tfunc_const(sv, name)
             r !== nothing && return r
         end
-        s00 = widenconst(s00)
+        typ = _getfield_tfunc(widenlattice(𝕃), widenconst(s00), name, setfield)
+	s00 = widenconst(s00)
+        if !isconcretetype(s00)
+            return typ
+	end
+        vals = Any[]
+        for n in fieldnames(s00)
+            r = _getfield_tfunc_const(sv, Const(n))
+            if r === nothing
+                return typ
+            end
+            push!(vals, r)
+        end
+        return Core.ConstSet(typ, vals)
     end
     return _getfield_tfunc(widenlattice(𝕃), s00, name, setfield)
 end
@@ -3087,7 +3100,7 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
     if match === nothing
         rt = Const(false)
         vresults = MethodLookupResult(Any[], valid_worlds, true)
-        vinfo = MethodMatchInfo(vresults, mt, types, false) # XXX: this should actually be an info with invoke-type edge
+        vinfo = MethodMatchInfo(MethodLookupQuery(vresults, argtype_by_index(argtypes, typeidx), types), mt, false) # XXX: this should actually be an info with invoke-type edge
     else
         rt = Const(true)
         vinfo = InvokeCallInfo(nothing, match, nothing, types)
