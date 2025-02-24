@@ -1251,10 +1251,16 @@ JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_RO
 STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 
 // write barriers
-#ifndef MMTK_GC
+
+#ifndef WITH_THIRD_PARTY_HEAP
 #include "gc-wb-stock.h"
 #else
+// Pick the appropriate third-party implementation
+#ifdef WITH_THIRD_PARTY_HEAP
+#if WITH_THIRD_PARTY_HEAP == 1 // MMTk
 #include "gc-wb-mmtk.h"
+#endif
+#endif
 #endif
 
 /*
