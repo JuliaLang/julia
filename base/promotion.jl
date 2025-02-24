@@ -332,7 +332,7 @@ end
 
 const _promote_type_binary_recursion_depth_limit = let n = nothing  # recursion depth limit to prevent stack overflow
     f = (n, n, n, n)
-    (f..., f...)
+    (f..., f..., f..., f..., f...)
 end
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
