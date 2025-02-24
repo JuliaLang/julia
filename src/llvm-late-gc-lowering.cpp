@@ -1219,22 +1219,18 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                 else {
                                     Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
                                     SmallSetVector<AllocaInst *, 8>  gc_allocas = FindSretAllocas(arg1);
-                                    AllocaInst *SRet_gc = nullptr;
-                                    if (gc_allocas.size() == 1) {
-                                        SRet_gc = gc_allocas.pop_back_val();
+                                    if (gc_allocas.size() == 0) {
+                                        llvm_dump(CI);
+                                        assert(false && "Expected at least one alloca");
                                     }
                                     else {
-                                        llvm_dump(CI);
-                                        for (AllocaInst *Alloca : gc_allocas) {
-                                            llvm_dump(Alloca);
+                                        for (AllocaInst* SRet_gc : gc_allocas) {
+                                            Type *ElT = SRet_gc->getAllocatedType();
+                                            if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
+                                                S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
+                                            }
                                         }
-                                        assert(false && "Expected single alloca");
                                     }
-                                    Type *ElT = SRet_gc->getAllocatedType();
-                                    if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                        S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
-                                    }
-                                    break; // Found our gc roots
                                 }
                             }
                         }
