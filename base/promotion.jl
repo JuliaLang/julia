@@ -309,6 +309,16 @@ function promote_type(::Type{T}, ::Type{S}) where {T,S}
     types_are_equal(::Type{Typ}, ::Type{Typ}) where {Typ} = true
     is_bottom(::Type) = false
     is_bottom(::Type{Bottom}) = true
+    function throw_conflicting_promote_rules((@nospecialize i1::Type), (@nospecialize i2::Type), (@nospecialize left::Type), (@nospecialize right::Type))
+        @noinline
+        s = LazyString("`promote_type(", i1, ", ", i2, ")` failed, there are conflicting `promote_rule` definitions for types ", left, ", ", right)
+        throw(ArgumentError(s))
+    end
+    function throw_gave_up((@nospecialize i1::Type), (@nospecialize i2::Type), (@nospecialize left::Type), (@nospecialize right::Type))
+        @noinline
+        s = LazyString("`promote_type(", i1, ", ", i2, ")` failed, ended up with (", left, ", ", right, "), check for faulty `promote_rule` methods")
+        throw(ArgumentError(s))
+    end
     left = T
     right = S
     for _ ∈ 1:1000
@@ -321,9 +331,7 @@ function promote_type(::Type{T}, ::Type{S}) where {T,S}
         loop_is_detected_1 = types_are_equal(left, a) && types_are_equal(right, b)
         loop_is_detected_2 = types_are_equal(left, b) && types_are_equal(right, a)
         if loop_is_detected_1 || loop_is_detected_2
-            let s = LazyString("`promote_type(", T, ", ", S, ")` failed, there are conflicting `promote_rule` definitions for types ", a, ", ", b)
-                throw(ArgumentError(s))
-            end
+            throw_conflicting_promote_rules(T, S, left, right)
         end
         if is_bottom(a) && is_bottom(b)
             # If no `promote_rule` is defined, both directions give `Bottom`. In that
@@ -338,9 +346,7 @@ function promote_type(::Type{T}, ::Type{S}) where {T,S}
     elseif is_bottom(right)
         left
     else
-        let s = LazyString("`promote_type(", T, ", ", S, ")` failed, ended up with (", left, ", ", right, "), check for faulty `promote_rule` methods")
-            throw(ArgumentError(s))
-        end
+        throw_gave_up(T, S, left, right)
     end
 end
 
