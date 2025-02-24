@@ -331,11 +331,8 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
 end
 
 const _promote_type_binary_recursion_depth_limit = let n = nothing  # recursion depth limit to prevent stack overflow
-    (
-        n, n, n, n, n, n, n, n,
-        n, n, n, n, n, n, n, n,
-        n, n, n, n, n, n, n, n,
-    )
+    f = (n, n, n, n)
+    (f..., f...)
 end
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
