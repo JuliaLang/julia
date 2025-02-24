@@ -403,6 +403,12 @@ module IteratorsMD
         getindex(iter, C.indices...)
     end
     @inline Base.getindex(iter::CartesianIndices{0}, ::CartesianIndices{0}) = iter
+    @inline function Base.getindex(iter::CartesianIndices{N}, r::StepRangeLen{CartesianIndex{N},CartesianIndex{N},CartesianIndex{N},<:Integer}) where {N}
+        @boundscheck checkbounds(iter, r)
+        start = first(iter) + first(r) - CartesianIndex(first.(axes(iter)))
+        stepsz = CartesianIndex(Tuple(step(iter)) .* Tuple(step(r)))
+        StepRangeLen(start, stepsz, length(r))
+    end
 
     # If dimensions permit, we may index into a CartesianIndices directly instead of constructing a SubArray wrapper
     @propagate_inbounds function Base.view(c::CartesianIndices{N}, r::Vararg{Union{OrdinalRange{<:Integer, <:Integer}, Colon},N}) where {N}
@@ -743,7 +749,7 @@ end
 @inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndex) =
     checkbounds_indices(Bool, inds, I.I)
 @inline checkindex(::Type{Bool}, inds::Tuple, i::AbstractRange{<:CartesianIndex}) =
-    isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
+    isempty(i) || (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
 
 # Indexing into Array with mixtures of Integers and CartesianIndices is
 # extremely performance-sensitive. While the abstract fallbacks support this,
