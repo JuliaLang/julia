@@ -307,19 +307,52 @@ promote_type(T) = T
 promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
 promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
-promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_type(::Type{T}, ::Type{T}) where {T} = T
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
-
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @inline
-    # Try promote_rule in both orders. Typically only one is defined,
-    # and there is a fallback returning Bottom below, so the common case is
-    #   promote_type(T, S) =>
-    #   promote_result(T, S, result, Bottom) =>
-    #   typejoin(result, Bottom) => result
-    promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
+    @_terminates_locally_meta
+    normalized_type(::Type{Typ}) where {Typ} = Typ
+    types_are_equal(::Type, ::Type) = false
+    types_are_equal(::Type{Typ}, ::Type{Typ}) where {Typ} = true
+    is_bottom(::Type) = false
+    is_bottom(::Type{Bottom}) = true
+    function throw_conflicting_promote_rules((@nospecialize i1::Type), (@nospecialize i2::Type), (@nospecialize left::Type), (@nospecialize right::Type))
+        @noinline
+        s = LazyString("`promote_type(", i1, ", ", i2, ")` failed, there are conflicting `promote_rule` definitions for types ", left, ", ", right)
+        throw(ArgumentError(s))
+    end
+    function throw_gave_up((@nospecialize i1::Type), (@nospecialize i2::Type), (@nospecialize left::Type), (@nospecialize right::Type))
+        @noinline
+        s = LazyString("`promote_type(", i1, ", ", i2, ")` failed, ended up with (", left, ", ", right, "), check for faulty `promote_rule` methods")
+        throw(ArgumentError(s))
+    end
+    left = T
+    right = S
+    for _ ∈ 1:1000  # guarantee local termination
+        if types_are_equal(left, right) || is_bottom(left) || is_bottom(right)
+            break
+        end
+        # Try `promote_rule` in both orders.
+        a = normalized_type(promote_rule(left, right))
+        b = normalized_type(promote_rule(right, left))
+        loop_is_detected_1 = types_are_equal(left, a) && types_are_equal(right, b)
+        loop_is_detected_2 = types_are_equal(left, b) && types_are_equal(right, a)
+        if loop_is_detected_1 || loop_is_detected_2
+            throw_conflicting_promote_rules(T, S, left, right)
+        end
+        if is_bottom(a) && is_bottom(b)
+            # If no `promote_rule` is defined, both directions give `Bottom`. In that
+            # case use `typejoin` on the original types.
+            return typejoin(left, right)
+        end
+        left = a
+        right = b
+    end
+    if types_are_equal(left, right) || is_bottom(left)
+        right
+    elseif is_bottom(right)
+        left
+    else
+        throw_gave_up(T, S, left, right)
+    end
 end
 
 """
@@ -338,11 +371,6 @@ promote_rule(::Type{Bottom}, slurp...) = Bottom
 promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly necessary, since the next method would match unambiguously anyways
 promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
 promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
-
-promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
-# If no promote_rule is defined, both directions give Bottom. In that
-# case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
 
 """
     promote(xs...)

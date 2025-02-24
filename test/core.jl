@@ -2019,6 +2019,37 @@ g4731() = f4731()
 @test f4731() == ""
 @test g4731() == ""
 
+@testset "type promotion" begin
+    @testset "conflicting promote_rule error, PR #57507" begin
+        struct PR57507A end
+        struct PR57507B end
+        struct PR57507C end
+        @testset "error with conflicting promote_rules" begin
+            Base.promote_rule(::Type{PR57507A}, ::Type{PR57507B}) = PR57507A
+            Base.promote_rule(::Type{PR57507B}, ::Type{PR57507A}) = PR57507B
+            @test_throws ArgumentError promote_type(PR57507A, PR57507B)
+            @test_throws ArgumentError promote_type(PR57507B, PR57507A)
+        end
+        @testset "unambiguous cases" begin
+            @test PR57507A === @inferred promote_type(PR57507A, PR57507A)
+            @test PR57507B === @inferred promote_type(PR57507B, PR57507B)
+            Base.promote_rule(::Type{PR57507C}, ::Type{PR57507A}) = PR57507C
+            Base.promote_rule(::Type{PR57507B}, ::Type{PR57507C}) = PR57507C
+            @test PR57507C === @inferred promote_type(PR57507A, PR57507C)
+            @test PR57507C === @inferred promote_type(PR57507C, PR57507B)
+        end
+    end
+    @testset "issue #13193" begin
+        struct Issue13193_SIQuantity{T<:Number} <: Number end
+        Base.promote_rule(::Type{Issue13193_SIQuantity{T}}, ::Type{Issue13193_SIQuantity{S}}) where {T, S} = Issue13193_SIQuantity{promote_type(T,S)}
+        Base.promote_rule(::Type{Issue13193_SIQuantity{T}}, ::Type{S}) where {T, S<:Number} = Issue13193_SIQuantity{promote_type(T,S)}
+        struct Issue13193_Interval{T<:Number} <: Number end
+        Base.promote_rule(::Type{Issue13193_Interval{T}}, ::Type{Issue13193_Interval{S}}) where {T, S} = Issue13193_Interval{promote_type(T,S)}
+        Base.promote_rule(::Type{Issue13193_Interval{T}}, ::Type{S}) where {T, S<:Number} = Issue13193_Interval{promote_type(T,S)}
+        @test_throws ArgumentError promote_type(Issue13193_Interval{Int}, Issue13193_SIQuantity{Int})
+    end
+end
+
 # issue #4675
 f4675(x::StridedArray...) = 1
 f4675(x::StridedArray{T}...) where {T} = 2
