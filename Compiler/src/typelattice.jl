@@ -478,7 +478,6 @@ end
                     continue # since ∀ T Union{} ⊑ T
                 end
                 i > length(b.fields) && break # `a` has more information than `b` that is partially initialized struct
-                is_field_initialized(b, i) || continue # `a` gives a decisive answer as to whether the field is defined or undefined
                 bfᵢ = b.fields[i]
                 if i == nf
                     bfᵢ = unwrapva(bfᵢ)
