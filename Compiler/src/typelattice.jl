@@ -473,7 +473,10 @@ end
             end
             nf = nfields(a.val)
             for i in 1:nf
-                isdefined(a.val, i) || continue # since ∀ T Union{} ⊑ T
+                if !isdefined(a.val, i)
+                    is_field_initialized(b, i) && return false # conflicting defined-ness information
+                    continue # since ∀ T Union{} ⊑ T
+                end
                 i > length(b.fields) && break # `a` has more information than `b` that is partially initialized struct
                 is_field_initialized(b, i) || continue # `a` gives a decisive answer as to whether the field is defined or undefined
                 bfᵢ = b.fields[i]

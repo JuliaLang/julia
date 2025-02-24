@@ -39,6 +39,9 @@ Core.PartialStruct
 
 function Core.PartialStruct(typ::Type, undef::BitVector, fields::Vector{Any})
     @assert length(undef) == length(fields) - isvarargtype(fields[end])
+    for i = 1:length(fields)
+        @assert fields[i] !== Union{} # TODO remove me once we start to exploit strict undef-ness of fields
+    end
     return Core._PartialStruct(typ, undef, fields)
 end
 

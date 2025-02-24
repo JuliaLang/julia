@@ -4836,6 +4836,11 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test !(PartialStruct(𝕃, Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
     @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
     @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
+    # test comparison between conflicting elements
+    let a = PartialStruct(M.Partial, falses(2), Any[Int,Int])
+        b = Const(M.Partial())
+        @test a ⋢ b && b ⋢ a
+    end
 
     t = Const((false, false)) ⊔ Const((false, true))
     @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
