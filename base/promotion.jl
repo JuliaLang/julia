@@ -325,8 +325,9 @@ function _promote_type_binary(::Type{Bottom}, ::Type{T}, ::Tuple{Nothing,Vararg{
     T
 end
 function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple{Nothing,Vararg{Nothing}}) where {T,S}
+    l = tail(recursion_depth_limit)
     # Try promote_rule in both orders.
-    promote_result(T, S, promote_rule(T,S), promote_rule(S,T), recursion_depth_limit)
+    promote_result(T, S, promote_rule(T,S), promote_rule(S,T), l)
 end
 
 const _promote_type_binary_recursion_depth_limit = ((nothing for _ in 1:28)...,)  # recursion depth limit to prevent stack overflow
