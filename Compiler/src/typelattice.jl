@@ -435,7 +435,7 @@ end
             nb = length(b.fields)
             nmax = max(na, nb)
             for i in 1:nmax
-                is_field_initialized(a, i) ≥ is_field_initialized(b, i) || return false
+                is_field_maybe_undef(a, i) ≤ is_field_maybe_undef(b, i) || return false
                 af = partialstruct_getfield(a, i)
                 bf = partialstruct_getfield(b, i)
                 if i == na || i == nb
@@ -474,7 +474,7 @@ end
             nf = nfields(a.val)
             for i in 1:nf
                 if !isdefined(a.val, i)
-                    is_field_initialized(b, i) && return false # conflicting defined-ness information
+                    is_field_maybe_undef(b, i) || return false # conflicting defined-ness information
                     continue # since ∀ T Union{} ⊑ T
                 end
                 i > length(b.fields) && break # `a` has more information than `b` that is partially initialized struct

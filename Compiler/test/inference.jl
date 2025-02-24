@@ -4849,7 +4849,7 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
 
     t = PartialStruct(𝕃, Tuple{Int, Int}, Any[Const(1)])
     @test t.undef == [false]
-    @test Compiler.is_field_initialized(t, 2)
+    @test !Compiler.is_field_maybe_undef(t, 2)
     @test Compiler.n_initialized(t) == 2
     t = PartialStruct(𝕃, Partial, Any[String, Const(2)])
     @test t.undef == [false, false]

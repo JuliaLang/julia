@@ -326,7 +326,7 @@ function n_initialized(t::Const)
     return something(findfirst(i::Int->!isdefined(t.val,i), 1:nf), nf+1)-1
 end
 
-is_field_initialized(t::Const, i) = isdefined(t.val, i)
+is_field_maybe_undef(t::Const, i) = !isdefined(t.val, i)
 
 function n_initialized(pstruct::PartialStruct)
     i = findfirst(pstruct.undef)
@@ -337,10 +337,10 @@ function n_initialized(pstruct::PartialStruct)
     n
 end
 
-function is_field_initialized(pstruct::PartialStruct, fi)
-    fi ≥ 1 || return false
-    fi ≤ length(pstruct.undef) && return !pstruct.undef[fi]
-    fi ≤ datatype_min_ninitialized(pstruct.typ)
+function is_field_maybe_undef(pstruct::PartialStruct, fi)
+    fi ≥ 1 || return true
+    fi ≤ length(pstruct.undef) && return pstruct.undef[fi]
+    fi > datatype_min_ninitialized(pstruct.typ)
 end
 
 function partialstruct_getfield(pstruct::PartialStruct, fi::Integer)
@@ -355,7 +355,7 @@ function refines_definedness_information(pstruct::PartialStruct)
 end
 
 function define_field(pstruct::PartialStruct, fi::Int)
-    if is_field_initialized(pstruct, fi)
+    if !is_field_maybe_undef(pstruct, fi)
         # no new information to be gained
         return nothing
     end
@@ -698,7 +698,7 @@ end
             end
             fields[i] = tyi
             if i ≤ nundef
-                _undef[i] = !is_field_initialized(typea, i) || !is_field_initialized(typeb, i)
+                _undef[i] = is_field_maybe_undef(typea, i) || is_field_maybe_undef(typeb, i)
             end
             if !anyrefine
                 anyrefine = has_nontrivial_extended_info(𝕃, tyi) || # extended information
