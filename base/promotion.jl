@@ -331,7 +331,7 @@ function promote_type(::Type{T}, ::Type{S}) where {T,S}
         left = a
         right = b
     end
-    if (left === right) || is_bottom(left)
+    if types_are_identical(left, right) || is_bottom(left)
         right
     elseif is_bottom(right)
         left
