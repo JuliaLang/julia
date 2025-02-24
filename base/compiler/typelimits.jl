@@ -575,7 +575,7 @@ end
 @nospecializeinfer function tmerge_partial_struct(lattice::PartialsLattice, @nospecialize(typea), @nospecialize(typeb))
     aty = widenconst(typea)
     bty = widenconst(typeb)
-    if aty === bty
+    if aty === bty && !isType(aty)
         # must have egal here, since we do not create PartialStruct for non-concrete types
         typea_nfields = nfields_tfunc(lattice, typea)
         typeb_nfields = nfields_tfunc(lattice, typeb)
@@ -589,9 +589,6 @@ end
         for i = 1:type_nfields
             ai = getfield_tfunc(lattice, typea, Const(i))
             bi = getfield_tfunc(lattice, typeb, Const(i))
-            # N.B.: We're assuming here that !isType(aty), because that case
-            # only arises when typea === typeb, which should have been caught
-            # before calling this.
             ft = fieldtype(aty, i)
             if is_lattice_equal(lattice, ai, bi) || is_lattice_equal(lattice, ai, ft)
                 # Since ai===bi, the given type has no restrictions on complexity.

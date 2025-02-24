@@ -2326,18 +2326,21 @@ end
 
 function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, vtypes::Union{VarTable,Nothing}, sv::AbsIntState)
     f = abstract_eval_value(interp, e.args[2], vtypes, sv)
-    # rt = sp_type_rewrap(e.args[3], sv.linfo, true)
+    # rt = sp_type_rewrap(e.args[3], sv.linfo, true) # verify that the result type make sense?
+    # rt === Bottom && return RTEffects(Union{}, Any, EFFECTS_UNKNOWN)
     atv = e.args[4]::SimpleVector
     at = Vector{Any}(undef, length(atv) + 1)
     at[1] = f
     for i = 1:length(atv)
-        at[i + 1] = sp_type_rewrap(at[i], frame_instance(sv), false)
-        at[i + 1] === Bottom && return
+        atᵢ = at[i + 1] = sp_type_rewrap(atv[i], frame_instance(sv), false)
+        atᵢ === Bottom && return RTEffects(Union{}, Any, EFFECTS_UNKNOWN)
     end
     # this may be the wrong world for the call,
     # but some of the result is likely to be valid anyways
     # and that may help generate better codegen
     abstract_call(interp, ArgInfo(nothing, at), StmtInfo(false), sv)
+    rt = e.args[1]
+    isconcretetype(rt) || (rt = Any)
     nothing
 end
 
@@ -3094,13 +3097,22 @@ function update_bestguess!(interp::AbstractInterpreter, frame::InferenceState,
     slottypes = frame.slottypes
     rt = widenreturn(rt, BestguessInfo(interp, bestguess, nargs, slottypes, currstate))
     # narrow representation of bestguess slightly to prepare for tmerge with rt
-    if rt isa InterConditional && bestguess isa Const
+    if rt isa InterConditional && bestguess isa Const && bestguess.val isa Bool
         slot_id = rt.slot
         old_id_type = slottypes[slot_id]
         if bestguess.val === true && rt.elsetype !== Bottom
             bestguess = InterConditional(slot_id, old_id_type, Bottom)
         elseif bestguess.val === false && rt.thentype !== Bottom
             bestguess = InterConditional(slot_id, Bottom, old_id_type)
+        end
+    # or narrow representation of rt slightly to prepare for tmerge with bestguess
+    elseif bestguess isa InterConditional && rt isa Const && rt.val isa Bool
+        slot_id = bestguess.slot
+        old_id_type = widenconditional(slottypes[slot_id])
+        if rt.val === true && bestguess.elsetype !== Bottom
+            rt = InterConditional(slot_id, old_id_type, Bottom)
+        elseif rt.val === false && bestguess.thentype !== Bottom
+            rt = InterConditional(slot_id, Bottom, old_id_type)
         end
     end
     # copy limitations to return value

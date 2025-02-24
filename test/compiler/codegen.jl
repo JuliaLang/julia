@@ -916,3 +916,20 @@ end
 
 # Core.getptls() special handling
 @test !occursin("call ptr @jlplt", get_llvm(Core.getptls, Tuple{})) #It should lower to a direct load of the ptls and not a ccall
+
+# issue #56996
+let
+   ()->() # trigger various heuristics
+   Base.Experimental.@force_compile
+   default_rng_orig = [] # make a value in a Slot
+   try
+       # overwrite the gc-slots in the exception branch
+       throw(ErrorException("This test is supposed to throw an error"))
+   catch ex
+       # destroy any values that aren't referenced
+       GC.gc()
+       # make sure that default_rng_orig value is still valid
+       @noinline copy!([], default_rng_orig)
+   end
+   nothing
+end

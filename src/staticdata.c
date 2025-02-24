@@ -859,6 +859,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                     record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
                 }
                 else if (native_functions && // don't delete any code if making a ji file
+                         (ci->owner == jl_nothing) && // don't delete code for external interpreters
                          !effects_foldable(ci->ipo_purity_bits) && // don't delete code we may want for irinterp
                          jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
                     // delete the code now: if we thought it was worth keeping, it would have been converted to object code

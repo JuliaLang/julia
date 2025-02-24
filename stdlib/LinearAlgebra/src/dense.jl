@@ -1417,6 +1417,7 @@ This returns a `5×5 Bidiagonal{Float64}`, which can now be passed to other line
 (e.g. eigensolvers) which will use specialized methods for `Bidiagonal` types.
 """
 function factorize(A::AbstractMatrix{T}) where T
+    require_one_based_indexing(A)
     m, n = size(A)
     if m == n
         if m == 1 return A[1] end
@@ -1424,18 +1425,18 @@ function factorize(A::AbstractMatrix{T}) where T
         utri1   = true
         herm    = true
         sym     = true
-        for j = 1:n-1, i = j+1:m
-            if utri1
+        for j = 1:n, i = j:m
+            if (j < n) && (i > j) && utri1 # indices are off-diagonal
                 if A[i,j] != 0
                     utri1 = i == j + 1
                     utri = false
                 end
             end
             if sym
-                sym &= A[i,j] == A[j,i]
+                sym &= A[i,j] == transpose(A[j,i])
             end
             if herm
-                herm &= A[i,j] == conj(A[j,i])
+                herm &= A[i,j] == adjoint(A[j,i])
             end
             if !(utri1|herm|sym) break end
         end
@@ -1448,7 +1449,7 @@ function factorize(A::AbstractMatrix{T}) where T
         if ltri1
             for i = 1:n-1
                 if A[i,i+1] != 0
-                    ltri &= false
+                    ltri = false
                     break
                 end
             end
