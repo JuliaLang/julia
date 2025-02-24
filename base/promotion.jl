@@ -331,7 +331,6 @@ const _promote_type_binary_recursion_depth_limit = let n = nothing  # recursion 
 end
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @inline
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
     #   promote_type(T, S) =>
@@ -357,10 +356,10 @@ promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly n
 promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
 promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
 
-promote_result(::Type,::Type,::Type{T},::Type{S},l::Tuple{Vararg{Nothing}}) where {T,S} = (@inline; _promote_type_binary(T,S,l))
+promote_result(::Type,::Type,::Type{T},::Type{S},l::Tuple{Vararg{Nothing}}) where {T,S} = _promote_type_binary(T,S,l)
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom},::Tuple{Vararg{Nothing}}) where {T,S} = (@inline; typejoin(T, S))
+promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom},::Tuple{Vararg{Nothing}}) where {T,S} = typejoin(T, S)
 
 """
     promote(xs...)
