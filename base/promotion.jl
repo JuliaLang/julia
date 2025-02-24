@@ -321,7 +321,7 @@ function promote_type(::Type{T}, ::Type{S}) where {T,S}
     end
     left = T
     right = S
-    for _ ∈ 1:1000
+    for _ ∈ 1:1000  # guarantee local termination
         if types_are_equal(left, right) || is_bottom(left) || is_bottom(right)
             break
         end
