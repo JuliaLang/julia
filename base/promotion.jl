@@ -305,7 +305,7 @@ promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
     @_terminates_locally_meta
     normalized_type(::Type{Typ}) where {Typ} = Typ
-    types_are_identical(::Type{A}, ::Type{B}) where {A,B} = A === B
+    types_are_identical(::Type{A}, ::Type{B}) where {A,B} = A == B
     is_bottom(::Type{Typ}) where {Typ} = Typ <: Bottom
     left = T
     right = S
