@@ -4910,6 +4910,10 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test c ⋢ t1 && t1 ⋢ c && c ⊑ t2 && t2 ⋢ c
     t3 = PartialStruct(𝕃, Partial4, Any[Const(1), Const("x")])
     @test c ⋢ t3 && t3 ⋢ c
+
+    c = Const(Ref{Any}(1))
+    t = PartialStruct(Base.RefValue{Any}, trues(1), Any[String])
+    @test c ⋢ t && t ⋢ c
 end
 
 # Test that a function-wise `@max_methods` works as expected
