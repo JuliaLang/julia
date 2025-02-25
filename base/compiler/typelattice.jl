@@ -607,7 +607,7 @@ end
         if ti === widev
             return v
         end
-        valid_as_lattice(ti) || return Bottom
+        valid_as_lattice(ti, true) || return Bottom
         if widev <: Tuple
             new_fields = Vector{Any}(undef, length(v.fields))
             for i = 1:length(new_fields)
@@ -631,7 +631,7 @@ end
             return v
         end
         ti = typeintersect(widev, t)
-        valid_as_lattice(ti) || return Bottom
+        valid_as_lattice(ti, true) || return Bottom
         return PartialOpaque(ti, v.env, v.parent, v.source)
     end
     return tmeet(widenlattice(lattice), v, t)

@@ -1202,7 +1202,7 @@ function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
 end
 
 function invoke_signature(argtypes::Vector{Any})
-    ft, argtyps = widenconst(argtypes[2]), instanceof_tfunc(widenconst(argtypes[3]))[1]
+    ft, argtyps = widenconst(argtypes[2]), instanceof_tfunc(widenconst(argtypes[3]), false)[1]
     return rewrap_unionall(Tuple{ft, unwrap_unionall(argtyps).parameters...}, argtyps)
 end
 
@@ -1450,8 +1450,9 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
     cases = compute_inlining_cases(info, flag, sig, state)
     cases === nothing && return nothing
     cases, all_covered, joint_effects = cases
-    handle_cases!(todo, ir, idx, stmt, argtypes_to_type(sig.argtypes), cases,
-        all_covered, joint_effects)
+    atype = argtypes_to_type(sig.argtypes)
+    atype === Union{} && return nothing # accidentally actually unreachable
+    handle_cases!(todo, ir, idx, stmt, atype, cases, all_covered, joint_effects)
 end
 
 function handle_match!(cases::Vector{InliningCase},
