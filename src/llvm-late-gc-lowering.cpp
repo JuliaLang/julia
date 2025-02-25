@@ -749,8 +749,8 @@ void RecursivelyVisit(callback f, Value *V) {
         }
         llvm_dump(V);
         llvm_dump(TheUser);
-        errs() << "Unexpected instruction\n"
-        abort()
+        errs() << "Unexpected instruction\n";
+        abort();
     }
 }
 
