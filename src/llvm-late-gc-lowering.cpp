@@ -1,6 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/Support/Casting.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -171,39 +173,54 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             (void)LI;
             break;
         }
-        else if (auto II = dyn_cast<IntrinsicInst>(CurrentV)) {
+        else if (dyn_cast<IntrinsicInst>(CurrentV) != nullptr &&
+                (cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::masked_load ||
+                cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::masked_gather)) {
             // Some intrinsics behave like LoadInst followed by a SelectInst
             // This should never happen in a derived addrspace (since those cannot be stored to memory)
             // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
-            if (II->getIntrinsicID() == Intrinsic::masked_load ||
-                II->getIntrinsicID() == Intrinsic::masked_gather) {
-                if (auto VTy = dyn_cast<VectorType>(II->getType())) {
-                    if (hasLoadedTy(VTy->getElementType())) {
-                        Value *Mask = II->getOperand(2);
-                        Value *Passthrough = II->getOperand(3);
-                        if (!isa<Constant>(Mask) || !cast<Constant>(Mask)->isAllOnesValue()) {
-                            assert(isa<UndefValue>(Passthrough) && "unimplemented");
-                            (void)Passthrough;
-                        }
-                        CurrentV = II->getOperand(0);
-                        if (II->getIntrinsicID() == Intrinsic::masked_load) {
-                            fld_idx = -1;
-                            if (!isSpecialPtr(CurrentV->getType())) {
-                                CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
-                            }
-                        } else {
-                            if (auto VTy2 = dyn_cast<VectorType>(CurrentV->getType())) {
-                                if (!isSpecialPtr(VTy2->getElementType())) {
-                                    CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
-                                    fld_idx = -1;
-                                }
-                            }
-                        }
-                        continue;
+            auto II = dyn_cast<IntrinsicInst>(CurrentV);
+            if (auto VTy = dyn_cast<VectorType>(II->getType())) {
+                if (hasLoadedTy(VTy->getElementType())) {
+                    Value *Mask = II->getOperand(2);
+                    Value *Passthrough = II->getOperand(3);
+                    if (!isa<Constant>(Mask) || !cast<Constant>(Mask)->isAllOnesValue()) {
+                        assert(isa<UndefValue>(Passthrough) && "unimplemented");
+                        (void)Passthrough;
                     }
+                    CurrentV = II->getOperand(0);
+                    if (II->getIntrinsicID() == Intrinsic::masked_load) {
+                        fld_idx = -1;
+                        if (!isSpecialPtr(CurrentV->getType())) {
+                            CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
+                        }
+                    } else {
+                        if (auto VTy2 = dyn_cast<VectorType>(CurrentV->getType())) {
+                            if (!isSpecialPtr(VTy2->getElementType())) {
+                                CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
+                                fld_idx = -1;
+                            }
+                        }
+                    }
+                    continue;
                 }
-                // In general a load terminates a walk
-                break;
+            }
+            // In general a load terminates a walk
+            break;
+        }
+        else if (dyn_cast<IntrinsicInst>(CurrentV) != nullptr && cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::vector_extract) {
+            auto II = dyn_cast<IntrinsicInst>(CurrentV);
+            if (auto VTy = dyn_cast<VectorType>(II->getType())) {
+                if (hasLoadedTy(VTy->getElementType())) {
+                    Value *Idx = II->getOperand(1);
+                    if (!isa<ConstantInt>(Idx)) {
+                        assert(isa<UndefValue>(Idx) && "unimplemented");
+                        (void)Idx;
+                    }
+                    CurrentV = II->getOperand(0);
+                    fld_idx = -1;
+                    continue;
+                }
             }
         }
         else if (auto CI = dyn_cast<CallInst>(CurrentV)) {
@@ -530,6 +547,20 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
         Numbers = NumberAll(S, IEI->getOperand(0));
         int ElNumber = Number(S, IEI->getOperand(1));
         Numbers[idx] = ElNumber;
+    } else if (dyn_cast<IntrinsicInst>(CurrentV) != nullptr && dyn_cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::vector_insert) {
+        auto *VII = cast<IntrinsicInst>(CurrentV);
+        // Vector insert is a bit like a shuffle so use the same approach
+        SmallVector<int, 0> Numbers1 = NumberAll(S, VII->getOperand(0));
+        SmallVector<int, 0> Numbers2 = NumberAll(S, VII->getOperand(1));
+        int first_idx = cast<ConstantInt>(VII->getOperand(2))->getZExtValue();
+        for (unsigned i = 0; i < Numbers1.size(); ++i) {
+            if (i < first_idx)
+                Numbers.push_back(Numbers1[i]);
+            else if (i - first_idx < Numbers2.size())
+                Numbers.push_back(Numbers2[i - first_idx]);
+            else
+                Numbers.push_back(Numbers1[i]);
+        }
     } else if (auto *IVI = dyn_cast<InsertValueInst>(CurrentV)) {
         Numbers = NumberAll(S, IVI->getAggregateOperand());
         auto Tracked = TrackCompositeType(IVI->getType());
@@ -1205,6 +1236,10 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                 continue;
                             }
                         }
+                    }
+                    if (II->getIntrinsicID() == Intrinsic::vector_extract || II->getIntrinsicID() == Intrinsic::vector_insert) {
+                        // These are not real defs
+                        continue;
                     }
                 }
                 auto callee = CI->getCalledFunction();
