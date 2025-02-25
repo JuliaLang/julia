@@ -824,6 +824,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
                      // ... or point to Base functions accessed by the runtime
                      (m == jl_base_module && (!strcmp(jl_symbol_name(b->globalref->name), "wait") ||
                                               !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook"))))) {
+                    record_field_change((jl_value_t**)&b->backedges, NULL);
                     jl_queue_for_serialization(s, b);
                 }
             }
