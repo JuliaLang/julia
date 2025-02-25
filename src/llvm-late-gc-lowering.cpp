@@ -749,7 +749,8 @@ void RecursivelyVisit(callback f, Value *V) {
         }
         llvm_dump(V);
         llvm_dump(TheUser);
-        assert(false && "Unexpected instruction");
+        errs() << "Unexpected instruction\n"
+        abort()
     }
 }
 
@@ -1138,11 +1139,13 @@ static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
                     worklist.insert(FalseBranch);
                 } else {
                     llvm_dump(SI);
-                    assert(false && "Malformed Select");
+                    dbgs() << "Malformed Select\n";
+                    abort;
                 }
             } else {
                 llvm_dump(V);
-                assert(false && "Unexpected SRet argument");
+                dbgs() << "Unexpected SRet argument\n";
+                abort();
             }
         }
     }
@@ -1221,7 +1224,8 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                     SmallSetVector<AllocaInst *, 8>  gc_allocas = FindSretAllocas(arg1);
                                     if (gc_allocas.size() == 0) {
                                         llvm_dump(CI);
-                                        assert(false && "Expected at least one alloca");
+                                        errs() << "Expected one Alloca at least\n";
+                                        abort();
                                     }
                                     else {
                                         for (AllocaInst* SRet_gc : gc_allocas) {
