@@ -4,10 +4,15 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
-#ifndef MMTK_GC
+#ifndef WITH_THIRD_PARTY_HEAP
 #include "gc-tls-stock.h"
 #else
+// Pick the appropriate third-party implementation
+#ifdef WITH_THIRD_PARTY_HEAP
+#if WITH_THIRD_PARTY_HEAP == 1 // MMTk
 #include "gc-tls-mmtk.h"
+#endif
+#endif
 #endif
 #include "gc-tls-common.h"
 #include "julia_atomics.h"

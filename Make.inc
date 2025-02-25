@@ -80,9 +80,6 @@ HAVE_SSP := 0
 WITH_GC_VERIFY := 0
 WITH_GC_DEBUG_ENV := 0
 
-# Use stock if MMTK_PLAN hasn't been defined
-MMTK_PLAN ?= None
-
 # Enable DTrace support
 WITH_DTRACE := 0
 
@@ -841,29 +838,44 @@ JCXXFLAGS += -DGC_DEBUG_ENV
 JCFLAGS += -DGC_DEBUG_ENV
 endif
 
-ifneq (${MMTK_PLAN},None)
-JCXXFLAGS += -DMMTK_GC
-JCFLAGS += -DMMTK_GC
-# Do a release build on the binding by default
-MMTK_BUILD ?= release
+# By default we use the stock GC
+WITH_THIRD_PARTY_GC ?= 0
+
+# Convert to lowercase
+USE_THIRD_PARTY_GC := $(shell echo $(WITH_THIRD_PARTY_GC) | tr A-Z a-z)
+
+# NB: When adding a new GC, make sure to add -DWITH_THIRD_PARTY_HEAP=<#NEW_GC>
+# to the variables JCFLAGS and JCXXFLAGS according to the mapping (MMTK=1, #NEW_GC=2)
+
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+JCXXFLAGS += -DWITH_THIRD_PARTY_HEAP=1
+JCFLAGS += -DWITH_THIRD_PARTY_HEAP=1
+
+# Must specify a supported MMTk Plan: Immix or StickyImmix
 ifeq (${MMTK_PLAN},Immix)
 JCXXFLAGS += -DMMTK_PLAN_IMMIX
 JCFLAGS += -DMMTK_PLAN_IMMIX
+else ifeq (${MMTK_PLAN},StickyImmix)
+JCXXFLAGS += -DMMTK_PLAN_STICKYIMMIX
+JCFLAGS += -DMMTK_PLAN_STICKYIMMIX
 else
-$(error "Unsupported MMTk plan: $(MMTK_PLAN)")
+$(error "Unsupported MMTk plan: $(MMTK_PLAN). Supported plan(s): Immix or StickyImmix.")
 endif
+
+# Do a release build on the binding by default
+MMTK_BUILD ?= release
 
 # Location of mmtk-julia binding
 # (needed for api/*.h and .so file)
 MMTK_JULIA_DIR ?= $(BUILDROOT)/usr/lib/mmtk_julia
-
 MMTK_DIR = ${MMTK_JULIA_DIR}/mmtk
 MMTK_API_INC = ${MMTK_DIR}/api
-
 MMTK_LIB := -lmmtk_julia
-else
-MMTK_JULIA_INC :=
-MMTK_LIB :=
+
+# Must specify a supported third-party GC or use the stock GC.
+# Supported third-party GCs: mmtk
+else ifneq (${USE_THIRD_PARTY_GC},0)
+$(error "Unsupported third-party GC: $(WITH_THIRD_PARTY_GC). Supported option(s): mmtk")
 endif
 
 ifeq ($(WITH_DTRACE), 1)
@@ -966,19 +978,17 @@ ARCH := $(BUILD_OS)
 endif
 endif
 
-# MMTk is only available on x86_64 Linux for now
-ifneq (${MMTK_PLAN},None)
 
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+# MMTk is only available on x86_64 Linux for now
 ifeq ($(OS),Linux)
 MMTK_LIB_NAME := libmmtk_julia.so
 else
 $(error "Unsupported OS for MMTk")
 endif
-
 ifneq ($(ARCH),x86_64)
 $(error "Unsupported build architecture for MMTk")
 endif
-
 endif
 
 # Detect common pre-SSE2 JULIA_CPU_TARGET values known not to work (#7185)
@@ -1407,7 +1417,12 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.34|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT BOLT MMTK_JULIA
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT BOLT
+
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+BB_PROJECTS += MMTK_JULIA
+endif
+
 define SET_BB_DEFAULT
 # First, check to see if BB is disabled on a global setting
 ifeq ($$(USE_BINARYBUILDER),0)
