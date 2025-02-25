@@ -33,6 +33,11 @@ See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 hash(data) = hash(data, RAPID_SEED)
 hash(@nospecialize(data), h::UInt64) = hash(objectid(data), h)
 
+function mul_parts(a::UInt64, b::UInt64)
+    p = widemul(a, b)
+    return (p >> 64) % UInt64, p % UInt64
+end
+rapid_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
 mul_hi64(A::UInt64, B::UInt64) = ((widen(A) * B) >> 64) % UInt64
 rapid_mix(A, B) = mul_hi64(A, B) ⊻ (A * B)
@@ -112,21 +117,15 @@ function hash(
 
     a = a ⊻ secret[2]
     b = b ⊻ seed
-    a, b = a * b, mul_hi64(a, b)
+    b, a = mul_parts(a, b)
     return rapid_mix(a ⊻ secret[1] ⊻ buflen, b ⊻ secret[2])
 end
 
 
 function hash_64_64(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64})
-    seed = seed ⊻ (rapid_mix(seed ⊻ secret[1], secret[2]) ⊻ 8)
-
-    a = (UInt64(bswap((data >>> 32) % UInt32)) << 32) | UInt64(bswap(data % UInt32))
-    b = (a << 32) | (a >>> 32)
-    a = a ⊻ secret[2]
-    b = b ⊻ seed
-    a, b = a * b, mul_hi64(a, b)
-    return rapid_mix(a ⊻ secret[1] ⊻ 8, b ⊻ secret[2])
+    return data ⊻ rapid_mix(data ⊻ rapid_mix(seed, secret[1]), secret[2])
 end
+
 hash_64_32(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64}) =
     hash_64_64(data, seed, secret) % UInt32
 hash_32_32(data::UInt32, seed::UInt64, secret::NTuple{3, UInt64}) =
