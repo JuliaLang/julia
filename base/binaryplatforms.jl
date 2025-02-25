@@ -631,9 +631,6 @@ const arch_march_isa_mapping = let
             "a64fx" => get_set("aarch64", "a64fx"),
             "apple_m1" => get_set("aarch64", "apple_m1"),
         ],
-        "riscv64" => [
-            "riscv64" => get_set("riscv64", "riscv64")
-        ],
         "powerpc64le" => [
             "power8" => get_set("powerpc64le", "power8"),
         ],
@@ -754,7 +751,7 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         end
         os_version = nothing
         if os == "macos"
-            os_version = extract_os_version("macos", r".*darwin([\d\.]+)"sa)
+            os_version = extract_os_version("macos", r".*darwin([\d.]+)"sa)
         end
         if os == "freebsd"
             os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)"sa)

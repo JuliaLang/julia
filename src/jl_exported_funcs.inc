@@ -42,7 +42,6 @@
     XX(jl_atomic_swap_bits) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
-    XX(jl_binding_resolved_p) \
     XX(jl_bitcast) \
     XX(jl_boundp) \
     XX(jl_bounds_error) \
@@ -72,6 +71,7 @@
     XX(jl_call1) \
     XX(jl_call2) \
     XX(jl_call3) \
+    XX(jl_call4) \
     XX(jl_calloc) \
     XX(jl_call_in_typeinf_world) \
     XX(jl_capture_interp_frame) \
@@ -127,7 +127,6 @@
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
     XX(jl_expand) \
-    XX(jl_expand_and_resolve) \
     XX(jl_expand_stmt) \
     XX(jl_expand_stmt_with_loc) \
     XX(jl_expand_with_loc) \
@@ -196,6 +195,7 @@
     XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
+    XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
     XX(jl_get_cpu_features) \
     XX(jl_cpu_has_fma) \
@@ -213,6 +213,8 @@
     XX(jl_get_module_infer) \
     XX(jl_get_module_of_binding) \
     XX(jl_get_module_optlevel) \
+    XX(jl_get_module_usings_backedges) \
+    XX(jl_get_module_binding_or_nothing) \
     XX(jl_get_next_task) \
     XX(jl_get_nth_field) \
     XX(jl_get_nth_field_checked) \
@@ -240,7 +242,6 @@
     XX(jl_has_typevar_from_unionall) \
     XX(jl_hrtime) \
     XX(jl_idtable_rehash) \
-    XX(jl_infer_thunk) \
     XX(jl_init) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
@@ -389,7 +390,7 @@
     XX(jl_read_verify_header) \
     XX(jl_realloc) \
     XX(jl_register_newmeth_tracer) \
-    XX(jl_resolve_globals_in_ir) \
+    XX(jl_resolve_definition_effects_in_ir) \
     XX(jl_restore_excstack) \
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \
@@ -450,7 +451,6 @@
     XX(jl_tagged_gensym) \
     XX(jl_take_buffer) \
     XX(jl_task_get_next) \
-    XX(jl_task_stack_buffer) \
     XX(jl_termios_size) \
     XX(jl_test_cpu_feature) \
     XX(jl_threadid) \
@@ -517,6 +517,7 @@
 #define JL_CODEGEN_EXPORTED_FUNCS(YY) \
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
+    YY(jl_emit_codeinst_to_jit) \
     YY(jl_extern_c) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
@@ -542,11 +543,13 @@
     YY(jl_dump_emitted_mi_name) \
     YY(jl_dump_llvm_opt) \
     YY(jl_dump_fptr_asm) \
+    YY(jl_emit_native) \
     YY(jl_get_function_id) \
     YY(jl_type_to_llvm) \
     YY(jl_getUnwindInfo) \
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
+    YY(jl_jit_abi_converter) \
     YY(JLJITGetLLVMOrcExecutionSession) \
     YY(JLJITGetJuliaOJIT) \
     YY(JLJITGetExternalJITDylib) \

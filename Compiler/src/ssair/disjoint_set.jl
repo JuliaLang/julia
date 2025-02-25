@@ -5,7 +5,7 @@
 # imports
 import Base: length, eltype, union!, push!
 # usings
-import Base: OneTo, collect, zero, zeros, one, typemax
+using Base: OneTo, collect, zero, zeros, one, typemax
 
 # Disjoint-Set
 
@@ -55,7 +55,7 @@ eltype(::Type{IntDisjointSet{T}}) where {T<:Integer} = T
 # path compression is implemented here
 function find_root_impl!(parents::Vector{T}, x::Integer) where {T<:Integer}
     p = parents[x]
-    @inbounds if parents[p] != p
+    @inbounds if parents[p] ≠ p
         parents[x] = p = _find_root_impl!(parents, p)
     end
     return p
@@ -64,7 +64,7 @@ end
 # unsafe version of the above
 function _find_root_impl!(parents::Vector{T}, x::Integer) where {T<:Integer}
     @inbounds p = parents[x]
-    @inbounds if parents[p] != p
+    @inbounds if parents[p] ≠ p
         parents[x] = p = _find_root_impl!(parents, p)
     end
     return p
@@ -95,7 +95,7 @@ function union!(s::IntDisjointSet{T}, x::T, y::T) where {T<:Integer}
     parents = s.parents
     xroot = find_root_impl!(parents, x)
     yroot = find_root_impl!(parents, y)
-    return xroot != yroot ? root_union!(s, xroot, yroot) : xroot
+    return xroot ≠ yroot ? root_union!(s, xroot, yroot) : xroot
 end
 
 """

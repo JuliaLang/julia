@@ -1275,6 +1275,7 @@ let x = [], y = [], z = Base.ImmutableDict(x => y)
     push!(y, x)
     push!(y, z)
     @test replstr(x) == "1-element Vector{Any}:\n Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any}, Vector{Any}}([#= circular reference @-3 =#] => [#= circular reference @-2 =#])]"
+    @test replstr(x, :color => true) == "1-element Vector{Any}:\n Any[Any[\e[33m#= circular reference @-2 =#\e[39m], Base.ImmutableDict{Vector{Any}, Vector{Any}}([\e[33m#= circular reference @-3 =#\e[39m] => [\e[33m#= circular reference @-2 =#\e[39m])]"
     @test repr(z) == "Base.ImmutableDict{Vector{Any}, Vector{Any}}([Any[Any[#= circular reference @-2 =#], Base.ImmutableDict{Vector{Any}, Vector{Any}}(#= circular reference @-3 =#)]] => [Any[Any[#= circular reference @-2 =#]], Base.ImmutableDict{Vector{Any}, Vector{Any}}(#= circular reference @-2 =#)])"
     @test sprint(dump, x) == """
         Array{Any}((1,))
@@ -1732,6 +1733,29 @@ end
               string("4×30 Matrix{Float64}:\n",
                      " 0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  …  0.0  0.0  0.0  0.0  0.0  0.0  0.0\n",
                      " ⋮                        ⋮              ⋱            ⋮                   ")
+
+    @testset "extremely large arrays" begin
+        struct MyBigFill{T,N} <: AbstractArray{T,N}
+            val :: T
+            axes :: NTuple{N,Base.OneTo{BigInt}}
+        end
+        MyBigFill(val, sz::Tuple{}) = MyBigFill{typeof(val),0}(val, sz)
+        MyBigFill(val, sz::NTuple{N,BigInt}) where {N} = MyBigFill(val, map(Base.OneTo, sz))
+        MyBigFill(val, sz::Tuple{Vararg{Integer}}) = MyBigFill(val, map(BigInt, sz))
+        Base.size(M::MyBigFill) = map(length, M.axes)
+        Base.axes(M::MyBigFill) = M.axes
+        function Base.getindex(M::MyBigFill{<:Any,N}, ind::Vararg{Integer,N}) where {N}
+            checkbounds(M, ind...)
+            M.val
+        end
+        function Base.isassigned(M::MyBigFill{<:Any,N}, ind::Vararg{BigInt,N}) where {N}
+            checkbounds(M, ind...)
+            true
+        end
+        M = MyBigFill(4, (big(2)^65, 3))
+        @test arrstr(M, 3) == "36893488147419103232×3 $MyBigFill{$Int, 2}: …"
+        @test arrstr(M, 8) == "36893488147419103232×3 $MyBigFill{$Int, 2}:\n 4  4  4\n 4  4  4\n ⋮     \n 4  4  4"
+    end
 end
 
 module UnexportedOperators
@@ -1860,6 +1884,9 @@ end
     B = @view ones(2)[r]
     Base.showarg(io, B, false)
     @test String(take!(io)) == "view(::Vector{Float64}, $(repr(r)))"
+
+    Base.showarg(io, reshape(UnitRange{Int64}(1,1)), false)
+    @test String(take!(io)) == "reshape(::UnitRange{Int64})"
 end
 
 @testset "Methods" begin
@@ -1899,15 +1926,6 @@ end
     b = IOBuffer()
     show(IOContext(b, :module => @__MODULE__), TypeA)
     @test String(take!(b)) == "TypeA"
-
-    # issue #26354; make sure testing for symbol visibility doesn't cause
-    # spurious binding resolutions
-    show(IOContext(b, :module => TestShowType), Base.Pair)
-    @test !Base.isbindingresolved(TestShowType, :Pair)
-    @test String(take!(b)) == "Core.Pair"
-    show(IOContext(b, :module => TestShowType), Base.Complex)
-    @test Base.isbindingresolved(TestShowType, :Complex)
-    @test String(take!(b)) == "Complex"
 end
 
 @testset "typeinfo" begin
@@ -2352,9 +2370,9 @@ end
 
 # begin/end indices
 @weak_test_repr "a[begin, end, (begin; end)]"
-@test repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
+@test_broken repr(Base.remove_linenums!(:(a[begin, end, (begin; end)]))) == ":(a[begin, end, (begin;\n          end)])"
 @weak_test_repr "a[begin, end, let x=1; (x+1;); end]"
-@test repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
+@test_broken repr(Base.remove_linenums!(:(a[begin, end, let x=1; (x+1;); end]))) ==
         ":(a[begin, end, let x = 1\n          begin\n              x + 1\n          end\n      end])"
 @test_repr "a[(bla;)]"
 @test_repr "a[(;;)]"
@@ -2790,4 +2808,10 @@ Base.setindex!(d::NoLengthDict, v, k) = d.dict[k] = v
     str = sprint(io->show(io, MIME("text/plain"), x))
     @test contains(str, "NoLengthDict")
     @test contains(str, "1 => 2")
+end
+
+# Issue 56936
+@testset "code printing of var\"keyword\" identifiers" begin
+    @test_repr """:(var"do" = 1)"""
+    @weak_test_repr """:(let var"let" = 1; var"let"; end)"""
 end

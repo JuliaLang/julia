@@ -15,11 +15,7 @@
 #include <llvm/ADT/SmallString.h>
 #include <llvm/ADT/BitVector.h>
 #include <llvm/ADT/Statistic.h>
-#if JL_LLVM_VERSION >= 170000
 #include <llvm/TargetParser/Triple.h>
-#else
-#include <llvm/ADT/Triple.h>
-#endif
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -51,7 +47,7 @@
 
 using namespace llvm;
 
-extern Optional<bool> always_have_fma(Function&, const Triple &TT);
+extern std::optional<bool> always_have_fma(Function&, const Triple &TT);
 
 namespace {
 constexpr uint32_t clone_mask =
@@ -185,7 +181,7 @@ struct TargetSpec {
     }
 };
 
-static Optional<SmallVector<TargetSpec, 0>> get_target_specs(Module &M) {
+static std::optional<SmallVector<TargetSpec, 0>> get_target_specs(Module &M) {
     auto md = M.getModuleFlag("julia.mv.specs");
     if (!md)
         return None;

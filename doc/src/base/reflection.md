@@ -100,10 +100,12 @@ as assignments, branches, and calls:
 ```jldoctest; setup = (using Base: +, sin)
 julia> Meta.lower(@__MODULE__, :( [1+2, sin(0.5)] ))
 :($(Expr(:thunk, CodeInfo(
-1 ─ %1 =   dynamic 1 + 2
-│   %2 =   dynamic sin(0.5)
-│   %3 =   dynamic Base.vect(%1, %2)
-└──      return %3
+1 ─ %1 = :+
+│   %2 =   dynamic (%1)(1, 2)
+│   %3 = sin
+│   %4 =   dynamic (%3)(0.5)
+│   %5 =   dynamic Base.vect(%2, %4)
+└──      return %5
 ))))
 ```
 

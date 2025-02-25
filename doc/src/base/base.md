@@ -166,6 +166,7 @@ Core.replacefield!
 Core.swapfield!
 Core.setfieldonce!
 Core.isdefined
+Core.isdefinedglobal
 Base.@isdefined
 Base.convert
 Base.promote

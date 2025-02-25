@@ -1511,6 +1511,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             used_ssas[x.id] -= 1
         end
         ir = complete(compact)
+        # remove any use that has been optimized away by the DCE
+        for (intermediaries, defuse) in values(defuses)
+            filter!(x -> ir[SSAValue(x.idx)][:stmt] !== nothing, defuse.uses)
+        end
         sroa_mutables!(ir, defuses, used_ssas, lazydomtree, inlining)
         return ir
     else
@@ -2393,8 +2397,10 @@ function cfg_simplify!(ir::IRCode)
                     end
                 elseif isa(terminator, EnterNode)
                     catchbb = terminator.catch_dest
-                    if bb_rename_succ[catchbb] == 0
-                        push!(worklist, catchbb)
+                    if catchbb ≠ 0
+                        if bb_rename_succ[catchbb] == 0
+                            push!(worklist, catchbb)
+                        end
                     end
                 elseif isa(terminator, GotoNode) || isa(terminator, ReturnNode)
                     # No implicit fall through. Schedule from work list.

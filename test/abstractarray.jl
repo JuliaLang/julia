@@ -908,7 +908,7 @@ test_ind2sub(TestAbstractArray)
 
 include("generic_map_tests.jl")
 generic_map_tests(map, map!)
-@test_throws ArgumentError map!(-, [1])
+@test map!(-, [1]) == [-1]
 
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
@@ -2185,4 +2185,45 @@ end
     A .= 0
     copyto!(A, 1, x, 1)
     @test A == axes(A,1)
+end
+
+@testset "reshape with Integer sizes" begin
+    @test reshape(1:4, big(2), big(2)) == reshape(1:4, 2, 2)
+    a = [1 2 3; 4 5 6]
+    reshaped_arrays = (
+        reshape(a, 3, 2),
+        reshape(a, (3, 2)),
+        reshape(a, big(3), big(2)),
+        reshape(a, (big(3), big(2))),
+        reshape(a, :, big(2)),
+        reshape(a, (:, big(2))),
+        reshape(a, big(3), :),
+        reshape(a, (big(3), :)),
+    )
+    @test allequal(reshaped_arrays)
+    for b ∈ reshaped_arrays
+        @test b isa Matrix{Int}
+        @test b.ref === a.ref
+    end
+end
+@testset "AbstractArrayMath" begin
+    @testset "IsReal" begin
+        A = [1, 2, 3, 4]
+        @test isreal(A) == true
+        B = [1.1, 2.2, 3.3, 4.4]
+        @test isreal(B) == true
+        C = [1, 2.2, 3]
+        @test isreal(C) == true
+        D = Real[]
+        @test isreal(D) == true
+        E = [1 + 1im, 2 - 2im]
+        @test isreal(E) == false
+        struct MyReal <: Real
+            value::Float64
+        end
+        F = [MyReal(1.0), MyReal(2.0)]
+        @test isreal(F) == true
+        G = ["a", "b", "c"]
+        @test_throws MethodError isreal(G)
+    end
 end

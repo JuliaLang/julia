@@ -798,6 +798,7 @@ end
 
 @testset "`::AbstractString` constraint on the path argument to `include`" begin
     for m ∈ (NotPkgModule, evalfile("testhelpers/just_module.jl"))
+        @Core.latestworld
         let i = m.include
             @test !applicable(i, (nothing,))
             @test !applicable(i, (identity, nothing,))
@@ -1218,6 +1219,40 @@ end
                 "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
             )
             @test occursin("Hello x-package ext-to-ext!", String(read(cmd)))
+        end
+
+        # Extensions for "parent" dependencies
+        # (i.e. an `ExtAB`  where A depends on / loads B, but B provides the extension)
+
+        mktempdir() do depot # Parallel pre-compilation
+            code = """
+            Base.disable_parallel_precompile = false
+            using Parent
+            Base.get_extension(getfield(Parent, :DepWithParentExt), :ParentExt) isa Module || error("expected extension to load")
+            Parent.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "Parent.jl")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            )
+            @test occursin("Hello parent!", String(read(cmd)))
+        end
+        mktempdir() do depot # Serial pre-compilation
+            code = """
+            Base.disable_parallel_precompile = true
+            using Parent
+            Base.get_extension(getfield(Parent, :DepWithParentExt), :ParentExt) isa Module || error("expected extension to load")
+            Parent.greet()
+            """
+            proj = joinpath(@__DIR__, "project", "Extensions", "Parent.jl")
+            cmd =  `$(Base.julia_cmd()) --startup-file=no -e $code`
+            cmd = addenv(cmd,
+                "JULIA_LOAD_PATH" => proj,
+                "JULIA_DEPOT_PATH" => depot * Base.Filesystem.pathsep(),
+            )
+            @test occursin("Hello parent!", String(read(cmd)))
         end
 
     finally

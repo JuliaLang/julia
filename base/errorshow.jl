@@ -915,9 +915,9 @@ function _collapse_repeated_frames(trace)
             [3] g(x::Int64) <-- useless
             @ Main ./REPL[1]:1
             =#
-            if frame.linfo isa MethodInstance && last_frame.linfo isa MethodInstance &&
-                frame.linfo.def isa Method && last_frame.linfo.def isa Method
-                m, last_m = frame.linfo.def::Method, last_frame.linfo.def::Method
+            m, last_m = StackTraces.frame_method_or_module(frame),
+                        StackTraces.frame_method_or_module(last_frame)
+            if m isa Method && last_m isa Method
                 params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
@@ -944,7 +944,6 @@ function _collapse_repeated_frames(trace)
     return trace[kept_frames]
 end
 
-
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
@@ -965,9 +964,8 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
             if (lkup.from_c && skipC)
                 continue
             end
-            code = lkup.linfo
-            if code isa MethodInstance
-                def = code.def
+            if lkup.linfo isa Union{MethodInstance, CodeInstance}
+                def = StackTraces.frame_method_or_module(lkup)
                 if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
                     # hide kwcall() methods, which are probably internal keyword sorter methods
                     # (we print the internal method instead, after demangling

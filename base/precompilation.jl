@@ -364,6 +364,50 @@ end
 const Config = Pair{Cmd, Base.CacheFlags}
 const PkgConfig = Tuple{PkgId,Config}
 
+# name or parent → ext
+function full_name(ext_to_parent::Dict{PkgId, PkgId}, pkg::PkgId)
+    if haskey(ext_to_parent, pkg)
+        return string(ext_to_parent[pkg].name, " → ", pkg.name)
+    else
+        return pkg.name
+    end
+end
+
+function excluded_circular_deps_explanation(io::IOContext{IO}, ext_to_parent::Dict{PkgId, PkgId}, circular_deps, cycles)
+    outer_deps = copy(circular_deps)
+    cycles_names = ""
+    for cycle in cycles
+        filter!(!in(cycle), outer_deps)
+        cycle_str = ""
+        for (i, pkg) in enumerate(cycle)
+            j = max(0, i - 1)
+            if length(cycle) == 1
+                line = " ─ "
+            elseif i == 1
+                line = " ┌ "
+            elseif i < length(cycle)
+                line = " │ " * " " ^j
+            else
+                line = " └" * "─" ^j * " "
+            end
+            hascolor = get(io, :color, false)::Bool
+            line = _color_string(line, :light_black, hascolor) * full_name(ext_to_parent, pkg) * "\n"
+            cycle_str *= line
+        end
+        cycles_names *= cycle_str
+    end
+    plural1 = length(cycles) > 1 ? "these cycles" : "this cycle"
+    plural2 = length(cycles) > 1 ? "cycles" : "cycle"
+    msg = """Circular dependency detected.
+    Precompilation will be skipped for dependencies in $plural1:
+    $cycles_names"""
+    if !isempty(outer_deps)
+        msg *= "Precompilation will also be skipped for the following, which depend on the above $plural2:\n"
+        msg *= join(("  " * full_name(ext_to_parent, pkg) for pkg in outer_deps), "\n")
+    end
+    return msg
+end
+
 function precompilepkgs(pkgs::Vector{String}=String[];
                         internal_call::Bool=false,
                         strict::Bool = false,
@@ -374,11 +418,12 @@ function precompilepkgs(pkgs::Vector{String}=String[];
                         io::IO=stderr,
                         # asking for timing disables fancy mode, as timing is shown in non-fancy mode
                         fancyprint::Bool = can_fancyprint(io) && !timing,
-                        manifest::Bool=false,)
+                        manifest::Bool=false,
+                        ignore_loaded::Bool=true)
     # monomorphize this to avoid latency problems
     _precompilepkgs(pkgs, internal_call, strict, warn_loaded, timing, _from_loading,
                    configs isa Vector{Config} ? configs : [configs],
-                   IOContext{IO}(io), fancyprint, manifest)
+                   IOContext{IO}(io), fancyprint, manifest, ignore_loaded)
 end
 
 function _precompilepkgs(pkgs::Vector{String},
@@ -390,7 +435,8 @@ function _precompilepkgs(pkgs::Vector{String},
                          configs::Vector{Config},
                          io::IOContext{IO},
                          fancyprint::Bool,
-                         manifest::Bool)
+                         manifest::Bool,
+                         ignore_loaded::Bool)
     requested_pkgs = copy(pkgs) # for understanding user intent
 
     time_start = time_ns()
@@ -426,7 +472,7 @@ function _precompilepkgs(pkgs::Vector{String},
     ext_to_parent = Dict{Base.PkgId, Base.PkgId}()
 
     function describe_pkg(pkg::PkgId, is_project_dep::Bool, flags::Cmd, cacheflags::Base.CacheFlags)
-        name = haskey(ext_to_parent, pkg) ? string(ext_to_parent[pkg].name, " → ", pkg.name) : pkg.name
+        name = full_name(ext_to_parent, pkg)
         name = is_project_dep ? name : color_string(name, :light_black)
         if nconfigs > 1 && !isempty(flags)
             config_str = join(flags, " ")
@@ -566,32 +612,51 @@ function _precompilepkgs(pkgs::Vector{String},
     @debug "precompile: signalling initialized"
 
     # find and guard against circular deps
-    circular_deps = Base.PkgId[]
-    # Three states
-    # !haskey -> never visited
-    # true -> cannot be compiled due to a cycle (or not yet determined)
-    # false -> not depending on a cycle
+    cycles = Vector{Base.PkgId}[]
+    # For every scanned package, true if pkg found to be in a cycle
+    # or depends on packages in a cycle and false otherwise.
     could_be_cycle = Dict{Base.PkgId, Bool}()
+    # temporary stack for the SCC-like algorithm below
+    stack = Base.PkgId[]
     function scan_pkg!(pkg, dmap)
-        did_visit_dep = true
-        inpath = get!(could_be_cycle, pkg) do
-            did_visit_dep = false
-            return true
+        if haskey(could_be_cycle, pkg)
+            return could_be_cycle[pkg]
+        else
+            return scan_deps!(pkg, dmap)
         end
-        if did_visit_dep ? inpath : scan_deps!(pkg, dmap)
-            # Found a cycle. Delete this and all parents
-            return true
-        end
-        return false
     end
     function scan_deps!(pkg, dmap)
+        push!(stack, pkg)
+        cycle = nothing
         for dep in dmap[pkg]
-            scan_pkg!(dep, dmap) && return true
+            if dep in stack
+                # Created fresh cycle
+                cycle′ = stack[findlast(==(dep), stack):end]
+                if cycle === nothing || length(cycle′) < length(cycle)
+                    cycle = cycle′ # try to report smallest cycle possible
+                end
+            elseif scan_pkg!(dep, dmap)
+                # Reaches an existing cycle
+                could_be_cycle[pkg] = true
+                pop!(stack)
+                return true
+            end
+        end
+        pop!(stack)
+        if cycle !== nothing
+            push!(cycles, cycle)
+            could_be_cycle[pkg] = true
+            return true
         end
         could_be_cycle[pkg] = false
         return false
     end
+    # set of packages that depend on a cycle (either because they are
+    # a part of a cycle themselves or because they transitively depend
+    # on a package in some cycle)
+    circular_deps = Base.PkgId[]
     for pkg in keys(direct_deps)
+        @assert isempty(stack)
         if scan_pkg!(pkg, direct_deps)
             push!(circular_deps, pkg)
             for pkg_config in keys(was_processed)
@@ -601,7 +666,7 @@ function _precompilepkgs(pkgs::Vector{String},
         end
     end
     if !isempty(circular_deps)
-        @warn """Circular dependency detected. Precompilation will be skipped for:\n  $(join(string.(circular_deps), "\n  "))"""
+        @warn excluded_circular_deps_explanation(io, ext_to_parent, circular_deps, cycles)
     end
     @debug "precompile: circular dep check done"
 
@@ -855,7 +920,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         wait(was_processed[(dep,config)])
                     end
                     circular = pkg in circular_deps
-                    is_stale = !Base.isprecompiled(pkg; ignore_loaded=true, stale_cache, cachepath_cache, cachepaths, sourcepath, flags=cacheflags)
+                    is_stale = !Base.isprecompiled(pkg; ignore_loaded, stale_cache, cachepath_cache, cachepaths, sourcepath, flags=cacheflags)
                     if !circular && is_stale
                         Base.acquire(parallel_limiter)
                         is_project_dep = pkg in project_deps
@@ -881,10 +946,10 @@ function _precompilepkgs(pkgs::Vector{String},
                         try
                             # allows processes to wait if another process is precompiling a given package to
                             # a functionally identical package cache (except for preferences, which may differ)
-                            t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor) do
+                            t = @elapsed ret = precompile_pkgs_maybe_cachefile_lock(io, print_lock, fancyprint, pkg_config, pkgspidlocked, hascolor, parallel_limiter, ignore_loaded) do
                                 Base.with_logger(Base.NullLogger()) do
-                                    # The false here means we ignore loaded modules, so precompile for a fresh session
-                                    keep_loaded_modules = false
+                                    # whether to respect already loaded dependency versions
+                                    keep_loaded_modules = !ignore_loaded
                                     # for extensions, any extension in our direct dependencies is one we have a right to load
                                     # for packages, we may load any extension (all possible triggers are accounted for above)
                                     loadable_exts = haskey(ext_to_parent, pkg) ? filter((dep)->haskey(ext_to_parent, dep), direct_deps[pkg]) : nothing
@@ -974,9 +1039,13 @@ function _precompilepkgs(pkgs::Vector{String},
                     plural1 = length(configs) > 1 ? "dependency configurations" : n_loaded == 1 ? "dependency" : "dependencies"
                     plural2 = n_loaded == 1 ? "a different version is" : "different versions are"
                     plural3 = n_loaded == 1 ? "" : "s"
+                    plural4 = n_loaded == 1 ? "this package" : "these packages"
                     print(iostr, "\n  ",
                         color_string(string(n_loaded), Base.warn_color()),
-                        " $(plural1) precompiled but $(plural2) currently loaded. Restart julia to access the new version$(plural3)"
+                        " $(plural1) precompiled but ",
+                        color_string("$(plural2) currently loaded", Base.warn_color()),
+                        ". Restart julia to access the new version$(plural3). \
+                        Otherwise, loading dependents of $(plural4) may trigger further precompilation to work with the unexpected version$(plural3)."
                     )
                 end
                 if !isempty(precomperr_deps)
@@ -1002,7 +1071,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         else
                             join(split(err, "\n"), color_string("\n│  ", Base.warn_color()))
                         end
-                        name = haskey(ext_to_parent, pkg) ? string(ext_to_parent[pkg].name, " → ", pkg.name) : pkg.name
+                        name = full_name(ext_to_parent, pkg)
                         print(iostr, color_string("\n┌ ", Base.warn_color()), name, color_string("\n│  ", Base.warn_color()), err, color_string("\n└  ", Base.warn_color()))
                     end
                 end
@@ -1035,7 +1104,7 @@ function _precompilepkgs(pkgs::Vector{String},
             direct = strict ? "" : "direct "
             err_msg = "The following $n_direct_errs $(direct)dependenc$(pluralde) failed to precompile:\n$(String(take!(err_str)))"
             if internal_call # aka. auto-precompilation
-                if isinteractive() && !get(ENV, "CI", false)
+                if isinteractive()
                     plural1 = length(failed_deps) == 1 ? "y" : "ies"
                     println(io, "  ", color_string("$(length(failed_deps))", Base.error_color()), " dependenc$(plural1) errored.")
                     println(io, "  For a report of the errors see `julia> err`. To retry use `pkg> precompile`")
@@ -1067,7 +1136,7 @@ function _color_string(cstr::String, col::Union{Int64, Symbol}, hascolor)
 end
 
 # Can be merged with `maybe_cachefile_lock` in loading?
-function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor)
+function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLock, fancyprint::Bool, pkg_config, pkgspidlocked, hascolor, parallel_limiter::Base.Semaphore, ignore_loaded::Bool)
     if !(isdefined(Base, :mkpidlock_hook) && isdefined(Base, :trymkpidlock_hook) && Base.isdefined(Base, :parse_pidfile_hook))
         return f()
     end
@@ -1090,17 +1159,22 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
         !fancyprint && lock(print_lock) do
             println(io, "    ", pkg.name, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
-        # wait until the lock is available
-        @invokelatest Base.mkpidlock_hook(() -> begin
-                # double-check in case the other process crashed or the lock expired
-                if Base.isprecompiled(pkg; ignore_loaded=true, flags=cacheflags) # don't use caches for this as the env state will have changed
-                    return nothing # returning nothing indicates a process waited for another
-                else
-                    delete!(pkgspidlocked, pkg_config)
-                    return f() # precompile
-                end
-            end,
-            pidfile; stale_age)
+        Base.release(parallel_limiter) # release so other work can be done while waiting
+        try
+            # wait until the lock is available
+            @invokelatest Base.mkpidlock_hook(() -> begin
+                    # double-check in case the other process crashed or the lock expired
+                    if Base.isprecompiled(pkg; ignore_loaded, flags=cacheflags) # don't use caches for this as the env state will have changed
+                        return nothing # returning nothing indicates a process waited for another
+                    else
+                        delete!(pkgspidlocked, pkg_config)
+                        Base.acquire(f, parallel_limiter) # precompile
+                    end
+                end,
+                pidfile; stale_age)
+        finally
+            Base.acquire(parallel_limiter) # re-acquire so the outer release is balanced
+        end
     end
     return cachefile
 end

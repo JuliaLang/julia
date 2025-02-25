@@ -23,6 +23,10 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 - `get_inference_world(interp::NewInterpreter)` - return the world age for this interpreter
 - `get_inference_cache(interp::NewInterpreter)` - return the local inference cache
 - `cache_owner(interp::NewInterpreter)` - return the owner of any new cache entries
+
+If `CodeInstance`s compiled using `interp::NewInterpreter` are meant to be executed with `invoke`,
+a method `codegen_cache(interp::NewInterpreter) -> IdDict{CodeInstance, CodeInfo}` must be defined,
+and inference must be triggered via `typeinf_ext_toplevel` with source mode `SOURCE_MODE_ABI`.
 """
 abstract type AbstractInterpreter end
 
@@ -366,6 +370,7 @@ struct NativeInterpreter <: AbstractInterpreter
 
     # Cache of inference results for this particular interpreter
     inf_cache::Vector{InferenceResult}
+    codegen::IdDict{CodeInstance,CodeInfo}
 
     # Parameters for inference and optimization
     inf_params::InferenceParams
@@ -386,16 +391,8 @@ function NativeInterpreter(world::UInt = get_world_counter();
     @assert world <= curr_max_world
     method_table = CachedMethodTable(InternalMethodTable(world))
     inf_cache = Vector{InferenceResult}() # Initially empty cache
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
-end
-
-function NativeInterpreter(interp::NativeInterpreter;
-                           world::UInt = interp.world,
-                           method_table::CachedMethodTable{InternalMethodTable} = interp.method_table,
-                           inf_cache::Vector{InferenceResult} = interp.inf_cache,
-                           inf_params::InferenceParams = interp.inf_params,
-                           opt_params::OptimizationParams = interp.opt_params)
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
+    codegen = IdDict{CodeInstance,CodeInfo}()
+    return NativeInterpreter(world, method_table, inf_cache, codegen, inf_params, opt_params)
 end
 
 # Quickly and easily satisfy the AbstractInterpreter API contract
@@ -436,6 +433,19 @@ to incorporate customized dispatches for the overridden methods.
 """
 method_table(interp::AbstractInterpreter) = InternalMethodTable(get_inference_world(interp))
 method_table(interp::NativeInterpreter) = interp.method_table
+
+"""
+    codegen_cache(interp::AbstractInterpreter) -> Union{Nothing, IdDict{CodeInstance, CodeInfo}}
+
+Optionally return a cache associating a `CodeInfo` to a `CodeInstance` that should be added to the JIT
+for future execution via `invoke(f, ::CodeInstance, args...)`. This cache is used during `typeinf_ext_toplevel`,
+and may be safely discarded between calls to this function.
+
+By default, a value of `nothing` is returned indicating that `CodeInstance`s should not be added to the JIT.
+Attempting to execute them via `invoke` will result in an error.
+"""
+codegen_cache(interp::AbstractInterpreter) = nothing
+codegen_cache(interp::NativeInterpreter) = interp.codegen
 
 """
 By default `AbstractInterpreter` implements the following inference bail out logic:
