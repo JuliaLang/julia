@@ -1140,7 +1140,7 @@ static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
                 } else {
                     llvm_dump(SI);
                     dbgs() << "Malformed Select\n";
-                    abort;
+                    abort();
                 }
             } else {
                 llvm_dump(V);
