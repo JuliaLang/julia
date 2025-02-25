@@ -138,12 +138,15 @@ function expand_macro(ctx, ex)
     #   a macro expansion.
     # In either case, we need to set any unset scope layers before passing the
     # arguments to the macro call.
-    macro_args = [set_scope_layer(ctx, e, ctx.current_layer.id, false)
-                  for e in children(ex)[2:end]]
     mctx = MacroContext(ctx.graph, ex, ctx.current_layer)
+    macro_args = Any[mctx]
+    for i in 2:numchildren(ex)
+        push!(macro_args, set_scope_layer(ctx, ex[i], ctx.current_layer.id, false))
+    end
+    macro_invocation_world = Base.get_world_counter()
     expanded = try
         # TODO: Allow invoking old-style macros for compat
-        invokelatest(macfunc, mctx, macro_args...)
+        invokelatest(macfunc, macro_args...)
     catch exc
         if exc isa MacroExpansionError
             # Add context to the error.
@@ -162,7 +165,10 @@ function expand_macro(ctx, ex)
             expanded = copy_ast(ctx, expanded)
         end
         expanded = append_sourceref(ctx, expanded, ex)
-        new_layer = ScopeLayer(length(ctx.scope_layers)+1, parentmodule(macfunc), true)
+        # Module scope for the returned AST is the module where this particular
+        # method was defined (may be different from `parentmodule(macfunc)`)
+        mod_for_ast = lookup_method_instance(macfunc, macro_args, macro_invocation_world).def.module
+        new_layer = ScopeLayer(length(ctx.scope_layers)+1, mod_for_ast, true)
         push!(ctx.scope_layers, new_layer)
         inner_ctx = MacroExpansionContext(ctx.graph, ctx.bindings, ctx.scope_layers, new_layer)
         expanded = expand_forms_1(inner_ctx, expanded)

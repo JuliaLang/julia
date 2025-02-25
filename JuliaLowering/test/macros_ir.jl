@@ -1,3 +1,21 @@
+module MacroMethods
+    macro some_macro()
+        quote
+            some_global
+        end
+    end
+
+    module ExtraMacroMethods
+        using ..MacroMethods
+        macro MacroMethods.some_macro(ex)
+            quote
+                some_global
+            end
+        end
+    end
+end
+
+#*******************************************************************************
 ########################################
 # Simple macro
 macro add_one(ex)
@@ -41,6 +59,17 @@ end
     3   (return %₁)
 9   TestMod.@foo
 10  (return %₉)
+
+########################################
+# Scope for symbols emitted by macros is the module where the method was
+# defined, thus two different modules in this case, even though `@some_macro`
+# belongs to the MacroMethods module.
+(MacroMethods.@some_macro(), MacroMethods.@some_macro(unused))
+#---------------------
+1   TestMod.MacroMethods.some_global
+2   TestMod.MacroMethods.ExtraMacroMethods.some_global
+3   (call core.tuple %₁ %₂)
+4   (return %₃)
 
 ########################################
 # Error: Macro with kw args

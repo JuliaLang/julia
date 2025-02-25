@@ -418,3 +418,11 @@ function reserve_module_binding_i(mod, basename)
     end
 end
 
+function lookup_method_instance(func, args, world::Integer)
+    allargs = Vector{Any}(undef, length(args) + 1)
+    allargs[1] = func
+    allargs[2:end] = args
+    mi = @ccall jl_method_lookup(allargs::Ptr{Any}, length(allargs)::Csize_t,
+                                 world::Csize_t)::Ptr{Cvoid}
+    return mi == C_NULL ? nothing : unsafe_pointer_to_objref(mi)
+end
