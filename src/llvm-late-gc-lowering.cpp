@@ -552,7 +552,7 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
         // Vector insert is a bit like a shuffle so use the same approach
         SmallVector<int, 0> Numbers1 = NumberAll(S, VII->getOperand(0));
         SmallVector<int, 0> Numbers2 = NumberAll(S, VII->getOperand(1));
-        int first_idx = cast<ConstantInt>(VII->getOperand(2))->getZExtValue();
+        unsigned first_idx = cast<ConstantInt>(VII->getOperand(2))->getZExtValue();
         for (unsigned i = 0; i < Numbers1.size(); ++i) {
             if (i < first_idx)
                 Numbers.push_back(Numbers1[i]);
