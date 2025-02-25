@@ -498,9 +498,9 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The number of required arguments for a varargs function definition.
 
-      * `args[5]::QuoteNode{<:Union{Symbol,Tuple{Symbol,UInt16}}`: calling convention
+      * `args[5]::QuoteNode{<:Union{Symbol,Tuple{Symbol,UInt16}, Tuple{Symbol,UInt16,Bool}}`: calling convention
 
-        The calling convention for the call, optionally with effects.
+        The calling convention for the call, optionally with effects, and `gc_safe` (safe to execute concurrently to GC.).
 
       * `args[6:5+length(args[3])]` : arguments
 

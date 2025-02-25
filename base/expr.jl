@@ -103,7 +103,7 @@ Take the expression `x` and return an equivalent expression with all macros remo
 for executing in module `m`.
 The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
 This is demonstrated in the example below:
-```julia-repl
+```jldoctest; filter = r"#= .*:6 =#"
 julia> module M
            macro m1()
                42
@@ -118,7 +118,7 @@ julia> macroexpand(M, :(@m2()), recursive=true)
 42
 
 julia> macroexpand(M, :(@m2()), recursive=false)
-:(#= REPL[16]:6 =# M.@m1)
+:(#= REPL[1]:6 =# @m1)
 ```
 """
 function macroexpand(m::Module, @nospecialize(x); recursive=true)
@@ -926,7 +926,7 @@ This can be used to limit the number of compiler-generated specializations durin
 
 # Examples
 
-```julia
+```jldoctest; setup = :(using InteractiveUtils)
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -935,7 +935,7 @@ g (generic function with 1 method)
 
 julia> @code_typed f([1.0])
 CodeInfo(
-1 ─ %1 = invoke Main.g(_2::AbstractArray)::Any
+1 ─ %1 =    invoke g(A::AbstractArray)::Any
 └──      return %1
 ) => Any
 ```
@@ -1694,6 +1694,6 @@ function (g::Core.GeneratedFunctionStub)(world::UInt, source::Method, @nospecial
                          Expr(:meta, :pop_loc))))
     spnames = g.spnames
     return generated_body_to_codeinfo(spnames === Core.svec() ? lam : Expr(Symbol("with-static-parameters"), lam, spnames...),
-        typename(typeof(g.gen)).module,
+        source.module,
         source.isva)
 end

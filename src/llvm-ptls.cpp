@@ -196,8 +196,13 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             last_gc_state->addIncoming(prior, fastTerm->getParent());
             for (auto &BB : *pgcstack->getParent()->getParent()) {
                 if (isa<ReturnInst>(BB.getTerminator())) {
+                    // Don't use emit_gc_safe_leave here, as that introduces a new BB while iterating BBs
                     builder.SetInsertPoint(BB.getTerminator());
-                    emit_gc_unsafe_leave(builder, T_size, get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, phi), tbaa), last_gc_state, true);
+                    Value *ptls = get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, phi), tbaa_gcframe);
+                    unsigned offset = offsetof(jl_tls_states_t, gc_state);
+                    Value *gc_state = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), ptls, offset, "gc_state");
+                    builder.CreateAlignedStore(last_gc_state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
+                    emit_gc_safepoint(builder, T_size, ptls, tbaa, true);
                 }
             }
         }
@@ -317,13 +322,13 @@ bool LowerPTLS::run(bool *CFGModified)
             need_init = false;
         }
 
-        for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end();) {
+        for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end(); ) {
             auto call = cast<CallInst>(*it);
             ++it;
             auto f = call->getCaller();
             Value *pgcstack = NULL;
-            for (Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end();++arg) {
-                if (arg->hasSwiftSelfAttr()){
+            for (Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end(); ++arg) {
+                if (arg->hasSwiftSelfAttr()) {
                     pgcstack = &*arg;
                     break;
                 }

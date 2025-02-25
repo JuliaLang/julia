@@ -343,7 +343,15 @@ mapfoldl mapfoldr
 
 When a single complete tab-complete result is available at the end of an input line and 2 or more characters
 have been typed, a hint of the completion will show in a lighter color.
-This can be disabled via `Base.active_repl.options.hint_tab_completes = false`.
+This can be disabled via `Base.active_repl.options.hint_tab_completes = false` or by adding
+```
+atreplinit() do repl
+    if VERSION >= v"1.11.0-0"
+        repl.options.hint_tab_completes = false
+    end
+end
+```
+to your `~/.julia/config/startup.jl`.
 
 !!! compat "Julia 1.11"
     Tab-complete hinting was added in Julia 1.11

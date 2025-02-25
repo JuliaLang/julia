@@ -328,7 +328,7 @@ public:
     bool runOnFunction(Function &F, bool *CFGModified = nullptr);
 
 private:
-    CallInst *pgcstack;
+    Value *pgcstack;
     Function *smallAllocFunc;
 
     void MaybeNoteDef(State &S, BBState &BBS, Value *Def, const ArrayRef<int> &SafepointsSoFar,
@@ -388,7 +388,7 @@ private:
     Function *smallAllocFunc;
     Function *bigAllocFunc;
     Function *allocTypedFunc;
-    Instruction *pgcstack;
+    Value *pgcstack;
     Type *T_size;
 
     // Lowers a `julia.new_gc_frame` intrinsic.
@@ -411,6 +411,9 @@ private:
 
     // Lowers a `julia.safepoint` intrinsic.
     void lowerSafepoint(CallInst *target, Function &F);
+
+    // Check if the pass should be run
+    bool shouldRunFinalGC();
 };
 
 #endif // LLVM_GC_PASSES_H

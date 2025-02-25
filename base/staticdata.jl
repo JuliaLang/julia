@@ -25,7 +25,8 @@ end
 function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{Any}}, extext_methods::Vector{Any}, internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
-    methods_with_invalidated_source = Base.scan_new_methods(extext_methods, internal_methods)
+    backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
+    methods_with_invalidated_source = Base.scan_new_methods(extext_methods, internal_methods, backedges_only)
     stack = CodeInstance[]
     visiting = IdDict{CodeInstance,Int}()
     _insert_backedges(edges, stack, visiting, methods_with_invalidated_source)
@@ -70,6 +71,8 @@ function verify_method_graph(codeinst::CodeInstance, stack::Vector{CodeInstance}
     nothing
 end
 
+get_require_world() = unsafe_load(cglobal(:jl_require_world, UInt))
+
 # Test all edges relevant to a method:
 # - Visit the entire call graph, starting from edges[idx] to determine if that method is valid
 # - Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
@@ -81,7 +84,14 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             return 0, world, max_valid2
         end
     end
-    local minworld::UInt, maxworld::UInt = 1, validation_world
+    # Implicitly referenced bindings in the current module do not get explicit edges.
+    # If they were invalidated, they'll be in `mwis`. If they weren't, they imply a minworld
+    # of `get_require_world`. In principle, this is only required for methods that do reference
+    # an implicit globalref. However, we already don't perform this validation for methods that
+    # don't have any (implicit or explicit) edges at all. The remaining corner case (some explicit,
+    # but no implicit edges) is rare and there would be little benefit to lower the minworld for it
+    # in any case, so we just always use `get_require_world` here.
+    local minworld::UInt, maxworld::UInt = get_require_world(), validation_world
     def = get_ci_mi(codeinst).def
     @assert def isa Method
     if haskey(visiting, codeinst)
@@ -103,9 +113,8 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     # verify current edges
     if isempty(callees)
         # quick return: no edges to verify (though we probably shouldn't have gotten here from WORLD_AGE_REVALIDATION_SENTINEL)
-    elseif maxworld == unsafe_load(cglobal(:jl_require_world, UInt))
+    elseif maxworld == get_require_world()
         # if no new worlds were allocated since serializing the base module, then no new validation is worth doing right now either
-        minworld = maxworld
     else
         j = 1
         while j ≤ length(callees)

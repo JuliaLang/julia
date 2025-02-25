@@ -183,6 +183,7 @@
                        (meta ret-type ,R)
                        ,@(list-tail body (+ 1 (length meta))))))))))
 
+
 ;; convert x<:T<:y etc. exprs into (name lower-bound upper-bound)
 ;; a bound is #f if not specified
 (define (analyze-typevar e)
@@ -753,64 +754,34 @@
    (params bounds) (sparam-name-bounds params)
    (struct-def-expr- name params bounds super (flatten-blocks fields) mut)))
 
-;; replace field names with gensyms if they conflict with field-types
-(define (safe-field-names field-names field-types)
-  (if (any (lambda (v) (contains (lambda (e) (eq? e v)) field-types))
-           field-names)
-      (map (lambda (x) (gensy)) field-names)
-      ;; use a different name for a field called `_`
-      (map (lambda (x) (if (eq? x '_) (gensy) x)) field-names)))
+;; definition with Any for all arguments (except type, which is exact)
+;; field-kinds:
+;;   -1 no convert (e.g. because it is Any)
+;;    0 normal convert to fieldtype
+;;   1+ static_parameter N
+(define (default-inner-ctor-body field-kinds file line)
+  (let* ((name '|#ctor-self#|)
+         (field-names (map (lambda (idx) (symbol (string "_" (+ idx 1)))) (iota (length field-kinds))))
+         (field-convert (lambda (fld fty val)
+              (cond ((eq? fty -1) val)
+                    ((> fty 0) (convert-for-type-decl val `(static_parameter ,fty) #f #f))
+                    (else (convert-for-type-decl val `(call (core fieldtype) ,name ,(+ fld 1)) #f #f)))))
+         (field-vals (map field-convert (iota (length field-names)) field-kinds field-names))
+         (body `(block
+                 (line ,line ,file)
+                 (return (new ,name ,@field-vals)))))
+    `(lambda ,(cons name field-names) () (scope-block ,body))))
 
-(define (with-wheres call wheres)
-  (if (pair? wheres)
-      `(where ,call ,@wheres)
-      call))
-
-(define (default-inner-ctors name field-names field-types params bounds locs)
-  (let* ((field-names (safe-field-names field-names field-types))
-         (all-ctor (if (null? params)
-          ;; definition with exact types for all arguments
-          `(function (call ,name
-                          ,@(map make-decl field-names field-types))
-                    (block
-                     ,@locs
-                     (new (globalref (thismodule) ,name) ,@field-names)))
-          #f))
-         (any-ctor (if (or (not all-ctor) (any (lambda (t) (not (equal? t '(core Any))))
-                                 field-types))
-          ;; definition with Any for all arguments
-          ;; only if any field type is not Any, checked at runtime
-          `(function (call (|::| |#ctor-self#|
-                            ,(with-wheres
-                              `(curly (core Type) ,(if (pair? params)
-                                                       `(curly ,name ,@params)
-                                                       name))
-                              (map (lambda (b) (cons 'var-bounds b)) bounds)))
-                           ,@field-names)
-                     (block
-                      ,@locs
-                      (call new ,@field-names))) ; this will add convert calls later
-          #f)))
-    (if all-ctor
-        (if any-ctor
-            (list all-ctor
-                  `(if ,(foldl (lambda (t u)
-                           `(&& ,u (call (core ===) (core Any) ,t)))
-                         `(call (core ===) (core Any) ,(car field-types))
-                         (cdr field-types))
-                       '(block)
-                       ,any-ctor))
-            (list all-ctor))
-        (list any-ctor))))
-
-(define (default-outer-ctor name field-names field-types params bounds locs)
-  (let ((field-names (safe-field-names field-names field-types)))
-    `(function ,(with-wheres
-                 `(call ,name ,@(map make-decl field-names field-types))
-                 (map (lambda (b) (cons 'var-bounds b)) bounds))
-               (block
-                ,@locs
-                (new (curly ,name ,@params) ,@field-names)))))
+;; definition with exact types for all arguments (except type, which is not parameterized)
+(define (default-outer-ctor-body thistype field-count sparam-count file line)
+  (let* ((name '|#ctor-self#|)
+         (field-names (map (lambda (idx) (symbol (string "_" (+ idx 1)))) (iota field-count)))
+         (sparams (map (lambda (idx) `(static_parameter ,(+ idx 1))) (iota sparam-count)))
+         (type (if (null? sparams) name `(curly ,thistype ,@sparams)))
+         (body `(block
+                 (line ,line ,file)
+                 (return (new ,type ,@field-names)))))
+    `(lambda ,(cons name field-names) () (scope-block ,body))))
 
 (define (num-non-varargs args)
   (count (lambda (a) (not (vararg? a))) args))
@@ -993,14 +964,11 @@
                          fields)))
           (attrs (reverse attrs))
           (defs        (filter (lambda (x) (not (or (effect-free? x) (eq? (car x) 'string)))) defs))
-          (locs        (if (and (pair? fields0) (linenum? (car fields0)))
-                           (list (car fields0))
-                           '()))
+          (loc         (if (and (pair? fields0) (linenum? (car fields0)))
+                           (car fields0)
+                           '(line 0 ||)))
           (field-names (map decl-var fields))
           (field-types (map decl-type fields))
-          (defs2 (if (null? defs)
-                     (default-inner-ctors name field-names field-types params bounds locs)
-                     defs))
           (min-initialized (min (ctors-min-initialized defs) (length fields)))
           (hasprev (make-ssavalue))
           (prev (make-ssavalue))
@@ -1042,34 +1010,21 @@
          (const (globalref (thismodule) ,name) ,newdef)
          (latestworld)
          (null)))
-       ;; "inner" constructors
-       (scope-block
-        (block
-         (hardscope)
-         (global ,name)
-         ,@(map (lambda (c)
-                  (rewrite-ctor c name params field-names field-types))
-                defs2)))
-       ;; "outer" constructors
-       ,@(if (and (null? defs)
-                  (not (null? params))
-                  ;; To generate an outer constructor, each parameter must occur in a field
-                  ;; type, or in the bounds of a subsequent parameter.
-                  ;; Otherwise the constructor would not work, since the parameter values
-                  ;; would never be specified.
-                  (let loop ((root-types field-types)
-                             (sp         (reverse bounds)))
-                    (or (null? sp)
-                        (let ((p (car sp)))
-                          (and (expr-contains-eq (car p) (cons 'list root-types))
-                               (loop (append (cdr p) root-types)
-                                     (cdr sp)))))))
-             `((scope-block
-                (block
-                 (global ,name)
-                 ,(default-outer-ctor name field-names field-types
-                    params bounds locs))))
-             '())
+       ;; Always define ctors even if we didn't change the definition.
+       ;; If newdef===prev, then this is a bit suspect, since we don't know what might be
+       ;; changing about the old ctor definitions (we don't even track whether we're
+       ;; replacing defaultctors with identical ones). But it seems better to have the ctors
+       ;; added alongside (replacing) the old ones, than to not have them and need them.
+       ;; Commonly Revise.jl should be used to figure out actually which methods should
+       ;; actually be deleted or added anew.
+       ,(if (null? defs)
+          `(call (core _defaultctors) ,newdef (inert ,loc))
+          `(scope-block
+            (block
+             (hardscope)
+             (global ,name)
+             ,@(map (lambda (c) (rewrite-ctor c name params field-names field-types)) defs))))
+       (latestworld)
        (null)))))
 
 (define (abstract-type-def-expr name params super)
@@ -2736,8 +2691,7 @@
                           (if (null? run) '()
                               (list `(call (core tuple) ,.(reverse run))))
                           (let ((x (car a)))
-                            (if (and (length= x 2)
-                                     (eq? (car x) '...))
+                            (if (vararg? x)
                                 (if (null? run)
                                     (list* (cadr x)
                                            (tuple-wrap (cdr a) '()))
@@ -2859,7 +2813,10 @@
    '.>>>=   lower-update-op
 
    '|...|
-   (lambda (e) (error "\"...\" expression outside call"))
+   (lambda (e)
+     (if (not (length= e 2))
+         (error "wrong number of expressions following \"...\""))
+     (error "\"...\" expression outside call"))
 
    '$
    (lambda (e) (error "\"$\" expression outside quote"))
@@ -4131,8 +4088,9 @@ f(x) = yt(x)
                                     `(toplevel-butfirst
                                       ;; wrap in toplevel-butfirst so it gets moved higher along with
                                       ;; closure type definitions
+                                      (unnecessary ,(cadr e))
                                       ,e
-                                      (thunk (lambda () (() () 0 ()) (block (return ,e))))))))
+                                      (latestworld)))))
                        ((null? cvs)
                         `(block
                           ,@sp-inits
@@ -4366,11 +4324,10 @@ f(x) = yt(x)
 (define (linearize e)
   (cond ((or (not (pair? e)) (quoted? e)) e)
         ((eq? (car e) 'lambda)
-         (set-car! (cdddr e) (compile-body (cadddr e) (append (car (caddr e))
-                                                              (cadr (caddr e)))
-                                           e)))
-        (else (for-each linearize (cdr e))))
-  e)
+         (list-set e 3 (compile-body (cadddr e)
+                                     (append (car (caddr e))
+                                             (cadr (caddr e))) e)))
+        (else (cons (car e) (map linearize (cdr e))))))
 
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
@@ -4645,7 +4602,7 @@ f(x) = yt(x)
     ;; from the current function.
     (define (compile e break-labels value tail)
       (if (or (not (pair? e)) (memq (car e) '(null true false ssavalue quote inert top core copyast the_exception $
-                                                   globalref thismodule cdecl stdcall fastcall thiscall llvmcall)))
+                                                   globalref thismodule cdecl stdcall fastcall thiscall llvmcall static_parameter)))
           (let ((e1 (if (and arg-map (symbol? e))
                         (get arg-map e e)
                         e)))
@@ -4656,7 +4613,7 @@ f(x) = yt(x)
             (cond (tail  (emit-return tail e1))
                   (value e1)
                   ((symbol? e1) (emit e1) #f)  ;; keep symbols for undefined-var checking
-                  ((and (pair? e1) (eq? (car e1) 'globalref)) (emit e1) #f) ;; keep globals for undefined-var checking
+                  ((and (pair? e1) (memq (car e1) '(globalref static_parameter))) (emit e1) #f) ;; keep for undefined-var checking
                   (else #f)))
           (case (car e)
             ((call new splatnew foreigncall cfunction new_opaque_closure)

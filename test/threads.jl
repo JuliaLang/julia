@@ -439,7 +439,7 @@ end
 
 let once = OncePerProcess(() -> return [nothing])
     @test typeof(once) <: OncePerProcess{Vector{Nothing}}
-    x = once()
+    x = @inferred once()
     @test x === once()
     @atomic once.state = 0xff
     @test_throws ErrorException("invalid state for OncePerProcess") once()
@@ -456,7 +456,7 @@ let e = Base.Event(true),
     started = Channel{Int16}(Inf),
     finish = Channel{Nothing}(Inf),
     exiting = Channel{Nothing}(Inf),
-    starttest2 = Event(),
+    starttest2 = Base.Event(),
     once = OncePerThread() do
         push!(started, threadid())
         take!(finish)
@@ -468,7 +468,7 @@ let e = Base.Event(true),
     @test typeof(once) <: OncePerThread{Vector{Nothing}}
     push!(finish, nothing)
     @test_throws ArgumentError once[0]
-    x = once()
+    x = @inferred once()
     @test_throws ArgumentError once[0]
     @test x === once() === fetch(@async once()) === once[threadid()]
     @test take!(started) == threadid()
@@ -558,7 +558,7 @@ end
 
 let once = OncePerTask(() -> return [nothing])
     @test typeof(once) <: OncePerTask{Vector{Nothing}}
-    x = once()
+    x = @inferred once()
     @test x === once() !== fetch(@async once())
     delete!(task_local_storage(), once)
     @test x !== once() === once()
