@@ -2115,7 +2115,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                     end
                     return Conditional(a, thentype, elsetype)
                 else
-                    thentype = form_partially_defined_struct(argtype2, argtypes[3])
+                    thentype = form_partially_defined_struct(𝕃ᵢ, argtype2, argtypes[3])
                     if thentype !== nothing
                         elsetype = argtype2
                         if rt === Const(false)
@@ -2133,22 +2133,32 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
     return rt
 end
 
-function form_partially_defined_struct(@nospecialize(obj), @nospecialize(name))
+function form_partially_defined_struct(𝕃ᵢ::AbstractLattice, @nospecialize(obj), @nospecialize(name))
     obj isa Const && return nothing # nothing to refine
     name isa Const || return nothing
     objt0 = widenconst(obj)
     objt = unwrap_unionall(objt0)
     objt isa DataType || return nothing
     isabstracttype(objt) && return nothing
+    objt <: Tuple && return nothing
     fldidx = try_compute_fieldidx(objt, name.val)
     fldidx === nothing && return nothing
-    isa(obj, PartialStruct) && return define_field(obj, fldidx)
+    if isa(obj, PartialStruct)
+        _getundefs(obj)[fldidx] === false && return nothing
+        newundefs = copy(_getundefs(obj))
+        newundefs[fldidx] = false
+        return PartialStruct(𝕃ᵢ, obj.typ, newundefs, copy(obj.fields))
+    end
     nminfld = datatype_min_ninitialized(objt)
-    fldidx > nminfld || return nothing
-    undef = partialstruct_init_undef(objt, fldidx; all_defined = false)
-    undef[fldidx] = false
-    fields = Any[fieldtype(objt0, i) for i = 1:fldidx]
-    return PartialStruct(fallback_lattice, objt0, undef, fields)
+    fldidx ≤ nminfld && return nothing
+    fldcnt = fieldcount_noerror(objt)::Int
+    fields = Any[fieldtype(objt0, i) for i = 1:fldcnt]
+    if fields[fldidx] === Union{}
+        return nothing # `Union{}` field never transitions to be defined
+    end
+    undefs = partialstruct_init_undefs(objt, fldcnt)
+    undefs[fldidx] = false
+    return PartialStruct(𝕃ᵢ, objt0, undefs, fields)
 end
 
 function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any}, call::CallMeta)
@@ -2663,7 +2673,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
                 # so we try to encode that information with a `PartialStruct`
                 farg2 = ssa_def_slot(fargs[2], sv)
                 if farg2 isa SlotNumber
-                    refined = form_partially_defined_struct(argtypes[2], argtypes[3])
+                    refined = form_partially_defined_struct(𝕃ᵢ, argtypes[2], argtypes[3])
                     if refined !== nothing
                         refinements = SlotRefinement(farg2, refined)
                     end
@@ -3035,7 +3045,6 @@ function abstract_eval_call(interp::AbstractInterpreter, e::Expr, sstate::Statem
     end
 end
 
-
 function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
                            sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
@@ -3093,7 +3102,30 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
                 # - any refinement information is available (`anyrefine`), or when
                 # - `nargs` is greater than `n_initialized` derived from the struct type
                 #   information alone
-                rt = PartialStruct(𝕃ᵢ, rt, ats)
+                undefs = Union{Nothing,Bool}[false for _ in 1:nargs]
+                if nargs < fcount # fill in uninitialized fields
+                    for i = (nargs+1):fcount
+                        ft = fieldtype(rt, i)
+                        push!(ats, ft)
+                        if ft === Union{} # `Union{}`-typed field is never initialized
+                            push!(undefs, true)
+                        elseif isconcretetype(ft) && datatype_pointerfree(ft) # this check is probably incomplete
+                            push!(undefs, false)
+                        # TODO If we can implement the query such that it accurately
+                        #      identifies fields that never be `#undef'd, we can make the
+                        #      following improvements:
+                        # elseif is_field_pointerfree(rt, i)
+                        #     push!(undefs, false)
+                        # elseif ismutable && !isconst(rt, i) # can't constrain this field (as it may be modified later)
+                        #     push!(undefs, nothing)
+                        # else
+                        #     push!(undefs, true)
+                        else
+                            push!(undefs, nothing)
+                        end
+                    end
+                end
+                rt = PartialStruct(𝕃ᵢ, rt, undefs, ats)
             end
         else
             rt = refine_partial_type(rt)
@@ -3122,13 +3154,18 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
             end))
             nothrow = isexact
             rt = Const(ccall(:jl_new_structt, Any, (Any, Any), rt, at.val))
-        elseif (isa(at, PartialStruct) && ⊑(𝕃ᵢ, at, Tuple) && n > 0 &&
-                n == length(at.fields::Vector{Any}) && !isvarargtype(at.fields[end]) &&
-                (let t = rt, at = at
-                    all(i::Int -> ⊑(𝕃ᵢ, (at.fields::Vector{Any})[i], fieldtype(t, i)), 1:n)
-                end))
-            nothrow = isexact
-            rt = PartialStruct(𝕃ᵢ, rt, at.fields::Vector{Any})
+        elseif at isa PartialStruct
+            if ⊑(𝕃ᵢ, at, Tuple) && n > 0
+                fields = at.fields
+                if (n == length(fields) && !isvarargtype(fields[end]) &&
+                    (let t = rt
+                        all(i::Int -> ⊑(𝕃ᵢ, fields[i], fieldtype(t, i)), 1:n)
+                    end))
+                    nothrow = isexact
+                    undefs = Union{Nothing,Bool}[false for _ in 1:n]
+                    rt = PartialStruct(𝕃ᵢ, rt, undefs, fields)
+                end
+            end
         end
     else
         rt = refine_partial_type(rt)
@@ -3713,7 +3750,7 @@ end
 @nospecializeinfer function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
-        anyrefine = refines_definedness_information(rt)
+        anyrefine = n_initialized(rt) > datatype_min_ninitialized(rt.typ)
         𝕃 = typeinf_lattice(info.interp)
         ⊏ = strictpartialorder(𝕃)
         for i in 1:length(fields)
@@ -3725,7 +3762,7 @@ end
             end
             fields[i] = a
         end
-        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, rt.undef, fields)
+        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, _getundefs(rt), fields)
     end
     if isa(rt, PartialOpaque)
         return rt # XXX: this case was missed in #39512
