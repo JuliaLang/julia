@@ -13,6 +13,8 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
              clamp, unsafe_takestring
 
+import Core: Signed, Float16, Float32, Float64
+
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
     const CulongMax = Union{UInt8, UInt16, UInt32}
