@@ -378,7 +378,18 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
 
         jl_cpu_pause();
         jl_ptls_t ptls = ct->ptls;
-        if (sleep_check_after_threshold(&start_cycles) || (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid) && (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
+        if (sleep_check_after_threshold(&start_cycles) ||
+                (ptls->tid == jl_atomic_load_relaxed(&io_loop_tid) &&
+                    (!jl_atomic_load_relaxed(&_threadedregion) || wait_empty))) {
+            // The place seems empty and this thread is on its way to sleeping;
+            // switch to the root task to do that and instruct the task switching
+            // code to wait for another task.
+            if (ct != ptls->root_task) {
+                ptls->wait_in_scheduler = 1;
+                jl_switchto(&ptls->root_task);
+                return ct;
+            }
+
             // acquire sleep-check lock
             assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
             jl_atomic_store_relaxed(&ptls->sleep_check_state, sleeping);

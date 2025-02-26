@@ -427,6 +427,12 @@ JL_DLLEXPORT jl_task_t *jl_get_next_task(void) JL_NOTSAFEPOINT
 const char tsan_state_corruption[] = "TSAN state corrupted. Exiting HARD!\n";
 #endif
 
+// is `t` the root task?
+static int is_root_task(jl_task_t *ct, jl_task_t *t)
+{
+    return ct->ptls->root_task == t;
+}
+
 JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
 {
     jl_ptls_t ptls = lastt->ptls;
@@ -446,7 +452,8 @@ JL_NO_ASAN static void ctx_switch(jl_task_t *lastt)
     }
 #endif
 
-    int killed = jl_atomic_load_relaxed(&lastt->_state) != JL_TASK_STATE_RUNNABLE;
+    int killed = (jl_atomic_load_relaxed(&lastt->_state) != JL_TASK_STATE_RUNNABLE) &&
+                    !is_root_task(t, lastt);
     if (!t->ctx.started && !t->ctx.copy_stack) {
         // may need to allocate the stack
         if (t->ctx.stkbuf == NULL) {
@@ -663,6 +670,7 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
     jl_task_t *ct = jl_current_task;
     jl_ptls_t ptls = ct->ptls;
+switch_restart:
     jl_task_t *t = ptls->next_task;
     if (t == ct) {
         return;
@@ -710,6 +718,12 @@ JL_DLLEXPORT void jl_switch(void) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
     ptls->defer_signal = defer_signal;
     if (other_defer_signal && !defer_signal)
         jl_sigint_safepoint(ptls);
+
+    if (ptls->wait_in_scheduler) {
+        ptls->wait_in_scheduler = 0;
+        jl_set_next_task(jl_task_get_next());
+        goto switch_restart;
+    }
 
     JL_PROBE_RT_RUN_TASK(ct);
     jl_gc_unsafe_leave(ptls, gc_state);

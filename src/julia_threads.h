@@ -167,6 +167,9 @@ typedef struct _jl_tls_states_t {
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
+    // The scheduler sets this to instruct the task switching code (jl_switch())
+    // to wait in the scheduler for another task.
+    int8_t wait_in_scheduler;
     struct _jl_timing_block_t *timing_stack;
     // This is the location of our copy_stack
     void *stackbase;
