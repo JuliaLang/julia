@@ -1145,6 +1145,16 @@ function throwto(t::Task, @nospecialize exc)
     return try_yieldto(identity)
 end
 
+@inline function wait_forever()
+    while true
+        wait()
+    end
+end
+
+const get_sched_task = OncePerThread{Task}() do
+    @task wait_forever()
+end
+
 function ensure_rescheduled(othertask::Task)
     ct = current_task()
     W = workqueue_for(Threads.threadid())
@@ -1184,7 +1194,17 @@ checktaskempty = Partr.multiq_check_empty
 @noinline function poptask(W::StickyWorkqueue)
     task = trypoptask(W)
     if !(task isa Task)
-        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
+        process_events()
+        task = trypoptask(W)
+    end
+    if !(task isa Task)
+        sched_task = get_sched_task()
+        if current_task() === sched_task
+            task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
+        else
+            yieldto(sched_task)
+            task = current_task()
+        end
     end
     set_next_task(task)
     nothing
