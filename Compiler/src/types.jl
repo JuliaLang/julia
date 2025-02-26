@@ -110,6 +110,7 @@ mutable struct InferenceResult
     effects::Effects                  # if optimization is finished
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool             # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
+    tombstone::Bool
 
     #=== uninitialized fields ===#
     ci::CodeInstance                  # CodeInstance if this result may be added to the cache
@@ -120,7 +121,7 @@ mutable struct InferenceResult
         ipo_effects = effects = Effects()
         analysis_results = NULL_ANALYSIS_RESULTS
         return new(mi, argtypes, overridden_by_const, result, exc_result, src,
-            valid_worlds, ipo_effects, effects, analysis_results, #=is_src_volatile=#false)
+            valid_worlds, ipo_effects, effects, analysis_results, #=is_src_volatile=#false, false)
     end
 end
 function InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice)
