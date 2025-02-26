@@ -749,7 +749,8 @@ void RecursivelyVisit(callback f, Value *V) {
         }
         llvm_dump(V);
         llvm_dump(TheUser);
-        assert(false && "Unexpected instruction");
+        errs() << "Unexpected instruction\n";
+        abort();
     }
 }
 
@@ -1138,11 +1139,13 @@ static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
                     worklist.insert(FalseBranch);
                 } else {
                     llvm_dump(SI);
-                    assert(false && "Malformed Select");
+                    dbgs() << "Malformed Select\n";
+                    abort();
                 }
             } else {
                 llvm_dump(V);
-                assert(false && "Unexpected SRet argument");
+                dbgs() << "Unexpected SRet argument\n";
+                abort();
             }
         }
     }
@@ -1219,22 +1222,19 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                 else {
                                     Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
                                     SmallSetVector<AllocaInst *, 8>  gc_allocas = FindSretAllocas(arg1);
-                                    AllocaInst *SRet_gc = nullptr;
-                                    if (gc_allocas.size() == 1) {
-                                        SRet_gc = gc_allocas.pop_back_val();
+                                    if (gc_allocas.size() == 0) {
+                                        llvm_dump(CI);
+                                        errs() << "Expected one Alloca at least\n";
+                                        abort();
                                     }
                                     else {
-                                        llvm_dump(CI);
-                                        for (AllocaInst *Alloca : gc_allocas) {
-                                            llvm_dump(Alloca);
+                                        for (AllocaInst* SRet_gc : gc_allocas) {
+                                            Type *ElT = SRet_gc->getAllocatedType();
+                                            if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
+                                                S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
+                                            }
                                         }
-                                        assert(false && "Expected single alloca");
                                     }
-                                    Type *ElT = SRet_gc->getAllocatedType();
-                                    if (!(SRet_gc->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
-                                        S.ArrayAllocas[SRet_gc] = tracked.count * cast<ConstantInt>(SRet_gc->getArraySize())->getZExtValue();
-                                    }
-                                    break; // Found our gc roots
                                 }
                             }
                         }
