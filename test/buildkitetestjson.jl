@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Convert test(set) results to a Buildkit-compatible JSON representation.
+# Convert test(set) results to a Buildkite-compatible JSON representation.
 # Based on <https://buildkite.com/docs/test-analytics/importing-json#json-test-results-data-reference>.
 
-module BuildKiteTestJSON
+module BuildkiteTestJSON
 
 using Test
 using Dates
@@ -31,10 +31,10 @@ json_repr(io::IO, val::Integer; indent::Int=0) = print(io, val)
 json_repr(io::IO, val::Float64; indent::Int=0) = print(io, val)
 function json_repr(io::IO, val::AbstractVector; indent::Int=0)
     print(io, '[')
-    for elt in val
+    for i in eachindex(val)
         print(io, '\n', ' '^(indent + 2))
-        json_repr(io, elt; indent=indent+2)
-        elt === last(val) || print(io, ',')
+        json_repr(io, val[i]; indent=indent+2)
+        i == lastindex(val) || print(io, ',')
     end
     print(io, '\n', ' '^indent, ']')
 end
@@ -105,9 +105,9 @@ function add_failure_info!(data::Dict{String, Any}, result::Test.Result)
         data["failure_reason"] = if result.test_type === :test_error
             if occursin("\nStacktrace:\n", result.backtrace)
                 err, trace = split(result.backtrace, "\nStacktrace:\n", limit=2)
-                data["failure_expanded"] = Dict{String, Any}(
-                    "expanded" => split(err, '\n'),
-                    "backtrace" => split(trace, '\n'))
+                data["failure_expanded"] =
+                    [Dict{String,Any}("expanded" => split(err, '\n'),
+                                      "backtrace" => split(trace, '\n'))]
             end
             "Exception (unexpectedly) thrown during test"
         elseif result.test_type === :test_nonbool

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Tuple
+
 # Document NTuple here where we have everything needed for the doc system
 """
     NTuple{N, T}
@@ -60,7 +62,7 @@ end
 
 function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
     @inline
-    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
+    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())::NTuple{N, Any}
 end
 
 
@@ -68,6 +70,7 @@ end
 
 function iterate(@nospecialize(t::Tuple), i::Int=1)
     @inline
+    @_nothrow_meta
     return (1 <= i <= length(t)) ? (t[i], i + 1) : nothing
 end
 
@@ -76,8 +79,8 @@ keys(@nospecialize t::Tuple) = OneTo(length(t))
 """
     prevind(A, i)
 
-Return the index before `i` in `A`. The returned index is often equivalent to `i
-- 1` for an integer `i`. This function can be useful for generic code.
+Return the index before `i` in `A`. The returned index is often equivalent to
+`i - 1` for an integer `i`. This function can be useful for generic code.
 
 !!! warning
     The returned index might be out of bounds. Consider using
@@ -110,8 +113,8 @@ function prevind end
 """
     nextind(A, i)
 
-Return the index after `i` in `A`. The returned index is often equivalent to `i
-+ 1` for an integer `i`. This function can be useful for generic code.
+Return the index after `i` in `A`. The returned index is often equivalent to
+`i + 1` for an integer `i`. This function can be useful for generic code.
 
 !!! warning
     The returned index might be out of bounds. Consider using
@@ -426,10 +429,6 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 
 # constructing from an iterator
 
-# only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Core.Compiler!
-if nameof(@__MODULE__) === :Base
-
 function tuple_type_tail(T::Type)
     @_foldable_meta # TODO: this method is wrong (and not :foldable)
     if isa(T, UnionAll)
@@ -458,7 +457,7 @@ _totuple(::Type{Tuple{}}, itr, s...) = ()
 
 function _totuple_err(@nospecialize T)
     @noinline
-    throw(ArgumentError("too few elements for tuple type $T"))
+    throw(ArgumentError(LazyString("too few elements for tuple type ", T)))
 end
 
 function _totuple(::Type{T}, itr, s::Vararg{Any,N}) where {T,N}
@@ -495,14 +494,12 @@ _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
 _totuple(::Type{Tuple}, p::Pair) = (p.first, p.second)
 _totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
 
-end
-
 ## find ##
 
 _findfirst_rec(f, i::Int, ::Tuple{}) = nothing
 _findfirst_rec(f, i::Int, t::Tuple) = (@inline; f(first(t)) ? i : _findfirst_rec(f, i+1, tail(t)))
 function _findfirst_loop(f::Function, t)
-    for i in 1:length(t)
+    for i in eachindex(t)
         f(t[i]) && return i
     end
     return nothing
@@ -536,7 +533,7 @@ function _isequal(t1::Tuple{Any,Vararg{Any}}, t2::Tuple{Any,Vararg{Any}})
     return isequal(t1[1], t2[1]) && _isequal(tail(t1), tail(t2))
 end
 function _isequal(t1::Any32, t2::Any32)
-    for i = 1:length(t1)
+    for i in eachindex(t1, t2)
         if !isequal(t1[i], t2[i])
             return false
         end
@@ -567,7 +564,7 @@ function _eq_missing(t1::Tuple, t2::Tuple)
 end
 function _eq(t1::Any32, t2::Any32)
     anymissing = false
-    for i = 1:length(t1)
+    for i in eachindex(t1, t2)
         eq = (t1[i] == t2[i])
         if ismissing(eq)
             anymissing = true
@@ -663,7 +660,9 @@ all(x::Tuple{}) = true
 all(x::Tuple{Bool}) = x[1]
 all(x::Tuple{Bool, Bool}) = x[1]&x[2]
 all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
-# use generic reductions for the rest
+all(x::Tuple{Any}) = x[1] || return false
+all(f, x::Tuple{}) = true
+all(f, x::Tuple{Any}) = all((f(x[1]),))
 
 any(x::Tuple{}) = false
 any(x::Tuple{Bool}) = x[1]
@@ -692,8 +691,11 @@ empty(@nospecialize x::Tuple) = ()
 foreach(f, itr::Tuple) = foldl((_, x) -> (f(x); nothing), itr, init=nothing)
 foreach(f, itr::Tuple, itrs::Tuple...) = foldl((_, xs) -> (f(xs...); nothing), zip(itr, itrs...), init=nothing)
 
-function circshift(x::Tuple, shift::Integer)
+circshift((@nospecialize t::Union{Tuple{},Tuple{Any}}), @nospecialize _::Integer) = t
+circshift(t::Tuple{Any,Any}, shift::Integer) = iseven(shift) ? t : reverse(t)
+function circshift(x::Tuple{Any,Any,Any,Vararg{Any,N}}, shift::Integer) where {N}
     @inline
-    j = mod1(shift, length(x))
-    ntuple(k -> getindex(x, k-j+ifelse(k>j,0,length(x))), Val(length(x)))
+    len = N + 3
+    j = mod1(shift, len)
+    ntuple(k -> getindex(x, k-j+ifelse(k>j,0,len)), Val(len))::Tuple
 end

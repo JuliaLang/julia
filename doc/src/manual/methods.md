@@ -587,12 +587,13 @@ In the example above, we see that the "current world" (in which the method `newf
 is one greater than the task-local "runtime world" that was fixed when the execution of `tryeval` started.
 
 Sometimes it is necessary to get around this (for example, if you are implementing the above REPL).
-Fortunately, there is an easy solution: call the function using [`Base.invokelatest`](@ref):
+Fortunately, there is an easy solution: call the function using [`Base.invokelatest`](@ref) or
+the macro version [`Base.@invokelatest`](@ref):
 
 ```jldoctest
 julia> function tryeval2()
            @eval newfun2() = 2
-           Base.invokelatest(newfun2)
+           @invokelatest newfun2()
        end
 tryeval2 (generic function with 1 method)
 
@@ -664,7 +665,7 @@ abstract type AbstractArray{T, N} end
 eltype(::Type{<:AbstractArray{T}}) where {T} = T
 ```
 
-using so-called triangular dispatch.  Note that `UnionAll` types, for
+using so-called triangular dispatch. Note that `UnionAll` types, for
 example `eltype(AbstractArray{T} where T <: Integer)`, do not match the
 above method. The implementation of `eltype` in `Base` adds a fallback
 method to `Any` for such cases.
@@ -698,11 +699,14 @@ While this works for declared types, it fails for types without
 supertypes:
 
 ```julia-repl
-julia> eltype_wrong(Union{AbstractArray{Int}, AbstractArray{Float64}})
-ERROR: MethodError: no method matching supertype(::Type{Union{AbstractArray{Float64,N} where N, AbstractArray{Int64,N} where N}})
+julia> eltype_wrong(Union{Vector{Int}, Matrix{Int}})
+ERROR: MethodError: no method matching supertype(::Type{VecOrMat{Int64}})
+
 Closest candidates are:
-  supertype(::DataType) at operators.jl:43
-  supertype(::UnionAll) at operators.jl:48
+  supertype(::UnionAll)
+   @ Base operators.jl:44
+  supertype(::DataType)
+   @ Base operators.jl:43
 ```
 
 ### Building a similar type with a different type parameter
@@ -745,8 +749,8 @@ often it is best to separate each level of dispatch into distinct functions.
 This may sound similar in approach to single-dispatch, but as we shall see below, it is still more flexible.
 
 For example, trying to dispatch on the element-type of an array will often run into ambiguous situations.
-Instead, commonly code will dispatch first on the container type,
-then recurse down to a more specific method based on eltype.
+Instead, common code will dispatch first on the container type,
+then recurse down to a more specific method based on `eltype`.
 In most cases, the algorithms lend themselves conveniently to this hierarchical approach,
 while in other cases, this rigor must be resolved manually.
 This dispatching branching can be observed, for example, in the logic to sum two matrices:
@@ -776,7 +780,7 @@ often referred to as a
 
 This pattern is implemented by defining a generic function which
 computes a different singleton value (or type) for each trait-set to which the
-function arguments may belong to.  If this function is pure there is
+function arguments may belong to. If this function is pure there is
 no impact on performance compared to normal dispatch.
 
 The example in the previous section glossed over the implementation details of
@@ -891,8 +895,8 @@ matmul(a, b) = matmul(promote(a, b)...)
 ## Parametrically-constrained Varargs methods
 
 Function parameters can also be used to constrain the number of arguments that may be supplied
-to a "varargs" function ([Varargs Functions](@ref)).  The notation `Vararg{T,N}` is used to indicate
-such a constraint.  For example:
+to a "varargs" function ([Varargs Functions](@ref)). The notation `Vararg{T,N}` is used to indicate
+such a constraint. For example:
 
 ```jldoctest
 julia> bar(a,b,x::Vararg{Any,2}) = (a,b,x)
@@ -1025,7 +1029,7 @@ function emptyfunc end
 ## [Method design and the avoidance of ambiguities](@id man-method-design-ambiguities)
 
 Julia's method polymorphism is one of its most powerful features, yet
-exploiting this power can pose design challenges.  In particular, in
+exploiting this power can pose design challenges. In particular, in
 more complex method hierarchies it is not uncommon for
 [ambiguities](@ref man-ambiguities) to arise.
 
@@ -1168,7 +1172,7 @@ sure this method is implemented with generic calls (like `similar` and
 When this approach is not possible, it may be worth starting a
 discussion with other developers about resolving the ambiguity; just
 because one method was defined first does not necessarily mean that it
-can't be modified or eliminated.  As a last resort, one developer can
+can't be modified or eliminated. As a last resort, one developer can
 define the "band-aid" method
 
 ```julia

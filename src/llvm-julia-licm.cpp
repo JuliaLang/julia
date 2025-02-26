@@ -330,10 +330,9 @@ struct JuliaLICM : public JuliaPassContext {
                     moveInstructionBefore(*call, *preheader->getTerminator(), MSSAU, SE);
                     IRBuilder<> builder(preheader->getTerminator());
                     builder.SetCurrentDebugLocation(call->getDebugLoc());
-                    auto obj_i8 = builder.CreateBitCast(call, Type::getInt8PtrTy(call->getContext(), call->getType()->getPointerAddressSpace()));
                     // Note that this alignment is assuming the GC allocates at least pointer-aligned memory
                     auto align = Align(DL.getPointerSize(0));
-                    auto clear_obj = builder.CreateMemSet(obj_i8, ConstantInt::get(Type::getInt8Ty(call->getContext()), 0), call->getArgOperand(1), align);
+                    auto clear_obj = builder.CreateMemSet(call, ConstantInt::get(Type::getInt8Ty(call->getContext()), 0), call->getArgOperand(1), align);
                     if (MSSAU.getMemorySSA()) {
                         auto clear_mdef = MSSAU.createMemoryAccessInBB(clear_obj, nullptr, clear_obj->getParent(), MemorySSA::BeforeTerminator);
                         MSSAU.insertDef(cast<MemoryDef>(clear_mdef), true);
@@ -343,11 +342,7 @@ struct JuliaLICM : public JuliaPassContext {
             }
         }
         if (changed && SE) {
-#if JL_LLVM_VERSION >= 160000
             SE->forgetLoopDispositions();
-#else
-            SE->forgetLoopDispositions(L);
-#endif
         }
 #ifdef JL_VERIFY_PASSES
         assert(!verifyLLVMIR(*L));

@@ -9,8 +9,11 @@ literals `md"..."` and `doc"..."`.
 """
 module Markdown
 
-import Base: show, ==, with_output_color, mapany
+import Base: AnnotatedString, AnnotatedIOBuffer, show, ==, with_output_color, mapany
 using Base64: stringmime
+
+using StyledStrings: StyledStrings, Face, addface!, @styled_str, styled
+using JuliaSyntaxHighlighting: highlight, highlight!
 
 # Margin for printing in terminal.
 const margin = 2
@@ -32,7 +35,40 @@ include("render/terminal/render.jl")
 
 export @md_str, @doc_str
 
-parse(markdown::AbstractString; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
+public MD, parse
+
+const MARKDOWN_FACES = [
+    :markdown_header => Face(weight=:bold),
+    :markdown_h1 => Face(height=1.25, inherit=:markdown_header),
+    :markdown_h2 => Face(height=1.20, inherit=:markdown_header),
+    :markdown_h3 => Face(height=1.15, inherit=:markdown_header),
+    :markdown_h4 => Face(height=1.12, inherit=:markdown_header),
+    :markdown_h5 => Face(height=1.08, inherit=:markdown_header),
+    :markdown_h6 => Face(height=1.05, inherit=:markdown_header),
+    :markdown_admonition => Face(weight=:bold),
+    :markdown_code => Face(inherit=:code),
+    :markdown_julia_prompt => Face(inherit=:repl_prompt_julia),
+    :markdown_footnote => Face(inherit=:bright_yellow),
+    :markdown_hrule => Face(inherit=:shadow),
+    :markdown_inlinecode => Face(inherit=:markdown_code),
+    :markdown_latex => Face(inherit=:magenta),
+    :markdown_link => Face(underline=:bright_blue),
+    :markdown_list => Face(foreground=:blue),
+]
+
+__init__() = foreach(addface!, MARKDOWN_FACES)
+
+parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
+
+"""
+    Markdown.parse(markdown::AbstractString) -> MD
+
+Parse `markdown` as Julia-flavored Markdown text and return the corresponding `MD` object.
+
+See also [`@md_str`](@ref).
+"""
+parse(markdown::AbstractString; flavor = julia) = parse(String(markdown), flavor = flavor)
+
 parse_file(file::AbstractString; flavor = julia) = parse(read(file, String), flavor = flavor)
 
 function mdexpr(s, flavor = :julia)
@@ -48,6 +84,8 @@ end
     @md_str -> MD
 
 Parse the given string as Markdown text and return a corresponding [`MD`](@ref) object.
+
+See also [`Markdown.parse`](@ref Markdown.parse(::AbstractString)).
 
 # Examples
 ```jldoctest
@@ -97,5 +135,26 @@ end
 import Base.Docs: catdoc
 
 catdoc(md::MD...) = MD(md...)
+
+if Base.generating_output()
+    # workload to reduce latency
+    md"""
+    # H1
+    ## H2
+    ### H3
+    **bold text**
+    *italicized text*
+    > blockquote
+    1. First item
+    2. Second item
+    3. Third item
+    - First item
+    - Second item
+    - Third item
+    `code`
+    Horizontal Rule
+    ---
+    """
+end
 
 end

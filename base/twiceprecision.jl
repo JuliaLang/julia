@@ -63,7 +63,7 @@ representation, even though it is exact from the standpoint of binary
 representation.
 
 Example:
-```julia-repl
+```jldoctest
 julia> 1.0 + 1.0001e-15
 1.000000000000001
 
@@ -94,7 +94,7 @@ numbers. Mathematically, `zhi + zlo = x * y`, where `zhi` contains the
 most significant bits and `zlo` the least significant.
 
 Example:
-```julia-repl
+```jldoctest
 julia> x = Float32(π)
 3.1415927f0
 
@@ -126,7 +126,7 @@ numbers. Mathematically, `zhi + zlo ≈ x / y`, where `zhi` contains the
 most significant bits and `zlo` the least significant.
 
 Example:
-```julia-repl
+```jldoctest
 julia> x, y = Float32(π), 3.1f0
 (3.1415927f0, 3.1f0)
 
@@ -278,6 +278,7 @@ big(x::TwicePrecision) = big(x.hi) + big(x.lo)
 
 -(x::TwicePrecision) = TwicePrecision(-x.hi, -x.lo)
 
+zero(x::TwicePrecision) = zero(typeof(x))
 function zero(::Type{TwicePrecision{T}}) where {T}
     z = zero(T)
     TwicePrecision{T}(z, z)

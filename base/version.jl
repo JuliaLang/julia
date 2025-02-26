@@ -9,12 +9,12 @@ const VInt = UInt32
     VersionNumber
 
 Version number type which follows the specifications of
-[semantic versioning (semver)](https://semver.org/), composed of major, minor
+[semantic versioning (semver)](https://semver.org/spec/v2.0.0-rc.2.html), composed of major, minor
 and patch numeric values, followed by pre-release and build
 alphanumeric annotations.
 
 `VersionNumber` objects can be compared with all of the standard comparison
-operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
+operators (`==`, `<`, `<=`, etc.), with the result following semver v2.0.0-rc.2 rules.
 
 `VersionNumber` has the following public fields:
 - `v.major::Integer`
@@ -51,8 +51,7 @@ struct VersionNumber
     build::VerTuple
 
     function VersionNumber(major::VInt, minor::VInt, patch::VInt,
-            pre::VerTuple,
-            bld::VerTuple)
+                           @nospecialize(pre::VerTuple), @nospecialize(bld::VerTuple))
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -179,7 +178,7 @@ ident_cmp(a::Integer, b::String ) = isempty(b) ? +1 : -1
 ident_cmp(a::String,  b::Integer) = isempty(a) ? -1 : +1
 ident_cmp(a::String,  b::String ) = cmp(a, b)
 
-function ident_cmp(A::VerTuple, B::VerTuple)
+function ident_cmp(@nospecialize(A::VerTuple), @nospecialize(B::VerTuple))
     for (a, b) in Iterators.Zip{Tuple{VerTuple,VerTuple}}((A, B))
         c = ident_cmp(a, b)
         (c != 0) && return c

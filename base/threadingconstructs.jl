@@ -3,11 +3,13 @@
 export threadid, nthreads, @threads, @spawn,
        threadpool, nthreadpools
 
-"""
-    Threads.threadid() -> Int
+public Condition, threadpoolsize, ngcthreads
 
-Get the ID number of the current thread of execution. The master thread has
-ID `1`.
+"""
+    Threads.threadid([t::Task]) -> Int
+
+Get the ID number of the current thread of execution, or the thread of task
+`t`. The master thread has ID `1`.
 
 # Examples
 ```julia-repl
@@ -21,12 +23,15 @@ julia> Threads.@threads for i in 1:4
 2
 5
 4
+
+julia> Threads.threadid(Threads.@spawn "foo")
+2
 ```
 
 !!! note
     The thread that a task runs on may change if the task yields, which is known as [`Task Migration`](@ref man-task-migration).
-    For this reason in most cases it is not safe to use `threadid()` to index into, say, a vector of buffer or stateful objects.
-
+    For this reason in most cases it is not safe to use `threadid([task])` to index into, say, a vector of buffers or stateful
+    objects.
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
@@ -67,7 +72,7 @@ function _tpid_to_sym(tpid::Int8)
     elseif tpid == -1
         return :foreign
     else
-        throw(ArgumentError("Unrecognized threadpool id $tpid"))
+        throw(ArgumentError(LazyString("Unrecognized threadpool id ", tpid)))
     end
 end
 
@@ -79,7 +84,7 @@ function _sym_to_tpid(tp::Symbol)
     elseif tp == :foreign
         return Int8(-1)
     else
-        throw(ArgumentError("Unrecognized threadpool name `$(repr(tp))`"))
+        throw(ArgumentError(LazyString("Unrecognized threadpool name `", tp, "`")))
     end
 end
 
@@ -91,6 +96,24 @@ Returns the specified thread's threadpool; either `:default`, `:interactive`, or
 function threadpool(tid = threadid())
     tpid = ccall(:jl_threadpoolid, Int8, (Int16,), tid-1)
     return _tpid_to_sym(tpid)
+end
+
+"""
+    Threads.threadpooldescription(tid = threadid()) -> String
+
+Returns the specified thread's threadpool name with extended description where appropriate.
+"""
+function threadpooldescription(tid = threadid())
+    threadpool_name = threadpool(tid)
+    if threadpool_name == :foreign
+        # TODO: extend tls to include a field to add a description to a foreign thread and make this more general
+        n_others = nthreads(:interactive) + nthreads(:default)
+        # Assumes GC threads come first in the foreign thread pool
+        if tid > n_others && tid <= n_others + ngcthreads()
+            return "foreign: gc"
+        end
+    end
+    return string(threadpool_name)
 end
 
 """
@@ -158,7 +181,8 @@ function threading_run(fun, static)
         else
             # TODO: this should be the current pool (except interactive) if there
             # are ever more than two pools.
-            @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default)) == 1
+            _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, _sym_to_tpid(:default))
+            @assert _result == 1
         end
         tasks[i] = t
         schedule(t)
@@ -410,15 +434,17 @@ function _spawn_set_thrpool(t::Task, tp::Symbol)
     if tpid == -1 || _nthreads_in_pool(tpid) == 0
         tpid = _sym_to_tpid(:default)
     end
-    @assert ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid) == 1
+    _result = ccall(:jl_set_task_threadpoolid, Cint, (Any, Int8), t, tpid)
+    @assert _result == 1
     nothing
 end
 
 """
-    Threads.@spawn [:default|:interactive] expr
+    Threads.@spawn [:default|:interactive|:samepool] expr
 
 Create a [`Task`](@ref) and [`schedule`](@ref) it to run on any available
-thread in the specified threadpool (`:default` if unspecified). The task is
+thread in the specified threadpool: `:default`, `:interactive`, or `:samepool`
+to use the same as the caller. `:default` is used if unspecified. The task is
 allocated to a thread once one becomes available. To wait for the task to
 finish, call [`wait`](@ref) on the result of this macro, or call
 [`fetch`](@ref) to wait and then obtain its return value.
@@ -443,6 +469,9 @@ the variable's value in the current task.
 !!! compat "Julia 1.9"
     A threadpool may be specified as of Julia 1.9.
 
+!!! compat "Julia 1.12"
+    The same threadpool may be specified as of Julia 1.12.
+
 # Examples
 ```julia-repl
 julia> t() = println("Hello from ", Threads.threadid());
@@ -461,8 +490,8 @@ macro spawn(args...)
         ttype, ex = args
         if ttype isa QuoteNode
             ttype = ttype.value
-            if ttype !== :interactive && ttype !== :default
-                throw(ArgumentError("unsupported threadpool in @spawn: $ttype"))
+            if !in(ttype, (:interactive, :default, :samepool))
+                throw(ArgumentError(LazyString("unsupported threadpool in @spawn: ", ttype)))
             end
             tp = QuoteNode(ttype)
         else
@@ -482,7 +511,11 @@ macro spawn(args...)
         let $(letargs...)
             local task = Task($thunk)
             task.sticky = false
-            _spawn_set_thrpool(task, $(esc(tp)))
+            local tp = $(esc(tp))
+            if tp == :samepool
+                tp = Threads.threadpool()
+            end
+            _spawn_set_thrpool(task, tp)
             if $(Expr(:islocal, var))
                 put!($var, task)
             end

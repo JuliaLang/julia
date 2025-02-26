@@ -11,9 +11,7 @@ optional second argument `h` is another hash code to be mixed with the result.
 New types should implement the 2-argument form, typically by calling the 2-argument `hash`
 method recursively in order to mix hashes of the contents with each other (and with `h`).
 Typically, any type that implements `hash` should also implement its own [`==`](@ref) (hence
-[`isequal`](@ref)) to guarantee the property mentioned above. Types supporting subtraction
-(operator `-`) should also implement [`widen`](@ref), which is required to hash
-values inside heterogeneous arrays.
+[`isequal`](@ref)) to guarantee the property mentioned above.
 
 The hash value may change when a new Julia process is started.
 

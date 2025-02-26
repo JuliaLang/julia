@@ -19,7 +19,8 @@ Number
 """
 typejoin() = Bottom
 typejoin(@nospecialize(t)) = (@_nospecializeinfer_meta; t)
-typejoin(@nospecialize(t), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(t, typejoin(ts...)))
+typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u)) = (@_foldable_meta; @_nospecializeinfer_meta; typejoin(typejoin(t, s), u))
+typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; afoldl(typejoin, typejoin(t, s, u), ts...))
 function typejoin(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
     @_nospecializeinfer_meta
@@ -198,16 +199,15 @@ end
 
 function typejoin_union_tuple(T::DataType)
     @_foldable_meta
-    u = Base.unwrap_unionall(T)
-    p = (u::DataType).parameters
-    lr = length(p)::Int
+    p = T.parameters
+    lr = length(p)
     if lr == 0
         return Tuple{}
     end
     c = Vector{Any}(undef, lr)
     for i = 1:lr
         pi = p[i]
-        U = Core.Compiler.unwrapva(pi)
+        U = unwrapva(pi)
         if U === Union{}
             ci = Union{}
         elseif U isa Union
@@ -217,7 +217,7 @@ function typejoin_union_tuple(T::DataType)
         else
             ci = promote_typejoin_union(U)
         end
-        if i == lr && Core.Compiler.isvarargtype(pi)
+        if i == lr && isvarargtype(pi)
             c[i] = isdefined(pi, :N) ? Vararg{ci, pi.N} : Vararg{ci}
         else
             c[i] = ci
@@ -299,7 +299,8 @@ function promote_type end
 
 promote_type()  = Bottom
 promote_type(T) = T
-promote_type(T, S, U, V...) = (@inline; promote_type(T, promote_type(S, U, V...)))
+promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
+promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type(::Type{T}, ::Type{T}) where {T} = T
@@ -373,7 +374,9 @@ function _promote(x::T, y::S) where {T,S}
     return (convert(R, x), convert(R, y))
 end
 promote_typeof(x) = typeof(x)
-promote_typeof(x, xs...) = (@inline; promote_type(typeof(x), promote_typeof(xs...)))
+promote_typeof(x, y) = (@inline; promote_type(typeof(x), typeof(y)))
+promote_typeof(x, y, z) = (@inline; promote_type(typeof(x), typeof(y), typeof(z)))
+promote_typeof(x, y, z, a...) = (@inline; afoldl(((::Type{T}, y) where {T}) -> promote_type(T, typeof(y)), promote_typeof(x, y, z), a...))
 function _promote(x, y, z)
     @inline
     R = promote_typeof(x, y, z)
@@ -489,12 +492,6 @@ fld1(x::Real, y::Real) = fld1(promote(x,y)...)
 max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
-
-if isdefined(Core, :Compiler)
-    const _return_type = Core.Compiler.return_type
-else
-    _return_type(@nospecialize(f), @nospecialize(t)) = Any
-end
 
 function TupleOrBottom(tt...)
     any(p -> p === Union{}, tt) && return Union{}

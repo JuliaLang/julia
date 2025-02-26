@@ -36,7 +36,7 @@ else
 LIBSUITESPARSE_CMAKE_FLAGS += -DSUITESPARSE_USE_64BIT_BLAS=NO
 endif
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 LIBSUITESPARSE_CMAKE_FLAGS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
@@ -59,8 +59,8 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
 	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
-	make -C $(dir $<)
-	make -C $(dir $<) install
+	$(MAKE) -C $(dir $<)
+	$(MAKE) -C $(dir $<) install
 	echo 1 > $@
 
 ifeq ($(OS),WINNT)
@@ -95,7 +95,7 @@ configure-libsuitesparse: extract-libsuitesparse
 compile-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 fastcheck-libsuitesparse: #none
 check-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked
-install-libsuitesparse: $(build_prefix)/manifest/libsuitesparse
+install-libsuitesparse: $(build_prefix)/manifest/libsuitesparse remove-libsuitesparse-gpl-lib
 
 else # USE_BINARYBUILDER_LIBSUITESPARSE
 
@@ -103,6 +103,7 @@ $(eval $(call bb-install,libsuitesparse,LIBSUITESPARSE,false))
 
 # libsuitesparse depends on blastrampoline
 compile-libsuitesparse: | $(build_prefix)/manifest/blastrampoline
+install-libsuitesparse: | remove-libsuitesparse-gpl-lib
 endif
 
 define manual_libsuitesparse
@@ -110,3 +111,13 @@ uninstall-libsuitesparse:
 	-rm -f $(build_prefix)/manifest/libsuitesparse
 	-rm -f $(addprefix $(build_shlibdir)/lib,$3)
 endef
+
+remove-libsuitesparse-gpl-lib:
+ifeq ($(USE_GPL_LIBS),0)
+	@echo Removing GPL libs...
+	-rm -f $(build_bindir)/libcholmod*
+	-rm -f $(build_bindir)/libklu_cholmod*
+	-rm -f $(build_bindir)/librbio*
+	-rm -f $(build_bindir)/libspqr*
+	-rm -f $(build_bindir)/libumfpack*
+endif

@@ -19,33 +19,27 @@
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/PassManager.h>
 #include <llvm/IR/Verifier.h>
-#include <llvm/Transforms/IPO.h>
-#include <llvm/Transforms/Scalar.h>
-#include <llvm/Transforms/Vectorize.h>
-#include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
-#include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
-#include <llvm/Transforms/Scalar/GVN.h>
-#include <llvm/Transforms/IPO/AlwaysInliner.h>
-#include <llvm/Transforms/IPO/StripDeadPrototypes.h>
-#include <llvm/Transforms/InstCombine/InstCombine.h>
-#include <llvm/Transforms/Scalar/InstSimplifyPass.h>
-#include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
-#include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Transforms/IPO/InferFunctionAttrs.h>
 #include <llvm/Passes/PassBuilder.h>
 #include <llvm/Passes/PassPlugin.h>
 
 // NewPM needs to manually include all the pass headers
+#include <llvm/Transforms/AggressiveInstCombine/AggressiveInstCombine.h>
 #include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/IPO/Annotation2Metadata.h>
 #include <llvm/Transforms/IPO/ConstantMerge.h>
 #include <llvm/Transforms/IPO/ForceFunctionAttrs.h>
 #include <llvm/Transforms/IPO/GlobalDCE.h>
+#include <llvm/Transforms/IPO/GlobalOpt.h>
+#include <llvm/Transforms/IPO/StripDeadPrototypes.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation/AddressSanitizer.h>
 #include <llvm/Transforms/Instrumentation/MemorySanitizer.h>
 #include <llvm/Transforms/Instrumentation/ThreadSanitizer.h>
 #include <llvm/Transforms/Scalar/ADCE.h>
 #include <llvm/Transforms/Scalar/AnnotationRemarks.h>
+#include <llvm/Transforms/Scalar/BDCE.h>
+#include "llvm/Transforms/Scalar/ConstraintElimination.h"
 #include <llvm/Transforms/Scalar/CorrelatedValuePropagation.h>
 #include <llvm/Transforms/Scalar/DCE.h>
 #include <llvm/Transforms/Scalar/DeadStoreElimination.h>
@@ -69,13 +63,19 @@
 #include <llvm/Transforms/Scalar/LowerConstantIntrinsics.h>
 #include <llvm/Transforms/Scalar/LowerExpectIntrinsic.h>
 #include <llvm/Transforms/Scalar/MemCpyOptimizer.h>
+#include <llvm/Transforms/Scalar/MergedLoadStoreMotion.h>
 #include <llvm/Transforms/Scalar/Reassociate.h>
 #include <llvm/Transforms/Scalar/SCCP.h>
 #include <llvm/Transforms/Scalar/SROA.h>
 #include <llvm/Transforms/Scalar/SimpleLoopUnswitch.h>
 #include <llvm/Transforms/Scalar/SimplifyCFG.h>
 #include <llvm/Transforms/Scalar/WarnMissedTransforms.h>
+#include <llvm/Transforms/Utils/LibCallsShrinkWrap.h>
 #include <llvm/Transforms/Utils/InjectTLIMappings.h>
+#include <llvm/Transforms/Utils/Mem2Reg.h>
+#include <llvm/Transforms/Utils/RelLookupTableConverter.h>
+#include <llvm/Transforms/Utils/ModuleUtils.h>
+#include <llvm/Transforms/Utils/SimplifyCFGOptions.h>
 #include <llvm/Transforms/Vectorize/LoopVectorize.h>
 #include <llvm/Transforms/Vectorize/SLPVectorizer.h>
 #include <llvm/Transforms/Vectorize/VectorCombine.h>
@@ -158,15 +158,9 @@ namespace {
             // Opts.UseAfterReturn = CodeGenOpts.getSanitizeAddressUseAfterReturn();
             // MPM.addPass(RequireAnalysisPass<ASanGlobalsMetadataAnalysis, Module>());
             //Let's assume the defaults are actually fine for our purposes
-    #if JL_LLVM_VERSION < 160000
-            // MPM.addPass(ModuleAddressSanitizerPass(
-            //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
-            MPM.addPass(ModuleAddressSanitizerPass(AddressSanitizerOptions()));
-    #else // LLVM 16+
             // MPM.addPass(AddressSanitizerPass(
             //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
             MPM.addPass(AddressSanitizerPass(AddressSanitizerOptions(), true, false));
-    #endif
         //   }
         };
         ASanPass(/*SanitizerKind::Address, */false);
@@ -189,10 +183,11 @@ namespace {
         // }
     }
 
-#ifdef JL_DEBUG_BUILD
+#ifdef JL_VERIFY_PASSES
     static inline void addVerificationPasses(ModulePassManager &MPM, bool llvm_only) JL_NOTSAFEPOINT {
-        if (!llvm_only)
-            MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass()));
+        if (!llvm_only){
+            MPM.addPass(llvm::createModuleToFunctionPassAdaptor(GCInvariantVerifierPass(true)));
+        }
         MPM.addPass(VerifierPass());
     }
 #endif
@@ -209,10 +204,9 @@ namespace {
             .convertSwitchRangeToICmp(true)
             .convertSwitchToLookupTable(true)
             .forwardSwitchCondToPhi(true)
-            //These mess with loop rotation, so only do them after that
+            .needCanonicalLoops(false)
             .hoistCommonInsts(true)
-            // Causes an SRET assertion error in late-gc-lowering
-            // .sinkCommonInsts(true)
+            .sinkCommonInsts(true)
             ;
     }
 
@@ -332,7 +326,7 @@ namespace {
 
 static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationLevel O, const OptimizationOptions &options) JL_NOTSAFEPOINT {
     MPM.addPass(BeforeEarlySimplificationMarkerPass());
-#ifdef JL_DEBUG_BUILD
+#ifdef JL_VERIFY_PASSES
     addVerificationPasses(MPM, options.llvm_only);
 #endif
     if (options.enable_early_simplifications) {
@@ -340,6 +334,7 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
       MPM.addPass(ForceFunctionAttrsPass());
       invokePipelineStartCallbacks(MPM, PB, O);
       MPM.addPass(Annotation2MetadataPass());
+      MPM.addPass(InferFunctionAttrsPass());
       MPM.addPass(ConstantMergePass());
       {
           FunctionPassManager FPM;
@@ -353,14 +348,16 @@ static void buildEarlySimplificationPipeline(ModulePassManager &MPM, PassBuilder
           FPM.addPass(DCEPass());
           FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
           if (O.getSpeedupLevel() >= 1) {
-#if JL_LLVM_VERSION >= 160000
-              // TODO check the LLVM 15 default.
-              FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
-#else
-              FPM.addPass(SROAPass());
-#endif
+              FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
+              FPM.addPass(EarlyCSEPass());
           }
           MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+          if (O.getSpeedupLevel() >= 1) {
+            FunctionPassManager GlobalFPM;
+            MPM.addPass(GlobalOptPass());
+            GlobalFPM.addPass(PromotePass());
+            GlobalFPM.addPass(InstCombinePass());
+        }
       }
       invokeEarlySimplificationCallbacks(MPM, PB, O);
     }
@@ -395,26 +392,24 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
       if (O.getSpeedupLevel() >= 1) {
           FunctionPassManager FPM;
           if (O.getSpeedupLevel() >= 2) {
-#if JL_LLVM_VERSION >= 160000
-              // TODO check the LLVM 15 default.
-              FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
-#else
-              FPM.addPass(SROAPass());
-#endif
-              // SROA can duplicate PHI nodes which can block LowerSIMD
-              FPM.addPass(InstCombinePass());
-              FPM.addPass(JumpThreadingPass());
-              FPM.addPass(CorrelatedValuePropagationPass());
-              FPM.addPass(ReassociatePass());
-              FPM.addPass(EarlyCSEPass());
-              JULIA_PASS(FPM.addPass(AllocOptPass()));
-          } else { // if (O.getSpeedupLevel() >= 1) (exactly)
-              FPM.addPass(InstCombinePass());
-              FPM.addPass(EarlyCSEPass());
-          }
-          invokePeepholeEPCallbacks(FPM, PB, O);
-          MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+            FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
+            FPM.addPass(EarlyCSEPass(true));
+            FPM.addPass(InstCombinePass());
+            FPM.addPass(AggressiveInstCombinePass());
+            FPM.addPass(JumpThreadingPass());
+            FPM.addPass(CorrelatedValuePropagationPass());
+            FPM.addPass(LibCallsShrinkWrapPass());
+            FPM.addPass(ReassociatePass());
+            FPM.addPass(ConstraintEliminationPass());
+            JULIA_PASS(FPM.addPass(AllocOptPass()));
+        } else { // if (O.getSpeedupLevel() >= 1) (exactly)
+            FPM.addPass(EarlyCSEPass());
+            FPM.addPass(InstCombinePass());
+        }
+        invokePeepholeEPCallbacks(FPM, PB, O);
+        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM), /*UseMemorySSA = */true));
       }
+      MPM.addPass(GlobalOptPass());
       MPM.addPass(GlobalDCEPass());
     }
     MPM.addPass(AfterEarlyOptimizationMarkerPass());
@@ -427,34 +422,32 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
             LoopPassManager LPM;
             LPM.addPass(LowerSIMDLoopPass());
             if (O.getSpeedupLevel() >= 2) {
-                LPM.addPass(LoopRotatePass());
+                LPM.addPass(LoopInstSimplifyPass());
+                LPM.addPass(LoopSimplifyCFGPass());
+                LPM.addPass(BeforeLICMMarkerPass());
+                auto opts = LICMOptions();
+                opts.AllowSpeculation = false;
+                LPM.addPass(LICMPass(opts));
+                LPM.addPass(JuliaLICMPass());
+                LPM.addPass(LoopRotatePass(true, false));
+                LPM.addPass(LICMPass(LICMOptions()));
+                LPM.addPass(JuliaLICMPass());
+                LPM.addPass(AfterLICMMarkerPass());
+                LPM.addPass(SimpleLoopUnswitchPass(/*NonTrivial*/true, true));
             }
             invokeLateLoopOptimizationCallbacks(LPM, PB, O);
             //We don't know if the loop callbacks support MSSA
-            FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */false));
-        }
-        if (O.getSpeedupLevel() >= 2) {
-            LoopPassManager LPM;
-            LPM.addPass(BeforeLICMMarkerPass());
-            LPM.addPass(LICMPass(LICMOptions()));
-            LPM.addPass(JuliaLICMPass());
-            LPM.addPass(SimpleLoopUnswitchPass(/*NonTrivial*/true, true));
-            LPM.addPass(LICMPass(LICMOptions()));
-            LPM.addPass(JuliaLICMPass());
-            LPM.addPass(AfterLICMMarkerPass());
-            //LICM needs MemorySSA now, so we must use it
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */true));
         }
-        if (O.getSpeedupLevel() >= 2) {
+        if (O.getSpeedupLevel() >= 2)
             FPM.addPass(IRCEPass());
-        }
         {
             LoopPassManager LPM;
             LPM.addPass(BeforeLoopSimplificationMarkerPass());
             if (O.getSpeedupLevel() >= 2) {
-                LPM.addPass(LoopInstSimplifyPass());
                 LPM.addPass(LoopIdiomRecognizePass());
                 LPM.addPass(IndVarSimplifyPass());
+                LPM.addPass(SimpleLoopUnswitchPass(/*NonTrivial*/true, true));
                 LPM.addPass(LoopDeletionPass());
                 // This unroll will only unroll loops when the trip count is known and small,
                 // so that no loop remains
@@ -462,6 +455,8 @@ static void buildLoopOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *PB
             }
             invokeLoopOptimizerEndCallbacks(LPM, PB, O);
             LPM.addPass(AfterLoopSimplificationMarkerPass());
+            FPM.addPass(SimplifyCFGPass(basicSimplifyCFGOptions()));
+            FPM.addPass(InstCombinePass());
             //We don't know if the loop end callbacks support MSSA
             FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */false));
         }
@@ -474,21 +469,28 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
     if (options.enable_scalar_optimizations) {
         if (O.getSpeedupLevel() >= 2) {
             JULIA_PASS(FPM.addPass(AllocOptPass()));
-    #if JL_LLVM_VERSION >= 160000
-            // TODO check the LLVM 15 default.
-            FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
-    #else
-            FPM.addPass(SROAPass());
-    #endif
-            FPM.addPass(InstSimplifyPass());
+            FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
+            FPM.addPass(VectorCombinePass(/*TryEarlyFoldsOnly=*/true));
+            FPM.addPass(MergedLoadStoreMotionPass());
             FPM.addPass(GVNPass());
+            FPM.addPass(SCCPPass());
+            FPM.addPass(BDCEPass());
+            FPM.addPass(InstCombinePass());
+            FPM.addPass(CorrelatedValuePropagationPass());
+            FPM.addPass(ADCEPass());
+            FPM.addPass(MemCpyOptPass());
+            FPM.addPass(DSEPass());
+            FPM.addPass(IRCEPass());
+            FPM.addPass(JumpThreadingPass());
+            FPM.addPass(ConstraintEliminationPass());
+        } else if (O.getSpeedupLevel() >= 1) {
+            JULIA_PASS(FPM.addPass(AllocOptPass()));
+            FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
             FPM.addPass(MemCpyOptPass());
             FPM.addPass(SCCPPass());
-            FPM.addPass(CorrelatedValuePropagationPass());
-            FPM.addPass(DCEPass());
-            FPM.addPass(IRCEPass());
+            FPM.addPass(BDCEPass());
             FPM.addPass(InstCombinePass());
-            FPM.addPass(JumpThreadingPass());
+            FPM.addPass(ADCEPass());
         }
         if (O.getSpeedupLevel() >= 3) {
             FPM.addPass(GVNPass());
@@ -500,12 +502,15 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
             JULIA_PASS(FPM.addPass(AllocOptPass()));
             {
                 LoopPassManager LPM;
-                LPM.addPass(LoopDeletionPass());
-                LPM.addPass(LoopInstSimplifyPass());
-                FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM)));
+                LPM.addPass(LICMPass(LICMOptions()));
+                LPM.addPass(JuliaLICMPass());
+                FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA = */true));
             }
-            FPM.addPass(LoopDistributePass());
-        }
+            FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
+            FPM.addPass(InstCombinePass());
+        } else if (O.getSpeedupLevel() >= 1)
+            FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
+
         invokeScalarOptimizerCallbacks(FPM, PB, O);
     }
     FPM.addPass(AfterScalarOptimizationMarkerPass());
@@ -515,19 +520,27 @@ static void buildVectorPipeline(FunctionPassManager &FPM, PassBuilder *PB, Optim
     FPM.addPass(BeforeVectorizationMarkerPass());
     if (options.enable_vector_pipeline) {
         //TODO look into loop vectorize options
+        // Rerotate loops that might have been unrotated in the simplification
+        LoopPassManager LPM;
+        LPM.addPass(LoopRotatePass());
+        LPM.addPass(LoopDeletionPass());
+        FPM.addPass(createFunctionToLoopPassAdaptor(std::move(LPM), /*UseMemorySSA=*/false, /*UseBlockFrequencyInfo=*/false));
+        FPM.addPass(LoopDistributePass());
         FPM.addPass(InjectTLIMappings());
         FPM.addPass(LoopVectorizePass());
         FPM.addPass(LoopLoadEliminationPass());
-        FPM.addPass(InstCombinePass());
         FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
+        FPM.addPass(createFunctionToLoopPassAdaptor(LICMPass(LICMOptions()), /*UseMemorySSA=*/true, /*UseBlockFrequencyInfo=*/false));
+        FPM.addPass(EarlyCSEPass());
+        FPM.addPass(CorrelatedValuePropagationPass());
+        FPM.addPass(InstCombinePass());
         FPM.addPass(SLPVectorizerPass());
-        invokeVectorizerCallbacks(FPM, PB, O);
         FPM.addPass(VectorCombinePass());
-        FPM.addPass(ADCEPass());
-        //TODO add BDCEPass here?
-        // This unroll will unroll vectorized loops
-        // as well as loops that we tried but failed to vectorize
+        invokeVectorizerCallbacks(FPM, PB, O);
         FPM.addPass(LoopUnrollPass(LoopUnrollOptions(O.getSpeedupLevel(), /*OnlyWhenForced = */ false, /*ForgetSCEV = */false)));
+        FPM.addPass(SROAPass(SROAOptions::PreserveCFG));
+        FPM.addPass(InstSimplifyPass());
+        FPM.addPass(AfterVectorizationMarkerPass());
     }
     FPM.addPass(AfterVectorizationMarkerPass());
 }
@@ -538,7 +551,6 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
         //TODO barrier pass?
         {
             FunctionPassManager FPM;
-            JULIA_PASS(FPM.addPass(LowerExcHandlersPass()));
             JULIA_PASS(FPM.addPass(GCInvariantVerifierPass(false)));
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
@@ -550,17 +562,18 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             FunctionPassManager FPM;
             JULIA_PASS(FPM.addPass(LateLowerGCPass()));
             JULIA_PASS(FPM.addPass(FinalLowerGCPass()));
-            if (O.getSpeedupLevel() >= 2) {
-                FPM.addPass(GVNPass());
-                FPM.addPass(SCCPPass());
-                FPM.addPass(DCEPass());
-            }
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
         JULIA_PASS(MPM.addPass(LowerPTLSPass(options.dump_native)));
         MPM.addPass(RemoveJuliaAddrspacesPass()); //TODO: Make this conditional on arches (GlobalISel doesn't like our addrsspaces)
         if (O.getSpeedupLevel() >= 1) {
             FunctionPassManager FPM;
+            if (O.getSpeedupLevel() >= 2) {
+                FPM.addPass(DSEPass());
+                FPM.addPass(GVNPass());
+                FPM.addPass(SCCPPass());
+                FPM.addPass(DCEPass());
+            }
             FPM.addPass(InstCombinePass());
             FPM.addPass(SimplifyCFGPass(aggressiveSimplifyCFGOptions()));
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
@@ -576,7 +589,6 @@ static void buildCleanupPipeline(ModulePassManager &MPM, PassBuilder *PB, Optimi
     if (options.cleanup) {
         if (O.getSpeedupLevel() >= 2) {
             FunctionPassManager FPM;
-            JULIA_PASS(FPM.addPass(CombineMulAddPass()));
             FPM.addPass(DivRemPairsPass());
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
@@ -608,7 +620,8 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
         if (O.getSpeedupLevel() >= 2) {
             buildVectorPipeline(FPM, PB, O, options);
         }
-        FPM.addPass(WarnMissedTransformationsPass());
+        if (options.warn_missed_transformations)
+            FPM.addPass(WarnMissedTransformationsPass());
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
     }
     buildIntrinsicLoweringPipeline(MPM, PB, O, options);
@@ -616,63 +629,6 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
     MPM.addPass(AfterOptimizationMarkerPass());
 }
 
-struct PipelineConfig {
-    int Speedup;
-    int Size;
-    int lower_intrinsics;
-    int dump_native;
-    int external_use;
-    int llvm_only;
-    int always_inline;
-    int enable_early_simplifications;
-    int enable_early_optimizations;
-    int enable_scalar_optimizations;
-    int enable_loop_optimizations;
-    int enable_vector_pipeline;
-    int remove_ni;
-    int cleanup;
-};
-
-extern "C" JL_DLLEXPORT_CODEGEN void jl_build_newpm_pipeline_impl(void *MPM, void *PB, PipelineConfig* config) JL_NOTSAFEPOINT
-{
-    OptimizationLevel O;
-    switch (config->Size) {
-        case 1:
-            O = OptimizationLevel::Os;
-            break;
-        default:
-            O = OptimizationLevel::Oz;
-            break;
-        case 0:
-            switch (config->Speedup) {
-                case 0:
-                    O = OptimizationLevel::O0;
-                    break;
-                case 1:
-                    O = OptimizationLevel::O1;
-                    break;
-                case 2:
-                    O = OptimizationLevel::O2;
-                    break;
-                default:
-                    O = OptimizationLevel::O3;
-                    break;
-            }
-    }
-    buildPipeline(*reinterpret_cast<ModulePassManager*>(MPM), reinterpret_cast<PassBuilder*>(PB), O,
-                    OptimizationOptions{!!config->lower_intrinsics,
-                                        !!config->dump_native,
-                                        !!config->external_use,
-                                        !!config->llvm_only,
-                                        !!config->always_inline,
-                                        !!config->enable_early_simplifications,
-                                        !!config->enable_early_optimizations,
-                                        !!config->enable_scalar_optimizations,
-                                        !!config->enable_loop_optimizations,
-                                        !!config->enable_vector_pipeline,
-                                        !!config->remove_ni,
-                                        !!config->cleanup});
-}
 
 #undef JULIA_PASS
 
@@ -680,29 +636,29 @@ namespace {
 
     void adjustPIC(PassInstrumentationCallbacks &PIC) JL_NOTSAFEPOINT {
 //Borrowed from LLVM PassBuilder.cpp:386
-#define MODULE_PASS(NAME, CLASS, CREATE_PASS)                                         \
+#define MODULE_PASS(NAME, CREATE_PASS)                                         \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define MODULE_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)      \
+#define MODULE_PASS_WITH_PARAMS(NAME, CREATE_PASS, PARSER, PARAMS)      \
 PIC.addClassToPassName(CLASS, NAME);
 #define MODULE_ANALYSIS(NAME, CREATE_PASS)                                     \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS)                                       \
+#define FUNCTION_PASS(NAME, CREATE_PASS)                                       \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define FUNCTION_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)    \
+#define FUNCTION_PASS_WITH_PARAMS(NAME, CREATE_PASS, PARSER, PARAMS)    \
 PIC.addClassToPassName(CLASS, NAME);
 #define FUNCTION_ANALYSIS(NAME, CREATE_PASS)                                   \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
 #define LOOPNEST_PASS(NAME, CREATE_PASS)                                       \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define LOOP_PASS(NAME, CLASS, CREATE_PASS)                                           \
+#define LOOP_PASS(NAME, CREATE_PASS)                                           \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define LOOP_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)        \
+#define LOOP_PASS_WITH_PARAMS(NAME, CREATE_PASS, PARSER, PARAMS)        \
 PIC.addClassToPassName(CLASS, NAME);
 #define LOOP_ANALYSIS(NAME, CREATE_PASS)                                       \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define CGSCC_PASS(NAME, CLASS, CREATE_PASS)                                          \
+#define CGSCC_PASS(NAME, CREATE_PASS)                                          \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
-#define CGSCC_PASS_WITH_PARAMS(NAME, CLASS, CREATE_PASS, PARSER, PARAMS)       \
+#define CGSCC_PASS_WITH_PARAMS(NAME, CREATE_PASS, PARSER, PARAMS)       \
 PIC.addClassToPassName(CLASS, NAME);
 #define CGSCC_ANALYSIS(NAME, CREATE_PASS)                                      \
 PIC.addClassToPassName(decltype(CREATE_PASS)::name(), NAME);
@@ -800,20 +756,16 @@ void NewPM::run(Module &M) {
     //We must recreate the analysis managers every time
     //so that analyses from previous runs of the pass manager
     //do not hang around for the next run
-#if JL_LLVM_VERSION >= 160000
     StandardInstrumentations SI(M.getContext(),false);
-#else
-    StandardInstrumentations SI(false);
-#endif
-    FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
     PassInstrumentationCallbacks PIC;
     adjustPIC(PIC);
     TimePasses.registerCallbacks(PIC);
-    SI.registerCallbacks(PIC, &FAM);
-    SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
+    FunctionAnalysisManager FAM(createFAM(O, *TM.get()));
     LoopAnalysisManager LAM;
     CGSCCAnalysisManager CGAM;
     ModuleAnalysisManager MAM;
+    SI.registerCallbacks(PIC, &MAM);
+    SI.getTimePasses().setOutStream(nulls()); //TODO: figure out a better way of doing this
     PassBuilder PB(TM.get(), PipelineTuningOptions(), None, &PIC);
     PB.registerLoopAnalyses(LAM);
     PB.registerFunctionAnalyses(FAM);
@@ -845,7 +797,7 @@ OptimizationLevel getOptLevel(int optlevel) {
 }
 
 //This part is also basically stolen from LLVM's PassBuilder.cpp file
-static Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJuliaPipelineOptions(StringRef name) {
+static std::optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJuliaPipelineOptions(StringRef name) {
     if (name.consume_front("julia")) {
         auto O = OptimizationLevel::O2;
         auto options = OptimizationOptions::defaults();
@@ -857,7 +809,16 @@ static Optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJuliaPip
             OPTION(lower_intrinsics),
             OPTION(dump_native),
             OPTION(external_use),
-            OPTION(llvm_only)
+            OPTION(llvm_only),
+            OPTION(always_inline),
+            OPTION(enable_early_simplifications),
+            OPTION(enable_early_optimizations),
+            OPTION(enable_scalar_optimizations),
+            OPTION(enable_loop_optimizations),
+            OPTION(enable_vector_pipeline),
+            OPTION(remove_ni),
+            OPTION(cleanup),
+            OPTION(warn_missed_transformations)
 #undef OPTION
         };
         while (!name.empty()) {
@@ -941,7 +902,7 @@ static void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, FunctionPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define FUNCTION_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef FUNCTION_PASS
             if (Name.consume_front("GCInvariantVerifier")) {
@@ -963,7 +924,7 @@ static void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, ModulePassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define MODULE_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define MODULE_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef MODULE_PASS
             if (Name.consume_front("LowerPTLSPass")) {
@@ -1006,7 +967,7 @@ static void registerCallbacks(PassBuilder &PB) JL_NOTSAFEPOINT {
     PB.registerPipelineParsingCallback(
         [](StringRef Name, LoopPassManager &PM,
            ArrayRef<PassBuilder::PipelineElement> InnerPipeline) {
-#define LOOP_PASS(NAME, CLASS, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
+#define LOOP_PASS(NAME, CREATE_PASS) if (Name == NAME) { PM.addPass(CREATE_PASS); return true; }
 #include "llvm-julia-passes.inc"
 #undef LOOP_PASS
             return false;
@@ -1021,4 +982,10 @@ void jl_register_passbuilder_callbacks_impl(void *PB) JL_NOTSAFEPOINT {
 extern "C" JL_DLLEXPORT_CODEGEN
 ::llvm::PassPluginLibraryInfo llvmGetPassPluginInfo() JL_NOTSAFEPOINT {
       return {LLVM_PLUGIN_API_VERSION, "Julia", "1", registerCallbacks};
+}
+
+void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis)
+{
+    PM->add(new TargetLibraryInfoWrapperPass(triple));
+    PM->add(createTargetTransformInfoWrapperPass(std::move(analysis)));
 }

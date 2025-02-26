@@ -42,7 +42,7 @@ it is the minimum of `maxintfloat(T)` and [`typemax(S)`](@ref).
 maxintfloat(::Type{S}, ::Type{T}) where {S<:AbstractFloat, T<:Integer} = min(maxintfloat(S), S(typemax(T)))
 maxintfloat() = maxintfloat(Float64)
 
-isinteger(x::AbstractFloat) = (x - trunc(x) == 0)
+isinteger(x::AbstractFloat) = iszero(x - trunc(x)) # note: x == trunc(x) would be incorrect for x=Inf
 
 # See rounding.jl for docstring.
 
@@ -232,7 +232,9 @@ function isapprox(x::Integer, y::Integer;
     if norm === abs && atol < 1 && rtol == 0
         return x == y
     else
-        return norm(x - y) <= max(atol, rtol*max(norm(x), norm(y)))
+        # We need to take the difference `max` - `min` when comparing unsigned integers.
+        _x, _y = x < y ? (x, y) : (y, x)
+        return norm(_y - _x) <= max(atol, rtol*max(norm(_x), norm(_y)))
     end
 end
 
@@ -274,6 +276,9 @@ significantly more expensive than `x*y+z`. `fma` is used to improve accuracy in 
 algorithms. See [`muladd`](@ref).
 """
 function fma end
+function fma_emulated(a::Float16, b::Float16, c::Float16)
+    Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.
+end
 function fma_emulated(a::Float32, b::Float32, c::Float32)::Float32
     ab = Float64(a) * b
     res = ab+c
@@ -346,19 +351,14 @@ function fma_emulated(a::Float64, b::Float64,c::Float64)
     s = (abs(abhi) > abs(c)) ? (abhi-r+c+ablo) : (c-r+abhi+ablo)
     return r+s
 end
-fma_llvm(x::Float32, y::Float32, z::Float32) = fma_float(x, y, z)
-fma_llvm(x::Float64, y::Float64, z::Float64) = fma_float(x, y, z)
 
 # Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
 # onto a broken system libm; if so, use a software emulated fma
-@assume_effects :consistent fma(x::Float32, y::Float32, z::Float32) = Core.Intrinsics.have_fma(Float32) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
-@assume_effects :consistent fma(x::Float64, y::Float64, z::Float64) = Core.Intrinsics.have_fma(Float64) ? fma_llvm(x,y,z) : fma_emulated(x,y,z)
-
-function fma(a::Float16, b::Float16, c::Float16)
-    Float16(muladd(Float32(a), Float32(b), Float32(c))) #don't use fma if the hardware doesn't have it.
+@assume_effects :consistent function fma(x::T, y::T, z::T) where {T<:IEEEFloat}
+    Core.Intrinsics.have_fma(T) ? fma_float(x,y,z) : fma_emulated(x,y,z)
 end
 
-# This is necessary at least on 32-bit Intel Linux, since fma_llvm may
+# This is necessary at least on 32-bit Intel Linux, since fma_float may
 # have called glibc, and some broken glibc fma implementations don't
 # properly restore the rounding mode
 Rounding.setrounding_raw(Float32, Rounding.JL_FE_TONEAREST)

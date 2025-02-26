@@ -9,8 +9,8 @@ module TOML
 
 using Base: IdSet
 
-# In case we do not have the Dates stdlib available
 # we parse DateTime into these internal structs,
+# unless a different DateTime library is passed to the Parser constructor
 # note that these do not do any argument checking
 struct Date
     year::Int
@@ -38,7 +38,7 @@ const TOMLDict  = Dict{String, Any}
 # Parser #
 ##########
 
-mutable struct Parser
+mutable struct Parser{Dates}
     str::String
     # 1 character look ahead
     current_char::Char
@@ -84,16 +84,11 @@ mutable struct Parser
 
     # Filled in in case we are parsing a file to improve error messages
     filepath::Union{String, Nothing}
-
-    # Gets populated with the Dates stdlib if it exists
-    Dates::Union{Module, Nothing}
 end
 
-const DATES_PKGID = Base.PkgId(Base.UUID("ade2ca70-3891-5945-98fb-dc099432e06a"), "Dates")
-
-function Parser(str::String; filepath=nothing)
+function Parser{Dates}(str::String; filepath=nothing) where {Dates}
     root = TOMLDict()
-    l = Parser(
+    l = Parser{Dates}(
             str,                  # str
             EOF_CHAR,             # current_char
             firstindex(str),      # pos
@@ -108,12 +103,12 @@ function Parser(str::String; filepath=nothing)
             IdSet{Any}(),         # static_arrays
             IdSet{TOMLDict}(),    # defined_tables
             root,
-            filepath,
-            isdefined(Base, :maybe_root_module) ? Base.maybe_root_module(DATES_PKGID) : nothing,
+            filepath
         )
     startup(l)
     return l
 end
+
 function startup(l::Parser)
     # Populate our one character look-ahead
     c = eat_char(l)
@@ -124,8 +119,10 @@ function startup(l::Parser)
     end
 end
 
-Parser() = Parser("")
-Parser(io::IO) = Parser(read(io, String))
+Parser{Dates}() where {Dates} = Parser{Dates}("")
+Parser{Dates}(io::IO) where {Dates} = Parser{Dates}(read(io, String))
+
+# Parser(...) will be defined by TOML stdlib
 
 function reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothing)
     p.str = str
@@ -150,8 +147,6 @@ end
 ##########
 # Errors #
 ##########
-
-throw_internal_error(msg) = error("internal TOML parser error: $msg")
 
 # Many functions return a ParserError. We want this to bubble up
 # all the way and have this error be returned to the user
@@ -496,8 +491,10 @@ function recurse_dict!(l::Parser, d::Dict, dotted_keys::AbstractVector{String}, 
         d = d::TOMLDict
         key = dotted_keys[i]
         d = get!(TOMLDict, d, key)
-        if d isa Vector
+        if d isa Vector{Any}
             d = d[end]
+        elseif d isa Vector
+            return ParserError(ErrKeyAlreadyHasValue)
         end
         check && @try check_allowed_add_key(l, d, i == length(dotted_keys))
     end
@@ -538,7 +535,7 @@ function parse_array_table(l)::Union{Nothing, ParserError}
     end
     d = @try recurse_dict!(l, l.root, @view(table_key[1:end-1]), false)
     k = table_key[end]
-    old = get!(() -> [], d, k)
+    old = get!(() -> Any[], d, k)
     if old isa Vector
         if old in l.static_arrays
             return ParserError(ErrAddArrayToStaticArray)
@@ -547,7 +544,7 @@ function parse_array_table(l)::Union{Nothing, ParserError}
         return ParserError(ErrArrayTreatedAsDictionary)
     end
     d_new = TOMLDict()
-    push!(old, d_new)
+    push!(old::Vector{Any}, d_new)
     push!(l.defined_tables, d_new)
     l.active_table = d_new
 
@@ -669,41 +666,20 @@ end
 # Array #
 #########
 
-function push!!(v::Vector, el)
-    # Since these types are typically non-inferable, they are a big invalidation risk,
-    # and since it's used by the package-loading infrastructure the cost of invalidation
-    # is high. Therefore, this is written to reduce the "exposed surface area": e.g., rather
-    # than writing `T[el]` we write it as `push!(Vector{T}(undef, 1), el)` so that there
-    # is no ambiguity about what types of objects will be created.
-    T = eltype(v)
-    t = typeof(el)
-    if el isa T || t === T
-        push!(v, el::T)
-        return v
-    elseif T === Union{}
-        out = Vector{t}(undef, 1)
-        out[1] = el
-        return out
-    else
-        if T isa Union
-            newT = Any
-        else
-            newT = Union{T, typeof(el)}
-        end
-        new = Array{newT}(undef, length(v))
-        copy!(new, v)
-        return push!(new, el)
+function copyto_typed!(a::Vector{T}, b::Vector) where T
+    for i in 1:length(b)
+        a[i] = b[i]::T
     end
+    return nothing
 end
 
-function parse_array(l::Parser)::Err{Vector}
+function parse_array(l::Parser{Dates})::Err{Vector} where Dates
     skip_ws_nl(l)
-    array = Vector{Union{}}()
+    array = Vector{Any}()
     empty_array = accept(l, ']')
     while !empty_array
         v = @try parse_value(l)
-        # TODO: Worth to function barrier this?
-        array = push!!(array, v)
+        array = push!(array, v)
         # There can be an arbitrary number of newlines and comments before a value and before the closing bracket.
         skip_ws_nl(l)
         comma = accept(l, ',')
@@ -713,8 +689,40 @@ function parse_array(l::Parser)::Err{Vector}
             return ParserError(ErrExpectedCommaBetweenItemsArray)
         end
     end
-    push!(l.static_arrays, array)
-    return array
+    # check for static type throughout array
+    T = !isempty(array) ? typeof(array[1]) : Union{}
+    for el in array
+        if typeof(el) != T
+            T = Any
+            break
+        end
+    end
+    if T === Any
+        new = array
+    elseif T === String
+        new = Array{T}(undef, length(array))
+        copyto_typed!(new, array)
+    elseif T === Bool
+        new = Array{T}(undef, length(array))
+        copyto_typed!(new, array)
+    elseif T === Int64
+        new = Array{T}(undef, length(array))
+        copyto_typed!(new, array)
+    elseif T === UInt64
+        new = Array{T}(undef, length(array))
+        copyto_typed!(new, array)
+    elseif T === Float64
+        new = Array{T}(undef, length(array))
+        copyto_typed!(new, array)
+    elseif T === Union{}
+        new = Any[]
+    elseif (T === TOMLDict) || (T == BigInt) || (T === UInt128) || (T === Int128) || (T <: Vector) ||
+        (T === Dates.Date) || (T === Dates.Time) || (T === Dates.DateTime)
+        # do nothing, leave as Vector{Any}
+        new = array
+    else @assert false end
+    push!(l.static_arrays, new)
+    return new
 end
 
 
@@ -854,7 +862,7 @@ function parse_number_or_date_start(l::Parser)
     ate, contains_underscore = @try accept_batch_underscore(l, isdigit, readed_zero)
     read_underscore |= contains_underscore
     if (read_digit || ate) && ok_end_value(peek(l))
-        return parse_int(l, contains_underscore)
+        return parse_integer(l, contains_underscore)
     end
     # Done with integers here
 
@@ -900,11 +908,22 @@ end
 function parse_float(l::Parser, contains_underscore)::Err{Float64}
     s = take_string_or_substring(l, contains_underscore)
     v = Base.tryparse(Float64, s)
-    v === nothing && return(ParserError(ErrGenericValueError))
+    v === nothing && return ParserError(ErrGenericValueError)
     return v
 end
 
-for (name, T1, T2, n1, n2) in (("int", Int64,  Int128,  17,  33),
+function parse_int(l::Parser, contains_underscore, base=nothing)::Err{Int64}
+    s = take_string_or_substring(l, contains_underscore)
+    v = try
+        Base.parse(Int64, s; base=base)
+    catch e
+        e isa Base.OverflowError && return ParserError(ErrOverflowError)
+        rethrow()
+    end
+    return v
+end
+
+for (name, T1, T2, n1, n2) in (("integer", Int64,  Int128,  17,  33),
                                ("hex", UInt64, UInt128, 18,  34),
                                ("oct", UInt64, UInt128, 24,  45),
                                ("bin", UInt64, UInt128, 66, 130),
@@ -921,8 +940,8 @@ for (name, T1, T2, n1, n2) in (("int", Int64,  Int128,  17,  33),
                 Base.parse(BigInt, s; base)
             end
         catch e
-            e isa Base.OverflowError && return(ParserError(ErrOverflowError))
-            error("internal parser error: did not correctly discredit $(repr(s)) as an int")
+            e isa Base.OverflowError && return ParserError(ErrOverflowError)
+            rethrow()
         end
         return v
     end
@@ -1014,26 +1033,26 @@ function parse_datetime(l)
     return try_return_datetime(l, year, month, day, h, m, s, ms)
 end
 
-function try_return_datetime(p, year, month, day, h, m, s, ms)
-    Dates = p.Dates
+function try_return_datetime(p::Parser{Dates}, year, month, day, h, m, s, ms) where Dates
     if Dates !== nothing
         try
             return Dates.DateTime(year, month, day, h, m, s, ms)
-        catch
-            return ParserError(ErrParsingDateTime)
+        catch ex
+            ex isa ArgumentError && return ParserError(ErrParsingDateTime)
+            rethrow()
         end
     else
         return DateTime(year, month, day, h, m, s, ms)
     end
 end
 
-function try_return_date(p, year, month, day)
-    Dates = p.Dates
+function try_return_date(p::Parser{Dates}, year, month, day) where Dates
     if Dates !== nothing
         try
             return Dates.Date(year, month, day)
-        catch
-            return ParserError(ErrParsingDateTime)
+        catch ex
+            ex isa ArgumentError && return ParserError(ErrParsingDateTime)
+            rethrow()
         end
     else
         return Date(year, month, day)
@@ -1049,13 +1068,13 @@ function parse_local_time(l::Parser)
     return try_return_time(l, h, m, s, ms)
 end
 
-function try_return_time(p, h, m, s, ms)
-    Dates = p.Dates
+function try_return_time(p::Parser{Dates}, h, m, s, ms) where Dates
     if Dates !== nothing
         try
             return Dates.Time(h, m, s, ms)
-        catch
-            return ParserError(ErrParsingDateTime)
+        catch ex
+            ex isa ArgumentError && return ParserError(ErrParsingDateTime)
+            rethrow()
         end
     else
         return Time(h, m, s, ms)
@@ -1103,7 +1122,7 @@ function _parse_local_time(l::Parser, skip_hour=false)::Err{NTuple{4, Int64}}
         end
         # DateTime in base only manages 3 significant digits in fractional
         # second
-        fractional_second = parse_int(l, false)
+        fractional_second = parse_int(l, false)::Int64
         # Truncate off the rest eventual digits
         accept_batch(l, isdigit)
     end

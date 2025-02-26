@@ -868,34 +868,25 @@ struct PersistentDict{K,V} <: AbstractDict{K,V}
     @noinline function KeyValue.set(::Type{PersistentDict{K, V}}, ::Nothing, key, val) where {K, V}
         new{K, V}(HAMT.HAMT{K, V}(key => val))
     end
-    @noinline @Base.assume_effects :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key, val) where {K, V}
+    @noinline Base.@assume_effects :effect_free :terminates_globally KeyValue.set(
+        dict::PersistentDict{K, V}, key, val) where {K, V} = @inline _keyvalueset(dict, key, val)
+    @noinline Base.@assume_effects :nothrow :effect_free :terminates_globally KeyValue.set(
+        dict::PersistentDict{K, V}, key::K, val::V) where {K, V} = @inline _keyvalueset(dict, key, val)
+    global function _keyvalueset(dict::PersistentDict{K, V}, key, val) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
+        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=#true)
         HAMT.insert!(found, present, trie, i, bi, hs, val)
         return new{K, V}(top)
     end
-    @noinline @Base.assume_effects :nothrow :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key::K, val::V) where {K, V}
+    @noinline Base.@assume_effects :effect_free :terminates_globally KeyValue.set(
+        dict::PersistentDict{K, V}, key) where {K, V} = @inline _keyvalueset(dict, key)
+    @noinline Base.@assume_effects :nothrow :effect_free :terminates_globally KeyValue.set(
+        dict::PersistentDict{K, V}, key::K) where {K, V} = @inline _keyvalueset(dict, key)
+    global function _keyvalueset(dict::PersistentDict{K, V}, key) where {K, V}
         trie = dict.trie
         h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, hs = HAMT.path(trie, key, h, #=persistent=# true)
-        HAMT.insert!(found, present, trie, i, bi, hs, val)
-        return new{K, V}(top)
-    end
-    @noinline @Base.assume_effects :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key) where {K, V}
-        trie = dict.trie
-        h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
-        if found && present
-            deleteat!(trie.data, i)
-            HAMT.unset!(trie, bi)
-        end
-        return new{K, V}(top)
-    end
-    @noinline @Base.assume_effects :nothrow :effect_free function KeyValue.set(dict::PersistentDict{K, V}, key::K) where {K, V}
-        trie = dict.trie
-        h = HAMT.HashState(key)
-        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=# true)
+        found, present, trie, i, bi, top, _ = HAMT.path(trie, key, h, #=persistent=#true)
         if found && present
             deleteat!(trie.data, i)
             HAMT.unset!(trie, bi)

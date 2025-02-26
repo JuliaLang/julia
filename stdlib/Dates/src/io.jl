@@ -111,7 +111,25 @@ end
 
 ### Parse tokens
 
-for c in "yYmdHIMS"
+for c in "yY"
+    @eval begin
+        @inline function tryparsenext(d::DatePart{$c}, str, i, len)
+            val = tryparsenext_sign(str, i, len)
+            if val !== nothing
+                coefficient, i = val
+            else
+                coefficient = 1
+            end
+            # The sign character does not affect fixed length `DatePart`s
+            val = tryparsenext_base10(str, i, len, min_width(d), max_width(d))
+            val === nothing && return nothing
+            y, ii = val
+            return y * coefficient, ii
+        end
+    end
+end
+
+for c in "mdHIMS"
     @eval begin
         @inline function tryparsenext(d::DatePart{$c}, str, i, len)
             return tryparsenext_base10(str, i, len, min_width(d), max_width(d))
@@ -695,7 +713,7 @@ except that it does not truncate values longer than the width.
 When creating a `format` you can use any non-code characters as a separator. For example to
 generate the string "1996-01-15T00:00:00" you could use `format`: "yyyy-mm-ddTHH:MM:SS".
 Note that if you need to use a code character as a literal you can use the escape character
-backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
+backslash. The string "1996y01m" can be produced with the format raw"yyyy\\ymm\\m".
 """
 function format(dt::TimeType, f::AbstractString; locale::Locale=ENGLISH)
     format(dt, DateFormat(f, locale))

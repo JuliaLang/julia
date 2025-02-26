@@ -2,6 +2,10 @@
 
 import Base.Docs: meta, @var, DocStr, parsedoc
 
+# check that @doc can work before REPL is loaded
+@test !startswith(read(`$(Base.julia_cmd()) -E '@doc sin'`, String), "nothing")
+@test !startswith(read(`$(Base.julia_cmd()) -E '@doc @time'`, String), "nothing")
+
 using Markdown
 using REPL
 
@@ -97,7 +101,7 @@ end
 
 @test Docs.undocumented_names(_ModuleWithUndocumentedNames) == [Symbol("@foo"), :f, :⨳]
 @test isempty(Docs.undocumented_names(_ModuleWithSomeDocumentedNames))
-@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:eval, :g, :include]
+@test Docs.undocumented_names(_ModuleWithSomeDocumentedNames; private=true) == [:g]
 
 
 # issue #11548
@@ -115,12 +119,12 @@ end
 # issue #38819
 
 module NoDocStrings end
-@test meta(NoDocStrings) === getfield(NoDocStrings, Base.Docs.META)
+@test meta(NoDocStrings) === invokelatest(getfield, NoDocStrings, Base.Docs.META)
 
 # General tests for docstrings.
 
 const LINE_NUMBER = @__LINE__() + 1
-"DocsTest"
+"DocsTest, evaluating $(K)"     # test that module docstring is evaluated within module
 module DocsTest
 
 using Markdown
@@ -265,7 +269,7 @@ fnospecialize(@nospecialize(x::AbstractArray)) = 2
 end
 
 let md = meta(DocsTest)[@var(DocsTest)]
-    @test docstrings_equal(md.docs[Union{}], doc"DocsTest")
+    @test docstrings_equal(md.docs[Union{}], doc"DocsTest, evaluating K")
     # Check that plain docstrings store a module reference.
     # https://github.com/JuliaLang/julia/pull/13017#issuecomment-138618663
     @test md.docs[Union{}].data[:module] == DocsTest
@@ -571,8 +575,8 @@ end
 
 let T = meta(DocVars)[@var(DocVars.T)],
     S = meta(DocVars)[@var(DocVars.S)],
-    Tname = Markdown.parse("```\n$(curmod_prefix)DocVars.T\n```"),
-    Sname = Markdown.parse("```\n$(curmod_prefix)DocVars.S\n```")
+    Tname = Markdown.parse("```julia\n$(curmod_prefix)DocVars.T\n```"),
+    Sname = Markdown.parse("```julia\n$(curmod_prefix)DocVars.S\n```")
     # Splicing the expression directly doesn't work
     @test docstrings_equal(T.docs[Union{}],
         doc"""
@@ -680,9 +684,11 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc :@m2_11993),
-    macro_doc = Markdown.parse("`$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993` is a macro.")
+    varstr = "$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993"
+    docstr = Markdown.Code("", "$curmod_prefix@m2_11993")
+    macro_doc = Markdown.parse("`$varstr` is a macro.")
     @test docstring_startswith(d, doc"""
-    No documentation found for private symbol.
+    No documentation found for private binding $docstr.
 
     $macro_doc""")
 end
@@ -897,7 +903,7 @@ Binding `$(curmod_prefix)Undocumented.bindingdoesnotexist` does not exist.
 @test docstrings_equal(@doc(Undocumented.bindingdoesnotexist), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public symbol.
+No documentation found for public binding `$(curmod_prefix)Undocumented.A`.
 
 # Summary
 ```
@@ -913,7 +919,7 @@ $(curmod_prefix)Undocumented.C
 @test docstrings_equal(@doc(Undocumented.A), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public symbol.
+No documentation found for public binding `$(curmod_prefix)Undocumented.B`.
 
 # Summary
 ```
@@ -933,7 +939,7 @@ $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
 @test docstrings_equal(@doc(Undocumented.B), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public symbol.
+No documentation found for public binding `$(curmod_prefix)Undocumented.C`.
 
 # Summary
 ```
@@ -948,7 +954,7 @@ $(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
 @test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.D`.
 
 # Summary
 ```
@@ -970,7 +976,7 @@ $(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_pre
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public symbol.
+No documentation found for public binding `$(curmod_prefix)Undocumented.at0`.
 
 # Summary
 
@@ -990,7 +996,7 @@ $(curmod_prefix)Undocumented.st4{T<:Number, N}
 @test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.at1`.
 
 # Summary
 
@@ -1013,7 +1019,7 @@ $(curmod_prefix)Undocumented.at1{T>:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.at1), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.at_`.
 
 # Summary
 
@@ -1032,7 +1038,7 @@ $(curmod_prefix)Undocumented.st4{Int64, N}
 @test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public symbol.
+No documentation found for public binding `$(curmod_prefix)Undocumented.pt2`.
 
 # Summary
 
@@ -1049,7 +1055,7 @@ $(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_prefix)Un
 @test docstrings_equal(@doc(Undocumented.pt2), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.st3`.
 
 # Summary
 
@@ -1072,7 +1078,7 @@ $(curmod_prefix)Undocumented.st3{T<:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.st3), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.st4`.
 
 # Summary
 
@@ -1094,7 +1100,7 @@ $(curmod_prefix)Undocumented.st4{T, N} <: $(curmod_prefix)Undocumented.at0{T, N}
 @test docstrings_equal(@doc(Undocumented.st4), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.st5`.
 
 # Summary
 
@@ -1115,7 +1121,7 @@ $(curmod_prefix)Undocumented.st5{T>:Int64, N} <: $(curmod_prefix)Undocumented.at
 @test docstrings_equal(@doc(Undocumented.st5), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.mt6`.
 
 # Summary
 
@@ -1136,7 +1142,7 @@ $(curmod_prefix)Undocumented.mt6{T<:Integer, N} <: $(curmod_prefix)Undocumented.
 @test docstrings_equal(@doc(Undocumented.mt6), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.ut7`.
 
 # Summary
 
@@ -1150,7 +1156,7 @@ No documentation found for private symbol.
 @test docstrings_equal(@doc(Undocumented.ut7), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.ut8`.
 
 # Summary
 
@@ -1166,7 +1172,7 @@ No documentation found for private symbol.
 @test docstrings_equal(@doc(Undocumented.ut8), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private symbol.
+No documentation found for private binding `$(curmod_prefix)Undocumented.ut9`.
 
 # Summary
 
@@ -1185,7 +1191,7 @@ let d = @doc(Undocumented.f)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)),"""
-    No documentation found for private symbol.
+    No documentation found for private binding `$(curmod_prefix)Undocumented.f`.
 
     `$(curmod_prefix)Undocumented.f` is a `Function`.
     """)
@@ -1195,7 +1201,7 @@ let d = @doc(Undocumented.undocumented)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)), """
-    No documentation found for private symbol.
+    No documentation found for private binding `$(curmod_prefix)Undocumented.undocumented`.
 
     `$(curmod_prefix)Undocumented.undocumented` is a `Function`.
     """)
@@ -1514,7 +1520,7 @@ struct B_20087 end
 # issue #27832
 
 _last_atdoc = Core.atdoc
-Core.atdoc!(Core.Compiler.CoreDocs.docm)  # test bootstrap doc system
+Core.atdoc!(Base.CoreDocs.docm)  # test bootstrap doc system
 
 """
 """
@@ -1562,3 +1568,15 @@ Base.@ccallable c51586_long()::Int = 3
     @test_broken isempty(undoc)
     @test undoc == [Symbol("@var")]
 end
+
+# Docing the macroception macro
+macro docmacroception()
+    Expr(:toplevel, macroexpand(__module__, :(@Base.__doc__ macro docmacrofoo() 1 end); recursive=false), :(@docmacrofoo))
+end
+
+"""
+This docmacroception has a docstring
+"""
+@docmacroception()
+
+@test Docs.hasdoc(@__MODULE__, :var"@docmacrofoo")

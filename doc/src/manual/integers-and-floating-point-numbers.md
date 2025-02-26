@@ -631,7 +631,7 @@ BigInt
 
 The default precision (in number of bits of the significand) and rounding mode of [`BigFloat`](@ref)
 operations can be changed globally by calling [`setprecision`](@ref) and [`setrounding`](@ref),
-and all further calculations will take these changes in account.  Alternatively, the precision
+and all further calculations will take these changes in account. Alternatively, the precision
 or the rounding can be changed only within the execution of a particular block of code by using
 the same functions with a `do` block:
 
@@ -699,7 +699,7 @@ julia> 2(x-1)^2 - 3(x-1) + 1
 !!! note
     The precedence of numeric literal coefficients used for implicit
     multiplication is higher than other binary operators such as multiplication
-    (`*`), and division (`/`, `\`, and `//`).  This means, for example, that
+    (`*`), and division (`/`, `\`, and `//`). This means, for example, that
     `1 / 2im` equals `-0.5im` and `6 // 2(2 + 1)` equals `1 // 1`.
 
 Additionally, parenthesized expressions can be used as coefficients to variables, implying multiplication

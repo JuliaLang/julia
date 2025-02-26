@@ -78,7 +78,7 @@ When fetching data from LibGit2, a typical usage would look like:
 ```julia
 sa_ref = Ref(StrArrayStruct())
 @check ccall(..., (Ptr{StrArrayStruct},), sa_ref)
-res = convert(Vector{String}, sa_ref[])
+res = collect(sa_ref[])
 free(sa_ref)
 ```
 In particular, note that `LibGit2.free` should be called afterward on the `Ref` object.
@@ -236,6 +236,9 @@ Matches the [`git_remote_callbacks`](https://libgit2.org/libgit2/#HEAD/type/git_
     payload::Any                       = nothing
     @static if LibGit2.VERSION >= v"0.99.0"
         resolve_url::Ptr{Cvoid}        = C_NULL
+    end
+    @static if LibGit2.VERSION >= v"1.9.0"
+        update_refs::Ptr{Cvoid}        = C_NULL
     end
 end
 @assert Base.allocatedinline(RemoteCallbacks)
@@ -678,6 +681,8 @@ The fields represent:
      for more information.
   * `custom_headers`: only relevant if the LibGit2 version is greater than or equal to `0.24.0`.
      Extra headers needed for the push operation.
+  * `remote_push_options`: only relevant if the LibGit2 version is greater than or equal to `1.8.0`.
+     "Push options" to deliver to the remote.
 """
 @kwdef struct PushOptions
     version::Cuint                     = Cuint(1)
@@ -691,6 +696,9 @@ The fields represent:
     end
     @static if LibGit2.VERSION >= v"0.24.0"
         custom_headers::StrArrayStruct = StrArrayStruct()
+    end
+    @static if LibGit2.VERSION >= v"1.8.0"
+        remote_push_options::StrArrayStruct = StrArrayStruct()
     end
 end
 @assert Base.allocatedinline(PushOptions)
@@ -913,16 +921,36 @@ Matches the [`git_config_entry`](https://libgit2.org/libgit2/#HEAD/type/git_conf
 struct ConfigEntry
     name::Cstring
     value::Cstring
+    @static if LibGit2.VERSION >= v"1.8.0"
+        backend_type::Cstring
+        origin_path::Cstring
+    end
     include_depth::Cuint
     level::GIT_CONFIG
-    free::Ptr{Cvoid}
-    payload::Ptr{Cvoid} # User is not permitted to read or write this field
+    @static if LibGit2.VERSION < v"1.9.0"
+        free::Ptr{Cvoid}
+    end
+    @static if LibGit2.VERSION < v"1.8.0"
+        # In 1.8.0, the unused payload value has been removed
+        payload::Ptr{Cvoid}
+    end
 end
 @assert Base.allocatedinline(ConfigEntry)
 
 function Base.show(io::IO, ce::ConfigEntry)
     print(io, "ConfigEntry(\"", unsafe_string(ce.name), "\", \"", unsafe_string(ce.value), "\")")
 end
+
+"""
+    LibGit2.ConfigBackendEntry
+
+Matches the [`git_config_backend_entry`](https://libgit2.org/libgit2/#HEAD/type/git_config_backend_entry) struct.
+"""
+struct ConfigBackendEntry
+    entry::ConfigEntry
+    free::Ptr{Cvoid}
+end
+@assert Base.allocatedinline(ConfigBackendEntry)
 
 """
     LibGit2.split_cfg_entry(ce::LibGit2.ConfigEntry) -> Tuple{String,String,String,String}
@@ -1045,7 +1073,6 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
                 return obj
             end
         end
-        @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
     else
         @eval mutable struct $typ <: $sup
             owner::$owntyp
@@ -1060,17 +1087,17 @@ for (typ, owntyp, sup, cname) in Tuple{Symbol,Any,Symbol,Symbol}[
                 return obj
             end
         end
-        @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::$typ) = x.ptr
         if isa(owntyp, Expr) && owntyp.args[1] === :Union && owntyp.args[3] === :Nothing
             @eval begin
                 $typ(ptr::Ptr{Cvoid}, fin::Bool=true) = $typ(nothing, ptr, fin)
             end
         end
     end
+    @eval Base.unsafe_convert(::Type{Ptr{Cvoid}}, obj::$typ) = obj.ptr
     @eval function Base.close(obj::$typ)
         if obj.ptr != C_NULL
             ensure_initialized()
-            ccall(($(string(cname, :_free)), libgit2), Cvoid, (Ptr{Cvoid},), obj.ptr)
+            ccall(($(string(cname, :_free)), libgit2), Cvoid, (Ptr{Cvoid},), obj)
             obj.ptr = C_NULL
             if Threads.atomic_sub!(REFCOUNT, 1) == 1
                 # will the last finalizer please turn out the lights?
@@ -1104,10 +1131,11 @@ end
 function Base.close(obj::GitSignature)
     if obj.ptr != C_NULL
         ensure_initialized()
-        ccall((:git_signature_free, libgit2), Cvoid, (Ptr{SignatureStruct},), obj.ptr)
+        ccall((:git_signature_free, libgit2), Cvoid, (Ptr{SignatureStruct},), obj)
         obj.ptr = C_NULL
     end
 end
+Base.unsafe_convert(::Type{Ptr{SignatureStruct}}, obj::GitSignature) = obj.ptr
 
 # Structure has the same layout as SignatureStruct
 mutable struct Signature
@@ -1126,15 +1154,20 @@ The fields represent:
     * `final_commit_id`: the [`GitHash`](@ref) of the commit where this section was last changed.
     * `final_start_line_number`: the *one based* line number in the file where the
        hunk starts, in the *final* version of the file.
-    * `final_signature`: the signature of the person who last modified this hunk. You will
+    * `final_signature`: the signature of the author of `final_commit_id`. You will
+       need to pass this to `Signature` to access its fields.
+    * `final_committer`: the signature of the committer of `final_commit_id`. You will
        need to pass this to `Signature` to access its fields.
     * `orig_commit_id`: the [`GitHash`](@ref) of the commit where this hunk was first found.
     * `orig_path`: the path to the file where the hunk originated. This may be different
        than the current/final path, for instance if the file has been moved.
     * `orig_start_line_number`: the *one based* line number in the file where the
        hunk starts, in the *original* version of the file at `orig_path`.
-    * `orig_signature`: the signature of the person who introduced this hunk. You will
+    * `orig_signature`: the signature of the author who introduced this hunk. You will
        need to pass this to `Signature` to access its fields.
+    * `orig_committer`: the signature of the committer who introduced this hunk. You will
+       need to pass this to `Signature` to access its fields.
+    * `summary`: a string summary.
     * `boundary`: `'1'` if the original commit is a "boundary" commit (for instance, if it's
        equal to an oldest commit set in `options`).
 """
@@ -1144,12 +1177,21 @@ The fields represent:
     final_commit_id::GitHash              = GitHash()
     final_start_line_number::Csize_t      = Csize_t(0)
     final_signature::Ptr{SignatureStruct} = Ptr{SignatureStruct}(C_NULL)
+    @static if LibGit2.VERSION >= v"1.9.0"
+        final_committer::Ptr{SignatureStruct} = Ptr{SignatureStruct}(C_NULL)
+    end
 
     orig_commit_id::GitHash               = GitHash()
     orig_path::Cstring                    = Cstring(C_NULL)
     orig_start_line_number::Csize_t       = Csize_t(0)
     orig_signature::Ptr{SignatureStruct}  = Ptr{SignatureStruct}(C_NULL)
+    @static if LibGit2.VERSION >= v"1.9.0"
+        orig_committer::Ptr{SignatureStruct}  = Ptr{SignatureStruct}(C_NULL)
+    end
 
+    @static if LibGit2.VERSION >= v"1.9.0"
+        summary::Cstring                      = Cstring(C_NULL)
+    end
     boundary::Char                        = '\0'
 end
 @assert Base.allocatedinline(BlameHunk)

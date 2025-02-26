@@ -10,6 +10,7 @@
 module Experimental
 
 using Base: Threads, sync_varname, is_function_def, @propagate_inbounds
+using Base: GenericCondition
 using Base.Meta
 
 """
@@ -318,10 +319,10 @@ function show_error_hints(io, ex, args...)
     isnothing(hinters) && return
     for handler in hinters
         try
-            Base.invokelatest(handler, io, ex, args...)
-        catch err
+            @invokelatest handler(io, ex, args...)
+        catch
             tn = typeof(handler).name
-            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error"
+            @error "Hint-handler $handler for $(typeof(ex)) in $(tn.module) caused an error" exception=current_exceptions()
         end
     end
 end
@@ -330,17 +331,99 @@ end
 include("opaque_closure.jl")
 
 """
-    Experimental.@overlay mt [function def]
+    Base.Experimental.@overlay mt def
 
 Define a method and add it to the method table `mt` instead of to the global method table.
 This can be used to implement a method override mechanism. Regular compilation will not
 consider these methods, and you should customize the compilation flow to look in these
 method tables (e.g., using [`Core.Compiler.OverlayMethodTable`](@ref)).
+
+!!! note
+    Please be aware that when defining overlay methods using `@overlay`, it is not necessary
+    to have an original method that corresponds exactly in terms of how the method dispatches.
+    This means that the method overlay mechanism enabled by `@overlay` is not implemented by
+    replacing the methods themselves, but through an additional and prioritized method
+    lookup during the method dispatch.
+
+    Considering this, it is important to understand that in compilations using an overlay
+    method table like the following, the method dispatched by `callx(x)` is not the regular
+    method `callx(::Float64)`, but the overlay method `callx(x::Real)`:
+    ```julia
+    callx(::Real) = :real
+    @overlay SOME_OVERLAY_MT callx(::Real) = :overlay_real
+    callx(::Float64) = :float64
+
+    # some overlay callsite
+    let x::Float64
+        callx(x) #> :overlay_real
+    end
+    ```
 """
 macro overlay(mt, def)
-    def = macroexpand(__module__, def) # to expand @inline, @generated, etc
-    is_function_def(def) || error("@overlay requires a function definition")
-    return esc(overlay_def!(mt, def))
+    inner = Base.unwrap_macrocalls(def)
+    is_function_def(inner) || error("@overlay requires a function definition")
+    overlay_def!(mt, inner)
+    return esc(def)
+end
+
+"""
+    Base.Experimental.@consistent_overlay mt def
+
+This macro operates almost identically to [`Base.Experimental.@overlay`](@ref), defining a
+new overlay method. The key difference with this macro is that it informs the compiler that
+the invocation of the overlay method it defines is `:consistent` with a regular,
+non-overlayed method call.
+
+More formally, when evaluating a generic function call ``f(x)`` at a specific world age
+``i``, if a regular method call ``fᵢ(x)`` is redirected to an overlay method call ``fᵢ′(x)``
+defined by this macro, ``fᵢ(x)`` and ``fᵢ′(x)`` are considered `:consistent` if the following
+conditions are met:
+- If ``fᵢ(x)`` returns a value ``y``, then ``fᵢ′(x)`` also returns some value ``yᵢ``, and ``y ≡ yᵢ`` holds.
+- If ``fᵢ(x)`` throws an exception, then ``fᵢ′(x)`` also throws some exception.
+
+For a detailed definition of `:consistent`-cy, consult the corresponding section in
+[`Base.@assume_effects`](@ref).
+
+!!! note
+    Note that the requirements for `:consistent`-cy include not only that the return values
+    are egal, but also that the manner of termination is the same. However, it's important
+    to aware that when they throw exceptions, the exceptions themselves don't necessarily
+    have to be egal. In other words, if ``fᵢ(x)`` throws an exception, ``fᵢ′(x)`` is
+    required to also throw one, but the exact exceptions may differ.
+
+!!! note
+    Please note that the `:consistent`-cy requirement applies not to method itself but to
+    _method invocation_. This means that for the use of `@consistent_overlay`, it is
+    necessary for method invocations with the native regular compilation and those with
+    a compilation with overlay method table to be `:consistent`.
+
+    For example, it is important to understand that, `@consistent_overlay` can be used like
+    the following:
+    ```julia
+    callsin(x::Real) = x < 0 ? error(x) : sin(x)
+    @consistent_overlay SOME_OVERLAY_MT callsin(x::Float64) =
+        x < 0 ? error_somehow(x) : sin(x)
+    ```
+    However, be aware that this `@consistent_overlay` will immediately become invalid if a
+    new method for `callsin` is defined subsequently, such as:
+    ```julia
+    callsin(x::Float64) = cos(x)
+    ```
+
+    This specifically implies that the use of `@consistent_overlay` should be restricted as
+    much as possible to cases where a regular method with a concrete signature is replaced
+    by an overlay method with the same concrete signature.
+
+    This constraint is closely related to the note in [`Base.Experimental.@overlay`](@ref);
+    you are advised to consult that as well.
+"""
+macro consistent_overlay(mt, def)
+    inner = Base.unwrap_macrocalls(def)
+    is_function_def(inner) || error("@consistent_overlay requires a function definition")
+    overlay_def!(mt, inner)
+    override = Base.EffectsOverride(; consistent_overlay=true)
+    Base.pushmeta!(def::Expr, Base.form_purity_expr(override))
+    return esc(def)
 end
 
 function overlay_def!(mt, @nospecialize ex)
@@ -367,12 +450,240 @@ let new_mt(name::Symbol, mod::Module) = begin
 end
 
 """
-    Experimental.@MethodTable(name)
+    Base.Experimental.@MethodTable name
 
 Create a new MethodTable in the current module, bound to `name`. This method table can be
-used with the [`Experimental.@overlay`](@ref) macro to define methods for a function without
-adding them to the global method table.
+used with the [`Base.Experimental.@overlay`](@ref) macro to define methods for a function
+without adding them to the global method table.
 """
 :@MethodTable
 
+"""
+    Base.Experimental.make_io_thread()
+
+Create a new thread that will run the Julia IO loop. This can potentially reduce the latency of some
+IO operations as they no longer depend on the main thread to run it. This does mean that code that uses
+this as implicit synchronization needs to be checked for correctness.
+"""
+function make_io_thread()
+    tid = UInt[0]
+    threadwork = @cfunction function(arg::Ptr{Cvoid})
+            current_task().donenotify = Base.ThreadSynchronizer() #TODO: Should this happen by default in adopt thread?
+            Base.errormonitor(current_task()) # this may not go particularly well if the IO loop is dead, but try anyways
+            @ccall jl_set_io_loop_tid((Threads.threadid() - 1)::Int16)::Cvoid
+            wait() # spin uv_run as long as needed
+            nothing
+        end Cvoid (Ptr{Cvoid},)
+    err = @ccall uv_thread_create(tid::Ptr{UInt}, threadwork::Ptr{Cvoid}, C_NULL::Ptr{Cvoid})::Cint
+    err == 0 || Base.uv_error("uv_thread_create", err)
+    @ccall uv_thread_detach(tid::Ptr{UInt})::Cint
+    err == 0 || Base.uv_error("uv_thread_detach", err)
+    # n.b. this does not wait for the thread to start or to take ownership of the event loop
 end
+
+"""
+    Base.Experimental.entrypoint(f, argtypes::Tuple)
+
+Mark a method for inclusion when the `--trim` option is specified.
+"""
+function entrypoint(@nospecialize(f), @nospecialize(argtypes::Tuple))
+    entrypoint(Tuple{Core.Typeof(f), argtypes...})
+end
+
+function entrypoint(@nospecialize(argt::Type))
+    ccall(:jl_add_entrypoint, Int32, (Any,), argt)
+    nothing
+end
+
+"""
+    Base.Experimental.disable_new_worlds()
+
+Mark that no new worlds (methods additions, deletions, etc) are permitted to be created at
+any future time, allowing for lower latencies for some operations and slightly lower memory
+usage, by eliminating the tracking of those possible invalidation.
+"""
+disable_new_worlds() = ccall(:jl_disable_new_worlds, Cvoid, ())
+
+### Task metrics
+
+"""
+    Base.Experimental.task_metrics(::Bool)
+
+Enable or disable the collection of per-task metrics.
+A `Task` created when `Base.Experimental.task_metrics(true)` is in effect will have
+[`Base.Experimental.task_running_time_ns`](@ref) and [`Base.Experimental.task_wall_time_ns`](@ref)
+timing information available.
+
+!!! note
+    Task metrics can be enabled at start-up via the `--task-metrics=yes` command line option.
+"""
+function task_metrics(b::Bool)
+    if b
+        ccall(:jl_task_metrics_enable, Cvoid, ())
+    else
+        ccall(:jl_task_metrics_disable, Cvoid, ())
+    end
+    return nothing
+end
+
+"""
+    Base.Experimental.task_running_time_ns(t::Task) -> Union{UInt64, Nothing}
+
+Return the total nanoseconds that the task `t` has spent running.
+This metric is only updated when `t` yields or completes unless `t` is the current task, in
+which it will be updated continuously.
+See also [`Base.Experimental.task_wall_time_ns`](@ref).
+
+Returns `nothing` if task timings are not enabled.
+See [`Base.Experimental.task_metrics`](@ref).
+
+!!! note "This metric is from the Julia scheduler"
+    A task may be running on an OS thread that is descheduled by the OS
+    scheduler, this time still counts towards the metric.
+
+!!! compat "Julia 1.12"
+    This method was added in Julia 1.12.
+"""
+function task_running_time_ns(t::Task=current_task())
+    t.metrics_enabled || return nothing
+    if t == current_task()
+        # These metrics fields can't update while we're running.
+        # But since we're running we need to include the time since we last started running!
+        return t.running_time_ns + (time_ns() - t.last_started_running_at)
+    else
+        return t.running_time_ns
+    end
+end
+
+"""
+    Base.Experimental.task_wall_time_ns(t::Task) -> Union{UInt64, Nothing}
+
+Return the total nanoseconds that the task `t` was runnable.
+This is the time since the task first entered the run queue until the time at which it
+completed, or until the current time if the task has not yet completed.
+See also [`Base.Experimental.task_running_time_ns`](@ref).
+
+Returns `nothing` if task timings are not enabled.
+See [`Base.Experimental.task_metrics`](@ref).
+
+!!! compat "Julia 1.12"
+    This method was added in Julia 1.12.
+"""
+function task_wall_time_ns(t::Task=current_task())
+    t.metrics_enabled || return nothing
+    start_at = t.first_enqueued_at
+    start_at == 0 && return UInt64(0)
+    end_at = t.finished_at
+    end_at == 0 && return time_ns() - start_at
+    return end_at - start_at
+end
+
+# wait_with_timeout
+#
+# A version of `wait(c::Condition)` that additionally allows the
+# specification of a timeout. This is experimental as it will likely
+# be dropped when a cancellation framework is added.
+#
+# The parallel behavior of wait_with_timeout is specified here. There
+# are three concurrent entities that can interact:
+# 1. Task W: the task that calls wait_with_timeout.
+# 2. Task T: the task created to handle a timeout.
+# 3. Task N: the task that notifies the Condition being waited on.
+#
+# Typical flow:
+# - W enters the Condition's wait queue.
+# - W creates T and stops running (calls wait()).
+# - T, when scheduled, waits on a Timer.
+# - Two common outcomes:
+#   - N notifies the Condition.
+#     - W starts running, closes the Timer, sets waiter_left and returns
+#       the notify'ed value.
+#     - The closed Timer throws an EOFError to T which simply ends.
+#   - The Timer expires.
+#     - T starts running and locks the Condition.
+#     - T confirms that waiter_left is unset and that W is still in the
+#       Condition's wait queue; it then removes W from the wait queue,
+#       sets dosched to true and unlocks the Condition.
+#     - If dosched is true, T schedules W with the special :timed_out
+#       value.
+#     - T ends.
+#     - W runs and returns :timed_out.
+#
+# Some possible interleavings:
+# - N notifies the Condition but the Timer expires and T starts running
+#   before W:
+#   - W closing the expired Timer is benign.
+#   - T will find that W is no longer in the Condition's wait queue
+#     (which is protected by a lock) and will not schedule W.
+# - N notifies the Condition; W runs and calls wait on the Condition
+#   again before the Timer expires:
+#   - W sets waiter_left before leaving. When T runs, it will find that
+#     waiter_left is set and will not schedule W.
+#
+# The lock on the Condition's wait queue and waiter_left together
+# ensure proper synchronization and behavior of the tasks involved.
+
+"""
+    wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
+
+Wait for [`notify`](@ref) on `c` and return the `val` parameter passed to `notify`.
+
+If the keyword `first` is set to `true`, the waiter will be put _first_
+in line to wake up on `notify`. Otherwise, `wait` has first-in-first-out (FIFO) behavior.
+
+If `timeout` is specified, cancel the `wait` when it expires and return
+`:timed_out`. The minimum value for `timeout` is 0.001 seconds, i.e. 1
+millisecond.
+"""
+function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real=0.0)
+    ct = current_task()
+    Base._wait2(c, ct, first)
+    token = Base.unlockall(c.lock)
+
+    timer::Union{Timer, Nothing} = nothing
+    waiter_left::Union{Threads.Atomic{Bool}, Nothing} = nothing
+    if timeout > 0.0
+        timer = Timer(timeout)
+        waiter_left = Threads.Atomic{Bool}(false)
+        # start a task to wait on the timer
+        t = Task() do
+            try
+                wait(timer)
+            catch e
+                # if the timer was closed, the waiting task has been scheduled; do nothing
+                e isa EOFError && return
+            end
+            dosched = false
+            lock(c.lock)
+            # Confirm that the waiting task is still in the wait queue and remove it. If
+            # the task is not in the wait queue, it must have been notified already so we
+            # don't do anything here.
+            if !waiter_left[] && ct.queue === c.waitq
+                dosched = true
+                Base.list_deletefirst!(c.waitq, ct)
+            end
+            unlock(c.lock)
+            # send the waiting task a timeout
+            dosched && schedule(ct, :timed_out)
+        end
+        t.sticky = false
+        Threads._spawn_set_thrpool(t, :interactive)
+        schedule(t)
+    end
+
+    try
+        res = wait()
+        if timer !== nothing
+            close(timer)
+            waiter_left[] = true
+        end
+        return res
+    catch
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
+        rethrow()
+    finally
+        Base.relockall(c.lock, token)
+    end
+end
+
+end # module

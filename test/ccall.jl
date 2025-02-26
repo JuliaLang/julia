@@ -1745,6 +1745,7 @@ using Base: ccall_macro_parse, ccall_macro_lower
         :Cvoid,                           # returntype
         Any[:Cstring, :Cstring, :Cint],   # argument types
         Any["%s = %d\n", :name, :value],  # argument symbols
+        false,                            # is gc_safe
         1                                 # number of required arguments (for varargs)
     )
 end
@@ -1757,7 +1758,7 @@ end
     )::Cstring))...)
     @test call == Base.remove_linenums!(
         quote
-        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, :ccall, 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
+        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, (:ccall, UInt16(0), false), 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
         end)
 
     local fptr = :x
@@ -1933,4 +1934,48 @@ end
         @test_throws "could not load library \"\"" somefunction_not_found()
     end
     @test_throws "could not load symbol \"test\"" somefunction_not_found_libc()
+end
+
+# issue #52025
+@test Base.unsafe_convert(Ptr{Ptr{Cchar}}, Base.cconvert(Ptr{Ptr{Cchar}}, map(pointer, ["ab"]))) isa Ptr{Ptr{Cchar}}
+#issue #54725
+for A in (reinterpret(UInt, [0]), reshape([0, 0], 1, 2))
+    @test pointer(A) == Base.unsafe_convert(Ptr{Cvoid}, A) == Base.unsafe_convert(Ptr{Int}, A)
+end
+# Cglobal with non-static symbols doesn't error
+function cglobal_non_static1()
+    sym = (:global_var, libccalltest)
+    cglobal(sym)
+end
+global the_sym = (:global_var, libccalltest)
+cglobal_non_static2() = cglobal(the_sym)
+
+@test isa(cglobal_non_static1(), Ptr)
+@test isa(cglobal_non_static2(), Ptr)
+
+@generated function generated_world_counter()
+    return :($(Base.get_world_counter()))
+end
+function world_counter()
+    return Base.get_world_counter()
+end
+let llvm = sprint(code_llvm, world_counter, ())
+    # check that we got a reasonable value for the world age
+    @test (world_counter() != 0) && (world_counter() != -1)
+    # no call to the runtime should be left over
+    @test !occursin("call i64", llvm)
+    # the world age should be -1 in generated functions (or other pure contexts)
+    @test (generated_world_counter() == reinterpret(UInt, -1))
+end
+
+function gc_safe_ccall()
+    # jl_rand is marked as JL_NOTSAFEPOINT
+    @ccall gc_safe=true jl_rand()::UInt64
+end
+
+let llvm = sprint(code_llvm, gc_safe_ccall, ())
+    # check that the call works
+    @test gc_safe_ccall() isa UInt64
+    # check for the gc_safe store
+    @test occursin("store atomic i8 2", llvm)
 end

@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Symbol
+
 """
 The `AbstractString` type is the supertype of all string implementations in
 Julia. Strings are encodings of sequences of [Unicode](https://unicode.org/)
@@ -146,9 +148,8 @@ Stacktrace:
 
 Return a tuple of the character in `s` at index `i` with the index of the start
 of the following character in `s`. This is the key method that allows strings to
-be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
-then a bounds error is raised. The `iterate` function, as part of the iteration
-protocol may assume that `i` is the start of a character in `s`.
+be iterated, yielding a sequences of characters. The `iterate` function, as part
+of the iteration protocol may assume that `i` is the start of a character in `s`.
 
 See also [`getindex`](@ref), [`checkbounds`](@ref).
 """
@@ -195,12 +196,7 @@ getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
 function get(s::AbstractString, i::Integer, default)
-# TODO: use ternary once @inbounds is expression-like
-    if checkbounds(Bool, s, i)
-        @inbounds return s[i]
-    else
-        return default
-    end
+    checkbounds(Bool, s, i) ? (@inbounds s[i]) : default
 end
 
 ## bounds checking ##
