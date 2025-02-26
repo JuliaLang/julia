@@ -619,6 +619,11 @@ let z = Z53061[Z53061(S53061(rand(), (rand(),rand())), 0) for _ in 1:10^4]
     @test abs(summarysize(z) - 640000)/640000 <= 0.01 broken = Sys.WORD_SIZE == 32 && Sys.islinux()
 end
 
+# issue #57506
+let len = 100, m1 = Memory{UInt8}(1:len), m2 = Memory{Union{Nothing,UInt8}}(1:len)
+    @test summarysize(m2) == summarysize(m1) + len
+end
+
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)
 
 # empty arrays
@@ -1574,7 +1579,12 @@ end
 @testset "Base docstrings" begin
     undoc = Docs.undocumented_names(Base)
     @test_broken isempty(undoc)
-    @test undoc == [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY]
+    @test isempty(setdiff(undoc, [:BufferStream, :CanonicalIndexError, :CapturedException, :Filesystem, :IOServer, :InvalidStateException, :Order, :PipeEndpoint, :ScopedValues, :Sort, :TTY, :AtomicMemoryRef, :Exception, :GenericMemoryRef, :GlobalRef, :IO, :LineNumberNode, :MemoryRef, :Method, :SegmentationFault, :TypeVar, :arrayref, :arrayset, :arraysize, :const_arrayref]))
+end
+
+exported_names(m) = filter(s -> Base.isexported(m, s), names(m))
+@testset "Base re-exports Core" begin
+    @test issubset(exported_names(Core), exported_names(Base))
 end
 
 @testset "Base.Libc docstrings" begin

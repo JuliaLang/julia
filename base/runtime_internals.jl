@@ -209,6 +209,8 @@ const BINDING_KIND_GUARD        = 0x8
 const BINDING_KIND_UNDEF_CONST  = 0x9
 const BINDING_KIND_BACKDATED_CONST = 0xa
 
+const BINDING_FLAG_EXPORTED     = 0x10
+
 is_defined_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == BINDING_KIND_UNDEF_CONST)
 is_some_imported(kind::UInt8) = (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED)
@@ -1654,3 +1656,5 @@ isempty(mt::Core.MethodTable) = (mt.defs === nothing)
 uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
                              isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
                              error("Code for this Method is not available.")
+
+has_image_globalref(m::Method) = ccall(:jl_ir_flag_has_image_globalref, Bool, (Any,), m.source)

@@ -72,17 +72,23 @@ void JuliaPassContext::initAll(Module &M)
     T_prjlvalue = JuliaType::get_prjlvalue_ty(ctx);
 }
 
-llvm::CallInst *JuliaPassContext::getPGCstack(llvm::Function &F) const
+llvm::Value *JuliaPassContext::getPGCstack(llvm::Function &F) const
 {
-    if (!pgcstack_getter && !adoptthread_func)
-        return nullptr;
-    for (auto &I : F.getEntryBlock()) {
-        if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
-            Value *callee = callInst->getCalledOperand();
-            if ((pgcstack_getter && callee == pgcstack_getter) ||
-                (adoptthread_func && callee == adoptthread_func)) {
-                return callInst;
+    if (pgcstack_getter || adoptthread_func) {
+        for (auto &I : F.getEntryBlock()) {
+            if (CallInst *callInst = dyn_cast<CallInst>(&I)) {
+                Value *callee = callInst->getCalledOperand();
+                if ((pgcstack_getter && callee == pgcstack_getter) ||
+                    (adoptthread_func && callee == adoptthread_func)) {
+                    return callInst;
+                }
             }
+        }
+    }
+    if (F.getCallingConv() == CallingConv::Swift) {
+        for (auto &arg : F.args()) {
+            if (arg.hasSwiftSelfAttr())
+                return &arg;
         }
     }
     return nullptr;

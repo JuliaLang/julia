@@ -40,6 +40,7 @@
     XX(jl_atomic_store_bits) \
     XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
+    XX(jl_autoinit_and_adopt_thread) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
     XX(jl_bitcast) \

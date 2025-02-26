@@ -618,7 +618,7 @@ function make_typealias(@nospecialize(x::Type))
     Any === x && return nothing
     x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
-    Core in mods && push!(mods, Base)
+    replace!(mods, Core=>Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     xenv = UnionAll[]
     for p in uniontypes(unwrap_unionall(x))
@@ -1671,7 +1671,8 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 """
 function operator_associativity(s::Symbol)
     if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<| || s === :||
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) ||
+        (s === :<| || s === :|| || s == :?)
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
         return :none
@@ -2840,7 +2841,6 @@ function show(io::IO, vm::Core.TypeofVararg)
 end
 
 Compiler.load_irshow!()
-const IRShow = Compiler.IRShow # an alias for compatibility
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body
@@ -3373,6 +3373,9 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, '∞')
     else
         print(io, max_world)
+    end
+    if (partition.kind & BINDING_FLAG_EXPORTED) != 0
+        print(io, " [exported]")
     end
     print(io, " - ")
     kind = binding_kind(partition)

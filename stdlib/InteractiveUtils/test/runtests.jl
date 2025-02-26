@@ -658,6 +658,10 @@ file, ln = functionloc(versioninfo, Tuple{})
 @test isfile(pathof(InteractiveUtils))
 @test isdir(pkgdir(InteractiveUtils))
 
+# compiler stdlib path updating
+file, ln = functionloc(Core.Compiler.tmeet, Tuple{Int, Float64})
+@test isfile(file)
+
 @testset "buildbot path updating" begin
     file, ln = functionloc(versioninfo, Tuple{})
     @test isfile(file)

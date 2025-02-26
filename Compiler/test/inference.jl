@@ -4727,7 +4727,7 @@ end
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
-        @test length(c.fields) == 1
+        @test length(c.fields) == 1 && c.undef == [0]
     end
     let T = Base.ImmutableDict{Number,Number}
         a = PartialStruct(𝕃, T, Any[T])
@@ -4783,10 +4783,44 @@ end
     @test a == Tuple
 end
 
+module _Partials_inference
+    mutable struct Partial
+        x::String
+        y::Integer
+        z::Any
+        Partial() = new()
+    end
+
+    struct Partial2
+        x::String
+        y::Integer
+        z::Any
+        Partial2(x) = new(x)
+    end
+
+    struct Partial3
+        x::Int
+        y::String
+        z::Float64
+        Partial3(x, y) = new(x, y)
+    end
+
+    struct Partial4
+        x::Int
+        y::String
+        z::Float64
+        Partial4(x) = new(x)
+    end
+end
+
 let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
+    ⋢ = !⊑
     ⊔ = Compiler.join(Compiler.fallback_lattice)
     𝕃 = Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
+    form_partially_defined_struct = Compiler.form_partially_defined_struct
+    M = _Partials_inference
+    Partial, Partial2, Partial3, Partial4 = M.Partial, M.Partial2, M.Partial3, M.Partial4
 
     @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]))
     @test !(Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
@@ -4802,11 +4836,84 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test !(PartialStruct(𝕃, Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
     @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
     @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
+    # test comparison between conflicting elements
+    let a = PartialStruct(M.Partial, falses(2), Any[Int,Int])
+        b = Const(M.Partial())
+        @test a ⋢ b && b ⋢ a
+    end
 
     t = Const((false, false)) ⊔ Const((false, true))
     @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
     t = t ⊔ Const((false, false, 0))
     @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
+
+    t = PartialStruct(𝕃, Tuple{Int, Int}, Any[Const(1)])
+    @test t.undef == [false]
+    @test !Compiler.is_field_maybe_undef(t, 2)
+    @test Compiler.n_initialized(t) == 2
+    t = PartialStruct(𝕃, Partial, Any[String, Const(2)])
+    @test t.undef == [false, false]
+    @test t.fields == Any[String, Const(2)]
+    @test t ⊑ t && t ⊔ t === t
+
+    t1 = PartialStruct(𝕃, Partial, Any[String, Const(3)])
+    t2 = PartialStruct(𝕃, Partial, Any[Const("x")])
+    @test t1 ⋢ t2 && t2 ⋢ t1
+    t3 = t1 ⊔ t2
+    @test t3.fields == Any[String]
+
+    t1 = PartialStruct(𝕃, Partial, BitVector([true, false, false]), Any[String, Int, Const(3)])
+    @test Compiler.n_initialized(t1) == 0
+    @test t1 ⊑ t1 && t1 ⊔ t1 === t1
+    t2 = PartialStruct(𝕃, Partial, BitVector([false, true]), Any[Const("x"), Int])
+    @test Compiler.n_initialized(t2) == 1
+    t3 = t1 ⊔ t2
+    @test t3 === Partial
+
+    t1 = PartialStruct(𝕃, Tuple, Any[Int, String, Vararg])
+    @test t1.undef == [false, false]
+    @test t1 ⊑ t1 && t1 ⊔ t1 == t1
+    t2 = PartialStruct(𝕃, Tuple, Any[Int, Any])
+    @test t1 ⋢ t2 && t2 ⋢ t1
+    t3 = t1 ⊔ t2
+    @test t3.undef == [false, false] && t3.fields == Any[Int, Any]
+    t2 = PartialStruct(𝕃, Tuple, Any[Int, Any, Vararg])
+    @test t1 ⊑ t2
+    @test t1 ⊔ t2 === t2
+
+    t = PartialStruct(𝕃, Partial, Any[Const("x")])
+    @test form_partially_defined_struct(t, Const(:x)) === nothing
+    t′ = form_partially_defined_struct(t, Const(:z))
+    @test t′ == PartialStruct(𝕃, Partial, BitVector([false, true, false]), Any[Const("x"), Integer, Any])
+    t = PartialStruct(𝕃, Partial, Any[String, Const(2)])
+    @test form_partially_defined_struct(t, Const(:x)) === nothing
+    t′ = form_partially_defined_struct(t, Const(:z))
+    @test t′ == PartialStruct(𝕃, Partial, Any[String, Const(2), Any])
+
+    t = PartialStruct(𝕃, Partial2, Any[String, Const(2)])
+    @test form_partially_defined_struct(t, Const(:x)) === nothing
+    t′ = form_partially_defined_struct(t, Const(:z))
+    @test t′ == PartialStruct(𝕃, Partial2, Any[String, Const(2), Any])
+
+    @test form_partially_defined_struct(Partial3, Const(:x)) === nothing
+    @test form_partially_defined_struct(Partial3, Const(:y)) === nothing
+    t = form_partially_defined_struct(Partial3, Const(:z))
+    @test t == PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
+    t = PartialStruct(𝕃, Partial3, Any[Int, String])
+    t′ = form_partially_defined_struct(t, Const(:z))
+    @test t′ == PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
+
+    t1 = PartialStruct(𝕃, Partial4, Any[Int, String])
+    t2 = PartialStruct(𝕃, Partial4, Any[Const(1)])
+    @test t1 ⋢ t2 && t2 ⋢ t1
+    c = Const(Partial4(1))
+    @test c ⋢ t1 && t1 ⋢ c && c ⊑ t2 && t2 ⋢ c
+    t3 = PartialStruct(𝕃, Partial4, Any[Const(1), Const("x")])
+    @test c ⋢ t3 && t3 ⋢ c
+
+    c = Const(Ref{Any}(1))
+    t = PartialStruct(Base.RefValue{Any}, trues(1), Any[String])
+    @test c ⋢ t && t ⋢ c
 end
 
 # Test that a function-wise `@max_methods` works as expected
@@ -6188,3 +6295,9 @@ end == Union{Float64,DomainError}
 @test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64 ]) === Tuple{Int, UnitRange{Int}, Float64}
 @test Compiler.argtypes_to_type(Any[ Int, UnitRange{Int}, Vararg{Pair{Any, Union{}}}, Float64, Memory{2} ]) === Union{}
 @test Base.return_types(Tuple{Tuple{Int, Vararg{Pair{Any, Union{}}}}},) do x; Returns(true)(x...); end |> only === Bool
+
+# issue #57292
+f57292(xs::Union{Tuple{String}, Int}...) = getfield(xs...)
+g57292(xs::String...) = getfield(("abc",), 1, :not_atomic, xs...)
+@test Base.infer_return_type(f57292) == String
+@test Base.infer_return_type(g57292) == String

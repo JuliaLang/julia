@@ -1134,6 +1134,7 @@ public:
     AttributeList attributes; // vector of function call site attributes
     Type *lrt; // input parameter of the llvm return type (from julia_struct_to_llvm)
     bool retboxed; // input parameter indicating whether lrt is jl_value_t*
+    bool gc_safe; // input parameter indicating whether the call is safe to execute concurrently to GC
     Type *prt; // out parameter of the llvm return type for the function signature
     int sret; // out parameter for indicating whether return value has been moved to the first argument position
     std::string err_msg;
@@ -1146,8 +1147,8 @@ public:
     size_t nreqargs; // number of required arguments in ccall function definition
     jl_codegen_params_t *ctx;
 
-    function_sig_t(const char *fname, Type *lrt, jl_value_t *rt, bool retboxed, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nreqargs, CallingConv::ID cc, bool llvmcall, jl_codegen_params_t *ctx)
-      : lrt(lrt), retboxed(retboxed),
+    function_sig_t(const char *fname, Type *lrt, jl_value_t *rt, bool retboxed, bool gc_safe, jl_svec_t *at, jl_unionall_t *unionall_env, size_t nreqargs, CallingConv::ID cc, bool llvmcall, jl_codegen_params_t *ctx)
+      : lrt(lrt), retboxed(retboxed), gc_safe(gc_safe),
         prt(NULL), sret(0), cc(cc), llvmcall(llvmcall),
         at(at), rt(rt), unionall_env(unionall_env),
         nccallargs(jl_svec_len(at)), nreqargs(nreqargs),
@@ -1295,6 +1296,7 @@ std::string generate_func_sig(const char *fname)
         RetAttrs = RetAttrs.addAttribute(LLVMCtx, Attribute::NonNull);
     if (rt == jl_bottom_type)
         FnAttrs = FnAttrs.addAttribute(LLVMCtx, Attribute::NoReturn);
+
     assert(attributes.isEmpty());
     attributes = AttributeList::get(LLVMCtx, FnAttrs, RetAttrs, paramattrs);
     return "";
@@ -1412,7 +1414,7 @@ static const std::string verify_ccall_sig(jl_value_t *&rt, jl_value_t *at,
 
 const int fc_args_start = 6;
 
-// Expr(:foreigncall, pointer, rettype, (argtypes...), nreq, [cconv | (cconv, effects)], args..., roots...)
+// Expr(:foreigncall, pointer, rettype, (argtypes...), nreq, gc_safe, [cconv | (cconv, effects)], args..., roots...)
 static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
 {
     JL_NARGSV(ccall, 5);
@@ -1424,11 +1426,13 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     assert(jl_is_quotenode(args[5]));
     jl_value_t *jlcc = jl_quotenode_value(args[5]);
     jl_sym_t *cc_sym = NULL;
+    bool gc_safe = false;
     if (jl_is_symbol(jlcc)) {
         cc_sym = (jl_sym_t*)jlcc;
     }
     else if (jl_is_tuple(jlcc)) {
         cc_sym = (jl_sym_t*)jl_get_nth_field_noalloc(jlcc, 0);
+        gc_safe = jl_unbox_bool(jl_get_nth_field_checked(jlcc, 2));
     }
     assert(jl_is_symbol(cc_sym));
     native_sym_arg_t symarg = {};
@@ -1547,7 +1551,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
     }
     if (rt != args[2] && rt != (jl_value_t*)jl_any_type)
         jl_temporary_root(ctx, rt);
-    function_sig_t sig("ccall", lrt, rt, retboxed,
+    function_sig_t sig("ccall", lrt, rt, retboxed, gc_safe,
                        (jl_svec_t*)at, unionall, nreqargs,
                        cc, llvmcall, &ctx.emission_context);
     for (size_t i = 0; i < nccallargs; i++) {
@@ -2158,11 +2162,16 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         }
     }
 
-    OperandBundleDef OpBundle("jl_roots", gc_uses);
+    // Potentially we could add gc_uses to `gc-transition`, instead of emitting them separately as jl_roots
+    SmallVector<OperandBundleDef, 2> bundles;
+    if (!gc_uses.empty())
+        bundles.push_back(OperandBundleDef("jl_roots", gc_uses));
+    if (gc_safe)
+        bundles.push_back(OperandBundleDef("gc-transition", get_current_ptls(ctx)));
     // the actual call
     CallInst *ret = ctx.builder.CreateCall(functype, llvmf,
             argvals,
-            ArrayRef<OperandBundleDef>(&OpBundle, gc_uses.empty() ? 0 : 1));
+            bundles);
     ((CallInst*)ret)->setAttributes(attributes);
 
     if (cc != CallingConv::C)
