@@ -868,21 +868,32 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
 {
     JL_TIMING(JULIA_INIT, JULIA_INIT);
     jl_resolve_sysimg_location(rel);
+
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
+    jl_image_buf_t raw_image = { JL_IMAGE_KIND_NONE };
     if (rel == JL_IMAGE_IN_MEMORY) {
-        jl_set_sysimg_so(jl_exe_handle);
+        raw_image = jl_set_sysimg_so(jl_exe_handle);
         jl_options.image_file = jl_options.julia_bin;
     }
     else if (jl_options.image_file)
-        jl_preload_sysimg_so(jl_options.image_file);
+        raw_image = jl_preload_sysimg(jl_options.image_file);
+
+    jl_gc_notify_image_load(raw_image.data, raw_image.size);
+
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
-    jl_init_codegen();
 
+    // Parse image, perform relocations, and init JIT targets, etc.
+    jl_image_t image = jl_init_processor_sysimg(raw_image);
+
+    jl_init_codegen();
     jl_init_common_symbols();
-    if (jl_options.image_file) {
-        jl_restore_system_image(jl_options.image_file);
+
+    if (raw_image.kind != JL_IMAGE_KIND_NONE) {
+        // Load the .ji or .so sysimage
+        jl_restore_system_image(&image, raw_image);
     } else {
+        // No sysimage provided, init a minimal environment
         jl_init_types();
         jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;

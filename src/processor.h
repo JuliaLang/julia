@@ -64,6 +64,7 @@ JL_DLLEXPORT int jl_test_cpu_feature(jl_cpu_feature_t feature);
 static const uint32_t jl_sysimg_tag_mask = 0x80000000u;
 static const uint32_t jl_sysimg_val_mask = ~((uint32_t)0x80000000u);
 
+// A parsed image file
 typedef struct _jl_image_fptrs_t {
     // number of functions
     uint32_t nptrs;
@@ -82,14 +83,14 @@ typedef struct _jl_image_fptrs_t {
     const uint32_t *clone_idxs;
 } jl_image_fptrs_t;
 
-typedef struct {
+struct _jl_image_t {
     uint64_t base;
     const char *gvars_base;
     const int32_t *gvars_offsets;
     uint32_t ngvars;
     jl_image_fptrs_t fptrs;
     void **jl_small_typeof;
-} jl_image_t;
+};
 
 // The header for each image
 // Details important counts about the image
@@ -206,8 +207,8 @@ typedef struct {
  *
  * Return the data about the function pointers selected.
  */
-jl_image_t jl_init_processor_sysimg(void *hdl);
-jl_image_t jl_init_processor_pkgimg(void *hdl);
+jl_image_t jl_init_processor_sysimg(jl_image_buf_t image);
+jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image);
 
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);

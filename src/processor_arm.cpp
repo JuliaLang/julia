@@ -1852,20 +1852,20 @@ JL_DLLEXPORT jl_value_t *jl_cpu_has_fma(int bits)
 #endif
 }
 
-jl_image_t jl_init_processor_sysimg(void *hdl)
+jl_image_t jl_init_processor_sysimg(jl_image_buf_t image)
 {
     if (!jit_targets.empty())
         jl_error("JIT targets already initialized");
-    return parse_sysimg(hdl, sysimg_init_cb);
+    return parse_sysimg(image, sysimg_init_cb);
 }
 
-jl_image_t jl_init_processor_pkgimg(void *hdl)
+jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image)
 {
     if (jit_targets.empty())
         jl_error("JIT targets not initialized");
     if (jit_targets.size() > 1)
         jl_error("Expected only one JIT target");
-    return parse_sysimg(hdl, pkgimg_init_cb);
+    return parse_sysimg(image, pkgimg_init_cb);
 }
 
 JL_DLLEXPORT jl_value_t* jl_check_pkgimage_clones(char *data)

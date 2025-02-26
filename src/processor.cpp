@@ -622,17 +622,15 @@ static inline llvm::SmallVector<TargetData<n>, 0> &get_cmdline_targets(F &&featu
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
-static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
+static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
 
-    const jl_image_pointers_t *pointers;
-    if (jl_system_image_size == 0)
-        jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
-    else
-        pointers = &jl_image_pointers; // libjulia-internal and sysimage statically linked
+    if (image.kind != JL_IMAGE_KIND_SO)
+        return res;
 
+    const jl_image_pointers_t *pointers = (const jl_image_pointers_t *)image.pointers;
     const void *ids = pointers->target_data;
     jl_value_t* rejection_reason = nullptr;
     JL_GC_PUSH1(&rejection_reason);
@@ -794,17 +792,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         res.fptrs.nclones = clones.size();
     }
 
-#ifdef _OS_WINDOWS_
-    res.base = (intptr_t)hdl;
-#else
-    Dl_info dlinfo;
-    if (dladdr((void*)pointers, &dlinfo) != 0) {
-        res.base = (intptr_t)dlinfo.dli_fbase;
-    }
-    else {
-        res.base = 0;
-    }
-#endif
+    res.base = image.base;
 
     {
         void *pgcstack_func_slot = pointers->ptls->pgcstack_func_slot;
