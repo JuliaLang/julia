@@ -2492,3 +2492,17 @@ let (c, r) = test_complete_pos("@tim| using Date")
     @test "@time" in c
     @test r == 1:4
 end
+
+# #56389
+let s = "begin\n  using Linear"
+    c, r = test_complete(s)
+    @test "LinearAlgebra" in c
+    @test r == 15:20
+    @test s[r] == "Linear"
+end
+let s = "using .CompletionFoo: bar, type_"
+    c, r = test_complete(s)
+    @test "type_test" in c
+    @test r == 28:32
+    @test s[r] == "type_"
+end

@@ -940,40 +940,22 @@ const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "
 
 # Aux function to detect whether we're right after a using or import keyword
 function get_import_mode(s::String, pos::Int)
-    # allow all of these to start with leading whitespace and macros like @eval and @eval(
-    # ^\s*(?:@\w+\s*(?:\(\s*)?)?
-
-    # Do not enter import mode unless cursor beyond import keyword
-    beyond_kw(m) = pos >= m.offsets[1] + sizeof(m[1])
-
-    # match simple cases like `using |` and `import  |`
-    mod_import_match_simple = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s*$", s)
-    if mod_import_match_simple !== nothing && beyond_kw(mod_import_match_simple)
-        if mod_import_match_simple[1] == "using"
-            return :using_module
-        else
-            return :import_module
+    # Capture group 1 will be returned, group 2 is where the cursor should be.
+    function match_pos(re)
+        for m in eachmatch(re, s, overlap=true)
+            m !== nothing || continue
+            pos in range(m.offsets[2], length=sizeof(m[2])) || continue
+            return m[1]
         end
     end
-    # match module import statements like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`
-    mod_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+(?:\s*,\s*[\w\.]+)*),?\s*$", s)
-    if mod_import_match !== nothing && beyond_kw(mod_import_match)
-        if mod_import_match.captures[1] == "using"
-            return :using_module
-        else
-            return :import_module
-        end
-    end
+
+    # match module import statements like `using |`, `import |`, `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`
+    m = match_pos(r"\b(using|import)(\s+(?:[\w\.]+(?:\s*,\s*[\w\.]+)*(:?\s*,)?\s*)?)")
+    m !== nothing && return m == "using" ? :using_module : :import_module
+
     # now match explicit name import statements like `using Foo: |` and `import Foo: bar, baz|`
-    name_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+)\s*:\s*([\w@!\s,]+)$", s)
-    if name_import_match !== nothing && beyond_kw(name_import_match)
-        if name_import_match[1] == "using"
-            return :using_name
-        else
-            return :import_name
-        end
-    end
-    return nothing
+    m = match_pos(r"\b(using|import)\s+(?:[\w\.]+(?:\s*,\s*[\w\.]+)*)\s*(:\s*(?:[\w@!\s,]+)*)")
+    m !== nothing && return m == "using" ? :using_name : :import_name
 end
 
 function close_path_completion(dir, path, str, pos)
