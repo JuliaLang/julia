@@ -1608,17 +1608,6 @@ static const auto &builtin_func_map() {
     return *builtins;
 }
 
-static const auto &may_dispatch_builtins() {
-    static auto builtins = new DenseSet<jl_fptr_args_t>(
-        {jl_f__apply_iterate_addr,
-        jl_f__apply_pure_addr,
-        jl_f__call_in_world_addr,
-        jl_f__call_in_world_total_addr,
-        jl_f__call_latest_addr,
-        });
-    return *builtins;
-}
-
 static const auto jl_new_opaque_closure_jlcall_func = new JuliaFunction<>{XSTR(jl_new_opaque_closure_jlcall), get_func_sig, get_func_attrs};
 
 static _Atomic(uint64_t) globalUniqueGeneratedNames{1};
@@ -2094,182 +2083,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p);
 static unsigned julia_alignment(jl_value_t *jt);
 static void recombine_value(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dst, jl_aliasinfo_t const &dst_ai, Align alignment, bool isVolatile);
-
-static void print_stack_crumbs(jl_codectx_t &ctx)
-{
-    errs() << "\n";
-    errs() << "Stacktrace:\n";
-    jl_method_instance_t *caller = ctx.linfo;
-    jl_((jl_value_t*)caller);
-    errs() << "In " << ctx.file << ":" << ctx.line << "\n";
-    while (true) {
-        auto it = ctx.emission_context.enqueuers.find(caller);
-        if (it != ctx.emission_context.enqueuers.end()) {
-            caller = std::get<jl_method_instance_t *>(it->second);
-        } else {
-            break;
-        }
-        if (caller) {
-            if (jl_is_method_instance(caller)) {
-                for (auto it2 = std::get<CallFrames>(it->second).begin(); it2 != (std::prev(std::get<CallFrames>(it->second).end())); ++it2) {
-                    auto frame = *it2;
-                    errs() << std::get<0>(frame) << "<inlined> \n";
-                    errs() << "In " << std::get<1>(frame) << ":" << std::get<unsigned int>(frame) << "\n";
-                }
-                auto &frame = std::get<CallFrames>(it->second).front();
-                jl_((jl_value_t*)caller);
-                errs() << "In " << std::get<1>(frame) << ":" << std::get<unsigned int>(frame) << "\n";
-            }
-        }
-        else
-            break;
-    }
-    abort();
-}
-
-static jl_value_t *StackFrame(
-        jl_value_t *linfo,
-        std::string fn_name,
-        std::string filepath,
-        int32_t lineno,
-        jl_value_t *inlined)
-{
-    jl_value_t *StackFrame = jl_get_global(jl_base_module, jl_symbol("StackFrame"));
-    assert(StackFrame != nullptr);
-
-    jl_value_t *args[7] = {
-        /* func */ (jl_value_t *)jl_symbol(fn_name.c_str()),
-        /* line */ (jl_value_t *)jl_symbol(filepath.c_str()),
-        /* line */ jl_box_int32(lineno),
-        /* linfo */ (jl_value_t *)linfo,
-        /* from_c */ jl_false,
-        /* inlined */ inlined,
-        /* pointer */ jl_box_uint64(0)
-    };
-
-    jl_value_t *frame = nullptr;
-    JL_TRY {
-        frame = jl_apply_generic(StackFrame, args, 7);
-    } JL_CATCH {
-        jl_safe_printf("Error creating stack frame\n");
-    }
-    return frame;
-}
-
-static void push_frames(jl_codectx_t &ctx, jl_method_instance_t *caller, jl_method_instance_t *callee)
-{
-    CallFrames frames;
-    auto it = ctx.emission_context.enqueuers.find(callee);
-    if (it != ctx.emission_context.enqueuers.end())
-        return;
-    auto DL = ctx.builder.getCurrentDebugLocation();
-    if (caller == nullptr || !DL) { // Used in various places
-        frames.push_back({ctx.funcName, "", 0});
-        ctx.emission_context.enqueuers.insert({callee, {caller, std::move(frames)}});
-        return;
-    }
-    auto filename = std::string(DL->getFilename());
-    auto line = DL->getLine();
-    auto fname = std::string(DL->getScope()->getSubprogram()->getName());
-    frames.push_back({fname, filename, line});
-    auto DI = DL.getInlinedAt();
-    while (DI) {
-        auto filename = std::string(DI->getFilename());
-        auto line = DI->getLine();
-        auto fname = std::string(DI->getScope()->getSubprogram()->getName());
-        frames.push_back({fname, filename, line});
-        DI = DI->getInlinedAt();
-    }
-    ctx.emission_context.enqueuers.insert({callee, {caller, std::move(frames)}});
-}
-
-static jl_array_t* build_stack_crumbs(jl_codectx_t &ctx) JL_NOTSAFEPOINT
-{
-    static intptr_t counter = 5;
-    jl_method_instance_t *caller = (jl_method_instance_t*)counter; //nothing serves as a sentinel for the bottom for the stack
-    push_frames(ctx, ctx.linfo, (jl_method_instance_t*)caller);
-    counter++;
-    jl_array_t *out = jl_alloc_array_1d(jl_array_any_type, 0);
-    JL_GC_PUSH1(&out);
-    while (true) {
-        auto it = ctx.emission_context.enqueuers.find(caller);
-        if (it != ctx.emission_context.enqueuers.end()) {
-            caller = std::get<jl_method_instance_t *>(it->second);
-        } else {
-            break;
-        }
-        if (caller) {
-
-            // assert(ctx.emission_context.enqueuers.count(caller) == 1);
-            // Each enqueuer should only be enqueued at least once and only once. Check why this assert is triggering
-            // This isn't a fatal error, just means that we may get a wrong backtrace
-            if (jl_is_method_instance(caller)) {
-                //TODO: Use a subrange when C++20 is a thing
-                for (auto it2 = std::get<CallFrames>(it->second).begin(); it2 != (std::prev(std::get<CallFrames>(it->second).end())); ++it2) {
-                    auto frame = *it2;
-                    jl_value_t *stackframe = StackFrame(jl_nothing, std::get<0>(frame), std::get<1>(frame), std::get<unsigned int>(frame), jl_true);
-                    if (stackframe == nullptr)
-                        print_stack_crumbs(ctx);
-                    jl_array_ptr_1d_push(out, stackframe);
-                }
-                auto &frame = std::get<CallFrames>(it->second).back();
-                jl_value_t *stackframe = StackFrame((jl_value_t *)caller, std::get<0>(frame), std::get<1>(frame), std::get<unsigned int>(frame), jl_false);
-                if (stackframe == nullptr)
-                    print_stack_crumbs(ctx);
-                jl_array_ptr_1d_push(out, stackframe);
-            }
-        }
-        else
-            break;
-    }
-    JL_GC_POP();
-    return out;
-}
-
-static void print_stacktrace(jl_codectx_t &ctx, int trim)
-{
-    jl_task_t *ct = jl_get_current_task();
-    assert(ct);
-
-    // Temporarily operate in the current age
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_get_world_counter();
-    jl_array_t* bt = build_stack_crumbs(ctx);
-    JL_GC_PUSH1(&bt);
-
-    // Call `reinit_stdio` to get TTY IO objects (w/ color)
-    jl_value_t *reinit_stdio = jl_get_global(jl_base_module, jl_symbol("_reinit_stdio"));
-    assert(reinit_stdio);
-    jl_apply_generic(reinit_stdio, nullptr, 0);
-
-    // Show the backtrace
-    jl_value_t *show_backtrace = jl_get_global(jl_base_module, jl_symbol("show_backtrace"));
-    jl_value_t *base_stderr = jl_get_global(jl_base_module, jl_symbol("stderr"));
-    assert(show_backtrace && base_stderr);
-
-    JL_TRY {
-        jl_value_t *args[2] = { base_stderr, (jl_value_t *)bt };
-        jl_apply_generic(show_backtrace, args, 2);
-    } JL_CATCH {
-        jl_printf(JL_STDERR,"Error showing backtrace\n");
-        print_stack_crumbs(ctx);
-    }
-
-    jl_printf(JL_STDERR, "\n\n");
-    JL_GC_POP();
-    ct->world_age = last_age;
-
-    if (trim == JL_TRIM_SAFE) {
-        jl_printf(JL_STDERR,"Aborting compilation due to finding a dynamic dispatch");
-        exit(1);
-    }
-    return;
-}
-
-static int trim_may_error(int trim)
-{
-    return (trim == JL_TRIM_SAFE) || (trim == JL_TRIM_UNSAFE_WARN);
-}
 
 static GlobalVariable *prepare_global_in(Module *M, JuliaVariable *G)
 {
@@ -4301,12 +4114,6 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
                 Value *theArgs = emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*));
                 Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
                 *ret = mark_julia_type(ctx, r, true, jl_any_type);
-                if (trim_may_error(ctx.params->trim)) {
-                    // if we know the return type, we can assume the result is of that type
-                    errs() << "ERROR: Dynamic call to Core._apply_iterate detected\n";
-                    errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-                    print_stacktrace(ctx, ctx.params->trim);
-                }
                 return true;
             }
         }
@@ -5460,8 +5267,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                     bool specsig, needsparams;
                     std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, ctx.params->prefer_specsig);
                     if (needsparams) {
-                        if (trim_may_error(ctx.params->trim))
-                            push_frames(ctx, ctx.linfo, mi);
                         Value *r = emit_jlcall(ctx, jlinvoke_func, track_pjlvalue(ctx, literal_pointer_val(ctx, (jl_value_t*)mi)), argv, nargs, julia_call2);
                         result = mark_julia_type(ctx, r, true, rt);
                     }
@@ -5516,8 +5321,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                         if (need_to_emit) {
                             Function *trampoline_decl = cast<Function>(jl_Module->getNamedValue(protoname));
                             ctx.call_targets[codeinst] = {cc, return_roots, trampoline_decl, nullptr, specsig};
-                            if (trim_may_error(ctx.params->trim))
-                                push_frames(ctx, ctx.linfo, mi);
                         }
                     }
                 }
@@ -5526,17 +5329,6 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         }
     }
     if (!handled) {
-        if (trim_may_error(ctx.params->trim)) {
-            if (lival.constant) {
-                push_frames(ctx, ctx.linfo, (jl_method_instance_t*)lival.constant);
-            }
-            else {
-                errs() << "Dynamic call to unknown function";
-                errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-
-                print_stacktrace(ctx, ctx.params->trim);
-            }
-        }
         Value *r = emit_jlcall(ctx, jlinvoke_func, boxed(ctx, lival), argv, nargs, julia_call2);
         result = mark_julia_type(ctx, r, true, rt);
     }
@@ -5595,12 +5387,6 @@ static jl_cgval_t emit_invoke_modify(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_
             Value *oldnew = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
             return mark_julia_type(ctx, oldnew, true, rt);
         }
-    }
-    if (trim_may_error(ctx.params->trim)) {
-        errs() << "ERROR: dynamic invoke modify call to";
-        jl_(args[0]);
-        errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-        print_stacktrace(ctx, ctx.params->trim);
     }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, nargs, julia_call);
@@ -5676,35 +5462,6 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             // special case for some known builtin not handled by emit_builtin_call
             auto it = builtin_func_map().find(builtin_fptr);
             if (it != builtin_func_map().end()) {
-                if (trim_may_error(ctx.params->trim)) {
-                    bool may_dispatch = may_dispatch_builtins().count(builtin_fptr);
-                    if (may_dispatch && f.constant == jl_builtin__apply_iterate && nargs >= 4) {
-                        if (jl_subtype(argv[2].typ, (jl_value_t*)jl_builtin_type)) {
-                            static jl_value_t *jl_dispatchfree_apply_iterate_type = NULL;
-                            if (!jl_dispatchfree_apply_iterate_type) {
-                                jl_value_t *types[5] = {
-                                    (jl_value_t *)jl_simplevector_type,
-                                    (jl_value_t *)jl_genericmemory_type,
-                                    (jl_value_t *)jl_array_type,
-                                    (jl_value_t *)jl_tuple_type,
-                                    (jl_value_t *)jl_namedtuple_type,
-                                };
-                                jl_dispatchfree_apply_iterate_type = jl_as_global_root(jl_type_union(types, 5), 1);
-                            }
-                            for (size_t i = 3; i < nargs; i++) {
-                                auto ai = argv[i].typ;
-                                if (!jl_subtype(ai, jl_dispatchfree_apply_iterate_type))
-                                    break;
-                            }
-                            may_dispatch = false;
-                        }
-                    }
-                    if (may_dispatch) {
-                        errs() << "ERROR: Dynamic call to builtin " << jl_symbol_name(((jl_datatype_t*)jl_typeof(f.constant))->name->name);
-                        errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-                        print_stacktrace(ctx, ctx.params->trim);
-                    }
-                }
                 Value *ret = emit_jlcall(ctx, it->second, Constant::getNullValue(ctx.types().T_prjlvalue), ArrayRef<jl_cgval_t>(argv).drop_front(), nargs - 1, julia_call);
                 setName(ctx.emission_context, ret, it->second->name + "_ret");
                 return mark_julia_type(ctx, ret, true, rt);
@@ -5719,11 +5476,6 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
         else {
             fptr = ctx.builder.CreateCall(prepare_call(jlgetbuiltinfptr_func), {emit_typeof(ctx, f)});
             cc = julia_call;
-        }
-        if (trim_may_error(ctx.params->trim)) {
-            errs() << "ERROR: Dynamic call to unknown builtin";
-            errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-            print_stacktrace(ctx, ctx.params->trim);
         }
         Value *ret = emit_jlcall(ctx, fptr, nullptr, argv, nargs, cc);
         setName(ctx.emission_context, ret, "Builtin_ret");
@@ -5744,40 +5496,6 @@ static jl_cgval_t emit_call(jl_codectx_t &ctx, jl_expr_t *ex, jl_value_t *rt, bo
             }
             // TODO: else emit_oc_call
         }
-    }
-    int failed_dispatch = !argv[0].constant;
-    if (ctx.params->trim != JL_TRIM_NO) {
-        // TODO: Implement the last-minute call resolution that used to be here
-        //       in inference instead.
-        failed_dispatch = 1;
-    }
-
-    if (failed_dispatch && trim_may_error(ctx.params->trim)) {
-        errs() << "Dynamic call to ";
-        jl_jmp_buf *old_buf = jl_get_safe_restore();
-        jl_jmp_buf buf;
-        jl_set_safe_restore(&buf);
-        if (!jl_setjmp(buf, 0)) {
-            jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)args[0]);
-            jl_printf((JL_STREAM*)STDERR_FILENO,"(");
-            for (size_t i = 1; i < nargs; ++i) {
-                jl_value_t *typ = argv[i].typ;
-                if (!jl_is_concrete_type(typ)) // Print type in red
-                    jl_printf((JL_STREAM*)STDERR_FILENO, "\x1b[31m");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, (jl_value_t*)argv[i].typ);
-                if (!jl_is_concrete_type(typ))
-                    jl_printf((JL_STREAM*)STDERR_FILENO, "\x1b[0m");
-                if (i != nargs-1)
-                    jl_printf((JL_STREAM*)STDERR_FILENO,", ");
-            }
-            jl_printf((JL_STREAM*)STDERR_FILENO,")\n");
-        }
-        else {
-            jl_printf((JL_STREAM*)STDERR_FILENO, "\n!!! ERROR while printing error -- ABORTING !!!\n");
-        }
-        jl_set_safe_restore(old_buf);
-        errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-        print_stacktrace(ctx, ctx.params->trim);
     }
     // emit function and arguments
     Value *callval = emit_jlcall(ctx, jlapplygeneric_func, nullptr, argv, n_generic_args, julia_call);
@@ -6834,12 +6552,6 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             ((jl_method_t*)source.constant)->nargs > 0 &&
             jl_is_valid_oc_argtype((jl_tupletype_t*)argt.constant, (jl_method_t*)source.constant);
 
-        if (!can_optimize && trim_may_error(ctx.params->trim)) {
-            // if we know the return type, we can assume the result is of that type
-            errs() << "ERROR: Dynamic call to OpaqueClosure method\n";
-            errs() << "In " << ctx.builder.getCurrentDebugLocation()->getFilename() << ":" << ctx.builder.getCurrentDebugLocation()->getLine() << "\n";
-            print_stacktrace(ctx, ctx.params->trim);
-        }
 
         if (can_optimize) {
             jl_value_t *closure_t = NULL;
@@ -7087,9 +6799,6 @@ Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, Module *
             GlobalVariable::InternalLinkage,
             name, M);
     jl_init_function(f, params.TargetTriple);
-    if (trim_may_error(params.params->trim)) {
-        push_frames(ctx, ctx.linfo, jl_get_ci_mi(codeinst));
-    }
     jl_name_jlfunc_args(params, f);
     //f->setAlwaysInline();
     ctx.f = f; // for jl_Module
