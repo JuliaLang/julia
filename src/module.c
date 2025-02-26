@@ -748,10 +748,10 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
         else if (!b->did_print_implicit_import_admonition) {
             b->did_print_implicit_import_admonition = 1;
             jl_printf(JL_STDERR, "WARNING: Constructor for type \"%s\" was extended in `%s` without explicit qualification or import.\n"
-                                 "  NOTE: Assumed \"%s\" refers to `%s.%s`. This behavior is deprecated and may differ in future versions.`\n"
+                                 "  NOTE: Assumed \"%s\" refers to `%s.%s`. This behavior is deprecated and may differ in future versions.\n"
                                  "  NOTE: This behavior may have differed in Julia versions prior to 1.12.\n"
                                  "  Hint: If you intended to create a new generic function of the same name, use `function %s end`.\n"
-                                 "  Hint: To silence the warning, qualify `%s` as `%s.%s` or explicitly `import %s: %s`\n",
+                                 "  Hint: To silence the warning, qualify `%s` as `%s.%s` in the method signature or explicitly `import %s: %s`.\n",
                 jl_symbol_name(var), jl_module_debug_name(m),
                 jl_symbol_name(var), jl_module_debug_name(from), jl_symbol_name(var),
                 jl_symbol_name(var), jl_symbol_name(var), jl_module_debug_name(from), jl_symbol_name(var),
