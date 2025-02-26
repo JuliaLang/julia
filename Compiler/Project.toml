@@ -1,9 +1,9 @@
 name = "Compiler"
 uuid = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
-version = "0.0.3"
+version = "1.12.0"
 
 [compat]
-julia = "1.10"
+julia = "1.12"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
