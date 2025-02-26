@@ -22,70 +22,78 @@ end
 # Restore backedges to external targets
 # `edges` = [caller1, ...], the list of worklist-owned code instances internally
 # `ext_ci_list` = [caller1, ...], the list of worklist-owned code instances externally
-function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{Any}})
+function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{Any}}, extext_methods::Vector{Any}, internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
+    backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
+    methods_with_invalidated_source = Base.scan_new_methods(extext_methods, internal_methods, backedges_only)
     stack = CodeInstance[]
     visiting = IdDict{CodeInstance,Int}()
-    _insert_backedges(edges, stack, visiting)
+    _insert_backedges(edges, stack, visiting, methods_with_invalidated_source)
     if ext_ci_list !== nothing
-        _insert_backedges(ext_ci_list, stack, visiting, #=external=#true)
+        _insert_backedges(ext_ci_list, stack, visiting, methods_with_invalidated_source, #=external=#true)
     end
 end
 
-function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, external::Bool=false)
+function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method}, external::Bool=false)
     for i = 1:length(edges)
         codeinst = edges[i]::CodeInstance
-        verify_method_graph(codeinst, stack, visiting)
+        validation_world = get_world_counter()
+        verify_method_graph(codeinst, stack, visiting, mwis, validation_world)
+        # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
+        # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
+        # validity.
+        @ccall jl_promote_ci_to_current(codeinst::Any, validation_world::UInt)::Cvoid
         minvalid = codeinst.min_world
         maxvalid = codeinst.max_world
-        if maxvalid ≥ minvalid
-            if get_world_counter() == maxvalid
-                # if this callee is still valid, add all the backedges
-                Base.Compiler.store_backedges(codeinst, codeinst.edges)
-            end
-            if get_world_counter() == maxvalid
-                maxvalid = typemax(UInt)
-                @atomic :monotonic codeinst.max_world = maxvalid
-            end
-            if external
-                caller = get_ci_mi(codeinst)
-                @assert isdefined(codeinst, :inferred) # See #53586, #53109
-                inferred = @ccall jl_rettype_inferred(
-                    codeinst.owner::Any, caller::Any, minvalid::UInt, maxvalid::UInt)::Any
-                if inferred !== nothing
-                    # We already got a code instance for this world age range from
-                    # somewhere else - we don't need this one.
-                else
-                    @ccall jl_mi_cache_insert(caller::Any, codeinst::Any)::Cvoid
-                end
+        # Finally, if this CI is still valid in some world age and and belongs to an external method(specialization),
+        # poke it that mi's cache
+        if maxvalid ≥ minvalid && external
+            caller = get_ci_mi(codeinst)
+            @assert isdefined(codeinst, :inferred) # See #53586, #53109
+            inferred = @ccall jl_rettype_inferred(
+                codeinst.owner::Any, caller::Any, minvalid::UInt, maxvalid::UInt)::Any
+            if inferred !== nothing
+                # We already got a code instance for this world age range from
+                # somewhere else - we don't need this one.
+            else
+                @ccall jl_mi_cache_insert(caller::Any, codeinst::Any)::Cvoid
             end
         end
     end
 end
 
-function verify_method_graph(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int})
+function verify_method_graph(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method}, validation_world::UInt)
     @assert isempty(stack); @assert isempty(visiting);
-    child_cycle, minworld, maxworld = verify_method(codeinst, stack, visiting)
+    child_cycle, minworld, maxworld = verify_method(codeinst, stack, visiting, mwis, validation_world)
     @assert child_cycle == 0
     @assert isempty(stack); @assert isempty(visiting);
     nothing
 end
 
+get_require_world() = unsafe_load(cglobal(:jl_require_world, UInt))
+
 # Test all edges relevant to a method:
 # - Visit the entire call graph, starting from edges[idx] to determine if that method is valid
 # - Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
 #   and slightly modified with an early termination option once the computation reaches its minimum
-function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int})
+function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method}, validation_world::UInt)
     world = codeinst.min_world
     let max_valid2 = codeinst.max_world
         if max_valid2 ≠ WORLD_AGE_REVALIDATION_SENTINEL
             return 0, world, max_valid2
         end
     end
-    current_world = get_world_counter()
-    local minworld::UInt, maxworld::UInt = 1, current_world
-    @assert get_ci_mi(codeinst).def isa Method
+    # Implicitly referenced bindings in the current module do not get explicit edges.
+    # If they were invalidated, they'll be in `mwis`. If they weren't, they imply a minworld
+    # of `get_require_world`. In principle, this is only required for methods that do reference
+    # an implicit globalref. However, we already don't perform this validation for methods that
+    # don't have any (implicit or explicit) edges at all. The remaining corner case (some explicit,
+    # but no implicit edges) is rare and there would be little benefit to lower the minworld for it
+    # in any case, so we just always use `get_require_world` here.
+    local minworld::UInt, maxworld::UInt = get_require_world(), validation_world
+    def = get_ci_mi(codeinst).def
+    @assert def isa Method
     if haskey(visiting, codeinst)
         return visiting[codeinst], minworld, maxworld
     end
@@ -94,22 +102,25 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     visiting[codeinst] = depth
     # TODO JL_TIMING(VERIFY_IMAGE, VERIFY_Methods)
     callees = codeinst.edges
+    # Check for invalidation of the implicit edges from GlobalRef in the Method source
+    if def in mwis
+        maxworld = 0
+        invalidations = _jl_debug_method_invalidation[]
+        if invalidations !== nothing
+            push!(invalidations, def, "method_globalref", codeinst, nothing)
+        end
+    end
     # verify current edges
     if isempty(callees)
         # quick return: no edges to verify (though we probably shouldn't have gotten here from WORLD_AGE_REVALIDATION_SENTINEL)
-    elseif maxworld == unsafe_load(cglobal(:jl_require_world, UInt))
+    elseif maxworld == get_require_world()
         # if no new worlds were allocated since serializing the base module, then no new validation is worth doing right now either
-        minworld = maxworld
     else
         j = 1
         while j ≤ length(callees)
             local min_valid2::UInt, max_valid2::UInt
             edge = callees[j]
             @assert !(edge isa Method) # `Method`-edge isn't allowed for the optimized one-edge format
-            if edge isa Core.BindingPartition
-                j += 1
-                continue
-            end
             if edge isa CodeInstance
                 edge = get_ci_mi(edge)
             end
@@ -122,6 +133,21 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
                 min_valid2, max_valid2, matches = verify_call(sig, callees, j+2, edge, world)
                 j += 2 + edge
                 edge = sig
+            elseif edge isa Core.Binding
+                j += 1
+                min_valid2 = minworld
+                max_valid2 = maxworld
+                if !Base.binding_was_invalidated(edge)
+                    if isdefined(edge, :partitions)
+                        min_valid2 = edge.partitions.min_world
+                        max_valid2 = edge.partitions.max_world
+                    end
+                else
+                    # Binding was previously invalidated
+                    min_valid2 = 1
+                    max_valid2 = 0
+                end
+                matches = nothing
             else
                 callee = callees[j+1]
                 if callee isa Core.MethodTable # skip the legacy edge (missing backedge)
@@ -166,7 +192,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             end
             callee = edge
             local min_valid2::UInt, max_valid2::UInt
-            child_cycle, min_valid2, max_valid2 = verify_method(callee, stack, visiting)
+            child_cycle, min_valid2, max_valid2 = verify_method(callee, stack, visiting, mwis, validation_world)
             if minworld < min_valid2
                 minworld = min_valid2
             end
@@ -196,13 +222,16 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     while length(stack) ≥ depth
         child = pop!(stack)
         if maxworld ≠ 0
-            @atomic  :monotonic child.min_world = minworld
+            @atomic :monotonic child.min_world = minworld
         end
         @atomic :monotonic child.max_world = maxworld
+        if maxworld == validation_world && validation_world == get_world_counter()
+            Base.Compiler.store_backedges(child, child.edges)
+        end
         @assert visiting[child] == length(stack) + 1
         delete!(visiting, child)
         invalidations = _jl_debug_method_invalidation[]
-        if invalidations !== nothing && maxworld < current_world
+        if invalidations !== nothing && maxworld < validation_world
             push!(invalidations, child, "verify_methods", cause)
         end
     end

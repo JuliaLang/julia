@@ -9,6 +9,15 @@ using Base.Threads
 @test fetch(Threads.@spawn Threads.threadpool()) === :default
 @test fetch(Threads.@spawn :default Threads.threadpool()) === :default
 @test fetch(Threads.@spawn :interactive Threads.threadpool()) === :interactive
+@test fetch(Threads.@spawn :samepool Threads.threadpool()) === Threads.threadpool()
+@sync for tp in [:interactive, :default]
+    Threads.@spawn tp begin
+        @test fetch(Threads.@spawn :samepool Threads.threadpool()) === Threads.threadpool()
+    end
+end
+wait(Threads.@spawn :interactive begin
+    @test fetch(Threads.@spawn :samepool Threads.threadpool()) === Threads.threadpool()
+end)
 tp = :default
 @test fetch(Threads.@spawn tp Threads.threadpool()) === :default
 tp = :interactive

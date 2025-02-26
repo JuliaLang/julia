@@ -229,7 +229,7 @@ export
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
-    nfields, throw, tuple, ===, isdefined, eval,
+    nfields, throw, tuple, ===, isdefined,
     # access to globals
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
@@ -238,7 +238,9 @@ export
     # method reflection
     applicable, invoke,
     # constants
-    nothing, Main
+    nothing, Main,
+    # backwards compatibility
+    arrayref, arrayset, arraysize, const_arrayref
 
 const getproperty = getfield # TODO: use `getglobal` for modules instead
 const setproperty! = setfield!
@@ -383,9 +385,10 @@ struct StackOverflowError  <: Exception end
 struct UndefRefError       <: Exception end
 struct UndefVarError <: Exception
     var::Symbol
+    world::UInt
     scope # a Module or Symbol or other object describing the context where this variable was looked for (e.g. Main or :local or :static_parameter)
-    UndefVarError(var::Symbol) = new(var)
-    UndefVarError(var::Symbol, @nospecialize scope) = new(var, scope)
+    UndefVarError(var::Symbol) = new(var, ccall(:jl_get_tls_world_age, UInt, ()))
+    UndefVarError(var::Symbol, @nospecialize scope) = new(var, ccall(:jl_get_tls_world_age, UInt, ()), scope)
 end
 struct ConcurrencyViolationError <: Exception
     msg::AbstractString
@@ -539,7 +542,7 @@ eval(Core, quote
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
-    _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
+    _PartialStruct(@nospecialize(typ), undef, fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :undef, :fields))
     PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
@@ -717,7 +720,8 @@ macro __doc__(x)
 end
 
 isbasicdoc(@nospecialize x) = (isa(x, Expr) && x.head === :.) || isa(x, Union{QuoteNode, Symbol})
-iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(ex.args[1]) : (isa(ex, Expr) && ex.head === :call)
+firstarg(arg1, args...) = arg1
+iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(firstarg(ex.args...)) : (isa(ex, Expr) && ex.head === :call)
 iscallexpr(ex) = false
 function ignoredoc(source, mod, str, expr)
     (isbasicdoc(expr) || iscallexpr(expr)) && return Expr(:escape, nothing)
@@ -773,27 +777,6 @@ struct GeneratedFunctionStub
     gen
     argnames::SimpleVector
     spnames::SimpleVector
-end
-
-# invoke and wrap the results of @generated expression
-function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
-    # args is (spvals..., argtypes...)
-    body = g.gen(args...)
-    file = source.file
-    file isa Symbol || (file = :none)
-    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
-               Expr(:var"scope-block",
-                    Expr(:block,
-                         source,
-                         Expr(:meta, :push_loc, file, :var"@generated body"),
-                         Expr(:return, body),
-                         Expr(:meta, :pop_loc))))
-    spnames = g.spnames
-    if spnames === svec()
-        return lam
-    else
-        return Expr(Symbol("with-static-parameters"), lam, spnames...)
-    end
 end
 
 # If the generator is a subtype of this trait, inference caches the generated unoptimized
@@ -1059,7 +1042,6 @@ const_arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...
 arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Main.Base.setindex!(A, x::T, i...)
 arraysize(a::Array) = a.size
 arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) : 1
-export arrayref, arrayset, arraysize, const_arrayref
 const check_top_bit = check_sign_bit
 
 # For convenience

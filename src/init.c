@@ -249,6 +249,8 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     }
 
     if (jl_base_module) {
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             jl_value_t **fargs;
@@ -257,10 +259,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
             fargs[1] = jl_box_int32(exitcode);
             JL_TRY {
                 assert(ct);
-                size_t last_age = ct->world_age;
-                ct->world_age = jl_get_world_counter();
                 jl_apply(fargs, 2);
-                ct->world_age = last_age;
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
@@ -270,10 +269,15 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
             }
             JL_GC_POP();
         }
+        ct->world_age = last_age;
     }
 
-    if (ct && exitcode == 0)
+    if (ct && exitcode == 0) {
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
         jl_write_compiler_output();
+        ct->world_age = last_age;
+    }
 
     jl_print_gc_stats(JL_STDERR);
     if (jl_options.code_coverage)
@@ -440,6 +444,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     // This also helps limit the impact other libraries can cause on our file handle.
     if ((err = uv_dup(fd, &fd)))
         jl_errorf("error initializing %s in uv_dup: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
+    assert(fd != -1); // This avoids a bug in clang's static analyzer, if an error did not occur, fd != -1
     switch(uv_guess_handle(fd)) {
     case UV_TTY:
         handle = malloc_s(sizeof(uv_tty_t));
@@ -804,8 +809,8 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
 
-    jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library);
-    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type);
+    jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1);
+    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type, /* throw_err */ 1);
 #ifdef _OS_WINDOWS_
     jl_exe_handle = GetModuleHandleA(NULL);
     jl_RTLD_DEFAULT_handle = jl_libjulia_internal_handle;
@@ -893,6 +898,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_init_primitives();
         jl_init_main_module();
         jl_load(jl_core_module, "boot.jl");
+        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
         post_boot_hooks();
     }
 
@@ -902,9 +908,10 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
         jl_n_markthreads = 0;
         jl_n_sweepthreads = 0;
         jl_n_gcthreads = 0;
-        jl_n_threads_per_pool[0] = 0; // Interactive threadpool
-        jl_n_threads_per_pool[1] = 1; // Default threadpool
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
     } else {
+        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
         post_image_load_hooks();
     }
     jl_start_threads();

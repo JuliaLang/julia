@@ -751,7 +751,7 @@ function Base.parse(::Type{Platform}, triplet::String; validate_strict::Bool = f
         end
         os_version = nothing
         if os == "macos"
-            os_version = extract_os_version("macos", r".*darwin([\d\.]+)"sa)
+            os_version = extract_os_version("macos", r".*darwin([\d.]+)"sa)
         end
         if os == "freebsd"
             os_version = extract_os_version("freebsd", r".*freebsd([\d.]+)"sa)

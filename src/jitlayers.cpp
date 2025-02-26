@@ -213,12 +213,83 @@ static void jl_optimize_roots(jl_codegen_params_t &params, jl_method_instance_t 
         JL_UNLOCK(&m->writelock);
 }
 
-void jl_jit_globals(std::map<void *, GlobalVariable*> &globals) JL_NOTSAFEPOINT
+static void finish_params(Module *M, jl_codegen_params_t &params, SmallVector<orc::ThreadSafeModule,0> &sharedmodules) JL_NOTSAFEPOINT
 {
-    for (auto &global : globals) {
-        jl_link_global(global.second, global.first);
+    if (params._shared_module) {
+        sharedmodules.push_back(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
+    }
+
+    // In imaging mode, we can't inline global variable initializers in order to preserve
+    // the fiction that we don't know what loads from the global will return. Thus, we
+    // need to emit a separate module for the globals before any functions are compiled,
+    // to ensure that the globals are defined when they are compiled.
+    if (jl_options.image_codegen) {
+        if (!params.global_targets.empty()) {
+            void **globalslots = new void*[params.global_targets.size()];
+            void **slot = globalslots;
+            for (auto &global : params.global_targets) {
+                auto GV = global.second;
+                *slot = global.first;
+                jl_ExecutionEngine->addGlobalMapping(GV->getName(), (uintptr_t)slot);
+                slot++;
+            }
+#ifdef __clang_analyzer__
+            static void **leaker = globalslots; // for the purpose of the analyzer, we need to expressly leak this variable or it thinks we forgot to free it
+#endif
+        }
+    }
+    else {
+        StringMap<void*> NewGlobals;
+        for (auto &global : params.global_targets) {
+            NewGlobals[global.second->getName()] = global.first;
+        }
+        for (auto &GV : M->globals()) {
+            auto InitValue = NewGlobals.find(GV.getName());
+            if (InitValue != NewGlobals.end()) {
+                jl_link_global(&GV, InitValue->second);
+            }
+        }
     }
 }
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void *jl_jit_abi_converter_impl(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
+                                jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
+{
+    if (codeinst == nullptr && unspecialized != nullptr)
+        return unspecialized;
+    orc::ThreadSafeModule result_m;
+    std::string gf_thunk_name;
+    {
+        jl_codegen_params_t params(std::make_unique<LLVMContext>(), jl_ExecutionEngine->getDataLayout(), jl_ExecutionEngine->getTargetTriple()); // Locks the context
+        params.getContext().setDiscardValueNames(true);
+        params.cache = true;
+        params.imaging_mode = 0;
+        result_m = jl_create_ts_module("gfthunk", params.tsctx, params.DL, params.TargetTriple);
+        Module *M = result_m.getModuleUnlocked();
+        if (target) {
+            Value *llvmtarget = literal_static_pointer_val((void*)target, PointerType::get(M->getContext(), 0));
+            gf_thunk_name = emit_abi_converter(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget, target_specsig);
+        }
+        else if (invoke == jl_fptr_const_return_addr) {
+            gf_thunk_name = emit_abi_constreturn(M, params, declrt, sigt, nargs, specsig, codeinst->rettype_const);
+        }
+        else {
+            Value *llvminvoke = invoke ? literal_static_pointer_val((void*)invoke, PointerType::get(M->getContext(), 0)) : nullptr;
+            gf_thunk_name = emit_abi_dispatcher(M, params, declrt, sigt, nargs, specsig, codeinst, llvminvoke);
+        }
+        SmallVector<orc::ThreadSafeModule,0> sharedmodules;
+        finish_params(M, params, sharedmodules);
+        assert(sharedmodules.empty());
+    }
+    int8_t gc_state = jl_gc_safe_enter(ct->ptls);
+    jl_ExecutionEngine->addModule(std::move(result_m));
+    uintptr_t Addr = jl_ExecutionEngine->getFunctionAddress(gf_thunk_name);
+    jl_gc_safe_leave(ct->ptls, gc_state);
+    assert(Addr);
+    return (void*)Addr;
+}
+
 
   // lock for places where only single threaded behavior is implemented, so we need GC support
 static jl_mutex_t jitlock;
@@ -261,45 +332,6 @@ static DenseMap<jl_code_instance_t*, SmallVector<jl_code_instance_t*,0>> incompl
 //     However, this guarantee relies on Julia releasing all TSC locks before causing any materialization units to be dispatched
 //     as materialization may need to acquire TSC locks.
 
-
-static void finish_params(Module *M, jl_codegen_params_t &params) JL_NOTSAFEPOINT
-{
-    if (params._shared_module) {
-        sharedmodules.push_back(orc::ThreadSafeModule(std::move(params._shared_module), params.tsctx));
-    }
-
-    // In imaging mode, we can't inline global variable initializers in order to preserve
-    // the fiction that we don't know what loads from the global will return. Thus, we
-    // need to emit a separate module for the globals before any functions are compiled,
-    // to ensure that the globals are defined when they are compiled.
-    if (jl_options.image_codegen) {
-        if (!params.global_targets.empty()) {
-            void **globalslots = new void*[params.global_targets.size()];
-            void **slot = globalslots;
-            for (auto &global : params.global_targets) {
-                auto GV = global.second;
-                *slot = global.first;
-                jl_ExecutionEngine->addGlobalMapping(GV->getName(), (uintptr_t)slot);
-                slot++;
-            }
-#ifdef __clang_analyzer__
-            static void **leaker = globalslots; // for the purpose of the analyzer, we need to expressly leak this variable or it thinks we forgot to free it
-#endif
-        }
-    }
-    else {
-        StringMap<void*> NewGlobals;
-        for (auto &global : params.global_targets) {
-            NewGlobals[global.second->getName()] = global.first;
-        }
-        for (auto &GV : M->globals()) {
-            auto InitValue = NewGlobals.find(GV.getName());
-            if (InitValue != NewGlobals.end()) {
-                jl_link_global(&GV, InitValue->second);
-            }
-        }
-    }
-}
 
 static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t &params, bool forceall=false) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
@@ -516,7 +548,7 @@ static void prepare_compile(jl_code_instance_t *codeinst) JL_NOTSAFEPOINT_LEAVE 
             waiting = jl_analyze_workqueue(codeinst, params, true); // may safepoint
             assert(!waiting); (void)waiting;
             Module *M = emittedmodules[codeinst].getModuleUnlocked();
-            finish_params(M, params);
+            finish_params(M, params, sharedmodules);
             incompletemodules.erase(it);
         }
         // and then indicate this should be compiled now
@@ -548,7 +580,7 @@ static void complete_emit(jl_code_instance_t *edge) JL_NOTSAFEPOINT_LEAVE JL_NOT
             int waiting = jl_analyze_workqueue(callee, params); // may safepoint
             assert(!waiting); (void)waiting;
             Module *M = emittedmodules[callee].getModuleUnlocked();
-            finish_params(M, params);
+            finish_params(M, params, sharedmodules);
             incompletemodules.erase(it);
         }
     }
@@ -764,7 +796,7 @@ void jl_emit_codeinst_to_jit_impl(
         incompletemodules.try_emplace(codeinst, std::move(params), waiting);
     }
     else {
-        finish_params(result_m.getModuleUnlocked(), params);
+        finish_params(result_m.getModuleUnlocked(), params, sharedmodules);
     }
     emittedmodules[codeinst] = std::move(result_m);
 }
@@ -832,7 +864,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
                 }
                 jl_analyze_workqueue(nullptr, params, true);
                 assert(params.workqueue.empty());
-                finish_params(&M, params);
+                finish_params(&M, params, sharedmodules);
             }
         }
         pparams = nullptr;
@@ -1185,11 +1217,11 @@ public:
 
 class JLMemoryUsagePlugin : public ObjectLinkingLayer::Plugin {
 private:
-    std::atomic<size_t> &jit_bytes_size;
+    _Atomic(size_t)* jit_bytes_size;
 
 public:
 
-    JLMemoryUsagePlugin(std::atomic<size_t> &jit_bytes_size)
+    JLMemoryUsagePlugin(_Atomic(size_t)* jit_bytes_size)
         : jit_bytes_size(jit_bytes_size) {}
 
     Error notifyFailed(orc::MaterializationResponsibility &MR) override {
@@ -1226,7 +1258,7 @@ public:
             }
             (void) code_size;
             (void) data_size;
-            this->jit_bytes_size.fetch_add(graph_size, std::memory_order_relaxed);
+            jl_atomic_fetch_add_relaxed(this->jit_bytes_size, graph_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITSize, graph_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITCodeSize, code_size);
             jl_timing_counter_inc(JL_TIMING_COUNTER_JITDataSize, data_size);
@@ -1969,7 +2001,7 @@ JuliaOJIT::JuliaOJIT()
         ES, std::move(ehRegistrar)));
 
     ObjectLayer.addPlugin(std::make_unique<JLDebuginfoPlugin>());
-    ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(jit_bytes_size));
+    ObjectLayer.addPlugin(std::make_unique<JLMemoryUsagePlugin>(&jit_bytes_size));
 #else
     UnlockedObjectLayer.setNotifyLoaded(registerRTDyldJITObject);
 #endif
@@ -2081,7 +2113,7 @@ JuliaOJIT::JuliaOJIT()
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin))), JITSymbolFlags::Exported};
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
-#if JL_LLVM_VERSION < 190000
+#if JL_LLVM_VERSION < 200000
 #ifdef _COMPILER_ASAN_ENABLED_
     // this is a hack to work around a bad assertion:
     //   /workspace/srcdir/llvm-project/llvm/lib/ExecutionEngine/Orc/Core.cpp:3028: llvm::Error llvm::orc::ExecutionSession::OL_notifyResolved(llvm::orc::MaterializationResponsibility&, const SymbolMap&): Assertion `(KV.second.getFlags() & ~JITSymbolFlags::Common) == (I->second & ~JITSymbolFlags::Common) && "Resolving symbol with incorrect flags"' failed.
@@ -2126,7 +2158,9 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     // even though that shouldn't be the case and might be unwise
     Expected<std::unique_ptr<MemoryBuffer>> Obj = CompileLayer.getCompiler()(M);
     if (!Obj) {
+#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
         ES.reportError(Obj.takeError());
+#endif
         errs() << "Failed to add module to JIT!\n";
         errs() << "Dumping failing module\n" << M << "\n";
         return;
@@ -2134,7 +2168,9 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     { auto release = std::move(Lock); }
     auto Err = JuliaOJIT::addObjectFile(JD, std::move(*Obj));
     if (Err) {
+#ifndef __clang_analyzer__ // reportError calls an arbitrary function, which the static analyzer thinks might be a safepoint
         ES.reportError(std::move(Err));
+#endif
         errs() << "Failed to add objectfile to JIT!\n";
         abort();
     }

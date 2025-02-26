@@ -439,7 +439,7 @@ end
                 end
             elseif isa(arg1, PartialStruct)
                 if !isvarargtype(arg1.fields[end])
-                    if 1 ≤ idx ≤ length(arg1.fields)
+                    if !is_field_maybe_undef(arg1, idx)
                         return Const(true)
                     end
                 end
@@ -1073,17 +1073,15 @@ end
 end
 
 @nospecs function getfield_tfunc(𝕃::AbstractLattice, s00, name, boundscheck_or_order)
-    t = isvarargtype(boundscheck_or_order) ? unwrapva(boundscheck_or_order) :
-        widenconst(boundscheck_or_order)
-    hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
+    if !isvarargtype(boundscheck_or_order)
+        t = widenconst(boundscheck_or_order)
+        hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
+    end
     return getfield_tfunc(𝕃, s00, name)
 end
 @nospecs function getfield_tfunc(𝕃::AbstractLattice, s00, name, order, boundscheck)
     hasintersect(widenconst(order), Symbol) || return Bottom
-    if isvarargtype(boundscheck)
-        t = unwrapva(boundscheck)
-        hasintersect(t, Symbol) || hasintersect(t, Bool) || return Bottom
-    else
+    if !isvarargtype(boundscheck)
         hasintersect(widenconst(boundscheck), Bool) || return Bottom
     end
     return getfield_tfunc(𝕃, s00, name)
@@ -1109,7 +1107,7 @@ function _getfield_tfunc_const(@nospecialize(sv), name::Const)
     if isa(sv, DataType) && nv == DATATYPE_TYPES_FIELDINDEX && isdefined(sv, nv)
         return Const(getfield(sv, nv))
     end
-    if isconst(typeof(sv), nv)
+    if !isa(sv, Module) && isconst(typeof(sv), nv)
         if isdefined(sv, nv)
             return Const(getfield(sv, nv))
         end
@@ -1143,8 +1141,8 @@ end
         sty = unwrap_unionall(s)::DataType
         if isa(name, Const)
             nv = _getfield_fieldindex(sty, name)
-            if isa(nv, Int) && 1 <= nv <= length(s00.fields)
-                return unwrapva(s00.fields[nv])
+            if isa(nv, Int) && !is_field_maybe_undef(s00, nv)
+                return unwrapva(partialstruct_getfield(s00, nv))
             end
         end
         s00 = s
@@ -2454,6 +2452,9 @@ const _SPECIAL_BUILTINS = Any[
     Core._apply_iterate,
 ]
 
+# Types compatible with fpext/fptrunc
+const CORE_FLOAT_TYPES = Union{Core.BFloat16, Float16, Float32, Float64}
+
 function isdefined_effects(𝕃::AbstractLattice, argtypes::Vector{Any})
     # consistent if the first arg is immutable
     na = length(argtypes)
@@ -2867,6 +2868,17 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         if !(isprimitivetype(ty) && isprimitivetype(xty))
             return ErrorException
         end
+
+        # fpext and fptrunc have further restrictions on the allowed types.
+        if f === Intrinsics.fpext &&
+            !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
+            return ErrorException
+        end
+        if f === Intrinsics.fptrunc &&
+            !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
+            return ErrorException
+        end
+
         return Union{}
     end
 
