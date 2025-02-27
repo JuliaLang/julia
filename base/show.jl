@@ -1051,10 +1051,13 @@ function check_world_bounded(tn::Core.TypeName)
     isdefined(bnd, :partitions) || return nothing
     partition = @atomic bnd.partitions
     while true
-        if is_defined_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
-            max_world = @atomic partition.max_world
-            max_world == typemax(UInt) && return nothing
-            return Int(partition.min_world):Int(max_world)
+        if is_defined_const_binding(binding_kind(partition))
+            cval = partition_restriction(partition)
+            if isa(cval, Type) && cval <: tn.wrapper
+                max_world = @atomic partition.max_world
+                max_world == typemax(UInt) && return nothing
+                return Int(partition.min_world):Int(max_world)
+            end
         end
         isdefined(partition, :next) || return nothing
         partition = @atomic partition.next
