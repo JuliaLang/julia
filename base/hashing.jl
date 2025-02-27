@@ -30,14 +30,63 @@ julia> hash(10, a) # only use the output of another hash function as the second 
 
 See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 """
-hash(data) = hash(data, HASH_SEED)
-hash(@nospecialize(data), h::UInt64) = hash(objectid(data), h)
+hash(data::Any) = hash(data, HASH_SEED)
+hash(w::WeakRef, h::UInt) = hash(w.value, h)
+
+# Types can't be deleted, so marking as total allows the compiler to look up the hash
+hash(T::Type, h::UInt) =
+    hash((Base.@assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)), h)
+hash(@nospecialize(data), h::UInt) = hash(objectid(data), h)
 
 function mul_parts(a::UInt64, b::UInt64)
     p = widemul(a, b)
     return (p >> 64) % UInt64, p % UInt64
 end
 hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
+
+
+function hash_64_64(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64})
+    return data ⊻ hash_mix(data ⊻ hash_mix(seed, secret[1]), secret[2])
+end
+
+hash_64_32(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64}) =
+    hash_64_64(data, seed, secret) % UInt32
+hash_32_32(data::UInt32, seed::UInt64, secret::NTuple{3, UInt64}) =
+    hash_64_32(UInt64(data), seed, secret)
+
+if UInt === UInt64
+    const hash_uint64 = hash_64_64
+    const hash_uint = hash_64_64
+else
+    const hash_uint64 = hash_64_32
+    const hash_uint = hash_32_32
+end
+
+hash(x::UInt64, h::UInt) = hash_uint64(promote(x, h)..., HASH_SECRET)
+hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
+hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
+
+function hash_integer(n::Integer, h::UInt)
+    h ⊻= hash((n % UInt) ⊻ h)
+    n = abs(n)
+    n >>>= sizeof(UInt) << 3
+    while n != 0
+        h ⊻= hash((n % UInt) ⊻ h)
+        n >>>= sizeof(UInt) << 3
+    end
+    return h
+end
+
+## symbol & expression hashing ##
+if UInt === UInt64
+    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
+    hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x2c97bf8b3de87020)
+else
+    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x96d26dc6))
+    hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x469d72af)
+end
+
+hash(x::Symbol) = objectid(x)
 
 
 load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
@@ -49,7 +98,7 @@ function read_small(ptr::Ptr{UInt8}, n::Int)
         UInt64(unsafe_load(ptr, n))
 end
 
-function hash(
+function hash_bytes(
         ptr::Ptr{UInt8},
         n::Int,
         seed::UInt64,
@@ -119,54 +168,5 @@ function hash(
     return hash_mix(a ⊻ secret[1] ⊻ buflen, b ⊻ secret[2])
 end
 
-
-function hash_64_64(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64})
-    return data ⊻ hash_mix(data ⊻ hash_mix(seed, secret[1]), secret[2])
-end
-
-hash_64_32(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64}) =
-    hash_64_64(data, seed, secret) % UInt32
-hash_32_32(data::UInt32, seed::UInt64, secret::NTuple{3, UInt64}) =
-    hash_64_32(UInt64(data), seed, secret)
-
-if UInt === UInt64
-    const hash_uint64 = hash_64_64
-    const hash_uint = hash_64_64
-else
-    const hash_uint64 = hash_64_32
-    const hash_uint = hash_32_32
-end
-
-hash(x::UInt64, h::UInt) = hash_uint64(x, h, HASH_SECRET)
-hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
-hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
-
-function hash_integer(n::Integer, h::UInt)
-    h ⊻= hash((n % UInt) ⊻ h)
-    n = abs(n)
-    n >>>= sizeof(UInt) << 3
-    while n != 0
-        h ⊻= hash((n % UInt) ⊻ h)
-        n >>>= sizeof(UInt) << 3
-    end
-    return h
-end
-
-
-if UInt === UInt64
-    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
-    hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x2c97bf8b3de87020)
-else
-    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x96d26dc6))
-    hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x469d72af)
-end
-
-# hash(data::String, h::UInt64) = hash(length(data), h)
-hash(data::String, h::UInt64) = @assume_effects :total GC.@preserve data hash(pointer(data), sizeof(data), h, HASH_SECRET)
-
-hash(w::WeakRef, h::UInt64) = hash(w.value, h)
-function hash(T::Type, h::UInt64)
-    return hash((Base.@assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)), h)
-end
-
-hash(x::Symbol) = objectid(x)
+hash(data::String, h::UInt) =
+    @assume_effects :total GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET)
