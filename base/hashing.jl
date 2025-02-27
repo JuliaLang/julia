@@ -98,7 +98,7 @@ function read_small(ptr::Ptr{UInt8}, n::Int)
         UInt64(unsafe_load(ptr, n))
 end
 
-function hash_bytes(
+@assume_effects :terminates_globally function hash_bytes(
         ptr::Ptr{UInt8},
         n::Int,
         seed::UInt64,
@@ -168,5 +168,5 @@ function hash_bytes(
     return hash_mix(a ⊻ secret[1] ⊻ buflen, b ⊻ secret[2])
 end
 
-hash(data::String, h::UInt) =
-    @assume_effects :total GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET)
+@assume_effects :total hash(data::String, h::UInt) =
+    GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET)
