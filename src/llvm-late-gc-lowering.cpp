@@ -2219,7 +2219,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 SmallVector<OperandBundleDef,2> bundles;
                 CI->getOperandBundlesAsDefs(bundles);
                 bool gc_transition = false;
-                Value *ptls;
+                Value *ptls = nullptr;
                 for (auto &bundle: bundles)
                     if (bundle.getTag() == "gc-transition") {
                         gc_transition = true;
