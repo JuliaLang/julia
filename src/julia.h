@@ -163,7 +163,7 @@ typedef struct {
     // jl_value_t *data[];
 } jl_svec_t;
 
-JL_EXTENSION typedef struct _jl_genericmemory_t {
+JL_EXTENSION struct _jl_genericmemory_t {
     JL_DATA_TYPE
     size_t length;
     void *ptr;
@@ -179,7 +179,7 @@ JL_EXTENSION typedef struct _jl_genericmemory_t {
     // size_t padding[1];
     // T inl[];
 #endif
-} jl_genericmemory_t;
+};
 
 JL_EXTENSION typedef struct {
     JL_DATA_TYPE
