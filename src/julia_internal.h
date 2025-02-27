@@ -2008,17 +2008,6 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
   #define JL_GC_ASSERT_LIVE(x) (void)(x)
 #endif
 
-#ifdef _OS_WINDOWS_
-// On Windows, weak symbols do not default to 0 due to a GCC bug
-// (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90826), use symbol
-// aliases with a known value instead.
-#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak,alias(#sym)))
-#define JL_WEAK_SYMBOL_DEFAULT(sym) &sym
-#else
-#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak))
-#define JL_WEAK_SYMBOL_DEFAULT(sym) NULL
-#endif
-
 JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
 
 // -- exports from codegen -- //
