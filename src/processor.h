@@ -207,7 +207,7 @@ typedef struct {
  *
  * Return the data about the function pointers selected.
  */
-jl_image_t jl_init_processor_sysimg(jl_image_buf_t image);
+jl_image_t jl_init_processor_sysimg(jl_image_buf_t image, const char *cpu_target);
 jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image);
 
 // Return the name of the host CPU as a julia string.
@@ -252,7 +252,7 @@ extern JL_DLLEXPORT bool jl_processor_print_help;
  * If the detected/specified CPU name is not available on the LLVM version specified,
  * a fallback CPU name will be used. Unsupported features will be ignored.
  */
-extern "C" JL_DLLEXPORT std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(const char *cpu_target, bool imaging, uint32_t &flags) JL_NOTSAFEPOINT;
 
 /**
  * Returns the CPU name and feature string to be used by LLVM disassembler.
@@ -276,7 +276,7 @@ struct jl_target_spec_t {
 /**
  * Return the list of targets to clone
  */
-extern "C" JL_DLLEXPORT llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(const char *cpu_target) JL_NOTSAFEPOINT;
 // NOLINTEND(clang-diagnostic-return-type-c-linkage)
 struct FeatureName {
     const char *name;
