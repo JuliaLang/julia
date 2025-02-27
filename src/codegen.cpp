@@ -76,6 +76,7 @@
 #include "llvm/Support/Path.h" // for llvm::sys::path
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
+#include <llvm/CodeGen/MachineModuleInfo.h>
 
 #ifdef USE_ITTAPI
 #include "ittapi/ittnotify.h"
@@ -823,7 +824,7 @@ static const auto jlhasnofield_func = new JuliaFunction<>{
 static const auto jlboundserrorv_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_ints),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), T_size->getPointerTo(), T_size}, false); },
+            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), PointerType::getUnqual(T_size->getContext()), T_size}, false); },
     get_attrs_noreturn,
 };
 static const auto jlboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
@@ -1291,13 +1292,13 @@ static const auto memcmp_func = new JuliaFunction<TypeFnContextAndSizeT>{
 };
 static const auto jldlsym_func = new JuliaFunction<>{
     XSTR(jl_load_and_lookup),
-    [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pvoidfunc_ty(C),
-            {getPointerTy(C), getPointerTy(C), PointerType::get(getPointerTy(C), 0)}, false); },
+    [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
+            {getPointerTy(C), getPointerTy(C), getPointerTy(C)}, false); },
     nullptr,
 };
 static const auto jllazydlsym_func = new JuliaFunction<>{
     XSTR(jl_lazy_load_and_lookup),
-    [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pvoidfunc_ty(C),
+    [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
             {JuliaType::get_prjlvalue_ty(C), getPointerTy(C)}, false); },
     nullptr,
 };
@@ -1356,7 +1357,6 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_pjlvalue = PointerType::get(C, 0);
         auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
-        auto T_ppjlvalue = PointerType::get(C, 0);
         auto T_derived = PointerType::get(C, AddressSpace::Derived);
         return FunctionType::get(T_prjlvalue,
             {
@@ -1364,7 +1364,7 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
                 T_pjlvalue, // result
                 getPointerTy(C), // cache
                 T_pjlvalue, // fill
-                FunctionType::get(getPointerTy(C), { getPointerTy(C), T_ppjlvalue }, false)->getPointerTo(), // trampoline
+                getPointerTy(C), // trampoline
                 T_pjlvalue, // env
                 T_derived, // vals
             }, false);
@@ -1443,7 +1443,7 @@ static const auto box_ssavalue_func = new JuliaFunction<TypeFnContextAndSizeT>{
 };
 static const auto jlgetbuiltinfptr_func = new JuliaFunction<>{
     XSTR(jl_get_builtin_fptr),
-    [](LLVMContext &C) { return FunctionType::get(get_func_sig(C)->getPointerTo(),
+    [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
             {JuliaType::get_prjlvalue_ty(C)}, false); },
     nullptr,
 };
@@ -1523,7 +1523,7 @@ static const auto julia_call = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-            {get_func_sig(C)->getPointerTo(),
+            {getPointerTy(C),
              T_prjlvalue}, // %f
             true); }, // %args
     get_attrs_basic,
@@ -1536,7 +1536,7 @@ static const auto julia_call2 = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-            {get_func2_sig(C)->getPointerTo(),
+            {getPointerTy(C),
              T_prjlvalue, // %arg1
              T_prjlvalue}, // %f
             true); }, // %args
@@ -1550,7 +1550,7 @@ static const auto julia_call3 = new JuliaFunction<>{
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived);
         return FunctionType::get(T_prjlvalue,
-            {get_func3_sig(C)->getPointerTo(),
+            {getPointerTy(C),
              T}, // %f
             true); }, // %args
     get_attrs_basic,
@@ -2164,7 +2164,13 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty, Align align)
 {
     ++EmittedAllocas;
-    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), nullptr, align, "", /*InsertBefore=*/ctx.topalloca);
+    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), nullptr, align, "",
+#if JL_LLVM_VERSION >= 200000
+                /*InsertBefore=*/ctx.topalloca->getIterator()
+#else
+                /*InsertBefore=*/ctx.topalloca
+#endif
+    );
 }
 
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, unsigned nb, Align align)
@@ -2438,7 +2444,11 @@ static void alloc_def_flag(jl_codectx_t &ctx, jl_varinfo_t& vi)
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block)
 {
     Function *f = irbuilder.GetInsertBlock()->getParent();
+#if JL_LLVM_VERSION >= 200000
+    Function *trap_func = Intrinsic::getOrInsertDeclaration(
+#else
     Function *trap_func = Intrinsic::getDeclaration(
+#endif
             f->getParent(),
             Intrinsic::trap);
     irbuilder.CreateCall(trap_func);
@@ -2461,7 +2471,11 @@ static void CreateConditionalAbort(IRBuilder<> &irbuilder, Value *test)
     BasicBlock *postBB = BasicBlock::Create(irbuilder.getContext(), "post_abort", f);
     irbuilder.CreateCondBr(test, abortBB, postBB);
     irbuilder.SetInsertPoint(abortBB);
+#if JL_LLVM_VERSION >= 200000
+    Function *trap_func = Intrinsic::getOrInsertDeclaration(
+#else
     Function *trap_func = Intrinsic::getDeclaration(
+#endif
             f->getParent(),
             Intrinsic::trap);
     irbuilder.CreateCall(trap_func);
@@ -3419,7 +3433,11 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
         counter);
     assert(allunboxed); (void)allunboxed;
     ctx.builder.SetInsertPoint(defaultBB);
+#if JL_LLVM_VERSION >= 200000
+    Function *trap_func = Intrinsic::getOrInsertDeclaration(
+#else
     Function *trap_func = Intrinsic::getDeclaration(
+#endif
         ctx.f->getParent(),
         Intrinsic::trap);
     ctx.builder.CreateCall(trap_func);
@@ -5181,7 +5199,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
         std::string namep("p");
         namep += specFunctionObject;
         GlobalVariable *GV = cast_or_null<GlobalVariable>(jl_Module->getNamedValue(namep));
-        Type *pfunc = ctx.types().T_jlfunc->getPointerTo();
+        Type *pfunc = PointerType::getUnqual(ctx.builder.getContext());
         if (GV == nullptr) {
             GV = new GlobalVariable(*jl_Module, pfunc, false,
                                     GlobalVariable::ExternalLinkage,
@@ -7511,8 +7529,16 @@ static Function *gen_cfun_wrapper(
         Function::arg_iterator AI = cw_make->arg_begin();
         Argument *Tramp = &*AI; ++AI;
         Argument *NVal = &*AI; ++AI;
+#if JL_LLVM_VERSION >= 200000
+        Function *init_trampoline = Intrinsic::getOrInsertDeclaration(cw_make->getParent(), Intrinsic::init_trampoline);
+#else
         Function *init_trampoline = Intrinsic::getDeclaration(cw_make->getParent(), Intrinsic::init_trampoline);
+#endif
+#if JL_LLVM_VERSION >= 200000
+        Function *adjust_trampoline = Intrinsic::getOrInsertDeclaration(cw_make->getParent(), Intrinsic::adjust_trampoline);
+#else
         Function *adjust_trampoline = Intrinsic::getDeclaration(cw_make->getParent(), Intrinsic::adjust_trampoline);
+#endif
         cwbuilder.CreateCall(init_trampoline, {
                 Tramp,
                 cw,
@@ -7866,8 +7892,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         union_alloca_type((jl_uniontype_t*)jlrettype, allunbox, props.union_bytes, props.union_align, props.union_minalign);
         if (props.union_bytes) {
             props.cc = jl_returninfo_t::Union;
-            Type *AT = ArrayType::get(getInt8Ty(M->getContext()), props.union_bytes);
-            fsig.push_back(AT->getPointerTo());
+            fsig.push_back(PointerType::getUnqual(M->getContext()));
             argnames.push_back("union_bytes_return");
             Type *pair[] = { T_prjlvalue, getInt8Ty(M->getContext()) };
             rt = StructType::get(M->getContext(), ArrayRef<Type*>(pair));
@@ -7896,7 +7921,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
             props.union_align = props.union_minalign = julia_alignment(jlrettype);
             // sret is always passed from alloca
             assert(M);
-            fsig.push_back(rt->getPointerTo(M->getDataLayout().getAllocaAddrSpace()));
+            fsig.push_back(PointerType::get(M->getContext(), M->getDataLayout().getAllocaAddrSpace()));
             argnames.push_back("sret_return");
             srt = rt;
             rt = getVoidTy(M->getContext());
@@ -10145,17 +10170,29 @@ namespace llvm {
     class MachineBasicBlock;
     class MachineFunction;
     raw_ostream& operator<<(raw_ostream &OS, const MachineBasicBlock &MBB);
+#if JL_LLVM_VERSION >= 200000
+    void printMIR(raw_ostream &OS, const MachineModuleInfo &MMI,
+                const MachineFunction &MF);
+#else
     void printMIR(raw_ostream &OS, const MachineFunction &MF);
+#endif
 }
 extern "C" void jl_dump_llvm_mbb(void *v)
 {
     errs() << *(llvm::MachineBasicBlock*)v;
 }
+#if JL_LLVM_VERSION >= 200000
+extern "C" void jl_dump_llvm_mfunction(void *m, void *v)
+{
+    llvm::printMIR(errs(), *(llvm::MachineModuleInfo*)v,
+                *(llvm::MachineFunction*)v);
+}
+#else
 extern "C" void jl_dump_llvm_mfunction(void *v)
 {
     llvm::printMIR(errs(), *(llvm::MachineFunction*)v);
 }
-
+#endif
 
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;

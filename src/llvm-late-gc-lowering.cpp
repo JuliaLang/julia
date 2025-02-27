@@ -348,10 +348,18 @@ void LateLowerGCFrame::LiftSelect(State &S, SelectInst *SI) {
         if (isa<VectorType>(Cond->getType())) {
             Cond = ExtractElementInst::Create(Cond,
                     ConstantInt::get(Type::getInt32Ty(Cond->getContext()), i),
+#if JL_LLVM_VERSION >= 200000
+                    "", SI->getIterator());
+#else
                     "", SI);
+#endif
         }
         assert(FalseElem->getType() == TrueElem->getType());
+#if JL_LLVM_VERSION >= 200000
+        SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI->getIterator());
+#else
         SelectInst *SelectBase = SelectInst::Create(Cond, TrueElem, FalseElem, "gclift", SI);
+#endif
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[SelectBase] = Number;
         S.ReversePtrNumbering[Number] = SelectBase;
@@ -389,7 +397,11 @@ void LateLowerGCFrame::LiftPhi(State &S, PHINode *Phi) {
         Numbers.resize(NumRoots);
     }
     for (unsigned i = 0; i < NumRoots; ++i) {
+#if JL_LLVM_VERSION >= 200000
+        PHINode *lift = PHINode::Create(T_prjlvalue, Phi->getNumIncomingValues(), "gclift", Phi->getIterator());
+#else
         PHINode *lift = PHINode::Create(T_prjlvalue, Phi->getNumIncomingValues(), "gclift", Phi);
+#endif
         int Number = ++S.MaxPtrNumber;
         S.AllPtrNumbering[lift] = Number;
         S.ReversePtrNumbering[Number] = lift;
@@ -2000,9 +2012,14 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
     AllocaInst *Frame = nullptr;
     unsigned allocaAddressSpace = F.getParent()->getDataLayout().getAllocaAddrSpace();
     if (T_prjlvalue) {
-        T_pprjlvalue = T_prjlvalue->getPointerTo();
-        Frame = new AllocaInst(T_prjlvalue, allocaAddressSpace,
-            ConstantInt::get(T_int32, maxframeargs), "jlcallframe", StartOff);
+        T_pprjlvalue = PointerType::getUnqual(T_prjlvalue->getContext());
+        Frame = new AllocaInst(T_prjlvalue, allocaAddressSpace,ConstantInt::get(T_int32, maxframeargs), "jlcallframe",
+#if JL_LLVM_VERSION >= 200000
+            StartOff->getIterator()
+#else
+            StartOff
+#endif
+        );
     }
     SmallVector<CallInst*, 0> write_barriers;
     for (BasicBlock &BB : F) {
@@ -2045,13 +2062,21 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 /* No replacement */
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
                 auto *obj = CI->getOperand(0);
+#if JL_LLVM_VERSION >= 200000
+                auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI->getIterator());
+#else
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI);
+#endif
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
             } else if (gc_loaded_func != nullptr && callee == gc_loaded_func) {
                 auto *obj = CI->getOperand(1);
+#if JL_LLVM_VERSION >= 200000
+                auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI->getIterator());
+#else
                 auto *ASCI = new AddrSpaceCastInst(obj, CI->getType(), "", CI);
+#endif
                 ASCI->takeName(CI);
                 CI->replaceAllUsesWith(ASCI);
                 UpdatePtrNumbering(CI, ASCI, S);
@@ -2193,7 +2218,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 }
                 ReplacementArgs.push_back(nframeargs == 0 ?
                     (llvm::Value*)ConstantPointerNull::get(T_pprjlvalue) :
-                    Builder.CreateAddrSpaceCast(Frame, T_prjlvalue->getPointerTo(0)));
+                    Builder.CreateAddrSpaceCast(Frame, PointerType::getUnqual(T_prjlvalue->getContext())));
                 ReplacementArgs.push_back(ConstantInt::get(T_int32, nframeargs));
                 if (callee == call2_func) {
                     // move trailing arg to the end now
@@ -2204,7 +2229,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 FunctionType *FTy = callee == call3_func ? JuliaType::get_jlfunc3_ty(CI->getContext()) :
                                     callee == call2_func ? JuliaType::get_jlfunc2_ty(CI->getContext()) :
                                                            JuliaType::get_jlfunc_ty(CI->getContext());
+#if JL_LLVM_VERSION >= 200000
+                CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI->getIterator());
+#else
                 CallInst *NewCall = CallInst::Create(FTy, new_callee, ReplacementArgs, "", CI);
+#endif
                 NewCall->setTailCallKind(CI->getTailCallKind());
                 auto callattrs = CI->getAttributes();
                 callattrs = AttributeList::get(CI->getContext(), getFnAttrs(callattrs), getRetAttrs(callattrs), {});
@@ -2251,7 +2280,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                     continue;
                 } else {
                     // remove all operand bundles
+#if JL_LLVM_VERSION >= 200000
+                    CallInst *NewCall = CallInst::Create(CI, None, CI->getIterator());
+#else
                     CallInst *NewCall = CallInst::Create(CI, None, CI);
+#endif
                     NewCall->takeName(CI);
                     NewCall->copyMetadata(*CI);
                     CI->replaceAllUsesWith(NewCall);
@@ -2318,14 +2351,18 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
+#if JL_LLVM_VERSION >= 200000
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
+#else
         "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
+#endif
 
     Value *Val = GetPtrForNumber(S, R, InsertBefore);
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
     assert(Val->getType() == T_prjlvalue);
-    new StoreInst(Val, slotAddress, InsertBefore);
+    new StoreInst(Val, slotAddress, InsertBefore->getIterator());
 }
 
 void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot,
@@ -2489,7 +2526,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 assert(Elem->getType() == T_prjlvalue);
                 //auto Idxs = ArrayRef<unsigned>(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
-                Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
+                Value *shadowStore = new StoreInst(Elem, slotAddress, SI->getIterator());
                 (void)shadowStore;
                 // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
                 AllocaSlot++;
