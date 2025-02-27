@@ -1956,7 +1956,7 @@ end
 function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs, argtypes)::ArgInfo,
                                sv::AbsIntState)
     @nospecialize f
-    la = length(argtypes)
+    la = length(argtypes)::Int
     𝕃ᵢ = typeinf_lattice(interp)
     ⊑, ⊏, ⊔, ⊓ = partialorder(𝕃ᵢ), strictpartialorder(𝕃ᵢ), join(𝕃ᵢ), meet(𝕃ᵢ)
     if has_conditional(𝕃ᵢ, sv) && f === Core.ifelse && fargs isa Vector{Any} && la == 4
@@ -2622,7 +2622,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
         max_methods::Int = get_max_methods(interp, f, sv))
     (; fargs, argtypes) = arginfo
-    la = length(argtypes)
+    la = length(argtypes)::Int
     𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
         if f === _apply_iterate
