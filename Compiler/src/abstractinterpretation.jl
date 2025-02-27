@@ -2148,23 +2148,13 @@ function form_partially_defined_struct(@nospecialize(obj), @nospecialize(name))
     isabstracttype(objt) && return nothing
     fldidx = try_compute_fieldidx(objt, name.val)
     fldidx === nothing && return nothing
+    isa(obj, PartialStruct) && return define_field(obj, fldidx)
     nminfld = datatype_min_ninitialized(objt)
-    if ismutabletype(objt)
-        # A mutable struct can have non-contiguous undefined fields, but `PartialStruct` cannot
-        # model such a state. So here `PartialStruct` can be used to represent only the
-        # objects where the field following the minimum initialized fields is also defined.
-        if fldidx ≠ nminfld+1
-            # if it is already represented as a `PartialStruct`, we can add one more
-            # `isdefined`-field information on top of those implied by its `fields`
-            if !(obj isa PartialStruct && fldidx == length(obj.fields)+1)
-                return nothing
-            end
-        end
-    else
-        fldidx > nminfld || return nothing
-    end
-    return PartialStruct(fallback_lattice, objt0, Any[obj isa PartialStruct && i≤length(obj.fields) ?
-        obj.fields[i] : fieldtype(objt0,i) for i = 1:fldidx])
+    fldidx > nminfld || return nothing
+    undef = partialstruct_init_undef(objt, fldidx; all_defined = false)
+    undef[fldidx] = false
+    fields = Any[fieldtype(objt0, i) for i = 1:fldidx]
+    return PartialStruct(fallback_lattice, objt0, undef, fields)
 end
 
 function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any}, call::CallMeta)
@@ -2665,12 +2655,24 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         pushfirst!(argtypes, ft)
         refinements = nothing
-        if sv isa InferenceState && f === typeassert
-            # perform very limited back-propagation of invariants after this type assertion
-            if rt !== Bottom && isa(fargs, Vector{Any})
+        if sv isa InferenceState
+            if f === typeassert
+                # perform very limited back-propagation of invariants after this type assertion
+                if rt !== Bottom && isa(fargs, Vector{Any})
+                    farg2 = ssa_def_slot(fargs[2], sv)
+                    if farg2 isa SlotNumber
+                        refinements = SlotRefinement(farg2, rt)
+                    end
+                end
+            elseif f === setfield! && length(argtypes) == 4 && isa(argtypes[3], Const)
+                # from there on we know that the struct field will never be undefined,
+                # so we try to encode that information with a `PartialStruct`
                 farg2 = ssa_def_slot(fargs[2], sv)
                 if farg2 isa SlotNumber
-                    refinements = SlotRefinement(farg2, rt)
+                    refined = form_partially_defined_struct(argtypes[2], argtypes[3])
+                    if refined !== nothing
+                        refinements = SlotRefinement(farg2, refined)
+                    end
                 end
             end
         end
@@ -3409,7 +3411,7 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
         abstract_eval_value(interp, x, sstate, sv)
     end
     cconv = e.args[5]
-    if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt16}))
+    if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt16, Bool}))
         override = decode_effects_override(v[2])
         effects = override_effects(effects, override)
     end
@@ -3713,8 +3715,7 @@ end
 @nospecializeinfer function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
-        anyrefine = !isvarargtype(rt.fields[end]) &&
-            length(rt.fields) > datatype_min_ninitialized(rt.typ)
+        anyrefine = refines_definedness_information(rt)
         𝕃 = typeinf_lattice(info.interp)
         ⊏ = strictpartialorder(𝕃)
         for i in 1:length(fields)
@@ -3726,7 +3727,7 @@ end
             end
             fields[i] = a
         end
-        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, fields)
+        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, rt.undef, fields)
     end
     if isa(rt, PartialOpaque)
         return rt # XXX: this case was missed in #39512

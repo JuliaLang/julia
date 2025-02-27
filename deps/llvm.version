@@ -2,14 +2,14 @@
 
 ## jll artifact
 LLVM_JLL_NAME := libLLVM
-LLVM_ASSERT_JLL_VER := 18.1.7+3
+LLVM_ASSERT_JLL_VER := 19.1.7+1
 ## source build
 # Version number of LLVM
-LLVM_VER := 18.1.7
+LLVM_VER := 19.1.7
 # Git branch name in `LLVM_GIT_URL` repository
-LLVM_BRANCH=julia-18.1.7-2
+LLVM_BRANCH=julia-19.1.7-1
 # Git ref in `LLVM_GIT_URL` repository
-LLVM_SHA1=julia-18.1.7-2
+LLVM_SHA1=julia-19.1.7-1
 
 ## Following options are used to automatically fetch patchset from Julia's fork.  This is
 ## useful if you want to build an external LLVM while still applying Julia's patches.
@@ -18,6 +18,6 @@ LLVM_APPLY_JULIA_PATCHES := 0
 # GitHub repository to use for fetching the Julia patches to apply to LLVM source code.
 LLVM_JULIA_DIFF_GITHUB_REPO := https://github.com/llvm/llvm-project
 # Base GitHub ref for generating the diff.
-LLVM_BASE_REF := llvm:llvmorg-18.1.7
+LLVM_BASE_REF := llvm:llvmorg-19.1.7
 # Julia fork's GitHub ref for generating the diff.
-LLVM_JULIA_REF := JuliaLang:julia-18.1.7-2
+LLVM_JULIA_REF := JuliaLang:julia-19.1.7-1

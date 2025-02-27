@@ -10,6 +10,7 @@ being used for this purpose alone.
 """
 module Timings
 
+using ..Core
 using ..Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
     @inbounds, copy, backtrace
 
@@ -92,7 +93,7 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = RefValue{Bool}(false)
 
-function finish!(interp::AbstractInterpreter, caller::InferenceState)
+function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt)
     result = caller.result
     opt = result.src
     if opt isa OptimizationState
@@ -108,12 +109,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
         ci = result.ci
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
-        if last(result.valid_worlds) >= get_world_counter()
-            # TODO: this should probably come after all store_backedges (after optimizations) for the entire graph in finish_cycle
-            # since we should be requiring that all edges first get their backedges set, as a batch
-            result.valid_worlds = WorldRange(first(result.valid_worlds), typemax(UInt))
-        end
-        if last(result.valid_worlds) == typemax(UInt)
+        if last(result.valid_worlds) >= validation_world
             # if we can record all of the backedges in the global reverse-cache,
             # we can now widen our applicability in the global cache too
             store_backedges(ci, edges)
@@ -147,9 +143,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState)
             ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
             result.analysis_results, di, edges)
         engine_reject(interp, ci)
-        if !discard_src && isdefined(interp, :codegen) && uncompressed isa CodeInfo
+        codegen = codegen_cache(interp)
+        if !discard_src && codegen !== nothing && uncompressed isa CodeInfo
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
-            interp.codegen[ci] = uncompressed
+            codegen[ci] = uncompressed
             if bootstrapping_compiler && inferred_result == nothing
                 # This is necessary to get decent bootstrapping performance
                 # when compiling the compiler to inject everything eagerly
@@ -189,8 +186,9 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
         ci, nothing, const_flag, min_world, max_world, ipo_effects, nothing, di, edges)
     code_cache(interp)[mi] = ci
-    if isdefined(interp, :codegen)
-        interp.codegen[ci] = src
+    codegen = codegen_cache(interp)
+    if codegen !== nothing
+        codegen[ci] = src
     end
     engine_reject(interp, ci)
     return nothing
@@ -202,7 +200,14 @@ function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
     if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
         optimize(frame.interp, opt, frame.result)
     end
-    finish!(frame.interp, frame)
+    validation_world = get_world_counter()
+    finish!(frame.interp, frame, validation_world)
+    if isdefined(frame.result, :ci)
+        # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
+        # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
+        # validity.
+        ccall(:jl_promote_ci_to_current, Cvoid, (Any, UInt), frame.result.ci, validation_world)
+    end
     if frame.cycleid != 0
         frames = frame.callstack::Vector{AbsIntState}
         @assert frames[end] === frame
@@ -236,10 +241,19 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
             optimize(caller.interp, opt, caller.result)
         end
     end
+    validation_world = get_world_counter()
+    cis = CodeInstance[]
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
-        finish!(caller.interp, caller)
+        finish!(caller.interp, caller, validation_world)
+        if isdefined(caller.result, :ci)
+            push!(cis, caller.result.ci)
+        end
     end
+    # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
+    # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
+    # validity.
+    ccall(:jl_promote_cis_to_current, Cvoid, (Ptr{CodeInstance}, Csize_t, UInt), cis, length(cis), validation_world)
     resize!(frames, cycleid - 1)
     return nothing
 end
@@ -501,7 +515,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter)
             rettype_const = result_type.parameters[1]
             const_flags = 0x2
         elseif isa(result_type, PartialStruct)
-            rettype_const = result_type.fields
+            rettype_const = (result_type.undef, result_type.fields)
             const_flags = 0x2
         elseif isa(result_type, InterConditional)
             rettype_const = result_type
@@ -945,8 +959,9 @@ function cached_return_type(code::CodeInstance)
     rettype_const = code.rettype_const
     # the second subtyping/egal conditions are necessary to distinguish usual cases
     # from rare cases when `Const` wrapped those extended lattice type objects
-    if isa(rettype_const, Vector{Any}) && !(Vector{Any} <: rettype)
-        return PartialStruct(fallback_lattice, rettype, rettype_const)
+    if isa(rettype_const, Tuple{BitVector, Vector{Any}}) && !(Tuple{BitVector, Vector{Any}} <: rettype)
+        undef, fields = rettype_const
+        return PartialStruct(fallback_lattice, rettype, undef, fields)
     elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
         return rettype_const
     elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
@@ -1156,7 +1171,10 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
 
     ci = result.ci # reload from result in case it changed
     @assert frame.cache_mode != CACHE_MODE_NULL
-    @assert is_result_constabi_eligible(result) || (!isdefined(interp, :codegen) || haskey(interp.codegen, ci))
+    @assert is_result_constabi_eligible(result) || begin
+            codegen = codegen_cache(interp)
+            codegen === nothing || haskey(codegen, ci)
+        end
     @assert is_result_constabi_eligible(result) == use_const_api(ci)
     @assert isdefined(ci, :inferred) "interpreter did not fulfill our expectations"
     if !is_cached(frame) && source_mode == SOURCE_MODE_ABI
@@ -1222,46 +1240,62 @@ function collectinvokes!(wq::Vector{CodeInstance}, ci::CodeInfo)
     end
 end
 
-# This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
-function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
-    interp = NativeInterpreter(world)
-    ci = typeinf_ext(interp, mi, source_mode)
-    if source_mode == SOURCE_MODE_ABI && ci isa CodeInstance && !ci_has_invoke(ci)
-        inspected = IdSet{CodeInstance}()
-        tocompile = Vector{CodeInstance}()
-        push!(tocompile, ci)
-        while !isempty(tocompile)
-            # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
-            callee = pop!(tocompile)
-            ci_has_invoke(callee) && continue
-            callee in inspected && continue
-            src = get(interp.codegen, callee, nothing)
-            if !isa(src, CodeInfo)
-                src = @atomic :monotonic callee.inferred
-                if isa(src, String)
-                    src = _uncompressed_ir(callee, src)
-                end
-                if !isa(src, CodeInfo)
-                    newcallee = typeinf_ext(interp, callee.def, source_mode)
-                    if newcallee isa CodeInstance
-                        callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
-                        push!(tocompile, newcallee)
-                    #else
-                    #    println("warning: could not get source code for ", callee.def)
-                    end
-                    continue
-                end
+function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UInt8)
+    source_mode == SOURCE_MODE_ABI || return ci
+    ci isa CodeInstance && !ci_has_invoke(ci) || return ci
+    codegen = codegen_cache(interp)
+    codegen === nothing && return ci
+    inspected = IdSet{CodeInstance}()
+    tocompile = Vector{CodeInstance}()
+    push!(tocompile, ci)
+    while !isempty(tocompile)
+        # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
+        callee = pop!(tocompile)
+        ci_has_invoke(callee) && continue
+        callee in inspected && continue
+        src = get(codegen, callee, nothing)
+        if !isa(src, CodeInfo)
+            src = @atomic :monotonic callee.inferred
+            if isa(src, String)
+                src = _uncompressed_ir(callee, src)
             end
-            push!(inspected, callee)
-            collectinvokes!(tocompile, src)
-            ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
+            if !isa(src, CodeInfo)
+                newcallee = typeinf_ext(interp, callee.def, source_mode)
+                if newcallee isa CodeInstance
+                    callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
+                    push!(tocompile, newcallee)
+                #else
+                #    println("warning: could not get source code for ", callee.def)
+                end
+                continue
+            end
         end
+        push!(inspected, callee)
+        collectinvokes!(tocompile, src)
+        ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
     end
     return ci
 end
 
+function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
+    ci = typeinf_ext(interp, mi, source_mode)
+    ci = add_codeinsts_to_jit!(interp, ci, source_mode)
+    return ci
+end
+
+# This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
+function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
+    interp = NativeInterpreter(world)
+    return typeinf_ext_toplevel(interp, mi, source_mode)
+end
+
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::Bool)
+# The trim_mode can be any of:
+const TRIM_NO = 0
+const TRIM_SAFE = 1
+const TRIM_UNSAFE = 2
+const TRIM_UNSAFE_WARN = 3
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
     inspected = IdSet{CodeInstance}()
     tocompile = Vector{CodeInstance}()
     codeinfos = []
@@ -1309,7 +1343,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                 src = codeinfo_for_const(interp, mi, callee.rettype_const)
             elseif haskey(interp.codegen, callee)
                 src = interp.codegen[callee]
-            elseif isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && !trim
+            elseif isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && trim_mode == TRIM_NO
                 src = retrieve_code_info(mi, get_inference_world(interp))
             else
                 # TODO: typeinf_code could return something with different edges/ages/owner/abi (needing an update to callee), which we don't handle here
@@ -1324,14 +1358,18 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                 end
                 push!(codeinfos, callee)
                 push!(codeinfos, src)
-            elseif trim
-                println("warning: failed to get code for ", mi)
             end
         end
         latest = false
     end
+    if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
+        verify_typeinf_trim(codeinfos, trim_mode == TRIM_UNSAFE_WARN)
+    end
     return codeinfos
 end
+
+verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool) = (msg = "--trim verifier not defined"; onlywarn ? println(io, msg) : error(msg))
+verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = invokelatest(verify_typeinf_trim, stdout, codeinfos, onlywarn)
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     world = tls_world_age()
