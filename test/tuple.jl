@@ -369,9 +369,9 @@ end
     @test !isless((1,2), (1,2))
     @test !isless((2,1), (1,2))
 
-    @test hash(()) === Base.tuplehash_seed ⊻ Base.RAPID_SEED
-    @test hash((1,)) === hash(1, Base.tuplehash_seed ⊻ Base.RAPID_SEED)
-    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed ⊻ Base.RAPID_SEED))
+    @test hash(()) === Base.tuplehash_seed ⊻ Base.HASH_SEED
+    @test hash((1,)) === hash(1, Base.tuplehash_seed ⊻ Base.HASH_SEED)
+    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed ⊻ Base.HASH_SEED))
 
     # Test Any32 methods
     t = ntuple(identity, 32)
@@ -393,7 +393,7 @@ end
     @test !isless((t...,1,2), (t...,1,2))
     @test !isless((t...,2,1), (t...,1,2))
 
-    @test hash(t) === foldr(hash, vcat(1:32, (), Base.RAPID_SEED))
+    @test hash(t) === foldr(hash, vcat(1:32, (), Base.HASH_SEED))
 end
 
 @testset "functions" begin

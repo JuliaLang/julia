@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const RAPID_SEED = UInt64(0xbdd89aa982704029)
-const RAPID_SECRET = tuple(
+const HASH_SEED = UInt64(0xbdd89aa982704029)
+const HASH_SECRET = tuple(
     0x2d358dccaa6c78a5,
     0x8bb84b93962eacc9,
     0x4b33a62ed433d4a3,
@@ -30,17 +30,15 @@ julia> hash(10, a) # only use the output of another hash function as the second 
 
 See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 """
-hash(data) = hash(data, RAPID_SEED)
+hash(data) = hash(data, HASH_SEED)
 hash(@nospecialize(data), h::UInt64) = hash(objectid(data), h)
 
 function mul_parts(a::UInt64, b::UInt64)
     p = widemul(a, b)
     return (p >> 64) % UInt64, p % UInt64
 end
-rapid_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
+hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
-mul_hi64(A::UInt64, B::UInt64) = ((widen(A) * B) >> 64) % UInt64
-rapid_mix(A, B) = mul_hi64(A, B) ⊻ (A * B)
 
 load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
     unsafe_load(convert(Ptr{T}, ptr + i - 1))
@@ -58,7 +56,7 @@ function hash(
         secret::NTuple{3, UInt64}
     )
     buflen = UInt64(n)
-    seed = seed ⊻ (rapid_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
+    seed = seed ⊻ (hash_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
 
     a = zero(UInt64)
     b = zero(UInt64)
@@ -81,15 +79,15 @@ function hash(
             see1 = seed
             see2 = seed
             while i ≥ 48
-                seed = rapid_mix(
+                seed = hash_mix(
                     load_le(UInt64, ptr, pos) ⊻ secret[1],
                     load_le(UInt64, ptr, pos + 8) ⊻ seed
                 )
-                see1 = rapid_mix(
+                see1 = hash_mix(
                     load_le(UInt64, ptr, pos + 16) ⊻ secret[2],
                     load_le(UInt64, ptr, pos + 24) ⊻ see1
                 )
-                see2 = rapid_mix(
+                see2 = hash_mix(
                     load_le(UInt64, ptr, pos + 32) ⊻ secret[3],
                     load_le(UInt64, ptr, pos + 40) ⊻ see2
                 )
@@ -99,12 +97,12 @@ function hash(
             seed = seed ⊻ see1 ⊻ see2
         end
         if i > 16
-            seed = rapid_mix(
+            seed = hash_mix(
                 load_le(UInt64, ptr, pos) ⊻ secret[3],
                 load_le(UInt64, ptr, pos + 8) ⊻ seed ⊻ secret[2]
             )
             if i > 32
-                seed = rapid_mix(
+                seed = hash_mix(
                     load_le(UInt64, ptr, pos + 16) ⊻ secret[3],
                     load_le(UInt64, ptr, pos + 24) ⊻ seed
                 )
@@ -118,12 +116,12 @@ function hash(
     a = a ⊻ secret[2]
     b = b ⊻ seed
     b, a = mul_parts(a, b)
-    return rapid_mix(a ⊻ secret[1] ⊻ buflen, b ⊻ secret[2])
+    return hash_mix(a ⊻ secret[1] ⊻ buflen, b ⊻ secret[2])
 end
 
 
 function hash_64_64(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64})
-    return data ⊻ rapid_mix(data ⊻ rapid_mix(seed, secret[1]), secret[2])
+    return data ⊻ hash_mix(data ⊻ hash_mix(seed, secret[1]), secret[2])
 end
 
 hash_64_32(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64}) =
@@ -139,7 +137,7 @@ else
     const hash_uint = hash_32_32
 end
 
-hash(x::UInt64, h::UInt) = hash_uint64(x, h, RAPID_SECRET)
+hash(x::UInt64, h::UInt) = hash_uint64(x, h, HASH_SECRET)
 hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
 hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
@@ -164,7 +162,7 @@ else
 end
 
 # hash(data::String, h::UInt64) = hash(length(data), h)
-hash(data::String, h::UInt64) = @assume_effects :total GC.@preserve data hash(pointer(data), sizeof(data), h, RAPID_SECRET)
+hash(data::String, h::UInt64) = @assume_effects :total GC.@preserve data hash(pointer(data), sizeof(data), h, HASH_SECRET)
 
 hash(w::WeakRef, h::UInt64) = hash(w.value, h)
 function hash(T::Type, h::UInt64)
