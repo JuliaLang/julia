@@ -189,14 +189,19 @@ macro __SOURCE_FILE__()
     return QuoteNode(__source__.file::Symbol)
 end
 
-module IRShow end
+module IRShow end # relies on string and IO operations defined in Base
+baremodule TrimVerifier end # relies on IRShow, so define this afterwards
+
 function load_irshow!()
     if isdefined(Base, :end_base_include)
         # This code path is exclusively for Revise, which may want to re-run this
         # after bootstrap.
-        include(IRShow, Base.joinpath(Base.dirname(Base.String(@__SOURCE_FILE__)), "ssair/show.jl"))
+        Compilerdir = Base.dirname(Base.String(@__SOURCE_FILE__))
+        include(IRShow, Base.joinpath(Compilerdir, "ssair/show.jl"))
+        include(TrimVerifier, Base.joinpath(Compilerdir, "verifytrim.jl"))
     else
         include(IRShow, "ssair/show.jl")
+        include(TrimVerifier, "verifytrim.jl")
     end
 end
 if !isdefined(Base, :end_base_include)

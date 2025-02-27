@@ -240,21 +240,32 @@ JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 #endif
 }
 
-void *jl_find_dynamic_library_by_addr(void *symbol) {
+void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err) {
     void *handle;
 #ifdef _OS_WINDOWS_
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                             (LPCWSTR)symbol,
                             (HMODULE*)&handle)) {
-        jl_error("could not load base module");
+        if (throw_err)
+            jl_error("could not load base module");
+        return NULL;
     }
 #else
     Dl_info info;
     if (!dladdr(symbol, &info) || !info.dli_fname) {
-        jl_error("could not load base module");
+        if (throw_err)
+            jl_error("could not load base module");
+        return NULL;
     }
     handle = dlopen(info.dli_fname, RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
-    dlclose(handle); // Undo ref count increment from `dlopen`
+#if !defined(__APPLE__)
+    if (handle == RTLD_DEFAULT && (RTLD_DEFAULT != NULL || dlerror() == NULL)) {
+        // We loaded the executable but got RTLD_DEFAULT back, ask for a real handle instead
+        handle = dlopen("", RTLD_NOW | RTLD_NOLOAD | RTLD_LOCAL);
+    }
+#endif
+    if (handle != NULL)
+        dlclose(handle); // Undo ref count increment from `dlopen`
 #endif
     return handle;
 }
@@ -277,7 +288,7 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
 
     // modname == NULL is a sentinel value requesting the handle of libjulia-internal
     if (modname == NULL)
-        return jl_find_dynamic_library_by_addr(&jl_load_dynamic_library);
+        return jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, throw_err);
 
     abspath = jl_isabspath(modname);
     is_atpath = 0;

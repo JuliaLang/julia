@@ -1290,7 +1290,12 @@ function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::Bool)
+# The trim_mode can be any of:
+const TRIM_NO = 0
+const TRIM_SAFE = 1
+const TRIM_UNSAFE = 2
+const TRIM_UNSAFE_WARN = 3
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
     inspected = IdSet{CodeInstance}()
     tocompile = Vector{CodeInstance}()
     codeinfos = []
@@ -1338,7 +1343,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                 src = codeinfo_for_const(interp, mi, callee.rettype_const)
             elseif haskey(interp.codegen, callee)
                 src = interp.codegen[callee]
-            elseif isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && !trim
+            elseif isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && trim_mode == TRIM_NO
                 src = retrieve_code_info(mi, get_inference_world(interp))
             else
                 # TODO: typeinf_code could return something with different edges/ages/owner/abi (needing an update to callee), which we don't handle here
@@ -1353,14 +1358,18 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim::
                 end
                 push!(codeinfos, callee)
                 push!(codeinfos, src)
-            elseif trim
-                println("warning: failed to get code for ", mi)
             end
         end
         latest = false
     end
+    if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
+        verify_typeinf_trim(codeinfos, trim_mode == TRIM_UNSAFE_WARN)
+    end
     return codeinfos
 end
+
+verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool) = (msg = "--trim verifier not defined"; onlywarn ? println(io, msg) : error(msg))
+verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = invokelatest(verify_typeinf_trim, stdout, codeinfos, onlywarn)
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     world = tls_world_age()
