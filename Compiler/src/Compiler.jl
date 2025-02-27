@@ -82,7 +82,7 @@ const modifyproperty! = Core.modifyfield!
 const replaceproperty! = Core.replacefield!
 const _DOCS_ALIASING_WARNING = ""
 
-function get_partialstruct_field_undef(p::PartialStruct)
+function _getundef(p::PartialStruct)
     Base.getproperty(p, :undef)
 end
 

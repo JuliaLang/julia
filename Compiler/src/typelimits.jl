@@ -329,7 +329,7 @@ end
 is_field_maybe_undef(t::Const, i) = !isdefined(t.val, i)
 
 function n_initialized(pstruct::PartialStruct)
-    pstruct_undef = get_partialstruct_field_undef(pstruct)
+    pstruct_undef = _getundef(pstruct)
     i = findfirst(pstruct_undef)
     nmin = datatype_min_ninitialized(pstruct.typ)
     i === nothing && return max(length(pstruct_undef), nmin)
@@ -340,7 +340,7 @@ end
 
 function is_field_maybe_undef(pstruct::PartialStruct, fi)
     fi ≥ 1 || return true
-    pstruct_undef = get_partialstruct_field_undef(pstruct)
+    pstruct_undef = _getundef(pstruct)
     fi ≤ length(pstruct_undef) && return pstruct_undef[fi]
     fi > datatype_min_ninitialized(pstruct.typ)
 end
@@ -352,7 +352,7 @@ function partialstruct_getfield(pstruct::PartialStruct, fi::Integer)
 end
 
 function refines_definedness_information(pstruct::PartialStruct)
-    pstruct_undef = get_partialstruct_field_undef(pstruct)
+    pstruct_undef = _getundef(pstruct)
     nflds = length(pstruct_undef)
     something(findfirst(pstruct_undef), nflds + 1) - 1 > datatype_min_ninitialized(pstruct.typ)
 end
@@ -365,14 +365,14 @@ function define_field(pstruct::PartialStruct, fi::Int)
 
     new = expand_partialstruct(pstruct, fi)
     if new === nothing
-        new = PartialStruct(fallback_lattice, pstruct.typ, copy(get_partialstruct_field_undef(pstruct)), copy(pstruct.fields))
+        new = PartialStruct(fallback_lattice, pstruct.typ, copy(_getundef(pstruct)), copy(pstruct.fields))
     end
-    get_partialstruct_field_undef(new)[fi] = false
+    _getundef(new)[fi] = false
     return new
 end
 
 function expand_partialstruct(pstruct::PartialStruct, until::Int)
-    pstruct_undef = get_partialstruct_field_undef(pstruct)
+    pstruct_undef = _getundef(pstruct)
     n = length(pstruct_undef)
     until ≤ n && return nothing
 
@@ -397,7 +397,7 @@ end
             @assert n_initialized(typea) ≤ n_initialized(typeb) "typeb ⊑ typea is assumed"
         elseif typeb isa PartialStruct
             @assert n_initialized(typea) ≤ n_initialized(typeb) &&
-                all(b < a for (a, b) in zip(get_partialstruct_field_undef(typea), get_partialstruct_field_undef(typeb))) "typeb ⊑ typea is assumed"
+                all(b < a for (a, b) in zip(_getundef(typea), _getundef(typeb))) "typeb ⊑ typea is assumed"
         else
             return false
         end
