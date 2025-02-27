@@ -56,7 +56,23 @@ function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
-        summary(io, ex.a)
+        a = ex.a
+        if isa(a, Core.Summarized)
+            if isnothing(a.desc)
+                if length(a.size) == 1
+                    print(io, only(a.size))
+                    print(io, "-element ")
+                else
+                    join(io, a.size, '×')
+                    print(io, ' ')
+                end
+                print(io, a.atype)
+            else
+                print(io, a.desc)
+            end
+        else
+            summary(io, a)
+        end
         if isdefined(ex, :i)
             print(io, " at index [")
             if ex.i isa AbstractRange
