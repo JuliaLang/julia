@@ -39,6 +39,7 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/error.jl \
 		base/essentials.jl \
 		base/expr.jl \
+		base/exports.jl \
 		base/generator.jl \
 		base/int.jl \
 		base/indices.jl \
@@ -56,10 +57,12 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/traits.jl \
 		base/refvalue.jl \
 		base/tuple.jl)
-COMPILER_SRCS += $(shell find $(JULIAHOME)/Compiler/src -name \*.jl)
+COMPILER_SRCS += $(shell find $(JULIAHOME)/Compiler/src -name \*.jl -and -not -name verifytrim.jl -and -not -name show.jl)
 # sort these to remove duplicates
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
-                    $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))
+                    $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl)) \
+             $(JULIAHOME)/Compiler/src/ssair/show.jl \
+             $(JULIAHOME)/Compiler/src/verifytrim.jl
 STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(SYSIMG_STDLIBS_SRCS)
 RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make sure this always has a trailing slash
 RELDATADIR := $(call rel_path,$(JULIAHOME)/base,$(build_datarootdir))/ # <-- make sure this always has a trailing slash
@@ -70,7 +73,13 @@ $(build_private_libdir)/basecompiler.ji: $(COMPILER_SRCS)
 		--startup-file=no --warn-overwrite=yes -g$(BOOTSTRAP_DEBUG_LEVEL) -O1 Base_compiler.jl --buildroot $(RELBUILDROOT) --dataroot $(RELDATADIR))
 	@mv $@.tmp $@
 
-$(build_private_libdir)/sys.ji: $(build_private_libdir)/basecompiler.ji $(JULIAHOME)/VERSION $(BASE_SRCS) $(STDLIB_SRCS)
+$(build_private_libdir)/basecompiler-o.a $(build_private_libdir)/basecompiler-bc.a: $(build_private_libdir)/basecompiler-%.a : $(COMPILER_SRCS)
+	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
+	JULIA_NUM_THREADS=1 $(call spawn,$(JULIA_EXECUTABLE)) -C "$(JULIA_CPU_TARGET)" $(HEAPLIM) --output-$* $(call cygpath_w,$@).tmp \
+		--startup-file=no --warn-overwrite=yes -g$(BOOTSTRAP_DEBUG_LEVEL) -O1 Base_compiler.jl --buildroot $(RELBUILDROOT) --dataroot $(RELDATADIR))
+	@mv $@.tmp $@
+
+$(build_private_libdir)/sys.ji: $(build_private_libdir)/basecompiler.$(SHLIB_EXT) $(JULIAHOME)/VERSION $(BASE_SRCS) $(STDLIB_SRCS)
 	@$(call PRINT_JULIA, cd $(JULIAHOME)/base && \
 	if ! JULIA_BINDIR=$(call cygpath_w,$(build_bindir)) WINEPATH="$(call cygpath_w,$(build_bindir));$$WINEPATH" \
 			JULIA_NUM_THREADS=1 $(call spawn, $(JULIA_EXECUTABLE)) -g1 -O1 -C "$(JULIA_CPU_TARGET)" $(HEAPLIM) --output-ji $(call cygpath_w,$@).tmp $(JULIA_SYSIMG_BUILD_FLAGS) \

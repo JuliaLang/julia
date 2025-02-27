@@ -229,6 +229,7 @@ DevDocs = [
         "devdocs/aot.md",
         "devdocs/gc-sa.md",
         "devdocs/gc.md",
+        "devdocs/gc-mmtk.md",
         "devdocs/jit.md",
         "devdocs/builtins.md",
         "devdocs/precompile_hang.md",

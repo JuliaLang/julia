@@ -93,7 +93,7 @@ f(y) = [x for x in y]
 
 # Examples
 
-```julia-repl
+```jldoctest; setup = :(using InteractiveUtils)
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -102,7 +102,7 @@ g (generic function with 1 method)
 
 julia> @code_typed f([1.0])
 CodeInfo(
-1 ─ %1 = invoke Main.g(_2::AbstractArray)::Float64
+1 ─ %1 =    invoke g(A::AbstractArray)::Float64
 └──      return %1
 ) => Float64
 ```
@@ -593,6 +593,39 @@ function unconstrain_vararg_length(va::Core.TypeofVararg)
     return Vararg{unwrapva(va)}
 end
 
+# Compute the minimum number of initialized fields for a particular datatype
+# (therefore also a lower bound on the number of fields)
+function datatype_min_ninitialized(@nospecialize t0)
+    t = unwrap_unionall(t0)
+    t isa DataType || return 0
+    isabstracttype(t) && return 0
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters[1], t.parameters[2]
+        if names isa Tuple
+            return length(names)
+        end
+        t = argument_datatype(types)
+        t isa DataType || return 0
+        t.name === Tuple.name || return 0
+    end
+    if t.name === Tuple.name
+        n = length(t.parameters)
+        n == 0 && return 0
+        va = t.parameters[n]
+        if isvarargtype(va)
+            n -= 1
+            if isdefined(va, :N)
+                va = va.N
+                if va isa Int
+                    n += va
+                end
+            end
+        end
+        return n
+    end
+    return length(t.name.names) - t.name.n_uninitialized
+end
+
 import Core: typename
 
 _tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
@@ -726,6 +759,7 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
 
 """
 function reinterpret(::Type{Out}, x) where {Out}
+    @inline
     if isprimitivetype(Out) && isprimitivetype(typeof(x))
         return bitcast(Out, x)
     end

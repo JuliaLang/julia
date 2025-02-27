@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+irshow_was_loaded() = invokelatest(isdefined, Compiler.IRShow, :debuginfo_firstline)
 function maybe_show_ir(ir::IRCode)
-    if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
+    if irshow_was_loaded()
         # ensure we use I/O that does not yield, as this gets called during compilation
         invokelatest(Core.Main.Base.show, Core.stdout, "text/plain", ir)
     else
@@ -61,13 +62,15 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             raise_error()
         end
     elseif isa(op, GlobalRef)
-        force_binding_resolution!(op, min_world(ir.valid_worlds))
         bpart = lookup_binding_partition(min_world(ir.valid_worlds), op)
         while is_some_imported(binding_kind(bpart)) && max_world(ir.valid_worlds) <= bpart.max_world
             imported_binding = partition_restriction(bpart)::Core.Binding
             bpart = lookup_binding_partition(min_world(ir.valid_worlds), imported_binding)
         end
-        if !is_defined_const_binding(binding_kind(bpart)) || (bpart.max_world < max_world(ir.valid_worlds))
+        if (!is_defined_const_binding(binding_kind(bpart)) || (bpart.max_world < max_world(ir.valid_worlds))) &&
+                (op.mod !== Core) && (op.mod !== Base)
+            # Core and Base are excluded because the frontend uses them for intrinsics, etc.
+            # TODO: Decide which way to go with these.
             @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
             raise_error()
         end
@@ -102,15 +105,16 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
+_debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream}) = IRShow.debuginfo_firstline(debuginfo)
 function verify_ir(ir::IRCode, print::Bool=true,
                    allow_frontend_forms::Bool=false,
                    𝕃ₒ::AbstractLattice = SimpleInferenceLattice.instance,
                    mi::Union{Nothing,MethodInstance}=nothing)
     function raise_error()
         error_args = Any["IR verification failed."]
-        if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
+        if irshow_was_loaded()
             # ensure we use I/O that does not yield, as this gets called during compilation
-            firstline = invokelatest(IRShow.debuginfo_firstline, ir.debuginfo)
+            firstline = invokelatest(_debuginfo_firstline, ir.debuginfo)
         else
             firstline = nothing
         end
@@ -121,7 +125,7 @@ function verify_ir(ir::IRCode, print::Bool=true,
         if mi !== nothing
             push!(error_args, "\n", "  Method instance: ", mi)
         end
-        error(error_args...)
+        invokelatest(error, error_args...)
     end
     # Verify CFG graph. Must be well formed to construct domtree
     if !(length(ir.cfg.blocks) - 1 <= length(ir.cfg.index) <= length(ir.cfg.blocks))
@@ -378,6 +382,15 @@ function verify_ir(ir::IRCode, print::Bool=true,
                     end
                     if stmt.args[1] isa GlobalRef
                         # undefined GlobalRef is OK in isdefined
+                        continue
+                    end
+                elseif stmt.head === :throw_undef_if_not
+                    if length(stmt.args) > 3
+                        @verify_error "malformed throw_undef_if_not"
+                        raise_error()
+                    end
+                    if stmt.args[1] isa GlobalRef
+                        # undefined GlobalRef is OK in throw_undef_if_not
                         continue
                     end
                 elseif stmt.head === :gc_preserve_end

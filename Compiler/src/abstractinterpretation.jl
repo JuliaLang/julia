@@ -208,6 +208,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                     end
                     if const_edge !== nothing
                         edge = const_edge
+                        update_valid_age!(sv, world_range(const_edge))
                     end
                 end
 
@@ -285,19 +286,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 state.rettype = Any
             end
             # if from_interprocedural added any pclimitations to the set inherited from the arguments,
-            # some of those may be part of our cycles, so those can be deleted now
-            # TODO: and those might need to be deleted later too if the cycle grows to include them?
             if isa(sv, InferenceState)
                 # TODO (#48913) implement a proper recursion handling for irinterp:
-                # This works just because currently the `:terminate` condition guarantees that
-                # irinterp doesn't fail into unresolved cycles, but it's not a good solution.
+                # This works most of the time just because currently the `:terminate` condition often guarantees that
+                # irinterp doesn't fail into unresolved cycles, but it is not a good (or working) solution.
                 # We should revisit this once we have a better story for handling cycles in irinterp.
-                if !isempty(sv.pclimitations) # remove self, if present
-                    delete!(sv.pclimitations, sv)
-                    for caller in callers_in_cycle(sv)
-                        delete!(sv.pclimitations, caller)
-                    end
-                end
+                delete!(sv.pclimitations, sv) # remove self, if present
             end
         else
             # there is unanalyzed candidate, widen type and effects to the top
@@ -774,7 +768,7 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
         # check in the cycle list first
         # all items in here are considered mutual parents of all others
         if !any(p::AbsIntState->matches_sv(p, sv), callers_in_cycle(frame))
-            let parent = frame_parent(frame)
+            let parent = cycle_parent(frame)
                 parent === nothing && return false
                 (is_cached(parent) || frame_parent(parent) !== nothing) || return false
                 matches_sv(parent, sv) || return false
@@ -1378,6 +1372,7 @@ function const_prop_call(interp::AbstractInterpreter,
         inf_result.result = concrete_eval_result.rt
         inf_result.ipo_effects = concrete_eval_result.effects
     end
+    typ = inf_result.result
     return const_prop_result(inf_result)
 end
 
@@ -2147,23 +2142,13 @@ function form_partially_defined_struct(@nospecialize(obj), @nospecialize(name))
     isabstracttype(objt) && return nothing
     fldidx = try_compute_fieldidx(objt, name.val)
     fldidx === nothing && return nothing
+    isa(obj, PartialStruct) && return define_field(obj, fldidx)
     nminfld = datatype_min_ninitialized(objt)
-    if ismutabletype(objt)
-        # A mutable struct can have non-contiguous undefined fields, but `PartialStruct` cannot
-        # model such a state. So here `PartialStruct` can be used to represent only the
-        # objects where the field following the minimum initialized fields is also defined.
-        if fldidx ≠ nminfld+1
-            # if it is already represented as a `PartialStruct`, we can add one more
-            # `isdefined`-field information on top of those implied by its `fields`
-            if !(obj isa PartialStruct && fldidx == length(obj.fields)+1)
-                return nothing
-            end
-        end
-    else
-        fldidx > nminfld || return nothing
-    end
-    return PartialStruct(fallback_lattice, objt0, Any[obj isa PartialStruct && i≤length(obj.fields) ?
-        obj.fields[i] : fieldtype(objt0,i) for i = 1:fldidx])
+    fldidx > nminfld || return nothing
+    undef = partialstruct_init_undef(objt, fldidx; all_defined = false)
+    undef[fldidx] = false
+    fields = Any[fieldtype(objt0, i) for i = 1:fldidx]
+    return PartialStruct(fallback_lattice, objt0, undef, fields)
 end
 
 function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{Any}, call::CallMeta)
@@ -2330,6 +2315,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             end
             if const_edge !== nothing
                 edge = const_edge
+                update_valid_age!(sv, world_range(const_edge))
             end
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo′, sig)
@@ -2396,8 +2382,9 @@ function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, s
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            (ret, bpart) = abstract_eval_globalref(interp, GlobalRef(M, s), saw_latestworld, sv)
-            return CallMeta(ret, bpart === nothing ? NoCallInfo() : GlobalAccessInfo(bpart))
+            gr = GlobalRef(M, s)
+            (ret, bpart) = abstract_eval_globalref(interp, gr, saw_latestworld, sv)
+            return CallMeta(ret, bpart === nothing ? NoCallInfo() : GlobalAccessInfo(convert(Core.Binding, gr), bpart))
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     elseif !hasintersect(widenconst(M), Module) || !hasintersect(widenconst(s), Symbol)
@@ -2475,8 +2462,9 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
     if isa(M, Const) && isa(s, Const)
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
-            (rt, exct), partition = global_assignment_rt_exct(interp, sv, saw_latestworld, GlobalRef(M, s), v)
-            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), GlobalAccessInfo(partition))
+            gr = GlobalRef(M, s)
+            (rt, exct), partition = global_assignment_rt_exct(interp, sv, saw_latestworld, gr, v)
+            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), GlobalAccessInfo(convert(Core.Binding, gr), partition))
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     end
@@ -2564,14 +2552,15 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
             M, s = M.val, s.val
             M isa Module || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
             s isa Symbol || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
-            partition = abstract_eval_binding_partition!(interp, GlobalRef(M, s), sv)
+            gr = GlobalRef(M, s)
+            partition = abstract_eval_binding_partition!(interp, gr, sv)
             rte = abstract_eval_partition_load(interp, partition)
             if binding_kind(partition) == BINDING_KIND_GLOBAL
                 T = partition_restriction(partition)
             end
             exct = Union{rte.exct, global_assignment_binding_rt_exct(interp, partition, v)[2]}
             effects = merge_effects(rte.effects, Effects(setglobal!_effects, nothrow=exct===Bottom))
-            sg = CallMeta(Any, exct, effects, GlobalAccessInfo(partition))
+            sg = CallMeta(Any, exct, effects, GlobalAccessInfo(convert(Core.Binding, gr), partition))
         else
             sg = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v)
         end
@@ -2660,12 +2649,24 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         end
         pushfirst!(argtypes, ft)
         refinements = nothing
-        if sv isa InferenceState && f === typeassert
-            # perform very limited back-propagation of invariants after this type assertion
-            if rt !== Bottom && isa(fargs, Vector{Any})
+        if sv isa InferenceState
+            if f === typeassert
+                # perform very limited back-propagation of invariants after this type assertion
+                if rt !== Bottom && isa(fargs, Vector{Any})
+                    farg2 = ssa_def_slot(fargs[2], sv)
+                    if farg2 isa SlotNumber
+                        refinements = SlotRefinement(farg2, rt)
+                    end
+                end
+            elseif f === setfield! && length(argtypes) == 4 && isa(argtypes[3], Const)
+                # from there on we know that the struct field will never be undefined,
+                # so we try to encode that information with a `PartialStruct`
                 farg2 = ssa_def_slot(fargs[2], sv)
                 if farg2 isa SlotNumber
-                    refinements = SlotRefinement(farg2, rt)
+                    refined = form_partially_defined_struct(argtypes[2], argtypes[3])
+                    if refined !== nothing
+                        refinements = SlotRefinement(farg2, refined)
+                    end
                 end
             end
         end
@@ -2791,6 +2792,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
                 end
                 if const_edge !== nothing
                     edge = const_edge
+                    update_valid_age!(sv, world_range(const_edge))
                 end
             end
         end
@@ -3225,7 +3227,8 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
     end
 
     effects = EFFECTS_TOTAL
-    partition = lookup_binding_partition!(interp, GlobalRef(mod, sym), sv)
+    gr = GlobalRef(mod, sym)
+    partition = lookup_binding_partition!(interp, gr, sv)
     if allow_import !== true && is_some_imported(binding_kind(partition))
         if allow_import === false
             rt = Const(false)
@@ -3243,7 +3246,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
             effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
         end
     end
-    return CallMeta(RTEffects(rt, Union{}, effects), GlobalAccessInfo(partition))
+    return CallMeta(RTEffects(rt, Union{}, effects), GlobalAccessInfo(convert(Core.Binding, gr), partition))
 end
 
 function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, @nospecialize(M), @nospecialize(s), @nospecialize(allow_import_arg), @nospecialize(order_arg), saw_latestworld::Bool, sv::AbsIntState)
@@ -3402,7 +3405,7 @@ function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate:
         abstract_eval_value(interp, x, sstate, sv)
     end
     cconv = e.args[5]
-    if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt16}))
+    if isa(cconv, QuoteNode) && (v = cconv.value; isa(v, Tuple{Symbol, UInt16, Bool}))
         override = decode_effects_override(v[2])
         effects = override_effects(effects, override)
     end
@@ -3454,16 +3457,10 @@ end
 
 world_range(ir::IRCode) = ir.valid_worlds
 world_range(ci::CodeInfo) = WorldRange(ci.min_world, ci.max_world)
+world_range(ci::CodeInstance) = WorldRange(ci.min_world, ci.max_world)
 world_range(compact::IncrementalCompact) = world_range(compact.ir)
 
-function force_binding_resolution!(g::GlobalRef, world::UInt)
-    # Force resolution of the binding
-    # TODO: This will go away once we switch over to fully partitioned semantics
-    ccall(:jl_force_binding_resolution, Cvoid, (Any, Csize_t), g, world)
-    return nothing
-end
-
-function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact}, retry_after_resolve::Bool=true)
+function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
     worlds = world_range(src)
     partition = lookup_binding_partition(min_world(worlds), g)
     partition.max_world < max_world(worlds) && return Any
@@ -3472,25 +3469,18 @@ function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode,
         partition = lookup_binding_partition(min_world(worlds), imported_binding)
         partition.max_world < max_world(worlds) && return Any
     end
-    if is_some_guard(binding_kind(partition))
-        if retry_after_resolve
-            # This method is surprisingly hot. For performance, don't ask the runtime to resolve
-            # the binding unless necessary - doing so triggers an additional lookup, which though
-            # not super expensive is hot enough to show up in benchmarks.
-            force_binding_resolution!(g, min_world(worlds))
-            return abstract_eval_globalref_type(g, src, false)
-        end
+    kind = binding_kind(partition)
+    if is_some_guard(kind)
         # return Union{}
         return Any
     end
-    if is_some_const_binding(binding_kind(partition))
+    if is_some_const_binding(kind)
         return Const(partition_restriction(partition))
     end
-    return partition_restriction(partition)
+    return kind == BINDING_KIND_DECLARED ? Any : partition_restriction(partition)
 end
 
 function lookup_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
-    force_binding_resolution!(g, get_inference_world(interp))
     partition = lookup_binding_partition(get_inference_world(interp), g)
     update_valid_age!(sv, WorldRange(partition.min_world, partition.max_world))
     partition
@@ -3524,11 +3514,20 @@ function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Co
     end
 
     if is_defined_const_binding(kind)
+        if kind == BINDING_KIND_BACKDATED_CONST
+            # Infer this as guard. We do not want a later const definition to retroactively improve
+            # inference results in an earlier world.
+            return RTEffects(Any, UndefVarError, generic_getglobal_effects)
+        end
         rt = Const(partition_restriction(partition))
         return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL, inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE))
     end
 
-    rt = partition_restriction(partition)
+    if kind == BINDING_KIND_DECLARED
+        rt = Any
+    else
+        rt = partition_restriction(partition)
+    end
     return RTEffects(rt, UndefVarError, generic_getglobal_effects)
 end
 
@@ -3567,7 +3566,7 @@ function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partitio
     elseif is_some_const_binding(kind)
         return Pair{Any,Any}(Bottom, ErrorException)
     end
-    ty = partition_restriction(partition)
+    ty = kind == BINDING_KIND_DECLARED ? Any : partition_restriction(partition)
     wnewty = widenconst(newty)
     if !hasintersect(wnewty, ty)
         return Pair{Any,Any}(Bottom, TypeError)
@@ -3710,8 +3709,7 @@ end
 @nospecializeinfer function widenreturn_partials(𝕃ᵢ::PartialsLattice, @nospecialize(rt), info::BestguessInfo)
     if isa(rt, PartialStruct)
         fields = copy(rt.fields)
-        anyrefine = !isvarargtype(rt.fields[end]) &&
-            length(rt.fields) > datatype_min_ninitialized(rt.typ)
+        anyrefine = refines_definedness_information(rt)
         𝕃 = typeinf_lattice(info.interp)
         ⊏ = strictpartialorder(𝕃)
         for i in 1:length(fields)
@@ -3723,7 +3721,7 @@ end
             end
             fields[i] = a
         end
-        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, fields)
+        anyrefine && return PartialStruct(𝕃ᵢ, rt.typ, rt.undef, fields)
     end
     if isa(rt, PartialOpaque)
         return rt # XXX: this case was missed in #39512

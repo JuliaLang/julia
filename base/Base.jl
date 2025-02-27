@@ -31,6 +31,10 @@ let os = ccall(:jl_get_UNAME, Any, ())
     end
 end
 
+# subarrays
+include("subarray.jl")
+include("views.jl")
+
 # numeric operations
 include("hashing.jl")
 include("rounding.jl")
@@ -103,6 +107,9 @@ include("strings/strings.jl")
 include("regex.jl")
 include("parse.jl")
 include("shell.jl")
+const IRShow = Compiler.IRShow # an alias for compatibility
+include("stacktraces.jl")
+using .StackTraces
 include("show.jl")
 include("arrayshow.jl")
 include("methodshow.jl")
@@ -127,6 +134,8 @@ include("version.jl")
 include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
+
+const USING_STOCK_GC = occursin("stock", GC.gc_active_impl())
 
 # These used to be in build_h.jl and are retained for backwards compatibility.
 # NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
@@ -236,10 +245,6 @@ include("combinatorics.jl")
 include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
-
-# Stack frames and traces
-include("stacktraces.jl")
-using .StackTraces
 
 # experimental API's
 include("experimental.jl")

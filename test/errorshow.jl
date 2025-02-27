@@ -216,13 +216,14 @@ Base.show_method_candidates(buf, try bad_vararg_decl("hello", 3) catch e e end)
 
 macro except_str(expr, err_type)
     source_info = __source__
+    errmsg = "expected failure, but no exception thrown for $expr"
     return quote
         let err = nothing
             try
                 $(esc(expr))
             catch err
             end
-            err === nothing && error("expected failure, but no exception thrown")
+            err === nothing && error($errmsg)
             @testset let expr=$(repr(expr))
                 $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
             end
@@ -255,6 +256,7 @@ end
 
 macro except_stackframe(expr, err_type)
     source_info = __source__
+    errmsg = "expected failure, but no exception thrown for $expr"
     return quote
        let err = nothing
            local st
@@ -263,7 +265,7 @@ macro except_stackframe(expr, err_type)
            catch err
                st = stacktrace(catch_backtrace())
            end
-           err === nothing && error("expected failure, but no exception thrown")
+           err === nothing && error($errmsg)
            @testset let expr=$(repr(expr))
                $(Expr(:macrocall, Symbol("@test"), source_info, :(typeof(err) === $(esc(err_type)))))
            end
@@ -297,6 +299,7 @@ err_str = @except_str 1 + 2 MethodError
 err_str = @except_str Float64[](1) MethodError
 @test !occursin("import Base.Array", err_str)
 
+global Array
 Array() = 1
 err_str = @except_str Array([1]) MethodError
 @test occursin("import Base.Array", err_str)
@@ -435,7 +438,7 @@ let err_str
     @test occursin("For element-wise subtraction, use broadcasting with dot syntax: array .- scalar", err_str)
 end
 
-
+import Core: String
 method_defs_lineno = @__LINE__() + 1
 String() = throw(ErrorException("1"))
 (::String)() = throw(ErrorException("2"))
@@ -1259,3 +1262,10 @@ end
 
 f33793(x::Float32, y::Float32) = 1
 @test_throws "\nClosest candidates are:\n  f33793(!Matched::Float32, !Matched::Float32)\n" f33793(Float64(0.0), Float64(0.0))
+
+# https://github.com/JuliaLang/julia/issues/56325
+let err_str
+    f56325 = x->x+1
+    err_str = @except_str f56325(1,2) MethodError
+    @test occursin("The anonymous function", err_str)
+end

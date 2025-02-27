@@ -288,6 +288,8 @@ time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ref{TmStruct},), tm))
     time() -> Float64
 
 Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+
+See also [`time_ns`](@ref).
 """
 time() = ccall(:jl_clock_now, Float64, ())
 

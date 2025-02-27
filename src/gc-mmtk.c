@@ -64,11 +64,37 @@ void jl_gc_init(void) {
 
     arraylist_new(&to_finalize, 0);
     arraylist_new(&finalizer_list_marked, 0);
-
+    gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
     gc_num.max_memory = 0;
 
+    // Necessary if we want to use Julia heap resizing heuristics
+    uint64_t mem_reserve = 250*1024*1024; // LLVM + other libraries need some amount of memory
+    uint64_t min_heap_size_hint = mem_reserve + 1*1024*1024;
+    uint64_t hint = jl_options.heap_size_hint;
+
+    // check if heap size specified on command line
+    if (jl_options.heap_size_hint == 0) {
+        char *cp = getenv(HEAP_SIZE_HINT);
+        if (cp)
+            hint = parse_heap_size_hint(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"");
+    }
+#ifdef _P64
+    if (hint == 0) {
+        uint64_t constrained_mem = uv_get_constrained_memory();
+        if (constrained_mem > 0 && constrained_mem < uv_get_total_memory())
+            hint = constrained_mem;
+    }
+#endif
+    if (hint) {
+        if (hint < min_heap_size_hint)
+            hint = min_heap_size_hint;
+        jl_gc_set_max_memory(hint - mem_reserve);
+    }
+
+    // MMTK supports setting the heap size using the
+    // MMTK_MIN_HSIZE and MMTK_MAX_HSIZE environment variables
     long long min_heap_size;
     long long max_heap_size;
     char* min_size_def = getenv("MMTK_MIN_HSIZE");
@@ -77,7 +103,8 @@ void jl_gc_init(void) {
     char* max_size_def = getenv("MMTK_MAX_HSIZE");
     char* max_size_gb = getenv("MMTK_MAX_HSIZE_G");
 
-    // default min heap currently set as Julia's default_collect_interval
+    // If min and max values are not specified, set them to 0 here
+    // and use stock heuristics as defined in the binding
     if (min_size_def != NULL) {
         char *p;
         double min_size = strtod(min_size_def, &p);
@@ -87,10 +114,9 @@ void jl_gc_init(void) {
         double min_size = strtod(min_size_gb, &p);
         min_heap_size = (long) 1024 * 1024 * 1024 * min_size;
     } else {
-        min_heap_size = default_collect_interval;
+        min_heap_size = 0;
     }
 
-    // default max heap currently set as 70% the free memory in the system
     if (max_size_def != NULL) {
         char *p;
         double max_size = strtod(max_size_def, &p);
@@ -100,7 +126,7 @@ void jl_gc_init(void) {
         double max_size = strtod(max_size_gb, &p);
         max_heap_size = (long) 1024 * 1024 * 1024 * max_size;
     } else {
-        max_heap_size = uv_get_free_memory() * 70 / 100;
+        max_heap_size = 0;
     }
 
     // Assert that the number of stock GC threads is 0; MMTK uses the number of threads in jl_options.ngcthreads
@@ -159,7 +185,17 @@ void jl_free_thread_gc_state(struct _jl_tls_states_t *ptls) {
 }
 
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem) {
-    // MMTk currently does not allow setting the heap size at runtime
+#ifdef _P32
+    max_mem = max_mem < MAX32HEAP ? max_mem : MAX32HEAP;
+#endif
+    max_total_memory = max_mem;
+}
+
+JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
+{
+    // FIXME: We should return the max heap size set in MMTk
+    // when not using Julia's heap resizing heuristics
+    return max_total_memory;
 }
 
 STATIC_INLINE void maybe_collect(jl_ptls_t ptls)
@@ -413,12 +449,6 @@ JL_DLLEXPORT void jl_gc_get_total_bytes(int64_t *bytes) JL_NOTSAFEPOINT
     combine_thread_gc_counts(&num, 0);
     // Sync this logic with `base/util.jl:GC_Diff`
     *bytes = (num.total_allocd + num.deferred_alloc + num.allocd);
-}
-
-JL_DLLEXPORT uint64_t jl_gc_get_max_memory(void)
-{
-    // FIXME: should probably return MMTk's heap size
-    return max_total_memory;
 }
 
 // These are needed to collect MMTk statistics from a Julia program using ccall
@@ -998,11 +1028,13 @@ void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
     return jl_gc_perm_alloc_nolock(sz, zero, align, offset);
 }
 
-jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT
+jl_value_t *jl_gc_permobj(size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT
 {
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    unsigned align = (sz == 0 ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
+    if (align == 0) {
+        align = ((sz == 0) ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
                                                  sizeof(void*) * 2 : 16));
+    }
     jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
                                                               sizeof(void*) % align);
 
