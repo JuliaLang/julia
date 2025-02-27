@@ -361,3 +361,11 @@ Base.show(io::IO, a::IntWrap) = print(io, "IntWrap(", a.x, ")")
         @test r2 isa IntWrap && r2.x === 103 === r[].x && r2 !== r[]
     end
 end)()
+
+@testset "Pointer Arithmatic" begin 
+    @test_intrinsic Core.Intrinsics.add_ptr Ptr{Int}(1) UInt(1) Ptr{Int}(2)
+    @test_throws TypeError Core.Intrinsics.add_ptr(Ptr{Int}(1), 1)
+    @test_intrinsic Core.Intrinsics.sub_ptr Ptr{Int}(1) UInt(1) Ptr{Int}(0)
+    @test_throws TypeError Core.Intrinsics.sub_ptr(Ptr{Int}(1), 1)
+end
+
