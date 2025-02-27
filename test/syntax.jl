@@ -1292,6 +1292,10 @@ let args = (Int, Any)
     @test >:(reverse(args)...)
 end
 
+# Chaining of <: and >: in `where`
+@test isa(Vector{T} where Int<:T<:Number, UnionAll)
+@test isa(Vector{T} where Number>:T>:Int, UnionAll)
+
 # issue #25947
 let getindex = 0, setindex! = 1, colon = 2, vcat = 3, hcat = 4, hvcat = 5
     a = [10,9,8]
