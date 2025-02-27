@@ -3065,6 +3065,15 @@ function abstract_eval_call(interp::AbstractInterpreter, e::Expr, sstate::Statem
     end
 end
 
+# TODO: try doing layout of dt so this doesn’t crash julia
+# function is_field_pointerfree(dt::DataType, fidx::Int)
+#     DataTypeFieldDesc(dt)[fidx].isptr && return false
+#     ft = fieldtype(dt, fidx)
+#     return ft isa DataType && datatype_pointerfree(ft)
+# end
+maybe_field_pointerfree(@nospecialize ft) =
+    !isconcretetype(ft) || datatype_pointerfree(ft)
+
 function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
                            sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
@@ -3075,9 +3084,8 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         ismutable = ismutabletype(ut)
         fcount = datatype_fieldcount(ut)
         nargs = length(e.args) - 1
-        has_any_uninitialized = (fcount === nothing || (fcount > nargs && (let t = rt
-                any(i::Int -> !is_undefref_fieldtype(fieldtype(t, i)), (nargs+1):fcount)
-            end)))
+        has_any_uninitialized = fcount === nothing || (fcount > nargs &&
+            any(i::Int->maybe_field_pointerfree(fieldtype(ut,i)), (nargs+1):fcount))
         if has_any_uninitialized
             # allocation with undefined field is inconsistent always
             consistent = ALWAYS_FALSE
