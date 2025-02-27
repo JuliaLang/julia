@@ -373,6 +373,7 @@ has_offset_axes(a::ReinterpretArray) = has_offset_axes(a.parent)
 
 elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
+unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
 @propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
     if isprimitivetype(T) && isprimitivetype(S)
@@ -870,25 +871,34 @@ end
         return out[]
     else
         # mismatched padding
-        GC.@preserve in out begin
-            ptr_in = unsafe_convert(Ptr{In}, in)
-            ptr_out = unsafe_convert(Ptr{Out}, out)
+        return _reinterpret_padding(Out, x)
+    end
+end
 
-            if fieldcount(In) > 0 && ispacked(Out)
-                _copytopacked!(ptr_out, ptr_in)
-            elseif fieldcount(Out) > 0 && ispacked(In)
-                _copyfrompacked!(ptr_out, ptr_in)
-            else
-                packed = Ref{NTuple{inpackedsize, UInt8}}()
-                GC.@preserve packed begin
-                    ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
-                    _copytopacked!(ptr_packed, ptr_in)
-                    _copyfrompacked!(ptr_out, ptr_packed)
-                end
+# If the code reaches this part, it needs to handle padding and is unlikely
+# to compile to a noop. Therefore, we don't forcibly inline it.
+function _reinterpret_padding(::Type{Out}, x::In) where {Out, In}
+    inpackedsize = packedsize(In)
+    in = Ref{In}(x)
+    out = Ref{Out}()
+    GC.@preserve in out begin
+        ptr_in = unsafe_convert(Ptr{In}, in)
+        ptr_out = unsafe_convert(Ptr{Out}, out)
+
+        if fieldcount(In) > 0 && ispacked(Out)
+            _copytopacked!(ptr_out, ptr_in)
+        elseif fieldcount(Out) > 0 && ispacked(In)
+            _copyfrompacked!(ptr_out, ptr_in)
+        else
+            packed = Ref{NTuple{inpackedsize, UInt8}}()
+            GC.@preserve packed begin
+                ptr_packed = unsafe_convert(Ptr{NTuple{inpackedsize, UInt8}}, packed)
+                _copytopacked!(ptr_packed, ptr_in)
+                _copyfrompacked!(ptr_out, ptr_packed)
             end
         end
-        return out[]
     end
+    return out[]
 end
 
 

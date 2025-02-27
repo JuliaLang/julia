@@ -67,6 +67,7 @@ Base.put!(::Channel, ::Any)
 Base.take!(::Channel)
 Base.isfull(::Channel)
 Base.isready(::Channel)
+Base.isopen(::Channel)
 Base.fetch(::Channel)
 Base.close(::Channel)
 Base.bind(c::Channel, task::Task)
@@ -138,7 +139,7 @@ end
 
 ev = OneWayEvent()
 @sync begin
-    @async begin
+    Threads.@spawn begin
         wait(ev)
         println("done")
     end

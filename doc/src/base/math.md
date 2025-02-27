@@ -166,6 +166,7 @@ Base.flipsign
 Base.sqrt(::Number)
 Base.isqrt
 Base.Math.cbrt(::AbstractFloat)
+Base.fourthroot(::Number)
 Base.real
 Base.imag
 Base.reim

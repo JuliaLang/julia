@@ -1158,6 +1158,8 @@ end
 end
 
 @testset "Irrationals compared with Rationals and Floats" begin
+    @test pi != Float64(pi)
+    @test Float64(pi) != pi
     @test Float64(pi,RoundDown) < pi
     @test Float64(pi,RoundUp) > pi
     @test !(Float64(pi,RoundDown) > pi)
@@ -1176,6 +1178,7 @@ end
     @test nextfloat(big(pi)) > pi
     @test !(prevfloat(big(pi)) > pi)
     @test !(nextfloat(big(pi)) < pi)
+    @test big(typeof(pi)) == BigFloat
 
     @test 2646693125139304345//842468587426513207 < pi
     @test !(2646693125139304345//842468587426513207 > pi)
@@ -2189,11 +2192,36 @@ for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128)
     end
 end
 
-@testset "Irrational/Bool multiplication" begin
+@testset "Bool multiplication" begin
     @test false*pi === 0.0
     @test pi*false === 0.0
     @test true*pi === Float64(pi)
     @test pi*true === Float64(pi)
+
+    @test false*Inf === 0.0
+    @test Inf*false === 0.0
+    @test true*Inf === Inf
+    @test Inf*true === Inf
+
+    @test false*NaN === 0.0
+    @test NaN*false === 0.0
+    @test true*NaN === NaN
+    @test NaN*true === NaN
+
+    @test false*-Inf === -0.0
+    @test -Inf*false === -0.0
+    @test true*-Inf === -Inf
+    @test -Inf*true === -Inf
+
+    @test false*1//0 === 0//1
+    @test 1//0*false === 0//1
+    @test true*1//0 === 1//0
+    @test 1//0*true === 1//0
+
+    @test false*-1//0 === 0//1
+    @test -1//0*false === 0//1
+    @test true*-1//0 === -1//0
+    @test -1//0*true === -1//0
 end
 # issue #5492
 @test -0.0 + false === -0.0
@@ -2932,6 +2960,14 @@ end
     @test π*ComplexF32(2) isa ComplexF32
     @test π/ComplexF32(2) isa ComplexF32
     @test log(π,ComplexF32(2)) isa ComplexF32
+end
+
+@testset "irrational promotion shouldn't recurse without bound, issue #51001" begin
+    for s ∈ (:π, :ℯ)
+        T = Irrational{s}
+        @test promote_type(Complex{T}, T) <: Complex
+        @test promote_type(T, Complex{T}) <: Complex
+    end
 end
 
 @testset "printing non finite floats" begin

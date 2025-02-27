@@ -270,12 +270,12 @@ end
 
 # PR #23168
 
-function f23168(a, x)
+@eval function f23168(a, x)
     push!(a, 1)
     if @generated
-        :(y = x + x)
+        :(y = $(+)(x, x))
     else
-        y = 2x
+        y = $(*)(2, x)
     end
     push!(a, y)
     if @generated
@@ -290,9 +290,9 @@ end
 let a = Any[]
     @test f23168(a, 3) == (6, Int)
     @test a == [1, 6, 3]
-    @test occursin(" + ", string(code_lowered(f23168, (Vector{Any},Int))))
-    @test occursin("2 * ", string(Base.uncompressed_ir(first(methods(f23168)))))
-    @test occursin("2 * ", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
+    @test occursin("(+)(", string(code_lowered(f23168, (Vector{Any},Int))))
+    @test occursin("(*)(2", string(Base.uncompressed_ir(first(methods(f23168)))))
+    @test occursin("(*)(2", string(code_lowered(f23168, (Vector{Any},Int), generated=false)))
     @test occursin("Base.add_int", string(code_typed(f23168, (Vector{Any},Int))))
 end
 
@@ -312,7 +312,7 @@ end
     :(global x33243 = 2)
 end
 @test_throws ErrorException f33243()
-global x33243
+global x33243::Any
 @test f33243() === 2
 @test x33243 === 2
 
@@ -381,11 +381,17 @@ let
     @test length(ir.cfg.blocks) == 1
 end
 
+function generate_lambda_ex(world::UInt, source::Method,
+                            argnames, spnames, @nospecialize body)
+    stub = Core.GeneratedFunctionStub(identity, Core.svec(argnames...), Core.svec(spnames...))
+    return stub(world, source, body)
+end
+
 # Test that `Core.CachedGenerator` works as expected
 struct Generator54916 <: Core.CachedGenerator end
-function (::Generator54916)(world::UInt, source::LineNumberNode, args...)
-    stub = Core.GeneratedFunctionStub(identity, Core.svec(:doit54916, :func, :arg), Core.svec())
-    return stub(world, source, :(func(arg)))
+function (::Generator54916)(world::UInt, source::Method, args...)
+    return generate_lambda_ex(world, source,
+        (:doit54916, :func, :arg), (), :(func(arg)))
 end
 @eval function doit54916(func, arg)
     $(Expr(:meta, :generated, Generator54916()))
@@ -412,8 +418,8 @@ function generator49715(world, source, self, f, tt)
     sig = Tuple{f, tt.parameters...}
     mi = Base._which(sig; world)
     error("oh no")
-    stub = Core.GeneratedFunctionStub(identity, Core.svec(:methodinstance, :ctx, :x, :f), Core.svec())
-    stub(world, source, :(nothing))
+    return generate_lambda_ex(world, source,
+        (:doit49715, :f, :tt), (), nothing)
 end
 @eval function doit49715(f, tt)
     $(Expr(:meta, :generated, generator49715))
@@ -426,9 +432,10 @@ function overdubbee54341(a, b)
     a + b
 end
 const overdubee_codeinfo54341 = code_lowered(overdubbee54341, Tuple{Any, Any})[1]
-function overdub_generator54341(world::UInt, source::LineNumberNode, args...)
-    if length(args) != 2
-        :(error("Wrong number of arguments"))
+function overdub_generator54341(world::UInt, source::Method, selftype, fargtypes)
+    if length(fargtypes) != 2
+        return generate_lambda_ex(world, source,
+            (:overdub54341, :args), (), :(error("Wrong number of arguments")))
     else
         return copy(overdubee_codeinfo54341)
     end
@@ -438,3 +445,35 @@ end
     $(Expr(:meta, :generated_only))
 end
 @test overdub54341(1, 2) == 3
+# check if the inlining pass handles `nargs`/`isva` correctly
+@test first(only(code_typed((Int,Int)) do x, y; @inline overdub54341(x, y); end)) isa Core.CodeInfo
+@test first(only(code_typed((Int,)) do x; @inline overdub54341(x, 1); end)) isa Core.CodeInfo
+@test_throws "Wrong number of arguments" overdub54341(1, 2, 3)
+
+# Test the module resolution scope of generated methods that are type constructors
+module GeneratedScope57417
+    using Test
+    import ..generate_lambda_ex
+    const x = 1
+    struct Generator; end
+    @generated (::Generator)() = :x
+    f(x::Int) = 1
+    module OtherModule
+        import ..f
+        const x = 2
+        @generated f(::Float64) = :x
+    end
+    import .OtherModule: f
+    @test Generator()() == 1
+    @test f(1.0) == 2
+
+    function g_generator(world::UInt, source::Method, _)
+        return generate_lambda_ex(world, source, (:g,), (), :(return x))
+    end
+
+    @eval function g()
+        $(Expr(:meta, :generated, g_generator))
+        $(Expr(:meta, :generated_only))
+    end
+    @test g() == 1
+end

@@ -34,6 +34,9 @@ Main.include
 Base.include_string
 Base.include_dependency
 __init__
+Base.OncePerProcess
+Base.OncePerTask
+Base.OncePerThread
 Base.which(::Any, ::Any)
 Base.methods
 Base.@show
@@ -106,6 +109,7 @@ where
 .
 ->
 ::
+[]
 ```
 
 ## Standard Modules
@@ -162,6 +166,7 @@ Core.replacefield!
 Core.swapfield!
 Core.setfieldonce!
 Core.isdefined
+Core.isdefinedglobal
 Base.@isdefined
 Base.convert
 Base.promote
@@ -281,6 +286,7 @@ Base.:(|>)
 Base.:(∘)
 Base.ComposedFunction
 Base.splat
+Base.Fix
 Base.Fix1
 Base.Fix2
 ```

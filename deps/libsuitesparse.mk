@@ -113,9 +113,7 @@ uninstall-libsuitesparse:
 endef
 
 remove-libsuitesparse-gpl-lib:
-ifeq ($(USE_GPL_LIBS),1)
-	@echo This build contains [GPL-2.0+] libs:  libcholmod librbio libspqr libumfpack
-else
+ifeq ($(USE_GPL_LIBS),0)
 	@echo Removing GPL libs...
 	-rm -f $(build_bindir)/libcholmod*
 	-rm -f $(build_bindir)/libklu_cholmod*

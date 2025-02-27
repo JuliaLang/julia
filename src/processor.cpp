@@ -7,11 +7,7 @@
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/StringMap.h>
-#if JL_LLVM_VERSION >= 170000
 #include <llvm/TargetParser/Host.h>
-#else
-#include <llvm/Support/Host.h>
-#endif
 #include <llvm/Support/MathExtras.h>
 #include <llvm/Support/raw_ostream.h>
 
@@ -162,11 +158,7 @@ struct FeatureList {
     {
         int cnt = 0;
         for (size_t i = 0; i < n; i++)
-            #if JL_LLVM_VERSION >= 170000
             cnt += llvm::popcount(eles[i]);
-            #else
-            cnt += llvm::countPopulation(eles[i]);
-            #endif
         return cnt;
     }
     inline bool empty() const
@@ -627,11 +619,6 @@ static inline llvm::SmallVector<TargetData<n>, 0> &get_cmdline_targets(F &&featu
     return targets;
 }
 
-extern "C" {
-void *image_pointers_unavailable;
-extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(image_pointers_unavailable) jl_image_pointers;
-}
-
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
@@ -641,10 +628,10 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
     jl_image_t res{};
 
     const jl_image_pointers_t *pointers;
-    if (hdl == jl_exe_handle && &jl_image_pointers != JL_WEAK_SYMBOL_DEFAULT(image_pointers_unavailable))
-        pointers = (const jl_image_pointers_t *)&jl_image_pointers;
-    else
+    if (jl_system_image_size == 0)
         jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
+    else
+        pointers = &jl_image_pointers; // libjulia-internal and sysimage statically linked
 
     const void *ids = pointers->target_data;
     jl_value_t* rejection_reason = nullptr;
@@ -978,8 +965,12 @@ static std::string jl_get_cpu_name_llvm(void)
 
 static std::string jl_get_cpu_features_llvm(void)
 {
+#if JL_LLVM_VERSION >= 190000
+    auto HostFeatures = llvm::sys::getHostCPUFeatures();
+#else
     llvm::StringMap<bool> HostFeatures;
     llvm::sys::getHostCPUFeatures(HostFeatures);
+#endif
     std::string attr;
     for (auto &ele: HostFeatures) {
         if (ele.getValue()) {

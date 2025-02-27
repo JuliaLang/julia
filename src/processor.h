@@ -224,6 +224,18 @@ JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
 JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);
 JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault);
 JL_DLLEXPORT int32_t jl_get_default_nans(void);
+
+/**
+ * System image contents.
+ *
+ * These symbols are typically dummy values, unless statically linking
+ * libjulia-* and the sysimage together (see null_sysimage.c), in which
+ * case they allow accessing the local copy of the sysimage.
+ **/
+extern char jl_system_image_data;
+extern size_t jl_system_image_size;
+extern jl_image_pointers_t jl_image_pointers;
+
 #ifdef __cplusplus
 }
 

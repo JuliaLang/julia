@@ -42,6 +42,7 @@ typeof(error).name.max_methods = UInt8(2)
 Raise an `ErrorException` with the given message.
 """
 error(s::AbstractString) = throw(ErrorException(s))
+error() = throw(ErrorException(""))
 
 """
     error(msg...)
@@ -232,12 +233,14 @@ macro assert(ex, msgs...)
         msg = msg # pass-through
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
-        msg = :(Main.Base.string($(esc(msg))))
+        # N.B. To reduce the risk of invalidation caused by the complex callstack involved
+        # with `string`, use `inferencebarrier` here to hide this `string` from the compiler.
+        msg = :(Main.Base.inferencebarrier(Main.Base.string)($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(_assert_tostring($(Expr(:quote,msg))))
+        msg = :(Main.Base.inferencebarrier(_assert_tostring)($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end

@@ -23,22 +23,32 @@ mutable struct Refxy{T}
 end
 
 modname = String(nameof(@__MODULE__))
-@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
+const orig_Refxy = Refxy
+const orig_ARefxy = ARefxy
+mutable struct ARefxy{T}
     @atomic x::T
     @atomic y::T
 end
-@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
+@test orig_ARefxy !== ARefxy
+const ARefxy = orig_ARefxy
+mutable struct ARefxy{T}
     x::T
     y::T
 end
-@test_throws ErrorException("invalid redefinition of constant $modname.ARefxy") @eval mutable struct ARefxy{T}
+@test orig_ARefxy !== ARefxy
+const ARefxy = orig_ARefxy
+mutable struct ARefxy{T}
     x::T
     @atomic y::T
 end
-@test_throws ErrorException("invalid redefinition of constant $modname.Refxy") @eval mutable struct Refxy{T}
+@test orig_ARefxy !== ARefxy
+const ARefxy = orig_ARefxy
+mutable struct Refxy{T}
     x::T
     @atomic y::T
 end
+@test orig_Refxy !== Refxy
+const Refxy = orig_Refxy
 
 copy(r::Union{Refxy,ARefxy}) = typeof(r)(r.x, r.y)
 function add(x::T, y)::T where {T}; x + y; end
@@ -129,6 +139,7 @@ test_field_operators(ARefxy{Any}(123_10, 123_20))
 test_field_operators(ARefxy{Union{Nothing,Int}}(123_10, nothing))
 test_field_operators(ARefxy{Complex{Int32}}(123_10, 123_20))
 test_field_operators(ARefxy{Complex{Int128}}(123_10, 123_20))
+test_field_operators(ARefxy{Complex{Real}}(123_10, 123_20))
 test_field_operators(ARefxy{PadIntA}(123_10, 123_20))
 test_field_operators(ARefxy{PadIntB}(123_10, 123_20))
 #FIXME: test_field_operators(ARefxy{Int24}(123_10, 123_20))
@@ -317,6 +328,8 @@ test_field_orderings(ARefxy{Any}(true, false), true, false)
 test_field_orderings(ARefxy{Union{Nothing,Missing}}(nothing, missing), nothing, missing)
 test_field_orderings(ARefxy{Union{Nothing,Int}}(nothing, 123_1), nothing, 123_1)
 test_field_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
+test_field_orderings(Complex{Real}(10, 30), Complex{Real}(20, 40))
+test_field_orderings(Complex{Rational{Integer}}(10, 30), Complex{Rational{Integer}}(20, 40))
 test_field_orderings(10.0, 20.0)
 test_field_orderings(NaN, Inf)
 
@@ -568,6 +581,7 @@ test_global_operators(Any)
 test_global_operators(Union{Nothing,Int})
 test_global_operators(Complex{Int32})
 test_global_operators(Complex{Int128})
+test_global_operators(Complex{Real})
 test_global_operators(PadIntA)
 test_global_operators(PadIntB)
 #FIXME: test_global_operators(Int24)
@@ -691,6 +705,7 @@ test_global_orderings(Any, true, false)
 test_global_orderings(Union{Nothing,Missing}, nothing, missing)
 test_global_orderings(Union{Nothing,Int}, nothing, 123_1)
 test_global_orderings(Complex{Int128}, Complex{Int128}(10, 30), Complex{Int128}(20, 40))
+test_global_orderings(Complex{Real}, Complex{Real}(10, 30), Complex{Real}(20, 40))
 test_global_orderings(Float64, 10.0, 20.0)
 test_global_orderings(Float64, NaN, Inf)
 
@@ -844,6 +859,7 @@ test_memory_operators(Any)
 test_memory_operators(Union{Nothing,Int})
 test_memory_operators(Complex{Int32})
 test_memory_operators(Complex{Int128})
+test_memory_operators(Complex{Real})
 test_memory_operators(PadIntA)
 test_memory_operators(PadIntB)
 #FIXME: test_memory_operators(Int24)
@@ -1031,6 +1047,7 @@ test_memory_orderings(Any, true, false)
 test_memory_orderings(Union{Nothing,Missing}, nothing, missing)
 test_memory_orderings(Union{Nothing,Int}, nothing, 123_1)
 test_memory_orderings(Complex{Int128}(10, 30), Complex{Int128}(20, 40))
+test_memory_orderings(Complex{Real}(10, 30), Complex{Real}(20, 40))
 test_memory_orderings(10.0, 20.0)
 test_memory_orderings(NaN, Inf)
 

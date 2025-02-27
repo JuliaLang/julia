@@ -1088,3 +1088,19 @@ end
         clear_flags()
     end
 end
+
+@testset "BigFloatData truncation OOB read" begin
+    @testset "T: $T" for T ∈ (UInt8, UInt16, UInt32, UInt64, UInt128)
+        v = Base.MPFR.BigFloatData{T}(fill(typemax(T), 1 + Base.MPFR.offset_p_limbs))
+        @testset "bit_count: $bit_count" for bit_count ∈ (0:10:80)
+            @test Base.MPFR.truncated(UInt128, v, bit_count) isa Any
+        end
+    end
+end
+
+# BigFloatData is the Ref type for BigFloat in ccall:
+@testset "cconvert(Ref{BigFloat}, x)" begin
+    for x in (1.0, big"1.0", Ref(big"1.0"))
+        @test Base.cconvert(Ref{BigFloat}, x) isa Base.MPFR.BigFloatData
+    end
+end

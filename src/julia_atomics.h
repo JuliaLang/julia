@@ -103,12 +103,12 @@ enum jl_memory_order {
 // this wrong thus we include the correct definitions here (with implicit
 // conversion), instead of using the macro version
 template<class T>
-T jl_atomic_load(std::atomic<T> *ptr)
+T jl_atomic_load(const std::atomic<T> *ptr)
 {
      return std::atomic_load<T>(ptr);
 }
 template<class T>
-T jl_atomic_load_explicit(std::atomic<T> *ptr, std::memory_order order)
+T jl_atomic_load_explicit(const std::atomic<T> *ptr, std::memory_order order)
 {
      return std::atomic_load_explicit<T>(ptr, order);
 }

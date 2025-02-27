@@ -39,9 +39,17 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
         static jl_value_t *replace_depot_func = NULL;
         if (!replace_depot_func)
             replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
+        static jl_value_t *normalize_depots_func = NULL;
+        if (!normalize_depots_func)
+            normalize_depots_func = jl_get_global(jl_base_module, jl_symbol("normalize_depots_for_relocation"));
         ios_t srctext;
-        jl_value_t *deptuple = NULL;
-        JL_GC_PUSH2(&deptuple, &udeps);
+        jl_value_t *deptuple = NULL, *depots = NULL;
+        JL_GC_PUSH3(&deptuple, &udeps, &depots);
+        jl_task_t *ct = jl_current_task;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        depots = jl_apply(&normalize_depots_func, 1);
+        ct->world_age = last_age;
         for (size_t i = 0; i < len; i++) {
             deptuple = jl_array_ptr_ref(udeps, i);
             jl_value_t *depmod = jl_fieldref(deptuple, 0);  // module
@@ -60,13 +68,14 @@ void write_srctext(ios_t *f, jl_array_t *udeps, int64_t srctextpos) {
                 }
 
                 jl_value_t **replace_depot_args;
-                JL_GC_PUSHARGS(replace_depot_args, 2);
+                JL_GC_PUSHARGS(replace_depot_args, 3);
                 replace_depot_args[0] = replace_depot_func;
                 replace_depot_args[1] = abspath;
+                replace_depot_args[2] = depots;
                 jl_task_t *ct = jl_current_task;
                 size_t last_age = ct->world_age;
                 ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-                jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 2);
+                jl_value_t *depalias = (jl_value_t*)jl_apply(replace_depot_args, 3);
                 ct->world_age = last_age;
                 JL_GC_POP();
 
@@ -116,14 +125,16 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         if (f) {
             jl_array_ptr_1d_push(jl_module_init_order, m);
             int setting = jl_get_module_compile((jl_module_t*)m);
-            if (setting != JL_OPTIONS_COMPILE_OFF &&
-                setting != JL_OPTIONS_COMPILE_MIN) {
+            if ((setting != JL_OPTIONS_COMPILE_OFF && (jl_options.trim ||
+                (setting != JL_OPTIONS_COMPILE_MIN)))) {
                 // TODO: this would be better handled if moved entirely to jl_precompile
                 // since it's a slightly duplication of effort
                 jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
                 JL_GC_PUSH1(&tt);
                 tt = jl_apply_tuple_type_v(&tt, 1);
                 jl_compile_hint((jl_tupletype_t*)tt);
+                if (jl_options.trim)
+                    jl_add_entrypoint((jl_tupletype_t*)tt);
                 JL_GC_POP();
             }
         }
@@ -187,6 +198,10 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
             jl_static_show(JL_STDERR, (jl_value_t*)jl_current_modules.table[i]);
             jl_printf(JL_STDERR, "\n  ** incremental compilation may be broken for this module **\n\n");
         }
+    }
+    if (jl_options.trim) {
+        exit(0); // Some finalizers need to run and we've blown up the bindings table
+        // TODO: Is this still needed
     }
     JL_GC_POP();
     jl_gc_enable_finalizers(ct, 1);

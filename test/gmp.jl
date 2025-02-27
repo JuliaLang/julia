@@ -445,6 +445,44 @@ end
     @test string(big(0), base = rand(2:62), pad = 0) == ""
 end
 
+@testset "Base.GMP.MPZ.export!" begin
+
+    function Base_GMP_MPZ_import!(x::BigInt, n::AbstractVector{T}; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}
+        ccall((:__gmpz_import, Base.GMP.MPZ.libgmp),
+               Cvoid,
+               (Base.GMP.MPZ.mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}),
+               x, length(n), order, sizeof(T), endian, nails, n)
+        return x
+    end
+    # test import
+    bytes_to_import_from = Vector{UInt8}([1, 0])
+    int_to_import_to = BigInt()
+    Base_GMP_MPZ_import!(int_to_import_to, bytes_to_import_from, order=0)
+    @test int_to_import_to == BigInt(256)
+
+    # test export
+    int_to_export_from = BigInt(256)
+    bytes_to_export_to = Vector{UInt8}(undef, 2)
+    Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
+    @test all(bytes_to_export_to .== bytes_to_import_from)
+
+    # test both composed import(export) is identity
+    int_to_export_from = BigInt(256)
+    bytes_to_export_to = Vector{UInt8}(undef, 2)
+    Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
+    int_to_import_to = BigInt()
+    Base_GMP_MPZ_import!(int_to_import_to, bytes_to_export_to, order=0)
+    @test int_to_export_from == int_to_import_to
+
+    # test both composed export(import) is identity
+    bytes_to_import_from = Vector{UInt8}([1, 0])
+    int_to_import_to = BigInt()
+    Base_GMP_MPZ_import!(int_to_import_to, bytes_to_import_from, order=0)
+    bytes_to_export_to = Vector{UInt8}(undef, 2)
+    Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
+    @test all(bytes_to_export_to .== bytes_to_import_from)
+end
+
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2
 
@@ -466,6 +504,34 @@ end
             @test_throws typeof(int8_res) big(i)^big(j)
         end
     end
+end
+
+@testset "modular invert" begin
+    # test invert is correct and does not mutate
+    a = BigInt(3)
+    b = BigInt(7)
+    i = BigInt(5)
+    @test Base.GMP.MPZ.invert(a, b) == i
+    @test a == BigInt(3)
+    @test b == BigInt(7)
+
+    # test in place invert does mutate first argument
+    a = BigInt(3)
+    b = BigInt(7)
+    i = BigInt(5)
+    i_inplace = BigInt(3)
+    Base.GMP.MPZ.invert!(i_inplace, b)
+    @test i_inplace == i
+
+    # test in place invert does mutate only first argument
+    a = BigInt(3)
+    b = BigInt(7)
+    i = BigInt(5)
+    i_inplace = BigInt(0)
+    Base.GMP.MPZ.invert!(i_inplace, a, b)
+    @test i_inplace == i
+    @test a == BigInt(3)
+    @test b == BigInt(7)
 end
 
 @testset "math ops returning BigFloat" begin

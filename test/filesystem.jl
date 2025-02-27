@@ -44,7 +44,7 @@ end
 @testset "Base.Filesystem docstrings" begin
     undoc = Docs.undocumented_names(Base.Filesystem)
     @test_broken isempty(undoc)
-    @test undoc == [:File, :Filesystem, :cptree, :futime, :rename, :sendfile, :unlink]
+    @test undoc == [:File, :Filesystem, :cptree, :futime, :sendfile, :unlink]
 end
 
 @testset "write return type" begin

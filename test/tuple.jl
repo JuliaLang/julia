@@ -533,7 +533,12 @@ end
         @test ntuple(identity, Val(n)) == ntuple(identity, n)
     end
 
-    @test Core.Compiler.return_type(ntuple, Tuple{typeof(identity), Val}) == Tuple{Vararg{Int}}
+    @test Base.infer_return_type(ntuple, Tuple{typeof(identity), Val}) == Tuple{Vararg{Int}}
+
+    # issue #55790
+    for n in 1:32
+        @test typeof(ntuple(identity, UInt64(n))) == NTuple{n, Int}
+    end
 end
 
 struct A_15703{N}
@@ -835,8 +840,8 @@ end
     @test @inferred(Base.circshift(t3, 7)) == ('b', 'c', 'd', 'a')
     @test @inferred(Base.circshift(t3, -1)) == ('b', 'c', 'd', 'a')
     @test_throws MethodError circshift(t1, 'a')
-    @test Core.Compiler.return_type(circshift, Tuple{Tuple,Integer}) <: Tuple
-    @test Core.Compiler.return_type(circshift, Tuple{Tuple{Vararg{Any,10}},Integer}) <: Tuple{Vararg{Any,10}}
+    @test Base.infer_return_type(circshift, Tuple{Tuple,Integer}) <: Tuple
+    @test Base.infer_return_type(circshift, Tuple{Tuple{Vararg{Any,10}},Integer}) <: Tuple{Vararg{Any,10}}
     for len ∈ 0:5
         v = 1:len
         t = Tuple(v)

@@ -1308,3 +1308,7 @@ end
     # https://github.com/JuliaLang/julia/issues/37757
     @test insert_hlines(nothing) === nothing
 end
+
+@testset "Lazy Strings" begin
+    @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
+end

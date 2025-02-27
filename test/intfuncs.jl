@@ -191,6 +191,13 @@ end
 
         @test lcm(T[2, 4, 6]) ⟷ T(12)
     end
+
+    # Issue #55379
+    @test lcm([1//2; 1//2]) === lcm([1//2, 1//2]) === lcm(1//2, 1//2) === 1//2
+    @test gcd(Int[]) === 0
+    @test lcm(Int[]) === 1
+    @test gcd(Rational{Int}[]) === 0//1
+    @test_throws ArgumentError("lcm has no identity for Rational{$Int}") lcm(Rational{Int}[])
 end
 
 ⟷(a::Tuple{T, T, T}, b::Tuple{T, T, T}) where T <: Union{Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128} = a === b
@@ -616,3 +623,20 @@ end
 @test Base.infer_effects(gcdx, (Int,Int)) |> Core.Compiler.is_foldable
 @test Base.infer_effects(invmod, (Int,Int)) |> Core.Compiler.is_foldable
 @test Base.infer_effects(binomial, (Int,Int)) |> Core.Compiler.is_foldable
+
+@testset "literal power" begin
+    @testset for T in Base.uniontypes(Base.HWReal)
+        ns = (T(0), T(1), T(5))
+        if T <: AbstractFloat
+            ns = (ns..., T(3.14), T(-2.71))
+        end
+        for n in ns
+            @test n ^ 0 === T(1)
+            @test n ^ 1 === n
+            @test n ^ 2 === n * n
+            @test n ^ 3 === n * n * n
+            @test n ^ -1 ≈ inv(n)
+            @test n ^ -2 ≈ inv(n) * inv(n)
+        end
+    end
+end
