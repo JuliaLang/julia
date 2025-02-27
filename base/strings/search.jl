@@ -807,3 +807,6 @@ false
 occursin(haystack) = Base.Fix2(occursin, haystack)
 
 in(::AbstractString, ::AbstractString) = error("use occursin(needle, haystack) for string containment")
+
+in(a::UInt8, b::DenseUInt8) = !isnothing(findfirst(==(a), b))
+in(a::Int8, b::DenseInt8) = !isnothing(findfirst(==(a), b))
