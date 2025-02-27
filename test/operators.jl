@@ -2,7 +2,7 @@
 
 using Random: randstring
 
-include("compiler/irutils.jl")
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 
 @testset "ifelse" begin
     @test ifelse(true, 1, 2) == 1
@@ -195,7 +195,7 @@ end
     @test repr(uppercase ∘ first) == "uppercase ∘ first"
     @test sprint(show, "text/plain", uppercase ∘ first) == "uppercase ∘ first"
 
-    # test keyword ags in composition
+    # test keyword args in composition
     function kwf(a;b,c); a + b + c; end
     @test (abs2 ∘ kwf)(1,b=2,c=3) == 36
 
@@ -328,9 +328,21 @@ end
     @test lt5(4) && !lt5(5)
 end
 
+@testset "in tuples" begin
+    @test ∈(5, (1,5,10,11))
+    @test ∉(0, (1,5,10,11))
+    @test ∈(5, (1,"hi","hey",5.0))
+    @test ∉(0, (1,"hi","hey",5.0))
+    @test ∈(5, (5,))
+    @test ∉(0, (5,))
+    @test ∉(5, ())
+end
+
 @testset "ni" begin
     @test ∋([1,5,10,11], 5)
     @test !∋([1,10,11], 5)
+    @test ∋((1,5,10,11), 5)
+    @test ∌((1,10,11), 5)
     @test ∋(5)([5,1])
     @test !∋(42)([0,1,100])
     @test ∌(0)(1:10)
@@ -338,6 +350,7 @@ end
 end
 
 @test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]
+@test Core.Compiler.is_terminates(Base.infer_effects(Base.afoldl, Tuple{typeof(+), Vararg{Int, 100}}))
 
 @testset "Returns" begin
     @test @inferred(Returns(1)()   ) === 1
@@ -367,7 +380,8 @@ end
     @test B46327() <= B46327()
 end
 
-@testset "concrete eval `x in itr::Tuple`" begin
+@testset "inference for `x in itr::Tuple`" begin
+    # concrete evaluation
     @test Core.Compiler.is_foldable(Base.infer_effects(in, (Int,Tuple{Int,Int,Int})))
     @test Core.Compiler.is_foldable(Base.infer_effects(in, (Char,Tuple{Char,Char,Char})))
     for i = (1,2,3)
@@ -377,10 +391,23 @@ end
             end |> only == Val{true}
         end
     end
-    @test Base.return_types() do
+    @test Base.infer_return_type() do
         Val(4 in (1,2,3))
-    end |> only == Val{false}
-    @test Base.return_types() do
+    end == Val{false}
+    @test Base.infer_return_type() do
         Val('1' in ('1','2','3'))
-    end |> only == Val{true}
+    end == Val{true}
+
+    # constant propagation
+    @test Base.infer_return_type((Int,Int)) do x, y
+        Val(1 in (x,2,y))
+    end >: Val{true}
+    @test Base.infer_return_type((Int,Int)) do x, y
+        Val(2 in (x,2,y))
+    end == Val{true}
+
+    # should use the loop implementation given large tuples to avoid inference blowup
+    let t = ntuple(x->'A', 10000);
+        @test Base.infer_return_type(in, (Char,typeof(t))) == Bool
+    end
 end

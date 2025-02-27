@@ -140,15 +140,15 @@ end
 
 function term(io::IO, md::Table, columns)
     margin_str = " "^margin
-    cells = mapmap(x -> terminline_string(io, x), md.rows)
-    padcells!(cells, md.align, len = ansi_length)
+    cells = mapmap(x -> annotprint(terminline, x), md.rows)
+    padcells!(cells, md.align, len = textwidth)
     for i = 1:length(cells)
         print(io, margin_str)
         join(io, cells[i], " ")
         if i == 1
             println(io)
             print(io, margin_str)
-            join(io, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
+            join(io, ["–"^textwidth(cells[i][j]) for j = 1:length(cells[1])], " ")
         end
         i < length(cells) && println(io)
     end

@@ -42,8 +42,8 @@ using namespace llvm;
 struct PropagateJuliaAddrspacesVisitor : public InstVisitor<PropagateJuliaAddrspacesVisitor> {
     DenseMap<Value *, Value *> LiftingMap;
     SmallPtrSet<Value *, 4> Visited;
-    std::vector<Instruction *> ToDelete;
-    std::vector<std::pair<Instruction *, Instruction *>> ToInsert;
+    SmallVector<Instruction *, 0> ToDelete;
+    SmallVector<std::pair<Instruction *, Instruction *>, 0> ToInsert;
 
 public:
     Value *LiftPointer(Module *M, Value *V, Instruction *InsertPt=nullptr);
@@ -56,18 +56,18 @@ public:
     void visitMemTransferInst(MemTransferInst &MTI);
 
 private:
-    void PoisonValues(std::vector<Value *> &Worklist);
+    void PoisonValues(SmallVectorImpl<Value *> &Worklist);
 };
 
 static unsigned getValueAddrSpace(Value *V) {
-    return cast<PointerType>(V->getType())->getAddressSpace();
+    return V->getType()->getPointerAddressSpace();
 }
 
 static bool isSpecialAS(unsigned AS) {
     return AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial;
 }
 
-void PropagateJuliaAddrspacesVisitor::PoisonValues(std::vector<Value *> &Worklist) {
+void PropagateJuliaAddrspacesVisitor::PoisonValues(SmallVectorImpl<Value *> &Worklist) {
     while (!Worklist.empty()) {
         Value *CurrentV = Worklist.back();
         Worklist.pop_back();
@@ -82,7 +82,7 @@ void PropagateJuliaAddrspacesVisitor::PoisonValues(std::vector<Value *> &Worklis
 
 Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruction *InsertPt) {
     SmallVector<Value *, 4> Stack;
-    std::vector<Value *> Worklist;
+    SmallVector<Value *, 0> Worklist;
     std::set<Value *> LocalVisited;
     unsigned allocaAddressSpace = M->getDataLayout().getAllocaAddrSpace();
     Worklist.push_back(V);
@@ -105,7 +105,6 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
             }
             else if (auto *GEP = dyn_cast<GetElementPtrInst>(CurrentV)) {
                 if (LiftingMap.count(GEP)) {
-                    CurrentV = LiftingMap[GEP];
                     break;
                 } else if (Visited.count(GEP)) {
                     return nullptr;
@@ -140,7 +139,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
                 break;
             } else {
                 // Ok, we've reached a leaf - check if it is eligible for lifting
-                if (!CurrentV->getType()->isPointerTy() ||
+                if (!CurrentV->getType()->isPtrOrPtrVectorTy() ||
                     isSpecialAS(getValueAddrSpace(CurrentV))) {
                     // If not, poison all (recursive) users of this value, to prevent
                     // looking at them again in future iterations.
@@ -156,7 +155,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
     }
 
     // Go through and insert lifted versions of all instructions on the list.
-    std::vector<Value *> ToRevisit;
+    SmallVector<Value *, 0> ToRevisit;
     for (Value *V : Stack) {
         if (LiftingMap.count(V))
             continue;
@@ -164,14 +163,14 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
-            Type *NewRetTy = PointerType::getWithSamePointeeType(cast<PointerType>(InstV->getType()), allocaAddressSpace);
+            Type *NewRetTy = PointerType::get(InstV->getType(), allocaAddressSpace);
             NewV->mutateType(NewRetTy);
             LiftingMap[InstV] = NewV;
             ToRevisit.push_back(NewV);
         }
     }
     auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
-        PointerType *TargetType = PointerType::getWithSamePointeeType(cast<PointerType>(CurrentV->getType()), allocaAddressSpace);
+        PointerType *TargetType = PointerType::get(CurrentV->getType(), allocaAddressSpace);
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
@@ -185,13 +184,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
         }
         if (LiftingMap.count(CurrentV))
             CurrentV = LiftingMap[CurrentV];
-        if (CurrentV->getType() != TargetType) {
-            // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-            assert(CurrentV->getContext().supportsTypedPointers());
-            auto *BCI = new BitCastInst(CurrentV, TargetType);
-            ToInsert.push_back(std::make_pair(BCI, InsertPt));
-            CurrentV = BCI;
-        }
+        assert(CurrentV->getType() == TargetType);
         return CurrentV;
     };
 

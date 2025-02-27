@@ -2,3 +2,6 @@
 /ccalltest
 /ccalltest.s
 /libccalltest.*
+/relocatedepot
+/RelocationTestPkg2/src/foo.txt
+/RelocationTestPkg*/Manifest.toml

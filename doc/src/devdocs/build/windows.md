@@ -60,14 +60,14 @@ MinGW-w64 compilers available through Cygwin's package manager.
 
  3. At the *Select Packages* step, select the following:
 
-    1.  From the *Devel* category: `cmake`, `gcc-g++`, `git`, `make`, `patch`
-    2.  From the *Net* category: `curl`
-    3.  From *Interpreters* (or *Python*) category: `m4`, `python3`
-    4.  From the *Archive* category: `p7zip`
-    5.  For 32 bit Julia, and also from the *Devel* category:
-        `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran`
-    6.  For 64 bit Julia, and also from the *Devel* category:
-        `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
+    1. From the *Devel* category: `cmake`, `gcc-g++`, `git`, `make`, `patch`
+    2. From the *Net* category: `curl`
+    3. From *Interpreters* (or *Python*) category: `m4`, `python3`
+    4. From the *Archive* category: `p7zip`
+    5. For 32 bit Julia, and also from the *Devel* category:
+       `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran`
+    6. For 64 bit Julia, and also from the *Devel* category:
+       `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran`
 
  4. Allow Cygwin installation to finish, then start from the installed shortcut
     *'Cygwin Terminal'*, or *'Cygwin64 Terminal'*, respectively.
@@ -129,32 +129,32 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
     2. Open the MSYS2 shell. Update the package database and base packages:
 
-        ```
-        pacman -Syu
-        ```
+       ```
+       pacman -Syu
+       ```
     3. Exit and restart MSYS2. Update the rest of the base packages:
 
-        ```
-        pacman -Syu
-        ```
+       ```
+       pacman -Syu
+       ```
 
     4. Then install tools required to build julia:
 
-        ```
-        pacman -S cmake diffutils git m4 make patch tar p7zip curl python
-        ```
+       ```
+       pacman -S cmake diffutils git m4 make patch tar p7zip curl python
+       ```
 
-        For 64 bit Julia, install the x86_64 version:
+       For 64 bit Julia, install the x86_64 version:
 
-        ```
-        pacman -S mingw-w64-x86_64-gcc
-        ```
+       ```
+       pacman -S mingw-w64-x86_64-gcc
+       ```
 
-        For 32 bit Julia, install the i686 version:
+       For 32 bit Julia, install the i686 version:
 
-        ```
-        pacman -S mingw-w64-i686-gcc
-        ```
+       ```
+       pacman -S mingw-w64-i686-gcc
+       ```
 
     5. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
  2. Build Julia and its dependencies with pre-build dependencies.
@@ -166,16 +166,16 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
     2. Clone the Julia sources:
 
-        ```
-        git clone https://github.com/JuliaLang/julia.git
-        cd julia
-        ```
+       ```sh
+       git clone https://github.com/JuliaLang/julia.git
+       cd julia
+       ```
 
     3. Start the build
 
-        ```
-        make -j$(nproc)
-        ```
+       ```
+       make -j$(nproc)
+       ```
 
 !!! note "Pro tip: build in dir"
     ```sh
@@ -208,7 +208,7 @@ done
 
 **On Mac**: Install XCode, XCode command line tools, X11 (now
 [XQuartz](https://www.xquartz.org/)), and [MacPorts](https://www.macports.org/install.php)
-or [Homebrew](https://brew.sh/).  Then run `port install wine wget mingw-w64`, or `brew
+or [Homebrew](https://brew.sh/). Then run `port install wine wget mingw-w64`, or `brew
 install wine wget mingw-w64`, as appropriate.
 
 **Then run the build:**
@@ -259,14 +259,14 @@ Then run the resulting installer.
 ### GDB not attaching to the right process
 
  - Use the PID from the Windows task manager or `WINPID` from the `ps` command
-   instead of the PID from unix-style command line tools (e.g. `pgrep`).  You
+   instead of the PID from unix-style command line tools (e.g. `pgrep`). You
    may need to add the PID column if it is not shown by default in the Windows
    task manager.
 
 ### GDB not showing the right backtrace
 
  - When attaching to the julia process, GDB may not be attaching to the right
-   thread.  Use `info threads` command to show all the threads and
+   thread. Use `info threads` command to show all the threads and
    `thread <threadno>` to switch threads.
  - Be sure to use a 32 bit version of GDB to debug a 32 bit build of Julia, or
    a 64 bit version of GDB to debug a 64 bit build of Julia.

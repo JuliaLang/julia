@@ -1,8 +1,9 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
-// This pass finds floating-point operations on 16-bit (half precision) values, and replaces
-// them by equivalent operations on 32-bit (single precision) values surrounded by a fpext
-// and fptrunc. This ensures that the exact semantics of IEEE floating-point are preserved.
+// This pass finds floating-point operations on 16-bit values (half precision and bfloat),
+// and replaces them by equivalent operations on 32-bit (single precision) values surrounded
+// by a fpext and fptrunc. This ensures that the exact semantics of IEEE floating-point are
+// preserved.
 //
 // Without this pass, back-ends that do not natively support half-precision (e.g. x86_64)
 // similarly pattern-match half-precision operations with single-precision equivalents, but
@@ -48,33 +49,36 @@ extern JuliaOJIT *jl_ExecutionEngine;
 
 namespace {
 
-static bool have_fp16(Function &caller, const Triple &TT) {
-    Attribute FSAttr = caller.getFnAttribute("target-features");
-    StringRef FS = "";
-    if (FSAttr.isValid())
-        FS = FSAttr.getValueAsString();
-    else if (jl_ExecutionEngine)
-        FS = jl_ExecutionEngine->getTargetFeatureString();
-    // else probably called from opt, just do nothing
-    if (TT.isAArch64()) {
-        if (FS.find("+fp16fml") != llvm::StringRef::npos || FS.find("+fullfp16") != llvm::StringRef::npos){
-            return true;
-        }
-    } else if (TT.getArch() == Triple::x86_64) {
-        if (FS.find("+avx512fp16") != llvm::StringRef::npos){
-            return true;
-        }
-    }
-    if (caller.hasFnAttribute("julia.hasfp16")) {
-        return true;
-    }
-    return false;
+static bool have_fp16(Function &F, const Triple &TT) {
+    // for testing purposes
+    Attribute Attr = F.getFnAttribute("julia.hasfp16");
+    if (Attr.isValid())
+        return Attr.getValueAsBool();
+
+    // llvm/llvm-project#97975: on some platforms, `half` uses excessive precision
+    if (TT.isPPC())
+        return false;
+
+    return true;
+}
+
+static bool have_bf16(Function &F, const Triple &TT) {
+    // for testing purposes
+    Attribute Attr = F.getFnAttribute("julia.hasbf16");
+    if (Attr.isValid())
+        return Attr.getValueAsBool();
+
+    // https://github.com/llvm/llvm-project/issues/97975#issuecomment-2218770199:
+    // on current versions of LLVM, bf16 always uses TypeSoftPromoteHalf
+    return true;
 }
 
 static bool demoteFloat16(Function &F)
 {
     auto TT = Triple(F.getParent()->getTargetTriple());
-    if (have_fp16(F, TT))
+    auto has_fp16 = have_fp16(F, TT);
+    auto has_bf16 = have_bf16(F, TT);
+    if (has_fp16 && has_bf16)
         return false;
 
     auto &ctx = F.getContext();
@@ -82,14 +86,17 @@ static bool demoteFloat16(Function &F)
     SmallVector<Instruction *, 0> erase;
     for (auto &BB : F) {
         for (auto &I : BB) {
-            // extend Float16 operands to Float32
+            // check whether there's any 16-bit floating point operands to extend
             bool Float16 = I.getType()->getScalarType()->isHalfTy();
-            for (size_t i = 0; !Float16 && i < I.getNumOperands(); i++) {
+            bool BFloat16 = I.getType()->getScalarType()->isBFloatTy();
+            for (size_t i = 0; !BFloat16 && !Float16 && i < I.getNumOperands(); i++) {
                 Value *Op = I.getOperand(i);
-                if (Op->getType()->getScalarType()->isHalfTy())
+                if (!has_fp16 && Op->getType()->getScalarType()->isHalfTy())
                     Float16 = true;
+                else if (!has_bf16 && Op->getType()->getScalarType()->isBFloatTy())
+                    BFloat16 = true;
             }
-            if (!Float16)
+            if (!Float16 && !BFloat16)
                 continue;
 
             switch (I.getOpcode()) {
@@ -113,11 +120,16 @@ static bool demoteFloat16(Function &F)
 
             IRBuilder<> builder(&I);
 
-            // extend Float16 operands to Float32
+            // extend 16-bit floating point operands
             SmallVector<Value *, 2> Operands(I.getNumOperands());
             for (size_t i = 0; i < I.getNumOperands(); i++) {
                 Value *Op = I.getOperand(i);
-                if (Op->getType()->getScalarType()->isHalfTy()) {
+                if (!has_fp16 && Op->getType()->getScalarType()->isHalfTy()) {
+                    // extend Float16 to Float32
+                    ++TotalExt;
+                    Op = builder.CreateFPExt(Op, Op->getType()->getWithNewType(T_float32));
+                } else if (!has_bf16 && Op->getType()->getScalarType()->isBFloatTy()) {
+                    // extend BFloat16 to Float32
                     ++TotalExt;
                     Op = builder.CreateFPExt(Op, Op->getType()->getWithNewType(T_float32));
                 }
@@ -125,7 +137,7 @@ static bool demoteFloat16(Function &F)
             }
 
             // recreate the instruction if any operands changed,
-            // truncating the result back to Float16
+            // truncating the result back to the original type
             Value *NewI;
             ++TotalChanged;
             switch (I.getOpcode()) {

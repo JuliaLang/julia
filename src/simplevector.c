@@ -22,7 +22,7 @@ JL_DLLEXPORT jl_svec_t *(ijl_svec)(size_t n, ...)
 jl_svec_t *(jl_perm_symsvec)(size_t n, ...)
 {
     if (n == 0) return jl_emptysvec;
-    jl_svec_t *jv = (jl_svec_t*)jl_gc_permobj((n + 1) * sizeof(void*), jl_simplevector_type);
+    jl_svec_t *jv = (jl_svec_t*)jl_gc_permobj((n + 1) * sizeof(void*), jl_simplevector_type, 0);
     jl_set_typetagof(jv, jl_simplevector_tag, jl_astaggedvalue(jv)->bits.gc);
     jl_svec_set_len_unsafe(jv, n);
     va_list args;
@@ -79,7 +79,7 @@ JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a)
 {
     size_t n = jl_svec_len(a);
     jl_svec_t *c = jl_alloc_svec_uninit(n);
-    memmove_refs((void**)jl_svec_data(c), (void**)jl_svec_data(a), n);
+    memmove_refs((_Atomic(void*)*)jl_svec_data(c), (_Atomic(void*)*)jl_svec_data(a), n);
     return c;
 }
 
@@ -95,11 +95,4 @@ JL_DLLEXPORT jl_svec_t *jl_svec_fill(size_t n, jl_value_t *x)
 JL_DLLEXPORT size_t (jl_svec_len)(jl_svec_t *t) JL_NOTSAFEPOINT
 {
     return jl_svec_len(t);
-}
-
-JL_DLLEXPORT jl_value_t *jl_svec_ref(jl_svec_t *t JL_PROPAGATES_ROOT, ssize_t i)
-{
-    jl_value_t *v = jl_svecref(t, (size_t)i);
-    assert(v != NULL);
-    return v;
 }

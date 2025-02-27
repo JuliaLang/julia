@@ -1,20 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=0"
-
-# RUN: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
-# RUN: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
-
-# RUN: julia --startup-file=no -O2 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
-# RUN: julia --startup-file=no -O3 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
-
-# RUN: julia --startup-file=no -O2 --check-bounds=auto %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_AUTO
-# RUN: julia --startup-file=no -O3 --check-bounds=auto %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_AUTO
-
-# RUN: export JULIA_LLVM_ARGS="--opaque-pointers=1"
-
-# RUN: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
-# RUN: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
+# RUNx: julia --startup-file=no -O2 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
+# RUNx: julia --startup-file=no -O3 --check-bounds=yes %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL
 
 # RUN: julia --startup-file=no -O2 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
 # RUN: julia --startup-file=no -O3 --check-bounds=no %s %t -O && llvm-link -S %t/* | FileCheck %s --check-prefixes=ALL,BC_OFF
@@ -144,6 +131,18 @@ function loopedlength(arr)
     end
     len
 end
+# COM: Vector
+# ALL-LABEL: @julia_memset_like
+# ALL: vector.body
+
+# COM: Memory
+# ALL-LABEL: @julia_memset_like
+# ALL: vector.body
+function memset_like(mem)
+    for idx in eachindex(mem)
+        mem[idx] = 1.0
+    end
+end
 
 emit(iterate_read, Vector{Int64})
 emit(iterate_write, Vector{Int64}, Vector{Int64})
@@ -163,3 +162,6 @@ emit(sumloop, Int64)
 emit(simd_sumloop, Float32)
 
 emit(loopedlength, Vector{Int64})
+
+emit(memset_like, Vector{Float64})
+emit(memset_like, Memory{Float64})

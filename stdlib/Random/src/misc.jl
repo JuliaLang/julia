@@ -17,16 +17,14 @@ Generate a `BitArray` of random boolean values.
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> bitrand(rng, 10)
+julia> bitrand(Xoshiro(123), 10)
 10-element BitVector:
- 0
- 0
- 0
  0
  1
  0
+ 1
+ 0
+ 1
  0
  0
  1
@@ -55,8 +53,8 @@ number generator, see [Random Numbers](@ref).
 julia> Random.seed!(3); randstring()
 "Lxz5hUwn"
 
-julia> randstring(MersenneTwister(3), 'a':'z', 6)
-"ocucay"
+julia> randstring(Xoshiro(3), 'a':'z', 6)
+"iyzcsm"
 
 julia> randstring("ACGT")
 "TGCTCCTC"
@@ -141,19 +139,17 @@ Like [`randsubseq`](@ref), but the results are stored in `S`
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
 julia> S = Int64[];
 
-julia> randsubseq!(rng, S, 1:8, 0.3)
+julia> randsubseq!(Xoshiro(123), S, 1:8, 0.3)
 2-element Vector{Int64}:
+ 4
  7
- 8
 
 julia> S
 2-element Vector{Int64}:
+ 4
  7
- 8
 ```
 """
 randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(default_rng(), S, A, p)
@@ -171,12 +167,10 @@ large.) Technically, this process is known as "Bernoulli sampling" of `A`.
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> randsubseq(rng, 1:8, 0.3)
+julia> randsubseq(Xoshiro(123), 1:8, 0.3)
 2-element Vector{Int64}:
+ 4
  7
- 8
 ```
 """
 randsubseq(A::AbstractArray, p::Real) = randsubseq(default_rng(), A, p)
@@ -197,26 +191,18 @@ optionally supplying the random-number generator `rng`.
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> shuffle!(rng, Vector(1:16))
-16-element Vector{Int64}:
- 16
-  1
- 14
- 12
+julia> shuffle!(Xoshiro(123), Vector(1:10))
+10-element Vector{Int64}:
   5
- 10
   4
- 15
- 13
-  3
-  7
-  9
-  6
- 11
-  8
   2
+  3
+  6
+ 10
+  8
+  1
+  9
+  7
 ```
 """
 function shuffle!(r::AbstractRNG, a::AbstractArray)
@@ -234,6 +220,21 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
     return a
 end
 
+function shuffle!(r::AbstractRNG, a::AbstractArray{Bool})
+    old_count = count(a)
+    len = length(a)
+    uncommon_value = 2old_count <= len
+    fuel = uncommon_value ? old_count : len - old_count
+    fuel == 0 && return a
+    a .= !uncommon_value
+    while fuel > 0
+        k = rand(r, eachindex(a))
+        fuel -= a[k] != uncommon_value
+        a[k] = uncommon_value
+    end
+    a
+end
+
 shuffle!(a::AbstractArray) = shuffle!(default_rng(), a)
 
 """
@@ -246,20 +247,18 @@ indices, see [`randperm`](@ref).
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> shuffle(rng, Vector(1:10))
+julia> shuffle(Xoshiro(123), Vector(1:10))
 10-element Vector{Int64}:
-  2
-  1
-  7
-  9
   5
- 10
   4
-  8
-  6
+  2
   3
+  6
+ 10
+  8
+  1
+  9
+  7
 ```
 """
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
@@ -286,11 +285,11 @@ To randomly permute an arbitrary vector, see [`shuffle`](@ref) or
 
 # Examples
 ```jldoctest
-julia> randperm(MersenneTwister(1234), 4)
+julia> randperm(Xoshiro(123), 4)
 4-element Vector{Int64}:
- 2
  1
  4
+ 2
  3
 ```
 """
@@ -307,11 +306,11 @@ optional `rng` argument specifies a random number generator (see
 
 # Examples
 ```jldoctest
-julia> randperm!(MersenneTwister(1234), Vector{Int}(undef, 4))
+julia> randperm!(Xoshiro(123), Vector{Int}(undef, 4))
 4-element Vector{Int64}:
- 2
  1
  4
+ 2
  3
 ```
 """
@@ -357,14 +356,14 @@ which are sampled uniformly.  If `n == 0`, `randcycle` returns an empty vector.
 
 # Examples
 ```jldoctest
-julia> randcycle(MersenneTwister(1234), 6)
+julia> randcycle(Xoshiro(123), 6)
 6-element Vector{Int64}:
- 3
  5
  4
- 6
- 1
  2
+ 6
+ 3
+ 1
 ```
 """
 randcycle(r::AbstractRNG, n::T) where {T <: Integer} = randcycle!(r, Vector{T}(undef, n))
@@ -385,14 +384,14 @@ which are sampled uniformly.  If `A` is empty, `randcycle!` leaves it unchanged.
 
 # Examples
 ```jldoctest
-julia> randcycle!(MersenneTwister(1234), Vector{Int}(undef, 6))
+julia> randcycle!(Xoshiro(123), Vector{Int}(undef, 6))
 6-element Vector{Int64}:
- 3
  5
  4
- 6
- 1
  2
+ 6
+ 3
+ 1
 ```
 """
 function randcycle!(r::AbstractRNG, a::Array{<:Integer})

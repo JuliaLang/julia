@@ -1,5 +1,44 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Re-exports from `Core`
+export Core,
+    # key types
+    Any, DataType, Vararg, NTuple,
+    Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
+    AbstractArray, DenseArray, NamedTuple, Pair,
+    # special objects
+    Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
+    Array, Memory, MemoryRef, AtomicMemory, AtomicMemoryRef, GenericMemory, GenericMemoryRef,
+    # numeric types
+    Number, Real, Integer, Bool, Ref, Ptr,
+    AbstractFloat, Float16, Float32, Float64,
+    Signed, Int, Int8, Int16, Int32, Int64, Int128,
+    Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
+    # string types
+    AbstractChar, Char, AbstractString, String, IO,
+    # errors
+    ErrorException, BoundsError, DivideError, DomainError, Exception,
+    InterruptException, InexactError, OutOfMemoryError, ReadOnlyMemoryError,
+    OverflowError, StackOverflowError, SegmentationFault, UndefRefError, UndefVarError,
+    TypeError, ArgumentError, MethodError, AssertionError, LoadError, InitError,
+    UndefKeywordError, ConcurrencyViolationError, FieldError,
+    # AST representation
+    Expr, QuoteNode, LineNumberNode, GlobalRef,
+    # object model functions
+    fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
+    nfields, throw, tuple, ===, isdefined,
+    # access to globals
+    getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
+    # ifelse, sizeof    # not exported, to avoid conflicting with Base
+    # type reflection
+    <:, typeof, isa, typeassert,
+    # method reflection
+    applicable, invoke,
+    # constants
+    nothing, Main,
+    # backwards compatibility
+    arrayref, arrayset, arraysize, const_arrayref
+
 export
 # Modules
     Meta,
@@ -58,6 +97,7 @@ export
     IOBuffer,
     IOStream,
     LinRange,
+    Lockable,
     Irrational,
     LazyString,
     Matrix,
@@ -65,9 +105,13 @@ export
     Missing,
     NTuple,
     IdDict,
+    IdSet,
     OrdinalRange,
     Pair,
     PartialQuickSort,
+    OncePerProcess,
+    OncePerTask,
+    OncePerThread,
     PermutedDimsArray,
     QuickSort,
     Rational,
@@ -405,12 +449,14 @@ export
     indexin,
     argmax,
     argmin,
+    insertdims,
     invperm,
     invpermute!,
     isassigned,
     isperm,
     issorted,
     last,
+    logrange,
     mapslices,
     max,
     maximum!,
@@ -532,6 +578,7 @@ export
     getkey,
     haskey,
     in,
+    in!,
     intersect!,
     intersect,
     isdisjoint,
@@ -546,6 +593,7 @@ export
     mapfoldl,
     mapfoldr,
     mapreduce,
+    memoryref,
     merge!,
     mergewith!,
     merge,
@@ -590,9 +638,11 @@ export
     codepoint,
     codeunit,
     codeunits,
+    ctruncate,
     digits,
     digits!,
     eachsplit,
+    eachrsplit,
     escape_string,
     hex2bytes,
     hex2bytes!,
@@ -613,6 +663,7 @@ export
     join,
     lpad,
     lstrip,
+    ltruncate,
     ncodeunits,
     ndigits,
     nextind,
@@ -625,6 +676,7 @@ export
     rpad,
     rsplit,
     rstrip,
+    rtruncate,
     split,
     string,
     strip,
@@ -701,6 +753,8 @@ export
     yield,
     yieldto,
     wait,
+    waitany,
+    waitall,
     timedwait,
     asyncmap,
     asyncmap!,
@@ -709,6 +763,7 @@ export
 # channels
     take!,
     put!,
+    isfull,
     isready,
     fetch,
     bind,
@@ -748,6 +803,7 @@ export
     swapproperty!,
     modifyproperty!,
     replaceproperty!,
+    setpropertyonce!,
     fieldoffset,
     fieldname,
     fieldnames,
@@ -801,6 +857,7 @@ export
     @invoke,
     invokelatest,
     @invokelatest,
+    @world,
 
 # loading source files
     __precompile__,
@@ -924,6 +981,7 @@ export
     isblockdev,
     ischardev,
     isdir,
+    isexecutable,
     isfifo,
     isfile,
     islink,
@@ -1028,6 +1086,7 @@ export
     @elapsed,
     @allocated,
     @allocations,
+    @lock_conflicts,
 
     # tasks
     @sync,
@@ -1056,91 +1115,13 @@ export
     @atomic,
     @atomicswap,
     @atomicreplace,
+    @atomiconce,
     @__dot__,
     @enum,
     @label,
     @goto,
     @view,
     @views,
-    @static
+    @static,
 
-# TODO: use normal syntax once JuliaSyntax.jl becomes available at this point in bootstrapping
-eval(Expr(:public,
-# Modules
-    :Checked,
-    :Filesystem,
-    :Order,
-    :Sort,
-
-# Types
-    :AbstractLock,
-    :AsyncCondition,
-    :CodeUnits,
-    :Event,
-    :Fix1,
-    :Fix2,
-    :Generator,
-    :ImmutableDict,
-    :OneTo,
-    :UUID,
-
-# Semaphores
-    :Semaphore,
-    :acquire,
-    :release,
-
-# collections
-    :IteratorEltype,
-    :IteratorSize,
-    :to_index,
-    :vect,
-    :isdone,
-    :front,
-    :rest,
-    :split_rest,
-    :tail,
-    :checked_length,
-
-# Loading
-    :DL_LOAD_PATH,
-    :load_path,
-    :active_project,
-
-# Reflection and introspection
-    :isambiguous,
-    :isexpr,
-    :isidentifier,
-    :issingletontype,
-    :identify_package,
-    :locate_package,
-    :moduleroot,
-    :jit_total_bytes,
-    :summarysize,
-    :isexported,
-    :ispublic,
-
-# Opperators
-    :operator_associativity,
-    :operator_precedence,
-    :isbinaryoperator,
-    :isoperator,
-    :isunaryoperator,
-
-# C interface
-    :cconvert,
-    :unsafe_convert,
-
-# Error handling
-    :exit_on_sigint,
-    :windowserror,
-
-# Macros
-    Symbol("@assume_effects"),
-    Symbol("@constprop"),
-    Symbol("@locals"),
-    Symbol("@propagate_inbounds"),
-
-# misc
-    :notnothing,
-    :runtests,
-    :text_colors))
+    @main

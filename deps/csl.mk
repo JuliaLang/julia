@@ -1,13 +1,13 @@
 # Interrogate the fortran compiler (which is always GCC based) on where it is keeping its libraries
 STD_LIB_PATH := $(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^programs: =' | sed -e "s/^programs: =//")
-STD_LIB_PATH += :$(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^libraries: =' | sed -e "s/^libraries: =//")
-ifneq (,$(findstring CYGWIN,$(BUILD_OS))) # the cygwin-mingw32 compiler lies about it search directory paths
+STD_LIB_PATH += $(PATHSEP)$(shell LANG=C $(FC) -print-search-dirs 2>/dev/null | grep '^libraries: =' | sed -e "s/^libraries: =//")
+ifeq ($(BUILD_OS),WINNT)  # the mingw compiler lies about it search directory paths
 STD_LIB_PATH := $(shell echo '$(STD_LIB_PATH)' | sed -e "s!/lib/!/bin/!g")
 endif
 
 # Given a colon-separated list of paths in $(2), find the location of the library given in $(1)
 define pathsearch
-$(firstword $(wildcard $(addsuffix /$(1),$(subst :, ,$(2)))))
+$(firstword $(wildcard $(addsuffix /$(1),$(subst $(PATHSEP), ,$(2)))))
 endef
 
 # CSL bundles lots of system compiler libraries, and while it is quite bleeding-edge
@@ -75,12 +75,24 @@ else
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s_seh,1)))
 endif
 else
-ifeq ($(APPLE_ARCH),arm64)
+ifeq ($(OS),Darwin)
+# On macOS, libgcc_s has soversion 1.1 always on aarch64 and only for GCC 12+
+# (-> libgfortran 5) on x86_64
+ifeq ($(ARCH),aarch64)
+$(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1.1)))
+else
+ifeq ($(LIBGFORTRAN_VERSION),5)
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1.1)))
 else
 $(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1)))
 endif
 endif
+else
+# Other targets just use libgcc_s.1
+$(eval $(call copy_csl,$(call versioned_libname,libgcc_s,1)))
+endif
+endif
+
 # winpthread is only Windows, pthread is only others
 ifeq ($(OS),WINNT)
 $(eval $(call copy_csl,$(call versioned_libname,libwinpthread,1)))
@@ -104,4 +116,23 @@ distclean-csl: clean-csl
 
 else
 $(eval $(call bb-install,csl,CSL,true))
+ifeq ($(OS),WINNT)
+GCC_VERSION = 14
+install-csl:
+	mkdir -p $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc_s.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmsvcrt.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_libdir)/
+endif
+endif
+ifeq ($(OS),WINNT)
+uninstall-csl: uninstall-gcc-libraries
+uninstall-gcc-libraries:
+	-rm -f $(build_private_libdir)/libgcc_s.a
+	-rm -f $(build_private_libdir)/libgcc.a
+	-rm -f $(build_private_libdir)/libmsvcrt.a
+	-rm -f $(build_private_libdir)/libssp.dll.a
+	-rm -f $(build_libdir)/libssp.dll.a
 endif
