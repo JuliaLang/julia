@@ -1370,8 +1370,7 @@ JL_DLLEXPORT int jl_globalref_is_const(jl_globalref_t *gr)
     if (!b)
         b = jl_get_module_binding(gr->mod, gr->name, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    if (!bpart)
-        return 0;
+    jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
     return jl_bkind_is_some_constant(jl_binding_kind(bpart));
 }
 
