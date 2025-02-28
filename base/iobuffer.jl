@@ -3,8 +3,9 @@
 ## work with AbstractVector{UInt8} via I/O primitives ##
 
 # Here, u represents used bytes (already read), X represents bytes still to read,
-# - represents bytes uninitialized data but which can be written to later,
-# and . represents content of `data` which the IOBuffer will not interact with.
+# - represents bytes uninitialized data but which can be written to later.
+# . are bytes which can neither be read nor written - but the IOBuffer has control
+# of the full array, and may move the offset as it wishes to overwrite any . bytes.
 
 #   ...uuuuuuuuuuuuuXXXXXXXXXXXXX------.......
 #   | |        |    |           |     |     |
@@ -22,7 +23,8 @@
 #      mark ( == offset + 1)
 
 # * The underlying array is always 1-indexed
-# * Data in 1:offset is never touched. This allows an IOBuffer to use a subset of a larger array.
+# * The IOBuffer has full control of the underlying array. That means it may move
+#   the offset, clobbering data in 1:offset and in size:lastindex(data) at will.
 # * Data in maxsize+1:lastindex(data) is also never touched.
 # * Data in offset+1:mark-1, if mark > 0 can be deleted, shifting the whole thing to the left
 #   to make room for more data, without replacing or resizing data
@@ -407,7 +409,6 @@ function _resize!(io::GenericIOBuffer, sz::Int)
     a = io.data
     offset = io.offset
     if applicable(resize!, a, sz)
-        # TODO: This is buggy: The buffer should never touch data before the offset.
         if offset != 0
             size = io.size
             size > offset && copyto!(a, 1, a, offset + 1, min(sz, size - offset))
@@ -472,7 +473,6 @@ function compact(io::GenericIOBuffer)
         ptr = io.ptr
         bytes_to_move = bytesavailable(io)
     end
-    # TODO: Invalid: Buffer must not touch data before offset
     copyto!(io.data, 1, io.data, ptr, bytes_to_move)
     io.size -= ptr - 1
     io.ptr -= ptr - 1
