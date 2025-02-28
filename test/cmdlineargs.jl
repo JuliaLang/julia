@@ -1046,7 +1046,7 @@ let exename = `$(Base.julia_cmd().exec[1]) -t 1`
         p = run(pipeline(`$exename --sysimage=$libjulia`, stderr=err), wait=false)
         close(err.in)
         let s = read(err, String)
-            @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
+            @test s == "ERROR: Image file failed consistency check: maybe opened the wrong version?\n"
         end
         @test errors_not_signals(p)
         @test p.exitcode == 1
