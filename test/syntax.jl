@@ -345,6 +345,10 @@ end
 # issue #15828
 @test Meta.lower(Main, Meta.parse("x...")) == Expr(:error, "\"...\" expression outside call")
 
+# issue #57153 - malformed "..." expr
+@test Meta.lower(@__MODULE__, :(identity($(Expr(:(...), 1, 2, 3))))) ==
+    (Expr(:error, "wrong number of expressions following \"...\""))
+
 # issue #15830
 @test Meta.lower(Main, Meta.parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
@@ -1291,6 +1295,10 @@ let args = (Int, Any)
     @test <:(args...)
     @test >:(reverse(args)...)
 end
+
+# Chaining of <: and >: in `where`
+@test isa(Vector{T} where Int<:T<:Number, UnionAll)
+@test isa(Vector{T} where Number>:T>:Int, UnionAll)
 
 # issue #25947
 let getindex = 0, setindex! = 1, colon = 2, vcat = 3, hcat = 4, hvcat = 5
@@ -3965,8 +3973,13 @@ end
 
 # Test trying to define a constant and then trying to assign to the same value
 module AssignConstValueTest
+    using Test
     const x = 1
-    x = 1
+    @test_throws ErrorException @eval x = 1
+    @test_throws ErrorException @eval begin
+        @Base.Experimental.force_compile
+        global x = 1
+    end
 end
 @test isconst(AssignConstValueTest, :x)
 
@@ -4102,3 +4115,7 @@ module Ambig57404
     using .B
 end
 @test Ambig57404.S == 1
+
+# Issue #56904 - lambda linearized twice
+@test (let; try 3; finally try 1; f(() -> x); catch x; end; end; x = 7; end) === 7
+@test (let; try 3; finally try 4; finally try 1; f(() -> x); catch x; end; end; end; x = 7; end) === 7

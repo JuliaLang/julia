@@ -1179,7 +1179,10 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
 end
 
 @test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
-@test Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
+
+# We consider a potential deprecatio warning an effect, so for completely unkown getglobal,
+# we taint the effect_free bit.
+@test !Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
 
 # Test that UseRefIterator gets SROA'd inside of new_to_regular (#44557)
 # expression and new_to_regular offset are arbitrary here, we just want to see the UseRefIterator erased
@@ -2075,6 +2078,26 @@ let src = code_typed1(()) do
         (inner(), ref[])
     end
     @test count(iscall((src, setfield!)), src.code) == 1
+end
+
+module _Partials_irpasses
+    mutable struct Partial
+        x::String
+        y::Integer
+        z::Any
+        Partial() = new()
+    end
+end
+
+# once `isdefined(p, name)` holds, this information should be kept
+# as a `PartialStruct` over `p` for subsequent constant propagation.
+let src = code_typed1(()) do
+        p = _Partials_irpasses.Partial()
+        invokelatest(identity, p)
+        isdefined(p, :z) && isdefined(p, :x) || return nothing
+        isdefined(p, :x) & isdefined(p, :z)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 2
 end
 
 # optimize `isdefined` away in the presence of a dominating `setfield!`
