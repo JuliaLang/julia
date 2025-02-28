@@ -21,7 +21,7 @@ on global variables (aside from constants like [`pi`](@ref)).
 
 ## Write docstrings
 
-Comments describing an object should typically be written as [docstrings](man-writing-documentation) for editor and REPL accessability.
+Comments describing an object should typically be written as [docstrings](@ref man-writing-documentation) for editor and REPL accessability.
 Inline comments (`# comment`) and multiline comments (`#= comment =#`) are appropriate for information that is intended only for the reader of the code (as opposed to a user).
 
 ## Avoid writing overly-specific types
