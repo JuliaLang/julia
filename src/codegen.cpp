@@ -629,6 +629,15 @@ static AttributeList get_donotdelete_func_attrs(LLVMContext &C)
             None);
 }
 
+static AttributeList get_jlpgcstack_func_attrs(LLVMContext &C)
+{
+    AttributeSet FnAttrs = Attributes(C, {Attribute::InaccessibleMemOnly, Attribute::WillReturn, Attribute::NoUnwind});
+    return AttributeList::get(C,
+            FnAttrs,
+            Attributes(C, {Attribute::NonNull}),
+            None);
+}
+
 static AttributeList get_attrs_noreturn(LLVMContext &C)
 {
     return AttributeList::get(C,
@@ -749,7 +758,7 @@ static const auto jlboxed_uint8_cache = new JuliaVariable{
 static const auto jlpgcstack_func = new JuliaFunction<>{
     "julia.get_pgcstack",
     [](LLVMContext &C) { return FunctionType::get(PointerType::get(JuliaType::get_ppjlvalue_ty(C), 0), false); },
-    nullptr,
+    get_jlpgcstack_func_attrs,
 };
 
 static const auto jladoptthread_func = new JuliaFunction<>{
