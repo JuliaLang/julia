@@ -1686,7 +1686,7 @@ static void construct_vars(Module &M, Partition &partition, StringRef suffix) {
 
     // Now commit the fvars, gvars, and idxs
     auto T_size = M.getDataLayout().getIntPtrType(M.getContext());
-    emit_table(M, fvars, "jl_fvars", T_size->getPointerTo());
+    emit_table(M, fvars, "jl_fvars", PointerType::getUnqual(T_size->getContext()));
     emit_offset_table(M, T_size, gvars, "jl_gvar", suffix);
     auto fidxs = ConstantDataArray::get(M.getContext(), fvar_idxs);
     auto fidxs_var = new GlobalVariable(M, fidxs->getType(), true,
@@ -2065,7 +2065,7 @@ void jl_dump_native_impl(void *native_code,
         dataM.setPICLevel(PICLevel::BigPIC);
         auto &Context = dataM.getContext();
 
-        Type *T_psize = dataM.getDataLayout().getIntPtrType(Context)->getPointerTo();
+        Type *T_psize = PointerType::getUnqual(Context);
 
         // This should really be in jl_create_native, but we haven't
         // yet set the target triple binary format correctly at that
@@ -2171,10 +2171,10 @@ void jl_dump_native_impl(void *native_code,
         GlobalValue *jlRTLD_DEFAULT_var = jl_emit_RTLD_DEFAULT_var(&metadataM);
 
         Type *T_size = DL.getIntPtrType(Context);
-        Type *T_psize = T_size->getPointerTo();
+        Type *T_psize = PointerType::getUnqual(T_size->getContext());
         Type *T_ptr = PointerType::get(Context, 0);
 
-        auto FT = FunctionType::get(Type::getInt8Ty(Context)->getPointerTo()->getPointerTo(), {}, false);
+        auto FT = FunctionType::get(PointerType::getUnqual(Context), {}, false);
         auto F = Function::Create(FT, Function::ExternalLinkage, "get_jl_RTLD_DEFAULT_handle_addr", metadataM);
         llvm::IRBuilder<> builder(BasicBlock::Create(Context, "top", F));
         builder.CreateRet(jlRTLD_DEFAULT_var);
@@ -2186,7 +2186,7 @@ void jl_dump_native_impl(void *native_code,
             // Windows expect that the function `_DllMainStartup` is present in an dll.
             // Normal compilers use something like Zig's crtdll.c instead we provide a
             // a stub implementation.
-            auto T_pvoid = Type::getInt8Ty(Context)->getPointerTo();
+            auto T_pvoid = PointerType::getUnqual(Context);
             auto T_int32 = Type::getInt32Ty(Context);
             auto FT = FunctionType::get(T_int32, {T_pvoid, T_int32, T_pvoid}, false);
             auto F = Function::Create(FT, Function::ExternalLinkage, "_DllMainCRTStartup", metadataM);
@@ -2196,7 +2196,7 @@ void jl_dump_native_impl(void *native_code,
             builder.CreateRet(ConstantInt::get(T_int32, 1));
         }
         if (imaging_mode) {
-            auto specs = jl_get_llvm_clone_targets();
+            auto specs = jl_get_llvm_clone_targets(jl_options.cpu_target);
             const uint32_t base_flags = has_veccall ? JL_TARGET_VEC_CALL : 0;
             SmallVector<uint8_t, 0> data;
             auto push_i32 = [&] (uint32_t v) {

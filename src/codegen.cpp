@@ -76,6 +76,7 @@
 #include "llvm/Support/Path.h" // for llvm::sys::path
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Linker/Linker.h>
+#include <llvm/CodeGen/MachineModuleInfo.h>
 
 #ifdef USE_ITTAPI
 #include "ittapi/ittnotify.h"
@@ -823,7 +824,7 @@ static const auto jlhasnofield_func = new JuliaFunction<>{
 static const auto jlboundserrorv_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_ints),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), T_size->getPointerTo(), T_size}, false); },
+            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), PointerType::getUnqual(T_size->getContext()), T_size}, false); },
     get_attrs_noreturn,
 };
 static const auto jlboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
@@ -907,13 +908,12 @@ static const auto jldeclareglobal_func = new JuliaFunction<>{
             {T_pjlvalue, T_pjlvalue, T_prjlvalue, getInt32Ty(C)}, false); },
     nullptr,
 };
-static const auto jlgetbindingorerror_func = new JuliaFunction<>{
-    XSTR(jl_get_binding_or_error),
+static const auto jldepcheck_func = new JuliaFunction<>{
+    XSTR(jl_binding_deprecation_check),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
-        return FunctionType::get(T_pjlvalue,
-                {T_pjlvalue, T_pjlvalue}, false);
-    },
+        return FunctionType::get(getVoidTy(C),
+            {T_pjlvalue}, false); },
     nullptr,
 };
 static const auto jlcheckbpwritable_func = new JuliaFunction<>{
@@ -1291,13 +1291,13 @@ static const auto memcmp_func = new JuliaFunction<TypeFnContextAndSizeT>{
 };
 static const auto jldlsym_func = new JuliaFunction<>{
     XSTR(jl_load_and_lookup),
-    [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pvoidfunc_ty(C),
-            {getPointerTy(C), getPointerTy(C), PointerType::get(getPointerTy(C), 0)}, false); },
+    [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
+            {getPointerTy(C), getPointerTy(C), getPointerTy(C)}, false); },
     nullptr,
 };
 static const auto jllazydlsym_func = new JuliaFunction<>{
     XSTR(jl_lazy_load_and_lookup),
-    [](LLVMContext &C) { return FunctionType::get(JuliaType::get_pvoidfunc_ty(C),
+    [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
             {JuliaType::get_prjlvalue_ty(C), getPointerTy(C)}, false); },
     nullptr,
 };
@@ -1356,7 +1356,6 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_pjlvalue = PointerType::get(C, 0);
         auto T_prjlvalue = PointerType::get(C, AddressSpace::Tracked);
-        auto T_ppjlvalue = PointerType::get(C, 0);
         auto T_derived = PointerType::get(C, AddressSpace::Derived);
         return FunctionType::get(T_prjlvalue,
             {
@@ -1364,7 +1363,7 @@ static const auto jlgetcfunctiontrampoline_func = new JuliaFunction<>{
                 T_pjlvalue, // result
                 getPointerTy(C), // cache
                 T_pjlvalue, // fill
-                FunctionType::get(getPointerTy(C), { getPointerTy(C), T_ppjlvalue }, false)->getPointerTo(), // trampoline
+                getPointerTy(C), // trampoline
                 T_pjlvalue, // env
                 T_derived, // vals
             }, false);
@@ -1443,7 +1442,7 @@ static const auto box_ssavalue_func = new JuliaFunction<TypeFnContextAndSizeT>{
 };
 static const auto jlgetbuiltinfptr_func = new JuliaFunction<>{
     XSTR(jl_get_builtin_fptr),
-    [](LLVMContext &C) { return FunctionType::get(get_func_sig(C)->getPointerTo(),
+    [](LLVMContext &C) { return FunctionType::get(getPointerTy(C),
             {JuliaType::get_prjlvalue_ty(C)}, false); },
     nullptr,
 };
@@ -1523,7 +1522,7 @@ static const auto julia_call = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-            {get_func_sig(C)->getPointerTo(),
+            {getPointerTy(C),
              T_prjlvalue}, // %f
             true); }, // %args
     get_attrs_basic,
@@ -1536,7 +1535,7 @@ static const auto julia_call2 = new JuliaFunction<>{
     [](LLVMContext &C) {
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         return FunctionType::get(T_prjlvalue,
-            {get_func2_sig(C)->getPointerTo(),
+            {getPointerTy(C),
              T_prjlvalue, // %arg1
              T_prjlvalue}, // %f
             true); }, // %args
@@ -1550,7 +1549,7 @@ static const auto julia_call3 = new JuliaFunction<>{
         auto T_prjlvalue = JuliaType::get_prjlvalue_ty(C);
         Type *T = PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::Derived);
         return FunctionType::get(T_prjlvalue,
-            {get_func3_sig(C)->getPointerTo(),
+            {getPointerTy(C),
              T}, // %f
             true); }, // %args
     get_attrs_basic,
@@ -2164,7 +2163,13 @@ static GlobalVariable *get_pointer_to_constant(jl_codegen_params_t &emission_con
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, Type *lty, Align align)
 {
     ++EmittedAllocas;
-    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), nullptr, align, "", /*InsertBefore=*/ctx.topalloca);
+    return new AllocaInst(lty, ctx.topalloca->getModule()->getDataLayout().getAllocaAddrSpace(), nullptr, align, "",
+#if JL_LLVM_VERSION >= 200000
+                /*InsertBefore=*/ctx.topalloca->getIterator()
+#else
+                /*InsertBefore=*/ctx.topalloca
+#endif
+    );
 }
 
 static AllocaInst *emit_static_alloca(jl_codectx_t &ctx, unsigned nb, Align align)
@@ -2438,7 +2443,11 @@ static void alloc_def_flag(jl_codectx_t &ctx, jl_varinfo_t& vi)
 static void CreateTrap(IRBuilder<> &irbuilder, bool create_new_block)
 {
     Function *f = irbuilder.GetInsertBlock()->getParent();
+#if JL_LLVM_VERSION >= 200000
+    Function *trap_func = Intrinsic::getOrInsertDeclaration(
+#else
     Function *trap_func = Intrinsic::getDeclaration(
+#endif
             f->getParent(),
             Intrinsic::trap);
     irbuilder.CreateCall(trap_func);
@@ -2461,7 +2470,11 @@ static void CreateConditionalAbort(IRBuilder<> &irbuilder, Value *test)
     BasicBlock *postBB = BasicBlock::Create(irbuilder.getContext(), "post_abort", f);
     irbuilder.CreateCondBr(test, abortBB, postBB);
     irbuilder.SetInsertPoint(abortBB);
+#if JL_LLVM_VERSION >= 200000
+    Function *trap_func = Intrinsic::getOrInsertDeclaration(
+#else
     Function *trap_func = Intrinsic::getDeclaration(
+#endif
             f->getParent(),
             Intrinsic::trap);
     irbuilder.CreateCall(trap_func);
@@ -2880,20 +2893,6 @@ static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Val
 
 // --- constant determination ---
 
-static void show_source_loc(jl_codectx_t &ctx, JL_STREAM *out)
-{
-    jl_printf(out, "in %s at %s", ctx.name, ctx.file.str().c_str());
-}
-
-static void cg_bdw(jl_codectx_t &ctx, jl_sym_t *var, jl_binding_t *b)
-{
-    jl_binding_deprecation_warning(ctx.module, var, b);
-    if (b->deprecated == 1 && jl_options.depwarn) {
-        show_source_loc(ctx, JL_STDERR);
-        jl_printf(JL_STDERR, "\n");
-    }
-}
-
 static jl_value_t *static_apply_type(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> args, size_t nargs)
 {
     assert(nargs > 1);
@@ -2918,6 +2917,12 @@ static jl_value_t *static_apply_type(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> arg
     return result;
 }
 
+static void emit_depwarn_check(jl_codectx_t &ctx, jl_binding_t *b)
+{
+    Value *bp = julia_binding_gv(ctx, b);
+    ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
+}
+
 // try to statically evaluate, NULL if not possible. note that this may allocate, and as
 // such the resulting value should not be embedded directly in the generated code.
 static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
@@ -2926,9 +2931,13 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
         jl_sym_t *sym = (jl_sym_t*)ex;
         jl_binding_t *bnd = jl_get_module_binding(ctx.module, sym, 0);
         jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-        jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
-        if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
+        int possibly_deprecated = 0;
+        jl_walk_binding_inplace_all(&bnd, &bpart, &possibly_deprecated, ctx.min_world, ctx.max_world);
+        if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
+            if (possibly_deprecated)
+                emit_depwarn_check(ctx, bnd);
             return bpart->restriction;
+        }
         return NULL;
     }
     if (jl_is_slotnumber(ex) || jl_is_argument(ex))
@@ -2951,13 +2960,14 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
         s = jl_globalref_name(ex);
         jl_binding_t *bnd = jl_get_module_binding(jl_globalref_mod(ex), s, 0);
         jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-        jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
+        int possibly_deprecated = 0;
+        jl_walk_binding_inplace_all(&bnd, &bpart, &possibly_deprecated, ctx.min_world, ctx.max_world);
         jl_value_t *v = NULL;
         if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
             v = bpart->restriction;
         if (v) {
-            if (bnd->deprecated)
-                cg_bdw(ctx, s, bnd);
+            if (possibly_deprecated)
+                emit_depwarn_check(ctx, bnd);
             return v;
         }
         return NULL;
@@ -2978,13 +2988,14 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                     if (s && jl_is_symbol(s)) {
                         jl_binding_t *bnd = jl_get_module_binding(m, s, 0);
                         jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-                        jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
+                        int possibly_deprecated = 0;
+                        jl_walk_binding_inplace_all(&bnd, &bpart, &possibly_deprecated, ctx.min_world, ctx.max_world);
                         jl_value_t *v = NULL;
                         if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
                             v = bpart->restriction;
                         if (v) {
-                            if (bnd->deprecated)
-                                cg_bdw(ctx, s, bnd);
+                            if (possibly_deprecated)
+                                emit_depwarn_check(ctx, bnd);
                             return v;
                         }
                     }
@@ -3230,48 +3241,47 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     if (!bpart) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
-    // bpart was updated in place - this will change with full partition
-    if (jl_bkind_is_some_guard(jl_binding_kind(bpart))) {
-        // Redo the lookup at runtime
-        return emit_globalref_runtime(ctx, bnd, mod, name);
-    } else {
-        while (true) {
-            if (!bpart)
-                break;
-            if (!jl_bkind_is_some_import(jl_binding_kind(bpart)))
-                break;
-            if (bnd->deprecated) {
-                cg_bdw(ctx, name, bnd);
+    int possibly_deprecated = 0;
+    int saw_explicit = 0;
+    while (bpart) {
+        if (!saw_explicit && (bpart->kind & BINDING_FLAG_DEPWARN))
+            possibly_deprecated = 1;
+        enum jl_partition_kind kind = jl_binding_kind(bpart);
+        if (!jl_bkind_is_some_import(kind))
+            break;
+        if (kind != BINDING_KIND_IMPLICIT)
+            saw_explicit = 1;
+        bnd = (jl_binding_t*)bpart->restriction;
+        bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+    }
+    Value *bp = NULL;
+    if (bpart) {
+        enum jl_partition_kind kind = jl_binding_kind(bpart);
+        if (jl_bkind_is_some_constant(kind) && kind != BINDING_KIND_BACKDATED_CONST) {
+            if (possibly_deprecated) {
+                bp = julia_binding_gv(ctx, bnd);
+                ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
             }
-            bnd = (jl_binding_t*)bpart->restriction;
-            bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-            if (!bpart)
-                break;
-        }
-        if (bpart) {
-            enum jl_partition_kind kind = jl_binding_kind(bpart);
-            if (jl_bkind_is_some_constant(kind) && kind != BINDING_KIND_BACKDATED_CONST) {
-                jl_value_t *constval = bpart->restriction;
-                if (!constval) {
-                    undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
-                    return jl_cgval_t();
-                }
-                return mark_julia_const(ctx, constval);
+            jl_value_t *constval = bpart->restriction;
+            if (!constval) {
+                undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
+                return jl_cgval_t();
             }
+            return mark_julia_const(ctx, constval);
         }
     }
     if (!bpart || jl_binding_kind(bpart) != BINDING_KIND_GLOBAL) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
-    Value *bp = julia_binding_gv(ctx, bnd);
-    if (bnd->deprecated) {
-        cg_bdw(ctx, name, bnd);
+    bp = julia_binding_gv(ctx, bnd);
+    if (possibly_deprecated) {
+        ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
     }
     jl_value_t *ty = bpart->restriction;
-    bp = julia_binding_pvalue(ctx, bp);
+    Value *bpval = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
-    return update_julia_type(ctx, emit_checked_var(ctx, bp, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding), ty);
+    return update_julia_type(ctx, emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding), ty);
 }
 
 static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, jl_cgval_t rval, const jl_cgval_t &cmp,
@@ -3284,6 +3294,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     Value *bp = julia_binding_gv(ctx, bnd);
     if (bpart) {
         if (jl_binding_kind(bpart) == BINDING_KIND_GLOBAL) {
+            int possibly_deprecated = bpart->kind & BINDING_FLAG_DEPWARN;
             jl_value_t *ty = bpart->restriction;
             if (ty != nullptr) {
                 const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
@@ -3296,6 +3307,9 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                 }
                 bool isboxed = true;
                 bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
+                if (possibly_deprecated) {
+                    ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
+                }
                 return typed_store(ctx,
                                 julia_binding_pvalue(ctx, bp),
                                 rval, cmp, ty,
@@ -3419,7 +3433,11 @@ static Value *emit_bitsunion_compare(jl_codectx_t &ctx, const jl_cgval_t &arg1, 
         counter);
     assert(allunboxed); (void)allunboxed;
     ctx.builder.SetInsertPoint(defaultBB);
+#if JL_LLVM_VERSION >= 200000
+    Function *trap_func = Intrinsic::getOrInsertDeclaration(
+#else
     Function *trap_func = Intrinsic::getDeclaration(
+#endif
         ctx.f->getParent(),
         Intrinsic::trap);
     ctx.builder.CreateCall(trap_func);
@@ -5181,7 +5199,7 @@ static jl_cgval_t emit_call_specfun_boxed(jl_codectx_t &ctx, jl_value_t *jlretty
         std::string namep("p");
         namep += specFunctionObject;
         GlobalVariable *GV = cast_or_null<GlobalVariable>(jl_Module->getNamedValue(namep));
-        Type *pfunc = ctx.types().T_jlfunc->getPointerTo();
+        Type *pfunc = PointerType::getUnqual(ctx.builder.getContext());
         if (GV == nullptr) {
             GV = new GlobalVariable(*jl_Module, pfunc, false,
                                     GlobalVariable::ExternalLinkage,
@@ -7511,8 +7529,16 @@ static Function *gen_cfun_wrapper(
         Function::arg_iterator AI = cw_make->arg_begin();
         Argument *Tramp = &*AI; ++AI;
         Argument *NVal = &*AI; ++AI;
+#if JL_LLVM_VERSION >= 200000
+        Function *init_trampoline = Intrinsic::getOrInsertDeclaration(cw_make->getParent(), Intrinsic::init_trampoline);
+#else
         Function *init_trampoline = Intrinsic::getDeclaration(cw_make->getParent(), Intrinsic::init_trampoline);
+#endif
+#if JL_LLVM_VERSION >= 200000
+        Function *adjust_trampoline = Intrinsic::getOrInsertDeclaration(cw_make->getParent(), Intrinsic::adjust_trampoline);
+#else
         Function *adjust_trampoline = Intrinsic::getDeclaration(cw_make->getParent(), Intrinsic::adjust_trampoline);
+#endif
         cwbuilder.CreateCall(init_trampoline, {
                 Tramp,
                 cw,
@@ -7866,8 +7892,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
         union_alloca_type((jl_uniontype_t*)jlrettype, allunbox, props.union_bytes, props.union_align, props.union_minalign);
         if (props.union_bytes) {
             props.cc = jl_returninfo_t::Union;
-            Type *AT = ArrayType::get(getInt8Ty(M->getContext()), props.union_bytes);
-            fsig.push_back(AT->getPointerTo());
+            fsig.push_back(PointerType::getUnqual(M->getContext()));
             argnames.push_back("union_bytes_return");
             Type *pair[] = { T_prjlvalue, getInt8Ty(M->getContext()) };
             rt = StructType::get(M->getContext(), ArrayRef<Type*>(pair));
@@ -7896,7 +7921,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
             props.union_align = props.union_minalign = julia_alignment(jlrettype);
             // sret is always passed from alloca
             assert(M);
-            fsig.push_back(rt->getPointerTo(M->getDataLayout().getAllocaAddrSpace()));
+            fsig.push_back(PointerType::get(M->getContext(), M->getDataLayout().getAllocaAddrSpace()));
             argnames.push_back("sret_return");
             srt = rt;
             rt = getVoidTy(M->getContext());
@@ -9888,7 +9913,6 @@ static void init_jit_functions(void)
     add_named_global(memcmp_func, &memcmp);
     add_named_global(jltypeerror_func, &jl_type_error);
     add_named_global(jlcheckassign_func, &jl_checked_assignment);
-    add_named_global(jlgetbindingorerror_func, &jl_get_binding_or_error);
     add_named_global(jlcheckbpwritable_func, &jl_check_binding_currently_writable);
     add_named_global(jlboundp_func, &jl_boundp);
     for (auto it : builtin_func_map())
@@ -10145,17 +10169,29 @@ namespace llvm {
     class MachineBasicBlock;
     class MachineFunction;
     raw_ostream& operator<<(raw_ostream &OS, const MachineBasicBlock &MBB);
+#if JL_LLVM_VERSION >= 200000
+    void printMIR(raw_ostream &OS, const MachineModuleInfo &MMI,
+                const MachineFunction &MF);
+#else
     void printMIR(raw_ostream &OS, const MachineFunction &MF);
+#endif
 }
 extern "C" void jl_dump_llvm_mbb(void *v)
 {
     errs() << *(llvm::MachineBasicBlock*)v;
 }
+#if JL_LLVM_VERSION >= 200000
+extern "C" void jl_dump_llvm_mfunction(void *m, void *v)
+{
+    llvm::printMIR(errs(), *(llvm::MachineModuleInfo*)v,
+                *(llvm::MachineFunction*)v);
+}
+#else
 extern "C" void jl_dump_llvm_mfunction(void *v)
 {
     llvm::printMIR(errs(), *(llvm::MachineFunction*)v);
 }
-
+#endif
 
 extern void jl_write_bitcode_func(void *F, char *fname) {
     std::error_code EC;

@@ -329,9 +329,10 @@ end
 is_field_maybe_undef(t::Const, i) = !isdefined(t.val, i)
 
 function n_initialized(pstruct::PartialStruct)
-    i = findfirst(pstruct.undef)
+    pstruct_undef = _getundef(pstruct)
+    i = findfirst(pstruct_undef)
     nmin = datatype_min_ninitialized(pstruct.typ)
-    i === nothing && return max(length(pstruct.undef), nmin)
+    i === nothing && return max(length(pstruct_undef), nmin)
     n = i::Int - 1
     @assert n ≥ nmin
     n
@@ -339,7 +340,8 @@ end
 
 function is_field_maybe_undef(pstruct::PartialStruct, fi)
     fi ≥ 1 || return true
-    fi ≤ length(pstruct.undef) && return pstruct.undef[fi]
+    pstruct_undef = _getundef(pstruct)
+    fi ≤ length(pstruct_undef) && return pstruct_undef[fi]
     fi > datatype_min_ninitialized(pstruct.typ)
 end
 
@@ -350,8 +352,9 @@ function partialstruct_getfield(pstruct::PartialStruct, fi::Integer)
 end
 
 function refines_definedness_information(pstruct::PartialStruct)
-    nflds = length(pstruct.undef)
-    something(findfirst(pstruct.undef), nflds + 1) - 1 > datatype_min_ninitialized(pstruct.typ)
+    pstruct_undef = _getundef(pstruct)
+    nflds = length(pstruct_undef)
+    something(findfirst(pstruct_undef), nflds + 1) - 1 > datatype_min_ninitialized(pstruct.typ)
 end
 
 function define_field(pstruct::PartialStruct, fi::Int)
@@ -362,19 +365,20 @@ function define_field(pstruct::PartialStruct, fi::Int)
 
     new = expand_partialstruct(pstruct, fi)
     if new === nothing
-        new = PartialStruct(fallback_lattice, pstruct.typ, copy(pstruct.undef), copy(pstruct.fields))
+        new = PartialStruct(fallback_lattice, pstruct.typ, copy(_getundef(pstruct)), copy(pstruct.fields))
     end
-    new.undef[fi] = false
+    _getundef(new)[fi] = false
     return new
 end
 
 function expand_partialstruct(pstruct::PartialStruct, until::Int)
-    n = length(pstruct.undef)
+    pstruct_undef = _getundef(pstruct)
+    n = length(pstruct_undef)
     until ≤ n && return nothing
 
     undef = partialstruct_init_undef(pstruct.typ, until; all_defined = false)
     for i in 1:n
-        undef[i] &= pstruct.undef[i]
+        undef[i] &= pstruct_undef[i]
     end
     nf = length(pstruct.fields)
     typ = pstruct.typ
@@ -393,7 +397,7 @@ end
             @assert n_initialized(typea) ≤ n_initialized(typeb) "typeb ⊑ typea is assumed"
         elseif typeb isa PartialStruct
             @assert n_initialized(typea) ≤ n_initialized(typeb) &&
-                all(b < a for (a, b) in zip(typea.undef, typeb.undef)) "typeb ⊑ typea is assumed"
+                all(b < a for (a, b) in zip(_getundef(typea), _getundef(typeb))) "typeb ⊑ typea is assumed"
         else
             return false
         end

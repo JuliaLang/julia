@@ -286,19 +286,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 state.rettype = Any
             end
             # if from_interprocedural added any pclimitations to the set inherited from the arguments,
-            # some of those may be part of our cycles, so those can be deleted now
-            # TODO: and those might need to be deleted later too if the cycle grows to include them?
             if isa(sv, InferenceState)
                 # TODO (#48913) implement a proper recursion handling for irinterp:
-                # This works just because currently the `:terminate` condition guarantees that
-                # irinterp doesn't fail into unresolved cycles, but it's not a good solution.
+                # This works most of the time just because currently the `:terminate` condition often guarantees that
+                # irinterp doesn't fail into unresolved cycles, but it is not a good (or working) solution.
                 # We should revisit this once we have a better story for handling cycles in irinterp.
-                if !isempty(sv.pclimitations) # remove self, if present
-                    delete!(sv.pclimitations, sv)
-                    for caller in callers_in_cycle(sv)
-                        delete!(sv.pclimitations, caller)
-                    end
-                end
+                delete!(sv.pclimitations, sv) # remove self, if present
             end
         else
             # there is unanalyzed candidate, widen type and effects to the top
@@ -775,7 +768,7 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
         # check in the cycle list first
         # all items in here are considered mutual parents of all others
         if !any(p::AbsIntState->matches_sv(p, sv), callers_in_cycle(frame))
-            let parent = frame_parent(frame)
+            let parent = cycle_parent(frame)
                 parent === nothing && return false
                 (is_cached(parent) || frame_parent(parent) !== nothing) || return false
                 matches_sv(parent, sv) || return false
@@ -1379,6 +1372,7 @@ function const_prop_call(interp::AbstractInterpreter,
         inf_result.result = concrete_eval_result.rt
         inf_result.ipo_effects = concrete_eval_result.effects
     end
+    typ = inf_result.result
     return const_prop_result(inf_result)
 end
 
@@ -2381,7 +2375,7 @@ function abstract_throw_methoderror(interp::AbstractInterpreter, argtypes::Vecto
     return Future(CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo()))
 end
 
-const generic_getglobal_effects = Effects(EFFECTS_THROWS, consistent=ALWAYS_FALSE, inaccessiblememonly=ALWAYS_FALSE)
+const generic_getglobal_effects = Effects(EFFECTS_THROWS, effect_free=ALWAYS_FALSE, consistent=ALWAYS_FALSE, inaccessiblememonly=ALWAYS_FALSE) #= effect_free for depwarn =#
 const generic_getglobal_exct = Union{ArgumentError, TypeError, ConcurrencyViolationError, UndefVarError}
 function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, @nospecialize(M), @nospecialize(s))
     ⊑ = partialorder(typeinf_lattice(interp))
@@ -3509,13 +3503,15 @@ end
 
 function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Core.BindingPartition)
     kind = binding_kind(partition)
+    isdepwarn = (partition.kind & BINDING_FLAG_DEPWARN) != 0
+    local_getglobal_effects = Effects(generic_getglobal_effects, effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE)
     if is_some_guard(kind) || kind == BINDING_KIND_UNDEF_CONST
         if InferenceParams(interp).assume_bindings_static
             return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
         else
             # We do not currently assume an invalidation for guard -> defined transitions
             # return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
-            return RTEffects(Any, UndefVarError, generic_getglobal_effects)
+            return RTEffects(Any, UndefVarError, local_getglobal_effects)
         end
     end
 
@@ -3523,10 +3519,12 @@ function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Co
         if kind == BINDING_KIND_BACKDATED_CONST
             # Infer this as guard. We do not want a later const definition to retroactively improve
             # inference results in an earlier world.
-            return RTEffects(Any, UndefVarError, generic_getglobal_effects)
+            return RTEffects(Any, UndefVarError, local_getglobal_effects)
         end
         rt = Const(partition_restriction(partition))
-        return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL, inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE))
+        return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL,
+            inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE,
+            effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE))
     end
 
     if kind == BINDING_KIND_DECLARED
@@ -3534,7 +3532,7 @@ function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Co
     else
         rt = partition_restriction(partition)
     end
-    return RTEffects(rt, UndefVarError, generic_getglobal_effects)
+    return RTEffects(rt, UndefVarError, local_getglobal_effects)
 end
 
 function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_latestworld::Bool, sv::AbsIntState)

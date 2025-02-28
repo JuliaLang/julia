@@ -99,6 +99,9 @@
 // for outputting assembly
 #include <llvm/CodeGen/AsmPrinter.h>
 #include <llvm/CodeGen/AsmPrinterHandler.h>
+#if JL_LLVM_VERSION >= 200000
+#include <llvm/CodeGen/CodeGenTargetMachineImpl.h>
+#endif
 #include <llvm/CodeGen/MachineModuleInfo.h>
 #include <llvm/CodeGen/Passes.h>
 #include <llvm/CodeGen/TargetPassConfig.h>
@@ -1139,7 +1142,11 @@ static void jl_dump_asm_internal(
 
 /// addPassesToX helper drives creation and initialization of TargetPassConfig.
 static MCContext *
+#if JL_LLVM_VERSION >= 200000
+addPassesToGenerateCode(CodeGenTargetMachineImpl *TM, PassManagerBase &PM) {
+#else
 addPassesToGenerateCode(LLVMTargetMachine *TM, PassManagerBase &PM) {
+#endif
     TargetPassConfig *PassConfig = TM->createPassConfig(PM);
     PassConfig->setDisableVerify(false);
     PM.add(PassConfig);
@@ -1224,7 +1231,11 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
                 f->addFnAttr(Attribute::NoUnwind);
         });
         auto TMBase = jl_ExecutionEngine->cloneTargetMachine();
+#if JL_LLVM_VERSION >= 200000
+        CodeGenTargetMachineImpl *TM = static_cast<CodeGenTargetMachineImpl*>(TMBase.get());
+#else
         LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(TMBase.get());
+#endif
         MCTargetOptions &Options = TM->Options.MCOptions;
         Options.AsmVerbose = true;
         Options.MCUseDwarfDirectory = MCTargetOptions::EnableDwarfDirectory;
@@ -1247,7 +1258,7 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
             if (!Context)
                 return jl_an_empty_string;
             Context->setGenDwarfForAssembly(false);
-            // Duplicate LLVMTargetMachine::addAsmPrinter here so we can set the asm dialect and add the custom annotation printer
+            // Duplicate CodeGenTargetMachineImpl::addAsmPrinter here so we can set the asm dialect and add the custom annotation printer
             const MCSubtargetInfo &STI = *TM->getMCSubtargetInfo();
             const MCAsmInfo &MAI = *TM->getMCAsmInfo();
             const MCRegisterInfo &MRI = *TM->getMCRegisterInfo();

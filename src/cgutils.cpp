@@ -123,7 +123,7 @@ static Value *stringConstPtr(
     // Doesn't need to be aligned, we shouldn't operate on these like julia objects
     GlobalVariable *gv = get_pointer_to_constant(emission_context, Data, Align(1), "_j_str_" + StringRef(ctxt.data(), ctxt.size()), *M);
     // AddrSpaceCast in case globals are in non-0 AS
-    return irbuilder.CreateAddrSpaceCast(gv, gv->getValueType()->getPointerTo(0));
+    return irbuilder.CreateAddrSpaceCast(gv, PointerType::getUnqual(gv->getContext()));
 }
 
 
@@ -1336,7 +1336,7 @@ static Value *emit_typeof(jl_codectx_t &ctx, const jl_cgval_t &p, bool maybenull
         Value *tindex = ctx.builder.CreateAnd(p.TIndex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x7f));
         bool allunboxed = is_uniontype_allunboxed(p.typ);
         Type *expr_type = justtag ? ctx.types().T_size : ctx.types().T_pjlvalue;
-        Value *datatype_or_p = Constant::getNullValue(expr_type->getPointerTo());
+        Value *datatype_or_p = Constant::getNullValue(PointerType::getUnqual(expr_type->getContext()));
         unsigned counter = 0;
         for_each_uniontype_small(
             [&](unsigned idx, jl_datatype_t *jt) {
@@ -3666,7 +3666,11 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
         ctx.builder.CreateBr(postBB);
     }
     else if (!vinfo.Vboxed) {
+#if JL_LLVM_VERSION >= 200000
+        Function *trap_func = Intrinsic::getOrInsertDeclaration(
+#else
         Function *trap_func = Intrinsic::getDeclaration(
+#endif
                 ctx.f->getParent(),
                 Intrinsic::trap);
         ctx.builder.CreateCall(trap_func);
@@ -3710,7 +3714,11 @@ static Function *mangleIntrinsic(IntrinsicInst *call) //mangling based on replac
         assert(matchvararg);
         (void)matchvararg;
     }
+#if JL_LLVM_VERSION >= 200000
+    auto newF = Intrinsic::getOrInsertDeclaration(call->getModule(), ID, overloadTys);
+#else
     auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+#endif
     assert(newF->getFunctionType() == newfType);
     newF->setCallingConv(call->getCallingConv());
     return newF;
@@ -3846,7 +3854,11 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
                     if (nb > 0) {
                         if (!src_ptr) {
                             Function *trap_func =
+#if JL_LLVM_VERSION >= 200000
+                                Intrinsic::getOrInsertDeclaration(ctx.f->getParent(), Intrinsic::trap);
+#else
                                 Intrinsic::getDeclaration(ctx.f->getParent(), Intrinsic::trap);
+#endif
                             ctx.builder.CreateCall(trap_func);
                             ctx.builder.CreateUnreachable();
                             return;
@@ -3861,7 +3873,11 @@ static void emit_unionmove(jl_codectx_t &ctx, Value *dest, MDNode *tbaa_dst, con
                 counter);
         ctx.builder.SetInsertPoint(defaultBB);
         if (!skip && allunboxed && (src.V == NULL || isa<AllocaInst>(src.V))) {
+#if JL_LLVM_VERSION >= 200000
+            Function *trap_func = Intrinsic::getOrInsertDeclaration(
+#else
             Function *trap_func = Intrinsic::getDeclaration(
+#endif
                     ctx.f->getParent(),
                     Intrinsic::trap);
             ctx.builder.CreateCall(trap_func);
@@ -4547,14 +4563,22 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     auto cg_typ = literal_pointer_val(ctx, (jl_value_t*) typ);
     auto cg_elsz = ConstantInt::get(T_size, elsz);
 
+#if JL_LLVM_VERSION >= 200000
+    FunctionCallee intr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::smul_with_overflow, ArrayRef<Type*>(T_size));
+#else
     FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, Intrinsic::smul_with_overflow, ArrayRef<Type*>(T_size));
+#endif
     // compute nbytes with possible overflow
     Value *prod_with_overflow = ctx.builder.CreateCall(intr, {nel_unboxed, cg_elsz});
     Value *nbytes = ctx.builder.CreateExtractValue(prod_with_overflow, 0);
     Value *overflow = ctx.builder.CreateExtractValue(prod_with_overflow, 1);
     if (isunion) {
         // if isunion, we need to allocate the union selector bytes as well
+#if JL_LLVM_VERSION >= 200000
+        intr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::sadd_with_overflow, ArrayRef<Type*>(T_size));
+#else
         intr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sadd_with_overflow, ArrayRef<Type*>(T_size));
+#endif
         Value *add_with_overflow = ctx.builder.CreateCall(intr, {nel_unboxed, nbytes});
         nbytes = ctx.builder.CreateExtractValue(add_with_overflow, 0);
         Value *overflow1 = ctx.builder.CreateExtractValue(add_with_overflow, 1);
@@ -4682,7 +4706,11 @@ static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cg
         Value *boffset;
 #if 0
         if (bc) {
+#if JL_LLVM_VERSION >= 200000
+            auto *MulF = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::smul_with_overflow, offset->getType());
+#else
             auto *MulF = Intrinsic::getDeclaration(jl_Module, Intrinsic::smul_with_overflow, offset->getType());
+#endif
             CallInst *Mul = ctx.builder.CreateCall(MulF, {offset, elsz});
             boffset = ctx.builder.CreateExtractValue(Mul, 0);
             ovflw = ctx.builder.CreateExtractValue(Mul, 1);
