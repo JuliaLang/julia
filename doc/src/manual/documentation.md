@@ -82,9 +82,7 @@ As in the example above, we recommend following some simple conventions when wri
    (i.e. `f(x; <keyword arguments>)`), and give the complete list under an `# Arguments` section
    (see point 4 below).
 
-   The return value or return type should be included in the signature if necessary.
-   Often the return type could vary widely depending on the input, and in that case should
-   not be included in the signature.
+   Use this style to document the return type or give the return value a name:
 
    ```julia
    # No return value is needed
