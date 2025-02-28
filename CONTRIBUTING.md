@@ -8,10 +8,11 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 # Table of Contents
 
 1. [Learning Julia](#learning-julia)
-2. [Before filing an issue](#before-filing-an-issue)
-3. [Contributor Checklist](#contributor-checklist)
-4. [How to file a bug report](#how-to-file-a-bug-report)
-5. [Submitting contributions](#submitting-contributions)
+2. [Filing an issue]
+    - [Before filing an issue](#before-filing-an-issue)
+    - [How to file a bug report](#how-to-file-a-bug-report)
+3. [Submitting contributions](#submitting-contributions)
+    - [Contributor Checklist](#contributor-checklist)
     - [Writing tests](#writing-tests)
     - [Improving documentation](#improving-documentation)
         - [Modifying files in `doc/src/`](#modifying-files-in-docsrc)
@@ -30,7 +31,7 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
         - [General Formatting Guidelines For C code contributions](#general-formatting-guidelines-for-c-code-contributions)
     - [Git Recommendations For Pull Requests](#git-recommendations-for-pull-requests)
         - [Git Recommendations For Pull Request Reviewers](#git-recommendations-for-pull-request-reviewers)
-6. [Resources](#resources)
+4. [Resources](#resources)
 
 
 ## Learning Julia
