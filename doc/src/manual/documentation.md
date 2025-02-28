@@ -107,8 +107,8 @@ As in the example above, we recommend following some simple conventions when wri
    ...
    """
    ```
-   When included, a return type should be written after the signature, separated by `::`
-   and a named return value should be separated by ` -> ` with a space on both sides.
+   When included, a return type should be written after the signature, separated by `::`,
+   while a named return value should be separated by ` -> `, with a space on both sides.
    Return types and return values should be valid Julia expressions when possible.
    Macro docstring signatures that annotate return types or return values should use
    parentheses to clarify where the macro arguments end and return type or return value begins.
