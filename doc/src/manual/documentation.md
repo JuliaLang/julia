@@ -81,6 +81,37 @@ As in the example above, we recommend following some simple conventions when wri
    accepts many keyword arguments, only include a `<keyword arguments>` placeholder in the signature
    (i.e. `f(x; <keyword arguments>)`), and give the complete list under an `# Arguments` section
    (see point 4 below).
+
+   The return value or return type should be included in the signature if necessary.
+   Often the return type could vary widely depending on the input, and in that case should
+   not be included in the signature.
+
+   ```julia
+   # No return value is needed
+   """
+      sum(itr; [init])
+
+   ...
+   """
+
+   # The return type is critical to the semantics of this function
+   """
+      vec(x::AbstractArray)::AbstractVector
+
+   ...
+   """
+
+   # Naming and destructuring the return value clarifies the semantics of this function
+   """
+      splitdir(path::AbstractString) -> (dir::AbstractString, file::AbstractString)
+   ...
+   """
+   ```
+   When included, a return type should be written after the signature, separated by `::`
+   and a named return value should be separated by ` -> ` with a space on both sides.
+   Return types and return values should be valid Julia expressions when possible.
+   Macro docstring signatures that annotate return types or return values should use
+   parentheses to clarify where the macro arguments end and return type or return value begins.
 2. Include a single one-line sentence describing what the function does or what the object represents
    after the simplified signature block. If needed, provide more details in a second paragraph, after
    a blank line.
