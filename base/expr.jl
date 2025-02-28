@@ -257,6 +257,14 @@ Give a hint to the compiler that calls within `block` are worth inlining.
     ```
 
 !!! note
+    The callsite annotation applies to all calls in the block, including function arguments
+    that are themselves calls:
+    ```julia
+    # The compiler will not inline `getproperty`, `g` or `f`
+    @noinline f(x.inner, g(y))
+    ```
+
+!!! note
     When there are nested callsite annotations, the innermost annotation has the precedence:
     ```julia
     @noinline let a0, b0 = ...
