@@ -85,7 +85,7 @@ As in the example above, we recommend following some simple conventions when wri
    Use this style to document the return type or give the return value a name:
 
    ```julia
-   # No return value is needed
+   # No return value is needed (this is the most common case)
    """
       sum(itr; [init])
 
