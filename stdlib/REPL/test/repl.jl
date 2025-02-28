@@ -1833,23 +1833,52 @@ fake_repl() do stdin_write, stdout_read, repl
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
 end
 
-try # test the functionality of `UndefVarError_hint` against `Base.remove_linenums!`
+try # test the functionality of `UndefVarError_hint`
     @assert isempty(Base.Experimental._hint_handlers)
     Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
-
-    # check the requirement to trigger the hint via `UndefVarError_hint`
-    @test !isdefined(Main, :remove_linenums!) && Base.ispublic(Base, :remove_linenums!)
 
     fake_repl() do stdin_write, stdout_read, repl
         backend = REPL.REPLBackend()
         repltask = @async REPL.run_repl(repl; backend)
-        write(stdin_write,
-              "remove_linenums!\n\"ZZZZZ\"\n")
+        write(stdin_write, """
+        module A53000
+            export f
+            f() = 0.0
+        end
+
+        module C_outer_53000
+            import ..A53000: f
+            public f
+
+            module C_inner_53000
+            import ..C_outer_53000: f
+            export f
+            end
+        end
+
+        module D_53000
+            public f
+            f() = 1.0
+        end
+
+        C_inner_53000 = "I'm a decoy with the same name as C_inner_53000!"
+
+        append!(Base.loaded_modules_order, [A53000, C_outer_53000, C_outer_53000.C_inner_53000, D_53000])
+        f
+        """
+        )
+        write(stdin_write, "\nZZZZZ\n")
         txt = readuntil(stdout_read, "ZZZZZ")
         write(stdin_write, '\x04')
         wait(repltask)
-        @test occursin("Hint: a global variable of this name also exists in Base.", txt)
+        @test occursin("Hint: a global variable of this name also exists in Main.A53000.", txt)
+        @test occursin("Hint: a global variable of this name also exists in Main.D_53000.", txt)
+        @test occursin("- Also declared public in Main.C_outer_53000.", txt)
+        @test occursin("- Also exported by Main.C_outer_53000.C_inner_53000 (loaded but not imported in Main).", txt)
     end
+catch e
+    # fail test if error
+    @test false
 finally
     empty!(Base.Experimental._hint_handlers)
 end
