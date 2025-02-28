@@ -155,10 +155,20 @@ end
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
 code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.world)
 
+mutable struct OptimizationResult
+    ir::IRCode
+    simplified::Bool # indicates whether the IR was processed with `cfg_simplify!`
+end
+
+function simplify_ir!(result::OptimizationResult)
+    result.ir = cfg_simplify!(result.ir)
+    result.simplified = true
+end
+
 mutable struct OptimizationState{Interp<:AbstractInterpreter}
     linfo::MethodInstance
     src::CodeInfo
-    ir::Union{Nothing, IRCode}
+    result::Union{Nothing, OptimizationResult}
     stmt_info::Vector{CallInfo}
     mod::Module
     sptypes::Vector{VarState}
@@ -227,12 +237,12 @@ include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
-    (; linfo, src, ir) = opt
-    if ir === nothing
+    (; linfo, src, result) = opt
+    if result === nothing
         return src
     end
-    src = ir_to_codeinf!(src, ir::IRCode)
-    opt.ir = nothing
+    src = ir_to_codeinf!(src, result.ir)
+    opt.result = nothing
     opt.src = src
     maybe_validate_code(linfo, src, "optimized")
     return src
@@ -493,7 +503,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     @assert !(result isa LimitedAccuracy)
     result = widenslotwrapper(result)
 
-    opt.ir = ir
+    opt.result = OptimizationResult(ir, false)
 
     # determine and cache inlineability
     if !force_noinline
