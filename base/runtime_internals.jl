@@ -210,6 +210,11 @@ const BINDING_KIND_UNDEF_CONST  = 0x9
 const BINDING_KIND_BACKDATED_CONST = 0xa
 
 const BINDING_FLAG_EXPORTED     = 0x10
+const BINDING_FLAG_DEPRECATED   = 0x20
+const BINDING_FLAG_DEPWARN      = 0x40
+
+const BINDING_KIND_MASK         = 0x0f
+const BINDING_FLAG_MASK         = 0xf0
 
 is_defined_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == BINDING_KIND_UNDEF_CONST)

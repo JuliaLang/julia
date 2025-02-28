@@ -1296,6 +1296,10 @@ let args = (Int, Any)
     @test >:(reverse(args)...)
 end
 
+# Chaining of <: and >: in `where`
+@test isa(Vector{T} where Int<:T<:Number, UnionAll)
+@test isa(Vector{T} where Number>:T>:Int, UnionAll)
+
 # issue #25947
 let getindex = 0, setindex! = 1, colon = 2, vcat = 3, hcat = 4, hvcat = 5
     a = [10,9,8]
@@ -3969,8 +3973,13 @@ end
 
 # Test trying to define a constant and then trying to assign to the same value
 module AssignConstValueTest
+    using Test
     const x = 1
-    x = 1
+    @test_throws ErrorException @eval x = 1
+    @test_throws ErrorException @eval begin
+        @Base.Experimental.force_compile
+        global x = 1
+    end
 end
 @test isconst(AssignConstValueTest, :x)
 

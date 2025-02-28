@@ -194,7 +194,6 @@
     XX(jl_get_backtrace) \
     XX(jl_get_binding) \
     XX(jl_get_binding_for_method_def) \
-    XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
@@ -366,7 +365,7 @@
     XX(jl_pointerset) \
     XX(jl_pop_handler) \
     XX(jl_pop_handler_noexcept) \
-    XX(jl_preload_sysimg_so) \
+    XX(jl_preload_sysimg) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \
     XX(jl_print_backtrace) \
@@ -396,7 +395,6 @@
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \
     XX(jl_restore_system_image) \
-    XX(jl_restore_system_image_data) \
     XX(jl_rethrow) \
     XX(jl_rethrow_other) \
     XX(jl_running_on_valgrind) \

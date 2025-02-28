@@ -14,6 +14,9 @@
 #include <llvm/ExecutionEngine/Orc/ExecutionUtils.h>
 #include <llvm/ExecutionEngine/Orc/DebugObjectManagerPlugin.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
+#if JL_LLVM_VERSION >= 200000
+#include "llvm/ExecutionEngine/Orc/AbsoluteSymbols.h"
+#endif
 #if JL_LLVM_VERSION >= 180000
 #include <llvm/ExecutionEngine/Orc/Debugging/DebugInfoSupport.h>
 #include <llvm/ExecutionEngine/Orc/Debugging/PerfSupportPlugin.h>
@@ -1413,7 +1416,7 @@ namespace {
 #endif
 #endif
         uint32_t target_flags = 0;
-        auto target = jl_get_llvm_target(jl_generating_output(), target_flags);
+        auto target = jl_get_llvm_target(jl_options.cpu_target, jl_generating_output(), target_flags);
         auto &TheCPU = target.first;
         SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
         std::string errorstr;
@@ -1956,7 +1959,7 @@ void fixupTM(TargetMachine &TM) {
 llvm::DataLayout jl_create_datalayout(TargetMachine &TM) {
     // Mark our address spaces as non-integral
     auto jl_data_layout = TM.createDataLayout();
-    jl_data_layout.reset(jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13");
+    jl_data_layout = DataLayout(jl_data_layout.getStringRepresentation() + "-ni:10:11:12:13");
     return jl_data_layout;
 }
 

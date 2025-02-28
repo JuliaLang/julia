@@ -105,7 +105,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_
         name += f_name;
         name += "_";
         name += std::to_string(jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1));
-        auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(M->getContext());
+        auto T_pvoidfunc = getPointerTy(M->getContext());
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), name);
@@ -133,7 +133,7 @@ static Value *runtime_sym_lookup(
     //       *llvmgv = jl_load_and_lookup(f_lib, f_name, libptrgv);
     //   }
     //   return (*llvmgv)
-    auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(irbuilder.getContext());
+    auto T_pvoidfunc = getPointerTy(irbuilder.getContext());
     BasicBlock *enter_bb = irbuilder.GetInsertBlock();
     BasicBlock *dlsym_lookup = BasicBlock::Create(irbuilder.getContext(), "dlsym");
     BasicBlock *ccall_bb = BasicBlock::Create(irbuilder.getContext(), "ccall");
@@ -197,7 +197,7 @@ static Value *runtime_sym_lookup(
         PointerType *funcptype, const char *f_lib, jl_value_t *lib_expr,
         const char *f_name, Function *f)
 {
-    auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(ctx.builder.getContext());
+    auto T_pvoidfunc = getPointerTy(ctx.builder.getContext());
     GlobalVariable *libptrgv;
     GlobalVariable *llvmgv;
     bool runtime_lib;
@@ -244,7 +244,7 @@ static GlobalVariable *emit_plt_thunk(
     plt->setAttributes(attrs);
     if (cc != CallingConv::C)
         plt->setCallingConv(cc);
-    auto T_pvoidfunc = JuliaType::get_pvoidfunc_ty(M->getContext());
+    auto T_pvoidfunc = getPointerTy(M->getContext());
     GlobalVariable *got = new GlobalVariable(*M, T_pvoidfunc, false,
                                              GlobalVariable::ExternalLinkage,
                                              plt,
@@ -2099,7 +2099,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
             }
             else if (f_name.starts_with("llvm.")) {
                 // compute and verify auto-mangling for intrinsic name
+#if JL_LLVM_VERSION >= 200000
+                auto ID = Intrinsic::lookupIntrinsicID(f_name);
+#else
                 auto ID = Function::lookupIntrinsicID(f_name);
+#endif
                 if (ID != Intrinsic::not_intrinsic) {
                     // Accumulate an array of overloaded types for the given intrinsic
                     // and compute the new name mangling schema
@@ -2111,7 +2115,11 @@ jl_cgval_t function_sig_t::emit_a_ccall(
                     if (res == Intrinsic::MatchIntrinsicTypes_Match) {
                         bool matchvararg = !Intrinsic::matchIntrinsicVarArg(functype->isVarArg(), TableRef);
                         if (matchvararg) {
+#if JL_LLVM_VERSION >= 200000
+                            Function *intrinsic = Intrinsic::getOrInsertDeclaration(jl_Module, ID, overloadTys);
+#else
                             Function *intrinsic = Intrinsic::getDeclaration(jl_Module, ID, overloadTys);
+#endif
                             assert(intrinsic->getFunctionType() == functype);
                             if (intrinsic->getName() == f_name || Intrinsic::getBaseName(ID) == f_name)
                                 llvmf = intrinsic;
@@ -2132,7 +2140,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     }
     else if (symarg.fptr != NULL) {
         ++LiteralCCalls;
-        Type *funcptype = functype->getPointerTo(0);
+        Type *funcptype = PointerType::getUnqual(functype->getContext());
         llvmf = literal_static_pointer_val((void*)(uintptr_t)symarg.fptr, funcptype);
         setName(ctx.emission_context, llvmf, "ccall_fptr");
     }

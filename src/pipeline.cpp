@@ -245,7 +245,11 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeEarlySimplificationCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
+#if JL_LLVM_VERSION >= 200000
+        PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
+#else
         PB->invokePipelineEarlySimplificationEPCallbacks(MPM, O);
+#endif
     }
     template<typename PB_t>
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeCGSCCCallbacks(CGSCCPassManager &CGPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
@@ -257,7 +261,11 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerEarlyCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
+#if JL_LLVM_VERSION >= 200000
+        PB->invokeOptimizerEarlyEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
+#else
         PB->invokeOptimizerEarlyEPCallbacks(MPM, O);
+#endif
     }
     template<typename PB_t>
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeLateLoopOptimizationCallbacks(LoopPassManager &LPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
@@ -287,7 +295,11 @@ namespace {
     std::enable_if_t<decltype(hasInvokeCallbacks_helper<PB_t>(nullptr))::value, void> invokeOptimizerLastCallbacks(ModulePassManager &MPM, PB_t *PB, OptimizationLevel O) JL_NOTSAFEPOINT {
         static_assert(std::is_same<PassBuilder, PB_t>::value, "Expected PassBuilder as second argument!");
         if (!PB) return;
+#if JL_LLVM_VERSION >= 200000
+        PB->invokeOptimizerLastEPCallbacks(MPM, O, ThinOrFullLTOPhase::None);
+#else
         PB->invokeOptimizerLastEPCallbacks(MPM, O);
+#endif
     }
 
     // Fallbacks

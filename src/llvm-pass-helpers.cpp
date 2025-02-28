@@ -240,7 +240,7 @@ namespace jl_intrinsics {
         SAFEPOINT_NAME,
         [](Type *T_size) {
             auto &ctx = T_size->getContext();
-            auto T_psize = T_size->getPointerTo();
+            auto T_psize = PointerType::getUnqual(ctx);
             auto intrinsic = Function::Create(
                 FunctionType::get(
                     Type::getVoidTy(ctx),

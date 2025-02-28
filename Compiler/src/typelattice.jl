@@ -318,7 +318,7 @@ end
         fields = vartyp.fields
         thenfields = thentype === Bottom ? nothing : copy(fields)
         elsefields = elsetype === Bottom ? nothing : copy(fields)
-        undef = copy(vartyp.undef)
+        undef = copy(_getundef(vartyp))
         if 1 ≤ fldidx ≤ length(fields)
             thenfields === nothing || (thenfields[fldidx] = thentype)
             elsefields === nothing || (elsefields[fldidx] = elsetype)
@@ -548,7 +548,7 @@ end
     if isa(a, PartialStruct)
         isa(b, PartialStruct) || return false
         length(a.fields) == length(b.fields) || return false
-        a.undef == b.undef || return false
+        _getundef(a) == _getundef(b) || return false
         widenconst(a) == widenconst(b) || return false
         a.fields === b.fields && return true # fast path
         for i in 1:length(a.fields)
