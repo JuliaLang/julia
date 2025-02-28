@@ -908,13 +908,12 @@ static const auto jldeclareglobal_func = new JuliaFunction<>{
             {T_pjlvalue, T_pjlvalue, T_prjlvalue, getInt32Ty(C)}, false); },
     nullptr,
 };
-static const auto jlgetbindingorerror_func = new JuliaFunction<>{
-    XSTR(jl_get_binding_or_error),
+static const auto jldepcheck_func = new JuliaFunction<>{
+    XSTR(jl_binding_deprecation_check),
     [](LLVMContext &C) {
         auto T_pjlvalue = JuliaType::get_pjlvalue_ty(C);
-        return FunctionType::get(T_pjlvalue,
-                {T_pjlvalue, T_pjlvalue}, false);
-    },
+        return FunctionType::get(getVoidTy(C),
+            {T_pjlvalue}, false); },
     nullptr,
 };
 static const auto jlcheckbpwritable_func = new JuliaFunction<>{
@@ -2894,20 +2893,6 @@ static void mallocVisitLine(jl_codectx_t &ctx, StringRef filename, int line, Val
 
 // --- constant determination ---
 
-static void show_source_loc(jl_codectx_t &ctx, JL_STREAM *out)
-{
-    jl_printf(out, "in %s at %s", ctx.name, ctx.file.str().c_str());
-}
-
-static void cg_bdw(jl_codectx_t &ctx, jl_sym_t *var, jl_binding_t *b)
-{
-    jl_binding_deprecation_warning(ctx.module, var, b);
-    if (b->deprecated == 1 && jl_options.depwarn) {
-        show_source_loc(ctx, JL_STDERR);
-        jl_printf(JL_STDERR, "\n");
-    }
-}
-
 static jl_value_t *static_apply_type(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> args, size_t nargs)
 {
     assert(nargs > 1);
@@ -2932,6 +2917,12 @@ static jl_value_t *static_apply_type(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> arg
     return result;
 }
 
+static void emit_depwarn_check(jl_codectx_t &ctx, jl_binding_t *b)
+{
+    Value *bp = julia_binding_gv(ctx, b);
+    ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
+}
+
 // try to statically evaluate, NULL if not possible. note that this may allocate, and as
 // such the resulting value should not be embedded directly in the generated code.
 static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
@@ -2940,9 +2931,13 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
         jl_sym_t *sym = (jl_sym_t*)ex;
         jl_binding_t *bnd = jl_get_module_binding(ctx.module, sym, 0);
         jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-        jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
-        if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
+        int possibly_deprecated = 0;
+        jl_walk_binding_inplace_all(&bnd, &bpart, &possibly_deprecated, ctx.min_world, ctx.max_world);
+        if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
+            if (possibly_deprecated)
+                emit_depwarn_check(ctx, bnd);
             return bpart->restriction;
+        }
         return NULL;
     }
     if (jl_is_slotnumber(ex) || jl_is_argument(ex))
@@ -2965,13 +2960,14 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
         s = jl_globalref_name(ex);
         jl_binding_t *bnd = jl_get_module_binding(jl_globalref_mod(ex), s, 0);
         jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-        jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
+        int possibly_deprecated = 0;
+        jl_walk_binding_inplace_all(&bnd, &bpart, &possibly_deprecated, ctx.min_world, ctx.max_world);
         jl_value_t *v = NULL;
         if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
             v = bpart->restriction;
         if (v) {
-            if (bnd->deprecated)
-                cg_bdw(ctx, s, bnd);
+            if (possibly_deprecated)
+                emit_depwarn_check(ctx, bnd);
             return v;
         }
         return NULL;
@@ -2992,13 +2988,14 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                     if (s && jl_is_symbol(s)) {
                         jl_binding_t *bnd = jl_get_module_binding(m, s, 0);
                         jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-                        jl_walk_binding_inplace_all(&bnd, &bpart, ctx.min_world, ctx.max_world);
+                        int possibly_deprecated = 0;
+                        jl_walk_binding_inplace_all(&bnd, &bpart, &possibly_deprecated, ctx.min_world, ctx.max_world);
                         jl_value_t *v = NULL;
                         if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
                             v = bpart->restriction;
                         if (v) {
-                            if (bnd->deprecated)
-                                cg_bdw(ctx, s, bnd);
+                            if (possibly_deprecated)
+                                emit_depwarn_check(ctx, bnd);
                             return v;
                         }
                     }
@@ -3244,48 +3241,47 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     if (!bpart) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
-    // bpart was updated in place - this will change with full partition
-    if (jl_bkind_is_some_guard(jl_binding_kind(bpart))) {
-        // Redo the lookup at runtime
-        return emit_globalref_runtime(ctx, bnd, mod, name);
-    } else {
-        while (true) {
-            if (!bpart)
-                break;
-            if (!jl_bkind_is_some_import(jl_binding_kind(bpart)))
-                break;
-            if (bnd->deprecated) {
-                cg_bdw(ctx, name, bnd);
+    int possibly_deprecated = 0;
+    int saw_explicit = 0;
+    while (bpart) {
+        if (!saw_explicit && (bpart->kind & BINDING_FLAG_DEPWARN))
+            possibly_deprecated = 1;
+        enum jl_partition_kind kind = jl_binding_kind(bpart);
+        if (!jl_bkind_is_some_import(kind))
+            break;
+        if (kind != BINDING_KIND_IMPLICIT)
+            saw_explicit = 1;
+        bnd = (jl_binding_t*)bpart->restriction;
+        bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+    }
+    Value *bp = NULL;
+    if (bpart) {
+        enum jl_partition_kind kind = jl_binding_kind(bpart);
+        if (jl_bkind_is_some_constant(kind) && kind != BINDING_KIND_BACKDATED_CONST) {
+            if (possibly_deprecated) {
+                bp = julia_binding_gv(ctx, bnd);
+                ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
             }
-            bnd = (jl_binding_t*)bpart->restriction;
-            bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-            if (!bpart)
-                break;
-        }
-        if (bpart) {
-            enum jl_partition_kind kind = jl_binding_kind(bpart);
-            if (jl_bkind_is_some_constant(kind) && kind != BINDING_KIND_BACKDATED_CONST) {
-                jl_value_t *constval = bpart->restriction;
-                if (!constval) {
-                    undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
-                    return jl_cgval_t();
-                }
-                return mark_julia_const(ctx, constval);
+            jl_value_t *constval = bpart->restriction;
+            if (!constval) {
+                undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
+                return jl_cgval_t();
             }
+            return mark_julia_const(ctx, constval);
         }
     }
     if (!bpart || jl_binding_kind(bpart) != BINDING_KIND_GLOBAL) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
-    Value *bp = julia_binding_gv(ctx, bnd);
-    if (bnd->deprecated) {
-        cg_bdw(ctx, name, bnd);
+    bp = julia_binding_gv(ctx, bnd);
+    if (possibly_deprecated) {
+        ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
     }
     jl_value_t *ty = bpart->restriction;
-    bp = julia_binding_pvalue(ctx, bp);
+    Value *bpval = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
-    return update_julia_type(ctx, emit_checked_var(ctx, bp, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding), ty);
+    return update_julia_type(ctx, emit_checked_var(ctx, bpval, name, (jl_value_t*)mod, false, ctx.tbaa().tbaa_binding), ty);
 }
 
 static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *sym, jl_cgval_t rval, const jl_cgval_t &cmp,
@@ -3298,6 +3294,7 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     Value *bp = julia_binding_gv(ctx, bnd);
     if (bpart) {
         if (jl_binding_kind(bpart) == BINDING_KIND_GLOBAL) {
+            int possibly_deprecated = bpart->kind & BINDING_FLAG_DEPWARN;
             jl_value_t *ty = bpart->restriction;
             if (ty != nullptr) {
                 const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
@@ -3310,6 +3307,9 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
                 }
                 bool isboxed = true;
                 bool maybe_null = jl_atomic_load_relaxed(&bnd->value) == NULL;
+                if (possibly_deprecated) {
+                    ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
+                }
                 return typed_store(ctx,
                                 julia_binding_pvalue(ctx, bp),
                                 rval, cmp, ty,
@@ -9913,7 +9913,6 @@ static void init_jit_functions(void)
     add_named_global(memcmp_func, &memcmp);
     add_named_global(jltypeerror_func, &jl_type_error);
     add_named_global(jlcheckassign_func, &jl_checked_assignment);
-    add_named_global(jlgetbindingorerror_func, &jl_get_binding_or_error);
     add_named_global(jlcheckbpwritable_func, &jl_check_binding_currently_writable);
     add_named_global(jlboundp_func, &jl_boundp);
     for (auto it : builtin_func_map())

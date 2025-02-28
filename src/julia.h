@@ -708,8 +708,21 @@ enum jl_partition_kind {
     BINDING_KIND_IMPLICIT_RECOMPUTE = 0xb
 };
 
-// These are flags that get anded into the above
+static const uint8_t BINDING_KIND_MASK = 0x0f;
+static const uint8_t BINDING_FLAG_MASK = 0xf0;
+
+//// These are flags that get anded into the above
+//
+// _EXPORTED: This binding partition is exported. In the world ranges covered by this partitions,
+// other modules that `using` this module, may implicit import this binding.
 static const uint8_t BINDING_FLAG_EXPORTED       = 0x10;
+// _DEPRECATED: This binding partition is deprecated. It is considered weak for the purposes of
+// implicit import resolution.
+static const uint8_t BINDING_FLAG_DEPRECATED     = 0x20;
+// _DEPWARN: This binding partition will print a deprecation warning on access. Note that _DEPWARN
+// implies _DEPRECATED. However, the reverse is not true. Such bindings are usually used for functions,
+// where calling the function itself will provide a (better) deprecation warning/error.
+static const uint8_t BINDING_FLAG_DEPWARN        = 0x40;
 
 typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
     JL_DATA_TYPE
@@ -2041,7 +2054,6 @@ JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym
 
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
-JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
