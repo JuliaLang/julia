@@ -191,7 +191,18 @@ function IOBuffer(;
         truncate::Union{Bool,Nothing}=true,
         maxsize::Integer=typemax(Int),
         sizehint::Union{Integer,Nothing}=nothing)
-    size = sizehint !== nothing ? Int(sizehint) : maxsize != typemax(Int) ? Int(maxsize) : 32
+    # TODO: It's not a good idea that the buffer size is maxsize.
+    size = if sizehint != nothing
+        # TODO: Check for negative
+        Int(sizehint)
+    else
+        if maxsize == typemax(Int)
+            32
+        else
+            # TODO: Check for negative
+            Int(maxsize)
+        end
+    end
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
     buf = IOBuffer(
         # A common usecase of IOBuffer is to incrementally construct strings. By using StringMemory
@@ -302,21 +313,14 @@ function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int3
     return x
 end
 
-function read_sub(from::GenericIOBuffer, a::AbstractArray{T}, offs, nel) where T
+function read_sub(from::GenericIOBuffer, a::MutableDenseArrayType{T}, offs, nel) where T
     require_one_based_indexing(a)
     from.readable || _throw_not_readable()
     if offs+nel-1 > length(a) || offs < 1 || nel < 0
         throw(BoundsError())
     end
-    # Use memcpy where applicable for performance
-    if isa(a, MutableDenseArrayType{UInt8})
-        nb = UInt(nel * sizeof(T))
-        GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
-    else
-        for i = offs:offs+nel-1
-            a[i] = read(from, T)
-        end
-    end
+    nb = UInt(nel * sizeof(T))
+    GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
     return a
 end
 
