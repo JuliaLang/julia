@@ -3973,8 +3973,13 @@ end
 
 # Test trying to define a constant and then trying to assign to the same value
 module AssignConstValueTest
+    using Test
     const x = 1
-    x = 1
+    @test_throws ErrorException @eval x = 1
+    @test_throws ErrorException @eval begin
+        @Base.Experimental.force_compile
+        global x = 1
+    end
 end
 @test isconst(AssignConstValueTest, :x)
 
