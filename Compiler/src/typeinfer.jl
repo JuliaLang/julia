@@ -514,7 +514,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
             rettype_const = result_type.parameters[1]
             const_flags = 0x2
         elseif isa(result_type, PartialStruct)
-            rettype_const = (result_type.undef, result_type.fields)
+            rettype_const = (_getundef(result_type), result_type.fields)
             const_flags = 0x2
         elseif isa(result_type, InterConditional)
             rettype_const = result_type

@@ -83,6 +83,10 @@ const modifyproperty! = Core.modifyfield!
 const replaceproperty! = Core.replacefield!
 const _DOCS_ALIASING_WARNING = ""
 
+function _getundef(p::PartialStruct)
+    Base.getproperty(p, :undef)
+end
+
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 
 eval(x) = Core.eval(Compiler, x)
