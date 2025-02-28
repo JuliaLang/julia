@@ -156,7 +156,7 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
 )
 
     if a in inline_tables
-        @invokelatest print_inline_table(f, io, a)
+        @invokelatest print_inline_table(f, io, a, sorted)
         return
     end
 
