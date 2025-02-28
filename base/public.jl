@@ -50,6 +50,7 @@ public
     DL_LOAD_PATH,
     load_path,
     active_project,
+    RelocPath,
 
 # Reflection and introspection
     isambiguous,
