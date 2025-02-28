@@ -4,6 +4,35 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 If you are already familiar with Julia itself, this blog post by Katharine Hyatt on [Making your first Julia pull request](https://kshyatt.github.io/post/firstjuliapr/) is a great way to get started.
 
+
+# Table of Contents
+
+1. [Learning Julia](#learning-julia)
+2. [Before filing an issue](#before-filing-an-issue)
+3. [Contributor Checklist](#contributor-checklist)
+4. [How to file a bug report](#how-to-file-a-bug-report)
+5. [Submitting contributions](#submitting-contributions)
+    - [Writing tests](#writing-tests)
+    - [Improving documentation](#improving-documentation)
+        - [Modifying files in `doc/src/`](#modifying-files-in-docsrc)
+        - [Modifying an existing docstring in `base/`](#modifying-an-existing-docstring-in-base)
+        - [Adding a new docstring to `base/`](#adding-a-new-docstring-to-base)
+        - [Doctests](#doctests)
+        - [News-worthy changes](#news-worthy-changes)
+        - [Annotations for new features, deprecations and behavior changes](#annotations-for-new-features-deprecations-and-behavior-changes)
+    - [Contributing to core functionality or base libraries](#contributing-to-core-functionality-or-base-libraries)
+        - [Running specific tests](#running-specific-tests)
+        - [Modifying base more efficiently with Revise.jl](#modifying-base-more-efficiently-with-revisejl)
+    - [Contributing to the standard library](#contributing-to-the-standard-library)
+    - [Contributing to patch releases](#contributing-to-patch-releases)
+    - [Code Formatting Guidelines](#code-formatting-guidelines)
+        - [General Formatting Guidelines for Julia code contributions](#general-formatting-guidelines-for-julia-code-contributions)
+        - [General Formatting Guidelines For C code contributions](#general-formatting-guidelines-for-c-code-contributions)
+    - [Git Recommendations For Pull Requests](#git-recommendations-for-pull-requests)
+        - [Git Recommendations For Pull Request Reviewers](#git-recommendations-for-pull-request-reviewers)
+6. [Resources](#resources)
+
+
 ## Learning Julia
 
 [The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike.
