@@ -124,7 +124,7 @@ end
     else
         pos = 1
         i = buflen
-        for _ in 1:div(buflen, 48)
+        while i ≥ 48
             see1 = seed
             see2 = seed
             while i ≥ 48
