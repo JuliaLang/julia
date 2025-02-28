@@ -1191,35 +1191,44 @@ end
 
 checktaskempty = Partr.multiq_check_empty
 
-@noinline function poptask(W::StickyWorkqueue)
-    task = trypoptask(W)
-    if !(task isa Task)
-        process_events()
-        task = trypoptask(W)
-    end
-    if !(task isa Task)
-        sched_task = get_sched_task()
-        if current_task() === sched_task
-            task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
-        else
-            yieldto(sched_task)
-            task = current_task()
-        end
-    end
-    set_next_task(task)
-    nothing
-end
-
 function wait()
     ct = current_task()
     # [task] user_time -yield-or-done-> wait_time
     record_running_time!(ct)
+    # let GC run
     GC.safepoint()
-    W = workqueue_for(Threads.threadid())
-    poptask(W)
-    result = try_yieldto(ensure_rescheduled)
+    # check for libuv events
     process_events()
-    # return when we come out of the queue
+
+    # get the next task to run
+    result = nothing
+    have_result = false
+    W = workqueue_for(Threads.threadid())
+    task = trypoptask(W)
+    if !(task isa Task)
+        # didn't find a task to run, try again
+        process_events()
+        task = trypoptask(W)
+    end
+    if !(task isa Task)
+        # No tasks to run; switch to the scheduler task to run the
+        # thread sleep logic.
+        sched_task = get_sched_task()
+        if ct !== sched_task
+            result = yieldto(sched_task)
+            have_result = true
+        else
+            task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any),
+                         trypoptask, W, checktaskempty)
+        end
+    end
+    # We may have already switched tasks (via the scheduler task), so
+    # only switch if we haven't.
+    if !have_result
+        @assert task isa Task
+        set_next_task(task)
+        result = try_yieldto(ensure_rescheduled)
+    end
     return result
 end
 
