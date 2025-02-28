@@ -617,7 +617,7 @@ end
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    nb = min(length(buffer.data)-buffer.offset, buffer.maxsize) + buffer.offset - ptr + 1
+    nb = min(length(buffer.data), buffer.maxsize) - ptr + 1
     return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
@@ -944,7 +944,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     else
         initsize = length(a)
         newbuf = PipeBuffer(a, maxsize=nb)
-        newbuf.size = newbuf.offset # reset the write pointer to the beginning
+        newbuf.size = 0 # reset the write pointer to the beginning
         nread = try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -992,7 +992,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
         unsafe_read(sbuf, p, nb)
     else
         newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), maxsize=Int(nb))
-        newbuf.size = newbuf.offset # reset the write pointer to the beginning
+        newbuf.size = 0 # reset the write pointer to the beginning
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -1601,7 +1601,7 @@ function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
         else
             initsize = length(a)
             newbuf = PipeBuffer(a, maxsize=nb)
-            newbuf.size = newbuf.offset # reset the write pointer to the beginning
+            newbuf.size = 0 # reset the write pointer to the beginning
             nread = try
                 s.buffer = newbuf
                 write(newbuf, sbuf)
