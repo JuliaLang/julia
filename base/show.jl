@@ -3370,8 +3370,21 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     else
         print(io, max_world)
     end
-    if (partition.kind & BINDING_FLAG_EXPORTED) != 0
-        print(io, " [exported]")
+    if (partition.kind & BINDING_FLAG_MASK) != 0
+        first = false
+        print(io, " [")
+        if (partition.kind & BINDING_FLAG_EXPORTED) != 0
+            print(io, "exported")
+        end
+        if (partition.kind & BINDING_FLAG_DEPRECATED) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "deprecated")
+        end
+        if (partition.kind & BINDING_FLAG_DEPWARN) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "depwarn")
+        end
+        print(io, "]")
     end
     print(io, " - ")
     kind = binding_kind(partition)
