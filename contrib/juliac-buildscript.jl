@@ -268,6 +268,12 @@ let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
             __init__() = rand()
         end
     end
+    if :JLLWrappers in loaded
+        using JLLWrappers
+        @eval JLLWrappers begin
+            Base.Experimental.@compiler_options compile=min optimize=2 infer=true
+        end
+    end
 end
 
 empty!(Core.ARGS)
