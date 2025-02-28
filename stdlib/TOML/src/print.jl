@@ -77,7 +77,7 @@ end
 # Fallback
 function printvalue(f::MbyFunc, io::IO, value, sorted::Bool)
     toml_value = to_toml_value(f, value)
-    @invokelatest printvalue(f, io, toml_value)
+    @invokelatest printvalue(f, io, toml_value, sorted)
 end
 
 function printvalue(f::MbyFunc, io::IO, value::AbstractVector, sorted::Bool)
