@@ -6,6 +6,161 @@ ioslength(io::IOBuffer) = (io.seekable ? io.size : bytesavailable(io))
 
 bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 
+@testset "Basic tests" begin
+    @test_broken IOBuffer(;maxsize=-1)
+    @test_throws ArgumentError IOBuffer([0x01]; maxsize=-1)
+
+    # Test that sizehint actually will sizehint the vector,
+    v = UInt8[]
+    buf = IOBuffer(v; sizehint=64, write=true)
+    @test length(v.ref.mem) >= 64
+
+
+end
+
+@testset "Basic reading" begin
+    # Readavailable is equal to read
+    buf = IOBuffer("abcdef")
+    @test read(buf, UInt8) == UInt8('a')
+    @test bytesavailable(buf) == 5
+    @test readavailable(buf) == b"bcdef"
+
+    # Reading less than all the bytes
+    buf = IOBuffer(b"ABCDEFGHIJ")
+    @test read(buf, 1) == b"A"
+    @test read(buf, 3) == b"BCD"
+
+    # Reading more bytes than available will not error
+    @test read(buf, 100) == b"EFGHIJ"
+end
+
+@testset "Byte occursin GenericIOBuffer" begin
+    buf = IOBuffer(@view(collect(0x1f:0x3d)[1:end]))
+    @test occursin(0x1f, buf)
+    @test occursin(0x3d, buf)
+    @test occursin(0x2a, buf)
+
+    @test !occursin(0xff, buf)
+    @test !occursin(0x00, buf)
+
+    v = Vector{UInt8}("bcdefg")
+    pushfirst!(v, UInt8('a'))
+    buf = IOBuffer(v)
+    @test occursin(UInt8('a'), buf)
+    read(buf, UInt8)
+    @test !occursin(UInt8('a'), buf)
+    @test !occursin(0x00, buf)
+
+    buf = IOBuffer("abcdefg")
+    @test occursin(UInt8('a'), buf)
+end
+
+@testset "Non-Memory backed IOBuffer" begin
+    buf = IOBuffer(Test.GenericArray(collect(0x02:0x0d)), read=true)
+    @test read(buf) == 0x02:0x0d
+
+    buf = IOBuffer(Test.GenericArray(collect(0x02:0x0d)), read=true)
+    @test read(buf, UInt8) == 0x02
+    @test read(buf) == 0x03:0x0d
+
+    v = view(collect(UInt8('a'):UInt8('z')), 4:10)
+    buf = IOBuffer(v, read=true, write=true)
+    @test read(buf, UInt8) == UInt8('d')
+    @test read(buf) == UInt8('e'):UInt8('j')
+    seekstart(buf)
+    @test read(buf, UInt8) == UInt8('d')
+    write(buf, UInt8('x'))
+    write(buf, "ABC")
+    seekstart(buf)
+    @test read(buf) == b"dxABCij"
+end
+
+@testset "Copying" begin
+    # Test offset is preserved when copying
+    v = UInt8[]
+    pushfirst!(v, UInt8('a'), UInt8('b'), UInt8('c'))
+    buf = IOBuffer(v; write=true, read=true, append=true)
+    write(buf, "def")
+    read(buf, UInt16)
+    buf2 = copy(buf)
+    @test String(read(buf)) == "cdef"
+    @test String(read(buf2)) == "cdef"
+
+    # Test copying with non-Memory backed GenericIOBuffer
+    buf = IOBuffer(Test.GenericArray(collect(0x02:0x0d)), read=true)
+    @test_broken read(buf, UInt16)
+    buf2 = copy(buf)
+    @test isreadable(buf2)
+    @test !iswritable(buf2)
+    @test_broken read(buf2) == 0x04:0x0d
+end
+
+@testset "copyuntil" begin
+    a = IOBuffer(b"abcdeajdgabdfg")
+    b = IOBuffer(collect(b"xx"); write=true, read=true, append=true)
+    copyuntil(b, a, UInt8('a'))
+    @test read(b) == b"xx"
+    seekstart(b)
+    copyuntil(b, a, UInt8('a'); keep=true)
+    @test read(b) == b"xxbcdea"
+    seekstart(b)
+    copyuntil(b, a, UInt('w'))
+    @test read(b) == b"xxbcdeajdgabdfg"
+end
+
+@testset "copyline" begin
+    a = IOBuffer(b"abcde\nabc\r\nabc\n\r\nac")
+    b = IOBuffer()
+    copyline(b, a)
+    @test take!(copy(b)) == b"abcde"
+    copyline(b, a)
+    @test take!(copy(b)) == b"abcdeabc"
+    copyline(b, a; keep=true)
+    @test take!(copy(b)) == b"abcdeabcabc\n"
+    copyline(b, a; keep=false)
+    @test take!(copy(b)) == b"abcdeabcabc\n"
+    copyline(b, a; keep=false)
+    @test take!(copy(b)) == b"abcdeabcabc\nac"
+end
+
+@testset "take!" begin
+    a = IOBuffer("abc")
+    @test take!(a) == b"abc"
+
+    v = UInt8[]
+    pushfirst!(v, 0x0a)
+    buf = IOBuffer(v; write=true, append=true)
+    write(buf, "def")
+    @test take!(buf) == b"\ndef"
+
+    v = view(collect(b"abcdefghij"), 3:9)
+    buf = IOBuffer(v; write=true, read=true)
+    read(buf, UInt8)
+    write(buf, "xxy")
+    @test take!(buf) == b"cxxyghi"
+
+    v = view(collect(b"abcdefghij"), 3:9)
+    buf = IOBuffer(v; write=true, read=true)
+end
+
+@testset "maxsize is preserved" begin
+    # After take!
+    buf = IOBuffer(; maxsize=3)
+    print(buf, "abcdef")
+    @test take!(buf) == b"abc"
+    print(buf, "abcdef")
+    @test_broken take!(buf) == b"abc"
+
+    # After resizing
+    buf = IOBuffer(;maxsize=128)
+    write(buf, collect(0x00:0x10))
+    write(buf, collect(0x11:0x30))
+    write(buf, collect(0x31:0x98))
+    write(buf, collect(0x99:0xff))
+    seekstart(buf)
+    @test read(buf) == 0x00:UInt8(127)
+end
+
 @testset "Read/write empty IOBuffer" begin
     io = IOBuffer()
     @test eof(io)
