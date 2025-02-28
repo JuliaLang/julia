@@ -545,14 +545,19 @@ JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module
 {
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (kind != BINDING_KIND_GLOBAL && kind != BINDING_KIND_DECLARED && !jl_bkind_is_some_constant(kind)) {
+    if (kind != BINDING_KIND_GLOBAL && kind != BINDING_KIND_DECLARED) {
         if (jl_bkind_is_some_guard(kind)) {
             jl_errorf("Global %s.%s does not exist and cannot be assigned.\n"
                         "Note: Julia 1.9 and 1.10 inadvertently omitted this error check (#56933).\n"
                         "Hint: Declare it using `global %s` inside `%s` before attempting assignment.",
                         jl_symbol_name(m->name), jl_symbol_name(s),
                         jl_symbol_name(s), jl_symbol_name(m->name));
-        } else {
+        }
+        else if (jl_bkind_is_some_constant(kind)) {
+            jl_errorf("invalid assignment to constant %s.%s. This redefinition may be permitted using the `const` keyword.",
+                        jl_symbol_name(m->name), jl_symbol_name(s));
+        }
+        else {
             jl_module_t *from = jl_binding_dbgmodule(b, m, s);
             if (from == m)
                 jl_errorf("cannot assign a value to imported variable %s.%s",
@@ -1449,16 +1454,6 @@ jl_value_t *jl_check_binding_assign_value(jl_binding_t *b JL_PROPAGATES_ROOT, jl
     JL_GC_PUSH1(&rhs); // callee-rooted
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (jl_bkind_is_some_constant(kind)) {
-        jl_value_t *old = bpart->restriction;
-        JL_GC_PROMISE_ROOTED(old);
-        if (jl_egal(rhs, old)) {
-            JL_GC_POP();
-            return NULL;
-        }
-        jl_errorf("invalid assignment to constant %s.%s. This redefinition may be permitted using the `const` keyword.",
-                    jl_symbol_name(mod->name), jl_symbol_name(var));
-    }
     assert(kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_GLOBAL);
     jl_value_t *old_ty = kind == BINDING_KIND_DECLARED ? (jl_value_t*)jl_any_type : bpart->restriction;
     JL_GC_PROMISE_ROOTED(old_ty);
