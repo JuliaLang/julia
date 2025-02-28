@@ -215,7 +215,7 @@ static void annotate_module_clones(Module &M) {
     if (auto maybe_specs = get_target_specs(M)) {
         specs = std::move(*maybe_specs);
     } else {
-        auto full_specs = jl_get_llvm_clone_targets();
+        auto full_specs = jl_get_llvm_clone_targets(jl_options.cpu_target);
         specs.reserve(full_specs.size());
         for (auto &spec: full_specs) {
             specs.push_back(TargetSpec::fromSpec(spec));
