@@ -177,7 +177,7 @@ Counter-examples to this rule include [`NamedTuple`](@ref), [`RegexMatch`](@ref 
 If a function name requires multiple words, consider whether it might represent more than one
 concept and might be better split into pieces.
 
-Function names should be written in snake case ([`minimum'](@ref), [`count_zeros`](@ref), [`escape_string`](@ref)).
+Function names should be written in snake case ([`minimum`](@ref), [`count_zeros`](@ref), [`escape_string`](@ref)).
 Base often breaks this convention by squashing words together ([`splitpath`](@ref), [`readeach`](@ref)) but this style is not recommended for packages.
 
 ## Write functions with argument ordering similar to Julia Base
