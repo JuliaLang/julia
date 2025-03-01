@@ -7,7 +7,7 @@ ioslength(io::IOBuffer) = (io.seekable ? io.size : bytesavailable(io))
 bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 
 @testset "Basic tests" begin
-    @test_broken IOBuffer(;maxsize=-1)
+    @test_throws ArgumentError IOBuffer(;maxsize=-1)
     @test_throws ArgumentError IOBuffer([0x01]; maxsize=-1)
 
     # Test that sizehint actually will sizehint the vector,
