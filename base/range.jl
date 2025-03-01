@@ -978,7 +978,8 @@ function lerpi(j::Integer, d::Integer, a::T, b::T) where T
 end
 
 # help avoid some unnecessary work for the compiler when compiling type unstable code
-@nospecializeinfer function lerpi((@nospecialize j::Integer), (@nospecialize d::Integer), ::String, ::String)
+function lerpi((@nospecialize j::Integer), (@nospecialize d::Integer), ::String, ::String)
+    @_nospecializeinfer_meta
     throw(ArgumentError("can't interpolate between strings"))
 end
 
