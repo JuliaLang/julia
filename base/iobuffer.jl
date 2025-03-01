@@ -709,22 +709,9 @@ readavailable(io::GenericIOBuffer) = read(io)
 
 read(io::GenericIOBuffer, nb::Integer) = read!(io, StringVector(min(nb, bytesavailable(io))))
 
-function occursin(delim::UInt8, buf::IOBuffer)
-    # TODO: This pointer call is invalid. Also, perhaps this should use the default `in` method,
-    # which already should be implemented using memchr.
-    p = pointer(buf.data, buf.ptr)
-    q = GC.@preserve buf ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, delim, bytesavailable(buf))
-    return q != C_NULL
-end
-
-# TODO: Invalid use of @inbounds, and also we can use the generic `in` method.
 function occursin(delim::UInt8, buf::GenericIOBuffer)
-    data = buf.data
-    for i = buf.ptr:buf.size
-        @inbounds b = data[i]
-        b == delim && return true
-    end
-    return false
+    ptr = buf.ptr
+    return in(delim, view(buf.data, ptr:ptr + bytesavailable(buf)-1))
 end
 
 function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
