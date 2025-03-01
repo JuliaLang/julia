@@ -254,7 +254,7 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
             // We're currently also using atomic store release in mutator threads
             // (in jl_gc_state_set), but we may want to use signals to flush the
             // memory operations on those threads lazily instead.
-            const int64_t timeout = jl_options.timeout_for_safepoint_straggler_s * 1000000000; // convert to nanoseconds
+            const int64_t timeout = jl_options.timeout_for_safepoint_straggler_s * 1000000000LL; // convert to nanoseconds
             uint64_t t0 = jl_hrtime();
             while (!jl_atomic_load_relaxed(&ptls2->gc_state) || !jl_atomic_load_acquire(&ptls2->gc_state)) {
                 jl_cpu_pause(); // yield?
