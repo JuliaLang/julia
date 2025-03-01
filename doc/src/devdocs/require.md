@@ -19,7 +19,7 @@ push!(Base.package_callbacks, callback)
 
 Using this would look something like:
 
-```julia-repl
+```jldoctest
 julia> using Example
 
 julia> loaded_packages

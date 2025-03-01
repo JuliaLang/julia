@@ -83,7 +83,7 @@ on Github with a link to the gist.
 Occasionally errors occur during Julia's startup process (especially when using binary distributions,
 as opposed to compiling from source) such as the following:
 
-```julia
+```jldoctest
 $ julia
 exec: error -5
 ```
@@ -111,13 +111,13 @@ on Github with a link to the gist.
 
 As mentioned elsewhere, `julia` has good integration with `rr` for generating traces; this includes, on Linux, the ability to automatically run `julia` under `rr` and share the trace after a crash. This can be immensely helpful when debugging such crashes and is strongly encouraged when reporting crash issues to the JuliaLang/julia repo. To run `julia` under `rr` automatically, do:
 
-```julia
+```jldoctest
 julia --bug-report=rr
 ```
 
 To generate the `rr` trace locally, but not share, you can do:
 
-```julia
+```jldoctest
 julia --bug-report=rr-local
 ```
 

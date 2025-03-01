@@ -53,7 +53,7 @@ Once you've identified a suspect (here we'll call it `ThePackageYouThinkIsCausin
 
 However, most likely `ThePackageYouThinkIsCausingTheProblem` will precompile fine. This suggests it's in the function `ThePackageYouThinkIsCausingTheProblem.__init__`, which does not run during precompilation of `ThePackageYouThinkIsCausingTheProblem` but *does* in any package that loads `ThePackageYouThinkIsCausingTheProblem`. To test this theory, set up a minimal working example (MWE), something like
 
-```julia
+```jldoctest
 (@v1.10) pkg> generate MWE
   Generating  project MWE:
     MWE\Project.toml

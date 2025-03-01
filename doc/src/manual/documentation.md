@@ -59,7 +59,7 @@ Compute the Bar index between `x` and `y`.
 If `y` is unspecified, compute the Bar index between all pairs of columns of `x`.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> bar([1, 2], [1, 2])
 1
 ```

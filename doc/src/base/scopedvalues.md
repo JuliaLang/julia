@@ -27,7 +27,7 @@ Let's first look at an example of **lexical** scope. A `let` statement begins
 a new lexical scope within which the outer definition of `x` is shadowed by
 it's inner definition.
 
-```julia
+```jldoctest
 x = 1
 let x = 5
     @show x # 5
@@ -39,7 +39,7 @@ In the following example, since Julia uses lexical scope, the variable `x` in th
 of `f` refers to the `x` defined in the global scope, and entering a `let` scope does
 not change the value `f` observes.
 
-```julia
+```jldoctest
 x = 1
 f() = @show x
 let x = 5
@@ -50,7 +50,7 @@ f() # 1
 
 Now using a `ScopedValue` we can use **dynamic** scoping.
 
-```julia
+```jldoctest
 using Base.ScopedValues
 
 x = ScopedValue(1)
@@ -68,7 +68,7 @@ It often makes sense to use a `const` variable to point to a scoped value,
 and you can set the value of multiple `ScopedValue`s with one call to `with`.
 
 
-```julia
+```jldoctest
 using Base.ScopedValues
 
 f() = @show a[]
@@ -102,7 +102,7 @@ is equivalent to `with(var=>val) do expr end`. However, `with` requires a zero-a
 closure or function, which results in an extra call-frame. As an example, consider the
 following function `f`:
 
-```julia
+```jldoctest
 using Base.ScopedValues
 const a = ScopedValue(1)
 f(x) = a[] + x
@@ -110,14 +110,14 @@ f(x) = a[] + x
 
 If you wish to run `f` in a dynamic scope with `a` set to `2`, then you can use `with`:
 
-```julia
+```jldoctest
 with(() -> f(10), a=>2)
 ```
 
 However, this requires wrapping `f` in a zero-argument function. If you wish to avoid
 the extra call-frame, then you can use the `@with` macro:
 
-```julia
+```jldoctest
 @with a=>2 f(10)
 ```
 
@@ -240,7 +240,7 @@ In order to access the value of a scoped value, the scoped value itself has to
 be in (lexical) scope. This means most often you likely want to use scoped values
 as constant globals.
 
-```julia
+```jldoctest
 using Base.ScopedValues
 const sval = ScopedValue(1)
 ```

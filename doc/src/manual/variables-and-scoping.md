@@ -668,7 +668,7 @@ julia> Fs[2]()
 
 A `for` loop or comprehension iteration variable is always a new variable:
 
-```julia-repl enable_doctest_when_deprecation_warning_is_removed
+```jldoctest enable_doctest_when_deprecation_warning_is_removed
 julia> function f()
            i = 0
            for i = 1:3

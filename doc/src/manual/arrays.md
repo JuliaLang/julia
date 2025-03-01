@@ -368,7 +368,7 @@ of the variable ranges `rx`, `ry`, etc. and each `F(x,y,...)` evaluation returns
 The following example computes a weighted average of the current element and its left and right
 neighbor along a 1-d grid:
 
-```julia-repl
+```jldoctest
 julia> x = rand(8)
 8-element Vector{Float64}:
  0.843025
@@ -413,7 +413,7 @@ julia> sum(1/n^2 for n=1:1000)
 When writing a generator expression with multiple dimensions inside an argument list, parentheses
 are needed to separate the generator from subsequent arguments:
 
-```julia-repl
+```jldoctest
 julia> map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
 ERROR: syntax: invalid iteration specification
 ```
@@ -1036,7 +1036,7 @@ It is sometimes useful to perform element-by-element binary operations on arrays
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
 be to replicate the vector to the size of the matrix:
 
-```julia-repl
+```jldoctest
 julia> a = rand(2, 1); A = rand(2, 3);
 
 julia> repeat(a, 1, 3) + A
@@ -1049,7 +1049,7 @@ This is wasteful when dimensions get large, so Julia provides [`broadcast`](@ref
 singleton dimensions in array arguments to match the corresponding dimension in the other array
 without using extra memory, and applies the given function elementwise:
 
-```julia-repl
+```jldoctest
 julia> broadcast(+, a, A)
 2×3 Matrix{Float64}:
  1.20813  1.82068  1.25387

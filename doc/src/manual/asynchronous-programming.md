@@ -28,7 +28,7 @@ It has a create-start-run-finish lifecycle.
 Tasks are created by calling the `Task` constructor on a 0-argument function to run,
 or using the [`@task`](@ref) macro:
 
-```julia-repl
+```jldoctest
 julia> t = @task begin; sleep(5); println("done"); end
 Task (runnable) @0x00007f13a40c0eb0
 ```
@@ -38,7 +38,7 @@ Task (runnable) @0x00007f13a40c0eb0
 This task will wait for five seconds, and then print `done`. However, it has not
 started running yet. We can run it whenever we're ready by calling [`schedule`](@ref):
 
-```julia-repl
+```jldoctest
 julia> schedule(t);
 ```
 
@@ -55,7 +55,7 @@ printed. `t` is then finished.
 The [`wait`](@ref) function blocks the calling task until some other task finishes.
 So for example if you type
 
-```julia-repl
+```jldoctest
 julia> schedule(t); wait(t)
 ```
 
@@ -203,7 +203,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
     On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
 
-    ```julia-repl
+    ```jldoctest
     julia> c = Channel(2);
 
     julia> put!(c, 1) # `put!` on an open channel succeeds
@@ -220,7 +220,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
   * [`take!`](@ref) and [`fetch`](@ref) (which retrieves but does not remove the value) on a closed
     channel successfully return any existing values until it is emptied. Continuing the above example:
 
-    ```julia-repl
+    ```jldoctest
     julia> fetch(c) # Any number of `fetch` calls succeed.
     1
 
@@ -242,7 +242,7 @@ Each task in this simulation reads a `job_id`, waits for a random amount of time
 a tuple of `job_id` and the simulated time to the results channel. Finally all the `results` are
 printed out.
 
-```julia-repl
+```jldoctest
 julia> const jobs = Channel{Int}(32);
 
 julia> const results = Channel{Tuple}(32);

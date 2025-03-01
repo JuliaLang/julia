@@ -9,18 +9,18 @@ expression in the body of a function.
 `:meta` expressions are created with macros. As an example, consider the implementation of the
 `@inline` macro:
 
-```julia
-macro inline(ex)
-    esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
-end
+```jldoctest
+julia> macro inline(ex)
+        esc(isa(ex, Expr) ? pushmeta!(ex, :inline) : ex)
+        end
 ```
 
 Here, `ex` is expected to be an expression defining a function. A statement like this:
 
-```julia
-@inline function myfunction(x)
-    x*(x+3)
-end
+```jldoctest
+julia> @inline function myfunction(x)
+        x*(x+3)
+        end
 ```
 
 gets turned into an expression like this:

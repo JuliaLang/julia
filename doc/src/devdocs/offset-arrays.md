@@ -39,15 +39,15 @@ frustrating bugs would be incorrect results or segfaults (total crashes of Julia
 For example,
 consider the following function:
 
-```julia
-function mycopy!(dest::AbstractVector, src::AbstractVector)
-    length(dest) == length(src) || throw(DimensionMismatch("vectors must match"))
-    # OK, now we're safe to use @inbounds, right? (not anymore!)
-    for i = 1:length(src)
-        @inbounds dest[i] = src[i]
-    end
-    dest
-end
+```jldoctest
+julia> function mycopy!(dest::AbstractVector, src::AbstractVector)
+            axes(dest) == axes(src) || throw(DimensionMismatch("vectors must match"))
+            # OK, now we're safe to use @inbounds, right? (not anymore!)
+            for i in LinearIndices(src)
+                @inbounds dest[i] = src[i]
+            end
+            dest
+        end 
 ```
 
 This code implicitly assumes that vectors are indexed from 1; if `dest` starts at a different index than `src`, there is a chance that this code would trigger a segfault.
