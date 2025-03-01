@@ -1185,7 +1185,9 @@
     (cond ((and (length= e 2) (or (symbol? name) (globalref? name)))
            (if (not (valid-name? name))
                (error (string "invalid function name \"" name "\"")))
-           `(method ,name))
+           (if (globalref? name)
+             `(block (global ,name) (method ,name))
+             `(block (global-if-global ,name) (method ,name))))
           ((not (pair? name))  e)
           ((eq? (car name) 'call)
            (let* ((raw-typevars (or where '()))
@@ -3131,6 +3133,10 @@
            (if (eq? (var-kind (cadr e) scope) 'local)
                (if (length= e 2) (null) `(= ,@(cdr e)))
                `(const ,@(cdr e))))
+        ((eq? (car e) 'global-if-global)
+           (if (eq? (var-kind (cadr e) scope) 'local)
+               '(null)
+               `(global ,@(cdr e))))
         ((memq (car e) '(local local-def))
          (check-valid-name (cadr e))
          ;; remove local decls
@@ -3763,7 +3769,7 @@ f(x) = yt(x)
   (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
-         global globalref assign-const-if-global isglobal thismodule
+         global globalref global-if-global assign-const-if-global isglobal thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
          error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
 
