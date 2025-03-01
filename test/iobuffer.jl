@@ -88,11 +88,11 @@ end
 
     # Test copying with non-Memory backed GenericIOBuffer
     buf = IOBuffer(Test.GenericArray(collect(0x02:0x0d)), read=true)
-    @test_broken read(buf, UInt16)
+    @test read(buf, UInt16) == 0x0302
     buf2 = copy(buf)
     @test isreadable(buf2)
     @test !iswritable(buf2)
-    @test_broken read(buf2) == 0x04:0x0d
+    @test read(buf2) == 0x04:0x0d
 end
 
 @testset "copyuntil" begin
