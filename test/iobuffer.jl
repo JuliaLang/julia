@@ -149,7 +149,7 @@ end
     print(buf, "abcdef")
     @test take!(buf) == b"abc"
     print(buf, "abcdef")
-    @test_broken take!(buf) == b"abc"
+    @test take!(buf) == b"abc"
 
     # After resizing
     buf = IOBuffer(;maxsize=128)
@@ -222,7 +222,6 @@ end
     @test_throws ArgumentError write(io,UInt8[0])
     @test String(take!(io)) == "hamster\nguinea pig\nturtle"
     @test String(take!(io)) == "hamster\nguinea pig\nturtle" #should be unchanged
-    @test_throws ArgumentError Base.compact(io) # not writeable
     close(io)
 end
 
@@ -230,14 +229,18 @@ end
     io = PipeBuffer()
     @test_throws EOFError read(io,UInt8)
     @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
+
+    # PipeBuffer is append, so writing to it does not advance the position
     @test position(io) == 0
     @test readline(io) == "pancakes"
-    Base.compact(io)
     @test readline(io) == "waffles"
     @test write(io,"whipped cream\n") > 0
     @test readline(io) == "blueberries"
+
+    # Pipebuffers do not support seeking, and therefore do not support truncation.
     @test_throws ArgumentError seek(io,0)
     @test_throws ArgumentError truncate(io,0)
+
     @test readline(io) == "whipped cream"
     @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
     @test readlines(io) == String["pancakes", "waffles", "blueberries"]
@@ -272,57 +275,6 @@ end
         rm(fname)
     end
 
-    Base.compact(io)
-    @test position(io) == 0
-    @test ioslength(io) == 0
-    Base._resize!(io,0)
-    Base.ensureroom(io,50)
-    @test position(io) == 0
-    @test ioslength(io) == 0
-    @test length(io.data) == 50
-    Base.ensureroom(io,10)
-    @test ioslength(io) == 0
-    @test length(io.data) == 50
-    io.maxsize = 75
-    Base.ensureroom(io,100)
-    @test ioslength(io) == 0
-    @test length(io.data) == 75
-    seekend(io)
-    @test ioslength(io) == 0
-    @test position(io) == 0
-    write(io,zeros(UInt8,200))
-    @test ioslength(io) == 75
-    @test length(io.data) == 75
-    write(io,1)
-    @test ioslength(io) == 75
-    @test length(io.data) == 75
-    write(io,[1,2,3])
-    @test ioslength(io) == 75
-    @test length(io.data) == 75
-    skip(io,1)
-    @test write(io,UInt8(104)) === 1
-    skip(io,3)
-    @test write(io,b"apples") === 3
-    skip(io,71)
-    @test write(io,'y') === 1
-    @test read(io, String) == "happy"
-    @test eof(io)
-    write(io,zeros(UInt8,73))
-    write(io,'a')
-    write(io,'b')
-    write(io,'c')
-    write(io,'d')
-    write(io,'e')
-    @test ioslength(io) == 75
-    @test length(io.data) == 75
-    @test position(io) == 0
-    skip(io,72)
-    @test String(take!(io)) == "\0ab"
-    @test String(take!(io)) == ""
-
-    # issues 4021
-    print(io, true)
-    close(io)
 end
 
 @testset "issue 5453" begin
@@ -502,20 +454,29 @@ end
     @test n == 5
 end
 
-@testset "Base.compact" begin
-    a = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int))
-    mark(a) # mark at position 0
-    write(a, "Hello!")
-    @test Base.compact(a) === nothing # because pointer > mark
-    close(a)
-    b = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int))
-    write(b, "Hello!")
-    read(b)
-    mark(b) # mark at position 6
-    write(b, "Goodbye!") # now pointer is > mark but mark is > 0
-    Base.compact(b)
-    @test readline(b) == "Goodbye!"
-    close(b)
+@testset "Compacting" begin
+    # Compacting works
+    buf = Base.GenericIOBuffer(UInt8[], true, true, false, true, 5)
+    mark(buf)
+    write(buf, "Hello")
+    reset(buf)
+    unmark(buf)
+    read(buf, UInt8)
+    read(buf, UInt8)
+    write(buf, "a!")
+    @test length(buf.data) == 5
+    @test take!(buf) == b"lloa!"
+
+    # Compacting does not do anything when mark == 0
+    buf = Base.GenericIOBuffer(UInt8[], true, true, false, true, 5)
+    mark(buf)
+    write(buf, "Hello")
+    reset(buf)
+    mark(buf)
+    read(buf, UInt8)
+    read(buf, UInt8)
+    @test write(buf, "a!") == 0
+    @test take!(buf) == b"llo"
 end
 
 @testset "peek(::GenericIOBuffer)" begin
