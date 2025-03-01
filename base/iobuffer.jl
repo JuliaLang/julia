@@ -23,7 +23,6 @@
 
 # * The underlying array is always 1-indexed
 # * The IOBuffer has full control of the underlying array.
-# * Data in maxsize+1:lastindex(data) is also never touched.
 # * Data in 1::mark-1, if mark > 0 can be deleted, shifting the whole thing to the left
 #   to make room for more data, without replacing or resizing data
 
@@ -48,10 +47,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # This value is always in 0 : min(maxsize, lastindex(data))
     size::Int
 
-    # Size can never be larger than this value. This is useful for two use cases:
-    # 1. To prevent `data` from becoming too large, using too much memory
-    # 2. To guarantee that data in maxsize+1:lastindex(data) is never touched
-    # Note that this can be larger than lastindex(data), since data may be replaced.
+    # This is the maximum length that the buffer size can grow to.
     # This value is always in 0:typemax(Int)
     maxsize::Int
 
@@ -60,10 +56,11 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # This value is alwaus in 1 : size+1
     ptr::Int
 
-    # Data before the marked location for non-seekable buffers can be compacted.
+    # Data at the marked location or before for non-seekable buffers can be compacted.
     # If this is -1, the mark is not set.
+    # The mark is zero-indexed.
     # The purpose of the mark is to reset the stream to a given position using reset.
-    # This value is always ==  -1, or in 1:size
+    # This value is always == -1, or in 0:size-1
     mark::Int
 
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
@@ -396,23 +393,22 @@ function seekend(io::GenericIOBuffer)
     return io
 end
 
-# choose a resize strategy based on whether `resize!` is defined:
-# for a Vector, we use `resize!`, but for most other types,
-# this calls `similar`+copy
-function _resize!(io::GenericIOBuffer, sz::Int)
-    a = io.data
-    if applicable(resize!, a, sz)
-        resize!(a, sz)
+# Resize data to exactly size `sz`. Either resize the underlying data,
+# or allocate a new one and copy.
+function _resize!(io::GenericIOBuffer, new_size::Int)
+    old_data = io.data
+    if applicable(resize!, old_data, new_size)
+        resize!(old_data, new_size)
     else
         size = io.size
         # Make a new data buffer, only if there is not room in existing buffer
-        if size >= sz && sz != 0
-            b = a
+        if size >= new_size && !iszero(new_size)
+            new_data = old_data
         else
-            b = _similar_data(io, sz == 0 ? 0 : max(overallocation(size), sz))
+            new_data = _similar_data(io, new_size)
+            io.data = new_data
         end
-        size > 0 && copyto!(b, 1, a, 1, min(sz, size))
-        io.data = b
+        size > 0 && copyto!(new_data, 1, old_data, 1, min(new_size, size))
     end
     return io
 end
@@ -436,65 +432,64 @@ function truncate(io::GenericIOBuffer, n::Integer)
     return io
 end
 
-# Internal method. Delete used data in the buffer, shifting the rest to the left.
-# Does not delete data at or after the mark,  nor data after ptr.
-function compact(io::GenericIOBuffer)
-    # For a seekable buffer, the user could always seek back to the used data.
-    # Therefore, it is invalid to compact a seekable buffer
-    io.writable || throw(ArgumentError("compact failed, IOBuffer is not writeable"))
-    io.seekable && throw(ArgumentError("compact failed, IOBuffer is seekable"))
-    #  If the data is invalid and needs to be replaced, no point in compacting
-    io.reinit && return
-    local ptr::Int, bytes_to_move::Int
-    if ismarked(io) && io.mark < position(io)
-        io.mark == 0 && return
-        ptr = io.mark
-        bytes_to_move = bytesavailable(io) + (io.ptr - ptr)
-    else
-        ptr = io.ptr
-        bytes_to_move = bytesavailable(io)
-    end
-    copyto!(io.data, 1, io.data, ptr, bytes_to_move)
-    io.size -= ptr - 1
-    io.ptr -= ptr - 1
-    return
-end
-
-@noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
-    io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
-    if io.reinit
-        io.data = _similar_data(io, nshort % Int)
-        io.reinit = false
-    end
-    if !io.seekable
-        if !ismarked(io) && io.ptr > 1 && io.size <= io.ptr - 1
-            io.ptr = 1
-            io.size = 0
-        else
-            datastart = (ismarked(io) ? io.mark : io.ptr)
-            if (io.size+nshort > io.maxsize) ||
-                (datastart > 4096 && datastart > io.size - io.ptr) ||
-                (datastart > 262144)
-                # apply somewhat arbitrary heuristics to decide when to destroy
-                # old, read data to make more room for new data
-                compact(io)
-            end
-        end
-    end
-    return
-end
-
+# Ensure that the buffer has room for at least `nshort` more bytes, except when
+# doing that would exceed maxsize.
 @inline ensureroom(io::GenericIOBuffer, nshort::Int) = ensureroom(io, UInt(nshort))
+
 @inline function ensureroom(io::GenericIOBuffer, nshort::UInt)
-    if !io.writable || (!io.seekable && io.ptr > 1) || io.reinit
-        ensureroom_slowpath(io, nshort)
+    # If the IO is not writable, we call the slow path only to error.
+    # If reinit, the data has been handed out to the user, and the IOBuffer
+    # no longer controls it, so we need to allocate a new one.
+    if !io.writable || io.reinit
+        return ensureroom_slowpath(io, nshort)
     end
-    n = min((nshort % Int) + (io.append ? io.size : io.ptr-1), io.maxsize)
-    l = length(io.data)
-    if n > l
-        _resize!(io, Int(n))
+    # The fast path here usually checks there is already room, then does nothing.
+    # When append is true, new data is added after io.size, not io.ptr
+    existing_space = lastindex(io.data) - (io.append ? io.size : io.ptr - 1)
+    if existing_space < nshort % Int
+        # If the buffer is seekable, the user can seek to before ptr, and so we
+        # cannot compact the data.
+        if (!io.seekable && io.ptr > 1)
+            nshort = ensureroom_compact(io, nshort)
+            iszero(nshort) && return io
+        end
+        # Don't exceed maxsize. Otherwise, we overshoot the number of bytes needed,
+        # such that we don't need to resize too often.
+        new_size = min(io.maxsize, overallocation(length(io.data) + nshort % Int))
+        _resize!(io, new_size)
     end
     return io
+end
+
+# Throw error (placed in this function to outline it) or reinit the buffer
+@noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
+    io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
+    io.data = _similar_data(io, min(io.maxsize, nshort % Int))
+    io.reinit = false
+    return io
+end
+
+# Compact data. Only called if the buffer is not seekable.
+# Returns the number of bytes still not available after compacting
+@noinline function ensureroom_compact(io::GenericIOBuffer, nshort::UInt)::UInt
+    ptr = io.ptr
+    mark = io.mark
+    size = io.size
+    data = io.data
+    data_len = lastindex(data)
+    to_delete = (mark > -1 ? min(mark, ptr - 1) : ptr - 1)
+    # Only shift data if any of these:
+    if (
+            to_delete > 1 >> 12 || # We can recover > 4 KiB from doing so
+            to_delete >= nshort % Int || # It will prevent us from having to resize buffer
+            to_delete > data_len >> 3 # We can recover more than 1/8th of the data's length
+        )
+        copyto!(data, 1, data, to_delete + 1, size - to_delete)
+        io.ptr = ptr - to_delete
+        io.mark = max(-1, mark - to_delete)
+        io.size = size - to_delete
+    end
+    return nshort - min(nshort, to_delete % UInt)
 end
 
 eof(io::GenericIOBuffer) = (io.ptr - 1 >= io.size)
