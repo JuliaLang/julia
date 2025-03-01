@@ -29,23 +29,24 @@ struct ConsoleLogger <: AbstractLogger
     show_limited::Bool
     right_justify::Int
     message_limits::Dict{Any,Int}
+    lock::ReentrantLock
 end
 function ConsoleLogger(stream::IO, min_level=Info;
                        meta_formatter=default_metafmt, show_limited=true,
                        right_justify=0)
     ConsoleLogger(stream, min_level, meta_formatter,
-                  show_limited, right_justify, Dict{Any,Int}())
+                  show_limited, right_justify, Dict{Any,Int}(), ReentrantLock())
 end
 function ConsoleLogger(min_level=Info;
                        meta_formatter=default_metafmt, show_limited=true,
                        right_justify=0)
     ConsoleLogger(closed_stream, min_level, meta_formatter,
-                  show_limited, right_justify, Dict{Any,Int}())
+                  show_limited, right_justify, Dict{Any,Int}(), ReentrantLock())
 end
 
 
 shouldlog(logger::ConsoleLogger, level, _module, group, id) =
-    get(logger.message_limits, id, 1) > 0
+    @lock logger.lock get(logger.message_limits, id, 1) > 0
 
 min_enabled_level(logger::ConsoleLogger) = logger.min_level
 
@@ -109,9 +110,11 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     hasmaxlog = haskey(kwargs, :maxlog) ? 1 : 0
     maxlog = get(kwargs, :maxlog, nothing)
     if maxlog isa Core.BuiltinInts
-        remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
-        logger.message_limits[id] = remaining - 1
-        remaining > 0 || return
+        @lock logger.lock begin
+            remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+            logger.message_limits[id] = remaining - 1
+            remaining > 0 || return
+        end
     end
 
     # Generate a text representation of the message and all key value pairs,
@@ -184,6 +187,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
         println(iob)
     end
 
-    write(stream, take!(buf))
+    b = take!(buf)
+    @lock logger.lock write(stream, b)
     nothing
 end
