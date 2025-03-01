@@ -281,7 +281,45 @@ function unsafe_read!(dest::Ptr{UInt8}, src::DenseBytes, so::Integer, nbytes::UI
     nothing
 end
 
-function peek(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+const MultiByteBitNumberType = Union{
+    Type{UInt16},
+    Type{Int16},
+    Type{UInt32},
+    Type{Int32},
+    Type{UInt64},
+    Type{Int64},
+    Type{UInt128},
+    Type{Int128},
+    Type{Float16},
+    Type{Float32},
+    Type{Float64},
+}
+
+function load_from_array(T::MultiByteBitNumberType, data::AbstractArray{UInt8}, from::Int)
+    x = if T <: AbstractFloat
+        uinttype(T)(0)
+    else
+        unsigned(T)(0)
+    end
+    for i in 0:sizeof(x)-1
+        x |= typeof(x)(data[from + i]) << (8 * i)
+    end
+    reinterpret(T, ltoh(x))
+end
+
+function peek(from::GenericIOBuffer, T::MultiByteBitNumberType)
+    from.readable || _throw_not_readable()
+    avail = bytesavailable(from)
+    nb = sizeof(T)
+    if nb > avail
+        throw(EOFError())
+    end
+    return load_from_array(T, from.data, from.ptr)
+end
+
+# This method can use a pointer, since the underlying buffer is dense
+# and memory backed
+function peek(from::GenericIOBuffer{<:MutableDenseArrayType}, T::MultiByteBitNumberType)
     from.readable || _throw_not_readable()
     avail = bytesavailable(from)
     nb = sizeof(T)
@@ -295,7 +333,7 @@ function peek(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int3
     return x
 end
 
-function read(from::GenericIOBuffer, T::Union{Type{Int16},Type{UInt16},Type{Int32},Type{UInt32},Type{Int64},Type{UInt64},Type{Int128},Type{UInt128},Type{Float16},Type{Float32},Type{Float64}})
+function read(from::GenericIOBuffer, T::MultiByteBitNumberType)
     x = peek(from, T)
     from.ptr += sizeof(T)
     return x
