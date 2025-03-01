@@ -578,9 +578,8 @@ function take!(io::GenericIOBuffer)
         nbytes = bytesavailable(io)
         data = read!(io, StringVector(nbytes))
     end
-    # TODO: Why do we not reinit here? The user has taken control of the buffer
-    # so it's not safe to hold onto it.
     if io.writable
+        io.reinit = true
         io.ptr = 1
         io.size = 0
     end
