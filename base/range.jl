@@ -907,7 +907,7 @@ copy(r::AbstractRange) = r
 
 ## iteration
 
-function iterate(r::Union{StepRangeLen,LinRange}, i::Integer=zero(length(r)))
+function iterate(r::Union{StepRangeLen,LinRange}, i::Int64=Int64(0))
     @inline
     i += oneunit(i)
     length(r) < i && return nothing
