@@ -66,6 +66,7 @@
 
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 typedef struct _jl_tls_states_t *jl_ptls_t;
+typedef struct _jl_genericmemory_t jl_genericmemory_t;
 
 #ifdef JL_LIBRARY_EXPORTS
 #include "uv.h"
@@ -707,8 +708,21 @@ enum jl_partition_kind {
     BINDING_KIND_IMPLICIT_RECOMPUTE = 0xb
 };
 
-// These are flags that get anded into the above
+static const uint8_t BINDING_KIND_MASK = 0x0f;
+static const uint8_t BINDING_FLAG_MASK = 0xf0;
+
+//// These are flags that get anded into the above
+//
+// _EXPORTED: This binding partition is exported. In the world ranges covered by this partitions,
+// other modules that `using` this module, may implicit import this binding.
 static const uint8_t BINDING_FLAG_EXPORTED       = 0x10;
+// _DEPRECATED: This binding partition is deprecated. It is considered weak for the purposes of
+// implicit import resolution.
+static const uint8_t BINDING_FLAG_DEPRECATED     = 0x20;
+// _DEPWARN: This binding partition will print a deprecation warning on access. Note that _DEPWARN
+// implies _DEPRECATED. However, the reverse is not true. Such bindings are usually used for functions,
+// where calling the function itself will provide a (better) deprecation warning/error.
+static const uint8_t BINDING_FLAG_DEPWARN        = 0x40;
 
 typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
     JL_DATA_TYPE
@@ -1244,6 +1258,24 @@ STATIC_INLINE jl_value_t *jl_svecset(
 #define jl_array_maxsize(a) (((jl_array_t*)(a))->ref.mem->length)
 #define jl_array_len(a)   (jl_array_ndims(a) == 1 ? jl_array_nrows(a) : jl_array_maxsize(a))
 
+JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
+#define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
+
+STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+
+// write barriers
+
+#ifndef WITH_THIRD_PARTY_HEAP
+#include "gc-wb-stock.h"
+#else
+// Pick the appropriate third-party implementation
+#ifdef WITH_THIRD_PARTY_HEAP
+#if WITH_THIRD_PARTY_HEAP == 1 // MMTk
+#include "gc-wb-mmtk.h"
+#endif
+#endif
+#endif
+
 /*
   how - allocation style
   0 = data is inlined
@@ -1299,94 +1331,6 @@ STATIC_INLINE jl_value_t *jl_genericmemory_ptr_set(
     return (jl_value_t*)x;
 }
 #endif
-
-// GC write barriers
-
-STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
-{
-    // parent and ptr isa jl_value_t*
-    if (__unlikely(jl_astaggedvalue(parent)->bits.gc == 3 /* GC_OLD_MARKED */ && // parent is old and not in remset
-                   (jl_astaggedvalue(ptr)->bits.gc & 1 /* GC_MARKED */) == 0)) // ptr is young
-        jl_gc_queue_root((jl_value_t*)parent);
-}
-
-STATIC_INLINE void jl_gc_wb_back(const void *ptr) JL_NOTSAFEPOINT // ptr isa jl_value_t*
-{
-    // if ptr is old
-    if (__unlikely(jl_astaggedvalue(ptr)->bits.gc == 3 /* GC_OLD_MARKED */)) {
-        jl_gc_queue_root((jl_value_t*)ptr);
-    }
-}
-
-STATIC_INLINE void jl_gc_multi_wb(const void *parent, const jl_value_t *ptr) JL_NOTSAFEPOINT
-{
-    // 3 == GC_OLD_MARKED
-    // ptr is an immutable object
-    if (__likely(jl_astaggedvalue(parent)->bits.gc != 3))
-        return; // parent is young or in remset
-    if (__likely(jl_astaggedvalue(ptr)->bits.gc == 3))
-        return; // ptr is old and not in remset (thus it does not point to young)
-    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(ptr);
-    const jl_datatype_layout_t *ly = dt->layout;
-    if (ly->npointers)
-        jl_gc_queue_multiroot((jl_value_t*)parent, ptr, dt);
-}
-
-STATIC_INLINE jl_value_t *jl_genericmemory_owner(jl_genericmemory_t *m JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const jl_value_t *dest_owner, _Atomic(void*) * dest_p,
-                                          jl_genericmemory_t *src, _Atomic(void*) * src_p,
-                                          size_t* n) JL_NOTSAFEPOINT
-{
-    if (__unlikely(jl_astaggedvalue(dest_owner)->bits.gc == 3 /* GC_OLD_MARKED */ )) {
-        jl_value_t *src_owner = jl_genericmemory_owner(src);
-        size_t done = 0;
-        if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
-            if (dest_p < src_p || dest_p > src_p + (*n)) {
-                for (; done < (*n); done++) { // copy forwards
-                    void *val = jl_atomic_load_relaxed(src_p + done);
-                    jl_atomic_store_release(dest_p + done, val);
-                    // `val` is young or old-unmarked
-                    if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
-                        jl_gc_queue_root(dest_owner);
-                        break;
-                    }
-                }
-                src_p += done;
-                dest_p += done;
-            }
-            else {
-                for (; done < (*n); done++) { // copy backwards
-                    void *val = jl_atomic_load_relaxed(src_p + (*n) - done - 1);
-                    jl_atomic_store_release(dest_p + (*n) - done - 1, val);
-                    // `val` is young or old-unmarked
-                    if (val && !(jl_astaggedvalue(val)->bits.gc & 1 /* GC_MARKED */)) {
-                        jl_gc_queue_root(dest_owner);
-                        break;
-                    }
-                }
-            }
-            (*n) -= done;
-        }
-    }
-}
-
-STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const jl_value_t *owner, jl_genericmemory_t *src, char* src_p,
-                                          size_t n, jl_datatype_t *dt) JL_NOTSAFEPOINT
-{
-    if (__unlikely(jl_astaggedvalue(owner)->bits.gc == 3 /* GC_OLD_MARKED */)) {
-        jl_value_t *src_owner = jl_genericmemory_owner(src);
-        size_t elsz = dt->layout->size;
-        if (jl_astaggedvalue(src_owner)->bits.gc != 3 /* GC_OLD_MARKED */) {
-            dt = (jl_datatype_t*)jl_tparam1(dt);
-            for (size_t done = 0; done < n; done++) { // copy forwards
-                char* s = (char*)src_p+done*elsz;
-                if (*((jl_value_t**)s+dt->layout->first_ptr) != NULL)
-                    jl_gc_queue_multiroot(owner, s, dt);
-            }
-        }
-    }
-}
 
 STATIC_INLINE uint8_t jl_memory_uint8_ref(void *m, size_t i) JL_NOTSAFEPOINT
 {
@@ -2110,7 +2054,6 @@ JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym
 
 // get binding for reading
 JL_DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
-JL_DLLEXPORT jl_binding_t *jl_get_binding_or_error(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_module_globalref(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
@@ -2228,6 +2171,25 @@ typedef enum {
     JL_IMAGE_IN_MEMORY = 2
 } JL_IMAGE_SEARCH;
 
+typedef enum {
+    JL_IMAGE_KIND_NONE = 0,
+    JL_IMAGE_KIND_JI,
+    JL_IMAGE_KIND_SO,
+} jl_image_kind_t;
+
+// A loaded, but unparsed .ji or .so image file
+typedef struct {
+    jl_image_kind_t kind;
+    void *handle;
+    const void *pointers; // jl_image_pointers_t *
+    const char *data;
+    size_t size;
+    uint64_t base;
+} jl_image_buf_t;
+
+struct _jl_image_t;
+typedef struct _jl_image_t jl_image_t;
+
 JL_DLLIMPORT const char *jl_get_libdir(void);
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 JL_DLLEXPORT void jl_init(void);
@@ -2244,11 +2206,10 @@ JL_DLLEXPORT const char *jl_pathname_for_handle(void *handle);
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void);
 
 JL_DLLEXPORT int jl_deserialize_verify_header(ios_t *s);
-JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname);
-JL_DLLEXPORT void jl_set_sysimg_so(void *handle);
+JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname);
+JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle);
 JL_DLLEXPORT void jl_create_system_image(void **, jl_array_t *worklist, bool_t emit_split, ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos);
-JL_DLLEXPORT void jl_restore_system_image(const char *fname);
-JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len);
+JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf);
 JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *depmods, int complete, const char *pkgimage);
 JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT;
 
@@ -2402,8 +2363,6 @@ JL_DLLEXPORT void JL_NORETURN jl_throw(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow(void);
 JL_DLLEXPORT void JL_NORETURN jl_rethrow_other(jl_value_t *e JL_MAYBE_UNROOTED);
 JL_DLLEXPORT void JL_NORETURN jl_no_exc_handler(jl_value_t *e, jl_task_t *ct);
-JL_DLLEXPORT JL_CONST_FUNC jl_gcframe_t **(jl_get_pgcstack)(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT;
-#define jl_current_task (container_of(jl_get_pgcstack(), jl_task_t, gcstack))
 
 extern JL_DLLIMPORT int jl_task_gcstack_offset;
 extern JL_DLLIMPORT int jl_task_ptls_offset;
@@ -2739,7 +2698,6 @@ typedef struct {
     int gcstack_arg; // Pass the ptls value as an argument with swiftself
 
     int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
-    int trim; // can we emit dynamic dispatches?
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;

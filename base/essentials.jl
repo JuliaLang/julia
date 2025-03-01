@@ -593,6 +593,39 @@ function unconstrain_vararg_length(va::Core.TypeofVararg)
     return Vararg{unwrapva(va)}
 end
 
+# Compute the minimum number of initialized fields for a particular datatype
+# (therefore also a lower bound on the number of fields)
+function datatype_min_ninitialized(@nospecialize t0)
+    t = unwrap_unionall(t0)
+    t isa DataType || return 0
+    isabstracttype(t) && return 0
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters[1], t.parameters[2]
+        if names isa Tuple
+            return length(names)
+        end
+        t = argument_datatype(types)
+        t isa DataType || return 0
+        t.name === Tuple.name || return 0
+    end
+    if t.name === Tuple.name
+        n = length(t.parameters)
+        n == 0 && return 0
+        va = t.parameters[n]
+        if isvarargtype(va)
+            n -= 1
+            if isdefined(va, :N)
+                va = va.N
+                if va isa Int
+                    n += va
+                end
+            end
+        end
+        return n
+    end
+    return length(t.name.names) - t.name.n_uninitialized
+end
+
 import Core: typename
 
 _tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))

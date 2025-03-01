@@ -319,7 +319,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                 }
                 check_safe_newbinding(gm, gs);
                 if (bpart->min_world == new_world) {
-                    bpart->kind = new_kind | (bpart->kind & 0xf0);
+                    bpart->kind = new_kind | (bpart->kind & BINDING_FLAG_MASK);
                     bpart->restriction = global_type;
                     if (global_type)
                         jl_gc_wb(bpart, global_type);

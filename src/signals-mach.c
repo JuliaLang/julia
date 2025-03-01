@@ -339,7 +339,7 @@ static void jl_throw_in_thread(jl_ptls_t ptls2, mach_port_t thread, jl_value_t *
                             NULL /*current_task?*/);
         ptls2->sig_exception = exception;
         ptls2->io_wait = 0;
-        jl_task_t *ct = ptls2->current_task;
+        jl_task_t *ct = jl_atomic_load_relaxed(&ptls2->current_task);
         jl_handler_t *eh = ct->eh;
         if (eh != NULL) {
             asan_unpoison_task_stack(ct, &eh->eh_ctx);
