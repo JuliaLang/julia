@@ -649,26 +649,34 @@ end
 
 function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     ensureroom(to, nb)
-    ptr = (to.append ? to.size+1 : to.ptr)
-    written = Int(min(nb, Int(length(to.data))::Int - ptr + 1))
-    towrite = written
-    d = to.data
-    # TODO: This inbounds is unsafe, since the underlying data may be of any type
-    while towrite > 0
-        @inbounds d[ptr] = unsafe_load(p)
-        ptr += 1
-        p += 1
-        towrite -= 1
-    end
-    to.size = max(to.size, ptr - 1)
+    ptr = to.append ? to.size+1 : to.ptr
+    data = to.data
+    to_write = min(nb % Int, Int(length(data))::Int - ptr + 1)
+    # Dispatch based on the type of data, to possibly allow using memcpy
+    _unsafe_write(data, p, ptr, to_write % UInt)
+    # Update to.size only if the ptr has advanced to higher than
+    # the previous size. Otherwise, we just overwrote existing data
+    to.size = max(to.size, ptr + to_write - 1)
+    # If to.append, we only update size, not ptr.
     if !to.append
-        to.ptr += written
+        to.ptr += to_write
     end
-    return written
+    return to_write
 end
 
-# TODO: We should have a method that uses memcpy (`copyto!`) for the IOBuffer case.
-# Preliminary testing suggests this would be ~10x faster than the current implementation
+@inline function _unsafe_write(data::AbstractVector{UInt8}, p::Ptr{UInt8}, from::Int, nb::UInt)
+    for i in 0:nb-1
+        data[from + i] = unsafe_load(p)
+        p += 1
+    end
+end
+
+@inline function _unsafe_write(data::MutableDenseArrayType{UInt8}, p::Ptr{UInt8}, from::Int, nb::UInt)
+    GC.@preserve data begin
+        ptr = Ptr{UInt8}(pointer(data, from))::Ptr{UInt8}
+        unsafe_copyto!(ptr, p, nb)
+    end
+end
 
 @inline function write(to::GenericIOBuffer, a::UInt8)
     ensureroom(to, UInt(1))
