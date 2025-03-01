@@ -10,20 +10,20 @@
 #   uuuuuuuuuuuuuXXXXXXXXXXXXX------.......
 #   |       |    |           |     |     |
 #   |       |    ptr         size  |     |
-#   1       mark                   |     lastindex(data)
+#   1       mark (zero-indexed)    |     lastindex(data)
 #                                  maxsize
 
 #            AFTER COMPACTION
-# Mark, ptr and size decreases by (mark - 1)
+# Mark, ptr and size decreases by `mark`
 
 #   uuuuuXXXXXXXXXXXXX--------------.......
-#   |    |           |             |      |
-#   |    ptr         size          |      lastindex(data)
-#   mark                           maxsize
+#  |     |           |             |      |
+#  |     ptr         size          |      lastindex(data)
+#  mark (zero-indexed)             maxsize
 
 # * The underlying array is always 1-indexed
 # * The IOBuffer has full control of the underlying array.
-# * Data in 1::mark-1, if mark > 0 can be deleted, shifting the whole thing to the left
+# * Data in 1:mark, if mark > -1 can be deleted, shifting the whole thing to the left
 #   to make room for more data, without replacing or resizing data
 
 mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
@@ -56,9 +56,8 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # This value is alwaus in 1 : size+1
     ptr::Int
 
-    # Data at the marked location or before for non-seekable buffers can be compacted.
-    # If this is -1, the mark is not set.
-    # The mark is zero-indexed.
+    # Data at the marked location or before for non-seekable buffers can be deleted.
+    # The mark is zero-indexed. If it is -1, the mark is not set.
     # The purpose of the mark is to reset the stream to a given position using reset.
     # This value is always == -1, or in 0:size-1
     mark::Int
