@@ -4119,3 +4119,11 @@ end
 # Issue #56904 - lambda linearized twice
 @test (let; try 3; finally try 1; f(() -> x); catch x; end; end; x = 7; end) === 7
 @test (let; try 3; finally try 4; finally try 1; f(() -> x); catch x; end; end; end; x = 7; end) === 7
+
+# Issue #57546 - explicit function declaration should create new global
+module FuncDecl57546
+    using Test
+    @test_nowarn @eval function Any end
+    @test isa(Any, Function)
+    @test isempty(methods(Any))
+end
