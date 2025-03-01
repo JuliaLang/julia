@@ -170,7 +170,7 @@ function IOBuffer(
         sizehint!(data, sizehint)
     end
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
-    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, Int(maxsize))
+    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, Int(maxsize)::Int)
     if flags.truncate
         buf.size = 0
     end
@@ -183,30 +183,26 @@ function IOBuffer(;
         append::Union{Bool,Nothing}=nothing,
         truncate::Union{Bool,Nothing}=true,
         maxsize::Integer=typemax(Int),
-        sizehint::Union{Integer,Nothing}=nothing)
-    # TODO: It's not a good idea that the buffer size is maxsize.
-    size = if sizehint != nothing
-        # TODO: Check for negative
-        Int(sizehint)
+        sizehint::Union{Integer,Nothing}=nothing,
+    )
+    mz = Int(maxsize)::Int
+    if mz < 0
+        throw(ArgumentError("negative maxsize"))
+    end
+    size = if sizehint !== nothing
+        # Allow negative sizehint, just like `sizehint!` does
+        min(mz, max(0, Int(sizehint)::Int))
     else
-        if maxsize == typemax(Int)
-            32
-        else
-            # TODO: Check for negative
-            Int(maxsize)
-        end
+        min(mz, 32)
     end
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
-    buf = IOBuffer(
-        # A common usecase of IOBuffer is to incrementally construct strings. By using StringMemory
-        # as the default storage, we can turn the result into a string without copying.
-        StringMemory(size),
-        read=flags.read,
-        write=flags.write,
-        append=flags.append,
-        truncate=flags.truncate,
-        maxsize=maxsize)
-    fill!(buf.data, 0)
+    # A common usecase of IOBuffer is to incrementally construct strings. By using StringMemory
+    # as the default storage, we can turn the result into a string without copying.
+    data = fill!(StringMemory(size), 0)
+    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, mz)
+    if flags.truncate
+        buf.size = 0
+    end
     return buf
 end
 
