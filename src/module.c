@@ -165,13 +165,9 @@ void jl_check_new_binding_implicit(
     return;
 }
 
-STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world, modstack_t *st) JL_GLOBALLY_ROOTED
+STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b JL_PROPAGATES_ROOT, jl_value_t *parent, _Atomic(jl_binding_partition_t *)*insert, size_t world, modstack_t *st) JL_GLOBALLY_ROOTED
 {
-    if (!b)
-        return NULL;
     assert(jl_is_binding(b));
-    jl_value_t *parent = (jl_value_t*)b;
-    _Atomic(jl_binding_partition_t *)*insert = &b->partitions;
     jl_binding_partition_t *bpart = jl_atomic_load_relaxed(insert);
     size_t max_world = (size_t)-1;
     jl_binding_partition_t *new_bpart = NULL;
@@ -202,12 +198,22 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b 
 }
 
 jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) {
+    if (!b)
+        return NULL;
     // Duplicate the code for the entry frame for branch prediction
-    return jl_get_binding_partition_(b, world, NULL);
+    return jl_get_binding_partition_(b, (jl_value_t*)b, &b->partitions, world, NULL);
+}
+
+jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b, jl_binding_partition_t *prev, size_t world) JL_GLOBALLY_ROOTED {
+    // Helper for getting a binding partition for an older world after we've already looked up the partition for a newer world
+    assert(b);
+    assert(prev->min_world > world);
+    return jl_get_binding_partition_(b, (jl_value_t*)prev, &prev->next, world, NULL);
 }
 
 jl_binding_partition_t *jl_get_binding_partition2(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world, modstack_t *st) JL_GLOBALLY_ROOTED {
-    return jl_get_binding_partition_(b, world, st);
+    assert(b);
+    return jl_get_binding_partition_(b, (jl_value_t*)b, &b->partitions, world, st);
 }
 
 jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b, size_t min_world, size_t max_world) {
@@ -219,6 +225,53 @@ jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b, size_t min
     if (jl_atomic_load_relaxed(&bpart->max_world) < max_world)
         return NULL;
     return bpart;
+}
+
+JL_DLLEXPORT int jl_get_binding_leaf_partitions_restriction_kind(jl_binding_t *b JL_PROPAGATES_ROOT, struct restriction_kind_pair *rkp, size_t min_world, size_t max_world) {
+    if (!b)
+        return 0;
+
+    int first = 1;
+    size_t validated_min_world = max_world == ~(size_t)0 ? ~(size_t)0 : max_world + 1;
+    jl_binding_partition_t *bpart = NULL;
+    int maybe_depwarn = 0;
+    while (validated_min_world > min_world) {
+        bpart = bpart ? jl_get_binding_partition_with_hint(b, bpart, validated_min_world - 1) :
+                        jl_get_binding_partition(b, validated_min_world - 1);
+        while (validated_min_world > min_world && validated_min_world > bpart->min_world) {
+            jl_binding_t *curb = b;
+            jl_binding_partition_t *curbpart = bpart;
+            size_t cur_min_world = bpart->min_world;
+            size_t cur_max_world = validated_min_world - 1;
+            jl_walk_binding_inplace_worlds(&curb, &curbpart, &cur_min_world, &cur_max_world, &maybe_depwarn, cur_max_world);
+            if (first == 1) {
+                rkp->kind = jl_binding_kind(curbpart);
+                rkp->restriction = curbpart->restriction;
+                if (rkp->kind == BINDING_KIND_GLOBAL || rkp->kind == BINDING_KIND_DECLARED)
+                    rkp->binding_if_global = curb;
+                first = 0;
+            } else {
+                if (jl_binding_kind(curbpart) != rkp->kind || curbpart->restriction != rkp->restriction)
+                    return 0;
+                if ((rkp->kind == BINDING_KIND_GLOBAL || rkp->kind == BINDING_KIND_DECLARED) && rkp->binding_if_global != curb)
+                    return 0;
+            }
+            validated_min_world = cur_min_world;
+        }
+    }
+    rkp->maybe_depwarn = maybe_depwarn;
+    return 1;
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT, int *maybe_depwarn, size_t min_world, size_t max_world) {
+    struct restriction_kind_pair rkp = { NULL, NULL, BINDING_KIND_GUARD, 0 };
+    if (!jl_get_binding_leaf_partitions_restriction_kind(b, &rkp, min_world, max_world))
+        return NULL;
+    if (jl_bkind_is_some_constant(rkp.kind) && rkp.kind != BINDING_KIND_BACKDATED_CONST) {
+        *maybe_depwarn = rkp.maybe_depwarn;
+        return rkp.restriction;
+    }
+    return NULL;
 }
 
 JL_DLLEXPORT jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
@@ -609,8 +662,13 @@ static inline void check_backdated_binding(jl_binding_t *b, enum jl_partition_ki
 
 JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b)
 {
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
+    return jl_get_binding_value_in_world(b, jl_current_task->world_age);
+}
+
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t world)
+{
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+    jl_walk_binding_inplace(&b, &bpart, world);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (jl_bkind_is_some_guard(kind))
         return NULL;

@@ -40,6 +40,14 @@ function intersect(a::WorldRange, b::WorldRange)
     return ret
 end
 
+function union(a::WorldRange, b::WorldRange)
+    if b.min_world < a.min_world
+        (b, a) = (a, b)
+    end
+    @assert a.max_world >= b.min_world - 1
+    return WorldRange(a.min_world, b.max_world)
+end
+
 """
     struct WorldView
 

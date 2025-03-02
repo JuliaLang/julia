@@ -642,20 +642,17 @@ end
 function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, bailed::Bool,
                                     sv::CC.InferenceState)
     # Ignore saw_latestworld
-    partition = CC.abstract_eval_binding_partition!(interp, g, sv)
     if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
+        partition = CC.abstract_eval_binding_partition!(interp, g, sv)
         if CC.is_defined_const_binding(CC.binding_kind(partition))
-            return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
-                CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL), partition)
+            return CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL)
         else
             b = convert(Core.Binding, g)
             if CC.binding_kind(partition) == CC.BINDING_KIND_GLOBAL && isdefined(b, :value)
-                return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
-                    CC.RTEffects(Const(b.value), Union{}, CC.EFFECTS_TOTAL), partition)
+                return CC.RTEffects(Const(b.value), Union{}, CC.EFFECTS_TOTAL)
             end
         end
-        return Pair{CC.RTEffects, Union{Nothing, Core.BindingPartition}}(
-            CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS), partition)
+        return CC.RTEffects(Union{}, UndefVarError, CC.EFFECTS_THROWS)
     end
     return @invoke CC.abstract_eval_globalref(interp::CC.AbstractInterpreter, g::GlobalRef, bailed::Bool,
                                               sv::CC.InferenceState)
