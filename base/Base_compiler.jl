@@ -277,6 +277,7 @@ end
 
 BUILDROOT::String = ""
 DATAROOT::String = ""
+const DL_LOAD_PATH = String[]
 
 baremodule BuildSettings end
 
