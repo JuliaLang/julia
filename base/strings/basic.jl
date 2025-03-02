@@ -514,7 +514,7 @@ function prevind(s::AbstractString, i::Int, n::Int)
     while n > 0 && 1 < i
         @inbounds n -= isvalid(s, i -= 1)
     end
-    return i::Int - n::Int
+    return i - n::Int
 end
 
 """
@@ -573,7 +573,7 @@ function nextind(s::AbstractString, i::Int, n::Int)
     while n > 0 && i < z
         @inbounds n -= isvalid(s, i += 1)
     end
-    return i::Int + n::Int
+    return i + n::Int
 end
 
 ## string index iteration type ##
