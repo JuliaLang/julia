@@ -30,6 +30,13 @@ using InteractiveUtils: gen_call_with_extracted_types
 using Base: typesplit, remove_linenums!
 using Serialization: Serialization
 
+const show_hooks = Any[]
+function run_show_hooks(io, t)
+    for show_hook in show_hooks
+        show_hook(io, t)
+    end
+end
+
 const DISPLAY_FAILED = (
     :isequal,
     :isapprox,
@@ -139,6 +146,7 @@ function Base.show(io::IO, t::Pass)
             print(io, "\n      Thrown: ", typeof(t.value))
         end
     end
+    run_show_hooks(io, t)
 end
 
 """
@@ -207,6 +215,7 @@ function Base.show(io::IO, t::Fail)
         end
     end
     println(io) # add some visual space to separate sequential failures
+    run_show_hooks(io, t)
 end
 
 """
@@ -288,6 +297,7 @@ function Base.show(io::IO, t::Error)
         # Capture error message and indent to match
         join(io, ("  " * line for line in split(t.backtrace, "\n")), "\n")
     end
+    run_show_hooks(io, t)
 end
 
 """
@@ -308,6 +318,7 @@ function Base.show(io::IO, t::Broken)
     elseif !(t.orig_expr === nothing)
         print(io, "  Expression: ", t.orig_expr)
     end
+    run_show_hooks(io, t)
 end
 
 # Types that appear in TestSetException.errors_and_fails we convert eagerly into strings
@@ -2378,5 +2389,50 @@ end
 
 include("logging.jl")
 include("precompile.jl")
+
+## TODO: Only here as a PoC. Move this to julia-buildkite ?
+function show_result_as_buildkite_annotation(io::IO, result::Result)
+    result isa Test.Pass && return nothing
+    if io isa IOBuffer || io isa IOContext
+        # HACK: If we're printing into a buffer we're probably testing Test itself.. so ignore
+        return nothing
+    end
+    # The supported values are: `default`, `success`, `info`, `warning`, `error`
+    type = "error"
+    label = get(ENV, "BUILDKITE_LABEL", "")
+    build_url = get(ENV, "BUILDKITE_BUILD_URL", "")
+    job_id = get(ENV, "BUILDKITE_JOB_ID", "")
+    url = "$build_url#$job_id"
+    str_nocolor = sprint(show, result; context=IOContext(io, :color => false))
+    firstline = split(str_nocolor, '\n')[1]
+    pathsep = Sys.iswindows() ? '\\' : '/'
+    firstline = replace(firstline, string(Sys.STDLIB, pathsep) => "")
+    str_color = sprint(show, result; context=io)
+
+    msg = """
+    <details>
+    <summary><code>$firstline</code> $label</summary>
+
+    ```term
+    $str_color
+    ```
+    [View $label]($url)
+    </details>
+    """
+
+    try
+        run(`buildkite-agent annotate --style $type --context "julia-test-failures" --append "$msg"`)
+    catch e
+        @error "Error adding buildkite annotation" e
+    end
+    return nothing
+end
+
+function __init__()
+    if Base.get_bool_env("BUILDKITE", false)
+        push!(show_hooks, show_result_as_buildkite_annotation)
+    end
+end
+###
 
 end # module
