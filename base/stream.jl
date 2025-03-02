@@ -991,12 +991,17 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     if bytesavailable(sbuf) >= nb
         unsafe_read(sbuf, p, nb)
     else
-        newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), maxsize=Int(nb))
-        newbuf.size = 0 # reset the write pointer to the beginning
+        # TODO: This isn't great. Ideally, we would want to write directly to the
+        # pointer, instead of doing what we do here, which is to write to a new
+        # IOBuffer, and then copy the content of the IOBuffer into the pointer.
+        newbuf = PipeBuffer(; maxsize=Int(nb))
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
             wait_locked(s, newbuf, Int(nb))
+            written_buffer = take!(newbuf)
+            @assert length(written_buffer) % UInt == nb
+            GC.@preserve written_buffer unsafe_copyto!(p, pointer(written_buffer), nb)
         finally
             s.buffer = sbuf
         end
