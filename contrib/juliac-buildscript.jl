@@ -38,17 +38,8 @@ end
     init_active_project() = nothing
     disable_library_threading() = nothing
     start_profile_listener() = nothing
-    @inline function invokelatest(f::F, args...; kwargs...) where F
-        return f(args...; kwargs...)
-    end
-    @inline function invokelatest_gr(gr::GlobalRef, @nospecialize args...; kwargs...)
-        @inline
-        kwargs = merge(NamedTuple(), kwargs)
-        if isempty(kwargs)
-            return apply_gr(gr, args...)
-        end
-        return apply_gr_kw(kwargs, gr, args...)
-    end
+    invokelatest_trimmed(f, args...; kwargs...) = f(args...; kwargs...)
+    const invokelatest = invokelatest_trimmed
     function sprint(f::F, args::Vararg{Any,N}; context=nothing, sizehint::Integer=0) where {F<:Function,N}
         s = IOBuffer(sizehint=sizehint)
         if context isa Tuple

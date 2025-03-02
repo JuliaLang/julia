@@ -153,11 +153,10 @@ function may_dispatch(@nospecialize ftyp)
         # other builtins (including the IntrinsicFunctions) are good
         return Core._apply isa ftyp ||
                Core._apply_iterate isa ftyp ||
-               Core._apply_pure isa ftyp ||
-               Core._call_in_world isa ftyp ||
                Core._call_in_world_total isa ftyp ||
-               Core._call_latest isa ftyp ||
                Core.invoke isa ftyp ||
+               Core.invoke_in_world isa ftyp ||
+               Core.invokelatest isa ftyp ||
                Core.finalizer isa ftyp ||
                Core.modifyfield! isa ftyp ||
                Core.modifyglobal! isa ftyp ||

@@ -67,7 +67,7 @@ function builtin_call_has_dispatch(
                 return true
             end
         end
-    elseif (f === Core._apply_pure || f === Core._call_in_world || f === Core._call_in_world_total || f === Core._call_latest)
+    elseif (f === Core.invoke_in_world || f === Core._call_in_world_total || f === Core.invokelatest)
         # These apply-like builtins are effectively dynamic calls
         return true
     end

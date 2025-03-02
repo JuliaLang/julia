@@ -778,7 +778,7 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
         # If the method defines a recursion relation, give it a chance
         # to tell us that this recursion is actually ok.
         if isdefined(method, :recursion_relation)
-            if Core._apply_pure(method.recursion_relation, Any[method, callee_method2, sig, frame_instance(frame).specTypes])
+            if Core._call_in_world_total(get_world_counter(), method.recursion_relation, method, callee_method2, sig, frame_instance(frame).specTypes)
                 return false
             end
         end

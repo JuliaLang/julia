@@ -637,9 +637,14 @@ static jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     return jl_memoryrefget(jl_memoryrefindex(a->ref, i), 0);
 }
 
-static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
+JL_CALLABLE(jl_f__apply_iterate)
 {
-    jl_function_t *f = args[0];
+    JL_NARGSV(_apply_iterate, 2);
+    jl_function_t *iterate = args[0];
+    jl_function_t *f = args[1];
+    assert(iterate);
+    args += 1;
+    nargs -= 1;
     if (nargs == 2) {
         // some common simple cases
         if (f == jl_builtin_svec) {
@@ -691,9 +696,6 @@ static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *itera
         else {
             extra += 1;
         }
-    }
-    if (extra && iterate == NULL) {
-        jl_undefined_var_error(jl_symbol("iterate"), NULL);
     }
     // allocate space for the argument array and gc roots for it
     // based on our previous estimates
@@ -841,40 +843,8 @@ static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *itera
     return result;
 }
 
-JL_CALLABLE(jl_f__apply_iterate)
-{
-    JL_NARGSV(_apply_iterate, 2);
-    return do_apply(args + 1, nargs - 1, args[0]);
-}
-
-// this is like `_apply`, but with quasi-exact checks to make sure it is pure
-JL_CALLABLE(jl_f__apply_pure)
-{
-    jl_task_t *ct = jl_current_task;
-    int last_in = ct->ptls->in_pure_callback;
-    jl_value_t *ret = NULL;
-    JL_TRY {
-        ct->ptls->in_pure_callback = 1;
-        // because this function was declared pure,
-        // we should be allowed to run it in any world
-        // so we run it in the newest world;
-        // because, why not :)
-        // and `promote` works better this way
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        ret = do_apply(args, nargs, NULL);
-        ct->world_age = last_age;
-        ct->ptls->in_pure_callback = last_in;
-    }
-    JL_CATCH {
-        ct->ptls->in_pure_callback = last_in;
-        jl_rethrow();
-    }
-    return ret;
-}
-
 // this is like a regular call, but always runs in the newest world
-JL_CALLABLE(jl_f__call_latest)
+JL_CALLABLE(jl_f_invokelatest)
 {
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
@@ -885,9 +855,9 @@ JL_CALLABLE(jl_f__call_latest)
     return ret;
 }
 
-// Like call_in_world, but runs in the specified world.
+// Like invokelatest, but runs in the specified world.
 // If world > jl_atomic_load_acquire(&jl_world_counter), run in the latest world.
-JL_CALLABLE(jl_f__call_in_world)
+JL_CALLABLE(jl_f_invoke_in_world)
 {
     JL_NARGSV(_apply_in_world, 2);
     jl_task_t *ct = jl_current_task;
@@ -2539,9 +2509,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
-    add_builtin_func("_apply_pure", jl_f__apply_pure);
-    add_builtin_func("_call_latest", jl_f__call_latest);
-    add_builtin_func("_call_in_world", jl_f__call_in_world);
+    add_builtin_func("invokelatest", jl_f_invokelatest);
+    add_builtin_func("invoke_in_world", jl_f_invoke_in_world);
     add_builtin_func("_call_in_world_total", jl_f__call_in_world_total);
     add_builtin_func("_typevar", jl_f__typevar);
     add_builtin_func("_structtype", jl_f__structtype);
