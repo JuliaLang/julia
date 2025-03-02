@@ -1276,18 +1276,6 @@ end
     return rewrap_unionall(R, s00)
 end
 
-# checks if a field of this type is guaranteed to be defined to a value
-# and that access to an uninitialized field will cause an `UndefRefError` or return zero
-# - is_undefref_fieldtype(String) === true
-# - is_undefref_fieldtype(Integer) === true
-# - is_undefref_fieldtype(Any) === true
-# - is_undefref_fieldtype(Int) === false
-# - is_undefref_fieldtype(Union{Int32,Int64}) === false
-# - is_undefref_fieldtype(T) === false
-function is_undefref_fieldtype(@nospecialize ftyp)
-    return !has_free_typevars(ftyp) && !allocatedinline(ftyp)
-end
-
 @nospecs function setfield!_tfunc(𝕃::AbstractLattice, o, f, v, order)
     if !isvarargtype(order)
         hasintersect(widenconst(order), Symbol) || return Bottom
