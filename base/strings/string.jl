@@ -18,7 +18,7 @@ function StringIndexError(str, ind)
     StringIndexError(s, i)
 end
 @noinline string_index_err((@nospecialize s::AbstractString), (@nospecialize i::Integer)) =
-    throw(StringIndexError(s, Int(i)))
+    throw(StringIndexError(s, i))
 function Base.showerror(io::IO, exc::StringIndexError)
     s = exc.string
     print(io, "StringIndexError: ", "invalid index [$(exc.index)]")
