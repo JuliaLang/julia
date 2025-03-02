@@ -128,6 +128,15 @@ end
     @test take!(copy(b)) == b"abcdeabcabc\n"
     copyline(b, a; keep=false)
     @test take!(copy(b)) == b"abcdeabcabc\nac"
+
+    # Test a current bug in copyline
+    a = Base.SecretBuffer("abcde\r\n")
+    b = IOBuffer()
+    write(b, "xxxxxxxxxx")
+    seek(b, 2)
+    copyline(b, a; keep=false)
+    Base.shred!(a)
+    @test take!(b) == b"xxabcdexxx"
 end
 
 @testset "take!" begin
