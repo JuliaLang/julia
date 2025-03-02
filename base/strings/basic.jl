@@ -512,9 +512,9 @@ function prevind(s::AbstractString, i::Int, n::Int)
     @boundscheck 0 < i ≤ z || throw(BoundsError(s, i))
     n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
     while n > 0 && 1 < i
-        @inbounds n -= isvalid(s, i -= 1)
+        @inbounds n -= isvalid(s, i -= 1)::Bool
     end
-    return i - n::Int
+    return i - n
 end
 
 """
@@ -571,9 +571,9 @@ function nextind(s::AbstractString, i::Int, n::Int)
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
     n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
     while n > 0 && i < z
-        @inbounds n -= isvalid(s, i += 1)
+        @inbounds n -= isvalid(s, i += 1)::Bool
     end
-    return i + n::Int
+    return i + n
 end
 
 ## string index iteration type ##
