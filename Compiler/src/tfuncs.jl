@@ -439,8 +439,9 @@ end
                 end
             elseif isa(arg1, PartialStruct)
                 if !isvarargtype(arg1.fields[end])
-                    if !is_field_maybe_undef(arg1, idx)
-                        return Const(true)
+                    aundefᵢ = _getundefs(arg1)[idx]
+                    if aundefᵢ isa Bool
+                        return Const(!aundefᵢ)
                     end
                 end
             elseif !isvatuple(a1)
@@ -906,31 +907,6 @@ add_tfunc(<:, 2, 2, subtype_tfunc, 10)
     return lty ⊑ Type && rty ⊑ Type
 end
 
-function fieldcount_noerror(@nospecialize t)
-    if t isa UnionAll || t isa Union
-        t = argument_datatype(t)
-        if t === nothing
-            return nothing
-        end
-    elseif t === Union{}
-        return 0
-    end
-    t isa DataType || return nothing
-    if t.name === _NAMEDTUPLE_NAME
-        names, types = t.parameters
-        if names isa Tuple
-            return length(names)
-        end
-        if types isa DataType && types <: Tuple
-            return fieldcount_noerror(types)
-        end
-        return nothing
-    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
-        return nothing
-    end
-    return isdefined(t, :types) ? length(t.types) : length(t.name.names)
-end
-
 function try_compute_fieldidx(@nospecialize(typ), @nospecialize(field))
     typ = argument_datatype(typ)
     typ === nothing && return nothing
@@ -1141,8 +1117,12 @@ end
         sty = unwrap_unionall(s)::DataType
         if isa(name, Const)
             nv = _getfield_fieldindex(sty, name)
-            if isa(nv, Int) && !is_field_maybe_undef(s00, nv)
-                return unwrapva(partialstruct_getfield(s00, nv))
+            if isa(nv, Int)
+                if nv < 1
+                    return Bottom
+                elseif nv ≤ length(s00.fields)
+                    return unwrapva(s00.fields[nv])
+                end
             end
         end
         s00 = s
@@ -1437,7 +1417,7 @@ end
             if TF2 === Bottom
                 RT = Bottom
             elseif isconcretetype(RT) && has_nontrivial_extended_info(𝕃ᵢ, TF2) # isconcrete condition required to form a PartialStruct
-                RT = PartialStruct(fallback_lattice, RT, Any[TF, TF2])
+                RT = PartialStruct(fallback_lattice, RT, Union{Nothing,Bool}[false,false], Any[TF, TF2])
             end
             info = ModifyOpInfo(callinfo.info)
             return CallMeta(RT, Any, Effects(), info)
@@ -2015,7 +1995,7 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
     typ = Tuple{params...}
     # replace a singleton type with its equivalent Const object
     issingletontype(typ) && return Const(typ.instance)
-    return anyinfo ? PartialStruct(𝕃, typ, argtypes) : typ
+    return anyinfo ? PartialStruct(𝕃, typ, partialstruct_init_undefs(typ, argtypes), argtypes) : typ
 end
 
 @nospecs function memorynew_tfunc(𝕃::AbstractLattice, memtype, memlen)
@@ -2023,7 +2003,7 @@ end
     memt = tmeet(𝕃, instanceof_tfunc(memtype, true)[1], GenericMemory)
     memt == Union{} && return memt
     # PartialStruct so that loads of Const `length` get inferred
-    return PartialStruct(𝕃, memt, Any[memlen, Ptr{Nothing}])
+    return PartialStruct(𝕃, memt, Union{Nothing,Bool}[false,false], Any[memlen, Ptr{Nothing}])
 end
 add_tfunc(Core.memorynew, 2, 2, memorynew_tfunc, 10)
 

@@ -349,6 +349,13 @@ end
     @test ∋(0)(-2:2)
 end
 
+@testset "in" begin
+    @test in(0x00, [0x04, 0x03, 0x02, 0x00])
+    @test !in(UInt8('a'), b"lkefjldk")
+    @test in(Int8(-1), Int8[2, 5, -1, 2])
+    @test !in(Int8(-1), UInt8[1, 3, 2, 0xff])
+end
+
 @test [Base.afoldl(+, 1:i...) for i = 1:40] == [i * (i + 1) ÷ 2 for i = 1:40]
 @test Core.Compiler.is_terminates(Base.infer_effects(Base.afoldl, Tuple{typeof(+), Vararg{Int, 100}}))
 

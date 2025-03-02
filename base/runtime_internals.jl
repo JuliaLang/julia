@@ -1146,6 +1146,32 @@ function fieldcount(@nospecialize t)
     return fcount
 end
 
+function fieldcount_noerror(@nospecialize t)
+    if t isa UnionAll || t isa Union
+        t = argument_datatype(t)
+        if t === nothing
+            return nothing
+        end
+    elseif t === Union{}
+        return 0
+    end
+    t isa DataType || return nothing
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters
+        if names isa Tuple
+            return length(names)
+        end
+        if types isa DataType && types <: Tuple
+            return fieldcount_noerror(types)
+        end
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+        return nothing
+    end
+    return isdefined(t, :types) ? length(t.types) : length(t.name.names)
+end
+
+
 """
     fieldtypes(T::Type)
 

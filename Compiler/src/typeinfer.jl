@@ -514,7 +514,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
             rettype_const = result_type.parameters[1]
             const_flags = 0x2
         elseif isa(result_type, PartialStruct)
-            rettype_const = (_getundef(result_type), result_type.fields)
+            rettype_const = (_getundefs(result_type), result_type.fields)
             const_flags = 0x2
         elseif isa(result_type, InterConditional)
             rettype_const = result_type
@@ -958,9 +958,9 @@ function cached_return_type(code::CodeInstance)
     rettype_const = code.rettype_const
     # the second subtyping/egal conditions are necessary to distinguish usual cases
     # from rare cases when `Const` wrapped those extended lattice type objects
-    if isa(rettype_const, Tuple{BitVector, Vector{Any}}) && !(Tuple{BitVector, Vector{Any}} <: rettype)
-        undef, fields = rettype_const
-        return PartialStruct(fallback_lattice, rettype, undef, fields)
+    if isa(rettype_const, Tuple{Vector{Union{Nothing,Bool}}, Vector{Any}}) && !(Tuple{Vector{Union{Nothing,Bool}}, Vector{Any}} <: rettype)
+        undefs, fields = rettype_const
+        return PartialStruct(fallback_lattice, rettype, undefs, fields)
     elseif isa(rettype_const, PartialOpaque) && rettype <: Core.OpaqueClosure
         return rettype_const
     elseif isa(rettype_const, InterConditional) && rettype !== InterConditional
