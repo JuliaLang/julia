@@ -252,7 +252,7 @@ end
 
 function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || _throw_not_readable()
-    avail = bytesavailable(from)
+    avail = bytesavailable(from) % UInt
     adv = min(avail, nb)
     unsafe_read!(p, from.data, from.ptr, adv)
     from.ptr += adv
@@ -382,6 +382,8 @@ filesize(io::GenericIOBuffer) = (io.seekable ? io.size : bytesavailable(io))
 bytesavailable(io::GenericIOBuffer) = io.size - io.ptr + 1
 
 # Position is zero-indexed, but ptr is one-indexed, hence the -1
+# TODO: Document that position for an unseekable stream is invalid, or
+# make it error
 position(io::GenericIOBuffer) = io.ptr - 1
 
 function skip(io::GenericIOBuffer, n::Integer)
@@ -421,6 +423,7 @@ function seek(io::GenericIOBuffer, n::Int)
     return io
 end
 
+# TODO: Should check for seekable and error if not
 function seekend(io::GenericIOBuffer)
     io.ptr = io.size+1
     return io
