@@ -106,8 +106,9 @@ map(f, t::Tuple{Any}) @ Base tuple.jl:358
   0 └──       unreachable
  20 3 ─ %8  = intrinsic Base.Math.sqrt_llvm(%3)::Float64
   0 └──       goto #4
-  0 4 ─ %10 =   builtin Core.tuple(%8)::Tuple{Float64}
-  0 └──       return %10
+  0 4 ─       goto #5
+  0 5 ─ %11 =   builtin Core.tuple(%8)::Tuple{Float64}
+  0 └──       return %11
 
 ```
 
