@@ -210,6 +210,11 @@ const BINDING_KIND_UNDEF_CONST  = 0x9
 const BINDING_KIND_BACKDATED_CONST = 0xa
 
 const BINDING_FLAG_EXPORTED     = 0x10
+const BINDING_FLAG_DEPRECATED   = 0x20
+const BINDING_FLAG_DEPWARN      = 0x40
+
+const BINDING_KIND_MASK         = 0x0f
+const BINDING_FLAG_MASK         = 0xf0
 
 is_defined_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == BINDING_KIND_UNDEF_CONST)
@@ -1140,6 +1145,32 @@ function fieldcount(@nospecialize t)
     end
     return fcount
 end
+
+function fieldcount_noerror(@nospecialize t)
+    if t isa UnionAll || t isa Union
+        t = argument_datatype(t)
+        if t === nothing
+            return nothing
+        end
+    elseif t === Union{}
+        return 0
+    end
+    t isa DataType || return nothing
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters
+        if names isa Tuple
+            return length(names)
+        end
+        if types isa DataType && types <: Tuple
+            return fieldcount_noerror(types)
+        end
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+        return nothing
+    end
+    return isdefined(t, :types) ? length(t.types) : length(t.name.names)
+end
+
 
 """
     fieldtypes(T::Type)

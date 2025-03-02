@@ -105,8 +105,8 @@ JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 #ifndef _OS_WINDOWS_
     #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
         #define MAX_ALIGN 8
-    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)))
-    // int128 is 16 bytes aligned on aarch64 and riscv, and on x86 with LLVM >= 18
+    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)) || (JL_LLVM_VERSION >= 200000 && defined(_CPU_PPC64_)))
+    // int128 is 16 bytes aligned on aarch64 and riscv, and on x86 with LLVM >= 18 and on ppc64 with LLVM >= 20
         #define MAX_ALIGN 16
     #elif defined(_P64)
     // Generically we assume MAX_ALIGN is sizeof(void*)
@@ -913,7 +913,7 @@ JL_DLLEXPORT jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, si
 void jl_compute_field_offsets(jl_datatype_t *st);
 void jl_module_run_initializer(jl_module_t *m);
 JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
-JL_DLLEXPORT void jl_binding_deprecation_warning(jl_module_t *m, jl_sym_t *sym, jl_binding_t *b);
+JL_DLLEXPORT void jl_binding_deprecation_warning(jl_binding_t *b);
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b JL_PROPAGATES_ROOT,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
@@ -964,7 +964,8 @@ EXTERN_INLINE_DECLARE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) J
 }
 
 STATIC_INLINE void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, size_t world) JL_NOTSAFEPOINT;
-STATIC_INLINE void jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
+STATIC_INLINE void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world, int *depwarn) JL_NOTSAFEPOINT;
+STATIC_INLINE void jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, int *depwarn, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
 
 #ifndef __clang_analyzer__
 STATIC_INLINE void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT
@@ -977,13 +978,40 @@ STATIC_INLINE void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partit
     }
 }
 
-STATIC_INLINE void jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world, int *depwarn) JL_NOTSAFEPOINT
 {
+    int passed_explicit = 0;
     while (1) {
-        if (!(*bpart))
+        enum jl_partition_kind kind = jl_binding_kind(*bpart);
+        if (!jl_bkind_is_some_import(kind)) {
+            if (!passed_explicit && depwarn)
+                *depwarn |= (*bpart)->kind & BINDING_FLAG_DEPWARN;
             return;
-        if (!jl_bkind_is_some_import(jl_binding_kind(*bpart)))
+        }
+        if (!passed_explicit && depwarn)
+            *depwarn |= (*bpart)->kind & BINDING_FLAG_DEPWARN;
+        if (kind != BINDING_KIND_IMPLICIT)
+            passed_explicit = 1;
+        *bnd = (jl_binding_t*)(*bpart)->restriction;
+        *bpart = jl_get_binding_partition(*bnd, world);
+    }
+}
+
+
+STATIC_INLINE void jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart, int *depwarn, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
+{
+    int passed_explicit = 0;
+    while (*bpart) {
+        enum jl_partition_kind kind = jl_binding_kind(*bpart);
+        if (!jl_bkind_is_some_import(kind)) {
+            if (!passed_explicit && depwarn)
+                *depwarn |= (*bpart)->kind & BINDING_FLAG_DEPWARN;
             return;
+        }
+        if (!passed_explicit && depwarn)
+            *depwarn |= (*bpart)->kind & BINDING_FLAG_DEPWARN;
+        if (kind != BINDING_KIND_IMPLICIT)
+            passed_explicit = 1;
         *bnd = (jl_binding_t*)(*bpart)->restriction;
         *bpart = jl_get_binding_partition_all(*bnd, min_world, max_world);
     }
@@ -1513,7 +1541,7 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 #endif
 
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err);
-void *jl_find_dynamic_library_by_addr(void *symbol);
+void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err);
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd);
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
@@ -1910,17 +1938,6 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
   void JL_GC_ASSERT_LIVE(jl_value_t *v) JL_NOTSAFEPOINT;
 #else
   #define JL_GC_ASSERT_LIVE(x) (void)(x)
-#endif
-
-#ifdef _OS_WINDOWS_
-// On Windows, weak symbols do not default to 0 due to a GCC bug
-// (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90826), use symbol
-// aliases with a known value instead.
-#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak,alias(#sym)))
-#define JL_WEAK_SYMBOL_DEFAULT(sym) &sym
-#else
-#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak))
-#define JL_WEAK_SYMBOL_DEFAULT(sym) NULL
 #endif
 
 //JL_DLLEXPORT float julia__gnu_h2f_ieee(half param) JL_NOTSAFEPOINT;

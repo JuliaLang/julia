@@ -1051,10 +1051,13 @@ function check_world_bounded(tn::Core.TypeName)
     isdefined(bnd, :partitions) || return nothing
     partition = @atomic bnd.partitions
     while true
-        if is_defined_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
-            max_world = @atomic partition.max_world
-            max_world == typemax(UInt) && return nothing
-            return Int(partition.min_world):Int(max_world)
+        if is_defined_const_binding(binding_kind(partition))
+            cval = partition_restriction(partition)
+            if isa(cval, Type) && cval <: tn.wrapper
+                max_world = @atomic partition.max_world
+                max_world == typemax(UInt) && return nothing
+                return Int(partition.min_world):Int(max_world)
+            end
         end
         isdefined(partition, :next) || return nothing
         partition = @atomic partition.next
@@ -2841,7 +2844,6 @@ function show(io::IO, vm::Core.TypeofVararg)
 end
 
 Compiler.load_irshow!()
-const IRShow = Compiler.IRShow # an alias for compatibility
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body
@@ -3375,8 +3377,21 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     else
         print(io, max_world)
     end
-    if (partition.kind & BINDING_FLAG_EXPORTED) != 0
-        print(io, " [exported]")
+    if (partition.kind & BINDING_FLAG_MASK) != 0
+        first = false
+        print(io, " [")
+        if (partition.kind & BINDING_FLAG_EXPORTED) != 0
+            print(io, "exported")
+        end
+        if (partition.kind & BINDING_FLAG_DEPRECATED) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "deprecated")
+        end
+        if (partition.kind & BINDING_FLAG_DEPWARN) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "depwarn")
+        end
+        print(io, "]")
     end
     print(io, " - ")
     kind = binding_kind(partition)

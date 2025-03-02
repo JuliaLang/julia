@@ -50,6 +50,7 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstanc
 using Base
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
     BINDING_KIND_GLOBAL, BINDING_KIND_UNDEF_CONST, BINDING_KIND_BACKDATED_CONST, BINDING_KIND_DECLARED,
+    BINDING_FLAG_DEPWARN,
     Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
     EffectsOverride, Filter, Generator, IteratorSize, JLOptions, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, SizeUnknown, _NAMEDTUPLE_NAME,
@@ -68,7 +69,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
     _uncompressed_ir, maybe_add_binding_backedge!, datatype_min_ninitialized,
-    partialstruct_undef_length, partialstruct_init_undef
+    partialstruct_init_undefs, fieldcount_noerror
 using Base.Order
 
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
@@ -189,14 +190,19 @@ macro __SOURCE_FILE__()
     return QuoteNode(__source__.file::Symbol)
 end
 
-module IRShow end
+module IRShow end # relies on string and IO operations defined in Base
+baremodule TrimVerifier end # relies on IRShow, so define this afterwards
+
 function load_irshow!()
     if isdefined(Base, :end_base_include)
         # This code path is exclusively for Revise, which may want to re-run this
         # after bootstrap.
-        include(IRShow, Base.joinpath(Base.dirname(Base.String(@__SOURCE_FILE__)), "ssair/show.jl"))
+        Compilerdir = Base.dirname(Base.String(@__SOURCE_FILE__))
+        include(IRShow, Base.joinpath(Compilerdir, "ssair/show.jl"))
+        include(TrimVerifier, Base.joinpath(Compilerdir, "verifytrim.jl"))
     else
         include(IRShow, "ssair/show.jl")
+        include(TrimVerifier, "verifytrim.jl")
     end
 end
 if !isdefined(Base, :end_base_include)

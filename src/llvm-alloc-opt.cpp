@@ -427,12 +427,20 @@ void Optimizer::insertLifetimeEnd(Value *ptr, Constant *sz, Instruction *insert)
         }
         break;
     }
+#if JL_LLVM_VERSION >= 200000
+    CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert->getIterator());
+#else
     CallInst::Create(pass.lifetime_end, {sz, ptr}, "", insert);
+#endif
 }
 
 void Optimizer::insertLifetime(Value *ptr, Constant *sz, Instruction *orig)
 {
+#if JL_LLVM_VERSION >= 200000
+    CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig->getIterator());
+#else
     CallInst::Create(pass.lifetime_start, {sz, ptr}, "", orig);
+#endif
     BasicBlock *def_bb = orig->getParent();
     std::set<BasicBlock*> bbs{def_bb};
     auto &DT = getDomTree();
@@ -627,10 +635,18 @@ void Optimizer::replaceIntrinsicUseWith(IntrinsicInst *call, Intrinsic::ID ID,
         assert(matchvararg);
         (void)matchvararg;
     }
+#if JL_LLVM_VERSION >= 200000
+    auto newF = Intrinsic::getOrInsertDeclaration(call->getModule(), ID, overloadTys);
+#else
     auto newF = Intrinsic::getDeclaration(call->getModule(), ID, overloadTys);
+#endif
     assert(newF->getFunctionType() == newfType);
     newF->setCallingConv(call->getCallingConv());
+#if JL_LLVM_VERSION >= 200000
+    auto newCall = CallInst::Create(newF, args, "", call->getIterator());
+#else
     auto newCall = CallInst::Create(newF, args, "", call);
+#endif
     newCall->setTailCallKind(call->getTailCallKind());
     auto old_attrs = call->getAttributes();
     newCall->setAttributes(AttributeList::get(pass.getLLVMContext(), getFnAttrs(old_attrs),
@@ -795,7 +811,11 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
             SmallVector<Value *, 4> IdxOperands(gep->idx_begin(), gep->idx_end());
             auto new_gep = GetElementPtrInst::Create(gep->getSourceElementType(),
                                                      new_i, IdxOperands,
+#if JL_LLVM_VERSION >= 200000
+                                                     gep->getName(), gep->getIterator());
+#else
                                                      gep->getName(), gep);
+#endif
             new_gep->setIsInBounds(gep->isInBounds());
             new_gep->takeName(gep);
             new_gep->copyMetadata(*gep);
@@ -1238,7 +1258,11 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
                 bundle = OperandBundleDef("jl_roots", std::move(operands));
                 break;
             }
+#if JL_LLVM_VERSION >= 200000
+            auto new_call = CallInst::Create(call, bundles, call->getIterator());
+#else
             auto new_call = CallInst::Create(call, bundles, call);
+#endif
             new_call->takeName(call);
             call->replaceAllUsesWith(new_call);
             call->eraseFromParent();
@@ -1283,8 +1307,16 @@ bool AllocOpt::doInitialization(Module &M)
 
     DL = &M.getDataLayout();
 
+#if JL_LLVM_VERSION >= 200000
+    lifetime_start = Intrinsic::getOrInsertDeclaration(&M, Intrinsic::lifetime_start, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#else
     lifetime_start = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_start, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#endif
+#if JL_LLVM_VERSION >= 200000
+    lifetime_end = Intrinsic::getOrInsertDeclaration(&M, Intrinsic::lifetime_end, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#else
     lifetime_end = Intrinsic::getDeclaration(&M, Intrinsic::lifetime_end, { PointerType::get(M.getContext(), DL->getAllocaAddrSpace()) });
+#endif
 
     return true;
 }

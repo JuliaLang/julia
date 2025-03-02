@@ -40,6 +40,7 @@
     XX(jl_atomic_store_bits) \
     XX(jl_atomic_storeonce_bits) \
     XX(jl_atomic_swap_bits) \
+    XX(jl_autoinit_and_adopt_thread) \
     XX(jl_backtrace_from_here) \
     XX(jl_base_relative_to) \
     XX(jl_bitcast) \
@@ -193,7 +194,6 @@
     XX(jl_get_backtrace) \
     XX(jl_get_binding) \
     XX(jl_get_binding_for_method_def) \
-    XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
@@ -246,8 +246,6 @@
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
     XX(jl_init_with_image) \
-    XX(jl_init_with_image__threading) \
-    XX(jl_init__threading) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -365,7 +363,7 @@
     XX(jl_pointerset) \
     XX(jl_pop_handler) \
     XX(jl_pop_handler_noexcept) \
-    XX(jl_preload_sysimg_so) \
+    XX(jl_preload_sysimg) \
     XX(jl_prepend_cwd) \
     XX(jl_printf) \
     XX(jl_print_backtrace) \
@@ -395,7 +393,6 @@
     XX(jl_restore_incremental) \
     XX(jl_restore_package_image_from_file) \
     XX(jl_restore_system_image) \
-    XX(jl_restore_system_image_data) \
     XX(jl_rethrow) \
     XX(jl_rethrow_other) \
     XX(jl_running_on_valgrind) \

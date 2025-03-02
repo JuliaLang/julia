@@ -804,6 +804,7 @@ show(io::IO, stream::Pipe) = print(io,
     uv_status_string(stream.out), ", ",
     bytesavailable(stream), " bytes waiting)")
 
+closewrite(pipe::Pipe) = close(pipe.in)
 
 ## Functions for PipeEndpoint and PipeServer ##
 
