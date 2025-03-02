@@ -78,7 +78,7 @@ limited_worker_rss && move_to_node1("Distributed")
 
 # Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
 # as well get them all started early.
-for prependme in ["LinearAlgebra", "Pkg"]
+for prependme in ["LinearAlgebra", "Pkg", "Dates", "Markdown"]
     prependme_test_ids = findall(x->occursin(prependme, x), tests)
     prependme_tests = tests[prependme_test_ids]
     deleteat!(tests, prependme_test_ids)
