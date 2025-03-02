@@ -7,19 +7,18 @@
 # . are bytes which can neither be read nor written - but the IOBuffer has control
 # of the full array.
 
-#   uuuuuuuuuuuuuXXXXXXXXXXXXX------.......
-#   |       |    |           |     |     |
-#   |       |    ptr         size  |     |
-#   1       mark (zero-indexed)    |     lastindex(data)
-#                                  maxsize
+#   uuuuuuuuuuuuuXXXXXXXXXXXXX------------
+#   |       |    |           |           |    |
+#   |       |    ptr         size        |    maxsize (≥ lastindex)
+#   1       mark (zero-indexed)          lastindex(data)
 
 #            AFTER COMPACTION
 # Mark, ptr and size decreases by `mark`
 
-#   uuuuuXXXXXXXXXXXXX--------------.......
-#  |     |           |             |      |
-#  |     ptr         size          |      lastindex(data)
-#  mark (zero-indexed)             maxsize
+#   uuuuuXXXXXXXXXXXXX---------------------
+#  ||    |           |                    |    |
+#  |1    ptr         size                 |    maxsize (≥ lastindex)
+#  mark (zero-indexed)                    lastindex(data)
 
 # * The underlying array is always 1-indexed
 # * The IOBuffer has full control of the underlying array.
@@ -44,11 +43,12 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     # Last index of `data` that has been written to. Data in size+1:end has not yet been used,
     # and may contain arbitrary values.
-    # This value is always in 0 : min(maxsize, lastindex(data))
+    # This value is always in 0 : lastindex(data)
     size::Int
 
     # This is the maximum length that the buffer size can grow to.
-    # This value is always in 0:typemax(Int)
+    # This value is always in 0:typemax(Int).
+    # We always have length(data) <= maxsize
     maxsize::Int
 
     # Data is read/written from/to ptr, except in situations where append is true, in which case
@@ -62,6 +62,8 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # This value is always == -1, or in 0:size-1
     mark::Int
 
+    # TODO: The invariants of the values should be enforced in all constructors,
+    # except explicitly unsafe ones.
     function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
                                 maxsize::Integer) where T<:AbstractVector{UInt8}
         require_one_based_indexing(data)
@@ -163,6 +165,7 @@ function IOBuffer(
         truncate::Union{Bool,Nothing}=nothing,
         maxsize::Integer=typemax(Int),
         sizehint::Union{Integer,Nothing}=nothing)
+    # TODO: Add a check that length(data) <= maxsize and error if not.
     if maxsize < 0
         throw(ArgumentError("negative maxsize"))
     end
@@ -684,6 +687,8 @@ end
 @inline function write(to::GenericIOBuffer, a::UInt8)
     ensureroom(to, UInt(1))
     ptr = (to.append ? to.size+1 : to.ptr)
+    # We have just ensured there is room for 1 byte, EXCEPT if we were to exceed
+    # maxsize. So, we just need to check that here.
     if ptr > to.maxsize
         return 0
     else
@@ -731,21 +736,45 @@ function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
 end
 
 function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
-    copyuntil(out, s, 0x0a, keep=true)
-    line = out.data
-    i = out.size # XXX: this is only correct for appended data. if the data was inserted, only ptr should change
-    if keep || iszero(i) || line[i] != 0x0a
+    # If the data is copied into the middle of the buffer of `out` instead of appended to the end,
+    # and !keep, and the line copied ends with \r\n, then the copyuntil (even if keep=false)
+    # will overwrite one too many bytes with the new \r byte.
+    # Work around this by making a new temporary buffer.
+    # Could perhaps be done better
+    if !out.append && out.ptr < out.size + 1
+        newbuf = IOBuffer()
+        copyuntil(newbuf, s, 0x0a, keep=true)
+        v = take!(newbuf)
+        # Remove \r\n or \n if present
+        if !keep
+            if length(v) > 1 && last(v) == UInt8('\n')
+                pop!(v)
+            end
+            if length(v) > 1 && last(v) == UInt8('\r')
+                pop!(v)
+            end
+        end
+        write(out, v)
         return out
-    elseif i < 2 || line[i-1] != 0x0d
-        i -= 1
     else
-        i -= 2
+        # Else, we can just copy the data directly into the buffer, and then
+        # subtract the last one or two bytes depending on `keep`.
+        copyuntil(out, s, 0x0a, keep=true)
+        line = out.data
+        i = out.size
+        if keep || iszero(i) || line[i] != 0x0a
+            return out
+        elseif i < 2 || line[i-1] != 0x0d
+            i -= 1
+        else
+            i -= 2
+        end
+        out.size = i
+        if !out.append
+            out.ptr = i+1
+        end
+        return out
     end
-    out.size = i
-    if !out.append
-        out.ptr = i+1
-    end
-    return out
 end
 
 function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false)
