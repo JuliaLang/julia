@@ -277,3 +277,24 @@ module ImageGlobalRefFlag
     @test Base.has_image_globalref(first(methods(fimage)))
     @test !Base.has_image_globalref(first(methods(fnoimage)))
 end
+
+# Test that inference can merge ranges for partitions as long as what's being imported doesn't change
+module RangeMerge
+    using Test
+    using InteractiveUtils
+
+    function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
+        params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
+        d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
+        sprint(print, d)
+    end
+
+    global x = 1
+    const after_def_world = Base.get_world_counter()
+    export x
+    f() = x
+    @test f() == 1
+    @test only(methods(f)).specializations.cache.min_world <= after_def_world
+
+    @test !contains(get_llvm(f, Tuple{}), "jl_get_binding_value")
+end
