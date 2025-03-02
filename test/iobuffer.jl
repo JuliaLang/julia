@@ -6,6 +6,13 @@ ioslength(io::IOBuffer) = (io.seekable ? io.size : bytesavailable(io))
 
 bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 
+# Julia Base's internals uses the PipeBuffer, which is an unseekable IOBuffer.
+# There are no public constructors to build such a buffer, but we need to test
+# it anyway.
+# I make a new method here such that if the implementation of Base.PipeBuffer
+# changes, these tests will still work.
+new_unseekable_buffer() = Base.GenericIOBuffer(Memory{UInt8}(), true, true, false, true, typemax(Int))
+
 @testset "Basic tests" begin
     @test_throws ArgumentError IOBuffer(;maxsize=-1)
     @test_throws ArgumentError IOBuffer([0x01]; maxsize=-1)
@@ -141,6 +148,13 @@ end
 
     v = view(collect(b"abcdefghij"), 3:9)
     buf = IOBuffer(v; write=true, read=true)
+
+    # Take on unseekable buffer does not return used bytes.
+    buf = new_unseekable_buffer()
+    write(buf, 0x61)
+    write(buf, "bcd")
+    @test read(buf, UInt8) == 0x61
+    @test take!(buf) == b"bcd"
 end
 
 @testset "maxsize is preserved" begin
@@ -226,7 +240,7 @@ end
 end
 
 @testset "PipeBuffer" begin
-    io = PipeBuffer()
+    io = new_unseekable_buffer()
     @test_throws EOFError read(io,UInt8)
     @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
 
@@ -477,6 +491,23 @@ end
     read(buf, UInt8)
     @test write(buf, "a!") == 0
     @test take!(buf) == b"llo"
+
+    # Compacting without maxsize still works
+    buf = new_unseekable_buffer()
+    write(buf, "abcd")
+    @test ltoh(read(buf, UInt32)) == 0x64636261
+    # Technically this position call is meaningless - we only use it here
+    # to check what the struct internally does with its pointer.
+    @test position(buf) == 4
+    v = repeat(b"abcdefg", 10)
+    mark(buf)
+    write(buf, v)
+    @test position(buf) == 0
+    @test read(buf) == v
+    reset(buf)
+    write(buf, "abcd")
+    write(buf, v[1:50])
+    @test position(buf) == 0
 end
 
 @testset "peek(::GenericIOBuffer)" begin
