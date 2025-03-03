@@ -763,22 +763,22 @@ mutable struct IncrementalCompact
     active_result_bb::Int
     renamed_new_nodes::Bool
 
-    function IncrementalCompact(code::IRCode, cfg_transform::CFGTransformState)
+    function IncrementalCompact(ir::IRCode, cfg_transform::CFGTransformState)
         # Sort by position with attach after nodes after regular ones
-        info = code.new_nodes.info
+        info = ir.new_nodes.info
         perm = sort!(collect(eachindex(info)); by=i::Int->(2info[i].pos+info[i].attach_after, i))
-        new_len = length(code.stmts) + length(info)
+        new_len = length(ir.stmts) + length(info)
         result = InstructionStream(new_len)
-        code.debuginfo.codelocs = result.line
+        ir.debuginfo.codelocs = result.line
         used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
-        blocks = code.cfg.blocks
+        blocks = ir.cfg.blocks
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
         new_new_nodes = NewNodeStream()
         pending_nodes = NewNodeStream()
         pending_perm = Int[]
-        return new(code, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
+        return new(ir, result, cfg_transform, ssa_rename, used_ssas, late_fixup, perm, 1,
             new_new_nodes, new_new_used_ssas, pending_nodes, pending_perm,
             1, 1, 1, 1, false)
     end
@@ -800,8 +800,8 @@ mutable struct IncrementalCompact
     end
 end
 
-function IncrementalCompact(code::IRCode, allow_cfg_transforms::Bool=false)
-    return IncrementalCompact(code, CFGTransformState!(code.cfg.blocks, allow_cfg_transforms))
+function IncrementalCompact(ir::IRCode, allow_cfg_transforms::Bool=false)
+    return IncrementalCompact(ir, CFGTransformState!(ir.cfg.blocks, allow_cfg_transforms))
 end
 
 struct TypesView{T}
@@ -2130,8 +2130,8 @@ function complete(compact::IncrementalCompact)
     return IRCode(compact.ir, compact.result, cfg, compact.new_new_nodes)
 end
 
-function compact!(code::IRCode, allow_cfg_transforms::Bool=false)
-    compact = IncrementalCompact(code, allow_cfg_transforms)
+function compact!(ir::IRCode, allow_cfg_transforms::Bool=false)
+    compact = IncrementalCompact(ir, allow_cfg_transforms)
     # Just run through the iterator without any processing
     for _ in compact; end # _ isa Pair{Int, Any}
     return finish(compact)
