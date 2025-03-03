@@ -1505,7 +1505,19 @@ end
     @test E^n == Inf
     @test E^float(n) == Inf
 
-    # #55633
+    # issue #55831
+    @testset "literal pow zero sign" begin
+        @testset "T: $T" for T ∈ (Float16, Float32, Float64, BigFloat)
+            @testset "literal `-1`" begin
+                @test -0.0 === Float64(T(-Inf)^-1)
+            end
+            @testset "`Int(-1)`" begin
+                @test -0.0 === Float64(T(-Inf)^Int(-1))
+            end
+        end
+    end
+
+    # issue #55633
     struct Issue55633_1 <: Number end
     struct Issue55633_3 <: Number end
     struct Issue55633_9 <: Number end

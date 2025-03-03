@@ -524,3 +524,13 @@ module AmbigWorldTest
         convert(Core.Binding, GlobalRef(M2, :x)).partitions.min_world
     )
 end
+
+module X57316; module Y57316; end; end
+module A57316; using ..X57316.Y57316, .Y57316.Y57316; end
+module B57316; import ..X57316.Y57316, .Y57316.Y57316; end
+module C57316; import ..X57316.Y57316 as Z, .Z.Y57316 as W; end
+@test X57316.Y57316 === A57316.Y57316 === B57316.Y57316 === C57316.Z === C57316.W
+@test !isdefined(A57316, :X57316)
+@test !isdefined(B57316, :X57316)
+@test !isdefined(C57316, :X57316)
+@test !isdefined(C57316, :Y57316)
