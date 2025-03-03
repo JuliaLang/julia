@@ -197,29 +197,29 @@ function _fieldnames(@nospecialize t)
 end
 
 # N.B.: Needs to be synced with julia.h
-const BINDING_KIND_CONST        = 0x0
-const BINDING_KIND_CONST_IMPORT = 0x1
-const BINDING_KIND_GLOBAL       = 0x2
-const BINDING_KIND_IMPLICIT     = 0x3
-const BINDING_KIND_EXPLICIT     = 0x4
-const BINDING_KIND_IMPORTED     = 0x5
-const BINDING_KIND_FAILED       = 0x6
-const BINDING_KIND_DECLARED     = 0x7
-const BINDING_KIND_GUARD        = 0x8
-const BINDING_KIND_UNDEF_CONST  = 0x9
-const BINDING_KIND_BACKDATED_CONST = 0xa
+const PARTITION_KIND_CONST        = 0x0
+const PARTITION_KIND_CONST_IMPORT = 0x1
+const PARTITION_KIND_GLOBAL       = 0x2
+const PARTITION_KIND_IMPLICIT     = 0x3
+const PARTITION_KIND_EXPLICIT     = 0x4
+const PARTITION_KIND_IMPORTED     = 0x5
+const PARTITION_KIND_FAILED       = 0x6
+const PARTITION_KIND_DECLARED     = 0x7
+const PARTITION_KIND_GUARD        = 0x8
+const PARTITION_KIND_UNDEF_CONST  = 0x9
+const PARTITION_KIND_BACKDATED_CONST = 0xa
 
-const BINDING_FLAG_EXPORTED     = 0x10
-const BINDING_FLAG_DEPRECATED   = 0x20
-const BINDING_FLAG_DEPWARN      = 0x40
+const PARTITION_FLAG_EXPORTED     = 0x10
+const PARTITION_FLAG_DEPRECATED   = 0x20
+const PARTITION_FLAG_DEPWARN      = 0x40
 
-const BINDING_KIND_MASK         = 0x0f
-const BINDING_FLAG_MASK         = 0xf0
+const PARTITION_MASK_KIND         = 0x0f
+const PARTITION_MASK_FLAG         = 0xf0
 
-is_defined_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_BACKDATED_CONST)
-is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == BINDING_KIND_UNDEF_CONST)
-is_some_imported(kind::UInt8) = (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED)
-is_some_guard(kind::UInt8) = (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_FAILED || kind == BINDING_KIND_UNDEF_CONST)
+is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_BACKDATED_CONST)
+is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
+is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_guard(kind::UInt8) = (kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_UNDEF_CONST)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)

@@ -3607,10 +3607,10 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return 1;
     size_t raw_kind = bpart->kind;
-    enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & BINDING_KIND_MASK);
+    enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & PARTITION_MASK_KIND);
     if (!unchanged_implicit && jl_bkind_is_some_implicit(kind)) {
         jl_check_new_binding_implicit(bpart, b, NULL, jl_atomic_load_relaxed(&jl_world_counter));
-        bpart->kind |= (raw_kind & BINDING_FLAG_MASK);
+        bpart->kind |= (raw_kind & PARTITION_MASK_FLAG);
         if (bpart->min_world > jl_require_world)
             goto invalidated;
     }
@@ -3625,7 +3625,7 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
     if (latest_imported_bpart->min_world <= bpart->min_world) {
 add_backedge:
         // Imported binding is still valid
-        if ((kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED) &&
+        if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
                 external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
             jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
         }
@@ -3650,7 +3650,7 @@ invalidated:
             jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0);
         }
     }
-    if (bpart->kind & BINDING_FLAG_EXPORTED) {
+    if (bpart->kind & PARTITION_FLAG_EXPORTED) {
         jl_module_t *mod = b->globalref->mod;
         jl_sym_t *name = b->globalref->name;
         JL_LOCK(&mod->lock);

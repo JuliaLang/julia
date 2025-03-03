@@ -648,7 +648,7 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, baile
             return CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL)
         else
             b = convert(Core.Binding, g)
-            if CC.binding_kind(partition) == CC.BINDING_KIND_GLOBAL && isdefined(b, :value)
+            if CC.binding_kind(partition) == CC.PARTITION_KIND_GLOBAL && isdefined(b, :value)
                 return CC.RTEffects(Const(b.value), Union{}, CC.EFFECTS_TOTAL)
             end
         end

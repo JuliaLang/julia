@@ -3226,11 +3226,11 @@ static jl_cgval_t emit_globalref_runtime(jl_codectx_t &ctx, jl_binding_t *bnd, j
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    struct restriction_kind_pair rkp = { NULL, NULL, BINDING_KIND_GUARD, 0 };
+    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
     if (!jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
-    if (jl_bkind_is_some_constant(rkp.kind) && rkp.kind != BINDING_KIND_BACKDATED_CONST) {
+    if (jl_bkind_is_some_constant(rkp.kind) && rkp.kind != PARTITION_KIND_BACKDATED_CONST) {
         if (rkp.maybe_depwarn) {
             Value *bp = julia_binding_gv(ctx, bnd);
             ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
@@ -3242,7 +3242,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
         }
         return mark_julia_const(ctx, constval);
     }
-    if (rkp.kind != BINDING_KIND_GLOBAL) {
+    if (rkp.kind != PARTITION_KIND_GLOBAL) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
     Value *bp = julia_binding_gv(ctx, bnd);
@@ -3267,8 +3267,8 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
     Value *bp = julia_binding_gv(ctx, bnd);
     if (bpart) {
-        if (jl_binding_kind(bpart) == BINDING_KIND_GLOBAL) {
-            int possibly_deprecated = bpart->kind & BINDING_FLAG_DEPWARN;
+        if (jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL) {
+            int possibly_deprecated = bpart->kind & PARTITION_FLAG_DEPWARN;
             jl_value_t *ty = bpart->restriction;
             if (ty != nullptr) {
                 const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
@@ -3819,11 +3819,11 @@ static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_
 {
     Value *isnull = NULL;
     jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-    struct restriction_kind_pair rkp = { NULL, NULL, BINDING_KIND_GUARD, 0 };
+    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
     if (allow_import && jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
         if (jl_bkind_is_some_constant(rkp.kind))
             return mark_julia_const(ctx, rkp.restriction);
-        if (rkp.kind == BINDING_KIND_GLOBAL) {
+        if (rkp.kind == PARTITION_KIND_GLOBAL) {
             Value *bp = julia_binding_gv(ctx, rkp.binding_if_global);
             bp = julia_binding_pvalue(ctx, bp);
             LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));

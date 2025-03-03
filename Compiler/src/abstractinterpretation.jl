@@ -2441,7 +2441,7 @@ end
         (valid_worlds, rt) = scan_leaf_partitions(interp, gr, sv.world) do interp, _, partition
             local rt
             kind = binding_kind(partition)
-            if is_some_guard(kind) || kind == BINDING_KIND_DECLARED
+            if is_some_guard(kind) || kind == PARTITION_KIND_DECLARED
                 # We do not currently assume an invalidation for guard -> defined transitions
                 # rt = Const(nothing)
                 rt = Type
@@ -2572,7 +2572,7 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
             (valid_worlds, (rte, T)) = scan_leaf_partitions(interp, gr, sv.world) do interp, _, partition
                 partition_T = nothing
                 partition_rte = abstract_eval_partition_load(interp, partition)
-                if binding_kind(partition) == BINDING_KIND_GLOBAL
+                if binding_kind(partition) == PARTITION_KIND_GLOBAL
                     partition_T = partition_restriction(partition)
                 end
                 partition_exct = Union{partition_rte.exct, global_assignment_binding_rt_exct(interp, partition, v)[2]}
@@ -3552,9 +3552,9 @@ abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing}, ::Core
     abstract_eval_partition_load(interp, partition)
 function abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing}, partition::Core.BindingPartition)
     kind = binding_kind(partition)
-    isdepwarn = (partition.kind & BINDING_FLAG_DEPWARN) != 0
+    isdepwarn = (partition.kind & PARTITION_FLAG_DEPWARN) != 0
     local_getglobal_effects = Effects(generic_getglobal_effects, effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE)
-    if is_some_guard(kind) || kind == BINDING_KIND_UNDEF_CONST
+    if is_some_guard(kind) || kind == PARTITION_KIND_UNDEF_CONST
         if interp !== nothing && InferenceParams(interp).assume_bindings_static
             return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
         else
@@ -3565,7 +3565,7 @@ function abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing
     end
 
     if is_defined_const_binding(kind)
-        if kind == BINDING_KIND_BACKDATED_CONST
+        if kind == PARTITION_KIND_BACKDATED_CONST
             # Infer this as guard. We do not want a later const definition to retroactively improve
             # inference results in an earlier world.
             return RTEffects(Any, UndefVarError, local_getglobal_effects)
@@ -3576,7 +3576,7 @@ function abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing
             effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE))
     end
 
-    if kind == BINDING_KIND_DECLARED
+    if kind == PARTITION_KIND_DECLARED
         # Could be replaced by a backdated const which has an effect, so we can't assume it won't.
         # Besides, we would prefer not to merge the world range for this into the world range for
         # _GLOBAL, because that would pessimize codegen.
@@ -3643,7 +3643,7 @@ function abstract_eval_globalref(interp, g::GlobalRef, saw_latestworld::Bool, sv
         # binding we end up reaching such that codegen can emit a simpler pointer load.
         Pair{RTEffects, Union{Nothing, Core.Binding}}(
             abstract_eval_partition_load(interp, partition),
-            binding_kind(partition) in (BINDING_KIND_GLOBAL, BINDING_KIND_DECLARED) ? binding : nothing)
+            binding_kind(partition) in (PARTITION_KIND_GLOBAL, PARTITION_KIND_DECLARED) ? binding : nothing)
     end
     update_valid_age!(sv, valid_worlds)
     if ret.rt !== Union{} && ret.exct === UndefVarError && binding_if_global !== nothing && InferenceParams(interp).assume_bindings_static
@@ -3672,7 +3672,7 @@ function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partitio
     elseif is_some_const_binding(kind) || is_some_imported(kind)
         return Pair{Any,Any}(Bottom, ErrorException)
     end
-    ty = kind == BINDING_KIND_DECLARED ? Any : partition_restriction(partition)
+    ty = kind == PARTITION_KIND_DECLARED ? Any : partition_restriction(partition)
     wnewty = widenconst(newty)
     if !hasintersect(wnewty, ty)
         return Pair{Any,Any}(Bottom, TypeError)

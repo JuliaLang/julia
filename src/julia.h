@@ -624,27 +624,27 @@ typedef struct _jl_weakref_t {
 //   These binding kinds depend solely on the set of using'd packages and are not explicitly
 //   declared:
 //
-//      BINDING_KIND_IMPLICIT
-//      BINDING_KIND_GUARD
-//      BINDING_KIND_FAILED
+//      PARTITION_KIND_IMPLICIT
+//      PARTITION_KIND_GUARD
+//      PARTITION_KIND_FAILED
 //
 // 2. Weakly Declared Bindings (Weak)
 //    The binding was declared using `global`. It is treated as a mutable, `Any` type global
 //    for almost all purposes, except that it receives slightly worse optimizations, since it
 //    may be replaced.
 //
-//      BINDING_KIND_DECLARED
+//      PARTITION_KIND_DECLARED
 //
 // 3. Strong Declared Bindings (Weak)
 //    All other bindings are explicitly declared using a keyword or global assignment.
 //   These are considered strongest:
 //
-//      BINDING_KIND_CONST
-//      BINDING_KIND_CONST_IMPORT
-//      BINDING_KIND_EXPLICIT
-//      BINDING_KIND_IMPORTED
-//      BINDING_KIND_GLOBAL
-//      BINDING_KIND_UNDEF_CONST
+//      PARTITION_KIND_CONST
+//      PARTITION_KIND_CONST_IMPORT
+//      PARTITION_KIND_EXPLICIT
+//      PARTITION_KIND_IMPORTED
+//      PARTITION_KIND_GLOBAL
+//      PARTITION_KIND_UNDEF_CONST
 //
 // The runtime supports syntactic invalidation (by raising the world age and changing the partition type
 // in the new world age) from any partition kind to any other.
@@ -652,86 +652,86 @@ typedef struct _jl_weakref_t {
 // However, not all transitions are allowed syntactically. We have the following rules for SYNTACTIC invalidation:
 // 1. It is always syntactically permissable to replace a weaker binding by a stronger binding
 // 2. Implicit bindings can be syntactically changed to other implicit bindings by changing the `using` set.
-// 3. Finally, we syntactically permit replacing one BINDING_KIND_CONST(_IMPORT) by another of a different value.
+// 3. Finally, we syntactically permit replacing one PARTITION_KIND_CONST(_IMPORT) by another of a different value.
 //
 // We may make this list more permissive in the future.
 //
-// Finally, BINDING_KIND_BACKDATED_CONST is a special case, and the only case where we may replace an
+// Finally, PARTITION_KIND_BACKDATED_CONST is a special case, and the only case where we may replace an
 // existing partition by a different partition kind in the same world age. As such, it needs special
-// support in inference. Any partition kind that may be replaced by a BINDING_KIND_BACKDATED_CONST
-// must be inferred accordingly. BINDING_KIND_BACKDATED_CONST is intended as a temporary compatibility
-// measure. The following kinds may be replaced by BINDING_KIND_BACKDATED_CONST:
-//  - BINDING_KIND_GUARD
-//  - BINDING_KIND_FAILED
-//  - BINDING_KIND_DECLARED
+// support in inference. Any partition kind that may be replaced by a PARTITION_KIND_BACKDATED_CONST
+// must be inferred accordingly. PARTITION_KIND_BACKDATED_CONST is intended as a temporary compatibility
+// measure. The following kinds may be replaced by PARTITION_KIND_BACKDATED_CONST:
+//  - PARTITION_KIND_GUARD
+//  - PARTITION_KIND_FAILED
+//  - PARTITION_KIND_DECLARED
 enum jl_partition_kind {
     // Constant: This binding partition is a constant declared using `const _ = ...`
     //  ->restriction holds the constant value
-    BINDING_KIND_CONST        = 0x0,
+    PARTITION_KIND_CONST        = 0x0,
     // Import Constant: This binding partition is a constant declared using `import A`
     //  ->restriction holds the constant value
-    BINDING_KIND_CONST_IMPORT = 0x1,
+    PARTITION_KIND_CONST_IMPORT = 0x1,
     // Global: This binding partition is a global variable. It was declared either using
     // `global x::T` to implicitly through a syntactic global assignment.
     //  -> restriction holds the type restriction
-    BINDING_KIND_GLOBAL       = 0x2,
+    PARTITION_KIND_GLOBAL       = 0x2,
     // Implicit: The binding was implicitly imported from a `using`'d module.
     //  ->restriction holds the imported binding
-    BINDING_KIND_IMPLICIT     = 0x3,
+    PARTITION_KIND_IMPLICIT     = 0x3,
     // Explicit: The binding was explicitly `using`'d by name
     //  ->restriction holds the imported binding
-    BINDING_KIND_EXPLICIT     = 0x4,
+    PARTITION_KIND_EXPLICIT     = 0x4,
     // Imported: The binding was explicitly `import`'d by name
     //  ->restriction holds the imported binding
-    BINDING_KIND_IMPORTED     = 0x5,
+    PARTITION_KIND_IMPORTED     = 0x5,
     // Failed: We attempted to import the binding, but the import was ambiguous
     //  ->restriction is NULL.
-    BINDING_KIND_FAILED       = 0x6,
+    PARTITION_KIND_FAILED       = 0x6,
     // Declared: The binding was declared using `global` or similar. This acts in most ways like
-    // BINDING_KIND_GLOBAL with an `Any` restriction, except that it may be redefined to a stronger
+    // PARTITION_KIND_GLOBAL with an `Any` restriction, except that it may be redefined to a stronger
     // binding like `const` or an explicit import.
     //  ->restriction is NULL.
-    BINDING_KIND_DECLARED     = 0x7,
+    PARTITION_KIND_DECLARED     = 0x7,
     // Guard: The binding was looked at, but no global or import was resolved at the time
     //  ->restriction is NULL.
-    BINDING_KIND_GUARD        = 0x8,
+    PARTITION_KIND_GUARD        = 0x8,
     // Undef Constant: This binding partition is a constant declared using `const`, but
     // without a value.
     //  ->restriction is NULL
-    BINDING_KIND_UNDEF_CONST  = 0x9,
+    PARTITION_KIND_UNDEF_CONST  = 0x9,
     // Backated constant. A constant that was backdated for compatibility. In all other
-    // ways equivalent to BINDING_KIND_CONST, but prints a warning on access
-    BINDING_KIND_BACKDATED_CONST = 0xa,
+    // ways equivalent to PARTITION_KIND_CONST, but prints a warning on access
+    PARTITION_KIND_BACKDATED_CONST = 0xa,
 
     // This is not a real binding kind, but can be used to ask for a re-resolution
     // of the implicit binding kind
-    BINDING_KIND_IMPLICIT_RECOMPUTE = 0xb
+    PARTITION_KIND_IMPLICIT_RECOMPUTE = 0xb
 };
 
-static const uint8_t BINDING_KIND_MASK = 0x0f;
-static const uint8_t BINDING_FLAG_MASK = 0xf0;
+static const uint8_t PARTITION_MASK_KIND = 0x0f;
+static const uint8_t PARTITION_MASK_FLAG = 0xf0;
 
 //// These are flags that get anded into the above
 //
 // _EXPORTED: This binding partition is exported. In the world ranges covered by this partitions,
 // other modules that `using` this module, may implicit import this binding.
-static const uint8_t BINDING_FLAG_EXPORTED       = 0x10;
+static const uint8_t PARTITION_FLAG_EXPORTED       = 0x10;
 // _DEPRECATED: This binding partition is deprecated. It is considered weak for the purposes of
 // implicit import resolution.
-static const uint8_t BINDING_FLAG_DEPRECATED     = 0x20;
+static const uint8_t PARTITION_FLAG_DEPRECATED     = 0x20;
 // _DEPWARN: This binding partition will print a deprecation warning on access. Note that _DEPWARN
 // implies _DEPRECATED. However, the reverse is not true. Such bindings are usually used for functions,
 // where calling the function itself will provide a (better) deprecation warning/error.
-static const uint8_t BINDING_FLAG_DEPWARN        = 0x40;
+static const uint8_t PARTITION_FLAG_DEPWARN        = 0x40;
 
 typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
     JL_DATA_TYPE
     /* union {
-     *   // For ->kind == BINDING_KIND_GLOBAL
+     *   // For ->kind == PARTITION_KIND_GLOBAL
      *   jl_value_t *type_restriction;
-     *   // For ->kind == BINDING_KIND_CONST(_IMPORT)
+     *   // For ->kind == PARTITION_KIND_CONST(_IMPORT)
      *   jl_value_t *constval;
-     *   // For ->kind in (BINDING_KIND_IMPLICIT, BINDING_KIND_EXPLICIT, BINDING_KIND_IMPORT)
+     *   // For ->kind in (PARTITION_KIND_IMPLICIT, PARTITION_KIND_EXPLICIT, PARTITION_KIND_IMPORT)
      *   jl_binding_t *imported;
      * } restriction;
      */
@@ -747,17 +747,20 @@ STATIC_INLINE enum jl_partition_kind jl_binding_kind(jl_binding_partition_t *bpa
     return (enum jl_partition_kind)(bpart->kind & 0xf);
 }
 
+enum jl_binding_flags {
+    BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION        = 0x1,
+    BINDING_FLAG_DID_PRINT_IMPLICIT_IMPORT_ADMONITION = 0x2,
+    // `export` is tracked in partitions, but sets this as well
+    BINDING_FLAG_PUBLICP                              = 0x4
+};
+
 typedef struct _jl_binding_t {
     JL_DATA_TYPE
     jl_globalref_t *globalref;  // cached GlobalRef for this binding
     _Atomic(jl_value_t*) value;
     _Atomic(jl_binding_partition_t*) partitions;
     jl_array_t *backedges;
-    uint8_t did_print_backdate_admonition:1;
-    uint8_t did_print_implicit_import_admonition:1;
-    uint8_t publicp:1; // `export` is tracked in partitions, but sets this as well
-    uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
-    uint8_t padding:3;
+    _Atomic(uint8_t) flags;
 } jl_binding_t;
 
 typedef struct {
@@ -785,7 +788,7 @@ typedef struct _jl_module_t {
     int8_t infer;
     uint8_t istopmod;
     int8_t max_methods;
-    // If cleared no binding partition in this module has BINDING_FLAG_EXPORTED and min_world > jl_require_world.
+    // If cleared no binding partition in this module has PARTITION_FLAG_EXPORTED and min_world > jl_require_world.
     _Atomic(int8_t) export_set_changed_since_require_world;
     jl_mutex_t lock;
     intptr_t hash;
