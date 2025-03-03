@@ -115,28 +115,27 @@ end
 
 function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core.BindingPartition, new_bpart::Union{Core.BindingPartition, Nothing}, new_max_world::UInt)
     gr = b.globalref
-    if !is_some_guard(binding_kind(invalidated_bpart))
-        # TODO: We may want to invalidate for these anyway, since they have performance implications
+    if (b.flags & BINDING_FLAG_ANY_IMPLICIT_EDGES) != 0
         foreach_module_mtable(gr.mod, new_max_world) do mt::Core.MethodTable
             for method in MethodList(mt)
                 invalidate_method_for_globalref!(gr, method, invalidated_bpart, new_max_world)
             end
             return true
         end
-        if isdefined(b, :backedges)
-            for edge in b.backedges
-                if isa(edge, CodeInstance)
-                    ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), edge, new_max_world)
-                elseif isa(edge, Core.Binding)
-                    isdefined(edge, :partitions) || continue
-                    latest_bpart = edge.partitions
-                    latest_bpart.max_world == typemax(UInt) || continue
-                    is_some_imported(binding_kind(latest_bpart)) || continue
-                    partition_restriction(latest_bpart) === b || continue
-                    invalidate_code_for_globalref!(edge, latest_bpart, nothing, new_max_world)
-                else
-                    invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
-                end
+    end
+    if isdefined(b, :backedges)
+        for edge in b.backedges
+            if isa(edge, CodeInstance)
+                ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), edge, new_max_world)
+            elseif isa(edge, Core.Binding)
+                isdefined(edge, :partitions) || continue
+                latest_bpart = edge.partitions
+                latest_bpart.max_world == typemax(UInt) || continue
+                is_some_imported(binding_kind(latest_bpart)) || continue
+                partition_restriction(latest_bpart) === b || continue
+                invalidate_code_for_globalref!(edge, latest_bpart, nothing, new_max_world)
+            else
+                invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
             end
         end
     end
@@ -166,7 +165,11 @@ gr_needs_backedge_in_module(gr::GlobalRef, mod::Module) = gr.mod !== mod
 # N.B.: This needs to match jl_maybe_add_binding_backedge
 function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeInstance})
     method = isa(edge, Method) ? edge : edge.def.def::Method
-    gr_needs_backedge_in_module(b.globalref, method.module) || return
+    methmod = method.module
+    if !gr_needs_backedge_in_module(b.globalref, methmod)
+        @atomic :acquire_release b.flags |= BINDING_FLAG_ANY_IMPLICIT_EDGES
+        return
+    end
     if !isdefined(b, :backedges)
         b.backedges = Any[]
     end

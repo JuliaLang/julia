@@ -375,6 +375,8 @@ typedef struct _jl_method_t {
     uint8_t isva;
     uint8_t is_for_opaque_closure;
     uint8_t nospecializeinfer;
+    _Atomic(uint8_t) did_scan_source;
+
     // uint8 settings
     uint8_t constprop;      // 0x00 = use heuristic; 0x01 = aggressive; 0x02 = none
     uint8_t max_varargs;    // 0xFF = use heuristic; otherwise, max # of args to expand
@@ -751,7 +753,10 @@ enum jl_binding_flags {
     BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION        = 0x1,
     BINDING_FLAG_DID_PRINT_IMPLICIT_IMPORT_ADMONITION = 0x2,
     // `export` is tracked in partitions, but sets this as well
-    BINDING_FLAG_PUBLICP                              = 0x4
+    BINDING_FLAG_PUBLICP                              = 0x4,
+    // Set if any methods defined in this module implicitly reference
+    // this binding. If not, invalidation is optimized.
+    BINDING_FLAG_ANY_IMPLICIT_EDGES                   = 0x8
 };
 
 typedef struct _jl_binding_t {
