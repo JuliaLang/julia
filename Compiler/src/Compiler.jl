@@ -49,8 +49,8 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstanc
 
 using Base
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
-    BINDING_KIND_GLOBAL, BINDING_KIND_UNDEF_CONST, BINDING_KIND_BACKDATED_CONST, BINDING_KIND_DECLARED,
-    BINDING_FLAG_DEPWARN,
+    PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,
+    PARTITION_FLAG_DEPWARN,
     Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
     EffectsOverride, Filter, Generator, IteratorSize, JLOptions, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, SizeUnknown, _NAMEDTUPLE_NAME,
@@ -69,7 +69,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
     _uncompressed_ir, maybe_add_binding_backedge!, datatype_min_ninitialized,
-    partialstruct_undef_length, partialstruct_init_undef
+    partialstruct_init_undefs, fieldcount_noerror
 using Base.Order
 
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
@@ -82,10 +82,6 @@ const swapproperty! = Core.swapfield!
 const modifyproperty! = Core.modifyfield!
 const replaceproperty! = Core.replacefield!
 const _DOCS_ALIASING_WARNING = ""
-
-function _getundef(p::PartialStruct)
-    Base.getproperty(p, :undef)
-end
 
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Compiler, false)
 

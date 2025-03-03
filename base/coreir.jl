@@ -14,61 +14,75 @@ Core.Const
 """
     struct PartialStruct
         typ
-        undef::BitVector # represents whether a given field may be undefined
+        undefs::Vector{Union{Nothing,Bool}} # represents whether a given field may be undefined
         fields::Vector{Any} # i-th element describes the lattice element for the i-th defined field
     end
 
 This extended lattice element is introduced when we have information about an object's
 fields beyond what can be obtained from the object type. E.g. it represents a tuple where
 some elements are known to be constants or a struct whose `Any`-typed field is initialized
-with `Int` values.
+with value whose type is concrete.
 
 - `typ` indicates the type of the object
-- `undef` records which fields are possibly undefined
-- `fields` holds the lattice elements corresponding to each defined field of the object
+- `undefs` records defined-ness of each field
+- `fields` holds the lattice elements corresponding to each field of the object
 
-If `typ` is a struct, `undef` represents whether the corresponding field of the struct is guaranteed to be
-initialized. For any defined field, there is a corresponding `fields` element which provides information
-about the type of the defined field.
+`fields` corresponds to the fields that `typ` can have.
+If `typ` is a struct that can have `n` fields, then `length(fields) == n`.
+A special case: if `typ` is a variable-length `Tuple`,
+then `length(fields) == datatype_min_ninitialized(typ) + 1`.
+The last element represents the `Vararg` element.
 
-If `typ` is a tuple, the last element of `fields` may be `Vararg`. In this case, it is
-guaranteed that the number of elements in the tuple is at least `length(fields)-1`, but the
-exact number of elements is unknown (`undef` then has a length of `length(fields)-1`).
+`undefs` is a `Vector{Union{Nothing,Bool}}` with the same length as `fields`, encoding
+the following information about field defined-ness:
+- `undefs[i] === nothing` indicates the corresponding element in `fields` may be undefined
+- `undefs[i] === false` indicates the corresponding element in `fields` is guaranteed to be defined
+- `undefs[i] === true` indicates the corresponding element in `fields` is guaranteed to be undefined
+If `field[i]` is of type `Union{}`, it means the `i`-th field is never be initialized and
+thus never be defined. In this case, `undefs[i]` should always be `true`.
+
+The same applies if `typ` is a `Tuple`, and because of how `Tuple` elements are initialized,
+`undefs[i] === false` holds except that `undefs[end]` may be `nothing` when the last element
+is `Vararg`.
 """
 Core.PartialStruct
 
-function Core.PartialStruct(typ::Type, undef::BitVector, fields::Vector{Any})
-    @assert length(undef) == length(fields) - isvarargtype(fields[end])
+function Core.PartialStruct(typ::Type, undefs::Vector{Union{Nothing,Bool}}, fields::Vector{Any})
+    fldcnt = fieldcount_noerror(typ)
+    if fldcnt !== nothing
+        @assert fldcnt == length(fields)
+    else
+        @assert typ <: Tuple && isvarargtype(fields[end])
+        @assert datatype_min_ninitialized(typ) == length(fields) - 1
+        @assert undefs[end] === nothing
+    end
+    @assert length(fields) == length(undefs)
     for i = 1:length(fields)
-        @assert fields[i] !== Union{} # TODO remove me once we start to exploit strict undef-ness of fields
+        if fields[i] === Union{}
+            @assert undefs[i] === true "`Union{}` typed field should be strictly undefined"
+        end
     end
-    return Core._PartialStruct(typ, undef, fields)
+    return Core._PartialStruct(typ, undefs, fields)
 end
 
+# Legacy constructor
 function Core.PartialStruct(@nospecialize(typ), fields::Vector{Any})
-    return Core.PartialStruct(typ, partialstruct_init_undef(typ, fields), fields)
+    return Core.PartialStruct(typ, partialstruct_init_undefs(typ, fields), fields)
 end
 
-partialstruct_undef_length(fields) = length(fields) - isvarargtype(fields[end])
-
-function partialstruct_init_undef(@nospecialize(typ), fields; all_defined = true)
-    n = partialstruct_undef_length(fields)
-    return partialstruct_init_undef(typ, n; all_defined)
-end
-
-function partialstruct_init_undef(@nospecialize(typ), n::Integer; all_defined = true)
-    all_defined && return falses(n)
-    undef = trues(n)
+partialstruct_init_undefs(@nospecialize(typ), fields::Vector{Any}) = partialstruct_init_undefs(typ, length(fields))
+function partialstruct_init_undefs(@nospecialize(typ), n::Int)
+    undefs = Union{Nothing,Bool}[nothing for _ in 1:n]
     for i in 1:min(datatype_min_ninitialized(typ), n)
-        undef[i] = false
+        undefs[i] = false
     end
-    return undef
+    return undefs
 end
 
-(==)(a::PartialStruct, b::PartialStruct) = a.typ === b.typ && a.undef == b.undef && a.fields == b.fields
+a::PartialStruct == b::PartialStruct = a.typ === b.typ && a.undefs == b.undefs && a.fields == b.fields
 
 function Base.getproperty(pstruct::Core.PartialStruct, name::Symbol)
-    name === :undef && return getfield(pstruct, :undef)::BitVector
+    name === :undefs && return getfield(pstruct, :undefs)::Vector{Union{Nothing,Bool}}
     return getfield(pstruct, name)
 end
 

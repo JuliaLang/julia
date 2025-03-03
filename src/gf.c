@@ -3816,7 +3816,7 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     JL_GC_PUSH1(&ftype);
     ftype->name->mt->name = name;
     jl_gc_wb(ftype->name->mt, name);
-    jl_declare_constant_val3(NULL, module, tname, (jl_value_t*)ftype, BINDING_KIND_CONST, new_world);
+    jl_declare_constant_val3(NULL, module, tname, (jl_value_t*)ftype, PARTITION_KIND_CONST, new_world);
     jl_value_t *f = jl_new_struct(ftype);
     ftype->instance = f;
     jl_gc_wb(ftype, f);

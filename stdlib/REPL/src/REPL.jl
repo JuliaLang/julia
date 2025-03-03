@@ -35,14 +35,14 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
         if scope isa Module
             bpart = Base.lookup_binding_partition(ex.world, GlobalRef(scope, var))
             kind = Base.binding_kind(bpart)
-            if kind === Base.BINDING_KIND_GLOBAL || kind === Base.BINDING_KIND_UNDEF_CONST || kind == Base.BINDING_KIND_DECLARED
+            if kind === Base.PARTITION_KIND_GLOBAL || kind === Base.PARTITION_KIND_UNDEF_CONST || kind == Base.PARTITION_KIND_DECLARED
                 print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
-            elseif kind === Base.BINDING_KIND_FAILED
+            elseif kind === Base.PARTITION_KIND_FAILED
                 print(io, "\nHint: It looks like two or more modules export different ",
                 "bindings with this name, resulting in ambiguity. Try explicitly ",
                 "importing it from a particular module, or qualifying the name ",
                 "with the module it should come from.")
-            elseif kind === Base.BINDING_KIND_GUARD
+            elseif kind === Base.PARTITION_KIND_GUARD
                 print(io, "\nSuggestion: check for spelling errors or missing imports.")
             elseif Base.is_some_imported(kind)
                 print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
