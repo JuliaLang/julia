@@ -303,15 +303,15 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
     jl_binding_partition_t *bpart = NULL;
     if (!strong && set_type)
         jl_error("Weak global definitions cannot have types");
-    enum jl_partition_kind new_kind = strong ? BINDING_KIND_GLOBAL : BINDING_KIND_DECLARED;
+    enum jl_partition_kind new_kind = strong ? PARTITION_KIND_GLOBAL : PARTITION_KIND_DECLARED;
     jl_value_t *global_type = set_type;
     if (strong && !global_type)
         global_type = (jl_value_t*)jl_any_type;
     while (1) {
         bpart = jl_get_binding_partition(b, new_world);
         enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if (kind != BINDING_KIND_GLOBAL) {
-            if (jl_bkind_is_some_guard(kind) || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_IMPLICIT) {
+        if (kind != PARTITION_KIND_GLOBAL) {
+            if (jl_bkind_is_some_guard(kind) || kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_IMPLICIT) {
                 if (kind == new_kind) {
                     if (!set_type)
                         goto done;
@@ -319,7 +319,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                 }
                 check_safe_newbinding(gm, gs);
                 if (bpart->min_world == new_world) {
-                    bpart->kind = new_kind | (bpart->kind & BINDING_FLAG_MASK);
+                    bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
                     bpart->restriction = global_type;
                     if (global_type)
                         jl_gc_wb(bpart, global_type);
@@ -659,10 +659,10 @@ static void import_module(jl_task_t *ct, jl_module_t *JL_NONNULL m, jl_module_t 
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (kind != BINDING_KIND_GUARD && kind != BINDING_KIND_FAILED && kind != BINDING_KIND_DECLARED && kind != BINDING_KIND_IMPLICIT) {
+    if (kind != PARTITION_KIND_GUARD && kind != PARTITION_KIND_FAILED && kind != PARTITION_KIND_DECLARED && kind != PARTITION_KIND_IMPLICIT) {
         // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
          jl_walk_binding_inplace(&b, &bpart, ct->world_age);
-        if (jl_binding_kind(bpart) == BINDING_KIND_CONST || jl_binding_kind(bpart) == BINDING_KIND_BACKDATED_CONST || jl_binding_kind(bpart) == BINDING_KIND_CONST_IMPORT) {
+        if (jl_binding_kind(bpart) == PARTITION_KIND_CONST || jl_binding_kind(bpart) == PARTITION_KIND_BACKDATED_CONST || jl_binding_kind(bpart) == PARTITION_KIND_CONST_IMPORT) {
             // Already declared (e.g. on another thread) or imported.
             if (bpart->restriction == (jl_value_t*)import)
                 return;
@@ -670,7 +670,7 @@ static void import_module(jl_task_t *ct, jl_module_t *JL_NONNULL m, jl_module_t 
         jl_errorf("importing %s into %s conflicts with an existing global",
                     jl_symbol_name(name), jl_symbol_name(m->name));
     }
-    jl_declare_constant_val2(b, m, name, (jl_value_t*)import, BINDING_KIND_CONST_IMPORT);
+    jl_declare_constant_val2(b, m, name, (jl_value_t*)import, PARTITION_KIND_CONST_IMPORT);
 }
 
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists
@@ -747,7 +747,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(
 
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *val)
 {
-    return jl_declare_constant_val2(b, mod, var, val, val ? BINDING_KIND_CONST : BINDING_KIND_UNDEF_CONST);
+    return jl_declare_constant_val2(b, mod, var, val, val ? PARTITION_KIND_CONST : PARTITION_KIND_UNDEF_CONST);
 }
 
 JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val)

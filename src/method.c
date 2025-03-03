@@ -1069,7 +1069,7 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     jl_value_t *gf = NULL;
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (!jl_bkind_is_some_guard(kind) && kind != BINDING_KIND_DECLARED && kind != BINDING_KIND_IMPLICIT) {
+    if (!jl_bkind_is_some_guard(kind) && kind != PARTITION_KIND_DECLARED && kind != PARTITION_KIND_IMPLICIT) {
         jl_walk_binding_inplace(&b, &bpart, new_world);
         if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
             gf = bpart->restriction;
@@ -1084,7 +1084,7 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
     // From this point on (if we didn't error), we're committed to raising the world age,
     // because we've used it to declare the type name.
     jl_atomic_store_release(&jl_world_counter, new_world);
-    jl_declare_constant_val3(b, mod, name, gf, BINDING_KIND_CONST, new_world);
+    jl_declare_constant_val3(b, mod, name, gf, PARTITION_KIND_CONST, new_world);
     JL_GC_PROMISE_ROOTED(gf);
     JL_UNLOCK(&world_counter_lock);
     return gf;
