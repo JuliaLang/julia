@@ -138,12 +138,14 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     // If we have `Base`, don't also try to import `Core` - the `Base` exports are a superset.
     // While we allow multiple imports of the same binding from different modules, various error printing
     // performs reflection on which module a binding came from and we'd prefer users see "Base" here.
-    jl_module_t *newm = jl_new_module_(name, is_parent__toplevel__ ? NULL : parent_module, std_imports && jl_base_module != NULL ? 0 : 1, 1);
+    jl_module_t *newm = jl_new_module__(name, is_parent__toplevel__ ? NULL : parent_module);
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
     JL_LOCK(&jl_modules_mutex);
     ptrhash_put(&jl_current_modules, (void*)newm, (void*)((uintptr_t)HT_NOTFOUND + 1));
     JL_UNLOCK(&jl_modules_mutex);
+
+    jl_add_default_names(newm, std_imports && jl_base_module != NULL ? 0 : 1, 1);
 
     jl_module_t *old_toplevel_module = jl_precompile_toplevel_module;
 
@@ -307,7 +309,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
         global_type = (jl_value_t*)jl_any_type;
     while (1) {
         bpart = jl_get_binding_partition(b, new_world);
-        enum jl_partition_kind kind = bpart->kind;
+        enum jl_partition_kind kind = jl_binding_kind(bpart);
         if (kind != BINDING_KIND_GLOBAL) {
             if (jl_bkind_is_some_guard(kind) || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_IMPLICIT) {
                 if (kind == new_kind) {
@@ -317,7 +319,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                 }
                 check_safe_newbinding(gm, gs);
                 if (bpart->min_world == new_world) {
-                    bpart->kind = new_kind;
+                    bpart->kind = new_kind | (bpart->kind & BINDING_FLAG_MASK);
                     bpart->restriction = global_type;
                     if (global_type)
                         jl_gc_wb(bpart, global_type);
@@ -486,20 +488,18 @@ static void body_attributes(jl_array_t *body, int *has_ccall, int *has_defs, int
 }
 
 extern size_t jl_require_world;
-static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
+static jl_module_t *call_require(jl_task_t *ct, jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Require);
     jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%s", jl_symbol_name(var));
 
     int build_mode = jl_options.incremental && jl_generating_output();
     jl_module_t *m = NULL;
-    jl_task_t *ct = jl_current_task;
     static jl_value_t *require_func = NULL;
     if (require_func == NULL && jl_base_module != NULL) {
         require_func = jl_get_global(jl_base_module, jl_symbol("require"));
     }
     if (require_func != NULL) {
-        size_t last_age = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         if (build_mode && jl_require_world < ct->world_age)
             ct->world_age = jl_require_world;
@@ -508,18 +508,19 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_RO
         reqargs[1] = (jl_value_t*)mod;
         reqargs[2] = (jl_value_t*)var;
         m = (jl_module_t*)jl_apply(reqargs, 3);
-        ct->world_age = last_age;
     }
     if (m == NULL || !jl_is_module(m)) {
         jl_errorf("failed to load module %s", jl_symbol_name(var));
     }
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
     return m;
 }
 
 // either:
 //   - sets *name and returns the module to import *name from
 //   - sets *name to NULL and returns a module to import
-static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PROPAGATES_ROOT,
+// also updates world_age
+static jl_module_t *eval_import_path(jl_task_t *ct, jl_module_t *where, jl_module_t *from JL_PROPAGATES_ROOT,
                                      jl_array_t *args, jl_sym_t **name, const char *keyword) JL_GLOBALLY_ROOTED
 {
     if (jl_array_nrows(args) == 0)
@@ -544,7 +545,7 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PR
             m = jl_base_module;
         }
         else {
-            m = call_require(where, var);
+            m = call_require(ct, where, var);
         }
         if (i == jl_array_nrows(args))
             return m;
@@ -563,6 +564,8 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PR
             m = m->parent;
         }
     }
+
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
 
     while (1) {
         var = (jl_sym_t*)jl_array_ptr_ref(args, i);
@@ -648,18 +651,18 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_instance_for_thunk(jl_code_info_t *
     return mi;
 }
 
-static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym_t *asname)
+static void import_module(jl_task_t *ct, jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym_t *asname)
 {
     assert(m);
     jl_sym_t *name = asname ? asname : import->name;
     // TODO: this is a bit race-y with what error message we might print
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    enum jl_partition_kind kind = bpart->kind;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (kind != BINDING_KIND_GUARD && kind != BINDING_KIND_FAILED && kind != BINDING_KIND_DECLARED && kind != BINDING_KIND_IMPLICIT) {
         // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
-         jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
-        if (bpart->kind == BINDING_KIND_CONST || bpart->kind == BINDING_KIND_BACKDATED_CONST || bpart->kind == BINDING_KIND_CONST_IMPORT) {
+         jl_walk_binding_inplace(&b, &bpart, ct->world_age);
+        if (jl_binding_kind(bpart) == BINDING_KIND_CONST || jl_binding_kind(bpart) == BINDING_KIND_BACKDATED_CONST || jl_binding_kind(bpart) == BINDING_KIND_CONST_IMPORT) {
             // Already declared (e.g. on another thread) or imported.
             if (bpart->restriction == (jl_value_t*)import)
                 return;
@@ -671,7 +674,7 @@ static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym
 }
 
 // in `import A.B: x, y, ...`, evaluate the `A.B` part if it exists
-static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_t *ex, const char *keyword)
+static jl_module_t *eval_import_from(jl_task_t *ct, jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_t *ex, const char *keyword)
 {
     if (jl_expr_nargs(ex) == 1 && jl_is_expr(jl_exprarg(ex, 0))) {
         jl_expr_t *fr = (jl_expr_t*)jl_exprarg(ex, 0);
@@ -680,7 +683,7 @@ static jl_module_t *eval_import_from(jl_module_t *m JL_PROPAGATES_ROOT, jl_expr_
                 jl_expr_t *path = (jl_expr_t*)jl_exprarg(fr, 0);
                 if (((jl_expr_t*)path)->head == jl_dot_sym) {
                     jl_sym_t *name = NULL;
-                    jl_module_t *from = eval_import_path(m, NULL, path->args, &name, keyword);
+                    jl_module_t *from = eval_import_path(ct, m, NULL, path->args, &name, keyword);
                     if (name != NULL) {
                         from = (jl_module_t*)jl_eval_global_var(from, name);
                         if (!from || !jl_is_module(from))
@@ -826,8 +829,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     }
     else if (head == jl_using_sym) {
         jl_sym_t *name = NULL;
-        jl_module_t *from = eval_import_from(m, ex, "using");
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        jl_module_t *from = eval_import_from(ct, m, ex, "using");
         size_t i = 0;
         if (from) {
             i = 1;
@@ -837,10 +839,10 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_value_t *a = jl_exprarg(ex, i);
             if (jl_is_expr(a) && ((jl_expr_t*)a)->head == jl_dot_sym) {
                 name = NULL;
-                jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "using");
+                jl_module_t *import = eval_import_path(ct, m, from, ((jl_expr_t*)a)->args, &name, "using");
                 if (from) {
                     // `using A: B` and `using A: B.c` syntax
-                    jl_module_use(m, import, name);
+                    jl_module_use(ct, m, import, name);
                 }
                 else {
                     jl_module_t *u = import;
@@ -855,7 +857,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                     if (m == jl_main_module && name == NULL) {
                         // TODO: for now, `using A` in Main also creates an explicit binding for `A`
                         // This will possibly be extended to all modules.
-                        import_module(m, u, NULL);
+                        import_module(ct, m, u, NULL);
                     }
                 }
                 continue;
@@ -866,12 +868,11 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 if (jl_is_symbol(asname)) {
                     jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
                     name = NULL;
-                    jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "using");
-                    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+                    jl_module_t *import = eval_import_path(ct, m, from, ((jl_expr_t*)path)->args, &name, "using");
                     assert(name);
                     check_macro_rename(name, asname, "using");
                     // `using A: B as C` syntax
-                    jl_module_use_as(m, import, name, asname);
+                    jl_module_use_as(ct, m, import, name, asname);
                     continue;
                 }
             }
@@ -884,8 +885,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     }
     else if (head == jl_import_sym) {
         jl_sym_t *name = NULL;
-        jl_module_t *from = eval_import_from(m, ex, "import");
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        jl_module_t *from = eval_import_from(ct, m, ex, "import");
         size_t i = 0;
         if (from) {
             i = 1;
@@ -895,14 +895,14 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_value_t *a = jl_exprarg(ex, i);
             if (jl_is_expr(a) && ((jl_expr_t*)a)->head == jl_dot_sym) {
                 name = NULL;
-                jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)a)->args, &name, "import");
+                jl_module_t *import = eval_import_path(ct, m, from, ((jl_expr_t*)a)->args, &name, "import");
                 if (name == NULL) {
                     // `import A` syntax
-                    import_module(m, import, NULL);
+                    import_module(ct, m, import, NULL);
                 }
                 else {
                     // `import A.B` or `import A: B` syntax
-                    jl_module_import(m, import, name);
+                    jl_module_import(ct, m, import, name);
                 }
                 continue;
             }
@@ -912,15 +912,15 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 if (jl_is_symbol(asname)) {
                     jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
                     name = NULL;
-                    jl_module_t *import = eval_import_path(m, from, ((jl_expr_t*)path)->args, &name, "import");
+                    jl_module_t *import = eval_import_path(ct, m, from, ((jl_expr_t*)path)->args, &name, "import");
                     if (name == NULL) {
                         // `import A as B` syntax
-                        import_module(m, import, asname);
+                        import_module(ct, m, import, asname);
                     }
                     else {
                         check_macro_rename(name, asname, "import");
                         // `import A.B as C` syntax
-                        jl_module_import_as(m, import, name, asname);
+                        jl_module_import_as(ct, m, import, name, asname);
                     }
                     continue;
                 }

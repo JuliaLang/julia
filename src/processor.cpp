@@ -504,7 +504,8 @@ static inline llvm::SmallVector<TargetData<n>, 0>
 parse_cmdline(const char *option, F &&feature_cb)
 {
     if (!option)
-        option = "native";
+        abort();
+
     llvm::SmallVector<TargetData<n>, 0> res;
     TargetData<n> arg{};
     auto reset_arg = [&] {
@@ -612,36 +613,29 @@ parse_cmdline(const char *option, F &&feature_cb)
 
 // Cached version of command line parsing
 template<size_t n, typename F>
-static inline llvm::SmallVector<TargetData<n>, 0> &get_cmdline_targets(F &&feature_cb)
+static inline llvm::SmallVector<TargetData<n>, 0> &get_cmdline_targets(const char *cpu_target, F &&feature_cb)
 {
     static llvm::SmallVector<TargetData<n>, 0> targets =
-        parse_cmdline<n>(jl_options.cpu_target, std::forward<F>(feature_cb));
+        parse_cmdline<n>(cpu_target, std::forward<F>(feature_cb));
     return targets;
-}
-
-extern "C" {
-void *image_pointers_unavailable;
-extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(image_pointers_unavailable) jl_image_pointers;
 }
 
 // Load sysimg, use the `callback` for dispatch and perform all relocations
 // for the selected target.
 template<typename F>
-static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
+static inline jl_image_t parse_sysimg(jl_image_buf_t image, F &&callback, void *ctx)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Processor);
     jl_image_t res{};
 
-    const jl_image_pointers_t *pointers;
-    if (hdl == jl_exe_handle && &jl_image_pointers != JL_WEAK_SYMBOL_DEFAULT(image_pointers_unavailable))
-        pointers = (const jl_image_pointers_t *)&jl_image_pointers;
-    else
-        jl_dlsym(hdl, "jl_image_pointers", (void**)&pointers, 1);
+    if (image.kind != JL_IMAGE_KIND_SO)
+        return res;
 
+    const jl_image_pointers_t *pointers = (const jl_image_pointers_t *)image.pointers;
     const void *ids = pointers->target_data;
     jl_value_t* rejection_reason = nullptr;
     JL_GC_PUSH1(&rejection_reason);
-    uint32_t target_idx = callback(ids, &rejection_reason);
+    uint32_t target_idx = callback(ctx, ids, &rejection_reason);
     if (target_idx == UINT32_MAX) {
         jl_error(jl_string_ptr(rejection_reason));
     }
@@ -799,17 +793,7 @@ static inline jl_image_t parse_sysimg(void *hdl, F &&callback)
         res.fptrs.nclones = clones.size();
     }
 
-#ifdef _OS_WINDOWS_
-    res.base = (intptr_t)hdl;
-#else
-    Dl_info dlinfo;
-    if (dladdr((void*)pointers, &dlinfo) != 0) {
-        res.base = (intptr_t)dlinfo.dli_fbase;
-    }
-    else {
-        res.base = 0;
-    }
-#endif
+    res.base = image.base;
 
     {
         void *pgcstack_func_slot = pointers->ptls->pgcstack_func_slot;
@@ -1029,7 +1013,7 @@ JL_DLLEXPORT jl_value_t *jl_get_cpu_features(void)
 }
 
 extern "C" JL_DLLEXPORT jl_value_t* jl_reflect_clone_targets() {
-    auto specs = jl_get_llvm_clone_targets();
+    auto specs = jl_get_llvm_clone_targets(jl_options.cpu_target);
     const uint32_t base_flags = 0;
     llvm::SmallVector<uint8_t, 0> data;
     auto push_i32 = [&] (uint32_t v) {
