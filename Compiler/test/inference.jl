@@ -2462,6 +2462,61 @@ isasome(::Nothing) = false
     return 0
 end |> only === Int
 
+@testset "Interprocedural slot refinement" begin
+    # basic case; type assert of `x` from `subfunc` should
+    # propagate refinement information to `x` from `topfunc`.
+    let subfunc(x) = x::Float64 + 1
+        src = code_typed1((Any,); optimize = false) do x
+            y = subfunc(x)
+            return sin(x), cos(y)
+        end
+        @test src.slottypes[2] === Any
+        @test src.rettype === Tuple{Float64, Float64}
+    end
+
+    # don't propagate refinement information if type assumptions
+    # may be invalidated by exception catching
+    let subfunc(x) = x::Float64 + 1
+        src = code_typed1((Any,); optimize = false) do x
+            y = try subfunc(x); catch; 0.0 end
+            # `x` must not be inferred to Float64 here!
+            return sin(x), cos(y)
+        end
+        @test src.slottypes[2] === Any
+        @test src.rettype === Tuple{Any, Float64}
+    end
+
+    let subfunc(x) = begin
+            x < 0 && return x::Float64 + 2
+            x::Float64 + 1
+        end
+        src = code_typed1((Any,); optimize = false) do x
+            y = subfunc(x)
+            # `x` should be inferred to Float64 here
+            return sin(x), cos(y)
+        end
+        @test src.slottypes[2] === Any
+        # XXX: Replace test once refinements are merged across control-flow paths
+        # @test src.rettype === Tuple{Float64, Float64}
+    end
+
+    # ensure that slot refinements are propagated for recursive calls
+    let subfunc(x) = begin
+            x < 0 && return x::Float64
+            sx, cy = topfunc(x::Float64 - 10000)
+            sx + cy
+        end
+        src = code_typed1((Any,); optimize = false) do x
+            y = subfunc(x)
+            return sin(x), cos(y)
+        end
+        @test src.slottypes[2] === Any
+        @test src.rettype === Tuple{Any, Float64}
+        # XXX: Replace test once refinements are merged across control-flow paths
+        # @test src.rettype === Tuple{Float64, Float64}
+    end
+end
+
 # appropriate lattice order
 @test Base.return_types((AliasableField{Any},); interp=MustAliasInterpreter()) do x
     v = x.f        # ::MustAlias(2, AliasableField{Any}, 1, Any)

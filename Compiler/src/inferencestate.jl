@@ -289,6 +289,7 @@ mutable struct InferenceState
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
     limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
     cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
+    refinements::VarTable
 
     # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
     callstack #::Vector{AbsIntState}
@@ -343,6 +344,7 @@ mutable struct InferenceState
         bb_saw_latestworld = Bool[false for i = 1:length(cfg.blocks)]
         bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
+        refinements = VarTable(undef, nslots)
         argtypes = result.argtypes
 
         argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
@@ -355,6 +357,7 @@ mutable struct InferenceState
             end
             slottypes[i] = argtyp
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
+            refinements[i] = VarState(argtyp, i > nargtypes)
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
         ssaflags = copy(src.ssaflags)
@@ -390,7 +393,7 @@ mutable struct InferenceState
         this = new(
             mi, WorldWithRange(world, valid_worlds), mod, sptypes, slottypes, src, cfg, spec_info,
             currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
-            tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
+            tasks, pclimitations, limitations, cycle_backedges, refinements, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
             interp)

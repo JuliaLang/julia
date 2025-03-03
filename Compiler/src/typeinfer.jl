@@ -779,13 +779,15 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
     rt = cached_return_type(codeinst)
     exct = codeinst.exctype
     effects = ipo_effects(codeinst)
+    # TODO: extract refinements from codeinst
+    refinements = nothing
     edge = codeinst
     update_valid_age!(caller, WorldRange(min_world(codeinst), max_world(codeinst)))
-    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, edge, edgecycle, edgelimited))
+    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, refinements, edge, edgecycle, edgelimited))
 end
 
 function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method,
-                          @nospecialize(rt), @nospecialize(exct), effects::Effects,
+                          @nospecialize(rt), @nospecialize(exct), effects::Effects, refinements,
                           edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
                           volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
     if edge === nothing
@@ -810,7 +812,7 @@ function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method
         end
     end
 
-    return MethodCallResult(rt, exct, effects, edge, edgecycle, edgelimited, volatile_inf_result)
+    return MethodCallResult(rt, exct, effects, refinements, edge, edgecycle, edgelimited, volatile_inf_result)
 end
 
 # allocate a dummy `edge::CodeInstance` to be added by `add_edges!`, reusing an existing_edge if possible
@@ -865,7 +867,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     end
     if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
         add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
-        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, nothing, edgecycle, edgelimited))
     end
     if !is_cached(caller) && frame_parent(caller) === nothing
         # this caller exists to return to the user
@@ -906,7 +908,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             if ci_from_engine !== nothing
                 engine_reject(interp, ci_from_engine)
             end
-            return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+            return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, nothing, edgecycle, edgelimited))
         end
         assign_parentchild!(frame, caller)
         # the actual inference task for this edge is going to be scheduled within `typeinf_local` via the callstack queue
@@ -920,6 +922,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                     adjust_effects(effects_for_cycle(frame.ipo_effects), method)
                 local bestguess = frame.bestguess
                 local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+                local stmt = caller.src.code[caller.currpc]
+                local refinements = propagate_refinements(frame, stmt)
+
                 # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
                 # note that this result is cached globally exclusively, so we can use this local result destructively
                 local volatile_inf_result = if isinferred && edge_ci isa CodeInstance
@@ -927,7 +932,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                     VolatileInferenceResult(result)
                 end
                 mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-                    edge, edgecycle, edgelimited, volatile_inf_result)
+                    refinements, edge, edgecycle, edgelimited, volatile_inf_result)
                 return true
             end)
             return mresult
@@ -935,7 +940,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     elseif frame === true
         # unresolvable cycle
         add_remark!(interp, caller, "[typeinf_edge] Unresolvable cycle")
-        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, nothing, edgecycle, edgelimited))
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
@@ -943,7 +948,31 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
-    return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, edgecycle, edgelimited))
+    return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, nothing, edgecycle, edgelimited))
+end
+
+function propagate_refinements(callee::InferenceState, stmt)
+    isexpr(stmt, :(=), 2) && (stmt = stmt.args[2])
+    isexpr(stmt, :call) || return nothing
+    stmt.args[1] === GlobalRef(Core, :_apply_iterate) && return nothing
+    refinements = nothing
+    n = length(callee.slottypes) - isvarargtype(callee.slottypes)
+    # XXX: this is caused by variable parameters or arguments
+    # @assert n == length(stmt.args)
+    # XXX: why do we sometimes have `length(stmt.args) < n`
+    for i in 2:min(n, length(stmt.args))
+        arg = stmt.args[i]
+        isa(arg, SlotNumber) || continue
+        from = callee.refinements[i]
+        from.typ === Bottom && continue
+        refinement = SlotRefinement(arg, from.typ)
+        if refinements === nothing
+            refinements = SlotRefinement[refinement]
+        else
+            push!(refinements, refinement)
+        end
+    end
+    refinements
 end
 
 # The `:terminates` effect bit must be conservatively tainted unless recursion cycle has
