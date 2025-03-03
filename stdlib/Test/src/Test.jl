@@ -2406,7 +2406,12 @@ function show_result_as_buildkite_annotation(io::IO, result::Result)
     str_nocolor = sprint(show, result; context=IOContext(io, :color => false))
     firstline = split(str_nocolor, '\n')[1]
     pathsep = Sys.iswindows() ? '\\' : '/'
-    firstline = replace(firstline, string(Sys.STDLIB, pathsep) => "")
+    firstline = replace(firstline,
+            string(Sys.STDLIB, pathsep) => "",
+            string(normpath(Sys.BUILD_ROOT_PATH), pathsep) => "", # HACK?
+            string(dirname(Sys.BINDIR), pathsep) => "" # HACK?
+            )
+
     str_color = sprint(show, result; context=io)
 
     msg = """
