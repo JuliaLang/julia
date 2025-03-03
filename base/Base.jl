@@ -107,6 +107,9 @@ include("strings/strings.jl")
 include("regex.jl")
 include("parse.jl")
 include("shell.jl")
+const IRShow = Compiler.IRShow # an alias for compatibility
+include("stacktraces.jl")
+using .StackTraces
 include("show.jl")
 include("arrayshow.jl")
 include("methodshow.jl")
@@ -242,10 +245,6 @@ include("combinatorics.jl")
 include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
-
-# Stack frames and traces
-include("stacktraces.jl")
-using .StackTraces
 
 # experimental API's
 include("experimental.jl")

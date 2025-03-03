@@ -183,7 +183,8 @@ function cache_lookup(𝕃::AbstractLattice, mi::MethodInstance, given_argtypes:
     method = mi.def::Method
     nargtypes = length(given_argtypes)
     for cached_result in cache
-        cached_result.linfo === mi || @goto next_cache
+        cached_result.tombstone && continue # ignore deleted entries (due to LimitedAccuracy)
+        cached_result.linfo === mi || continue
         cache_argtypes = cached_result.argtypes
         @assert length(cache_argtypes) == nargtypes "invalid `cache_argtypes` for `mi`"
         cache_overridden_by_const = cached_result.overridden_by_const::BitVector

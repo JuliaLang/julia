@@ -71,7 +71,7 @@ function bootstrap!()
                 end
             end
         end
-        codeinfos = typeinf_ext_toplevel(methods, [world], false)
+        codeinfos = typeinf_ext_toplevel(methods, [world], TRIM_NO)
         for i = 1:2:length(codeinfos)
             ci = codeinfos[i]::CodeInstance
             src = codeinfos[i + 1]::CodeInfo

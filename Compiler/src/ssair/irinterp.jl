@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 function collect_limitations!(@nospecialize(typ), ::IRInterpretationState)
-    @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion"
+    @assert !isa(typ, LimitedAccuracy) "irinterp is unable to handle heavy recursion correctly"
     return typ
 end
 
@@ -212,6 +212,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     else
         rt = argextype(stmt, irsv.ir)
     end
+    @assert !(rt isa LimitedAccuracy)
     if rt !== nothing
         if has_flag(inst, IR_FLAG_UNUSED)
             # Don't bother checking the type if we know it's unused

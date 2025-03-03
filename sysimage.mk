@@ -57,10 +57,12 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/traits.jl \
 		base/refvalue.jl \
 		base/tuple.jl)
-COMPILER_SRCS += $(shell find $(JULIAHOME)/Compiler/src -name \*.jl)
+COMPILER_SRCS += $(shell find $(JULIAHOME)/Compiler/src -name \*.jl -and -not -name verifytrim.jl -and -not -name show.jl)
 # sort these to remove duplicates
 BASE_SRCS := $(sort $(shell find $(JULIAHOME)/base -name \*.jl -and -not -name sysimg.jl) \
-                    $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl))
+                    $(shell find $(BUILDROOT)/base -name \*.jl  -and -not -name sysimg.jl)) \
+             $(JULIAHOME)/Compiler/src/ssair/show.jl \
+             $(JULIAHOME)/Compiler/src/verifytrim.jl
 STDLIB_SRCS := $(JULIAHOME)/base/sysimg.jl $(SYSIMG_STDLIBS_SRCS)
 RELBUILDROOT := $(call rel_path,$(JULIAHOME)/base,$(BUILDROOT)/base)/ # <-- make sure this always has a trailing slash
 RELDATADIR := $(call rel_path,$(JULIAHOME)/base,$(build_datarootdir))/ # <-- make sure this always has a trailing slash

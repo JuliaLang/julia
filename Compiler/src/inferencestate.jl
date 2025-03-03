@@ -292,7 +292,7 @@ mutable struct InferenceState
 
     # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
     callstack #::Vector{AbsIntState}
-    parentid::Int # index into callstack of the parent frame that originally added this frame (call frame_parent to extract the current parent of the SCC)
+    parentid::Int # index into callstack of the parent frame that originally added this frame (call cycle_parent to extract the current parent of the SCC)
     frameid::Int # index into callstack at which this object is found (or zero, if this is not a cached frame and has no parent)
     cycleid::Int # index into the callstack of the topmost frame in the cycle (all frames in the same cycle share the same cycleid)
 
@@ -908,14 +908,17 @@ function frame_module(sv::AbsIntState)
     return def.module
 end
 
-function frame_parent(sv::InferenceState)
+frame_parent(sv::AbsIntState) = sv.parentid == 0 ? nothing : (sv.callstack::Vector{AbsIntState})[sv.parentid]
+
+function cycle_parent(sv::InferenceState)
     sv.parentid == 0 && return nothing
     callstack = sv.callstack::Vector{AbsIntState}
     sv = callstack[sv.cycleid]::InferenceState
     sv.parentid == 0 && return nothing
     return callstack[sv.parentid]
 end
-frame_parent(sv::IRInterpretationState) = sv.parentid == 0 ? nothing : (sv.callstack::Vector{AbsIntState})[sv.parentid]
+cycle_parent(sv::IRInterpretationState) = frame_parent(sv)
+
 
 # add the orphan child to the parent and the parent to the child
 function assign_parentchild!(child::InferenceState, parent::AbsIntState)

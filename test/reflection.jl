@@ -110,6 +110,7 @@ not_const = 1
 @test isconst(@__MODULE__, :a_const) == true
 @test isconst(Base, :pi) == true
 @test isconst(@__MODULE__, :pi) == true
+@test isconst(GlobalRef(@__MODULE__, :pi)) == true
 @test isconst(@__MODULE__, :not_const) == false
 @test isconst(@__MODULE__, :is_not_defined) == false
 

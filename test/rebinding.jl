@@ -18,6 +18,13 @@ module Rebinding
     @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_GUARD
     @test contains(repr(x), "@world")
 
+    # Test that it still works if Foo is redefined to a non-type
+    const Foo = 1
+
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_CONST
+    @test contains(repr(x), "@world")
+    Base.delete_binding(@__MODULE__, :Foo)
+
     struct Foo
         x::Int
     end

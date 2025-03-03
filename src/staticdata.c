@@ -507,8 +507,8 @@ static htable_t bits_replace;
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
 static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_throw, &jl_f_throw_methoderror, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
-    &jl_f_typeassert, &jl_f__apply_iterate, &jl_f__apply_pure,
-    &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined, &jl_f_isdefinedglobal,
+    &jl_f_typeassert, &jl_f__apply_iterate,
+    &jl_f_invokelatest, &jl_f_invoke_in_world, &jl_f__call_in_world_total, &jl_f_isdefined, &jl_f_isdefinedglobal,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call,
     &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield, &jl_f_setfieldonce,
     &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type, &jl_f_memorynew,
@@ -794,6 +794,8 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 {
     jl_queue_for_serialization(s, m->name);
     jl_queue_for_serialization(s, m->parent);
+    if (jl_options.strip_metadata)
+        jl_queue_for_serialization(s, m->file);
     if (jl_options.trim) {
         jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->bindings), 0, 1);
     } else {
@@ -822,6 +824,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
                      // ... or point to Base functions accessed by the runtime
                      (m == jl_base_module && (!strcmp(jl_symbol_name(b->globalref->name), "wait") ||
                                               !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook"))))) {
+                    record_field_change((jl_value_t**)&b->backedges, NULL);
                     jl_queue_for_serialization(s, b);
                 }
             }
@@ -1339,7 +1342,9 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_atomic_load_relaxed(&m->bindingkeyset), s->link_ids_relocs));
     newm->file = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, file)));
-    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->file, s->link_ids_relocs));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_options.strip_metadata ? jl_empty_sym : m->file , s->link_ids_relocs));
+    if (jl_options.strip_metadata)
+        newm->line = 0;
     newm->usings_backedges = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings_backedges)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings_backedges, s->link_ids_relocs));
@@ -2593,7 +2598,7 @@ uint_t bindingkey_hash(size_t idx, jl_value_t *data);
 
 static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
 {
-    jl_svec_t * bindings = jl_atomic_load_relaxed(&m->bindings);
+    jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
     size_t l = jl_svec_len(bindings), i;
     arraylist_t bindings_list;
     arraylist_new(&bindings_list, 0);

@@ -55,36 +55,65 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     else
         scope = undef
     end
-    if scope !== Base && !_UndefVarError_warnfor(io, Base, var)
-        warned = false
-        for m in Base.loaded_modules_order
-            m === Core && continue
-            m === Base && continue
-            m === Main && continue
-            m === scope && continue
-            warned |= _UndefVarError_warnfor(io, m, var)
+    if scope !== Base
+        warned = _UndefVarError_warnfor(io, [Base], var)
+
+        if !warned
+            modules_to_check = (m for m in Base.loaded_modules_order
+                                if m !== Core && m !== Base && m !== Main && m !== scope)
+            warned |= _UndefVarError_warnfor(io, modules_to_check, var)
         end
-        warned ||
-            _UndefVarError_warnfor(io, Core, var) ||
-            _UndefVarError_warnfor(io, Main, var)
+
+        warned || _UndefVarError_warnfor(io, [Core, Main], var)
     end
     return nothing
 end
 
-function _UndefVarError_warnfor(io::IO, m::Module, var::Symbol)
-    (Base.isexported(m, var) || Base.ispublic(m, var)) || return false
+function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
     active_mod = Base.active_module()
-    print(io, "\nHint: ")
-    if isdefined(active_mod, Symbol(m))
-        print(io, "a global variable of this name also exists in $m.")
-    else
-        if Symbol(m) == var
-            print(io, "$m is loaded but not imported in the active module $active_mod.")
+
+    warned = false
+    # collect modules which export or make public the variable by
+    # the module in which the variable is defined
+    to_warn_about = Dict{Module, Vector{Module}}()
+    for m in modules
+        # only include in info if binding has a value and is exported or public
+        if !Base.isdefined(m, var) || (!Base.isexported(m, var) && !Base.ispublic(m, var))
+            continue
+        end
+        warned = true
+
+        # handle case where the undefined variable is the name of a loaded module
+        if Symbol(m) == var && !isdefined(active_mod, var)
+            print(io, "\nHint: $m is loaded but not imported in the active module $active_mod.")
+            continue
+        end
+
+        binding_m = Base.binding_module(m, var)
+        if !haskey(to_warn_about, binding_m)
+            to_warn_about[binding_m] = [m]
         else
-            print(io, "a global variable of this name may be made accessible by importing $m in the current active module $active_mod")
+            push!(to_warn_about[binding_m], m)
         end
     end
-    return true
+
+    for (binding_m, modules) in pairs(to_warn_about)
+        print(io, "\nHint: a global variable of this name also exists in ", binding_m, ".")
+        for m in modules
+            m == binding_m && continue
+            how_available = if Base.isexported(m, var)
+                "exported by"
+            elseif Base.ispublic(m, var)
+                "declared public in"
+            end
+            print(io, "\n    - Also $how_available $m")
+            if !isdefined(active_mod, nameof(m)) || (getproperty(active_mod, nameof(m)) !== m)
+                print(io, " (loaded but not imported in $active_mod)")
+            end
+            print(io, ".")
+        end
+    end
+    return warned
 end
 
 function __init__()

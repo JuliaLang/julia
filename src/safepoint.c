@@ -157,7 +157,7 @@ void jl_gc_wait_for_the_world(jl_ptls_t* gc_all_tls_states, int gc_n_threads)
                     uv_mutex_unlock(&safepoint_lock);
                 }
                 else {
-                    const int64_t timeout = jl_options.timeout_for_safepoint_straggler_s * 1000000000; // convert to nanoseconds
+                    const int64_t timeout = jl_options.timeout_for_safepoint_straggler_s * 1000000000LL; // convert to nanoseconds
                     int ret = 0;
                     uv_mutex_lock(&safepoint_lock);
                     if (!jl_atomic_load_relaxed(&ptls2->gc_state)) {
