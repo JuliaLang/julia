@@ -907,7 +907,7 @@ end
 function complete_methods!(out::Vector{Completion}, @nospecialize(funct), args_ex::Vector{Any}, kwargs_ex::Set{Symbol}, max_method_completions::Int, exact_nargs::Bool)
     # Input types and number of arguments
     t_in = Tuple{funct, args_ex...}
-    m = Base._methods_by_ftype(t_in, nothing, max_method_completions, Base.get_world_counter(),
+    m = Base._methods_by_ftype(t_in, nothing, max_method_completions, 0, Base.get_world_counter(),
         #=ambig=# true, Ref(typemin(UInt)), Ref(typemax(UInt)), Ptr{Int32}(C_NULL))
     if !isa(m, Vector)
         push!(out, TextCompletion(sprint(Base.show_signature_function, funct) * "( too many methods, use SHIFT-TAB to show )"))

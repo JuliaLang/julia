@@ -341,11 +341,12 @@ end
 
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
                              max_union_splitting::Int = InferenceParams(interp).max_union_splitting,
-                             max_methods::Int = InferenceParams(interp).max_methods)
+                             max_methods::Int = InferenceParams(interp).max_methods,
+                             max_concrete_methods::Int = InferenceParams(interp).max_concrete_methods)
     if is_union_split_eligible(typeinf_lattice(interp), argtypes, max_union_splitting)
-        return find_union_split_method_matches(interp, argtypes, atype, max_methods)
+        return find_union_split_method_matches(interp, argtypes, atype, max_methods, max_concrete_methods)
     end
-    return find_simple_method_matches(interp, atype, max_methods)
+    return find_simple_method_matches(interp, atype, max_methods, max_concrete_methods)
 end
 
 # NOTE this is valid as far as any "constant" lattice element doesn't represent `Union` type
@@ -353,7 +354,7 @@ is_union_split_eligible(𝕃::AbstractLattice, argtypes::Vector{Any}, max_union_
     1 < unionsplitcost(𝕃, argtypes) <= max_union_splitting
 
 function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any},
-                                         @nospecialize(atype), max_methods::Int)
+                                         @nospecialize(atype), max_methods::Int, max_concrete_methods::Int)
     split_argtypes = switchtupleunion(typeinf_lattice(interp), argtypes)
     infos = MethodMatchInfo[]
     applicable = MethodMatchTarget[]
@@ -366,7 +367,7 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
         mt === nothing && return FailedMethodMatch("Could not identify method table for call")
         mt = mt::MethodTable
-        thismatches = findall(sig_n, method_table(interp); limit = max_methods)
+        thismatches = findall(sig_n, method_table(interp); limit = max_methods, concrete_method_limit = max_concrete_methods)
         if thismatches === nothing
             return FailedMethodMatch("For one of the union split cases, too many methods matched")
         end
@@ -384,13 +385,13 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         applicable, applicable_argtypes, info, valid_worlds)
 end
 
-function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(atype), max_methods::Int)
+function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(atype), max_methods::Int, max_concrete_methods::Int)
     mt = ccall(:jl_method_table_for, Any, (Any,), atype)
     if mt === nothing
         return FailedMethodMatch("Could not identify method table for call")
     end
     mt = mt::MethodTable
-    matches = findall(atype, method_table(interp); limit = max_methods)
+    matches = findall(atype, method_table(interp); limit = max_methods, concrete_method_limit = max_concrete_methods)
     if matches === nothing
         # this means too many methods matched
         # (assume this will always be true, so we don't compute / update valid age in this case)

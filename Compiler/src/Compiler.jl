@@ -135,6 +135,7 @@ using Core: ARGS, include
 using ..Compiler: >, getindex, length
 
 global MAX_METHODS::Int = 3
+global MAX_CONCRETE_METHODS::Int = 0
 
 if length(ARGS) > 2 && ARGS[2] === "--buildsettings"
     include(BuildSettings, ARGS[3])
