@@ -1345,15 +1345,16 @@ JL_DLLEXPORT void jl_maybe_add_binding_backedge(jl_globalref_t *gr, jl_module_t 
 {
     if (!edge)
         return;
+    jl_binding_t *b = gr->binding;
+    if (!b)
+        b = jl_get_module_binding(gr->mod, gr->name, 1);
     // N.B.: The logic for evaluating whether a backedge is required must
     // match the invalidation logic.
     if (gr->mod == defining_module) {
         // No backedge required - invalidation will forward scan
+        jl_atomic_fetch_or(&b->flags, BINDING_FLAG_ANY_IMPLICIT_EDGES);
         return;
     }
-    jl_binding_t *b = gr->binding;
-    if (!b)
-        b = jl_get_module_binding(gr->mod, gr->name, 1);
     jl_add_binding_backedge(b, edge);
 }
 
