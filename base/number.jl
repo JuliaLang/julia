@@ -163,8 +163,8 @@ ispositive(x::Real) = x > 0
 
 Test whether `x < 0`. See also [`ispositive`](@ref).
 
-!!! compat "Julia 1.12"
-    This function requires at least Julia 1.12.
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
 
 # Examples
 ```jldoctest
