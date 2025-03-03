@@ -1,11 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## work with AbstractVector{UInt8} via I/O primitives ##
+# IOBuffer is a Memory{UInt8} backed IO type for in-memory IO.
 
 # Here, u represents used bytes (already read), X represents bytes still to read,
 # - represents bytes uninitialized data but which can be written to later.
-# . are bytes which can neither be read nor written - but the IOBuffer has control
-# of the full array.
 
 #   uuuuuuuuuuuuuXXXXXXXXXXXXX------------
 #   |       |    |           |           |    |
@@ -21,8 +19,8 @@
 #  mark (zero-indexed)                    lastindex(data)
 
 # * The underlying array is always 1-indexed
-# * The IOBuffer has full control of the underlying array.
-# * Data in 1:mark, if mark > -1 can be deleted, shifting the whole thing to the left
+# * The IOBuffer has full control (ownership) of the underlying array.
+# * Data in 1:mark can be deleted, shifting the whole thing to the left
 #   to make room for more data, without replacing or resizing data
 
 mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
@@ -35,7 +33,9 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     readable::Bool
     writable::Bool
 
-    # If not seekable, implementation is free to destroy (compact) data in 1:mark-1
+    # If not seekable, implementation is free to destroy (compact) data in 1:mark-1.
+    # If it IS seekable, the user may always recover any data in 1:size by seeking,
+    # so no data can be destroyed
     seekable::Bool
 
     # If true, write new data to the index size+1 instead of the index ptr.
@@ -53,13 +53,13 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     # Data is read/written from/to ptr, except in situations where append is true, in which case
     # data is still read from ptr, but written to size+1.
-    # This value is alwaus in 1 : size+1
+    # This value is always in 1 : size+1
     ptr::Int
 
     # Data at the marked location or before for non-seekable buffers can be deleted.
     # The mark is zero-indexed. If it is -1, the mark is not set.
     # The purpose of the mark is to reset the stream to a given position using reset.
-    # This value is always == -1, or in 0:size-1
+    # This value is always in -1 : size-1
     mark::Int
 
     # TODO: The invariants of the values should be enforced in all constructors,
@@ -480,55 +480,55 @@ end
     # If reinit, the data has been handed out to the user, and the IOBuffer
     # no longer controls it, so we need to allocate a new one.
     if !io.writable || io.reinit
-        return ensureroom_slowpath(io, nshort)
+        return ensureroom_reallocate(io, nshort)
     end
     # The fast path here usually checks there is already room, then does nothing.
     # When append is true, new data is added after io.size, not io.ptr
     existing_space = lastindex(io.data) - (io.append ? io.size : io.ptr - 1)
     if existing_space < nshort % Int
-        # If the buffer is seekable, the user can seek to before ptr, and so we
-        # cannot compact the data.
-        if (!io.seekable && io.ptr > 1)
-            nshort = ensureroom_compact(io, nshort)
-            iszero(nshort) && return io
-        end
-        # Don't exceed maxsize. Otherwise, we overshoot the number of bytes needed,
-        # such that we don't need to resize too often.
-        new_size = min(io.maxsize, overallocation(length(io.data) + nshort % Int))
-        _resize!(io, new_size)
+        # Outline this function to make it more likely that ensureroom inlines itself
+        return ensureroom_slowpath(io, nshort)
     end
     return io
 end
 
 # Throw error (placed in this function to outline it) or reinit the buffer
-@noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
+@noinline function ensureroom_reallocate(io::GenericIOBuffer, nshort::UInt)
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     io.data = _similar_data(io, min(io.maxsize, nshort % Int))
     io.reinit = false
     return io
 end
 
-# Compact data. Only called if the buffer is not seekable.
-# Returns the number of bytes still not available after compacting
-@noinline function ensureroom_compact(io::GenericIOBuffer, nshort::UInt)::UInt
-    ptr = io.ptr
-    mark = io.mark
-    size = io.size
-    data = io.data
-    data_len = lastindex(data)
-    to_delete = (mark > -1 ? min(mark, ptr - 1) : ptr - 1)
-    # Only shift data if any of these:
-    if (
-            to_delete > 1 >> 12 || # We can recover > 4 KiB from doing so
-            to_delete >= nshort % Int || # It will prevent us from having to resize buffer
-            to_delete > data_len >> 3 # We can recover more than 1/8th of the data's length
-        )
-        copyto!(data, 1, data, to_delete + 1, size - to_delete)
-        io.ptr = ptr - to_delete
-        io.mark = max(-1, mark - to_delete)
-        io.size = size - to_delete
+@noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
+    # If the buffer is seekable, the user can seek to before ptr, and so we
+    # cannot compact the data.
+    if (!io.seekable && io.ptr > 1)
+        ptr = io.ptr
+        mark = io.mark
+        size = io.size
+        data = io.data
+        data_len = lastindex(data)
+        to_delete = (mark > -1 ? min(mark, ptr - 1) : ptr - 1)
+        # Only shift data if any of these:
+        if (
+                to_delete > 1 >> 12 || # We can recover > 4 KiB from doing so
+                to_delete >= nshort % Int || # It will prevent us from having to resize buffer
+                to_delete > data_len >> 3 # We can recover more than 1/8th of the data's length
+            )
+            copyto!(data, 1, data, to_delete + 1, size - to_delete)
+            io.ptr = ptr - to_delete
+            io.mark = max(-1, mark - to_delete)
+            io.size = size - to_delete
+        end
+        nshort -= min(nshort, to_delete % UInt)
+        iszero(nshort) && return io
     end
-    return nshort - min(nshort, to_delete % UInt)
+    # Don't exceed maxsize. Otherwise, we overshoot the number of bytes needed,
+    # such that we don't need to resize too often.
+    new_size = min(io.maxsize, overallocation(length(io.data) + nshort % Int))
+    _resize!(io, new_size)
+    return io
 end
 
 eof(io::GenericIOBuffer) = (io.ptr - 1 >= io.size)
@@ -655,17 +655,19 @@ end
 
 function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     ensureroom(to, nb)
-    ptr = to.append ? to.size+1 : to.ptr
+    size = to.size
+    append = to.append
+    ptr = append ? size+1 : to.ptr
     data = to.data
     to_write = min(nb % Int, Int(length(data))::Int - ptr + 1)
     # Dispatch based on the type of data, to possibly allow using memcpy
     _unsafe_write(data, p, ptr, to_write % UInt)
     # Update to.size only if the ptr has advanced to higher than
     # the previous size. Otherwise, we just overwrote existing data
-    to.size = max(to.size, ptr + to_write - 1)
+    to.size = max(size, ptr + to_write - 1)
     # If to.append, we only update size, not ptr.
-    if !to.append
-        to.ptr += to_write
+    if !append
+        to.ptr = ptr + to_write
     end
     return to_write
 end
@@ -678,9 +680,20 @@ end
 end
 
 @inline function _unsafe_write(data::MutableDenseArrayType{UInt8}, p::Ptr{UInt8}, from::Int, nb::UInt)
-    GC.@preserve data begin
-        ptr = Ptr{UInt8}(pointer(data, from))::Ptr{UInt8}
-        unsafe_copyto!(ptr, p, nb)
+    # Calling `unsafe_copyto!` is very efficient for large arrays, but has some overhead
+    # for small (< 5 bytes) arrays.
+    # Since a common use case of IOBuffer is to construct strings incrementally, often
+    # one char at a time, it's crucial to be fast in the case of small arrays.
+    # This optimization only gives a minor 10% speed boost in the best case.
+    if nb < 5
+        @inbounds for i in UInt(1):nb
+            data[from + (i % Int) - 1] = unsafe_load(p, i)
+        end
+    else
+        GC.@preserve data begin
+            ptr = Ptr{UInt8}(pointer(data, from))::Ptr{UInt8}
+            @inline unsafe_copyto!(ptr, p, nb)
+        end
     end
 end
 
