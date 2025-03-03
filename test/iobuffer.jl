@@ -357,3 +357,9 @@ end
     seek(io,0)
     @test Base.read_sub(io,v,1,1) == [1,0]
 end
+
+@testset "Writing Char to full buffer" begin
+    io = IOBuffer(;maxsize=1)
+    write(io, 'a')
+    @test write(io, 'a') == 0
+end

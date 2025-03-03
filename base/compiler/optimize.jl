@@ -305,7 +305,7 @@ function stmt_effect_flags(𝕃ₒ::AbstractLattice, @nospecialize(stmt), @nospe
         elseif head === :new_opaque_closure
             length(args) < 4 && return (false, false, false)
             typ = argextype(args[1], src)
-            typ, isexact = instanceof_tfunc(typ)
+            typ, isexact = instanceof_tfunc(typ, true)
             isexact || return (false, false, false)
             ⊑(𝕃ₒ, typ, Tuple) || return (false, false, false)
             rt_lb = argextype(args[2], src)

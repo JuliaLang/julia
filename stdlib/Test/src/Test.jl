@@ -1135,7 +1135,7 @@ function print_test_results(ts::DefaultTestSet, depth_pad=0)
     duration_width = max(length("Time"), length(duration))
     # Calculate the alignment of the test result counts by
     # recursively walking the tree of test sets
-    align = max(get_alignment(ts, 0), length("Test Summary:"))
+    align = max(get_alignment(ts, depth_pad), textwidth("Test Summary:"))
     # Print the outer test set header once
     pad = total == 0 ? "" : " "
     printstyled(rpad("Test Summary:", align, " "), " |", pad; bold=true)
