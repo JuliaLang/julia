@@ -21,8 +21,6 @@ new_unseekable_buffer() = Base.GenericIOBuffer(Memory{UInt8}(), true, true, fals
     v = UInt8[]
     buf = IOBuffer(v; sizehint=64, write=true)
     @test length(v.ref.mem) >= 64
-
-
 end
 
 @testset "Basic reading" begin
@@ -182,6 +180,37 @@ end
     write(buf, collect(0x99:0xff))
     seekstart(buf)
     @test read(buf) == 0x00:UInt8(127)
+end
+
+@testset "Write to self" begin
+    buffer = IOBuffer()
+    write(buffer, "abcde")
+    write(buffer, buffer)
+    @test take!(buffer) == b"abcde"
+
+    buffer = IOBuffer()
+    write(buffer, "abcde")
+    seek(buffer, 2)
+    write(buffer, buffer)
+    @test take!(buffer) == b"abcde"
+
+    buffer = IOBuffer(;append=true)
+    write(buffer, "abcde")
+    seek(buffer, 2)
+    write(buffer, buffer)
+    @test take!(buffer) == b"abcdecde"
+
+    buffer = IOBuffer(;append=true)
+    write(buffer, "abcde")
+    read(buffer)
+    write(buffer, buffer)
+    @test take!(buffer) == b"abcde"
+
+    buffer = IOBuffer(;append=true, maxsize=7, sizehint=5)
+    write(buffer, "abcde")
+    seek(buffer, 2)
+    write(buffer, buffer)
+    @test take!(buffer) == b"abcdecd"
 end
 
 @testset "Read/write empty IOBuffer" begin
@@ -503,20 +532,12 @@ end
 
     # Compacting without maxsize still works
     buf = new_unseekable_buffer()
-    write(buf, "abcd")
-    @test ltoh(read(buf, UInt32)) == 0x64636261
-    # Technically this position call is meaningless - we only use it here
-    # to check what the struct internally does with its pointer.
-    @test position(buf) == 4
-    v = repeat(b"abcdefg", 10)
-    mark(buf)
-    write(buf, v)
-    @test position(buf) == 0
-    @test read(buf) == v
-    reset(buf)
-    write(buf, "abcd")
-    write(buf, v[1:50])
-    @test position(buf) == 0
+    data = repeat(b"abcdefg", 100)
+    write(buf, data)
+    read(buf, 600)
+    data_len = length(buf.data)
+    write(buf, view(data, 1:500))
+    @test length(buf.data) == data_len
 end
 
 @testset "peek(::GenericIOBuffer)" begin

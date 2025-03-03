@@ -197,7 +197,7 @@ function IOBuffer(
         sizehint!(data, sizehint)
     end
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
-    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, mz)
+    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, maxsize)
     if flags.truncate
         buf.size = 0
     end
@@ -669,14 +669,34 @@ _unsafe_take!(io::IOBuffer) =
         io.size)
 
 function write(to::IO, from::GenericIOBuffer)
-    written::Int = bytesavailable(from)
+    available = bytesavailable(from)
+    # If they're the same buffer, we need to special case it since the buffer
+    # is being mutated twice in the write call.
     if to === from
-        from.ptr = from.size + 1
+        if from.append
+            # If from.append, we copy data to from.size + 1.
+            # Note that this ensureroom might switch the data buffer, or update
+            # the fields like from.size
+            ensureroom(from, available)
+            data = from.data
+            size = from.size
+            existing_space = lastindex(data) - size
+            to_write = min(existing_space, available)
+            iszero(to_write) && return 0
+            GC.@preserve from unsafe_copyto!(data, size + 1, data, from.ptr, to_write)
+            from.size = size + to_write
+            from.ptr += to_write
+            return to_write
+        else
+            # Else, we copy data to itself, meaning we don't need to copy the data at all.
+            from.ptr = from.size + 1
+            return available
+        end
     else
-        written = GC.@preserve from unsafe_write(to, pointer(from.data, from.ptr), UInt(written))
+        written = GC.@preserve from unsafe_write(to, pointer(from.data, from.ptr), UInt(available))
         from.ptr += written
     end
-    return written
+    return available
 end
 
 function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
