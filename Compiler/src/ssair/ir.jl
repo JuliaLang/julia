@@ -1264,9 +1264,8 @@ function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int}
                                 mark_refined!::Union{Refiner, Nothing})
     values = Vector{Any}(undef, length(old_values))
     for i = 1:length(old_values)
-        val = process_phinode_value(old_values, i, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
-        val === nothing && continue
-        values[i] = val
+        isassigned(old_values, i) || continue
+        values[i] = process_phinode_value(old_values, i, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
     end
     return values
 end
@@ -1277,7 +1276,6 @@ function process_phinode_value(old_values::Vector{Any}, i::Int, late_fixup::Vect
                                new_new_used_ssas::Vector{Int},
                                do_rename_ssa::Bool,
                                mark_refined!::Union{Refiner, Nothing})
-    isassigned(old_values, i) || return nothing
     val = old_values[i]
     if isa(val, SSAValue)
         if do_rename_ssa

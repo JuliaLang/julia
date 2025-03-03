@@ -2588,16 +2588,16 @@ function cfg_simplify!(ir::IRCode)
                         new_edge = bb_rename_pred[old_edge]
                         if new_edge > 0
                             push!(edges, new_edge)
-                            val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
-                            if val === nothing
-                                resize!(values, length(values)+1)
-                            else
+                            if isassigned(phi.values, old_index)
+                                val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                                 push!(values, val)
+                            else
+                                resize!(values, length(values)+1)
                             end
                         elseif new_edge == -1
                             @assert length(phi.edges) == 1
-                            val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
-                            if val !== nothing
+                            if isassigned(phi.values, old_index)
+                                val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                                 push!(edges, -1)
                                 push!(values, val)
                             end
@@ -2608,8 +2608,8 @@ function cfg_simplify!(ir::IRCode)
                             append!(edges, all_new_preds)
                             np = length(all_new_preds)
                             if np > 0
-                                val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
-                                if val !== nothing
+                                if isassigned(phi.values, old_index)
+                                    val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                                     for p in 1:np
                                         push!(values, val)
                                         p > 2 && count_added_node!(compact, val)
