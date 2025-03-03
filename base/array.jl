@@ -900,6 +900,18 @@ end
 
 iterate(A::Array, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
 
+## Indexing: firstindex ##
+
+# Functionality-wise this is redundant with respect to the method for `AbstractArray`,
+# but this constant folds even when `typeof(a)` is not concretely inferred.
+firstindex(@nospecialize a::Array) = 1
+
+## Indexing: lastindex ##
+
+# Functionality-wise this is redundant with respect to the method for `AbstractArray`,
+# but the return type infers perfectly here even when `typeof(a)` is not concretely inferred.
+lastindex(a::Array) = length(a)
+
 ## Indexing: getindex ##
 
 """
