@@ -209,7 +209,8 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b 
         if (!new_bpart)
             new_bpart = new_binding_partition();
         jl_atomic_store_relaxed(&new_bpart->next, bpart);
-        jl_gc_wb(new_bpart, bpart); // Not fresh the second time around the loop
+        if (bpart)
+            jl_gc_wb(new_bpart, bpart); // Not fresh the second time around the loop
         new_bpart->min_world = bpart ? jl_atomic_load_relaxed(&bpart->max_world) + 1 : 0;
         jl_atomic_store_relaxed(&new_bpart->max_world, max_world);
         JL_GC_PROMISE_ROOTED(new_bpart); // TODO: Analyzer doesn't understand MAYBE_UNROOTED properly
@@ -319,6 +320,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     m->build_id.hi = ~(uint64_t)0;
     jl_atomic_store_relaxed(&m->counter, 1);
     m->usings_backedges = jl_nothing;
+    m->scanned_methods = jl_nothing;
     m->nospecialize = 0;
     m->optlevel = -1;
     m->compile = -1;
@@ -1163,6 +1165,25 @@ JL_DLLEXPORT jl_value_t *jl_get_module_usings_backedges(jl_module_t *m)
     return m->usings_backedges;
 }
 
+JL_DLLEXPORT size_t jl_module_scanned_methods_length(jl_module_t *m)
+{
+    JL_LOCK(&m->lock);
+    size_t len = 0;
+    if (m->scanned_methods != jl_nothing)
+        len = jl_array_len(m->scanned_methods);
+    JL_UNLOCK(&m->lock);
+    return len;
+}
+
+JL_DLLEXPORT jl_value_t *jl_module_scanned_methods_getindex(jl_module_t *m, size_t i)
+{
+    JL_LOCK(&m->lock);
+    assert(m->scanned_methods != jl_nothing);
+    jl_value_t *ret = jl_array_ptr_ref(m->scanned_methods, i-1);
+    JL_UNLOCK(&m->lock);
+    return ret;
+}
+
 JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym_t *s)
 {
     jl_binding_t *b = jl_get_module_binding(m, s, 0);
@@ -1369,21 +1390,22 @@ JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge)
 
 // Called for all GlobalRefs found in lowered code. Adds backedges for cross-module
 // GlobalRefs.
-JL_DLLEXPORT void jl_maybe_add_binding_backedge(jl_globalref_t *gr, jl_module_t *defining_module, jl_value_t *edge)
+JL_DLLEXPORT int jl_maybe_add_binding_backedge(jl_binding_t *b, jl_value_t *edge, jl_method_t *for_method)
 {
     if (!edge)
-        return;
-    jl_binding_t *b = gr->binding;
-    if (!b)
-        b = jl_get_module_binding(gr->mod, gr->name, 1);
+        return 0;
+    jl_module_t *defining_module = for_method->module;
     // N.B.: The logic for evaluating whether a backedge is required must
     // match the invalidation logic.
-    if (gr->mod == defining_module) {
+    if (b->globalref->mod == defining_module) {
         // No backedge required - invalidation will forward scan
         jl_atomic_fetch_or(&b->flags, BINDING_FLAG_ANY_IMPLICIT_EDGES);
-        return;
+        if (!(jl_atomic_fetch_or(&for_method->did_scan_source, 0x2) & 0x2))
+            jl_add_scanned_method(for_method->module, for_method);
+        return 1;
     }
-    jl_add_binding_backedge(b, edge);
+    jl_add_binding_backedge(b, (jl_value_t*)edge);
+    return 0;
 }
 
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b,

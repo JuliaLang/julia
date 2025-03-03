@@ -136,11 +136,10 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
 
     if need_to_invalidate_code
         if (b.flags & BINDING_FLAG_ANY_IMPLICIT_EDGES) != 0
-            foreach_module_mtable(gr.mod, new_max_world) do mt::Core.MethodTable
-                for method in MethodList(mt)
-                    invalidate_method_for_globalref!(gr, method, invalidated_bpart, new_max_world)
-                end
-                return true
+            nmethods = ccall(:jl_module_scanned_methods_length, Csize_t, (Any,), gr.mod)
+            for i = 1:nmethods
+                method = ccall(:jl_module_scanned_methods_getindex, Any, (Any, Csize_t), gr.mod, i)::Method
+                invalidate_method_for_globalref!(gr, method, invalidated_bpart, new_max_world)
             end
         end
         if isdefined(b, :backedges)
@@ -166,7 +165,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
         # have a binding that is affected by this change.
         usings_backedges = ccall(:jl_get_module_usings_backedges, Any, (Any,), gr.mod)
         if usings_backedges !== nothing
-            for user in usings_backedges::Vector{Any}
+            for user::Module in usings_backedges::Vector{Any}
                 user_binding = ccall(:jl_get_module_binding_or_nothing, Any, (Any, Any), user, gr.name)
                 user_binding === nothing && continue
                 isdefined(user_binding, :partitions) || continue
@@ -186,21 +185,10 @@ end
 invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPartition, new_bpart::Core.BindingPartition, new_max_world::UInt) =
     invalidate_code_for_globalref!(convert(Core.Binding, gr), invalidated_bpart, new_bpart, new_max_world)
 
-gr_needs_backedge_in_module(gr::GlobalRef, mod::Module) = gr.mod !== mod
-
-# N.B.: This needs to match jl_maybe_add_binding_backedge
 function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeInstance})
-    method = isa(edge, Method) ? edge : edge.def.def::Method
-    methmod = method.module
-    if !gr_needs_backedge_in_module(b.globalref, methmod)
-        @atomic :acquire_release b.flags |= BINDING_FLAG_ANY_IMPLICIT_EDGES
-        return
-    end
-    if !isdefined(b, :backedges)
-        b.backedges = Any[]
-    end
-    !isempty(b.backedges) && b.backedges[end] === edge && return
-    push!(b.backedges, edge)
+    meth = isa(edge, Method) ? edge : Compiler.get_ci_mi(edge).def
+    ccall(:jl_maybe_add_binding_backedge, Cint, (Any, Any, Any), b, edge, meth)
+    return nothing
 end
 
 function binding_was_invalidated(b::Core.Binding)

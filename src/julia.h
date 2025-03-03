@@ -375,6 +375,8 @@ typedef struct _jl_method_t {
     uint8_t isva;
     uint8_t is_for_opaque_closure;
     uint8_t nospecializeinfer;
+    // bit flags, 0x01 = scanned
+    // 0x02 = added to module scanned list (either from scanning or inference edge)
     _Atomic(uint8_t) did_scan_source;
 
     // uint8 settings
@@ -782,6 +784,7 @@ typedef struct _jl_module_t {
     jl_sym_t *file;
     int32_t line;
     jl_value_t *usings_backedges;
+    jl_value_t *scanned_methods;
     // hidden fields:
     arraylist_t usings; /* arraylist of struct jl_module_using */  // modules with all bindings potentially imported
     jl_uuid_t build_id;
@@ -2059,6 +2062,7 @@ JL_DLLEXPORT int jl_get_module_infer(jl_module_t *m);
 JL_DLLEXPORT void jl_set_module_max_methods(jl_module_t *self, int value);
 JL_DLLEXPORT int jl_get_module_max_methods(jl_module_t *m);
 JL_DLLEXPORT jl_value_t *jl_get_module_usings_backedges(jl_module_t *m);
+JL_DLLEXPORT jl_value_t *jl_get_module_scanned_methods(jl_module_t *m);
 JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym_t *s);
 
 // get binding for reading

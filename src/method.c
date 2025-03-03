@@ -39,9 +39,20 @@ static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
     }
 }
 
+void jl_add_scanned_method(jl_module_t *m, jl_method_t *meth)
+{
+    JL_LOCK(&m->lock);
+    if (m->scanned_methods == jl_nothing) {
+        m->scanned_methods = (jl_value_t*)jl_alloc_vec_any(0);
+        jl_gc_wb(m, m->scanned_methods);
+    }
+    jl_array_ptr_1d_push((jl_array_t*)m->scanned_methods, (jl_value_t*)meth);
+    JL_UNLOCK(&m->lock);
+}
+
 JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
 {
-    if (!jl_atomic_load_relaxed(&m->did_scan_source)) {
+    if (!jl_atomic_fetch_or(&m->did_scan_source, 1)) {
         jl_code_info_t *code = NULL;
         JL_GC_PUSH1(&code);
         if (!jl_is_code_info(src))
@@ -50,13 +61,19 @@ JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
             code = (jl_code_info_t*)src;
         jl_array_t *stmts = code->code;
         size_t i, l = jl_array_nrows(stmts);
+        int any_implicit = 0;
         for (i = 0; i < l; i++) {
             jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
             if (jl_is_globalref(stmt)) {
-                jl_maybe_add_binding_backedge((jl_globalref_t*)stmt, m->module, (jl_value_t*)m);
+                jl_globalref_t *gr = (jl_globalref_t*)stmt;
+                jl_binding_t *b = gr->binding;
+                if (!b)
+                    b = jl_get_module_binding(gr->mod, gr->name, 1);
+                any_implicit |= jl_maybe_add_binding_backedge(b, (jl_value_t*)m, m);
             }
         }
-        jl_atomic_store_relaxed(&m->did_scan_source, 1);
+        if (any_implicit && !(jl_atomic_fetch_or(&m->did_scan_source, 0x2) & 0x2))
+            jl_add_scanned_method(m->module, m);
         JL_GC_POP();
     }
 }

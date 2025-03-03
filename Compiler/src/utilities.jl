@@ -129,7 +129,7 @@ function retrieve_code_info(mi::MethodInstance, world::UInt)
         else
             c = copy(src::CodeInfo)
         end
-        if !def.did_scan_source
+        if (def.did_scan_source & 0x1) == 0x0
             # This scan must happen:
             #   1. After method definition
             #   2. Before any code instances that may have relied on information
