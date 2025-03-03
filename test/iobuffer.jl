@@ -21,6 +21,11 @@ new_unseekable_buffer() = Base.GenericIOBuffer(Memory{UInt8}(), true, true, fals
     v = UInt8[]
     buf = IOBuffer(v; sizehint=64, write=true)
     @test length(v.ref.mem) >= 64
+
+    # Test that you can't make an IOBuffer with a maxsize
+    # smaller than the size you actually give it
+    @test_throws ArgumentError IOBuffer([0x01, 0x02]; maxsize=1)
+    @test_throws ArgumentError IOBuffer("abcdefghij"; maxsize=8)
 end
 
 @testset "Basic reading" begin
