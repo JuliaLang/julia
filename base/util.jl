@@ -554,6 +554,12 @@ Inner constructors can still be defined, but at least one should accept argument
 same form as the default inner constructor (i.e. one positional argument per field) in
 order to function correctly with the keyword outer constructor.
 
+Additionally, for mutable structs, a keyword-based "reconstructor" is defined with a
+trailing bang. This allows for in-place modification of a mutable object using the same
+argument syntax as the keyword-based constructor for an immutable object. The
+"reconstructor" combines the convenience of the keyword-based constructor with the
+efficiency or necessity of reusing an object.
+
 !!! compat "Julia 1.1"
     `Base.@kwdef` for parametric structs, and structs with supertypes
     requires at least Julia 1.1.
@@ -577,11 +583,31 @@ ERROR: UndefKeywordError: keyword argument `b` not assigned
 Stacktrace:
 [...]
 ```
+
+```jldoctest
+julia> @kwdef mutable struct Bar
+           a::Int = 0
+           b::Tuple{Int, Int} = (0, 0)
+        end
+Bar
+
+julia> outer = Some(Bar(42, (1, 2)))
+Some(Bar(42, (1, 2)))
+
+julia> Bar!(outer.value)
+Bar(0, (0, 0))
+
+julia> Bar!(outer.value, a=43)
+Bar(43, (0, 0))
+
+julia> outer
+Some(Bar(43, (0, 0)))
+```
 """
 macro kwdef(expr)
     expr = macroexpand(__module__, expr) # to expand @static
     isexpr(expr, :struct) || error("Invalid usage of @kwdef")
-    _, T, fieldsblock = expr.args
+    mutable, T, fieldsblock = expr.args
     if T isa Expr && T.head === :<:
         T = T.args[1]
     end
@@ -602,9 +628,25 @@ macro kwdef(expr)
     if !isempty(parameters)
         T_no_esc = Meta.unescape(T)
         if T_no_esc isa Symbol
-            sig = Expr(:call, esc(T), Expr(:parameters, parameters...))
-            body = Expr(:block, __source__, Expr(:call, esc(T), fieldnames...))
-            kwdefs = Expr(:function, sig, body)
+            sig1 = Expr(:call, esc(T), Expr(:parameters, parameters...))
+            body1 = Expr(:block, __source__, Expr(:call, esc(T), fieldnames...))
+            def1 = Expr(:function, sig1, body1)
+
+            if mutable
+                # if struct is mutable define a constructor and a "reconstructor"
+                #   T(...) = ...
+                #   T!(obj; a, b, ...) = (obj.a = a; obj.b = b; ...; obj)
+                T! = Symbol(T, "!")
+                sig2 = Expr(:call, esc(T!), Expr(:parameters, parameters...), esc(:obj))
+                assign(x) = Expr(:(=), Expr(:., esc(:obj), QuoteNode(x)), esc(x))
+                assigns = (assign(x) for x in fieldnames)
+                body2 = Expr(:block, __source__, assigns..., esc(:obj))
+                def2 = Expr(:function, sig2, body2)
+                # Reverse the definitions to return the type
+                kwdefs = Expr(:block, def2, def1)
+            else
+                kwdefs = def1
+            end
         elseif isexpr(T_no_esc, :curly)
             # if T == S{A<:AA,B<:BB}, define two methods
             #   S(...) = ...
