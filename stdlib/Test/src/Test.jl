@@ -2411,7 +2411,7 @@ function show_result_as_buildkite_annotation(io::IO, result::Result)
 
     msg = """
     <details>
-    <summary><code>$firstline</code> $label</summary>
+    <summary><code>$firstline</code></summary>
 
     ```term
     $str_color
@@ -2421,7 +2421,7 @@ function show_result_as_buildkite_annotation(io::IO, result::Result)
     """
 
     try
-        run(`buildkite-agent annotate --style $type --context "julia-test-failures" --append "$msg"`)
+        run(`buildkite-agent annotate --style $type --job $job_id --context "$(label)-$(job_id)" --append "$msg"`)
     catch e
         @error "Error adding buildkite annotation" e
     end
