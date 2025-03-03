@@ -200,7 +200,7 @@ function Base.show(io::IO, t::Fail)
         if data !== nothing
             # The test was an expression, so display the term-by-term
             # evaluated version as well
-            print(io, "\n   Evaluated: ", data)
+            print(io, "\n   Evaluated: ", repr(data))
         end
         if t.context !== nothing
             print(io, "\n     Context: ", t.context)
