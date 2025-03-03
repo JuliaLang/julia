@@ -534,11 +534,13 @@ end
         data = io.data
         data_len = lastindex(data)
         to_delete = (mark > -1 ? min(mark, ptr - 1) : ptr - 1)
-        # Only shift data if any of these:
+        # Only shift data if:
         if (
-                to_delete > 1 >> 12 || # We can recover > 4 KiB from doing so
-                to_delete >= nshort % Int || # It will prevent us from having to resize buffer
-                to_delete > data_len >> 3 # We can recover more than 1/8th of the data's length
+                # It will prevent us from having to resize buffer, or
+                to_delete >= nshort % Int ||
+                # We will recover at least 256 bytes, and at least 1/8th
+                # of the data buffer's total length
+                (to_delete > data_len >>> 3 && to_delete > 255)
             )
             copyto!(data, 1, data, to_delete + 1, size - to_delete)
             io.ptr = ptr - to_delete
@@ -595,7 +597,7 @@ julia> String(take!(io))
 ```
 """
 function take!(io::GenericIOBuffer)
-    ismarked(io) && unmark(io)
+    io.mark = -1
     if io.seekable
         # If the buffer is seekable, then the previously consumed bytes from ptr+1:size
         # must still be output, as they are not truly gone.
