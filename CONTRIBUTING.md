@@ -79,9 +79,9 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 ### Writing tests
 
-There are never enough tests. Track [code coverage at Codecov](https://codecov.io/github/JuliaLang/julia), and help improve it.
+There are never enough tests. Track [code coverage at Codecov](https://about.codecov.io/language/julia/), and help improve it.
 
-1. Go visit https://codecov.io/github/JuliaLang/julia.
+1. Go visit https://about.codecov.io/language/julia/.
 
 2. Browse through the source files and find some untested functionality (highlighted in red) that you think you might be able to write a test for.
 
