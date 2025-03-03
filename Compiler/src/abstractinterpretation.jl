@@ -3633,18 +3633,20 @@ scan_partitions(query::Function, interp, g::GlobalRef, wwr::WorldWithRange) =
 abstract_load_all_consistent_leaf_partitions(interp, g::GlobalRef, wwr::WorldWithRange) =
     scan_leaf_partitions(abstract_eval_partition_load, interp, g, wwr)
 
+function abstract_eval_globalref_partition(interp, binding::Core.Binding, partition::Core.BindingPartition)
+    # For inference purposes, we don't particularly care which global binding we end up loading, we only
+    # care about its type. However, we would still like to terminate the world range for the particular
+    # binding we end up reaching such that codegen can emit a simpler pointer load.
+    Pair{RTEffects, Union{Nothing, Core.Binding}}(
+        abstract_eval_partition_load(interp, partition),
+        binding_kind(partition) in (PARTITION_KIND_GLOBAL, PARTITION_KIND_DECLARED) ? binding : nothing)
+end
+
 function abstract_eval_globalref(interp, g::GlobalRef, saw_latestworld::Bool, sv::AbsIntState)
     if saw_latestworld
         return RTEffects(Any, Any, generic_getglobal_effects)
     end
-    (valid_worlds, (ret, binding_if_global)) = scan_leaf_partitions(interp, g, sv.world) do interp, binding, partition
-        # For inference purposes, we don't particularly care which global binding we end up loading, we only
-        # care about its type. However, we would still like to terminate the world range for the particular
-        # binding we end up reaching such that codegen can emit a simpler pointer load.
-        Pair{RTEffects, Union{Nothing, Core.Binding}}(
-            abstract_eval_partition_load(interp, partition),
-            binding_kind(partition) in (PARTITION_KIND_GLOBAL, PARTITION_KIND_DECLARED) ? binding : nothing)
-    end
+    (valid_worlds, (ret, binding_if_global)) = scan_leaf_partitions(abstract_eval_globalref_partition, interp, g, sv.world)
     update_valid_age!(sv, valid_worlds)
     if ret.rt !== Union{} && ret.exct === UndefVarError && binding_if_global !== nothing && InferenceParams(interp).assume_bindings_static
         if isdefined(binding_if_global, :value)

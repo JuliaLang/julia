@@ -106,6 +106,9 @@ void jl_check_new_binding_implicit(
             if (tempbmax_world < max_world)
                 max_world = tempbmax_world;
 
+            // N.B.: Which aspects of the partition are considered here needs to
+            // be kept in sync with `export_affecting_partition_flags` in the
+            // invalidation code.
             if ((tempbpart->kind & PARTITION_FLAG_EXPORTED) == 0)
                 continue;
 
@@ -165,6 +168,27 @@ void jl_check_new_binding_implicit(
     return;
 }
 
+JL_DLLEXPORT jl_binding_partition_t *jl_maybe_reresolve_implicit(jl_binding_t *b, size_t new_max_world)
+{
+    jl_binding_partition_t *new_bpart = new_binding_partition();
+    jl_binding_partition_t *bpart = jl_atomic_load_acquire(&b->partitions);
+    while (1) {
+        jl_atomic_store_relaxed(&new_bpart->next, bpart);
+        jl_gc_wb(new_bpart, bpart);
+        jl_check_new_binding_implicit(new_bpart, b, NULL, new_max_world+1);
+        if (bpart && (bpart->kind & PARTITION_FLAG_EXPORTED))
+            new_bpart->kind |= PARTITION_FLAG_EXPORTED;
+        if (new_bpart->kind == bpart->kind && new_bpart->restriction == bpart->restriction)
+            return bpart;
+        // Resolution changed, insert the new partition
+        size_t expected_max_world = ~(size_t)0;
+        if (jl_atomic_cmpswap(&bpart->max_world, &expected_max_world, new_max_world) &&
+            jl_atomic_cmpswap(&b->partitions, &bpart, new_bpart))
+            break;
+    }
+    return new_bpart;
+}
+
 STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b JL_PROPAGATES_ROOT, jl_value_t *parent, _Atomic(jl_binding_partition_t *)*insert, size_t world, modstack_t *st) JL_GLOBALLY_ROOTED
 {
     assert(jl_is_binding(b));
@@ -183,7 +207,7 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b 
         if (!new_bpart)
             new_bpart = new_binding_partition();
         jl_atomic_store_relaxed(&new_bpart->next, bpart);
-        jl_gc_wb_fresh(new_bpart, bpart);
+        jl_gc_wb(new_bpart, bpart); // Not fresh the second time around the loop
         new_bpart->min_world = bpart ? jl_atomic_load_relaxed(&bpart->max_world) + 1 : 0;
         jl_atomic_store_relaxed(&new_bpart->max_world, max_world);
         JL_GC_PROMISE_ROOTED(new_bpart); // TODO: Analyzer doesn't understand MAYBE_UNROOTED properly
@@ -1112,10 +1136,12 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
             jl_sym_t *var = b->globalref->name;
             jl_binding_t *tob = jl_get_module_binding(to, var, 0);
             if (tob) {
-                jl_binding_partition_t *tobpart = jl_get_binding_partition(tob, new_world);
-                enum jl_partition_kind kind = jl_binding_kind(tobpart);
-                if (jl_bkind_is_some_implicit(kind)) {
-                    jl_replace_binding_locked(tob, tobpart, NULL, PARTITION_KIND_IMPLICIT_RECOMPUTE, new_world);
+                jl_binding_partition_t *tobpart = jl_atomic_load_relaxed(&tob->partitions);
+                if (tobpart) {
+                    enum jl_partition_kind kind = jl_binding_kind(tobpart);
+                    if (jl_bkind_is_some_implicit(kind)) {
+                        jl_replace_binding_locked(tob, tobpart, NULL, PARTITION_KIND_IMPLICIT_RECOMPUTE, new_world);
+                    }
                 }
             }
         }
@@ -1380,7 +1406,6 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
         jl_atomic_store_relaxed(&jl_first_image_replacement_world, new_world);
 
     assert(jl_atomic_load_relaxed(&b->partitions) == old_bpart);
-    jl_atomic_store_release(&old_bpart->max_world, new_world-1);
     jl_binding_partition_t *new_bpart = new_binding_partition();
     JL_GC_PUSH1(&new_bpart);
     new_bpart->min_world = new_world;
@@ -1388,12 +1413,17 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
         assert(!restriction_val);
         jl_check_new_binding_implicit(new_bpart /* callee rooted */, b, NULL, new_world);
         new_bpart->kind |= kind & PARTITION_MASK_FLAG;
+        if (new_bpart->kind == old_bpart->kind && new_bpart->restriction == old_bpart->restriction) {
+            JL_GC_POP();
+            return old_bpart;
+        }
     }
     else {
         new_bpart->kind = kind;
         new_bpart->restriction = restriction_val;
         jl_gc_wb_fresh(new_bpart, restriction_val);
     }
+    jl_atomic_store_release(&old_bpart->max_world, new_world-1);
     jl_atomic_store_relaxed(&new_bpart->next, old_bpart);
     jl_gc_wb_fresh(new_bpart, old_bpart);
 
