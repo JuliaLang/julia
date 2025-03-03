@@ -3273,6 +3273,28 @@ end
         "BoundsError: attempt to access 2×2 Matrix{Float64} at index [10, \"bad index\"]"
 end
 
+@testset "return type inference of function that calls `length(::Array)`" begin
+    f(x) = length(x)
+    @test Int === Base.infer_return_type(f, Tuple{Array})
+end
+
+@testset "return type inference of `sizeof(::Array)`" begin
+    @test isconcretetype(Base.infer_return_type(sizeof, Tuple{Array}))
+end
+
+@testset "return type inference of `getindex(::Array, ::Colon)`" begin
+    f = a -> a[:]
+    @test Vector == Base.infer_return_type(f, Tuple{Array})
+    @test Vector{Float32} === Base.infer_return_type(f, Tuple{Array{Float32}})
+end
+
+@testset "return type inference of linear `eachindex` for `Array` and `Memory`" begin
+    f = a -> eachindex(IndexLinear(), a)
+    for typ in (Array, Memory, Union{Array, Memory})
+        @test isconcretetype(Base.infer_return_type(f, Tuple{typ}))
+    end
+end
+
 @testset "inference of Union{T,Nothing} arrays 26771" begin
     f(a) = (v = [1, nothing]; [v[x] for x in a])
     @test only(Base.return_types(f, (Int,))) === Union{Array{Int,0}, Array{Nothing,0}}
