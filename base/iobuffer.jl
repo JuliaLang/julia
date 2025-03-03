@@ -225,8 +225,7 @@ function IOBuffer(;
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
     # A common usecase of IOBuffer is to incrementally construct strings. By using StringMemory
     # as the default storage, we can turn the result into a string without copying.
-    data = fill!(StringMemory(size), 0)
-    buf = GenericIOBuffer{Memory{UInt8}}(unsafe_method, data, flags.read, flags.write, true, flags.append, mz)
+    buf = GenericIOBuffer{Memory{UInt8}}(unsafe_method, StringMemory(size), flags.read, flags.write, true, flags.append, mz)
     if flags.truncate
         buf.size = 0
     end
