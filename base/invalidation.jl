@@ -115,7 +115,14 @@ end
 
 function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core.BindingPartition, new_bpart::Union{Core.BindingPartition, Nothing}, new_max_world::UInt)
     gr = b.globalref
-    if !is_some_guard(binding_kind(invalidated_bpart))
+    export_only_change = false
+    if new_bpart !== nothing
+        export_only_change =
+            (invalidated_bpart.kind & ~BINDING_FLAG_EXPORTED) == (new_bpart.kind & ~BINDING_FLAG_EXPORTED) &&
+            isdefined(invalidated_bpart, :restriction) == isdefined(new_bpart, :restriction) &&
+            (!isdefined(invalidated_bpart, :restriction) || invalidated_bpart.restriction === new_bpart.restriction)
+    end
+    if !is_some_guard(binding_kind(invalidated_bpart)) && !export_only_change
         # TODO: We may want to invalidate for these anyway, since they have performance implications
         foreach_module_mtable(gr.mod, new_max_world) do mt::Core.MethodTable
             for method in MethodList(mt)
@@ -133,7 +140,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                     latest_bpart.max_world == typemax(UInt) || continue
                     is_some_imported(binding_kind(latest_bpart)) || continue
                     partition_restriction(latest_bpart) === b || continue
-                    invalidate_code_for_globalref!(edge, latest_bpart, nothing, new_max_world)
+                    invalidate_code_for_globalref!(edge, latest_bpart, latest_bpart, new_max_world)
                 else
                     invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
                 end

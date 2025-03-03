@@ -756,8 +756,7 @@ typedef struct _jl_binding_t {
     uint8_t did_print_backdate_admonition:1;
     uint8_t did_print_implicit_import_admonition:1;
     uint8_t publicp:1; // `export` is tracked in partitions, but sets this as well
-    uint8_t deprecated:2; // 0=not deprecated, 1=renamed, 2=moved to another package
-    uint8_t padding:3;
+    uint8_t padding:5;
 } jl_binding_t;
 
 typedef struct {
