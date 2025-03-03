@@ -77,7 +77,7 @@ end
 # Fallback
 function printvalue(f::MbyFunc, io::IO, value, sorted::Bool)
     toml_value = to_toml_value(f, value)
-    @invokelatest printvalue(f, io, toml_value)
+    @invokelatest printvalue(f, io, toml_value, sorted)
 end
 
 function printvalue(f::MbyFunc, io::IO, value::AbstractVector, sorted::Bool)
@@ -156,7 +156,7 @@ function print_table(f::MbyFunc, io::IO, a::AbstractDict,
 )
 
     if a in inline_tables
-        @invokelatest print_inline_table(f, io, a)
+        @invokelatest print_inline_table(f, io, a, sorted)
         return
     end
 
