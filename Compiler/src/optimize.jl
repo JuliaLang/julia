@@ -129,6 +129,7 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
 function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
+    isa(src, OptimizationState) && (src = src.src)
     if isa(src, MaybeCompressed)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable
@@ -154,10 +155,20 @@ end
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
 code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.world)
 
+mutable struct OptimizationResult
+    ir::IRCode
+    simplified::Bool # indicates whether the IR was processed with `cfg_simplify!`
+end
+
+function simplify_ir!(result::OptimizationResult)
+    result.ir = cfg_simplify!(result.ir)
+    result.simplified = true
+end
+
 mutable struct OptimizationState{Interp<:AbstractInterpreter}
     linfo::MethodInstance
     src::CodeInfo
-    ir::Union{Nothing, IRCode}
+    result::Union{Nothing, OptimizationResult}
     stmt_info::Vector{CallInfo}
     mod::Module
     sptypes::Vector{VarState}
@@ -226,10 +237,13 @@ include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
 function ir_to_codeinf!(opt::OptimizationState)
-    (; linfo, src) = opt
-    src = ir_to_codeinf!(src, opt.ir::IRCode)
-    src.edges = Core.svec(opt.inlining.edges...)
-    opt.ir = nothing
+    (; linfo, src, result) = opt
+    if result === nothing
+        return src
+    end
+    src = ir_to_codeinf!(src, result.ir)
+    opt.result = nothing
+    opt.src = src
     maybe_validate_code(linfo, src, "optimized")
     return src
 end
@@ -489,7 +503,7 @@ function finish(interp::AbstractInterpreter, opt::OptimizationState,
     @assert !(result isa LimitedAccuracy)
     result = widenslotwrapper(result)
 
-    opt.ir = ir
+    opt.result = OptimizationResult(ir, false)
 
     # determine and cache inlineability
     if !force_noinline
