@@ -19,6 +19,11 @@ Julia's compiler works.
 It is also worth emphasizing that functions should take arguments, instead of operating directly
 on global variables (aside from constants like [`pi`](@ref)).
 
+## Write docstrings
+
+Comments describing an object should typically be written as [docstrings](@ref man-writing-documentation) for editor and REPL accessibility.
+Inline comments (`# comment`) and multiline comments (`#= comment =#`) are appropriate for information that is intended only for the reader of the code (as opposed to a user).
+
 ## Avoid writing overly-specific types
 
 Code should be as generic as possible. Instead of writing:
