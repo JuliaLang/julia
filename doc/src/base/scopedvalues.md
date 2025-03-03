@@ -27,38 +27,58 @@ Let's first look at an example of **lexical** scope. A `let` statement begins
 a new lexical scope within which the outer definition of `x` is shadowed by
 it's inner definition.
 
-```julia
+```jldoctest
+julia> x = 1
+1
+
+julia> let x = 5
+           @show x # 5
+       end
+x = 5
+
+julia> @show x # 1
 x = 1
-let x = 5
-    @show x # 5
-end
-@show x # 1
+1
 ```
 
 In the following example, since Julia uses lexical scope, the variable `x` in the body
 of `f` refers to the `x` defined in the global scope, and entering a `let` scope does
 not change the value `f` observes.
 
-```julia
+```jldoctest
+julai> x = 1
+1
+
+julia> f() = @show x
+f(generic function with 1 method)
+
+julia>  let x = 5
+            f() # 1
+        end
 x = 1
-f() = @show x
-let x = 5
-    f() # 1
-end
-f() # 1
+1
+
+julia> f() # 1
+x = 1
+1
 ```
 
 Now using a `ScopedValue` we can use **dynamic** scoping.
 
-```julia
-using Base.ScopedValues
+```jldoctest
+julia> using Base.ScopedValues
 
-x = ScopedValue(1)
-f() = @show x[]
-with(x=>5) do
-    f() # 5
-end
-f() # 1
+julia> x = ScopedValue(1)
+
+julia> f() = @show x[]
+
+julia>  with(x=>5) do
+            f() # 5
+        end
+x[] = 5
+
+julia> f() # 1
+x[] = 1
 ```
 
 Note that the observed value of the `ScopedValue` is dependent on the execution
@@ -66,7 +86,6 @@ path of the program.
 
 It often makes sense to use a `const` variable to point to a scoped value,
 and you can set the value of multiple `ScopedValue`s with one call to `with`.
-
 
 ```julia
 using Base.ScopedValues
@@ -102,23 +121,30 @@ is equivalent to `with(var=>val) do expr end`. However, `with` requires a zero-a
 closure or function, which results in an extra call-frame. As an example, consider the
 following function `f`:
 
-```julia
-using Base.ScopedValues
-const a = ScopedValue(1)
-f(x) = a[] + x
+```jldoctest
+julia> using Base.ScopedValues
+
+julia> const a = ScopedValue(1)
+
+julia> f(x) = a[] + x
+
+julia> f(5)
+6
 ```
 
 If you wish to run `f` in a dynamic scope with `a` set to `2`, then you can use `with`:
 
-```julia
-with(() -> f(10), a=>2)
+```jldoctest
+julia> with(() -> f(10), a=>2)
+12
 ```
 
 However, this requires wrapping `f` in a zero-argument function. If you wish to avoid
 the extra call-frame, then you can use the `@with` macro:
 
-```julia
-@with a=>2 f(10)
+```jldoctest
+julia> @with a=>2 f(10)
+12
 ```
 
 !!! note
@@ -240,30 +266,34 @@ In order to access the value of a scoped value, the scoped value itself has to
 be in (lexical) scope. This means most often you likely want to use scoped values
 as constant globals.
 
-```julia
-using Base.ScopedValues
-const sval = ScopedValue(1)
+```jldoctest
+julia> using Base.ScopedValues
+
+julia> const sval = ScopedValue(1)
+ScopedValue(1)
 ```
 
 Indeed one can think of scoped values as hidden function arguments.
 
 This does not preclude their use as non-globals.
 
-```julia
-using Base.ScopedValues
-import Base.Threads: @spawn
+```jldoctest
+julia> using Base.ScopedValues
 
-function main()
-    role = ScopedValue(:client)
+julia> import Base.Threads: @spawn
 
-    function launch()
-        #...
-        role[]
-    end
+julia>  function main()
+            role = ScopedValue(:client)
 
-    @with role => :server @spawn launch()
-    launch()
-end
+            function launch()
+                #...
+                role[]
+            end
+
+            @with role => :server @spawn launch()
+            launch()
+        end
+main(generic fucntion with 1 method)
 ```
 
 But it might have been simpler to just directly pass the function argument
