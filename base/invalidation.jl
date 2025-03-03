@@ -140,7 +140,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
             end
         end
     end
-    if (invalidated_bpart.kind & BINDING_FLAG_EXPORTED != 0) || (new_bpart !== nothing && (new_bpart.kind & BINDING_FLAG_EXPORTED != 0))
+    if (invalidated_bpart.kind & PARTITION_FLAG_EXPORTED != 0) || (new_bpart !== nothing && (new_bpart.kind & PARTITION_FLAG_EXPORTED != 0))
         # This binding was exported - we need to check all modules that `using` us to see if they
         # have a binding that is affected by this change.
         usings_backedges = ccall(:jl_get_module_usings_backedges, Any, (Any,), gr.mod)
@@ -151,7 +151,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                 isdefined(user_binding, :partitions) || continue
                 latest_bpart = user_binding.partitions
                 latest_bpart.max_world == typemax(UInt) || continue
-                binding_kind(latest_bpart) in (BINDING_KIND_IMPLICIT, BINDING_KIND_FAILED, BINDING_KIND_GUARD) || continue
+                binding_kind(latest_bpart) in (PARTITION_KIND_IMPLICIT, PARTITION_KIND_FAILED, PARTITION_KIND_GUARD) || continue
                 @atomic :release latest_bpart.max_world = new_max_world
                 invalidate_code_for_globalref!(convert(Core.Binding, user_binding), latest_bpart, nothing, new_max_world)
             end

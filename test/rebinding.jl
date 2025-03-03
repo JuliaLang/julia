@@ -4,24 +4,24 @@ module Rebinding
     using Test
     make_foo() = Foo(1)
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_GUARD
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_GUARD
     struct Foo
         x::Int
     end
     const defined_world_age = Base.tls_world_age()
     x = Foo(1)
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_CONST
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_CONST
     @test !contains(repr(x), "@world")
     Base.delete_binding(@__MODULE__, :Foo)
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_GUARD
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_GUARD
     @test contains(repr(x), "@world")
 
     # Test that it still works if Foo is redefined to a non-type
     const Foo = 1
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_CONST
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_CONST
     @test contains(repr(x), "@world")
     Base.delete_binding(@__MODULE__, :Foo)
 
