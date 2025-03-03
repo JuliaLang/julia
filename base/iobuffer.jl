@@ -24,8 +24,8 @@
 #   to make room for more data, without replacing or resizing data
 
 # Internal trait object used to access unsafe constructors.
-struct Unsafe end
-const unsafe = Unsafe()
+struct UnsafeMethod end
+const unsafe_method = UnsafeMethod()
 
 mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # T should support: getindex, setindex!, length, copyto!, similar, and (optionally) resize!
@@ -68,7 +68,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     # Unsafe constructor which does not do any checking
     function GenericIOBuffer{T}(
-            ::Unsafe,
+            ::UnsafeMethod,
             data::T,
             readable::Bool,
             writable::Bool,
@@ -95,7 +95,7 @@ function GenericIOBuffer{T}(
     if mz < len
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end
-    return GenericIOBuffer{T}(unsafe, data, readable, writable, seekable, append, mz)
+    return GenericIOBuffer{T}(unsafe_method, data, readable, writable, seekable, append, mz)
 end
 
 const IOBuffer = GenericIOBuffer{Memory{UInt8}}
@@ -226,7 +226,7 @@ function IOBuffer(;
     # A common usecase of IOBuffer is to incrementally construct strings. By using StringMemory
     # as the default storage, we can turn the result into a string without copying.
     data = fill!(StringMemory(size), 0)
-    buf = GenericIOBuffer{Memory{UInt8}}(unsafe, data, flags.read, flags.write, true, flags.append, mz)
+    buf = GenericIOBuffer{Memory{UInt8}}(unsafe_method, data, flags.read, flags.write, true, flags.append, mz)
     if flags.truncate
         buf.size = 0
     end
