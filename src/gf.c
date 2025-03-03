@@ -3049,11 +3049,15 @@ JL_DLLEXPORT jl_value_t *jl_fptr_args(jl_value_t *f, jl_value_t **args, uint32_t
 
 JL_DLLEXPORT jl_value_t *jl_fptr_sparam(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
 {
-    jl_svec_t *sparams = jl_get_ci_mi(m)->sparam_vals;
-    assert(sparams != jl_emptysvec);
+    jl_datatype_t *tt = jl_inst_arg_tuple_type(f, args, nargs+1, 1);
+    jl_svec_t *env = jl_emptysvec;
+    JL_GC_PUSH2(&env, &tt);
+    jl_type_intersection_env((jl_value_t*)tt, jl_get_ci_mi(m)->def.method->sig, &env);
     jl_fptr_sparam_t invoke = jl_atomic_load_relaxed(&m->specptr.fptr3);
     assert(invoke && "Forgot to set specptr for jl_fptr_sparam!");
-    return invoke(f, args, nargs, sparams);
+    jl_value_t *ret = invoke(f, args, nargs, env);
+    JL_GC_POP();
+    return ret;
 }
 
 jl_value_t *jl_fptr_wait_for_compiled(jl_value_t *f, jl_value_t **args, uint32_t nargs, jl_code_instance_t *m)
