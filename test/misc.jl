@@ -1367,6 +1367,23 @@ end
     end
 end
 
+@kwdef mutable struct Test57592
+    a::Int = 0
+    b::Tuple{Int, Int} = (0, 0)
+end
+@kwdef struct Test57592Immutable
+    a::String
+end
+Base.:(==)(x::Test57592, y::Test57592) = x.a == y.a && x.b == y.b
+@testset "@kwdef reconstructor" begin
+    outer = Some(Test57592(42, (1, 2)))
+    @test Test57592!(outer.value) == Test57592(0, (0, 0))
+    @test Test57592!(outer.value, a=27) == Test57592(27, (0, 0))
+    @test Test57592!(outer.value, b=(-17,20)) == Test57592(0, (-17, 20))
+    @test Test57592!(outer.value, a=-19, b=(300,-30)) == Test57592(-19, (300, -30))
+    @test_throws UndefVarError Test57592Immutable!(Test57592Immutable("abc"), "def")
+end
+
 module KwdefWithEsc
     const Int1 = Int
     const val1 = 42
