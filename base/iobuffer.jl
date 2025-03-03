@@ -23,6 +23,10 @@
 # * Data in 1:mark can be deleted, shifting the whole thing to the left
 #   to make room for more data, without replacing or resizing data
 
+# Internal trait object used to access unsafe constructors.
+struct Unsafe end
+const unsafe = Unsafe()
+
 mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # T should support: getindex, setindex!, length, copyto!, similar, and (optionally) resize!
     data::T
@@ -62,13 +66,36 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # This value is always in -1 : size-1
     mark::Int
 
-    # TODO: The invariants of the values should be enforced in all constructors,
-    # except explicitly unsafe ones.
-    function GenericIOBuffer{T}(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
-                                maxsize::Integer) where T<:AbstractVector{UInt8}
-        require_one_based_indexing(data)
-        return new(data, false, readable, writable, seekable, append, length(data), maxsize, 1, -1)
+    # Unsafe constructor which does not do any checking
+    function GenericIOBuffer{T}(
+            ::Unsafe,
+            data::T,
+            readable::Bool,
+            writable::Bool,
+            seekable::Bool,
+            append::Bool,
+            maxsize::Int,
+        ) where T<:AbstractVector{UInt8}
+        len = Int(length(data))::Int
+        return new(data, false, readable, writable, seekable, append, len, maxsize, 1, -1)
     end
+end
+
+function GenericIOBuffer{T}(
+        data::T,
+        readable::Bool,
+        writable::Bool,
+        seekable::Bool,
+        append::Bool,
+        maxsize::Integer,
+    ) where T<:AbstractVector{UInt8}
+    require_one_based_indexing(data)
+    mz = Int(maxsize)::Int
+    len = Int(length(data))::Int
+    if mz < len
+        throw(ArgumentError("maxsize must not be smaller than data length"))
+    end
+    return GenericIOBuffer{T}(unsafe, data, readable, writable, seekable, append, mz)
 end
 
 const IOBuffer = GenericIOBuffer{Memory{UInt8}}
@@ -164,16 +191,13 @@ function IOBuffer(
         append::Union{Bool,Nothing}=nothing,
         truncate::Union{Bool,Nothing}=nothing,
         maxsize::Integer=typemax(Int),
-        sizehint::Union{Integer,Nothing}=nothing)
-    # TODO: Add a check that length(data) <= maxsize and error if not.
-    if maxsize < 0
-        throw(ArgumentError("negative maxsize"))
-    end
+        sizehint::Union{Integer,Nothing}=nothing,
+    )
     if sizehint !== nothing
         sizehint!(data, sizehint)
     end
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
-    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, Int(maxsize)::Int)
+    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, mz)
     if flags.truncate
         buf.size = 0
     end
@@ -202,7 +226,7 @@ function IOBuffer(;
     # A common usecase of IOBuffer is to incrementally construct strings. By using StringMemory
     # as the default storage, we can turn the result into a string without copying.
     data = fill!(StringMemory(size), 0)
-    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, mz)
+    buf = GenericIOBuffer{Memory{UInt8}}(unsafe, data, flags.read, flags.write, true, flags.append, mz)
     if flags.truncate
         buf.size = 0
     end
