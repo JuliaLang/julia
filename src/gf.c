@@ -1839,7 +1839,7 @@ JL_DLLEXPORT jl_value_t *jl_debug_method_invalidation(int state)
     return jl_nothing;
 }
 
-static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, int depth);
+static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth);
 
 // recursively invalidate cached methods that had an edge to a replaced method
 static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_world, int depth)
@@ -1864,7 +1864,7 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
     }
     assert(jl_atomic_load_relaxed(&replaced->max_world) <= max_world);
     // recurse to all backedges to update their valid range also
-    _invalidate_backedges(replaced_mi, max_world, depth + 1);
+    _invalidate_backedges(replaced_mi, replaced, max_world, depth + 1);
     JL_UNLOCK(&replaced_mi->def.method->writelock);
 }
 
@@ -1873,7 +1873,7 @@ JL_DLLEXPORT void jl_invalidate_code_instance(jl_code_instance_t *replaced, size
     invalidate_code_instance(replaced, max_world, 1);
 }
 
-static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, int depth) {
+static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth) {
     jl_array_t *backedges = replaced_mi->backedges;
     if (backedges) {
         // invalidate callers (if any)
@@ -1884,6 +1884,17 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_
         while (i < l) {
             i = get_next_edge(backedges, i, NULL, &replaced);
             JL_GC_PROMISE_ROOTED(replaced); // propagated by get_next_edge from backedges
+            if (replaced_ci) {
+                // If we're invalidating a particular codeinstance, only invalidate
+                // this backedge it actually has an edge for our codeinstance.
+                jl_svec_t *edges = jl_atomic_load_relaxed(&replaced->edges);
+                for (size_t j = 0; j < jl_svec_len(edges); ++j) {
+                    if (jl_svecref(edges, j) == (jl_value_t*)replaced_ci)
+                        goto found;
+                }
+                continue;
+            found:;
+            }
             invalidate_code_instance(replaced, max_world, depth);
         }
         JL_GC_POP();
@@ -1894,7 +1905,7 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_
 static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
 {
     JL_LOCK(&replaced_mi->def.method->writelock);
-    _invalidate_backedges(replaced_mi, max_world, 1);
+    _invalidate_backedges(replaced_mi, NULL, max_world, 1);
     JL_UNLOCK(&replaced_mi->def.method->writelock);
     if (why && _jl_debug_method_invalidation) {
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)replaced_mi);
