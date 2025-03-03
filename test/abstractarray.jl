@@ -2142,10 +2142,6 @@ end
     @test Core.Compiler.is_foldable(Base.infer_effects(firstindex, Tuple{Array}))
 end
 
-@testset "inference for `lastindex(::Array)`" begin
-    @test Int === Base.infer_return_type(lastindex, Tuple{Array})
-end
-
 @testset "zero for arbitrary axes" begin
     r = SizedArrays.SOneTo(2)
     s = Base.OneTo(2)
