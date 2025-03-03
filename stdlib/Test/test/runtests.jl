@@ -110,7 +110,21 @@ end
 # Test printing of Fail results
 include("nothrow_testset.jl")
 
-let fails = @testset NoThrowTestSet begin
+macro with_no_show_hooks(f)
+    quote
+        hooks_before = copy(Test.show_hooks)
+        empty!(Test.show_hooks)
+        append!(Test.show_hooks, hooks_before)
+        try
+            $(esc(f))
+        finally
+            empty!(Test.show_hooks)
+            append!(Test.show_hooks, hooks_before)
+        end
+    end
+end
+
+let fails = @testset NoThrowTestSet begin @with_no_show_hooks begin
         # 1 - Fail - wrong exception
         @test_throws OverflowError error()
         # 2 - Fail - no exception
@@ -163,7 +177,7 @@ let fails = @testset NoThrowTestSet begin
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
         @test_throws ["BoundsError", "acquire", "1-element", "at index [2]"] [1][2]
-    end
+    end end
     for fail in fails
         @test fail isa Test.Fail
     end
@@ -302,7 +316,7 @@ end
 
 struct BadError <: Exception end
 Base.show(io::IO, ::BadError) = throw("I am a bad error")
-let errors = @testset NoThrowTestSet begin
+let errors = @testset NoThrowTestSet begin @with_no_show_hooks begin
         # 1 - Error - unexpected pass
         @test_broken true
         # 2 - Error - converting a call into a comparison
@@ -311,7 +325,7 @@ let errors = @testset NoThrowTestSet begin
         @test throw(BadError())
         @test BadError()
         throw(BadError())
-    end
+    end end
 
     for err in errors
         @test err isa Test.Error
@@ -340,7 +354,7 @@ let errors = @testset NoThrowTestSet begin
     end
 end
 
-let retval_tests = @testset NoThrowTestSet begin
+let retval_tests = @testset NoThrowTestSet begin @with_no_show_hooks begin
         ts = Test.DefaultTestSet("Mock for testing retval of record(::DefaultTestSet, ::T <: Result) methods")
         pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
@@ -350,7 +364,7 @@ let retval_tests = @testset NoThrowTestSet begin
         @test Test.record(ts, fail_mock) isa Test.Fail
         broken_mock = Test.Broken(:test, LineNumberNode(0, "A Broken Mock"))
         @test Test.record(ts, broken_mock) isa Test.Broken
-    end
+    end end
     for retval_test in retval_tests
         @test retval_test isa Test.Pass
     end
@@ -988,12 +1002,12 @@ erronce() = @error "an error" maxlog=1
     @test length(test_logger.logs) == 2
 
     # Test failures
-    fails = @testset NoThrowTestSet "check that @test_logs detects bad input" begin
+    fails = @testset NoThrowTestSet "check that @test_logs detects bad input" begin @with_no_show_hooks begin
         @test_logs (Warn,) foo(1)
         @test_logs (Warn,) match_mode=:any @info "foo"
         @test_logs (Debug,) @debug "foo"
         @test_logs (Warn,) error()
-    end
+    end end
     @test length(fails) == 4
     @test fails[1] isa Test.LogTestFailure
     @test fails[2] isa Test.LogTestFailure
@@ -1014,10 +1028,10 @@ let code = quote
 
             @test (@test_deprecated oldfunc()) == 42
 
-            fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin
+            fails = @testset NoThrowTestSet "check that @test_deprecated detects bad input" begin @with_no_show_hooks begin
                 @test_deprecated newfunc()
                 @test_deprecated r"Not found in message" oldfunc()
-            end
+            end end
             @test length(fails) == 2
             @test fails[1] isa Test.LogTestFailure
             @test fails[2] isa Test.LogTestFailure
@@ -1430,7 +1444,7 @@ end
 struct T35888 end
 Base.isequal(::T35888, ::T35888) = T35888()
 Base.:!(::T35888) = missing
-let errors = @testset NoThrowTestSet begin
+let errors = @testset NoThrowTestSet begin @with_no_show_hooks begin
         # 1 - evaluates to non-Boolean
         @test missing
         # 2 - evaluates to non-Boolean
@@ -1451,7 +1465,7 @@ let errors = @testset NoThrowTestSet begin
         @test 1 < 2 < missing < 4
         # 10 - TypeError in chained comparison
         @test !(1 < 2 < missing < 4)
-    end
+    end end
 
     for err in errors
         @test err isa Test.Error
@@ -1746,10 +1760,10 @@ module M54082 end
     @test_throws UndefVarError(:var) f54082()
     # But if scope is set, then it has to match.
     @test_throws UndefVarError(:var, M54082) M54082.var
-    let result = @testset NoThrowTestSet begin
+    let result = @testset NoThrowTestSet begin @with_no_show_hooks begin
             # Wrong module scope
             @test_throws UndefVarError(:var, Main) M54082.var
-        end
+        end end
         @test only(result) isa Test.Fail
     end
 end
