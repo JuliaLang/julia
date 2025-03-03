@@ -293,7 +293,7 @@ julia>  function main()
             @with role => :server @spawn launch()
             launch()
         end
-main(generic fucntion with 1 method)
+main(generic function with 1 method)
 ```
 
 But it might have been simpler to just directly pass the function argument
