@@ -942,19 +942,20 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     if bytesavailable(sbuf) >= nb
         nread = readbytes!(sbuf, a, nb)
     else
-        initsize = length(a)
-        newbuf = PipeBuffer(a, maxsize=nb)
-        newbuf.size = 0 # reset the write pointer to the beginning
+        # TODO: Here, we don't read directly into `a`, but read to
+        # a new buffer, and then copy to `a`
+        newbuf = PipeBuffer(; maxsize=nb)
         nread = try
             s.buffer = newbuf
             write(newbuf, sbuf)
             wait_locked(s, newbuf, nb)
-            bytesavailable(newbuf)
+            v = take!(newbuf)
+            length(v) > length(a) && resize!(a, length(v))
+            unsafe_copyto!(a, 1, v, 1, length(v))
+            length(v)
         finally
             s.buffer = sbuf
         end
-        _take!(a, _unsafe_take!(newbuf))
-        length(a) >= initsize || resize!(a, initsize)
     end
     iolock_end()
     return nread
@@ -1604,19 +1605,20 @@ function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
         if bytesavailable(sbuf) >= nb
             nread = readbytes!(sbuf, a, nb)
         else
-            initsize = length(a)
-            newbuf = PipeBuffer(a, maxsize=nb)
-            newbuf.size = 0 # reset the write pointer to the beginning
+            # TODO: Copy data directly from s into a. Instead, here,
+            # we use a PipeBuffer as indirect IO.
+            newbuf = PipeBuffer(; maxsize=nb)
             nread = try
                 s.buffer = newbuf
                 write(newbuf, sbuf)
                 wait_locked(s, newbuf, nb)
-                bytesavailable(newbuf)
+                v = take!(newbuf)
+                length(v) > length(a) && resize!(a, length(v))
+                unsafe_copyto!(a, 1, v, 1, length(v))
+                length(v)
             finally
                 s.buffer = sbuf
             end
-            _take!(a, _unsafe_take!(newbuf))
-            length(a) >= initsize || resize!(a, initsize)
         end
         return nread
     end
