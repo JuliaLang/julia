@@ -827,6 +827,12 @@ function issue23618(a::AbstractVector)
 end
 @test Base.infer_return_type(issue23618, (Vector{Int},)) == Vector{Set{Int}}
 
+@testset "type inference for getting the `parameters` field of a type" begin
+    let f(x) = x.parameters
+        @test Base.infer_return_type(f, Tuple{DataType}) === Base.infer_return_type(f, Tuple{Type})
+    end
+end
+
 # ? syntax
 @test (true ? 1 : false ? 2 : 3) == 1
 

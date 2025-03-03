@@ -46,7 +46,15 @@ macro _boundscheck() Expr(:boundscheck) end
 # with ambiguities by defining a few common and critical operations
 # (and these don't need the extra convert code)
 getproperty(x::Module, f::Symbol) = (@inline; getglobal(x, f))
-getproperty(x::Type, f::Symbol) = (@inline; getfield(x, f))
+function getproperty(x::Type, f::Symbol)
+    @inline
+    if f === :parameters
+        # Ensure `type.parameters` has perfect type inference even when `type` is
+        # not completely determined at compile time.
+        x = x::DataType
+    end
+    getfield(x, f)
+end
 setproperty!(x::Type, f::Symbol, v) = error("setfield! fields of Types should not be changed")
 setproperty!(x::Array, f::Symbol, v) = error("setfield! fields of Array should not be changed")
 getproperty(x::Tuple, f::Int) = (@inline; getfield(x, f))
