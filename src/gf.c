@@ -1839,7 +1839,7 @@ JL_DLLEXPORT jl_value_t *jl_debug_method_invalidation(int state)
     return jl_nothing;
 }
 
-static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, int depth);
+static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth);
 
 // recursively invalidate cached methods that had an edge to a replaced method
 static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_world, int depth)
@@ -1858,13 +1858,15 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
     if (!jl_is_method(replaced_mi->def.method))
         return; // shouldn't happen, but better to be safe
     JL_LOCK(&replaced_mi->def.method->writelock);
-    if (jl_atomic_load_relaxed(&replaced->max_world) == ~(size_t)0) {
+    size_t replacedmaxworld = jl_atomic_load_relaxed(&replaced->max_world);
+    if (replacedmaxworld == ~(size_t)0) {
         assert(jl_atomic_load_relaxed(&replaced->min_world) - 1 <= max_world && "attempting to set illogical world constraints (probable race condition)");
         jl_atomic_store_release(&replaced->max_world, max_world);
+        // recurse to all backedges to update their valid range also
+        _invalidate_backedges(replaced_mi, replaced, max_world, depth + 1);
+    } else {
+        assert(jl_atomic_load_relaxed(&replaced->max_world) <= max_world);
     }
-    assert(jl_atomic_load_relaxed(&replaced->max_world) <= max_world);
-    // recurse to all backedges to update their valid range also
-    _invalidate_backedges(replaced_mi, max_world, depth + 1);
     JL_UNLOCK(&replaced_mi->def.method->writelock);
 }
 
@@ -1873,18 +1875,41 @@ JL_DLLEXPORT void jl_invalidate_code_instance(jl_code_instance_t *replaced, size
     invalidate_code_instance(replaced, max_world, 1);
 }
 
-static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, int depth) {
+static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth) {
     jl_array_t *backedges = replaced_mi->backedges;
     if (backedges) {
         // invalidate callers (if any)
         replaced_mi->backedges = NULL;
         JL_GC_PUSH1(&backedges);
         size_t i = 0, l = jl_array_nrows(backedges);
+        size_t ins = 0;
         jl_code_instance_t *replaced;
         while (i < l) {
-            i = get_next_edge(backedges, i, NULL, &replaced);
+            jl_value_t *invokesig = NULL;
+            i = get_next_edge(backedges, i, &invokesig, &replaced);
             JL_GC_PROMISE_ROOTED(replaced); // propagated by get_next_edge from backedges
+            if (replaced_ci) {
+                // If we're invalidating a particular codeinstance, only invalidate
+                // this backedge it actually has an edge for our codeinstance.
+                jl_svec_t *edges = jl_atomic_load_relaxed(&replaced->edges);
+                for (size_t j = 0; j < jl_svec_len(edges); ++j) {
+                    jl_value_t *edge = jl_svecref(edges, j);
+                    if (edge == (jl_value_t*)replaced_mi || edge == (jl_value_t*)replaced_ci)
+                        goto found;
+                }
+                // Keep this entry in the backedge list, but compact it
+                ins = set_next_edge(backedges, ins, invokesig, replaced);
+                continue;
+            found:;
+            }
             invalidate_code_instance(replaced, max_world, depth);
+        }
+        if (replaced_ci && ins != 0) {
+            jl_array_del_end(backedges, l - ins);
+            // If we're only invalidating one ci, we don't know which ci any particular
+            // backedge was for, so we can't delete them. Put them back.
+            replaced_mi->backedges = backedges;
+            jl_gc_wb(replaced_mi, backedges);
         }
         JL_GC_POP();
     }
@@ -1894,7 +1919,7 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_
 static void invalidate_backedges(jl_method_instance_t *replaced_mi, size_t max_world, const char *why)
 {
     JL_LOCK(&replaced_mi->def.method->writelock);
-    _invalidate_backedges(replaced_mi, max_world, 1);
+    _invalidate_backedges(replaced_mi, NULL, max_world, 1);
     JL_UNLOCK(&replaced_mi->def.method->writelock);
     if (why && _jl_debug_method_invalidation) {
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)replaced_mi);
@@ -1928,8 +1953,8 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
             size_t i = 0, l = jl_array_nrows(callee->backedges);
             for (i = 0; i < l; i++) {
                 // optimized version of while (i < l) i = get_next_edge(callee->backedges, i, &invokeTypes, &mi);
-                jl_value_t *mi = jl_array_ptr_ref(callee->backedges, i);
-                if (mi != (jl_value_t*)caller)
+                jl_value_t *ciedge = jl_array_ptr_ref(callee->backedges, i);
+                if (ciedge != (jl_value_t*)caller)
                     continue;
                 jl_value_t *invokeTypes = i > 0 ? jl_array_ptr_ref(callee->backedges, i - 1) : NULL;
                 if (invokeTypes && jl_is_method_instance(invokeTypes))
@@ -2372,7 +2397,7 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
                     continue;
                 loctag = jl_atomic_load_relaxed(&m->specializations); // use loctag for a gcroot
                 _Atomic(jl_method_instance_t*) *data;
-                size_t i, l;
+                size_t l;
                 if (jl_is_svec(loctag)) {
                     data = (_Atomic(jl_method_instance_t*)*)jl_svec_data(loctag);
                     l = jl_svec_len(loctag);
@@ -2382,7 +2407,7 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
                     l = 1;
                 }
                 enum morespec_options ambig = morespec_unknown;
-                for (i = 0; i < l; i++) {
+                for (size_t i = 0; i < l; i++) {
                     jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
                     if ((jl_value_t*)mi == jl_nothing)
                         continue;
