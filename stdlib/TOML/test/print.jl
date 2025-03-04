@@ -204,6 +204,14 @@ LocalPkg = {path = "LocalPkg"}
 @test toml_str(d; sorted=true, inline_tables) == s
 @test roundtrip(s)
 
+
+# https://github.com/JuliaLang/julia/pull/57584
+d = Dict("a" => 1, "b" => 2)
+inline_tables = IdSet{Dict}([d])
+s = "{a = 1, b = 2}"
+@test toml_str(d; sorted=true, inline_tables) == s
+
+
 # multiline strings (#55083)
 s = """
 a = \"\"\"lorem ipsum
