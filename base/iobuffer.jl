@@ -78,7 +78,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # which can be seeked back using `reset`, even for non-seekable buffers.
     # For non-seekable buffers that can be compacted, data before the mark can be
     # destroyed.
-    # This value is always in -1 : size-offset-1
+    # This value is always in -1 : size - offset
     mark::Int
 
     # Unsafe constructor which does not do any checking
@@ -128,7 +128,15 @@ function GenericIOBuffer(data::Vector{UInt8}, readable::Bool, writable::Bool, se
     mem = ref.mem
     len = length(data)
     offset = memoryrefoffset(ref) - 1
-    buf = GenericIOBuffer(mem, readable, writable, seekable, append, maxsize)
+
+    # The user may pass a vector of length <= maxsize, but where the underlying memory
+    # is larger than maxsize. Don't throw an error in that case.
+    mz = Int(maxsize)::Int
+    len = Int(length(data))::Int
+    if mz < len
+        throw(ArgumentError("maxsize must not be smaller than data length"))
+    end
+    buf = GenericIOBuffer{Memory{UInt8}}(unsafe_method, mem, readable, writable, seekable, append, max(mz, length(mem)))
     buf.size = len + offset
     buf.ptr = offset + 1
     buf.offset = offset
@@ -239,12 +247,8 @@ function IOBuffer(;
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
     # A common usecase of IOBuffer is to incrementally construct strings. By using StringMemory
     # as the default storage, we can turn the result into a string without copying.
-    # TODO: Do we need to zero this here?
-    data = fill!(StringMemory(size), 0)
-    buf = GenericIOBuffer{Memory{UInt8}}(unsafe_method, data, flags.read, flags.write, true, flags.append, mz)
-    if flags.truncate
-        buf.size = buf.offset
-    end
+    buf = GenericIOBuffer{Memory{UInt8}}(unsafe_method, StringMemory(size), flags.read, flags.write, true, flags.append, mz)
+    buf.size = 0
     return buf
 end
 
@@ -382,17 +386,6 @@ function read(from::GenericIOBuffer, T::MultiByteBitNumberType)
     return x
 end
 
-function read_sub(from::GenericIOBuffer, a::MutableDenseArrayType{T}, offs, nel) where T
-    require_one_based_indexing(a)
-    from.readable || _throw_not_readable()
-    if offs+nel-1 > length(a) || offs < 1 || nel < 0
-        throw(BoundsError())
-    end
-    nb = UInt(nel * sizeof(T))
-    GC.@preserve a unsafe_read(from, pointer(a, offs), nb)
-    return a
-end
-
 @inline function read(from::GenericIOBuffer, ::Type{UInt8})
     from.readable || _throw_not_readable()
     ptr = from.ptr
@@ -496,7 +489,7 @@ function _resize!(io::GenericIOBuffer, new_size::Int)
 end
 
 # TODO: These errors cannot be converted to LazyString, but it's wasteful to interpolate them here.
-function truncate(io::GenericIOBuffer, n::Integer) 
+function truncate(io::GenericIOBuffer, n::Integer)
     io.writable || throw(ArgumentError("truncate failed, IOBuffer is not writeable"))
     # Non-seekable buffers can only be constructed with `PipeBuffer`, which is explicitly
     # documented to not be truncatable.
@@ -812,13 +805,16 @@ end
 end
 
 readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb=length(b)) = readbytes!(io, b, Int(nb))
+
 function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::Int)
-    nr = min(nb, bytesavailable(io))
-    if length(b) < nr
-        resize!(b, nr)
+    io.readable || _throw_not_readable()
+    to_read = min(nb, bytesavailable(io))
+    if length(b) < to_read
+        resize!(b, to_read)
     end
-    read_sub(io, b, 1, nr)
-    return nr
+    checkbounds(b, 1:to_read)
+    GC.@preserve b unsafe_read(io, pointer(b), to_read)
+    to_read
 end
 read(io::GenericIOBuffer) = read!(io, StringVector(bytesavailable(io)))
 

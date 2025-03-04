@@ -42,6 +42,10 @@ end
 
     # Reading more bytes than available will not error
     @test read(buf, 100) == b"EFGHIJ"
+
+    # Passing truncate=false will still truncate an IOBuffer with no
+    # initialized data
+    @test isempty(read(IOBuffer(;sizehint=34, truncate=false)))
 end
 
 @testset "Byte occursin GenericIOBuffer" begin
@@ -185,6 +189,12 @@ end
     write(buf, collect(0x99:0xff))
     seekstart(buf)
     @test read(buf) == 0x00:UInt8(127)
+
+    # Edge case: When passing a Vector, does not error if the
+    # underlying mem is larger than maxsize
+    v = pushfirst!([0x01], 0x02)
+    io = IOBuffer(v; maxsize=2)
+    @test read(io) == b"\x02\x01"
 end
 
 @testset "Write to self" begin
@@ -245,7 +255,7 @@ end
     @test position(io) == 0
     truncate(io, 10)
     @test position(io) == 0
-    @test all(io.data .== 0)
+    @test all(view(io.data, 1:10) .== 0)
     @test write(io, Int16[1, 2, 3, 4, 5, 6]) === 12
     seek(io, 2)
     truncate(io, 10)
@@ -604,8 +614,9 @@ end
     v = @view a[1:2]
     io = IOBuffer()
     write(io,1)
+    write(io,0)
     seek(io,0)
-    @test Base.read_sub(io,v,1,1) == [1,0]
+    @test read!(io, v) == [1, 0]
 end
 
 @testset "with offset" begin
