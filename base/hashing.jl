@@ -161,8 +161,8 @@ end
             end
         end
 
-        a = load_le(UInt64, ptr, n - 17)
-        b = load_le(UInt64, ptr, n - 9)
+        a = load_le(UInt64, ptr, n - 15)
+        b = load_le(UInt64, ptr, n - 7)
     end
 
     a = a ⊻ secret[2]
