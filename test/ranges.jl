@@ -2786,3 +2786,20 @@ end
     @test promote(MyUnitRange(2:3), Base.OneTo(3)) == (2:3, 1:3)
     @test promote(MyUnitRange(UnitRange(3.0, 4.0)), Base.OneTo(3)) == (3.0:4.0, 1.0:3.0)
 end
+
+@testset "StepRange(::StepRangeLen)" begin
+    ind = StepRangeLen(2, -1, 2)
+    @test StepRange(ind) == ind
+    @test StepRange(ind) isa StepRange{eltype(ind), typeof(step(ind))}
+    @test StepRange{Int8}(ind) == ind
+    @test StepRange{Int8}(ind) isa StepRange{Int8}
+    @test StepRange{Int8,Int8}(ind) == ind
+    @test StepRange{Int8,Int8}(ind) isa StepRange{Int8,Int8}
+
+    r = StepRangeLen(3, 0, 4)
+    @test_throws "step cannot be zero" StepRange(r)
+
+    r = StepRangeLen(Date(2020,1,1), Day(1), 4)
+    @test StepRange(r) == r
+    @test StepRange(r) isa StepRange{Date,Day}
+end
