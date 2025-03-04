@@ -39,6 +39,45 @@ static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
     }
 }
 
+void jl_add_scanned_method(jl_module_t *m, jl_method_t *meth)
+{
+    JL_LOCK(&m->lock);
+    if (m->scanned_methods == jl_nothing) {
+        m->scanned_methods = (jl_value_t*)jl_alloc_vec_any(0);
+        jl_gc_wb(m, m->scanned_methods);
+    }
+    jl_array_ptr_1d_push((jl_array_t*)m->scanned_methods, (jl_value_t*)meth);
+    JL_UNLOCK(&m->lock);
+}
+
+JL_DLLEXPORT void jl_scan_method_source_now(jl_method_t *m, jl_value_t *src)
+{
+    if (!jl_atomic_fetch_or(&m->did_scan_source, 1)) {
+        jl_code_info_t *code = NULL;
+        JL_GC_PUSH1(&code);
+        if (!jl_is_code_info(src))
+            code = jl_uncompress_ir(m, NULL, src);
+        else
+            code = (jl_code_info_t*)src;
+        jl_array_t *stmts = code->code;
+        size_t i, l = jl_array_nrows(stmts);
+        int any_implicit = 0;
+        for (i = 0; i < l; i++) {
+            jl_value_t *stmt = jl_array_ptr_ref(stmts, i);
+            if (jl_is_globalref(stmt)) {
+                jl_globalref_t *gr = (jl_globalref_t*)stmt;
+                jl_binding_t *b = gr->binding;
+                if (!b)
+                    b = jl_get_module_binding(gr->mod, gr->name, 1);
+                any_implicit |= jl_maybe_add_binding_backedge(b, (jl_value_t*)m, m);
+            }
+        }
+        if (any_implicit && !(jl_atomic_fetch_or(&m->did_scan_source, 0x2) & 0x2))
+            jl_add_scanned_method(m->module, m);
+        JL_GC_POP();
+    }
+}
+
 // Resolve references to non-locally-defined variables to become references to global
 // variables in `module` (unless the rvalue is one of the type parameters in `sparam_vals`).
 static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *module, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
@@ -47,10 +86,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
     if (jl_is_symbol(expr)) {
         jl_error("Found raw symbol in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.");
     }
-    if (jl_is_globalref(expr)) {
-        jl_maybe_add_binding_backedge((jl_globalref_t*)expr, module, binding_edge);
-        return expr;
-    }
+
     if (!jl_is_expr(expr)) {
         return expr;
     }
@@ -973,6 +1009,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     jl_atomic_store_relaxed(&m->deleted_world, 1);
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;
+    jl_atomic_store_relaxed(&m->did_scan_source, 0);
     m->constprop = 0;
     m->purity.bits = 0;
     m->max_varargs = UINT8_MAX;
