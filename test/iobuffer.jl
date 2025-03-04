@@ -107,6 +107,37 @@ end
     @test isreadable(buf2)
     @test !iswritable(buf2)
     @test read(buf2) == 0x04:0x0d
+
+    # Test copying a non-seekable stream
+    buf = new_unseekable_buffer()
+    write(buf, "abcdef")
+    read(buf, UInt16)
+    mark(buf)
+    read(buf, UInt16)
+    buf2 = copy(buf)
+    @test read(buf2) == b"ef"
+    reset(buf2)
+    @test read(buf2) == b"cdef"
+
+    # Test copying seekable stream
+    buf = IOBuffer()
+    write(buf, "abcdef")
+    seekstart(buf)
+    read(buf)
+    mark(buf)
+    buf2 = copy(buf)
+    @test reset(buf2) == 6
+    seekstart(buf2)
+    @test read(buf2) == b"abcdef"
+
+    # Test copying a taken buffer
+    buf = IOBuffer()
+    write(buf, "abcdef")
+    take!(buf)
+    buf2 = copy(buf)
+    @test eof(buf2)
+    seekstart(buf2)
+    @test eof(buf2)
 end
 
 @testset "copyuntil" begin
