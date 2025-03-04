@@ -158,6 +158,13 @@ Parameters that control abstract interpretation-based type inference operation.
   can have a more fine-grained control on this configuration with per-module or per-method
   annotation basis.
 ---
+- `inf_params.max_concrete_methods::Int = 0`\\
+  TODO: rewrite
+  Specifies an additional set of allowed matches for a call (on top of `max_methods`) for
+  "concrete" methods which have exactly one specialization signature, i.e. the signature they
+  were defined with is already fully-specialized, for example all argument types are concrete
+  or marked `@nospecialize`.
+---
 - `inf_params.max_union_splitting::Int = 4`\\
   Specifies the maximum number of union-tuples to swap or expand before computing the set of
   matching methods or conditional types.
@@ -194,6 +201,7 @@ Parameters that control abstract interpretation-based type inference operation.
 """
 struct InferenceParams
     max_methods::Int
+    max_concrete_methods::Int
     max_union_splitting::Int
     max_apply_union_enum::Int
     max_tuple_splat::Int
@@ -205,6 +213,7 @@ struct InferenceParams
 
     function InferenceParams(
         max_methods::Int,
+        max_concrete_methods::Int,
         max_union_splitting::Int,
         max_apply_union_enum::Int,
         max_tuple_splat::Int,
@@ -212,9 +221,11 @@ struct InferenceParams
         ipo_constant_propagation::Bool,
         aggressive_constant_propagation::Bool,
         assume_bindings_static::Bool,
-        ignore_recursion_hardlimit::Bool)
+        ignore_recursion_hardlimit::Bool,
+    )
         return new(
             max_methods,
+            max_concrete_methods,
             max_union_splitting,
             max_apply_union_enum,
             max_tuple_splat,
@@ -222,12 +233,14 @@ struct InferenceParams
             ipo_constant_propagation,
             aggressive_constant_propagation,
             assume_bindings_static,
-            ignore_recursion_hardlimit)
+            ignore_recursion_hardlimit,
+        )
     end
 end
 function InferenceParams(
     params::InferenceParams = InferenceParams( # default constructor
         #=max_methods::Int=# BuildSettings.MAX_METHODS,
+        #=max_concrete_methods::Int=# BuildSettings.MAX_CONCRETE_METHODS,
         #=max_union_splitting::Int=# 4,
         #=max_apply_union_enum::Int=# 8,
         #=max_tuple_splat::Int=# 32,
@@ -235,8 +248,10 @@ function InferenceParams(
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
         #=assume_bindings_static::Bool=# false,
-        #=ignore_recursion_hardlimit::Bool=# false);
+        #=ignore_recursion_hardlimit::Bool=# false
+    );
     max_methods::Int = params.max_methods,
+    max_concrete_methods::Int = params.max_concrete_methods,
     max_union_splitting::Int = params.max_union_splitting,
     max_apply_union_enum::Int = params.max_apply_union_enum,
     max_tuple_splat::Int = params.max_tuple_splat,
@@ -244,9 +259,11 @@ function InferenceParams(
     ipo_constant_propagation::Bool = params.ipo_constant_propagation,
     aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
     assume_bindings_static::Bool = params.assume_bindings_static,
-    ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit)
+    ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit,
+)
     return InferenceParams(
         max_methods,
+        max_concrete_methods,
         max_union_splitting,
         max_apply_union_enum,
         max_tuple_splat,
@@ -254,7 +271,8 @@ function InferenceParams(
         ipo_constant_propagation,
         aggressive_constant_propagation,
         assume_bindings_static,
-        ignore_recursion_hardlimit)
+        ignore_recursion_hardlimit,
+    )
 end
 
 """
