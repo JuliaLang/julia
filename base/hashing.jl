@@ -104,7 +104,7 @@ end
         seed::UInt64,
         secret::NTuple{3, UInt64}
     )
-    # With reference and gratitude to [rapidhash](https://github.com/Nicoshev/rapidhash)
+    # Adapted with gratitude from [rapidhash](https://github.com/Nicoshev/rapidhash)
     # while the integer hashing methods defined in this file share the mixing function
     # used by rapidhash, only this method implements the algorithm in its entirety.
     buflen = UInt64(n)
