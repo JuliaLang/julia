@@ -23,7 +23,7 @@ environments provide a way to access documentation directly:
 `Docs.hasdoc(module, name)::Bool` tells whether a name has a docstring. `Docs.undocumented_names(module; all)`
 returns the undocumented names in a module.
 
-## Writing Documentation
+## [Writing Documentation](@id man-writing-documentation)
 
 Julia enables package developers and users to document functions, types and other objects easily
 via a built-in documentation system.
