@@ -264,7 +264,7 @@ function transcode(::Type{UInt8}, src::AbstractVector{UInt16})
         a = src[i += 1]
     end
 
-    dst = StringVector(m)
+    dst = Vector{UInt8}(undef, m)
     a = src[1]
     i, j = 1, 0
     while true
