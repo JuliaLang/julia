@@ -298,3 +298,23 @@ module RangeMerge
 
     @test !contains(get_llvm(f, Tuple{}), "jl_get_binding_value")
 end
+
+# Test that we invalidate for undefined -> defined transitions (#54733)
+module UndefinedTransitions
+    using Test
+    function foo54733()
+        for i = 1:1_000_000_000
+            bar54733(i)
+        end
+        return 1
+    end
+    @test_throws UndefVarError foo54733()
+    let ci = first(methods(foo54733)).specializations.cache
+        @test !Base.Compiler.is_nothrow(Base.Compiler.decode_effects(ci.ipo_purity_bits))
+    end
+    bar54733(x) = 3x
+    @test foo54733() === 1
+    let ci = first(methods(foo54733)).specializations.cache
+        @test Base.Compiler.is_nothrow(Base.Compiler.decode_effects(ci.ipo_purity_bits))
+    end
+end
