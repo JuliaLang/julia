@@ -400,6 +400,17 @@ let effects = Base.infer_effects(setglobal!_nothrow_undefinedyet2)
 end
 @test_throws TypeError setglobal!_nothrow_undefinedyet2()
 
+module ExportMutableGlobal
+    global mutable_global_for_setglobal_test::Int = 0
+    export mutable_global_for_setglobal_test
+end
+using .ExportMutableGlobal: mutable_global_for_setglobal_test
+f_assign_imported() = global mutable_global_for_setglobal_test = 42
+let effects = Base.infer_effects(f_assign_imported)
+    @test !Compiler.is_nothrow(effects)
+end
+@test_throws ErrorException f_assign_imported()
+
 # Nothrow for setfield!
 mutable struct SetfieldNothrow
     x::Int

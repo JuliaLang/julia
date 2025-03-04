@@ -33,19 +33,13 @@ end
     JuliaSyntax.enable_in_core!() = nothing
     init_active_project() = ACTIVE_PROJECT[] = nothing
     set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
+    init_depot_path() = nothing
+    init_load_path() = nothing
+    init_active_project() = nothing
     disable_library_threading() = nothing
     start_profile_listener() = nothing
-    @inline function invokelatest(f::F, args...; kwargs...) where F
-        return f(args...; kwargs...)
-    end
-    @inline function invokelatest_gr(gr::GlobalRef, @nospecialize args...; kwargs...)
-        @inline
-        kwargs = merge(NamedTuple(), kwargs)
-        if isempty(kwargs)
-            return apply_gr(gr, args...)
-        end
-        return apply_gr_kw(kwargs, gr, args...)
-    end
+    invokelatest_trimmed(f, args...; kwargs...) = f(args...; kwargs...)
+    const invokelatest = invokelatest_trimmed
     function sprint(f::F, args::Vararg{Any,N}; context=nothing, sizehint::Integer=0) where {F<:Function,N}
         s = IOBuffer(sizehint=sizehint)
         if context isa Tuple
@@ -132,15 +126,8 @@ end
     mapreduce_empty(::typeof(abs), op::F, T) where {F}     = abs(reduce_empty(op, T))
     mapreduce_empty(::typeof(abs2), op::F, T) where {F}    = abs2(reduce_empty(op, T))
 end
-@eval Base.Unicode begin
-    function utf8proc_map(str::Union{String,SubString{String}}, options::Integer, chartransform::F = identity) where F
-        nwords = utf8proc_decompose(str, options, C_NULL, 0, chartransform)
-        buffer = Base.StringVector(nwords*4)
-        nwords = utf8proc_decompose(str, options, buffer, nwords, chartransform)
-        nbytes = ccall(:utf8proc_reencode, Int, (Ptr{UInt8}, Int, Cint), buffer, nwords, options)
-        nbytes < 0 && utf8proc_error(nbytes)
-        return String(resize!(buffer, nbytes))
-    end
+@eval Base.Sys begin
+    __init_build() = nothing
 end
 @eval Base.GMP begin
     function __init__()
@@ -202,6 +189,7 @@ let mod = Base.include(Base.__toplevel__, inputfile)
     if !isa(mod, Module)
         mod = Main
     end
+    Core.@latestworld
     if output_type == "--output-exe" && isdefined(mod, :main) && !add_ccallables
         entrypoint(mod.main, ())
     end
