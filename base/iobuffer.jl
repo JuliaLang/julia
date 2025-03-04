@@ -20,14 +20,15 @@
 #   uuuuuXXXXXXXXXXXXX---------------------
 #  ||    |           |                    |    |
 #  |1    ptr         size                 |    maxsize (≥ lastindex)
-#                                         lastindex(data)
+#  |                                      lastindex(data)
 #  offset (set to zero)
 
 # * The underlying array is always 1-indexed
 # * The IOBuffer has full control (ownership) of the underlying array, only when
 #   buffer.write == true.
-# * Data in 1:mark can be deleted, shifting the whole thing to the left
-#   to make room for more data, without replacing or resizing data
+# * Data before the mark can be deleted, shifting the whole thing to the left
+#   to make room for more data, without replacing or resizing data.
+#   This can be done only if the buffer is not seekable
 
 # Internal trait object used to access unsafe constructors.
 struct UnsafeMethod end
@@ -59,13 +60,15 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # This value is always in 0 : lastindex(data)
     size::Int
 
+    # When the buffer is resized, or a new buffer allocated, this is the maximum size of the buffer.
+    # A new GenericIOBuffer may be constructed with an existing data larger than `maxsize`.
+    # When that happens, the buffer will not write to data in maxsize + 1 : lastindex(data).
     # This value is always in 0:typemax(Int).
-    # We always have length(data) <= maxsize
     maxsize::Int
 
     # Data is read/written from/to ptr, except in situations where append is true, in which case
     # data is still read from ptr, but written to size+1.
-    # This value is always in 1 : size+1
+    # This value is always in offset + 1 : size+1
     ptr::Int
 
     # This is used when seeking. seek(io, 0) results in ptr == offset.
@@ -73,6 +76,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # memory offset, the start of the vector, and thus the start of data, does not correspond
     # to the start of its underlying memory.
     # Once the offset is set to zero, it will never be set to nonzero.
+    # This is always in 0:lastindex(data)
     offset::Int
 
     # mark is the position (as given by `position`, i.e. io.ptr - io.offset - 1)
@@ -269,16 +273,43 @@ PipeBuffer(maxsize::Integer) = (x = PipeBuffer(StringMemory(maxsize), maxsize = 
 _similar_data(b::GenericIOBuffer, len::Int) = similar(b.data, len)
 _similar_data(b::IOBuffer, len::Int) = StringMemory(len)
 
-# TODO: Only copy the used data, not the whole buffer.
+# Note: Copying may change the value of the position (and mark) for un-seekable streams.
+# However, these values are not stable anyway due to compaction.
+
 function copy(b::GenericIOBuffer)
-    ret = typeof(b)(b.reinit ? _similar_data(b, 0) : b.writable ?
-                    copyto!(_similar_data(b, length(b.data)), b.data) : b.data,
-                    b.readable, b.writable, b.seekable, b.append, b.maxsize)
-    ret.size = b.size
-    ret.ptr  = b.ptr
-    ret.mark = b.mark
-    ret.offset = b.offset
-    return ret
+    if b.reinit
+        # If buffer is used up, allocate a new size-zero buffer
+        # Reinit implies wriable, and that ptr, size, offset and mark are already the default values
+        return typeof(b)(_similar_data(b, 0), b.readable, b.writable, b.seekable, b.append, b.maxsize)
+    elseif b.writable
+        # Else, we just copy the reachable bytes. If buffer is seekable, all bytes
+        # after offset are reachable, since they can be seeked to
+        used_span = if b.seekable
+            b.offset + 1 : b.size
+        else
+            # Even non-seekable streams can be seeked using `reset`. Therefore, we need to
+            # copy all data from mark if it's set and below ptr.
+            (b.mark > -1 ? min(b.ptr, b.mark) : b.ptr) : b.size
+        end
+        len = length(used_span)
+        data = copyto!(_similar_data(b, len), view(b.data, used_span))
+        ret = typeof(b)(data, b.readable, b.writable, b.seekable, b.append, b.maxsize)
+        ret.size = len
+        ret.offset = 0
+        ret.ptr = b.ptr - first(used_span) + 1
+        ret.mark = b.mark < 0 ? -1 : (b.mark - first(used_span) + 1)
+        return ret
+    else
+        # When the buffer is just readable, they can share the same data, so we just make
+        # a shallow copy of the IOBuffer struct.
+        # Use unsafe method because we want to allow b.maxsize to be larger than data, in case that
+        # is the case for `b`.
+        ret = typeof(b)(unsafe_method, b.data, b.readable, b.writable, b.seekable, b.append, b.maxsize)
+        ret.offset = b.offset
+        ret.ptr = b.ptr
+        ret.mark = b.mark
+        return ret
+    end
 end
 
 show(io::IO, b::GenericIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
