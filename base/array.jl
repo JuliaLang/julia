@@ -1348,7 +1348,7 @@ function append! end
 
 function append!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     items isa Tuple && (items = map(x -> convert(T, x), items))
-    n = length(items)
+    n = Int(length(items))::Int
     _growend!(a, n)
     copyto!(a, length(a)-n+1, items, firstindex(items), n)
     return a
@@ -1473,6 +1473,9 @@ julia> a[1:6]
 ```
 """
 function resize!(a::Vector, nl::Integer)
+    resize!(a, Int(nl)::Int)
+end
+function resize!(a::Vector, nl::Int)
     l = length(a)
     if nl > l
         _growend!(a, nl-l)
