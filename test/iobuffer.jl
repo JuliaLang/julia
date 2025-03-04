@@ -282,6 +282,47 @@ end
     close(io)
 end
 
+@testset "Truncate" begin
+    # Fails for non-writable and non-seekable
+    @test_throws ArgumentError truncate(PipeBuffer(), 0)
+    @test_throws ArgumentError truncate(IOBuffer(b"abcde"), 3)
+
+    # Standard use
+    buf = IOBuffer(collect(b"abcdef"); write=true, read=true)
+    truncate(buf, 4)
+    @test read(buf) == b"abcd"
+    @test take!(buf) == b"abcd"
+
+    # Mark is removed if beyond the size
+    buf = IOBuffer()
+    write(buf, "abcde")
+    seek(buf, 4)
+    mark(buf)
+    truncate(buf, 4)
+    @test !ismarked(buf)
+
+    # Making it larger
+    buf = IOBuffer(collect(b"abcdef"); write=true, read=true)
+    seek(buf, 3)
+    truncate(buf, 3)
+    write(buf, 'X')
+    mark(buf)
+    truncate(buf, 5)
+    @test ismarked(buf)
+    @test reset(buf) == 4
+    @test take!(buf) == b"abcX\0"
+
+    # With offset
+    v = pushfirst!(UInt8[0x62, 0x63, 0x64], 0x61)
+    buf = IOBuffer(v; write=true, read=true)
+    seekstart(buf)
+    read(buf, UInt8)
+    mark(buf)
+    truncate(buf, 7)
+    @test reset(buf) == 1
+    @test take!(buf) == b"abcd\0\0\0"
+end
+
 @testset "PipeBuffer" begin
     io = new_unseekable_buffer()
     @test_throws EOFError read(io,UInt8)
@@ -570,6 +611,14 @@ end
 @testset "with offset" begin
     b = pushfirst!([0x02], 0x01)
     @test take!(IOBuffer(b)) == [0x01, 0x02]
+
+    # Read-only buffer does not take control of underlying buffer
+    v = pushfirst!([0x62, 0x63], 0x61)
+    buf = IOBuffer(v; write=false)
+    @test read(buf) == b"abc"
+    @test v == b"abc" # v is unchanged
+
+    # Truncate
 end
 
 @testset "#54636 reading from non-dense vectors" begin
