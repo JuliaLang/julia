@@ -361,8 +361,8 @@ function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate
             if res
                 res = op(a, b)
             end
-            quoted_args[i] = a
-            quoted_args[i+2] = b
+            quoted_args[i] = a isa Symbol ? QuoteNode(a) : (a isa Expr ? Expr(:quote, a) : a)
+            quoted_args[i+2] = b isa Symbol ? QuoteNode(b) : (b isa Expr ? Expr(:quote, b) : b)
             i += 2
         end
 
