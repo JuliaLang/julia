@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module inference
+
 using Test
 
 include("irutils.jl")
@@ -4680,16 +4682,18 @@ end
     ⊔ = Compiler.join(Compiler.fallback_lattice)
     𝕃 = Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
+    alldefined = Union{Nothing,Bool}[false, false, false]
+    defined1 = Union{Nothing,Bool}[false, nothing, nothing]
     let init = Base.ImmutableDict{Any,Any}()
         a = Const(init)
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Any, Any])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), Any, Any])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
     let init = Base.ImmutableDict{Any,Any}(1,2)
         a = Const(init)
-        b = PartialStruct(𝕃, typeof(init), Any[Const(getfield(init,1)), Any, Any])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(getfield(init,1)), Any, Any])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4697,14 +4701,14 @@ end
     end
     let init = Base.ImmutableDict{Number,Number}()
         a = Const(init)
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Number, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
     let init = Base.ImmutableDict{Number,Number}()
-        a = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Number, ComplexF64])
+        a = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4712,8 +4716,8 @@ end
         @test c.fields[3] === ComplexF64
     end
     let init = Base.ImmutableDict{Number,Number}()
-        a = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+        a = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4721,16 +4725,16 @@ end
         @test c.fields[3] === Complex
     end
     let T = Base.ImmutableDict{Number,Number}
-        a = PartialStruct(𝕃, T, Any[T])
-        b = PartialStruct(𝕃, T, Any[T, Number, Number])
+        a = PartialStruct(𝕃, T, defined1, Any[T, Number, Number])
+        b = PartialStruct(𝕃, T, alldefined, Any[T, Number, Number])
         @test b ⊑ a
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
-        @test length(c.fields) == 1 && c.undef == [0]
+        @test length(c.fields) == 3 && c.undefs == defined1
     end
     let T = Base.ImmutableDict{Number,Number}
-        a = PartialStruct(𝕃, T, Any[T])
+        a = PartialStruct(𝕃, T, defined1, Any[T, Number, Number])
         b = Const(T())
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
@@ -4738,7 +4742,7 @@ end
     end
     let T = Base.ImmutableDict{Number,Number}
         a = Const(T())
-        b = PartialStruct(𝕃, T, Any[T])
+        b = PartialStruct(𝕃, T, defined1, Any[T, Number, Number])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === T
@@ -4837,83 +4841,159 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
     @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
     # test comparison between conflicting elements
-    let a = PartialStruct(M.Partial, falses(2), Any[Int,Int])
+    let a = PartialStruct(M.Partial, Union{Nothing,Bool}[false,false,false], Any[Int,Int,Any])
         b = Const(M.Partial())
         @test a ⋢ b && b ⋢ a
     end
+    let a = PartialStruct(M.Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[Int,Int,Any])
+        b = Const(M.Partial())
+        @test a ⋢ b && b ⋢ a
+    end
+    let a = PartialStruct(M.Partial, Union{Nothing,Bool}[nothing,nothing,nothing], Any[Int,Int,Any])
+        b = Const(M.Partial())
+        @test a ⋢ b && b ⊑ a
+    end
 
-    t = Const((false, false)) ⊔ Const((false, true))
-    @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
-    t = t ⊔ Const((false, false, 0))
-    @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
+    let t = Const((false, false)) ⊔ Const((false, true))
+        @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
+        t = t ⊔ Const((false, false, 0))
+        @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
+    end
 
-    t = PartialStruct(𝕃, Tuple{Int, Int}, Any[Const(1)])
-    @test t.undef == [false]
-    @test !Compiler.is_field_maybe_undef(t, 2)
-    @test Compiler.n_initialized(t) == 2
-    t = PartialStruct(𝕃, Partial, Any[String, Const(2)])
-    @test t.undef == [false, false]
-    @test t.fields == Any[String, Const(2)]
-    @test t ⊑ t && t ⊔ t === t
+    let t = PartialStruct(𝕃, Tuple{Int, Int}, Any[Const(1),Int])
+        @test Compiler.n_initialized(t) == 2
+        @test t ⊑ t && t ⊔ t === t
+        t = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,false,nothing], Any[String, Const(2), Any])
+        @test Compiler.n_initialized(t) == 2
+        @test t ⊑ t && t ⊔ t === t
+    end
 
-    t1 = PartialStruct(𝕃, Partial, Any[String, Const(3)])
-    t2 = PartialStruct(𝕃, Partial, Any[Const("x")])
-    @test t1 ⋢ t2 && t2 ⋢ t1
-    t3 = t1 ⊔ t2
-    @test t3.fields == Any[String]
+    let t1 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,false,nothing], Any[String, Const(3), Any])
+        t2 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[Const("x"), Integer, Any])
+        @test t1 ⋢ t2 && t2 ⋢ t1
+        t3 = t1 ⊔ t2
+        @test t3.fields == Any[String, Integer, Any]
+    end
 
-    t1 = PartialStruct(𝕃, Partial, BitVector([true, false, false]), Any[String, Int, Const(3)])
-    @test Compiler.n_initialized(t1) == 0
-    @test t1 ⊑ t1 && t1 ⊔ t1 === t1
-    t2 = PartialStruct(𝕃, Partial, BitVector([false, true]), Any[Const("x"), Int])
-    @test Compiler.n_initialized(t2) == 1
-    t3 = t1 ⊔ t2
-    @test t3 === Partial
+    let t1 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[nothing,false,false], Any[String, Int, Const(3)])
+        @test Compiler.n_initialized(t1) == 0
+        @test t1 ⊑ t1 && t1 ⊔ t1 === t1
+        t2 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,false], Any[Const("x"), Int, Any])
+        @test Compiler.n_initialized(t2) == 1
+        @test t1 ⊔ t2 isa PartialStruct
+    end
 
-    t1 = PartialStruct(𝕃, Tuple, Any[Int, String, Vararg])
-    @test t1.undef == [false, false]
-    @test t1 ⊑ t1 && t1 ⊔ t1 == t1
-    t2 = PartialStruct(𝕃, Tuple, Any[Int, Any])
-    @test t1 ⋢ t2 && t2 ⋢ t1
-    t3 = t1 ⊔ t2
-    @test t3.undef == [false, false] && t3.fields == Any[Int, Any]
-    t2 = PartialStruct(𝕃, Tuple, Any[Int, Any, Vararg])
-    @test t1 ⊑ t2
-    @test t1 ⊔ t2 === t2
+    let t1 = PartialStruct(𝕃, Tuple{Int,String,Vararg}, Any[Int, String, Vararg])
+        @test t1 ⊑ t1 && t1 ⊔ t1 == t1
+        t2 = PartialStruct(𝕃, Tuple{Int,String}, Any[Int, String])
+        @test t1 ⋢ t2 && t2 ⋢ t1
+        t3 = t1 ⊔ t2
+        @test_broken t3 isa PartialStruct && Compiler.n_initialized(t3) == 2
+    end
 
-    t = PartialStruct(𝕃, Partial, Any[Const("x")])
-    @test form_partially_defined_struct(t, Const(:x)) === nothing
-    t′ = form_partially_defined_struct(t, Const(:z))
-    @test t′ == PartialStruct(𝕃, Partial, BitVector([false, true, false]), Any[Const("x"), Integer, Any])
-    t = PartialStruct(𝕃, Partial, Any[String, Const(2)])
-    @test form_partially_defined_struct(t, Const(:x)) === nothing
-    t′ = form_partially_defined_struct(t, Const(:z))
-    @test t′ == PartialStruct(𝕃, Partial, Any[String, Const(2), Any])
+    let t = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[Const("x"),Integer,Any])
+        @test form_partially_defined_struct(𝕃, t, Const(:x)) === nothing
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,false], Any[Const("x"), Integer, Any])
+    end
+    let t = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[String,Integer,Const(2)])
+        @test form_partially_defined_struct(𝕃, t, Const(:x)) === nothing
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,false], Any[String,Integer,Const(2)])
+    end
 
-    t = PartialStruct(𝕃, Partial2, Any[String, Const(2)])
-    @test form_partially_defined_struct(t, Const(:x)) === nothing
-    t′ = form_partially_defined_struct(t, Const(:z))
-    @test t′ == PartialStruct(𝕃, Partial2, Any[String, Const(2), Any])
+    @test form_partially_defined_struct(𝕃, Partial2, Const(:x)) === nothing
+    let t = PartialStruct(𝕃, Partial2, Any[String, Const(2), Any])
+        @test form_partially_defined_struct(𝕃, t, Const(:x)) === nothing
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial2, Union{Nothing,Bool}[false,nothing,false], Any[String, Const(2), Any])
+    end
 
-    @test form_partially_defined_struct(Partial3, Const(:x)) === nothing
-    @test form_partially_defined_struct(Partial3, Const(:y)) === nothing
-    t = form_partially_defined_struct(Partial3, Const(:z))
-    @test t == PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
-    t = PartialStruct(𝕃, Partial3, Any[Int, String])
-    t′ = form_partially_defined_struct(t, Const(:z))
-    @test t′ == PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
+    @test form_partially_defined_struct(𝕃, Partial3, Const(:x)) === nothing
+    @test form_partially_defined_struct(𝕃, Partial3, Const(:y)) === nothing
+    let t = form_partially_defined_struct(𝕃, Partial3, Const(:z))
+        @test t == PartialStruct(𝕃, Partial3, Union{Nothing,Bool}[false,false,false], Any[Int, String, Float64])
+    end
+    let t = PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial3, Union{Nothing,Bool}[false,false,false], Any[Int, String, Float64])
+    end
 
-    t1 = PartialStruct(𝕃, Partial4, Any[Int, String])
-    t2 = PartialStruct(𝕃, Partial4, Any[Const(1)])
-    @test t1 ⋢ t2 && t2 ⋢ t1
-    c = Const(Partial4(1))
-    @test c ⋢ t1 && t1 ⋢ c && c ⊑ t2 && t2 ⋢ c
-    t3 = PartialStruct(𝕃, Partial4, Any[Const(1), Const("x")])
-    @test c ⋢ t3 && t3 ⋢ c
+    let t1 = PartialStruct(𝕃, Partial4, Union{Nothing,Bool}[false,false,nothing], Any[Int, String, Float64])
+        t2 = PartialStruct(𝕃, Partial4, Union{Nothing,Bool}[false,nothing,false], Any[Const(1), String, Float64])
+        @test t1 ⋢ t2 && t2 ⋢ t1
+        c = Const(Partial4(1))
+        @test c ⋢ t1 && t1 ⋢ c && c ⊑ t2 && t2 ⋢ c
+        t3 = PartialStruct(𝕃, Partial4, Union{Nothing,Bool}[false,false,nothing], Any[Const(1), Const("x"), Float64])
+        @test c ⋢ t3 && t3 ⋢ c
+    end
 
-    c = Const(Ref{Any}(1))
-    t = PartialStruct(Base.RefValue{Any}, trues(1), Any[String])
-    @test c ⋢ t && t ⋢ c
+    let c = Const(Ref{Any}(1))
+        t = PartialStruct(Base.RefValue{Any}, Union{Nothing,Bool}[true], Any[String])
+        @test c ⋢ t && t ⋢ c
+    end
+
+    let a = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[false], Any[Int])
+        b = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[true], Any[Int])
+        @test a ⊔ b == b ⊔ a
+        c = a ⊔ b
+        @test c isa PartialStruct && Compiler.n_initialized(c) == 0
+    end
+    let a = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[false], Any[Int])
+        b = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[nothing], Any[Int])
+        @test a ⊔ b == b ⊔ a
+        c = a ⊔ b
+        @test c isa PartialStruct && Compiler.n_initialized(c) == 0
+    end
+    let a = PartialStruct(𝕃, Base.RefValue{Int}, Union{Nothing,Bool}[false], Any[Int])
+        b = Const(Base.RefValue{Int}(42))
+        @test a == a ⊔ b == b ⊔ a
+    end
+    let a = Const(Base.RefValue{Int}(1))
+        b = Const(Base.RefValue{Int}(2))
+        @test a ⊔ b == b ⊔ a
+        c = a ⊔ b
+        @test c isa PartialStruct && Compiler.n_initialized(c) == 1
+    end
+end
+
+# strict undef information of `PartialStruct`
+struct StrictUndefXY1{X,Y}
+    x::X
+    y::Y
+    StrictUndefXY1{Y}(x::X) where {X,Y} = new{X,Y}(x)
+    StrictUndefXY1(x::X,y::Y) where {X,Y} = new{X,Y}(x,y)
+end
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY1{Union{}}(42), :y))
+end == Val{false}
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY1{Int}(42), :y))
+end == Val{true}
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY1(42,nothing), :y))
+end == Val{true}
+
+mutable struct StrictUndefXY2{X,Y}
+    const x::X
+    y::Y
+    StrictUndefXY2{Y}(x::X) where {X,Y} = new{X,Y}(x)
+    StrictUndefXY2(x::X,y::Y) where {X,Y} = new{X,Y}(x,y)
+end
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY2{Union{}}(42), :y))
+end == Val{false}
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY2{Bool}(42), :y))
+end == Val{true}
+let rt = Base.infer_return_type((Bool,)) do b
+        xy = StrictUndefXY2{Any}(42)
+        if b
+            xy.y = nothing
+        end
+        Val(isdefined(xy, :y))
+    end
+    @test rt >: Val{false} && rt >: Val{true}
 end
 
 # Test that a function-wise `@max_methods` works as expected
@@ -5050,7 +5130,7 @@ let src = code_typed1() do
 end
 
 # Test that Const ⊑ PartialStruct respects vararg
-@test Const((1,2)) ⊑ PartialStruct(Compiler.fallback_lattice, Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
+@test Const((1,2)) ⊑ PartialStruct(Compiler.fallback_lattice, Tuple{Int,Vararg{Int}}, Union{Nothing,Bool}[false,nothing], [Const(1), Vararg{Int}])
 
 # Test that semi-concrete interpretation doesn't break on functions with while loops in them.
 Base.@assume_effects :consistent :effect_free :terminates_globally function pure_annotated_loop(x::Int, y::Int)
@@ -6301,3 +6381,5 @@ f57292(xs::Union{Tuple{String}, Int}...) = getfield(xs...)
 g57292(xs::String...) = getfield(("abc",), 1, :not_atomic, xs...)
 @test Base.infer_return_type(f57292) == String
 @test Base.infer_return_type(g57292) == String
+
+end # module inference
