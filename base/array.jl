@@ -191,7 +191,6 @@ function size(a::Array, d::Int)
     sz = getfield(a, :size)
     return d > length(sz) ? 1 : getfield(sz, d, false) # @inbounds
 end
-size(a::Array) = getfield(a, :size)
 
 asize_from(a::Array, n) = n > ndims(a) ? () : (size(a,n), asize_from(a, n+1)...)
 
