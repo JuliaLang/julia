@@ -32,6 +32,7 @@ public
 # arrays
     has_offset_axes,
     require_one_based_indexing,
+    isstored,
 
 # collections
     IteratorEltype,
