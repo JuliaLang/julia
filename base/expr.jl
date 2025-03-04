@@ -1352,6 +1352,10 @@ function make_atomic(order, ex)
                 op = :+
             elseif ex.head === :(-=)
                 op = :-
+            elseif ex.head === :(|=)
+                op = :|
+            elseif ex.head === :(&=)
+                op = :&
             elseif @isdefined string
                 shead = string(ex.head)
                 if endswith(shead, '=')
