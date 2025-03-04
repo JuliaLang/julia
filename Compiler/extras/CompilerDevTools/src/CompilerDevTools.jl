@@ -46,22 +46,20 @@ function lookup_method_instance(f, args...)
 end
 
 function Compiler.transform_result_for_cache(interp::SplitCacheInterp, result::Compiler.InferenceResult, edges::Compiler.SimpleVector)
-    if isa(result.src, Compiler.OptimizationState)
-        opt = result.src
-        ir = opt.result.ir::Compiler.IRCode
-        override = GlobalRef(@__MODULE__(), :with_new_compiler)
-        for inst in ir.stmts
-            stmt = inst[:stmt]
-            isexpr(stmt, :call) || continue
-            f = stmt.args[1]
-            f === override && continue
-            if isa(f, GlobalRef)
-                T = widenconst(argextype(f, ir))
-                T <: Core.Builtin && continue
-            end
-            insert!(stmt.args, 1, override)
-            insert!(stmt.args, 3, interp.owner)
+    opt = result.src::Compiler.OptimizationState
+    ir = opt.result.ir::Compiler.IRCode
+    override = GlobalRef(@__MODULE__(), :with_new_compiler)
+    for inst in ir.stmts
+        stmt = inst[:stmt]
+        isexpr(stmt, :call) || continue
+        f = stmt.args[1]
+        f === override && continue
+        if isa(f, GlobalRef)
+            T = widenconst(argextype(f, ir))
+            T <: Core.Builtin && continue
         end
+        insert!(stmt.args, 1, override)
+        insert!(stmt.args, 3, interp.owner)
     end
     @invoke Compiler.transform_result_for_cache(interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult, edges::Compiler.SimpleVector)
 end
