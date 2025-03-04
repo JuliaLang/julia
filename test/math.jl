@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("testhelpers/EvenIntegers.jl")
+using .EvenIntegers
+
 using Random
 using LinearAlgebra
 using Base.Experimental: @force_compile
@@ -1505,7 +1508,19 @@ end
     @test E^n == Inf
     @test E^float(n) == Inf
 
-    # #55633
+    # issue #55831
+    @testset "literal pow zero sign" begin
+        @testset "T: $T" for T ∈ (Float16, Float32, Float64, BigFloat)
+            @testset "literal `-1`" begin
+                @test -0.0 === Float64(T(-Inf)^-1)
+            end
+            @testset "`Int(-1)`" begin
+                @test -0.0 === Float64(T(-Inf)^Int(-1))
+            end
+        end
+    end
+
+    # issue #55633
     struct Issue55633_1 <: Number end
     struct Issue55633_3 <: Number end
     struct Issue55633_9 <: Number end
@@ -1525,6 +1540,12 @@ end
         for y ∈ 0:2
             @test all((t -> ===(t...)), zip(x^y, p[y + 1]))
         end
+    end
+
+    @testset "rng exponentiation, issue #57590" begin
+        @test EvenInteger(16) === @inferred EvenInteger(2)^4
+        @test EvenInteger(16) === @inferred EvenInteger(2)^Int(4)  # avoid `literal_pow`
+        @test EvenInteger(16) === @inferred EvenInteger(2)^EvenInteger(4)
     end
 end
 

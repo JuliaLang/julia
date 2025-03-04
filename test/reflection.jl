@@ -110,6 +110,7 @@ not_const = 1
 @test isconst(@__MODULE__, :a_const) == true
 @test isconst(Base, :pi) == true
 @test isconst(@__MODULE__, :pi) == true
+@test isconst(GlobalRef(@__MODULE__, :pi)) == true
 @test isconst(@__MODULE__, :not_const) == false
 @test isconst(@__MODULE__, :is_not_defined) == false
 
@@ -968,10 +969,6 @@ f20872(::Val, ::Val) = false
 @test which(f20872, Tuple{Val,Val{N}} where N).sig == Tuple{typeof(f20872), Val, Val}
 @test_throws ErrorException which(f20872, Tuple{Any,Val{N}} where N)
 @test which(Tuple{typeof(f20872), Val{1}, Val{2}}).sig == Tuple{typeof(f20872), Val, Val}
-
-module M29962 end
-# make sure checking if a binding is deprecated does not resolve it
-@test !Base.isdeprecated(M29962, :sin) && !Base.isbindingresolved(M29962, :sin)
 
 # @locals
 using Base: @locals

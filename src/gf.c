@@ -3165,6 +3165,7 @@ jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_
 JL_DLLEXPORT jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *match, size_t world, size_t min_valid, size_t max_valid, int mt_cache)
 {
     jl_method_t *m = match->method;
+    JL_GC_PROMISE_ROOTED(m);
     jl_svec_t *env = match->sparams;
     jl_tupletype_t *ti = match->spec_types;
     jl_method_instance_t *mi = NULL;
@@ -3200,7 +3201,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *matc
 }
 
 // compile-time method lookup
-jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, int mt_cache)
+jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache)
 {
     if (jl_has_free_typevars((jl_value_t*)types))
         return NULL; // don't poison the cache due to a malformed query
@@ -3815,7 +3816,7 @@ jl_function_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_
     JL_GC_PUSH1(&ftype);
     ftype->name->mt->name = name;
     jl_gc_wb(ftype->name->mt, name);
-    jl_declare_constant_val3(NULL, module, tname, (jl_value_t*)ftype, BINDING_KIND_CONST, new_world);
+    jl_declare_constant_val3(NULL, module, tname, (jl_value_t*)ftype, PARTITION_KIND_CONST, new_world);
     jl_value_t *f = jl_new_struct(ftype);
     ftype->instance = f;
     jl_gc_wb(ftype, f);

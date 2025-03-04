@@ -46,7 +46,6 @@ precompile(Tuple{typeof(Base.Threads.atomic_sub!), Base.Threads.Atomic{Int}, Int
 precompile(Tuple{Type{Base.Val{x} where x}, Module})
 precompile(Tuple{Type{NamedTuple{(:honor_overrides,), T} where T<:Tuple}, Tuple{Bool}})
 precompile(Tuple{typeof(Base.unique!), Array{String, 1}})
-precompile(Tuple{typeof(Base.invokelatest), Any})
 precompile(Tuple{typeof(Base.vcat), Array{String, 1}, Array{String, 1}})
 
 # Pkg loading
@@ -106,6 +105,9 @@ precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, 
 precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
 precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
 precompile(Tuple{typeof(Base.run_module_init), Module, Int})
+
+# Presence tested in the tests
+precompile(Tuple{typeof(Base.print), Base.IOStream, String})
 
 # precompilepkgs
 precompile(Tuple{typeof(Base.get), Type{Array{String, 1}}, Base.Dict{String, Any}, String})
@@ -352,10 +354,10 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
     PrecompileStagingArea = Module()
     for (_pkgid, _mod) in Base.loaded_modules
         if !(_pkgid.name in ("Main", "Core", "Base"))
-            eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
+            Core.eval(PrecompileStagingArea, :(const $(Symbol(_mod)) = $_mod))
         end
     end
-    eval(PrecompileStagingArea, :(const Compiler = Base.Compiler))
+    Core.eval(PrecompileStagingArea, :(const Compiler = Base.Compiler))
 
     n_succeeded = 0
     # Make statements unique

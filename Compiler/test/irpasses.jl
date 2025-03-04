@@ -1179,7 +1179,10 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
 end
 
 @test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
-@test Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
+
+# We consider a potential deprecatio warning an effect, so for completely unkown getglobal,
+# we taint the effect_free bit.
+@test !Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
 
 # Test that UseRefIterator gets SROA'd inside of new_to_regular (#44557)
 # expression and new_to_regular offset are arbitrary here, we just want to see the UseRefIterator erased
@@ -2029,4 +2032,47 @@ let code = Any[
     domtree = Compiler.construct_domtree(ir)
     ir = Compiler.domsort_ssa!(ir, domtree)
     Compiler.verify_ir(ir)
+end
+
+# https://github.com/JuliaLang/julia/issues/57141
+# don't eliminate `setfield!` when the field is to be used
+let src = code_typed1(()) do
+        ref = Ref{Any}()
+        ref[] = 0
+        @assert isdefined(ref, :x)
+        inner() = ref[] + 1
+        (inner(), ref[])
+    end
+    @test count(iscall((src, setfield!)), src.code) == 1
+end
+
+module _Partials_irpasses
+    mutable struct Partial
+        x::String
+        y::Integer
+        z::Any
+        Partial() = new()
+    end
+end
+
+# once `isdefined(p, name)` holds, this information should be kept
+# as a `PartialStruct` over `p` for subsequent constant propagation.
+let src = code_typed1(()) do
+        p = _Partials_irpasses.Partial()
+        invokelatest(identity, p)
+        isdefined(p, :z) && isdefined(p, :x) || return nothing
+        isdefined(p, :x) & isdefined(p, :z)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 2
+end
+
+# optimize `isdefined` away in the presence of a dominating `setfield!`
+let src = code_typed1(()) do
+        a = Ref{Any}()
+        setfield!(a, :x, 2)
+        invokelatest(identity, a)
+        isdefined(a, :x) && return 1.0
+        a[]
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
 end

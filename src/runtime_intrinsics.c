@@ -161,8 +161,11 @@ static inline uint16_t float_to_half(float param) JL_NOTSAFEPOINT
     uint32_t f;
     memcpy(&f, &param, sizeof(float));
     if (isnan(param)) {
-        uint32_t t = 0x8000 ^ (0x8000 & ((uint16_t)(f >> 0x10)));
-        return t ^ ((uint16_t)(f >> 0xd));
+        // Match the behaviour of arm64's fcvt or x86's vcvtps2ph by quieting
+        // all NaNs (avoids creating infinities), preserving the sign, and using
+        // the upper bits of the payload.
+        //      sign              exp      quiet    payload
+        return (f>>16 & 0x8000) | 0x7c00 | 0x0200 | (f>>13 & 0x03ff);
     }
     int i = ((f & ~0x007fffff) >> 23);
     uint8_t sh = shifttable[i];
@@ -761,33 +764,25 @@ static inline void name(unsigned osize, jl_value_t *ty, void *pa, void *pr) JL_N
     OP(ty, (c_type*)pr, a); \
 }
 
-#define un_fintrinsic_half(OP, name) \
-static inline void name(unsigned osize, jl_value_t *ty, void *pa, void *pr) JL_NOTSAFEPOINT \
-{ \
-    uint16_t a = *(uint16_t*)pa; \
-    float A = half_to_float(a); \
-    if (osize == 16) { \
-        float R; \
-        OP(ty, &R, A); \
-        *(uint16_t*)pr = float_to_half(R); \
-    } else { \
-        OP(ty, (uint16_t*)pr, A); \
-    } \
-}
+#define un_fintrinsic_half(OP, name)                                            \
+    static inline void name(unsigned osize, jl_value_t *ty, void *pa, void *pr) \
+        JL_NOTSAFEPOINT                                                         \
+    {                                                                           \
+        uint16_t a = *(uint16_t *)pa;                                           \
+        float R, A = half_to_float(a);                                          \
+        OP(ty, &R, A);                                                          \
+        *(uint16_t *)pr = float_to_half(R);                                     \
+    }
 
-#define un_fintrinsic_bfloat(OP, name) \
-static inline void name(unsigned osize, jl_value_t *ty, void *pa, void *pr) JL_NOTSAFEPOINT \
-{ \
-    uint16_t a = *(uint16_t*)pa; \
-    float A = bfloat_to_float(a); \
-    if (osize == 16) { \
-        float R; \
-        OP(ty, &R, A); \
-        *(uint16_t*)pr = float_to_bfloat(R); \
-    } else { \
-        OP(ty, (uint16_t*)pr, A); \
-    } \
-}
+#define un_fintrinsic_bfloat(OP, name)                                          \
+    static inline void name(unsigned osize, jl_value_t *ty, void *pa, void *pr) \
+        JL_NOTSAFEPOINT                                                         \
+    {                                                                           \
+        uint16_t a = *(uint16_t *)pa;                                           \
+        float R, A = bfloat_to_float(a);                                        \
+        OP(ty, &R, A);                                                          \
+        *(uint16_t *)pr = float_to_bfloat(R);                                   \
+    }
 
 // float or integer inputs
 // OP::Function macro(inputa, inputb)
@@ -1629,32 +1624,74 @@ cvt_iintrinsic(LLVMUItoFP, uitofp)
 cvt_iintrinsic(LLVMFPtoSI, fptosi)
 cvt_iintrinsic(LLVMFPtoUI, fptoui)
 
-#define fptrunc(tr, pr, a) \
-        if (!(osize < 8 * sizeof(a))) \
-            jl_error("fptrunc: output bitsize must be < input bitsize"); \
-        else if (osize == 16) { \
-            if ((jl_datatype_t*)tr == jl_float16_type) \
-                *(uint16_t*)pr = float_to_half(a); \
-            else /*if ((jl_datatype_t*)tr == jl_bfloat16_type)*/ \
-                *(uint16_t*)pr = float_to_bfloat(a); \
-        } \
-        else if (osize == 32) \
-            *(float*)pr = a; \
-        else if (osize == 64) \
-            *(double*)pr = a; \
-        else \
-            jl_error("fptrunc: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
-#define fpext(tr, pr, a) \
-        if (!(osize >= 8 * sizeof(a))) \
-            jl_error("fpext: output bitsize must be >= input bitsize"); \
-        if (osize == 32) \
-            *(float*)pr = a; \
-        else if (osize == 64) \
-            *(double*)pr = a; \
-        else \
-            jl_error("fpext: runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64");
-un_fintrinsic_withtype(fptrunc,fptrunc)
-un_fintrinsic_withtype(fpext,fpext)
+#define fintrinsic_read_float16(p)   half_to_float(*(uint16_t *)p)
+#define fintrinsic_read_bfloat16(p)  bfloat_to_float(*(uint16_t *)p)
+#define fintrinsic_read_float32(p)   *(float *)p
+#define fintrinsic_read_float64(p)   *(double *)p
+
+#define fintrinsic_write_float16(p, x)  *(uint16_t *)p = float_to_half(x)
+#define fintrinsic_write_bfloat16(p, x) *(uint16_t *)p = float_to_bfloat(x)
+#define fintrinsic_write_float32(p, x)  *(float *)p = x
+#define fintrinsic_write_float64(p, x)  *(double *)p = x
+
+/*
+ * aty: Type of value argument (input)
+ * pa:  Pointer to value argument data
+ * ty:  Type argument (output)
+ * pr:  Pointer to result data
+ */
+
+static inline void fptrunc(jl_datatype_t *aty, void *pa, jl_datatype_t *ty, void *pr)
+{
+    unsigned isize = jl_datatype_size(aty), osize = jl_datatype_size(ty);
+    if (!(osize < isize)) {
+        jl_error("fptrunc: output bitsize must be < input bitsize");
+        return;
+    }
+
+#define fptrunc_convert(in, out)                                \
+    else if (aty == jl_##in##_type && ty == jl_##out##_type)    \
+        fintrinsic_write_##out(pr, fintrinsic_read_##in(pa))
+
+    if (0)
+        ;
+    fptrunc_convert(float32, float16);
+    fptrunc_convert(float64, float16);
+    fptrunc_convert(float32, bfloat16);
+    fptrunc_convert(float64, bfloat16);
+    fptrunc_convert(float64, float32);
+    else
+        jl_error("fptrunc: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
+#undef fptrunc_convert
+}
+
+static inline void fpext(jl_datatype_t *aty, void *pa, jl_datatype_t *ty, void *pr)
+{
+    unsigned isize = jl_datatype_size(aty), osize = jl_datatype_size(ty);
+    if (!(osize > isize)) {
+        jl_error("fpext: output bitsize must be > input bitsize");
+        return;
+    }
+
+#define fpext_convert(in, out)                                  \
+    else if (aty == jl_##in##_type && ty == jl_##out##_type)    \
+        fintrinsic_write_##out(pr, fintrinsic_read_##in(pa))
+
+    if (0)
+        ;
+    fpext_convert(float16, float32);
+    fpext_convert(float16, float64);
+    fpext_convert(bfloat16, float32);
+    fpext_convert(bfloat16, float64);
+    fpext_convert(float32, float64);
+    else
+        jl_error("fptrunc: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
+#undef fpext_convert
+}
+
+cvt_iintrinsic(fptrunc, fptrunc)
+cvt_iintrinsic(fpext, fpext)
+
 
 // checked arithmetic
 /**

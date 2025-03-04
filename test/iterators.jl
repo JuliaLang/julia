@@ -998,6 +998,57 @@ end
     @test (@inferred Base.IteratorSize(zip(1:5, (1,2,3)) )) == Base.HasLength()         # for zip of ::HasShape and ::HasLength
 end
 
+@testset "foldability inference" begin
+    functions = (eltype, Base.IteratorSize, Base.IteratorEltype)
+    helper(type::UnionAll) = (type{n} for n ∈ 1:10) # helper for trying with multiple iterator counts
+    iterator_types = (  # each element here takes an iterator type as first parameter
+        Base.Generator,
+        Iterators.Reverse,
+        Iterators.Enumerate,
+        Iterators.Filter{F, I} where {I, F},
+        Iterators.Accumulate{F, I} where {I, F},
+        Iterators.Rest,
+        Iterators.Count,
+        Iterators.Take,
+        Iterators.Drop,
+        Iterators.TakeWhile,
+        Iterators.DropWhile,
+        Iterators.Cycle,
+        Iterators.Repeated,
+        Iterators.PartitionIterator,
+        Iterators.Stateful,
+        helper(Iterators.ProductIterator{Tuple{Vararg{I, N}}} where {N, I})...,
+    )
+    iterator_types_extra = (
+        iterator_types...,
+        helper(Iterators.Zip{Tuple{Vararg{I, N}}} where {N, I})...,
+        helper(Iterators.Flatten{Tuple{Vararg{I, N}}} where {N, I})...,
+    )
+    simple_types = (Vector, NTuple, NamedTuple{X, Y} where {X, Y <: NTuple})
+    example_type = Tuple{Bool, Int8, Vararg{Int16, 20}}
+    function test_foldability_inference(f, S::Type)
+        @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{S}))
+        @test Core.Compiler.is_foldable(Base.infer_effects(f, Tuple{Type{<:S}}))
+    end
+    @testset "concrete" begin  # weaker test, only checks foldability for certain concrete types
+        @testset "f: $f" for f ∈ functions
+            for U ∈ iterator_types_extra
+                test_foldability_inference(f, U{example_type})
+            end
+        end
+    end
+    @testset "nonconcrete" begin  # stronger test, checks foldability for large families of types
+        @testset "f: $f" for f ∈ functions
+            for V ∈ simple_types
+                test_foldability_inference(f, V)  # sanity check
+                for U ∈ iterator_types
+                    test_foldability_inference(f, U{<:V})
+                end
+            end
+        end
+    end
+end
+
 @testset "proper partition for non-1-indexed vector" begin
     @test partition(IdentityUnitRange(11:19), 5) |> collect == [11:15,16:19] # IdentityUnitRange
 end

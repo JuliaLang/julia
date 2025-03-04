@@ -658,7 +658,7 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
             # Confirm that the waiting task is still in the wait queue and remove it. If
             # the task is not in the wait queue, it must have been notified already so we
             # don't do anything here.
-            if !waiter_left[] && ct.queue == c.waitq
+            if !waiter_left[] && ct.queue === c.waitq
                 dosched = true
                 Base.list_deletefirst!(c.waitq, ct)
             end

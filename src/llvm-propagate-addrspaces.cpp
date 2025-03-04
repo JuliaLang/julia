@@ -244,7 +244,11 @@ void PropagateJuliaAddrspacesVisitor::visitMemSetInst(MemSetInst &MI) {
     Value *Replacement = LiftPointer(MI.getModule(), MI.getRawDest());
     if (!Replacement)
         return;
+#if JL_LLVM_VERSION >= 200000
+    Function *TheFn = Intrinsic::getOrInsertDeclaration(MI.getModule(), Intrinsic::memset,
+#else
     Function *TheFn = Intrinsic::getDeclaration(MI.getModule(), Intrinsic::memset,
+#endif
         {Replacement->getType(), MI.getOperand(1)->getType()});
     MI.setCalledFunction(TheFn);
     MI.setArgOperand(0, Replacement);
@@ -269,7 +273,11 @@ void PropagateJuliaAddrspacesVisitor::visitMemTransferInst(MemTransferInst &MTI)
     }
     if (Dest == MTI.getRawDest() && Src == MTI.getRawSource())
         return;
+#if JL_LLVM_VERSION >= 200000
+    Function *TheFn = Intrinsic::getOrInsertDeclaration(MTI.getModule(), MTI.getIntrinsicID(),
+#else
     Function *TheFn = Intrinsic::getDeclaration(MTI.getModule(), MTI.getIntrinsicID(),
+#endif
         {Dest->getType(), Src->getType(),
          MTI.getOperand(2)->getType()});
     MTI.setCalledFunction(TheFn);

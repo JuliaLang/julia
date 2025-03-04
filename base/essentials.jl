@@ -93,7 +93,7 @@ f(y) = [x for x in y]
 
 # Examples
 
-```julia-repl
+```jldoctest; setup = :(using InteractiveUtils)
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -102,7 +102,7 @@ g (generic function with 1 method)
 
 julia> @code_typed f([1.0])
 CodeInfo(
-1 ─ %1 = invoke Main.g(_2::AbstractArray)::Float64
+1 ─ %1 =    invoke g(A::AbstractArray)::Float64
 └──      return %1
 ) => Float64
 ```
@@ -437,7 +437,7 @@ julia> convert(BigFloat, x)
 ```
 
 If `T` is a collection type and `x` a collection, the result of
-`convert(T, x)` may alias all or part of `x`.
+`convert(T, x)` may share memory with all or part of `x`.
 ```jldoctest
 julia> x = Int[1, 2, 3];
 
@@ -593,6 +593,39 @@ function unconstrain_vararg_length(va::Core.TypeofVararg)
     return Vararg{unwrapva(va)}
 end
 
+# Compute the minimum number of initialized fields for a particular datatype
+# (therefore also a lower bound on the number of fields)
+function datatype_min_ninitialized(@nospecialize t0)
+    t = unwrap_unionall(t0)
+    t isa DataType || return 0
+    isabstracttype(t) && return 0
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters[1], t.parameters[2]
+        if names isa Tuple
+            return length(names)
+        end
+        t = argument_datatype(types)
+        t isa DataType || return 0
+        t.name === Tuple.name || return 0
+    end
+    if t.name === Tuple.name
+        n = length(t.parameters)
+        n == 0 && return 0
+        va = t.parameters[n]
+        if isvarargtype(va)
+            n -= 1
+            if isdefined(va, :N)
+                va = va.N
+                if va isa Int
+                    n += va
+                end
+            end
+        end
+        return n
+    end
+    return length(t.name.names) - t.name.n_uninitialized
+end
+
 import Core: typename
 
 _tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
@@ -726,6 +759,7 @@ julia> reinterpret(Tuple{UInt16, UInt8}, (0x01, 0x0203))
 
 """
 function reinterpret(::Type{Out}, x) where {Out}
+    @inline
     if isprimitivetype(Out) && isprimitivetype(typeof(x))
         return bitcast(Out, x)
     end
@@ -1035,63 +1069,6 @@ struct Val{x}
 end
 
 Val(x) = Val{x}()
-
-"""
-    invokelatest(f, args...; kwargs...)
-
-Calls `f(args...; kwargs...)`, but guarantees that the most recent method of `f`
-will be executed.   This is useful in specialized circumstances,
-e.g. long-running event loops or callback functions that may
-call obsolete versions of a function `f`.
-(The drawback is that `invokelatest` is somewhat slower than calling
-`f` directly, and the type of the result cannot be inferred by the compiler.)
-
-!!! compat "Julia 1.9"
-    Prior to Julia 1.9, this function was not exported, and was called as `Base.invokelatest`.
-"""
-function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
-    @inline
-    kwargs = merge(NamedTuple(), kwargs)
-    if isempty(kwargs)
-        return Core._call_latest(f, args...)
-    end
-    return Core._call_latest(Core.kwcall, kwargs, f, args...)
-end
-
-"""
-    invoke_in_world(world, f, args...; kwargs...)
-
-Call `f(args...; kwargs...)` in a fixed world age, `world`.
-
-This is useful for infrastructure running in the user's Julia session which is
-not part of the user's program. For example, things related to the REPL, editor
-support libraries, etc. In these cases it can be useful to prevent unwanted
-method invalidation and recompilation latency, and to prevent the user from
-breaking supporting infrastructure by mistake.
-
-The current world age can be queried using [`Base.get_world_counter()`](@ref)
-and stored for later use within the lifetime of the current Julia session, or
-when serializing and reloading the system image.
-
-Technically, `invoke_in_world` will prevent any function called by `f` from
-being extended by the user during their Julia session. That is, generic
-function method tables seen by `f` (and any functions it calls) will be frozen
-as they existed at the given `world` age. In a sense, this is like the opposite
-of [`invokelatest`](@ref).
-
-!!! note
-    It is not valid to store world ages obtained in precompilation for later use.
-    This is because precompilation generates a "parallel universe" where the
-    world age refers to system state unrelated to the main Julia session.
-"""
-function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
-    @inline
-    kwargs = Base.merge(NamedTuple(), kwargs)
-    if isempty(kwargs)
-        return Core._call_in_world(world, f, args...)
-    end
-    return Core._call_in_world(world, Core.kwcall, kwargs, f, args...)
-end
 
 """
     inferencebarrier(x)

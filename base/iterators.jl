@@ -20,7 +20,7 @@ using .Base:
 using Core: @doc
 
 using .Base:
-    cld, fld, SubArray, view, resize!, IndexCartesian
+    cld, fld, resize!, IndexCartesian
 using .Base.Checked: checked_mul
 
 import .Base:
@@ -1327,7 +1327,7 @@ eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
 # Arrays use a generic `view`-of-a-`vec`, so we cannot exactly predict what we'll get back
 eltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = AbstractVector{eltype(T)}
 # But for some common implementations in Base we know the answer exactly
-eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
+eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = Base.SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
 
 IteratorEltype(::Type{PartitionIterator{T}}) where {T} = IteratorEltype(T)
 IteratorEltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
@@ -1353,7 +1353,7 @@ end
 function iterate(itr::PartitionIterator{<:AbstractArray}, state = firstindex(itr.c))
     state > lastindex(itr.c) && return nothing
     r = min(state + itr.n - 1, lastindex(itr.c))
-    return @inbounds view(itr.c, state:r), r + 1
+    return @inbounds Base.view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end

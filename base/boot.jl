@@ -229,7 +229,7 @@ export
     Expr, QuoteNode, LineNumberNode, GlobalRef,
     # object model functions
     fieldtype, getfield, setfield!, swapfield!, modifyfield!, replacefield!, setfieldonce!,
-    nfields, throw, tuple, ===, isdefined, eval,
+    nfields, throw, tuple, ===, isdefined,
     # access to globals
     getglobal, setglobal!, swapglobal!, modifyglobal!, replaceglobal!, setglobalonce!, isdefinedglobal,
     # ifelse, sizeof    # not exported, to avoid conflicting with Base
@@ -238,7 +238,9 @@ export
     # method reflection
     applicable, invoke,
     # constants
-    nothing, Main
+    nothing, Main,
+    # backwards compatibility
+    arrayref, arrayset, arraysize, const_arrayref
 
 const getproperty = getfield # TODO: use `getglobal` for modules instead
 const setproperty! = setfield!
@@ -540,7 +542,7 @@ eval(Core, quote
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
-    _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
+    _PartialStruct(@nospecialize(typ), undef, fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :undef, :fields))
     PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
@@ -775,27 +777,6 @@ struct GeneratedFunctionStub
     gen
     argnames::SimpleVector
     spnames::SimpleVector
-end
-
-# invoke and wrap the results of @generated expression
-function (g::GeneratedFunctionStub)(world::UInt, source::LineNumberNode, @nospecialize args...)
-    # args is (spvals..., argtypes...)
-    body = g.gen(args...)
-    file = source.file
-    file isa Symbol || (file = :none)
-    lam = Expr(:lambda, Expr(:argnames, g.argnames...).args,
-               Expr(:var"scope-block",
-                    Expr(:block,
-                         source,
-                         Expr(:meta, :push_loc, file, :var"@generated body"),
-                         Expr(:return, body),
-                         Expr(:meta, :pop_loc))))
-    spnames = g.spnames
-    if spnames === svec()
-        return lam
-    else
-        return Expr(Symbol("with-static-parameters"), lam, spnames...)
-    end
 end
 
 # If the generator is a subtype of this trait, inference caches the generated unoptimized
@@ -1033,8 +1014,11 @@ _parse = nothing
 
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 
-# support for deprecated uses of internal _apply function
-_apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)
+# support for deprecated uses of builtin functions
+_apply(x...) = _apply_iterate(Main.Base.iterate, x...)
+_apply_pure(x...) = invoke_in_world_total(typemax_UInt, x...)
+const _call_latest = invokelatest
+const _call_in_world = invoke_in_world
 
 struct Pair{A, B}
     first::A
@@ -1061,7 +1045,6 @@ const_arrayref(inbounds::Bool, A::Array, i::Int...) = Main.Base.getindex(A, i...
 arrayset(inbounds::Bool, A::Array{T}, x::Any, i::Int...) where {T} = Main.Base.setindex!(A, x::T, i...)
 arraysize(a::Array) = a.size
 arraysize(a::Array, i::Int) = sle_int(i, nfields(a.size)) ? getfield(a.size, i) : 1
-export arrayref, arrayset, arraysize, const_arrayref
 const check_top_bit = check_sign_bit
 
 # For convenience

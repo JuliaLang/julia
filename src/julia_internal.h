@@ -105,8 +105,8 @@ JL_DLLIMPORT void __tsan_switch_to_fiber(void *fiber, unsigned flags);
 #ifndef _OS_WINDOWS_
     #if defined(_CPU_ARM_) || defined(_CPU_PPC_) || defined(_CPU_WASM_)
         #define MAX_ALIGN 8
-    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)))
-    // int128 is 16 bytes aligned on aarch64 and riscv, and on x86 with LLVM >= 18
+    #elif defined(_CPU_AARCH64_) || defined(_CPU_RISCV64_) || (JL_LLVM_VERSION >= 180000 && (defined(_CPU_X86_64_) || defined(_CPU_X86_)) || (JL_LLVM_VERSION >= 200000 && defined(_CPU_PPC64_)))
+    // int128 is 16 bytes aligned on aarch64 and riscv, and on x86 with LLVM >= 18 and on ppc64 with LLVM >= 20
         #define MAX_ALIGN 16
     #elif defined(_P64)
     // Generically we assume MAX_ALIGN is sizeof(void*)
@@ -650,6 +650,7 @@ STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NO
 typedef struct {
     uint16_t propagate_inbounds:1;
     uint16_t has_fcall:1;
+    uint16_t has_image_globalref:1;
     uint16_t nospecializeinfer:1;
     uint16_t isva:1;
     uint16_t nargsmatchesmethod:1;
@@ -719,8 +720,10 @@ jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *lam JL_PROPAGATE
 int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile);
 jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast);
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void);
-JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals,
-                                                      int binding_effects);
+JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
+                                           int binding_effects);
+JL_DLLEXPORT void jl_maybe_add_binding_backedge(jl_globalref_t *gr, jl_module_t *defining_module, jl_value_t *edge);
+JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge);
 
 int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_code_instance_t **caller) JL_NOTSAFEPOINT;
 int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instance_t *caller);
@@ -841,12 +844,19 @@ int jl_type_equality_is_identity(jl_value_t *t1, jl_value_t *t2) JL_NOTSAFEPOINT
 JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t *val);
 void jl_binding_set_type(jl_binding_t *b, jl_module_t *mod, jl_sym_t *sym, jl_value_t *ty);
 void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type);
-JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type);
+JL_DLLEXPORT void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, int strong);
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind, size_t new_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno);
 
 STATIC_INLINE struct _jl_module_using *module_usings_getidx(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
 STATIC_INLINE jl_module_t *module_usings_getmod(jl_module_t *m JL_PROPAGATES_ROOT, size_t i) JL_NOTSAFEPOINT;
+void jl_add_usings_backedge(jl_module_t *from, jl_module_t *to);
+typedef struct _modstack_t {
+    jl_binding_t *b;
+    struct _modstack_t *prev;
+} modstack_t;
+void jl_check_new_binding_implicit(
+    jl_binding_partition_t *new_bpart JL_MAYBE_UNROOTED, jl_binding_t *b, modstack_t *st, size_t world);
 
 #ifndef __clang_gcanalyzer__
 // The analyzer doesn't like looking through the arraylist, so just model the
@@ -867,6 +877,7 @@ STATIC_INLINE size_t module_usings_max(jl_module_t *m) JL_NOTSAFEPOINT {
     return m->usings.max/3;
 }
 
+JL_DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) JL_NOTSAFEPOINT;
 jl_value_t *jl_eval_global_var(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *e);
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs);
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src);
@@ -902,13 +913,18 @@ JL_DLLEXPORT jl_value_t *jl_nth_slot_type(jl_value_t *sig JL_PROPAGATES_ROOT, si
 void jl_compute_field_offsets(jl_datatype_t *st);
 void jl_module_run_initializer(jl_module_t *m);
 JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, int alloc);
-JL_DLLEXPORT void jl_binding_deprecation_warning(jl_module_t *m, jl_sym_t *sym, jl_binding_t *b);
+JL_DLLEXPORT void jl_binding_deprecation_warning(jl_binding_t *b);
+JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b JL_PROPAGATES_ROOT,
+    jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world) JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
+    jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world) JL_GLOBALLY_ROOTED;
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
 extern jl_genericmemory_t *jl_global_roots_list JL_GLOBALLY_ROOTED;
 extern jl_genericmemory_t *jl_global_roots_keyset JL_GLOBALLY_ROOTED;
 extern arraylist_t *jl_entrypoint_mis;
+JL_DLLEXPORT extern size_t jl_require_world;
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert) JL_GLOBALLY_ROOTED;
 extern jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED;
@@ -920,112 +936,119 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
     int nargs, jl_value_t *functionloc, jl_code_info_t *ci, int isva, int isinferred);
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
-EXTERN_INLINE_DECLARE enum jl_partition_kind decode_restriction_kind(jl_ptr_kind_union_t pku) JL_NOTSAFEPOINT
-{
-#ifdef _P64
-    uint8_t bits = (pku & 0x7);
-    jl_value_t *val = (jl_value_t*)(pku & ~0x7);
-
-    if (val == NULL) {
-        if (bits == BINDING_KIND_IMPLICIT) {
-            return BINDING_KIND_GUARD;
-        }
-        if (bits == BINDING_KIND_CONST) {
-            return BINDING_KIND_UNDEF_CONST;
-        }
-    } else {
-        if (bits == BINDING_KIND_DECLARED) {
-            return BINDING_KIND_BACKDATED_CONST;
-        }
-    }
-
-    return (enum jl_partition_kind)bits;
-#else
-    return (enum jl_partition_kind)pku.kind;
-#endif
-}
-
-STATIC_INLINE jl_value_t *decode_restriction_value(jl_ptr_kind_union_t JL_PROPAGATES_ROOT pku) JL_NOTSAFEPOINT
-{
-#ifdef _P64
-    jl_value_t *val = (jl_value_t*)(pku & ~0x7);
-    return val;
-#else
-    return pku.val;
-#endif
-}
-
-STATIC_INLINE jl_ptr_kind_union_t encode_restriction(jl_value_t *val, enum jl_partition_kind kind) JL_NOTSAFEPOINT
-{
-#ifdef _P64
-    if (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED || kind == BINDING_KIND_UNDEF_CONST)
-        assert(val == NULL);
-    else if (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_CONST || kind == BINDING_KIND_BACKDATED_CONST)
-        assert(val != NULL);
-    if (kind == BINDING_KIND_GUARD)
-        kind = BINDING_KIND_IMPLICIT;
-    else if (kind == BINDING_KIND_UNDEF_CONST)
-        kind = BINDING_KIND_CONST;
-    else if (kind == BINDING_KIND_BACKDATED_CONST)
-        kind = BINDING_KIND_DECLARED;
-    assert((((uintptr_t)val) & 0x7) == 0);
-    return ((jl_ptr_kind_union_t)val) | kind;
-#else
-    jl_ptr_kind_union_t ret = { val, kind };
-    return ret;
-#endif
-}
-
 STATIC_INLINE int jl_bkind_is_some_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED;
-}
-
-STATIC_INLINE int jl_bkind_is_some_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_UNDEF_CONST || kind == BINDING_KIND_BACKDATED_CONST;
-}
-
-STATIC_INLINE int jl_bkind_is_defined_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT || kind == BINDING_KIND_BACKDATED_CONST;
+    return kind == PARTITION_KIND_IMPLICIT || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED;
 }
 
 STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == BINDING_KIND_FAILED || kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED;
+    return kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_GUARD;
+}
+
+STATIC_INLINE int jl_bkind_is_some_implicit(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_IMPLICIT || jl_bkind_is_some_guard(kind);
+}
+
+STATIC_INLINE int jl_bkind_is_some_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_BACKDATED_CONST;
+}
+
+STATIC_INLINE int jl_bkind_is_defined_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_BACKDATED_CONST;
 }
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b JL_PROPAGATES_ROOT, jl_binding_partition_t *previous_part, size_t world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_GLOBALLY_ROOTED;
 
+struct restriction_kind_pair {
+    jl_binding_t *binding_if_global;
+    jl_value_t *restriction;
+    enum jl_partition_kind kind;
+    int maybe_depwarn;
+};
+JL_DLLEXPORT int jl_get_binding_leaf_partitions_restriction_kind(jl_binding_t *b JL_PROPAGATES_ROOT, struct restriction_kind_pair *rkp, size_t min_world, size_t max_world) JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT, int *maybe_depwarn, size_t min_world, size_t max_world);
+
 EXTERN_INLINE_DECLARE uint8_t jl_bpart_get_kind(jl_binding_partition_t *bpart) JL_NOTSAFEPOINT {
-    return decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction));
+    return (uint8_t)(bpart->kind & 0xf);
 }
 
-STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, size_t world) JL_NOTSAFEPOINT;
-STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
+STATIC_INLINE void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, size_t world) JL_NOTSAFEPOINT;
+STATIC_INLINE void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world, int *depwarn) JL_NOTSAFEPOINT;
+STATIC_INLINE void jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart JL_PROPAGATES_ROOT, int *depwarn, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
+STATIC_INLINE void jl_walk_binding_inplace_worlds(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t *min_world, size_t *max_world, int *depwarn, size_t world) JL_NOTSAFEPOINT;
 
 #ifndef __clang_analyzer__
-STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT
 {
     while (1) {
-        if (!*bpart)
-            return encode_restriction(NULL, BINDING_KIND_GUARD);
-        jl_ptr_kind_union_t pku = jl_atomic_load_acquire(&(*bpart)->restriction);
-        if (!jl_bkind_is_some_import(decode_restriction_kind(pku)))
-            return pku;
-        *bnd = (jl_binding_t*)decode_restriction_value(pku);
+        if (!jl_bkind_is_some_import(jl_binding_kind(*bpart)))
+            return;
+        *bnd = (jl_binding_t*)(*bpart)->restriction;
         *bpart = jl_get_binding_partition(*bnd, world);
     }
 }
 
-STATIC_INLINE jl_ptr_kind_union_t jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
+STATIC_INLINE void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world, int *depwarn) JL_NOTSAFEPOINT
 {
+    int passed_explicit = 0;
     while (1) {
-        if (!*bpart)
-            return encode_restriction(NULL, BINDING_KIND_GUARD);
-        jl_ptr_kind_union_t pku = jl_atomic_load_acquire(&(*bpart)->restriction);
-        if (!jl_bkind_is_some_import(decode_restriction_kind(pku)))
-            return pku;
-        *bnd = (jl_binding_t*)decode_restriction_value(pku);
+        enum jl_partition_kind kind = jl_binding_kind(*bpart);
+        if (!jl_bkind_is_some_import(kind)) {
+            if (!passed_explicit && depwarn)
+                *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
+            return;
+        }
+        if (!passed_explicit && depwarn)
+            *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
+        if (kind != PARTITION_KIND_IMPLICIT)
+            passed_explicit = 1;
+        *bnd = (jl_binding_t*)(*bpart)->restriction;
+        *bpart = jl_get_binding_partition(*bnd, world);
+    }
+}
+
+
+STATIC_INLINE void jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_partition_t **bpart, int *depwarn, size_t min_world, size_t max_world) JL_NOTSAFEPOINT
+{
+    int passed_explicit = 0;
+    while (*bpart) {
+        enum jl_partition_kind kind = jl_binding_kind(*bpart);
+        if (!jl_bkind_is_some_import(kind)) {
+            if (!passed_explicit && depwarn)
+                *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
+            return;
+        }
+        if (!passed_explicit && depwarn)
+            *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
+        if (kind != PARTITION_KIND_IMPLICIT)
+            passed_explicit = 1;
+        *bnd = (jl_binding_t*)(*bpart)->restriction;
         *bpart = jl_get_binding_partition_all(*bnd, min_world, max_world);
+    }
+}
+
+STATIC_INLINE void jl_walk_binding_inplace_worlds(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t *min_world, size_t *max_world, int *depwarn, size_t world) JL_NOTSAFEPOINT
+{
+    int passed_explicit = 0;
+    while (*bpart) {
+        if (*min_world < (*bpart)->min_world)
+            *min_world = (*bpart)->min_world;
+        size_t bpart_max_world = jl_atomic_load_relaxed(&(*bpart)->max_world);
+        if (*max_world > bpart_max_world)
+            *max_world = bpart_max_world;
+        enum jl_partition_kind kind = jl_binding_kind(*bpart);
+        if (!jl_bkind_is_some_import(kind)) {
+            if (!passed_explicit && depwarn)
+                *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
+            return;
+        }
+        if (!passed_explicit && depwarn)
+            *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
+        if (kind != PARTITION_KIND_IMPLICIT)
+            passed_explicit = 1;
+        *bnd = (jl_binding_t*)(*bpart)->restriction;
+        *bpart = jl_get_binding_partition(*bnd, world);
     }
 }
 #endif
@@ -1226,16 +1249,19 @@ _Atomic(jl_value_t*) *jl_table_peek_bp(jl_genericmemory_t *a, jl_value_t *key) J
 
 JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t*);
 
+JL_DLLEXPORT jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent);
+JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_using_core, uint8_t self_name);
+JL_DLLEXPORT void jl_add_default_names(jl_module_t *m, uint8_t default_using_core, uint8_t self_name);
 JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module);
-JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache);
-jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp);
+JL_DLLEXPORT jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types JL_PROPAGATES_ROOT, size_t world, int mt_cache);
+jl_method_instance_t *jl_get_specialized(jl_method_t *m, jl_value_t *types, jl_svec_t *sp) JL_PROPAGATES_ROOT;
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred(jl_value_t *owner, jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
 JL_DLLEXPORT jl_value_t *jl_rettype_inferred_native(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t world) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_value_t *type, size_t world);
 JL_DLLEXPORT jl_method_instance_t *jl_specializations_get_linfo(
     jl_method_t *m JL_PROPAGATES_ROOT, jl_value_t *type, jl_svec_t *sparams);
-jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_ins);
+jl_method_instance_t *jl_specializations_get_or_insert(jl_method_instance_t *mi_ins JL_PROPAGATES_ROOT);
 JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, jl_value_t *invokesig, jl_code_instance_t *caller);
 JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *typ, jl_code_instance_t *caller);
 JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
@@ -1261,6 +1287,9 @@ JL_DLLEXPORT int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
                                   size_t lineno, size_t offset, jl_value_t *options);
+jl_code_info_t *jl_inner_ctor_body(jl_array_t *fieldkinds, jl_module_t *inmodule, const char *file, int line);
+jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line);
+void jl_ctor_def(jl_value_t *ty, jl_value_t *functionloc);
 
 //--------------------------------------------------
 // Backtraces
@@ -1547,7 +1576,7 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 #endif
 
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err);
-void *jl_find_dynamic_library_by_addr(void *symbol);
+void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err);
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd);
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
@@ -1555,6 +1584,9 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_value_t *fobj, jl_datatype_t *result, htable_t *cache, jl_svec_t *fill,
     void *(*init_trampoline)(void *tramp, void **nval),
     jl_unionall_t *env, jl_value_t **vals);
+JL_DLLEXPORT void *jl_get_abi_converter(jl_task_t *ct, _Atomic(void*) *fptr, _Atomic(size_t) *last_world, void *data);
+JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
+    jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig);
 
 
 // Special filenames used to refer to internal julia libraries
@@ -1941,17 +1973,6 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
   void JL_GC_ASSERT_LIVE(jl_value_t *v) JL_NOTSAFEPOINT;
 #else
   #define JL_GC_ASSERT_LIVE(x) (void)(x)
-#endif
-
-#ifdef _OS_WINDOWS_
-// On Windows, weak symbols do not default to 0 due to a GCC bug
-// (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90826), use symbol
-// aliases with a known value instead.
-#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak,alias(#sym)))
-#define JL_WEAK_SYMBOL_DEFAULT(sym) &sym
-#else
-#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak))
-#define JL_WEAK_SYMBOL_DEFAULT(sym) NULL
 #endif
 
 //JL_DLLEXPORT float julia__gnu_h2f_ieee(half param) JL_NOTSAFEPOINT;

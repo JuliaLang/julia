@@ -1,7 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+irshow_was_loaded() = invokelatest(isdefined, Compiler.IRShow, :debuginfo_firstline)
 function maybe_show_ir(ir::IRCode)
-    if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
+    if irshow_was_loaded()
         # ensure we use I/O that does not yield, as this gets called during compilation
         invokelatest(Core.Main.Base.show, Core.stdout, "text/plain", ir)
     else
@@ -61,15 +62,14 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             raise_error()
         end
     elseif isa(op, GlobalRef)
-        force_binding_resolution!(op, min_world(ir.valid_worlds))
-        bpart = lookup_binding_partition(min_world(ir.valid_worlds), op)
-        while is_some_imported(binding_kind(bpart)) && max_world(ir.valid_worlds) <= bpart.max_world
-            imported_binding = partition_restriction(bpart)::Core.Binding
-            bpart = lookup_binding_partition(min_world(ir.valid_worlds), imported_binding)
-        end
-        if !is_defined_const_binding(binding_kind(bpart)) || (bpart.max_world < max_world(ir.valid_worlds))
-            @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
-            raise_error()
+        if op.mod !== Core && op.mod !== Base
+            (valid_worlds, alldef) = scan_leaf_partitions(nothing, op, WorldWithRange(min_world(ir.valid_worlds), ir.valid_worlds)) do _, _, bpart
+                is_defined_const_binding(binding_kind(bpart))
+            end
+            if !alldef || max_world(valid_worlds) < max_world(ir.valid_worlds) || min_world(valid_worlds) > min_world(ir.valid_worlds)
+                @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
+                raise_error()
+            end
         end
     elseif isa(op, Expr)
         # Only Expr(:boundscheck) is allowed in value position
@@ -102,15 +102,16 @@ function count_int(val::Int, arr::Vector{Int})
     n
 end
 
+_debuginfo_firstline(debuginfo::Union{DebugInfo,DebugInfoStream}) = IRShow.debuginfo_firstline(debuginfo)
 function verify_ir(ir::IRCode, print::Bool=true,
                    allow_frontend_forms::Bool=false,
                    𝕃ₒ::AbstractLattice = SimpleInferenceLattice.instance,
                    mi::Union{Nothing,MethodInstance}=nothing)
     function raise_error()
         error_args = Any["IR verification failed."]
-        if isdefined(Core, :Main) && isdefined(Core.Main, :Base)
+        if irshow_was_loaded()
             # ensure we use I/O that does not yield, as this gets called during compilation
-            firstline = invokelatest(IRShow.debuginfo_firstline, ir.debuginfo)
+            firstline = invokelatest(_debuginfo_firstline, ir.debuginfo)
         else
             firstline = nothing
         end
