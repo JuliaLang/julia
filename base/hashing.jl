@@ -22,10 +22,10 @@ The hash value may change when a new Julia process is started.
 
 ```jldoctest
 julia> a = hash(10)
-0x64abb6a0b5357846
+r"0x[0-9a-f]{16}"
 
 julia> hash(10, a) # only use the output of another hash function as the second argument
-0xeb3ffc597ad4eafd
+r"0x[0-9a-f]{16}"
 ```
 
 See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
@@ -104,6 +104,9 @@ end
         seed::UInt64,
         secret::NTuple{3, UInt64}
     )
+    # With reference and gratitude to [rapidhash](https://github.com/Nicoshev/rapidhash)
+    # while the integer hashing methods defined in this file share the mixing function
+    # used by rapidhash, only this method implements the algorithm in its entirety.
     buflen = UInt64(n)
     seed = seed ⊻ (hash_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
 
