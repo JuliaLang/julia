@@ -93,19 +93,21 @@ If set to `true`, record per-method-instance timings within type inference in th
 __set_measure_typeinf(onoff::Bool) = __measure_typeinf__[] = onoff
 const __measure_typeinf__ = RefValue{Bool}(false)
 
-function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt)
+function result_edges(interp::AbstractInterpreter, caller::InferenceState)
     result = caller.result
     opt = result.src
-    if opt isa OptimizationState
-        src = ir_to_codeinf!(opt)
-        edges = src.edges::SimpleVector
-        caller.src = result.src = src
+    if isa(opt, OptimizationState)
+        return Core.svec(opt.inlining.edges...)
     else
-        edges = Core.svec(caller.edges...)
-        caller.src.edges = edges
+        return Core.svec(caller.edges...)
     end
+end
+
+function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt)
+    result = caller.result
     #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
     if isdefined(result, :ci)
+        edges = result_edges(interp, caller)
         ci = result.ci
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
@@ -119,9 +121,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         const_flag = is_result_constabi_eligible(result)
         discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
         if !discard_src
-            inferred_result = transform_result_for_cache(interp, result)
+            inferred_result = transform_result_for_cache(interp, result, edges)
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
             if inferred_result isa CodeInfo
+                result.src = inferred_result
                 if may_compress(interp)
                     nslots = length(inferred_result.slotflags)
                     resize!(inferred_result.slottypes::Vector{Any}, nslots)
@@ -278,7 +281,16 @@ function is_result_constabi_eligible(result::InferenceResult)
     return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
 
-transform_result_for_cache(::AbstractInterpreter, result::InferenceResult) = result.src
+function transform_result_for_cache(::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
+    src = result.src
+    if isa(src, OptimizationState)
+        src = ir_to_codeinf!(src)
+    end
+    if isa(src, CodeInfo)
+        src.edges = edges
+    end
+    return src
+end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
@@ -1064,6 +1076,7 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
             opt = OptimizationState(frame, interp)
             optimize(interp, opt, frame.result)
             src = ir_to_codeinf!(opt)
+            src.edges = Core.svec(opt.inlining.edges...)
         end
         result.src = frame.src = src
     end
