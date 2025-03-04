@@ -185,13 +185,18 @@ end
 
 import Base.Experimental.entrypoint
 
-let mod = Base.include(Base.__toplevel__, inputfile)
-    if !isa(mod, Module)
-        mod = Main
-    end
+let mod = Base.include(Main, inputfile)
     Core.@latestworld
-    if output_type == "--output-exe" && isdefined(mod, :main) && !add_ccallables
-        entrypoint(mod.main, ())
+    if output_type == "--output-exe"
+        if Base.should_use_main_entrypoint()
+            if hasmethod(Main.main, Tuple{Vector{String}})
+                entrypoint(Main.main, (Vector{String},))
+            else
+                error("`@main` must accept a `Vector{String}` argument.")
+            end
+        else
+            error("To generate an executable a `@main` function must be defined.")
+        end
     end
     #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{Base.SubString{String}, 1}, String))
     #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))

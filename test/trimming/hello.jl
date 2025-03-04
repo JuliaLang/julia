@@ -1,6 +1,3 @@
-module MyApp
-Base.@ccallable function main()::Cint
+function @main(args)
     println(Core.stdout, "Hello, world!")
-    return 0
-end
 end
