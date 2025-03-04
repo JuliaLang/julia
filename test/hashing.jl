@@ -249,7 +249,9 @@ end
         )
 
         for a in vals, b in vals
-            @test isequal(a, b) == (Base.hash_64_32(a) == Base.hash_64_32(b))
+            ha = Base.hash_64_32(a, Base.HASH_SEED, Base.HASH_SECRET)
+            hb = Base.hash_64_32(b, Base.HASH_SEED, Base.HASH_SECRET)
+            @test isequal(a, b) == (ha == hb)
         end
     end
 
@@ -260,7 +262,9 @@ end
         )
 
         for a in vals, b in vals
-            @test isequal(a, b) == (Base.hash_32_32(a) == Base.hash_32_32(b))
+            ha = Base.hash_32_32(a, Base.HASH_SEED, Base.HASH_SECRET)
+            hb = Base.hash_32_32(b, Base.HASH_SEED, Base.HASH_SECRET)
+            @test isequal(a, b) == (ha == hb)
         end
     end
 end
