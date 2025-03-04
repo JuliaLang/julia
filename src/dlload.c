@@ -318,9 +318,9 @@ JL_DLLEXPORT void *jl_load_dynamic_library(const char *modname, unsigned flags, 
       While these exist as OS concepts on Darwin, we want to use them on other platforms
       such as Windows, so we emulate them here.
     */
-    if (!abspath && !is_atpath && jl_base_module != NULL) {
+    if (!abspath && !is_atpath && jl_base_module != NULL && jl_typeinf_world != 1) {
         jl_binding_t *b = jl_get_module_binding(jl_base_module, jl_symbol("DL_LOAD_PATH"), 0);
-        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_get_binding_value(b) : NULL);
+        jl_array_t *DL_LOAD_PATH = (jl_array_t*)(b ? jl_get_binding_value_in_world(b, jl_typeinf_world) : NULL);
         if (DL_LOAD_PATH != NULL) {
             size_t j;
             for (j = 0; j < jl_array_nrows(DL_LOAD_PATH); j++) {

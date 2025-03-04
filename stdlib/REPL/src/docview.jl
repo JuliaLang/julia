@@ -313,7 +313,7 @@ function summarize(binding::Binding, sig)
         println(io, "No documentation found.\n")
         quot = any(isspace, sprint(print, binding)) ? "'" : ""
         bpart = Base.lookup_binding_partition(Base.tls_world_age(), convert(Core.Binding, GlobalRef(binding.mod, binding.var)))
-        if Base.binding_kind(bpart) === Base.BINDING_KIND_GUARD
+        if Base.binding_kind(bpart) === Base.PARTITION_KIND_GUARD
             println(io, "Binding ", quot, "`", binding, "`", quot, " does not exist.")
         else
             println(io, "Binding ", quot, "`", binding, "`", quot, " exists, but has not been assigned a value.")

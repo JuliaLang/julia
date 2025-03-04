@@ -1649,8 +1649,7 @@ let code = Any[
     try
         argtypes = Any[Bool]
         ssavaluetypes = Any[Bool, Tuple{Int}, Tuple{Float64}, Tuple{Int}, Int, Any]
-        ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
-        Compiler.verify_ir(ir)
+        ir = make_ircode(code; slottypes=argtypes, ssavaluetypes, verify=true)
         Compiler.__set_check_ssa_counts(true)
         ir = Compiler.sroa_pass!(ir)
         Compiler.verify_ir(ir)
@@ -1690,8 +1689,7 @@ let code = Any[
                         Union{Nothing, Tuple{Tuple{Int, Int}, Int}}, Bool, Any, Any,
                         Tuple{Tuple{Int, Int}, Int},
                         Tuple{Int, Int}, Int, Any]
-    ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
-    Compiler.verify_ir(ir)
+    ir = make_ircode(code; slottypes=argtypes, ssavaluetypes, verify=true)
     ir = Compiler.sroa_pass!(ir)
     Compiler.verify_ir(ir)
     ir = Compiler.compact!(ir)
@@ -1964,9 +1962,8 @@ let code = Any[
         # block 8
         ReturnNode(2),
     ]
-    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Any, Any, Any, Any, Union{}, Union{}])
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Any, Any, Any, Any, Union{}, Union{}], verify=true)
     @test length(ir.cfg.blocks) == 8
-    Compiler.verify_ir(ir)
 
     # Union typed deletion marker in basic block 2
     Compiler.setindex!(ir, nothing, SSAValue(2))
@@ -1984,6 +1981,45 @@ let code = Any[
     @test isdefined(ir[SSAValue(gotoifnot+1)][:inst]::ReturnNode, :val)
 end
 
+# Make sure that PhiNode values containing forward references are eventually updated.
+let code = Any[
+             # block 1
+    #= %1 =# Argument(2),
+    #= %2 =# GotoNode(4),
+             # block 2
+    #= %3 =# GotoNode(4), # will be removed, shifting SSA indices by 1
+             # block 3
+    #= %4 =# PhiNode(Int32[1, 9, 13], Any[SSAValue(1), SSAValue(6), SSAValue(6)]),
+    #= %5 =# GotoNode(6),
+             # block 4
+    #= %6 =# Expr(:call, :add_int, Argument(2), 1),
+    #= %7 =# GotoIfNot(Argument(3), 9),
+             # block 5
+    #= %8 =# ReturnNode(Argument(3)),
+             # block 6
+    #= %9 =# GotoIfNot(Argument(3), 4),
+             # block 7
+    #= %10=# GotoIfNot(Argument(3), 12),
+             # block 8
+    #= %11=# GotoNode(13),
+             # block 9
+    #= %12=# GotoNode(13),
+             # block 10
+    #= %13=# GotoNode(4),
+    ]
+    ssavaluetypes = Any[Int64, Any, Any, Int64, Any, Int64, Any, Int64, Any, Any, Any, Any, Any]
+    slottypes = Any[Any, Int, Bool]
+    ir = make_ircode(code; ssavaluetypes, slottypes, verify=true)
+    @test length(ir.cfg.blocks) == 10
+    ir = Compiler.cfg_simplify!(ir)
+    Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 6
+    phistmt = ir.cfg.blocks[2].stmts[1]
+    phinode = ir[SSAValue(phistmt)][:stmt]
+    @test isa(phinode, PhiNode)
+    @test phinode.values[2] == phinode.values[3] == SSAValue(5)
+end
+
 # https://github.com/JuliaLang/julia/issues/54596
 # finalized object's uses have no postdominator
 let f = (x)->nothing, mi = Base.method_instance(f, (Base.RefValue{Nothing},)), code = Any[
@@ -1998,9 +2034,8 @@ let f = (x)->nothing, mi = Base.method_instance(f, (Base.RefValue{Nothing},)), c
    Expr(:call, Base.getfield, SSAValue(1), :x)
    ReturnNode(SSAValue(6))
 ]
-   ir = make_ircode(code; ssavaluetypes=Any[Base.RefValue{Nothing}, Nothing, Any, Nothing, Any, Nothing, Any])
+   ir = make_ircode(code; ssavaluetypes=Any[Base.RefValue{Nothing}, Nothing, Any, Nothing, Any, Nothing, Any], verify=true)
    inlining = Compiler.InliningState(Compiler.NativeInterpreter())
-   Compiler.verify_ir(ir)
    ir = Compiler.sroa_pass!(ir, inlining)
    Compiler.verify_ir(ir)
 end
@@ -2023,9 +2058,8 @@ let code = Any[
         # block 8
         ReturnNode(nothing),
     ]
-    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}])
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}], verify=true)
     @test length(ir.cfg.blocks) == 8
-    Compiler.verify_ir(ir)
 
     # The IR should remain valid after domsorting
     # (esp. including the insertion of new BasicBlocks for any fix-ups)

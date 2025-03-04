@@ -4,24 +4,24 @@ module Rebinding
     using Test
     make_foo() = Foo(1)
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_GUARD
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_GUARD
     struct Foo
         x::Int
     end
     const defined_world_age = Base.tls_world_age()
     x = Foo(1)
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_CONST
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_CONST
     @test !contains(repr(x), "@world")
     Base.delete_binding(@__MODULE__, :Foo)
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_GUARD
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_GUARD
     @test contains(repr(x), "@world")
 
     # Test that it still works if Foo is redefined to a non-type
     const Foo = 1
 
-    @test Base.binding_kind(@__MODULE__, :Foo) == Base.BINDING_KIND_CONST
+    @test Base.binding_kind(@__MODULE__, :Foo) == Base.PARTITION_KIND_CONST
     @test contains(repr(x), "@world")
     Base.delete_binding(@__MODULE__, :Foo)
 
@@ -276,4 +276,45 @@ module ImageGlobalRefFlag
     fnoimage() = x
     @test Base.has_image_globalref(first(methods(fimage)))
     @test !Base.has_image_globalref(first(methods(fnoimage)))
+end
+
+# Test that inference can merge ranges for partitions as long as what's being imported doesn't change
+module RangeMerge
+    using Test
+    using InteractiveUtils
+
+    function get_llvm(@nospecialize(f), @nospecialize(t), raw=true, dump_module=false, optimize=true)
+        params = Base.CodegenParams(safepoint_on_entry=false, gcstack_arg = false, debug_info_level=Cint(2))
+        d = InteractiveUtils._dump_function(f, t, false, false, raw, dump_module, :att, optimize, :none, false, params)
+        sprint(print, d)
+    end
+
+    global x = 1
+    const after_def_world = Base.get_world_counter()
+    export x
+    f() = x
+    @test f() == 1
+    @test only(methods(f)).specializations.cache.min_world <= after_def_world
+
+    @test !contains(get_llvm(f, Tuple{}), "jl_get_binding_value")
+end
+
+# Test that we invalidate for undefined -> defined transitions (#54733)
+module UndefinedTransitions
+    using Test
+    function foo54733()
+        for i = 1:1_000_000_000
+            bar54733(i)
+        end
+        return 1
+    end
+    @test_throws UndefVarError foo54733()
+    let ci = first(methods(foo54733)).specializations.cache
+        @test !Base.Compiler.is_nothrow(Base.Compiler.decode_effects(ci.ipo_purity_bits))
+    end
+    bar54733(x) = 3x
+    @test foo54733() === 1
+    let ci = first(methods(foo54733)).specializations.cache
+        @test Base.Compiler.is_nothrow(Base.Compiler.decode_effects(ci.ipo_purity_bits))
+    end
 end

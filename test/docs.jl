@@ -575,8 +575,8 @@ end
 
 let T = meta(DocVars)[@var(DocVars.T)],
     S = meta(DocVars)[@var(DocVars.S)],
-    Tname = Markdown.parse("```julia\n$(curmod_prefix)DocVars.T\n```"),
-    Sname = Markdown.parse("```julia\n$(curmod_prefix)DocVars.S\n```")
+    Tname = Markdown.parse("```julia\n$(curmod_str).DocVars.T\n```"),
+    Sname = Markdown.parse("```julia\n$(curmod_str).DocVars.S\n```")
     # Splicing the expression directly doesn't work
     @test docstrings_equal(T.docs[Union{}],
         doc"""
@@ -684,8 +684,8 @@ end
 @doc "This should document @m1... since its the result of expansion" @m2_11993
 @test (@doc @m1_11993) !== nothing
 let d = (@doc :@m2_11993),
-    varstr = "$(curmod_prefix == "Main." ? "" : curmod_prefix)@m2_11993"
-    docstr = Markdown.Code("", "$curmod_prefix@m2_11993")
+    varstr = "$(curmod_prefix)@m2_11993"
+    docstr = Markdown.Code("", "$(curmod_str).@m2_11993")
     macro_doc = Markdown.parse("`$varstr` is a macro.")
     @test docstring_startswith(d, doc"""
     No documentation found for private binding $docstr.
@@ -887,7 +887,7 @@ undocumented(x,y) = 3
 end # module
 
 doc_str = Markdown.parse("""
-No docstring or readme file found for internal module `$(curmod_prefix)Undocumented`.
+No docstring or readme file found for internal module `$(curmod_str).Undocumented`.
 
 # Public names
 
@@ -898,67 +898,67 @@ No docstring or readme file found for internal module `$(curmod_prefix)Undocumen
 doc_str = Markdown.parse("""
 No documentation found.
 
-Binding `$(curmod_prefix)Undocumented.bindingdoesnotexist` does not exist.
+Binding `$(curmod_str).Undocumented.bindingdoesnotexist` does not exist.
 """)
 @test docstrings_equal(@doc(Undocumented.bindingdoesnotexist), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public binding `$(curmod_prefix)Undocumented.A`.
+No documentation found for public binding `$(curmod_str).Undocumented.A`.
 
 # Summary
 ```
-abstract type $(curmod_prefix)Undocumented.A
+abstract type $(curmod_str).Undocumented.A
 ```
 
 # Subtypes
 ```
-$(curmod_prefix)Undocumented.B
-$(curmod_prefix)Undocumented.C
+$(curmod_str).Undocumented.B
+$(curmod_str).Undocumented.C
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.A), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public binding `$(curmod_prefix)Undocumented.B`.
+No documentation found for public binding `$(curmod_str).Undocumented.B`.
 
 # Summary
 ```
-abstract type $(curmod_prefix)Undocumented.B
+abstract type $(curmod_str).Undocumented.B
 ```
 
 # Subtypes
 ```
-$(curmod_prefix)Undocumented.D
+$(curmod_str).Undocumented.D
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
+$(curmod_str).Undocumented.B <: $(curmod_str).Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.B), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public binding `$(curmod_prefix)Undocumented.C`.
+No documentation found for public binding `$(curmod_str).Undocumented.C`.
 
 # Summary
 ```
-mutable struct $(curmod_prefix)Undocumented.C
+mutable struct $(curmod_str).Undocumented.C
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.C <: $(curmod_prefix)Undocumented.A <: Any
+$(curmod_str).Undocumented.C <: $(curmod_str).Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.C), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private binding `$(curmod_prefix)Undocumented.D`.
+No documentation found for private binding `$(curmod_str).Undocumented.D`.
 
 # Summary
 ```
-struct $(curmod_prefix)Undocumented.D
+struct $(curmod_str).Undocumented.D
 ```
 
 # Fields
@@ -970,97 +970,97 @@ three :: Float64
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.D <: $(curmod_prefix)Undocumented.B <: $(curmod_prefix)Undocumented.A <: Any
+$(curmod_str).Undocumented.D <: $(curmod_str).Undocumented.B <: $(curmod_str).Undocumented.A <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.D), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public binding `$(curmod_prefix)Undocumented.at0`.
+No documentation found for public binding `$(curmod_str).Undocumented.at0`.
 
 # Summary
 
 ```
-abstract type $(curmod_prefix)Undocumented.at0{T<:Number, N}
+abstract type $(curmod_str).Undocumented.at0{T<:Number, N}
 ```
 
 # Subtypes
 
 ```
-$(curmod_prefix)Undocumented.at1{Integer<:T<:Number, N}
-$(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer}
-$(curmod_prefix)Undocumented.st3{T<:Integer, N}
-$(curmod_prefix)Undocumented.st4{T<:Number, N}
+$(curmod_str).Undocumented.at1{Integer<:T<:Number, N}
+$(curmod_str).Undocumented.pt2{T<:Number, N, A>:Integer}
+$(curmod_str).Undocumented.st3{T<:Integer, N}
+$(curmod_str).Undocumented.st4{T<:Number, N}
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.at0), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private binding `$(curmod_prefix)Undocumented.at1`.
+No documentation found for private binding `$(curmod_str).Undocumented.at1`.
 
 # Summary
 
 ```
-abstract type $(curmod_prefix)Undocumented.at1{T>:Integer, N}
+abstract type $(curmod_str).Undocumented.at1{T>:Integer, N}
 ```
 
 # Subtypes
 
 ```
-$(curmod_prefix)Undocumented.mt6{Integer, N}
-$(curmod_prefix)Undocumented.st5{T>:Integer, N}
+$(curmod_str).Undocumented.mt6{Integer, N}
+$(curmod_str).Undocumented.st5{T>:Integer, N}
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.at1{T>:Integer, N} <: $(curmod_prefix)Undocumented.at0{T>:Integer, N} <: Any
+$(curmod_str).Undocumented.at1{T>:Integer, N} <: $(curmod_str).Undocumented.at0{T>:Integer, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.at1), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private binding `$(curmod_prefix)Undocumented.at_`.
+No documentation found for private binding `$(curmod_str).Undocumented.at_`.
 
 # Summary
 
 ```
-abstract type $(curmod_prefix)Undocumented.at0{Int64, N}
+abstract type $(curmod_str).Undocumented.at0{Int64, N}
 ```
 
 # Subtypes
 
 ```
-$(curmod_prefix)Undocumented.pt2{Int64, N, A>:Integer}
-$(curmod_prefix)Undocumented.st3{Int64, N}
-$(curmod_prefix)Undocumented.st4{Int64, N}
+$(curmod_str).Undocumented.pt2{Int64, N, A>:Integer}
+$(curmod_str).Undocumented.st3{Int64, N}
+$(curmod_str).Undocumented.st4{Int64, N}
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.at_), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for public binding `$(curmod_prefix)Undocumented.pt2`.
+No documentation found for public binding `$(curmod_str).Undocumented.pt2`.
 
 # Summary
 
 ```
-primitive type $(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer}
+primitive type $(curmod_str).Undocumented.pt2{T<:Number, N, A>:Integer}
 ```
 
 # Supertype Hierarchy
 
 ```
-$(curmod_prefix)Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_prefix)Undocumented.at0{T<:Number, N} <: Any
+$(curmod_str).Undocumented.pt2{T<:Number, N, A>:Integer} <: $(curmod_str).Undocumented.at0{T<:Number, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.pt2), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private binding `$(curmod_prefix)Undocumented.st3`.
+No documentation found for private binding `$(curmod_str).Undocumented.st3`.
 
 # Summary
 
 ```
-struct $(curmod_prefix)Undocumented.st3{T<:Integer, N}
+struct $(curmod_str).Undocumented.st3{T<:Integer, N}
 ```
 
 # Fields
@@ -1072,18 +1072,18 @@ c :: Int64
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.st3{T<:Integer, N} <: $(curmod_prefix)Undocumented.at0{T<:Integer, N} <: Any
+$(curmod_str).Undocumented.st3{T<:Integer, N} <: $(curmod_str).Undocumented.at0{T<:Integer, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.st3), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private binding `$(curmod_prefix)Undocumented.st4`.
+No documentation found for private binding `$(curmod_str).Undocumented.st4`.
 
 # Summary
 
 ```
-struct $(curmod_prefix)Undocumented.st4{T, N}
+struct $(curmod_str).Undocumented.st4{T, N}
 ```
 
 # Fields
@@ -1094,96 +1094,96 @@ b :: NTuple{N, T}
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.st4{T, N} <: $(curmod_prefix)Undocumented.at0{T, N} <: Any
+$(curmod_str).Undocumented.st4{T, N} <: $(curmod_str).Undocumented.at0{T, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.st4), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private binding `$(curmod_prefix)Undocumented.st5`.
+No documentation found for private binding `$(curmod_str).Undocumented.st5`.
 
 # Summary
 
 ```
-struct $(curmod_prefix)Undocumented.st5{T>:Int64, N}
+struct $(curmod_str).Undocumented.st5{T>:Int64, N}
 ```
 
 # Fields
 ```
-c :: $(curmod_prefix)Undocumented.st3{T>:Int64, N}
+c :: $(curmod_str).Undocumented.st3{T>:Int64, N}
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.st5{T>:Int64, N} <: $(curmod_prefix)Undocumented.at1{T>:Int64, N} <: $(curmod_prefix)Undocumented.at0{T>:Int64, N} <: Any
+$(curmod_str).Undocumented.st5{T>:Int64, N} <: $(curmod_str).Undocumented.at1{T>:Int64, N} <: $(curmod_str).Undocumented.at0{T>:Int64, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.st5), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private binding `$(curmod_prefix)Undocumented.mt6`.
+No documentation found for private binding `$(curmod_str).Undocumented.mt6`.
 
 # Summary
 
 ```
-mutable struct $(curmod_prefix)Undocumented.mt6{T<:Integer, N}
+mutable struct $(curmod_str).Undocumented.mt6{T<:Integer, N}
 ```
 
 # Fields
 ```
-d :: $(curmod_prefix)Undocumented.st5{T<:Integer, N}
+d :: $(curmod_str).Undocumented.st5{T<:Integer, N}
 ```
 
 # Supertype Hierarchy
 ```
-$(curmod_prefix)Undocumented.mt6{T<:Integer, N} <: $(curmod_prefix)Undocumented.at1{T<:Integer, N} <: $(curmod_prefix)Undocumented.at0{T<:Integer, N} <: Any
+$(curmod_str).Undocumented.mt6{T<:Integer, N} <: $(curmod_str).Undocumented.at1{T<:Integer, N} <: $(curmod_str).Undocumented.at0{T<:Integer, N} <: Any
 ```
 """)
 @test docstrings_equal(@doc(Undocumented.mt6), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private binding `$(curmod_prefix)Undocumented.ut7`.
+No documentation found for private binding `$(curmod_str).Undocumented.ut7`.
 
 # Summary
 
-`$(curmod_prefix)Undocumented.ut7` is of type `Union`.
+`$(curmod_str).Undocumented.ut7` is of type `Union`.
 
 # Union Composed of Types
 
- - `$(curmod_prefix)Undocumented.mt6`
- - `$(curmod_prefix)Undocumented.st5`
+ - `$(curmod_str).Undocumented.mt6`
+ - `$(curmod_str).Undocumented.st5`
 """)
 @test docstrings_equal(@doc(Undocumented.ut7), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private binding `$(curmod_prefix)Undocumented.ut8`.
+No documentation found for private binding `$(curmod_str).Undocumented.ut8`.
 
 # Summary
 
-`$(curmod_prefix)Undocumented.ut8` is of type `Union`.
+`$(curmod_str).Undocumented.ut8` is of type `Union`.
 
 # Union Composed of Types
 
- - `$(curmod_prefix)Undocumented.at1`
- - `$(curmod_prefix)Undocumented.pt2`
- - `$(curmod_prefix)Undocumented.st3`
- - `$(curmod_prefix)Undocumented.st4`
+ - `$(curmod_str).Undocumented.at1`
+ - `$(curmod_str).Undocumented.pt2`
+ - `$(curmod_str).Undocumented.st3`
+ - `$(curmod_str).Undocumented.st4`
 """)
 @test docstrings_equal(@doc(Undocumented.ut8), doc"$doc_str")
 
 doc_str = Markdown.parse("""
-No documentation found for private binding `$(curmod_prefix)Undocumented.ut9`.
+No documentation found for private binding `$(curmod_str).Undocumented.ut9`.
 
 # Summary
 
-`$(curmod_prefix)Undocumented.ut9` is of type `UnionAll`.
+`$(curmod_str).Undocumented.ut9` is of type `UnionAll`.
 
 # Union Composed of Types
 
- - `$(curmod_prefix)Undocumented.at1{T} where T`
- - `$(curmod_prefix)Undocumented.pt2{T} where T`
- - `$(curmod_prefix)Undocumented.st3{T} where T`
- - `$(curmod_prefix)Undocumented.st4`
+ - `$(curmod_str).Undocumented.at1{T} where T`
+ - `$(curmod_str).Undocumented.pt2{T} where T`
+ - `$(curmod_str).Undocumented.st3{T} where T`
+ - `$(curmod_str).Undocumented.st4`
 """)
 @test docstrings_equal(@doc(Undocumented.ut9), doc"$doc_str")
 
@@ -1191,9 +1191,9 @@ let d = @doc(Undocumented.f)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)),"""
-    No documentation found for private binding `$(curmod_prefix)Undocumented.f`.
+    No documentation found for private binding `$(curmod_str).Undocumented.f`.
 
-    `$(curmod_prefix)Undocumented.f` is a `Function`.
+    `$(curmod_str).Undocumented.f` is a `Function`.
     """)
 end
 
@@ -1201,9 +1201,9 @@ let d = @doc(Undocumented.undocumented)
     io = IOBuffer()
     show(io, MIME"text/markdown"(), d)
     @test startswith(String(take!(io)), """
-    No documentation found for private binding `$(curmod_prefix)Undocumented.undocumented`.
+    No documentation found for private binding `$(curmod_str).Undocumented.undocumented`.
 
-    `$(curmod_prefix)Undocumented.undocumented` is a `Function`.
+    `$(curmod_str).Undocumented.undocumented` is a `Function`.
     """)
 end
 

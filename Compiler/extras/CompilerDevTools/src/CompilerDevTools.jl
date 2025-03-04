@@ -47,7 +47,7 @@ end
 
 function Compiler.optimize(interp::SplitCacheInterp, opt::Compiler.OptimizationState, caller::Compiler.InferenceResult)
     @invoke Compiler.optimize(interp::Compiler.AbstractInterpreter, opt::Compiler.OptimizationState, caller::Compiler.InferenceResult)
-    ir = opt.ir::Compiler.IRCode
+    ir = opt.result.ir::Compiler.IRCode
     override = GlobalRef(@__MODULE__(), :with_new_compiler)
     for inst in ir.stmts
         stmt = inst[:stmt]

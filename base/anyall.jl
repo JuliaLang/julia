@@ -132,6 +132,20 @@ for ItrT = (Tuple,Any)
     end
 end
 
+# When the function is side effect-free, we may avoid short-circuiting to help
+# vectorize the loop.
+function _any(::typeof(identity), itr::Tuple{Vararg{Bool}}, ::Colon)
+    @_terminates_locally_meta
+    r = false
+    for i in eachindex(itr)
+        # Avoid bounds checking to help vectorization. Use `getfield` directly,
+        # instead of `@inbounds itr[i]`, for better effects.
+        v = getfield(itr, i, false)
+        r |= v
+    end
+    r
+end
+
 # Specialized versions of any(f, ::Tuple)
 # We fall back to the for loop implementation all elements have the same type or
 # if the tuple is too large.
@@ -205,6 +219,20 @@ for ItrT = (Tuple,Any)
     end
 end
 
+# When the function is side effect-free, we may avoid short-circuiting to help
+# vectorize the loop.
+function _all(::typeof(identity), itr::Tuple{Vararg{Bool}}, ::Colon)
+    @_terminates_locally_meta
+    r = true
+    for i in eachindex(itr)
+        # Avoid bounds checking to help vectorization. Use `getfield` directly,
+        # instead of `@inbounds itr[i]`, for better effects.
+        v = getfield(itr, i, false)
+        r &= v
+    end
+    r
+end
+
 # Specialized versions of all(f, ::Tuple),
 # This is similar to any(f, ::Tuple) defined above.
 function all(f, itr::Tuple)
@@ -227,5 +255,3 @@ end
     return _all_tuple(f, anymissing, rest...)
 end
 @inline _all_tuple(f, anymissing) = anymissing ? missing : true
-
-all(::Tuple{Missing}) = missing
