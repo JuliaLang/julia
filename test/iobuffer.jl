@@ -195,6 +195,19 @@ end
     v = pushfirst!([0x01], 0x02)
     io = IOBuffer(v; maxsize=2)
     @test read(io) == b"\x02\x01"
+
+    # Buffer will not write past maxsize, even if given a larger buffer
+    # And also even if the data is taken and replaced
+    v = sizehint!(UInt8[], 128)
+    io = IOBuffer(v; write=true, read=true, maxsize=12)
+    write(io, 0x01:0x0f)
+    seekstart(io)
+    @test read(io) == 0x01:0x0c
+    @test write(io, 0x01) == 0
+    @test write(io, "abc") == 0
+    @test take!(io).ref.mem === v.ref.mem
+    write(io, 0x01:0x0f)
+    @test take!(io) == 0x01:0x0c
 end
 
 @testset "Write to self" begin

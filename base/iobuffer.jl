@@ -127,18 +127,15 @@ function GenericIOBuffer(data::Vector{UInt8}, readable::Bool, writable::Bool, se
                          maxsize::Integer)
     ref = data.ref
     mem = ref.mem
-    len = length(data)
     offset = memoryrefoffset(ref) - 1
-
     # The user may pass a vector of length <= maxsize, but where the underlying memory
     # is larger than maxsize. Don't throw an error in that case.
     mz = Int(maxsize)::Int
-    len = Int(length(data))::Int
-    if mz < len
+    if mz < length(data)
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end
-    buf = GenericIOBuffer{Memory{UInt8}}(unsafe_method, mem, readable, writable, seekable, append, max(mz, length(mem)))
-    buf.size = len + offset
+    buf = GenericIOBuffer{Memory{UInt8}}(unsafe_method, mem, readable, writable, seekable, append, mz)
+    buf.size = length(data) + offset
     buf.ptr = offset + 1
     buf.offset = offset
     return buf
@@ -272,6 +269,7 @@ PipeBuffer(maxsize::Integer) = (x = PipeBuffer(StringMemory(maxsize), maxsize = 
 _similar_data(b::GenericIOBuffer, len::Int) = similar(b.data, len)
 _similar_data(b::IOBuffer, len::Int) = StringMemory(len)
 
+# TODO: Only copy the used data, not the whole buffer.
 function copy(b::GenericIOBuffer)
     ret = typeof(b)(b.reinit ? _similar_data(b, 0) : b.writable ?
                     copyto!(_similar_data(b, length(b.data)), b.data) : b.data,
@@ -500,11 +498,11 @@ function truncate(io::GenericIOBuffer, n::Integer)
     if io.reinit
         io.data = _similar_data(io, n)
         io.reinit = false
-    elseif n > length(io.data) - io.offset
+    elseif n > min(io.maxsize, length(io.data)) - io.offset
         # We zero the offset here because that allows us to minimize the resizing,
         # saving memory.
         zero_offset!(io)
-        n > length(io.data) && _resize!(io, n)
+        n > min(io.maxsize, length(io.data)) && _resize!(io, n)
     end
     # Since mark is zero-indexed, we must also clear it if they're equal
     ismarked(io) && io.mark >= n && (io.mark = -1)
@@ -527,7 +525,7 @@ end
     end
     # The fast path here usually checks there is already room, then does nothing.
     # When append is true, new data is added after io.size, not io.ptr
-    existing_space = lastindex(io.data) - (io.append ? io.size : io.ptr - 1)
+    existing_space = min(lastindex(io.data), io.maxsize) - (io.append ? io.size : io.ptr - 1)
     if existing_space < nshort % Int
         # Outline this function to make it more likely that ensureroom inlines itself
         return ensureroom_slowpath(io, nshort)
@@ -546,8 +544,13 @@ end
 
 @noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
     # Begin by zeroing out offset and check if that gives us room enough
-    nshort -= zero_offset!(io) % UInt
-    iszero(nshort) && return io
+    if !iszero(io.offset)
+        nshort_after_zero_offset = (nshort % Int) - zero_offset!(io)
+        nshort_after_zero_offset < 1 && return io
+        nshort = nshort_after_zero_offset % UInt
+    end
+
+    data_len = min(lastindex(io.data), io.maxsize)
 
     # Else, try to compact the data. To do this, the buffer must not be seekable.
     # If it's seekable, the user can recover used data by seeking before ptr,
@@ -557,7 +560,6 @@ end
         mark = io.mark
         size = io.size
         data = io.data
-        data_len = lastindex(data)
         to_delete = (mark > -1 ? min(mark, ptr - 1) : ptr - 1)
         # Only shift data if:
         if (
@@ -577,7 +579,7 @@ end
     end
     # Don't exceed maxsize. Otherwise, we overshoot the number of bytes needed,
     # such that we don't need to resize too often.
-    new_size = min(io.maxsize, overallocation(length(io.data) + nshort % Int))
+    new_size = min(io.maxsize, overallocation(data_len + nshort % Int))
     _resize!(io, new_size)
     return io
 end
@@ -722,7 +724,7 @@ function write(to::IO, from::GenericIOBuffer)
             ensureroom(from, available)
             data = from.data
             size = from.size
-            existing_space = lastindex(data) - size
+            existing_space = lastindex(data) - min(from.maxsize, size)
             to_write = min(existing_space, available)
             iszero(to_write) && return 0
             GC.@preserve from unsafe_copyto!(data, size + 1, data, from.ptr, to_write)
@@ -747,7 +749,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     append = to.append
     ptr = append ? size+1 : to.ptr
     data = to.data
-    to_write = min(nb % Int, Int(length(data))::Int - ptr + 1)
+    to_write = min(nb % Int, min(Int(length(data))::Int, to.maxsize) - ptr + 1)
     # Dispatch based on the type of data, to possibly allow using memcpy
     _unsafe_write(data, p, ptr, to_write % UInt)
     # Update to.size only if the ptr has advanced to higher than
