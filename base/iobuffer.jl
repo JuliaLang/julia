@@ -8,17 +8,19 @@
 # a write operation happens.
 
 #   .....uuuuuuuuuuuuuXXXXXXXXXXXXX------------
-#   |   |       |    |           |            |    |
-#   |   offset  |    ptr         size         |    maxsize (≥ lastindex)
-#   1           mark (zero-indexed)           lastindex(data)
+#   |   |            |           |            |    |
+#   |   offset       ptr         size         |    maxsize (≥ lastindex)
+#   1                                         lastindex(data)
+
+# N.B: `mark` does not correspond to any index in the buffer, but is instead equal
+# to position (== io.offset + io.ptr - 1) at the time it is set.
 
 #            AFTER COMPACTION
-# Mark, ptr and size decreases by `mark`. Offset is zeroed.
 
 #   uuuuuXXXXXXXXXXXXX---------------------
 #  ||    |           |                    |    |
 #  |1    ptr         size                 |    maxsize (≥ lastindex)
-#  mark (zero-indexed)                    lastindex(data)
+#                                         lastindex(data)
 #  offset (set to zero)
 
 # * The underlying array is always 1-indexed
@@ -57,7 +59,6 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # This value is always in 0 : lastindex(data)
     size::Int
 
-    # This is the maximum length that the buffer size can grow to.
     # This value is always in 0:typemax(Int).
     # We always have length(data) <= maxsize
     maxsize::Int
