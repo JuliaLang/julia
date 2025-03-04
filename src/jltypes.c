@@ -3275,7 +3275,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(5, jl_any_type/*jl_globalref_type*/, jl_any_type, jl_binding_partition_type,
                                    jl_any_type, jl_uint8_type),
                         jl_emptysvec, 0, 1, 0);
-    const static uint32_t binding_atomicfields[] = { 0x0005 }; // Set fields 2, 3 as atomic
+    const static uint32_t binding_atomicfields[] = { 0x0016 }; // Set fields 2, 3, 5 as atomic
     jl_binding_type->name->atomicfields = binding_atomicfields;
     const static uint32_t binding_constfields[] = { 0x0001 }; // Set fields 1 as constant
     jl_binding_type->name->constfields = binding_constfields;
@@ -3539,7 +3539,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(31,
+                        jl_perm_symsvec(32,
                             "name",
                             "module",
                             "file",
@@ -3568,10 +3568,11 @@ void jl_init_types(void) JL_GC_DISABLED
                             "isva",
                             "is_for_opaque_closure",
                             "nospecializeinfer",
+                            "did_scan_source",
                             "constprop",
                             "max_varargs",
                             "purity"),
-                        jl_svec(31,
+                        jl_svec(32,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
@@ -3600,6 +3601,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
+                            jl_uint8_type,
                             jl_uint8_type,
                             jl_uint8_type,
                             jl_uint16_type),
