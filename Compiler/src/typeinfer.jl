@@ -923,7 +923,11 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                     adjust_effects(effects_for_cycle(frame.ipo_effects), method)
                 local bestguess = frame.bestguess
                 local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
-                local stmt = caller.src.code[caller.currpc]
+                local stmt = if isa(caller, InferenceState)
+                    caller.src.code[caller.currpc]
+                else
+                    caller.ir.stmts[caller.curridx][:stmt]
+                end
                 local refinements = propagate_refinements(frame, stmt)
 
                 # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
@@ -965,7 +969,6 @@ function propagate_refinements(callee::InferenceState, stmt)
         arg = stmt.args[i]
         isa(arg, SlotNumber) || continue
         from = callee.refinements[i]
-        from.typ === Bottom && continue
         refinement = SlotRefinement(arg, from.typ)
         if refinements === nothing
             refinements = SlotRefinement[refinement]

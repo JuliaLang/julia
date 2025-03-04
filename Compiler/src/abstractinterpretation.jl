@@ -355,7 +355,7 @@ function merge_slot_refinements!(into, 𝕃ᵢ, refinements)
     for refinement in refinements
         slot = refinement.slot
         i = findfirst(x -> x.slot === slot, into)
-        if isnothing(i)
+        if i === nothing
             push!(into, refinement)
         else
             existing = into[i]
@@ -368,9 +368,8 @@ end
 function narrow_slot_refinements!(into, 𝕃ᵢ, refinements)
     ⊏, ⊔ = strictpartialorder(𝕃ᵢ), join(𝕃ᵢ)
     for refinement in refinements
-        slot = refinement.slot
-        i = findfirst(x -> x.slot === slot, into)
-        if isnothing(i)
+        i = findfirst(x -> x.slot === refinement.slot, into)
+        if i === nothing
             push!(into, refinement)
             continue
         end
@@ -637,12 +636,12 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{M
                 if slotrefinements === nothing
                     slotrefinements = SlotRefinement[]
                 end
-                i = findfirst(x -> fargᵢ == x, slotrefinements)
+                j = findfirst(x -> fargᵢ == x, slotrefinements)
                 refinement = SlotRefinement(fargᵢ, sigt)
-                if isnothing(i)
+                if j === nothing
                     push!(slotrefinements, refinement)
                 else
-                    slotrefinements[i] = refinement
+                    slotrefinements[j] = refinement
                 end
             end
         end
