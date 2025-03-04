@@ -812,6 +812,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     }
 
     jl_queue_for_serialization(s, m->usings_backedges);
+    jl_queue_for_serialization(s, m->scanned_methods);
 }
 
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
@@ -1324,6 +1325,9 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     newm->usings_backedges = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings_backedges)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings_backedges, s->link_ids_relocs));
+    newm->scanned_methods = NULL;
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, scanned_methods)));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->scanned_methods, s->link_ids_relocs));
 
     // After reload, everything that has happened in this process happened semantically at
     // (for .incremental) or before jl_require_world, so reset this flag.
