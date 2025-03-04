@@ -123,7 +123,7 @@ escape_microsoft_c_args(io::IO, cmd::Cmd) =
     escape_microsoft_c_args(io::IO, cmd.exec...)
 
 function show(io::IO, cmd::Cmd)
-    print_env = cmd.env !== nothing
+    print_env = (cmd.env !== nothing) && Base.parse_bool_env("JULIA_PRINT_CMD_ENVIRONMENT", "true")
     print_dir = !isempty(cmd.dir)
     (print_env || print_dir) && print(io, "setenv(")
     print_cpus = cmd.cpus !== nothing
