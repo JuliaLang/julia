@@ -471,7 +471,6 @@ end
 # _resize! should reset offset before so.
 function _resize!(io::GenericIOBuffer, new_size::Int)
     old_data = io.data
-    @assert iszero(io.offset)
     if applicable(resize!, old_data, new_size)
         resize!(old_data, new_size)
     else
@@ -498,7 +497,6 @@ function truncate(io::GenericIOBuffer, n::Integer)
     n > io.maxsize && throw(ArgumentError("truncate failed, $(n) bytes is exceeds IOBuffer maxsize $(io.maxsize)"))
     n = Int(n)::Int
     if io.reinit
-        @assert iszero(io.offset)
         io.data = _similar_data(io, n)
         io.reinit = false
     elseif n > length(io.data) - io.offset
@@ -584,7 +582,6 @@ end
 end
 
 function zero_offset!(io::GenericIOBuffer)::Int
-    @assert io.writable
     offset = io.offset
     iszero(offset) && return 0
     size = io.size
