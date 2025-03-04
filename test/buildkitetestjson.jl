@@ -7,6 +7,7 @@ module BuildkiteTestJSON
 
 using Test
 using Dates
+using Printf
 
 export write_testset_json_files
 
@@ -54,9 +55,23 @@ json_repr(io::IO, val::Any; indent::Int=0) = json_repr(io, string(val))
 # Test result processing
 
 function result_dict(testset::Test.DefaultTestSet, prefix::String="")
+    scope = if isempty(prefix)
+        testset.description == "Overall" ? "" : testset.description
+    else
+        join((prefix, testset.description), " → ")
+    end
     Dict{String, Any}(
         "id" => Base.UUID(rand(UInt128)),
-        "scope" => join((prefix, testset.description), '/'),
+        "scope" => scope,
+        "tags" => Dict{String, String}(
+            "job_label" => get(ENV, "BUILDKITE_LABEL", "unknown"),
+            "job_id" => get(ENV, "BUILDKITE_JOB_ID", "unknown"),
+            "os" => string(Sys.KERNEL),
+            "arch" => string(Sys.ARCH),
+            "julia_version" => string(VERSION),
+            "testset" => testset.description,
+            "prefix" => prefix
+        ),
         "history" => if !isnothing(testset.time_end)
             Dict{String, Any}(
                 "start_at" => testset.time_start,
@@ -65,6 +80,17 @@ function result_dict(testset::Test.DefaultTestSet, prefix::String="")
         else
             Dict{String, Any}("start_at" => testset.time_start, "duration" => 0.0)
         end)
+end
+
+# Test paths on runners are often in deep directories, so just make them contain enough information
+# to be able to identify the file.
+function generalize_file_paths(path::AbstractString)
+    pathsep = Sys.iswindows() ? '\\' : '/'
+    return replace(path,
+        string(Sys.STDLIB, pathsep) => "",
+        string(normpath(Sys.BUILD_ROOT_PATH), pathsep) => "",
+        string(dirname(Sys.BINDIR), pathsep) => ""
+    )
 end
 
 function result_dict(result::Test.Result)
@@ -82,6 +108,7 @@ function result_dict(result::Test.Result)
     else
         "unknown"
     end
+    file = generalize_file_paths(string(file))
     data = Dict{String, Any}(
         "name" => "$(result.test_type): $(result.orig_expr)",
         "location" => string(file, ':', line),
@@ -91,32 +118,12 @@ function result_dict(result::Test.Result)
 end
 
 function add_failure_info!(data::Dict{String, Any}, result::Test.Result)
-    if result isa Test.Fail
-        data["failure_reason"] = if result.test_type === :test && !isnothing(result.data)
-            "Evaluated: $(result.data)"
-        elseif result.test_type === :test_throws_nothing
-            "No exception thrown"
-        elseif result.test_type === :test_throws_wrong
-            "Wrong exception type thrown"
-        else
-            "unknown"
-        end
-    elseif result isa Test.Error
-        data["failure_reason"] = if result.test_type === :test_error
-            if occursin("\nStacktrace:\n", result.backtrace)
-                err, trace = split(result.backtrace, "\nStacktrace:\n", limit=2)
-                data["failure_expanded"] =
-                    [Dict{String,Any}("expanded" => split(err, '\n'),
-                                      "backtrace" => split(trace, '\n'))]
-            end
-            "Exception (unexpectedly) thrown during test"
-        elseif result.test_type === :test_nonbool
-            "Expected the expression to evaluate to a Bool, not a $(typeof(result.data))"
-        elseif result.test_type === :test_unbroken
-            "Expected this test to be broken, but it passed"
-        else
-            "unknown"
-        end
+
+    if result isa Test.Fail || result isa Test.Error
+        result_show = sprint(show, result; context=:color=>false)
+        firstline = split(result_show, '\n')[1]
+        data["failure_reason"] = generalize_file_paths(firstline)
+        data["failure_expanded"] = result_show
     end
     data
 end
@@ -125,10 +132,11 @@ function collect_results!(results::Vector{Dict{String, Any}}, testset::Test.Defa
     common_data = result_dict(testset, prefix)
     result_offset = length(results) + 1
     result_counts = Dict{Tuple{String, String}, Int}()
+    get_rid(rdata) = (rdata["location"], rdata["result"])
     for (i, result) in enumerate(testset.results)
         if result isa Test.Result
             rdata = result_dict(result)
-            rid = (rdata["location"], rdata["result"])
+            rid = get_rid(rdata)
             if haskey(result_counts, rid)
                 result_counts[rid] += 1
             else
@@ -142,7 +150,7 @@ function collect_results!(results::Vector{Dict{String, Any}}, testset::Test.Defa
     # Modify names to hold `result_counts`
     for i in result_offset:length(results)
         result = results[i]
-        rid = (result["location"], result["result"])
+        rid = get_rid(result)
         if get(result_counts, rid, 0) > 1
             result["name"] = replace(result["name"], r"^([^:]):" =>
                 SubstitutionString("\\1 (x$(result_counts[rid])):"))
