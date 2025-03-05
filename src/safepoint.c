@@ -270,6 +270,8 @@ void jl_safepoint_wait_gc(jl_task_t *ct) JL_NOTSAFEPOINT
     }
 }
 
+int wake_next_threads(int16_t) JL_NOTSAFEPOINT;
+
 // equivalent to jl_set_gc_and_wait, but waiting on resume-thread lock instead
 void jl_safepoint_wait_thread_resume(jl_task_t *ct)
 {
@@ -288,8 +290,13 @@ void jl_safepoint_wait_thread_resume(jl_task_t *ct)
         uv_cond_broadcast(&safepoint_cond_begin);
         uv_mutex_unlock(&safepoint_lock);
         uv_mutex_lock(&ct->ptls->sleep_lock);
-        while (jl_atomic_load_relaxed(&ct->ptls->suspend_count))
+        while (jl_atomic_load_relaxed(&ct->ptls->suspend_count)) {
             uv_cond_wait(&ct->ptls->wake_signal, &ct->ptls->sleep_lock);
+            if (ct->ptls->wake_next) {
+                ct->ptls->wake_next = 0;
+                wake_next_threads(ct->ptls->tid);
+            }
+        }
     }
     // must exit gc while still holding the mutex_unlock, so we know other
     // threads in jl_safepoint_suspend_thread will observe this thread in the
