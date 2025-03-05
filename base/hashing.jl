@@ -116,11 +116,11 @@ end
     if buflen ≤ 16
         if buflen ≥ 4
             a = (UInt64(load_le(UInt32, ptr, 1)) << 32) |
-                UInt64(load_le(UInt32, ptr, n - 4 + 1))
+                UInt64(load_le(UInt32, ptr, n - 3))
 
             delta = (buflen & 24) >>> (buflen >>> 3)
             b = (UInt64(load_le(UInt32, ptr, delta + 1)) << 32) |
-                UInt64(load_le(UInt32, ptr, n - 4 - delta + 1))
+                UInt64(load_le(UInt32, ptr, n - 3 - delta))
         elseif buflen > 0
             a = read_small(ptr, n)
         end
