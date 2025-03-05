@@ -94,7 +94,7 @@ load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
 
 function read_small(ptr::Ptr{UInt8}, n::Int)
     return (UInt64(unsafe_load(ptr)) << 56) |
-        (UInt64(unsafe_load(ptr, div(n + 1, 2))) << 32) |
+        (UInt64(unsafe_load(ptr, div(n, 2) + 1)) << 32) |
         UInt64(unsafe_load(ptr, n))
 end
 
@@ -173,3 +173,7 @@ end
 
 @assume_effects :total hash(data::String, h::UInt) =
     GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET)
+
+# no longer used in Base, but a lot of packages access these internals
+const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
+const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
