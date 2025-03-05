@@ -66,7 +66,6 @@
 
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 typedef struct _jl_tls_states_t *jl_ptls_t;
-typedef struct _jl_genericmemory_t jl_genericmemory_t;
 
 #ifdef JL_LIBRARY_EXPORTS
 #include "uv.h"
