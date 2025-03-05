@@ -136,12 +136,14 @@ inside of another local scope, the scope it creates is nested inside of all the
 local scopes that it appears within, which are all ultimately nested inside of
 the global scope of the module in which the code is evaluated. Variables in
 outer scopes are visible from any scope they contain — meaning that they can be
-read and written in inner scopes — unless there is a local variable with the
-same name that "shadows" the outer variable of the same name. This is true even
-if the outer local is declared after (in the sense of textually below) an inner
+read and written in inner scopes — unless there is a variable with the same name
+that "shadows" the outer variable of the same name. This is true even if the
+outer local is declared after (in the sense of textually below) an inner
 block. When we say that a variable "exists" in a given scope, this means that a
 variable by that name exists in any of the scopes that the current scope is
-nested inside of, including the current one.
+nested inside of, including the current one. If a variable's value is used in a
+local scope, but nothing with its name exists in this scope, it is assumed to be
+a global.
 
 Some programming languages require explicitly declaring new variables before
 using them. Explicit declaration works in Julia too: in any local scope, writing
