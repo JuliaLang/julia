@@ -138,6 +138,12 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             }
             process_slot(closure, Address::from_ptr(usings_backeges_slot));
 
+            let scanned_methods_slot = ::std::ptr::addr_of!((*m).scanned_methods);
+            if PRINT_OBJ_TYPE {
+                println!(" - scan parent: {:?}\n", scanned_methods_slot);
+            }
+            process_slot(closure, Address::from_ptr(scanned_methods_slot));
+
             // m.usings.items may be inlined in the module when the array list size <= AL_N_INLINE (cf. arraylist_new)
             // In that case it may be an mmtk object and not a malloced address.
             // If it is an mmtk object, (*m).usings.items will then be an internal pointer to the module
@@ -317,15 +323,6 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
     let layout = (*vt).layout;
     let npointers = (*layout).npointers;
     if npointers != 0 {
-        if vt == jl_binding_partition_type {
-            let bpart_ptr = obj.to_mut_ptr::<jl_binding_partition_t>();
-            let restriction = (*bpart_ptr).restriction._M_i;
-            let offset = mmtk_decode_restriction_value(restriction);
-            let slot = Address::from_ptr(::std::ptr::addr_of!((*bpart_ptr).restriction));
-            if restriction - offset != 0 {
-                process_offset_slot(closure, slot, offset);
-            }
-        }
         debug_assert!(
             (*layout).nfields > 0 && (*layout).fielddesc_type_custom() != 3,
             "opaque types should have been handled specially"
@@ -524,27 +521,6 @@ pub fn process_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Addres
     }
 
     closure.visit_slot(JuliaVMSlot::Simple(simple_slot));
-}
-
-// This is based on the function decode_restriction_value from julia_internal.h.
-// However, since MMTk uses the slot to load the object, we get the offset from pku using
-// that offset to pass to process_offset_edge and get the right address.
-#[inline(always)]
-pub fn mmtk_decode_restriction_value(pku: usize) -> usize {
-    #[cfg(target_pointer_width = "64")]
-    {
-        // need to apply (pku & ~0x7) to get the object to be traced
-        // so we use (pku & 0x7) to get the offset from the object
-        // and pass it to process_offset_slot
-        pku & 0x7
-    }
-
-    #[cfg(not(target_pointer_width = "64"))]
-    {
-        // when not #ifdef _P64 we simply return pku.val
-        // i.e., the offset is 0, since val is the first field
-        0
-    }
 }
 
 #[inline(always)]
