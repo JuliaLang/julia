@@ -357,7 +357,7 @@ mutable struct InferenceState
             end
             slottypes[i] = argtyp
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
-            refinements[i] = VarState(argtyp, i > nargtypes)
+            refinements[i] = VarState((i > nargtypes) ? Any : argtypes[i], i > nargtypes)
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
         ssaflags = copy(src.ssaflags)

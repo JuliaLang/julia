@@ -276,14 +276,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             end
             local fargs = arginfo.fargs
             if sv isa InferenceState && fargs !== nothing
-                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, argtypes, fargs, sv)
-                if !isempty(inferred_refinements)
-                    if state.slotrefinements === nothing
-                        state.slotrefinements = inferred_refinements
-                    else
-                        narrow_slot_refinements!(state.slotrefinements, 𝕃ᵢ, inferred_refinements)
-                    end
-                end
+                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, inferred_refinements, argtypes, fargs, sv)
             end
             state.rettype = from_interprocedural!(interp, state.rettype, sv, arginfo, state.conditionals)
             if call_result_unused(si) && !(state.rettype === Bottom)
@@ -351,7 +344,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
 end
 
 function merge_slot_refinements!(into, 𝕃ᵢ, refinements)
-    ⊏, ⊔ = strictpartialorder(𝕃ᵢ), join(𝕃ᵢ)
+    ⊔ = join(𝕃ᵢ)
     for refinement in refinements
         slot = refinement.slot
         i = findfirst(x -> x.slot === slot, into)
@@ -360,25 +353,6 @@ function merge_slot_refinements!(into, 𝕃ᵢ, refinements)
         else
             existing = into[i]
             into[i] = SlotRefinement(slot, existing.typ ⊔ refinement.typ)
-        end
-    end
-    into
-end
-
-function narrow_slot_refinements!(into, 𝕃ᵢ, refinements)
-    ⊏, ⊔ = strictpartialorder(𝕃ᵢ), join(𝕃ᵢ)
-    for refinement in refinements
-        i = findfirst(x -> x.slot === refinement.slot, into)
-        if i === nothing
-            push!(into, refinement)
-            continue
-        end
-        existing = into[i]
-        if refinement.typ ⊏ existing.typ
-            into[i] = refinement
-        elseif !(existing.typ ⊏ refinement.typ)
-            # neither is narrower than the other, join conservatively
-            into[i] = SlotRefinement(existing.slot, existing.typ ⊔ refinement.typ)
         end
     end
     into
@@ -615,9 +589,8 @@ function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospe
     end
 end
 
-function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{MethodMatchTarget},
-    argtypes::Vector{Any}, fargs::Vector{Any}, sv::InferenceState)
-    ⊏, ⊔ = strictpartialorder(𝕃ᵢ), join(𝕃ᵢ)
+function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{MethodMatchTarget}, refinements::Vector{SlotRefinement}, argtypes::Vector{Any}, fargs::Vector{Any}, sv::InferenceState)
+    ⊏, ⊑, ⊔ = strictpartialorder(𝕃ᵢ), partialorder(𝕃ᵢ), join(𝕃ᵢ)
     slotrefinements = nothing
     for i = 1:length(fargs)
         fargᵢ = fargs[i]
@@ -632,12 +605,20 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{M
                 valid_as_lattice(match.spec_types, true) || continue
                 sigt = sigt ⊔ fieldtype(match.spec_types, i)
             end
-            if sigt ⊏ argt # i.e. signature type is strictly more specific than the type of the argument slot
+            j = findfirst(x -> x.slot === fargᵢ, refinements)
+            newt = j === nothing ? sigt : begin
+                inferred = refinements[j].typ
+                sigt ⊑ inferred ? sigt : inferred ⊑ sigt ? inferred : begin
+                    # Core.println("sigt and inferred are not ordered: ", sigt, ", ", inferred)
+                    sigt
+                end
+            end
+            if newt ⊏ argt # i.e. inferred slot type is strictly more specific than the type of the argument slot
                 if slotrefinements === nothing
                     slotrefinements = SlotRefinement[]
                 end
-                j = findfirst(x -> fargᵢ == x, slotrefinements)
-                refinement = SlotRefinement(fargᵢ, sigt)
+                j = findfirst(x -> fargᵢ == x.slot, slotrefinements)
+                refinement = SlotRefinement(fargᵢ, newt)
                 if j === nothing
                     push!(slotrefinements, refinement)
                 else

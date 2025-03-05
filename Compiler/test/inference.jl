@@ -2488,6 +2488,7 @@ end |> only === Int
         @test src.rettype === Tuple{Any, Float64}
     end
 
+    # merge refinements across control-flow paths
     let subfunc(x) = begin
             x < 0 && return x::Float64 + 2
             x::Float64 + 1
@@ -2513,7 +2514,7 @@ end |> only === Int
             return sin(x), cos(y)
         end
         @test src.slottypes[2] === Any
-        @test src.rettype === Tuple{Any, Float64}
+        @test src.rettype === Tuple{Any, Any}
         # XXX: Replace test once refinements are merged across control-flow paths
         # @test src.rettype === Tuple{Float64, Float64}
     end

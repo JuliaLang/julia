@@ -935,12 +935,12 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                     adjust_effects(effects_for_cycle(frame.ipo_effects), method)
                 local bestguess = frame.bestguess
                 local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
-                local stmt = if isa(caller, InferenceState)
-                    caller.src.code[caller.currpc]
+                local refinements = if isa(caller, InferenceState)
+                    local stmt = caller.src.code[caller.currpc]
+                    propagate_refinements(frame, caller, stmt, typeinf_lattice(interp))
                 else
-                    caller.ir.stmts[caller.curridx][:stmt]
+                    nothing
                 end
-                local refinements = propagate_refinements(frame, stmt)
 
                 # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
                 # note that this result is cached globally exclusively, so we can use this local result destructively
@@ -968,24 +968,51 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, nothing, edgecycle, edgelimited))
 end
 
-function propagate_refinements(callee::InferenceState, stmt)
+function propagate_refinements(callee::InferenceState, caller::InferenceState, stmt, 𝕃ᵢ)
     isexpr(stmt, :(=), 2) && (stmt = stmt.args[2])
     isexpr(stmt, :call) || return nothing
     stmt.args[1] === GlobalRef(Core, :_apply_iterate) && return nothing
+    ⊑, ⊓ = partialorder(𝕃ᵢ), meet(𝕃ᵢ)
     refinements = nothing
-    n = length(callee.slottypes) - isvarargtype(callee.slottypes)
-    # XXX: this is caused by variable parameters or arguments
-    # @assert n == length(stmt.args)
-    # XXX: why do we sometimes have `length(stmt.args) < n`
-    for i in 2:min(n, length(stmt.args))
+    isva = callee.linfo.def.isva
+    n = length(stmt.args)
+    m = callee.linfo.def.nargs
+    isva || n == m || begin
+        # `stmt` does not represent a direct call to `callee`,
+        # which may instead be an `invoke`/`return_type`/`finalizer` call.
+        f = stmt.args[1]
+        if isa(f, SSAValue)
+            f = caller.src.ssavaluetypes[f.id]
+            @assert f === Const(invoke) || f === Const(return_type) || f === Const(Core.finalizer)
+        else
+            @assert isa(f, GlobalRef)
+            @assert f === GlobalRef(Core, :invoke)
+        end
+        return nothing
+    end
+    for i in 2:n
         arg = stmt.args[i]
         isa(arg, SlotNumber) || continue
-        from = callee.refinements[i]
-        refinement = SlotRefinement(arg, from.typ)
-        if refinements === nothing
-            refinements = SlotRefinement[refinement]
+        if isva && i ≥ m
+            vatype = unwrap_unionall(callee.refinements[m].typ)
+            from = getfield_tfunc(𝕃ᵢ, vatype, Const(i - m + 1))
         else
-            push!(refinements, refinement)
+            from = callee.refinements[i].typ
+        end
+        known = caller.slottypes[slot_id(arg)]
+        from ⊑ known || continue
+        if refinements === nothing
+            refinements = SlotRefinement[SlotRefinement(arg, from)]
+        else
+            j = findfirst(x -> x.slot === arg, refinements)
+            if j === nothing
+                push!(refinements, SlotRefinement(arg, from))
+            else
+                # A given slot was used multiple times.
+                existing = refinements[j].typ
+                existing === from && continue
+                refinements[j] = SlotRefinement(arg, existing ⊓ from)
+            end
         end
     end
     refinements
