@@ -310,7 +310,6 @@ end
 # driver / verifier implemented by juliac-buildscript.jl for the purpose of extensibility.
 # For now, it is part of Base.Compiler, but executed with invokelatest so that packages
 # could provide hooks to change, customize, or tweak its behavior and heuristics.
-Base.delete_method(Base.which(verify_typeinf_trim, (IO, Vector{Any}, Bool)),)
 function verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool)
     errors, parents = get_verify_typeinf_trim(codeinfos)
 
