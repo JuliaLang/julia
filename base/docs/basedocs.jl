@@ -1118,6 +1118,30 @@ normally), [`close(f)`](@ref) will be executed. If the `try` block exits due to 
 the exception will continue propagating. A `catch` block may be combined with `try` and
 `finally` as well. In this case the `finally` block will run after `catch` has handled
 the error.
+
+When evaluating a `try/catch/else/finally` expression, the value of the
+entire expression is the value of the `try` block (or the `catch` block if the
+`try` block threw). For example:
+
+```jldoctest
+julia> try
+           1
+       finally
+           2
+       end
+1
+
+julia> try
+           error("")
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+1
+```
 """
 kw"finally"
 
