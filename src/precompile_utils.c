@@ -382,7 +382,14 @@ static void *jl_precompile_trimmed(size_t world)
             jl_array_ptr_1d_push(m, ccallable);
     }
 
-    void *native_code = jl_create_native(m, NULL, jl_options.trim, 0, world);
+    void *native_code = NULL;
+    JL_TRY {
+        native_code = jl_create_native(m, NULL, jl_options.trim, 0, world);
+    } JL_CATCH {
+        // The verification check (presumably) failed. The error message should
+        // already have been printed, so just give up here (w/o a stack trace).
+        exit(1);
+    }
     JL_GC_POP();
     return native_code;
 }
