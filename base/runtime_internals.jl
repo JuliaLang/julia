@@ -832,7 +832,8 @@ isbits(@nospecialize x) = isbitstype(typeof(x))
 """
     objectid(x) -> UInt
 
-Get a hash value for `x` based on object identity.
+Get a hash value for `x` based on object identity. This value is not unique nor
+stable between Julia processes or versions.
 
 If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `objectid(x) != objectid(y)`.
 
