@@ -2769,7 +2769,7 @@ jl_genericmemory_t *jl_global_roots_keyset;
 jl_mutex_t global_roots_lock;
 
 jl_mutex_t precompile_field_replace_lock;
-jl_svec_t *precompile_field_replace = NULL JL_GLOBALLY_ROOTED;
+jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED = NULL;
 
 static inline jl_value_t *get_checked_fieldindex(const char *name, jl_datatype_t *st, jl_value_t *v, jl_value_t *arg, int mutabl)
 {
