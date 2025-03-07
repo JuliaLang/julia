@@ -283,6 +283,7 @@ function zero(::Type{TwicePrecision{T}}) where {T}
     z = zero(T)
     TwicePrecision{T}(z, z)
 end
+iszero(x::TwicePrecision) = iszero(x.hi) && iszero(x.lo)
 
 # Arithmetic
 
