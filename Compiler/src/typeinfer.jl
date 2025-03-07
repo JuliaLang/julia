@@ -1380,7 +1380,6 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     return codeinfos
 end
 
-verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool) = (msg = "--trim verifier not defined"; onlywarn ? println(io, msg) : error(msg))
 verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = invokelatest(verify_typeinf_trim, stdout, codeinfos, onlywarn)
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc

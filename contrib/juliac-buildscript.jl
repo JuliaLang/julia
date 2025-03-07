@@ -205,10 +205,15 @@ let mod = Base.include(Base.__toplevel__, inputfile)
 end
 
 # Additional method patches depending on whether user code loads certain stdlibs
+let loaded = Base.loaded_modules_array()
+    function find_loaded_module(name)
+        idx = findfirst((m) -> Symbol(m) === name, loaded)
+        idx === nothing && return nothing
+        return loaded[idx]
+    end
 
-let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
-    if :SparseArrays in loaded
-        using SparseArrays
+    SparseArrays = find_loaded_module(:SparseArrays)
+    if SparseArrays !== nothing
         @eval SparseArrays.CHOLMOD begin
             function __init__()
                 ccall((:SuiteSparse_config_malloc_func_set, :libsuitesparseconfig),
@@ -222,8 +227,9 @@ let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
             end
         end
     end
-    if :Artifacts in loaded
-        using Artifacts
+
+    Artifacts = find_loaded_module(:Artifacts)
+    if Artifacts !== nothing
         @eval Artifacts begin
             function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, _::Val{lazyartifacts}) where lazyartifacts
                 # If the artifact exists, we're in the happy path and we can immediately
@@ -238,26 +244,30 @@ let loaded = Symbol.(Base.loaded_modules_array())  # TODO better way to do this
             end
         end
     end
-    if :Pkg in loaded
-        using Pkg
+
+    Pkg = find_loaded_module(:Pkg)
+    if Pkg !== nothing
         @eval Pkg begin
             __init__() = rand() #TODO, methods that do nothing don't get codegened
         end
     end
-    if :StyledStrings in loaded
-        using StyledStrings
+
+    StyledStrings = find_loaded_module(:StyledStrings)
+    if StyledStrings !== nothing
         @eval StyledStrings begin
             __init__() = rand()
         end
     end
-    if :Markdown in loaded
-        using Markdown
+
+    Markdown = find_loaded_module(:Markdown)
+    if Markdown !== nothing
         @eval Markdown begin
             __init__() = rand()
         end
     end
-    if :JuliaSyntaxHighlighting in loaded
-        using JuliaSyntaxHighlighting
+
+    JuliaSyntaxHighlighting = find_loaded_module(:JuliaSyntaxHighlighting)
+    if JuliaSyntaxHighlighting !== nothing
         @eval JuliaSyntaxHighlighting begin
             __init__() = rand()
         end

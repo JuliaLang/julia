@@ -94,6 +94,14 @@ loaders = ["gzip", { driver = "csv", args = {delim = "\t"}}]
     a = 222
     d = 333
     """
+
+    # https://github.com/JuliaLang/julia/pull/57584
+    d = Dict("b" => [MyStruct(1), MyStruct(2)])
+    @test toml_str(d) do x
+        x isa MyStruct && return Dict("a" => x.a)
+    end == """
+    b = [{a = 1}, {a = 2}]
+    """
 end
 
 @testset "unsigned integers" for (x, s) in [
@@ -195,6 +203,14 @@ LocalPkg = {path = "LocalPkg"}
 """
 @test toml_str(d; sorted=true, inline_tables) == s
 @test roundtrip(s)
+
+
+# https://github.com/JuliaLang/julia/pull/57584
+d = Dict("a" => 1, "b" => 2)
+inline_tables = IdSet{Dict}([d])
+s = "{a = 1, b = 2}"
+@test toml_str(d; sorted=true, inline_tables) == s
+
 
 # multiline strings (#55083)
 s = """
