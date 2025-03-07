@@ -894,8 +894,9 @@ continue propagating. A `catch` block may be combined with `try` and `finally` a
 case the `finally` block will run after `catch` has handled the error.
 
 When evaluating a `try/catch/else/finally` expression, the value of the
-entire expression is the value of the `try` block (or the `catch` block if the
-`try` block threw). For example:
+entire expression is the value of the `try` block, the `else` block if it
+exists and the `try` block did not throw, or the `catch` block if the
+`try` block threw. For example:
 
 ```jldoctest
 julia> try
@@ -915,6 +916,17 @@ julia> try
            3
        end
 1
+
+julia> try
+           0
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+2
 ```
 
 ## [Tasks (aka Coroutines)](@id man-tasks)
