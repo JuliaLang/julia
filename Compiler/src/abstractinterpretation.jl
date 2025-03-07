@@ -1605,8 +1605,8 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
         may_have_terminated = false
         local call2future::Future{CallMeta}
 
-        nextstate::UInt8 = 0x0
-        function inferiterate_2arg(interp, sv)
+        inferiterate_2arg = let nextstate::UInt8 = 0x0
+        function(interp, sv)
             if nextstate === 0x1
                 nextstate = 0xff
                 @goto state1
@@ -1700,7 +1700,7 @@ function abstract_iteration(interp::AbstractInterpreter, @nospecialize(itft), @n
             end
             iterateresult[] = AbstractIterationResult(ret, AbstractIterationInfo(calls, false))
             return true
-        end # function inferiterate_2arg
+        end; end # function inferiterate_2arg
         # continue making progress as much as possible, on iterate(arg, state)
         inferiterate_2arg(interp, sv) || push!(sv.tasks, inferiterate_2arg)
         return true
@@ -1746,8 +1746,8 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     # split the rest into a resumable state machine
     i::Int = 1
     j::Int = 1
-    nextstate::UInt8 = 0x0
-    function infercalls(interp, sv)
+    infercalls = let nextstate::UInt8 = 0x0
+    function(interp, sv)
         # n.b. Remember that variables will lose their values across restarts,
         # so be sure to manually hoist any values that must be preserved and do
         # not rely on program order.
@@ -1870,7 +1870,7 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
         # For now, only propagate info if we don't also union-split the iteration
         applyresult[] = CallMeta(res, exctype, all_effects, retinfo)
         return true
-    end # function infercalls
+    end; end # function infercalls
     # start making progress on the first call
     infercalls(interp, sv) || push!(sv.tasks, infercalls)
     return applyresult
