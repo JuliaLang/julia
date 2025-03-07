@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-const HASH_SEED = UInt64(0xbdd89aa982704029)
+const HASH_SEED = UInt == UInt64 ? 0xbdd89aa982704029 : 0xeabe9406
 const HASH_SECRET = tuple(
     0x2d358dccaa6c78a5,
     0x8bb84b93962eacc9,
@@ -45,13 +45,13 @@ end
 hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
 
-function hash_64_64(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64})
-    return data ⊻ hash_mix(data ⊻ hash_mix(seed, secret[1]), secret[2])
+function hash_64_64(data::UInt64, seed::UInt, secret::NTuple{3, UInt64})
+    return data ⊻ hash_mix(data ⊻ hash_mix(UInt64(seed), secret[1]), secret[2])
 end
 
-hash_64_32(data::UInt64, seed::UInt64, secret::NTuple{3, UInt64}) =
+hash_64_32(data::UInt64, seed::UInt, secret::NTuple{3, UInt64}) =
     hash_64_64(data, seed, secret) % UInt32
-hash_32_32(data::UInt32, seed::UInt64, secret::NTuple{3, UInt64}) =
+hash_32_32(data::UInt32, seed::UInt, secret::NTuple{3, UInt64}) =
     hash_64_32(UInt64(data), seed, secret)
 
 if UInt === UInt64
@@ -62,7 +62,7 @@ else
     const hash_uint = hash_32_32
 end
 
-hash(x::UInt64, h::UInt) = hash_uint64(promote(x, h)..., HASH_SECRET)
+hash(x::UInt64, h::UInt) = hash_uint64(x, h, HASH_SECRET)
 hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
 hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
@@ -172,7 +172,7 @@ end
 end
 
 @assume_effects :total hash(data::String, h::UInt) =
-    GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET)
+    GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
 
 # no longer used in Base, but a lot of packages access these internals
 const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
