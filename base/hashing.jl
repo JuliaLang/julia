@@ -79,11 +79,11 @@ end
 
 ## symbol & expression hashing ##
 if UInt === UInt64
-    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
-    hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x2c97bf8b3de87020)
+    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h ⊻ 0x83c7900696d26dc6))
+    hash(x::QuoteNode, h::UInt) = hash(x.value, h ⊻ 0x2c97bf8b3de87020)
 else
-    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x96d26dc6))
-    hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x469d72af)
+    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h ⊻ 0x469d72af))
+    hash(x::QuoteNode, h::UInt) = hash(x.value, h ⊻ 0x469d72af)
 end
 
 hash(x::Symbol) = objectid(x)

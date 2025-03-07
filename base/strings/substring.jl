@@ -136,7 +136,7 @@ pointer(x::SubString{String}) = pointer(x.string) + x.offset
 pointer(x::SubString{String}, i::Integer) = pointer(x.string) + x.offset + (i-1)
 
 hash(data::SubString{String}, h::UInt) =
-    GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET)
+    GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
 
 _isannotated(::SubString{T}) where {T} = _isannotated(T)
 
