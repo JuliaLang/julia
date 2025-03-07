@@ -339,7 +339,7 @@ function verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool)
             severity = 1
         end
         # messages classified as errors are fatal, warnings are not
-        0 < severity <= 1 && !onlywarn && error("verify_typeinf_trim failed")
+        0 < severity <= 1 && !onlywarn && throw(Core.TrimFailure())
     end
     nothing
 end
