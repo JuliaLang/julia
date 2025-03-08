@@ -1736,8 +1736,8 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     retinfos = ApplyCallInfo[]
     retinfo = UnionSplitApplyCallInfo(retinfos)
     exctype = Union{}
-    ctypes´ = Vector{Any}[]
-    infos´ = Vector{MaybeAbstractIterationInfo}[]
+    ctypes´::Vector{Vector{Any}} = Vector{Any}[]
+    infos´::Vector{Vector{MaybeAbstractIterationInfo}} = Vector{MaybeAbstractIterationInfo}[]
     local ti, argtypesi
     local ctfuture::Future{AbstractIterationResult}
     local callfuture::Future{CallMeta}
