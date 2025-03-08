@@ -7,8 +7,9 @@ module StackTraces
 
 
 import Base: hash, ==, show
-import Core: CodeInfo, MethodInstance, CodeInstance
-using Base.IRShow: normalize_method_name, append_scopes!, LineInfoNode
+
+using Core: CodeInfo, MethodInstance, CodeInstance
+using Base.IRShow
 
 export StackTrace, StackFrame, stacktrace
 
@@ -112,7 +113,7 @@ Base.@constprop :none function lookup(pointer::Ptr{Cvoid})
     res = Vector{StackFrame}(undef, length(infos))
     for i in 1:length(infos)
         info = infos[i]::Core.SimpleVector
-        @assert(length(info) == 6)
+        @assert length(info) == 6 "corrupt return from jl_lookup_code_address"
         func = info[1]::Symbol
         file = info[2]::Symbol
         linenum = info[3]::Int
@@ -158,8 +159,8 @@ function lookup(ip::Base.InterpreterIP)
     end
     def = (code isa CodeInfo ? StackTraces : code) # Module just used as a token for top-level code
     pc::Int = max(ip.stmt + 1, 0) # n.b. ip.stmt is 0-indexed
-    scopes = LineInfoNode[]
-    append_scopes!(scopes, pc, codeinfo.debuginfo, def)
+    scopes = IRShow.LineInfoNode[]
+    IRShow.append_scopes!(scopes, pc, codeinfo.debuginfo, def)
     if isempty(scopes)
         return [StackFrame(func, file, line, code, false, false, 0)]
     end
@@ -171,7 +172,7 @@ function lookup(ip::Base.InterpreterIP)
         else
             def = codeinfo
         end
-        sf = StackFrame(normalize_method_name(lno.method), lno.file, lno.line, def, false, inlined, 0)
+        sf = StackFrame(IRShow.normalize_method_name(lno.method), lno.file, lno.line, def, false, inlined, 0)
         inlined = true
         return sf
     end

@@ -129,6 +129,25 @@ function retrieve_code_info(mi::MethodInstance, world::UInt)
         else
             c = copy(src::CodeInfo)
         end
+        if (def.did_scan_source & 0x1) == 0x0
+            # This scan must happen:
+            #   1. After method definition
+            #   2. Before any code instances that may have relied on information
+            #      from implicit GlobalRefs for this method are added to the cache
+            #   3. Preferably while the IR is already uncompressed
+            #   4. As late as possible, as early adding of the backedges may cause
+            #      spurious invalidations.
+            #
+            # At the moment we do so here, because
+            #  1. It's reasonably late
+            #  2. It has easy access to the uncompressed IR
+            #  3. We necessarily pass through here before relying on any
+            #     information obtained from implicit GlobalRefs.
+            #
+            # However, the exact placement of this scan is not as important as
+            # long as the above conditions are met.
+            ccall(:jl_scan_method_source_now, Cvoid, (Any, Any), def, c)
+        end
     end
     if c isa CodeInfo
         c.parent = mi
