@@ -78,6 +78,7 @@ External links:
 #include "julia_internal.h"
 #include "julia_gcext.h"
 #include "builtin_proto.h"
+#include "julia_locks.h"
 #include "processor.h"
 #include "serialize.h"
 
@@ -2769,7 +2770,7 @@ jl_genericmemory_t *jl_global_roots_keyset;
 jl_mutex_t global_roots_lock;
 
 jl_mutex_t precompile_field_replace_lock;
-jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED;
+jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED = NULL;
 
 static inline jl_value_t *get_checked_fieldindex(const char *name, jl_datatype_t *st, jl_value_t *v, jl_value_t *arg, int mutabl)
 {
@@ -3090,6 +3091,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     }
     jl_genericmemory_t *global_roots_list = NULL;
     jl_genericmemory_t *global_roots_keyset = NULL;
+    jl_svec_t* precompile_field_replace_list = NULL;
 
     { // step 1: record values (recursively) that need to go in the image
         size_t i;
@@ -3130,7 +3132,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, s.method_roots_list);
             jl_serialize_reachable(&s);
         }
-        // step 1.4: prune (garbage collect) special weak references from the jl_global_roots_list
+        // step 1.4: prune (garbage collect) special weak references from the jl_global_roots_list and field replace list
         if (worklist == NULL) {
             global_roots_list = jl_alloc_memory_any(0);
             global_roots_keyset = jl_alloc_memory_any(0);
@@ -3146,6 +3148,23 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, global_roots_keyset);
             jl_serialize_reachable(&s);
         }
+        precompile_field_replace_list = jl_alloc_svec(3);
+        jl_svecset(precompile_field_replace_list, 0, jl_alloc_vec_any(0));
+        jl_svecset(precompile_field_replace_list, 1, jl_alloc_vec_any(0));
+        jl_svecset(precompile_field_replace_list, 2, jl_alloc_vec_any(0));
+        if (precompile_field_replace) {
+            jl_array_t * vals_array = (jl_array_t *)jl_svecref(precompile_field_replace, 0);
+            for (size_t i = 0; i < jl_array_len(vals_array); i++) {
+                jl_value_t *val = jl_array_ptr_ref(vals_array, i);
+                if (val && ptrhash_get(&serialization_order, val) != HT_NOTFOUND) {
+                    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace_list, 0), val);
+                    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace_list, 1), jl_array_ptr_ref(jl_svecref(precompile_field_replace, 1), i));
+                    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace_list, 2), jl_array_ptr_ref(jl_svecref(precompile_field_replace, 2), i));
+                }
+            }
+        }
+        jl_queue_for_serialization(&s, precompile_field_replace_list);
+        jl_serialize_reachable(&s);
         // step 1.5: prune (garbage collect) some special weak references from
         // built-in type caches too
         for (i = 0; i < serialization_queue.len; i++) {
@@ -3302,6 +3321,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, s.method_roots_list);
             jl_write_value(&s, edges);
         }
+        jl_write_value(&s, precompile_field_replace_list);
         write_uint32(f, jl_array_len(s.link_ids_gctags));
         ios_write(f, (char*)jl_array_data(s.link_ids_gctags, uint32_t), jl_array_len(s.link_ids_gctags) * sizeof(uint32_t));
         write_uint32(f, jl_array_len(s.link_ids_relocs));
@@ -3798,6 +3818,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, vo
         offset_method_roots_list = jl_read_offset(&s);
         offset_edges = jl_read_offset(&s);
     }
+    jl_svec_t* new_precompile_field_replace = (jl_svec_t*)jl_read_value(&s);
+
     s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
     size_t nlinks_gctags = read_uint32(f);
     if (nlinks_gctags > 0) {
@@ -4164,6 +4186,25 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, vo
 
     if (s.incremental)
         jl_root_new_gvars(&s, image, external_fns_begin);
+
+    // Merge precompile_field_replace
+    JL_LOCK_NOGC(&precompile_field_replace_lock);
+    if (precompile_field_replace) {
+        // Someone has already initialized, take lock and push
+
+        jl_array_t * vals_array = (jl_array_t *)jl_svecref(new_precompile_field_replace, 0);
+        for (size_t i = 0; i < jl_array_len(vals_array); i++) {
+            jl_value_t *val = jl_array_ptr_ref(vals_array, i);
+            if (val) {
+                jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace, 0), val);
+                jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace, 1), jl_array_ptr_ref(jl_svecref(new_precompile_field_replace, 1), i));
+                jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace, 2), jl_array_ptr_ref(jl_svecref(new_precompile_field_replace, 2), i));
+            }
+        }
+    } else {
+        precompile_field_replace = new_precompile_field_replace;
+    }
+    JL_UNLOCK_NOGC(&precompile_field_replace_lock);
     ios_close(&relocs);
     ios_close(&const_data);
     ios_close(&gvar_record);
@@ -4233,10 +4274,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, vo
     }
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
     rebuild_image_blob_tree();
-
     // jl_printf(JL_STDOUT, "%ld blobs to link against\n", jl_linkage_blobs.len >> 1);
     jl_gc_enable(en);
-
     if (s.incremental)
         jl_add_methods(*extext_methods);
 }
