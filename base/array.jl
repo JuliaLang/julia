@@ -1472,10 +1472,8 @@ julia> a[1:6]
  1
 ```
 """
-function resize!(a::Vector, nl::Integer)
-    resize!(a, Int(nl)::Int)
-end
-function resize!(a::Vector, nl::Int)
+function resize!(a::Vector, nl_::Integer)
+    nl = Int(nl_)::Int
     l = length(a)
     if nl > l
         _growend!(a, nl-l)
