@@ -165,8 +165,7 @@ function collect_results!(results::Vector{Dict{String,Any}}, testset::Test.Defau
         end
     end
     # Modify names to hold `result_counts`
-    for i in result_offset:length(results)
-        result = results[i]
+    for result in results[result_offset:end]
         rid = get_rid(result)
         if get(result_counts, rid, 0) > 1
             result["name"] = replace(result["name"], r"^([^:]):" =>
