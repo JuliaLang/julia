@@ -8,14 +8,6 @@ An error occurred when trying to access `str` at index `i` that is not valid.
 struct StringIndexError <: Exception
     string::AbstractString
     index::Integer
-    function StringIndexError((@nospecialize s::AbstractString), (@nospecialize i::Integer))
-        new(s, i)
-    end
-end
-function StringIndexError(str, ind)
-    s = convert(AbstractString, str)
-    i = convert(Integer, ind)
-    StringIndexError(s, i)
 end
 @noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
     throw(StringIndexError(s, Int(i)))
