@@ -22,7 +22,7 @@ isinteger(x::Integer) = true
 """
     iszero(x)
 
-Return `true` if `x == zero(x)`; if `x` is an array, this checks whether
+For numbers, return `true` if `x == zero(x)`; if `x` is an array, this checks whether
 all of the elements of `x` are zero.
 
 See also: [`isone`](@ref), [`isinteger`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
@@ -39,12 +39,12 @@ julia> iszero([false, 0, 0])
 true
 ```
 """
-iszero(x) = x == zero(x) # fallback method
+iszero(x::Number) = x == zero(x) # fallback method
 
 """
     isone(x)
 
-Return `true` if `x == one(x)`; if `x` is an array, this checks whether
+For numbers, return `true` if `x == one(x)`; if `x` is an array, this checks whether
 `x` is an identity matrix.
 
 # Examples
@@ -59,7 +59,7 @@ julia> isone([1 0; 0 true])
 true
 ```
 """
-isone(x) = x == one(x) # fallback method
+isone(x::Number) = x == one(x) # fallback method
 
 """
     isfinite(f) -> Bool
