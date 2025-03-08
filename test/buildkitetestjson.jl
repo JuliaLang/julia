@@ -72,14 +72,18 @@ function result_dict(testset::Test.DefaultTestSet, prefix::String="")
             "julia_version" => string(VERSION),
             "testset" => testset.description,
         ),
-        "history" => if !isnothing(testset.time_end)
-            Dict{String,Any}(
-                "start_at" => testset.time_start,
-                "end_at" => testset.time_end,
-                "duration" => testset.time_end - testset.time_start)
-        else
-            Dict{String,Any}("start_at" => testset.time_start, "duration" => 0.0)
-        end)
+        # Given we only report the result failures specifically, it is misleading to attribute
+        # the parent testset timing information as the test timing information.
+        # TODO: Add timing information to the various Result types in Test.jl, to use in `result_dict(result::Test.Result)`.
+        # "history" => if !isnothing(testset.time_end)
+        #     Dict{String,Any}(
+        #         "start_at" => testset.time_start,
+        #         "end_at" => testset.time_end,
+        #         "duration" => testset.time_end - testset.time_start)
+        # else
+        #     Dict{String,Any}("start_at" => testset.time_start, "duration" => 0.0)
+        # end
+        )
     return data
 end
 
