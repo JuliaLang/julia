@@ -4,6 +4,8 @@
 #include "platform.h"
 
 // target support
+#include "llvm/IR/Constants.h"
+#include "llvm/Support/Debug.h"
 #include <llvm/TargetParser/Triple.h>
 #include "llvm/Support/CodeGen.h"
 #include <llvm/ADT/Statistic.h>
@@ -199,29 +201,28 @@ static inline SmallVector<T*, 0> consume_gv(Module &M, const char *name, bool al
     return res;
 }
 
-static Constant *get_ptrdiff32(Type *T_size, Constant *ptr, Constant *base)
+static Constant *get_ptrdiff(Type *T_size, Constant *ptr, Constant *base)
 {
     if (ptr->getType()->isPointerTy())
         ptr = ConstantExpr::getPtrToInt(ptr, T_size);
     auto ptrdiff = ConstantExpr::getSub(ptr, base);
-    return T_size->getPrimitiveSizeInBits() > 32 ? ConstantExpr::getTrunc(ptrdiff, Type::getInt32Ty(ptr->getContext())) : ptrdiff;
+    return ptrdiff;
 }
 
 static Constant *emit_offset_table(Module &M, Type *T_size, ArrayRef<Constant*> vars,
                                    StringRef name, StringRef suffix)
 {
-    auto T_int32 = Type::getInt32Ty(M.getContext());
     uint32_t nvars = vars.size();
-    ArrayType *vars_type = ArrayType::get(T_int32, nvars + 1);
+    ArrayType *vars_type = ArrayType::get(T_size, nvars + 1);
     auto gv = new GlobalVariable(M, vars_type, true,
                                  GlobalVariable::ExternalLinkage,
                                  nullptr,
                                  name + "_offsets" + suffix);
     auto vbase = ConstantExpr::getPtrToInt(gv, T_size);
     SmallVector<Constant*, 0> offsets(nvars + 1);
-    offsets[0] = ConstantInt::get(T_int32, nvars);
+    offsets[0] = ConstantInt::get(T_size, nvars);
     for (uint32_t i = 0; i < nvars; i++)
-        offsets[i + 1] = get_ptrdiff32(T_size, vars[i], vbase);
+        offsets[i + 1] = get_ptrdiff(T_size, vars[i], vbase);
     gv->setInitializer(ConstantArray::get(vars_type, offsets));
     gv->setVisibility(GlobalValue::HiddenVisibility);
     gv->setDSOLocal(true);
@@ -1979,7 +1980,7 @@ void jl_dump_native_impl(void *native_code,
 
     CodeModel::Model CMModel = CodeModel::Small;
     if (TheTriple.isPPC() || TheTriple.isRISCV() ||
-        (TheTriple.isX86() && TheTriple.isArch64Bit() && TheTriple.isOSLinux())) {
+        (TheTriple.isX86() && TheTriple.isArch64Bit() && (TheTriple.isOSLinux() || TheTriple.isOSDarwin()))) {
         // On PPC the small model is limited to 16bit offsets. For very large images the small code model
         CMModel = CodeModel::Medium; //  isn't good enough on x86 so use Medium, it has no cost because only the image goes in .ldata
     }
