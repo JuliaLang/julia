@@ -1,10 +1,8 @@
-Julia v1.12 Release Notes
+Julia v1.13 Release Notes
 ========================
 
 New language features
 ---------------------
-
-* The `@ccall` macro can now take a `gc_safe` argument, that if set to true allows the runtime to run garbage collection concurrently to the `ccall`
 
 Language changes
 ----------------
