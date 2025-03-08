@@ -18,16 +18,14 @@ replace_ref_begin_end!(ex) = replace_ref_begin_end_!(ex, nothing)[1]
 # replace_ref_begin_end_!(ex,withex) returns (new ex, whether withex was used)
 function replace_ref_begin_end_!(ex, withex)
     used_withex = false
-    if isa(ex,Symbol)
-        if ex === :begin
+    if isa(ex,Expr)
+        if ex.head === :begin
             withex === nothing && error("Invalid use of begin")
             return withex[1], true
-        elseif ex === :end
+        elseif ex.head === :end
             withex === nothing && error("Invalid use of end")
             return withex[2], true
-        end
-    elseif isa(ex,Expr)
-        if ex.head === :ref
+        elseif ex.head === :ref
             ex.args[1], used_withex = replace_ref_begin_end_!(ex.args[1], withex)
             S = isa(ex.args[1],Symbol) ? ex.args[1]::Symbol : gensym(:S) # temp var to cache ex.args[1] if needed
             used_S = false # whether we actually need S
