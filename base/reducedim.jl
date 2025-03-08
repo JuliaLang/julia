@@ -1220,6 +1220,149 @@ end
 
 reducedim1(R, A) = length(axes1(R)) == 1
 
+function _findextrema!(f, op_mn, op_mx, Rval_mn, Rind_mn, Rval_mx, Rind_mx, A::AbstractArray{T,N}) where {T,N}
+    (isempty(Rval_mn) || isempty(Rval_mx) || isempty(A)) && return ((Rval_mn, Rind_mn), (Rval_mx, Rind_mx))
+    lsiz_mn = check_reducedims(Rval_mn, A)
+    for i = 1:N
+        axes(Rval_mn, i) == axes(Rind_mn, i) == axes(Rval_mx, i) == axes(Rind_mx, i) || throw(DimensionMismatch("Find-reduction: outputs must have the same indices"))
+    end
+    # Same as findminmax! implementation
+    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(Rval_mn))
+    keep, Idefault = Broadcast.shapeindexer(indsRt)
+    ks = keys(A)
+    y = iterate(ks)
+    zi = zero(eltype(ks))
+    if reducedim1(Rval_mn, A)
+        i1 = first(axes1(Rval_mn))
+        @inbounds for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            tmpRv_mn = Rval_mn[i1,IR]
+            tmpRi_mn = Rind_mn[i1,IR]
+            tmpRv_mx = Rval_mx[i1,IR]
+            tmpRi_mx = Rind_mx[i1,IR]
+            for i in axes(A,1)
+                k, kss = y::Tuple
+                tmpAv = f(A[i,IA])
+                if tmpRi_mn == zi || op_mn(tmpRv_mn, tmpAv)
+                    tmpRv_mn = tmpAv
+                    tmpRi_mn = k
+                end
+                if tmpRi_mx == zi || op_mx(tmpRv_mx, tmpAv)
+                    tmpRv_mx = tmpAv
+                    tmpRi_mx = k
+                end
+                y = iterate(ks, kss)
+            end
+            Rval_mn[i1,IR] = tmpRv_mn
+            Rind_mn[i1,IR] = tmpRi_mn
+            Rval_mx[i1,IR] = tmpRv_mx
+            Rind_mx[i1,IR] = tmpRi_mx
+        end
+    else
+        @inbounds for IA in CartesianIndices(indsAt)
+            IR = Broadcast.newindex(IA, keep, Idefault)
+            for i in axes(A, 1)
+                k, kss = y::Tuple
+                tmpAv = f(A[i,IA])
+                tmpRv_mn = Rval_mn[i,IR]
+                tmpRi_mn = Rind_mn[i,IR]
+                tmpRv_mx = Rval_mx[i,IR]
+                tmpRi_mx = Rind_mx[i,IR]
+                if tmpRi_mn == zi || op_mn(tmpRv_mn, tmpAv)
+                    Rval_mn[i,IR] = tmpAv
+                    Rind_mn[i,IR] = k
+                end
+                if tmpRi_mx == zi || op_mx(tmpRv_mx, tmpAv)
+                    Rval_mx[i,IR] = tmpAv
+                    Rind_mx[i,IR] = k
+                end
+                y = iterate(ks, kss)
+            end
+        end
+    end
+    ((Rval_mn, Rind_mn), (Rval_mx, Rind_mx))
+end
+
+"""
+    findextrema!(rval_mn, rind_mn, rval_mx, rind_mx, A) -> ((minval, index), (maxval, index))
+
+Find the minimum and maximum of `A` and the respective linear index along singleton
+dimensions, storing the results in `((rval_mn , rind_mn), (rval_mn , rind_mn))`,
+equivalent to `(findmin!(rval_mn, rind_mn, A), findmax!(rval_mx, rind_mx, A))`
+but computed in a single pass.
+"""
+function findextrema!(rval_mn::AbstractArray, rind_mn::AbstractArray, rval_mx::AbstractArray, rind_mx::AbstractArray, A::AbstractArray; init::Bool=true)
+    init && !isempty(A) && (fill!(rval_mn, first(A)); fill!(rval_mx, first(A)))
+    Ti = eltype(keys(A))
+    _findextrema!(identity, isgreater, isless, rval_mn, fill!(rind_mn,zero(Ti)), rval_mx, fill!(rind_mx,zero(Ti)), A)
+end
+
+"""
+    findextrema(A; dims) -> ((minval, index), (maxval, index))
+
+For an array input, returns the value and index of the minimum and maximum over the
+given dimensions. Equivalent to `(findmin(A; dims), findmax(A; dims))`, but computed
+in a single pass.
+`NaN` is treated as greater than all other values except `missing`.
+
+# Examples
+```jldoctest
+julia> A = [1.0 2; 3 4]
+2×2 Matrix{Float64}:
+ 1.0  2.0
+ 3.0  4.0
+
+julia> findextrema(A, dims=1) == (findmin(A, dims=1), findmax(A, dims=1))
+true
+
+julia> findextrema(A, dims=2) == (findmin(A, dims=2), findmax(A, dims=2))
+true
+```
+"""
+findextrema(A::AbstractArray; dims=:) = _findextrema(A, dims)
+_findextrema(A, dims) = _findextrema(identity, A, dims)
+
+"""
+    findextrema(f, A; dims) -> ((f(x), index_mn), (f(x), index_mx))
+
+For an array input, returns the value in the codomain and index of the corresponding value
+which minimize and maximize `f` over the given dimensions. Equivalent to
+`(findmin(f, A; dims), findmax(f, A; dims))`, but computed in a single pass.
+
+# Examples
+```jldoctest
+julia> A = [-1.0 1; -0.5 2]
+2×2 Matrix{Float64}:
+ -1.0  1.0
+ -0.5  2.0
+
+julia> findextrema(abs2, A, dims=1) == (findmin(abs2, A, dims=1), findmax(abs2, A, dims=1))
+true
+
+julia> findextrema(abs2, A, dims=2) == (findmin(abs2, A, dims=2), findmax(abs2, A, dims=2))
+true
+```
+"""
+findextrema(f, A::AbstractArray; dims=:) = _findextrema(f, A, dims)
+
+function _findextrema(f, A, region)
+    ri = reduced_indices0(A, region)
+    if isempty(A)
+        if prod(map(length, reduced_indices(A, region))) != 0
+            throw(ArgumentError("collection slices must be non-empty"))
+        end
+        Tr = promote_op(f, eltype(A))
+        Ti = eltype(keys(A))
+        (similar(A, Tr, ri), zeros(Ti, ri)), (similar(A, Tr, ri), zeros(Ti, ri))
+    else
+        fA = f(first(A))
+        Tr = _findminmax_inittype(f, A)
+        Ti = eltype(keys(A))
+        _findextrema!(f, isgreater, isless, fill!(similar(A, Tr, ri), fA), zeros(Ti, ri),
+                      fill!(similar(A, Tr, ri), fA), zeros(Ti, ri), A)
+    end
+end
+
 """
     argmin(A; dims) -> indices
 
