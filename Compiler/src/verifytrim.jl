@@ -327,16 +327,19 @@ function verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool)
     end
 
     let severity = 0
-        if counts[2] > 0
-            print("Trim verify finished with ", counts[2], counts[2] == 1 ? " warning.\n\n" : " warnings.\n\n")
+        if counts[1] > 0 || counts[2] > 0
+            print("Trim verify finished with ")
+            print(counts[1], counts[1] == 1 ? " error" : " errors")
+            print(", ")
+            print(counts[2], counts[2] == 1 ? " warning" : " warnings")
+            print(".\n")
             severity = 2
         end
         if counts[1] > 0
-            print("Trim verify finished with ", counts[1], counts[1] == 1 ? " error.\n\n" : " errors.\n\n")
             severity = 1
         end
         # messages classified as errors are fatal, warnings are not
-        0 < severity <= 1 && !onlywarn && error("verify_typeinf_trim failed")
+        0 < severity <= 1 && !onlywarn && throw(Core.TrimFailure())
     end
     nothing
 end
