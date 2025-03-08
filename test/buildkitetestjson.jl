@@ -72,6 +72,7 @@ function result_dict(testset::Test.DefaultTestSet, prefix::String="")
             "julia_version" => string(VERSION),
             "testset" => testset.description,
         ),
+        # note we drop some of this from common_data before merging into individual results
         "history" => if !isnothing(testset.time_end)
             Dict{String,Any}(
                 "start_at" => testset.time_start,
@@ -147,6 +148,9 @@ end
 
 function collect_results!(results::Vector{Dict{String,Any}}, testset::Test.DefaultTestSet, prefix::String="")
     common_data = result_dict(testset, prefix)
+    # testset duration is not relevant for individual test results
+    common_data["history"]["duration"] = 0.0 # required field
+    delete!(common_data["history"], "end_at")
     result_offset = length(results) + 1
     result_counts = Dict{Tuple{String,String},Int}()
     get_rid(rdata) = (rdata["location"], rdata["result"])
