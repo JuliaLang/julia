@@ -977,6 +977,12 @@ function lerpi(j::Integer, d::Integer, a::T, b::T) where T
     return T((1-t)*a + t*b)
 end
 
+# help avoid some unnecessary work for the compiler when compiling type unstable code
+function lerpi((@nospecialize j::Integer), (@nospecialize d::Integer), ::String, ::String)
+    @_nospecializeinfer_meta
+    throw(ArgumentError("can't interpolate between strings"))
+end
+
 # non-scalar indexing
 
 getindex(r::AbstractRange, ::Colon) = copy(r)
