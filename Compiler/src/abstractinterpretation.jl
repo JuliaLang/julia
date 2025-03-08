@@ -95,7 +95,7 @@ mutable struct CallInferenceState
     all_effects::Effects
     const_results::Union{Nothing,Vector{Union{Nothing,ConstResult}}} # keeps the results of inference with the extended lattice elements (if happened)
     conditionals::Union{Nothing,Tuple{Vector{Any},Vector{Any}}} # keeps refinement information of call argument types when the return type is boolean
-    slotrefinements::Union{Nothing,Vector{Any}} # keeps refinement information on slot types obtained from call signature
+    slotrefinements::Union{Nothing,Vector{SlotRefinement}} # keeps refinement information on slot types obtained from call signature
 
     # some additional fields for untyped objects (just to avoid capturing)
     func
@@ -140,6 +140,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # final result
     gfresult = Future{CallMeta}()
     state = CallInferenceState(func, matches)
+    inferred_refinements = SlotRefinement[]
 
     # split the for loop off into a function, so that we can pause and restart it at will
     function infercalls(interp, sv)
@@ -166,7 +167,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             #end
             mresult = abstract_call_method(interp, method, sig, match.sparams, multiple_matches, si, sv)::Future
             function handle1(interp, sv)
-                local (; rt, exct, effects, edge, volatile_inf_result) = mresult[]
+                local (; rt, exct, effects, refinements, edge, volatile_inf_result) = mresult[]
                 this_conditional = ignorelimited(rt)
                 this_rt = widenwrappedconditional(rt)
                 this_exct = exct
@@ -213,6 +214,9 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 end
 
                 state.all_effects = merge_effects(state.all_effects, effects)
+                if refinements !== nothing
+                    merge_slot_refinements!(inferred_refinements, 𝕃ᵢ, refinements)
+                end
                 if const_result !== nothing
                     local const_results = state.const_results
                     if const_results === nothing
@@ -272,7 +276,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
             end
             local fargs = arginfo.fargs
             if sv isa InferenceState && fargs !== nothing
-                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, argtypes, fargs, sv)
+                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, inferred_refinements, argtypes, fargs, sv)
             end
             state.rettype = from_interprocedural!(interp, state.rettype, sv, arginfo, state.conditionals)
             if call_result_unused(si) && !(state.rettype === Bottom)
@@ -337,6 +341,21 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # start making progress on the first call
     infercalls(interp, sv) || push!(sv.tasks, infercalls)
     return gfresult
+end
+
+function merge_slot_refinements!(into, 𝕃ᵢ, refinements)
+    ⊔ = join(𝕃ᵢ)
+    for refinement in refinements
+        slot = refinement.slot
+        i = findfirst(x -> x.slot === slot, into)
+        if i === nothing
+            push!(into, refinement)
+        else
+            existing = into[i]
+            into[i] = SlotRefinement(slot, existing.typ ⊔ refinement.typ)
+        end
+    end
+    into
 end
 
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
@@ -570,14 +589,12 @@ function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospe
     end
 end
 
-function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{MethodMatchTarget},
-    argtypes::Vector{Any}, fargs::Vector{Any}, sv::InferenceState)
-    ⊏, ⊔ = strictpartialorder(𝕃ᵢ), join(𝕃ᵢ)
+function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{MethodMatchTarget}, refinements::Vector{SlotRefinement}, argtypes::Vector{Any}, fargs::Vector{Any}, sv::InferenceState)
+    ⊏, ⊑, ⊔ = strictpartialorder(𝕃ᵢ), partialorder(𝕃ᵢ), join(𝕃ᵢ)
     slotrefinements = nothing
     for i = 1:length(fargs)
         fargᵢ = fargs[i]
         if fargᵢ isa SlotNumber
-            fidx = slot_id(fargᵢ)
             argt = widenslotwrapper(argtypes[i])
             if isvarargtype(argt)
                 argt = unwrapva(argt)
@@ -588,11 +605,25 @@ function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{M
                 valid_as_lattice(match.spec_types, true) || continue
                 sigt = sigt ⊔ fieldtype(match.spec_types, i)
             end
-            if sigt ⊏ argt # i.e. signature type is strictly more specific than the type of the argument slot
-                if slotrefinements === nothing
-                    slotrefinements = fill!(Vector{Any}(undef, length(sv.slottypes)), nothing)
+            j = findfirst(x -> x.slot === fargᵢ, refinements)
+            newt = j === nothing ? sigt : begin
+                inferred = refinements[j].typ
+                sigt ⊑ inferred ? sigt : inferred ⊑ sigt ? inferred : begin
+                    # Core.println("sigt and inferred are not ordered: ", sigt, ", ", inferred)
+                    sigt
                 end
-                slotrefinements[fidx] = sigt
+            end
+            if newt ⊏ argt # i.e. inferred slot type is strictly more specific than the type of the argument slot
+                if slotrefinements === nothing
+                    slotrefinements = SlotRefinement[]
+                end
+                j = findfirst(x -> fargᵢ == x.slot, slotrefinements)
+                refinement = SlotRefinement(fargᵢ, newt)
+                if j === nothing
+                    push!(slotrefinements, refinement)
+                else
+                    slotrefinements[j] = refinement
+                end
             end
         end
     end
@@ -608,9 +639,9 @@ function abstract_call_method(interp::AbstractInterpreter,
                               hardlimit::Bool, si::StmtInfo, sv::AbsIntState)
     sigtuple = unwrap_unionall(sig)
     sigtuple isa DataType ||
-        return Future(MethodCallResult(Any, Any, Effects(), nothing, false, false))
+        return Future(MethodCallResult(Any, Any, Effects(), nothing, nothing, false, false))
     all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), sigtuple.parameters) ||
-        return Future(MethodCallResult(Union{}, Any, EFFECTS_THROWS, nothing, false, false)) # catch bad type intersections early
+        return Future(MethodCallResult(Union{}, Any, EFFECTS_THROWS, nothing, nothing, false, false)) # catch bad type intersections early
 
     if is_nospecializeinfer(method)
         sig = get_nospecializeinfer_sig(method, sig, sparams)
@@ -682,7 +713,7 @@ function abstract_call_method(interp::AbstractInterpreter,
                 # since it's very unlikely that we'll try to inline this,
                 # or want make an invoke edge to its calling convention return type.
                 # (non-typically, this means that we lose the ability to detect a guaranteed StackOverflow in some cases)
-                return Future(MethodCallResult(Any, Any, Effects(), nothing, true, true))
+                return Future(MethodCallResult(Any, Any, Effects(), nothing, nothing, true, true))
             end
             add_remark!(interp, sv, washardlimit ? RECURSION_MSG_HARDLIMIT : RECURSION_MSG)
             # TODO (#48913) implement a proper recursion handling for irinterp:
@@ -838,14 +869,16 @@ struct MethodCallResult
     rt
     exct
     effects::Effects
+    refinements::Union{Nothing,Vector{SlotRefinement}}
     edge::Union{Nothing,CodeInstance}
     edgecycle::Bool
     edgelimited::Bool
     volatile_inf_result::Union{Nothing,VolatileInferenceResult}
     function MethodCallResult(@nospecialize(rt), @nospecialize(exct), effects::Effects,
+                              refinements::Union{Nothing,Vector{SlotRefinement}},
                               edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
                               volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
-        return new(rt, exct, effects, edge, edgecycle, edgelimited, volatile_inf_result)
+        return new(rt, exct, effects, refinements, edge, edgecycle, edgelimited, volatile_inf_result)
     end
 end
 
@@ -2297,7 +2330,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
     lookupsig_box = Core.Box(lookupsig)
     invokecall = InvokeCall(types)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
-        (; rt, exct, effects, edge, volatile_inf_result) = result
+        (; rt, exct, effects, edge, volatile_inf_result, refinements) = result
         local ft′ = ft′_box.contents
         sig = match.spec_types
         argtypes′ = invoke_rewrite(arginfo.argtypes)
@@ -2334,7 +2367,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
             effects = Effects(effects; nothrow=false)
             exct = exct ⊔ TypeError
         end
-        return CallMeta(rt, exct, effects, info)
+        return CallMeta(rt, exct, effects, info, refinements)
     end
 end
 
@@ -2796,7 +2829,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
     mresult = abstract_call_method(interp, ocmethod, sig, Core.svec(), false, si, sv)
     ocsig_box = Core.Box(ocsig)
     return Future{CallMeta}(mresult, interp, sv) do result, interp, sv
-        (; rt, exct, effects, volatile_inf_result, edge, edgecycle) = result
+        (; rt, exct, effects, refinements, volatile_inf_result, edge, edgecycle) = result
         𝕃ₚ = ipo_lattice(interp)
         ⊑, ⋤, ⊔ = partialorder(𝕃ₚ), strictneqpartialorder(𝕃ₚ), join(𝕃ₚ)
         const_result = volatile_inf_result
@@ -2828,7 +2861,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter,
         end
         rt = from_interprocedural!(interp, rt, sv, arginfo, match.spec_types)
         info = OpaqueClosureCallInfo(edge, match, const_result)
-        return CallMeta(rt, exct, effects, info)
+        return CallMeta(rt, exct, effects, info, refinements)
     end
 end
 
@@ -3015,7 +3048,7 @@ struct RTEffects
     rt::Any
     exct::Any
     effects::Effects
-    refinements # ::Union{Nothing,SlotRefinement,Vector{Any}}
+    refinements # ::Union{Nothing,SlotRefinement,Vector{SlotRefinement}}
     function RTEffects(rt, exct, effects::Effects, refinements=nothing)
         @nospecialize rt exct refinements
         return new(rt, exct, effects, refinements)
@@ -3992,6 +4025,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     nbbs = length(bbs)
     𝕃ᵢ = typeinf_lattice(interp)
     states = frame.bb_vartables
+    postdomtree = construct_postdomtree(frame.cfg)
     saw_latestworld = frame.bb_saw_latestworld
     currbb = frame.currbb
     currpc = frame.currpc
@@ -4254,14 +4288,15 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
+                # TODO: update `refinements`
             end
             if refinements isa SlotRefinement
                 apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, currstate, changes)
-            elseif refinements isa Vector{Any}
-                for i = 1:length(refinements)
-                    newtyp = refinements[i]
-                    newtyp === nothing && continue
-                    apply_refinement!(𝕃ᵢ, SlotNumber(i), newtyp, currstate, changes)
+                postdominates(postdomtree, currbb, 1) && apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, frame.refinements, changes)
+            elseif refinements isa Vector{SlotRefinement}
+                for refinement in refinements
+                    apply_refinement!(𝕃ᵢ, refinement.slot, refinement.typ, currstate, changes)
+                    postdominates(postdomtree, currbb, 1) && apply_refinement!(𝕃ᵢ, refinement.slot, refinement.typ, frame.refinements, changes)
                 end
             end
             if rt === nothing
