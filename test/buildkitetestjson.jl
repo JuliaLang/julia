@@ -151,7 +151,13 @@ function collect_results!(results::Vector{Dict{String,Any}}, testset::Test.Defau
     result_counts = Dict{Tuple{String,String},Int}()
     get_rid(rdata) = (rdata["location"], rdata["result"])
     for (i, result) in enumerate(testset.results)
-        if result isa Test.Result
+        # DefaultTestSet stores Broken results, but they're not helpful for the buildkite
+        # test analytics, so we skip them.
+        # TODO: Ideally we'd record all the results including passes, but Test doesn't store
+        # Pass results in DefaultTestSet for efficiency.
+        # That means BK can't distinguish between a test that passed and a test that wasn't run
+        # so "flaky" tests cannot be identified, and success %'s will always be 0%.
+        if result isa Test.Result && !(result isa Test.Broken)
             rdata = result_dict(result)
             rid = get_rid(rdata)
             if haskey(result_counts, rid)
