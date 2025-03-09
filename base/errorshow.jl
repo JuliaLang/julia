@@ -920,7 +920,7 @@ function _collapse_repeated_frames(trace)
             m, last_m = StackTraces.frame_method_or_module(frame),
                         StackTraces.frame_method_or_module(last_frame)
             if m isa Method && last_m isa Method
-                params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
+                params, last_params = Base.unwrap_unionall(m.sig).parameters::SimpleVector, Base.unwrap_unionall(last_m.sig).parameters::SimpleVector
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
                     issame = true
