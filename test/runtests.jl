@@ -422,8 +422,8 @@ cd(@__DIR__) do
     if Base.get_bool_env("CI", false)
         @info "Writing test result data to $(@__DIR__)"
         Profile.clear()
-        @profile @time "write_testset_json_files" write_testset_json_files(@__DIR__, o_ts)
-        Profile.print()
+        @time "write_testset_json_files" @profile write_testset_json_files(@__DIR__, o_ts)
+        Profile.print(IOContext(stdout, :displaysize=>(1000,200)), noisefloor=1.0)
     end
 
     Test.TESTSET_PRINT_ENABLE[] = true
