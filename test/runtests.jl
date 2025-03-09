@@ -420,7 +420,7 @@ cd(@__DIR__) do
 
     if Base.get_bool_env("CI", false)
         @info "Writing test result data to $(@__DIR__)"
-        write_testset_json_files(@__DIR__, o_ts)
+        @time "write_testset_json_files" write_testset_json_files(@__DIR__, o_ts)
     end
 
     Test.TESTSET_PRINT_ENABLE[] = true
