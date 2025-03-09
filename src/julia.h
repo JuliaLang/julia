@@ -66,7 +66,6 @@
 
 typedef struct _jl_taggedvalue_t jl_taggedvalue_t;
 typedef struct _jl_tls_states_t *jl_ptls_t;
-typedef struct _jl_genericmemory_t jl_genericmemory_t;
 
 #ifdef JL_LIBRARY_EXPORTS
 #include "uv.h"
@@ -728,7 +727,15 @@ static const uint8_t PARTITION_FLAG_DEPRECATED     = 0x20;
 // where calling the function itself will provide a (better) deprecation warning/error.
 static const uint8_t PARTITION_FLAG_DEPWARN        = 0x40;
 
-typedef struct __attribute__((aligned(8))) _jl_binding_partition_t {
+#if defined(_COMPILER_MICROSOFT_)
+#define JL_ALIGNED_ATTR(alignment) \
+    __declspec(align(alignment))
+#else
+#define JL_ALIGNED_ATTR(alignment) \
+    __attribute__((aligned(alignment)))
+#endif
+
+typedef struct JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
     JL_DATA_TYPE
     /* union {
      *   // For ->kind == PARTITION_KIND_GLOBAL
@@ -1013,6 +1020,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_fielderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_missingcodeerror_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_trimfailure_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_abioverride_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;

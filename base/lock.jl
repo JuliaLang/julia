@@ -711,10 +711,10 @@ mutable struct OncePerProcess{T, F} <: Function
 end
 OncePerProcess{T}(initializer::F) where {T, F} = OncePerProcess{T, F}(initializer)
 OncePerProcess(initializer) = OncePerProcess{Base.promote_op(initializer), typeof(initializer)}(initializer)
-@inline function (once::OncePerProcess{T})() where T
+@inline function (once::OncePerProcess{T,F})() where {T,F}
     state = (@atomic :acquire once.state)
     if state != PerStateHasrun
-        (@noinline function init_perprocesss(once, state)
+        (@noinline function init_perprocesss(once::OncePerProcess{T,F}, state::UInt8) where {T,F}
             state == PerStateErrored && error("OncePerProcess initializer failed previously")
             once.allow_compile_time || __precompile__(false)
             lock(once.lock)
@@ -818,14 +818,14 @@ mutable struct OncePerThread{T, F} <: Function
 end
 OncePerThread{T}(initializer::F) where {T, F} = OncePerThread{T,F}(initializer)
 OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(initializer)}(initializer)
-@inline (once::OncePerThread)() = once[Threads.threadid()]
-@inline function getindex(once::OncePerThread, tid::Integer)
+@inline (once::OncePerThread{T,F})() where {T,F} = once[Threads.threadid()]
+@inline function getindex(once::OncePerThread{T,F}, tid::Integer) where {T,F}
     tid = Int(tid)
     ss = @atomic :acquire once.ss
     xs = @atomic :monotonic once.xs
     # n.b. length(xs) >= length(ss)
     if tid <= 0 || tid > length(ss) || (@atomic :acquire ss[tid]) != PerStateHasrun
-        (@noinline function init_perthread(once, tid)
+        (@noinline function init_perthread(once::OncePerThread{T,F}, tid::Int) where {T,F}
             local ss = @atomic :acquire once.ss
             local xs = @atomic :monotonic once.xs
             local len = length(ss)
@@ -933,6 +933,6 @@ mutable struct OncePerTask{T, F} <: Function
     OncePerTask{T,F}(initializer::F) where {T, F} = new{T,F}(initializer)
     OncePerTask(initializer) = new{Base.promote_op(initializer), typeof(initializer)}(initializer)
 end
-@inline function (once::OncePerTask{T})() where {T}
+@inline function (once::OncePerTask{T,F})() where {T,F}
     get!(once.initializer, task_local_storage(), once)::T
 end
