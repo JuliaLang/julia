@@ -49,8 +49,8 @@ using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstanc
 
 using Base
 using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospecializeinfer,
-    BINDING_KIND_GLOBAL, BINDING_KIND_UNDEF_CONST, BINDING_KIND_BACKDATED_CONST, BINDING_KIND_DECLARED,
-    BINDING_FLAG_DEPWARN,
+    PARTITION_KIND_GLOBAL, PARTITION_KIND_UNDEF_CONST, PARTITION_KIND_BACKDATED_CONST, PARTITION_KIND_DECLARED,
+    PARTITION_FLAG_DEPWARN,
     Base, BitVector, Bottom, Callable, DataTypeFieldDesc,
     EffectsOverride, Filter, Generator, IteratorSize, JLOptions, NUM_EFFECTS_OVERRIDES,
     OneTo, Ordering, RefValue, SizeUnknown, _NAMEDTUPLE_NAME,
@@ -193,23 +193,22 @@ end
 module IRShow end # relies on string and IO operations defined in Base
 baremodule TrimVerifier end # relies on IRShow, so define this afterwards
 
-function load_irshow!()
-    if isdefined(Base, :end_base_include)
-        # This code path is exclusively for Revise, which may want to re-run this
-        # after bootstrap.
-        Compilerdir = Base.dirname(Base.String(@__SOURCE_FILE__))
-        include(IRShow, Base.joinpath(Compilerdir, "ssair/show.jl"))
-        include(TrimVerifier, Base.joinpath(Compilerdir, "verifytrim.jl"))
-    else
+if isdefined(Base, :end_base_include)
+    # When this module is loaded as the standard library, include these files as usual
+    include(IRShow, "ssair/show.jl")
+    include(TrimVerifier, "verifytrim.jl")
+else
+    function load_irshow!()
+        Base.delete_method(Base.which(verify_typeinf_trim, (IO, Vector{Any}, Bool)),)
         include(IRShow, "ssair/show.jl")
         include(TrimVerifier, "verifytrim.jl")
     end
-end
-if !isdefined(Base, :end_base_include)
-    # During bootstrap, skip including this file and defer it to base/show.jl to include later
-else
-    # When this module is loaded as the standard library, include this file as usual
-    load_irshow!()
+    function verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool)
+        # stub implementation
+        msg = "--trim verifier not defined"
+        onlywarn ? println(io, msg) : error(msg)
+    end
+    # During bootstrap, skip including these files and defer to base/show.jl to include it later
 end
 
 end # baremodule Compiler

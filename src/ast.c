@@ -178,7 +178,7 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     jl_sym_t *var = scmsym_to_julia(fl_ctx, args[0]);
     jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    return (bpart != NULL && jl_binding_kind(bpart) == BINDING_KIND_GLOBAL) ? fl_ctx->T : fl_ctx->F;
+    return (bpart != NULL && jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL) ? fl_ctx->T : fl_ctx->F;
 }
 
 // Used to generate a unique suffix for a given symbol (e.g. variable or type name)

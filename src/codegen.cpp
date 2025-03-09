@@ -2928,14 +2928,13 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
 {
     if (jl_is_symbol(ex)) {
         jl_sym_t *sym = (jl_sym_t*)ex;
-        jl_binding_t *bnd = jl_get_module_binding(ctx.module, sym, 0);
-        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+        jl_binding_t *bnd = jl_get_module_binding(ctx.module, sym, 1);
         int possibly_deprecated = 0;
-        jl_walk_binding_inplace_all(&bnd, &bpart, &possibly_deprecated, ctx.min_world, ctx.max_world);
-        if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
+        jl_value_t *cval = jl_get_binding_leaf_partitions_value_if_const(bnd, &possibly_deprecated, ctx.min_world, ctx.max_world);
+        if (cval) {
             if (possibly_deprecated)
                 emit_depwarn_check(ctx, bnd);
-            return bpart->restriction;
+            return cval;
         }
         return NULL;
     }
@@ -2957,13 +2956,9 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
     jl_sym_t *s = NULL;
     if (jl_is_globalref(ex)) {
         s = jl_globalref_name(ex);
-        jl_binding_t *bnd = jl_get_module_binding(jl_globalref_mod(ex), s, 0);
-        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+        jl_binding_t *bnd = jl_get_module_binding(jl_globalref_mod(ex), s, 1);
         int possibly_deprecated = 0;
-        jl_walk_binding_inplace_all(&bnd, &bpart, &possibly_deprecated, ctx.min_world, ctx.max_world);
-        jl_value_t *v = NULL;
-        if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
-            v = bpart->restriction;
+        jl_value_t *v = jl_get_binding_leaf_partitions_value_if_const(bnd, &possibly_deprecated, ctx.min_world, ctx.max_world);
         if (v) {
             if (possibly_deprecated)
                 emit_depwarn_check(ctx, bnd);
@@ -2985,13 +2980,9 @@ static jl_value_t *static_eval(jl_codectx_t &ctx, jl_value_t *ex)
                     // Assumes that the module is rooted somewhere.
                     s = (jl_sym_t*)static_eval(ctx, jl_exprarg(e, 2));
                     if (s && jl_is_symbol(s)) {
-                        jl_binding_t *bnd = jl_get_module_binding(m, s, 0);
-                        jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
+                        jl_binding_t *bnd = jl_get_module_binding(m, s, 1);
                         int possibly_deprecated = 0;
-                        jl_walk_binding_inplace_all(&bnd, &bpart, &possibly_deprecated, ctx.min_world, ctx.max_world);
-                        jl_value_t *v = NULL;
-                        if (bpart && jl_bkind_is_some_constant(jl_binding_kind(bpart)))
-                            v = bpart->restriction;
+                        jl_value_t *v = jl_get_binding_leaf_partitions_value_if_const(bnd, &possibly_deprecated, ctx.min_world, ctx.max_world);
                         if (v) {
                             if (possibly_deprecated)
                                 emit_depwarn_check(ctx, bnd);
@@ -3235,48 +3226,32 @@ static jl_cgval_t emit_globalref_runtime(jl_codectx_t &ctx, jl_binding_t *bnd, j
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name, AtomicOrdering order)
 {
     jl_binding_t *bnd = jl_get_module_binding(mod, name, 1);
-    assert(bnd);
-    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-    if (!bpart) {
+    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
+    if (!jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
-    int possibly_deprecated = 0;
-    int saw_explicit = 0;
-    while (bpart) {
-        if (!saw_explicit && (bpart->kind & BINDING_FLAG_DEPWARN))
-            possibly_deprecated = 1;
-        enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if (!jl_bkind_is_some_import(kind))
-            break;
-        if (kind != BINDING_KIND_IMPLICIT)
-            saw_explicit = 1;
-        bnd = (jl_binding_t*)bpart->restriction;
-        bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-    }
-    Value *bp = NULL;
-    if (bpart) {
-        enum jl_partition_kind kind = jl_binding_kind(bpart);
-        if (jl_bkind_is_some_constant(kind) && kind != BINDING_KIND_BACKDATED_CONST) {
-            if (possibly_deprecated) {
-                bp = julia_binding_gv(ctx, bnd);
-                ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
-            }
-            jl_value_t *constval = bpart->restriction;
-            if (!constval) {
-                undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
-                return jl_cgval_t();
-            }
-            return mark_julia_const(ctx, constval);
+    if (jl_bkind_is_some_constant(rkp.kind) && rkp.kind != PARTITION_KIND_BACKDATED_CONST) {
+        if (rkp.maybe_depwarn) {
+            Value *bp = julia_binding_gv(ctx, bnd);
+            ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
         }
+        jl_value_t *constval = rkp.restriction;
+        if (!constval) {
+            undef_var_error_ifnot(ctx, ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0), name, (jl_value_t*)mod);
+            return jl_cgval_t();
+        }
+        return mark_julia_const(ctx, constval);
     }
-    if (!bpart || jl_binding_kind(bpart) != BINDING_KIND_GLOBAL) {
+    if (rkp.kind != PARTITION_KIND_GLOBAL) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
-    bp = julia_binding_gv(ctx, bnd);
-    if (possibly_deprecated) {
+    Value *bp = julia_binding_gv(ctx, bnd);
+    if (rkp.maybe_depwarn) {
         ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
     }
-    jl_value_t *ty = bpart->restriction;
+    if (bnd != rkp.binding_if_global)
+        bp = julia_binding_gv(ctx, rkp.binding_if_global);
+    jl_value_t *ty = rkp.restriction;
     Value *bpval = julia_binding_pvalue(ctx, bp);
     if (ty == nullptr)
         ty = (jl_value_t*)jl_any_type;
@@ -3292,8 +3267,8 @@ static jl_cgval_t emit_globalop(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *s
     jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
     Value *bp = julia_binding_gv(ctx, bnd);
     if (bpart) {
-        if (jl_binding_kind(bpart) == BINDING_KIND_GLOBAL) {
-            int possibly_deprecated = bpart->kind & BINDING_FLAG_DEPWARN;
+        if (jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL) {
+            int possibly_deprecated = bpart->kind & PARTITION_FLAG_DEPWARN;
             jl_value_t *ty = bpart->restriction;
             if (ty != nullptr) {
                 const std::string fname = issetglobal ? "setglobal!" : isreplaceglobal ? "replaceglobal!" : isswapglobal ? "swapglobal!" : ismodifyglobal ? "modifyglobal!" : "setglobalonce!";
@@ -3844,27 +3819,27 @@ static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_
 {
     Value *isnull = NULL;
     jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
-    jl_binding_partition_t *bpart = jl_get_binding_partition_all(bnd, ctx.min_world, ctx.max_world);
-    enum jl_partition_kind kind = bpart ? jl_binding_kind(bpart) : BINDING_KIND_GUARD;
-    if (kind == BINDING_KIND_GLOBAL || jl_bkind_is_some_constant(kind)) {
-        if (jl_get_binding_value_if_const(bnd))
-            return mark_julia_const(ctx, jl_true);
-        Value *bp = julia_binding_gv(ctx, bnd);
-        bp = julia_binding_pvalue(ctx, bp);
-        LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
-        jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
-        ai.decorateInst(v);
-        v->setOrdering(get_llvm_atomic_order(order));
-        isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
+    struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
+    if (allow_import && jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
+        if (jl_bkind_is_some_constant(rkp.kind))
+            return mark_julia_const(ctx, rkp.restriction);
+        if (rkp.kind == PARTITION_KIND_GLOBAL) {
+            Value *bp = julia_binding_gv(ctx, rkp.binding_if_global);
+            bp = julia_binding_pvalue(ctx, bp);
+            LoadInst *v = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, bp, Align(sizeof(void*)));
+            jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_binding);
+            ai.decorateInst(v);
+            v->setOrdering(get_llvm_atomic_order(order));
+            isnull = ctx.builder.CreateICmpNE(v, Constant::getNullValue(ctx.types().T_prjlvalue));
+            return mark_julia_type(ctx, isnull, false, jl_bool_type);
+        }
     }
-    else {
-        Value *v = ctx.builder.CreateCall(prepare_call(jlboundp_func), {
-                literal_pointer_val(ctx, (jl_value_t*)modu),
-                literal_pointer_val(ctx, (jl_value_t*)name),
-                ConstantInt::get(getInt32Ty(ctx.builder.getContext()), allow_import)
-            });
-        isnull = ctx.builder.CreateICmpNE(v, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
-    }
+    Value *v = ctx.builder.CreateCall(prepare_call(jlboundp_func), {
+            literal_pointer_val(ctx, (jl_value_t*)modu),
+            literal_pointer_val(ctx, (jl_value_t*)name),
+            ConstantInt::get(getInt32Ty(ctx.builder.getContext()), allow_import)
+        });
+    isnull = ctx.builder.CreateICmpNE(v, ConstantInt::get(getInt32Ty(ctx.builder.getContext()), 0));
     return mark_julia_type(ctx, isnull, false, jl_bool_type);
 }
 

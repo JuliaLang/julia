@@ -102,7 +102,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    196
+#define NUM_TAGS    197
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -250,6 +250,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_atomicerror_type);
         INSERT_TAG(jl_missingcodeerror_type);
         INSERT_TAG(jl_precompilable_error);
+        INSERT_TAG(jl_trimfailure_type);
 
         // other special values
         INSERT_TAG(jl_emptysvec);
@@ -812,6 +813,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     }
 
     jl_queue_for_serialization(s, m->usings_backedges);
+    jl_queue_for_serialization(s, m->scanned_methods);
 }
 
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
@@ -1324,6 +1326,9 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     newm->usings_backedges = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings_backedges)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings_backedges, s->link_ids_relocs));
+    newm->scanned_methods = NULL;
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, scanned_methods)));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->scanned_methods, s->link_ids_relocs));
 
     // After reload, everything that has happened in this process happened semantically at
     // (for .incremental) or before jl_require_world, so reset this flag.
@@ -3607,10 +3612,10 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return 1;
     size_t raw_kind = bpart->kind;
-    enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & BINDING_KIND_MASK);
+    enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & PARTITION_MASK_KIND);
     if (!unchanged_implicit && jl_bkind_is_some_implicit(kind)) {
         jl_check_new_binding_implicit(bpart, b, NULL, jl_atomic_load_relaxed(&jl_world_counter));
-        bpart->kind |= (raw_kind & BINDING_FLAG_MASK);
+        bpart->kind |= (raw_kind & PARTITION_MASK_FLAG);
         if (bpart->min_world > jl_require_world)
             goto invalidated;
     }
@@ -3625,7 +3630,7 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
     if (latest_imported_bpart->min_world <= bpart->min_world) {
 add_backedge:
         // Imported binding is still valid
-        if ((kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED) &&
+        if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
                 external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
             jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
         }
@@ -3650,7 +3655,7 @@ invalidated:
             jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0);
         }
     }
-    if (bpart->kind & BINDING_FLAG_EXPORTED) {
+    if (bpart->kind & PARTITION_FLAG_EXPORTED) {
         jl_module_t *mod = b->globalref->mod;
         jl_sym_t *name = b->globalref->name;
         JL_LOCK(&mod->lock);
