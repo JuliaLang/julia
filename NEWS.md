@@ -25,6 +25,9 @@ New library functions
 New library features
 --------------------
 
+* `match(regex, string, idx)` now supports updating `idx::Ref{Int}` to
+  point at the first character after a successful match ([#51429])
+
 Standard library changes
 ------------------------
 
