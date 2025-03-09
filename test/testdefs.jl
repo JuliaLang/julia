@@ -4,7 +4,9 @@ using Test, Random
 
 function runtests(name, path, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
+    old_record_passes = get(ENV, "JULIA_TEST_RECORD_PASSES", nothing)
     Test.TESTSET_PRINT_ENABLE[] = false
+    ENV["JULIA_TEST_RECORD_PASSES"] = Base.get_bool_env("CI", false)
     # remove all hint_handlers, so that errorshow tests are not changed by which packages have been loaded on this worker already
     # packages that call register_error_hint should also call this again, and then re-add any hooks they want to test
     empty!(Base.Experimental._hint_handlers)
@@ -97,6 +99,12 @@ function runtests(name, path, isolate=true; seed=nothing)
         Test.TESTSET_PRINT_ENABLE[] = old_print_setting
         ex isa TestSetException || rethrow()
         return Any[ex]
+    finally
+        if old_record_passes === nothing
+            delete!(ENV, "JULIA_TEST_RECORD_PASSES")
+        else
+            ENV["JULIA_TEST_RECORD_PASSES"] = old_record_passes
+        end
     end
 end
 
