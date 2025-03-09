@@ -43,6 +43,10 @@ const DISPLAY_FAILED = (
 
 const FAIL_FAST = Ref{Bool}(false)
 
+const record_passes = OncePerProcess{Bool}() do
+    return Base.get_bool_env("JULIA_TEST_RECORD_PASSES", false)
+end
+
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
@@ -1101,7 +1105,11 @@ struct FailFastError <: Exception end
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
 # For a passed result, do not store the result since it uses a lot of memory
-record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
+function record(ts::DefaultTestSet, t::Pass)
+    ts.n_passed += 1
+    record_passes() && push!(ts.results, t)
+    return t
+end
 
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
