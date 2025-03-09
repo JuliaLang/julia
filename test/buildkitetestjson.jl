@@ -87,14 +87,23 @@ end
 # Test paths on runners are often in deep directories, so just make them contain enough information
 # to be able to identify the file. Also convert Windows-style paths to Unix-style paths so tests can
 # be grouped by file.
+const generalize_file_paths_cache = Dict{AbstractString,AbstractString}()
+const norm_build_root_path = normpath(Sys.BUILD_ROOT_PATH)
+const bindir_dir = dirname(Sys.BINDIR)
+const pathsep = Sys.iswindows() ? '\\' : '/'
 function generalize_file_paths(path::AbstractString)
-    pathsep = Sys.iswindows() ? '\\' : '/'
-    path = replace(path,
-        string(Sys.STDLIB, pathsep) => "",
-        string(normpath(Sys.BUILD_ROOT_PATH), pathsep) => "",
-        string(dirname(Sys.BINDIR), pathsep) => ""
-    )
-    return Sys.iswindows() ? replace(path, "\\" => "/") : path
+    return get!(generalize_file_paths_cache, path) do
+        path = replace(path,
+            string(Sys.STDLIB, pathsep) => "",
+            string(norm_build_root_path, pathsep) => "",
+            string(bindir_dir, pathsep) => ""
+        )
+        @static if Sys.iswindows()
+            return replace(path, "\\" => "/")
+        else
+            return path
+        end
+    end
 end
 
 # passed, failed, skipped, or unknown
