@@ -112,6 +112,24 @@ function get_status(result)
     end
 end
 
+# An attempt to reconstruct the test call.
+# Note we can't know if broken or skip was via the broken/skip macros or kwargs.
+function get_test_call_str(result)
+    tt = result.test_type
+    if tt in (:test, :test_nonbool, :test_error, :test_interrupted)
+        "@test $(result.orig_expr)"
+    elseif tt === :test_unbroken
+        "@test_broken $(result.orig_expr)"
+    elseif tt === :skipped
+        "@test_skip $(result.orig_expr)"
+    elseif tt === (:test_throws, :test_throws_wrong, :test_throws_nothing)
+        expected = t.data
+        "@test_throws $expected $(result.orig_expr)"
+    elseif tt === :nontest_error
+        "Non-test error"
+    end
+end
+
 function result_dict(result::Test.Result)
     file, line = if !hasproperty(result, :source) || isnothing(result.source)
         "unknown", 0
@@ -121,19 +139,18 @@ function result_dict(result::Test.Result)
     file = generalize_file_paths(string(file))
 
     status = get_status(result)
-
-    result_show = sprint(show, result; context=:color => false)
-    firstline = split(result_show, '\n')[1]
-    primary_reason = split(firstline, " at ")[1]
+    test_call = get_test_call_str(result)
 
     data = Dict{String,Any}(
-        "name" => "$(primary_reason). Expression: $(result.orig_expr)",
+        "name" => test_call,
         "location" => string(file, ':', line),
         "file_name" => file,
         "result" => status)
 
     job_label = replace(get(ENV, "BUILDKITE_LABEL", "job label not found"), r":\w+:\s*" => "")
     if result isa Test.Fail || result isa Test.Error
+        result_show = sprint(show, result; context=:color => false)
+        firstline = split(result_show, '\n')[1]
         data["failure_reason"] = generalize_file_paths(firstline) * " | $job_label"
         err_trace = split(result_show, "\nStacktrace:\n", limit=2)
         if length(err_trace) == 2
