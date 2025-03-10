@@ -178,8 +178,8 @@ function collect_results!(results::Vector{Dict{String,Any}}, testset::Test.Defau
     common_data["history"]["duration"] = 0.0 # required field
     delete!(common_data["history"], "end_at")
     result_offset = length(results) + 1
-    result_counts = Dict{Tuple{String,String},Int}()
-    get_rid(rdata) = (rdata["location"], rdata["result"])
+    result_counts = Dict{Tuple{String,String,UInt64},Int}()
+    get_rid(rdata) = (rdata["location"], rdata["result"], haskey(rdata, "failure_expanded") ? hash(rdata["failure_expanded"]) : UInt64(0))
     for (i, result) in enumerate(testset.results)
         if result isa Test.Result
             rdata = result_dict(result)
@@ -194,13 +194,10 @@ function collect_results!(results::Vector{Dict{String,Any}}, testset::Test.Defau
             collect_results!(results, result, common_data["scope"])
         end
     end
-    # Modify names to hold `result_counts`
+    # Add a tag for count of each result
     for result in results[result_offset:end]
         rid = get_rid(result)
-        if get(result_counts, rid, 0) > 1
-            result["name"] = replace(result["name"], r"^([^:]):" =>
-                SubstitutionString("\\1 (x$(result_counts[rid])):"))
-        end
+        result["tags"]["count"] = string(get(result_counts, rid, 1))
     end
     return results
 end
