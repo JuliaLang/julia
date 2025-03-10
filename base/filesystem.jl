@@ -319,9 +319,9 @@ function readbytes!(f::File, b::MutableDenseArrayType{UInt8}, nb=length(b))
     uv_error("read", ret)
     return ret
 end
-read(io::File) = read!(io, Base.StringVector(bytesavailable(io)))
+read(io::File) = read!(io, Vector{UInt8}(undef, bytesavailable(io)))
 readavailable(io::File) = read(io)
-read(io::File, nb::Integer) = read!(io, Base.StringVector(min(nb, bytesavailable(io))))
+read(io::File, nb::Integer) = read!(io, Vector{UInt8}(undef, min(nb, bytesavailable(io))))
 
 const SEEK_SET = Int32(0)
 const SEEK_CUR = Int32(1)
