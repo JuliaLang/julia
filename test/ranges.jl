@@ -2752,7 +2752,7 @@ end
     # printing
     @test repr(Base.LogRange(1,2,3)) == "LogRange{Float64}(1.0, 2.0, 3)"  # like 2-arg show
     @test repr("text/plain", Base.LogRange(1,2,3)) == "3-element Base.LogRange{Float64, Base.TwicePrecision{Float64}}:\n 1.0, 1.41421, 2.0"
-    @test repr("text/plain", Base.LogRange(1,2,0)) == "LogRange{Float64}(1.0, 2.0, 0)"  # empty case
+    @test repr("text/plain", Base.LogRange(1,2,0)) == "LogRange{Float64}(1.0, 2.0, 0) (empty range)"  # empty case
 end
 
 @testset "_log_twice64_unchecked" begin

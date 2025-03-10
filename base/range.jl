@@ -618,6 +618,9 @@ function show(io::IO, r::LinRange{T}) where {T}
     print(io, ", ")
     show(io, length(r))
     print(io, ')')
+    if isempty(r)
+        print(io, " (empty range)")
+    end
 end
 
 """
@@ -1104,15 +1107,37 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
     end
 end
 
-show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
-show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
-show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
+function show(io::IO, r::AbstractRange)
+    print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
+    if isempty(r)
+        print(io, " (empty range)")
+    end
+end
+
+function show(io::IO, r::UnitRange)
+    print(io, repr(first(r)), ':', repr(last(r)))
+    if isempty(r)
+        print(io, " (empty range)")
+    end
+end
+
+function show(io::IO, r::OneTo)
+    print(io, "Base.OneTo(", r.stop, ")")
+    if isempty(r)
+        print(io, " (empty range)")
+    end
+end
+
 function show(io::IO, r::StepRangeLen)
     if !iszero(step(r))
         print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
     else
         # ugly temporary printing, to avoid 0:0:0 etc.
         print(io, "StepRangeLen(", repr(first(r)), ", ", repr(step(r)), ", ", repr(length(r)), ")")
+    end
+
+    if isempty(r)
+        print(io, " (empty range)")
     end
 end
 
@@ -1687,6 +1712,9 @@ function show(io::IO, r::LogRange{T}) where {T}
     print(io, ", ")
     show(io, length(r))
     print(io, ')')
+    if isempty(r)
+        print(io, " (empty range)")
+    end
 end
 
 # Implementation detail of @world
