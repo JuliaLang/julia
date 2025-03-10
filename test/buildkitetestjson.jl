@@ -210,7 +210,8 @@ function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
     files = String[]
     # Buildkite is limited to 5000 results per file https://buildkite.com/docs/test-analytics/importing-json
     for (i, chunk) in enumerate(Iterators.partition(data, 5000))
-        res_file = joinpath(dir, "results_$i.json")
+        name = replace(testset.description, r"[^a-zA-Z0-9]" => "_")
+        res_file = joinpath(dir, "results_$(name)_$(i).json")
         open(io -> json_repr(io, chunk), res_file, "w")
         push!(files, res_file)
         @info "Saved $(basename(res_file)) ($(Base.format_bytes(filesize(res_file))))"
