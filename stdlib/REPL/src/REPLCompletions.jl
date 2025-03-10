@@ -936,38 +936,23 @@ const superscripts = Dict(k[3]=>v[1] for (k,v) in latex_symbols if startswith(k,
 const superscript_regex = Regex("^\\\\\\^[" * join(isdigit(k) || isletter(k) ? "$k" : "\\$k" for k in keys(superscripts)) * "]+\\z")
 
 # Aux function to detect whether we're right after a using or import keyword
-function get_import_mode(s::String)
-    # allow all of these to start with leading whitespace and macros like @eval and @eval(
-    # ^\s*(?:@\w+\s*(?:\(\s*)?)?
+function get_import_mode(s::String, pos::Int)
+    # Capture group 1 will be returned, group 2 is where the cursor should be.
+    function match_pos(re)
+        for m in eachmatch(re, s, overlap=true)
+            m !== nothing || continue
+            pos in range(m.offsets[2], length=sizeof(m[2])) || continue
+            return m[1]
+        end
+    end
 
-    # match simple cases like `using |` and `import  |`
-    mod_import_match_simple = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s*$", s)
-    if mod_import_match_simple !== nothing
-        if mod_import_match_simple[1] == "using"
-            return :using_module
-        else
-            return :import_module
-        end
-    end
-    # match module import statements like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`
-    mod_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+(?:\s*,\s*[\w\.]+)*),?\s*$", s)
-    if mod_import_match !== nothing
-        if mod_import_match.captures[1] == "using"
-            return :using_module
-        else
-            return :import_module
-        end
-    end
+    # match module import statements like `using |`, `import |`, `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`
+    m = match_pos(r"\b(using|import)(\s+(?:[\w\.]+(?:\s*,\s*[\w\.]+)*(:?\s*,)?\s*)?)")
+    m !== nothing && return m == "using" ? :using_module : :import_module
+
     # now match explicit name import statements like `using Foo: |` and `import Foo: bar, baz|`
-    name_import_match = match(r"^\s*(?:@\w+\s*(?:\(\s*)?)?\b(using|import)\s+([\w\.]+)\s*:\s*([\w@!\s,]+)$", s)
-    if name_import_match !== nothing
-        if name_import_match[1] == "using"
-            return :using_name
-        else
-            return :import_name
-        end
-    end
-    return nothing
+    m = match_pos(r"\b(using|import)\s+(?:[\w\.]+(?:\s*,\s*[\w\.]+)*)\s*(:\s*(?:[\w@!\s,]+)*)")
+    m !== nothing && return m == "using" ? :using_name : :import_name
 end
 
 function close_path_completion(dir, path, str, pos)
@@ -1459,7 +1444,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     separatorpos = something(findprev(isequal('.'), string, pos), 0)
     namepos = max(startpos, separatorpos+1)
     name = string[namepos:pos]
-    import_mode = get_import_mode(string)
+    import_mode = get_import_mode(string, pos)
     if import_mode === :using_module || import_mode === :import_module
         # Given input lines like `using Foo|`, `import Foo, Bar|` and `using Foo.Bar, Baz, |`:
         # Let's look only for packages and modules we can reach from here
