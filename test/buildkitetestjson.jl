@@ -131,11 +131,13 @@ function get_test_call_str(result)
         "@test_broken $(result.orig_expr)"
     elseif tt === :skipped
         "@test_skip $(result.orig_expr)"
-    elseif tt === (:test_throws, :test_throws_wrong, :test_throws_nothing)
-        expected = t.data
+    elseif tt in (:test_throws, :test_throws_wrong, :test_throws_nothing)
+        expected = result.data
         "@test_throws $expected $(result.orig_expr)"
     elseif tt === :nontest_error
         "Non-test error"
+    else
+        error("Unknown test type $(repr(tt))")
     end
 end
 
