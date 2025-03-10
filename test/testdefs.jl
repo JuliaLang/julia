@@ -2,12 +2,16 @@
 
 using Test, Random
 
+include("buildkitetestjson.jl")
+using .BuildkiteTestJSON
+
 function runtests(name, path, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
     Test.TESTSET_PRINT_ENABLE[] = false
     # remove all hint_handlers, so that errorshow tests are not changed by which packages have been loaded on this worker already
     # packages that call register_error_hint should also call this again, and then re-add any hooks they want to test
     empty!(Base.Experimental._hint_handlers)
+    withenv("JULIA_TEST_RECORD_PASSES" => Base.get_bool_env("CI", false)) do
     try
         if isolate
             # Simple enough to type and random enough so that no one will hard
@@ -83,6 +87,14 @@ function runtests(name, path, isolate=true; seed=nothing)
         #res_and_time_data[1] is the testset
         ts = res_and_time_data[1]
         tc = Test.get_test_counts(ts)
+
+        if Base.get_bool_env("CI", false)
+            @info "Writing test result data to $(@__DIR__)"
+            # Profile.clear()
+            @time "write_testset_json_files" write_testset_json_files(@__DIR__, ts)
+            # Profile.print(IOContext(stdout, :displaysize=>(1000,200)), noisefloor=1.0)
+        end
+
         # simplify our stored data to just contain the counts
         res_and_time_data = (TestSetException(tc.passes+tc.cumulative_passes, tc.fails+tc.cumulative_fails,
                              tc.errors+tc.cumulative_errors, tc.broken+tc.cumulative_broken,
@@ -98,6 +110,7 @@ function runtests(name, path, isolate=true; seed=nothing)
         ex isa TestSetException || rethrow()
         return Any[ex]
     end
+    end # withenv
 end
 
 # looking in . messes things up badly
