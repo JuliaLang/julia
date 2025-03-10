@@ -2,6 +2,9 @@
 
 using Test, Random
 
+include("buildkitetestjson.jl")
+using .BuildkiteTestJSON
+
 function runtests(name, path, isolate=true; seed=nothing)
     old_print_setting = Test.TESTSET_PRINT_ENABLE[]
     old_record_passes = get(ENV, "JULIA_TEST_RECORD_PASSES", nothing)
@@ -85,6 +88,14 @@ function runtests(name, path, isolate=true; seed=nothing)
         #res_and_time_data[1] is the testset
         ts = res_and_time_data[1]
         tc = Test.get_test_counts(ts)
+
+        if Base.get_bool_env("CI", false)
+            @info "Writing test result data to $(@__DIR__)"
+            # Profile.clear()
+            @time "write_testset_json_files" write_testset_json_files(@__DIR__, ts)
+            # Profile.print(IOContext(stdout, :displaysize=>(1000,200)), noisefloor=1.0)
+        end
+
         # simplify our stored data to just contain the counts
         res_and_time_data = (TestSetException(tc.passes+tc.cumulative_passes, tc.fails+tc.cumulative_fails,
                              tc.errors+tc.cumulative_errors, tc.broken+tc.cumulative_broken,
