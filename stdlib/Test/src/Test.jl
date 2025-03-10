@@ -1104,7 +1104,8 @@ struct FailFastError <: Exception end
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
-# For a passed result, do not store the result since it uses a lot of memory
+# For a passed result, do not store the result since it uses a lot of memory, unless
+# `record_passes()` is true. i.e. set env var `JULIA_TEST_RECORD_PASSES=true` before running any testsets
 function record(ts::DefaultTestSet, t::Pass)
     ts.n_passed += 1
     record_passes() && push!(ts.results, t)
