@@ -5824,7 +5824,7 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r)
             unsigned nb = jl_datatype_size(phiType);
             dest = emit_static_alloca(ctx, nb, align);
             phi = cast<AllocaInst>(dest->clone());
-            phi->insertBefore(dest.getIterator());
+            phi->insertBefore(dest->getIterator());
             ctx.builder.CreateMemCpy(phi, align, dest, align, nb, false);
             ctx.builder.CreateLifetimeEnd(dest);
         }
