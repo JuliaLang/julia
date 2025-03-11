@@ -2390,6 +2390,10 @@ function __require(into::Module, mod::Symbol)
         error("`using/import $mod` outside of a Module detected. Importing a package outside of a module \
          is not allowed during package precompilation.")
     end
+    topmod = moduleroot(into)
+    if nameof(topmod) === mod
+        return topmod
+    end
     @lock require_lock begin
     LOADING_CACHE[] = LoadingCache()
     try
