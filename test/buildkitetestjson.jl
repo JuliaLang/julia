@@ -214,7 +214,7 @@ function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
         res_file = joinpath(dir, "results_$(name)_$(i).json")
         open(io -> json_repr(io, chunk), res_file, "w")
         push!(files, res_file)
-        @info "Saved $(basename(res_file)) ($(Base.format_bytes(filesize(res_file))))"
+        @debug "Saved $(basename(res_file)) ($(Base.format_bytes(filesize(res_file))))"
     end
     return files
 end
