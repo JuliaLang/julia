@@ -2178,7 +2178,6 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     # load already in progress for this module on the task
     task, cond = loading
     deps = String[modkey.name]
-    pkgid = modkey
     assert_havelock(cond.lock)
     if debug_loading_deadlocks && current_task() !== task
         waiters = Dict{Task,Pair{Task,PkgId}}() # invert to track waiting tasks => loading tasks
@@ -2198,18 +2197,26 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
         end
     end
     if current_task() === task
-        others = String[modkey.name] # repeat this to emphasize the cycle here
+        push!(deps, modkey.name) # repeat this to emphasize the cycle here
+        others = Set{String}()
         for each in package_locks # list the rest of the packages being loaded too
             if each[2][1] === task
                 other = each[1].name
-                other == modkey.name || other == pkgid.name || push!(others, other)
+                other == modkey.name || push!(others, other)
             end
+        end
+        # remove duplicates from others already in deps
+        for dep in deps
+            delete!(others, dep)
         end
         msg = sprint(deps, others) do io, deps, others
             print(io, "deadlock detected in loading ")
-            join(io, deps, " -> ")
-            print(io, " -> ")
-            join(io, others, " && ")
+            join(io, deps, " using ")
+            if !isempty(others)
+                print(io, " (while loading ")
+                join(io, others, " and ")
+                print(io, ")")
+            end
         end
         throw(ConcurrencyViolationError(msg))
     end
