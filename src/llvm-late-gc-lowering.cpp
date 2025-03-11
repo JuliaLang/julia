@@ -2589,7 +2589,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 auto popGcframe = CallInst::Create(
                     getOrDeclare(jl_intrinsics::popGCFrame),
                     {gcframe});
-                popGcframe->insertBefore(BB.getTerminator().getIterator());
+                popGcframe->insertBefore(BB.getTerminator()->getIterator());
             }
         }
     }
