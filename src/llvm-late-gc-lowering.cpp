@@ -2420,7 +2420,7 @@ void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColor
         "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
     // Reset the slot to NULL.
     Value *Val = ConstantPointerNull::get(T_prjlvalue);
-    new StoreInst(Val, slotAddress, InsertBefore);
+    new StoreInst(Val, slotAddress, InsertBefore->getIterator());
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
@@ -2473,7 +2473,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             getOrDeclare(jl_intrinsics::newGCFrame),
             {ConstantInt::get(T_int32, 0)},
             "gcframe");
-        gcframe->insertBefore(&*F->getEntryBlock().begin());
+        gcframe->insertBefore(F->getEntryBlock().begin());
 
         auto pushGcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::pushGCFrame),
@@ -2589,7 +2589,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 auto popGcframe = CallInst::Create(
                     getOrDeclare(jl_intrinsics::popGCFrame),
                     {gcframe});
-                popGcframe->insertBefore(BB.getTerminator());
+                popGcframe->insertBefore(BB.getTerminator().getIterator());
             }
         }
     }
