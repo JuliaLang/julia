@@ -573,3 +573,12 @@ end
     end
     @test t3 == (1, 2, 0)
 end
+
+@testset "CartesianIndex show" begin
+    c = CartesianIndex()
+    @test sprint(show, c) == "CartesianIndex()"
+    c = CartesianIndex(3)
+    @test sprint(show, c) == "CartesianIndex(3)"
+    c = CartesianIndex(3, 3)
+    @test sprint(show, c) == "CartesianIndex(3, 3)"
+end

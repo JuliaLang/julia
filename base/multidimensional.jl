@@ -91,7 +91,9 @@ module IteratorsMD
     flatten(I::Tuple{Any}) = Tuple(I[1])
     @inline flatten(I::Tuple) = (Tuple(I[1])..., flatten(tail(I))...)
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
-    show(io::IO, i::CartesianIndex) = (print(io, "CartesianIndex"); show(io, i.I))
+    show(io::IO, i::CartesianIndex) = (print(io, "CartesianIndex"); _showtuple_skiptrailingcomma(io, i.I))
+    _showtuple_skiptrailingcomma(io, t) = show(io, t)
+    _showtuple_skiptrailingcomma(io, t::Tuple{Any}) = print(io, "(", t[1], ")")
 
     # length
     length(::CartesianIndex{N}) where {N} = N
