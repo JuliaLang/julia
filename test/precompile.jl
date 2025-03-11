@@ -2230,7 +2230,7 @@ precompile_test_harness("No package module") do load_path
     """)
     @test_throws r"Failed to precompile NoModule" Base.compilecache(Base.identify_package("NoModule"), io, io)
     @test occursin(
-        "NoModule [top-level] did not define the expected module `NoModule`, check for typos in package module name",
+        "package `NoModule` did not define the expected module `NoModule`, check for typos in package module name",
         String(take!(io)))
 
 
@@ -2242,7 +2242,7 @@ precompile_test_harness("No package module") do load_path
     """)
     @test_throws r"Failed to precompile WrongModuleName" Base.compilecache(Base.identify_package("WrongModuleName"), io, io)
     @test occursin(
-        "WrongModuleName [top-level] did not define the expected module `WrongModuleName`, check for typos in package module name",
+        "package `WrongModuleName` did not define the expected module `WrongModuleName`, check for typos in package module name",
         String(take!(io)))
 
 
