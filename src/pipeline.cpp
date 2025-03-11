@@ -490,6 +490,13 @@ static void buildScalarOptimizerPipeline(FunctionPassManager &FPM, PassBuilder *
             FPM.addPass(IRCEPass());
             FPM.addPass(InstCombinePass());
             FPM.addPass(JumpThreadingPass());
+        } else if (O.getSpeedupLevel() >= 1) {
+            JULIA_PASS(FPM.addPass(AllocOptPass()));
+            FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
+            FPM.addPass(MemCpyOptPass());
+            FPM.addPass(SCCPPass());
+            FPM.addPass(InstCombinePass());
+            FPM.addPass(ADCEPass());
         }
         if (O.getSpeedupLevel() >= 3) {
             FPM.addPass(GVNPass());
