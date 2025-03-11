@@ -81,6 +81,8 @@ else
 end
 
 function __init__()
+    libblastrampoline_jll.eager_mode()
+
     # BSD-3-Clause
     global libamd_handle = dlopen(libamd)
     global libamd_path = dlpath(libamd_handle)
