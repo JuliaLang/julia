@@ -2417,7 +2417,7 @@ void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColor
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
     // Reset the slot to NULL.
     Value *Val = ConstantPointerNull::get(T_prjlvalue);
     new StoreInst(Val, slotAddress, InsertBefore);
