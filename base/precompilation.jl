@@ -833,7 +833,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         bar.max = n_total - n_already_precomp
                         # when sizing to the terminal width subtract a little to give some tolerance to resizing the
                         # window between print cycles
-                        termwidth = displaysize(io)[2] - 4
+                        termwidth = (displaysize(io)::Tuple{Int,Int})[2] - 4
                         if !final_loop
                             str = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
                             print(iostr, Base._truncate_at_width_or_chars(true, str, termwidth), "\n")
