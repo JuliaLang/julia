@@ -173,7 +173,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             (void)LI;
             break;
         }
-        else if (auto II = dyn_cast<IntrinsicInst>(CurrentV)) {
+        else if (auto *II = dyn_cast<IntrinsicInst>(CurrentV)) {
             if (II->getIntrinsicID() == Intrinsic::masked_load ||
                 II->getIntrinsicID() == Intrinsic::masked_gather) {
                 // Some intrinsics behave like LoadInst followed by a SelectInst
@@ -232,6 +232,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 CurrentV = CI->getArgOperand(0);
                 continue;
             }
+            // Unkown Call
             break;
         }
         else {
@@ -551,12 +552,14 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
         Numbers = NumberAll(S, IEI->getOperand(0));
         int ElNumber = Number(S, IEI->getOperand(1));
         Numbers[idx] = ElNumber;
-    } else if (dyn_cast<IntrinsicInst>(CurrentV) != nullptr && dyn_cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::vector_insert) {
-        auto *VII = cast<IntrinsicInst>(CurrentV);
+    // C++17
+    // } else if (auto *II = dyn_cast<IntrinsicInst>(CurrentV); II && II->getIntrinsicID() == Intrinsic::vector_insert) {
+    } else if (isa<IntrinsicInst>(CurrentV) && cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::vector_insert) {
+        auto *II = dyn_cast<IntrinsicInst>(CurrentV);
         // Vector insert is a bit like a shuffle so use the same approach
-        SmallVector<int, 0> Numbers1 = NumberAll(S, VII->getOperand(0));
-        SmallVector<int, 0> Numbers2 = NumberAll(S, VII->getOperand(1));
-        unsigned first_idx = cast<ConstantInt>(VII->getOperand(2))->getZExtValue();
+        SmallVector<int, 0> Numbers1 = NumberAll(S, II->getOperand(0));
+        SmallVector<int, 0> Numbers2 = NumberAll(S, II->getOperand(1));
+        unsigned first_idx = cast<ConstantInt>(II->getOperand(2))->getZExtValue();
         for (unsigned i = 0; i < Numbers1.size(); ++i) {
             if (i < first_idx)
                 Numbers.push_back(Numbers1[i]);
