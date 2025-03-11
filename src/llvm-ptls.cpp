@@ -179,7 +179,7 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             adoptFunc->copyMetadata(pgcstack_getter, 0);
         }
         adopt->setCalledFunction(adoptFunc);
-        adopt->insertBefore(slowTerm);
+        adopt->insertBefore(slowTerm->getIterator());
         phi->addIncoming(adopt, slowTerm->getParent());
         // emit fast branch code
         builder.SetInsertPoint(fastTerm->getParent());
