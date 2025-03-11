@@ -3103,11 +3103,7 @@ static jl_cgval_t emit_getfield_knownidx(jl_codectx_t &ctx, const jl_cgval_t &st
     else if (strct.ispointer()) {
         auto tbaa = best_field_tbaa(ctx, strct, jt, idx, byte_offset);
         Value *staddr = data_pointer(ctx, strct);
-        Value *addr;
-        if (jl_is_vecelement_type((jl_value_t*)jt) || byte_offset == 0)
-            addr = staddr; // VecElement types are unwrapped in LLVM.
-        else
-            addr = emit_ptrgep(ctx, staddr, byte_offset);
+        Value *addr = (byte_offset == 0 ? staddr : emit_ptrgep(ctx, staddr, byte_offset));
         if (addr != staddr)
             setNameWithField(ctx.emission_context, addr, get_objname, jt, idx, Twine("_ptr"));
         if (jl_field_isptr(jt, idx)) {
@@ -3571,7 +3567,7 @@ static void union_alloca_type(jl_uniontype_t *ut,
             [&](unsigned idx, jl_datatype_t *jt) {
                 if (!jl_is_datatype_singleton(jt)) {
                     size_t nb1 = jl_datatype_size(jt);
-                    size_t align1 = jl_datatype_align(jt);
+                    size_t align1 = julia_alignment((jl_value_t*)jt);
                     if (nb1 > nbytes)
                         nbytes = nb1;
                     if (align1 > align)
@@ -4133,10 +4129,11 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 
             // choose whether we should perform the initialization with the struct as a IR value
             // or instead initialize the stack buffer with stores (the later is nearly always better)
+            // although we do the former if it is a vector or could be a vector element
             auto tracked = split_value_size(sty);
             assert(CountTrackedPointers(lt).count == tracked.second);
             bool init_as_value = false;
-            if (lt->isVectorTy() || jl_is_vecelement_type(ty)) { // maybe also check the size ?
+            if (lt->isVectorTy() || jl_special_vector_alignment(1, ty) != 0) {
                 init_as_value = true;
             }
 
@@ -4343,7 +4340,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
                 if (strct) {
                     jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack);
                     promotion_point = ai.decorateInst(ctx.builder.CreateMemSet(strct, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
-                                                                jl_datatype_size(ty), MaybeAlign(jl_datatype_align(ty))));
+                                                                jl_datatype_size(ty), Align(julia_alignment(ty))));
                 }
                 ctx.builder.restoreIP(savedIP);
             }
