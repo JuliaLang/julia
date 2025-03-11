@@ -2360,4 +2360,19 @@ precompile_test_harness("MainImportDisallow") do load_path
     end
 end
 
+precompile_test_harness("Package top-level load itself") do load_path
+    write(joinpath(load_path, "UsingSelf.jl"),
+        """
+        __precompile__(false)
+        module UsingSelf
+        using UsingSelf
+        x = 3
+        end
+          """)
+    @eval using UsingSelf
+    invokelatest() do
+        @test UsingSelf.x == 3
+    end
+end
+
 finish_precompile_test!()
