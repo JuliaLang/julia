@@ -2927,7 +2927,7 @@ keymap_data(ms::MIState, m::ModalInterface) = keymap_data(state(ms), mode(ms))
 
 function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_state(term, prompt))
     Base.reseteof(term)
-    t1 = Threads.@spawn :interactive while true
+    t1 = @async while true
         wait(s.async_channel)
         status = @lock s.line_modify_lock begin
             fcn = take!(s.async_channel)
@@ -2942,7 +2942,7 @@ function prompt!(term::TextTerminal, prompt::ModalInterface, s::MIState = init_s
         old_state = mode(s)
         # spawn this because the main repl task is sticky (due to use of @async and _wait2)
         # and we want to not block typing when the repl task thread is busy
-        t2 = Threads.@spawn :interactive while true
+        t2 = @async while true
             eof(term) || peek(term) # wait before locking but don't consume
             @lock s.line_modify_lock begin
                 s.n_keys_pressed += 1
