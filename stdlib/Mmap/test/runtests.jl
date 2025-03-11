@@ -47,6 +47,7 @@ close(s)
 @test_throws ErrorException mmap(file, Vector{Ref}) # must be bit-type
 GC.gc(); GC.gc()
 
+file = tempname() # new name to reduce chance of issues due slow windows fs
 s = open(f->f,file,"w")
 @test mmap(file) == Vector{UInt8}() # requested len=0 on empty file
 @test mmap(file,Vector{UInt8},0) == Vector{UInt8}()
