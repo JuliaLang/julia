@@ -334,8 +334,7 @@ julia> typeof(x)
 Float64
 ```
 
-Half-precision floating-point numbers are also supported ([`Float16`](@ref)), but they are
-implemented in software and use [`Float32`](@ref) for calculations.
+Half-precision floating-point numbers are also supported ([`Float16`](@ref)) on all platforms, with native instructions used on hardware which supports this number format, otherwise operations are implemented in software and use [`Float32`](@ref) for intermediate calculations.
 
 ```jldoctest
 julia> sizeof(Float16(4.))
