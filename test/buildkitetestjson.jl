@@ -94,7 +94,7 @@ const pathsep = Sys.iswindows() ? '\\' : '/'
 function generalize_file_paths(path::AbstractString)
     return get!(generalize_file_paths_cache, path) do
         path = replace(path,
-            string(Sys.STDLIB, pathsep) => "",
+            Sys.STDLIB => "stdlib",
             string(norm_build_root_path, pathsep) => "",
             string(bindir_dir, pathsep) => ""
         )
