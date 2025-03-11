@@ -173,54 +173,57 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             (void)LI;
             break;
         }
-        else if (dyn_cast<IntrinsicInst>(CurrentV) != nullptr &&
-                (cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::masked_load ||
-                cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::masked_gather)) {
-            // Some intrinsics behave like LoadInst followed by a SelectInst
-            // This should never happen in a derived addrspace (since those cannot be stored to memory)
-            // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
-            auto II = dyn_cast<IntrinsicInst>(CurrentV);
-            if (auto VTy = dyn_cast<VectorType>(II->getType())) {
-                if (hasLoadedTy(VTy->getElementType())) {
-                    Value *Mask = II->getOperand(2);
-                    Value *Passthrough = II->getOperand(3);
-                    if (!isa<Constant>(Mask) || !cast<Constant>(Mask)->isAllOnesValue()) {
-                        assert(isa<UndefValue>(Passthrough) && "unimplemented");
-                        (void)Passthrough;
-                    }
-                    CurrentV = II->getOperand(0);
-                    if (II->getIntrinsicID() == Intrinsic::masked_load) {
-                        fld_idx = -1;
-                        if (!isSpecialPtr(CurrentV->getType())) {
-                            CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
+        else if (auto II = dyn_cast<IntrinsicInst>(CurrentV)) {
+            if (II->getIntrinsicID() == Intrinsic::masked_load ||
+                II->getIntrinsicID() == Intrinsic::masked_gather) {
+                // Some intrinsics behave like LoadInst followed by a SelectInst
+                // This should never happen in a derived addrspace (since those cannot be stored to memory)
+                // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
+                if (auto VTy = dyn_cast<VectorType>(II->getType())) {
+                    if (hasLoadedTy(VTy->getElementType())) {
+                        Value *Mask = II->getOperand(2);
+                        Value *Passthrough = II->getOperand(3);
+                        if (!isa<Constant>(Mask) || !cast<Constant>(Mask)->isAllOnesValue()) {
+                            assert(isa<UndefValue>(Passthrough) && "unimplemented");
+                            (void)Passthrough;
                         }
-                    } else {
-                        if (auto VTy2 = dyn_cast<VectorType>(CurrentV->getType())) {
-                            if (!isSpecialPtr(VTy2->getElementType())) {
+                        CurrentV = II->getOperand(0);
+                        if (II->getIntrinsicID() == Intrinsic::masked_load) {
+                            fld_idx = -1;
+                            if (!isSpecialPtr(CurrentV->getType())) {
                                 CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
-                                fld_idx = -1;
+                            }
+                        } else {
+                            if (auto VTy2 = dyn_cast<VectorType>(CurrentV->getType())) {
+                                if (!isSpecialPtr(VTy2->getElementType())) {
+                                    CurrentV = ConstantPointerNull::get(PointerType::get(V->getContext(), 0));
+                                    fld_idx = -1;
+                                }
                             }
                         }
+                        continue;
                     }
-                    continue;
                 }
+                // In general a load terminates a walk
+                break;
             }
-            // In general a load terminates a walk
-            break;
-        }
-        else if (dyn_cast<IntrinsicInst>(CurrentV) != nullptr && cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::vector_extract) {
-            auto II = dyn_cast<IntrinsicInst>(CurrentV);
-            if (auto VTy = dyn_cast<VectorType>(II->getType())) {
-                if (hasLoadedTy(VTy->getElementType())) {
-                    Value *Idx = II->getOperand(1);
-                    if (!isa<ConstantInt>(Idx)) {
-                        assert(isa<UndefValue>(Idx) && "unimplemented");
-                        (void)Idx;
+            else if (II->getIntrinsicID() == Intrinsic::vector_extract) {
+                if (auto VTy = dyn_cast<VectorType>(II->getType())) {
+                    if (hasLoadedTy(VTy->getElementType())) {
+                        Value *Idx = II->getOperand(1);
+                        if (!isa<ConstantInt>(Idx)) {
+                            assert(isa<UndefValue>(Idx) && "unimplemented");
+                            (void)Idx;
+                        }
+                        CurrentV = II->getOperand(0);
+                        fld_idx = -1;
+                        continue;
                     }
-                    CurrentV = II->getOperand(0);
-                    fld_idx = -1;
-                    continue;
                 }
+                break;
+            } else {
+                // Unknown Intrinsic
+                break;
             }
         }
         else if (auto CI = dyn_cast<CallInst>(CurrentV)) {
@@ -232,6 +235,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             break;
         }
         else {
+            // Unknown Instruction
             break;
         }
     }
