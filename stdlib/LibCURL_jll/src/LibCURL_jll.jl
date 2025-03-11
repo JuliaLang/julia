@@ -30,6 +30,7 @@ else
 end
 
 function __init__()
+    Zlib_jll.eager_mode()
     global libcurl_handle = dlopen(libcurl)
     global libcurl_path = dlpath(libcurl_handle)
     global artifact_dir = dirname(Sys.BINDIR)
