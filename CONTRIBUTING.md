@@ -4,11 +4,32 @@ Hi! If you are new to the Julia community: welcome, and thanks for trying Julia.
 
 If you are already familiar with Julia itself, this blog post by Katharine Hyatt on [Making your first Julia pull request](https://kshyatt.github.io/post/firstjuliapr/) is a great way to get started.
 
+
+# Table of Contents
+
+1. [Learning Julia](#learning-julia)
+2. [Filing an issue](#filing-an-issue)
+    - [Before filing an issue](#before-filing-an-issue)
+    - [How to file a bug report](#how-to-file-a-bug-report)
+3. [Submitting contributions](#submitting-contributions)
+    - [Contributor Checklist](#contributor-checklist)
+    - [Writing tests](#writing-tests)
+    - [Improving documentation](#improving-documentation)
+    - [Contributing to core functionality or base libraries](#contributing-to-core-functionality-or-base-libraries)
+    - [Contributing to the standard library](#contributing-to-the-standard-library)
+    - [Contributing to patch releases](#contributing-to-patch-releases)
+    - [Code Formatting Guidelines](#code-formatting-guidelines)
+    - [Git Recommendations For Pull Requests](#git-recommendations-for-pull-requests)
+4. [Resources](#resources)
+
+
 ## Learning Julia
 
 [The learning page](https://julialang.org/learning) has a great list of resources for new and experienced users alike.
 
-## Before filing an issue
+## Filing an issue
+
+### Before filing an issue
 
 - Reporting a potential bug? Please read the "[How to file a bug report](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#how-to-file-a-bug-report)" section to make sure that all necessary information is included.
 
@@ -16,25 +37,7 @@ If you are already familiar with Julia itself, this blog post by Katharine Hyatt
 
 - Library feature requests are generally not accepted on this issue tracker. New libraries should be developed as [packages](https://julialang.github.io/Pkg.jl/v1/creating-packages/). Discuss ideas for libraries at the [Julia Discourse forum](https://discourse.julialang.org). Doing so will often lead to pointers to existing projects and bring together collaborators with common interests.
 
-## Contributor Checklist
-
-* Create a [GitHub account](https://github.com/signup/free).
-
-* [Fork Julia](https://github.com/JuliaLang/julia/fork).
-
-* Build the software and libraries (the first time takes a while, but it's fast after that). Detailed build instructions are in the [README](https://github.com/JuliaLang/julia/tree/master/README.md). Julia depends on several external packages; most are automatically downloaded and installed, but are less frequently updated than Julia itself.
-
-* Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keep the repository up-to-date and rebase work-in-progress frequently to make merges simpler.
-
-* Learn to use [git](https://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](https://try.GitHub.io/levels/1/challenges/1).
-
-* Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
-
-* For more detailed tips, read the [submission guide](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#submitting-contributions) below.
-
-* Relax and have fun!
-
-## How to file a bug report
+### How to file a bug report
 
 A useful bug report filed as a GitHub issue provides information about how to reproduce the error.
 
@@ -55,6 +58,24 @@ A useful bug report filed as a GitHub issue provides information about how to re
 4. When pasting code blocks or output, put triple backquotes (\`\`\`) around the text so GitHub will format it nicely. Code statements should be surrounded by single backquotes (\`). Be aware that the `@` sign tags users on GitHub, so references to macros should always be in single backquotes. See [GitHub's guide on Markdown](https://guides.github.com/features/mastering-markdown) for more formatting tricks.
 
 ## Submitting contributions
+
+### Contributor Checklist
+
+* Create a [GitHub account](https://github.com/signup/free).
+
+* [Fork Julia](https://github.com/JuliaLang/julia/fork).
+
+* Build the software and libraries (the first time takes a while, but it's fast after that). Detailed build instructions are in the [README](https://github.com/JuliaLang/julia/tree/master/README.md). Julia depends on several external packages; most are automatically downloaded and installed, but are less frequently updated than Julia itself.
+
+* Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keep the repository up-to-date and rebase work-in-progress frequently to make merges simpler.
+
+* Learn to use [git](https://git-scm.com), the version control system used by GitHub and the Julia project. Try a tutorial such as the one [provided by GitHub](https://try.GitHub.io/levels/1/challenges/1).
+
+* Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
+
+* For more detailed tips, read the [submission guide](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md#submitting-contributions) below.
+
+* Relax and have fun!
 
 ### Writing tests
 

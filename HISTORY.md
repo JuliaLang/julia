@@ -25,6 +25,7 @@ New language features
 * Support for Unicode 16 ([#56925]).
 * `Threads.@spawn` now takes a `:samepool` argument to specify the same threadpool as the caller.
   `Threads.@spawn :samepool foo()` which is shorthand for `Threads.@spawn Threads.threadpool() foo()` ([#57109]).
+* The `@ccall` macro can now take a `gc_safe` argument, that if set to true allows the runtime to run garbage collection concurrently to the `ccall` ([#49933]).
 
 Language changes
 ----------------

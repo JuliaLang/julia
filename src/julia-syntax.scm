@@ -194,10 +194,14 @@
   (cond ((atom? e) (list (check-sym e) #f #f))
         ((eq? (car e) 'var-bounds)  (cdr e))
         ((and (eq? (car e) 'comparison) (length= e 6))
-         (cons (check-sym (cadddr e))
-               (cond ((and (eq? (caddr e) '|<:|) (eq? (caddr (cddr e)) '|<:|))
-                      (list (cadr e) (last e)))
-                     (else (error "invalid bounds in \"where\"")))))
+         (let* ((lhs (list-ref e 1))
+                (rel (list-ref e 2))
+                (t (check-sym (list-ref e 3)))
+                (rel-same (eq? rel (list-ref e 4)))
+                (rhs (list-ref e 5)))
+           (cond ((and rel-same (eq? rel '|<:|)) (list t lhs rhs))
+                 ((and rel-same (eq? rel '|>:|)) (list t rhs lhs))
+                 (else (error "invalid bounds in \"where\"")))))
         ((eq? (car e) '|<:|)
          (list (check-sym (cadr e)) #f (caddr e)))
         ((eq? (car e) '|>:|)
@@ -1181,7 +1185,9 @@
     (cond ((and (length= e 2) (or (symbol? name) (globalref? name)))
            (if (not (valid-name? name))
                (error (string "invalid function name \"" name "\"")))
-           `(method ,name))
+           (if (globalref? name)
+             `(block (global ,name) (method ,name))
+             `(block (global-if-global ,name) (method ,name))))
           ((not (pair? name))  e)
           ((eq? (car name) 'call)
            (let* ((raw-typevars (or where '()))
@@ -2691,8 +2697,7 @@
                           (if (null? run) '()
                               (list `(call (core tuple) ,.(reverse run))))
                           (let ((x (car a)))
-                            (if (and (length= x 2)
-                                     (eq? (car x) '...))
+                            (if (vararg? x)
                                 (if (null? run)
                                     (list* (cadr x)
                                            (tuple-wrap (cdr a) '()))
@@ -2814,7 +2819,10 @@
    '.>>>=   lower-update-op
 
    '|...|
-   (lambda (e) (error "\"...\" expression outside call"))
+   (lambda (e)
+     (if (not (length= e 2))
+         (error "wrong number of expressions following \"...\""))
+     (error "\"...\" expression outside call"))
 
    '$
    (lambda (e) (error "\"$\" expression outside quote"))
@@ -3125,6 +3133,10 @@
            (if (eq? (var-kind (cadr e) scope) 'local)
                (if (length= e 2) (null) `(= ,@(cdr e)))
                `(const ,@(cdr e))))
+        ((eq? (car e) 'global-if-global)
+           (if (eq? (var-kind (cadr e) scope) 'local)
+               '(null)
+               `(global ,@(cdr e))))
         ((memq (car e) '(local local-def))
          (check-valid-name (cadr e))
          ;; remove local decls
@@ -3757,7 +3769,7 @@ f(x) = yt(x)
   (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
-         global globalref assign-const-if-global isglobal thismodule
+         global globalref global-if-global assign-const-if-global isglobal thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
          error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
 
@@ -4322,11 +4334,10 @@ f(x) = yt(x)
 (define (linearize e)
   (cond ((or (not (pair? e)) (quoted? e)) e)
         ((eq? (car e) 'lambda)
-         (set-car! (cdddr e) (compile-body (cadddr e) (append (car (caddr e))
-                                                              (cadr (caddr e)))
-                                           e)))
-        (else (for-each linearize (cdr e))))
-  e)
+         (list-set e 3 (compile-body (cadddr e)
+                                     (append (car (caddr e))
+                                             (cadr (caddr e))) e)))
+        (else (cons (car e) (map linearize (cdr e))))))
 
 (define (valid-ir-argument? e)
   (or (simple-atom? e)
