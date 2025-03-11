@@ -574,7 +574,7 @@ end
     @test t3 == (1, 2, 0)
 end
 
-@test "Tuple conversions from CartesianIndices" begin
+@testset "Tuple conversions from CartesianIndices" begin
     @test convert(Tuple{}, CartesianIndices(())) === ()
     @testset for t in ((1:4,), (1:4, 3:5))
         st = map(x -> convert(StepRange, x), t)

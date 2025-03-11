@@ -329,7 +329,7 @@ module IteratorsMD
     promote_rule(::Type{CartesianIndices{N,R1}}, ::Type{CartesianIndices{N,R2}}) where {N,R1,R2} =
         CartesianIndices{N,Base.indices_promote_type(R1,R2)}
 
-    convert(::Type{T}, R::CartesianIndices) where {T<:Tuple{Vararg{AbstractRange}}} = convert(T, R.indices)
+    convert(::Type{T}, R::CartesianIndices) where {T<:Tuple{Vararg{OrdinalRange}}} = convert(T, R.indices)
 
     convert(::Type{CartesianIndices{N,R}}, inds::CartesianIndices{N}) where {N,R} =
         CartesianIndices(convert(R, inds.indices))::CartesianIndices{N,R}
