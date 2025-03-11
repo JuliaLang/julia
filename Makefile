@@ -1,5 +1,6 @@
 JULIAHOME := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 $(shell $(JULIAHOME)/contrib/download_cmake.sh > /dev/null)
+USE_BINARYBUILDER_LLVM=0
 include $(JULIAHOME)/Make.inc
 # import LLVM_SHARED_LIB_NAME
 include $(JULIAHOME)/deps/llvm-ver.make
