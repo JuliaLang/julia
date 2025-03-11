@@ -1299,6 +1299,8 @@ end
     @test convert(StepRange, 0:5) === 0:1:5
     @test convert(StepRange{Int128,Int128}, 0.:5) === Int128(0):Int128(1):Int128(5)
 
+    @test StepRange(1:1:4) === 1:1:4
+
     @test_throws ArgumentError StepRange(1.1,1,5.1)
 
     @test promote(0f0:inv(3f0):1f0, 0.:2.:5.) === (0:1/3:1, 0.:2.:5.)

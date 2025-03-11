@@ -1326,8 +1326,8 @@ promote_rule(a::Type{StepRange{T1a,T1b}}, ::Type{UR}) where {T1a,T1b,UR<:Abstrac
     promote_rule(a, StepRange{eltype(UR), eltype(UR)})
 StepRange{T1,T2}(r::AbstractRange) where {T1,T2} =
     StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
-StepRange(r::AbstractUnitRange{T}) where {T} =
-    StepRange{T,T}(first(r), step(r), last(r))
+StepRange(r::OrdinalRange{T,S}) where {T,S} =
+    StepRange{T,S}(first(r), step(r), last(r))
 (StepRange{T1,T2} where T1)(r::AbstractRange) where {T2} = StepRange{eltype(r),T2}(r)
 StepRange(r::StepRangeLen) = StepRange{eltype(r)}(r)
 StepRange{T}(r::StepRangeLen{<:Any,<:Any,S}) where {T,S} = StepRange{T,S}(r)
