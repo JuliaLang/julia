@@ -30,10 +30,6 @@
 #   to make room for more data, without replacing or resizing data.
 #   This can be done only if the buffer is not seekable
 
-# Internal trait object used to access unsafe constructors.
-struct UnsafeMethod end
-const unsafe_method = UnsafeMethod()
-
 mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # T should support: getindex, setindex!, length, copyto!, similar, and (optionally) resize!
     data::T
@@ -87,8 +83,8 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     mark::Int
 
     # Unsafe constructor which does not do any checking
-    function GenericIOBuffer{T}(
-            ::UnsafeMethod,
+    global function _new_generic_iobuffer(
+            ::Type{T},
             data::T,
             readable::Bool,
             writable::Bool,
@@ -115,7 +111,7 @@ function GenericIOBuffer{T}(
     if mz < len
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end
-    return GenericIOBuffer{T}(unsafe_method, data, readable, writable, seekable, append, mz)
+    return _new_generic_iobuffer(T, data, readable, writable, seekable, append, mz)
 end
 
 const IOBuffer = GenericIOBuffer{Memory{UInt8}}
@@ -138,7 +134,7 @@ function GenericIOBuffer(data::Vector{UInt8}, readable::Bool, writable::Bool, se
     if mz < length(data)
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end
-    buf = GenericIOBuffer{Memory{UInt8}}(unsafe_method, mem, readable, writable, seekable, append, mz)
+    buf = _new_generic_iobuffer(Memory{UInt8}, mem, readable, writable, seekable, append, mz)
     buf.size = length(data) + offset
     buf.ptr = offset + 1
     buf.offset = offset
@@ -215,8 +211,7 @@ function IOBuffer(
         append::Union{Bool,Nothing}=nothing,
         truncate::Union{Bool,Nothing}=nothing,
         maxsize::Integer=typemax(Int),
-        sizehint::Union{Integer,Nothing}=nothing,
-    )
+        sizehint::Union{Integer,Nothing}=nothing)
     if sizehint !== nothing
         sizehint!(data, sizehint)
     end
@@ -249,7 +244,7 @@ function IOBuffer(;
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
     # A common usecase of IOBuffer is to incrementally construct strings. By using StringMemory
     # as the default storage, we can turn the result into a string without copying.
-    buf = GenericIOBuffer{Memory{UInt8}}(unsafe_method, StringMemory(size), flags.read, flags.write, true, flags.append, mz)
+    buf = _new_generic_iobuffer(Memory{UInt8}, StringMemory(size), flags.read, flags.write, true, flags.append, mz)
     buf.size = 0
     return buf
 end
@@ -276,7 +271,7 @@ _similar_data(b::IOBuffer, len::Int) = StringMemory(len)
 # Note: Copying may change the value of the position (and mark) for un-seekable streams.
 # However, these values are not stable anyway due to compaction.
 
-function copy(b::GenericIOBuffer)
+function copy(b::GenericIOBuffer{T}) where T
     if b.reinit
         # If buffer is used up, allocate a new size-zero buffer
         # Reinit implies wriable, and that ptr, size, offset and mark are already the default values
@@ -304,7 +299,7 @@ function copy(b::GenericIOBuffer)
         # a shallow copy of the IOBuffer struct.
         # Use unsafe method because we want to allow b.maxsize to be larger than data, in case that
         # is the case for `b`.
-        ret = typeof(b)(unsafe_method, b.data, b.readable, b.writable, b.seekable, b.append, b.maxsize)
+        ret = _new_generic_iobuffer(T, b.data, b.readable, b.writable, b.seekable, b.append, b.maxsize)
         ret.offset = b.offset
         ret.ptr = b.ptr
         ret.mark = b.mark
