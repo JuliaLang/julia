@@ -93,7 +93,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
             maxsize::Int,
         ) where T<:AbstractVector{UInt8}
         len = Int(length(data))::Int
-        return new(data, false, readable, writable, seekable, append, len, maxsize, 1, 0, -1)
+        return new{T}(data, false, readable, writable, seekable, append, len, maxsize, 1, 0, -1)
     end
 end
 
@@ -297,8 +297,8 @@ function copy(b::GenericIOBuffer{T}) where T
     else
         # When the buffer is just readable, they can share the same data, so we just make
         # a shallow copy of the IOBuffer struct.
-        # Use unsafe method because we want to allow b.maxsize to be larger than data, in case that
-        # is the case for `b`.
+        # Use internal constructor because we want to allow b.maxsize to be larger than data,
+        # in case that is the case for `b`.
         ret = _new_generic_iobuffer(T, b.data, b.readable, b.writable, b.seekable, b.append, b.maxsize)
         ret.offset = b.offset
         ret.ptr = b.ptr
