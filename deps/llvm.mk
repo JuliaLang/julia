@@ -60,7 +60,10 @@ ifeq ($(BUILD_LLD), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lld
 endif
 
-LLVM_ENABLE_RUNTIMES := $(patsubst ;%,%,$(LLVM_ENABLE_RUNTIMES)) # Remove ; if it's the first character
+# Remove ; if it's the first character
+ifneq ($(LLVM_ENABLE_RUNTIMES),)
+	LLVM_ENABLE_RUNTIMES := $(patsubst ;%,%,$(LLVM_ENABLE_RUNTIMES))
+endif
 
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
