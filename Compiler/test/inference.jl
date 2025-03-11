@@ -6382,4 +6382,15 @@ g57292(xs::String...) = getfield(("abc",), 1, :not_atomic, xs...)
 @test Base.infer_return_type(f57292) == String
 @test Base.infer_return_type(g57292) == String
 
+mutable struct Issue57673{C<:Union{Int,Float64}}
+    c::C
+    d
+    Issue57673(c::C, d) where C = new{C}(c, d)
+    Issue57673(c::C) where C = new{C}(c)
+end
+@test Base.infer_return_type((Issue57673,)) do a::Issue57673{<:String}
+    setfield!(a, :d, nothing)
+    a
+end === Union{} # `setfield!` tfunc should be able to figure out this object is runtime invalid
+
 end # module inference

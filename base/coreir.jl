@@ -67,14 +67,27 @@ end
 
 # Legacy constructor
 function Core.PartialStruct(@nospecialize(typ), fields::Vector{Any})
-    return Core.PartialStruct(typ, partialstruct_init_undefs(typ, fields), fields)
+    undefs = partialstruct_init_undefs(typ, fields)
+    undefs === nothing && error("This object never exists at runtime")
+    return Core.PartialStruct(typ, undefs, fields)
 end
 
-partialstruct_init_undefs(@nospecialize(typ), fields::Vector{Any}) = partialstruct_init_undefs(typ, length(fields))
-function partialstruct_init_undefs(@nospecialize(typ), n::Int)
-    undefs = Union{Nothing,Bool}[nothing for _ in 1:n]
-    for i in 1:min(datatype_min_ninitialized(typ), n)
+function partialstruct_init_undefs(@nospecialize(typ), fields::Vector{Any})
+    nf = length(fields)
+    minf = datatype_min_ninitialized(typ)
+    for i = 1:minf
+        if fields[i] === Union{}
+            return nothing # disallow runtime-invalid `PartialStruct`
+        end
+    end
+    undefs = Union{Nothing,Bool}[nothing for _ in 1:nf]
+    for i in 1:minf
         undefs[i] = false
+    end
+    for i = minf+1:nf
+        if fields[i] === Union{}
+            undefs[i] = true
+        end
     end
     return undefs
 end
