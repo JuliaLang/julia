@@ -573,3 +573,27 @@ end
     end
     @test t3 == (1, 2, 0)
 end
+
+@test "Tuple conversions from CartesianIndices" begin
+    @test convert(Tuple{}, CartesianIndices(())) === ()
+    @testset for t in ((1:4,), (1:4, 3:5))
+        st = map(x -> convert(StepRange, x), t)
+        C = CartesianIndices(t)
+        @test convert(NTuple{length(t),UnitRange{Int}}, C) == t
+        @test convert(NTuple{length(t),AbstractUnitRange{Int}}, C) == t
+        @test convert(NTuple{length(t),UnitRange}, C) == t
+        @test convert(NTuple{length(t),AbstractUnitRange}, C) == t
+        @test convert(Tuple{Vararg{UnitRange{Int}}}, C) == t
+        @test convert(Tuple{Vararg{AbstractUnitRange{Int}}}, C) == t
+        @test convert(Tuple{Vararg{UnitRange}}, C) == t
+        @test convert(Tuple{Vararg{AbstractUnitRange}}, C) == t
+        @test convert(NTuple{length(t),StepRange{Int,Int}}, C) == st
+        @test convert(NTuple{length(t),OrdinalRange{Int,Int}}, C) == t
+    end
+    @testset for t in ((3:2:5,), (1:1:4, 3:5), (1:1:4, 3:1:5))
+        st = map(x -> convert(StepRange, x), t)
+        C = CartesianIndices(t)
+        @test convert(NTuple{length(t),StepRange{Int,Int}}, C) == st
+        @test convert(NTuple{length(t),OrdinalRange{Int,Int}}, C) == t
+    end
+end
