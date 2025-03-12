@@ -76,9 +76,9 @@ ifeq ($(JULIACODEGEN),LLVM)
 GC_CODEGEN_SRCS := llvm-final-gc-lowering llvm-late-gc-lowering llvm-gc-invariant-verifier
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 FLAGS_COMMON += -I$(MMTK_API_INC)
-GC_CODEGEN_SRCS += llvm-late-gc-lowering-mmtk
+GC_CODEGEN_SRCS += llvm-final-gc-lowering-mmtk
 else
-GC_CODEGEN_SRCS += llvm-late-gc-lowering-stock
+GC_CODEGEN_SRCS += llvm-final-gc-lowering-stock
 endif
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces \
