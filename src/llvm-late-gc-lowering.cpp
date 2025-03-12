@@ -1898,30 +1898,6 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     return {Colors, PreAssignedColors};
 }
 
-// Size of T is assumed to be `sizeof(void*)`
-Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
-{
-    assert(T == T_size || isa<PointerType>(T));
-    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
-}
-
-Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
-{
-    auto addr = EmitTagPtr(builder, T_size, T_size, V);
-    auto &M = *builder.GetInsertBlock()->getModule();
-    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0), V->getName() + ".tag");
-    load->setOrdering(AtomicOrdering::Unordered);
-    load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
-    MDBuilder MDB(load->getContext());
-    auto *NullInt = ConstantInt::get(T_size, 0);
-    // We can be sure that the tag is at least 16 (1<<4)
-    // Hopefully this is enough to convince LLVM that the value is still not NULL
-    // after masking off the tag bits
-    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 16));
-    load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
-    return load;
-}
-
 static inline void UpdatePtrNumbering(Value *From, Value *To, State *S)
 {
     if (!S)
@@ -1962,7 +1938,6 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
 #endif
         );
     }
-    SmallVector<CallInst*, 0> write_barriers;
     for (BasicBlock &BB : F) {
         for (auto it = BB.begin(); it != BB.end();) {
             Instruction *I = &*it;
@@ -2110,21 +2085,13 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
-                auto tag = EmitLoadTag(builder, T_size, CI->getArgOperand(0));
+                auto tag = EmitLoadTag(builder, T_size, CI->getArgOperand(0), tbaa_tag);
                 auto masked = builder.CreateAnd(tag, ConstantInt::get(T_size, ~(uintptr_t)15));
                 auto typ = builder.CreateAddrSpaceCast(builder.CreateIntToPtr(masked, JuliaType::get_pjlvalue_ty(masked->getContext())),
                                                        T_prjlvalue);
                 typ->takeName(CI);
                 CI->replaceAllUsesWith(typ);
                 UpdatePtrNumbering(CI, typ, S);
-            } else if (write_barrier_func && callee == write_barrier_func) {
-                // The replacement for this requires creating new BasicBlocks
-                // which messes up the loop. Queue all of them to be replaced later.
-                assert(CI->arg_size() >= 1);
-                write_barriers.push_back(CI);
-                ChangesMade = true;
-                ++it;
-                continue;
             } else if ((call_func && callee == call_func) ||
                        (call2_func && callee == call2_func) ||
                        (call3_func && callee == call3_func)) {
@@ -2240,7 +2207,6 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
             ChangesMade = true;
         }
     }
-    CleanupWriteBarriers(F, S, write_barriers, CFGModified);
     if (maxframeargs == 0 && Frame) {
         Frame->eraseFromParent();
     }
@@ -2506,30 +2472,6 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
     PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
     CleanupIR(F, &S, CFGModified);
-
-
-    // We lower the julia.gc_alloc_bytes intrinsic in this pass to insert slowpath/fastpath blocks for MMTk
-    // For now, we do nothing for the Stock GC
-    auto GCAllocBytes = getOrNull(jl_intrinsics::GCAllocBytes);
-
-    if (GCAllocBytes) {
-        for (auto it = GCAllocBytes->user_begin(); it != GCAllocBytes->user_end(); ) {
-            if (auto *CI = dyn_cast<CallInst>(*it)) {
-                *CFGModified = true;
-
-                assert(CI->getCalledOperand() == GCAllocBytes);
-
-                auto newI = lowerGCAllocBytesLate(CI, F);
-                if (newI != CI) {
-                    ++it;
-                    CI->replaceAllUsesWith(newI);
-                    CI->eraseFromParent();
-                    continue;
-                }
-            }
-            ++it;
-        }
-    }
 
     return true;
 }
