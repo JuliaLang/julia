@@ -1300,6 +1300,18 @@ end
     @test convert(StepRange{Int128,Int128}, 0.:5) === Int128(0):Int128(1):Int128(5)
 
     @test StepRange(1:1:4) === 1:1:4
+    @test StepRange{Int32}(1:1:4) === StepRange{Int32,Int64}(1,1,4)
+
+    struct MyStepRange57718{T,S} <: OrdinalRange{T,S}
+        r :: StepRange{T,S}
+    end
+    Base.first(mr::MyStepRange57718) = first(mr.r)
+    Base.last(mr::MyStepRange57718) = last(mr.r)
+    Base.step(mr::MyStepRange57718) = step(mr.r)
+    Base.length(mr::MyStepRange57718) = length(mr.r)
+
+    @test StepRange(MyStepRange57718(1:1:4)) === 1:1:4
+    @test StepRange{Int32}(MyStepRange57718(1:1:4)) === StepRange{Int32,Int64}(1,1,4)
 
     @test_throws ArgumentError StepRange(1.1,1,5.1)
 
