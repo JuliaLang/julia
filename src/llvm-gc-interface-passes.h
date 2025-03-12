@@ -46,6 +46,7 @@
 #include "llvm-pass-helpers.h"
 #include <map>
 #include <string>
+#include <optional>
 
 #ifndef LLVM_GC_PASSES_H
 #define LLVM_GC_PASSES_H
