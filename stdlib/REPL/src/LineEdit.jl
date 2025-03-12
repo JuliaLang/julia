@@ -195,11 +195,11 @@ end
 
 NamedCompletion(completion::String) = NamedCompletion(completion, completion)
 
-complete_line(c::EmptyCompletionProvider, s; hint::Bool=false) = NamedCompletion[], "", true
+complete_line(c::EmptyCompletionProvider, s; hint::Bool=false, show_completion_list::Bool=true) = NamedCompletion[], "", true
 
 # complete_line can be specialized for only two arguments, when the active module
 # doesn't matter (e.g. Pkg does this)
-complete_line(c::CompletionProvider, s, ::Module; hint::Bool=false) = complete_line(c, s; hint)
+complete_line(c::CompletionProvider, s, ::Module; hint::Bool=false, show_completion_list::Bool=true) = complete_line(c, s; hint, show_completion_list)
 
 terminal(s::IO) = s
 terminal(s::PromptState) = s.terminal
@@ -381,9 +381,9 @@ function show_completions(s::PromptState, completions::Vector{String})
 end
 
 # Prompt Completions & Hints
-function complete_line(s::MIState)
+function complete_line(s::MIState; show_completion_list::Bool=true)
     set_action!(s, :complete_line)
-    if complete_line(state(s), s.key_repeats, s.active_module)
+    if complete_line(state(s), s.key_repeats, s.active_module; show_completion_list)
         return refresh_line(s)
     else
         beep(s)
@@ -490,7 +490,7 @@ function clear_hint(s::ModeState)
     end
 end
 
-function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=false)
+function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=false, show_completion_list::Bool=true)
     completions, partial, should_complete = complete_line_named(s.p.complete, s, mod; hint)
     isempty(completions) && return false
     if !should_complete
@@ -510,7 +510,7 @@ function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=fal
             prev_pos = position(s)
             push_undo(s)
             edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, p)
-        elseif repeats > 0
+        elseif repeats > 0 && show_completion_list
             show_completions(s, completions)
         end
     end
@@ -2254,8 +2254,8 @@ setmodifiers!(p::Prompt, m::Modifiers) = setmodifiers!(p.complete, m)
 setmodifiers!(c) = nothing
 
 # Search Mode completions
-function complete_line(s::SearchState, repeats, mod::Module; hint::Bool=false)
-    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod; hint)
+function complete_line(s::SearchState, repeats, mod::Module; hint::Bool=false, show_completion_list::Bool=true)
+    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod; hint, show_completion_list)
     # For now only allow exact completions in search mode
     if length(completions) == 1
         prev_pos = position(s)
@@ -2494,7 +2494,7 @@ function bracketed_paste(s::MIState; tabwidth::Int=options(s).tabwidth)
     return replace(input, '\t' => " "^tabwidth)
 end
 
-function tab_should_complete(s::MIState)
+function key_should_complete(s::MIState, key::Char)
     # Yes, we are ignoring the possibility
     # the we could be in the middle of a multi-byte
     # sequence, here but that's ok, since any
@@ -2503,17 +2503,29 @@ function tab_should_complete(s::MIState)
     pos = position(buf)
     pos == 0 && return true
     c = buf.data[pos]
-    return c != _newline && c != UInt8('\t') &&
+    return c != _newline && c != UInt8(key) &&
         # hack to allow path completion in cmds
         # after a space, e.g., `cd <tab>`, while still
         # allowing multiple indent levels
         (c != _space || pos <= 3 || buf.data[pos-1] != _space)
 end
 
+function control_key_should_complete(s::MIState)
+    # Yes, we are ignoring the possibility
+    # the we could be in the middle of a multi-byte
+    # sequence, here but that's ok, since any
+    # whitespace we're interested in is only one byte
+    buf = buffer(s)
+    pos = position(buf)
+    seekend(buf)
+    end_pos = position(buf)
+    seek(buf, pos)
+    return pos == end_pos
+end
+
 # jump_spaces: if cursor is on a ' ', move it to the first non-' ' char on the right
 # if `delete_trailing`, ignore trailing ' ' by deleting them
 function edit_tab(s::MIState, jump_spaces::Bool=false, delete_trailing::Bool=jump_spaces)
-    tab_should_complete(s) && return complete_line(s)
     set_action!(s, :edit_insert_tab)
     push_undo(s)
     edit_insert_tab(buffer(s), jump_spaces, delete_trailing) || pop_undo(s)
@@ -2559,7 +2571,7 @@ end
 const default_keymap =
 AnyDict(
     # Tab
-    '\t' => (s::MIState,o...)->edit_tab(s, true),
+    '\t' => (s::MIState,o...)->(key_should_complete(s, '\t') ? complete_line(s) : edit_tab(s, true)),
     # Shift-tab
     "\e[Z" => (s::MIState,o...)->shift_tab_completion(s),
     # Enter
@@ -2651,7 +2663,7 @@ AnyDict(
     end,
     "^Z" => (s::MIState,o...)->(return :suspend),
     # Right Arrow
-    "\e[C" => (s::MIState,o...)->edit_move_right(s),
+    "\e[C" => (s::MIState,o...)->(control_key_should_complete(s) ? complete_line(s; show_completion_list=false) : edit_move_right(s)),
     # Left Arrow
     "\e[D" => (s::MIState,o...)->edit_move_left(s),
     # Up Arrow
@@ -2675,7 +2687,9 @@ AnyDict(
     "\el" => (s::MIState,o...)->edit_lower_case(s),
     "\ec" => (s::MIState,o...)->edit_title_case(s),
     "\ee" => (s::MIState,o...) -> edit_input(s),
-    "\em" => (s::MIState, o...) -> activate_module(s)
+    "\em" => (s::MIState, o...) -> activate_module(s),
+    # End
+    "\e[F" => (s::MIState, o...) -> (control_key_should_complete(s) ? complete_line(s; show_completion_list=false) : (move_line_end(s); refresh_line(s))),
 )
 
 const history_keymap = AnyDict(
