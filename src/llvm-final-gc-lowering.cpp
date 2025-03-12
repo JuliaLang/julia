@@ -228,6 +228,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
 #undef LOWER_INTRINSIC
         }
     }
+
     return true;
     // Verify that skipping was in fact correct
     verify_skip:
