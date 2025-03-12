@@ -282,7 +282,7 @@ version = "1.3.1+2"
 [[deps.nghttp2_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
-version = "1.64.0+1"
+version = "1.65.0+0"
 
 [[deps.p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
