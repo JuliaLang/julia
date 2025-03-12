@@ -17,42 +17,42 @@ libstdcxx_path::String = ""
 libgomp_path::String = ""
 
 if Sys.iswindows()
-    const _libatomic_path = BundledLazyLibraryPath("bin\\libatomic-1.dll")
-    const _libquadmath_path = BundledLazyLibraryPath("bin\\libquadmath-0.dll")
+    const _libatomic_path = BundledLazyLibraryPath("libatomic-1.dll")
+    const _libquadmath_path = BundledLazyLibraryPath("libquadmath-0.dll")
     if arch(HostPlatform()) == "x86_64"
-        const _libgcc_s_path = BundledLazyLibraryPath("bin\\libgcc_s_seh-1.dll")
+        const _libgcc_s_path = BundledLazyLibraryPath("libgcc_s_seh-1.dll")
     else
-        const _libgcc_s_path = BundledLazyLibraryPath("bin\\libgcc_s_sjlj-1.dll")
+        const _libgcc_s_path = BundledLazyLibraryPath("libgcc_s_sjlj-1.dll")
     end
-    const _libgfortran_path = BundledLazyLibraryPath(string("bin\\libgfortran-", libgfortran_version(HostPlatform()).major, ".dll"))
-    const _libstdcxx_path = BundledLazyLibraryPath("bin\\libstdc++-6.dll")
-    const _libgomp_path = BundledLazyLibraryPath("bin\\libgomp-1.dll")
-    const _libssp_path = BundledLazyLibraryPath("bin\\libssp-0.dll")
+    const _libgfortran_path = BundledLazyLibraryPath(string("libgfortran-", libgfortran_version(HostPlatform()).major, ".dll"))
+    const _libstdcxx_path = BundledLazyLibraryPath("libstdc++-6.dll")
+    const _libgomp_path = BundledLazyLibraryPath("libgomp-1.dll")
+    const _libssp_path = BundledLazyLibraryPath("libssp-0.dll")
 elseif Sys.isapple()
-    const _libatomic_path = BundledLazyLibraryPath("lib/libatomic.1.dylib")
-    const _libquadmath_path = BundledLazyLibraryPath("lib/libquadmath.0.dylib")
+    const _libatomic_path = BundledLazyLibraryPath("libatomic.1.dylib")
+    const _libquadmath_path = BundledLazyLibraryPath("libquadmath.0.dylib")
     if arch(HostPlatform()) == "aarch64" || libgfortran_version(HostPlatform()) == v"5"
-        const _libgcc_s_path = BundledLazyLibraryPath("lib/libgcc_s.1.1.dylib")
+        const _libgcc_s_path = BundledLazyLibraryPath("libgcc_s.1.1.dylib")
     else
-        const _libgcc_s_path = BundledLazyLibraryPath("lib/libgcc_s.1.dylib")
+        const _libgcc_s_path = BundledLazyLibraryPath("libgcc_s.1.dylib")
     end
-    const _libgfortran_path = BundledLazyLibraryPath(string("lib/libgfortran.", libgfortran_version(HostPlatform()).major, ".dylib"))
-    const _libstdcxx_path = BundledLazyLibraryPath("lib/libstdc++.6.dylib")
-    const _libgomp_path = BundledLazyLibraryPath("lib/libgomp.1.dylib")
-    const _libssp_path = BundledLazyLibraryPath("lib/libssp.0.dylib")
+    const _libgfortran_path = BundledLazyLibraryPath(string("libgfortran.", libgfortran_version(HostPlatform()).major, ".dylib"))
+    const _libstdcxx_path = BundledLazyLibraryPath("libstdc++.6.dylib")
+    const _libgomp_path = BundledLazyLibraryPath("libgomp.1.dylib")
+    const _libssp_path = BundledLazyLibraryPath("libssp.0.dylib")
 else
-    if !Sys.isfreebsd()    
-        const _libatomic_path = BundledLazyLibraryPath("lib/libatomic.so.1")
+    if !Sys.isfreebsd()
+        const _libatomic_path = BundledLazyLibraryPath("libatomic.so.1")
     end
-    const _libgcc_s_path = BundledLazyLibraryPath("lib/libgcc_s.so.1")
-    const _libgfortran_path = BundledLazyLibraryPath(string("lib/libgfortran.so.", libgfortran_version(HostPlatform()).major))
-    const _libstdcxx_path = BundledLazyLibraryPath("lib/libstdc++.so.6")
-    const _libgomp_path = BundledLazyLibraryPath("lib/libgomp.so.1")
+    const _libgcc_s_path = BundledLazyLibraryPath("libgcc_s.so.1")
+    const _libgfortran_path = BundledLazyLibraryPath(string("libgfortran.so.", libgfortran_version(HostPlatform()).major))
+    const _libstdcxx_path = BundledLazyLibraryPath("libstdc++.so.6")
+    const _libgomp_path = BundledLazyLibraryPath("libgomp.so.1")
     if libc(HostPlatform()) != "musl"
-        const _libssp_path = BundledLazyLibraryPath("lib/libssp.so.0")
+        const _libssp_path = BundledLazyLibraryPath("libssp.so.0")
     end
     if arch(HostPlatform()) ∈ ("x86_64", "i686")
-        const _libquadmath_path = BundledLazyLibraryPath("lib/libquadmath.so.0")
+        const _libquadmath_path = BundledLazyLibraryPath("libquadmath.so.0")
     end
 end
 

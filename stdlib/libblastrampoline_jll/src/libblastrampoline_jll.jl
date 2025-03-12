@@ -33,11 +33,11 @@ end
 
 # NOTE: keep in sync with `Base.libblas_name` and `Base.liblapack_name`.
 const _libblastrampoline_path = if Sys.iswindows()
-    BundledLazyLibraryPath("bin\\libblastrampoline-5.dll")
+    BundledLazyLibraryPath("libblastrampoline-5.dll")
 elseif Sys.isapple()
-    BundledLazyLibraryPath("lib/libblastrampoline.5.dylib")
+    BundledLazyLibraryPath("libblastrampoline.5.dylib")
 else
-    BundledLazyLibraryPath("lib/libblastrampoline.so.5")
+    BundledLazyLibraryPath("libblastrampoline.so.5")
 end
 const libblastrampoline = LazyLibrary(_libblastrampoline_path, dependencies=[],
                                       on_load_callback=libblastrampoline_on_load_callback)
