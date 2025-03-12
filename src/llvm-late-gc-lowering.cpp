@@ -1807,31 +1807,24 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     return {Colors, PreAssignedColors};
 }
 
-// Size of T is assumed to be `sizeof(void*)`
-Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
+static SmallVector<int, 1> *FindRefinements(Value *V, State *S)
 {
-    assert(T == T_size || isa<PointerType>(T));
-    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
+    if (!S)
+        return nullptr;
+    auto it = S->AllPtrNumbering.find(V);
+    if (it == S->AllPtrNumbering.end())
+        return nullptr;
+    auto rit = S->Refinements.find(it->second);
+    return rit != S->Refinements.end() && !rit->second.empty() ? &rit->second : nullptr;
 }
 
-Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
+static bool IsPermRooted(Value *V, State *S)
 {
-    auto addr = EmitTagPtr(builder, T_size, T_size, V);
-    auto &M = *builder.GetInsertBlock()->getModule();
-    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0), V->getName() + ".tag");
-    load->setOrdering(AtomicOrdering::Unordered);
-    // Mark as volatile to prevent optimizers from treating GC tag loads as constants
-    // since GC mark bits can change during runtime (issue #59547)
-    load->setVolatile(true);
-    load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
-    MDBuilder MDB(load->getContext());
-    auto *NullInt = ConstantInt::get(T_size, 0);
-    // We can be sure that the tag is at least 16 (1<<4)
-    // Hopefully this is enough to convince LLVM that the value is still not NULL
-    // after masking off the tag bits
-    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 16));
-    load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
-    return load;
+    if (isa<Constant>(V))
+        return true;
+    if (auto *RefinePtr = FindRefinements(V, S))
+        return RefinePtr->size() == 1 && (*RefinePtr)[0] == -2;
+    return false;
 }
 
 static inline void UpdatePtrNumbering(Value *From, Value *To, State *S)
@@ -1850,6 +1843,17 @@ static inline void UpdatePtrNumbering(Value *From, Value *To, State *S)
 
 MDNode *createMutableTBAAAccessTag(MDNode *Tag) {
     return MDBuilder(Tag->getContext()).createMutableTBAAAccessTag(Tag);
+}
+
+void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified) {
+    for (auto CI : WriteBarriers) {
+        auto parent = CI->getArgOperand(0);
+        if (std::all_of(CI->op_begin() + 1, CI->op_end(),
+                    [parent, &S](Value *child) { return parent == child || IsPermRooted(child, S); })) {
+            CI->eraseFromParent();
+            continue;
+        }
+    }
 }
 
 bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
@@ -1910,6 +1914,16 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 continue;
             }
             Value *callee = CI->getCalledOperand();
+
+            if (write_barrier_func && callee == write_barrier_func) {
+                assert(CI->arg_size() >= 1);
+                write_barriers.push_back(CI);
+                ChangesMade = true;
+                ++it;
+                continue;
+            }
+
+
             if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
                         || callee == gc_preserve_end_func)) {
                 /* No replacement */
@@ -2022,21 +2036,13 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
-                auto tag = EmitLoadTag(builder, T_size, CI->getArgOperand(0));
+                auto tag = EmitLoadTag(builder, T_size, CI->getArgOperand(0), tbaa_tag);
                 auto masked = builder.CreateAnd(tag, ConstantInt::get(T_size, ~(uintptr_t)15));
                 auto typ = builder.CreateAddrSpaceCast(builder.CreateIntToPtr(masked, JuliaType::get_pjlvalue_ty(masked->getContext())),
                                                        T_prjlvalue);
                 typ->takeName(CI);
                 CI->replaceAllUsesWith(typ);
                 UpdatePtrNumbering(CI, typ, S);
-            } else if (write_barrier_func && callee == write_barrier_func) {
-                // The replacement for this requires creating new BasicBlocks
-                // which messes up the loop. Queue all of them to be replaced later.
-                assert(CI->arg_size() >= 1);
-                write_barriers.push_back(CI);
-                ChangesMade = true;
-                ++it;
-                continue;
             } else if ((call_func && callee == call_func) ||
                        (call2_func && callee == call2_func) ||
                        (call3_func && callee == call3_func)) {
@@ -2447,29 +2453,6 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     }
     else {
       CleanupIR(F, nullptr, CFGModified);
-    }
-
-    // We lower the julia.gc_alloc_bytes intrinsic in this pass to insert slowpath/fastpath blocks for MMTk
-    // For now, we do nothing for the Stock GC
-    auto GCAllocBytes = getOrNull(jl_intrinsics::GCAllocBytes);
-
-    if (GCAllocBytes) {
-        for (auto it = GCAllocBytes->user_begin(); it != GCAllocBytes->user_end(); ) {
-            if (auto *CI = dyn_cast<CallInst>(*it)) {
-                *CFGModified = true;
-
-                assert(CI->getCalledOperand() == GCAllocBytes);
-
-                auto newI = lowerGCAllocBytesLate(CI, F);
-                if (newI != CI) {
-                    ++it;
-                    CI->replaceAllUsesWith(newI);
-                    CI->eraseFromParent();
-                    continue;
-                }
-            }
-            ++it;
-        }
     }
 
     return true;
