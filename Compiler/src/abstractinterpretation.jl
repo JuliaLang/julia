@@ -2622,7 +2622,7 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
         max_methods::Int = get_max_methods(interp, f, sv))
     (; fargs, argtypes) = arginfo
-    argtypes::Vector{Any} = arginfo.argtypes  # declare type because the closure below captures it
+    argtypes::Vector{Any} = arginfo.argtypes  # declare type because the closure below captures `argtypes`
     fargs = arginfo.fargs
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
