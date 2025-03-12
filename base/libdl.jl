@@ -330,10 +330,9 @@ libfoo = LazyLibrary(LazyLibraryPath(prefix, "lib/libfoo.so.1.2.3"))
 ```
 """
 struct LazyLibraryPath
-    pieces::Vector
-    LazyLibraryPath(pieces::Vector) = new(pieces)
+    pieces::Tuple{Vararg{Any}}
+    LazyLibraryPath(pieces...) = new(pieces)
 end
-LazyLibraryPath(args...) = LazyLibraryPath(collect(args))
 Base.string(llp::LazyLibraryPath) = joinpath(String[string(p) for p in llp.pieces])
 Base.cconvert(::Type{Cstring}, llp::LazyLibraryPath) = Base.cconvert(Cstring, string(llp))
 # Define `print` so that we can wrap this in a `LazyString`
