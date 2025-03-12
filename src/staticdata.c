@@ -3153,14 +3153,23 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_svecset(precompile_field_replace_list, 2, jl_alloc_vec_any(0));
         if (precompile_field_replace) {
             jl_array_t * vals_array = (jl_array_t *)jl_svecref(precompile_field_replace, 0);
-            for (size_t i = 0; i < jl_array_len(vals_array); i++) {
-                jl_value_t *val = jl_array_ptr_ref(vals_array, i);
-                if (val && ptrhash_get(&serialization_order, val) != HT_NOTFOUND) {
-                    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace_list, 0), val);
-                    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace_list, 1), jl_array_ptr_ref(jl_svecref(precompile_field_replace, 1), i));
-                    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace_list, 2), jl_array_ptr_ref(jl_svecref(precompile_field_replace, 2), i));
+            int fields_pushed = 0;
+            while (1) { // Fixed point because the field being set is a new object that must be serialized
+                int old_fields_pushed = fields_pushed;
+                for (size_t i = 0; i < jl_array_len(vals_array); i++) {
+                    jl_value_t *val = jl_array_ptr_ref(vals_array, i);
+                    if (val && ptrhash_get(&serialization_order, val) != HT_NOTFOUND) {
+                        fields_pushed += 1;
+                        jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace_list, 0), val);
+                        jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace_list, 1), jl_array_ptr_ref(jl_svecref(precompile_field_replace, 1), i));
+                        jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace_list, 2), jl_array_ptr_ref(jl_svecref(precompile_field_replace, 2), i));
+                        jl_array_ptr_set(vals_array, i, NULL);
+                    }
                 }
+                if (fields_pushed == old_fields_pushed)
+                    break;
             }
+            precompile_field_replace = precompile_field_replace_list;
         }
         jl_queue_for_serialization(&s, precompile_field_replace_list);
         jl_serialize_reachable(&s);
