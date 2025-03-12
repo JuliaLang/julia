@@ -3301,7 +3301,7 @@ static void union_alloca_type(jl_uniontype_t *ut,
             [&](unsigned idx, jl_datatype_t *jt) {
                 if (!jl_is_datatype_singleton(jt)) {
                     size_t nb1 = jl_datatype_size(jt);
-                    size_t align1 = jl_datatype_align(jt);
+                    size_t align1 = julia_alignment((jl_value_t*)jt);
                     if (nb1 > nbytes)
                         nbytes = nb1;
                     if (align1 > align)
@@ -3850,9 +3850,10 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
 
             // whether we should perform the initialization with the struct as a IR value
             // or instead initialize the stack buffer with stores
+            // although we do the former if it is a vector or could be a vector element
             auto tracked = CountTrackedPointers(lt);
             bool init_as_value = false;
-            if (lt->isVectorTy() || jl_is_vecelement_type(ty)) { // maybe also check the size ?
+            if (lt->isVectorTy() || jl_special_vector_alignment(1, ty) != 0) {
                 init_as_value = true;
             }
             else if (tracked.count) {

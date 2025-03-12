@@ -543,15 +543,14 @@ is not valid, since the type layout of `T` is not known statically.
 
 ### SIMD Values
 
-Note: This feature is currently implemented on 64-bit x86 and AArch64 platforms only.
-
 If a C/C++ routine has an argument or return value that is a native SIMD type, the corresponding
 Julia type is a homogeneous tuple of `VecElement` that naturally maps to the SIMD type. Specifically:
 
->   * The tuple must be the same size as the SIMD type. For example, a tuple representing an `__m128`
->     on x86 must have a size of 16 bytes.
->   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a primitive type that
->     is 1, 2, 4 or 8 bytes.
+>   * The tuple must be the same size and elements as the SIMD type. For example, a tuple
+>     representing an `__m128` on x86 must have a size of 16 bytes and Float32 elements.
+>   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a
+>     primitive type with a power-of-two number of bytes (e.g. 1, 2, 4, 8, 16, etc) such as
+>     Int8 or Float64.
 
 For instance, consider this C routine that uses AVX intrinsics:
 
@@ -624,6 +623,10 @@ For translating a C argument list to Julia:
 
       * `T`, where `T` is a Julia leaf type
       * argument value will be copied (passed by value)
+  * `vector T` (or `__attribute__ vector_size`, or a typedef such as `__m128`)
+
+      * `NTuple{N, VecElement{T}}`, where `T` is a primitive Julia type of the correct size
+        and N is the number of elements in the vector (equal to `vector_size / sizeof T`).
   * `void*`
 
       * depends on how this parameter is used, first translate this to the intended pointer type, then
@@ -670,13 +673,16 @@ For translating a C return type to Julia:
   * `T`, where `T` is one of the primitive types: `char`, `int`, `long`, `short`, `float`, `double`,
     `complex`, `enum` or any of their `typedef` equivalents
 
-      * `T`, where `T` is an equivalent Julia Bits Type (per the table above)
-      * if `T` is an `enum`, the argument type should be equivalent to `Cint` or `Cuint`
+      * same as C argument list
       * argument value will be copied (returned by-value)
   * `struct T` (including typedef to a struct)
 
-      * `T`, where `T` is a Julia Leaf Type
+      * same as C argument list
       * argument value will be copied (returned by-value)
+
+  * `vector T`
+
+      * same as C argument list
   * `void*`
 
       * depends on how this parameter is used, first translate this to the intended pointer type, then

@@ -872,6 +872,11 @@ end
             end
         end
     end
+
+    @testset "return type infers to `Int`" begin
+        @test Int === Base.infer_return_type(prevind, Tuple{AbstractString, Vararg})
+        @test Int === Base.infer_return_type(nextind, Tuple{AbstractString, Vararg})
+    end
 end
 
 @testset "first and last" begin
