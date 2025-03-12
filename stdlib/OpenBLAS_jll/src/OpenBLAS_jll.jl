@@ -23,11 +23,11 @@ else
 end
 
 if Sys.iswindows()
-    const _libopenblas_path = BundledLazyLibraryPath(string("bin\\libopenblas", libsuffix, ".dll"))
+    const _libopenblas_path = BundledLazyLibraryPath(string("libopenblas", libsuffix, ".dll"))
 elseif Sys.isapple()
-    const _libopenblas_path = BundledLazyLibraryPath(string("lib/libopenblas", libsuffix, ".dylib"))
+    const _libopenblas_path = BundledLazyLibraryPath(string("libopenblas", libsuffix, ".dylib"))
 else
-    const _libopenblas_path = BundledLazyLibraryPath(string("lib/libopenblas", libsuffix, ".so"))
+    const _libopenblas_path = BundledLazyLibraryPath(string("libopenblas", libsuffix, ".so"))
 end
 const libopenblas = LazyLibrary(_libopenblas_path, dependencies=[libgfortran])
 
