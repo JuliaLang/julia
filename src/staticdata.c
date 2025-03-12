@@ -3152,6 +3152,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_svecset(precompile_field_replace_list, 1, jl_alloc_vec_any(0));
         jl_svecset(precompile_field_replace_list, 2, jl_alloc_vec_any(0));
         if (precompile_field_replace) {
+            // We must inherit the field replace of images that we load, this is necessary because the
+            // precompile_field_replace calls can happen in the constructor, and constructors of globals don't run when loading images
+            // We then store the list of replaced fields and merge them when loading
             jl_array_t * vals_array = (jl_array_t *)jl_svecref(precompile_field_replace, 0);
             int fields_pushed = 0;
             while (1) { // Fixed point because the field being set is a new object that must be serialized
