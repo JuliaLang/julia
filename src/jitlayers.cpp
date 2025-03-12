@@ -386,8 +386,8 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
         }
         if (preal_decl.empty()) {
             // there may be an equivalent method already compiled (or at least registered with the JIT to compile), in which case we should be using that instead
-            jl_code_instance_t *compiled_ci = jl_get_ci_equiv(codeinst, 1);
-            if ((jl_value_t*)compiled_ci != jl_nothing) {
+            jl_code_instance_t *compiled_ci = jl_get_ci_equiv(codeinst, 0);
+            if (compiled_ci != codeinst) {
                 codeinst = compiled_ci;
                 uint8_t specsigflags;
                 void *fptr;
