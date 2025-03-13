@@ -983,7 +983,7 @@ function propagate_refinements(callee::InferenceState, caller::InferenceState, s
         f = stmt.args[1]
         if isa(f, SSAValue)
             f = caller.src.ssavaluetypes[f.id]
-            @assert f === Const(invoke) || f === Const(return_type) || f === Const(Core.finalizer)
+            @assert f === Const(invoke) || f === Const(Base.Compiler.return_type) || f === Const(Core.finalizer)
         else
             @assert isa(f, GlobalRef)
             @assert f === GlobalRef(Core, :invoke)
