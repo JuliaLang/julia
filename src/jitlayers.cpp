@@ -805,11 +805,11 @@ void jl_emit_codeinst_to_jit_impl(
 }
 
 
-const char *jl_generate_ccallable(Module *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
+const char *jl_generate_ccallable(Module *llvmmod, void *sysimg_handle, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
 // compile a C-callable alias
 extern "C" JL_DLLEXPORT_CODEGEN
-int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *sysimg, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt)
 {
     auto ct = jl_current_task;
     bool timed = (ct->reentrant_timing & 1) == 0;
@@ -842,7 +842,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
         }
         Module &M = *into->getModuleUnlocked();
         assert(pparams->tsctx.getContext() == &M.getContext());
-        name = jl_generate_ccallable(&M, sysimg, declrt, sigt, *pparams);
+        name = jl_generate_ccallable(&M, sysimg, nameval, declrt, sigt, *pparams);
         if (!sysimg && !p) {
             { // drop lock to keep analyzer happy (since it doesn't know we have the only reference to it)
                 auto release = std::move(params.tsctx_lock);
@@ -898,7 +898,7 @@ int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *
 
 // declare a C-callable entry point; called during code loading from the toplevel
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
+void jl_extern_c_impl(jl_value_t *name, jl_value_t *declrt, jl_tupletype_t *sigt)
 {
     // validate arguments. try to do as many checks as possible here to avoid
     // throwing errors later during codegen.
@@ -929,12 +929,15 @@ void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
     if (!jl_is_method(meth))
         jl_error("@ccallable: could not find requested method");
     JL_GC_PUSH1(&meth);
-    meth->ccallable = jl_svec2(declrt, (jl_value_t*)sigt);
+    if (name == jl_nothing)
+        meth->ccallable = jl_svec2(declrt, (jl_value_t*)sigt);
+    else
+        meth->ccallable = jl_svec3(declrt, (jl_value_t*)sigt, name);
     jl_gc_wb(meth, meth->ccallable);
     JL_GC_POP();
 
     // create the alias in the current runtime environment
-    int success = jl_compile_extern_c(NULL, NULL, NULL, declrt, (jl_value_t*)sigt);
+    int success = jl_compile_extern_c(NULL, NULL, NULL, name, declrt, (jl_value_t*)sigt);
     if (!success)
         jl_error("@ccallable was already defined for this method name");
 }

@@ -203,11 +203,11 @@ function exit_on_sigint(on::Bool)
     ccall(:jl_exit_on_sigint, Cvoid, (Cint,), on)
 end
 
-function _ccallable(rt::Type, sigt::Type)
-    ccall(:jl_extern_c, Cvoid, (Any, Any), rt, sigt)
+function _ccallable(name::Union{Nothing, String}, rt::Type, sigt::Type)
+    ccall(:jl_extern_c, Cvoid, (Any, Any, Any), name, rt, sigt)
 end
 
-function expand_ccallable(rt, def)
+function expand_ccallable(name, rt, def)
     if isa(def,Expr) && (def.head === :(=) || def.head === :function)
         sig = def.args[1]
         if sig.head === :(::)
@@ -235,7 +235,7 @@ function expand_ccallable(rt, def)
             end
             return quote
                 @__doc__ $(esc(def))
-                _ccallable($(esc(rt)), $(Expr(:curly, :Tuple, esc(f), map(esc, at)...)))
+                _ccallable($name, $(esc(rt)), $(Expr(:curly, :Tuple, esc(f), map(esc, at)...)))
             end
         end
     end
@@ -243,16 +243,22 @@ function expand_ccallable(rt, def)
 end
 
 """
-    @ccallable(def)
+    @ccallable ["name"] function f(...)::RetType ... end
 
 Make the annotated function be callable from C using its name. This can, for example,
-be used to expose functionality as a C-API when creating a custom Julia sysimage.
+be used to expose functionality as a C API when creating a custom Julia sysimage.
+
+If the first argument is a string, it is used as the external name of the function.
 """
 macro ccallable(def)
-    expand_ccallable(nothing, def)
+    expand_ccallable(nothing, nothing, def)
 end
 macro ccallable(rt, def)
-    expand_ccallable(rt, def)
+    if rt isa String
+        expand_ccallable(rt, nothing, def)
+    else
+        expand_ccallable(nothing, rt, def)
+    end
 end
 
 # @ccall implementation
