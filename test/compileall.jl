@@ -15,6 +15,7 @@ function precompile_test_harness(@nospecialize(f))
             @show err
         end
         filter!((≠)(load_path), LOAD_PATH)
+        filter!((≠)(load_path), DEPOT_PATH)
     end
     return nothing
 end
