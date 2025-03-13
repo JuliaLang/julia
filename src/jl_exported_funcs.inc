@@ -313,7 +313,6 @@
     XX(jl_module_names) \
     XX(jl_module_parent) \
     XX(jl_module_getloc) \
-    XX(jl_module_public) \
     XX(jl_module_public_p) \
     XX(jl_module_use) \
     XX(jl_module_using) \

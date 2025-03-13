@@ -1335,12 +1335,10 @@ JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym
     return (jl_value_t*)b;
 }
 
-JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
+int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_world)
 {
     // caller must hold world_counter_lock
     jl_binding_t *b = jl_get_module_binding(from, s, 1);
-    JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     int was_exported = (bpart->kind & PARTITION_FLAG_EXPORTED) != 0;
     if (jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) {
@@ -1355,9 +1353,9 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
     jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_PUBLICP);
     if (was_exported != exported) {
         jl_replace_binding_locked2(b, bpart, bpart->restriction, bpart->kind | PARTITION_FLAG_EXPORTED, new_world);
-        jl_atomic_store_release(&jl_world_counter, new_world);
+        return 1;
     }
-    JL_UNLOCK(&world_counter_lock);
+    return 0;
 }
 
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // unlike most queries here, this is currently seq_cst
