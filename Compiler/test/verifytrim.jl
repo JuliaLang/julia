@@ -44,8 +44,8 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Base.SecretBuffer, Tuple{Type{Bas
 
             $""", repr)
 
-    resize!(infos, 2)
-    @test infos[1] isa Type && infos[2] isa Type
+    resize!(infos, 1)
+    @test infos[1] isa Core.SimpleVector && infos[1][1] isa Type && infos[1][2] isa Type
     errors, parents = get_verify_typeinf_trim(infos)
     desc = only(errors)
     @test !desc.first
