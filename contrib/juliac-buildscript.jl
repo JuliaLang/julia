@@ -33,9 +33,6 @@ end
     JuliaSyntax.enable_in_core!() = nothing
     init_active_project() = ACTIVE_PROJECT[] = nothing
     set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
-    init_depot_path() = nothing
-    init_load_path() = nothing
-    init_active_project() = nothing
     disable_library_threading() = nothing
     start_profile_listener() = nothing
     invokelatest_trimmed(f, args...; kwargs...) = f(args...; kwargs...)
