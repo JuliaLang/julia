@@ -86,6 +86,7 @@ import .LineEdit:
     PromptState,
     mode_idx
 
+include("SyntaxUtil.jl")
 include("REPLCompletions.jl")
 using .REPLCompletions
 
@@ -782,7 +783,7 @@ end
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
-# Convert inclusive-inclusive 1-based char indexing to inclusive-exclusuive byte Region.
+# Convert inclusive-inclusive 1-based char indexing to inclusive-exclusive byte Region.
 to_region(s, r) = first(r)-1 => (length(r) > 0 ? nextind(s, last(r))-1 : first(r)-1)
 
 function complete_line(c::REPLCompletionProvider, s::PromptState, mod::Module; hint::Bool=false)

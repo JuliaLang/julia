@@ -158,6 +158,10 @@ let ex =
             export exported_symbol
             exported_symbol(::WeirdNames) = nothing
 
+            macro ignoremacro(e...)
+                :nothing
+            end
+
         end # module CompletionFoo
         test_repl_comp_dict = CompletionFoo.test_dict
         test_repl_comp_customdict = CompletionFoo.test_customdict
@@ -180,9 +184,11 @@ end
 
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
 test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
+# | is reserved in test_complete_pos
+test_complete_pos(s) = map_completion_text(@inferred(completions(replace(s, '|' => ""), findfirst('|', s)-1)))
 test_complete_context(s, m=@__MODULE__; shift::Bool=true) =
     map_completion_text(@inferred(completions(s,lastindex(s), m, shift)))
-test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
+test_complete_foo(s; shift::Bool=true) = test_complete_context(s, Main.CompletionFoo; shift)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
 
 test_bslashcomplete(s) =  map_named_completion(@inferred(bslash_completions(s, lastindex(s)))[2])
@@ -290,10 +296,11 @@ let s = "Main.CompletionFoo.bar.no_val_available"
     @test length(c)==0
 end
 
-#cannot do dot completion on infix operator
-let s = "+."
-    c, r = test_complete(s)
-    @test length(c)==0
+#cannot do dot completion on infix operator (get default completions)
+let s1 = "", s2 = "+."
+    c1, r1 = test_complete(s1)
+    c2, r2 = test_complete(s2)
+    @test length(c1)==length(c2)
 end
 
 # To complete on a variable of a type, the type T of the variable
@@ -458,13 +465,13 @@ let
     c, r, res = test_complete(s)
     @test !res
     @test all(m -> string(m) in c, methods(isnothing))
-    @test s[r] == s[1:end-1]
+    @test s[r] == s[2:end-1]
 
     s = "!!isnothing("
     c, r, res = test_complete(s)
     @test !res
     @test all(m -> string(m) in c, methods(isnothing))
-    @test s[r] == s[1:end-1]
+    @test s[r] == s[3:end-1]
 end
 
 # Test completion of methods with input concrete args and args where typeinference determine their type
@@ -1052,7 +1059,7 @@ end
 let c, r, res
     c, r, res = test_scomplete("\$a")
     @test c == String[]
-    @test r === 0:-1
+    @test r === 1:0
     @test res === false
 end
 
@@ -1064,38 +1071,38 @@ let s, c, r
     # Issue #8047
     s = "@show \"/dev/nul"
     c,r = test_complete(s)
-    @test "null\"" in c
-    @test r == 13:15
-    @test s[r] == "nul"
+    @test "/dev/null\"" in c
+    @test r == 8:15
+    @test s[r] == "/dev/nul"
 
     # Tests path in Julia code and not closing " if it's a directory
     # Issue #8047
     s = "@show \"/tm"
     c,r = test_complete(s)
-    @test "tmp/" in c
-    @test r == 9:10
-    @test s[r] == "tm"
+    @test "/tmp/" in c
+    @test r == 8:10
+    @test s[r] == "/tm"
 
     # Tests path in Julia code and not double-closing "
     # Issue #8047
     s = "@show \"/dev/nul\""
     c,r = completions(s, 15)
     c = map(named_completion, c)
-    @test "null\"" in [_c.completion for _c in c]
-    @test r == 13:15
-    @test s[r] == "nul"
+    @test "/dev/null" in [_c.completion for _c in c]
+    @test r == 8:15
+    @test s[r] == "/dev/nul"
 
     s = "/t"
     c,r = test_scomplete(s)
-    @test "tmp/" in c
-    @test r == 2:2
-    @test s[r] == "t"
+    @test "/tmp/" in c
+    @test r == 1:2
+    @test s[r] == "/t"
 
     s = "/tmp"
     c,r = test_scomplete(s)
-    @test "tmp/" in c
-    @test r == 2:4
-    @test s[r] == "tmp"
+    @test "/tmp/" in c
+    @test r == 1:4
+    @test s[r] == "/tmp"
 
     # This should match things that are inside the tmp directory
     s = tempdir()
@@ -1106,7 +1113,7 @@ let s, c, r
         c,r = test_scomplete(s)
         @test !("tmp/" in c)
         @test !("$s/tmp/" in c)
-        @test r === (sizeof(s) + 1):sizeof(s)
+        @test r === 1:sizeof(s)
     end
 
     s = "cd \$(Iter"
@@ -1131,8 +1138,8 @@ let s, c, r
         touch(file)
         s = string(tempdir(), "/repl\\ ")
         c,r = test_scomplete(s)
-        @test ["'repl completions'"] == c
-        @test s[r] == "repl\\ "
+        @test [joinpath(tempdir(),  "'repl completions'")] == c
+        @test s[r] == string(tempdir(), "/repl\\ ")
         rm(file)
     end
 
@@ -1144,12 +1151,11 @@ let s, c, r
             mkdir(dir)
             s = "\"" * path * "/tmpfoob"
             c,r = test_complete(s)
-            @test "tmpfoobar/" in c
-            l = 3 + length(path)
-            @test r == l:l+6
-            @test s[r] == "tmpfoob"
+            @test string(dir, "/") in c
+            @test r == 2:sizeof(s)
+            @test s[r] == joinpath(path, "tmpfoob")
             s = "\"~"
-            @test "tmpfoobar/" in c
+            @test joinpath(path, "tmpfoobar/") in c
             c,r = test_complete(s)
             s = "\"~user"
             c, r = test_complete(s)
@@ -1248,7 +1254,7 @@ let current_dir, forbidden
                 e isa Base.IOError && occursin("ELOOP", e.msg)
             end
             c, r = test_complete("\"$(escape_string(path))/selfsym")
-            @test c == ["selfsymlink\""]
+            @test c == [string(escape_string(path), "/selfsymlink\"")]
         end
     end
 
@@ -1299,8 +1305,8 @@ mktempdir() do path
         # the usual rules for Julia strings.
         s = "cd(\"" * julia_esc(joinpath(path, space_folder) * "/space")
         c, r = test_complete(s)
-        @test s[r] == "space"
-        @test "space .file\"" in c
+        @test s[r] == joinpath(path, space_folder, "space")
+        @test joinpath(path, space_folder, "space .file\"") in c
 
         # '$' is the only character which can appear in a windows filename and
         # which needs to be escaped in Julia strings (on unix we could do this
@@ -1309,23 +1315,23 @@ mktempdir() do path
         escpath = julia_esc(joinpath(path, space_folder) * "/needs_escape\$")
         s = "cd(\"$escpath"
         c, r = test_complete(s)
-        @test s[r] == "needs_escape\\\$"
-        @test "needs_escape\\\$.file\"" in c
+        @test s[r] == joinpath(path, space_folder, "needs_escape\\\$")
+        @test joinpath(path, space_folder, "needs_escape\\\$.file\"") in c
 
         if !Sys.iswindows()
             touch(joinpath(space_folder, "needs_escape2\n\".file"))
             escpath = julia_esc(joinpath(path, space_folder, "needs_escape2\n\""))
             s = "cd(\"$escpath"
             c, r = test_complete(s)
-            @test s[r] == "needs_escape2\\n\\\""
-            @test "needs_escape2\\n\\\".file\"" in c
+            @test s[r] == joinpath(path, space_folder, "needs_escape2\\n\\\"")
+            @test joinpath(path, space_folder, "needs_escape2\\n\\\".file\"") in c
 
             touch(joinpath(space_folder, "needs_escape3\\.file"))
             escpath = julia_esc(joinpath(path, space_folder, "needs_escape3\\"))
             s = "cd(\"$escpath"
             c, r = test_complete(s)
-            @test s[r] == "needs_escape3\\\\"
-            @test "needs_escape3\\\\.file\"" in c
+            @test s[r] == joinpath(path, space_folder, "needs_escape3\\\\")
+            @test joinpath(path, space_folder, "needs_escape3\\\\.file\"") in c
         end
 
         # Test for issue #10324
@@ -1361,7 +1367,7 @@ end
 # Test tilde path completion
 let (c, r, res) = test_complete("\"~/ka8w5rsz")
     if !Sys.iswindows()
-        @test res && c == String[homedir() * "/ka8w5rsz"]
+        @test res && c == String[homedir() * "/ka8w5rsz\""]
     else
         @test !res
     end
@@ -1376,7 +1382,7 @@ if !Sys.iswindows()
     try
         let (c, r, res) = test_complete("\"~/Zx6Wa0GkC")
             @test res
-            @test c == String["Zx6Wa0GkC0/"]
+            @test c == String["~/Zx6Wa0GkC0/"]
         end
         let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0")
             @test res
@@ -1384,11 +1390,11 @@ if !Sys.iswindows()
         end
         let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0/my_")
             @test res
-            @test c == String["my_file\""]
+            @test c == String["~/Zx6Wa0GkC0/my_file\""]
         end
         let (c, r, res) = test_complete("\"~/Zx6Wa0GkC0/my_file")
             @test res
-            @test c == String[homedir() * "/Zx6Wa0GkC0/my_file"]
+            @test c == String[homedir() * "/Zx6Wa0GkC0/my_file\""]
         end
     finally
         rm(path, recursive=true)
@@ -1485,10 +1491,10 @@ function test_dict_completion(dict_name)
     s = "$dict_name[ \"abcd"  # leading whitespace
     c, r = test_complete(s)
     @test c == Any["\"abcd\"]"]
-    s = "$dict_name[\"abcd]"  # trailing close bracket
+    s = "$dict_name[Bas]"  # trailing close bracket
     c, r = completions(s, lastindex(s) - 1)
     c = map(x -> named_completion(x).completion, c)
-    @test c == Any["\"abcd\""]
+    @test c == Any["Base"]
     s = "$dict_name[:b"
     c, r = test_complete(s)
     @test c == Any[":bar", ":bar2"]
@@ -1542,9 +1548,13 @@ test_dict_completion("test_repl_comp_customdict")
 
 @testset "dict_identifier_key" begin
     # Issue #23004: this should not throw:
-    @test REPLCompletions.dict_identifier_key("test_dict_ℂ[\\", :other) isa Tuple
+    let s = "test_dict_ℂ[\\"
+        @test REPLCompletions.completions(s, sizeof(s), CompletionFoo) isa Tuple
+    end
     # Issue #55931: neither should this:
-    @test REPLCompletions.dict_identifier_key("test_dict_no_length[", :other) isa NTuple{3,Nothing}
+    let s = "test_dict_no_length["
+        @test REPLCompletions.completions(s, sizeof(s), CompletionFoo) isa Tuple
+    end
 end
 
 @testset "completion of string/cmd macros (#22577)" begin
@@ -2483,4 +2493,44 @@ end
 let (c, r, res) = test_complete_context("global xxx::Number = Base.", Main)
     @test res
     @test "pi" ∈ c
+end
+
+# #57473
+let (c, r) = test_complete_pos("@tim| using Date")
+    @test "@time" in c
+    @test r == 1:4
+end
+
+# #56389
+let s = "begin\n  using Linear"
+    c, r = test_complete(s)
+    @test "LinearAlgebra" in c
+    @test r == 15:20
+    @test s[r] == "Linear"
+end
+let s = "using .CompletionFoo: bar, type_"
+    c, r = test_complete(s)
+    @test "type_test" in c
+    @test r == 28:32
+    @test s[r] == "type_"
+end
+
+# #55518
+let s = "CompletionFoo.@barfoo kwtest"
+    c, r = test_complete(s)
+    @test isempty(c)
+end
+
+# #57611
+let s = "x = Base.BinaryPlatforms.ar"
+    c, r = test_complete(s)
+    @test "arch" in c
+    @test r == 26:27
+end
+
+# #55520
+let s = "@ignoremacro A .= A setup=(A=ident"
+    c, r = test_complete(s)
+    @test "identity"in c
+    @test r == 30:34
 end
