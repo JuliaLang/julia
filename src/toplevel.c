@@ -34,26 +34,23 @@ htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
 
 // During incremental compilation, the following gets set
-JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
+jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
 
-JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
+jl_module_t *jl_add_standard_imports(jl_module_t *m)
 {
     jl_module_t *base_module = jl_base_relative_to(m);
     assert(base_module != NULL);
     // using Base
-    jl_module_using(m, base_module);
+    jl_module_initial_using(m, base_module);
+    return base_module;
 }
 
 // create a new top-level module
 void jl_init_main_module(void)
 {
     assert(jl_main_module == NULL);
-    jl_main_module = jl_new_module(jl_symbol("Main"), NULL);
-    jl_main_module->parent = jl_main_module;
-    jl_set_const(jl_main_module, jl_symbol("Core"),
-                 (jl_value_t*)jl_core_module);
-    jl_set_const(jl_core_module, jl_symbol("Main"),
-                 (jl_value_t*)jl_main_module);
+    jl_main_module = jl_new_module_(jl_symbol("Main"), NULL, 0, 1);
+    jl_set_initial_const(jl_core_module, jl_symbol("Main"), (jl_value_t*)jl_main_module, 0);
 }
 
 static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROOT)
@@ -138,38 +135,14 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     // If we have `Base`, don't also try to import `Core` - the `Base` exports are a superset.
     // While we allow multiple imports of the same binding from different modules, various error printing
     // performs reflection on which module a binding came from and we'd prefer users see "Base" here.
-    jl_module_t *newm = jl_new_module__(name, is_parent__toplevel__ ? NULL : parent_module);
+    jl_module_t *newm = jl_new_module_(name, is_parent__toplevel__ ? NULL : parent_module, std_imports && jl_base_module != NULL ? 0 : 1, 1);
     jl_value_t *form = (jl_value_t*)newm;
     JL_GC_PUSH1(&form);
     JL_LOCK(&jl_modules_mutex);
     ptrhash_put(&jl_current_modules, (void*)newm, (void*)((uintptr_t)HT_NOTFOUND + 1));
     JL_UNLOCK(&jl_modules_mutex);
-
-    jl_add_default_names(newm, std_imports && jl_base_module != NULL ? 0 : 1, 1);
-
-    jl_module_t *old_toplevel_module = jl_precompile_toplevel_module;
-
     // copy parent environment info into submodule
     newm->uuid = parent_module->uuid;
-    if (is_parent__toplevel__) {
-        newm->parent = newm;
-        jl_register_root_module(newm);
-        if (jl_options.incremental) {
-            jl_precompile_toplevel_module = newm;
-        }
-    }
-    else {
-        jl_declare_constant_val(NULL, parent_module, name, (jl_value_t*)newm);
-    }
-
-    if (parent_module == jl_main_module && name == jl_symbol("Base")) {
-        // pick up Base module during bootstrap
-        jl_base_module = newm;
-    }
-
-    size_t last_age = ct->world_age;
-
-    // add standard imports unless baremodule
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     int lineno = 0;
     const char *filename = "none";
@@ -182,25 +155,42 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
                 filename = jl_symbol_name((jl_sym_t*)file);
         }
     }
-    if (std_imports) {
-        if (jl_base_module != NULL) {
-            jl_add_standard_imports(newm);
-            jl_datatype_t *include_into = (jl_datatype_t *)jl_get_global(jl_base_module, jl_symbol("IncludeInto"));
-            if (include_into) {
-                form = jl_new_struct(include_into, newm);
-                jl_set_const(newm, jl_symbol("include"), form);
-            }
+    newm->file = jl_symbol(filename);
+    jl_gc_wb_knownold(newm, newm->file);
+    newm->line = lineno;
+
+    // add standard imports unless baremodule
+    if (std_imports && jl_base_module != NULL) {
+        jl_module_t *base = jl_add_standard_imports(newm);
+        jl_datatype_t *include_into = (jl_datatype_t *)jl_get_global(base, jl_symbol("IncludeInto"));
+        if (include_into) {
+            form = jl_new_struct(include_into, newm);
+            jl_set_initial_const(newm, jl_symbol("include"), form, 0);
         }
         jl_datatype_t *eval_into = (jl_datatype_t *)jl_get_global(jl_core_module, jl_symbol("EvalInto"));
         if (eval_into) {
             form = jl_new_struct(eval_into, newm);
-            jl_set_const(newm, jl_symbol("eval"), form);
+            jl_set_initial_const(newm, jl_symbol("eval"), form, 0);
         }
     }
 
-    newm->file = jl_symbol(filename);
-    jl_gc_wb_knownold(newm, newm->file);
-    newm->line = lineno;
+    jl_module_t *old_toplevel_module = jl_precompile_toplevel_module;
+    size_t last_age = ct->world_age;
+
+    if (parent_module == jl_main_module && name == jl_symbol("Base") && jl_base_module == NULL) {
+        // pick up Base module during bootstrap
+        jl_base_module = newm;
+    }
+
+    if (is_parent__toplevel__) {
+        jl_register_root_module(newm);
+        if (jl_options.incremental) {
+            jl_precompile_toplevel_module = newm;
+        }
+    }
+    else {
+        jl_declare_constant_val(NULL, parent_module, name, (jl_value_t*)newm);
+    }
 
     for (int i = 0; i < jl_array_nrows(exprs); i++) {
         // process toplevel form

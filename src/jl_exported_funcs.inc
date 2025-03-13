@@ -2,7 +2,6 @@
 
 #define JL_RUNTIME_EXPORTED_FUNCS(XX) \
     XX(jl_active_task_stack) \
-    XX(jl_add_standard_imports) \
     XX(jl_adopt_thread) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \
@@ -98,7 +97,6 @@
     XX(jl_cstr_to_string) \
     XX(jl_current_exception) \
     XX(jl_debug_method_invalidation) \
-    XX(jl_defines_or_exports_p) \
     XX(jl_deprecate_binding) \
     XX(jl_dlclose) \
     XX(jl_dlopen) \
