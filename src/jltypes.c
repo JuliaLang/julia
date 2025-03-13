@@ -2866,6 +2866,7 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
     top.prev = (jl_typestack_t*)stack;
     st->types = inst_ftypes(wt->types, &env[n - 1], &top, cacheable);
     jl_gc_wb(st, st->types);
+    jl_compute_has_concrete_subtype(st);
     return st->types;
 }
 

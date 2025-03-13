@@ -645,14 +645,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
     }
     else {
-        // compute a conservative estimate of whether there could exist an instance of a subtype of this
-        for (i = 0; st->has_concrete_subtype && i < nfields - st->name->n_uninitialized; i++) {
-            jl_value_t *fld = jl_svecref(st->types, i);
-            if (fld == jl_bottom_type)
-                st->has_concrete_subtype = 0;
-            else
-                st->has_concrete_subtype = !jl_is_datatype(fld) || ((jl_datatype_t *)fld)->has_concrete_subtype;
-        }
+        jl_compute_has_concrete_subtype(st);
         // compute layout for the wrapper object if the field types have no free variables
         if (!st->isconcretetype && !jl_has_fixed_layout(st)) {
             assert(st == w); // otherwise caller should not have requested this layout
@@ -810,6 +803,20 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     st->ismutationfree = ismutationfree;
     st->isidentityfree = isidentityfree;
     jl_maybe_allocate_singleton_instance(st);
+    return;
+}
+
+void jl_compute_has_concrete_subtype(jl_datatype_t *st) {
+    st->has_concrete_subtype = 1;
+    size_t nfields = jl_svec_len(st->types);
+    // compute a conservative estimate of whether there could exist an instance of a subtype of this
+    for (size_t i = 0; st->has_concrete_subtype && i < nfields - st->name->n_uninitialized; i++) {
+        jl_value_t *fld = jl_svecref(st->types, i);
+        if (fld == jl_bottom_type)
+            st->has_concrete_subtype = 0;
+        else
+            st->has_concrete_subtype = !jl_is_datatype(fld) || ((jl_datatype_t *)fld)->has_concrete_subtype;
+    }
     return;
 }
 

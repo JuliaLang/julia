@@ -184,6 +184,15 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 @test Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 5
 @test Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 7
 
+struct A57757{X,Y}
+    x::X
+    y::Y
+end
+
+@test Compiler.valid_as_lattice(A57757{Int,Int}, true)
+@test Compiler.valid_as_lattice(A57757{<:Int,Int}, true)
+@test !Compiler.valid_as_lattice(A57757{Int,Union{}}, true)
+@test !Compiler.valid_as_lattice(A57757{<:Int,Union{}}, true)
 
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)
