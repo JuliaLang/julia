@@ -462,7 +462,7 @@ If a lower bound fails this test the algorithm stops with the answer `false`.
 
 For example, in the problem `Tuple{Int,String} <: Tuple{T,T} where T`, we derive that
 this would be true if `T` were a supertype of `Union{Int,String}`.
-However, `Union{Int,String}` is an abstract type, so the relation does not hold.
+However, `Union{Int,String}` is a non-concrete type, so the relation does not hold.
 
 This concreteness test is done by the function `is_leaf_bound`.
 Note that this test is slightly different from `jl_is_leaf_type`, since it also returns

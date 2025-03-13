@@ -3344,10 +3344,10 @@ kw"Union{}", Base.Bottom
 """
     Union{Types...}
 
-A `Union` type is an abstract type which includes all instances of any of its argument types.
+A `Union` type is a non-concrete type which includes all instances of any of its argument types.
 This means that `T <: Union{T,S}` and `S <: Union{T,S}`.
 
-Like other abstract types, it cannot be instantiated, even if all of its arguments are non
+Like other non-concrete types, it cannot be instantiated, even if all of its arguments are non
 abstract.
 
 # Examples
@@ -3496,7 +3496,7 @@ julia> Tuple{String, Float64}(["a", 1])
 ```
 
 Tuple types are covariant in their parameters: `Tuple{Int}` is a subtype of `Tuple{Any}`. Therefore `Tuple{Any}`
-is considered an abstract type, and tuple types are only concrete if their parameters are. Tuples do not have
+is considered a non-concrete type, and tuple types are only concrete if their parameters are. Tuples do not have
 field names; fields are only accessed by index.
 Tuple types may have any number of parameters.
 
