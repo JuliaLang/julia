@@ -924,14 +924,29 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     }
     else if (head == jl_export_sym || head == jl_public_sym) {
         int exp = (head == jl_export_sym);
-        for (size_t i = 0; i < jl_array_nrows(ex->args); i++) {
-            jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, i);
-            if (!jl_is_symbol(name))
-                jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno,
-                     exp ? "syntax: malformed \"export\" statement" :
-                           "syntax: malformed \"public\" statement");
-            jl_module_public(m, name, exp);
+        volatile int any_new = 0;
+        JL_LOCK(&world_counter_lock);
+        size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
+        JL_TRY {
+            for (size_t i = 0; i < jl_array_nrows(ex->args); i++) {
+                jl_sym_t *name = (jl_sym_t*)jl_array_ptr_ref(ex->args, i);
+                if (!jl_is_symbol(name))
+                    jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno,
+                         exp ? "syntax: malformed \"export\" statement" :
+                               "syntax: malformed \"public\" statement");
+                if (jl_module_public_(m, name, exp, new_world))
+                    any_new = 1;
+            }
         }
+        JL_CATCH {
+            if (any_new)
+                jl_atomic_store_release(&jl_world_counter, new_world);
+            JL_UNLOCK(&world_counter_lock);
+            jl_rethrow();
+        }
+        if (any_new)
+            jl_atomic_store_release(&jl_world_counter, new_world);
+        JL_UNLOCK(&world_counter_lock);
         JL_GC_POP();
         return jl_nothing;
     }
