@@ -1,0 +1,44 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug lldb load",
+            "program": "${workspaceFolder}/julia",
+            "args": ["--startup-file=no","-J/home/tomasd/_proj/raicode/sysimg/new_sysimg.so"],
+            "cwd": "${workspaceFolder}",
+            "initCommands": ["pro hand -p true -s false -n false SIGSEGV"]
+        },
+        {
+            "type": "gdb",
+            "name": "Debug gdb load",
+            "request": "launch",
+            "target": "${workspaceFolder}/julia",
+            "arguments": "--startup-file=no -J/home/tomasd/_proj/raicode/sysimg/new_sysimg.so",
+            "cwd": "${workspaceFolder}",
+            "debugger_args": ["--eval-command=\"handle SIGSEGV noprint nostop pass\""],
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug lldb write",
+            "program": "${workspaceFolder}/julia",
+            "args": [" --startup-file=no ", " --output-o=sys.o "," -J\"${workspaceFolder}/usr/lib/julia/sys.so\" ", " ${workspaceFolder}/DummyPkg/build.jl "],
+            "cwd": "${workspaceFolder}",
+            "initCommands": ["pro hand -p true -s false -n false SIGSEGV"]
+        },
+        {
+            "type": "gdb",
+            "name": "Debug gdb write",
+            "request": "launch",
+            "target": "${workspaceFolder}/julia",
+            "arguments": "--startup-file=no --output-o=sys.o -J\"${workspaceFolder}/usr/lib/julia/sys.so\" ${workspaceFolder}/DummyPkg/build.jl",
+            "cwd": "${workspaceFolder}",
+            "debugger_args": ["--eval-command=\"handle SIGSEGV noprint nostop pass\""],
+        }
+    ]
+}

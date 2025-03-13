@@ -101,6 +101,52 @@ extern "C" {
 
 #define NUM_TAGS    159
 
+JL_STREAM* global_log_stream = NULL;
+ios_t global_log_file;
+
+void close_global_log_file(void) {
+    ios_flush(&global_log_file);
+    ios_close(&global_log_file);
+    global_log_stream = NULL;
+}
+void open_global_log_file(const char *filename) {
+    ios_t *f = ios_file(&global_log_file, filename, 1, 1, 1, 1);
+    if (f == NULL) {
+            jl_errorf("cannot open log file \"%s\" for writing", filename);
+            close_global_log_file();
+    };
+    global_log_stream = (JL_STREAM*)f;
+}
+
+void json_encode(ios_t *stream, const char* str, size_t len)
+{
+    ios_putc('"', stream);
+    size_t i = 0;
+    char c;
+    while (i < len) {
+        c = str[i];
+        switch (c) {
+        case '"':  ios_write(stream, "\\\"", 2); break;
+        case '\\': ios_write(stream, "\\\\", 2); break;
+        case '\b': ios_write(stream, "\\b",  2); break;
+        case '\f': ios_write(stream, "\\f",  2); break;
+        case '\n': ios_write(stream, "\\n",  2); break;
+        case '\r': ios_write(stream, "\\r",  2); break;
+        case '\t': ios_write(stream, "\\t",  2); break;
+        default:
+            // if (('\x00' <= c) & (c <= '\x1f')) {
+            if ((' ' <= c) & (c <= '~')) { // only print "common ascii"
+                // ios_printf(stream, "\\u%04x", (int)c); TODO
+                ios_putc(c, stream);
+            } else {
+                // ios_putc(c, stream); TODO
+                ios_putc('?', stream);
+            }
+        }
+        i += 1;
+    }
+    ios_putc('"', stream);
+}
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
 jl_value_t **const*const get_tags(void) {
@@ -1181,13 +1227,14 @@ jl_value_t *jl_find_ptr = NULL;
 static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 {
     size_t l = serialization_queue.len;
-
+    size_t const_pos;
     arraylist_new(&layout_table, 0);
     arraylist_grow(&layout_table, l * 2);
     memset(layout_table.items, 0, l * 2 * sizeof(void*));
 
     // Serialize all entries
     for (size_t item = 0; item < l; item++) {
+        const_pos = ios_pos(s->const_data);
         jl_value_t *v = (jl_value_t*)serialization_queue.items[item];           // the object
         JL_GC_PROMISE_ROOTED(v);
         assert(!(s->incremental && jl_object_in_image(v)));
@@ -1205,7 +1252,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         // realign stream to expected gc alignment (16 bytes)
         uintptr_t skip_header_pos = ios_pos(f) + sizeof(jl_taggedvalue_t);
         write_padding(f, LLT_ALIGN(skip_header_pos, 16) - skip_header_pos);
-
         // write header
         if (s->incremental && jl_needs_serialization(s, (jl_value_t*)t) && needs_uniquing((jl_value_t*)t))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(ios_pos(f)|1));
@@ -1288,6 +1334,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 
             // write data
             if (!ar->flags.ptrarray && !ar->flags.hasptr) {
+                assert(const_pos == ios_pos(s->const_data));
                 // Non-pointer eltypes get encoded in the const_data section
                 uintptr_t data = LLT_ALIGN(ios_pos(s->const_data), alignment_amt);
                 write_padding(s->const_data, data - ios_pos(s->const_data));
@@ -1316,6 +1363,13 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     else {
                         ios_write(s->const_data, (char*)jl_array_data(ar), tot);
                     }
+                }
+                if ((ios_pos(s->const_data) - const_pos) > 0) {
+                    jl_printf(global_log_stream, "ARRAY    ");
+                    jl_printf(global_log_stream, "tot_size: %7li, ", ios_pos(s->const_data) - const_pos);
+                    jl_printf(global_log_stream, "eltype: ");
+                    jl_static_show(global_log_stream, et);
+                    jl_printf(global_log_stream, ", len: %li, isbitsunion: %i\n", alen, isbitsunion);
                 }
             }
             else {
@@ -1389,6 +1443,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             ios_write(f, (char*)v, jl_datatype_size(t));
         }
         else if (jl_bigint_type && jl_typetagis(v, jl_bigint_type)) {
+            assert(const_pos == ios_pos(s->const_data));
             // foreign types require special handling
             assert(f == s->s);
             jl_value_t *sizefield = jl_get_nth_field(v, 1);
@@ -1406,6 +1461,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             void *pdata = jl_unbox_voidpointer(jl_get_nth_field(v, 2));
             ios_write(s->const_data, (char*)pdata, nb);
             write_pointer(f);
+            jl_printf(global_log_stream, "BIGINT   ");
+            jl_printf(global_log_stream, "tot_size: %7li\n", ios_pos(s->const_data) - const_pos);
         }
         else {
             // Generic object::DataType serialization by field
@@ -1574,6 +1631,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 jl_datatype_t *newdt = (jl_datatype_t*)&f->buf[reloc_offset];
 
                 if (dt->layout != NULL) {
+                    assert(const_pos == ios_pos(s->const_data));
                     size_t nf = dt->layout->nfields;
                     size_t np = dt->layout->npointers;
                     size_t fieldsize = 0;
@@ -1599,6 +1657,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                         jl_fielddescdyn_t dyn = {0, 0};
                         ios_write(s->const_data, (char*)&dyn, sizeof(jl_fielddescdyn_t));
                     }
+                    jl_printf(global_log_stream, "DATATYPE ");
+                    jl_printf(global_log_stream, "tot_size: %7li, mod: ", ios_pos(s->const_data) - const_pos);
+                    jl_static_show(global_log_stream, dt->name->module);
+                    jl_printf(global_log_stream, ", isforeign: %i ", is_foreign_type);
+                    jl_static_show(global_log_stream, v);
+                    jl_printf(global_log_stream, "\n");
                 }
                 void *superidx = ptrhash_get(&serialization_order, dt->super);
                 if (s->incremental && superidx != HT_NOTFOUND && (char*)superidx - 1 - (char*)HT_NOTFOUND > item && needs_uniquing((jl_value_t*)dt->super))
@@ -1606,6 +1670,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             }
             else if (jl_is_typename(v)) {
                 assert(f == s->s);
+                assert(const_pos == ios_pos(s->const_data));
                 jl_typename_t *tn = (jl_typename_t*)v;
                 jl_typename_t *newtn = (jl_typename_t*)&f->buf[reloc_offset];
                 if (tn->atomicfields != NULL) {
@@ -1628,6 +1693,13 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     arraylist_push(&s->relocs_list, (void*)(((uintptr_t)ConstDataRef << RELOC_TAG_OFFSET) + layout)); // relocation target
                     ios_write(s->const_data, (char*)tn->constfields, nb);
                 }
+                if ((ios_pos(s->const_data) - const_pos) > 0) {
+                    jl_printf(global_log_stream, "TYPENAME ");
+                    jl_printf(global_log_stream, "tot_size: %7li, ", ios_pos(s->const_data) - const_pos);
+                    jl_printf(global_log_stream, "has_atomic: %i, has_const: %i,  ", tn->atomicfields != NULL, tn->constfields != NULL);
+                    jl_static_show(global_log_stream, v);
+                    jl_printf(global_log_stream, "\n");
+                }
             }
             else if (jl_is_globalref(v)) {
                 assert(f == s->s);
@@ -1645,6 +1717,20 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             else {
                 write_padding(f, jl_datatype_size(t) - tot);
             }
+        }
+        if (f == s->const_data) {
+            jl_printf(global_log_stream, "SMALLTAG ");
+            jl_printf(global_log_stream, "tot_size: %7li, ", ios_pos(s->const_data) - const_pos);
+            jl_static_show(global_log_stream, t);
+            jl_printf(global_log_stream, " ");
+            if (jl_is_string(v)) {
+                json_encode(global_log_stream, jl_string_data(v), jl_string_len(v));
+            } else {
+                jl_static_show(global_log_stream, v);
+            }
+            jl_printf(global_log_stream, "\n");
+        } else {
+            assert(const_pos == ios_pos(s->const_data));
         }
     }
     assert(s->uniquing_super.len == 0);
@@ -2783,7 +2869,9 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
+    open_global_log_file("const_data_logs.txt");
     jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_specializations, method_roots_list, ext_targets, edges);
+    close_global_log_file();
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point

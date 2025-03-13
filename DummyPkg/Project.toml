@@ -1,0 +1,4 @@
+name = "DummyPkg"
+uuid = "5fbe56a3-6ea1-46f6-9922-315c7bc193de"
+authors = ["Drvi <tomas.drvostep@gmail.com>"]
+version = "0.1.0"
