@@ -4199,7 +4199,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, vo
         jl_root_new_gvars(&s, image, external_fns_begin);
 
     // Merge precompile_field_replace
-    JL_LOCK_NOGC(&precompile_field_replace_lock);
+    JL_LOCK(&precompile_field_replace_lock);
     if (precompile_field_replace) {
         // Someone has already initialized, take lock and push
 
@@ -4215,7 +4215,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, vo
     } else {
         precompile_field_replace = new_precompile_field_replace;
     }
-    JL_UNLOCK_NOGC(&precompile_field_replace_lock);
+    JL_UNLOCK(&precompile_field_replace_lock);
     ios_close(&relocs);
     ios_close(&const_data);
     ios_close(&gvar_record);
