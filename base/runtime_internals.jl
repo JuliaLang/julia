@@ -197,17 +197,18 @@ function _fieldnames(@nospecialize t)
 end
 
 # N.B.: Needs to be synced with julia.h
-const PARTITION_KIND_CONST        = 0x0
-const PARTITION_KIND_CONST_IMPORT = 0x1
-const PARTITION_KIND_GLOBAL       = 0x2
-const PARTITION_KIND_IMPLICIT     = 0x3
-const PARTITION_KIND_EXPLICIT     = 0x4
-const PARTITION_KIND_IMPORTED     = 0x5
-const PARTITION_KIND_FAILED       = 0x6
-const PARTITION_KIND_DECLARED     = 0x7
-const PARTITION_KIND_GUARD        = 0x8
-const PARTITION_KIND_UNDEF_CONST  = 0x9
-const PARTITION_KIND_BACKDATED_CONST = 0xa
+const PARTITION_KIND_CONST              = 0x0
+const PARTITION_KIND_CONST_IMPORT       = 0x1
+const PARTITION_KIND_GLOBAL             = 0x2
+const PARTITION_KIND_IMPLICIT_GLOBAL    = 0x3
+const PARTITION_KIND_IMPLICIT_CONST     = 0x4
+const PARTITION_KIND_EXPLICIT           = 0x5
+const PARTITION_KIND_IMPORTED           = 0x6
+const PARTITION_KIND_FAILED             = 0x7
+const PARTITION_KIND_DECLARED           = 0x8
+const PARTITION_KIND_GUARD              = 0x9
+const PARTITION_KIND_UNDEF_CONST        = 0xa
+const PARTITION_KIND_BACKDATED_CONST    = 0xb
 
 const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
@@ -218,9 +219,12 @@ const PARTITION_MASK_FLAG         = 0xf0
 
 const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
 
-is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_BACKDATED_CONST)
+is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
-is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_implicit(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED)
+is_some_explicit_imported(kind::UInt8) = (kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_binding_imported(kind::UInt8) = is_some_explicit_imported(kind) || kind == PARTITION_KIND_IMPLICIT_GLOBAL
 is_some_guard(kind::UInt8) = (kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_UNDEF_CONST)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
