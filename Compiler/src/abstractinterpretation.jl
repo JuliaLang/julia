@@ -140,7 +140,16 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     # final result
     gfresult = Future{CallMeta}()
     state = CallInferenceState(func, matches)
-    inferred_refinements = SlotRefinement[]
+    merged_refinements::Union{Nothing, Vector{SlotRefinement}} = nothing
+    fargs = arginfo.fargs
+    if isa(sv, InferenceState) && fargs !== nothing && !isconcretetype(atype)
+        merged_refinements = SlotRefinement[]
+        for farg in fargs
+            isa(farg, SlotNumber) || continue
+            any(x::SlotRefinement -> x.slot === farg, merged_refinements) && continue
+            push!(merged_refinements, SlotRefinement(farg, Union{}))
+        end
+    end
 
     # split the for loop off into a function, so that we can pause and restart it at will
     function infercalls(interp, sv)
@@ -171,11 +180,14 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 this_conditional = ignorelimited(rt)
                 this_rt = widenwrappedconditional(rt)
                 this_exct = exct
+                if merged_refinements !== nothing
+                    merge_slot_refinements!(merged_refinements, 𝕃ᵢ, refinements, fargs, match)
+                end
                 # try constant propagation with argtypes for this match
                 # this is in preparation for inlining, or improving the return result
                 local matches = state.matches
                 this_argtypes = isa(matches, MethodMatches) ? argtypes : matches.applicable_argtypes[state.inferidx]
-                this_arginfo = ArgInfo(arginfo.fargs, this_argtypes)
+                this_arginfo = ArgInfo(fargs, this_argtypes)
                 const_call_result = abstract_call_method_with_const_args(interp,
                     mresult[], state.func, this_arginfo, si, match, sv)
                 const_result = volatile_inf_result
@@ -214,9 +226,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 end
 
                 state.all_effects = merge_effects(state.all_effects, effects)
-                if refinements !== nothing
-                    merge_slot_refinements!(inferred_refinements, 𝕃ᵢ, refinements)
-                end
+
                 if const_result !== nothing
                     local const_results = state.const_results
                     if const_results === nothing
@@ -235,7 +245,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
 
                 state.rettype = state.rettype ⊔ₚ this_rt
                 state.exctype = state.exctype ⊔ₚ this_exct
-                if has_conditional(𝕃ₚ, sv) && this_conditional !== Bottom && is_lattice_bool(𝕃ₚ, state.rettype) && arginfo.fargs !== nothing
+                if has_conditional(𝕃ₚ, sv) && this_conditional !== Bottom && is_lattice_bool(𝕃ₚ, state.rettype) && fargs !== nothing
                     local conditionals = state.conditionals
                     if conditionals === nothing
                         conditionals = state.conditionals = (
@@ -274,9 +284,8 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 state.all_effects = Effects(state.all_effects; nothrow=false)
                 state.exctype = state.exctype ⊔ₚ MethodError
             end
-            local fargs = arginfo.fargs
-            if sv isa InferenceState && fargs !== nothing
-                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, inferred_refinements, argtypes, fargs, sv)
+            if merged_refinements !== nothing
+                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, merged_refinements, argtypes, fargs, applicable)
             end
             state.rettype = from_interprocedural!(interp, state.rettype, sv, arginfo, state.conditionals)
             if call_result_unused(si) && !(state.rettype === Bottom)
@@ -343,19 +352,24 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
     return gfresult
 end
 
-function merge_slot_refinements!(into, 𝕃ᵢ, refinements)
-    ⊔ = join(𝕃ᵢ)
-    for refinement in refinements
-        slot = refinement.slot
-        i = findfirst(x -> x.slot === slot, into)
-        if i === nothing
-            push!(into, refinement)
-        else
-            existing = into[i]
-            into[i] = SlotRefinement(slot, existing.typ ⊔ refinement.typ)
+function merge_slot_refinements!(merged_refinements::Vector{SlotRefinement}, 𝕃ᵢ::AbstractLattice, refinements::Union{Nothing, Vector{SlotRefinement}}, fargs::Vector{Any}, match::MethodMatch)
+    valid_as_lattice(match.spec_types, true) || return nothing
+    ⊔, ⊓ = join(𝕃ᵢ), meet(𝕃ᵢ)
+    for i in 1:length(merged_refinements)
+        merged_refinement = merged_refinements[i]
+        newt = refinements === nothing ? Any : begin
+            j = findfirst(x::SlotRefinement -> x.slot === merged_refinement.slot, refinements)
+            j === nothing ? Any : refinements[j].typ
         end
+        for k in 1:length(fargs)
+            fargₖ = fargs[k]
+            isa(fargₖ, SlotNumber) || continue
+            fargₖ === merged_refinement.slot || continue
+            sigtₖ = fieldtype(match.spec_types, k)
+            newt = newt ⊓ sigtₖ
+        end
+        merged_refinements[i] = SlotRefinement(merged_refinement.slot, merged_refinement.typ ⊔ newt)
     end
-    into
 end
 
 function find_method_matches(interp::AbstractInterpreter, argtypes::Vector{Any}, @nospecialize(atype);
@@ -589,43 +603,30 @@ function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospe
     end
 end
 
-function collect_slot_refinements(𝕃ᵢ::AbstractLattice, applicable::Vector{MethodMatchTarget}, refinements::Vector{SlotRefinement}, argtypes::Vector{Any}, fargs::Vector{Any}, sv::InferenceState)
-    ⊏, ⊑, ⊔ = strictpartialorder(𝕃ᵢ), partialorder(𝕃ᵢ), join(𝕃ᵢ)
+function collect_slot_refinements(𝕃ᵢ::AbstractLattice, merged_refinements::Vector{SlotRefinement}, argtypes::Vector{Any}, fargs::Vector{Any}, applicable)
+    ⊏ = strictpartialorder(𝕃ᵢ)
     slotrefinements = nothing
     for i = 1:length(fargs)
         fargᵢ = fargs[i]
-        if fargᵢ isa SlotNumber
-            argt = widenslotwrapper(argtypes[i])
-            if isvarargtype(argt)
-                argt = unwrapva(argt)
+        fargᵢ isa SlotNumber || continue
+        argt = unwrapva(widenslotwrapper(argtypes[i]))
+        if slotrefinements !== nothing && any(x::SlotRefinement -> fargᵢ === x.slot, slotrefinements)
+            # slot was already processed, and argtypes should be identical for the same slot
+            for i′ in 1:length(fargs)
+                i === i′ && continue
+                fargᵢ′ = fargs[i′]
+                fargᵢ′ === fargᵢ || continue
+                @assert widenslotwrapper(unwrapva(argtypes[i′])) == argt
             end
-            sigt = Bottom
-            for j = 1:length(applicable)
-                (;match) = applicable[j]
-                valid_as_lattice(match.spec_types, true) || continue
-                sigt = sigt ⊔ fieldtype(match.spec_types, i)
-            end
-            j = findfirst(x -> x.slot === fargᵢ, refinements)
-            newt = j === nothing ? sigt : begin
-                inferred = refinements[j].typ
-                sigt ⊑ inferred ? sigt : inferred ⊑ sigt ? inferred : begin
-                    # Core.println("sigt and inferred are not ordered: ", sigt, ", ", inferred)
-                    sigt
-                end
-            end
-            if newt ⊏ argt # i.e. inferred slot type is strictly more specific than the type of the argument slot
-                if slotrefinements === nothing
-                    slotrefinements = SlotRefinement[]
-                end
-                j = findfirst(x -> fargᵢ == x.slot, slotrefinements)
-                refinement = SlotRefinement(fargᵢ, newt)
-                if j === nothing
-                    push!(slotrefinements, refinement)
-                else
-                    slotrefinements[j] = refinement
-                end
-            end
+            continue
         end
+        j = findfirst(x::SlotRefinement -> x.slot === fargᵢ, merged_refinements)::Int
+        newt = merged_refinements[j].typ
+        newt === Union{} && continue
+        newt ⊏ argt || continue
+        refinement = SlotRefinement(fargᵢ, newt)
+        slotrefinements === nothing && (slotrefinements = SlotRefinement[])
+        push!(slotrefinements, refinement)
     end
     return slotrefinements
 end
