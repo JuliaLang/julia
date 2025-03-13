@@ -271,7 +271,7 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
         }
         else {
             assert(jl_is_simplevector(item));
-            assert(jl_svec_len(item) == 2);
+            assert(jl_svec_len(item) == 2 || jl_svec_len(item) == 3);
             jl_array_ptr_1d_push(m2, item);
         }
     }

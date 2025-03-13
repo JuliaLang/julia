@@ -256,7 +256,7 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
     caches = IdDict{MethodInstance,CodeInstance}()
     errors = ErrorList()
     parents = ParentMap()
-    for i = 1:2:length(codeinfos)
+    for i = 1:length(codeinfos)
         item = codeinfos[i]
         if item isa CodeInstance
             push!(inspected, item)
@@ -268,14 +268,14 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
             end
         end
     end
-    for i = 1:2:length(codeinfos)
+    for i = 1:length(codeinfos)
         item = codeinfos[i]
         if item isa CodeInstance
             src = codeinfos[i + 1]::CodeInfo
             verify_codeinstance!(item, src, inspected, caches, parents, errors)
-        else
-            rt = item::Type
-            sig = codeinfos[i + 1]::Type
+        elseif item isa SimpleVector
+            rt = item[1]::Type
+            sig = item[2]::Type
             ptr = ccall(:jl_get_specialization1,
                         #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
                         sig, this_world, #= mt_cache =# 0)

@@ -784,9 +784,12 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
         }
         else {
-            jl_value_t *sig = jl_array_ptr_ref(codeinfos, ++i);
-            assert(jl_is_type(item) && jl_is_type(sig));
-            jl_generate_ccallable(clone.getModuleUnlocked(), nullptr, item, sig, params);
+            assert(jl_is_simplevector(item));
+            jl_value_t *rt = jl_svecref(item, 0);
+            jl_value_t *sig = jl_svecref(item, 1);
+            jl_value_t *nameval = jl_svec_len(item) == 2 ? jl_nothing : jl_svecref(item, 2);
+            assert(jl_is_type(rt) && jl_is_type(sig));
+            jl_generate_ccallable(clone.getModuleUnlocked(), nullptr, nameval, rt, sig, params);
         }
     }
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
