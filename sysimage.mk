@@ -107,7 +107,7 @@ $$(build_private_libdir)/sysbase$1-o.a $$(build_private_libdir)/sysbase$1-bc.a :
 		false; \
 	fi )
 	@mv $$@.tmp $$@
-$$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(build_private_libdir)/sys$1-%.a : $$(build_private_libdir)/sysbase$1.ji $$(JULIAHOME)/contrib/generate_precompile.jl
+$$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(build_private_libdir)/sys$1-%.a : $$(build_private_libdir)/sysbase$1.$$(SHLIB_EXT) $$(JULIAHOME)/contrib/generate_precompile.jl
 	@$$(call PRINT_JULIA, cd $$(JULIAHOME)/base && \
 	if ! JULIA_BINDIR=$$(call cygpath_w,$(build_bindir)) \
 		 WINEPATH="$$(call cygpath_w,$$(build_bindir));$$$$WINEPATH" \
