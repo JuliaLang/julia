@@ -747,7 +747,7 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 The lowest value representable by the given (real) numeric DataType `T`.
 
-See also: [`floatmin`](@ref), [`typemax`](@ref), [`eps`](@ref).
+See also: [`floatmin`](@ref), [`maxintfloat`](@ref), [`typemax`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest
@@ -774,7 +774,7 @@ function typemin end
 
 The highest value representable by the given (real) numeric `DataType`.
 
-See also: [`floatmax`](@ref), [`typemin`](@ref), [`eps`](@ref).
+See also: [`floatmax`](@ref), [`maxintfloat`](@ref), [`typemin`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest
