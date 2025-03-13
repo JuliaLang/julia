@@ -73,7 +73,7 @@ LLVM_EXPERIMENTAL_TARGETS :=
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
-LLVM_CPPFLAGS := -L"$(build_prefix)/lib/libz.so.1"
+LLVM_CPPFLAGS := "$(build_prefix)/lib/libz.so.1"
 LLVM_LDFLAGS :=
 LLVM_CMAKE :=
 
