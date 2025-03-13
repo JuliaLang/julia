@@ -977,19 +977,16 @@ function propagate_refinements(callee::InferenceState, caller::InferenceState, s
     isva = callee.linfo.def.isva
     n = length(stmt.args)
     m = callee.linfo.def.nargs
-    isva || n == m || begin
-        # `stmt` does not represent a direct call to `callee`,
-        # which may instead be an `invoke`/`return_type`/`finalizer` call.
-        f = stmt.args[1]
-        if isa(f, SSAValue)
-            f = caller.src.ssavaluetypes[f.id]
-            @assert f === Const(invoke) || f === Const(Base.Compiler.return_type) || f === Const(Core.finalizer)
-        else
-            @assert isa(f, GlobalRef)
-            @assert f === GlobalRef(Core, :invoke)
-        end
+    f_callee = fieldtype(callee.linfo.specTypes, 1)
+    f_called = argextype(stmt.args[1], caller.src, caller.sptypes)
+    # Make sure that the expression actually represents a direct call to `callee`.
+    # It may not be the case if identify the callee through `invoke`, `modifyfield!`,
+    # `finalizer` or `return_type`.
+    # TODO: propagate refinements through `invoke` calls
+    f_callee ⊑ f_called || # `f_called` might not be inferred precisely
+        f_called ⊑ f_callee || # callee may be unspecialized
         return nothing
-    end
+    isva || @assert n == m
     for i in 2:n
         arg = stmt.args[i]
         isa(arg, SlotNumber) || continue
