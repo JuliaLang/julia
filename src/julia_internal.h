@@ -855,7 +855,6 @@ typedef struct _modstack_t {
     jl_binding_t *b;
     struct _modstack_t *prev;
 } modstack_t;
-void jl_check_new_binding_implicit(jl_binding_partition_t *new_bpart, jl_binding_t *b, modstack_t *st, size_t world);
 
 #ifndef __clang_gcanalyzer__
 // The analyzer doesn't like looking through the arraylist, so just model the
@@ -918,6 +917,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b J
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, enum jl_partition_kind kind, size_t new_world) JL_GLOBALLY_ROOTED;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b JL_PROPAGATES_ROOT,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world) JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t *bpart);
 extern jl_array_t *jl_module_init_order JL_GLOBALLY_ROOTED;
 extern htable_t jl_current_modules JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_module_t *jl_precompile_toplevel_module JL_GLOBALLY_ROOTED;
@@ -937,7 +937,11 @@ jl_method_t *jl_make_opaque_closure_method(jl_module_t *module, jl_value_t *name
 JL_DLLEXPORT int jl_is_valid_oc_argtype(jl_tupletype_t *argt, jl_method_t *source);
 
 STATIC_INLINE int jl_bkind_is_some_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == PARTITION_KIND_IMPLICIT || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED;
+    return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED;
+}
+
+STATIC_INLINE int jl_bkind_is_some_explicit_import(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED;
 }
 
 STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
@@ -945,15 +949,15 @@ STATIC_INLINE int jl_bkind_is_some_guard(enum jl_partition_kind kind) JL_NOTSAFE
 }
 
 STATIC_INLINE int jl_bkind_is_some_implicit(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == PARTITION_KIND_IMPLICIT || jl_bkind_is_some_guard(kind);
+    return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_IMPLICIT_GLOBAL || jl_bkind_is_some_guard(kind);
 }
 
 STATIC_INLINE int jl_bkind_is_some_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_BACKDATED_CONST;
+    return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_BACKDATED_CONST;
 }
 
 STATIC_INLINE int jl_bkind_is_defined_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
-    return kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_BACKDATED_CONST;
+    return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_BACKDATED_CONST;
 }
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_GLOBALLY_ROOTED;
@@ -982,7 +986,8 @@ STATIC_INLINE void jl_walk_binding_inplace_worlds(jl_binding_t **bnd, jl_binding
 STATIC_INLINE void jl_walk_binding_inplace(jl_binding_t **bnd, jl_binding_partition_t **bpart, size_t world) JL_NOTSAFEPOINT
 {
     while (1) {
-        if (!jl_bkind_is_some_import(jl_binding_kind(*bpart)))
+        enum jl_partition_kind kind = jl_binding_kind(*bpart);
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
             return;
         *bnd = (jl_binding_t*)(*bpart)->restriction;
         *bpart = jl_get_binding_partition(*bnd, world);
@@ -994,14 +999,14 @@ STATIC_INLINE void jl_walk_binding_inplace_depwarn(jl_binding_t **bnd, jl_bindin
     int passed_explicit = 0;
     while (1) {
         enum jl_partition_kind kind = jl_binding_kind(*bpart);
-        if (!jl_bkind_is_some_import(kind)) {
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
             if (!passed_explicit && depwarn)
                 *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
             return;
         }
         if (!passed_explicit && depwarn)
             *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
-        if (kind != PARTITION_KIND_IMPLICIT)
+        if (kind != PARTITION_KIND_IMPLICIT_GLOBAL)
             passed_explicit = 1;
         *bnd = (jl_binding_t*)(*bpart)->restriction;
         *bpart = jl_get_binding_partition(*bnd, world);
@@ -1014,14 +1019,14 @@ STATIC_INLINE void jl_walk_binding_inplace_all(jl_binding_t **bnd, jl_binding_pa
     int passed_explicit = 0;
     while (*bpart) {
         enum jl_partition_kind kind = jl_binding_kind(*bpart);
-        if (!jl_bkind_is_some_import(kind)) {
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
             if (!passed_explicit && depwarn)
                 *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
             return;
         }
         if (!passed_explicit && depwarn)
             *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
-        if (kind != PARTITION_KIND_IMPLICIT)
+        if (kind != PARTITION_KIND_IMPLICIT_GLOBAL)
             passed_explicit = 1;
         *bnd = (jl_binding_t*)(*bpart)->restriction;
         *bpart = jl_get_binding_partition_all(*bnd, min_world, max_world);
@@ -1038,14 +1043,14 @@ STATIC_INLINE void jl_walk_binding_inplace_worlds(jl_binding_t **bnd, jl_binding
         if (*max_world > bpart_max_world)
             *max_world = bpart_max_world;
         enum jl_partition_kind kind = jl_binding_kind(*bpart);
-        if (!jl_bkind_is_some_import(kind)) {
+        if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL) {
             if (!passed_explicit && depwarn)
                 *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
             return;
         }
         if (!passed_explicit && depwarn)
             *depwarn |= (*bpart)->kind & PARTITION_FLAG_DEPWARN;
-        if (kind != PARTITION_KIND_IMPLICIT)
+        if (kind != PARTITION_KIND_IMPLICIT_GLOBAL)
             passed_explicit = 1;
         *bnd = (jl_binding_t*)(*bpart)->restriction;
         *bpart = jl_get_binding_partition(*bnd, world);
