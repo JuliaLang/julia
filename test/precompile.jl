@@ -1595,25 +1595,28 @@ precompile_test_harness("Issue #26028") do load_path
         """
         module Foo26028
         module Bar26028
+            using Foo26028: Foo26028 as InnerFoo1
+            using ..Foo26028: Foo26028 as InnerFoo2
             x = 0
             y = 0
         end
         function __init__()
-            include(joinpath(@__DIR__, "Baz26028.jl"))
+            Baz = @eval module Baz26028
+                  using Test
+                  public @test_throws
+                  import Foo26028.Bar26028.y as y1
+                  import ..Foo26028.Bar26028.y as y2
+                  end
+            @eval Base \$Baz.@test_throws(ConcurrencyViolationError("deadlock detected in loading Foo26028 using Foo26028"),
+                                         import Foo26028.Bar26028.x)
         end
-        end
-        """)
-    write(joinpath(load_path, "Baz26028.jl"),
-        """
-        module Baz26028
-        using Test
-        @test_throws(ConcurrencyViolationError("deadlock detected in loading Foo26028 -> Foo26028"),
-                     @eval import Foo26028.Bar26028.x)
-        import ..Foo26028.Bar26028.y
         end
         """)
     Base.compilecache(Base.PkgId("Foo26028"))
     @test_nowarn @eval using Foo26028
+    invokelatest() do
+        @test Foo26028 === Foo26028.Bar26028.InnerFoo1 === Foo26028.Bar26028.InnerFoo2
+    end
 end
 
 precompile_test_harness("Issue #29936") do load_path
@@ -2227,7 +2230,7 @@ precompile_test_harness("No package module") do load_path
     """)
     @test_throws r"Failed to precompile NoModule" Base.compilecache(Base.identify_package("NoModule"), io, io)
     @test occursin(
-        "NoModule [top-level] did not define the expected module `NoModule`, check for typos in package module name",
+        "package `NoModule` did not define the expected module `NoModule`, check for typos in package module name",
         String(take!(io)))
 
 
@@ -2239,7 +2242,7 @@ precompile_test_harness("No package module") do load_path
     """)
     @test_throws r"Failed to precompile WrongModuleName" Base.compilecache(Base.identify_package("WrongModuleName"), io, io)
     @test occursin(
-        "WrongModuleName [top-level] did not define the expected module `WrongModuleName`, check for typos in package module name",
+        "package `WrongModuleName` did not define the expected module `WrongModuleName`, check for typos in package module name",
         String(take!(io)))
 
 
@@ -2357,6 +2360,21 @@ precompile_test_harness("MainImportDisallow") do load_path
     invokelatest() do
         @test MainImportDisallow.importvar.msg == "Any `import` or `using` from `Main` is prohibited during incremental compilation."
         @test MainImportDisallow.usingmain.msg == "Any `import` or `using` from `Main` is prohibited during incremental compilation."
+    end
+end
+
+precompile_test_harness("Package top-level load itself") do load_path
+    write(joinpath(load_path, "UsingSelf.jl"),
+        """
+        __precompile__(false)
+        module UsingSelf
+        using UsingSelf
+        x = 3
+        end
+          """)
+    @eval using UsingSelf
+    invokelatest() do
+        @test UsingSelf.x == 3
     end
 end
 
