@@ -2464,59 +2464,137 @@ isasome(::Nothing) = false
     return 0
 end |> only === Int
 
+
 @testset "Interprocedural slot refinement" begin
-    # basic case; type assert of `x` from `subfunc` should
-    # propagate refinement information to `x` from `topfunc`.
-    let subfunc(x) = x::Float64 + 1
-        src = code_typed1((Any,); optimize = false) do x
-            y = subfunc(x)
-            return sin(x), cos(y)
+    return_after(f, x) = (f(x); x)
+    return_after(f, x, y) = (f(x, y); (x, y))
+    return_after(f, x, y, z) = (f(x, y, z); (x, y, z))
+
+    @testset "Signature/refinement merging for a single method match" begin
+        # refinement ⊏ signature type
+        let subfunc(x::Number) = x::AbstractFloat
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === AbstractFloat
         end
-        @test src.slottypes[2] === Any
-        @test src.rettype === Tuple{Float64, Float64}
+
+        # signature type ⊏ refinement
+        let subfunc(x::Float64) = x::AbstractFloat
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Float64
+        end
+
+        # signature type === refinement
+        let subfunc(x::AbstractFloat) = x::AbstractFloat
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === AbstractFloat
+        end
+
+        ## multiple refinements for a single slot in a single call
+
+        let subfunc(x, y) = (x::AbstractFloat, y::Float64)
+            src = code_typed1((f, x) -> (f(x, x); x), (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Float64
+        end
+
+        let subfunc(x, y) = (x::Union{Int64, Float64}, y::Union{Float64, String})
+            src = code_typed1((f, x) -> (f(x, x); x), (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Float64
+        end
+
+        let subfunc(x::Float64, y) = (x, y::AbstractFloat)
+            src = code_typed1((f, x) -> (f(x, x); x), (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Float64
+        end
+
+        let subfunc(x, y::Float64) = (x::AbstractFloat, y)
+            src = code_typed1((f, x) -> (f(x, x); x), (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Float64
+        end
+
+        let subfunc(x::String, y) = (x, y::Float64)
+            src = code_typed1((f, x) -> (f(x, x); x), (typeof(subfunc), Any); optimize = false)
+            # XXX: we could also refine `x` down to `Union{}`
+            @test src.rettype === Any
+        end
+
+        let subfunc(x::T, y::T) where {T<:Number} = (x::Float64, y)
+            src = code_typed1(return_after, (typeof(subfunc), Any, Any); optimize = false)
+            # XXX: we could also further refine `y` to `Float64` using the diagonal type constraint
+            @test src.rettype === Tuple{Float64, Number}
+        end
     end
 
-    # don't propagate refinement information if type assumptions
-    # may be invalidated by exception catching
-    let subfunc(x) = x::Float64 + 1
-        src = code_typed1((Any,); optimize = false) do x
-            y = try subfunc(x); catch; 0.0 end
-            # `x` must not be inferred to Float64 here!
-            return sin(x), cos(y)
+    @testset "Merging refinements across method matches" begin
+        let subfunc(lt::typeof(isless)) = lt::typeof(isless)
+            subfunc(lt) = lt
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Any
         end
-        @test src.slottypes[2] === Any
-        @test src.rettype === Tuple{Any, Float64}
+
+        let subfunc(x) = unwrap_unionall(x)
+            U = Union{Type{Tuple}, Core.TypeofVararg, UnionAll}
+            src = code_typed1(return_after, (typeof(subfunc), U); optimize = false)
+            @test src.rettype === U
+        end
+
+        let subfunc(x::AbstractFloat) = x
+            subfunc(x) = x::Number
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Number
+        end
+
+        let subfunc(x) = x::AbstractFloat
+            subfunc(x::Number) = x
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Number
+        end
+
+        let subfunc(x::Float64) = x
+            subfunc(x) = x::String
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Union{Float64, String}
+        end
+
+        let subfunc(x::Number, y) = (x, y::Float64)
+            subfunc(x, y) = (x::String, y::Symbol)
+            subfunc(x::Symbol, y::Int64) = (x, y::String)
+            src = code_typed1(return_after, (typeof(subfunc), Any, Any); optimize = false)
+            # XXX: we could further infer `y` as `Union{Float64, Symbol}`,
+            # as the third method will always throw.
+            @test src.rettype === Tuple{Union{Number, String, Symbol}, Union{Float64, Symbol, Int64}}
+        end
+
+        let subfunc(x::Float64, y, z) = (x, y::String, z::Float64)
+            subfunc(x::Float64, y::String, z) = (x, y, z::Symbol)
+            src = code_typed1(return_after, (typeof(subfunc), Any, Any, Any); optimize = false)
+            # XXX: it is theoretically possible to infer `z::Symbol` given that
+            # `y::String` implies dispatching to the second method; the first
+            # is therefore never dispatched to if we assume that execution does not throw.
+            @test src.rettype === Tuple{Float64, String, Union{Float64, Symbol}}
+        end
     end
 
-    # merge refinements across control-flow paths
-    let subfunc(x) = begin
-            x < 0 && return x::Float64 + 2
-            x::Float64 + 1
+    @testset "Computation and use of slot refinements across control-flow paths" begin
+        # don't propagate refinement information if type assumptions
+        # may be invalidated by exception catching
+        let subfunc(x) = x::Float64
+            src = code_typed1((f, x) -> (try subfunc(x); catch; end; x), (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Any
         end
-        src = code_typed1((Any,); optimize = false) do x
-            y = subfunc(x)
-            # `x` should be inferred to Float64 here
-            return sin(x), cos(y)
-        end
-        @test src.slottypes[2] === Any
-        # XXX: Replace test once refinements are merged across control-flow paths
-        # @test src.rettype === Tuple{Float64, Float64}
-    end
 
-    # ensure that slot refinements are propagated for recursive calls
-    let subfunc(x) = begin
-            x < 0 && return x::Float64
-            sx, cy = topfunc(x::Float64 - 10000)
-            sx + cy
+        let subfunc(x) = rand(Bool) ? x::Float64 : x::String
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Any
+            # TODO: Implement merging of local refinements into global refinements
+            # @test src.rettype === Union{Float64, String}
         end
-        src = code_typed1((Any,); optimize = false) do x
-            y = subfunc(x)
-            return sin(x), cos(y)
+
+        let subfunc(x) = rand(Bool) ? x::Float64 : subfunc(x)
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            @test src.rettype === Any
+            # TODO: Implement merging of local refinements into global refinements
+            # @test src.rettype === Float64
         end
-        @test src.slottypes[2] === Any
-        @test src.rettype === Tuple{Any, Any}
-        # XXX: Replace test once refinements are merged across control-flow paths
-        # @test src.rettype === Tuple{Float64, Float64}
     end
 end
 
