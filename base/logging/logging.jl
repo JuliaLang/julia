@@ -172,6 +172,7 @@ Alias for [`LogLevel(1_000_001)`](@ref LogLevel).
 const AboveMaxLevel = LogLevel( 1000001)
 
 # Global log limiting mechanism for super fast but inflexible global log limiting.
+# Atomic ensures that the value is always consistent across threads.
 const _min_enabled_level = Threads.Atomic{Int32}(Debug)
 
 function show(io::IO, level::LogLevel)
