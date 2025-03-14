@@ -209,6 +209,26 @@ module CcallableRetTypeTest
     @test do_the_call() === 42.0
 end
 
+module CcallableNameTest
+    using Base: llvmcall, @ccallable
+    using Test
+    @ccallable "jl_some_other_name" function returns_float()::Float64
+        return 42
+    end
+    function do_the_call()
+        llvmcall(
+            ("""declare double @jl_some_other_name()
+                define double @entry() #0 {
+                0:
+                    %1 = call double @jl_some_other_name()
+                    ret double %1
+                }
+                attributes #0 = { alwaysinline }
+            """, "entry"),Float64,Tuple{})
+    end
+    @test do_the_call() === 42.0
+end
+
 # Issue #48093 - test that non-external globals are not deduplicated
 function kernel()
     Base.llvmcall(("""
