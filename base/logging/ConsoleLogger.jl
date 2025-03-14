@@ -9,6 +9,9 @@ interactive work with the Julia REPL.
 
 Log levels less than `min_level` are filtered out.
 
+This Logger is thread-safe, with locks for both orchestration of message
+limits i.e. `maxlog`, and writes to the stream.
+
 Message formatting can be controlled by setting keyword arguments:
 
 * `meta_formatter` is a function which takes the log event metadata
@@ -24,29 +27,30 @@ Message formatting can be controlled by setting keyword arguments:
 """
 struct ConsoleLogger <: AbstractLogger
     stream::IO
+    stream_lock::ReentrantLock
     min_level::LogLevel
     meta_formatter
     show_limited::Bool
     right_justify::Int
     message_limits::Dict{Any,Int}
-    lock::ReentrantLock
+    message_limits_lock::ReentrantLock
 end
 function ConsoleLogger(stream::IO, min_level=Info;
                        meta_formatter=default_metafmt, show_limited=true,
                        right_justify=0)
-    ConsoleLogger(stream, min_level, meta_formatter,
+    ConsoleLogger(stream, ReentrantLock(), min_level, meta_formatter,
                   show_limited, right_justify, Dict{Any,Int}(), ReentrantLock())
 end
 function ConsoleLogger(min_level=Info;
                        meta_formatter=default_metafmt, show_limited=true,
                        right_justify=0)
-    ConsoleLogger(closed_stream, min_level, meta_formatter,
+    ConsoleLogger(closed_stream, ReentrantLock(), min_level, meta_formatter,
                   show_limited, right_justify, Dict{Any,Int}(), ReentrantLock())
 end
 
 
 shouldlog(logger::ConsoleLogger, level, _module, group, id) =
-    @lock logger.lock get(logger.message_limits, id, 1) > 0
+    @lock logger.message_limits_lock get(logger.message_limits, id, 1) > 0
 
 min_enabled_level(logger::ConsoleLogger) = logger.min_level
 
@@ -110,7 +114,7 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     hasmaxlog = haskey(kwargs, :maxlog) ? 1 : 0
     maxlog = get(kwargs, :maxlog, nothing)
     if maxlog isa Core.BuiltinInts
-        @lock logger.lock begin
+        @lock logger.message_limits_lock begin
             remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
             logger.message_limits[id] = remaining - 1
             remaining > 0 || return
@@ -188,6 +192,6 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     end
 
     b = take!(buf)
-    @lock logger.lock write(stream, b)
+    @lock logger.stream_lock write(stream, b)
     nothing
 end
