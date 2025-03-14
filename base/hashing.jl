@@ -15,7 +15,7 @@ Typically, any type that implements `hash` should also implement its own [`==`](
 
 The hash value may change when a new Julia process is started.
 
-```jldoctest
+```jldoctest; filter = r"0x[0-9a-f]{16}"
 julia> a = hash(10)
 0x95ea2955abd45275
 
