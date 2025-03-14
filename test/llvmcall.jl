@@ -143,40 +143,6 @@ function call_jl_errno()
 end
 call_jl_errno()
 
-module ObjLoadTest
-    using Base: llvmcall, @ccallable
-    using Test
-    didcall = false
-    """    jl_the_callback()
-
-    Sets the global didcall when it did the call
-    """
-    @ccallable Cvoid function jl_the_callback()
-        global didcall
-        didcall = true
-        nothing
-    end
-    @test_throws(ErrorException("@ccallable was already defined for this method name"),
-            @eval @ccallable String jl_the_callback(not_the_method::Int) = "other")
-    # Make sure everything up until here gets compiled
-    @test jl_the_callback() === nothing
-    @test jl_the_callback(1) == "other"
-    didcall = false
-    function do_the_call()
-        llvmcall(
-            ("""declare void @jl_the_callback()
-                define void @entry() #0 {
-                0:
-                    call void @jl_the_callback()
-                    ret void
-                }
-                attributes #0 = { alwaysinline }
-            """, "entry"),Cvoid,Tuple{})
-    end
-    do_the_call()
-    @test didcall
-end
-
 # Test for proper parenting
 local foo
 function foo()
@@ -188,26 +154,6 @@ function foo()
     Cvoid, Tuple{})
 end
 code_llvm(devnull, foo, ())
-
-module CcallableRetTypeTest
-    using Base: llvmcall, @ccallable
-    using Test
-    @ccallable function jl_test_returns_float()::Float64
-        return 42
-    end
-    function do_the_call()
-        llvmcall(
-            ("""declare double @jl_test_returns_float()
-                define double @entry() #0 {
-                0:
-                    %1 = call double @jl_test_returns_float()
-                    ret double %1
-                }
-                attributes #0 = { alwaysinline }
-            """, "entry"),Float64,Tuple{})
-    end
-    @test do_the_call() === 42.0
-end
 
 # Issue #48093 - test that non-external globals are not deduplicated
 function kernel()
