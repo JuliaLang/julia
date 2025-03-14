@@ -7,9 +7,9 @@ LLVM_ASSERT_JLL_VER := 19.1.7+1
 # Version number of LLVM
 LLVM_VER := 20.1.0
 # Git branch name in `LLVM_GIT_URL` repository
-LLVM_BRANCH=9191f0d890728ba959cb2b2a76e3ab914069cabc
+LLVM_BRANCH=d95ac947448f0eb0de729d80c575607334871f3f
 # Git ref in `LLVM_GIT_URL` repository
-LLVM_SHA1=9191f0d890728ba959cb2b2a76e3ab914069cabc
+LLVM_SHA1=d95ac947448f0eb0de729d80c575607334871f3f
 
 ## Following options are used to automatically fetch patchset from Julia's fork.  This is
 ## useful if you want to build an external LLVM while still applying Julia's patches.
