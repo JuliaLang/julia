@@ -925,7 +925,7 @@ function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
     fake_response = (Base.ExceptionStack([(exception=Error19864(),backtrace=Ptr{Cvoid}[])]),true)
-    REPL.print_response(buf, fake_response, false, false, nothing)
+    REPL.print_response(buf, fake_response, nothing, false, false, nothing)
     return String(take!(buf))
 end
 @test occursin("correct19864", test19864())
