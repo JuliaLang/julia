@@ -225,11 +225,13 @@
                  (if lb (list lb ub) (list ub))
                  (if lb (list lb '(core Any)) '())))))
 
+;; Note that Scheme pairs representing a method in the AST are
+;; of the form (method name) or (method (outerref name)), at least in Julia 1.10.
 (define (is-method? x)
   (if (and (pair? x) (eq? (car x) 'method))
       (let ((name (cadr x)))
-        (if (and (pair? name) (eq? (car name) 'globalref))
-            (let ((name (caddr name)))
+        (if (and (pair? name) (eq? (car name) 'outerref))
+            (let ((name (cadr name)))
               (if (symbol? name)
                   #t
                   #f))
