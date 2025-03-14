@@ -1154,6 +1154,14 @@ let s, c, r
             @test string(dir, "/") in c
             @test r == 2:sizeof(s)
             @test s[r] == joinpath(path, "tmpfoob")
+
+            # Homedir expansion inside Cmd string (#57624)
+            s = "`ls " * path * "/tmpfoob"
+            c,r = test_complete(s)
+            @test string(dir, "/") in c
+            @test r == 5:sizeof(s)
+            @test s[r] == joinpath(path, "tmpfoob")
+
             s = "\"~"
             @test joinpath(path, "tmpfoobar/") in c
             c,r = test_complete(s)
@@ -1549,11 +1557,11 @@ test_dict_completion("test_repl_comp_customdict")
 @testset "dict_identifier_key" begin
     # Issue #23004: this should not throw:
     let s = "test_dict_ℂ[\\"
-        @test REPLCompletions.completions(s, sizeof(s), CompletionFoo) isa Tuple
+        @test REPLCompletions.completions(s, sizeof(s), Main.CompletionFoo) isa Tuple
     end
     # Issue #55931: neither should this:
     let s = "test_dict_no_length["
-        @test REPLCompletions.completions(s, sizeof(s), CompletionFoo) isa Tuple
+        @test REPLCompletions.completions(s, sizeof(s), Main.CompletionFoo) isa Tuple
     end
 end
 
@@ -2495,7 +2503,7 @@ let (c, r, res) = test_complete_context("global xxx::Number = Base.", Main)
     @test "pi" ∈ c
 end
 
-# #57473
+# #55842
 let (c, r) = test_complete_pos("@tim| using Date")
     @test "@time" in c
     @test r == 1:4
@@ -2533,4 +2541,25 @@ let s = "@ignoremacro A .= A setup=(A=ident"
     c, r = test_complete(s)
     @test "identity"in c
     @test r == 30:34
+end
+
+# #57307
+let s = "unicode_αβγ.yy = named.len"
+    c, r = test_complete_foo(s)
+    @test "len2" in c
+    @test r == 27:29
+end
+
+# #55429
+let s = "@time @eval CompletionFoo.Compl"
+    c, r = test_complete(s)
+    @test "CompletionFoo2" in c
+    @test r == 27:31
+end
+
+# #55420
+let s = "CompletionFoo.test(iden"
+    c, r = test_complete(s)
+    @test "identity" in c
+    @test r == 20:23
 end
