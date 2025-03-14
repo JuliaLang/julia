@@ -3109,7 +3109,7 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
     # write data over stdin to avoid the (unlikely) case of exceeding max command line size
     write(io.in, """
         empty!(Base.EXT_DORMITORY) # If we have a custom sysimage with `EXT_DORMITORY` prepopulated
-        Base.track_nested_precomp($(_pkg_str(vcat(Base.precompilation_stack, pkg))))
+        Base.track_nested_precomp($(_pkg_str(push!(copy(Base.precompilation_stack), pkg))))
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
