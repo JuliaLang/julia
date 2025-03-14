@@ -2563,3 +2563,15 @@ let s = "CompletionFoo.test(iden"
     @test "identity" in c
     @test r == 20:23
 end
+
+# #57772
+let s = "sum(!ismis"
+    c, r = test_complete(s)
+    @test "ismissing" in c
+    @test r == 6:10
+end
+let s = "sum(!!ismis"
+    c, r = test_complete(s)
+    @test "ismissing" in c
+    @test r == 7:11
+end
