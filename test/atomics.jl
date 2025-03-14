@@ -1099,3 +1099,14 @@ test_once_undef(Any)
 test_once_undef(Union{Nothing,Integer})
 test_once_undef(UndefComplex{Any})
 test_once_undef(UndefComplex{UndefComplex{Any}})
+
+mutable struct Atomic57190
+    @atomic x::Int
+end
+
+
+function add_one57190!()
+    @atomic (Atomic57190(0).x) += 1
+end
+
+@test add_one57190!() == 1
