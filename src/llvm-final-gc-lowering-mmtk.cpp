@@ -155,4 +155,3 @@ void FinalLowerGC::lowerWriteBarrier(CallInst *target, Function &F) {
         assert(false);
     }
 }
-

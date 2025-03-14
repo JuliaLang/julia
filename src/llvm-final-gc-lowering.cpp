@@ -187,7 +187,7 @@ bool FinalLowerGC::runOnFunction(Function &F)
             ++it;
         }
     }
-    
+
     // Lower all calls to supported intrinsics.
     for (auto &BB : F) {
         for (auto &I : make_early_inc_range(BB)) {

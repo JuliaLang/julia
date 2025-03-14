@@ -989,12 +989,12 @@ ascending the tree from the given `AbsIntState`).
 Note that cycles may be visited in any order.
 """
 struct AbsIntStackUnwind
-    sv::AbsIntState
+    callstack::Vector{AbsIntState}
+    AbsIntStackUnwind(sv::AbsIntState) = new(sv.callstack::Vector{AbsIntState})
 end
-iterate(unw::AbsIntStackUnwind) = (unw.sv, length(unw.sv.callstack::Vector{AbsIntState}))
-function iterate(unw::AbsIntStackUnwind, frame::Int)
+function iterate(unw::AbsIntStackUnwind, frame::Int=length(unw.callstack))
     frame == 0 && return nothing
-    return ((unw.sv.callstack::Vector{AbsIntState})[frame], frame - 1)
+    return (unw.callstack[frame], frame - 1)
 end
 
 struct AbsIntCycle
