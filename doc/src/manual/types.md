@@ -231,11 +231,11 @@ specific method named `myplus` that matches the given arguments. (See [Methods](
 information on multiple dispatch.)
 
 Assuming no method more specific than the above is found, Julia next internally defines and compiles
-a method called `myplus` specifically for two `Int` arguments based on the generic function given
+a method called `myplus` specifically for two `Int64` arguments based on the generic function given
 above, i.e., it implicitly defines and compiles:
 
 ```julia
-function myplus(x::Int,y::Int)
+function myplus(x::Int64,y::Int64)
     x+y
 end
 ```
