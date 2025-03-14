@@ -672,25 +672,25 @@ function _mul!(C::AbstractMatrix, A::Diagonal, B::BiTriSym, _add::MulAddMul = Mu
     C
 end
 
-function *(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
+function mul(A::UpperOrUnitUpperTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = mul!(similar(A, TS, size(A)), A, B)
     return B.uplo == 'U' ? UpperTriangular(C) : C
 end
 
-function *(A::LowerOrUnitLowerTriangular, B::Bidiagonal)
+function mul(A::LowerOrUnitLowerTriangular, B::Bidiagonal)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = mul!(similar(A, TS, size(A)), A, B)
     return B.uplo == 'L' ? LowerTriangular(C) : C
 end
 
-function *(A::Bidiagonal, B::UpperOrUnitUpperTriangular)
+function mul(A::Bidiagonal, B::UpperOrUnitUpperTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = mul!(similar(B, TS, size(B)), A, B)
     return A.uplo == 'U' ? UpperTriangular(C) : C
 end
 
-function *(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
+function mul(A::Bidiagonal, B::LowerOrUnitLowerTriangular)
     TS = promote_op(matprod, eltype(A), eltype(B))
     C = mul!(similar(B, TS, size(B)), A, B)
     return A.uplo == 'L' ? LowerTriangular(C) : C

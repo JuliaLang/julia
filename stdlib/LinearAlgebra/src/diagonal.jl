@@ -275,7 +275,7 @@ function _muldiag_size_check(C, A, B)
     _size_check_out(C, A, B)
 end
 
-function (*)(Da::Diagonal, Db::Diagonal)
+function mul(Da::Diagonal, Db::Diagonal)
     _muldiag_size_check(Da, Db)
     return Diagonal(Da.diag .* Db.diag)
 end
@@ -342,11 +342,11 @@ function lmul!(D::Diagonal, T::Tridiagonal)
     return T
 end
 
-function (*)(A::AdjOrTransAbsMat, D::Diagonal)
+function mul(A::AdjOrTransAbsMat, D::Diagonal)
     Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
     rmul!(Ac, D)
 end
-function (*)(D::Diagonal, A::AdjOrTransAbsMat)
+function mul(D::Diagonal, A::AdjOrTransAbsMat)
     Ac = copy_similar(A, promote_op(*, eltype(A), eltype(D.diag)))
     lmul!(D, Ac)
 end

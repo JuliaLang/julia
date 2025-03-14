@@ -524,7 +524,7 @@ for f in (:+, :-)
     end
 end
 
-*(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
+mul(A::HermOrSym, B::HermOrSym) = A * copyto!(similar(parent(B)), B)
 
 function dot(x::AbstractVector, A::RealHermSymComplexHerm, y::AbstractVector)
     require_one_based_indexing(x, y)

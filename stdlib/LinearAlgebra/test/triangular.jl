@@ -1014,4 +1014,19 @@ end
     end
 end
 
+struct MyTriangular{T, A<:LinearAlgebra.AbstractTriangular{T}} <: LinearAlgebra.AbstractTriangular{T,A}
+    data :: A
+end
+Base.size(A::MyTriangular) = size(A.data)
+Base.getindex(A::MyTriangular, i::Int, j::Int) = A.data[i,j]
+
+@testset "diagonal mul for generic triangular" begin
+    @testset for T in (UpperTriangular, LowerTriangular, UnitUpperTriangular, UnitLowerTriangular)
+        M = MyTriangular(T(rand(4,4)))
+        D = Diagonal(randn(4))
+        @test D * M ≈ D * M.data
+        @test M * D ≈ M.data * D
+    end
+end
+
 end # module TestTriangular

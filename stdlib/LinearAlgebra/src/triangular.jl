@@ -1606,7 +1606,7 @@ end
 
 ## Some Triangular-Triangular cases. We might want to write tailored methods
 ## for these cases, but I'm not sure it is worth it.
-for f in (:*, :\)
+for f in (:mul, :\)
     @eval begin
         ($f)(A::LowerTriangular, B::LowerTriangular) =
             LowerTriangular(@invoke $f(A::LowerTriangular, B::AbstractMatrix))
