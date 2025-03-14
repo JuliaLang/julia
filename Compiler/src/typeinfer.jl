@@ -937,7 +937,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
                 local refinements = if isa(caller, InferenceState)
                     local stmt = caller.src.code[caller.currpc]
-                    propagate_refinements(frame, caller, stmt, typeinf_lattice(interp))
+                    propagate_refinements(frame, caller, stmt, interp)
                 else
                     nothing
                 end
@@ -968,11 +968,13 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, nothing, edgecycle, edgelimited))
 end
 
-function propagate_refinements(callee::InferenceState, caller::InferenceState, stmt, 𝕃ᵢ)
+function propagate_refinements(callee::InferenceState, caller::InferenceState, stmt, interp::AbstractInterpreter)
     isexpr(stmt, :(=), 2) && (stmt = stmt.args[2])
     isexpr(stmt, :call) || return nothing
     stmt.args[1] === GlobalRef(Core, :_apply_iterate) && return nothing
-    ⊑, ⊓ = partialorder(𝕃ᵢ), meet(𝕃ᵢ)
+    𝕃ᵢ = typeinf_lattice(interp)
+    𝕃ₚ = ipo_lattice(interp)
+    ⊑ = partialorder(𝕃ᵢ)
     refinements = nothing
     isva = callee.linfo.def.isva
     n = length(stmt.args)
@@ -980,8 +982,8 @@ function propagate_refinements(callee::InferenceState, caller::InferenceState, s
     f_callee = fieldtype(callee.linfo.specTypes, 1)
     f_called = argextype(stmt.args[1], caller.src, caller.sptypes)
     # Make sure that the expression actually represents a direct call to `callee`.
-    # It may not be the case if identify the callee through `invoke`, `modifyfield!`,
-    # `finalizer` or `return_type`.
+    # It may not be the case if the callee was identified through `invoke`, `modifyfield!`,
+    # `finalizer`, `return_type` or similar proxies.
     # TODO: propagate refinements through `invoke` calls
     f_callee ⊑ f_called || # `f_called` might not be inferred precisely
         f_called ⊑ f_callee || # callee may be unspecialized
@@ -1008,11 +1010,19 @@ function propagate_refinements(callee::InferenceState, caller::InferenceState, s
                 # A given slot was used multiple times.
                 existing = refinements[j].typ
                 existing === from && continue
-                refinements[j] = SlotRefinement(arg, existing ⊓ from)
+                newt = from ⊑ existing ? from : intersect_refined_types(from, existing, 𝕃ₚ)
+                refinements[j] = SlotRefinement(arg, newt)
             end
         end
     end
     refinements
+end
+
+function intersect_refined_types(@nospecialize(xtyp), @nospecialize(ytyp), 𝕃ₚ::AbstractLattice)
+    ⊓ = meet(𝕃ₚ)
+    isa(xtyp, Const) && isa(ytyp, Const) && return xtyp == ytyp ? xtyp : Union{}
+    isa(ytyp, Const) && ((xtyp, ytyp) = (ytyp, xtyp))
+    xtyp ⊓ ytyp
 end
 
 # The `:terminates` effect bit must be conservatively tainted unless recursion cycle has
