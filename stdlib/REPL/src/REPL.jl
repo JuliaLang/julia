@@ -120,6 +120,22 @@ mutable struct REPLBackend
 end
 REPLBackend() = REPLBackend(Channel(1), Channel(1), false)
 
+# A reference to a backend that is not mutable
+struct REPLBackendRef
+    repl_channel::Channel{Any}
+    response_channel::Channel{Any}
+end
+REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel)
+
+function destroy(ref::REPLBackendRef, state::Task)
+    if istaskfailed(state)
+        close(ref.repl_channel, TaskFailedException(state))
+        close(ref.response_channel, TaskFailedException(state))
+    end
+    close(ref.repl_channel)
+    close(ref.response_channel)
+end
+
 """
     softscope(ex)
 
@@ -418,12 +434,23 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
     while true
         tls = task_local_storage()
         tls[:SOURCE_PATH] = nothing
-        ast, show_value = take!(backend.repl_channel)
+        ast_or_func, show_value = take!(backend.repl_channel)
         if show_value == -1
             # exit flag
             break
         end
-        eval_user_input(ast, backend, get_module())
+        if ast_or_func isa Expr
+            ast = ast_or_func
+            eval_user_input(ast, backend, get_module())
+        else
+            f = ast_or_func
+            try
+                ret = f()
+                put!(backend.response_channel, Pair{Any, Bool}(ret, false))
+            catch err
+                put!(backend.response_channel, Pair{Any, Bool}(err, true))
+            end
+        end
     end
     return nothing
 end
@@ -526,7 +553,7 @@ function print_response(repl::AbstractREPL, response, show_value::Bool, have_col
     repl.waserror = response[2]
     with_repl_linfo(repl) do io
         io = IOContext(io, :module => Base.active_module(repl)::Module)
-        print_response(io, response, show_value, have_color, specialdisplay(repl))
+        print_response(io, response, backend(repl), show_value, have_color, specialdisplay(repl))
     end
     return nothing
 end
@@ -543,7 +570,7 @@ function repl_display_error(errio::IO, @nospecialize errval)
     return nothing
 end
 
-function print_response(errio::IO, response, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
+function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothing}, show_value::Bool, have_color::Bool, specialdisplay::Union{AbstractDisplay,Nothing}=nothing)
     Base.sigatomic_begin()
     val, iserr = response
     while true
@@ -557,9 +584,14 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
                 if val !== nothing && show_value
                     try
                         if specialdisplay === nothing
-                            Base.invokelatest(display, val)
+                            # display calls may require being run on the main thread
+                            eval_with_backend(backend) do
+                                Base.invokelatest(display, val)
+                            end
                         else
-                            Base.invokelatest(display, specialdisplay, val)
+                            eval_with_backend(backend) do
+                                Base.invokelatest(display, specialdisplay, val)
+                            end
                         end
                     catch
                         println(errio, "Error showing value of type ", typeof(val), ":")
@@ -593,21 +625,7 @@ function print_response(errio::IO, response, show_value::Bool, have_color::Bool,
     nothing
 end
 
-# A reference to a backend that is not mutable
-struct REPLBackendRef
-    repl_channel::Channel{Any}
-    response_channel::Channel{Any}
-end
-REPLBackendRef(backend::REPLBackend) = REPLBackendRef(backend.repl_channel, backend.response_channel)
 
-function destroy(ref::REPLBackendRef, state::Task)
-    if istaskfailed(state)
-        close(ref.repl_channel, TaskFailedException(state))
-        close(ref.response_channel, TaskFailedException(state))
-    end
-    close(ref.repl_channel)
-    close(ref.response_channel)
-end
 
 """
     run_repl(repl::AbstractREPL)
@@ -1130,10 +1148,25 @@ find_hist_file() = get(ENV, "JULIA_HISTORY",
 
 backend(r::AbstractREPL) = r.backendref
 
-function eval_with_backend(ast, backend::REPLBackendRef)
-    put!(backend.repl_channel, (ast, 1))
+
+function eval_with_backend(ast::Expr, backend::REPLBackendRef)
+    put!(backend.repl_channel, (ast, 1)) # (f, show_value)
     return take!(backend.response_channel) # (val, iserr)
 end
+function eval_with_backend(f, backend::REPLBackendRef)
+    put!(backend.repl_channel, (f, false)) # (f, show_value)
+    return take!(backend.response_channel) # (val, iserr)
+end
+# if no backend just eval (used by tests)
+function eval_with_backend(f, backend::Nothing)
+    try
+        ret = f()
+        return (ret, false) # (val, iserr)
+    catch err
+        return (err, true)
+    end
+end
+
 
 function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon::Bool = true)
     return function do_respond(s::MIState, buf, ok::Bool)
