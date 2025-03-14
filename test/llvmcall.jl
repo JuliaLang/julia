@@ -272,3 +272,21 @@ s = MyStruct()
 @test eltype(supertype(Core.LLVMPtr{UInt8,1})) <: UInt8
 @test s.kern == 0
 @test reinterpret(Int, s.ptr) == 0
+
+function too_few_args(x::Int32, y::Int32)
+    llvmcall("""%3 = add i32 %1, %0
+                ret i32 %3""",
+        Int32,
+        Tuple{Int32, Int32},
+        x)
+end
+@test_throws ErrorException too_few_args(Int32(1), Int32(1))
+
+function too_many_args(x::Int32, y::Int32)
+    llvmcall("""%3 = add i32 %1, %0
+                ret i32 %3""",
+        Int32,
+        Tuple{Int32, Int32},
+        x,y,x)
+end
+@test_throws ErrorException too_many_args(Int32(1), Int32(1))
