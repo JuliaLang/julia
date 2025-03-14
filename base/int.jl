@@ -763,7 +763,7 @@ julia> typemin(Float16)
 julia> typemin(Float32)
 -Inf32
 
-julia> floatmin(Float32)  # smallest finite Float32 floating point number
+julia> floatmin(Float32)  # smallest positive finite Float32 floating point number
 1.1754944f-38
 ```
 """
@@ -790,7 +790,7 @@ Inf
 julia> typemax(Float32)
 Inf32
 
-julia> floatmax(Float32)  # largest finite Float32 floating point number
+julia> floatmax(Float32)  # largest positive finite Float32 floating point number
 3.4028235f38
 ```
 """
