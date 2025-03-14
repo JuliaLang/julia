@@ -2524,9 +2524,35 @@ let s = "using .CompletionFoo: bar, type_"
 end
 
 # #55518
+let s = "CompletionFoo.@barfoo nothi"
+    c, r = test_complete(s)
+    @test "nothing" in c
+    @test r == 23:27
+end
 let s = "CompletionFoo.@barfoo kwtest"
     c, r = test_complete(s)
     @test isempty(c)
+end
+let s = "CompletionFoo.kwtest(x=type"
+    c, r = test_complete(s)
+    @test "typeof" in c
+    @test !("type_test" in c)
+    @test r == 24:27
+end
+let s = "CompletionFoo.bar; nothi"
+    c, r = test_complete(s)
+    @test "nothing" in c
+    @test r == 20:24
+end
+let s = "CompletionFoo.bar; @ti"
+    c, r = test_complete(s)
+    @test "@time" in c
+    @test r == 20:22
+end
+let s = "x = sin.([1]); y = ex"
+    c, r = test_complete(s)
+    @test "exp" in c
+    @test r == 20:21
 end
 
 # #57611
