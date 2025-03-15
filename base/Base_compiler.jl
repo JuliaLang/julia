@@ -1,9 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-baremodule Base
+module Base
 
-using Core
-using Core.Intrinsics, Core.IR
+using .Core.Intrinsics, .Core.IR
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
@@ -370,4 +369,4 @@ Core._setparser!(fl_parse)
 
 # Further definition of Base will happen in Base.jl if loaded.
 
-end # baremodule Base
+end # module Base
