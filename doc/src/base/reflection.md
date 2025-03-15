@@ -125,7 +125,7 @@ generation for any function which has not previously been called).
 For convenience, there are macro versions of the above functions which take standard function
 calls and expand argument types automatically:
 
-```julia-repl
+```jldoctest
 julia> @code_llvm +(1,1)
 ;  @ int.jl:87 within `+`
 ; Function Attrs: sspstrong uwtable
