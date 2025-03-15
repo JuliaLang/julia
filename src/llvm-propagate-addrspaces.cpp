@@ -289,7 +289,7 @@ bool propagateJuliaAddrspaces(Function &F) {
     PropagateJuliaAddrspacesVisitor visitor;
     visitor.visit(F);
     for (auto it : visitor.ToInsert)
-        it.first->insertBefore(it.second);
+        it.first->insertBefore(it.second->getIterator());
     for (Instruction *I : visitor.ToDelete)
         I->eraseFromParent();
     visitor.ToInsert.clear();
