@@ -336,13 +336,13 @@ julia> searchsorted([1, 2, 4, 5, 5, 7], 5) # multiple matches
 4:5
 
 julia> searchsorted([1, 2, 4, 5, 5, 7], 3) # no match, insert in the middle
-3:2
+3:2 (empty range)
 
 julia> searchsorted([1, 2, 4, 5, 5, 7], 9) # no match, insert at end
-7:6
+7:6 (empty range)
 
 julia> searchsorted([1, 2, 4, 5, 5, 7], 0) # no match, insert at start
-1:0
+1:0 (empty range)
 
 julia> searchsorted([1=>"one", 2=>"two", 2=>"two", 4=>"four"], 2=>"two", by=first) # compare the keys of the pairs
 2:3
