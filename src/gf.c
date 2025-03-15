@@ -759,33 +759,6 @@ JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
     return ret;
 }
 
-static int get_method_unspec_list(jl_typemap_entry_t *def, void *closure)
-{
-    size_t world = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *specializations = jl_atomic_load_relaxed(&def->func.method->specializations);
-    if (specializations == (jl_value_t*)jl_emptysvec)
-        return 1;
-    if (!jl_is_svec(specializations)) {
-        jl_method_instance_t *mi = (jl_method_instance_t*)specializations;
-        assert(jl_is_method_instance(mi));
-        if (jl_rettype_inferred_native(mi, world, world) == jl_nothing)
-            jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
-        return 1;
-    }
-    size_t i, l = jl_svec_len(specializations);
-    JL_GC_PUSH1(&specializations);
-    for (i = 0; i < l; i++) {
-        jl_method_instance_t *mi = (jl_method_instance_t*)jl_svecref(specializations, i);
-        if ((jl_value_t*)mi != jl_nothing) {
-            assert(jl_is_method_instance(mi));
-            if (jl_rettype_inferred_native(mi, world, world) == jl_nothing)
-                jl_array_ptr_1d_push((jl_array_t*)closure, (jl_value_t*)mi);
-        }
-    }
-    JL_GC_POP();
-    return 1;
-}
-
 int foreach_mtable_in_module(
         jl_module_t *m,
         int (*visit)(jl_methtable_t *mt, void *env),
@@ -865,42 +838,14 @@ int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env), voi
     return 1;
 }
 
-static int reset_mt_caches(jl_methtable_t *mt, void *env)
-{
-    // removes all method caches
-    // this might not be entirely safe (GC or MT), thus we only do it very early in bootstrapping
-    if (!mt->frozen) { // make sure not to reset builtin functions
-        jl_atomic_store_release(&mt->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
-        jl_atomic_store_release(&mt->cache, jl_nothing);
-    }
-    jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), get_method_unspec_list, env);
-    return 1;
-}
-
 
 jl_function_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
 
 JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f)
 {
-    size_t newfunc = jl_typeinf_world == 1 && jl_typeinf_func == NULL;
     jl_typeinf_func = (jl_function_t*)f;
     jl_typeinf_world = jl_get_tls_world_age();
-    int world = jl_atomic_fetch_add(&jl_world_counter, 1) + 1; // make type-inference the only thing in this world
-    if (newfunc) {
-        // give type inference a chance to see all of these
-        // TODO: also reinfer if max_world != ~(size_t)0
-        jl_array_t *unspec = jl_alloc_vec_any(0);
-        JL_GC_PUSH1(&unspec);
-        jl_foreach_reachable_mtable(reset_mt_caches, (void*)unspec);
-        size_t i, l;
-        for (i = 0, l = jl_array_nrows(unspec); i < l; i++) {
-            jl_method_instance_t *mi = (jl_method_instance_t*)jl_array_ptr_ref(unspec, i);
-            if (jl_rettype_inferred_native(mi, world, world) == jl_nothing)
-                jl_type_infer(mi, world, SOURCE_MODE_NOT_REQUIRED);
-        }
-        JL_GC_POP();
-    }
 }
 
 static int very_general_type(jl_value_t *t)
@@ -4639,6 +4584,44 @@ JL_DLLEXPORT void jl_typeinf_timing_end(uint64_t start, int is_recompile)
         }
     }
 }
+
+// declare a C-callable entry point; called during code loading from the toplevel
+JL_DLLEXPORT void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
+{
+    // validate arguments. try to do as many checks as possible here to avoid
+    // throwing errors later during codegen.
+    JL_TYPECHK(@ccallable, type, declrt);
+    if (!jl_is_tuple_type(sigt))
+        jl_type_error("@ccallable", (jl_value_t*)jl_anytuple_type_type, (jl_value_t*)sigt);
+    // check that f is a guaranteed singleton type
+    jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
+    if (!jl_is_datatype(ft) || !jl_is_datatype_singleton(ft))
+        jl_error("@ccallable: function object must be a singleton");
+
+    // compute / validate return type
+    if (!jl_is_concrete_type(declrt) || jl_is_kind(declrt))
+        jl_error("@ccallable: return type must be concrete and correspond to a C type");
+    if (!jl_type_mappable_to_c(declrt))
+        jl_error("@ccallable: return type doesn't correspond to a C type");
+
+    // validate method signature
+    size_t i, nargs = jl_nparams(sigt);
+    for (i = 1; i < nargs; i++) {
+        jl_value_t *ati = jl_tparam(sigt, i);
+        if (!jl_is_concrete_type(ati) || jl_is_kind(ati) || !jl_type_mappable_to_c(ati))
+            jl_error("@ccallable: argument types must be concrete");
+    }
+
+    // save a record of this so that the alias is generated when we write an object file
+    jl_method_t *meth = (jl_method_t*)jl_methtable_lookup(ft->name->mt, (jl_value_t*)sigt, jl_atomic_load_acquire(&jl_world_counter));
+    if (!jl_is_method(meth))
+        jl_error("@ccallable: could not find requested method");
+    JL_GC_PUSH1(&meth);
+    meth->ccallable = jl_svec2(declrt, (jl_value_t*)sigt);
+    jl_gc_wb(meth, meth->ccallable);
+    JL_GC_POP();
+}
+
 
 #ifdef __cplusplus
 }

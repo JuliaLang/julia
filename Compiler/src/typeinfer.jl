@@ -876,7 +876,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             end
         end
     end
-    if ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
+    if !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
         add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
         return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
     end
@@ -1160,15 +1160,17 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
             end
         end
     end
-    if isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0
-        src = retrieve_code_info(mi, get_inference_world(interp))
-        if src isa CodeInfo
-            finish!(interp, mi, ci, src)
-        else
-            engine_reject(interp, ci)
+    if !InferenceParams(interp).force_enable_inference
+        if isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0
+            src = retrieve_code_info(mi, get_inference_world(interp))
+            if src isa CodeInfo
+                finish!(interp, mi, ci, src)
+            else
+                engine_reject(interp, ci)
+            end
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
+            return ci
         end
-        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-        return ci
     end
     result = InferenceResult(mi, typeinf_lattice(interp))
     result.ci = ci
@@ -1314,7 +1316,10 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     # first compute the ABIs of everything
     latest = true # whether this_world == world_counter()
     for this_world in reverse(sort!(worlds))
-        interp = NativeInterpreter(this_world)
+        interp = NativeInterpreter(
+            this_world;
+            inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+        )
         for i = 1:length(methods)
             # each item in this list is either a MethodInstance indicating something
             # to compile, or an svec(rettype, sig) describing a C-callable alias to create.
@@ -1355,7 +1360,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                 src = codeinfo_for_const(interp, mi, callee.rettype_const)
             elseif haskey(interp.codegen, callee)
                 src = interp.codegen[callee]
-            elseif isa(def, Method) && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0 && trim_mode == TRIM_NO
+            elseif isa(def, Method) && !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0
                 src = retrieve_code_info(mi, get_inference_world(interp))
             else
                 # TODO: typeinf_code could return something with different edges/ages/owner/abi (needing an update to callee), which we don't handle here

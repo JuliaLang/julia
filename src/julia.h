@@ -1020,6 +1020,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_undefvarerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_fielderror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_atomicerror_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_missingcodeerror_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_trimfailure_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_lineinfonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_abioverride_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_stackovf_exception JL_GLOBALLY_ROOTED;
@@ -2200,7 +2201,6 @@ typedef enum {
 // A loaded, but unparsed .ji or .so image file
 typedef struct {
     jl_image_kind_t kind;
-    void *handle;
     const void *pointers; // jl_image_pointers_t *
     const char *data;
     size_t size;

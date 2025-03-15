@@ -3934,27 +3934,30 @@ void post_boot_hooks(void)
     jl_int32_type->super = jl_signed_type;
     jl_int64_type->super = jl_signed_type;
 
-    jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
-    jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
-    jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
-    jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
-    jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
-    jl_fielderror_type     = (jl_datatype_t*)core("FieldError");
-    jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");
-    jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
-    jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
-    jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
+    jl_stackovf_exception       = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
+    jl_diverror_exception       = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
+    jl_undefref_exception       = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
+    jl_interrupt_exception      = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
+    jl_memory_exception         = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
     jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
-    jl_typeerror_type      = (jl_datatype_t*)core("TypeError");
-    jl_argumenterror_type  = (jl_datatype_t*)core("ArgumentError");
-    jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
-    jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
-    jl_initerror_type      = (jl_datatype_t*)core("InitError");
+    jl_precompilable_error      = jl_new_struct_uninit((jl_datatype_t*)core("PrecompilableError"));
+
+    jl_errorexception_type   = (jl_datatype_t*)core("ErrorException");
+    jl_undefvarerror_type    = (jl_datatype_t*)core("UndefVarError");
+    jl_fielderror_type       = (jl_datatype_t*)core("FieldError");
+    jl_atomicerror_type      = (jl_datatype_t*)core("ConcurrencyViolationError");
+    jl_boundserror_type      = (jl_datatype_t*)core("BoundsError");
+    jl_typeerror_type        = (jl_datatype_t*)core("TypeError");
+    jl_argumenterror_type    = (jl_datatype_t*)core("ArgumentError");
+    jl_methoderror_type      = (jl_datatype_t*)core("MethodError");
+    jl_loaderror_type        = (jl_datatype_t*)core("LoadError");
+    jl_initerror_type        = (jl_datatype_t*)core("InitError");
     jl_missingcodeerror_type = (jl_datatype_t*)core("MissingCodeError");
-    jl_precompilable_error = jl_new_struct_uninit((jl_datatype_t*)core("PrecompilableError"));
-    jl_pair_type           = core("Pair");
-    jl_kwcall_func         = core("kwcall");
-    jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
+    jl_trimfailure_type      = (jl_datatype_t*)core("TrimFailure");
+
+    jl_pair_type             = core("Pair");
+    jl_kwcall_func           = core("kwcall");
+    jl_kwcall_mt             = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
     jl_atomic_store_relaxed(&jl_kwcall_mt->max_args, 0);
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
