@@ -1108,7 +1108,11 @@ record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
 # `record_passes()` is true. i.e. set env var `JULIA_TEST_RECORD_PASSES=true` before running any testsets
 function record(ts::DefaultTestSet, t::Pass)
     ts.n_passed += 1
-    record_passes() && push!(ts.results, t)
+    if record_passes()
+        # throw away the value so it can be GC-ed
+        t_novalue = Pass(t.test_type, t.orig_expr, t.data, nothing, t.source, t.message_only)
+        push!(ts.results, t_novalue)
+    end
     return t
 end
 
