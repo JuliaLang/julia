@@ -35,6 +35,19 @@ julia> Threads.threadid(Threads.@spawn "foo")
 """
 threadid() = Int(ccall(:jl_threadid, Int16, ())+1)
 
+"""
+    Threads.threadpool_threadidx() -> Int
+
+Return the index of the current thread in its threadpool.
+i.e. For the first default thread when 1 interactive thread exists this returns 1
+because the interactive threadpool comes first in threadid order.
+"""
+function threadpool_threadidx()
+    pool  = threadpool()
+    first_tid = _threadpool_first_threadid(pool)
+    return Int(threadid() - first_tid + 1)
+end
+
 # lower bound on the largest threadid()
 """
     Threads.maxthreadid() -> Int
@@ -144,17 +157,29 @@ function threadpoolsize(pool::Symbol = :default)
     return _nthreads_in_pool(tpid)
 end
 
+function _threadpool_first_threadid(pool::Symbol)
+    if pool === :interactive
+        return 1
+    end
+    if pool === :default
+        ni = _nthreads_in_pool(Int8(0))
+        return ni+1
+    else
+        error("invalid threadpool specified")
+    end
+end
+
 """
     threadpooltids(pool::Symbol)
 
 Returns a vector of IDs of threads in the given pool.
 """
 function threadpooltids(pool::Symbol)
-    ni = _nthreads_in_pool(Int8(0))
+    first_tid = _threadpool_first_threadid(pool)
     if pool === :interactive
-        return collect(1:ni)
+        return collect(1:_nthreads_in_pool(Int8(0)))
     elseif pool === :default
-        return collect(ni+1:ni+_nthreads_in_pool(Int8(1)))
+        return collect(first_tid:first_tid+_nthreads_in_pool(Int8(1)))
     else
         error("invalid threadpool specified")
     end
