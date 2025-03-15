@@ -14,7 +14,7 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results]),
+        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results, :time_infer_total, :time_infer_cache_saved, :time_infer_self]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:module]),
@@ -33,7 +33,7 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
         (Core.Method, [:primary_world, :deleted_world]),
         (Core.MethodInstance, [:cache, :flags]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),

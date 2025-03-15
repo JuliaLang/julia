@@ -640,6 +640,9 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         assert(const_flags & 2);
         jl_atomic_store_relaxed(&codeinst->invoke, jl_fptr_const_return);
     }
+    codeinst->time_infer_total = 0;
+    codeinst->time_infer_self = 0;
+    jl_atomic_store_relaxed(&codeinst->time_compile, 0);
     jl_atomic_store_relaxed(&codeinst->specsigflags, 0);
     jl_atomic_store_relaxed(&codeinst->precompile, 0);
     jl_atomic_store_relaxed(&codeinst->next, NULL);
@@ -652,12 +655,16 @@ JL_DLLEXPORT void jl_update_codeinst(
         jl_code_instance_t *codeinst, jl_value_t *inferred,
         int32_t const_flags, size_t min_world, size_t max_world,
         uint32_t effects, jl_value_t *analysis_results,
+        double time_infer_total, double time_infer_cache_saved, double time_infer_self,
         jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/)
 {
     assert(min_world <= max_world && "attempting to set invalid world constraints");
     //assert((!jl_is_method(codeinst->def->def.value) || max_world != ~(size_t)0 || min_world <= 1 || jl_svec_len(edges) != 0) && "missing edges");
     codeinst->analysis_results = analysis_results;
     jl_gc_wb(codeinst, analysis_results);
+    codeinst->time_infer_total = julia_double_to_half(time_infer_total);
+    codeinst->time_infer_cache_saved = julia_double_to_half(time_infer_cache_saved);
+    codeinst->time_infer_self = julia_double_to_half(time_infer_self);
     jl_atomic_store_relaxed(&codeinst->ipo_purity_bits, effects);
     jl_atomic_store_relaxed(&codeinst->debuginfo, di);
     jl_gc_wb(codeinst, di);

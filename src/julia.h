@@ -450,9 +450,9 @@ typedef struct _jl_code_instance_t {
     _Atomic(jl_value_t *) inferred;
     _Atomic(jl_debuginfo_t *) debuginfo; // stored information about edges from this object (set once, with a happens-before both source and invoke)
     _Atomic(jl_svec_t *) edges; // forward edge info
-    //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // purity results
+    jl_value_t *analysis_results; // Analysis results about this code (IPO-safe)
     // see also encode_effects() and decode_effects() in `base/compiler/effects.jl`,
     _Atomic(uint32_t) ipo_purity_bits;
     // purity_flags:
@@ -464,9 +464,14 @@ typedef struct _jl_code_instance_t {
     //     uint8_t inaccessiblememonly : 2;
     //     uint8_t noub                : 2;
     //     uint8_t nonoverlayed        : 2;
-    jl_value_t *analysis_results; // Analysis results about this code (IPO-safe)
 
     // compilation state cache
+    // these time fields have units of seconds (60 ns minimum resolution and 18 hour maximum saturates to Infinity) and are stored in Float16 format
+    uint16_t time_infer_total; // total cost of computing `inferred` originally
+    uint16_t time_infer_cache_saved; // adjustment to total cost, reflecting how much time was saved by having caches, to give a stable real cost without caches for comparisons
+    uint16_t time_infer_self; // self cost of julia inference for `inferred` (included in time_infer_total)
+    _Atomic(uint16_t) time_compile; // self cost of llvm compilation (e.g. of computing `invoke`)
+    //TODO: uint8_t absolute_max; // whether true max world is unknown
     _Atomic(uint8_t) specsigflags; // & 0b001 == specptr is a specialized function signature for specTypes->rettype
                                    // & 0b010 == invokeptr matches specptr
                                    // & 0b100 == From image
