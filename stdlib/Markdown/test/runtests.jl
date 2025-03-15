@@ -4,6 +4,8 @@ using Test, Markdown, StyledStrings
 import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, insert_hlines, plain, term, html, rst, Table, Code, LaTeX, Footnote
 import Base: show
 
+@test error("dummy error")
+
 # Basics
 # Equality is checked by making sure the HTML output is
 # the same – the structure itself may be different.
