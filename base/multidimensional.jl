@@ -329,25 +329,7 @@ module IteratorsMD
     promote_rule(::Type{CartesianIndices{N,R1}}, ::Type{CartesianIndices{N,R2}}) where {N,R1,R2} =
         CartesianIndices{N,Base.indices_promote_type(R1,R2)}
 
-    convert(::Type{Tuple{}}, R::CartesianIndices{0}) = ()
-    for RT in (OrdinalRange{Int, Int}, StepRange{Int, Int}, AbstractUnitRange{Int})
-        @eval convert(::Type{NTuple{N,$RT}}, R::CartesianIndices{N}) where {N} =
-            map(x->convert($RT, x), R.indices)
-    end
-    convert(::Type{NTuple{N,AbstractUnitRange}}, R::CartesianIndices{N}) where {N} =
-        convert(NTuple{N,AbstractUnitRange{Int}}, R)
-    convert(::Type{NTuple{N,UnitRange{Int}}}, R::CartesianIndices{N}) where {N} =
-        UnitRange{Int}.(convert(NTuple{N,AbstractUnitRange}, R))
-    convert(::Type{NTuple{N,UnitRange}}, R::CartesianIndices{N}) where {N} =
-        UnitRange.(convert(NTuple{N,AbstractUnitRange}, R))
-    convert(::Type{Tuple{Vararg{AbstractUnitRange{Int}}}}, R::CartesianIndices{N}) where {N} =
-        convert(NTuple{N,AbstractUnitRange{Int}}, R)
-    convert(::Type{Tuple{Vararg{AbstractUnitRange}}}, R::CartesianIndices) =
-        convert(Tuple{Vararg{AbstractUnitRange{Int}}}, R)
-    convert(::Type{Tuple{Vararg{UnitRange{Int}}}}, R::CartesianIndices{N}) where {N} =
-        convert(NTuple{N,UnitRange{Int}}, R)
-    convert(::Type{Tuple{Vararg{UnitRange}}}, R::CartesianIndices) =
-        convert(Tuple{Vararg{UnitRange{Int}}}, R)
+    convert(::Type{T}, R::CartesianIndices) where {T<:Tuple{Vararg{OrdinalRange}}} = convert(T, R.indices)
 
     convert(::Type{CartesianIndices{N,R}}, inds::CartesianIndices{N}) where {N,R} =
         CartesianIndices(convert(R, inds.indices))::CartesianIndices{N,R}
