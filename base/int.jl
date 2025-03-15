@@ -642,7 +642,7 @@ ERROR: LoadError: ArgumentError: invalid base 10 digit '.' in "123456789123.4"
 [...]
 ```
 """
-macro int128_str(s)
+macro int128_str(s::String)
     return parse(Int128, s)
 end
 
@@ -662,7 +662,7 @@ ERROR: LoadError: ArgumentError: invalid base 10 digit '-' in "-123456789123"
 [...]
 ```
 """
-macro uint128_str(s)
+macro uint128_str(s::String)
     return parse(UInt128, s)
 end
 
@@ -695,7 +695,7 @@ ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
     depends on the value of the precision at the point when the function is
     defined, **not** at the precision at the time when the function is called.
 """
-macro big_str(s)
+macro big_str(s::String)
     message = "invalid number format $s for BigInt or BigFloat"
     throw_error =  :(throw(ArgumentError($message)))
     if '_' in s
