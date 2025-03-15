@@ -72,6 +72,7 @@ function result_dict(testset::Test.DefaultTestSet, prefix::String="")
             "julia_version" => string(VERSION),
             "testset" => testset.description,
         ),
+        # note we drop some of this from common_data before merging into individual results
         "history" => if !isnothing(testset.time_end)
             Dict{String,Any}(
                 "start_at" => testset.time_start,
@@ -86,14 +87,23 @@ end
 # Test paths on runners are often in deep directories, so just make them contain enough information
 # to be able to identify the file. Also convert Windows-style paths to Unix-style paths so tests can
 # be grouped by file.
+const generalize_file_paths_cache = Dict{AbstractString,AbstractString}()
+const norm_build_root_path = normpath(Sys.BUILD_ROOT_PATH)
+const bindir_dir = dirname(Sys.BINDIR)
+const pathsep = Sys.iswindows() ? '\\' : '/'
 function generalize_file_paths(path::AbstractString)
-    pathsep = Sys.iswindows() ? '\\' : '/'
-    path = replace(path,
-        string(Sys.STDLIB, pathsep) => "",
-        string(normpath(Sys.BUILD_ROOT_PATH), pathsep) => "",
-        string(dirname(Sys.BINDIR), pathsep) => ""
-    )
-    return Sys.iswindows() ? replace(path, "\\" => "/") : path
+    return get!(generalize_file_paths_cache, path) do
+        path = replace(path,
+            Sys.STDLIB => "stdlib",
+            string(norm_build_root_path, pathsep) => "",
+            string(bindir_dir, pathsep) => ""
+        )
+        @static if Sys.iswindows()
+            return replace(path, "\\" => "/")
+        else
+            return path
+        end
+    end
 end
 
 # passed, failed, skipped, or unknown
@@ -111,6 +121,26 @@ function get_status(result)
     end
 end
 
+# An attempt to reconstruct the test call.
+# Note we can't know if broken or skip was via the broken/skip macros or kwargs.
+function get_test_call_str(result)
+    tt = result.test_type
+    if tt in (:test, :test_nonbool, :test_error, :test_interrupted)
+        "@test $(result.orig_expr)"
+    elseif tt === :test_unbroken
+        "@test_broken $(result.orig_expr)"
+    elseif tt === :skipped
+        "@test_skip $(result.orig_expr)"
+    elseif tt in (:test_throws, :test_throws_wrong, :test_throws_nothing)
+        expected = result.data
+        "@test_throws $expected $(result.orig_expr)"
+    elseif tt === :nontest_error
+        "Non-test error"
+    else
+        error("Unknown test type $(repr(tt))")
+    end
+end
+
 function result_dict(result::Test.Result)
     file, line = if !hasproperty(result, :source) || isnothing(result.source)
         "unknown", 0
@@ -120,19 +150,18 @@ function result_dict(result::Test.Result)
     file = generalize_file_paths(string(file))
 
     status = get_status(result)
-
-    result_show = sprint(show, result; context=:color => false)
-    firstline = split(result_show, '\n')[1]
-    primary_reason = split(firstline, " at ")[1]
+    test_call = get_test_call_str(result)
 
     data = Dict{String,Any}(
-        "name" => "$(primary_reason). Expression: $(result.orig_expr)",
+        "name" => test_call,
         "location" => string(file, ':', line),
         "file_name" => file,
         "result" => status)
 
     job_label = replace(get(ENV, "BUILDKITE_LABEL", "job label not found"), r":\w+:\s*" => "")
     if result isa Test.Fail || result isa Test.Error
+        result_show = sprint(show, result; context=:color => false)
+        firstline = split(result_show, '\n')[1]
         data["failure_reason"] = generalize_file_paths(firstline) * " | $job_label"
         err_trace = split(result_show, "\nStacktrace:\n", limit=2)
         if length(err_trace) == 2
@@ -147,9 +176,12 @@ end
 
 function collect_results!(results::Vector{Dict{String,Any}}, testset::Test.DefaultTestSet, prefix::String="")
     common_data = result_dict(testset, prefix)
+    # testset duration is not relevant for individual test results
+    common_data["history"]["duration"] = 0.0 # required field
+    delete!(common_data["history"], "end_at")
     result_offset = length(results) + 1
-    result_counts = Dict{Tuple{String,String},Int}()
-    get_rid(rdata) = (rdata["location"], rdata["result"])
+    result_counts = Dict{Tuple{String,String,UInt64},Int}()
+    get_rid(rdata) = (rdata["location"], rdata["result"], haskey(rdata, "failure_expanded") ? hash(rdata["failure_expanded"]) : UInt64(0))
     for (i, result) in enumerate(testset.results)
         if result isa Test.Result
             rdata = result_dict(result)
@@ -164,14 +196,10 @@ function collect_results!(results::Vector{Dict{String,Any}}, testset::Test.Defau
             collect_results!(results, result, common_data["scope"])
         end
     end
-    # Modify names to hold `result_counts`
-    for i in result_offset:length(results)
-        result = results[i]
+    # Add a tag for count of each result
+    for result in results[result_offset:end]
         rid = get_rid(result)
-        if get(result_counts, rid, 0) > 1
-            result["name"] = replace(result["name"], r"^([^:]):" =>
-                SubstitutionString("\\1 (x$(result_counts[rid])):"))
-        end
+        result["tags"]["count"] = string(get(result_counts, rid, 1))
     end
     return results
 end
@@ -182,9 +210,11 @@ function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
     files = String[]
     # Buildkite is limited to 5000 results per file https://buildkite.com/docs/test-analytics/importing-json
     for (i, chunk) in enumerate(Iterators.partition(data, 5000))
-        res_file = joinpath(dir, "results_$i.json")
+        name = replace(testset.description, r"[^a-zA-Z0-9]" => "_")
+        res_file = joinpath(dir, "results_$(name)_$(i).json")
         open(io -> json_repr(io, chunk), res_file, "w")
         push!(files, res_file)
+        @debug "Saved $(basename(res_file)) ($(Base.format_bytes(filesize(res_file))))"
     end
     return files
 end
