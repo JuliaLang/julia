@@ -413,8 +413,8 @@ function Compiler.abstract_call(interp::NoinlineInterpreter,
         arginfo::Compiler.ArgInfo, si::Compiler.StmtInfo, sv::Compiler.InferenceState, max_methods::Int)
     return Compiler.Future{Compiler.CallMeta}(ret, interp, sv) do ret, interp, sv
         if sv.mod in noinline_modules(interp)
-            (;rt, exct, effects, info) = ret
-            return Compiler.CallMeta(rt, exct, effects, NoinlineCallInfo(info))
+            (;rt, exct, effects, info, refinements) = ret
+            return Compiler.CallMeta(rt, exct, effects, NoinlineCallInfo(info), refinements)
         end
         return ret
     end
