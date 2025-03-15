@@ -302,19 +302,42 @@ promote_type(T) = T
 promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
 promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
-promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_type(::Type{T}, ::Type{T}) where {T} = T
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
+function _promote_type_binary(::Type, ::Type, ::Tuple{})
+    @noinline
+    s = "`promote_type`: recursion depth limit reached, giving up; check for faulty/conflicting/missing `promote_rule` methods"
+    throw(ArgumentError(s))
+end
+function _promote_type_binary(::Type{Bottom}, ::Type{Bottom}, ::Tuple{Nothing,Vararg{Nothing}})
+    Bottom
+end
+function _promote_type_binary(::Type{T}, ::Type{T}, ::Tuple{Nothing,Vararg{Nothing}}) where {T}
+    T
+end
+function _promote_type_binary(::Type{T}, ::Type{Bottom}, ::Tuple{Nothing,Vararg{Nothing}}) where {T}
+    T
+end
+function _promote_type_binary(::Type{Bottom}, ::Type{T}, ::Tuple{Nothing,Vararg{Nothing}}) where {T}
+    T
+end
+function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple{Nothing,Vararg{Nothing}}) where {T,S}
+    l = tail(recursion_depth_limit)
+    # Try promote_rule in both orders.
+    promote_result(T, S, promote_rule(T,S), promote_rule(S,T), l)
+end
+
+const _promote_type_binary_recursion_depth_limit = let n = nothing  # recursion depth limit to prevent stack overflow
+    n2 = (n, n)
+    n4 = (n2..., n2...)
+    (n4..., n4..., n2...)
+end
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @inline
     # Try promote_rule in both orders. Typically only one is defined,
     # and there is a fallback returning Bottom below, so the common case is
     #   promote_type(T, S) =>
     #   promote_result(T, S, result, Bottom) =>
     #   typejoin(result, Bottom) => result
-    promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
+    _promote_type_binary(T, S, _promote_type_binary_recursion_depth_limit)
 end
 
 """
@@ -334,10 +357,10 @@ promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly n
 promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
 promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
 
-promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
+promote_result(::Type,::Type,::Type{T},::Type{S},l::Tuple{Vararg{Nothing}}) where {T,S} = _promote_type_binary(T,S,l)
 # If no promote_rule is defined, both directions give Bottom. In that
 # case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
+promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom},::Tuple{Vararg{Nothing}}) where {T,S} = typejoin(T, S)
 
 """
     promote(xs...)
