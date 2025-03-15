@@ -97,9 +97,7 @@ JL_DLLEXPORT int jl_gc_is_enabled(void);
 // Sets a soft limit to Julia's heap.
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 // Runs a GC cycle. This function's parameter determines whether we're running an
-// incremental, full, or automatic (i.e. heuristic driven) collection. Returns whether we
-// should run a collection cycle again (e.g. a full mark right after a full sweep to ensure
-// we do a full heap traversal).
+// incremental, full, or automatic (i.e. heuristic driven) collection.
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
