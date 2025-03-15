@@ -1192,9 +1192,15 @@ end
 function find_prefix_call(cur::CursorNode)
     n = cur.parent
     n !== nothing || return nothing
-    kind(n) == K"parameters" && (n = n.parent)
-    kind(n) in KSet"call dotcall" && is_prefix_call(n) || return nothing
-    n
+    is_call(n) = kind(n) in KSet"call dotcall" && is_prefix_call(n)
+    if kind(n) == K"parameters"
+        is_call(n.parent) || return nothing
+        n.parent
+    else
+        # Check that we are beyond the function name.
+        is_call(n) && cur.index > children_nt(n)[1].index || return nothing
+        n
+    end
 end
 
 # If node is the field in a getfield-like expression, return the value

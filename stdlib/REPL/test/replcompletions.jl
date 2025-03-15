@@ -2601,3 +2601,10 @@ let s = "sum(!!ismis"
     @test "ismissing" in c
     @test r == 7:11
 end
+
+# Don't trigger complete_methods! when the cursor is on the function name.
+let s = "prin|(\"hello\")"
+    c, r = test_complete_pos(s)
+    @test "print" in c
+    @test r == 1:4
+end
