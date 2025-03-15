@@ -1070,6 +1070,8 @@ end
 Return the smallest positive normal number representable by the floating-point
 type `T`.
 
+See also: [`typemin`](@ref), [`maxintfloat`](@ref), [`floatmax`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
 julia> floatmin(Float16)
@@ -1089,7 +1091,7 @@ floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 Return the largest finite number representable by the floating-point type `T`.
 
-See also: [`typemax`](@ref), [`floatmin`](@ref), [`eps`](@ref).
+See also: [`typemax`](@ref), [`maxintfloat`](@ref), [`floatmin`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest

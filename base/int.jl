@@ -747,7 +747,7 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 The lowest value representable by the given (real) numeric DataType `T`.
 
-See also: [`floatmin`](@ref), [`typemax`](@ref), [`eps`](@ref).
+See also: [`floatmin`](@ref), [`maxintfloat`](@ref), [`typemax`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest
@@ -763,8 +763,8 @@ julia> typemin(Float16)
 julia> typemin(Float32)
 -Inf32
 
-julia> nextfloat(-Inf32)  # smallest finite Float32 floating point number
--3.4028235f38
+julia> floatmin(Float32)  # smallest positive finite Float32 floating point number
+1.1754944f-38
 ```
 """
 function typemin end
@@ -774,7 +774,7 @@ function typemin end
 
 The highest value representable by the given (real) numeric `DataType`.
 
-See also: [`floatmax`](@ref), [`typemin`](@ref), [`eps`](@ref).
+See also: [`floatmax`](@ref), [`maxintfloat`](@ref), [`typemin`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest
@@ -790,7 +790,7 @@ Inf
 julia> typemax(Float32)
 Inf32
 
-julia> floatmax(Float32)  # largest finite Float32 floating point number
+julia> floatmax(Float32)  # largest positive finite Float32 floating point number
 3.4028235f38
 ```
 """
