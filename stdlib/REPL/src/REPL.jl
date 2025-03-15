@@ -439,10 +439,7 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
             # exit flag
             break
         end
-        if ast_or_func isa Expr
-            ast = ast_or_func
-            eval_user_input(ast, backend, get_module())
-        else
+        if show_value == 2 # 2 indicates a function to be called
             f = ast_or_func
             try
                 ret = f()
@@ -450,6 +447,9 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
             catch err
                 put!(backend.response_channel, Pair{Any, Bool}(err, true))
             end
+        else
+            ast = ast_or_func
+            eval_user_input(ast, backend, get_module())
         end
     end
     return nothing
@@ -582,20 +582,19 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
                 repl_display_error(errio, val)
             else
                 if val !== nothing && show_value
-                    try
-                        if specialdisplay === nothing
-                            # display calls may require being run on the main thread
-                            eval_with_backend(backend) do
-                                Base.invokelatest(display, val)
-                            end
-                        else
-                            eval_with_backend(backend) do
-                                Base.invokelatest(display, specialdisplay, val)
-                            end
+                    val2, iserr = if specialdisplay === nothing
+                        # display calls may require being run on the main thread
+                        eval_with_backend(backend) do
+                            Base.invokelatest(display, val)
                         end
-                    catch
+                    else
+                        eval_with_backend(backend) do
+                            Base.invokelatest(display, specialdisplay, val)
+                        end
+                    end
+                    if iserr
                         println(errio, "Error showing value of type ", typeof(val), ":")
-                        rethrow()
+                        throw(val2)
                     end
                 end
             end
@@ -1154,7 +1153,7 @@ function eval_with_backend(ast::Expr, backend::REPLBackendRef)
     return take!(backend.response_channel) # (val, iserr)
 end
 function eval_with_backend(f, backend::REPLBackendRef)
-    put!(backend.repl_channel, (f, false)) # (f, show_value)
+    put!(backend.repl_channel, (f, 2)) # (f, show_value) 2 indicates function (rather than ast)
     return take!(backend.response_channel) # (val, iserr)
 end
 # if no backend just eval (used by tests)
