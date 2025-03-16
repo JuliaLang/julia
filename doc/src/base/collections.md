@@ -9,7 +9,6 @@ The general `for` loop:
 julia> for i in 1:3
            println(i)
        end
-
 1
 2
 3
@@ -19,14 +18,13 @@ is translated into:
 
 ```jldoctest
 julia> iter = 1:3
+       next = iterate(iter)
 
-julia> next = iterate(iter)
 julia> while next !== nothing
            (i, state) = next
            println(i)
            next = iterate(iter, state)
        end
-
 1
 2
 3
