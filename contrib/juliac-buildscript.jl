@@ -17,6 +17,9 @@ task.rngState3 = 0x3a77f7189200c20b
 task.rngState4 = 0x5502376d099035ae
 uuid_tuple = (UInt64(0), UInt64(0))
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
+if Base.get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
+    Base.JuliaSyntax.enable_in_core!()
+end
 
 # Patch methods in Core and Base
 
@@ -33,9 +36,6 @@ end
     JuliaSyntax.enable_in_core!() = nothing
     init_active_project() = ACTIVE_PROJECT[] = nothing
     set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
-    init_depot_path() = nothing
-    init_load_path() = nothing
-    init_active_project() = nothing
     disable_library_threading() = nothing
     start_profile_listener() = nothing
     invokelatest_trimmed(f, args...; kwargs...) = f(args...; kwargs...)

@@ -2693,6 +2693,18 @@ import .TestImportAs.Mod2 as M2
 @test !@isdefined(Mod2)
 @test M2 === TestImportAs.Mod2
 
+# 57702: nearby bindings shouldn't cause us to closure-convert in import/using
+module OddImports
+using Test
+module ABC end
+x = let; let; import .ABC; end; let; ABC() = (ABC,); end; end
+y = let; let; using  .ABC; end; let; ABC() = (ABC,); end; end
+z = let; let; import SHA: R; end; let; R(x...) = R(x); end; end
+@test x isa Function
+@test y isa Function
+@test z isa Function
+end
+
 @testset "unicode modifiers after '" begin
     @test Meta.parse("a'ᵀ") == Expr(:call, Symbol("'ᵀ"), :a)
     @test Meta.parse("a'⁻¹") == Expr(:call, Symbol("'⁻¹"), :a)

@@ -2201,7 +2201,6 @@ typedef enum {
 // A loaded, but unparsed .ji or .so image file
 typedef struct {
     jl_image_kind_t kind;
-    void *handle;
     const void *pointers; // jl_image_pointers_t *
     const char *data;
     size_t size;
