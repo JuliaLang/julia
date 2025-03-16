@@ -2356,36 +2356,39 @@ static void AddInPredLiveOuts(BasicBlock *BB, LargeSparseBitVector &LiveIn, Stat
 
 void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColorRoot,
                                          ArrayRef<int> Colors, Value *GCFrame,
+#if JL_LLVM_VERSION >= 200000
                                          Instruction *InsertBefore) {
-    // Get the slot address.
+#else
+                                         InstListType::iterator InsertBefore) {
+#endif    // Get the slot address.
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-#if JL_LLVM_VERSION >= 200000
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
-#else
         "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
-#endif
 
     Value *Val = GetPtrForNumber(S, R, InsertBefore);
     // Pointee types don't have semantics, so the optimizer is
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
     assert(Val->getType() == T_prjlvalue);
-    new StoreInst(Val, slotAddress, InsertBefore->getIterator());
+    new StoreInst(Val, slotAddress, InsertBefore);
 }
 
 void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot,
                                          ArrayRef<int> Colors, Value *GCFrame,
+#if JL_LLVM_VERSION >= 200000
                                          Instruction *InsertBefore) {
+#else
+                                         InstListType::iterator InsertBefore) {
+#endif
     // Get the slot address.
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
-        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
     // Reset the slot to NULL.
     Value *Val = ConstantPointerNull::get(T_prjlvalue);
-    new StoreInst(Val, slotAddress, InsertBefore->getIterator());
+    new StoreInst(Val, slotAddress, InsertBefore);
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
@@ -2406,15 +2409,22 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
             for (int Idx : *LastLive) {
                 if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx)) {
                     PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
-                      S.ReverseSafepointNumbering[*rit]);
-                }
+#if JL_LLVM_VERSION >= 200000
+                        S.ReverseSafepointNumbering[*rit]->getIterator());
+  #else
+                        S.ReverseSafepointNumbering[*rit]);
+  #endif                }
             }
             // store values which are alive in this safepoint but
             // haven't been stored in the GC frame before
             for (int Idx : NowLive) {
                 if (!HasBitSet(*LastLive, Idx)) {
                     PlaceGCFrameStore(S, Idx, MinColorRoot, Colors, GCFrame,
+#if JL_LLVM_VERSION >= 200000
+                      S.ReverseSafepointNumbering[*rit]->getIterator());
+#else
                       S.ReverseSafepointNumbering[*rit]);
+#endif
                 }
             }
             LastLive = &NowLive;
@@ -2536,7 +2546,11 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 assert(Elem->getType() == T_prjlvalue);
                 //auto Idxs = ArrayRef<unsigned>(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
+#if JL_LLVM_VERSION >= 200000
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI->getIterator());
+#else
+                Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
+#endif
                 (void)shadowStore;
                 // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
                 AllocaSlot++;
@@ -2554,7 +2568,11 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 auto popGcframe = CallInst::Create(
                     getOrDeclare(jl_intrinsics::popGCFrame),
                     {gcframe});
+#if JL_LLVM_VERSION >= 200000
                 popGcframe->insertBefore(BB.getTerminator()->getIterator());
+#else
+                popGcframe->insertBefore(BB.getTerminator());
+#endif
             }
         }
     }
