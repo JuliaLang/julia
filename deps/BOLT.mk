@@ -12,7 +12,7 @@ LLVM_ENABLE_PROJECTS := bolt
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
-LLVM_CPPFLAGS :=
+LLVM_CPPFLAGS := "$(build_prefix)/lib/libz.$(SHLIB_EXT)" # Hacky way to force linking against the correct zlib
 LLVM_LDFLAGS :=
 LLVM_CMAKE :=
 
@@ -55,6 +55,10 @@ endif
 
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
+ifeq ($(OS),FreeBSD)
+    # On FreeBSD, we must force even statically-linked code to have -fPIC
+    LLVM_CMAKE += -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE
+endif
 endif
 
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
