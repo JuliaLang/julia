@@ -55,6 +55,7 @@ endif
 
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
+else
 ifeq ($(OS),FreeBSD)
     # On FreeBSD, we must force even statically-linked code to have -fPIC
     LLVM_CMAKE += -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE
