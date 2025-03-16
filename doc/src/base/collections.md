@@ -18,7 +18,10 @@ is translated into:
 
 ```jldoctest
 julia> iter = 1:3
-       next = iterate(iter)
+1:3
+
+julia> next = iterate(iter)
+(1,1)
 
 julia> while next !== nothing
            (i, state) = next
