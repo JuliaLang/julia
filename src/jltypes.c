@@ -1805,6 +1805,9 @@ static unsigned typekey_hash(jl_typename_t *tn, jl_value_t **key, size_t n, int 
         unsigned hashp = type_hash(p, &failed);
         if (failed && !nofail)
             return 0;
+        size_t vararg_length_hash_precision_cutoff = 100000;  // don't spend too much time hashing long Vararg
+        if (vararg_length_hash_precision_cutoff < repeats)
+            repeats = vararg_length_hash_precision_cutoff;
         while (repeats--)
             hash = bitmix(hashp, hash);
     }
