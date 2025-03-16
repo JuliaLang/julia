@@ -425,7 +425,7 @@ Update `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
 # Examples
-```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
+```jldoctest; filter = r"^\\s+\\d\\s+=>\\s+\\S+\$"m
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
 Dict{Int64, String} with 3 entries:
   2 => "b"
@@ -467,7 +467,7 @@ Return a copy of `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\\s+=>\\s+\\S+\$"m
 julia> d = Dict(1=>"a", 2=>"b")
 Dict{Int64, String} with 2 entries:
   2 => "b"
@@ -660,7 +660,7 @@ of `dict` then it will be converted to the value type if possible and otherwise 
     `map!(f, values(dict::AbstractDict))` requires Julia 1.2 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+(\\s+=>\\s+\\d)?\$"m
 julia> d = Dict(:a => 1, :b => 2)
 Dict{Symbol, Int64} with 2 entries:
   :a => 1
