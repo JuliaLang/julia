@@ -74,6 +74,9 @@
 
     a = Base.AnnotatedString("hello", [(1:5, :label, 1)])
     @test first(a) == Base.AnnotatedChar('h', [(:label, 1)])
+
+    @test Bool === Base.infer_return_type(isvalid, Tuple{Base.AnnotatedString, Vararg})
+    @test Int === Base.infer_return_type(ncodeunits, Tuple{Base.AnnotatedString})
 end
 
 @testset "AnnotatedChar" begin

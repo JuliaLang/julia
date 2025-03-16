@@ -228,10 +228,6 @@ void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
 {
     *jl_pgcstack_key() = pgcstack;
 }
-#  if JL_USE_IFUNC
-JL_DLLEXPORT __attribute__((weak))
-void jl_register_pgcstack_getter(void);
-#  endif
 static jl_gcframe_t **jl_get_pgcstack_init(void);
 static jl_get_pgcstack_func *jl_get_pgcstack_cb = jl_get_pgcstack_init;
 static jl_gcframe_t **jl_get_pgcstack_init(void)
@@ -244,15 +240,8 @@ static jl_gcframe_t **jl_get_pgcstack_init(void)
     // This is clearly not thread-safe but should be fine since we
     // make sure the tls states callback is finalized before adding
     // multiple threads
-#  if JL_USE_IFUNC
-    if (jl_register_pgcstack_getter)
-        jl_register_pgcstack_getter();
-    else
-#  endif
-    {
-        jl_get_pgcstack_cb = jl_get_pgcstack_fallback;
-        jl_pgcstack_key = &jl_pgcstack_addr_fallback;
-    }
+    jl_get_pgcstack_cb = jl_get_pgcstack_fallback;
+    jl_pgcstack_key = &jl_pgcstack_addr_fallback;
     return jl_get_pgcstack_cb();
 }
 
@@ -321,6 +310,11 @@ JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT
 {
     return jl_current_task->ptls->rngseed;
 }
+
+
+#if !defined(_OS_WINDOWS_) && !defined(JL_DISABLE_LIBUNWIND) && !defined(LLVMLIBUNWIND)
+    extern int unw_ensure_tls (void);
+#endif
 
 // get thread local rng
 JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT
@@ -434,7 +428,6 @@ static void jl_init_task_lock(jl_task_t *ct)
     }
 }
 
-
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 {
     // `jl_init_threadtls` puts us in a GC unsafe region, so ensure GC isn't running.
@@ -460,6 +453,23 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
+JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
+{
+    if (!jl_is_initialized()) {
+        void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
+        void *sysimg_handle = jl_find_dynamic_library_by_addr(retaddr, /* throw_err */ 0);
+
+        if (sysimg_handle == NULL) {
+            fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
+                            "       (this should not happen, please file a bug report)\n");
+            abort();
+        }
+
+        assert(0 && "TODO: implement auto-init");
+    }
+
+    return jl_adopt_thread();
+}
 
 void jl_safepoint_suspend_all_threads(jl_task_t *ct)
 {

@@ -244,9 +244,8 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
-            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] "),
-            skip = Sys.iswindows() && Sys.WORD_SIZE == 32)
+        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
+            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] "))
         write(stdin_write, "\b")
         wait(t)
     end
@@ -1831,56 +1830,6 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, '\x04')
     wait(repltask)
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
-end
-
-try # test the functionality of `UndefVarError_hint` against `Base.remove_linenums!`
-    @assert isempty(Base.Experimental._hint_handlers)
-    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
-
-    # check the requirement to trigger the hint via `UndefVarError_hint`
-    @test !isdefined(Main, :remove_linenums!) && Base.ispublic(Base, :remove_linenums!)
-
-    fake_repl() do stdin_write, stdout_read, repl
-        backend = REPL.REPLBackend()
-        repltask = @async REPL.run_repl(repl; backend)
-        write(stdin_write,
-              "remove_linenums!\n\"ZZZZZ\"\n")
-        txt = readuntil(stdout_read, "ZZZZZ")
-        write(stdin_write, '\x04')
-        wait(repltask)
-        @test occursin("Hint: a global variable of this name also exists in Base.", txt)
-    end
-finally
-    empty!(Base.Experimental._hint_handlers)
-end
-
-try # test the functionality of `UndefVarError_hint` against import clashes
-    @assert isempty(Base.Experimental._hint_handlers)
-    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
-
-    @eval module X
-
-    module A
-    export x
-    x = 1
-    end # A
-
-    module B
-    export x
-    x = 2
-    end # B
-
-    using .A, .B
-
-    end # X
-
-    expected_message = string("\nHint: It looks like two or more modules export different ",
-                              "bindings with this name, resulting in ambiguity. Try explicitly ",
-                              "importing it from a particular module, or qualifying the name ",
-                              "with the module it should come from.")
-    @test_throws expected_message X.x
-finally
-    empty!(Base.Experimental._hint_handlers)
 end
 
 # Hints for tab completes

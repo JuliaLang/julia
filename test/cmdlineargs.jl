@@ -753,7 +753,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test errors_not_signals(`$exename -E "$code" --depwarn=error`)
 
         @test readchomperrors(`$exename -E "$code" --depwarn=yes`) ==
-            (true, "true", "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
+            (true, "true", "WARNING: Use of Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
 
         @test readchomperrors(`$exename -E "$code" --depwarn=no`) ==
             (true, "true", "")
@@ -1046,7 +1046,7 @@ let exename = `$(Base.julia_cmd().exec[1]) -t 1`
         p = run(pipeline(`$exename --sysimage=$libjulia`, stderr=err), wait=false)
         close(err.in)
         let s = read(err, String)
-            @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
+            @test s == "ERROR: Image file failed consistency check: maybe opened the wrong version?\n"
         end
         @test errors_not_signals(p)
         @test p.exitcode == 1
@@ -1080,13 +1080,18 @@ run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, de
 let exename = `$(Base.julia_cmd()) --startup-file=no`
     @test readchomp(`$exename --sysimage-native-code=yes -E
         "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "true"
-    @test readchomp(`$exename --sysimage-native-code=no -E
+    # TODO: Make this safe in the presence of two single-thread threadpools
+    # see https://github.com/JuliaLang/julia/issues/57198
+    @test readchomp(`$exename --sysimage-native-code=no -t1,0 -E
         "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "false"
 end
 
 # backtrace contains line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'sqrt(-2)'`)
+    # TODO: Make this safe in the presence of two single-thread threadpools
+    # see https://github.com/JuliaLang/julia/issues/57198
+    threads = precomp == "no" ? `-t1,0` : ``
+    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) $threads --startup-file=no --sysimage-native-code=$precomp -E 'sqrt(-2)'`)
     @test !succ
     @test out == ""
     @test occursin(r"\.jl:(\d+)", bt)

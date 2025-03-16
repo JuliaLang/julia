@@ -1051,10 +1051,13 @@ function check_world_bounded(tn::Core.TypeName)
     isdefined(bnd, :partitions) || return nothing
     partition = @atomic bnd.partitions
     while true
-        if is_defined_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
-            max_world = @atomic partition.max_world
-            max_world == typemax(UInt) && return nothing
-            return Int(partition.min_world):Int(max_world)
+        if is_defined_const_binding(binding_kind(partition))
+            cval = partition_restriction(partition)
+            if isa(cval, Type) && cval <: tn.wrapper
+                max_world = @atomic partition.max_world
+                max_world == typemax(UInt) && return nothing
+                return Int(partition.min_world):Int(max_world)
+            end
         end
         isdefined(partition, :next) || return nothing
         partition = @atomic partition.next
@@ -2841,7 +2844,6 @@ function show(io::IO, vm::Core.TypeofVararg)
 end
 
 Compiler.load_irshow!()
-const IRShow = Compiler.IRShow # an alias for compatibility
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body
@@ -3375,36 +3377,49 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     else
         print(io, max_world)
     end
-    if (partition.kind & BINDING_FLAG_EXPORTED) != 0
-        print(io, " [exported]")
+    if (partition.kind & PARTITION_MASK_FLAG) != 0
+        first = false
+        print(io, " [")
+        if (partition.kind & PARTITION_FLAG_EXPORTED) != 0
+            print(io, "exported")
+        end
+        if (partition.kind & PARTITION_FLAG_DEPRECATED) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "deprecated")
+        end
+        if (partition.kind & PARTITION_FLAG_DEPWARN) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "depwarn")
+        end
+        print(io, "]")
     end
     print(io, " - ")
     kind = binding_kind(partition)
-    if kind == BINDING_KIND_BACKDATED_CONST
+    if kind == PARTITION_KIND_BACKDATED_CONST
         print(io, "backdated constant binding to ")
         print(io, partition_restriction(partition))
     elseif is_defined_const_binding(kind)
         print(io, "constant binding to ")
         print(io, partition_restriction(partition))
-    elseif kind == BINDING_KIND_UNDEF_CONST
+    elseif kind == PARTITION_KIND_UNDEF_CONST
         print(io, "undefined const binding")
-    elseif kind == BINDING_KIND_GUARD
+    elseif kind == PARTITION_KIND_GUARD
         print(io, "undefined binding - guard entry")
-    elseif kind == BINDING_KIND_FAILED
+    elseif kind == PARTITION_KIND_FAILED
         print(io, "ambiguous binding - guard entry")
-    elseif kind == BINDING_KIND_DECLARED
+    elseif kind == PARTITION_KIND_DECLARED
         print(io, "weak global binding declared using `global` (implicit type Any)")
-    elseif kind == BINDING_KIND_IMPLICIT
+    elseif kind == PARTITION_KIND_IMPLICIT
         print(io, "implicit `using` from ")
         print(io, partition_restriction(partition).globalref)
-    elseif kind == BINDING_KIND_EXPLICIT
+    elseif kind == PARTITION_KIND_EXPLICIT
         print(io, "explicit `using` from ")
         print(io, partition_restriction(partition).globalref)
-    elseif kind == BINDING_KIND_IMPORTED
+    elseif kind == PARTITION_KIND_IMPORTED
         print(io, "explicit `import` from ")
         print(io, partition_restriction(partition).globalref)
     else
-        @assert kind == BINDING_KIND_GLOBAL
+        @assert kind == PARTITION_KIND_GLOBAL
         print(io, "global variable with type ")
         print(io, partition_restriction(partition))
     end

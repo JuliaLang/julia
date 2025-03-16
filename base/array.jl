@@ -1348,7 +1348,7 @@ function append! end
 
 function append!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     items isa Tuple && (items = map(x -> convert(T, x), items))
-    n = length(items)
+    n = Int(length(items))::Int
     _growend!(a, n)
     copyto!(a, length(a)-n+1, items, firstindex(items), n)
     return a
@@ -1472,7 +1472,8 @@ julia> a[1:6]
  1
 ```
 """
-function resize!(a::Vector, nl::Integer)
+function resize!(a::Vector, nl_::Integer)
+    nl = Int(nl_)::Int
     l = length(a)
     if nl > l
         _growend!(a, nl-l)
@@ -2809,14 +2810,14 @@ function indexin(a, b::AbstractArray)
     ]
 end
 
-function _findin(a::Union{AbstractArray, Tuple}, b)
+function _findin(a::Union{AbstractArray, Tuple}, b::AbstractSet)
     ind  = Vector{eltype(keys(a))}()
-    bset = Set(b)
     @inbounds for (i,ai) in pairs(a)
-        ai in bset && push!(ind, i)
+        ai in b && push!(ind, i)
     end
     ind
 end
+_findin(a::Union{AbstractArray, Tuple}, b) = _findin(a, Set(b))
 
 # If two collections are already sorted, _findin can be computed with
 # a single traversal of the two collections. This is much faster than

@@ -490,9 +490,7 @@ perform such accesses.
 """
 struct GlobalAccessInfo <: CallInfo
     b::Core.Binding
-    bpart::Core.BindingPartition
 end
-GlobalAccessInfo(::Core.Binding, ::Nothing) = NoCallInfo()
 function add_edges_impl(edges::Vector{Any}, info::GlobalAccessInfo)
     push!(edges, info.b)
 end
