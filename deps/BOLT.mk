@@ -12,7 +12,7 @@ LLVM_ENABLE_PROJECTS := bolt
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
-LLVM_CPPFLAGS := "$(build_prefix)/lib/libz.$(SHLIB_EXT)" # Hacky way to force linking against the correct zlib
+LLVM_CPPFLAGS :=
 LLVM_LDFLAGS :=
 LLVM_CMAKE :=
 
