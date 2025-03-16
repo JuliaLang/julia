@@ -62,7 +62,7 @@ static void moveInstructionBefore(Instruction &I, Instruction &Dest,
 #if JL_LLVM_VERSION >= 200000
   I.moveBefore(Dest.getIterator());
 #else
-  I.moveBefore(Dest);
+  I.moveBefore(&Dest);
 #endif
   if (MSSAU.getMemorySSA())
     if (MemoryUseOrDef *OldMemAcc = cast_or_null<MemoryUseOrDef>(
