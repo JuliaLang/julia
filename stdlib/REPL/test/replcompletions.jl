@@ -2510,11 +2510,11 @@ let (c, r) = test_complete_pos("@tim| using Date")
 end
 
 # #56389
-let s = "begin\n  using Linear"
+let s = "begin\n  using Ran"
     c, r = test_complete(s)
-    @test "LinearAlgebra" in c
-    @test r == 15:20
-    @test s[r] == "Linear"
+    @test "Random" in c
+    @test r == 15:17
+    @test s[r] == "Ran"
 end
 let s = "using .CompletionFoo: bar, type_"
     c, r = test_complete(s)
