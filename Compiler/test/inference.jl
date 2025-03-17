@@ -2584,9 +2584,7 @@ end |> only === Int
 
         let subfunc(x) = rand(Bool) ? x::Float64 : x::String
             src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
-            @test src.rettype === Any
-            # TODO: Implement merging of local refinements into global refinements
-            # @test src.rettype === Union{Float64, String}
+            @test src.rettype === Union{Float64, String}
         end
 
         let subfunc(x) = rand(Bool) ? x::Float64 : subfunc(x)

@@ -1,11 +1,5 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-struct SlotRefinement
-    slot::SlotNumber
-    typ::Any
-    SlotRefinement(slot::SlotNumber, @nospecialize(typ)) = new(slot, typ)
-end
-
 # See if the inference result of the current statement's result value might affect
 # the final answer for the method (aside from optimization potential and exceptions).
 # To do that, we need to check both for slot assignment and SSA usage.
@@ -4032,10 +4026,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     nbbs = length(bbs)
     𝕃ᵢ = typeinf_lattice(interp)
     states = frame.bb_vartables
-    postdomtree = construct_postdomtree(frame.cfg)
     saw_latestworld = frame.bb_saw_latestworld
     currbb = frame.currbb
     currpc = frame.currpc
+    refinement_propagation = frame.refinement_propagation
 
     if isdefined(nextresult, :result)
         # for reasons that are fairly unclear, some state is arbitrarily on the stack instead in the InferenceState as normal
@@ -4297,13 +4291,12 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                 stoverwrite1!(currstate, changes)
                 # TODO: update `refinements`
             end
-            if refinements isa SlotRefinement
-                apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, currstate, changes)
-                postdominates(postdomtree, currbb, 1) && apply_refinement!(𝕃ᵢ, refinements.slot, refinements.typ, frame.refinements, changes)
-            elseif refinements isa Vector{SlotRefinement}
-                for refinement in refinements
-                    apply_refinement!(𝕃ᵢ, refinement.slot, refinement.typ, currstate, changes)
-                    postdominates(postdomtree, currbb, 1) && apply_refinement!(𝕃ᵢ, refinement.slot, refinement.typ, frame.refinements, changes)
+            if refinements !== nothing
+                apply_refinements!(𝕃ᵢ, refinements, currstate, changes)
+                if should_eagerly_apply_refinements(refinement_propagation, currbb)
+                    apply_refinements!(𝕃ᵢ, refinements, frame.refinements, changes)
+                else
+                    record_refinements!(refinement_propagation.updates[currbb], interp, refinements, changes)
                 end
             end
             if rt === nothing
@@ -4336,25 +4329,172 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                 init_vartable!(currstate, frame)
             else
                 stoverwrite!(currstate, nexttable)
+                merge_refinements_from_predecessors!(frame, currstate, interp)
             end
         end
     end # while currbb <= nbbs
 
+    finish_merging_global_refinements!(frame, interp)
+
     return CurrentState()
 end
 
-function apply_refinement!(𝕃ᵢ::AbstractLattice, slot::SlotNumber, @nospecialize(newtyp),
+function apply_refinement!(𝕃ᵢ::AbstractLattice, refinement::SlotRefinement,
                            currstate::VarTable, currchanges::Union{Nothing,StateUpdate})
+    slot = refinement.slot
     if currchanges !== nothing && currchanges.var == slot
         return # type propagation from statement (like assignment) should have the precedence
     end
     vtype = currstate[slot_id(slot)]
     oldtyp = vtype.typ
+    newtyp = refinement.typ
     ⊏ = strictpartialorder(𝕃ᵢ)
     if newtyp ⊏ oldtyp
         stmtupdate = StateUpdate(slot, VarState(newtyp, vtype.undef))
         stoverwrite1!(currstate, stmtupdate)
     end
+end
+
+function apply_refinements!(𝕃ᵢ::AbstractLattice, refinements#=::Iterable{SlotRefinement}=#,
+                            state::VarTable, changes::Union{Nothing,StateUpdate} = nothing)
+    for refinement in refinements
+        apply_refinement!(𝕃ᵢ, refinement, state, changes)
+    end
+end
+
+function SlotRefinementPropagationState(cfg::CFG)
+    postdomtree = construct_postdomtree(cfg)
+    n = length(cfg.blocks)
+
+    terminating_blocks = BBIndex[]
+    top_level_blocks = BBIndex[]
+    merge_points = BBIndex[]
+
+    # Initialize paths.
+    paths = PathIndex[0 for _ in 1:n]
+    paths[1] = 1
+    path_bound = 1
+    next = Int[1]
+    v = 1
+    seen = IdSet{Int}()
+    while !isempty(next)
+        v = popfirst!(next)
+        in(v, seen) && continue # don't process backedges
+        push!(seen, v)
+        postdominates(postdomtree, v, 1) && push!(top_level_blocks, v)
+        info = cfg.blocks[v]
+        preds = info.preds
+        succs = info.succs
+        if isempty(succs)
+            push!(terminating_blocks, v)
+        elseif length(succs) == 1
+            w = succs[1]
+            paths[w] == 0 || continue
+            paths[w] = paths[v]
+            push!(next, w)
+        else
+            for w in succs
+                paths[w] == 0 || continue
+                paths[w] = (path_bound += 1)
+                push!(next, w)
+            end
+        end
+    end
+
+    for v in 1:n
+        info = cfg.blocks[v]
+        preds = info.preds
+        length(preds) ≥ 2 || continue
+        a = paths[preds[1]]
+        a == 0 && continue # don't process nodes that are not reachable
+        for i in 2:length(preds)
+            u = preds[i]
+            u == 0 && continue
+            b = paths[u]
+            b == 0 && continue
+            a == b && continue
+            push!(merge_points, v)
+            break
+        end
+    end
+
+    # Allocate slot refinement information
+    initial_refinements = Vector{SlotRefinement}[SlotRefinement[] for _ in 1:length(paths)]
+    updates = IdDict{Int,SlotRefinement}[IdDict{Int,SlotRefinement}() for _ in 1:length(paths)]
+
+    SlotRefinementPropagationState(postdomtree, paths, initial_refinements, updates, merge_points, terminating_blocks, top_level_blocks)
+end
+
+function record_refinements!(updates::IdDict{Int, SlotRefinement}, interp::AbstractInterpreter,
+                             refinements#=::Iterable{SlotRefinement}=#, changes::Union{Nothing,StateUpdate} = nothing)
+    for refinement in refinements
+        if changes !== nothing && changes.var == refinement.slot
+            # type propagation from statement (like assignment) should have the precedence
+            @assert !changes.vtype.undef
+            refinement = SlotRefinement(refinement.slot, changes.vtype.typ)
+        end
+        i = slot_id(refinement.slot)
+        existing = get(updates, i, nothing)
+        if existing === nothing
+            updates[i] = refinement
+            continue
+        end
+        𝕃ₚ = ipo_lattice(interp)
+        ⊑ = partialorder(𝕃ₚ)
+        new = refinement.typ
+        existing.typ === new && continue
+        newt = new ⊑ existing.typ ? new : intersect_refined_types(new, existing.typ, 𝕃ₚ)
+        updates[i] = SlotRefinement(refinement.slot, newt)
+    end
+end
+
+function merge_updates_from_paths(𝕃ᵢ::AbstractLattice, state::SlotRefinementPropagationState, paths::Vector{PathIndex})
+    @assert length(paths) ≥ 2
+    ⊔ = join(𝕃ᵢ)
+    result = copy(state.updates[paths[1]])
+    for i in 2:length(paths)
+        path = paths[i]
+        path == 0 && continue
+        updates = state.updates[path]
+        for key in keys(result)
+            update = get(updates, key, nothing)
+            if update === nothing
+                delete!(result, key)
+            else
+                existing = result[key]
+                result[key] = SlotRefinement(existing.slot, existing.typ ⊔ update.typ)
+            end
+        end
+    end
+    result
+end
+
+should_eagerly_apply_refinements(state::SlotRefinementPropagationState, bb::Int) = in(bb, state.top_level_blocks)
+
+function merge_refinements_from_predecessors!(frame::InferenceState, currstate::VarTable, interp::AbstractInterpreter)
+    block = frame.currbb
+    state = frame.refinement_propagation
+    in(block, state.merge_points) || return
+    𝕃ᵢ = typeinf_lattice(interp)
+    paths = PathIndex[state.paths[v] for v in frame.cfg.blocks[block].preds]
+    updates = merge_updates_from_paths(𝕃ᵢ, state, paths)
+    refinements = values(updates)
+    apply_refinements!(𝕃ᵢ, refinements, currstate)
+    if should_eagerly_apply_refinements(state, block)
+        apply_refinements!(𝕃ᵢ, refinements, frame.refinements)
+    else
+        state.updates[block] = updates
+    end
+end
+
+function finish_merging_global_refinements!(frame::InferenceState, interp::AbstractInterpreter)
+    state = frame.refinement_propagation
+    length(state.terminating_blocks) ≥ 2 || return
+    𝕃ᵢ = typeinf_lattice(interp)
+    paths = PathIndex[state.paths[v] for v in state.terminating_blocks]
+    updates = merge_updates_from_paths(𝕃ᵢ, state, paths)
+    refinements = values(updates)
+    apply_refinements!(𝕃ᵢ, refinements, frame.refinements)
 end
 
 function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt::Conditional, then_or_else::Bool)
