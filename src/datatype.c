@@ -504,7 +504,6 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
         // this is expected to have a layout, but since it is not constructable, we don't care too much what it is
         static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, sizeof(void*), {0}};
         st->layout = &opaque_ptr_layout;
-        st->has_concrete_subtype = 0;
         return;
     }
 
@@ -806,10 +805,20 @@ void jl_compute_field_offsets(jl_datatype_t *st)
     return;
 }
 
+// compute a conservative estimate of whether there could exist an instance of a subtype of this
 void jl_compute_has_concrete_subtype(jl_datatype_t *st) {
+    // special-case stricter constraints for `genericmemory`
+    if (st->name == jl_genericmemory_typename) {
+        jl_value_t *eltype = jl_tparam1(st);
+        if (!jl_is_typevar(eltype) && !jl_is_type(eltype)) {
+            st->has_concrete_subtype = 0;
+            return;
+        }
+    }
+
+    // check whether all fields can be instantiated
     st->has_concrete_subtype = 1;
     size_t nfields = jl_svec_len(st->types);
-    // compute a conservative estimate of whether there could exist an instance of a subtype of this
     for (size_t i = 0; st->has_concrete_subtype && i < nfields - st->name->n_uninitialized; i++) {
         jl_value_t *fld = jl_svecref(st->types, i);
         if (fld == jl_bottom_type)
