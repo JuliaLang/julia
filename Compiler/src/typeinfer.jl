@@ -792,13 +792,15 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
     rt = cached_return_type(codeinst)
     exct = codeinst.exctype
     effects = ipo_effects(codeinst)
+    # TODO: extract refinements from codeinst
+    refinements = nothing
     edge = codeinst
     update_valid_age!(caller, WorldRange(min_world(codeinst), max_world(codeinst)))
-    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, edge, edgecycle, edgelimited))
+    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, refinements, edge, edgecycle, edgelimited))
 end
 
 function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method,
-                          @nospecialize(rt), @nospecialize(exct), effects::Effects,
+                          @nospecialize(rt), @nospecialize(exct), effects::Effects, refinements,
                           edge::Union{Nothing,CodeInstance}, edgecycle::Bool, edgelimited::Bool,
                           volatile_inf_result::Union{Nothing,VolatileInferenceResult}=nothing)
     if edge === nothing
@@ -823,7 +825,7 @@ function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method
         end
     end
 
-    return MethodCallResult(rt, exct, effects, edge, edgecycle, edgelimited, volatile_inf_result)
+    return MethodCallResult(rt, exct, effects, refinements, edge, edgecycle, edgelimited, volatile_inf_result)
 end
 
 # allocate a dummy `edge::CodeInstance` to be added by `add_edges!`, reusing an existing_edge if possible
@@ -878,7 +880,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     end
     if !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), method.module) == 0
         add_remark!(interp, caller, "[typeinf_edge] Inference is disabled for the target module")
-        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, nothing, edgecycle, edgelimited))
     end
     if !is_cached(caller) && frame_parent(caller) === nothing
         # this caller exists to return to the user
@@ -919,7 +921,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
             if ci_from_engine !== nothing
                 engine_reject(interp, ci_from_engine)
             end
-            return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+            return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, nothing, edgecycle, edgelimited))
         end
         assign_parentchild!(frame, caller)
         # the actual inference task for this edge is going to be scheduled within `typeinf_local` via the callstack queue
@@ -933,6 +935,13 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                     adjust_effects(effects_for_cycle(frame.ipo_effects), method)
                 local bestguess = frame.bestguess
                 local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
+                local refinements = if isa(caller, InferenceState)
+                    local stmt = caller.src.code[caller.currpc]
+                    propagate_refinements(frame, caller, stmt, interp)
+                else
+                    nothing
+                end
+
                 # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
                 # note that this result is cached globally exclusively, so we can use this local result destructively
                 local volatile_inf_result = if isinferred && edge_ci isa CodeInstance
@@ -940,7 +949,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                     VolatileInferenceResult(result)
                 end
                 mresult[] = MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects,
-                    edge, edgecycle, edgelimited, volatile_inf_result)
+                    refinements, edge, edgecycle, edgelimited, volatile_inf_result)
                 return true
             end)
             return mresult
@@ -948,7 +957,7 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     elseif frame === true
         # unresolvable cycle
         add_remark!(interp, caller, "[typeinf_edge] Unresolvable cycle")
-        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, edgecycle, edgelimited))
+        return Future(MethodCallResult(interp, caller, method, Any, Any, Effects(), nothing, nothing, edgecycle, edgelimited))
     end
     # return the current knowledge about this cycle
     frame = frame::InferenceState
@@ -956,7 +965,64 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
-    return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, edgecycle, edgelimited))
+    return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, nothing, edgecycle, edgelimited))
+end
+
+function propagate_refinements(callee::InferenceState, caller::InferenceState, stmt, interp::AbstractInterpreter)
+    isexpr(stmt, :(=), 2) && (stmt = stmt.args[2])
+    isexpr(stmt, :call) || return nothing
+    stmt.args[1] === GlobalRef(Core, :_apply_iterate) && return nothing
+    𝕃ᵢ = typeinf_lattice(interp)
+    𝕃ₚ = ipo_lattice(interp)
+    ⊑ = partialorder(𝕃ᵢ)
+    refinements = nothing
+    isva = callee.linfo.def.isva
+    n = length(stmt.args)
+    m = callee.linfo.def.nargs
+    f_callee = fieldtype(callee.linfo.specTypes, 1)
+    f_called = argextype(stmt.args[1], caller.src, caller.sptypes)
+    # Make sure that the expression actually represents a direct call to `callee`.
+    # It may not be the case if the callee was identified through `invoke`, `modifyfield!`,
+    # `finalizer`, `return_type` or similar proxies.
+    # TODO: propagate refinements through `invoke` calls
+    f_callee ⊑ f_called || # `f_called` might not be inferred precisely
+        f_called ⊑ f_callee || # callee may be unspecialized
+        return nothing
+    isva || @assert n == m
+    for i in 2:n
+        arg = stmt.args[i]
+        isa(arg, SlotNumber) || continue
+        if isva && i ≥ m
+            vatype = unwrap_unionall(callee.refinements[m].typ)
+            from = getfield_tfunc(𝕃ᵢ, vatype, Const(i - m + 1))
+        else
+            from = callee.refinements[i].typ
+        end
+        known = caller.slottypes[slot_id(arg)]
+        from ⊑ known || continue
+        if refinements === nothing
+            refinements = SlotRefinement[SlotRefinement(arg, from)]
+        else
+            j = findfirst(x -> x.slot === arg, refinements)
+            if j === nothing
+                push!(refinements, SlotRefinement(arg, from))
+            else
+                # A given slot was used multiple times.
+                existing = refinements[j].typ
+                existing === from && continue
+                newt = from ⊑ existing ? from : intersect_refined_types(from, existing, 𝕃ₚ)
+                refinements[j] = SlotRefinement(arg, newt)
+            end
+        end
+    end
+    refinements
+end
+
+function intersect_refined_types(@nospecialize(xtyp), @nospecialize(ytyp), 𝕃ₚ::AbstractLattice)
+    ⊓ = meet(𝕃ₚ)
+    isa(xtyp, Const) && isa(ytyp, Const) && return xtyp == ytyp ? xtyp : Union{}
+    isa(ytyp, Const) && ((xtyp, ytyp) = (ytyp, xtyp))
+    xtyp ⊓ ytyp
 end
 
 # The `:terminates` effect bit must be conservatively tainted unless recursion cycle has
