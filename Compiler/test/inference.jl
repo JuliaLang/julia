@@ -193,6 +193,10 @@ end
 @test Compiler.valid_as_lattice(A57764{<:Int,Int}, true)
 @test !Compiler.valid_as_lattice(A57764{Int,Union{}}, true)
 @test !Compiler.valid_as_lattice(A57764{<:Int,Union{}}, true)
+@test Compiler.valid_as_lattice(Array{2}, true)
+@test !Compiler.valid_as_lattice(Memory{2}, true)
+@test !Compiler.valid_as_lattice(Tuple{2}, true)
+@test !Compiler.valid_as_lattice(Type{2}, true)
 
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)

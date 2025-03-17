@@ -572,7 +572,6 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
     assert(!st->layout);
     st->layout = jl_get_layout(elsz, nfields, npointers, al, haspadding, isbitsegal, arrayelem, NULL, pointers);
     st->zeroinit = zi;
-    //st->has_concrete_subtype = 1;
     //st->isbitstype = 0;
     //st->ismutationfree = 0;
     //st->isidentityfree = 0;
@@ -601,7 +600,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         // this check allows us to force re-computation of the layout for some types during init
         st->layout = NULL;
         st->zeroinit = 0;
-        st->has_concrete_subtype = 1;
     }
     if (st->name == jl_genericmemory_typename) {
         jl_get_genericmemory_layout(st);
@@ -644,7 +642,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
     }
     else {
-        jl_compute_has_concrete_subtype(st);
+        jl_compute_has_concrete_subtype_from_fields(st);
         // compute layout for the wrapper object if the field types have no free variables
         if (!st->isconcretetype && !jl_has_fixed_layout(st)) {
             assert(st == w); // otherwise caller should not have requested this layout
@@ -806,25 +804,11 @@ void jl_compute_field_offsets(jl_datatype_t *st)
 }
 
 // compute a conservative estimate of whether there could exist an instance of a subtype of this
-void jl_compute_has_concrete_subtype(jl_datatype_t *st) {
-    // special-case stricter constraints for `genericmemory`
-    if (st->name == jl_genericmemory_typename) {
-        jl_value_t *eltype = jl_tparam1(st);
-        if (!jl_is_typevar(eltype) && !jl_is_type(eltype)) {
-            st->has_concrete_subtype = 0;
-            return;
-        }
-    }
-
-    // check whether all fields can be instantiated
-    st->has_concrete_subtype = 1;
-    size_t nfields = jl_svec_len(st->types);
-    for (size_t i = 0; st->has_concrete_subtype && i < nfields - st->name->n_uninitialized; i++) {
-        jl_value_t *fld = jl_svecref(st->types, i);
-        if (fld == jl_bottom_type)
-            st->has_concrete_subtype = 0;
-        else
-            st->has_concrete_subtype = !jl_is_datatype(fld) || ((jl_datatype_t *)fld)->has_concrete_subtype;
+void jl_compute_has_concrete_subtype_from_fields(jl_datatype_t *dt) {
+    size_t nfields = jl_svec_len(dt->types);
+    for (size_t i = 0; dt->has_concrete_subtype && i < nfields - dt->name->n_uninitialized; i++) {
+        jl_value_t *fld = jl_svecref(dt->types, i);
+        dt->has_concrete_subtype = jl_has_concrete_subtype(fld);
     }
     return;
 }
