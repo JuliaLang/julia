@@ -74,7 +74,7 @@ LLVM_EXPERIMENTAL_TARGETS :=
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
-LLVM_LDFLAGS := "$(build_prefix)/lib/libz.$(SHLIB_EXT)" # Hacky way to force zlib to be found when linking against libLLVM and sysroot is set
+LLVM_LDFLAGS := "$(build_shlibdir)/libz.$(SHLIB_EXT)" # Hacky way to force zlib to be found when linking against libLLVM and sysroot is set
 LLVM_CMAKE :=
 
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
