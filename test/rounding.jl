@@ -502,4 +502,9 @@ end
             @test iszero(f(zero(t), RoundFromZero))
         end
     end
+    @test Float16(100000, RoundToZero) === floatmax(Float16)
+    @test Float16(100000, RoundFromZero) === Inf16
+    @test Float16(-100000, RoundToZero) === -floatmax(Float16)
+    @test Float16(-100000, RoundFromZero) === -Inf16
+    @test Float32(nextfloat(0.0), RoundFromZero) === nextfloat(0.0f0)
 end
