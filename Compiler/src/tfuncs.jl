@@ -2939,7 +2939,12 @@ end
 # whether `f` is pure for inference
 function is_pure_intrinsic_infer(f::IntrinsicFunction)
     return !(f === Intrinsics.pointerref || # this one is volatile
+             f === Intrinsics.atomic_pointerref || # this one is volatile
              f === Intrinsics.pointerset || # this one is never effect-free
+             f === Intrinsics.atomic_pointerset || # this one is never effect-free
+             f === Intrinsics.atomic_pointerswap || # this one is never effect-free
+             f === Intrinsics.atomic_pointermodify || # this one is never effect-free
+             f === Intrinsics.atomic_pointerreplace || # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
              f === Intrinsics.sqrt_llvm_fast ||  # this one may differ at runtime (by a few ulps)
              f === Intrinsics.have_fma ||  # this one depends on the runtime environment
