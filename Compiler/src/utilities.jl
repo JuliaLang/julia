@@ -351,3 +351,5 @@ function inbounds_option()
 end
 
 is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+
+_time_ns() = ccall(:jl_hrtime, UInt64, ())
