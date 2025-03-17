@@ -680,7 +680,7 @@ static NOINLINE void print_backdate_admonition(jl_binding_t *b) JL_NOTSAFEPOINT
 static inline void check_backdated_binding(jl_binding_t *b, enum jl_partition_kind kind) JL_NOTSAFEPOINT
 {
     if (__unlikely(kind == PARTITION_KIND_BACKDATED_CONST) &&
-        !(jl_atomic_fetch_or(&b->flags, BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION) & BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION)) {
+        !(jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION) & BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION)) {
         print_backdate_admonition(b);
     }
 }
@@ -858,8 +858,8 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_
             jl_errorf("invalid method definition in %s: function %s.%s must be explicitly imported to be extended",
                         jl_module_debug_name(m), jl_module_debug_name(from), jl_symbol_name(var));
         }
-        else if (jl_atomic_fetch_or(&b->flags, BINDING_FLAG_DID_PRINT_IMPLICIT_IMPORT_ADMONITION) &
-                                               BINDING_FLAG_DID_PRINT_IMPLICIT_IMPORT_ADMONITION) {
+        else if (!(jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_DID_PRINT_IMPLICIT_IMPORT_ADMONITION) &
+                                              BINDING_FLAG_DID_PRINT_IMPLICIT_IMPORT_ADMONITION)) {
             jl_printf(JL_STDERR, "WARNING: Constructor for type \"%s\" was extended in `%s` without explicit qualification or import.\n"
                                  "  NOTE: Assumed \"%s\" refers to `%s.%s`. This behavior is deprecated and may differ in future versions.\n"
                                  "  NOTE: This behavior may have differed in Julia versions prior to 1.12.\n"
