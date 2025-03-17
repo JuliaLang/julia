@@ -206,7 +206,7 @@ function show(io::IO, z::Complex)
         print(io, compact ? "+" : " + ")
         show(io, i)
     end
-    if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
+    if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i)) || occursin("0x",repr(i))
         print(io, "*")
     end
     print(io, "im")
