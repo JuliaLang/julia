@@ -1852,6 +1852,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                         jl_atomic_store_release(&newci->max_world, 0);
                     }
                 }
+                jl_atomic_store_relaxed(&newci->time_compile, 0.0);
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
                 jl_atomic_store_relaxed(&newci->specsigflags, 0);
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
