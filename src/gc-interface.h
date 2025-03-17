@@ -8,6 +8,7 @@
 #define JL_GC_INTERFACE_H
 
 #include "dtypes.h"
+#include "julia_atomics.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -17,6 +18,7 @@ struct _jl_tls_states_t;
 struct _jl_value_t;
 struct _jl_weakref_t;
 struct _jl_datatype_t;
+struct _jl_genericmemory_t;
 
 // ========================================================================= //
 // GC Metrics
@@ -95,9 +97,7 @@ JL_DLLEXPORT int jl_gc_is_enabled(void);
 // Sets a soft limit to Julia's heap.
 JL_DLLEXPORT void jl_gc_set_max_memory(uint64_t max_mem);
 // Runs a GC cycle. This function's parameter determines whether we're running an
-// incremental, full, or automatic (i.e. heuristic driven) collection. Returns whether we
-// should run a collection cycle again (e.g. a full mark right after a full sweep to ensure
-// we do a full heap traversal).
+// incremental, full, or automatic (i.e. heuristic driven) collection.
 JL_DLLEXPORT void jl_gc_collect(jl_gc_collection_t collection);
 // Returns whether the thread with `tid` is a collector thread
 JL_DLLEXPORT int gc_is_collector_thread(int tid) JL_NOTSAFEPOINT;
@@ -243,16 +243,29 @@ STATIC_INLINE void jl_gc_wb(const void *parent, const void *ptr) JL_NOTSAFEPOINT
 // so write barriers can be omitted until the next allocation. This function is a no-op that
 // can be used to annotate that a write barrier would be required were it not for this property
 // (as opposed to somebody just having forgotten to think about write barriers).
-STATIC_INLINE void jl_gc_wb_fresh(const void *parent, const void *ptr) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_fresh(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
 // Used to annotate that a write barrier would be required, but may be omitted because `ptr`
 // is known to be an old object.
-STATIC_INLINE void jl_gc_wb_knownold(const void *parent, const void *ptr) JL_NOTSAFEPOINT {}
+STATIC_INLINE void jl_gc_wb_knownold(const void *parent JL_UNUSED, const void *ptr JL_UNUSED) JL_NOTSAFEPOINT {}
 // Write-barrier function that must be used after copying multiple fields of an object into
 // another. It should be semantically equivalent to triggering multiple write barriers – one
 // per field of the object being copied, but may be special-cased for performance reasons.
 STATIC_INLINE void jl_gc_multi_wb(const void *parent,
                                   const struct _jl_value_t *ptr) JL_NOTSAFEPOINT;
 
+// Write-barrier function that must be used after copying fields of elements of genericmemory objects
+// into another. It should be semantically equivalent to triggering multiple write barriers – one
+// per field of the object being copied, but may be special-cased for performance reasons.
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_ptr(const struct _jl_value_t *owner, struct _jl_genericmemory_t *src, char* src_p,
+                                          size_t n, struct _jl_datatype_t *dt) JL_NOTSAFEPOINT;
+
+// Similar to jl_gc_wb_genericmemory_copy but must be used when copying *boxed* elements of a genericmemory
+// object. Note that this barrier also performs the copying unlike jl_gc_wb_genericmemory_copy_ptr.
+// The parameters src_p, dest_p and n will be modified and will contain information about
+// the *uncopied* data after performing this barrier, and will be copied using memmove_refs.
+STATIC_INLINE void jl_gc_wb_genericmemory_copy_boxed(const struct _jl_value_t *owner, _Atomic(void*) * dest_p,
+                                          struct _jl_genericmemory_t *src, _Atomic(void*) * src_p,
+                                          size_t* n) JL_NOTSAFEPOINT;
 #ifdef __cplusplus
 }
 #endif

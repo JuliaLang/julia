@@ -195,7 +195,7 @@ DEP_LIBS += libwhich
 endif
 endif
 
-ifneq (${MMTK_PLAN},None)
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
 DEP_LIBS += mmtk_julia
 endif
 

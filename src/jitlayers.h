@@ -244,7 +244,6 @@ struct jl_codegen_params_t {
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
-    llvm::MapVector<jl_method_instance_t*, std::tuple<jl_method_instance_t*, CallFrames>> enqueuers;
     // Map from symbol name (in a certain library) to its GV in sysimg and the
     // DL handle address in the current session.
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
@@ -284,6 +283,8 @@ struct jl_codegen_params_t {
     jl_codegen_params_t(jl_codegen_params_t &&) JL_NOTSAFEPOINT = default;
     ~jl_codegen_params_t() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
 };
+
+const char *jl_generate_ccallable(Module *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
 
 jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &M,

@@ -143,15 +143,16 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
             # Extensions
             deps_pkg = get(Dict{String, Any}, pkg_info, "extensions")::Dict{String, Any}
+            deps_pkg_concrete = Dict{String, Vector{String}}()
             for (ext, triggers) in deps_pkg
                 if triggers isa String
                     triggers = [triggers]
                 else
                     triggers = triggers::Vector{String}
                 end
-                deps_pkg[ext] = triggers
+                deps_pkg_concrete[ext] = triggers
             end
-            extensions[m_uuid] = deps_pkg
+            extensions[m_uuid] = deps_pkg_concrete
 
             # Determine strategy to find package
             lookup_strat = begin

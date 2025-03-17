@@ -30,6 +30,7 @@ end
 
 # arguments to forward to julia compilation process
 julia_args = []
+enable_trim::Bool = false
 
 let i = 1
     while i <= length(ARGS)
@@ -46,9 +47,11 @@ let i = 1
             global verbose = true
         elseif arg == "--relative-rpath"
             global relative_rpath = true
-        elseif startswith(arg, "--trim") || arg == "--experimental"
-            # forwarded args
-            push!(julia_args, arg)
+        elseif startswith(arg, "--trim")
+            global enable_trim = arg != "--trim=no"
+            push!(julia_args, arg) # forwarded arg
+        elseif arg == "--experimental"
+            push!(julia_args, arg) # forwarded arg
         else
             if arg[1] == '-' || !isnothing(file)
                 println("Unexpected argument `$arg`")
@@ -102,9 +105,17 @@ function precompile_env()
     end
 end
 
-function compile_products()
+function compile_products(enable_trim::Bool)
+
+    # Only strip IR / metadata if not `--trim=no`
+    strip_args = String[]
+    if enable_trim
+        push!(strip_args, "--strip-ir")
+        push!(strip_args, "--strip-metadata")
+    end
+
     # Compile the Julia code
-    cmd = addenv(`$julia_cmd_target --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $julia_args $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    cmd = addenv(`$julia_cmd_target --project=$(Base.active_project()) --output-o $img_path --output-incremental=no $strip_args $julia_args $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
     verbose && println("Running: $cmd")
     if !success(pipeline(cmd; stdout, stderr))
         println(stderr, "\nFailed to compile $file")
@@ -154,5 +165,5 @@ function link_products()
 end
 
 precompile_env()
-compile_products()
+compile_products(enable_trim)
 link_products()

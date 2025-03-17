@@ -25,6 +25,7 @@ New language features
 * Support for Unicode 16 ([#56925]).
 * `Threads.@spawn` now takes a `:samepool` argument to specify the same threadpool as the caller.
   `Threads.@spawn :samepool foo()` which is shorthand for `Threads.@spawn Threads.threadpool() foo()` ([#57109]).
+* The `@ccall` macro can now take a `gc_safe` argument, that if set to true allows the runtime to run garbage collection concurrently to the `ccall` ([#49933]).
 
 Language changes
 ----------------
@@ -51,6 +52,10 @@ Language changes
 * Errors during `getfield` now raise a new `FieldError` exception type instead of the generic
   `ErrorException` ([#54504]).
 * Macros in function-signature-position no longer require parentheses. E.g. `function @main(args) ... end` is now permitted, whereas `function (@main)(args) ... end` was required in prior Julia versions.
+* Calling `using` on a package name inside of that package of that name (especially relevant
+  for a submodule) now explicitly uses that package without examining the Manifest and
+  environment, which is identical to the behavior of `..Name`. This appears to better match
+  how users expect this to behave in the wild. ([#57727])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -97,7 +102,7 @@ New library functions
 * The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block ([#53159]).
 * `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait for multiple tasks
   at once ([#53341]).
-* `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
+* `uuid7()` creates an RFC 9562 compliant UUID with version 7 ([#54834]).
 * `insertdims(array; dims)` inserts singleton dimensions into an array --- the inverse operation of
   `dropdims` ([#45793]).
 * A new `Fix` type generalizes `Fix1/Fix2` for fixing a single argument ([#54653]).
