@@ -16,7 +16,7 @@ function show(io::IO, ::MIME"text/plain", r::UnitRange)
     show(io, first(r))
     print(io, ':')
     show(io, last(r))
-    if !get(io, :compact, false) && isempty(r)
+    if !(get(io, :compact, false)::Bool) && isempty(r)
         print(io, " (empty range)")
     end
 end
