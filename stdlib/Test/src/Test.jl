@@ -1648,6 +1648,7 @@ julia> @testset let logi = log(im)
        end
 Test Failed at none:3
   Expression: !(iszero(real(logi)))
+   Evaluated: !(iszero(0.0))
      Context: logi = 0.0 + 1.5707963267948966im
 
 ERROR: There was an error during testing

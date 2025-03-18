@@ -163,6 +163,10 @@ let fails = @testset NoThrowTestSet begin
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
         @test_throws ["BoundsError", "acquire", "1-element", "at index [2]"] [1][2]
+        # 27 - Fail - issetequal
+        a = [1, 2]
+        b = [1, 3]
+        @test issetequal(a, b)
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -296,6 +300,11 @@ let fails = @testset NoThrowTestSet begin
     let str = sprint(show, fails[26])
         @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
+    end
+
+    let str = sprint(show, fails[27])
+        @test occursin("Expression: issetequal(a, b)", str)
+        @test occursin("Evaluated: issetequal([1, 2], [1, 3])", str)
     end
 
 end
