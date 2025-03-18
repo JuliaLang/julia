@@ -184,19 +184,30 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 @test Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 5
 @test Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 7
 
+using Compiler, Test
+
 struct A57764{X,Y}
     x::X
     y::Y
+end
+
+struct B57764{X}
+    x::X
 end
 
 @test Compiler.valid_as_lattice(A57764{Int,Int}, true)
 @test Compiler.valid_as_lattice(A57764{<:Int,Int}, true)
 @test !Compiler.valid_as_lattice(A57764{Int,Union{}}, true)
 @test !Compiler.valid_as_lattice(A57764{<:Int,Union{}}, true)
-@test Compiler.valid_as_lattice(Array{2}, true)
-@test !Compiler.valid_as_lattice(Memory{2}, true)
-@test !Compiler.valid_as_lattice(Tuple{2}, true)
-@test !Compiler.valid_as_lattice(Type{2}, true)
+@test !Compiler.valid_as_lattice(B57764{Union{}}, true)
+@test !Compiler.valid_as_lattice(B57764{<:Union{}}, true)
+@test Compiler.valid_as_lattice(B57764{Int}, true)
+@test Compiler.valid_as_lattice(B57764{<:Int}, true)
+@test !Compiler.valid_as_lattice(B57764{Type{1}}, true)
+@test !Compiler.valid_as_lattice(Array{1}, true)
+@test !Compiler.valid_as_lattice(Memory{1}, true)
+@test !Compiler.valid_as_lattice(Tuple{1}, true)
+@test !Compiler.valid_as_lattice(Type{1}, true)
 
 # PR 22120
 function tuplemerge_test(a, b, r, commutative=true)

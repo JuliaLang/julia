@@ -2454,8 +2454,10 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             // recursively instantiate the types of the fields
             if (dt->types == NULL)
                 ndt->types = jl_compute_fieldtypes(ndt, stack, cacheable);
-            else
+            else {
                 ndt->types = inst_ftypes(ftypes, env, stack, cacheable);
+                jl_compute_has_concrete_subtype_from_fields(ndt);
+            }
             jl_gc_wb(ndt, ndt->types);
         }
     }
@@ -2872,7 +2874,6 @@ void jl_compute_has_concrete_subtype_from_fields(jl_datatype_t *dt) {
         jl_value_t *fld = jl_svecref(dt->types, i);
         dt->has_concrete_subtype = jl_has_concrete_subtype(fld);
     }
-    return;
 }
 
 JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable)
@@ -2945,6 +2946,7 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
             assert(ndt->types == NULL);
             ndt->types = inst_ftypes(t->types, &env[n - 1], &top, 1);
             jl_gc_wb(ndt, ndt->types);
+            jl_compute_has_concrete_subtype_from_fields(ndt);
             if (ndt->isconcretetype) { // cacheable
                 jl_compute_field_offsets(ndt);
             }
