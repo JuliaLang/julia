@@ -2865,6 +2865,16 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
     return vm;
 }
 
+// compute a conservative estimate of whether there could exist an instance of a subtype of this
+void jl_compute_has_concrete_subtype_from_fields(jl_datatype_t *dt) {
+    size_t nfields = jl_svec_len(dt->types);
+    for (size_t i = 0; dt->has_concrete_subtype && i < nfields - dt->name->n_uninitialized; i++) {
+        jl_value_t *fld = jl_svecref(dt->types, i);
+        dt->has_concrete_subtype = jl_has_concrete_subtype(fld);
+    }
+    return;
+}
+
 JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable)
 {
     assert(st->name != jl_namedtuple_typename && st->name != jl_tuple_typename);
@@ -2890,7 +2900,6 @@ JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_RO
     jl_compute_has_concrete_subtype_from_fields(st);
     return st->types;
 }
-
 
 void jl_reinstantiate_inner_types(jl_datatype_t *t) // can throw!
 {
