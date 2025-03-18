@@ -30,15 +30,16 @@ using InteractiveUtils: gen_call_with_extracted_types
 using Base: typesplit, remove_linenums!
 using Serialization: Serialization
 
+# Whitelist boolean functions which show their evaluated arguments when the test fails
 const DISPLAY_FAILED = (
-    :isequal,
-    :isapprox,
     :≈,
+    :contains,
+    :endswith,
+    :isapprox,
+    :isempty,
+    :isequal,
     :occursin,
     :startswith,
-    :endswith,
-    :isempty,
-    :contains
 )
 
 const FAIL_FAST = Ref{Bool}(false)
