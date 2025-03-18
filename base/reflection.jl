@@ -149,23 +149,21 @@ struct CodegenParams
     use_jlplt::Cint
 
     """
-    If enabled, only provably reachable code (from functions marked with `entrypoint`) is included
-    in the output system image. Errors or warnings can be given for call sites too dynamic to handle.
-    The option is disabled by default. (0=>disabled, 1=>safe (static errors), 2=>unsafe, 3=>unsafe plus warnings)
+        If enabled emit LLVM IR even for functions with constant return values.
     """
-    trim::Cint
+    force_emit_const::Cint
 
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true, use_jlplt::Bool=true, trim::Cint=Cint(0))
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_const::Bool=false)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
-            Cint(gcstack_arg), Cint(use_jlplt), Cint(trim))
+            Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_const))
     end
 end
 

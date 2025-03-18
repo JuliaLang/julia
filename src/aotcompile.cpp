@@ -775,7 +775,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                     params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                     Triple(clone.getModuleUnlocked()->getTargetTriple()));
             jl_llvm_functions_t decls;
-            if (jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
+            if (!(params.params->force_emit_const) && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
                 decls.functionObject = "jl_fptr_const_return";
             else
                 decls = jl_emit_codeinst(result_m, codeinst, src, params);
