@@ -765,6 +765,9 @@ julia> typemin(Float32)
 
 julia> floatmin(Float32)  # smallest positive finite Float32 floating point number
 1.1754944f-38
+
+julia> nextfloat(-Inf32) == -floatmax(Float32)  # equivalent ways of getting the lowest finite Float32 floating point number
+true
 ```
 """
 function typemin end
