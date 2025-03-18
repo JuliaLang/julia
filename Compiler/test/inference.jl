@@ -184,8 +184,6 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 @test Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}) == 5
 @test Compiler.unioncomplexity(Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Union{Symbol, Tuple{Vararg{Symbol}}}}}}}}}}}) == 7
 
-using Compiler, Test
-
 struct A57764{X,Y}
     x::X
     y::Y
