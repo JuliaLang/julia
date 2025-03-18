@@ -36,8 +36,11 @@ const DISPLAY_FAILED = (
     :contains,
     :endswith,
     :isapprox,
+    :isdisjoint,
     :isempty,
     :isequal,
+    :issetequal,
+    :issubset,
     :occursin,
     :startswith,
 )
