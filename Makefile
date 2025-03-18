@@ -1,5 +1,6 @@
 JULIAHOME := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-$(shell mkdir -p deps/srccache && curl -L https://buildkite.com/organizations/julialang/pipelines/yggdrasil/builds/18641/jobs/01959975-326e-4669-bbc7-1d71e996d9c8/artifacts/01959cef-8c11-491c-b86d-46e643505db3 > deps/srccache/libLLVM.v19.1.7+1.x86_64-apple-darwin-llvm_version+19.tar.gz)
+# $(shell mkdir -p deps/srccache && curl -L https://buildkite.com/organizations/julialang/pipelines/yggdrasil/builds/18641/jobs/01959975-326e-4669-bbc7-1d71e996d9c8/artifacts/01959cef-8c11-491c-b86d-46e643505db3 > deps/srccache/libLLVM.v19.1.7+1.x86_64-apple-darwin-llvm_version+19.tar.gz)
+$(shell mkdir -p deps/srccache && curl -L https://buildkite.com/organizations/julialang/pipelines/yggdrasil/builds/18641/jobs/01959dbb-5a33-46e4-a85b-77cfa5fdd24f/artifacts/01959e13-a90d-48b9-8747-14fad4f738cc > deps/srccache/libLLVM.v19.1.7+1.x86_64-linux-gnu-cxx11-llvm_version+19.tar.gz)
 include $(JULIAHOME)/Make.inc
 # import LLVM_SHARED_LIB_NAME
 include $(JULIAHOME)/deps/llvm-ver.make
