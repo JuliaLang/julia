@@ -715,12 +715,12 @@ OncePerProcess(initializer) = OncePerProcess{Base.promote_op(initializer), typeo
             once.allow_compile_time || __precompile__(false)
             lock(once.lock)
             try
-                ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-                once, :value, nothing)
-                ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-                    once, :state, PerStateInitial)
                 state = @atomic :monotonic once.state
                 if state == PerStateInitial
+                    ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                        once, :value, nothing)
+                    ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                        once, :state, PerStateInitial)
                     once.value = once.initializer()
                 elseif state == PerStateErrored
                     error("OncePerProcess initializer failed previously")
@@ -847,7 +847,7 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                 if tid > length(ss)
                     if length(ss) == 0 # We are the first to initialize
                         ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-                        once, :xs, xs)
+                            once, :xs, xs)
                         ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
                             once, :ss, ss)
                     end
