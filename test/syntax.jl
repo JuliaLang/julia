@@ -4226,3 +4226,16 @@ end
 
 end
 
+# #57574
+module M57574
+struct A{T} end
+out = let
+    for B in ()
+    end
+    let
+        B{T} = A{T}
+        B
+    end
+end
+end
+@test M57574.out === M57574.A

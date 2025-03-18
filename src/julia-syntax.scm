@@ -3168,7 +3168,9 @@
 
         ((eq? (car e) 'assign-const-if-global)
            (if (eq? (var-kind (cadr e) scope) 'local)
-               (if (length= e 2) (null) `(= ,@(cdr e)))
+               (if (length= e 2)
+                   (null)
+                   (resolve-scopes- `(= ,@(cdr e)) scope sp loc))
                (resolve-scopes- `(const ,@(cdr e)) scope sp loc)))
         ((eq? (car e) 'global-if-global)
            (if (eq? (var-kind (cadr e) scope) 'local)
