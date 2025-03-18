@@ -1629,8 +1629,8 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
 #define fintrinsic_read_float32(p)   *(float *)p
 #define fintrinsic_read_float64(p)   *(double *)p
 
-#define fintrinsic_write_float16(p, x)  *(uint16_t *)p = float_to_half(x)
-#define fintrinsic_write_bfloat16(p, x) *(uint16_t *)p = float_to_bfloat(x)
+#define fintrinsic_write_float16(p, x)  *(uint16_t *)p = double_to_half(x)
+#define fintrinsic_write_bfloat16(p, x) *(uint16_t *)p = double_to_bfloat(x)
 #define fintrinsic_write_float32(p, x)  *(float *)p = x
 #define fintrinsic_write_float64(p, x)  *(double *)p = x
 
