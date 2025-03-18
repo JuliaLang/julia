@@ -14,7 +14,7 @@ show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use th
 
 function show(io::IO, ::MIME"text/plain", r::UnitRange)
     print(io, repr(first(r)), ':', repr(last(r)))
-    if isempty(r)
+    if !get(io, :compact, false) && isempty(r)
         print(io, " (empty range)")
     end
 end
