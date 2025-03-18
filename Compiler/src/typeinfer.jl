@@ -1414,6 +1414,8 @@ end
 verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = invokelatest(verify_typeinf_trim, stdout, codeinfos, onlywarn)
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
+    bootstrapping_compiler && return Any # unavailable during bootstrap
+
     world = tls_world_age()
     args = Any[_return_type, NativeInterpreter(world), Tuple{Core.Typeof(f), t.parameters...}]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
@@ -1429,6 +1431,8 @@ function return_type(t::DataType)
 end
 
 function return_type(t::DataType, world::UInt)
+    bootstrapping_compiler && return Any # unavailable during bootstrap
+
     args = Any[_return_type, NativeInterpreter(world), t]
     return ccall(:jl_call_in_typeinf_world, Any, (Ptr{Any}, Cint), args, length(args))
 end
