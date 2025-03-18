@@ -5,12 +5,11 @@ baremodule OpenBLAS_jll
 using Base, Libdl, Base.BinaryPlatforms
 using CompilerSupportLibraries_jll
 
-const PATH_list = String[]
-const LIBPATH_list = String[]
-
 export libopenblas
 
 # These get calculated in __init__()
+const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
 const LIBPATH_list = String[]
 artifact_dir::String = ""

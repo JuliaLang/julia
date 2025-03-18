@@ -8,6 +8,8 @@ using Base, Libdl, Base.BinaryPlatforms
 export libgfortran, libstdcxx, libgomp, libatomic, libgcc_s
 
 # These get calculated in __init__()
+const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
 const LIBPATH_list = String[]
 artifact_dir::String = ""
