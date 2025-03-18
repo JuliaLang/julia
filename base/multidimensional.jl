@@ -91,7 +91,11 @@ module IteratorsMD
     flatten(I::Tuple{Any}) = Tuple(I[1])
     @inline flatten(I::Tuple) = (Tuple(I[1])..., flatten(tail(I))...)
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
-    show(io::IO, i::CartesianIndex) = (print(io, "CartesianIndex"); show(io, i.I))
+    function show(io::IO, i::CartesianIndex)
+        print(io, "CartesianIndex(")
+        join(io, i.I, ", ")
+        print(io, ")")
+    end
 
     # length
     length(::CartesianIndex{N}) where {N} = N
