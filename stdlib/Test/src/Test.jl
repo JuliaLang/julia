@@ -30,6 +30,7 @@ using InteractiveUtils: gen_call_with_extracted_types
 using Base: typesplit, remove_linenums!
 using Serialization: Serialization
 
+# Whitelist boolean functions which show their evaluated arguments when the test fails
 const DISPLAY_FAILED = (
     :isequal,
     :isapprox,
@@ -619,7 +620,8 @@ function get_test_result(ex, source)
             $(QuoteNode(source)),
             $negate,
         ))
-    elseif isa(ex, Expr) && ex.head === :call && ex.args[1] in DISPLAY_FAILED
+    elseif isa(ex, Expr) && ex.head === :call &&
+        (2 <= length(ex.args) <= 3 || ex.args[1] in DISPLAY_FAILED)
         escaped_func = esc(ex.args[1])
         quoted_func = QuoteNode(ex.args[1])
 
@@ -1623,6 +1625,7 @@ julia> @testset let logi = log(im)
        end
 Test Failed at none:3
   Expression: !(iszero(real(logi)))
+   Evaluated: !(iszero(0.0))
      Context: logi = 0.0 + 1.5707963267948966im
 
 ERROR: There was an error during testing
@@ -1633,6 +1636,7 @@ julia> @testset let logi = log(im), op = !iszero
        end
 Test Failed at none:3
   Expression: op(real(logi))
+   Evaluated: op(0.0)
      Context: logi = 0.0 + 1.5707963267948966im
               op = !iszero
 
