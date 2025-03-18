@@ -13,7 +13,9 @@ end
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
 function show(io::IO, ::MIME"text/plain", r::UnitRange)
-    print(io, repr(first(r)), ':', repr(last(r)))
+    show(io, first(r))
+    print(io, ':')
+    show(io, last(r))
     if !get(io, :compact, false) && isempty(r)
         print(io, " (empty range)")
     end
