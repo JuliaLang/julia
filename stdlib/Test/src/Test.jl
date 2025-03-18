@@ -47,6 +47,8 @@ const DISPLAY_FAILED = (
     :isfinite,
     :isinf,
     :isinteger,
+    :ismissing,
+    :isnothing,
     :isnumeric,
     :isprint,
     :ispunct,
