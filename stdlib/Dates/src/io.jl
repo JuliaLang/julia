@@ -416,34 +416,30 @@ function DateFormat(f::AbstractString, locale::DateLocale=ENGLISH)
 
     # To understand this block, please see the comments attached to the definitions of
     # DATEFORMAT_REGEX_LOCK, DATEFORMAT_REGEX_HASH, and DATEFORMAT_REGEX_CACHE.
-    lock(DATEFORMAT_REGEX_LOCK)
-    try
+    @lock DATEFORMAT_REGEX_LOCK begin
         dateformat_regex_hash = hash(keys(CONVERSION_SPECIFIERS))
         if dateformat_regex_hash != DATEFORMAT_REGEX_HASH[]
             DATEFORMAT_REGEX_HASH[] = dateformat_regex_hash
             DATEFORMAT_REGEX_CACHE[] = compute_dateformat_regex(CONVERSION_SPECIFIERS)
         end
-    finally
-        unlock(DATEFORMAT_REGEX_LOCK)
-    end
+        for m in eachmatch(DATEFORMAT_REGEX_CACHE[], f)
+            tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
 
-    for m in eachmatch(DATEFORMAT_REGEX_CACHE[], f)
-        tran = replace(f[prev_offset:prevind(f, m.offset)], r"\\(.)" => s"\1")
+            if !isempty(prev)
+                letter, width = prev
+                push!(tokens, DatePart{letter}(width, isempty(tran)))
+            end
 
-        if !isempty(prev)
-            letter, width = prev
-            push!(tokens, DatePart{letter}(width, isempty(tran)))
+            if !isempty(tran)
+                push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
+            end
+
+            letter = f[m.offset]
+            width = length(m.match)
+
+            prev = (letter, width)
+            prev_offset = m.offset + width
         end
-
-        if !isempty(tran)
-            push!(tokens, Delim(length(tran) == 1 ? first(tran) : tran))
-        end
-
-        letter = f[m.offset]
-        width = length(m.match)
-
-        prev = (letter, width)
-        prev_offset = m.offset + width
     end
 
     tran = replace(f[prev_offset:lastindex(f)], r"\\(.)" => s"\1")
