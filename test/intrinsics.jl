@@ -304,6 +304,17 @@ end
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float32(3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float64(3.3) Float16(3.3)
 
+    # #57805 - cases where rounding Float64 -> Float32 -> Float16 would fail
+    #     2^-25 * 0b1.0000000000000000000000000000000000000001 binary
+    #   0 01111100110 0000000000000000000000000000000000000001000000000000
+    #     2^-25 * 0b1.0                                        binary
+    #   0    01100110 00000000000000000000000
+    #     2^-14 * 0b0.0000000001 (subnormal)
+    #   0       00000 0000000001 (correct)
+    #   0       00000 0000000000 (incorrect)
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 0x1.0000000001p-25 Float16(6.0e-8)
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 -0x1.0000000001p-25 Float16(-6.0e-8)
+
     # float_to_half/bfloat_to_float special cases
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Inf32 Inf16
     @test_intrinsic Core.Intrinsics.fptrunc Float16 -Inf32 -Inf16

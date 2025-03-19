@@ -277,6 +277,8 @@ include("operators.jl")
 include("pointer.jl")
 include("refvalue.jl")
 include("cmem.jl")
+include("rounding.jl")
+include("float.jl")
 
 include("checked.jl")
 using .Checked

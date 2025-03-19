@@ -12,7 +12,7 @@ module Timings
 
 using ..Core
 using ..Compiler: -, +, :, Vector, length, first, empty!, push!, pop!, @inline,
-    @inbounds, copy, backtrace
+    @inbounds, copy, backtrace, _time_ns
 
 # What we record for any given frame we infer during type inference.
 struct InferenceFrameInfo
@@ -52,8 +52,6 @@ struct Timing
 end
 Timing(mi_info, start_time, cur_start_time, time, children) = Timing(mi_info, start_time, cur_start_time, time, children, nothing)
 Timing(mi_info, start_time) = Timing(mi_info, start_time, start_time, UInt64(0), Timing[])
-
-_time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # We keep a stack of the Timings for each of the MethodInstances currently being timed.
 # Since type inference currently operates via a depth-first search (during abstract
@@ -103,7 +101,7 @@ function result_edges(interp::AbstractInterpreter, caller::InferenceState)
     end
 end
 
-function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt)
+function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     result = caller.result
     #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
     if isdefined(result, :ci)
@@ -142,9 +140,12 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         if !@isdefined di
             di = DebugInfo(result.linfo)
         end
-        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
+        time_now = _time_ns()
+        time_self_ns = caller.time_self_ns + (time_now - time_before)
+        time_total = (time_now - caller.time_start - caller.time_paused) * 1e-9
+        ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
             ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
-            result.analysis_results, di, edges)
+            result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, di, edges)
         engine_reject(interp, ci)
         codegen = codegen_cache(interp)
         if !discard_src && codegen !== nothing && uncompressed isa CodeInfo
@@ -186,8 +187,8 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     end
     ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
         ci, rettype, exctype, nothing, const_flags, min_world, max_world, ipo_effects, nothing, di, edges)
-    ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
-        ci, nothing, const_flag, min_world, max_world, ipo_effects, nothing, di, edges)
+    ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
+        ci, nothing, const_flag, min_world, max_world, ipo_effects, nothing, 0.0, 0.0, 0.0, di, edges)
     code_cache(interp)[mi] = ci
     codegen = codegen_cache(interp)
     if codegen !== nothing
@@ -197,14 +198,14 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
     return nothing
 end
 
-function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
+function finish_nocycle(::AbstractInterpreter, frame::InferenceState, time_before::UInt64)
     finishinfer!(frame, frame.interp, frame.cycleid)
     opt = frame.result.src
     if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
         optimize(frame.interp, opt, frame.result)
     end
     validation_world = get_world_counter()
-    finish!(frame.interp, frame, validation_world)
+    finish!(frame.interp, frame, validation_world, time_before)
     if isdefined(frame.result, :ci)
         # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
         # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
@@ -219,7 +220,7 @@ function finish_nocycle(::AbstractInterpreter, frame::InferenceState)
     return nothing
 end
 
-function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cycleid::Int)
+function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cycleid::Int, time_before::UInt64)
     cycle_valid_worlds = WorldRange()
     cycle_valid_effects = EFFECTS_TOTAL
     for frameid = cycleid:length(frames)
@@ -236,22 +237,44 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
         caller = frames[frameid]::InferenceState
         adjust_cycle_frame!(caller, cycle_valid_worlds, cycle_valid_effects)
         finishinfer!(caller, caller.interp, cycleid)
+        time_now = _time_ns()
+        caller.time_self_ns += (time_now - time_before)
+        time_before = time_now
     end
+    time_caches = 0.0 # the total and adjusted time of every entry in the cycle are the same
+    time_paused = UInt64(0)
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         opt = caller.result.src
         if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
             optimize(caller.interp, opt, caller.result)
+            time_now = _time_ns()
+            caller.time_self_ns += (time_now - time_before)
+            time_before = time_now
         end
+        time_caches += caller.time_caches
+        time_paused += caller.time_paused
+        caller.time_paused = UInt64(0)
+        caller.time_caches = 0.0
     end
+    cycletop = frames[cycleid]::InferenceState
+    time_start = cycletop.time_start
     validation_world = get_world_counter()
     cis = CodeInstance[]
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
-        finish!(caller.interp, caller, validation_world)
+        caller.time_start = time_start
+        caller.time_caches = time_caches
+        caller.time_paused = time_paused
+        finish!(caller.interp, caller, validation_world, time_before)
         if isdefined(caller.result, :ci)
             push!(cis, caller.result.ci)
         end
+    end
+    if cycletop.parentid != 0
+        parent = frames[cycletop.parentid]
+        parent.time_caches += time_caches
+        parent.time_paused += time_paused
     end
     # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
     # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
@@ -792,9 +815,10 @@ function return_cached_result(interp::AbstractInterpreter, method::Method, codei
     rt = cached_return_type(codeinst)
     exct = codeinst.exctype
     effects = ipo_effects(codeinst)
-    edge = codeinst
     update_valid_age!(caller, WorldRange(min_world(codeinst), max_world(codeinst)))
-    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, edge, edgecycle, edgelimited))
+    caller.time_caches += reinterpret(Float16, codeinst.time_infer_total)
+    caller.time_caches += reinterpret(Float16, codeinst.time_infer_cache_saved)
+    return Future(MethodCallResult(interp, caller, method, rt, exct, effects, codeinst, edgecycle, edgelimited))
 end
 
 function MethodCallResult(::AbstractInterpreter, sv::AbsIntState, method::Method,
@@ -890,7 +914,9 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     if frame === false
         # completely new, but check again after reserving in the engine
         if cache_mode == CACHE_MODE_GLOBAL
+            reserve_start = _time_ns() # subtract engine_reserve (thread-synchronization) time from callers to avoid double-counting
             ci_from_engine = engine_reserve(interp, mi)
+            caller.time_paused += (_time_ns() - reserve_start)
             edge_ci = ci_from_engine
             codeinst = get(code_cache(interp), mi, nothing)
             if codeinst isa CodeInstance # return existing rettype if the code is already inferred
