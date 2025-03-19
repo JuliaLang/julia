@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-using Test: guardseed, _is_simple_call
+using Test: guardseed, _is_simple_call, _function_name
 using Serialization
 using Distributed: RemoteException
 
@@ -156,7 +156,7 @@ let fails = @testset NoThrowTestSet begin
         # 21 - Fail - endswith
         @test endswith(str1, str2)
         # 22 - Fail - contains
-        @test contains(str1, str2)
+        @test Base.contains(str1, str2)
         # 23 - Fail - issetequal
         a = [1, 2]
         b = [1, 3]
@@ -279,8 +279,8 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[22])
-        @test occursin("Expression: contains(str1, str2)", str)
-        @test occursin("Evaluated: contains(\"Hello\", \"World\")", str)
+        @test occursin("Expression: Base.contains(str1, str2)", str)
+        @test occursin("Evaluated: Base.contains(\"Hello\", \"World\")", str)
     end
 
     let str = sprint(show, fails[23])
@@ -1804,4 +1804,10 @@ end
     @test !_is_simple_call(:(f(x...)))
     @test !_is_simple_call(:(f(x, y...)))
     @test !_is_simple_call(:(f(x; y...)))
+end
+
+@testset "_function_name" begin
+    @test _function_name(:(isequal(x, y))) === :isequal
+    @test _function_name(:(Base.isequal(x.y))) === :isequal
+    @test _function_name(:(Base.Meta.isexpr(ex))) === :isexpr
 end
