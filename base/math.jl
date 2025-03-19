@@ -1144,16 +1144,23 @@ end
         y = sign(y)*max_exp
     end
     yint = unsafe_trunc(Int32, y) # This is actually safe since julia freezes the result
-    y == yint && return pow_body(x, yint)
-    x < 0 && throw_exp_domainerror(x)
-    !isfinite(x) && return x*(y>0 || isnan(x))
-    x==0 && return abs(y)*T(Inf)*(!(y>0))
-    return pow_body(x, y)
+    yisint = y == yint
+    if yisint
+        yint == 0 && return 1.0
+        use_power_by_squaring(yint) && return pow_body(x, yint)
+    end
+    s = 1
+    if x < 0
+        !yisint && throw_exp_domainerror(x) # y isn't an integer
+        s = ifelse(isodd(yint), -1, 1)
+    end
+    !isfinite(x) && return copysign(x,s)*(y>0 || isnan(x))           # x is inf or NaN
+    return copysign(pow_body(abs(x), y), s)
 end
 
 # @constprop aggressive to help the compiler see the switch between the integer and float
 # variants for callers with constant `y`
-@constprop :aggressive @inline function ^(x::Union{Float16, Float32}, n::Integer)
+@constprop :aggressive @inline function ^(x::T, n::Integer) where T <: Union{Float16, Float32}
     n = clamp(n, Int32)
     # Exponents greater than this will always overflow or underflow.
     # Note that NaN can pass through this, but that will end up fine.
@@ -1161,7 +1168,7 @@ end
     use_power_by_squaring(n) && return pow_body(x, n)
     s = ifelse(x < 0 && isodd(n), -1f0, 1f0)
     x = abs(x)
-    return pow_body(x, n)
+    return pow_body(x, widen(T)(n))
 end
 
 @inline function pow_body(x::T, y) where T <: Union{Float16, Float32}
@@ -1172,7 +1179,7 @@ end
     n == -2 && return (i=inv(x); i*i)
     n == 3 && return x*x*x #keep compatibility with literal_pow
     n < 0 && return oftype(x, Base.power_by_squaring(inv(widen(x)), -n))
-    return oftype(x, Base.power_by_squaring(inv(widen(x)), n))
+    return oftype(x, Base.power_by_squaring(widen(x), n))
 end
 
 # @constprop aggressive to help the compiler see the switch between the integer and float
