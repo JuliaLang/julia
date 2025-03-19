@@ -198,7 +198,7 @@ function Base.show(io::IO, t::Fail)
         print(io, "\n    Expected: ", data)
         print(io, "\n  No exception thrown")
     elseif t.test_type === :test
-        if data !== nothing
+        if data !== nothing && t.orig_expr != data
             # The test was an expression, so display the term-by-term
             # evaluated version as well
             print(io, "\n   Evaluated: ", data)

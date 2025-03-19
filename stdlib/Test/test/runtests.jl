@@ -185,7 +185,7 @@ let fails = @testset NoThrowTestSet begin
 
     let str = sprint(show, fails[3])
         @test occursin("Expression: 1 == 2", str)
-        @test occursin("Evaluated: 1 == 2", str)
+        @test !occursin("Evaluated", str)
     end
 
     let str = sprint(show, fails[4])
