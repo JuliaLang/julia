@@ -8,6 +8,8 @@ using Base, Libdl, Base.BinaryPlatforms
 export libgfortran, libstdcxx, libgomp, libatomic, libgcc_s
 
 # These get calculated in __init__()
+const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
 const LIBPATH_list = String[]
 artifact_dir::String = ""
@@ -41,7 +43,9 @@ elseif Sys.isapple()
     const _libgomp_path = BundledLazyLibraryPath("libgomp.1.dylib")
     const _libssp_path = BundledLazyLibraryPath("libssp.0.dylib")
 else
-    if !Sys.isfreebsd()
+    if Sys.isfreebsd()
+        const _libatomic_path = BundledLazyLibraryPath("libatomic.so.3")
+    else
         const _libatomic_path = BundledLazyLibraryPath("libatomic.so.1")
     end
     const _libgcc_s_path = BundledLazyLibraryPath("libgcc_s.so.1")
