@@ -1134,6 +1134,49 @@ end
 
 # @constprop aggressive to help the compiler see the switch between the integer and float
 # variants for callers with constant `y`
+@constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
+    x == 1 && return one(T)
+    # Exponents greater than this will always overflow or underflow.
+    # Note that NaN can pass through this, but that will end up fine.
+    max_exp = T == Float16 ? T(3<<14) : T(0x1.Ap30)
+    if !(abs(y)<max_exp)
+        isnan(y) && return y
+        y = sign(y)*max_exp
+    end
+    yint = unsafe_trunc(Int32, y) # This is actually safe since julia freezes the result
+    y == yint && return pow_body(x, yint)
+    x < 0 && throw_exp_domainerror(x)
+    !isfinite(x) && return x*(y>0 || isnan(x))
+    x==0 && return abs(y)*T(Inf)*(!(y>0))
+    return pow_body(x, y)
+end
+
+# @constprop aggressive to help the compiler see the switch between the integer and float
+# variants for callers with constant `y`
+@constprop :aggressive @inline function ^(x::Union{Float16, Float32}, n::Integer)
+    n = clamp(n, Int32)
+    # Exponents greater than this will always overflow or underflow.
+    # Note that NaN can pass through this, but that will end up fine.
+    n == 0 && return one(x)
+    use_power_by_squaring(n) && return pow_body(x, n)
+    s = ifelse(x < 0 && isodd(n), -1f0, 1f0)
+    x = abs(x)
+    return pow_body(x, n)
+end
+
+@inline function pow_body(x::T, y) where T <: Union{Float16, Float32}
+    return T(exp2(log2(abs(widen(x))) * y))
+end
+
+@inline function pow_body(x::Union{Float16, Float32}, n::Int32)
+    n == -2 && return (i=inv(x); i*i)
+    n == 3 && return x*x*x #keep compatibility with literal_pow
+    n < 0 && return oftype(x, Base.power_by_squaring(inv(widen(x)), -n))
+    return oftype(x, Base.power_by_squaring(inv(widen(x)), n))
+end
+
+# @constprop aggressive to help the compiler see the switch between the integer and float
+# variants for callers with constant `y`
 @constprop :aggressive function ^(x::Float64, y::Float64)
     xu = reinterpret(UInt64, x)
     xu == reinterpret(UInt64, 1.0) && return 1.0
@@ -1159,41 +1202,6 @@ end
     return copysign(pow_body(abs(x), y), s)
 end
 
-@assume_effects :foldable @noinline function pow_body(x::Float64, y::Float64)
-    xu = reinterpret(UInt64, x)
-    if xu < (UInt64(1)<<52) # x is subnormal
-        xu = reinterpret(UInt64, x * 0x1p52) # normalize x
-        xu &= ~sign_mask(Float64)
-        xu -= UInt64(52) << 52 # mess with the exponent
-    end
-    logxhi,logxlo = _log_ext(xu)
-    xyhi, xylo = two_mul(logxhi,y)
-    xylo = muladd(logxlo, y, xylo)
-    hi = xyhi+xylo
-    return @inline Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
-end
-
-@constprop :aggressive function ^(x::T, y::T) where T <: Union{Float16, Float32}
-    x == 1 && return one(T)
-    # Exponents greater than this will always overflow or underflow.
-    # Note that NaN can pass through this, but that will end up fine.
-    max_exp = T == Float16 ? T(3<<14) : T(0x1.Ap30)
-    if !(abs(y)<max_exp)
-        isnan(y) && return y
-        y = sign(y)*max_exp
-    end
-    yint = unsafe_trunc(Int32, y) # This is actually safe since julia freezes the result
-    y == yint && return x^yint
-    x < 0 && throw_exp_domainerror(x)
-    !isfinite(x) && return x*(y>0 || isnan(x))
-    x==0 && return abs(y)*T(Inf)*(!(y>0))
-    return pow_body(x, y)
-end
-
-@inline function pow_body(x::T, y::T) where T <: Union{Float16, Float32}
-    return T(exp2(log2(abs(widen(x))) * y))
-end
-
 @constprop :aggressive @inline function ^(x::Float64, n::Integer)
     n = clamp(n, Int64)
     n == 0 && return one(x)
@@ -1211,6 +1219,20 @@ end
             return pow_body(x, y) * copysign(pow_body(x, n2), s)
         end
     end
+end
+
+@assume_effects :foldable @noinline function pow_body(x::Float64, y::Float64)
+    xu = reinterpret(UInt64, x)
+    if xu < (UInt64(1)<<52) # x is subnormal
+        xu = reinterpret(UInt64, x * 0x1p52) # normalize x
+        xu &= ~sign_mask(Float64)
+        xu -= UInt64(52) << 52 # mess with the exponent
+    end
+    logxhi,logxlo = _log_ext(xu)
+    xyhi, xylo = two_mul(logxhi,y)
+    xylo = muladd(logxlo, y, xylo)
+    hi = xyhi+xylo
+    return @inline Base.Math.exp_impl(hi, xylo-(hi-xyhi), Val(:ℯ))
 end
 
 # compensated power by squaring
@@ -1240,13 +1262,6 @@ end
     end
     err = muladd(y, xnlo, x*ynlo)
     return ifelse(isfinite(x) & isfinite(err), muladd(x, y, err), x*y)
-end
-
-function ^(x::Union{Float16,Float32}, n::Integer)
-    n == -2 && return (i=inv(x); i*i)
-    n == 3 && return x*x*x #keep compatibility with literal_pow
-    n < 0 && return oftype(x, Base.power_by_squaring(inv(widen(x)),-n))
-    oftype(x, Base.power_by_squaring(widen(x),n))
 end
 
 ## rem2pi-related calculations ##
