@@ -803,7 +803,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
             jl_value_t *sig = jl_svecref(item, 1);
             jl_value_t *nameval = jl_svec_len(item) == 2 ? jl_nothing : jl_svecref(item, 2);
             assert(jl_is_type(rt) && jl_is_type(sig));
-            jl_generate_ccallable(clone.getModuleUnlocked(), nullptr, nameval, rt, sig, params);
+            jl_generate_ccallable(clone.getModuleUnlocked(), nameval, rt, sig, params);
         }
     }
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
