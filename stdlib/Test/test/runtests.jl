@@ -355,9 +355,9 @@ let retval_tests = @testset NoThrowTestSet begin
         pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
         error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
-        @test Test.record(ts, error_mock) isa Test.Error
+        @test Test.record(ts, error_mock; print_result=false) isa Test.Error
         fail_mock = Test.Fail(:test, 1, 2, 3, nothing, LineNumberNode(0, "A Fail Mock"), false)
-        @test Test.record(ts, fail_mock) isa Test.Fail
+        @test Test.record(ts, fail_mock; print_result=false) isa Test.Fail
         broken_mock = Test.Broken(:test, LineNumberNode(0, "A Broken Mock"))
         @test Test.record(ts, broken_mock) isa Test.Broken
     end
