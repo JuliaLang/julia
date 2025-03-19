@@ -1361,7 +1361,18 @@ function complete_path_string(path, hint::Bool=false;
 
     # Expand '~' if the user hits TAB after exhausting completions (either
     # because we have found an existing file, or there is no such file).
-    full_path = ispath(path) || isempty(paths)
+    full_path = try
+        ispath(path) || isempty(paths)
+    catch err
+        # access(2) errors unhandled by ispath: EACCES, EIO, ELOOP, ENAMETOOLONG
+        if err isa Base.IOError
+            false
+        elseif err isa Base.ArgumentError && occursin("embedded NULs", err.msg)
+            false
+        else
+            rethrow()
+        end
+    end
     expanded && !hint && full_path && return Completion[PathCompletion(escape(path))], true
 
     # Expand '~' if the user hits TAB on a path ending in '/'.

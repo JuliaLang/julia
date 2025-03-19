@@ -2608,3 +2608,9 @@ let s = "prin|(\"hello\")"
     @test "print" in c
     @test r == 1:4
 end
+
+# Don't crash when tab-completing paths that cause ispath() to throw
+let s = "include(\"" * repeat("a", 5000) # ENAMETOOLONG
+    c, r = test_complete(s)
+    @test isempty(c)
+end
