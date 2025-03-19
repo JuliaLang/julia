@@ -12,6 +12,13 @@ end
 
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
+function show(io::IO, ::MIME"text/plain", r::UnitRange)
+    show(io, r)
+    if !(get(io, :compact, false)::Bool) && isempty(r)
+        print(io, " (empty range)")
+    end
+end
+
 function show(io::IO, ::MIME"text/plain", r::LinRange)
     isempty(r) && return show(io, r)
     # show for LinRange, e.g.
