@@ -168,6 +168,8 @@ let fails = @testset NoThrowTestSet begin
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
         @test_throws ["BoundsError", "acquire", "1-element", "at index [2]"] [1][2]
+        # 29 - Fail - broadcast
+        @test 1 .== 2
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -312,6 +314,11 @@ let fails = @testset NoThrowTestSet begin
     let str = sprint(show, fails[28])
         @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
+    end
+
+    let str = sprint(show, fails[29])
+        @test occursin("Expression: 1 .== 2", str)
+        @test !occursin("Evaluated", str)
     end
 
 end
@@ -1804,6 +1811,9 @@ end
     @test !_is_simple_call(:(f(x...)))
     @test !_is_simple_call(:(f(x, y...)))
     @test !_is_simple_call(:(f(x; y...)))
+
+    @test _is_simple_call(:(x == y))
+    @test !_is_simple_call(:(x .== y))
 end
 
 @testset "_function_name" begin

@@ -586,6 +586,10 @@ end
 
 function _is_simple_call(@nospecialize ex)
     ex.head === :call || return false
+
+    # Broadcasted functions are not currently supported
+    first(string(ex.args[1])) != '.' || return false
+
     num_pargs = 0
     for x in ex.args[2:end]
         if isa(x, Expr) && x.head === :parameters
