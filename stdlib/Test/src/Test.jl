@@ -593,7 +593,7 @@ function _is_simple_call(@nospecialize ex)
         elseif isa(x, Expr) && x.head === :kw
             return false
         elseif isa(x, Expr) && x.head === :...
-            return false  # Unable to deterimine number of arguments
+            return false  # Unable to determine number of arguments
         else
             num_pargs += 1
         end
