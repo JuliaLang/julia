@@ -806,6 +806,12 @@ inline jl_value_t *jl_gc_alloc_(jl_ptls_t ptls, size_t sz, void *ty)
     return v;
 }
 
+inline jl_value_t *jl_gc_alloc_nonmoving_(jl_ptls_t ptls, size_t sz, void *ty)
+{
+    // Just use the normal allocation, as the GC won't move objects anyway.
+    return jl_gc_alloc_(ptls, sz, ty);
+}
+
 int jl_gc_classify_pools(size_t sz, int *osize)
 {
     if (sz > GC_MAX_SZCLASS)
