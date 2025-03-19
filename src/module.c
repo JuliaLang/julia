@@ -47,7 +47,7 @@ static int eq_bindings(jl_binding_partition_t *owner, jl_binding_t *alias, size_
 
 // find a binding from a module's `usings` list
 void jl_check_new_binding_implicit(
-    jl_binding_partition_t *new_bpart JL_MAYBE_UNROOTED, jl_binding_t *b, modstack_t *st, size_t world)
+    jl_binding_partition_t *new_bpart, jl_binding_t *b, modstack_t *st, size_t world)
 {
     modstack_t top = { b, st };
     modstack_t *tmp = st;
@@ -59,7 +59,6 @@ void jl_check_new_binding_implicit(
         }
     }
 
-    JL_GC_PUSH1(&new_bpart);
     jl_module_t *m = b->globalref->mod;
     jl_sym_t *var = b->globalref->name;
 
@@ -164,8 +163,6 @@ void jl_check_new_binding_implicit(
         new_bpart->kind = guard_kind;
         new_bpart->restriction = NULL;
     }
-    JL_GC_POP();
-    return;
 }
 
 JL_DLLEXPORT jl_binding_partition_t *jl_maybe_reresolve_implicit(jl_binding_t *b, size_t new_max_world)
@@ -173,22 +170,26 @@ JL_DLLEXPORT jl_binding_partition_t *jl_maybe_reresolve_implicit(jl_binding_t *b
     jl_binding_partition_t *new_bpart = new_binding_partition();
     jl_binding_partition_t *bpart = jl_atomic_load_acquire(&b->partitions);
     assert(bpart);
+    JL_GC_PUSH1(&new_bpart);
     while (1) {
         jl_atomic_store_relaxed(&new_bpart->next, bpart);
         jl_gc_wb(new_bpart, bpart);
         jl_check_new_binding_implicit(new_bpart, b, NULL, new_max_world+1);
-        JL_GC_PROMISE_ROOTED(new_bpart); // TODO: Analyzer doesn't understand MAYBE_UNROOTED properly
         if (bpart->kind & PARTITION_FLAG_EXPORTED)
             new_bpart->kind |= PARTITION_FLAG_EXPORTED;
-        if (new_bpart->kind == bpart->kind && new_bpart->restriction == bpart->restriction)
+        if (new_bpart->kind == bpart->kind && new_bpart->restriction == bpart->restriction) {
+            JL_GC_POP();
             return bpart;
+        }
         // Resolution changed, insert the new partition
         size_t expected_max_world = ~(size_t)0;
         if (jl_atomic_cmpswap(&bpart->max_world, &expected_max_world, new_max_world) &&
-            jl_atomic_cmpswap(&b->partitions, &bpart, new_bpart))
-            break;
+            jl_atomic_cmpswap(&b->partitions, &bpart, new_bpart)) {
+            jl_gc_wb(b, new_bpart);
+            JL_GC_POP();
+            return new_bpart;
+        }
     }
-    return new_bpart;
 }
 
 STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b JL_PROPAGATES_ROOT, jl_value_t *parent, _Atomic(jl_binding_partition_t *)*insert, size_t world, modstack_t *st) JL_GLOBALLY_ROOTED
@@ -197,6 +198,7 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b 
     jl_binding_partition_t *bpart = jl_atomic_load_relaxed(insert);
     size_t max_world = (size_t)-1;
     jl_binding_partition_t *new_bpart = NULL;
+    JL_GC_PUSH1(&new_bpart);
     while (1) {
         while (bpart && world < bpart->min_world) {
             insert = &bpart->next;
@@ -204,8 +206,10 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b 
             parent = (jl_value_t *)bpart;
             bpart = jl_atomic_load_relaxed(&bpart->next);
         }
-        if (bpart && world <= jl_atomic_load_relaxed(&bpart->max_world))
+        if (bpart && world <= jl_atomic_load_relaxed(&bpart->max_world)) {
+            JL_GC_POP();
             return bpart;
+        }
         if (!new_bpart)
             new_bpart = new_binding_partition();
         jl_atomic_store_relaxed(&new_bpart->next, bpart);
@@ -213,12 +217,12 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b 
             jl_gc_wb(new_bpart, bpart); // Not fresh the second time around the loop
         new_bpart->min_world = bpart ? jl_atomic_load_relaxed(&bpart->max_world) + 1 : 0;
         jl_atomic_store_relaxed(&new_bpart->max_world, max_world);
-        JL_GC_PROMISE_ROOTED(new_bpart); // TODO: Analyzer doesn't understand MAYBE_UNROOTED properly
         jl_check_new_binding_implicit(new_bpart, b, st, world);
         if (bpart && (bpart->kind & PARTITION_FLAG_EXPORTED))
             new_bpart->kind |= PARTITION_FLAG_EXPORTED;
         if (jl_atomic_cmpswap(insert, &bpart, new_bpart)) {
             jl_gc_wb(parent, new_bpart);
+            JL_GC_POP();
             return new_bpart;
         }
     }
@@ -1435,7 +1439,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     new_bpart->min_world = new_world;
     if ((kind & PARTITION_MASK_KIND) == PARTITION_KIND_IMPLICIT_RECOMPUTE) {
         assert(!restriction_val);
-        jl_check_new_binding_implicit(new_bpart /* callee rooted */, b, NULL, new_world);
+        jl_check_new_binding_implicit(new_bpart, b, NULL, new_world);
         new_bpart->kind |= kind & PARTITION_MASK_FLAG;
         if (new_bpart->kind == old_bpart->kind && new_bpart->restriction == old_bpart->restriction) {
             JL_GC_POP();

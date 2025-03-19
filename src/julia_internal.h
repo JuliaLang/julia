@@ -855,8 +855,7 @@ typedef struct _modstack_t {
     jl_binding_t *b;
     struct _modstack_t *prev;
 } modstack_t;
-void jl_check_new_binding_implicit(
-    jl_binding_partition_t *new_bpart JL_MAYBE_UNROOTED, jl_binding_t *b, modstack_t *st, size_t world);
+void jl_check_new_binding_implicit(jl_binding_partition_t *new_bpart, jl_binding_t *b, modstack_t *st, size_t world);
 
 #ifndef __clang_gcanalyzer__
 // The analyzer doesn't like looking through the arraylist, so just model the
