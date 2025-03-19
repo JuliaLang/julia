@@ -7709,7 +7709,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
 // do codegen to create a C-callable alias/wrapper, or if sysimg_handle is set,
 // restore one from a loaded system image.
-const char *jl_generate_ccallable(Module *llvmmod, void *sysimg_handle, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
+const char *jl_generate_ccallable(Module *llvmmod, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
 {
     ++GeneratedCCallables;
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
@@ -7738,25 +7738,12 @@ const char *jl_generate_ccallable(Module *llvmmod, void *sysimg_handle, jl_value
         function_sig_t sig("cfunction", lcrt, crt, toboxed, false,
                            argtypes, NULL, false, CallingConv::C, false, &params);
         if (sig.err_msg.empty()) {
-            if (sysimg_handle) {
-                // restore a ccallable from the system image
-                void *addr;
-                int found = jl_dlsym(sysimg_handle, name, &addr, 0);
-                if (found)
-                    add_named_global(name, addr);
-                else {
-                    err = jl_get_exceptionf(jl_errorexception_type, "%s not found in sysimg", name);
-                    jl_throw(err);
-                }
-            }
-            else {
-                //Safe b/c params holds context lock
-                Function *cw = gen_cfun_wrapper(llvmmod, params, sig, ff, name, declrt, sigt, NULL, NULL, NULL);
-                auto alias = GlobalAlias::create(cw->getValueType(), cw->getType()->getAddressSpace(),
-                                    GlobalValue::ExternalLinkage, name, cw, llvmmod);
-                if (params.TargetTriple.isOSBinFormatCOFF()) {
-                    alias->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLExportStorageClass);
-                }
+            //Safe b/c params holds context lock
+            Function *cw = gen_cfun_wrapper(llvmmod, params, sig, ff, name, declrt, sigt, NULL, NULL, NULL);
+            auto alias = GlobalAlias::create(cw->getValueType(), cw->getType()->getAddressSpace(),
+                                GlobalValue::ExternalLinkage, name, cw, llvmmod);
+            if (params.TargetTriple.isOSBinFormatCOFF()) {
+                alias->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLExportStorageClass);
             }
             JL_GC_POP();
             return name;
