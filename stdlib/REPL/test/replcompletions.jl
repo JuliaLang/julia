@@ -159,7 +159,7 @@ let ex =
             exported_symbol(::WeirdNames) = nothing
 
             macro ignoremacro(e...)
-                :nothing
+                nothing
             end
 
         end # module CompletionFoo
