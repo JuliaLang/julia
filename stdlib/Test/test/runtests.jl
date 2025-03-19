@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-using Test: guardseed
+using Test: guardseed, _is_simple_call
 using Serialization
 using Distributed: RemoteException
 
@@ -210,7 +210,7 @@ let fails = @testset NoThrowTestSet begin
 
     let str = sprint(show, fails[8])
         @test occursin("Expression: (==)(1:2...)", str)
-        @test occursin("Evaluated: 1 == 2", str)
+        @test !occursin("Evaluated", str)
     end
 
     let str = sprint(show, fails[9])
@@ -1785,4 +1785,23 @@ end
             @test rand() == rand(rng3)
         end
     end
+end
+
+@testset "_is_simple_function" begin
+    @test !_is_simple_call(:(f()))
+    @test _is_simple_call(:(f(x)))
+    @test _is_simple_call(:(f(x, y)))
+    @test !_is_simple_call(:(f(x, y, z)))
+
+    @test !_is_simple_call(:(f(; x)))
+    @test !_is_simple_call(:(f(; x, y)))
+    @test !_is_simple_call(:(f(x=1)))
+    @test !_is_simple_call(:(f(x=1, y=2)))
+
+    @test !_is_simple_call(:(f(x, y=1)))
+    @test !_is_simple_call(:(f(x; y=1)))
+
+    @test !_is_simple_call(:(f(x...)))
+    @test !_is_simple_call(:(f(x, y...)))
+    @test !_is_simple_call(:(f(x; y...)))
 end
