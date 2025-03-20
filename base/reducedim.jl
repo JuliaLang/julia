@@ -985,12 +985,10 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
     end
 end
 
-any(a::AbstractArray; dims=:)              = _any(a, dims)
-any(f::Function, a::AbstractArray; dims=:) = _any(f, a, dims)
-_any(a, ::Colon)                           = _any(identity, a, :)
-all(a::AbstractArray; dims=:)              = _all(a, dims)
-all(f::Function, a::AbstractArray; dims=:) = _all(f, a, dims)
-_all(a, ::Colon)                           = _all(identity, a, :)
+any(a::AbstractArray; kw...)     = any(identity, a; kw...)
+any(f, a::AbstractArray; dims=:) = _any(f, a, dims)
+all(a::AbstractArray; kw...)     = all(identity, a; kw...)
+all(f, a::AbstractArray; dims=:) = _all(f, a, dims)
 
 for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
                     (:maximum, :max), (:minimum, :min),
