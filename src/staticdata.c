@@ -632,7 +632,7 @@ typedef struct {
 // --- Static Compile ---
 static jl_image_buf_t jl_sysimage_buf = { JL_IMAGE_KIND_NONE };
 
-static inline uintptr_t *sysimg_gvars(const char *base, const int32_t *offsets, size_t idx)
+static inline uintptr_t *sysimg_gvars(const char *base, const ptrdiff_t *offsets, size_t idx)
 {
     return (uintptr_t*)(base + offsets[idx]);
 }

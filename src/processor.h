@@ -86,7 +86,7 @@ typedef struct _jl_image_fptrs_t {
 struct _jl_image_t {
     uint64_t base;
     const char *gvars_base;
-    const int32_t *gvars_offsets;
+    const ptrdiff_t *gvars_offsets;
     uint32_t ngvars;
     jl_image_fptrs_t fptrs;
     void **jl_small_typeof;
@@ -127,7 +127,7 @@ typedef struct {
     // Similar to fvar_offsets, but for gvars
     // This is also the base data pointer
     // (all data pointers in this shard are stored as offsets to this address)
-    const int32_t *gvar_offsets;
+    const ptrdiff_t *gvar_offsets;
     // This is the mapping of shard global variable index -> global global variable index
     // Similar to fvar_idxs, but for gvars
     const uint32_t *gvar_idxs;
