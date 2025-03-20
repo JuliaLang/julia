@@ -2227,3 +2227,11 @@ end
         @test_throws MethodError isreal(G)
     end
 end
+
+@testset "issue #27138" begin
+    @test convert(AbstractVector{Float64},1:10) === 1.0:1.0:10.0
+    @test AbstractVector{Float64}(1:10) === 1.0:1.0:10.0
+    @test AbstractVector(1:10) === 1:10
+    @inferred AbstractVector(1:10)
+    @inferred AbstractVector{Float64}(1:10)
+end
