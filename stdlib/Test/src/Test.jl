@@ -43,6 +43,10 @@ const DISPLAY_FAILED = (
 
 const FAIL_FAST = Ref{Bool}(false)
 
+const record_passes = OncePerProcess{Bool}() do
+    return Base.get_bool_env("JULIA_TEST_RECORD_PASSES", false)
+end
+
 #-----------------------------------------------------------------------
 
 # Backtrace utility functions
@@ -1100,8 +1104,18 @@ struct FailFastError <: Exception end
 
 # For a broken result, simply store the result
 record(ts::DefaultTestSet, t::Broken) = (push!(ts.results, t); t)
-# For a passed result, do not store the result since it uses a lot of memory
-record(ts::DefaultTestSet, t::Pass) = (ts.n_passed += 1; t)
+# For a passed result, do not store the result since it uses a lot of memory, unless
+# `record_passes()` is true. i.e. set env var `JULIA_TEST_RECORD_PASSES=true` before running any testsets
+function record(ts::DefaultTestSet, t::Pass)
+    ts.n_passed += 1
+    if record_passes()
+        # throw away the captured data so it can be GC-ed
+        t_nodata = Pass(t.test_type, t.orig_expr, nothing, t.value, t.source, t.message_only)
+        push!(ts.results, t_nodata)
+        return t_nodata
+    end
+    return t
+end
 
 # For the other result types, immediately print the error message
 # but do not terminate. Print a backtrace.
