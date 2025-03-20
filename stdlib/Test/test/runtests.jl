@@ -81,6 +81,9 @@ end
         @test_nowarn a = 1
         @test a === 1
     end
+    warn_help = @macroexpand(@test_warn foo)
+    @test warn_help.head == :call
+    @test warn_help.args == [GlobalRef(Test, :error), "Incorrect usage of the `@test_warn` macro, expected format: `@test_warn msg expr`"]
 end
 @testset "@test and elements of an array" begin
     a = Array{Float64, 5}(undef, 2, 2, 2, 2, 2)
@@ -686,9 +689,6 @@ Base.getindex(a::SillyArray, i) = rand() > 0.5 ? 0 : false
     test_result = @test_throws ErrorException (@inferred SillyArray()[2])
     @test occursin("Bool", test_result.value.msg)
 end
-# Issue #14928
-# Make sure abstract error type works.
-@test_throws Exception error("")
 
 # Issue #17105
 # @inferred with kwargs
@@ -699,9 +699,19 @@ uninferable_kwtest(x; y=1) = 2x+y
 @test (@inferred uninferable_kwtest(1)) == 3
 @test (@inferred uninferable_kwtest(1; y=2)) == 4
 
-@test_throws ErrorException @testset "$(error())" for i in 1:10
-end
-@test_throws ErrorException @testset "$(error())" begin
+@testset "misc @test_throws" begin
+    # Issue #14928
+    # Make sure abstract error type works.
+    @test_throws Exception error("")
+
+    @test_throws ErrorException @testset "$(error())" for i in 1:10
+    end
+    @test_throws ErrorException @testset "$(error())" begin
+    end
+
+    throw_help = @macroexpand(@test_throws foo)
+    @test throw_help.head == :call
+    @test throw_help.args == [GlobalRef(Test, :error), "Incorrect usage of the `@test_throws` macro, expected format: `@test_throws exception expr`"]
 end
 
 @testset "backtraces in test errors" begin
