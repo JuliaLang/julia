@@ -2165,3 +2165,12 @@ end
     @test dstat.total < 32PB
     @test dstat.used + dstat.available == dstat.total
 end
+
+@testset "cd(::Module)" begin
+    import LinearAlgebra
+    cd(LinearAlgebra)
+    @test pwd() == pkgdir(LinearAlgebra)
+
+    @eval module M; end
+    @test_throws ErrorException cd(M)
+end
