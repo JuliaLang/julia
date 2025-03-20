@@ -85,7 +85,7 @@ function unsafe_takestring(m::Memory{UInt8})
 end
 
 """
-    unsafe_string(p::Ptr{UInt8}, [length::Integer])
+    unsafe_string(p::Union{Ptr{UInt8},Cstring}, [length::Integer])
 
 Copy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8.
 (The pointer can be safely freed afterwards.) If `length` is specified
