@@ -1280,6 +1280,9 @@ JL_DLLEXPORT void jl_force_trace_compile_timing_disable(void);
 JL_DLLEXPORT void jl_force_trace_dispatch_enable(void);
 JL_DLLEXPORT void jl_force_trace_dispatch_disable(void);
 
+JL_DLLEXPORT void jl_tag_newly_inferred_enable(void);
+JL_DLLEXPORT void jl_tag_newly_inferred_disable(void);
+
 uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs);
 
