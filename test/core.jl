@@ -2852,7 +2852,7 @@ mutable struct Obj; x; end
         push!(wr, WeakRef(x))
         nothing
     end
-    @noinline test_wr(r, wr) = @test r[1] == wr[1].value
+    @noinline test_wr(r, wr) = r[1] == wr[1].value
     function test_wr()
         # we need to be very careful here that we never
         # use the value directly in this function, so we aren't dependent
@@ -2860,7 +2860,7 @@ mutable struct Obj; x; end
         ref = []
         wref = []
         mk_wr(ref, wref)
-        test_wr(ref, wref)
+        @test test_wr(ref, wref)
         GC.gc()
         test_wr(ref, wref)
         empty!(ref)
