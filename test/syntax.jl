@@ -3820,7 +3820,7 @@ module ImplicitCurlies
     end
     @test !@isdefined(ImplicitCurly6)
     # Check return value of assignment expr
-    @test isa((const ImplicitCurly7{T} = Ref{T}), UnionAll)
+    @test isa(Core.eval(@__MODULE__, :(const ImplicitCurly7{T} = Ref{T})), UnionAll)
     @test isa(begin; ImplicitCurly8{T} = Ref{T}; end, UnionAll)
 end
 
@@ -3856,7 +3856,8 @@ const (gconst_assign(), hconst_assign()) = (2, 3)
 # and the conversion, but not the rhs.
 struct CantConvert; end
 Base.convert(::Type{CantConvert}, x) = error()
-@test (const _::CantConvert = 1) == 1
+# @test splices into a function, where const cannot appear
+@test Core.eval(@__MODULE__, :(const _::CantConvert = 1)) == 1
 @test !isconst(@__MODULE__, :_)
 @test_throws ErrorException("expected") (const _ = error("expected"))
 
@@ -4139,3 +4140,102 @@ module FuncDecl57546
     @test isa(Any, Function)
     @test isempty(methods(Any))
 end
+
+# #57334
+let
+    x57334 = Ref(1)
+    @test_throws "syntax: cannot declare \"x57334[]\" `const`" Core.eval(@__MODULE__, :(const x57334[] = 1))
+end
+
+# #57470
+module M57470
+using ..Test
+
+@test_throws(
+    "syntax: `global const` declaration not allowed inside function",
+    Core.eval(@__MODULE__, :(function f57470()
+                                 const global x57470 = 1
+                             end)))
+@test_throws(
+    "unsupported `const` declaration on local variable",
+    Core.eval(@__MODULE__, :(let
+                                 const y57470 = 1
+                             end))
+)
+
+let
+    global a57470
+    const a57470 = 1
+end
+@test a57470 === 1
+
+let
+    global const z57470 = 1
+    const global w57470 = 1
+end
+
+@test z57470 === 1
+@test w57470 === 1
+
+const (; field57470_1, field57470_2) = (field57470_1 = 1, field57470_2 = 2)
+@test field57470_1 === 1
+@test field57470_2 === 2
+
+# TODO: 1.11 allows these, but should we?
+const X57470{T}, Y57470{T} = Int, Bool
+@test X57470 === Int
+@test Y57470 === Bool
+const A57470{T}, B57470{T} = [Int, Bool]
+@test A57470 === Int
+@test B57470 === Bool
+const a57470, f57470(x), T57470{U} = [1, 2, Int]
+@test a57470 === 1
+@test f57470(0) === 2
+@test T57470 === Int
+
+module M57470_sub end
+@test_throws("syntax: cannot declare \"M57470_sub.x\" `const`",
+             Core.eval(@__MODULE__, :(const M57470_sub.x = 1)))
+
+# # `const global` should not trample previously declared `local`
+@test_throws(
+    "syntax: variable \"v57470\" declared both local and global",
+    Core.eval(@__MODULE__, :(let
+                                 local v57470
+                                 const global v57470 = 1
+                             end))
+)
+
+# Chain of assignments must happen right-to-left:
+let
+    x = [0, 0]; i = 1
+    i = x[i] = 2
+    @test x == [2, 0]
+    x = [0, 0]; i = 1
+    x[i] = i = 2
+    @test x == [0, 2]
+end
+
+# Global const decl inside local scope
+let
+    const global letf_57470(x)::Int = 2+x
+    const global letT_57470{T} = Int64
+end
+@test letf_57470(3) == 5
+@test letT_57470 === Int64
+
+end
+
+# #57574
+module M57574
+struct A{T} end
+out = let
+    for B in ()
+    end
+    let
+        B{T} = A{T}
+        B
+    end
+end
+end
+@test M57574.out === M57574.A
