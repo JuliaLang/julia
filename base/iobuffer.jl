@@ -775,7 +775,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     append = to.append
     ptr = append ? size+1 : to.ptr
     data = to.data
-    to_write = min(nb % Int, min(Int(length(data))::Int, to.maxsize) - ptr + 1)
+    to_write = min(nb, (min(Int(length(data))::Int, to.maxsize) - ptr + 1) % UInt) % Int
     # Dispatch based on the type of data, to possibly allow using memcpy
     _unsafe_write(data, p, ptr, to_write % UInt)
     # Update to.size only if the ptr has advanced to higher than
@@ -850,8 +850,7 @@ readavailable(io::GenericIOBuffer) = read(io)
 read(io::GenericIOBuffer, nb::Integer) = read!(io, StringVector(min(nb, bytesavailable(io))))
 
 function occursin(delim::UInt8, buf::GenericIOBuffer)
-    ptr = buf.ptr
-    return in(delim, view(buf.data, ptr:ptr + bytesavailable(buf)-1))
+    return in(delim, view(buf.data, buf.ptr:buf.size))
 end
 
 function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)

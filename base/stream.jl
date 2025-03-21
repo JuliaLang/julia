@@ -615,7 +615,7 @@ end
 ## BUFFER ##
 ## Allocate space in buffer (for immediate use)
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
-    ensureroom(buffer, Int(recommended_size))
+    ensureroom(buffer, recommended_size)
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     nb = min(length(buffer.data), buffer.maxsize) - ptr + 1
     return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
