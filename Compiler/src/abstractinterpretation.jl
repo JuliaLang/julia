@@ -2690,11 +2690,13 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             elseif f === setfield! && length(argtypes) == 4 && isa(argtypes[3], Const)
                 # from there on we know that the struct field will never be undefined,
                 # so we try to encode that information with a `PartialStruct`
-                farg2 = ssa_def_slot(fargs[2], sv)
-                if farg2 isa SlotNumber
-                    refined = form_partially_defined_struct(𝕃ᵢ, argtypes[2], argtypes[3])
-                    if refined !== nothing
-                        refinements = SlotRefinement(farg2, refined)
+                if rt !== Bottom && isa(fargs, Vector{Any})
+                    farg2 = ssa_def_slot(fargs[2], sv)
+                    if farg2 isa SlotNumber
+                        refined = form_partially_defined_struct(𝕃ᵢ, argtypes[2], argtypes[3])
+                        if refined !== nothing
+                            refinements = SlotRefinement(farg2, refined)
+                        end
                     end
                 end
             end
