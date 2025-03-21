@@ -1321,6 +1321,24 @@ function MethodList(mt::Core.MethodTable)
     return MethodList(ms, mt)
 end
 
+function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodTable, mod)
+    # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
+    ms = Method[(ms[i]::Core.MethodMatch).method for i in 1:length(ms)]
+    # Remove shadowed methods with identical type signatures
+    prev = nothing
+    filter!(ms) do m
+        l = prev
+        repeated = (l isa Method && m.sig == l.sig)
+        prev = m
+        return !repeated
+    end
+    # Remove methods not part of module (after removing shadowed methods)
+    mod === nothing || filter!(ms) do m
+        return parentmodule(m) ∈ mod
+    end
+    return MethodList(ms, mt)
+end
+
 """
     methods(f, [types], [module])
 
@@ -1328,7 +1346,7 @@ Return the method table for `f`.
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
-A list of modules can also be specified as an array.
+A list of modules can also be specified as an array or set.
 
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
@@ -1336,16 +1354,11 @@ A list of modules can also be specified as an array.
 See also: [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which) and [`methodswith`](@ref Main.InteractiveUtils.methodswith).
 """
 function methods(@nospecialize(f), @nospecialize(t),
-                 mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
+                 mod::Union{Tuple{Module},AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
-    ms = Method[]
-    for m in _methods(f, t, -1, world)::Vector
-        m = m::Core.MethodMatch
-        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
-    end
-    MethodList(ms, typeof(f).name.mt)
+    ms = _methods(f, t, -1, world)::Vector{Any}
+    return matches_to_methods(ms, typeof(f).name.mt, mod)
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 
@@ -1355,12 +1368,12 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
-    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector
-    return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
+    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector{Any}
+    return matches_to_methods(ms, typeof(f).name.mt, nothing)
 end
 
 function methods(@nospecialize(f),
-                 mod::Union{Module,AbstractArray{Module},Nothing}=nothing)
+                 mod::Union{Module,AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
