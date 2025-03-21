@@ -497,6 +497,16 @@ end
 @test sprint(show, Symbol("'")) == "Symbol(\"'\")"
 @test_repr "var\"'\" = 5"
 
+# isreserved
+@test Meta.isreserved(:for)
+@test Meta.isreserved(:while)
+@test !Meta.isreserved(:x)
+@test !Meta.isreserved(:wrong)
+@test Meta.isreserved("begin")
+@test Meta.isreserved("end")
+@test !Meta.isreserved("abcd")
+@test !Meta.isreserved("pqrs")
+
 # isidentifier
 @test Meta.isidentifier("x")
 @test Meta.isidentifier("x1")
