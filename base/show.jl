@@ -1690,6 +1690,37 @@ function operator_associativity(s::Symbol)
     return :left
 end
 
+const keyword_syms = Set([
+    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
+    :end, :export, :false, :finally, :for, :function, :global, :if, :import,
+    :let, :local, :macro, :module, :public, :quote, :return, :struct, :true,
+    :try, :using, :while ])
+
+"""
+     isreserved(s) -> Bool
+
+Return whether the symbol or string `s` is a reserved julia keyword.
+
+# Examples
+```jldoctest
+julia> Meta.isreserved(:for), Meta.isreserved("cat")
+(true, false)
+```
+
+!!! compat "Julia 1.13"
+    This method requires at least Julia 1.13.
+"""
+isreserved(s::Symbol) = s in keyword_syms
+isreserved(s::AbstractString) = isreserved(Symbol(s))
+
+function is_valid_identifier(sym)
+    return (isidentifier(sym) && !(sym in keyword_syms)) ||
+        (_isoperator(sym) &&
+        !(sym in (Symbol("'"), :(::), :?)) &&
+        !is_syntactic_operator(sym)
+    )
+end
+
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true
 is_quoted(ex::Expr)      = is_expr(ex, :quote, 1) || is_expr(ex, :inert, 1)
@@ -1772,20 +1803,6 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
     print(io, op)
     show_list(io, items, sep, indent, prec, quote_level, encl_ops, kw)
     print(io, cl)
-end
-
-const keyword_syms = Set([
-    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
-    :end, :export, :false, :finally, :for, :function, :global, :if, :import,
-    :let, :local, :macro, :module, :public, :quote, :return, :struct, :true,
-    :try, :using, :while ])
-
-function is_valid_identifier(sym)
-    return (isidentifier(sym) && !(sym in keyword_syms)) ||
-        (_isoperator(sym) &&
-        !(sym in (Symbol("'"), :(::), :?)) &&
-        !is_syntactic_operator(sym)
-    )
 end
 
 # show a normal (non-operator) function call, e.g. f(x, y) or A[z]
