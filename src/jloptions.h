@@ -21,6 +21,7 @@ typedef struct {
     int32_t nprocs;
     const char *machine_file;
     const char *project;
+    const char *program_file;
     int8_t isinteractive;
     int8_t color;
     int8_t historyfile;
