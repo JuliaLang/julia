@@ -244,6 +244,13 @@ end
 @testset "Write to self" begin
     buffer = IOBuffer()
     @test_throws ArgumentError write(buffer, buffer)
+
+    # Write to another IOBuffer with limited size
+    to = IOBuffer(;maxsize=4)
+    from = IOBuffer(collect(b"abcdefghi"))
+    write(to, from)
+    @test String(take!(to)) == "abcd"
+    @test eof(from)
 end
 
 @testset "Read/write empty IOBuffer" begin
