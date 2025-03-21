@@ -543,6 +543,7 @@ Base.jit_total_bytes
 Meta.quot
 Meta.isexpr
 Meta.isidentifier
+Meta.isreserved
 Meta.isoperator
 Meta.isunaryoperator
 Meta.isbinaryoperator
