@@ -586,16 +586,16 @@ end
 
 @testset "Compacting" begin
     # Compacting works
-    buf = Base.GenericIOBuffer(UInt8[], true, true, false, true, 5)
+    buf = Base.GenericIOBuffer(UInt8[], true, true, false, true, 20)
     mark(buf)
-    write(buf, "Hello")
+    write(buf, "Hello"^5)
     reset(buf)
     unmark(buf)
     read(buf, UInt8)
     read(buf, UInt8)
     write(buf, "a!")
-    @test length(buf.data) == 5
-    @test take!(buf) == b"lloa!"
+    @test length(buf.data) == 20
+    @test String(take!(buf)) == "llo" * "Hello"^3 * "a!"
 
     # Compacting does not do anything when mark == 0
     buf = Base.GenericIOBuffer(UInt8[], true, true, false, true, 5)
