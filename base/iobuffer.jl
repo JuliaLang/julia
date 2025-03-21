@@ -31,7 +31,7 @@
 #   This can be done only if the buffer is not seekable
 
 mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
-    # T should support: getindex, setindex!, length, copyto!, similar, and (optionally) resize!
+    # T should support: getindex, setindex!, length, copyto!, similar, size and (optionally) resize!
     data::T
 
     # The user can take control of `data` out of this struct. When that happens, instead of eagerly allocating
@@ -274,7 +274,7 @@ _similar_data(b::IOBuffer, len::Int) = StringMemory(len)
 function copy(b::GenericIOBuffer{T}) where T
     if b.reinit
         # If buffer is used up, allocate a new size-zero buffer
-        # Reinit implies wriable, and that ptr, size, offset and mark are already the default values
+        # Reinit implies writable, and that ptr, size, offset and mark are already the default values
         return typeof(b)(_similar_data(b, 0), b.readable, b.writable, b.seekable, b.append, b.maxsize)
     elseif b.writable
         # Else, we just copy the reachable bytes. If buffer is seekable, all bytes
@@ -443,8 +443,7 @@ filesize(io::GenericIOBuffer) = (io.seekable ? io.size - io.offset : bytesavaila
 bytesavailable(io::GenericIOBuffer) = io.size - io.ptr + 1
 
 # Position is zero-indexed, but ptr is one-indexed, hence the -1
-# TODO: Document that position for an unseekable stream is invalid, or
-# make it error
+# TODO: Document that position for an unmarked and unseekable stream is invalid (and make it error?)
 position(io::GenericIOBuffer) = io.ptr - io.offset - 1
 
 function skip(io::GenericIOBuffer, n::Integer)
@@ -484,7 +483,6 @@ function seek(io::GenericIOBuffer, n::Int)
     return io
 end
 
-# TODO: Should check for seekable and error if not
 function seekend(io::GenericIOBuffer)
     io.ptr = io.size+1
     return io
@@ -512,7 +510,6 @@ function _resize!(io::GenericIOBuffer, new_size::Int)
     return io
 end
 
-# TODO: These errors cannot be converted to LazyString, but it's wasteful to interpolate them here.
 function truncate(io::GenericIOBuffer, n::Integer)
     io.writable || throw(ArgumentError("truncate failed, IOBuffer is not writeable"))
     # Non-seekable buffers can only be constructed with `PipeBuffer`, which is explicitly
@@ -587,21 +584,22 @@ end
         size = io.size
         data = io.data
         to_delete = (mark > -1 ? min(mark, ptr - 1) : ptr - 1)
-        # Only shift data if:
-        if (
-                # It will prevent us from having to resize buffer, or
-                to_delete >= nshort % Int ||
-                # We will recover at least 256 bytes, and at least 1/8th
-                # of the data buffer's total length
-                (to_delete > data_len >>> 3 && to_delete > 255)
-            )
+
+        # We don't want to shift data too often to avoid making writing O(n),
+        # so we prefer resizing if the shift would free up too little data.
+        # Therefore, we prefer to resize if copying gets us less than 32 bytes,
+        # or less than 1/8th of the data's size.
+        # But we need to shift data if maxsize prevents us from gaining enough
+        # space through resizing
+        can_allocate_enough = (io.maxsize - (io.append ? io.size : io.ptr - 1)) % UInt ≥ nshort
+        if !can_allocate_enough || to_delete ≥ max(32, data_len >>> 3)
             copyto!(data, 1, data, to_delete + 1, size - to_delete)
             io.ptr = ptr - to_delete
             io.mark = max(-1, mark - to_delete)
             io.size = size - to_delete
+            nshort -= min(nshort, to_delete % UInt)
+            iszero(nshort) && return io
         end
-        nshort -= min(nshort, to_delete % UInt)
-        iszero(nshort) && return io
     end
     # Don't exceed maxsize. Otherwise, we overshoot the number of bytes needed,
     # such that we don't need to resize too often.
