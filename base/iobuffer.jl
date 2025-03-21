@@ -739,16 +739,16 @@ _unsafe_take!(io::IOBuffer) =
         io.size - io.offset)
 
 function write(to::IO, from::GenericIOBuffer)
-    available = bytesavailable(from)
-    # If they're the same buffer, we need to special case it since the buffer
-    # is being mutated twice in the write call.
+    # This would cause an infinite loop, as it should read until the end, but more
+    # data is being written into it continuously.
     if to === from
         throw(ArgumentError("Writing all content fron an IOBuffer into itself in invalid"))
     else
+        available = bytesavailable(from)
         written = GC.@preserve from unsafe_write(to, pointer(from.data, from.ptr), UInt(available))
-        from.ptr += written
+        from.ptr = from.size + 1
     end
-    return available
+    return written
 end
 
 function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
