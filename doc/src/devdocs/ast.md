@@ -661,6 +661,26 @@ for important details on how to modify these fields safely.
     If max_world is the special token value `-1`, the value is not yet known.
     It may continue to be used until we encounter a backedge that requires us to reconsider.
 
+  * Timing fields
+
+    - `time_infer_total`: Total cost of computing `inferred` originally as wall-time from start to finish.
+
+    - `time_infer_cache_saved`: The cost saved from `time_infer_total` by having caching.
+      Adding this to `time_infer_total` should give a stable estimate for comparing the cost
+      of two implementations or one implementation over time. This is generally an
+      over-estimate of the time to infer something, since the cache is frequently effective
+      at handling repeated work.
+
+    - `time_infer_self`: Self cost of julia inference for `inferred` (a portion of
+      `time_infer_total`). This is simply the incremental cost of compiling this one method,
+      if given a fully populated cache of all call targets, even including constant
+      inference results and LimitedAccuracy results, which generally are not in a cache.
+
+    - `time_compile`: Self cost of llvm JIT compilation (e.g. of computing `invoke` from
+      `inferred`). A total cost estimate can be computed by walking all of the `edges`
+      contents and summing those, while accounting for cycles and duplicates. (This field
+      currently does not include any measured AOT compile times.)
+
 
 ### CodeInfo
 

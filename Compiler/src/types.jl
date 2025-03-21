@@ -110,6 +110,7 @@ mutable struct InferenceResult
     effects::Effects                  # if optimization is finished
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool             # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
+    tombstone::Bool
 
     #=== uninitialized fields ===#
     ci::CodeInstance                  # CodeInstance if this result may be added to the cache
@@ -120,7 +121,7 @@ mutable struct InferenceResult
         ipo_effects = effects = Effects()
         analysis_results = NULL_ANALYSIS_RESULTS
         return new(mi, argtypes, overridden_by_const, result, exc_result, src,
-            valid_worlds, ipo_effects, effects, analysis_results, #=is_src_volatile=#false)
+            valid_worlds, ipo_effects, effects, analysis_results, #=is_src_volatile=#false, false)
     end
 end
 function InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice)
@@ -190,6 +191,10 @@ Parameters that control abstract interpretation-based type inference operation.
   it will `throw`). Defaults to `false` since this assumption does not hold in Julia's
   semantics for native code execution.
 ---
+- `inf_params.force_enable_inference::Bool = false`\\
+  If `true`, inference will be performed on functions regardless of whether it was disabled
+  at the module level via `Base.Experimental.@compiler_options`.
+---
 """
 struct InferenceParams
     max_methods::Int
@@ -201,6 +206,7 @@ struct InferenceParams
     aggressive_constant_propagation::Bool
     assume_bindings_static::Bool
     ignore_recursion_hardlimit::Bool
+    force_enable_inference::Bool
 
     function InferenceParams(
         max_methods::Int,
@@ -211,7 +217,9 @@ struct InferenceParams
         ipo_constant_propagation::Bool,
         aggressive_constant_propagation::Bool,
         assume_bindings_static::Bool,
-        ignore_recursion_hardlimit::Bool)
+        ignore_recursion_hardlimit::Bool,
+        force_enable_inference::Bool,
+    )
         return new(
             max_methods,
             max_union_splitting,
@@ -221,7 +229,9 @@ struct InferenceParams
             ipo_constant_propagation,
             aggressive_constant_propagation,
             assume_bindings_static,
-            ignore_recursion_hardlimit)
+            ignore_recursion_hardlimit,
+            force_enable_inference,
+        )
     end
 end
 function InferenceParams(
@@ -234,7 +244,9 @@ function InferenceParams(
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
         #=assume_bindings_static::Bool=# false,
-        #=ignore_recursion_hardlimit::Bool=# false);
+        #=ignore_recursion_hardlimit::Bool=# false,
+        #=force_enable_inference::Bool=# false
+    );
     max_methods::Int = params.max_methods,
     max_union_splitting::Int = params.max_union_splitting,
     max_apply_union_enum::Int = params.max_apply_union_enum,
@@ -243,7 +255,9 @@ function InferenceParams(
     ipo_constant_propagation::Bool = params.ipo_constant_propagation,
     aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
     assume_bindings_static::Bool = params.assume_bindings_static,
-    ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit)
+    ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit,
+    force_enable_inference::Bool = params.force_enable_inference,
+)
     return InferenceParams(
         max_methods,
         max_union_splitting,
@@ -253,7 +267,9 @@ function InferenceParams(
         ipo_constant_propagation,
         aggressive_constant_propagation,
         assume_bindings_static,
-        ignore_recursion_hardlimit)
+        ignore_recursion_hardlimit,
+        force_enable_inference,
+    )
 end
 
 """

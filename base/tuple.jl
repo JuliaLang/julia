@@ -649,25 +649,15 @@ reverse(t::Tuple) = revargs(t...)
 
 ## specialized reduction ##
 
-prod(x::Tuple{}) = 1
-# This is consistent with the regular prod because there is no need for size promotion
-# if all elements in the tuple are of system size.
-# It is defined here separately in order to support bootstrap, because it's needed earlier
-# than the general prod definition is available.
-prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
-
-all(x::Tuple{}) = true
-all(x::Tuple{Bool}) = x[1]
-all(x::Tuple{Bool, Bool}) = x[1]&x[2]
-all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
-all(x::Tuple{Any}) = x[1] || return false
-all(f, x::Tuple{}) = true
-all(f, x::Tuple{Any}) = all((f(x[1]),))
-
-any(x::Tuple{}) = false
-any(x::Tuple{Bool}) = x[1]
-any(x::Tuple{Bool, Bool}) = x[1]|x[2]
-any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
+# used in bootstrapping
+function prod(x::Tuple{Vararg{Int}})
+    @_terminates_locally_meta
+    r = 1
+    for y in x
+        r *= y
+    end
+    r
+end
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})

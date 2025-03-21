@@ -14,7 +14,7 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results]),
+        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results, :time_infer_total, :time_infer_cache_saved, :time_infer_self]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:module]),
@@ -33,7 +33,7 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
         (Core.Method, [:primary_world, :deleted_world]),
         (Core.MethodInstance, [:cache, :flags]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
@@ -2852,7 +2852,7 @@ mutable struct Obj; x; end
         push!(wr, WeakRef(x))
         nothing
     end
-    @noinline test_wr(r, wr) = @test r[1] == wr[1].value
+    @noinline test_wr(r, wr) = r[1] == wr[1].value
     function test_wr()
         # we need to be very careful here that we never
         # use the value directly in this function, so we aren't dependent
@@ -2860,7 +2860,7 @@ mutable struct Obj; x; end
         ref = []
         wref = []
         mk_wr(ref, wref)
-        test_wr(ref, wref)
+        @test test_wr(ref, wref)
         GC.gc()
         test_wr(ref, wref)
         empty!(ref)
@@ -5772,6 +5772,13 @@ let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     end
     @test reinterpret(UInt128, arr[2].fp) == expected
 end
+
+# make sure VecElement Tuple has the C alignment and ABI for supported types
+primitive type Int24 24 end
+@test Base.datatype_alignment(NTuple{10,VecElement{Int16}}) == 32
+@test Base.datatype_alignment(NTuple{10,VecElement{Int24}}) == 4
+@test Base.datatype_alignment(NTuple{10,VecElement{Int64}}) == 128
+@test Base.datatype_alignment(NTuple{10,VecElement{Int128}}) == 256
 
 # issue #21516
 struct T21516

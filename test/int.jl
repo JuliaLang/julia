@@ -118,6 +118,10 @@ end
     @test big"1.0" == BigFloat(1.0)
     @test_throws ArgumentError big"1.0.3"
     @test_throws ArgumentError big"pi"
+
+    @test_throws ArgumentError big"_æ1"
+    @test_throws ArgumentError big"æ_1"
+    @test_throws ArgumentError big"_ææ"
 end
 
 @test round(UInt8, 123) == 123

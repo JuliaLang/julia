@@ -449,12 +449,14 @@ jl_gc_wb(jl_array_owner(some_array), some_value);
 
 There are some functions to control the GC. In normal use cases, these should not be necessary.
 
-| Function             | Description                                  |
-|:-------------------- |:-------------------------------------------- |
-| `jl_gc_collect()`    | Force a GC run                               |
-| `jl_gc_enable(0)`    | Disable the GC, return previous state as int |
-| `jl_gc_enable(1)`    | Enable the GC,  return previous state as int |
-| `jl_gc_is_enabled()` | Return current state as int                  |
+| Function                           | Description                                                         |
+| :--------------------------------- | :------------------------------------------------------------------ |
+| `jl_gc_collect(JL_GC_FULL)`        | Force a GC run on all objects                                       |
+| `jl_gc_collect(JL_GC_INCREMENTAL)` | Force a GC run only on young objects                                |
+| `jl_gc_collect(JL_GC_AUTO)`        | Force a GC run, automatically choosing between full and incremental |
+| `jl_gc_enable(0)`                  | Disable the GC, return previous state as int                        |
+| `jl_gc_enable(1)`                  | Enable the GC, return previous state as int                         |
+| `jl_gc_is_enabled()`               | Return current state as int                                         |
 
 ## Working with Arrays
 
