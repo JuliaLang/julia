@@ -1115,7 +1115,7 @@ This function simply returns its argument by default, since the elements
 of a general iterator are normally considered its "values".
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> d = Dict("a"=>1, "b"=>2);
 
 julia> values(d)

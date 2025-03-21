@@ -104,7 +104,7 @@ See also: [`in`](@ref), [`push!`](@ref), [`Set`](@ref)
     This function requires at least 1.11.
 
 # Examples
-```jldoctest; filter = r"^  [1234]\$"
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> s = Set{Any}([1, 2, 3]); in!(4, s)
 false
 
@@ -753,7 +753,7 @@ If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d+(\\s+=>\\s+\\d)?\$"m
 julia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Vector{Int64}:
  2
@@ -849,7 +849,7 @@ If `count` is specified, then replace at most `count` values in total
     Version 1.7 is required to replace elements of a `Tuple`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Vector{Int64}:
  2

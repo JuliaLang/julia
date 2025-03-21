@@ -911,7 +911,7 @@ Retrieve the value(s) stored at the given key or index within a collection. The 
 See also [`get`](@ref), [`keys`](@ref), [`eachindex`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> A = Dict("a" => 1, "b" => 2)
 Dict{String, Int64} with 2 entries:
   "b" => 2
@@ -967,7 +967,7 @@ Store the given value at the given key or index within a collection. The syntax 
 x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> a = Dict("a"=>1)
 Dict{String, Int64} with 1 entry:
   "a" => 1

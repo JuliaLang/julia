@@ -25,7 +25,7 @@ This is an infix operator, allowing `s ∪ itr`.
 See also [`unique`](@ref), [`intersect`](@ref), [`isdisjoint`](@ref), [`vcat`](@ref), [`Iterators.flatten`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> union([1, 2], [3])
 3-element Vector{Int64}:
  1
@@ -68,7 +68,7 @@ Maintain order with arrays.
 $(_DOCS_ALIASING_WARNING)
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> a = Set([3, 4, 5]);
 
 julia> union!(a, 1:2:7);
