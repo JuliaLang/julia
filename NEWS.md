@@ -22,6 +22,8 @@ Build system changes
 New library functions
 ---------------------
 
+* `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
+
 New library features
 --------------------
 
