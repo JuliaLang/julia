@@ -55,6 +55,7 @@ public
     isambiguous,
     isexpr,
     isidentifier,
+    isreserved,
     issingletontype,
     identify_package,
     locate_package,
