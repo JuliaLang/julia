@@ -460,8 +460,9 @@ function skip(io::GenericIOBuffer, n::Int)
         seek(io, seekto) # Does error checking
     else
         # Don't use seek in order to allow a non-seekable IO to still skip bytes.
-        # Handle overflow
-        io.ptr = min(io.size + 1, clamp(widen(io.ptr) + widen(n), Int))
+        # Handle overflow.
+        maxptr = io.size + 1
+        io.ptr = n > maxptr || io.ptr - n > maxptr ? maxptr : io.ptr + n
         io
     end
 end
