@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-using Test: guardseed, _is_simple_call, _function_name
+using Test: guardseed, _can_escape_call
 using Serialization
 using Distributed: RemoteException
 
@@ -212,7 +212,7 @@ let fails = @testset NoThrowTestSet begin
 
     let str = sprint(show, fails[8])
         @test occursin("Expression: (==)(1:2...)", str)
-        @test !occursin("Evaluated", str)
+        @test occursin("Evaluated: 1 == 2", str)
     end
 
     let str = sprint(show, fails[9])
@@ -286,7 +286,6 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[23])
-        @test !(:issetequal in Test.DISPLAY_FAILED)
         @test occursin("Expression: issetequal(a, b)", str)
         @test occursin("Evaluated: issetequal([1, 2], [1, 3])", str)
     end
@@ -1794,30 +1793,13 @@ end
     end
 end
 
-@testset "_is_simple_function" begin
-    @test !_is_simple_call(:(f()))
-    @test _is_simple_call(:(f(x)))
-    @test _is_simple_call(:(f(x, y)))
-    @test !_is_simple_call(:(f(x, y, z)))
+@testset "_can_escape_call" begin
+    @test !_can_escape_call(:(f()))
+    @test _can_escape_call(:(f(x)))
+    @test _can_escape_call(:(f(; x)))
+    @test _can_escape_call(:(f(x=1)))
 
-    @test !_is_simple_call(:(f(; x)))
-    @test !_is_simple_call(:(f(; x, y)))
-    @test !_is_simple_call(:(f(x=1)))
-    @test !_is_simple_call(:(f(x=1, y=2)))
-
-    @test !_is_simple_call(:(f(x, y=1)))
-    @test !_is_simple_call(:(f(x; y=1)))
-
-    @test !_is_simple_call(:(f(x...)))
-    @test !_is_simple_call(:(f(x, y...)))
-    @test !_is_simple_call(:(f(x; y...)))
-
-    @test _is_simple_call(:(x == y))
-    @test !_is_simple_call(:(x .== y))
-end
-
-@testset "_function_name" begin
-    @test _function_name(:(isequal(x, y))) === :isequal
-    @test _function_name(:(Base.isequal(x.y))) === :isequal
-    @test _function_name(:(Base.Meta.isexpr(ex))) === :isexpr
+    @test _can_escape_call(:(x == y))
+    @test !_can_escape_call(:(x .== y))
+    @test !_can_escape_call(:((==).(x, y)))
 end
