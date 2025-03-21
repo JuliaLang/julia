@@ -1427,3 +1427,37 @@ end |> !Compiler.is_nothrow
 @test Base.infer_effects((UInt64,)) do x
     return Core.Intrinsics.uitofp(Int64, x)
 end |> !Compiler.is_nothrow
+
+# effects modeling for pointer-related intrinsics
+let effects = Base.infer_effects(Core.Intrinsics.pointerref, Tuple{Vararg{Any}})
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_inaccessiblememonly(effects)
+end
+let effects = Base.infer_effects(Core.Intrinsics.pointerset, Tuple{Vararg{Any}})
+    @test Compiler.is_consistent(effects)
+    @test !Compiler.is_effect_free(effects)
+end
+# effects modeling for atomic intrinsics
+# these functions especially need to be marked !effect_free since they imply synchronization
+for atomicfunc = Any[
+        Core.Intrinsics.atomic_pointerref,
+        Core.Intrinsics.atomic_pointerset,
+        Core.Intrinsics.atomic_pointerswap,
+        Core.Intrinsics.atomic_pointerreplace,
+        Core.Intrinsics.atomic_fence]
+    @test !Compiler.is_effect_free(Base.infer_effects(atomicfunc, Tuple{Vararg{Any}}))
+end
+
+# effects modeling for intrinsics that can do arbitrary things
+let effects = Base.infer_effects(Core.Intrinsics.llvmcall, Tuple{Vararg{Any}})
+    @test effects == Compiler.Effects()
+end
+let effects = Base.infer_effects(Core.Intrinsics.atomic_pointermodify, Tuple{Vararg{Any}})
+    @test effects == Compiler.Effects()
+end
+
+# JuliaLang/julia#57780
+let effects = Base.infer_effects(Base._unsetindex!, (MemoryRef{String},))
+    @test !Compiler.is_effect_free(effects)
+end
