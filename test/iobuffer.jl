@@ -243,33 +243,7 @@ end
 
 @testset "Write to self" begin
     buffer = IOBuffer()
-    write(buffer, "abcde")
-    write(buffer, buffer)
-    @test take!(buffer) == b"abcde"
-
-    buffer = IOBuffer()
-    write(buffer, "abcde")
-    seek(buffer, 2)
-    write(buffer, buffer)
-    @test take!(buffer) == b"abcde"
-
-    buffer = IOBuffer(;append=true)
-    write(buffer, "abcde")
-    seek(buffer, 2)
-    write(buffer, buffer)
-    @test take!(buffer) == b"abcdecde"
-
-    buffer = IOBuffer(;append=true)
-    write(buffer, "abcde")
-    read(buffer)
-    write(buffer, buffer)
-    @test take!(buffer) == b"abcde"
-
-    buffer = IOBuffer(;append=true, maxsize=7, sizehint=5)
-    write(buffer, "abcde")
-    seek(buffer, 2)
-    write(buffer, buffer)
-    @test take!(buffer) == b"abcdecd"
+    @test_throws ArgumentError write(buffer, buffer)
 end
 
 @testset "Read/write empty IOBuffer" begin
@@ -507,9 +481,6 @@ end
     truncate(io2, io2.size - 2)
     @test read(io2, String) == "goodnightmoonhelloworld"
     seek(io2, 0)
-    write(io2, io2)
-    @test read(io2, String) == ""
-    @test bufcontents(io2) == "goodnightmoonhelloworld"
 end
 
 # issue #11917
