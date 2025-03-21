@@ -281,6 +281,15 @@ function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T
         y < x ? nextfloat(y) : y
     end
 end
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:FromZero}) where T<:AbstractFloat
+    y = convert(T,x)::T
+    if x < 0.0
+        y > x ? prevfloat(y) : y
+    else
+        y < x ? nextfloat(y) : y
+    end
+end
+
 
 # Default definitions
 
