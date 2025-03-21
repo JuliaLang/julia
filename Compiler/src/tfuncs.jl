@@ -2432,6 +2432,43 @@ const _SPECIAL_BUILTINS = Any[
     Core._apply_iterate,
 ]
 
+# Intrinsics that require all arguments to be floats
+const _FLOAT_INTRINSICS = Any[
+    Intrinsics.neg_float,
+    Intrinsics.add_float,
+    Intrinsics.sub_float,
+    Intrinsics.mul_float,
+    Intrinsics.div_float,
+    Intrinsics.min_float,
+    Intrinsics.max_float,
+    Intrinsics.fma_float,
+    Intrinsics.muladd_float,
+    Intrinsics.neg_float_fast,
+    Intrinsics.add_float_fast,
+    Intrinsics.sub_float_fast,
+    Intrinsics.mul_float_fast,
+    Intrinsics.div_float_fast,
+    Intrinsics.min_float_fast,
+    Intrinsics.max_float_fast,
+    Intrinsics.eq_float,
+    Intrinsics.ne_float,
+    Intrinsics.lt_float,
+    Intrinsics.le_float,
+    Intrinsics.eq_float_fast,
+    Intrinsics.ne_float_fast,
+    Intrinsics.lt_float_fast,
+    Intrinsics.le_float_fast,
+    Intrinsics.fpiseq,
+    Intrinsics.abs_float,
+    Intrinsics.copysign_float,
+    Intrinsics.ceil_llvm,
+    Intrinsics.floor_llvm,
+    Intrinsics.trunc_llvm,
+    Intrinsics.rint_llvm,
+    Intrinsics.sqrt_llvm,
+    Intrinsics.sqrt_llvm_fast
+]
+
 # Types compatible with fpext/fptrunc
 const CORE_FLOAT_TYPES = Union{Core.BFloat16, Float16, Float32, Float64}
 
@@ -2849,13 +2886,20 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
             return ErrorException
         end
 
-        # fpext and fptrunc have further restrictions on the allowed types.
+        # fpext, fptrunc, fptoui, fptosi, uitofp, and sitofp have further
+        # restrictions on the allowed types.
         if f === Intrinsics.fpext &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) > Core.sizeof(xty))
             return ErrorException
         end
         if f === Intrinsics.fptrunc &&
             !(ty <: CORE_FLOAT_TYPES && xty <: CORE_FLOAT_TYPES && Core.sizeof(ty) < Core.sizeof(xty))
+            return ErrorException
+        end
+        if (f === Intrinsics.fptoui || f === Intrinsics.fptosi) && !(xty <: CORE_FLOAT_TYPES)
+            return ErrorException
+        end
+        if (f === Intrinsics.uitofp || f === Intrinsics.sitofp) && !(ty <: CORE_FLOAT_TYPES)
             return ErrorException
         end
 
@@ -2870,11 +2914,15 @@ function intrinsic_exct(𝕃::AbstractLattice, f::IntrinsicFunction, argtypes::V
         return Union{}
     end
 
-    # The remaining intrinsics are math/bits/comparison intrinsics. They work on all
-    # primitive types of the same type.
+    # The remaining intrinsics are math/bits/comparison intrinsics.
+    # All the non-floating point intrinsics work on primitive values of the same type.
     isshift = f === shl_int || f === lshr_int || f === ashr_int
     argtype1 = widenconst(argtypes[1])
     isprimitivetype(argtype1) || return ErrorException
+    if contains_is(_FLOAT_INTRINSICS, f)
+        argtype1 <: CORE_FLOAT_TYPES || return ErrorException
+    end
+
     for i = 2:length(argtypes)
         argtype = widenconst(argtypes[i])
         if isshift ? !isprimitivetype(argtype) : argtype !== argtype1
