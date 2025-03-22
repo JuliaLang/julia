@@ -578,7 +578,7 @@ Stacktrace:
 [...]
 ```
 """
-macro kwdef(expr)
+macro kwdef(expr::Expr)
     expr = macroexpand(__module__, expr) # to expand @static
     isexpr(expr, :struct) || error("Invalid usage of @kwdef")
     _, T, fieldsblock = expr.args
