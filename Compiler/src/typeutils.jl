@@ -61,7 +61,9 @@ function isknownlength(t::DataType)
     return isdefined(va, :N) && va.N isa Int
 end
 
-has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often computed only after setting the type and layout fields
+# n.b. often computed only after setting the type and layout fields
+# if that is the case, you may need to use `invokelatest` to observe the changes
+has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020
 
 # determine whether x is a valid lattice element
 # For example, Type{v} is not valid if v is a value
@@ -82,7 +84,7 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
             p isa Type || p isa TypeVar || return false
         elseif astag && isstructtype(x)
             datatype_fieldtypes(x) # force computation of has_concrete_subtype to be updated now
-            return has_concrete_subtype(x)
+            return invokelatest(has_concrete_subtype, x)::Bool
         end
         return true
     end
