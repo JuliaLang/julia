@@ -286,8 +286,14 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
-mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
-mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
+function mod(x::BitSigned, y::Unsigned)
+    remval = rem(x, y) # correct iff  remval>=0
+    return unsigned(remval + (remval<zero(remval))*y)
+end
+function mod(x::Unsigned, y::Signed)
+    remval =  signed(rem(x, y)) #remval>0 so correct iff y>0 or remval==0
+    return remval + (!iszero(remval) && y<zero(y))*y
+end
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
