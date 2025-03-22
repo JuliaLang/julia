@@ -3289,7 +3289,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
     if allow_import !== true
         gr = GlobalRef(mod, sym)
         partition = lookup_binding_partition!(interp, gr, sv)
-        if allow_import !== true && is_some_imported(binding_kind(partition))
+        if allow_import !== true && is_some_binding_imported(binding_kind(partition))
             if allow_import === false
                 rt = Const(false)
             else
@@ -3542,7 +3542,7 @@ end
 
 function walk_binding_partition(imported_binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
     valid_worlds = WorldRange(partition.min_world, partition.max_world)
-    while is_some_imported(binding_kind(partition))
+    while is_some_binding_imported(binding_kind(partition))
         imported_binding = partition_restriction(partition)::Core.Binding
         partition = lookup_binding_partition(world, imported_binding)
         valid_worlds = intersect(valid_worlds, WorldRange(partition.min_world, partition.max_world))

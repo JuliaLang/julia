@@ -6120,7 +6120,6 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test which(@__MODULE__, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
@@ -8478,3 +8477,54 @@ module GlobalAssign57446
     (@__MODULE__).theglobal = 1
     @test theglobal == 1
 end
+
+# issue #57638 - circular imports
+module M57638
+module I
+    using ..M57638
+end
+using .I
+end
+convert(Core.Binding, GlobalRef(M57638.I, :Base))
+@test M57638.Base === Base
+
+module M57638_2
+module I
+    using ..M57638_2
+    export Base
+end
+using .I
+export Base
+end
+@test M57638_2.Base === Base
+
+module M57638_3
+    module M2
+        using ..M57638_3
+        module M3
+            const x = 1
+            export x
+        end
+        using .M3
+        export x
+    end
+    using .M2
+    export x
+end
+@test M57638_3.x === 1
+
+module GlobalBindingMulti
+    module M
+        export S
+        module C
+            export S
+            struct A end
+            S = A() # making S const makes the error go away
+        end
+        using .C
+    end
+
+    using .M
+    using .M.C
+end
+@test GlobalBindingMulti.S === GlobalBindingMulti.M.C.S
