@@ -12,13 +12,14 @@ export quot,
        isunaryoperator,
        isbinaryoperator,
        ispostfixoperator,
+       isreserved,
        replace_sourceloc!,
        show_sexpr,
        @dump
 
 public parse
 
-using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator
+using Base: isidentifier, isoperator, isunaryoperator, isbinaryoperator, ispostfixoperator, isreserved
 import Base: isexpr
 
 """
