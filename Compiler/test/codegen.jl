@@ -1007,3 +1007,23 @@ let
    end
    nothing
 end
+
+# Test that turning an implicit import into an explicit one doesn't pessimize codegen
+module TurnedIntoExplicit
+    using Test
+    import ..get_llvm
+
+    module ReExportBitCast
+        export bitcast
+        import Base: bitcast
+    end
+    using .ReExportBitCast
+
+    f(x::UInt) = bitcast(Float64, x)
+
+    @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
+
+    import Base: bitcast
+
+    @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
+end

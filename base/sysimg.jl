@@ -12,8 +12,6 @@ Core.include(Base, "Base.jl")
 had_compiler && ccall(:jl_init_restored_module, Cvoid, (Any,), Base)
 end
 
-using .Base
-
 # Set up Main module
 using Base.MainInclude # ans, err, and sometimes Out
 

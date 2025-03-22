@@ -300,9 +300,10 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
 }
 
 // Determine if homogeneous tuple with fields of type t will have
-// a special alignment beyond normal Julia rules.
+// a special alignment and vector-ABI beyond normal rules for aggregates.
 // Return special alignment if one exists, 0 if normal alignment rules hold.
 // A non-zero result *must* match the LLVM rules for a vector type <nfields x t>.
+// Matching the compiler's `__attribute__ vector_size` behavior.
 // For sake of Ahead-Of-Time (AOT) compilation, this routine has to work
 // without LLVM being available.
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
@@ -317,8 +318,12 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
         // motivating use case comes up for Julia, we reject pointers.
         return 0;
     size_t elsz = jl_datatype_size(ty);
-    if (elsz != 1 && elsz != 2 && elsz != 4 && elsz != 8)
-        // Only handle power-of-two-sized elements (for now)
+    if (next_power_of_two(elsz) != elsz)
+        // Only handle power-of-two-sized elements (for now), since other
+        // lengths may be packed into very complicated arrangements (llvm pads
+        // extra bits on most platforms when computing alignment but not when
+        // computing type size, but adds no extra bytes for each element, so
+        // their effect on offsets are never what you may naturally expect).
         return 0;
     size_t size = nfields * elsz;
     // Use natural alignment for this vector: this matches LLVM and clang.
@@ -723,9 +728,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             }
             else {
                 fsz = sizeof(void*);
-                if (fsz > MAX_ALIGN)
-                    fsz = MAX_ALIGN;
                 al = fsz;
+                if (al > MAX_ALIGN)
+                    al = MAX_ALIGN;
                 desc[i].isptr = 1;
                 zeroinit = 1;
                 npointers++;
@@ -769,8 +774,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (al > alignm)
                 alignm = al;
         }
-        if (alignm > MAX_ALIGN)
-            alignm = MAX_ALIGN; // We cannot guarantee alignments over 16 bytes because that's what our heap is aligned as
         if (LLT_ALIGN(sz, alignm) > sz) {
             haspadding = 1;
             sz = LLT_ALIGN(sz, alignm);
@@ -939,6 +942,14 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     uint32_t nbytes = (nbits + 7) / 8;
     uint32_t alignm = next_power_of_two(nbytes);
 # if defined(_CPU_X86_) && !defined(_OS_WINDOWS_)
+    // datalayout strings are often weird: on 64-bit they usually follow fairly simple rules,
+    // but on x86 32 bit platforms, sometimes 5 to 8 byte types are
+    // 32-bit aligned even though the MAX_ALIGN (for types 9+ bytes) is 16
+    // (except for f80 which is align 4 on Mingw, Linux, and BSDs--but align 16 on MSVC and Darwin)
+    // https://llvm.org/doxygen/ARMTargetMachine_8cpp.html#adb29b487708f0dc2a940345b68649270
+    // https://llvm.org/doxygen/AArch64TargetMachine_8cpp.html#a003a58caf135efbf7273c5ed84e700d7
+    // https://llvm.org/doxygen/X86TargetMachine_8cpp.html#aefdbcd6131ef195da070cef7fdaf0532
+    // 32-bit alignment is weird
     if (alignm == 8)
         alignm = 4;
 # endif

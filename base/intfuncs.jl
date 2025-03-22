@@ -336,7 +336,7 @@ end
 
 # ^ for any x supporting *
 function to_power_type(x::Number)
-    T = promote_type(typeof(x), typeof(one(x)), typeof(x*x))
+    T = promote_type(typeof(x), typeof(x*x))
     convert(T, x)
 end
 to_power_type(x) = oftype(x*x, x)

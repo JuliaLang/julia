@@ -28,6 +28,61 @@ end
 # (expected test duration is about 18-180 seconds)
 Timer(t -> killjob("KILLING BY THREAD TEST WATCHDOG\n"), 1200)
 
+module ConcurrencyUtilities
+    function new_task_nonsticky(f)
+        t = Task(f)
+        t.sticky = false
+        t
+    end
+
+    """
+        run_concurrently(worker, n)::Nothing
+
+    Run `n` tasks of `worker` concurrently. Return when all workers are done.
+    """
+    function run_concurrently(worker, n)
+        tasks = map(new_task_nonsticky ∘ Returns(worker), Base.OneTo(n))
+        foreach(schedule, tasks)
+        foreach(fetch, tasks)
+    end
+
+    """
+        run_concurrently_in_new_task(worker, n)::Task
+
+    Return a task that:
+    * is not started yet
+    * when started, runs `n` tasks of `worker` concurrently
+    * returns when all workers are done
+    """
+    function run_concurrently_in_new_task(worker, n)
+        function f(t)
+            run_concurrently(t...)
+        end
+        new_task_nonsticky(f ∘ Returns((worker, n)))
+    end
+end
+
+module AbstractIrrationalExamples
+    for n ∈ 0:9
+        name_aa = Symbol(:aa, n)
+        name_ab = Symbol(:ab, n)
+        name_ba = Symbol(:ba, n)
+        name_bb = Symbol(:bb, n)
+        @eval begin
+            Base.@irrational $name_aa exp(BigFloat(2)^$n)
+            Base.@irrational $name_ab exp(BigFloat(2)^-$n)
+            Base.@irrational $name_ba exp(-(BigFloat(2)^$n))
+            Base.@irrational $name_bb exp(-(BigFloat(2)^-$n))
+        end
+    end
+    const examples = (
+        aa0, aa1, aa2, aa3, aa4, aa5, aa6, aa7, aa8, aa9,
+        ab0, ab1, ab2, ab3, ab4, ab5, ab6, ab7, ab8, ab9,
+        ba0, ba1, ba2, ba3, ba4, ba5, ba6, ba7, ba8, ba9,
+        bb0, bb1, bb2, bb3, bb4, bb5, bb6, bb7, bb8, bb9,
+    )
+end
+
 @testset """threads_exec.jl with JULIA_NUM_THREADS == $(ENV["JULIA_NUM_THREADS"])""" begin
 
 @test Threads.threadid() == 1
@@ -1347,6 +1402,43 @@ end
     end
 end
 
+@testset "race on `BigFloat` precision when constructing `Rational` from `AbstractIrrational`" begin
+    function test_racy_rational_from_irrational(::Type{Rational{I}}, c::AbstractIrrational) where {I}
+        function construct()
+            Rational{I}(c)
+        end
+        function is_racy_rational_from_irrational()
+            worker_count = 10 * Threads.nthreads()
+            task = ConcurrencyUtilities.run_concurrently_in_new_task(construct, worker_count)
+            schedule(task)
+            ok = true
+            while !istaskdone(task)
+                for _ ∈ 1:1000000
+                    ok &= precision(BigFloat) === prec
+                end
+                GC.safepoint()
+                yield()
+            end
+            fetch(task)
+            ok
+        end
+        prec = precision(BigFloat)
+        task = ConcurrencyUtilities.new_task_nonsticky(is_racy_rational_from_irrational)
+        schedule(task)
+        ok = fetch(task)::Bool
+        setprecision(BigFloat, prec)
+        ok
+    end
+    @testset "c: $c" for c ∈ AbstractIrrationalExamples.examples
+        Q = Rational{Int128}
+        # metatest: `test_racy_rational_from_irrational` needs the constructor
+        # to not be constant folded away, otherwise it's not testing anything.
+        @test !Core.Compiler.is_foldable(Base.infer_effects(Q, Tuple{typeof(c)}))
+        # test for race
+        @test test_racy_rational_from_irrational(Q, c)
+    end
+end
+
 @testset "task time counters" begin
     @testset "enabled" begin
         try
@@ -1538,25 +1630,27 @@ end
     program = "
         function main()
             t = Threads.@spawn begin
-                ccall(:uv_sleep, Cvoid, (Cuint,), 5000)
+                ccall(:uv_sleep, Cvoid, (Cuint,), 20_000)
             end
             # Force a GC
-            ccall(:uv_sleep, Cvoid, (Cuint,), 1000)
+            ccall(:uv_sleep, Cvoid, (Cuint,), 1_000)
             GC.gc()
             wait(t)
         end
         main()
     "
-    tmp_output_filename = tempname()
-    tmp_output_file = open(tmp_output_filename, "w")
-    if isnothing(tmp_output_file)
-        error("Failed to open file $tmp_output_filename")
+    for timeout in ("1", "4", "16")
+        tmp_output_filename = tempname()
+        tmp_output_file = open(tmp_output_filename, "w")
+        if isnothing(tmp_output_file)
+            error("Failed to open file $tmp_output_filename")
+        end
+        run(pipeline(`$(Base.julia_cmd()) --threads=4 --timeout-for-safepoint-straggler=$(timeout) -e $program`, stderr=tmp_output_file))
+        # Check whether we printed the straggler's backtrace
+        @test !isempty(read(tmp_output_filename, String))
+        close(tmp_output_file)
+        rm(tmp_output_filename)
     end
-    run(pipeline(`$(Base.julia_cmd()) --threads=4 --timeout-for-safepoint-straggler=1 -e $program`, stderr=tmp_output_file))
-    # Check whether we printed the straggler's backtrace
-    @test !isempty(read(tmp_output_filename, String))
-    close(tmp_output_file)
-    rm(tmp_output_filename)
 end
 
 end # main testset

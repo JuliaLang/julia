@@ -286,19 +286,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 state.rettype = Any
             end
             # if from_interprocedural added any pclimitations to the set inherited from the arguments,
-            # some of those may be part of our cycles, so those can be deleted now
-            # TODO: and those might need to be deleted later too if the cycle grows to include them?
             if isa(sv, InferenceState)
                 # TODO (#48913) implement a proper recursion handling for irinterp:
-                # This works just because currently the `:terminate` condition guarantees that
-                # irinterp doesn't fail into unresolved cycles, but it's not a good solution.
+                # This works most of the time just because currently the `:terminate` condition often guarantees that
+                # irinterp doesn't fail into unresolved cycles, but it is not a good (or working) solution.
                 # We should revisit this once we have a better story for handling cycles in irinterp.
-                if !isempty(sv.pclimitations) # remove self, if present
-                    delete!(sv.pclimitations, sv)
-                    for caller in callers_in_cycle(sv)
-                        delete!(sv.pclimitations, caller)
-                    end
-                end
+                delete!(sv.pclimitations, sv) # remove self, if present
             end
         else
             # there is unanalyzed candidate, widen type and effects to the top
@@ -775,7 +768,7 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
         # check in the cycle list first
         # all items in here are considered mutual parents of all others
         if !any(p::AbsIntState->matches_sv(p, sv), callers_in_cycle(frame))
-            let parent = frame_parent(frame)
+            let parent = cycle_parent(frame)
                 parent === nothing && return false
                 (is_cached(parent) || frame_parent(parent) !== nothing) || return false
                 matches_sv(parent, sv) || return false
@@ -785,7 +778,7 @@ function edge_matches_sv(interp::AbstractInterpreter, frame::AbsIntState,
         # If the method defines a recursion relation, give it a chance
         # to tell us that this recursion is actually ok.
         if isdefined(method, :recursion_relation)
-            if Core._apply_pure(method.recursion_relation, Any[method, callee_method2, sig, frame_instance(frame).specTypes])
+            if Core._call_in_world_total(get_world_counter(), method.recursion_relation, method, callee_method2, sig, frame_instance(frame).specTypes)
                 return false
             end
         end
@@ -1359,6 +1352,8 @@ function const_prop_call(interp::AbstractInterpreter,
     end
     assign_parentchild!(frame, sv)
     if !typeinf(interp, frame)
+        sv.time_caches += frame.time_caches
+        sv.time_paused += frame.time_paused
         add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
         @assert frame.frameid != 0 && frame.cycleid == frame.frameid
         callstack = frame.callstack::Vector{AbsIntState}
@@ -1379,6 +1374,7 @@ function const_prop_call(interp::AbstractInterpreter,
         inf_result.result = concrete_eval_result.rt
         inf_result.ipo_effects = concrete_eval_result.effects
     end
+    typ = inf_result.result
     return const_prop_result(inf_result)
 end
 
@@ -1742,8 +1738,8 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     retinfos = ApplyCallInfo[]
     retinfo = UnionSplitApplyCallInfo(retinfos)
     exctype = Union{}
-    ctypes´ = Vector{Any}[]
-    infos´ = Vector{MaybeAbstractIterationInfo}[]
+    ctypes´::Vector{Vector{Any}} = Vector{Any}[]
+    infos´::Vector{Vector{MaybeAbstractIterationInfo}} = Vector{MaybeAbstractIterationInfo}[]
     local ti, argtypesi
     local ctfuture::Future{AbstractIterationResult}
     local callfuture::Future{CallMeta}
@@ -2391,7 +2387,7 @@ function abstract_throw_methoderror(interp::AbstractInterpreter, argtypes::Vecto
     return Future(CallMeta(Union{}, exct, EFFECTS_THROWS, NoCallInfo()))
 end
 
-const generic_getglobal_effects = Effects(EFFECTS_THROWS, consistent=ALWAYS_FALSE, inaccessiblememonly=ALWAYS_FALSE)
+const generic_getglobal_effects = Effects(EFFECTS_THROWS, effect_free=ALWAYS_FALSE, consistent=ALWAYS_FALSE, inaccessiblememonly=ALWAYS_FALSE) #= effect_free for depwarn =#
 const generic_getglobal_exct = Union{ArgumentError, TypeError, ConcurrencyViolationError, UndefVarError}
 function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, @nospecialize(M), @nospecialize(s))
     ⊑ = partialorder(typeinf_lattice(interp))
@@ -2399,8 +2395,8 @@ function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, s
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
             gr = GlobalRef(M, s)
-            (ret, bpart) = abstract_eval_globalref(interp, gr, saw_latestworld, sv)
-            return CallMeta(ret, bpart === nothing ? NoCallInfo() : GlobalAccessInfo(convert(Core.Binding, gr), bpart))
+            ret = abstract_eval_globalref(interp, gr, saw_latestworld, sv)
+            return CallMeta(ret, GlobalAccessInfo(convert(Core.Binding, gr)))
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     elseif !hasintersect(widenconst(M), Module) || !hasintersect(widenconst(s), Symbol)
@@ -2443,18 +2439,23 @@ end
         if !isa(M, Module) || !isa(s, Symbol)
             return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
         end
-        partition = abstract_eval_binding_partition!(interp, GlobalRef(M, s), sv)
-
-        if is_some_guard(binding_kind(partition))
-            # We do not currently assume an invalidation for guard -> defined transitions
-            # rt = Const(nothing)
-            rt = Type
-        elseif is_some_const_binding(binding_kind(partition))
-            rt = Const(Any)
-        else
-            rt = Const(partition_restriction(partition))
+        gr = GlobalRef(M, s)
+        (valid_worlds, rt) = scan_leaf_partitions(interp, gr, sv.world) do interp, _, partition
+            local rt
+            kind = binding_kind(partition)
+            if is_some_guard(kind) || kind == PARTITION_KIND_DECLARED
+                # We do not currently assume an invalidation for guard -> defined transitions
+                # rt = Const(nothing)
+                rt = Type
+            elseif is_some_const_binding(kind)
+                rt = Const(Any)
+            else
+                rt = Const(partition_restriction(partition))
+            end
+            rt
         end
-        return CallMeta(rt, Union{}, EFFECTS_TOTAL, NoCallInfo())
+        update_valid_age!(sv, valid_worlds)
+        return CallMeta(rt, Union{}, EFFECTS_TOTAL, GlobalAccessInfo(convert(Core.Binding, gr)))
     elseif !hasintersect(widenconst(M), Module) || !hasintersect(widenconst(s), Symbol)
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     elseif M ⊑ Module && s ⊑ Symbol
@@ -2479,8 +2480,8 @@ function abstract_eval_setglobal!(interp::AbstractInterpreter, sv::AbsIntState, 
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
             gr = GlobalRef(M, s)
-            (rt, exct), partition = global_assignment_rt_exct(interp, sv, saw_latestworld, gr, v)
-            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), GlobalAccessInfo(convert(Core.Binding, gr), partition))
+            (rt, exct) = global_assignment_rt_exct(interp, sv, saw_latestworld, gr, v)
+            return CallMeta(rt, exct, Effects(setglobal!_effects, nothrow=exct===Bottom), GlobalAccessInfo(convert(Core.Binding, gr)))
         end
         return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
     end
@@ -2560,6 +2561,7 @@ function abstract_eval_setglobalonce!(interp::AbstractInterpreter, sv::AbsIntSta
     end
 end
 
+
 function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
     if length(argtypes) in (5, 6, 7)
         (M, s, x, v) = argtypes[2], argtypes[3], argtypes[4], argtypes[5]
@@ -2569,14 +2571,19 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
             M isa Module || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
             s isa Symbol || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
             gr = GlobalRef(M, s)
-            partition = abstract_eval_binding_partition!(interp, gr, sv)
-            rte = abstract_eval_partition_load(interp, partition)
-            if binding_kind(partition) == BINDING_KIND_GLOBAL
-                T = partition_restriction(partition)
+            (valid_worlds, (rte, T)) = scan_leaf_partitions(interp, gr, sv.world) do interp, _, partition
+                partition_T = nothing
+                partition_rte = abstract_eval_partition_load(interp, partition)
+                if binding_kind(partition) == PARTITION_KIND_GLOBAL
+                    partition_T = partition_restriction(partition)
+                end
+                partition_exct = Union{partition_rte.exct, global_assignment_binding_rt_exct(interp, partition, v)[2]}
+                partition_rte = RTEffects(partition_rte.rt, partition_exct, partition_rte.effects)
+                Pair{RTEffects, Any}(partition_rte, partition_T)
             end
-            exct = Union{rte.exct, global_assignment_binding_rt_exct(interp, partition, v)[2]}
-            effects = merge_effects(rte.effects, Effects(setglobal!_effects, nothrow=exct===Bottom))
-            sg = CallMeta(Any, exct, effects, GlobalAccessInfo(convert(Core.Binding, gr), partition))
+            update_valid_age!(sv, valid_worlds)
+            effects = merge_effects(rte.effects, Effects(setglobal!_effects, nothrow=rte.exct===Bottom))
+            sg = CallMeta(Any, rte.exct, effects, GlobalAccessInfo(convert(Core.Binding, gr)))
         else
             sg = abstract_eval_setglobal!(interp, sv, saw_latestworld, M, s, v)
         end
@@ -2947,7 +2954,7 @@ function abstract_eval_special_value(interp::AbstractInterpreter, @nospecialize(
         end
     elseif isa(e, GlobalRef)
         # No need for an edge since an explicit GlobalRef will be picked up by the source scan
-        return abstract_eval_globalref(interp, e, sstate.saw_latestworld, sv)[1]
+        return abstract_eval_globalref(interp, e, sstate.saw_latestworld, sv)
     end
     if isa(e, QuoteNode)
         e = e.value
@@ -3232,25 +3239,29 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
 
     effects = EFFECTS_TOTAL
     gr = GlobalRef(mod, sym)
-    partition = lookup_binding_partition!(interp, gr, sv)
-    if allow_import !== true && is_some_imported(binding_kind(partition))
-        if allow_import === false
-            rt = Const(false)
-        else
-            effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
-        end
-    else
-        partition = walk_binding_partition!(interp, partition, sv)
-        rte = abstract_eval_partition_load(interp, partition)
-        if rte.exct == Union{}
-            rt = Const(true)
-        elseif rte.rt === Union{} && rte.exct === UndefVarError
-            rt = Const(false)
-        else
-            effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
+    if allow_import !== true
+        gr = GlobalRef(mod, sym)
+        partition = lookup_binding_partition!(interp, gr, sv)
+        if allow_import !== true && is_some_binding_imported(binding_kind(partition))
+            if allow_import === false
+                rt = Const(false)
+            else
+                effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
+            end
+            @goto done
         end
     end
-    return CallMeta(RTEffects(rt, Union{}, effects), GlobalAccessInfo(convert(Core.Binding, gr), partition))
+
+    (valid_worlds, rte) = abstract_load_all_consistent_leaf_partitions(interp, gr, sv.world)
+    if rte.exct == Union{}
+        rt = Const(true)
+    elseif rte.rt === Union{} && rte.exct === UndefVarError
+        rt = Const(false)
+    else
+        effects = Effects(generic_isdefinedglobal_effects, nothrow=true)
+    end
+@label done
+    return CallMeta(RTEffects(rt, Union{}, effects), GlobalAccessInfo(convert(Core.Binding, gr)))
 end
 
 function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, @nospecialize(M), @nospecialize(s), @nospecialize(allow_import_arg), @nospecialize(order_arg), saw_latestworld::Bool, sv::AbsIntState)
@@ -3467,110 +3478,166 @@ world_range(compact::IncrementalCompact) = world_range(compact.ir)
 function abstract_eval_globalref_type(g::GlobalRef, src::Union{CodeInfo, IRCode, IncrementalCompact})
     worlds = world_range(src)
     partition = lookup_binding_partition(min_world(worlds), g)
-    partition.max_world < max_world(worlds) && return Any
-    while is_some_imported(binding_kind(partition))
-        imported_binding = partition_restriction(partition)::Core.Binding
-        partition = lookup_binding_partition(min_world(worlds), imported_binding)
-        partition.max_world < max_world(worlds) && return Any
-    end
-    kind = binding_kind(partition)
-    if is_some_guard(kind)
-        # return Union{}
+
+    (valid_worlds, rte) = abstract_load_all_consistent_leaf_partitions(nothing, g, WorldWithRange(min_world(worlds), worlds))
+    if min_world(valid_worlds) > min_world(worlds) || max_world(valid_worlds) < max_world(worlds)
         return Any
     end
-    if is_some_const_binding(kind)
-        return Const(partition_restriction(partition))
-    end
-    return kind == BINDING_KIND_DECLARED ? Any : partition_restriction(partition)
+
+    return rte.rt
 end
 
-function lookup_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
+function lookup_binding_partition!(interp::AbstractInterpreter, g::Union{GlobalRef, Core.Binding}, sv::AbsIntState)
     partition = lookup_binding_partition(get_inference_world(interp), g)
     update_valid_age!(sv, WorldRange(partition.min_world, partition.max_world))
     partition
 end
 
-function walk_binding_partition!(interp::AbstractInterpreter, partition::Core.BindingPartition, sv::AbsIntState)
-    while is_some_imported(binding_kind(partition))
+function walk_binding_partition(imported_binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
+    valid_worlds = WorldRange(partition.min_world, partition.max_world)
+    while is_some_binding_imported(binding_kind(partition))
         imported_binding = partition_restriction(partition)::Core.Binding
-        partition = lookup_binding_partition(get_inference_world(interp), imported_binding)
-        update_valid_age!(sv, WorldRange(partition.min_world, partition.max_world))
+        partition = lookup_binding_partition(world, imported_binding)
+        valid_worlds = intersect(valid_worlds, WorldRange(partition.min_world, partition.max_world))
     end
-    return partition
+    return Pair{WorldRange, Pair{Core.Binding, Core.BindingPartition}}(valid_worlds, imported_binding=>partition)
 end
 
 function abstract_eval_binding_partition!(interp::AbstractInterpreter, g::GlobalRef, sv::AbsIntState)
-    partition = lookup_binding_partition!(interp, g, sv)
-    partition = walk_binding_partition!(interp, partition, sv)
+    b = convert(Core.Binding, g)
+    partition = lookup_binding_partition!(interp, b, sv)
+    valid_worlds, (_, partition) = walk_binding_partition(b, partition, get_inference_world(interp))
+    update_valid_age!(sv, valid_worlds)
     return partition
 end
 
-function abstract_eval_partition_load(interp::AbstractInterpreter, partition::Core.BindingPartition)
+abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing}, ::Core.Binding, partition::Core.BindingPartition) =
+    abstract_eval_partition_load(interp, partition)
+function abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing}, partition::Core.BindingPartition)
     kind = binding_kind(partition)
-    if is_some_guard(kind) || kind == BINDING_KIND_UNDEF_CONST
-        if InferenceParams(interp).assume_bindings_static
+    isdepwarn = (partition.kind & PARTITION_FLAG_DEPWARN) != 0
+    local_getglobal_effects = Effects(generic_getglobal_effects, effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE)
+    if is_some_guard(kind) || kind == PARTITION_KIND_UNDEF_CONST
+        if interp !== nothing && InferenceParams(interp).assume_bindings_static
             return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
         else
             # We do not currently assume an invalidation for guard -> defined transitions
             # return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
-            return RTEffects(Any, UndefVarError, generic_getglobal_effects)
+            return RTEffects(Any, UndefVarError, local_getglobal_effects)
         end
     end
 
     if is_defined_const_binding(kind)
-        if kind == BINDING_KIND_BACKDATED_CONST
+        if kind == PARTITION_KIND_BACKDATED_CONST
             # Infer this as guard. We do not want a later const definition to retroactively improve
             # inference results in an earlier world.
-            return RTEffects(Any, UndefVarError, generic_getglobal_effects)
+            return RTEffects(Any, UndefVarError, local_getglobal_effects)
         end
         rt = Const(partition_restriction(partition))
-        return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL, inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE))
+        return RTEffects(rt, Union{}, Effects(EFFECTS_TOTAL,
+            inaccessiblememonly=is_mutation_free_argtype(rt) ? ALWAYS_TRUE : ALWAYS_FALSE,
+            effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE))
     end
 
-    if kind == BINDING_KIND_DECLARED
+    if kind == PARTITION_KIND_DECLARED
+        # Could be replaced by a backdated const which has an effect, so we can't assume it won't.
+        # Besides, we would prefer not to merge the world range for this into the world range for
+        # _GLOBAL, because that would pessimize codegen.
+        local_getglobal_effects = Effects(local_getglobal_effects, effect_free=ALWAYS_FALSE)
         rt = Any
     else
         rt = partition_restriction(partition)
     end
-    return RTEffects(rt, UndefVarError, generic_getglobal_effects)
+    return RTEffects(rt, UndefVarError, local_getglobal_effects)
 end
 
-function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_latestworld::Bool, sv::AbsIntState)
-    if saw_latestworld
-        return Pair{RTEffects, Union{Nothing, Core.BindingPartition}}(RTEffects(Any, Any, generic_getglobal_effects), nothing)
+function scan_specified_partitions(query::Function, walk_binding_partition::Function, interp, g::GlobalRef, wwr::WorldWithRange)
+    local total_validity, rte, binding_partition
+    binding = convert(Core.Binding, g)
+    lookup_world = max_world(wwr.valid_worlds)
+    while true
+        # Partitions are ordered newest-to-oldest so start at the top
+        binding_partition = @isdefined(binding_partition) ?
+            lookup_binding_partition(lookup_world, binding, binding_partition) :
+            lookup_binding_partition(lookup_world, binding)
+        while lookup_world >= binding_partition.min_world && (!@isdefined(total_validity) || min_world(total_validity) > min_world(wwr.valid_worlds))
+            partition_validity, (leaf_binding, leaf_partition) = walk_binding_partition(binding, binding_partition, lookup_world)
+            @assert lookup_world in partition_validity
+            this_rte = query(interp, leaf_binding, leaf_partition)
+            if @isdefined(rte)
+                if this_rte === rte
+                    total_validity = union(total_validity, partition_validity)
+                    lookup_world = min_world(total_validity) - 1
+                    continue
+                end
+                if min_world(total_validity) <= wwr.this
+                    @goto out
+                end
+            end
+            total_validity = partition_validity
+            lookup_world = min_world(total_validity) - 1
+            rte = this_rte
+        end
+        min_world(total_validity) > min_world(wwr.valid_worlds) || break
     end
-    partition = abstract_eval_binding_partition!(interp, g, sv)
-    ret = abstract_eval_partition_load(interp, partition)
-    if ret.rt !== Union{} && ret.exct === UndefVarError && InferenceParams(interp).assume_bindings_static
-        b = convert(Core.Binding, g)
-        if isdefined(b, :value)
+@label out
+    return Pair{WorldRange, typeof(rte)}(total_validity, rte)
+end
+
+scan_leaf_partitions(query::Function, interp, g::GlobalRef, wwr::WorldWithRange) =
+    scan_specified_partitions(query, walk_binding_partition, interp, g, wwr)
+
+scan_partitions(query::Function, interp, g::GlobalRef, wwr::WorldWithRange) =
+    scan_specified_partitions(query,
+        (b::Core.Binding, bpart::Core.BindingPartition, world::UInt)->
+            Pair{WorldRange, Pair{Core.Binding, Core.BindingPartition}}(WorldRange(bpart.min_world, bpart.max_world), b=>bpart),
+        interp, g, wwr)
+
+abstract_load_all_consistent_leaf_partitions(interp, g::GlobalRef, wwr::WorldWithRange) =
+    scan_leaf_partitions(abstract_eval_partition_load, interp, g, wwr)
+
+function abstract_eval_globalref_partition(interp, binding::Core.Binding, partition::Core.BindingPartition)
+    # For inference purposes, we don't particularly care which global binding we end up loading, we only
+    # care about its type. However, we would still like to terminate the world range for the particular
+    # binding we end up reaching such that codegen can emit a simpler pointer load.
+    Pair{RTEffects, Union{Nothing, Core.Binding}}(
+        abstract_eval_partition_load(interp, partition),
+        binding_kind(partition) in (PARTITION_KIND_GLOBAL, PARTITION_KIND_DECLARED) ? binding : nothing)
+end
+
+function abstract_eval_globalref(interp, g::GlobalRef, saw_latestworld::Bool, sv::AbsIntState)
+    if saw_latestworld
+        return RTEffects(Any, Any, generic_getglobal_effects)
+    end
+    (valid_worlds, (ret, binding_if_global)) = scan_leaf_partitions(abstract_eval_globalref_partition, interp, g, sv.world)
+    update_valid_age!(sv, valid_worlds)
+    if ret.rt !== Union{} && ret.exct === UndefVarError && binding_if_global !== nothing && InferenceParams(interp).assume_bindings_static
+        if isdefined(binding_if_global, :value)
             ret = RTEffects(ret.rt, Union{}, Effects(generic_getglobal_effects, nothrow=true))
         end
         # We do not assume in general that assigned global bindings remain assigned.
         # The existence of pkgimages allows them to revert in practice.
     end
-    return Pair{RTEffects, Union{Nothing, Core.BindingPartition}}(ret, partition)
+    return ret
 end
 
 function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
     if saw_latestworld
-        return Pair{Pair{Any,Any}, Union{Core.BindingPartition, Nothing}}(
-            Pair{Any,Any}(newty, Union{ErrorException, TypeError}), nothing)
+        return Pair{Any,Any}(newty, Union{ErrorException, TypeError})
     end
-    partition = abstract_eval_binding_partition!(interp, g, sv)
-    return Pair{Pair{Any,Any}, Union{Core.BindingPartition, Nothing}}(
-        global_assignment_binding_rt_exct(interp, partition, newty),
-        partition)
+    (valid_worlds, ret) = scan_partitions((interp, _, partition)->global_assignment_binding_rt_exct(interp, partition, newty), interp, g, sv.world)
+    update_valid_age!(sv, valid_worlds)
+    return ret
 end
 
 function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partition::Core.BindingPartition, @nospecialize(newty))
     kind = binding_kind(partition)
     if is_some_guard(kind)
         return Pair{Any,Any}(newty, ErrorException)
-    elseif is_some_const_binding(kind)
+    elseif is_some_const_binding(kind) || is_some_imported(kind)
         return Pair{Any,Any}(Bottom, ErrorException)
     end
-    ty = kind == BINDING_KIND_DECLARED ? Any : partition_restriction(partition)
+    ty = kind == PARTITION_KIND_DECLARED ? Any : partition_restriction(partition)
     wnewty = widenconst(newty)
     if !hasintersect(wnewty, ty)
         return Pair{Any,Any}(Bottom, TypeError)
@@ -4248,6 +4315,7 @@ end
 # make as much progress on `frame` as possible (by handling cycles)
 warnlength::Int = 2500
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
+    time_before = _time_ns()
     callstack = frame.callstack::Vector{AbsIntState}
     nextstates = CurrentState[]
     takenext = frame.frameid
@@ -4279,7 +4347,6 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             # get_compileable_sig), but still must be finished up since it may see and
             # change the local variables of the InferenceState at currpc, we do this
             # even if the nextresult status is already completed.
-            continue
         elseif isdefined(nextstates[nextstateid], :result) || !isempty(callee.ip)
             # Next make progress on this frame
             prev = length(callee.tasks) + 1
@@ -4287,16 +4354,23 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             reverse!(callee.tasks, prev)
         elseif callee.cycleid == length(callstack)
             # With no active ip's and no cycles, frame is done
-            finish_nocycle(interp, callee)
+            time_now = _time_ns()
+            callee.time_self_ns += (time_now - time_before)
+            time_before = time_now
+            finish_nocycle(interp, callee, time_before)
             callee.frameid == 0 && break
             takenext = length(callstack)
             nextstateid = takenext + 1 - frame.frameid
             #@assert length(nextstates) == nextstateid + 1
             #@assert all(i -> !isdefined(nextstates[i], :result), nextstateid+1:length(nextstates))
             resize!(nextstates, nextstateid)
+            continue
         elseif callee.cycleid == callee.frameid
             # If the current frame is the top part of a cycle, check if the whole cycle
             # is done, and if not, pick the next item to work on.
+            time_now = _time_ns()
+            callee.time_self_ns += (time_now - time_before)
+            time_before = time_now
             no_active_ips_in_cycle = true
             for i = callee.cycleid:length(callstack)
                 caller = callstack[i]::InferenceState
@@ -4307,7 +4381,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
                 end
             end
             if no_active_ips_in_cycle
-                finish_cycle(interp, callstack, callee.cycleid)
+                finish_cycle(interp, callstack, callee.cycleid, time_before)
             end
             takenext = length(callstack)
             nextstateid = takenext + 1 - frame.frameid
@@ -4317,10 +4391,14 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             else
                 #@assert length(nextstates) == nextstateid
             end
+            continue
         else
             # Continue to the next frame in this cycle
             takenext = takenext - 1
         end
+        time_now = _time_ns()
+        callee.time_self_ns += (time_now - time_before)
+        time_before = time_now
     end
     #@assert all(nextresult -> !isdefined(nextresult, :result), nextstates)
     return is_inferred(frame)

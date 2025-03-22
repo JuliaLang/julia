@@ -102,7 +102,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    196
+#define NUM_TAGS    197
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -250,6 +250,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_atomicerror_type);
         INSERT_TAG(jl_missingcodeerror_type);
         INSERT_TAG(jl_precompilable_error);
+        INSERT_TAG(jl_trimfailure_type);
 
         // other special values
         INSERT_TAG(jl_emptysvec);
@@ -507,8 +508,8 @@ static htable_t bits_replace;
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
 static const jl_fptr_args_t id_to_fptrs[] = {
     &jl_f_throw, &jl_f_throw_methoderror, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
-    &jl_f_typeassert, &jl_f__apply_iterate, &jl_f__apply_pure,
-    &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined, &jl_f_isdefinedglobal,
+    &jl_f_typeassert, &jl_f__apply_iterate,
+    &jl_f_invokelatest, &jl_f_invoke_in_world, &jl_f__call_in_world_total, &jl_f_isdefined, &jl_f_isdefinedglobal,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call,
     &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield, &jl_f_setfieldonce,
     &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type, &jl_f_memorynew,
@@ -794,6 +795,8 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
 {
     jl_queue_for_serialization(s, m->name);
     jl_queue_for_serialization(s, m->parent);
+    if (!jl_options.strip_metadata)
+        jl_queue_for_serialization(s, m->file);
     if (jl_options.trim) {
         jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->bindings), 0, 1);
     } else {
@@ -822,6 +825,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
                      // ... or point to Base functions accessed by the runtime
                      (m == jl_base_module && (!strcmp(jl_symbol_name(b->globalref->name), "wait") ||
                                               !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook"))))) {
+                    record_field_change((jl_value_t**)&b->backedges, NULL);
                     jl_queue_for_serialization(s, b);
                 }
             }
@@ -833,6 +837,7 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     }
 
     jl_queue_for_serialization(s, m->usings_backedges);
+    jl_queue_for_serialization(s, m->scanned_methods);
 }
 
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
@@ -1339,10 +1344,15 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_atomic_load_relaxed(&m->bindingkeyset), s->link_ids_relocs));
     newm->file = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, file)));
-    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->file, s->link_ids_relocs));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_options.strip_metadata ? jl_empty_sym : m->file , s->link_ids_relocs));
+    if (jl_options.strip_metadata)
+        newm->line = 0;
     newm->usings_backedges = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings_backedges)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings_backedges, s->link_ids_relocs));
+    newm->scanned_methods = NULL;
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, scanned_methods)));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->scanned_methods, s->link_ids_relocs));
 
     // After reload, everything that has happened in this process happened semantically at
     // (for .incremental) or before jl_require_world, so reset this flag.
@@ -1871,6 +1881,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                         jl_atomic_store_release(&newci->max_world, 0);
                     }
                 }
+                jl_atomic_store_relaxed(&newci->time_compile, 0.0);
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
                 jl_atomic_store_relaxed(&newci->specsigflags, 0);
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
@@ -2593,7 +2604,7 @@ uint_t bindingkey_hash(size_t idx, jl_value_t *data);
 
 static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
 {
-    jl_svec_t * bindings = jl_atomic_load_relaxed(&m->bindings);
+    jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
     size_t l = jl_svec_len(bindings), i;
     arraylist_t bindings_list;
     arraylist_new(&bindings_list, 0);
@@ -3548,14 +3559,16 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
     if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
         return 1;
     size_t raw_kind = bpart->kind;
-    enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & 0x0f);
+    enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & PARTITION_MASK_KIND);
     if (!unchanged_implicit && jl_bkind_is_some_implicit(kind)) {
-        jl_check_new_binding_implicit(bpart, b, NULL, jl_atomic_load_relaxed(&jl_world_counter));
-        bpart->kind |= (raw_kind & 0xf0);
+        // TODO: Should we actually update this in place or delete it from the partitions list
+        // and allocate a fresh bpart?
+        jl_update_loaded_bpart(b, bpart);
+        bpart->kind |= (raw_kind & PARTITION_MASK_FLAG);
         if (bpart->min_world > jl_require_world)
             goto invalidated;
     }
-    if (!jl_bkind_is_some_import(kind))
+    if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
         return 1;
     jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
     if (no_replacement)
@@ -3566,7 +3579,7 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
     if (latest_imported_bpart->min_world <= bpart->min_world) {
 add_backedge:
         // Imported binding is still valid
-        if ((kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED) &&
+        if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
                 external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
             jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
         }
@@ -3591,7 +3604,7 @@ invalidated:
             jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0);
         }
     }
-    if (bpart->kind & BINDING_FLAG_EXPORTED) {
+    if (bpart->kind & PARTITION_FLAG_EXPORTED) {
         jl_module_t *mod = b->globalref->mod;
         jl_sym_t *name = b->globalref->name;
         JL_LOCK(&mod->lock);

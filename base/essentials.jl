@@ -323,7 +323,7 @@ macro _nothrow_meta()
         #=:consistent_overlay=#false,
         #=:nortcall=#false))
 end
-# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
+# can be used in place of `@assume_effects :noub` (supposed to be used for bootstrapping)
 macro _noub_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
@@ -1036,63 +1036,6 @@ struct Val{x}
 end
 
 Val(x) = Val{x}()
-
-"""
-    invokelatest(f, args...; kwargs...)
-
-Calls `f(args...; kwargs...)`, but guarantees that the most recent method of `f`
-will be executed.   This is useful in specialized circumstances,
-e.g. long-running event loops or callback functions that may
-call obsolete versions of a function `f`.
-(The drawback is that `invokelatest` is somewhat slower than calling
-`f` directly, and the type of the result cannot be inferred by the compiler.)
-
-!!! compat "Julia 1.9"
-    Prior to Julia 1.9, this function was not exported, and was called as `Base.invokelatest`.
-"""
-function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
-    @inline
-    kwargs = merge(NamedTuple(), kwargs)
-    if isempty(kwargs)
-        return Core._call_latest(f, args...)
-    end
-    return Core._call_latest(Core.kwcall, kwargs, f, args...)
-end
-
-"""
-    invoke_in_world(world, f, args...; kwargs...)
-
-Call `f(args...; kwargs...)` in a fixed world age, `world`.
-
-This is useful for infrastructure running in the user's Julia session which is
-not part of the user's program. For example, things related to the REPL, editor
-support libraries, etc. In these cases it can be useful to prevent unwanted
-method invalidation and recompilation latency, and to prevent the user from
-breaking supporting infrastructure by mistake.
-
-The current world age can be queried using [`Base.get_world_counter()`](@ref)
-and stored for later use within the lifetime of the current Julia session, or
-when serializing and reloading the system image.
-
-Technically, `invoke_in_world` will prevent any function called by `f` from
-being extended by the user during their Julia session. That is, generic
-function method tables seen by `f` (and any functions it calls) will be frozen
-as they existed at the given `world` age. In a sense, this is like the opposite
-of [`invokelatest`](@ref).
-
-!!! note
-    It is not valid to store world ages obtained in precompilation for later use.
-    This is because precompilation generates a "parallel universe" where the
-    world age refers to system state unrelated to the main Julia session.
-"""
-function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
-    @inline
-    kwargs = Base.merge(NamedTuple(), kwargs)
-    if isempty(kwargs)
-        return Core._call_in_world(world, f, args...)
-    end
-    return Core._call_in_world(world, Core.kwcall, kwargs, f, args...)
-end
 
 """
     inferencebarrier(x)

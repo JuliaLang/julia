@@ -1027,17 +1027,19 @@ end
     sig = sig.body
     isa(sig, DataType) || return nothing
     sig.name === Tuple.name || return nothing
-    length(sig.parameters) >= 1 || return nothing
+    sig_parameters = sig.parameters::SimpleVector
+    length_sig_parameters = length(sig_parameters)
+    length_sig_parameters >= 1 || return nothing
 
-    i = let sig=sig
-        findfirst(j::Int->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
+    function has_typevar_closure(j::Int)
+        has_typevar(sig_parameters[j], tvar)
     end
-    i === nothing && return nothing
-    let sig=sig
-        any(j::Int->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
-    end && return nothing
 
-    arg = sig.parameters[i]
+    i = findfirst(has_typevar_closure, 1:length_sig_parameters)
+    i === nothing && return nothing
+    any(has_typevar_closure, i+1:length_sig_parameters) && return nothing
+
+    arg = sig_parameters[i]
 
     rarg = def.args[2 + i]
     isa(rarg, SSAValue) || return nothing

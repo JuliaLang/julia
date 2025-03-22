@@ -142,8 +142,8 @@ begin
     # this redefinition below should invalidate the cache of `pr48932_callee` but not that of `pr48932_caller`
     pr48932_callee(x) = (print(GLOBAL_BUFFER, x); nothing)
 
-    @test length(Base.methods(pr48932_callee)) == 2
-    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === first(Base.methods(pr48932_callee))
+    @test length(Base.methods(pr48932_callee)) == 1
+    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === only(Base.methods(pr48932_callee))
     @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee, Tuple{Any}))))
     let mi = only(Base.specializations(Base.only(Base.methods(pr48932_caller))))
         # Base.method_instance(pr48932_callee, (Any,))

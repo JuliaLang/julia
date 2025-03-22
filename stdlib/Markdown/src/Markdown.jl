@@ -138,12 +138,16 @@ catdoc(md::MD...) = MD(md...)
 
 if Base.generating_output()
     # workload to reduce latency
-    md"""
+    show(devnull, MIME("text/plain"), md"""
     # H1
     ## H2
     ### H3
+    #### H4
+    ##### H5
+    ###### H6
     **bold text**
     *italicized text*
+    ***bold and italicized text***
     > blockquote
     1. First item
     2. Second item
@@ -151,10 +155,18 @@ if Base.generating_output()
     - First item
     - Second item
     - Third item
+        - Indented item
     `code`
     Horizontal Rule
     ---
-    """
+    **[Duck Duck Go](https://duckduckgo.com)**
+    <https://www.markdownguide.org>
+    <fake@example.com>
+    ![The San Juan Mountains are beautiful!](/assets/images/san-juan-mountains.jpg "San Juan Mountains")
+
+    H~2~O
+    X^2^
+    """)
 end
 
 end
