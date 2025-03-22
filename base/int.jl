@@ -288,7 +288,7 @@ function mod(x::T, y::T) where T<:Integer
 end
 function mod(x::BitSigned, y::Unsigned)
     remval = rem(x, y) # correct iff  remval>=0
-    return remval + (remval<zero(remval))*y
+    return unsigned(remval + (remval<zero(remval))*y)
 end
 function mod(x::Unsigned, y::Signed)
     remval =  signed(rem(x, y)) #remval>0 so correct iff y>0 or remval==0
