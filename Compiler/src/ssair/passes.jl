@@ -296,7 +296,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
             end
             possible_predecessors = Int[]
 
-            for n in 1:length(values)
+            for n in 1:length(values)::Int
                 isassigned(values, n) || continue
                 val = values[n]
                 if is_old(compact, defssa) && isa(val, SSAValue)
