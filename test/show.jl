@@ -500,12 +500,20 @@ end
 # isreserved
 @test Meta.isreserved(:for)
 @test Meta.isreserved(:while)
+@test !Meta.isreserved(:primitive)
+@test !Meta.isreserved(:type)
+@test Meta.isreserved(:struct)
 @test !Meta.isreserved(:x)
 @test !Meta.isreserved(:wrong)
+@test !Meta.isreserved(:billa)
 @test Meta.isreserved("begin")
 @test Meta.isreserved("end")
 @test !Meta.isreserved("abcd")
-@test !Meta.isreserved("pqrs")
+@test !Meta.isreserved("billa")
+@test !Meta.isreserved("mutable")
+@test Meta.isreserved("struct")
+@test !Meta.isreserved("primitive")
+@test !Meta.isreserved("type")
 
 # isidentifier
 @test Meta.isidentifier("x")
