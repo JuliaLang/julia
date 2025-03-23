@@ -92,14 +92,14 @@ As in the example above, we recommend following some simple conventions when wri
    ...
    """
 
-   # The return type is critical to the semantics of this function
+   # The return type is easily documented and critical to the semantics of this function
    """
       vec(x::AbstractArray)::AbstractVector
 
    ...
    """
 
-   # Naming and destructuring the return value clarifies the semantics of this function
+   # Naming and/or destructuring the return value clarifies the semantics of this function
    """
       splitdir(path::AbstractString) -> (dir::AbstractString, file::AbstractString)
    ...
