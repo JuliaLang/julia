@@ -413,7 +413,7 @@ Since expressions are just `Expr` objects which can be constructed programmatica
 it is possible to dynamically generate arbitrary code which can then be run using [`eval`](@ref).
 Here is a simple example:
 
-```julia-repl
+```jldoctest
 julia> a = 1;
 
 julia> ex = Expr(:call, :+, a, :b)

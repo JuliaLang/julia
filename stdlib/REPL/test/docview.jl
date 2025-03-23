@@ -29,8 +29,22 @@ end
 end
 
 @testset "non-loaded packages in doc search" begin
-    str = get_help_io("Profile")
-    @test occursin("Couldn't find Profile, but a loadable package with that name exists.", str)
+    temp_package = mktempdir()
+    write(joinpath(temp_package, "Project.toml"),
+        """
+        name = "FooPackage"
+        uuid = "2e6e0b2d-0e7f-4b7f-9f3b-6f3f3f3f3f3f"
+        """)
+    mkpath(joinpath(temp_package, "src"))
+    write(joinpath(temp_package, "src", "FooPackage.jl"),
+        """
+        module FooPackage
+        end
+        """)
+    push!(LOAD_PATH, temp_package)
+    str = get_help_io("FooPackage")
+    @test occursin("Couldn't find FooPackage, but a loadable package with that name exists.", str)
+    @test pop!(LOAD_PATH) == temp_package
 end
 
 @testset "Check @var_str also completes to var\"\" in REPL.doc_completions()" begin
@@ -92,6 +106,9 @@ end
     @test endswith(get_help_standard("StructWithOneField.not_a_field"), "StructWithOneField` has field `field1`.\n")
     @test endswith(get_help_standard("StructWithTwoFields.not_a_field"), "StructWithTwoFields` has fields `field1`, and `field2`.\n")
     @test endswith(get_help_standard("StructWithThreeFields.not_a_field"), "StructWithThreeFields` has fields `field1`, `field2`, and `field3`.\n")
+
+    # Shouldn't error if the struct doesn't have any field documentations at all.
+    @test endswith(get_help_standard("Int.not_a_field"), "`$Int` has no fields.\n")
 end
 
 module InternalWarningsTests

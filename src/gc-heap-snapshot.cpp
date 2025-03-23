@@ -380,7 +380,7 @@ size_t record_node_to_gc_snapshot(jl_value_t *a) JL_NOTSAFEPOINT
         ios_mem(&str_, 0);
         JL_STREAM* str = (JL_STREAM*)&str_;
         jl_static_show(str, (jl_value_t*)type);
-
+        node_type = StringRef((const char*)str_.buf, str_.size);
         name = StringRef((const char*)str_.buf, str_.size);
     }
 

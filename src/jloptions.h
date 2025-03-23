@@ -43,6 +43,7 @@ typedef struct {
     int8_t worker;
     const char *cookie;
     int8_t handle_signals;
+    int8_t use_experimental_features;
     int8_t use_sysimage_native_code;
     int8_t use_compiled_modules;
     int8_t use_pkgimages;
@@ -64,6 +65,8 @@ typedef struct {
     uint64_t heap_size_hint;
     int8_t trace_compile_timing;
     int8_t trim;
+    int8_t task_metrics;
+    int16_t timeout_for_safepoint_straggler_s;
 } jl_options_t;
 
 #endif

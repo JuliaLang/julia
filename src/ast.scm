@@ -449,7 +449,7 @@
                   (check-dotop (cadr e))))))
   e)
 
-(define (vararg? x) (and (pair? x) (eq? (car x) '...)))
+(define (vararg? x) (and (pair? x) (eq? (car x) '...) (length= x 2)))
 (define (vararg-type-expr? x)
   (or (eq? x 'Vararg)
       (and (length> x 1)

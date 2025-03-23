@@ -864,11 +864,10 @@ end
 
 function write(io::IO, c::Char)
     u = bswap(reinterpret(UInt32, c))
-    n = 1
+    n = 0
     while true
-        write(io, u % UInt8)
+        n += write(io, u % UInt8)
         (u >>= 8) == 0 && return n
-        n += 1
     end
 end
 # write(io, ::AbstractChar) is not defined: implementations

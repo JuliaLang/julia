@@ -593,6 +593,7 @@ const ⊽ = nor
 # method count limit in inference
 afoldl(op, a) = a
 function afoldl(op, a, bs...)
+    @_terminates_locally_meta
     l = length(bs)
     i =  0; y = a;            l == i && return y
     #@nexprs 31 i -> (y = op(y, bs[i]); l == i && return y)

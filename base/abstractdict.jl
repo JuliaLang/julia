@@ -88,8 +88,8 @@ Return an iterator over all keys in a dictionary.
 When the keys are stored internally in a hash table,
 as is the case for `Dict`,
 the order in which they are returned may vary.
-But `keys(a)` and `values(a)` both iterate `a` and
-return the elements in the same order.
+But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
+and return the elements in the same order.
 
 # Examples
 ```jldoctest
@@ -114,8 +114,8 @@ Return an iterator over all values in a collection.
 When the values are stored internally in a hash table,
 as is the case for `Dict`,
 the order in which they are returned may vary.
-But `keys(a)` and `values(a)` both iterate `a` and
-return the elements in the same order.
+But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
+and return the elements in the same order.
 
 # Examples
 ```jldoctest
@@ -138,6 +138,10 @@ values(a::AbstractDict) = ValueIterator(a)
 Return an iterator over `key => value` pairs for any
 collection that maps a set of keys to a set of values.
 This includes arrays, where the keys are the array indices.
+When the entries are stored internally in a hash table,
+as is the case for `Dict`, the order in which they are returned may vary.
+But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
+and return the elements in the same order.
 
 # Examples
 ```jldoctest

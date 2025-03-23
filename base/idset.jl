@@ -4,7 +4,7 @@
     IdSet{T}([itr])
     IdSet()
 
-IdSet{T}() constructs a set (see [`Set`](@ref)) using
+`IdSet{T}()` constructs a set (see [`Set`](@ref)) using
 `===` as equality with values of type `T`.
 
 In the example below, the values are all `isequal` so they get overwritten in the ordinary `Set`.

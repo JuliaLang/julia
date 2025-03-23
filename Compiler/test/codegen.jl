@@ -5,6 +5,9 @@
 using Random
 using InteractiveUtils
 using Libdl
+using Test
+
+include("setup_Compiler.jl")
 
 const opt_level = Base.JLOptions().opt_level
 const coverage = (Base.JLOptions().code_coverage > 0) || (Base.JLOptions().malloc_log > 0)
@@ -181,15 +184,15 @@ end
 breakpoint_mutable(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ref{MutableStruct},), a)
 
 # Allocation with uninitialized field as gcroot
-mutable struct BadRef
+mutable struct BadRefMutableStruct
     x::MutableStruct
     y::MutableStruct
-    BadRef(x) = new(x)
+    BadRefMutableStruct(x) = new(x)
 end
-Base.cconvert(::Type{Ptr{BadRef}}, a::MutableStruct) = BadRef(a)
-Base.unsafe_convert(::Type{Ptr{BadRef}}, ar::BadRef) = Ptr{BadRef}(pointer_from_objref(ar.x))
+Base.cconvert(::Type{Ptr{BadRefMutableStruct}}, a::MutableStruct) = BadRefMutableStruct(a)
+Base.unsafe_convert(::Type{Ptr{BadRefMutableStruct}}, ar::BadRefMutableStruct) = Ptr{BadRefMutableStruct}(pointer_from_objref(ar.x))
 
-breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ptr{BadRef},), a)
+breakpoint_badref(a::MutableStruct) = ccall(:jl_breakpoint, Cvoid, (Ptr{BadRefMutableStruct},), a)
 
 struct PtrStruct
     a::Ptr{Cvoid}
@@ -372,10 +375,9 @@ mktemp() do f_22330, _
 end
 
 # Alias scope
-using Base.Experimental: @aliasscope, Const
 function foo31018!(a, b)
-    @aliasscope for i in eachindex(a, b)
-        a[i] = Const(b)[i]
+    @Base.Experimental.aliasscope for i in eachindex(a, b)
+        a[i] = Base.Experimental.Const(b)[i]
     end
 end
 io = IOBuffer()
@@ -788,8 +790,8 @@ f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
 @test_throws TypeError f47247(Ref(5), nothing)
 
 f48085(@nospecialize x...) = length(x)
-@test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Vararg{Int}}, Core.svec()) === nothing
-@test Core.Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Int, Vararg{Int}}, Core.svec()) === Tuple{typeof(f48085), Any, Vararg{Any}}
+@test Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Vararg{Int}}, Core.svec()) === nothing
+@test Compiler.get_compileable_sig(which(f48085, (Vararg{Any},)), Tuple{typeof(f48085), Int, Vararg{Int}}, Core.svec()) === Tuple{typeof(f48085), Any, Vararg{Any}}
 
 # Make sure that the bounds check is elided in tuple iteration
 @test !occursin("call void @", strip_debug_calls(get_llvm(iterate, Tuple{NTuple{4, Float64}, Int})))
@@ -887,57 +889,6 @@ ex54166 = Union{Missing, Int64}[missing -2; missing -2];
 dims54166 = (1,2)
 @test (minimum(ex54166; dims=dims54166)[1] === missing)
 
-# #54109 - Excessive LLVM time for egal
-struct DefaultOr54109{T}
-    x::T
-    default::Bool
-end
-
-@eval struct Torture1_54109
-    $((Expr(:(::), Symbol("x$i"), DefaultOr54109{Float64}) for i = 1:897)...)
-end
-Torture1_54109() = Torture1_54109((DefaultOr54109(1.0, false) for i = 1:897)...)
-
-@eval struct Torture2_54109
-    $((Expr(:(::), Symbol("x$i"), DefaultOr54109{Float64}) for i = 1:400)...)
-    $((Expr(:(::), Symbol("x$(i+400)"), DefaultOr54109{Int16}) for i = 1:400)...)
-end
-Torture2_54109() = Torture2_54109((DefaultOr54109(1.0, false) for i = 1:400)..., (DefaultOr54109(Int16(1), false) for i = 1:400)...)
-
-@noinline egal_any54109(x, @nospecialize(y::Any)) = x === Base.compilerbarrier(:type, y)
-
-let ir1 = get_llvm(egal_any54109, Tuple{Torture1_54109, Any}),
-    ir2 = get_llvm(egal_any54109, Tuple{Torture2_54109, Any})
-
-    # We can't really do timing on CI, so instead, let's look at the length of
-    # the optimized IR. The original version had tens of thousands of lines and
-    # was slower, so just check here that we only have < 500 lines. If somebody,
-    # implements a better comparison that's larger than that, just re-benchmark
-    # this and adjust the threshold.
-
-    @test count(==('\n'), ir1) < 500
-    @test count(==('\n'), ir2) < 500
-end
-
-## Regression test for egal of a struct of this size without padding, but with
-## non-bitsegal, to make sure that it doesn't accidentally go down the accelerated
-## path.
-@eval struct BigStructAnyInt
-    $((Expr(:(::), Symbol("x$i"), Pair{Any, Int}) for i = 1:33)...)
-end
-BigStructAnyInt() = BigStructAnyInt((Union{Base.inferencebarrier(Float64), Int}=>i for i = 1:33)...)
-@test egal_any54109(BigStructAnyInt(), BigStructAnyInt())
-
-## For completeness, also test correctness, since we don't have a lot of
-## large-struct tests.
-
-# The two allocations of the same struct will likely have different padding,
-# we want to make sure we find them egal anyway - a naive memcmp would
-# accidentally look at it.
-@test egal_any54109(Torture1_54109(), Torture1_54109())
-@test egal_any54109(Torture2_54109(), Torture2_54109())
-@test !egal_any54109(Torture1_54109(), Torture1_54109((DefaultOr54109(2.0, false) for i = 1:897)...))
-
 bar54599() = Base.inferencebarrier(true) ? (Base.PkgId(Main),1) : nothing
 
 function foo54599()
@@ -1024,4 +975,55 @@ for a in ((@noinline Ref{Int}(2)),
     catch ex
         @test ex === a
     end
+end
+
+# Make sure that code that has unbound sparams works
+#https://github.com/JuliaLang/julia/issues/56739
+
+@test_warn r"declares type variable T but does not use it" @eval f56739(a) where {T} = a
+
+@test f56739(1) == 1
+g56739(x) = @noinline f56739(x)
+@test g56739(1) == 1
+
+struct Vec56937 x::NTuple{8, VecElement{Int}} end
+
+x56937 = Ref(Vec56937(ntuple(_->VecElement(1),8)))
+@test x56937[].x[1] == VecElement{Int}(1) # shouldn't crash
+
+# issue #56996
+let
+   ()->() # trigger various heuristics
+   Base.Experimental.@force_compile
+   default_rng_orig = [] # make a value in a Slot
+   try
+       # overwrite the gc-slots in the exception branch
+       throw(ErrorException("This test is supposed to throw an error"))
+   catch ex
+       # destroy any values that aren't referenced
+       GC.gc()
+       # make sure that default_rng_orig value is still valid
+       @noinline copy!([], default_rng_orig)
+   end
+   nothing
+end
+
+# Test that turning an implicit import into an explicit one doesn't pessimize codegen
+module TurnedIntoExplicit
+    using Test
+    import ..get_llvm
+
+    module ReExportBitCast
+        export bitcast
+        import Base: bitcast
+    end
+    using .ReExportBitCast
+
+    f(x::UInt) = bitcast(Float64, x)
+
+    @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
+
+    import Base: bitcast
+
+    @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
 end

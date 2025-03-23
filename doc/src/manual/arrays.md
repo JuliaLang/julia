@@ -355,7 +355,7 @@ julia> Int8[[1 2] [3 4]]
 Comprehensions provide a general and powerful way to construct arrays. Comprehension syntax is
 similar to set construction notation in mathematics:
 
-```
+```julia
 A = [ F(x, y, ...) for x=rx, y=ry, ... ]
 ```
 
@@ -366,11 +366,11 @@ The result is an N-d dense array with dimensions that are the concatenation of t
 of the variable ranges `rx`, `ry`, etc. and each `F(x,y,...)` evaluation returns a scalar.
 
 The following example computes a weighted average of the current element and its left and right
-neighbor along a 1-d grid. :
+neighbor along a 1-d grid:
 
 ```julia-repl
 julia> x = rand(8)
-8-element Array{Float64,1}:
+8-element Vector{Float64}:
  0.843025
  0.869052
  0.365105
@@ -381,7 +381,7 @@ julia> x = rand(8)
  0.809411
 
 julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
-6-element Array{Float64,1}:
+6-element Vector{Float64}:
  0.736559
  0.57468
  0.685417
@@ -1040,7 +1040,7 @@ be to replicate the vector to the size of the matrix:
 julia> a = rand(2, 1); A = rand(2, 3);
 
 julia> repeat(a, 1, 3) + A
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  1.20813  1.82068  1.25387
  1.56851  1.86401  1.67846
 ```
@@ -1051,16 +1051,16 @@ without using extra memory, and applies the given function elementwise:
 
 ```julia-repl
 julia> broadcast(+, a, A)
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  1.20813  1.82068  1.25387
  1.56851  1.86401  1.67846
 
 julia> b = rand(1,2)
-1×2 Array{Float64,2}:
+1×2 Matrix{Float64}:
  0.867535  0.00457906
 
 julia> broadcast(+, a, b)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.71056  0.847604
  1.73659  0.873631
 ```
@@ -1160,7 +1160,7 @@ dimension `d`. For example, the builtin `Array` returned by `rand(5,7,2)` has it
 arranged contiguously in column major order. This means that the stride of the first
 dimension — the spacing between elements in the same column — is `1`:
 
-```julia-repl
+```jldoctest strides
 julia> A = rand(5, 7, 2);
 
 julia> stride(A, 1)
@@ -1172,7 +1172,7 @@ as many elements as there are in a single column (`5`). Similarly, jumping betwe
 "pages" (in the third dimension) requires skipping `5*7 == 35` elements. The [`strides`](@ref)
 of this array is the tuple of these three numbers together:
 
-```julia-repl
+```jldoctest strides
 julia> strides(A)
 (1, 5, 35)
 ```
@@ -1185,7 +1185,7 @@ This view `V` refers to the same memory as `A` but is skipping and re-arranging 
 elements. The stride of the first dimension of `V` is `3` because we're only selecting every
 third row from our original array:
 
-```julia-repl
+```jldoctest strides
 julia> V = @view A[1:3:4, 2:2:6, 2:-1:1];
 
 julia> stride(V, 1)
@@ -1196,7 +1196,7 @@ This view is similarly selecting every other column from our original `A` — an
 needs to skip the equivalent of two five-element columns when moving between indices in the
 second dimension:
 
-```julia-repl
+```jldoctest strides
 julia> stride(V, 2)
 10
 ```
@@ -1205,7 +1205,7 @@ The third dimension is interesting because its order is reversed! Thus to get fr
 "page" to the second one it must go _backwards_ in memory, and so its stride in this
 dimension is negative!
 
-```julia-repl
+```jldoctest strides
 julia> stride(V, 3)
 -35
 ```

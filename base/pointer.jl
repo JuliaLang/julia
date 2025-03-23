@@ -169,7 +169,7 @@ The `unsafe` prefix on this function indicates that no validation is performed o
 pointer `p` to ensure that it is valid. Like C, the programmer is responsible for ensuring
 that referenced memory is not freed or garbage collected while invoking this function.
 Incorrect usage may segfault your program. Unlike C, storing memory region allocated as
-different type may be valid provided that that the types are compatible.
+different type may be valid provided that the types are compatible.
 
 !!! compat "Julia 1.10"
      The `order` argument is available as of Julia 1.10.

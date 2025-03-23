@@ -35,12 +35,12 @@
 *                               Compiler                                       *
 *******************************************************************************/
 
-#if defined(__clang__)
+#if defined(_MSC_VER)
+#define _COMPILER_MICROSOFT_
+#elif defined(__clang__)
 #define _COMPILER_CLANG_
 #elif defined(__GNUC__)
 #define _COMPILER_GCC_
-#elif defined(_MSC_VER)
-#define _COMPILER_MICROSOFT_
 #else
 #error Unsupported compiler
 #endif

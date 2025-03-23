@@ -6,7 +6,7 @@ const STDLIB_DIR = Sys.STDLIB
 const STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
 
 const TESTNAMES = [
-        "subarray", "core", "compiler", "worlds", "atomics",
+        "subarray", "core", "compiler", "compiler_extras", "worlds", "atomics",
         "keywordargs", "numbers", "subtype",
         "char", "strings", "triplequote", "unicode", "intrinsics",
         "dict", "hashing", "iobuffer", "staged", "offsetarray",
@@ -48,11 +48,15 @@ const NETWORK_REQUIRED_LIST = vcat(INTERNET_REQUIRED_LIST, ["Sockets"])
 function test_path(test)
     t = split(test, '/')
     if t[1] in STDLIBS
+        pkgdir = abspath(Base.find_package(String(t[1])), "..", "..")
         if length(t) == 2
-            return joinpath(STDLIB_DIR, t[1], "test", t[2])
+            return joinpath(pkgdir, "test", t[2])
         else
-            return joinpath(STDLIB_DIR, t[1], "test", "runtests")
+            return joinpath(pkgdir, "test", "runtests")
         end
+    elseif t[1] == "Compiler" && length(t) ≥ 3 && t[2] == "extras"
+        testpath = length(t) >= 4 ? t[4:end] : ("runtests",)
+        return joinpath(@__DIR__, "..", t[1], t[2], t[3], "test", testpath...)
     elseif t[1] == "Compiler"
         testpath = length(t) >= 2 ? t[2:end] : ("runtests",)
         return joinpath(@__DIR__, "..", t[1], "test", testpath...)
@@ -171,6 +175,7 @@ function choosetests(choices = [])
     # do subarray before sparse but after linalg
     filtertests!(tests, "subarray")
     filtertests!(tests, "compiler", ["Compiler"])
+    filtertests!(tests, "compiler_extras", ["Compiler/extras/CompilerDevTools/testpkg"])
     filtertests!(tests, "stdlib", STDLIBS)
     filtertests!(tests, "internet_required", INTERNET_REQUIRED_LIST)
     # do ambiguous first to avoid failing if ambiguities are introduced by other tests

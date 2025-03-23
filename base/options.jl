@@ -39,6 +39,7 @@ struct JLOptions
     worker::Int8
     cookie::Ptr{UInt8}
     handle_signals::Int8
+    use_experimental_features::Int8
     use_sysimage_native_code::Int8
     use_compiled_modules::Int8
     use_pkgimages::Int8
@@ -60,6 +61,8 @@ struct JLOptions
     heap_size_hint::UInt64
     trace_compile_timing::Int8
     trim::Int8
+    task_metrics::Int8
+    timeout_for_safepoint_straggler_s::Int16
 end
 
 # This runs early in the sysimage != is not defined yet

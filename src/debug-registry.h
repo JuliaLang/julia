@@ -14,7 +14,7 @@ typedef struct {
     int64_t slide;
 } objfileentry_t;
 
-// Central registry for resolving function addresses to `jl_method_instance_t`s and
+// Central registry for resolving function addresses to `jl_code_instance_t`s and
 // originating `ObjectFile`s (for the DWARF debug info).
 //
 // A global singleton instance is notified by the JIT whenever a new object is emitted,
@@ -82,7 +82,7 @@ public:
     struct image_info_t {
         uint64_t base;
         jl_image_fptrs_t fptrs;
-        jl_method_instance_t **fvars_linfo;
+        jl_code_instance_t **fvars_cinst;
         size_t fvars_n;
     };
 
@@ -124,7 +124,7 @@ private:
     typedef rev_map<uint64_t, objfileentry_t> objfilemap_t;
 
     objectmap_t objectmap{};
-    rev_map<size_t, std::pair<size_t, jl_method_instance_t *>> linfomap{};
+    rev_map<size_t, std::pair<size_t, jl_code_instance_t *>> cimap{};
 
     // Maintain a mapping of unrealized function names -> linfo objects
     // so that when we see it get emitted, we can add a link back to the linfo
@@ -145,7 +145,7 @@ public:
     libc_frames_t libc_frames{};
 
     void add_code_in_flight(llvm::StringRef name, jl_code_instance_t *codeinst, const llvm::DataLayout &DL) JL_NOTSAFEPOINT;
-    jl_method_instance_t *lookupLinfo(size_t pointer) JL_NOTSAFEPOINT;
+    jl_code_instance_t *lookupCodeInstance(size_t pointer) JL_NOTSAFEPOINT;
     void registerJITObject(const llvm::object::ObjectFile &Object,
                         std::function<uint64_t(const llvm::StringRef &)> getLoadAddress) JL_NOTSAFEPOINT;
     objectmap_t& getObjectMap() JL_NOTSAFEPOINT;

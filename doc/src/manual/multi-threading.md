@@ -5,11 +5,13 @@ of Julia multi-threading features.
 
 ## Starting Julia with multiple threads
 
-By default, Julia starts up with a single thread of execution. This can be verified by using the
-command [`Threads.nthreads()`](@ref):
+By default, Julia starts up with 2 threads of execution; 1 worker thread and 1 interactive thread.
+This can be verified by using the command [`Threads.nthreads()`](@ref):
 
 ```jldoctest
-julia> Threads.nthreads()
+julia> Threads.nthreads(:default)
+1
+julia> Threads.nthreads(:interactive)
 1
 ```
 
@@ -22,6 +24,9 @@ The number of threads can either be specified as an integer (`--threads=4`) or a
 (`--threads=auto`), where `auto` tries to infer a useful default number of threads to use
 (see [Command-line Options](@ref command-line-interface) for more details).
 
+See [threadpools](@ref man-threadpools) for how to control how many `:default` and `:interactive` threads are in
+each threadpool.
+
 !!! compat "Julia 1.5"
     The `-t`/`--threads` command line argument requires at least Julia 1.5.
     In older versions you must use the environment variable instead.
@@ -29,6 +34,10 @@ The number of threads can either be specified as an integer (`--threads=4`) or a
 !!! compat "Julia 1.7"
     Using `auto` as value of the environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) requires at least Julia 1.7.
     In older versions, this value is ignored.
+
+!!! compat "Julia 1.12"
+    Starting by default with 1 interactive thread, as well as the 1 worker thread, was made as such in Julia 1.12
+
 Lets start Julia with 4 threads:
 
 ```bash
@@ -96,10 +105,17 @@ using Base.Threads
 Interactive tasks should avoid performing high latency operations, and if they
 are long duration tasks, should yield frequently.
 
-Julia may be started with one or more threads reserved to run interactive tasks:
+By default Julia starts with one interactive thread reserved to run interactive tasks, but that number can
+be controlled with:
 
 ```bash
 $ julia --threads 3,1
+julia> Threads.nthreads(:interactive)
+1
+
+$ julia --threads 3,0
+julia> Threads.nthreads(:interactive)
+0
 ```
 
 The environment variable [`JULIA_NUM_THREADS`](@ref JULIA_NUM_THREADS) can also be used similarly:

@@ -1027,17 +1027,19 @@ end
     sig = sig.body
     isa(sig, DataType) || return nothing
     sig.name === Tuple.name || return nothing
-    length(sig.parameters) >= 1 || return nothing
+    sig_parameters = sig.parameters::SimpleVector
+    length_sig_parameters = length(sig_parameters)
+    length_sig_parameters >= 1 || return nothing
 
-    i = let sig=sig
-        findfirst(j::Int->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
+    function has_typevar_closure(j::Int)
+        has_typevar(sig_parameters[j], tvar)
     end
-    i === nothing && return nothing
-    let sig=sig
-        any(j::Int->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
-    end && return nothing
 
-    arg = sig.parameters[i]
+    i = findfirst(has_typevar_closure, 1:length_sig_parameters)
+    i === nothing && return nothing
+    any(has_typevar_closure, i+1:length_sig_parameters) && return nothing
+
+    arg = sig_parameters[i]
 
     rarg = def.args[2 + i]
     isa(rarg, SSAValue) || return nothing
@@ -1302,7 +1304,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 # at the end of the intrinsic. Detect that here.
                 if length(stmt.args) == 4 && stmt.args[4] === nothing
                     # constant case
-                elseif length(stmt.args) == 5 && stmt.args[4] isa Bool && stmt.args[5] isa MethodInstance
+                elseif length(stmt.args) == 5 && stmt.args[4] isa Bool && stmt.args[5] isa Core.CodeInstance
                     # inlining case
                 else
                     continue
@@ -1511,6 +1513,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             used_ssas[x.id] -= 1
         end
         ir = complete(compact)
+        # remove any use that has been optimized away by the DCE
+        for (intermediaries, defuse) in values(defuses)
+            filter!(x -> ir[SSAValue(x.idx)][:stmt] !== nothing, defuse.uses)
+        end
         sroa_mutables!(ir, defuses, used_ssas, lazydomtree, inlining)
         return ir
     else
@@ -1522,9 +1528,9 @@ end
 # NOTE we resolve the inlining source here as we don't want to serialize `Core.Compiler`
 # data structure into the global cache (see the comment in `handle_finalizer_call!`)
 function try_inline_finalizer!(ir::IRCode, argexprs::Vector{Any}, idx::Int,
-    mi::MethodInstance, @nospecialize(info::CallInfo), inlining::InliningState,
+    code::CodeInstance, @nospecialize(info::CallInfo), inlining::InliningState,
     attach_after::Bool)
-    code = get(code_cache(inlining), mi, nothing)
+    mi = code.def
     et = InliningEdgeTracker(inlining)
     if code isa CodeInstance
         if use_const_api(code)
@@ -1671,11 +1677,11 @@ function try_resolve_finalizer!(ir::IRCode, alloc_idx::Int, finalizer_idx::Int, 
         if inline === nothing
             # No code in the function - Nothing to do
         else
-            mi = finalizer_stmt.args[5]::MethodInstance
-            if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, mi, info, inlining, attach_after)
+            ci = finalizer_stmt.args[5]::CodeInstance
+            if inline::Bool && try_inline_finalizer!(ir, argexprs, loc, ci, info, inlining, attach_after)
                 # the finalizer body has been inlined
             else
-                newinst = add_flag(NewInstruction(Expr(:invoke, mi, argexprs...), Nothing), flag)
+                newinst = add_flag(NewInstruction(Expr(:invoke, ci, argexprs...), Nothing), flag)
                 insert_node!(ir, loc, newinst, attach_after)
             end
         end
@@ -2393,8 +2399,10 @@ function cfg_simplify!(ir::IRCode)
                     end
                 elseif isa(terminator, EnterNode)
                     catchbb = terminator.catch_dest
-                    if bb_rename_succ[catchbb] == 0
-                        push!(worklist, catchbb)
+                    if catchbb ≠ 0
+                        if bb_rename_succ[catchbb] == 0
+                            push!(worklist, catchbb)
+                        end
                     end
                 elseif isa(terminator, GotoNode) || isa(terminator, ReturnNode)
                     # No implicit fall through. Schedule from work list.
@@ -2568,51 +2576,50 @@ function cfg_simplify!(ir::IRCode)
                     values = phi.values
                     (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
                     ssa_rename[i] = SSAValue(compact.result_idx)
-                    already_inserted = function (i::Int, val::OldSSAValue)
+                    already_inserted = function (branch::Int, val::OldSSAValue)
                         if val.id in old_bb_stmts
                             return val.id <= i
                         end
-                        return bb_rename_pred[phi.edges[i]] < idx
+                        return 0 < bb_rename_pred[phi.edges[branch]] < idx
                     end
-                    renamed_values = process_phinode_values(values, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                     edges = Int32[]
                     values = Any[]
-                    sizehint!(edges, length(phi.edges)); sizehint!(values, length(renamed_values))
+                    sizehint!(edges, length(phi.edges)); sizehint!(values, length(phi.values))
                     for old_index in 1:length(phi.edges)
                         old_edge = phi.edges[old_index]
                         new_edge = bb_rename_pred[old_edge]
                         if new_edge > 0
                             push!(edges, new_edge)
-                            if isassigned(renamed_values, old_index)
-                                push!(values, renamed_values[old_index])
+                            if isassigned(phi.values, old_index)
+                                val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
+                                push!(values, val)
                             else
                                 resize!(values, length(values)+1)
                             end
                         elseif new_edge == -1
                             @assert length(phi.edges) == 1
-                            if isassigned(renamed_values, old_index)
+                            if isassigned(phi.values, old_index)
+                                val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                                 push!(edges, -1)
-                                push!(values, renamed_values[old_index])
+                                push!(values, val)
                             end
                         elseif new_edge == -3
                             # Multiple predecessors, we need to expand out this phi
                             all_new_preds = Int32[]
                             add_preds!(all_new_preds, bbs, bb_rename_pred, old_edge)
                             append!(edges, all_new_preds)
-                            if isassigned(renamed_values, old_index)
-                                val = renamed_values[old_index]
-                                for _ in 1:length(all_new_preds)
-                                    push!(values, val)
+                            np = length(all_new_preds)
+                            if np > 0
+                                if isassigned(phi.values, old_index)
+                                    val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
+                                    for p in 1:np
+                                        push!(values, val)
+                                        p > 2 && count_added_node!(compact, val)
+                                    end
+                                else
+                                    resize!(values, length(values)+np)
                                 end
-                                length(all_new_preds) == 0 && kill_current_use!(compact, val)
-                                for _ in 2:length(all_new_preds)
-                                    count_added_node!(compact, val)
-                                end
-                            else
-                                resize!(values, length(values)+length(all_new_preds))
                             end
-                        else
-                            isassigned(renamed_values, old_index) && kill_current_use!(compact, renamed_values[old_index])
                         end
                     end
                     if length(edges) == 0 || (length(edges) == 1 && !isassigned(values, 1))

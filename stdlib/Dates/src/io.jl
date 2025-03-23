@@ -478,7 +478,7 @@ but creates the DateFormat object once during macro expansion.
 
 See [`DateFormat`](@ref) for details about format specifiers.
 """
-macro dateformat_str(str)
+macro dateformat_str(str::String)
     DateFormat(str)
 end
 
@@ -713,7 +713,7 @@ except that it does not truncate values longer than the width.
 When creating a `format` you can use any non-code characters as a separator. For example to
 generate the string "1996-01-15T00:00:00" you could use `format`: "yyyy-mm-ddTHH:MM:SS".
 Note that if you need to use a code character as a literal you can use the escape character
-backslash. The string "1996y01m" can be produced with the format "yyyy\\ymm\\m".
+backslash. The string "1996y01m" can be produced with the format raw"yyyy\\ymm\\m".
 """
 function format(dt::TimeType, f::AbstractString; locale::Locale=ENGLISH)
     format(dt, DateFormat(f, locale))

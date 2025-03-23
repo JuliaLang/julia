@@ -3,14 +3,9 @@
 # under the MIT license: https://github.com/JuliaCollections/DataStructures.jl/blob/master/License.md
 
 # imports
-import ._TOP_MOD:
-    length,
-    eltype,
-    union!,
-    push!
+import Base: length, eltype, union!, push!
 # usings
-import ._TOP_MOD:
-    OneTo, collect, zero, zeros, one, typemax
+using Base: OneTo, collect, zero, zeros, one, typemax
 
 # Disjoint-Set
 
@@ -27,7 +22,8 @@ import ._TOP_MOD:
 #
 ############################################################
 
-_intdisjointset_bounds_err_msg(T) = "the maximum number of elements in IntDisjointSet{$T} is $(typemax(T))"
+_intdisjointset_bounds_err_msg(@nospecialize T) =
+    "the maximum number of elements in IntDisjointSet{$T} is $(typemax(T))"
 
 """
     IntDisjointSet{T<:Integer}(n::Integer)
@@ -59,7 +55,7 @@ eltype(::Type{IntDisjointSet{T}}) where {T<:Integer} = T
 # path compression is implemented here
 function find_root_impl!(parents::Vector{T}, x::Integer) where {T<:Integer}
     p = parents[x]
-    @inbounds if parents[p] != p
+    @inbounds if parents[p] ≠ p
         parents[x] = p = _find_root_impl!(parents, p)
     end
     return p
@@ -68,7 +64,7 @@ end
 # unsafe version of the above
 function _find_root_impl!(parents::Vector{T}, x::Integer) where {T<:Integer}
     @inbounds p = parents[x]
-    @inbounds if parents[p] != p
+    @inbounds if parents[p] ≠ p
         parents[x] = p = _find_root_impl!(parents, p)
     end
     return p
@@ -99,7 +95,7 @@ function union!(s::IntDisjointSet{T}, x::T, y::T) where {T<:Integer}
     parents = s.parents
     xroot = find_root_impl!(parents, x)
     yroot = find_root_impl!(parents, y)
-    return xroot != yroot ? root_union!(s, xroot, yroot) : xroot
+    return xroot ≠ yroot ? root_union!(s, xroot, yroot) : xroot
 end
 
 """

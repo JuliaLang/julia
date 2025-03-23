@@ -372,7 +372,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                     kwargs = (;$(log_data.kwargs...))
                     true
                 else
-                    @invokelatest logging_error(logger, level, _module, group, id, file, line, err, false)
+                    @invokelatest $(logging_error)(logger, level, _module, group, id, file, line, err, false)
                     false
                 end
             end
@@ -384,7 +384,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                 kwargs = (;$(log_data.kwargs...))
                 true
             catch err
-                @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
+                @invokelatest $(logging_error)(logger, level, _module, group, id, file, line, err, true)
                 false
             end
         end
@@ -409,7 +409,7 @@ function logmsg_code(_module, file, line, level, message, exs...)
                         end
                         line = $(log_data._line)
                         local msg, kwargs
-                        $(logrecord) && invokelatest($handle_message,
+                        $(logrecord) && $handle_message_nothrow(
                             logger, level, msg, _module, group, id, file, line;
                             kwargs...)
                     end
@@ -417,6 +417,18 @@ function logmsg_code(_module, file, line, level, message, exs...)
             end
             nothing
         end
+    end
+end
+
+@noinline function handle_message_nothrow(logger, level, msg, _module, group, id, file, line; kwargs...)
+    @nospecialize
+    try
+        @invokelatest handle_message(
+            logger, level, msg, _module, group, id, file, line;
+            kwargs...)
+
+    catch err
+        @invokelatest logging_error(logger, level, _module, group, id, file, line, err, true)
     end
 end
 

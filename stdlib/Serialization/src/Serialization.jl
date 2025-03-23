@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 29 # do not make changes without bumping the version #!
+const ser_version = 30 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -1267,6 +1267,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     end
     if format_version(s) >= 20
         ci.has_fcall = deserialize(s)
+    end
+    if format_version(s) >= 30
+        ci.has_image_globalref = deserialize(s)::Bool
     end
     if format_version(s) >= 24
         ci.nospecializeinfer = deserialize(s)::Bool

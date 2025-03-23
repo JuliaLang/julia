@@ -355,7 +355,7 @@ See also [`randn`](@ref) for normally distributed numbers, and [`rand!`](@ref) a
 # Examples
 ```julia-repl
 julia> rand(Int, 2)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1339893410598768192
  1575814717733606317
 
@@ -368,7 +368,7 @@ julia> rand((2, 3))
 3
 
 julia> rand(Float64, (2, 3))
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  0.999717  0.0143835  0.540787
  0.696556  0.783855   0.938235
 ```

@@ -135,15 +135,6 @@ JL_DLLEXPORT int jl_gc_conservative_gc_support_enabled(void);
 // NOTE: Only valid to call from within a GC context.
 JL_DLLEXPORT jl_value_t *jl_gc_internal_obj_base_ptr(void *p) JL_NOTSAFEPOINT;
 
-// Return a non-null pointer to the start of the stack area if the task
-// has an associated stack buffer. In that case, *size will also contain
-// the size of that stack buffer upon return. Also, if task is a thread's
-// current task, that thread's id will be stored in *tid; otherwise,
-// *tid will be set to -1.
-//
-// DEPRECATED: use jl_active_task_stack() instead.
-JL_DLLEXPORT void *jl_task_stack_buffer(jl_task_t *task, size_t *size, int *tid);
-
 // Query the active and total stack range for the given task, and set
 // *active_start and *active_end respectively *total_start and *total_end
 // accordingly. The range for the active part is a best-effort approximation

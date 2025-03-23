@@ -2192,11 +2192,36 @@ for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128)
     end
 end
 
-@testset "Irrational/Bool multiplication" begin
+@testset "Bool multiplication" begin
     @test false*pi === 0.0
     @test pi*false === 0.0
     @test true*pi === Float64(pi)
     @test pi*true === Float64(pi)
+
+    @test false*Inf === 0.0
+    @test Inf*false === 0.0
+    @test true*Inf === Inf
+    @test Inf*true === Inf
+
+    @test false*NaN === 0.0
+    @test NaN*false === 0.0
+    @test true*NaN === NaN
+    @test NaN*true === NaN
+
+    @test false*-Inf === -0.0
+    @test -Inf*false === -0.0
+    @test true*-Inf === -Inf
+    @test -Inf*true === -Inf
+
+    @test false*1//0 === 0//1
+    @test 1//0*false === 0//1
+    @test true*1//0 === 1//0
+    @test 1//0*true === 1//0
+
+    @test false*-1//0 === 0//1
+    @test -1//0*false === 0//1
+    @test true*-1//0 === -1//0
+    @test -1//0*true === -1//0
 end
 # issue #5492
 @test -0.0 + false === -0.0

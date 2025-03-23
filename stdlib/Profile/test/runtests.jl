@@ -204,6 +204,24 @@ end
     @test getline(values(fdictc)) == getline(values(fdict0)) + 2
 end
 
+import InteractiveUtils
+
+@testset "Module short names" begin
+    Profile.clear()
+    @profile InteractiveUtils.peakflops()
+    io = IOBuffer()
+    ioc = IOContext(io, :displaysize=>(1000,1000))
+    Profile.print(ioc, C=true)
+    str = String(take!(io))
+    slash = Sys.iswindows() ? "\\" : "/"
+    @test occursin("@Compiler" * slash, str)
+    @test occursin("@Base" * slash, str)
+    @test occursin("@InteractiveUtils" * slash, str)
+    @test occursin("@LinearAlgebra" * slash, str)
+    @test occursin("@juliasrc" * slash, str)
+    @test occursin("@julialib" * slash, str)
+end
+
 # Profile deadlocking in compilation (debuginfo registration)
 let cmd = Base.julia_cmd()
     script = """
@@ -326,6 +344,8 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+# FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
+@static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
     tmpdir = mktempdir()
 
@@ -355,6 +375,7 @@ end
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)
+end
 end
 
 @testset "PageProfile" begin

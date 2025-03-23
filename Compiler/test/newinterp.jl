@@ -10,7 +10,7 @@ from the native code cache, satisfying the minimum interface requirements.
 
 When the `ephemeral_cache=true` option is specified, `NewInterpreter` will hold
 `CodeInstance` in an ephemeral non-integrated cache, rather than in the integrated
-`Core.Compiler.InternalCodeCache`.
+`Compiler.InternalCodeCache`.
 Keep in mind that ephemeral cache lacks support for invalidation and doesn't persist across
 sessions. However it is an usual Julia object of the type `code_cache::IdDict{MethodInstance,CodeInstance}`,
 making it easier for debugging and inspecting the compiler behavior.
@@ -20,7 +20,6 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
     InterpCacheName = esc(Symbol(string(InterpName, "Cache")))
     InterpName = esc(InterpName)
     C = Core
-    CC = Core.Compiler
     quote
         $(ephemeral_cache && quote
         struct $InterpCacheName
@@ -28,18 +27,18 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
         end
         $InterpCacheName() = $InterpCacheName(IdDict{$C.MethodInstance,$C.CodeInstance}())
         end)
-        struct $InterpName <: $CC.AbstractInterpreter
+        struct $InterpName <: $Compiler.AbstractInterpreter
             meta # additional information
             world::UInt
-            inf_params::$CC.InferenceParams
-            opt_params::$CC.OptimizationParams
-            inf_cache::Vector{$CC.InferenceResult}
+            inf_params::$Compiler.InferenceParams
+            opt_params::$Compiler.OptimizationParams
+            inf_cache::Vector{$Compiler.InferenceResult}
             $(ephemeral_cache && :(code_cache::$InterpCacheName))
             function $InterpName(meta = nothing;
                                  world::UInt = Base.get_world_counter(),
-                                 inf_params::$CC.InferenceParams = $CC.InferenceParams(),
-                                 opt_params::$CC.OptimizationParams = $CC.OptimizationParams(),
-                                 inf_cache::Vector{$CC.InferenceResult} = $CC.InferenceResult[],
+                                 inf_params::$Compiler.InferenceParams = $Compiler.InferenceParams(),
+                                 opt_params::$Compiler.OptimizationParams = $Compiler.OptimizationParams(),
+                                 inf_cache::Vector{$Compiler.InferenceResult} = $Compiler.InferenceResult[],
                                  $(ephemeral_cache ?
                                     Expr(:kw, :(code_cache::$InterpCacheName), :($InterpCacheName())) :
                                     Expr(:kw, :_, :nothing)))
@@ -48,17 +47,17 @@ macro newinterp(InterpName, ephemeral_cache::Bool=false)
                     :(new(meta, world, inf_params, opt_params, inf_cache)))
             end
         end
-        $CC.InferenceParams(interp::$InterpName) = interp.inf_params
-        $CC.OptimizationParams(interp::$InterpName) = interp.opt_params
-        $CC.get_inference_world(interp::$InterpName) = interp.world
-        $CC.get_inference_cache(interp::$InterpName) = interp.inf_cache
-        $CC.cache_owner(::$InterpName) = $cache_token
+        $Compiler.InferenceParams(interp::$InterpName) = interp.inf_params
+        $Compiler.OptimizationParams(interp::$InterpName) = interp.opt_params
+        $Compiler.get_inference_world(interp::$InterpName) = interp.world
+        $Compiler.get_inference_cache(interp::$InterpName) = interp.inf_cache
+        $Compiler.cache_owner(::$InterpName) = $cache_token
         $(ephemeral_cache && quote
-        $CC.code_cache(interp::$InterpName) = $CC.WorldView(interp.code_cache, $CC.WorldRange(interp.world))
-        $CC.get(wvc::$CC.WorldView{$InterpCacheName}, mi::$C.MethodInstance, default) = get(wvc.cache.dict, mi, default)
-        $CC.getindex(wvc::$CC.WorldView{$InterpCacheName}, mi::$C.MethodInstance) = getindex(wvc.cache.dict, mi)
-        $CC.haskey(wvc::$CC.WorldView{$InterpCacheName}, mi::$C.MethodInstance) = haskey(wvc.cache.dict, mi)
-        $CC.setindex!(wvc::$CC.WorldView{$InterpCacheName}, ci::$C.CodeInstance, mi::$C.MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
+        $Compiler.code_cache(interp::$InterpName) = $Compiler.WorldView(interp.code_cache, $Compiler.WorldRange(interp.world))
+        $Compiler.get(wvc::$Compiler.WorldView{$InterpCacheName}, mi::$C.MethodInstance, default) = get(wvc.cache.dict, mi, default)
+        $Compiler.getindex(wvc::$Compiler.WorldView{$InterpCacheName}, mi::$C.MethodInstance) = getindex(wvc.cache.dict, mi)
+        $Compiler.haskey(wvc::$Compiler.WorldView{$InterpCacheName}, mi::$C.MethodInstance) = haskey(wvc.cache.dict, mi)
+        $Compiler.setindex!(wvc::$Compiler.WorldView{$InterpCacheName}, ci::$C.CodeInstance, mi::$C.MethodInstance) = setindex!(wvc.cache.dict, ci, mi)
         end)
     end
 end

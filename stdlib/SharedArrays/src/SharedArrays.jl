@@ -9,6 +9,7 @@ using Mmap, Distributed, Random
 
 import Base: length, size, elsize, ndims, IndexStyle, reshape, convert, deepcopy_internal,
              show, getindex, setindex!, fill!, similar, reduce, map!, copyto!, cconvert
+import Base: Array
 import Random
 using Serialization
 using Serialization: serialize_cycle_header, serialize_type, writetag, UNDEFREF_TAG, serialize, deserialize

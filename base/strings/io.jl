@@ -84,10 +84,6 @@ setfield!(typeof(println).name.mt, :max_args, 10, :monotonic)
 
 Call the given function with an I/O stream and the supplied extra arguments.
 Everything written to this I/O stream is returned as a string.
-`context` can be an [`IOContext`](@ref) whose properties will be used, a `Pair`
-specifying a property and its value, or a tuple of `Pair` specifying multiple
-properties and their values. `sizehint` suggests the capacity of the buffer (in
-bytes).
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a
 tuple of `:key=>value` pairs, or an `IO` or [`IOContext`](@ref) object whose
@@ -250,7 +246,9 @@ print(io::IO, s::Union{String,SubString{String}}) = (write(io, s); nothing)
 """
     repr(x; context=nothing)
 
-Create a string from any value using the 2-argument `show(io, x)` function.
+Create a string representation of any value using the 2-argument `show(io, x)` function,
+which aims to produce a string that is parseable Julia code, where possible.
+i.e. `eval(Meta.parse(repr(x))) == x` should hold true.
 You should not add methods to `repr`; define a [`show`](@ref) method instead.
 
 The optional keyword argument `context` can be set to a `:key=>value` pair, a

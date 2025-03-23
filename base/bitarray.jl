@@ -81,7 +81,7 @@ BitVector() = BitVector(undef, 0)
 
 Construct a `BitVector` from a tuple of `Bool`.
 # Examples
-```julia-repl
+```jldoctest
 julia> nt = (true, false, true, false)
 (true, false, true, false)
 

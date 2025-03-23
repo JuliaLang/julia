@@ -23,6 +23,10 @@ the following methods to satisfy the `AbstractInterpreter` API requirement:
 - `get_inference_world(interp::NewInterpreter)` - return the world age for this interpreter
 - `get_inference_cache(interp::NewInterpreter)` - return the local inference cache
 - `cache_owner(interp::NewInterpreter)` - return the owner of any new cache entries
+
+If `CodeInstance`s compiled using `interp::NewInterpreter` are meant to be executed with `invoke`,
+a method `codegen_cache(interp::NewInterpreter) -> IdDict{CodeInstance, CodeInfo}` must be defined,
+and inference must be triggered via `typeinf_ext_toplevel` with source mode `SOURCE_MODE_ABI`.
 """
 abstract type AbstractInterpreter end
 
@@ -41,6 +45,7 @@ struct StmtInfo
     need thus not be computed.
     """
     used::Bool
+    saw_latestworld::Bool
 end
 
 struct SpecInfo
@@ -105,6 +110,7 @@ mutable struct InferenceResult
     effects::Effects                  # if optimization is finished
     analysis_results::AnalysisResults # AnalysisResults with e.g. result::ArgEscapeCache if optimized, otherwise NULL_ANALYSIS_RESULTS
     is_src_volatile::Bool             # `src` has been cached globally as the compressed format already, allowing `src` to be used destructively
+    tombstone::Bool
 
     #=== uninitialized fields ===#
     ci::CodeInstance                  # CodeInstance if this result may be added to the cache
@@ -115,7 +121,7 @@ mutable struct InferenceResult
         ipo_effects = effects = Effects()
         analysis_results = NULL_ANALYSIS_RESULTS
         return new(mi, argtypes, overridden_by_const, result, exc_result, src,
-            valid_worlds, ipo_effects, effects, analysis_results, #=is_src_volatile=#false)
+            valid_worlds, ipo_effects, effects, analysis_results, #=is_src_volatile=#false, false)
     end
 end
 function InferenceResult(mi::MethodInstance, 𝕃::AbstractLattice=fallback_lattice)
@@ -185,6 +191,10 @@ Parameters that control abstract interpretation-based type inference operation.
   it will `throw`). Defaults to `false` since this assumption does not hold in Julia's
   semantics for native code execution.
 ---
+- `inf_params.force_enable_inference::Bool = false`\\
+  If `true`, inference will be performed on functions regardless of whether it was disabled
+  at the module level via `Base.Experimental.@compiler_options`.
+---
 """
 struct InferenceParams
     max_methods::Int
@@ -196,6 +206,7 @@ struct InferenceParams
     aggressive_constant_propagation::Bool
     assume_bindings_static::Bool
     ignore_recursion_hardlimit::Bool
+    force_enable_inference::Bool
 
     function InferenceParams(
         max_methods::Int,
@@ -206,7 +217,9 @@ struct InferenceParams
         ipo_constant_propagation::Bool,
         aggressive_constant_propagation::Bool,
         assume_bindings_static::Bool,
-        ignore_recursion_hardlimit::Bool)
+        ignore_recursion_hardlimit::Bool,
+        force_enable_inference::Bool,
+    )
         return new(
             max_methods,
             max_union_splitting,
@@ -216,7 +229,9 @@ struct InferenceParams
             ipo_constant_propagation,
             aggressive_constant_propagation,
             assume_bindings_static,
-            ignore_recursion_hardlimit)
+            ignore_recursion_hardlimit,
+            force_enable_inference,
+        )
     end
 end
 function InferenceParams(
@@ -229,7 +244,9 @@ function InferenceParams(
         #=ipo_constant_propagation::Bool=# true,
         #=aggressive_constant_propagation::Bool=# false,
         #=assume_bindings_static::Bool=# false,
-        #=ignore_recursion_hardlimit::Bool=# false);
+        #=ignore_recursion_hardlimit::Bool=# false,
+        #=force_enable_inference::Bool=# false
+    );
     max_methods::Int = params.max_methods,
     max_union_splitting::Int = params.max_union_splitting,
     max_apply_union_enum::Int = params.max_apply_union_enum,
@@ -238,7 +255,9 @@ function InferenceParams(
     ipo_constant_propagation::Bool = params.ipo_constant_propagation,
     aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
     assume_bindings_static::Bool = params.assume_bindings_static,
-    ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit)
+    ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit,
+    force_enable_inference::Bool = params.force_enable_inference,
+)
     return InferenceParams(
         max_methods,
         max_union_splitting,
@@ -248,7 +267,9 @@ function InferenceParams(
         ipo_constant_propagation,
         aggressive_constant_propagation,
         assume_bindings_static,
-        ignore_recursion_hardlimit)
+        ignore_recursion_hardlimit,
+        force_enable_inference,
+    )
 end
 
 """
@@ -365,6 +386,7 @@ struct NativeInterpreter <: AbstractInterpreter
 
     # Cache of inference results for this particular interpreter
     inf_cache::Vector{InferenceResult}
+    codegen::IdDict{CodeInstance,CodeInfo}
 
     # Parameters for inference and optimization
     inf_params::InferenceParams
@@ -385,16 +407,8 @@ function NativeInterpreter(world::UInt = get_world_counter();
     @assert world <= curr_max_world
     method_table = CachedMethodTable(InternalMethodTable(world))
     inf_cache = Vector{InferenceResult}() # Initially empty cache
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
-end
-
-function NativeInterpreter(interp::NativeInterpreter;
-                           world::UInt = interp.world,
-                           method_table::CachedMethodTable{InternalMethodTable} = interp.method_table,
-                           inf_cache::Vector{InferenceResult} = interp.inf_cache,
-                           inf_params::InferenceParams = interp.inf_params,
-                           opt_params::OptimizationParams = interp.opt_params)
-    return NativeInterpreter(world, method_table, inf_cache, inf_params, opt_params)
+    codegen = IdDict{CodeInstance,CodeInfo}()
+    return NativeInterpreter(world, method_table, inf_cache, codegen, inf_params, opt_params)
 end
 
 # Quickly and easily satisfy the AbstractInterpreter API contract
@@ -435,6 +449,19 @@ to incorporate customized dispatches for the overridden methods.
 """
 method_table(interp::AbstractInterpreter) = InternalMethodTable(get_inference_world(interp))
 method_table(interp::NativeInterpreter) = interp.method_table
+
+"""
+    codegen_cache(interp::AbstractInterpreter) -> Union{Nothing, IdDict{CodeInstance, CodeInfo}}
+
+Optionally return a cache associating a `CodeInfo` to a `CodeInstance` that should be added to the JIT
+for future execution via `invoke(f, ::CodeInstance, args...)`. This cache is used during `typeinf_ext_toplevel`,
+and may be safely discarded between calls to this function.
+
+By default, a value of `nothing` is returned indicating that `CodeInstance`s should not be added to the JIT.
+Attempting to execute them via `invoke` will result in an error.
+"""
+codegen_cache(interp::AbstractInterpreter) = nothing
+codegen_cache(interp::NativeInterpreter) = interp.codegen
 
 """
 By default `AbstractInterpreter` implements the following inference bail out logic:

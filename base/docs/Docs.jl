@@ -75,18 +75,23 @@ const META    = gensym(:meta)
 const METAType = IdDict{Any,Any}
 
 function meta(m::Module; autoinit::Bool=true)
-    if !isdefined(m, META) || getfield(m, META) === nothing
-        autoinit ? initmeta(m) : return nothing
+    if !invokelatest(isdefinedglobal, m, META)
+        return autoinit ? initmeta(m) : nothing
     end
-    return getfield(m, META)::METAType
+    # TODO: This `invokelatest` is not technically required, but because
+    # of the automatic constant backdating is currently required to avoid
+    # a warning.
+    return invokelatest(getglobal, m, META)::METAType
 end
 
 function initmeta(m::Module)
-    if !isdefined(m, META) || getfield(m, META) === nothing
-        Core.eval(m, :($META = $(METAType())))
+    if !invokelatest(isdefinedglobal, m, META)
+        val = METAType()
+        Core.eval(m, :(const $META = $val))
         push!(modules, m)
+        return val
     end
-    nothing
+    return invokelatest(getglobal, m, META)
 end
 
 function signature!(tv::Vector{Any}, expr::Expr)

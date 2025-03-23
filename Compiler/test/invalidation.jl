@@ -6,29 +6,28 @@
 include("irutils.jl")
 
 using Test
-const CC = Core.Compiler
 
 struct InvalidationTesterToken end
 
-struct InvalidationTester <: CC.AbstractInterpreter
+struct InvalidationTester <: Compiler.AbstractInterpreter
     world::UInt
-    inf_params::CC.InferenceParams
-    opt_params::CC.OptimizationParams
-    inf_cache::Vector{CC.InferenceResult}
+    inf_params::Compiler.InferenceParams
+    opt_params::Compiler.OptimizationParams
+    inf_cache::Vector{Compiler.InferenceResult}
     function InvalidationTester(;
                                 world::UInt = Base.get_world_counter(),
-                                inf_params::CC.InferenceParams = CC.InferenceParams(),
-                                opt_params::CC.OptimizationParams = CC.OptimizationParams(),
-                                inf_cache::Vector{CC.InferenceResult} = CC.InferenceResult[])
+                                inf_params::Compiler.InferenceParams = Compiler.InferenceParams(),
+                                opt_params::Compiler.OptimizationParams = Compiler.OptimizationParams(),
+                                inf_cache::Vector{Compiler.InferenceResult} = Compiler.InferenceResult[])
         return new(world, inf_params, opt_params, inf_cache)
     end
 end
 
-CC.InferenceParams(interp::InvalidationTester) = interp.inf_params
-CC.OptimizationParams(interp::InvalidationTester) = interp.opt_params
-CC.get_inference_world(interp::InvalidationTester) = interp.world
-CC.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
-CC.cache_owner(::InvalidationTester) = InvalidationTesterToken()
+Compiler.InferenceParams(interp::InvalidationTester) = interp.inf_params
+Compiler.OptimizationParams(interp::InvalidationTester) = interp.opt_params
+Compiler.get_inference_world(interp::InvalidationTester) = interp.world
+Compiler.get_inference_cache(interp::InvalidationTester) = interp.inf_cache
+Compiler.cache_owner(::InvalidationTester) = InvalidationTesterToken()
 
 # basic functionality test
 # ------------------------
@@ -56,7 +55,7 @@ let mi = Base.method_instance(basic_caller, (Float64,))
 end
 
 # this redefinition below should invalidate the cache
-const BASIC_CALLER_WORLD = Base.get_world_counter()
+const BASIC_CALLER_WORLD = Base.get_world_counter()+1
 basic_callee(x) = x, x
 @test !isdefined(Base.method_instance(basic_callee, (Float64,)), :cache)
 let mi = Base.method_instance(basic_caller, (Float64,))
@@ -105,7 +104,7 @@ begin
     let rt = only(Base.return_types(pr48932_callee, (Any,)))
         @test rt === Any
         effects = Base.infer_effects(pr48932_callee, (Any,))
-        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
+        @test effects == Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`
@@ -143,8 +142,8 @@ begin
     # this redefinition below should invalidate the cache of `pr48932_callee` but not that of `pr48932_caller`
     pr48932_callee(x) = (print(GLOBAL_BUFFER, x); nothing)
 
-    @test length(Base.methods(pr48932_callee)) == 2
-    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === first(Base.methods(pr48932_callee))
+    @test length(Base.methods(pr48932_callee)) == 1
+    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === only(Base.methods(pr48932_callee))
     @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee, Tuple{Any}))))
     let mi = only(Base.specializations(Base.only(Base.methods(pr48932_caller))))
         # Base.method_instance(pr48932_callee, (Any,))
@@ -172,7 +171,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee_inferable, (Any,)))
         @test rt === Int
         effects = Base.infer_effects(pr48932_callee_inferable, (Any,))
-        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
+        @test effects == Compiler.Effects()
     end
 
     # run inference on both `pr48932_caller` and `pr48932_callee`:
@@ -234,7 +233,7 @@ begin take!(GLOBAL_BUFFER)
     let rt = only(Base.return_types(pr48932_callee_inlined, (Any,)))
         @test rt === Any
         effects = Base.infer_effects(pr48932_callee_inlined, (Any,))
-        @test Core.Compiler.Effects(effects) == Core.Compiler.Effects()
+        @test effects == Compiler.Effects()
     end
 
     # run inference on `pr48932_caller_inlined` and `pr48932_callee_inlined`

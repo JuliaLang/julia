@@ -67,7 +67,7 @@ function builtin_call_has_dispatch(
                 return true
             end
         end
-    elseif (f === Core._apply_pure || f === Core._call_in_world || f === Core._call_in_world_total || f === Core._call_latest)
+    elseif (f === Core.invoke_in_world || f === Core._call_in_world_total || f === Core.invokelatest)
         # These apply-like builtins are effectively dynamic calls
         return true
     end
@@ -92,16 +92,25 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         print(io, ", ")
         print(io, stmt.typ)
         print(io, ")")
-    elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], MethodInstance)
+    elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], Union{MethodInstance,CodeInstance})
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
         printstyled(io, "   invoke "; color = :light_black)
-        mi = stmt.args[1]::Core.MethodInstance
+        mi = stmt.args[1]
+        if !(mi isa Core.MethodInstance)
+            mi = (mi::Core.CodeInstance).def
+        end
+        if isa(mi, Core.ABIOverride)
+            abi = mi.abi
+            mi = mi.def
+        else
+            abi = mi.specTypes
+        end
         show_unquoted(io, stmt.args[2], indent)
         print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
-        sig = mi.specTypes == Tuple ? Core.svec() : Base.unwrap_unionall(mi.specTypes).parameters::Core.SimpleVector
+        sig = abi == Tuple ? Core.svec() : Base.unwrap_unionall(abi).parameters::Core.SimpleVector
         print_arg(i) = sprint(; context=io) do io
             show_unquoted(io, stmt.args[i], indent)
             if (i - 1) <= length(sig)
@@ -110,6 +119,7 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         end
         join(io, (print_arg(i) for i = 3:length(stmt.args)), ", ")
         print(io, ")")
+        # TODO: if we have a CodeInstance, should we print that rettype info here, which may differ (wider or narrower than the ssavaluetypes)
     elseif isexpr(stmt, :call) && length(stmt.args) >= 1 && label_dynamic_calls
         ft = maybe_argextype(stmt.args[1], code, sptypes)
         f = singleton_type(ft)

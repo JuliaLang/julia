@@ -79,7 +79,8 @@ end
     @test unsafe_trunc(Int16, Float16(3)) === Int16(3)
     @test unsafe_trunc(UInt128, Float16(3)) === UInt128(3)
     @test unsafe_trunc(Int128, Float16(3)) === Int128(3)
-    @test unsafe_trunc(Int16, NaN16) === Int16(0)  #18771
+    # `unsafe_trunc` of `NaN` can be any value, see #56582
+    @test unsafe_trunc(Int16, NaN16) isa Int16 # #18771
 end
 @testset "fma and muladd" begin
     @test fma(Float16(0.1),Float16(0.9),Float16(0.5)) ≈ fma(0.1,0.9,0.5)

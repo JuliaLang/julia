@@ -12,25 +12,6 @@ if !@isdefined(var"@timeit")
     end
 end
 
-# avoid cycle due to over-specializing `any` when used by inference
-function _any(@nospecialize(f), a)
-    for x in a
-        f(x) && return true
-    end
-    return false
-end
-any(@nospecialize(f), itr) = _any(f, itr)
-any(itr) = _any(identity, itr)
-
-function _all(@nospecialize(f), a)
-    for x in a
-        f(x) || return false
-    end
-    return true
-end
-all(@nospecialize(f), itr) = _all(f, itr)
-all(itr) = _all(identity, itr)
-
 function contains_is(itr, @nospecialize(x))
     for y in itr
         if y === x
@@ -54,8 +35,8 @@ function count_const_size(@nospecialize(x), count_self::Bool = true)
         # No definite size
         (isa(x, GenericMemory) || isa(x, String) || isa(x, SimpleVector)) &&
             return MAX_INLINE_CONST_SIZE + 1
-        if isa(x, Module)
-            # We allow modules, because we already assume they are externally
+        if isa(x, Module) || isa(x, Method) || isa(x, CodeInstance)
+            # We allow modules, methods and CodeInstance, because we already assume they are externally
             # rooted, so we count their contents as 0 size.
             return sizeof(Ptr{Cvoid})
         end
@@ -148,6 +129,25 @@ function retrieve_code_info(mi::MethodInstance, world::UInt)
         else
             c = copy(src::CodeInfo)
         end
+        if (def.did_scan_source & 0x1) == 0x0
+            # This scan must happen:
+            #   1. After method definition
+            #   2. Before any code instances that may have relied on information
+            #      from implicit GlobalRefs for this method are added to the cache
+            #   3. Preferably while the IR is already uncompressed
+            #   4. As late as possible, as early adding of the backedges may cause
+            #      spurious invalidations.
+            #
+            # At the moment we do so here, because
+            #  1. It's reasonably late
+            #  2. It has easy access to the uncompressed IR
+            #  3. We necessarily pass through here before relying on any
+            #     information obtained from implicit GlobalRefs.
+            #
+            # However, the exact placement of this scan is not as important as
+            # long as the above conditions are met.
+            ccall(:jl_scan_method_source_now, Cvoid, (Any, Any), def, c)
+        end
     end
     if c isa CodeInfo
         c.parent = mi
@@ -167,6 +167,9 @@ end
 
 isa_compileable_sig(@nospecialize(atype), sparams::SimpleVector, method::Method) =
     !iszero(ccall(:jl_isa_compileable_sig, Int32, (Any, Any, Any), atype, sparams, method))
+
+isa_compileable_sig(m::MethodInstance) = (def = m.def; !isa(def, Method) || isa_compileable_sig(m.specTypes, m.sparam_vals, def))
+isa_compileable_sig(m::ABIOverride) = false
 
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
 
@@ -204,87 +207,6 @@ is_aggressive_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x
 Check if `method` is declared as `Base.@constprop :none`.
 """
 is_no_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x02
-
-#############
-# backedges #
-#############
-
-"""
-    BackedgeIterator(backedges::Vector{Any})
-
-Return an iterator over a list of backedges. Iteration returns `(sig, caller)` elements,
-which will be one of the following:
-
-- `BackedgePair(nothing, caller::MethodInstance)`: a call made by ordinary inferable dispatch
-- `BackedgePair(invokesig::Type, caller::MethodInstance)`: a call made by `invoke(f, invokesig, args...)`
-- `BackedgePair(specsig::Type, mt::MethodTable)`: an abstract call
-
-# Examples
-
-```julia
-julia> callme(x) = x+1
-callme (generic function with 1 method)
-
-julia> callyou(x) = callme(x)
-callyou (generic function with 1 method)
-
-julia> callyou(2.0)
-3.0
-
-julia> mi = which(callme, (Any,)).specializations
-MethodInstance for callme(::Float64)
-
-julia> @eval Core.Compiler for (; sig, caller) in BackedgeIterator(Main.mi.backedges)
-           println(sig)
-           println(caller)
-       end
-nothing
-callyou(Float64) from callyou(Any)
-```
-"""
-struct BackedgeIterator
-    backedges::Vector{Any}
-end
-
-struct BackedgePair
-    sig # ::Union{Nothing,Type}
-    caller::Union{MethodInstance,MethodTable}
-    BackedgePair(@nospecialize(sig), caller::Union{MethodInstance,MethodTable}) = new(sig, caller)
-end
-
-function iterate(iter::BackedgeIterator, i::Int=1)
-    backedges = iter.backedges
-    while true
-        i > length(backedges) && return nothing
-        item = backedges[i]
-        if item isa Int
-            i += 2
-            continue # ignore the query information if present
-        elseif isa(item, Method)
-            # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
-            i += 1
-            continue
-        end
-        if isa(item, CodeInstance)
-            item = item.def
-        end
-        if isa(item, MethodInstance) # regular dispatch
-            return BackedgePair(nothing, item), i+1
-        elseif isa(item, MethodTable) # abstract dispatch (legacy style edges)
-            return BackedgePair(backedges[i+1], item), i+2
-        else # `invoke` call
-            callee = backedges[i+1]
-            if isa(callee, Method)
-                i += 2
-                continue
-            end
-            if isa(callee, CodeInstance)
-                callee = callee.def
-            end
-            return BackedgePair(item, callee::MethodInstance), i+2
-        end
-    end
-end
 
 #########
 # types #
@@ -429,3 +351,5 @@ function inbounds_option()
 end
 
 is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+
+_time_ns() = ccall(:jl_hrtime, UInt64, ())

@@ -268,7 +268,31 @@ The above input outputs this:
 
     (:printf, :Cvoid, [:Cstring, :Cuint], ["%d", :value])
 """
-function ccall_macro_parse(expr::Expr)
+function ccall_macro_parse(exprs)
+    gc_safe = false
+    expr = nothing
+    if exprs isa Expr
+        expr = exprs
+    elseif length(exprs) == 1
+        expr = exprs[1]
+    elseif length(exprs) == 2
+        gc_expr = exprs[1]
+        expr = exprs[2]
+        if gc_expr.head == :(=) && gc_expr.args[1] == :gc_safe
+            if gc_expr.args[2] == true
+                gc_safe = true
+            elseif gc_expr.args[2] == false
+                gc_safe = false
+            else
+                throw(ArgumentError("gc_safe must be true or false"))
+            end
+        else
+            throw(ArgumentError("@ccall option must be `gc_safe=true` or `gc_safe=false`"))
+        end
+    else
+        throw(ArgumentError("@ccall needs a function signature with a return type"))
+    end
+
     # setup and check for errors
     if !isexpr(expr, :(::))
         throw(ArgumentError("@ccall needs a function signature with a return type"))
@@ -328,12 +352,11 @@ function ccall_macro_parse(expr::Expr)
             pusharg!(a)
         end
     end
-
-    return func, rettype, types, args, nreq
+    return func, rettype, types, args, gc_safe, nreq
 end
 
 
-function ccall_macro_lower(convention, func, rettype, types, args, nreq)
+function ccall_macro_lower(convention, func, rettype, types, args, gc_safe, nreq)
     statements = []
 
     # if interpolation was used, ensure the value is a function pointer at runtime.
@@ -351,9 +374,15 @@ function ccall_macro_lower(convention, func, rettype, types, args, nreq)
     else
         func = esc(func)
     end
+    cconv = nothing
+    if convention isa Tuple
+        cconv = Expr(:cconv, (convention..., gc_safe), nreq)
+    else
+        cconv = Expr(:cconv, (convention, UInt16(0), gc_safe), nreq)
+    end
 
     return Expr(:block, statements...,
-                Expr(:call, :ccall, func, Expr(:cconv, convention, nreq), esc(rettype),
+                Expr(:call, :ccall, func, cconv, esc(rettype),
                      Expr(:tuple, map(esc, types)...), map(esc, args)...))
 end
 
@@ -404,9 +433,16 @@ Example using an external library:
 
 The string literal could also be used directly before the function
 name, if desired `"libglib-2.0".g_uri_escape_string(...`
+
+It's possible to declare the ccall as `gc_safe` by using the `gc_safe = true` option:
+    @ccall gc_safe=true strlen(s::Cstring)::Csize_t
+This allows the garbage collector to run concurrently with the ccall, which can be useful whenever
+the `ccall` may block outside of julia.
+WARNING: This option should be used with caution, as it can lead to undefined behavior if the ccall
+calls back into the julia runtime. (`@cfunction`/`@ccallables` are safe however)
 """
-macro ccall(expr)
-    return ccall_macro_lower(:ccall, ccall_macro_parse(expr)...)
+macro ccall(exprs...)
+    return ccall_macro_lower((:ccall), ccall_macro_parse(exprs)...)
 end
 
 macro ccall_effects(effects::UInt16, expr)

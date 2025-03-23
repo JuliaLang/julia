@@ -399,3 +399,9 @@ end
     io = IOBuffer(data)
     @test read(io) == data
 end
+
+@testset "Writing Char to full buffer" begin
+    io = IOBuffer(;maxsize=1)
+    write(io, 'a')
+    @test write(io, 'a') == 0
+end
