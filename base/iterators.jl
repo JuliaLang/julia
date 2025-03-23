@@ -1625,58 +1625,40 @@ julia> first(stateful)
 8
 ```
 """
-nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
-nth(itr::AbstractArray, n::Integer) = _withlength_nth_throw(itr, n, length(itr))
-# specialized versions to better interact with existing iterators
+nth(itr, n::Integer) = _nth(itr, n)
+
 # Count
 nth(itr::Count, n::Integer) = n > 0 ? itr.start + itr.step * (n - 1) : throw(ArgumentError("n must be positive."))
-# # Repeated
-nth(itr::Repeated, n::Integer) = itr.x
-# # Take(Repeated)
-nth(itr::Take{Repeated{O}}, n::Integer) where {O} = begin
-    n > itr.n ? throw(BoundsError("attempted to access $(itr.n)-element $(typeof(itr)) at position $n")) : itr.xs.x
+# Repeated
+nth(itr::Repeated, ::Integer) = itr.x
+# Take(Repeated)
+nth(itr::Take{Repeated}, n::Integer) = begin
+    n > itr.n ? throw(BoundsError(itr, n)) : nth(itr.xs)
 end
+
 # infinite cycle
-nth(itr::Cycle{I}, n::Integer) where {I} = _nth_inf_cycle(IteratorSize(I), itr, n)
+nth(itr::Cycle{I}, n::Integer) where {I} = begin
+    if IteratorSize(I) isa Union{HasShape, HasLength}
+        _nth(itr.xs, mod1(n, length(itr.xs)))
+    else
+        _nth(itr, n)
+    end
+end
+
 # finite cycle: in reality a Flatten{Take{Repeated{O}}} iterator
-nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O} = _nth_finite_cycle(IteratorSize(O), itr, n)
-
-_nth(::SizeUnknown, itr, n) = _fallback_nth_throw(itr, n)
-_nth(::Union{HasShape,HasLength}, itr, n) = _withlength_nth_throw(itr, n, length(itr))
-_nth(::IsInfinite, itr, n) = _inbounds_nth(itr, n)
-
-_inbounds_nth(itr, n) = iterate(drop(itr, n - 1))[1]
-_inbounds_nth(itr::AbstractArray, n) = itr[begin + n-1]
-
-function _withlength_nth_throw(itr, n, N)
-    n > N && throw(BoundsError("attempted to access $N-element $(typeof(itr)) at position $n"))
-    _inbounds_nth(itr, n)
+nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O} = begin
+    if IteratorSize(O) isa Union{HasShape, HasLength}
+        cycles = itr.it.n
+        repeated = itr.it.xs.x
+        k = length(repeated)
+        n > k*cycles ? throw(BoundsError(itr, n)) : _nth(repeated, mod1(n, k))
+    else
+        _nth(itr, n)
+    end
 end
 
-function _fallback_nth_throw(itr, n)
-    y = iterate(drop(itr, n - 1))
-    y === nothing && throw(BoundsError("Iterator $(typeof(itr)) has less than $n elements"))
-    y[1]
-end
-
-_nth_inf_cycle(::IsInfinite, itr, n) = _inbounds_nth(itr.xs, n)
-_nth_inf_cycle(::SizeUnknown, itr, n) = _fallback_nth(itr.xs, n)
-_nth_inf_cycle(::Union{HasShape,HasLength}, itr, n) = _repeating_cycle_nth(itr.xs, n, length(itr.xs))
-
-_nth_finite_cycle(::IsInfinite, itr, n) = _inbounds_nth(itr, n)
-_nth_finite_cycle(::SizeUnknown, itr, n) = _fallback_nth_throw(itr, n)
-_nth_finite_cycle(::Union{HasShape,HasLength}, itr, n) = _walk_cycle_throw(itr, n)
-
-_repeating_cycle_nth(inner_itr, n, inner_N) = _inbounds_nth(inner_itr, 1 + ((n - 1) % inner_N))
-
-function _walk_cycle_throw(itr, n)
-    N = itr.it.n # `Take` iterator n
-    torepeat = itr.it.xs.x # repeated object
-    K = length(torepeat)
-    n > K * N && throw(BoundsError("attempted to access $(N*K)-element $(typeof(itr)) at position $n"))
-    _repeating_cycle_nth(torepeat, n, K)
-end
-
+@inline _nth(itr, n) = first(drop(itr, n-1))
+@inline _nth(itr::AbstractArray, n) = itr[begin + n-1]
 """
     nth(n::Integer)
 

@@ -1153,7 +1153,7 @@ end
     @testset "iter: $IT" for (IT, n, exp) in testset
         @test exp == nth(IT, n)
         IT isa Cycle && continue # cycles are infinite so never OOB
-        @test nth(IT, 999999999) === nothing
+        @test_throws Union{ArgumentError,BoundsError} nth(IT, 999999999)
     end
 end
 
