@@ -177,28 +177,6 @@ ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m,
 # `Base.deprecate`, not the @deprecated macro:
 isdeprecated(m::Module, s::Symbol) = ccall(:jl_is_binding_deprecated, Cint, (Any, Any), m, s) != 0
 
-"""
-    isbindingresolved(m::Module, s::Symbol)::Bool
-
-Returns whether the binding of a symbol in a module is resolved.
-
-See also: [`isexported`](@ref), [`ispublic`](@ref), [`isdeprecated`](@ref)
-
-```jldoctest
-julia> module Mod
-           foo() = 17
-       end
-Mod
-
-julia> Base.isbindingresolved(Mod, :foo)
-true
-
-julia> Base.isbindingresolved(Mod, :bar)
-false
-```
-"""
-isbindingresolved(m::Module, var::Symbol) = ccall(:jl_binding_resolved_p, Cint, (Any, Any), m, var) != 0
-
 function binding_module(m::Module, s::Symbol)
     p = ccall(:jl_get_module_of_binding, Ptr{Cvoid}, (Any, Any), m, s)
     p == C_NULL && return m
@@ -219,32 +197,54 @@ function _fieldnames(@nospecialize t)
 end
 
 # N.B.: Needs to be synced with julia.h
-const BINDING_KIND_CONST        = 0x0
-const BINDING_KIND_CONST_IMPORT = 0x1
-const BINDING_KIND_GLOBAL       = 0x2
-const BINDING_KIND_IMPLICIT     = 0x3
-const BINDING_KIND_EXPLICIT     = 0x4
-const BINDING_KIND_IMPORTED     = 0x5
-const BINDING_KIND_FAILED       = 0x6
-const BINDING_KIND_DECLARED     = 0x7
-const BINDING_KIND_GUARD        = 0x8
-const BINDING_KIND_UNDEF_CONST  = 0x9
+const PARTITION_KIND_CONST              = 0x0
+const PARTITION_KIND_CONST_IMPORT       = 0x1
+const PARTITION_KIND_GLOBAL             = 0x2
+const PARTITION_KIND_IMPLICIT_GLOBAL    = 0x3
+const PARTITION_KIND_IMPLICIT_CONST     = 0x4
+const PARTITION_KIND_EXPLICIT           = 0x5
+const PARTITION_KIND_IMPORTED           = 0x6
+const PARTITION_KIND_FAILED             = 0x7
+const PARTITION_KIND_DECLARED           = 0x8
+const PARTITION_KIND_GUARD              = 0x9
+const PARTITION_KIND_UNDEF_CONST        = 0xa
+const PARTITION_KIND_BACKDATED_CONST    = 0xb
 
-is_defined_const_binding(kind::UInt8) = (kind == BINDING_KIND_CONST || kind == BINDING_KIND_CONST_IMPORT)
-is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == BINDING_KIND_UNDEF_CONST)
-is_some_imported(kind::UInt8) = (kind == BINDING_KIND_IMPLICIT || kind == BINDING_KIND_EXPLICIT || kind == BINDING_KIND_IMPORTED)
-is_some_guard(kind::UInt8) = (kind == BINDING_KIND_GUARD || kind == BINDING_KIND_DECLARED || kind == BINDING_KIND_FAILED || kind == BINDING_KIND_UNDEF_CONST)
+const PARTITION_FLAG_EXPORTED     = 0x10
+const PARTITION_FLAG_DEPRECATED   = 0x20
+const PARTITION_FLAG_DEPWARN      = 0x40
+
+const PARTITION_MASK_KIND         = 0x0f
+const PARTITION_MASK_FLAG         = 0xf0
+
+const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
+
+is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
+is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
+is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_implicit(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED)
+is_some_explicit_imported(kind::UInt8) = (kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_binding_imported(kind::UInt8) = is_some_explicit_imported(kind) || kind == PARTITION_KIND_IMPLICIT_GLOBAL
+is_some_guard(kind::UInt8) = (kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_UNDEF_CONST)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
     ccall(:jl_get_binding_partition, Ref{Core.BindingPartition}, (Any, UInt), b, world)
 end
 
-function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
+function lookup_binding_partition(world::UInt, b::Core.Binding, previous_partition::Core.BindingPartition)
+    ccall(:jl_get_binding_partition_with_hint, Ref{Core.BindingPartition}, (Any, Any, UInt), b, previous_partition, world)
+end
+
+function convert(::Type{Core.Binding}, gr::Core.GlobalRef)
     if isdefined(gr, :binding)
-        b = gr.binding
+        return gr.binding
     else
-        b = ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), gr.mod, gr.name, true)
+        return ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), gr.mod, gr.name, true)
     end
+end
+
+function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
+    b = convert(Core.Binding, gr)
     return lookup_binding_partition(world, b)
 end
 
@@ -407,8 +407,13 @@ parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
 
 """
     isconst(m::Module, s::Symbol)::Bool
+    isconst(g::GlobalRef)::Bool
 
-Determine whether a global is declared `const` in a given module `m`.
+Determine whether a global is `const` in a given module `m`, either
+because it was declared constant or because it was imported from a
+constant binding. Note that constant-ness is specific to a particular
+world age, so the result of this function may not be assumed to hold
+after a world age update.
 """
 isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Cint, (Any, Any), m, s) != 0
@@ -420,7 +425,11 @@ end
 """
     isconst(t::DataType, s::Union{Int,Symbol})::Bool
 
-Determine whether a field `s` is declared `const` in a given type `t`.
+Determine whether a field `s` is const in a given type `t`
+in the sense that a read from said field is consistent
+for egal objects. Note in particular that out-of-bounds
+fields are considered const under this definition (because
+they always throw).
 """
 function isconst(@nospecialize(t::Type), s::Symbol)
     @_foldable_meta
@@ -827,7 +836,8 @@ isbits(@nospecialize x) = isbitstype(typeof(x))
 """
     objectid(x)::UInt
 
-Get a hash value for `x` based on object identity.
+Get a hash value for `x` based on object identity. This value is not unique nor
+stable between Julia processes or versions.
 
 If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `objectid(x) != objectid(y)`.
 
@@ -1147,6 +1157,32 @@ function fieldcount(@nospecialize t)
     return fcount
 end
 
+function fieldcount_noerror(@nospecialize t)
+    if t isa UnionAll || t isa Union
+        t = argument_datatype(t)
+        if t === nothing
+            return nothing
+        end
+    elseif t === Union{}
+        return 0
+    end
+    t isa DataType || return nothing
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters
+        if names isa Tuple
+            return length(names)
+        end
+        if types isa DataType && types <: Tuple
+            return fieldcount_noerror(types)
+        end
+        return nothing
+    elseif isabstracttype(t) || (t.name === Tuple.name && isvatuple(t))
+        return nothing
+    end
+    return isdefined(t, :types) ? length(t.types) : length(t.name.names)
+end
+
+
 """
     fieldtypes(T::Type)
 
@@ -1316,6 +1352,24 @@ function MethodList(mt::Core.MethodTable)
     return MethodList(ms, mt)
 end
 
+function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodTable, mod)
+    # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
+    ms = Method[(ms[i]::Core.MethodMatch).method for i in 1:length(ms)]
+    # Remove shadowed methods with identical type signatures
+    prev = nothing
+    filter!(ms) do m
+        l = prev
+        repeated = (l isa Method && m.sig == l.sig)
+        prev = m
+        return !repeated
+    end
+    # Remove methods not part of module (after removing shadowed methods)
+    mod === nothing || filter!(ms) do m
+        return parentmodule(m) ∈ mod
+    end
+    return MethodList(ms, mt)
+end
+
 """
     methods(f, [types], [module])
 
@@ -1323,7 +1377,7 @@ Return the method table for `f`.
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
-A list of modules can also be specified as an array.
+A list of modules can also be specified as an array or set.
 
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
@@ -1331,16 +1385,11 @@ A list of modules can also be specified as an array.
 See also: [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which) and [`methodswith`](@ref Main.InteractiveUtils.methodswith).
 """
 function methods(@nospecialize(f), @nospecialize(t),
-                 mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
+                 mod::Union{Tuple{Module},AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
-    ms = Method[]
-    for m in _methods(f, t, -1, world)::Vector
-        m = m::Core.MethodMatch
-        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
-    end
-    MethodList(ms, typeof(f).name.mt)
+    ms = _methods(f, t, -1, world)::Vector{Any}
+    return matches_to_methods(ms, typeof(f).name.mt, mod)
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 
@@ -1350,12 +1399,12 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
-    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector
-    return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
+    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector{Any}
+    return matches_to_methods(ms, typeof(f).name.mt, nothing)
 end
 
 function methods(@nospecialize(f),
-                 mod::Union{Module,AbstractArray{Module},Nothing}=nothing)
+                 mod::Union{Module,AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
@@ -1575,3 +1624,92 @@ hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Botto
 ###########
 
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
+
+
+# high-level, more convenient method lookup functions
+
+function visit(f, mt::Core.MethodTable)
+    mt.defs !== nothing && visit(f, mt.defs)
+    nothing
+end
+function visit(f, mc::Core.TypeMapLevel)
+    function avisit(f, e::Memory{Any})
+        for i in 2:2:length(e)
+            isassigned(e, i) || continue
+            ei = e[i]
+            if ei isa Memory{Any}
+                for j in 2:2:length(ei)
+                    isassigned(ei, j) || continue
+                    visit(f, ei[j])
+                end
+            else
+                visit(f, ei)
+            end
+        end
+    end
+    if mc.targ !== nothing
+        avisit(f, mc.targ::Memory{Any})
+    end
+    if mc.arg1 !== nothing
+        avisit(f, mc.arg1::Memory{Any})
+    end
+    if mc.tname !== nothing
+        avisit(f, mc.tname::Memory{Any})
+    end
+    if mc.name1 !== nothing
+        avisit(f, mc.name1::Memory{Any})
+    end
+    mc.list !== nothing && visit(f, mc.list)
+    mc.any !== nothing && visit(f, mc.any)
+    nothing
+end
+function visit(f, d::Core.TypeMapEntry)
+    while d !== nothing
+        f(d.func)
+        d = d.next
+    end
+    nothing
+end
+struct MethodSpecializations
+    specializations::Union{Nothing, Core.MethodInstance, Core.SimpleVector}
+end
+"""
+    specializations(m::Method) → itr
+
+Return an iterator `itr` of all compiler-generated specializations of `m`.
+"""
+specializations(m::Method) = MethodSpecializations(isdefined(m, :specializations) ? m.specializations : nothing)
+function iterate(specs::MethodSpecializations)
+    s = specs.specializations
+    s === nothing && return nothing
+    isa(s, Core.MethodInstance) && return (s, nothing)
+    return iterate(specs, 0)
+end
+iterate(specs::MethodSpecializations, ::Nothing) = nothing
+function iterate(specs::MethodSpecializations, i::Int)
+    s = specs.specializations::Core.SimpleVector
+    n = length(s)
+    i >= n && return nothing
+    item = nothing
+    while i < n && item === nothing
+        item = s[i+=1]
+    end
+    item === nothing && return nothing
+    return (item, i)
+end
+length(specs::MethodSpecializations) = count(Returns(true), specs)
+
+function length(mt::Core.MethodTable)
+    n = 0
+    visit(mt) do m
+        n += 1
+    end
+    return n::Int
+end
+isempty(mt::Core.MethodTable) = (mt.defs === nothing)
+
+uncompressed_ir(m::Method) = isdefined(m, :source) ? _uncompressed_ir(m) :
+                             isdefined(m, :generator) ? error("Method is @generated; try `code_lowered` instead.") :
+                             error("Code for this Method is not available.")
+
+has_image_globalref(m::Method) = ccall(:jl_ir_flag_has_image_globalref, Bool, (Any,), m.source)

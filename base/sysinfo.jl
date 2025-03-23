@@ -36,7 +36,8 @@ export BINDIR,
        isreadable,
        iswritable,
        username,
-       which
+       which,
+       detectwsl
 
 import ..Base: show
 
@@ -531,6 +532,27 @@ including e.g. a WebAssembly JavaScript embedding in a web browser.
     This function requires at least Julia 1.2.
 """
 isjsvm(os::Symbol) = (os === :Emscripten)
+
+"""
+    Sys.detectwsl()
+
+Runtime predicate for testing if Julia is running inside
+Windows Subsystem for Linux (WSL).
+
+!!! note
+    Unlike `Sys.iswindows`, `Sys.islinux` etc., this is a runtime test, and thus
+    cannot meaningfully be used in `@static if` constructs.
+
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
+"""
+function detectwsl()
+    # We use the same approach as canonical/snapd do to detect WSL
+    islinux() && (
+        isfile("/proc/sys/fs/binfmt_misc/WSLInterop")
+        || isdir("/run/WSL")
+    )
+end
 
 for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))

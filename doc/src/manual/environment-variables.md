@@ -397,8 +397,11 @@ during image compilation. Defaults to 0.
 ### [`JULIA_EXCLUSIVE`](@id JULIA_EXCLUSIVE)
 
 If set to anything besides `0`, then Julia's thread policy is consistent with
-running on a dedicated machine: the master thread is on proc 0, and threads are
-affinitized. Otherwise, Julia lets the operating system handle thread policy.
+running on a dedicated machine: each thread in the default threadpool is
+affinitized.  [Interactive threads](@ref man-threadpools) remain under the
+control of the operating system scheduler.
+
+Otherwise, Julia lets the operating system handle thread policy.
 
 ## Garbage Collection
 

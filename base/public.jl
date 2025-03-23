@@ -20,6 +20,7 @@ public
     Generator,
     ImmutableDict,
     OneTo,
+    Pairs,
     LogRange,
     UUID,
 

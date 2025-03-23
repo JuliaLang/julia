@@ -130,7 +130,7 @@ create_serialization_stream() do s # user-defined module
     modtype = eval(Meta.parse("$(modstring)"))
     serialize(s, modtype)
     seek(s, 0)
-    @test deserialize(s) === modtype
+    @test invokelatest(deserialize, s) === modtype
 end
 
 # DataType
@@ -151,7 +151,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test invokelatest(deserialize, s) === utype
 end
 
 create_serialization_stream() do s # user-defined type
@@ -160,7 +160,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) === utype
+    @test invokelatest(deserialize, s) === utype
 end
 
 create_serialization_stream() do s # user-defined type
@@ -169,7 +169,7 @@ create_serialization_stream() do s # user-defined type
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) == utype
+    @test invokelatest(deserialize, s) == utype
 end
 
 create_serialization_stream() do s # immutable struct with 1 field
@@ -178,7 +178,7 @@ create_serialization_stream() do s # immutable struct with 1 field
     utype = eval(Meta.parse("$(usertype)"))
     serialize(s, utype)
     seek(s, 0)
-    @test deserialize(s) == utype
+    @test invokelatest(deserialize, s) == utype
 end
 
 create_serialization_stream() do s # immutable struct with 2 field
@@ -187,7 +187,7 @@ create_serialization_stream() do s # immutable struct with 2 field
     utval = eval(Meta.parse("$(usertype)(1,2)"))
     serialize(s, utval)
     seek(s, 0)
-    @test deserialize(s) === utval
+    @test invokelatest(deserialize, s) === utval
 end
 
 create_serialization_stream() do s # immutable struct with 3 field
@@ -196,7 +196,7 @@ create_serialization_stream() do s # immutable struct with 3 field
     utval = eval(Meta.parse("$(usertype)(1,2,3)"))
     serialize(s, utval)
     seek(s, 0)
-    @test deserialize(s) === utval
+    @test invokelatest(deserialize, s) === utval
 end
 
 create_serialization_stream() do s # immutable struct with 4 field
@@ -205,7 +205,7 @@ create_serialization_stream() do s # immutable struct with 4 field
     utval = eval(Meta.parse("$(usertype)(1,2,3,4)"))
     serialize(s, utval)
     seek(s, 0)
-    @test deserialize(s) === utval
+    @test invokelatest(deserialize, s) === utval
 end
 
 # Expression

@@ -11,4 +11,4 @@ LIBGIT2_SHA1=338e6fb681369ff0537719095e22ce9dc602dbf0
 # The versions of cacert.pem are identified by the date (YYYY-MM-DD) of their changes.
 # See https://curl.haxx.se/docs/caextract.html for more details.
 # Keep in sync with `stdlib/MozillaCACerts_jll/Project.toml`.
-MOZILLA_CACERT_VERSION := 2024-11-26
+MOZILLA_CACERT_VERSION := 2024-12-31

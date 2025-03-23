@@ -637,9 +637,14 @@ static jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     return jl_memoryrefget(jl_memoryrefindex(a->ref, i), 0);
 }
 
-static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *iterate)
+JL_CALLABLE(jl_f__apply_iterate)
 {
-    jl_function_t *f = args[0];
+    JL_NARGSV(_apply_iterate, 2);
+    jl_function_t *iterate = args[0];
+    jl_function_t *f = args[1];
+    assert(iterate);
+    args += 1;
+    nargs -= 1;
     if (nargs == 2) {
         // some common simple cases
         if (f == jl_builtin_svec) {
@@ -691,9 +696,6 @@ static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *itera
         else {
             extra += 1;
         }
-    }
-    if (extra && iterate == NULL) {
-        jl_undefined_var_error(jl_symbol("iterate"), NULL);
     }
     // allocate space for the argument array and gc roots for it
     // based on our previous estimates
@@ -841,40 +843,8 @@ static jl_value_t *do_apply(jl_value_t **args, uint32_t nargs, jl_value_t *itera
     return result;
 }
 
-JL_CALLABLE(jl_f__apply_iterate)
-{
-    JL_NARGSV(_apply_iterate, 2);
-    return do_apply(args + 1, nargs - 1, args[0]);
-}
-
-// this is like `_apply`, but with quasi-exact checks to make sure it is pure
-JL_CALLABLE(jl_f__apply_pure)
-{
-    jl_task_t *ct = jl_current_task;
-    int last_in = ct->ptls->in_pure_callback;
-    jl_value_t *ret = NULL;
-    JL_TRY {
-        ct->ptls->in_pure_callback = 1;
-        // because this function was declared pure,
-        // we should be allowed to run it in any world
-        // so we run it in the newest world;
-        // because, why not :)
-        // and `promote` works better this way
-        size_t last_age = ct->world_age;
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        ret = do_apply(args, nargs, NULL);
-        ct->world_age = last_age;
-        ct->ptls->in_pure_callback = last_in;
-    }
-    JL_CATCH {
-        ct->ptls->in_pure_callback = last_in;
-        jl_rethrow();
-    }
-    return ret;
-}
-
 // this is like a regular call, but always runs in the newest world
-JL_CALLABLE(jl_f__call_latest)
+JL_CALLABLE(jl_f_invokelatest)
 {
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
@@ -885,9 +855,9 @@ JL_CALLABLE(jl_f__call_latest)
     return ret;
 }
 
-// Like call_in_world, but runs in the specified world.
+// Like invokelatest, but runs in the specified world.
 // If world > jl_atomic_load_acquire(&jl_world_counter), run in the latest world.
-JL_CALLABLE(jl_f__call_in_world)
+JL_CALLABLE(jl_f_invoke_in_world)
 {
     JL_NARGSV(_apply_in_world, 2);
     jl_task_t *ct = jl_current_task;
@@ -1395,7 +1365,7 @@ JL_CALLABLE(jl_f_setglobal)
         jl_atomic_error("setglobal!: module binding cannot be written non-atomically");
     else if (order >= jl_memory_order_seq_cst)
         jl_fence();
-    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
     jl_checked_assignment(b, mod, var, args[2]); // release store
     if (order >= jl_memory_order_seq_cst)
         jl_fence();
@@ -1430,7 +1400,7 @@ JL_CALLABLE(jl_f_swapglobal)
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("swapglobal!: module binding cannot be written non-atomically");
     // is seq_cst already, no fence needed
-    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
     return jl_checked_swap(b, mod, var, args[2]);
 }
 
@@ -1448,7 +1418,7 @@ JL_CALLABLE(jl_f_modifyglobal)
     JL_TYPECHK(modifyglobal!, symbol, (jl_value_t*)var);
     if (order == jl_memory_order_notatomic)
         jl_atomic_error("modifyglobal!: module binding cannot be written non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
     // is seq_cst already, no fence needed
     return jl_checked_modify(b, mod, var, args[2], args[3]);
 }
@@ -1477,7 +1447,7 @@ JL_CALLABLE(jl_f_replaceglobal)
         jl_atomic_error("replaceglobal!: module binding cannot be written non-atomically");
     if (failure_order == jl_memory_order_notatomic)
         jl_atomic_error("replaceglobal!: module binding cannot be accessed non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
     // is seq_cst already, no fence needed
     return jl_checked_replace(b, mod, var, args[2], args[3]);
 }
@@ -1506,7 +1476,7 @@ JL_CALLABLE(jl_f_setglobalonce)
         jl_atomic_error("setglobalonce!: module binding cannot be written non-atomically");
     if (failure_order == jl_memory_order_notatomic)
         jl_atomic_error("setglobalonce!: module binding cannot be accessed non-atomically");
-    jl_binding_t *b = jl_get_binding_wr(mod, var, 0);
+    jl_binding_t *b = jl_get_binding_wr(mod, var);
     // is seq_cst already, no fence needed
     jl_value_t *old = jl_checked_assignonce(b, mod, var, args[2]);
     return old == NULL ? jl_true : jl_false;
@@ -2197,11 +2167,13 @@ static int references_name(jl_value_t *p, jl_typename_t *name, int affects_layou
 
 JL_CALLABLE(jl_f__typebody)
 {
-    JL_NARGS(_typebody!, 1, 2);
-    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
+    JL_NARGS(_typebody!, 2, 3);
+    jl_value_t *prev = args[0];
+    jl_value_t *tret = args[1];
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[1]);
     JL_TYPECHK(_typebody!, datatype, (jl_value_t*)dt);
-    if (nargs == 2) {
-        jl_value_t *ft = args[1];
+    if (nargs == 3) {
+        jl_value_t *ft = args[2];
         JL_TYPECHK(_typebody!, simplevector, ft);
         size_t nf = jl_svec_len(ft);
         for (size_t i = 0; i < nf; i++) {
@@ -2212,29 +2184,52 @@ JL_CALLABLE(jl_f__typebody)
                                  (jl_value_t*)jl_type_type, elt);
             }
         }
-        if (dt->types != NULL) {
-            if (!equiv_field_types((jl_value_t*)dt->types, ft))
-                jl_errorf("invalid redefinition of type %s", jl_symbol_name(dt->name->name));
-        }
-        else {
-            dt->types = (jl_svec_t*)ft;
-            jl_gc_wb(dt, ft);
-            // If a supertype can reference the same type, then we may not be
-            // able to compute the layout of the object before needing to
-            // publish it, so we must assume it cannot be inlined, if that
-            // check passes, then we also still need to check the fields too.
-            if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1))) {
-                int mayinlinealloc = 1;
-                size_t i;
-                for (i = 0; i < nf; i++) {
-                    jl_value_t *fld = jl_svecref(ft, i);
-                    if (references_name(fld, dt->name, 1, 1)) {
-                        mayinlinealloc = 0;
-                        break;
+        // Optimization: To avoid lots of unnecessary churning, lowering contains an optimization
+        // that re-uses the typevars of an existing definition (if any exists) for compute the field
+        // types. If such a previous type exists, there are two possibilities:
+        //  1. The field types are identical, we don't need to do anything and can proceed with the
+        //     old type as if it was the new one.
+        //  2. The field types are not identical, in which case we need to rename the typevars
+        //     back to their equivalents in the new type before proceeding.
+        if (prev == jl_false) {
+            if (dt->types != NULL)
+                jl_errorf("Internal Error: Expected type fields to be unset");
+        } else {
+            jl_datatype_t *prev_dt = (jl_datatype_t*)jl_unwrap_unionall(prev);
+            JL_TYPECHK(_typebody!, datatype, (jl_value_t*)prev_dt);
+            if (equiv_field_types((jl_value_t*)prev_dt->types, ft)) {
+                tret = prev;
+                goto have_type;
+            } else {
+                if (jl_svec_len(prev_dt->parameters) != jl_svec_len(dt->parameters))
+                    jl_errorf("Internal Error: Types should not have been considered equivalent");
+                for (size_t i = 0; i < nf; i++) {
+                    jl_value_t *elt = jl_svecref(ft, i);
+                    for (int j = 0; j < jl_svec_len(prev_dt->parameters); ++j) {
+                        // Only the last svecset matters for semantics, but we re-use the GC root
+                        elt = jl_substitute_var(elt, (jl_tvar_t *)jl_svecref(prev_dt->parameters, j), jl_svecref(dt->parameters, j));
+                        jl_svecset(ft, i, elt);
                     }
                 }
-                dt->name->mayinlinealloc = mayinlinealloc;
             }
+        }
+        dt->types = (jl_svec_t*)ft;
+        jl_gc_wb(dt, ft);
+        // If a supertype can reference the same type, then we may not be
+        // able to compute the layout of the object before needing to
+        // publish it, so we must assume it cannot be inlined, if that
+        // check passes, then we also still need to check the fields too.
+        if (!dt->name->mutabl && (nf == 0 || !references_name((jl_value_t*)dt->super, dt->name, 0, 1))) {
+            int mayinlinealloc = 1;
+            size_t i;
+            for (i = 0; i < nf; i++) {
+                jl_value_t *fld = jl_svecref(ft, i);
+                if (references_name(fld, dt->name, 1, 1)) {
+                    mayinlinealloc = 0;
+                    break;
+                }
+            }
+            dt->name->mayinlinealloc = mayinlinealloc;
         }
     }
 
@@ -2248,7 +2243,8 @@ JL_CALLABLE(jl_f__typebody)
 
     if (jl_is_structtype(dt))
         jl_compute_field_offsets(dt);
-    return jl_nothing;
+have_type:
+    return tret;
 }
 
 // this is a heuristic for allowing "redefining" a type to something identical
@@ -2317,6 +2313,13 @@ JL_CALLABLE(jl_f__equiv_typedef)
 {
     JL_NARGS(_equiv_typedef, 2, 2);
     return equiv_type(args[0], args[1]) ? jl_true : jl_false;
+}
+
+JL_CALLABLE(jl_f__defaultctors)
+{
+    JL_NARGS(_defaultctors, 2, 2);
+    jl_ctor_def(args[0], args[1]);
+    return jl_nothing;
 }
 
 // IntrinsicFunctions ---------------------------------------------------------
@@ -2506,15 +2509,15 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin__apply_iterate = add_builtin_func("_apply_iterate", jl_f__apply_iterate);
     jl_builtin__expr = add_builtin_func("_expr", jl_f__expr);
     jl_builtin_svec = add_builtin_func("svec", jl_f_svec);
-    add_builtin_func("_apply_pure", jl_f__apply_pure);
-    add_builtin_func("_call_latest", jl_f__call_latest);
-    add_builtin_func("_call_in_world", jl_f__call_in_world);
+    add_builtin_func("invokelatest", jl_f_invokelatest);
+    add_builtin_func("invoke_in_world", jl_f_invoke_in_world);
     add_builtin_func("_call_in_world_total", jl_f__call_in_world_total);
     add_builtin_func("_typevar", jl_f__typevar);
     add_builtin_func("_structtype", jl_f__structtype);
     add_builtin_func("_abstracttype", jl_f__abstracttype);
     add_builtin_func("_primitivetype", jl_f__primitivetype);
     add_builtin_func("_setsuper!", jl_f__setsuper);
+    add_builtin_func("_defaultctors", jl_f__defaultctors);
     jl_builtin__typebody = add_builtin_func("_typebody!", jl_f__typebody);
     add_builtin_func("_equiv_typedef", jl_f__equiv_typedef);
     jl_builtin_donotdelete = add_builtin_func("donotdelete", jl_f_donotdelete);

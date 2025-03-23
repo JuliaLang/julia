@@ -31,7 +31,7 @@ end
     # @test success(p)
     errlines = fetch(err_task)
     lines = fetch(out_task)
-    @test length(errlines) == 0
+    @test isempty(errlines)
     # @test length(lines) == 6
     @test length(lines) == 5
     @test checknum(lines[2], r"([0-9]+) full collections", n -> n >= 10)

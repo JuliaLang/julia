@@ -2,7 +2,7 @@
 
 module Rounding
 
-let fenv_consts = Vector{Cint}(undef, 9)
+let fenv_consts = Array{Cint,1}(undef, 9)
     ccall(:jl_get_fenv_consts, Cvoid, (Ptr{Cint},), fenv_consts)
     global const JL_FE_INEXACT = fenv_consts[1]
     global const JL_FE_UNDERFLOW = fenv_consts[2]
@@ -281,6 +281,15 @@ function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T
         y < x ? nextfloat(y) : y
     end
 end
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:FromZero}) where T<:AbstractFloat
+    y = convert(T,x)::T
+    if x < 0.0
+        y > x ? prevfloat(y) : y
+    else
+        y < x ? nextfloat(y) : y
+    end
+end
+
 
 # Default definitions
 

@@ -107,7 +107,7 @@ end
 # but the macro is not available at this time in bootstrap, so we write it manually.
 const _string_n_override = 0x04ee
 @eval _string_n(n::Integer) = $(Expr(:foreigncall, QuoteNode(:jl_alloc_string), Ref{String},
-    :(Core.svec(Csize_t)), 1, QuoteNode((:ccall, _string_n_override)), :(convert(Csize_t, n))))
+    :(Core.svec(Csize_t)), 1, QuoteNode((:ccall, _string_n_override, false)), :(convert(Csize_t, n))))
 
 """
     String(s::AbstractString)

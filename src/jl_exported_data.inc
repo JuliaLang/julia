@@ -2,6 +2,7 @@
 
 // Pointers that are exposed through the public libjulia
 #define JL_EXPORTED_DATA_POINTERS(XX) \
+    XX(jl_abioverride_type) \
     XX(jl_abstractarray_type) \
     XX(jl_abstractstring_type) \
     XX(jl_addrspace_type) \
@@ -65,6 +66,8 @@
     XX(jl_interrupt_exception) \
     XX(jl_intrinsic_type) \
     XX(jl_kwcall_func) \
+    XX(jl_libdl_module) \
+    XX(jl_libdl_dlopen_func) \
     XX(jl_lineinfonode_type) \
     XX(jl_linenumbernode_type) \
     XX(jl_llvmpointer_type) \
@@ -108,6 +111,7 @@
     XX(jl_pinode_type) \
     XX(jl_pointer_type) \
     XX(jl_pointer_typename) \
+    XX(jl_precompilable_error) \
     XX(jl_quotenode_type) \
     XX(jl_readonlymemory_exception) \
     XX(jl_ref_type) \
@@ -116,12 +120,12 @@
     XX(jl_simplevector_type) \
     XX(jl_slotnumber_type) \
     XX(jl_ssavalue_type) \
-    XX(jl_abioverride_type) \
     XX(jl_stackovf_exception) \
     XX(jl_string_type) \
     XX(jl_symbol_type) \
     XX(jl_task_type) \
     XX(jl_top_module) \
+    XX(jl_trimfailure_type) \
     XX(jl_true) \
     XX(jl_tuple_typename) \
     XX(jl_tvar_type) \
@@ -149,9 +153,6 @@
     XX(jl_voidpointer_type) \
     XX(jl_void_type) \
     XX(jl_weakref_type) \
-    XX(jl_libdl_module) \
-    XX(jl_libdl_dlopen_func) \
-    XX(jl_precompilable_error) \
 
 // Data symbols that are defined inside the public libjulia
 #define JL_EXPORTED_DATA_SYMBOLS(XX) \

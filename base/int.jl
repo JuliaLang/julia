@@ -286,8 +286,14 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
-mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
-mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
+function mod(x::BitSigned, y::Unsigned)
+    remval = rem(x, y) # correct iff  remval>=0
+    return unsigned(remval + (remval<zero(remval))*y)
+end
+function mod(x::Unsigned, y::Signed)
+    remval =  signed(rem(x, y)) #remval>0 so correct iff y>0 or remval==0
+    return remval + (!iszero(remval) && y<zero(y))*y
+end
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
@@ -642,7 +648,7 @@ ERROR: LoadError: ArgumentError: invalid base 10 digit '.' in "123456789123.4"
 [...]
 ```
 """
-macro int128_str(s)
+macro int128_str(s::String)
     return parse(Int128, s)
 end
 
@@ -662,7 +668,7 @@ ERROR: LoadError: ArgumentError: invalid base 10 digit '-' in "-123456789123"
 [...]
 ```
 """
-macro uint128_str(s)
+macro uint128_str(s::String)
     return parse(UInt128, s)
 end
 
@@ -695,17 +701,18 @@ ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
     depends on the value of the precision at the point when the function is
     defined, **not** at the precision at the time when the function is called.
 """
-macro big_str(s)
+macro big_str(s::String)
     message = "invalid number format $s for BigInt or BigFloat"
     throw_error =  :(throw(ArgumentError($message)))
     if '_' in s
-        # remove _ in s[2:end-1]
-        bf = IOBuffer(maxsize=lastindex(s))
+        # remove _ in s[2:end-1].
+        # Do not allow '_' right before or after dot.
+        bf = IOBuffer(sizehint=ncodeunits(s))
         c = s[1]
         print(bf, c)
         is_prev_underscore = (c == '_')
         is_prev_dot = (c == '.')
-        for c in SubString(s, 2, lastindex(s)-1)
+        for c in SubString(s, nextind(s, 1), prevind(s, lastindex(s)))
             c != '_' && print(bf, c)
             c == '_' && is_prev_dot && return throw_error
             c == '.' && is_prev_underscore && return throw_error
@@ -747,7 +754,7 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 The lowest value representable by the given (real) numeric DataType `T`.
 
-See also: [`floatmin`](@ref), [`typemax`](@ref), [`eps`](@ref).
+See also: [`floatmin`](@ref), [`maxintfloat`](@ref), [`typemax`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest
@@ -763,8 +770,11 @@ julia> typemin(Float16)
 julia> typemin(Float32)
 -Inf32
 
-julia> nextfloat(-Inf32)  # smallest finite Float32 floating point number
--3.4028235f38
+julia> floatmin(Float32)  # smallest positive finite Float32 floating point number
+1.1754944f-38
+
+julia> nextfloat(-Inf32) == -floatmax(Float32)  # equivalent ways of getting the lowest finite Float32 floating point number
+true
 ```
 """
 function typemin end
@@ -774,7 +784,7 @@ function typemin end
 
 The highest value representable by the given (real) numeric `DataType`.
 
-See also: [`floatmax`](@ref), [`typemin`](@ref), [`eps`](@ref).
+See also: [`floatmax`](@ref), [`maxintfloat`](@ref), [`typemin`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest
@@ -790,7 +800,7 @@ Inf
 julia> typemax(Float32)
 Inf32
 
-julia> floatmax(Float32)  # largest finite Float32 floating point number
+julia> floatmax(Float32)  # largest positive finite Float32 floating point number
 3.4028235f38
 ```
 """

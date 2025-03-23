@@ -8,6 +8,9 @@
 Greatest common (positive) divisor (or zero if all arguments are zero).
 The arguments may be integer and rational numbers.
 
+``a`` is a divisor of ``b`` if there exists an integer ``m`` such
+that ``ma=b``.
+
 !!! compat "Julia 1.4"
     Rational arguments require Julia 1.4 or later.
 
@@ -333,7 +336,7 @@ end
 
 # ^ for any x supporting *
 function to_power_type(x::Number)
-    T = promote_type(typeof(x), typeof(one(x)), typeof(x*x))
+    T = promote_type(typeof(x), typeof(x*x))
     convert(T, x)
 end
 to_power_type(x) = oftype(x*x, x)

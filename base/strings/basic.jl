@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Symbol
+
 """
 The `AbstractString` type is the supertype of all string implementations in
 Julia. Strings are encodings of sequences of [Unicode](https://unicode.org/)
@@ -194,12 +196,7 @@ getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
 function get(s::AbstractString, i::Integer, default)
-# TODO: use ternary once @inbounds is expression-like
-    if checkbounds(Bool, s, i)
-        @inbounds return s[i]
-    else
-        return default
-    end
+    checkbounds(Bool, s, i) ? (@inbounds s[i]) : default
 end
 
 ## bounds checking ##
@@ -511,11 +508,11 @@ prevind(s::AbstractString, i::Int)                 = prevind(s, i, 1)
 
 function prevind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
-    z = ncodeunits(s) + 1
+    z = ncodeunits(s)::Int + 1
     @boundscheck 0 < i ≤ z || throw(BoundsError(s, i))
-    n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
+    n == 0 && return thisind(s, i)::Int == i ? i : string_index_err(s, i)
     while n > 0 && 1 < i
-        @inbounds n -= isvalid(s, i -= 1)
+        @inbounds n -= isvalid(s, i -= 1)::Bool
     end
     return i - n
 end
@@ -570,11 +567,11 @@ nextind(s::AbstractString, i::Int)                 = nextind(s, i, 1)
 
 function nextind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
-    z = ncodeunits(s)
+    z = ncodeunits(s)::Int
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
-    n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
+    n == 0 && return thisind(s, i)::Int == i ? i : string_index_err(s, i)
     while n > 0 && i < z
-        @inbounds n -= isvalid(s, i += 1)
+        @inbounds n -= isvalid(s, i += 1)::Bool
     end
     return i + n
 end

@@ -25,7 +25,7 @@ using .Base: sign_mask, exponent_mask, exponent_one,
             significand_bits, exponent_bits, exponent_bias,
             exponent_max, exponent_raw_max, clamp, clamp!
 
-using Core.Intrinsics: sqrt_llvm
+using Core.Intrinsics: sqrt_llvm, min_float, max_float
 
 using .Base: IEEEFloat
 
@@ -831,47 +831,12 @@ min(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(x, y
 max(x::T, y::T) where {T<:AbstractFloat} = isnan(x) || ~isnan(y) && _isless(y, x) ? x : y
 minmax(x::T, y::T) where {T<:AbstractFloat} = min(x, y), max(x, y)
 
-_isless(x::Float16, y::Float16) = signbit(widen(x) - widen(y))
-
-const has_native_fminmax = Sys.ARCH === :aarch64
-@static if has_native_fminmax
-    @eval begin
-        Base.@assume_effects :total @inline llvm_min(x::Float64, y::Float64) = ccall("llvm.minimum.f64", llvmcall, Float64, (Float64, Float64), x, y)
-        Base.@assume_effects :total @inline llvm_min(x::Float32, y::Float32) = ccall("llvm.minimum.f32", llvmcall, Float32, (Float32, Float32), x, y)
-        Base.@assume_effects :total @inline llvm_max(x::Float64, y::Float64) = ccall("llvm.maximum.f64", llvmcall, Float64, (Float64, Float64), x, y)
-        Base.@assume_effects :total @inline llvm_max(x::Float32, y::Float32) = ccall("llvm.maximum.f32", llvmcall, Float32, (Float32, Float32), x, y)
-    end
+function min(x::T, y::T) where {T<:IEEEFloat}
+    return min_float(x, y)
 end
 
-function min(x::T, y::T) where {T<:Union{Float32,Float64}}
-    @static if has_native_fminmax
-        return llvm_min(x,y)
-    end
-    diff = x - y
-    argmin = ifelse(signbit(diff), x, y)
-    anynan = isnan(x)|isnan(y)
-    return ifelse(anynan, diff, argmin)
-end
-
-function max(x::T, y::T) where {T<:Union{Float32,Float64}}
-    @static if has_native_fminmax
-        return llvm_max(x,y)
-    end
-    diff = x - y
-    argmax = ifelse(signbit(diff), y, x)
-    anynan = isnan(x)|isnan(y)
-    return ifelse(anynan, diff, argmax)
-end
-
-function minmax(x::T, y::T) where {T<:Union{Float32,Float64}}
-    @static if has_native_fminmax
-        return llvm_min(x, y), llvm_max(x, y)
-    end
-    diff = x - y
-    sdiff = signbit(diff)
-    min, max = ifelse(sdiff, x, y), ifelse(sdiff, y, x)
-    anynan = isnan(x)|isnan(y)
-    return ifelse(anynan, diff, min), ifelse(anynan, diff, max)
+function max(x::T, y::T) where {T<:IEEEFloat}
+    return max_float(x, y)
 end
 
 """
@@ -1252,7 +1217,8 @@ end
 # this method is only reliable for -2^20 < n < 2^20 (cf. #53881 #53886)
 @assume_effects :terminates_locally @noinline function pow_body(x::Float64, n::Integer)
     y = 1.0
-    xnlo = ynlo = 0.0
+    xnlo = -0.0
+    ynlo = 0.0
     n == 3 && return x*x*x # keep compatibility with literal_pow
     if n < 0
         rx = inv(x)
@@ -1576,7 +1542,7 @@ for f in (:sin, :cos, :tan, :asin, :atan, :acos,
           :exponent, :sqrt, :cbrt, :sinpi, :cospi, :sincospi, :tanpi)
     @eval function ($f)(x::Real)
         xf = float(x)
-        x === xf && throw(MethodError($f, (x,)))
+        xf isa typeof(x) && throw(MethodError($f, (x,)))
         return ($f)(xf)
     end
     @eval $(f)(::Missing) = missing

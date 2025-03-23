@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: AbstractChar, Char
+
 """
 The `AbstractChar` type is the supertype of all character implementations
 in Julia. A character represents a Unicode code point, and can be converted
@@ -221,9 +223,6 @@ in(x::AbstractChar, y::AbstractChar) = x == y
 isless(x::Char, y::Char) = bitcast(UInt32, x) < bitcast(UInt32, y)
 hash(x::Char, h::UInt) =
     hash_uint64(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
-
-first_utf8_byte(c::Char) = (bitcast(UInt32, c) >> 24) % UInt8
-first_utf8_byte(c::AbstractChar) = first_utf8_byte(Char(c)::Char)
 
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))

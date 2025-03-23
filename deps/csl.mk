@@ -117,13 +117,14 @@ distclean-csl: clean-csl
 else
 $(eval $(call bb-install,csl,CSL,true))
 ifeq ($(OS),WINNT)
+GCC_VERSION = 14
 install-csl:
 	mkdir -p $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc_s.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libgcc.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libmsvcrt.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_private_libdir)/
-	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc_s.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmsvcrt.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_private_libdir)/
+	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_libdir)/
 endif
 endif
 ifeq ($(OS),WINNT)
