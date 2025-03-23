@@ -3,7 +3,7 @@
 # Conversion/Promotion
 
 """
-    Date(dt::DateTime)::Date
+    Date(dt::DateTime)
 
 Convert a `DateTime` to a `Date`. The hour, minute, second, and millisecond parts of
 the `DateTime` are truncated, so only the year, month and day parts are used in
@@ -12,7 +12,7 @@ construction.
 Date(dt::TimeType) = convert(Date, dt)
 
 """
-    DateTime(dt::Date)::DateTime
+    DateTime(dt::Date)
 
 Convert a `Date` to a `DateTime`. The hour, minute, second, and millisecond parts of
 the new `DateTime` are assumed to be zero.
@@ -20,7 +20,7 @@ the new `DateTime` are assumed to be zero.
 DateTime(dt::TimeType) = convert(DateTime, dt)
 
 """
-    Time(dt::DateTime)::Time
+    Time(dt::DateTime)
 
 Convert a `DateTime` to a `Time`. The hour, minute, second, and millisecond parts of
 the `DateTime` are used to create the new `Time`. Microsecond and nanoseconds are zero by default.

@@ -28,7 +28,7 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
     for typ_str in typs
         @eval begin
             @doc """
-                $($period_str)(dt::$($typ_str))::$($period_str)
+                $($period_str)(dt::$($typ_str))
 
             The $($accessor_str) part of a $($typ_str) as a `$($period_str)`.$($reference)
             """ $period(dt::$(Symbol(typ_str))) = $period($(Symbol(accessor_str))(dt))
@@ -175,7 +175,7 @@ Return the `Vector` of `Period`s that comprise the given `CompoundPeriod`.
 periods(x::CompoundPeriod) = x.periods
 
 """
-    CompoundPeriod(periods)::CompoundPeriod
+    CompoundPeriod(periods)
 
 Construct a `CompoundPeriod` from a `Vector` of `Period`s. All `Period`s of the same type
 will be added together.
