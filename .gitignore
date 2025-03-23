@@ -11,6 +11,8 @@
 /julia-*
 /source-dist.tmp
 /source-dist.tmp1
+/test/results_*.json
+/test/results_*.dat
 
 *.expmap
 *.exe

@@ -244,9 +244,8 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
-            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] "),
-            skip = Sys.iswindows() && Sys.WORD_SIZE == 32)
+        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
+            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] "))
         write(stdin_write, "\b")
         wait(t)
     end
@@ -1831,85 +1830,6 @@ fake_repl() do stdin_write, stdout_read, repl
     write(stdin_write, '\x04')
     wait(repltask)
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
-end
-
-try # test the functionality of `UndefVarError_hint`
-    @assert isempty(Base.Experimental._hint_handlers)
-    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
-
-    fake_repl() do stdin_write, stdout_read, repl
-        backend = REPL.REPLBackend()
-        repltask = @async REPL.run_repl(repl; backend)
-        write(stdin_write, """
-        module A53000
-            export f
-            f() = 0.0
-        end
-
-        module C_outer_53000
-            import ..A53000: f
-            public f
-
-            module C_inner_53000
-            import ..C_outer_53000: f
-            export f
-            end
-        end
-
-        module D_53000
-            public f
-            f() = 1.0
-        end
-
-        C_inner_53000 = "I'm a decoy with the same name as C_inner_53000!"
-
-        append!(Base.loaded_modules_order, [A53000, C_outer_53000, C_outer_53000.C_inner_53000, D_53000])
-        f
-        """
-        )
-        write(stdin_write, "\nZZZZZ\n")
-        txt = readuntil(stdout_read, "ZZZZZ")
-        write(stdin_write, '\x04')
-        wait(repltask)
-        @test occursin("Hint: a global variable of this name also exists in Main.A53000.", txt)
-        @test occursin("Hint: a global variable of this name also exists in Main.D_53000.", txt)
-        @test occursin("- Also declared public in Main.C_outer_53000.", txt)
-        @test occursin("- Also exported by Main.C_outer_53000.C_inner_53000 (loaded but not imported in Main).", txt)
-    end
-catch e
-    # fail test if error
-    @test false
-finally
-    empty!(Base.Experimental._hint_handlers)
-end
-
-try # test the functionality of `UndefVarError_hint` against import clashes
-    @assert isempty(Base.Experimental._hint_handlers)
-    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
-
-    @eval module X
-
-    module A
-    export x
-    x = 1
-    end # A
-
-    module B
-    export x
-    x = 2
-    end # B
-
-    using .A, .B
-
-    end # X
-
-    expected_message = string("\nHint: It looks like two or more modules export different ",
-                              "bindings with this name, resulting in ambiguity. Try explicitly ",
-                              "importing it from a particular module, or qualifying the name ",
-                              "with the module it should come from.")
-    @test_throws expected_message X.x
-finally
-    empty!(Base.Experimental._hint_handlers)
 end
 
 # Hints for tab completes

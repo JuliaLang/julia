@@ -193,7 +193,6 @@
     XX(jl_get_ARCH) \
     XX(jl_get_backtrace) \
     XX(jl_get_binding) \
-    XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_wr) \
     XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
@@ -515,7 +514,6 @@
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_emit_codeinst_to_jit) \
-    YY(jl_extern_c) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \
@@ -532,7 +530,6 @@
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_codeinst) \
-    YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \
     YY(jl_create_native) \

@@ -1283,9 +1283,9 @@ function invokelatest_gr(gr::GlobalRef, @nospecialize args...; kwargs...)
     @inline
     kwargs = merge(NamedTuple(), kwargs)
     if isempty(kwargs)
-        return Core._call_latest(apply_gr, gr, args...)
+        return invokelatest(apply_gr, gr, args...)
     end
-    return Core._call_latest(apply_gr_kw, kwargs, gr, args...)
+    return invokelatest(apply_gr_kw, kwargs, gr, args...)
 end
 
 """

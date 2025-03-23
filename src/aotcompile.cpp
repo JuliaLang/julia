@@ -786,7 +786,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
         else {
             jl_value_t *sig = jl_array_ptr_ref(codeinfos, ++i);
             assert(jl_is_type(item) && jl_is_type(sig));
-            jl_compile_extern_c(wrap(&clone), &params, NULL, item, sig);
+            jl_generate_ccallable(clone.getModuleUnlocked(), nullptr, item, sig, params);
         }
     }
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
