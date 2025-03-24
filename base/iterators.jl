@@ -16,7 +16,7 @@ using .Base:
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
-    afoldl
+    afoldl, mod1
 using Core
 using Core: @doc
 
