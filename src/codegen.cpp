@@ -5724,7 +5724,7 @@ static void emit_vi_assignment_unboxed(jl_codectx_t &ctx, jl_varinfo_t &vi, Valu
                 if (vi.inline_roots)
                     split_value_into(ctx, rval_info, align, vi.value.V, align, jl_aliasinfo_t::fromTBAA(ctx, tbaa), vi.inline_roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe), vi.isVolatile);
                 else
-                    emit_unbox_store(ctx, rval_info, vi.value.V, tbaa, align, vi.isVolatile);
+                    emit_unbox_store(ctx, rval_info, vi.value.V, tbaa, align, align, vi.isVolatile);
             }
         }
     }
@@ -6947,7 +6947,7 @@ static void emit_specsig_to_specsig(
             split_value_into(ctx, gf_retval, align, sret, align, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), roots, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe));
         }
         else {
-            emit_unbox_store(ctx, gf_retval, sret, ctx.tbaa().tbaa_stack, align);
+            emit_unbox_store(ctx, gf_retval, sret, ctx.tbaa().tbaa_stack, align, align);
         }
         ctx.builder.CreateRetVoid();
         break;
@@ -7709,14 +7709,14 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
 
 // do codegen to create a C-callable alias/wrapper, or if sysimg_handle is set,
 // restore one from a loaded system image.
-const char *jl_generate_ccallable(Module *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
+const char *jl_generate_ccallable(Module *llvmmod, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params)
 {
     ++GeneratedCCallables;
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
     assert(jl_is_datatype(ft));
     jl_value_t *ff = ft->instance;
     assert(ff);
-    const char *name = jl_symbol_name(ft->name->mt->name);
+    const char *name = !jl_is_string(nameval) ? jl_symbol_name(ft->name->mt->name) : jl_string_data(nameval);
     jl_value_t *crt = declrt;
     if (jl_is_abstract_ref_type(declrt)) {
         declrt = jl_tparam0(declrt);
@@ -7738,25 +7738,12 @@ const char *jl_generate_ccallable(Module *llvmmod, void *sysimg_handle, jl_value
         function_sig_t sig("cfunction", lcrt, crt, toboxed, false,
                            argtypes, NULL, false, CallingConv::C, false, &params);
         if (sig.err_msg.empty()) {
-            if (sysimg_handle) {
-                // restore a ccallable from the system image
-                void *addr;
-                int found = jl_dlsym(sysimg_handle, name, &addr, 0);
-                if (found)
-                    add_named_global(name, addr);
-                else {
-                    err = jl_get_exceptionf(jl_errorexception_type, "%s not found in sysimg", name);
-                    jl_throw(err);
-                }
-            }
-            else {
-                //Safe b/c params holds context lock
-                Function *cw = gen_cfun_wrapper(llvmmod, params, sig, ff, name, declrt, sigt, NULL, NULL, NULL);
-                auto alias = GlobalAlias::create(cw->getValueType(), cw->getType()->getAddressSpace(),
-                                    GlobalValue::ExternalLinkage, name, cw, llvmmod);
-                if (params.TargetTriple.isOSBinFormatCOFF()) {
-                    alias->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLExportStorageClass);
-                }
+            //Safe b/c params holds context lock
+            Function *cw = gen_cfun_wrapper(llvmmod, params, sig, ff, name, declrt, sigt, NULL, NULL, NULL);
+            auto alias = GlobalAlias::create(cw->getValueType(), cw->getType()->getAddressSpace(),
+                                GlobalValue::ExternalLinkage, name, cw, llvmmod);
+            if (params.TargetTriple.isOSBinFormatCOFF()) {
+                alias->setDLLStorageClass(GlobalValue::DLLStorageClassTypes::DLLExportStorageClass);
             }
             JL_GC_POP();
             return name;
@@ -8730,11 +8717,12 @@ static jl_llvm_functions_t
             ++AI; // both specsig (derived) and fptr1 (box) pass this argument as a distinct argument
             // Load closure world
             Value *worldaddr = emit_ptrgep(ctx, oc_this, offsetof(jl_opaque_closure_t, world));
+            Align alignof_ptr(ctx.types().alignof_ptr);
             jl_cgval_t closure_world = typed_load(ctx, worldaddr, NULL, (jl_value_t*)jl_long_type,
-                nullptr, nullptr, false, AtomicOrdering::NotAtomic, false, ctx.types().alignof_ptr.value());
+                nullptr, nullptr, false, AtomicOrdering::NotAtomic, false, alignof_ptr.value());
             assert(ctx.world_age_at_entry == nullptr);
             ctx.world_age_at_entry = closure_world.V; // The tls world in a OC is the world of the closure
-            emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, ctx.types().alignof_ptr);
+            emit_unbox_store(ctx, closure_world, world_age_field, ctx.tbaa().tbaa_gcframe, alignof_ptr, alignof_ptr);
 
             if (s == jl_unused_sym || vi.value.constant)
                 continue;
@@ -9502,7 +9490,7 @@ static jl_llvm_functions_t
                             if (tracked)
                                 split_value_into(ctx, typedval, align, dest, align, jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_stack), mayberoots);
                             else
-                                emit_unbox_store(ctx, typedval, dest, ctx.tbaa().tbaa_stack, align);
+                                emit_unbox_store(ctx, typedval, dest, ctx.tbaa().tbaa_stack, align, align);
                         }
                         return mayberoots;
                     });
@@ -9537,8 +9525,10 @@ static jl_llvm_functions_t
                     else {
                         if (VN)
                             V = Constant::getNullValue(ctx.types().T_prjlvalue);
-                        if (dest)
-                            emit_unbox_store(ctx, val, dest, ctx.tbaa().tbaa_stack, Align(julia_alignment(val.typ)));
+                        if (dest) {
+                            Align align(julia_alignment(val.typ));
+                            emit_unbox_store(ctx, val, dest, ctx.tbaa().tbaa_stack, align, align);
+                        }
                         RTindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), tindex);
                     }
                 }

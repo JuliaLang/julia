@@ -86,6 +86,23 @@ static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
 // Mutex for newly_inferred
 jl_mutex_t newly_inferred_mutex;
 extern jl_mutex_t world_counter_lock;
+static _Atomic(uint8_t) jl_tag_newly_inferred_enabled = 0;
+
+/**
+ * @brief Enable tagging of all newly inferred CodeInstances.
+ */
+JL_DLLEXPORT void jl_tag_newly_inferred_enable(void)
+{
+    jl_atomic_fetch_add(&jl_tag_newly_inferred_enabled, 1);  // FIXME overflow?
+}
+/**
+ * @brief Disable tagging of all newly inferred CodeInstances.
+ */
+JL_DLLEXPORT void jl_tag_newly_inferred_disable(void)
+{
+    jl_atomic_fetch_add(&jl_tag_newly_inferred_enabled, -1);  // FIXME underflow?
+}
+
 
 // Register array of newly-inferred MethodInstances
 // This gets called as the first step of Base.include_package_for_output
@@ -101,6 +118,12 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 {
     if (!newly_inferred)
         return;
+    uint8_t tag_newly_inferred = jl_atomic_load_relaxed(&jl_tag_newly_inferred_enabled);
+    if (tag_newly_inferred) {
+        jl_method_instance_t *mi = jl_get_ci_mi((jl_code_instance_t*)ci);
+        uint8_t miflags = jl_atomic_load_relaxed(&mi->flags);
+        jl_atomic_store_relaxed(&mi->flags, miflags | JL_MI_FLAGS_MASK_PRECOMPILED);
+    }
     JL_LOCK(&newly_inferred_mutex);
     size_t end = jl_array_nrows(newly_inferred);
     jl_array_grow_end(newly_inferred, 1);

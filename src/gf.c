@@ -4596,7 +4596,7 @@ JL_DLLEXPORT void jl_typeinf_timing_end(uint64_t start, int is_recompile)
 }
 
 // declare a C-callable entry point; called during code loading from the toplevel
-JL_DLLEXPORT void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
+JL_DLLEXPORT void jl_extern_c(jl_value_t *name, jl_value_t *declrt, jl_tupletype_t *sigt)
 {
     // validate arguments. try to do as many checks as possible here to avoid
     // throwing errors later during codegen.
@@ -4627,7 +4627,10 @@ JL_DLLEXPORT void jl_extern_c(jl_value_t *declrt, jl_tupletype_t *sigt)
     if (!jl_is_method(meth))
         jl_error("@ccallable: could not find requested method");
     JL_GC_PUSH1(&meth);
-    meth->ccallable = jl_svec2(declrt, (jl_value_t*)sigt);
+    if (name == jl_nothing)
+        meth->ccallable = jl_svec2(declrt, (jl_value_t*)sigt);
+    else
+        meth->ccallable = jl_svec3(declrt, (jl_value_t*)sigt, name);
     jl_gc_wb(meth, meth->ccallable);
     JL_GC_POP();
 }

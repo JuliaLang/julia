@@ -643,7 +643,7 @@ function _copyline(out::IO, io::GenericIOBuffer; keep::Bool=false)
     data = view(io.data, io.ptr:io.size)
     # note: findfirst + copyto! is much faster than a single loop
     #       except for nout ≲ 20.  A single loop is 2x faster for nout=5.
-    nout = nread = something(findfirst(==(0x0a), data), length(data))
+    nout = nread = something(findfirst(==(0x0a), data), length(data))::Int
     if !keep && nout > 0 && data[nout] == 0x0a
         nout -= 1
         nout > 0 && data[nout] == 0x0d && (nout -= 1)
