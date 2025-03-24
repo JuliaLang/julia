@@ -569,7 +569,7 @@ fLargeTable() = 4
 fLargeTable(::Union, ::Union) = "a"
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "a"
 fLargeTable(::Union, ::Union) = "b"
-@test length(methods(fLargeTable)) == 206
+@test length(methods(fLargeTable)) == 205
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
 # issue #15280
@@ -1295,3 +1295,24 @@ end
 @test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
 
 @test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187
+
+# which should not look through const bindings, even if they have the same value
+# as a previous implicit import
+module SinConst
+const sin = Base.sin
+end
+
+@test which(SinConst, :sin) === SinConst
+
+# `which` should error if there is not a unique binding that a constant was imported from
+module X1ConstConflict
+const xconstconflict = 1
+export xconstconflict
+end
+module X2ConstConflict
+const xconstconflict = 1
+export xconstconflict
+end
+using .X1ConstConflict, .X2ConstConflict
+
+@test_throws ErrorException which(@__MODULE__, :xconstconflict)

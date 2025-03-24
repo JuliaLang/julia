@@ -13,8 +13,6 @@ include("choosetests.jl")
 include("testenv.jl")
 include("buildkitetestjson.jl")
 
-using .BuildkiteTestJSON
-
 (; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
 tests = unique(tests)
 
@@ -344,6 +342,8 @@ cd(@__DIR__) do
         end
     end
 
+    BuildkiteTestJSON.write_testset_json_files(@__DIR__)
+
     #=
 `   Construct a testset on the master node which will hold results from all the
     test files run on workers and on node1. The loop goes through the results,
@@ -416,11 +416,6 @@ cd(@__DIR__) do
         Test.push_testset(fake)
         Test.record(o_ts, fake)
         Test.pop_testset()
-    end
-
-    if Base.get_bool_env("CI", false)
-        @info "Writing test result data to $(@__DIR__)"
-        write_testset_json_files(@__DIR__, o_ts)
     end
 
     Test.TESTSET_PRINT_ENABLE[] = true
