@@ -1195,7 +1195,7 @@ end
         !yisint && throw_exp_domainerror(x) # y isn't an integer
         s = ifelse(isodd(yint), -1, 1)
     end
-    !isfinite(x) && return copysign(x,s)*(y>0 || isnan(x))           # x is inf or NaN
+    !isfinite(x) && return copysign(x,s)*(y>0 || isnan(x)) # x is inf or NaN
     return copysign(pow_body(abs(x), y), s)
 end
 
