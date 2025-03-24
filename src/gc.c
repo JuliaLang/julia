@@ -1121,17 +1121,8 @@ static void sweep_big(jl_ptls_t ptls, int sweep_full) JL_NOTSAFEPOINT
 
 void jl_gc_track_malloced_genericmemory(jl_ptls_t ptls, jl_genericmemory_t *m, int isaligned){
     // This is **NOT** a GC safe point.
-    mallocarray_t *ma;
-    if (ptls->heap.mafreelist == NULL) {
-        ma = (mallocarray_t*)malloc_s(sizeof(mallocarray_t));
-    }
-    else {
-        ma = ptls->heap.mafreelist;
-        ptls->heap.mafreelist = ma->next;
-    }
-    ma->a = (jl_value_t*)((uintptr_t)m | !!isaligned);
-    ma->next = ptls->heap.mallocarrays;
-    ptls->heap.mallocarrays = ma;
+    void *a = (void*)((uintptr_t)m | !!isaligned);
+    small_arraylist_push(&ptls->heap.mallocarrays, a);
 }
 
 
@@ -1245,24 +1236,23 @@ static void sweep_malloced_memory(void) JL_NOTSAFEPOINT
     for (int t_i = 0; t_i < gc_n_threads; t_i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[t_i];
         if (ptls2 != NULL) {
-            mallocarray_t *ma = ptls2->heap.mallocarrays;
-            mallocarray_t **pma = &ptls2->heap.mallocarrays;
-            while (ma != NULL) {
-                mallocarray_t *nxt = ma->next;
-                jl_value_t *a = (jl_value_t*)((uintptr_t)ma->a & ~1);
-                int bits = jl_astaggedvalue(a)->bits.gc;
-                if (gc_marked(bits)) {
-                    pma = &ma->next;
+            size_t n = 0;
+            size_t l = ptls2->heap.mallocarrays.len;
+            void **lst = ptls2->heap.mallocarrays.items;
+            // filter without preserving order
+            while (n < l) {
+                jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[n] & ~1);
+                if (gc_marked(jl_astaggedvalue(m)->bits.gc)) {
+                    n++;
                 }
                 else {
-                    *pma = nxt;
-                    int isaligned = (uintptr_t)ma->a & 1;
-                    jl_gc_free_memory(a, isaligned);
-                    free(ma);
+                    int isaligned = (uintptr_t)lst[n] & 1;
+                    jl_gc_free_memory(m, isaligned);
+                    l--;
+                    lst[n] = lst[l];
                 }
-                gc_time_count_mallocd_memory(bits);
-                ma = nxt;
             }
+            ptls2->heap.mallocarrays.len = l;
         }
     }
     gc_time_mallocd_memory_end();
@@ -3968,8 +3958,7 @@ void jl_init_thread_heap(jl_ptls_t ptls)
     small_arraylist_new(&heap->live_tasks, 0);
     for (int i = 0; i < JL_N_STACK_POOLS; i++)
         small_arraylist_new(&heap->free_stacks[i], 0);
-    heap->mallocarrays = NULL;
-    heap->mafreelist = NULL;
+    small_arraylist_new(&heap->mallocarrays, 0);
     heap->big_objects = NULL;
     heap->remset = &heap->_remset[0];
     heap->last_remset = &heap->_remset[1];
