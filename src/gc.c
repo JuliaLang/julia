@@ -6,7 +6,11 @@
 #include "julia_atomics.h"
 #include "julia_gcext.h"
 #include "julia_assert.h"
-#ifdef __GLIBC__
+#include <stdlib.h>
+
+#if defined(_OS_DARWIN_)
+#include <malloc/malloc.h>
+#else
 #include <malloc.h> // for malloc_trim
 #endif
 
@@ -1134,10 +1138,6 @@ void jl_gc_count_allocd(size_t sz) JL_NOTSAFEPOINT
     jl_batch_accum_heap_size(ptls, sz);
 }
 
-void jl_gc_count_freed(size_t sz) JL_NOTSAFEPOINT
-{
-    jl_batch_accum_free_size(jl_current_task->ptls, sz);
-}
 
 // Only safe to update the heap inside the GC
 static void combine_thread_gc_counts(jl_gc_num_t *dest, int update_heap) JL_NOTSAFEPOINT
@@ -1213,19 +1213,21 @@ size_t jl_genericmemory_nbytes(jl_genericmemory_t *m) JL_NOTSAFEPOINT
 }
 
 
-static void jl_gc_free_memory(jl_value_t *v, int isaligned) JL_NOTSAFEPOINT
+static void jl_gc_free_memory(jl_genericmemory_t *v, int isaligned) JL_NOTSAFEPOINT
 {
     assert(jl_is_genericmemory(v));
     jl_genericmemory_t *m = (jl_genericmemory_t*)v;
     assert(jl_genericmemory_how(m) == 1 || jl_genericmemory_how(m) == 2);
     char *d = (char*)m->ptr;
+    size_t freed_bytes = memory_block_usable_size(d, isaligned);
+    assert(freed_bytes != 0);
     if (isaligned)
         jl_free_aligned(d);
     else
         free(d);
     jl_atomic_store_relaxed(&gc_heap_stats.heap_size,
-        jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - jl_genericmemory_nbytes(m));
-    gc_num.freed += jl_genericmemory_nbytes(m);
+        jl_atomic_load_relaxed(&gc_heap_stats.heap_size) - freed_bytes);
+    gc_num.freed += freed_bytes;
     gc_num.freecall++;
 }
 
@@ -4058,58 +4060,44 @@ JL_DLLEXPORT void jl_throw_out_of_memory_error(void)
     jl_throw(jl_memory_exception);
 }
 
-// allocation wrappers that track allocation and let collection run
+// allocation wrappers that add to gc pressure
 
-JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+JL_DLLEXPORT void *jl_malloc(size_t sz)
 {
-    jl_gcframe_t **pgcstack = jl_get_pgcstack();
-    jl_task_t *ct = jl_current_task;
-    void *data = malloc(sz);
-    if (data != NULL && pgcstack != NULL && ct->world_age) {
-        jl_ptls_t ptls = ct->ptls;
-        maybe_collect(ptls);
-        jl_atomic_store_relaxed(&ptls->gc_num.allocd,
-            jl_atomic_load_relaxed(&ptls->gc_num.allocd) + sz);
-        jl_atomic_store_relaxed(&ptls->gc_num.malloc,
-            jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
-        jl_batch_accum_heap_size(ptls, sz);
-    }
-    return data;
+    return jl_gc_counted_malloc(sz);
 }
 
-JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
-{
-    jl_gcframe_t **pgcstack = jl_get_pgcstack();
-    jl_task_t *ct = jl_current_task;
-    void *data = calloc(nm, sz);
-    if (data != NULL && pgcstack != NULL && ct->world_age) {
-        jl_ptls_t ptls = ct->ptls;
-        maybe_collect(ptls);
-        jl_atomic_store_relaxed(&ptls->gc_num.allocd,
-            jl_atomic_load_relaxed(&ptls->gc_num.allocd) + nm*sz);
-        jl_atomic_store_relaxed(&ptls->gc_num.malloc,
-            jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
-        jl_batch_accum_heap_size(ptls, sz * nm);
-    }
-    return data;
+//_unchecked_calloc does not check for potential overflow of nm*sz
+STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
+    size_t nmsz = nm*sz;
+    return jl_gc_counted_calloc(nmsz, 1);
 }
 
-JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
+JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
 {
-    jl_gcframe_t **pgcstack = jl_get_pgcstack();
-    jl_task_t *ct = jl_current_task;
-    free(p);
-    if (pgcstack != NULL && ct->world_age) {
-        jl_batch_accum_free_size(ct->ptls, sz);
+    if (nm > SSIZE_MAX/sz)
+        return NULL;
+    return _unchecked_calloc(nm, sz);
+}
+
+JL_DLLEXPORT void jl_free(void *p)
+{
+    if (p != NULL) {
+        size_t sz = memory_block_usable_size(p, 0);
+        free(p);
+        jl_task_t *ct = jl_get_current_task();
+        if (ct != NULL)
+            jl_batch_accum_free_size(ct->ptls, sz);
     }
 }
 
-JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
 {
-    jl_gcframe_t **pgcstack = jl_get_pgcstack();
-    jl_task_t *ct = jl_current_task;
+    size_t old = p ? memory_block_usable_size(p, 0) : 0;
     void *data = realloc(p, sz);
-    if (data != NULL && pgcstack != NULL && ct->world_age) {
+    jl_task_t *ct = jl_get_current_task();
+    if (data != NULL && ct != NULL) {
+        sz = memory_block_usable_size(data, 0);
         jl_ptls_t ptls = ct->ptls;
         maybe_collect(ptls);
         if (!(sz < old))
@@ -4129,63 +4117,80 @@ JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size
     return data;
 }
 
-// allocation wrappers that save the size of allocations, to allow using
-// jl_gc_counted_* functions with a libc-compatible API.
-
-JL_DLLEXPORT void *jl_malloc(size_t sz)
+JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
-    int64_t *p = (int64_t *)jl_gc_counted_malloc(sz + JL_SMALL_BYTE_ALIGNMENT);
-    if (p == NULL)
-        return NULL;
-    p[0] = sz;
-    return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
-}
-
-//_unchecked_calloc does not check for potential overflow of nm*sz
-STATIC_INLINE void *_unchecked_calloc(size_t nm, size_t sz) {
-    size_t nmsz = nm*sz;
-    int64_t *p = (int64_t *)jl_gc_counted_calloc(nmsz + JL_SMALL_BYTE_ALIGNMENT, 1);
-    if (p == NULL)
-        return NULL;
-    p[0] = nmsz;
-    return (void *)(p + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
-}
-
-JL_DLLEXPORT void *jl_calloc(size_t nm, size_t sz)
-{
-    if (nm > SSIZE_MAX/sz - JL_SMALL_BYTE_ALIGNMENT)
-        return NULL;
-    return _unchecked_calloc(nm, sz);
-}
-
-JL_DLLEXPORT void jl_free(void *p)
-{
-    if (p != NULL) {
-        int64_t *pp = (int64_t *)p - 2;
-        size_t sz = pp[0];
-        jl_gc_counted_free_with_size(pp, sz + JL_SMALL_BYTE_ALIGNMENT);
+    jl_task_t *ct = jl_current_task;
+    void *data = malloc(sz);
+    if (data != NULL && ct != NULL && ct->world_age) {
+        sz = memory_block_usable_size(data, 0);
+        jl_ptls_t ptls = ct->ptls;
+        maybe_collect(ptls);
+        jl_atomic_store_relaxed(&ptls->gc_num.allocd,
+            jl_atomic_load_relaxed(&ptls->gc_num.allocd) + sz);
+        jl_atomic_store_relaxed(&ptls->gc_num.malloc,
+            jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
+        jl_batch_accum_heap_size(ptls, sz);
     }
+    return data;
 }
 
-JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
+JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
-    int64_t *pp;
-    size_t szold;
-    if (p == NULL) {
-        pp = NULL;
-        szold = 0;
+    jl_task_t *ct = jl_current_task;
+    void *data = calloc(nm, sz);
+    if (data != NULL && ct != NULL && ct->world_age) {
+        sz = memory_block_usable_size(data, 0);
+        jl_ptls_t ptls = ct->ptls;
+        maybe_collect(ptls);
+        jl_atomic_store_relaxed(&ptls->gc_num.allocd,
+            jl_atomic_load_relaxed(&ptls->gc_num.allocd) + sz);
+        jl_atomic_store_relaxed(&ptls->gc_num.malloc,
+            jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
+        jl_batch_accum_heap_size(ptls, sz);
     }
-    else {
-        pp = (int64_t *)p - 2;
-        szold = pp[0] + JL_SMALL_BYTE_ALIGNMENT;
-    }
-    int64_t *pnew = (int64_t *)jl_gc_counted_realloc_with_old_size(pp, szold, sz + JL_SMALL_BYTE_ALIGNMENT);
-    if (pnew == NULL)
-        return NULL;
-    pnew[0] = sz;
-    return (void *)(pnew + 2); // assumes JL_SMALL_BYTE_ALIGNMENT == 16
+    return data;
 }
 
+JL_DLLEXPORT void jl_gc_counted_free_with_size(void *p, size_t sz)
+{
+    jl_free(p);
+}
+
+JL_DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    return jl_realloc(p, sz);
+}
+
+// =========================================================================== //
+// malloc wrappers, aligned allocation
+// =========================================================================== //
+
+#if defined(_OS_WINDOWS_)
+// helper function based partly on wine msvcrt80+ heap.c
+// but with several fixes to improve the correctness of the computation and remove unnecessary parameters
+#define SAVED_PTR(x) ((void *)((DWORD_PTR)((char *)x - sizeof(void *)) & \
+                               ~(sizeof(void *) - 1)))
+static size_t _aligned_msize(void *p)
+{
+    void *alloc_ptr = *(void**)SAVED_PTR(p);
+    return _msize(alloc_ptr) - ((char*)p - (char*)alloc_ptr);
+}
+#undef SAVED_PTR
+#endif
+
+size_t memory_block_usable_size(void *p, int isaligned) JL_NOTSAFEPOINT
+{
+#if defined(_OS_WINDOWS_)
+    if (isaligned)
+        return _aligned_msize(p);
+    else
+        return _msize(p);
+#elif defined(_OS_DARWIN_)
+    return malloc_size(p);
+#else
+    return malloc_usable_size(p);
+#endif
+}
 // allocating blocks for Arrays and Strings
 
 JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
@@ -4203,12 +4208,13 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
     void *b = malloc_cache_align(allocsz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
-
+    size_t allocated_bytes = memory_block_usable_size(b, 1);
+    assert(allocated_bytes >= allocsz);
     jl_atomic_store_relaxed(&ptls->gc_num.allocd,
-        jl_atomic_load_relaxed(&ptls->gc_num.allocd) + allocsz);
+        jl_atomic_load_relaxed(&ptls->gc_num.allocd) + allocated_bytes);
     jl_atomic_store_relaxed(&ptls->gc_num.malloc,
         jl_atomic_load_relaxed(&ptls->gc_num.malloc) + 1);
-    jl_batch_accum_heap_size(ptls, allocsz);
+    jl_batch_accum_heap_size(ptls, allocated_bytes);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);
 #endif
