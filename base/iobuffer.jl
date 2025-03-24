@@ -493,7 +493,7 @@ end
 # or allocate a new one and copy.
 # This should only be called after the offset is zero - any operation which calls
 # _resize! should reset offset before so.
-function _resize!(io::GenericIOBuffer, new_size::Int)
+function _resize!(io::GenericIOBuffer, new_size::Int, exact::Bool)
     old_data = io.data
     if applicable(resize!, old_data, new_size)
         resize!(old_data, new_size)
@@ -503,8 +503,13 @@ function _resize!(io::GenericIOBuffer, new_size::Int)
         if size >= new_size && !iszero(new_size)
             new_data = old_data
         else
-            new_data = _similar_data(io, new_size)
-            io.data = new_data
+            sz = min(io.maxsize, exact ? new_size : overallocation(new_size))
+            if sz > length(old_data)
+                new_data = _similar_data(io, sz)
+                io.data = new_data
+            else
+                new_data = old_data
+            end
         end
         size > 0 && copyto!(new_data, 1, old_data, 1, min(new_size, size))
     end
@@ -526,7 +531,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
         # We zero the offset here because that allows us to minimize the resizing,
         # saving memory.
         zero_offset!(io)
-        n > min(io.maxsize, length(io.data)) && _resize!(io, n)
+        n > min(io.maxsize, length(io.data)) && _resize!(io, n, true)
     end
     # Since mark is zero-indexed, we must also clear it if they're equal
     ismarked(io) && io.mark >= n && (io.mark = -1)
@@ -602,10 +607,7 @@ end
             iszero(nshort) && return io
         end
     end
-    # Don't exceed maxsize. Otherwise, we overshoot the number of bytes needed,
-    # such that we don't need to resize too often.
-    new_size = min(io.maxsize, overallocation(data_len + nshort % Int))
-    _resize!(io, new_size)
+    _resize!(io, data_len + nshort % Int, false)
     return io
 end
 
@@ -632,7 +634,7 @@ end
 
 @noinline function close(io::GenericIOBuffer{T}) where T
     if io.writable && !io.reinit
-        _resize!(io, 0)
+        _resize!(io, 0, true)
     end
     io.readable = false
     io.writable = false
