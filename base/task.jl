@@ -1206,11 +1206,6 @@ function wait()
     W = workqueue_for(Threads.threadid())
     task = trypoptask(W)
     if !(task isa Task)
-        # didn't find a task to run, try again
-        process_events()
-        task = trypoptask(W)
-    end
-    if !(task isa Task)
         # No tasks to run; switch to the scheduler task to run the
         # thread sleep logic.
         sched_task = get_sched_task()
