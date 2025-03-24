@@ -1611,13 +1611,13 @@ See also: [`first`](@ref), [`last`](@ref), [`nth`](@ref)
 
 # Examples
 ```jldoctest
-julia> nth(2:2:10, 4)
+julia> Iterators.nth(2:2:10, 4)
 8
 
-julia> nth(reshape(1:30, (5,6)), 6)
+julia> Iterators.nth(reshape(1:30, (5,6)), 6)
 6
 
-julia> stateful = Stateful(1:10); nth(stateful, 7)
+julia> stateful = Iterators.Stateful(1:10); nth(stateful, 7)
 7
 
 julia> first(stateful)
@@ -1670,13 +1670,13 @@ Will advance any `Stateful`[@ref] iterator.
 See also: [`nth`](@ref), [`Base.Fix2`](@ref)
 # Examples
 ```jldoctest
-julia> fifth_element = nth(5)
+julia> fifth_element = Iterators.nth(5)
 (::Base.Fix2{typeof(nth), Int64}) (generic function with 1 method)
 
 julia> fifth_element(reshape(1:30, (5,6)))
 5
 
-julia> map(nth(3), my_vec)
+julia> map(Iterators.nth(3), my_vec)
 ```
 """
 nth(n::Integer) = Base.Fix2(nth, n)
