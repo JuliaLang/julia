@@ -809,8 +809,14 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
         jl_queue_for_serialization(s, module_usings_getmod(m, i));
     }
 
-    jl_queue_for_serialization(s, m->usings_backedges);
-    jl_queue_for_serialization(s, m->scanned_methods);
+    if (jl_options.trim || jl_options.strip_ir) {
+        record_field_change((jl_value_t**)&m->usings_backedges, jl_nothing);
+        record_field_change((jl_value_t**)&m->scanned_methods, jl_nothing);
+    }
+    else {
+        jl_queue_for_serialization(s, m->usings_backedges);
+        jl_queue_for_serialization(s, m->scanned_methods);
+    }
 }
 
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
@@ -1322,10 +1328,10 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
         newm->line = 0;
     newm->usings_backedges = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings_backedges)));
-    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings_backedges, s->link_ids_relocs));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, get_replaceable_field(&m->usings_backedges, 1), s->link_ids_relocs));
     newm->scanned_methods = NULL;
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, scanned_methods)));
-    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->scanned_methods, s->link_ids_relocs));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, get_replaceable_field(&m->scanned_methods, 1), s->link_ids_relocs));
 
     // After reload, everything that has happened in this process happened semantically at
     // (for .incremental) or before jl_require_world, so reset this flag.
@@ -3630,7 +3636,7 @@ invalidated:
         jl_sym_t *name = b->globalref->name;
         JL_LOCK(&mod->lock);
         jl_atomic_store_release(&mod->export_set_changed_since_require_world, 1);
-        if (mod->usings_backedges) {
+        if (mod->usings_backedges != jl_nothing) {
             for (size_t i = 0; i < jl_array_len(mod->usings_backedges); i++) {
                 jl_module_t *edge = (jl_module_t*)jl_array_ptr_ref(mod->usings_backedges, i);
                 jl_binding_t *importee = jl_get_module_binding(edge, name, 0);
