@@ -1152,7 +1152,7 @@ end
     testset = zip(itrs, ns, expected)
     @testset "iter: $IT" for (IT, n, exp) in testset
         @test exp == nth(IT, n)
-        IT isa Cycle && continue # cycles are infinite so never OOB
+        IT isa Iterators.Cycle && continue # cycles are infinite so never OOB
         @test_throws Union{ArgumentError,BoundsError} nth(IT, 999999999)
     end
 end
