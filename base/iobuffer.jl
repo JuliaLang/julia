@@ -631,6 +631,9 @@ function closewrite(io::GenericIOBuffer)
 end
 
 @noinline function close(io::GenericIOBuffer{T}) where T
+    if io.writable && !io.reinit
+        _resize!(io, 0)
+    end
     io.readable = false
     io.writable = false
     io.seekable = false
@@ -639,9 +642,6 @@ end
     io.ptr = 1
     io.mark = -1
     io.offset = 0
-    if io.writable && !io.reinit
-        io.data = _resize!(io, 0)
-    end
     nothing
 end
 
