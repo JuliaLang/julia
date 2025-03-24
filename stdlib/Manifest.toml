@@ -68,7 +68,7 @@ version = "1.11.0"
 [[deps.LLD_jll]]
 deps = ["Artifacts", "Libdl", "Zlib_jll", "libLLVM_jll"]
 uuid = "d55e3150-da41-5e91-b323-ecfd1eec6109"
-version = "16.0.6+4"
+version = "16.0.6+5"
 
 [[deps.LLVMLibUnwind_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -276,7 +276,7 @@ version = "2.2.5+0"
 [[deps.libLLVM_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "8f36deef-c2a5-5394-99ed-8e07531fb29a"
-version = "16.0.6+4"
+version = "16.0.6+5"
 
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
