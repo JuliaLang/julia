@@ -2,7 +2,7 @@
 
 # weak key dictionaries
 
-struct WeakKeyDictFinalizer{T}
+mutable struct WeakKeyDictFinalizer{T}
     d::T
 end
 (d::WeakKeyDictFinalizer)(k) = d.d.dirty = true
