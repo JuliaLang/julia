@@ -167,7 +167,9 @@ let fails = @testset NoThrowTestSet begin
         @test issetequal([2, 3] .- 1, [1, 3])
         # 28 - Fail - Type Comparison
         @test typeof(1) <: typeof("julia")
-        # 29 - 32 - Fail - wrong message
+        # 29 - Fail - assignment
+        @test (i = length([1, 2])) == 3
+        # 30 - 33 - Fail - wrong message
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
@@ -318,21 +320,26 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[29])
+        @test occursin("Expression: (i = length([1, 2])) == 3", str)
+        @test occursin("Evaluated: 2 == 3", str)
+    end
+
+    let str = sprint(show, fails[30])
         @test occursin("Expected: \"A test\"", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[30])
+    let str = sprint(show, fails[31])
         @test occursin("Expected: r\"sqrt\\([Cc]omplx\"", str)
         @test occursin(r"Message: .*Try sqrt\(Complex", str)
     end
 
-    let str = sprint(show, fails[31])
+    let str = sprint(show, fails[32])
         @test occursin("Expected: < match function >", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[32])
+    let str = sprint(show, fails[33])
         @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end

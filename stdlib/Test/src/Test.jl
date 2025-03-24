@@ -340,15 +340,17 @@ struct Threw <: ExecutionResult
     source::LineNumberNode
 end
 
-function eval_test_comparison(comparisons::Tuple, quoted::Expr, source::LineNumberNode, negate::Bool=false)
+function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
+    comparison.head === :comparison || throw(ArgumentError("$comparison is not a comparison expression"))
+    comparison_args = comparison.args
     quoted_args = quoted.args
-    n = length(comparisons)
+    n = length(comparison_args)
     kw_suffix = ""
 
     res = true
     i = 1
     while i < n
-        a, op, b = comparisons[i], comparisons[i+1], comparisons[i+2]
+        a, op, b = comparison_args[i], comparison_args[i+1], comparison_args[i+2]
         if res
             res = op(a, b)
         end
@@ -702,7 +704,7 @@ function get_test_result(ex, source)
         escaped_terms = [esc(arg) for arg in ex.args]
         quoted_terms = [QuoteNode(arg) for arg in ex.args]
         testret = :(eval_test_comparison(
-            ($(escaped_terms...),),
+            Expr(:comparison, $(escaped_terms...)),
             Expr(:comparison, $(quoted_terms...)),
             $(QuoteNode(source)),
             $negate,
