@@ -454,7 +454,7 @@ end
 """
     Base.AbstractOneTo
 
-Abstract type for ranges that start at 1.
+Abstract type for ranges that start at 1 and have a step size of 1.
 """
 abstract type AbstractOneTo{T} <: AbstractUnitRange{T} end
 
