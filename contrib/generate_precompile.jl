@@ -46,7 +46,6 @@ precompile(Tuple{typeof(Base.Threads.atomic_sub!), Base.Threads.Atomic{Int}, Int
 precompile(Tuple{Type{Base.Val{x} where x}, Module})
 precompile(Tuple{Type{NamedTuple{(:honor_overrides,), T} where T<:Tuple}, Tuple{Bool}})
 precompile(Tuple{typeof(Base.unique!), Array{String, 1}})
-precompile(Tuple{typeof(Base.invokelatest), Any})
 precompile(Tuple{typeof(Base.vcat), Array{String, 1}, Array{String, 1}})
 
 # Pkg loading

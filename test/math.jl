@@ -1,5 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("testhelpers/EvenIntegers.jl")
+using .EvenIntegers
+
 using Random
 using LinearAlgebra
 using Base.Experimental: @force_compile
@@ -1537,6 +1540,20 @@ end
         for y ∈ 0:2
             @test all((t -> ===(t...)), zip(x^y, p[y + 1]))
         end
+    end
+
+    @testset "rng exponentiation, issue #57590" begin
+        @test EvenInteger(16) === @inferred EvenInteger(2)^4
+        @test EvenInteger(16) === @inferred EvenInteger(2)^Int(4)  # avoid `literal_pow`
+        @test EvenInteger(16) === @inferred EvenInteger(2)^EvenInteger(4)
+    end
+end
+
+@testset "special function `::Real` fallback shouldn't recur without bound, issue #57789" begin
+    mutable struct Issue57789 <: Real end
+    Base.float(::Issue57789) = Issue57789()
+    for f ∈ (sin, sinpi, log, exp)
+        @test_throws MethodError f(Issue57789())
     end
 end
 

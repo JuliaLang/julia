@@ -747,7 +747,6 @@ end
 
 # method root provenance & external code caching
 precompile_test_harness("code caching") do dir
-    Bid = rootid(Base)
     Cache_module = :Cacheb8321416e8a3e2f1
     # Note: calling setindex!(::Dict{K,V}, ::Any, ::K) adds both compression and codegen roots
     write(joinpath(dir, "$Cache_module.jl"),
@@ -1074,6 +1073,45 @@ precompile_test_harness("code caching") do dir
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
+    end
+end
+
+precompile_test_harness("precompiletools") do dir
+    PrecompileToolsModule = :PCTb8321416e8a3e2f1
+    write(joinpath(dir, "$PrecompileToolsModule.jl"),
+        """
+        module $PrecompileToolsModule
+            struct MyType
+                x::Int
+            end
+
+            function call_findfirst(x, list)
+                # call a method defined in Base by runtime dispatch
+                return findfirst(==(Base.inferencebarrier(x)), Base.inferencebarrier(list))
+            end
+
+            let
+                ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+                call_findfirst(MyType(2), [MyType(1), MyType(2), MyType(3)])
+                ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+            end
+        end
+        """
+    )
+    pkgid = Base.PkgId(string(PrecompileToolsModule))
+    @test !Base.isprecompiled(pkgid)
+    Base.compilecache(pkgid)
+    @test Base.isprecompiled(pkgid)
+    @eval using $PrecompileToolsModule
+    M = invokelatest(getfield, @__MODULE__, PrecompileToolsModule)
+    invokelatest() do
+        m = which(Tuple{typeof(findfirst), Base.Fix2{typeof(==), T}, Vector{T}} where T)
+        success = 0
+        for mi in Base.specializations(m)
+            sig = Base.unwrap_unionall(mi.specTypes)
+            success += sig.parameters[3] === Vector{M.MyType}
+        end
+        @test success == 1
     end
 end
 
@@ -1595,25 +1633,28 @@ precompile_test_harness("Issue #26028") do load_path
         """
         module Foo26028
         module Bar26028
+            using Foo26028: Foo26028 as InnerFoo1
+            using ..Foo26028: Foo26028 as InnerFoo2
             x = 0
             y = 0
         end
         function __init__()
-            include(joinpath(@__DIR__, "Baz26028.jl"))
+            Baz = @eval module Baz26028
+                  using Test
+                  public @test_throws
+                  import Foo26028.Bar26028.y as y1
+                  import ..Foo26028.Bar26028.y as y2
+                  end
+            @eval Base \$Baz.@test_throws(ConcurrencyViolationError("deadlock detected in loading Foo26028 using Foo26028"),
+                                         import Foo26028.Bar26028.x)
         end
-        end
-        """)
-    write(joinpath(load_path, "Baz26028.jl"),
-        """
-        module Baz26028
-        using Test
-        @test_throws(ConcurrencyViolationError("deadlock detected in loading Foo26028 -> Foo26028"),
-                     @eval import Foo26028.Bar26028.x)
-        import ..Foo26028.Bar26028.y
         end
         """)
     Base.compilecache(Base.PkgId("Foo26028"))
     @test_nowarn @eval using Foo26028
+    invokelatest() do
+        @test Foo26028 === Foo26028.Bar26028.InnerFoo1 === Foo26028.Bar26028.InnerFoo2
+    end
 end
 
 precompile_test_harness("Issue #29936") do load_path
@@ -2227,7 +2268,7 @@ precompile_test_harness("No package module") do load_path
     """)
     @test_throws r"Failed to precompile NoModule" Base.compilecache(Base.identify_package("NoModule"), io, io)
     @test occursin(
-        "NoModule [top-level] did not define the expected module `NoModule`, check for typos in package module name",
+        "package `NoModule` did not define the expected module `NoModule`, check for typos in package module name",
         String(take!(io)))
 
 
@@ -2239,7 +2280,7 @@ precompile_test_harness("No package module") do load_path
     """)
     @test_throws r"Failed to precompile WrongModuleName" Base.compilecache(Base.identify_package("WrongModuleName"), io, io)
     @test occursin(
-        "WrongModuleName [top-level] did not define the expected module `WrongModuleName`, check for typos in package module name",
+        "package `WrongModuleName` did not define the expected module `WrongModuleName`, check for typos in package module name",
         String(take!(io)))
 
 
@@ -2357,6 +2398,21 @@ precompile_test_harness("MainImportDisallow") do load_path
     invokelatest() do
         @test MainImportDisallow.importvar.msg == "Any `import` or `using` from `Main` is prohibited during incremental compilation."
         @test MainImportDisallow.usingmain.msg == "Any `import` or `using` from `Main` is prohibited during incremental compilation."
+    end
+end
+
+precompile_test_harness("Package top-level load itself") do load_path
+    write(joinpath(load_path, "UsingSelf.jl"),
+        """
+        __precompile__(false)
+        module UsingSelf
+        using UsingSelf
+        x = 3
+        end
+          """)
+    @eval using UsingSelf
+    invokelatest() do
+        @test UsingSelf.x == 3
     end
 end
 

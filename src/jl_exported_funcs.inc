@@ -192,8 +192,6 @@
     XX(jl_get_ARCH) \
     XX(jl_get_backtrace) \
     XX(jl_get_binding) \
-    XX(jl_get_binding_for_method_def) \
-    XX(jl_get_binding_or_error) \
     XX(jl_get_binding_wr) \
     XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
@@ -246,8 +244,6 @@
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
     XX(jl_init_with_image) \
-    XX(jl_init_with_image__threading) \
-    XX(jl_init__threading) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
