@@ -1631,8 +1631,8 @@ nth(itr::Count, n::Integer) = n > 0 ? itr.start + itr.step * (n - 1) : throw(Arg
 # Repeated
 nth(itr::Repeated, ::Integer) = itr.x
 # Take(Repeated)
-nth(itr::Take{Repeated}, n::Integer) = begin
-    n > itr.n ? throw(BoundsError(itr, n)) : nth(itr.xs)
+nth(itr::Take{Repeated{T}}, n::Integer) where T = begin
+    n > itr.n ? throw(BoundsError(itr, n)) : nth(itr.xs, n)
 end
 
 # infinite cycle
