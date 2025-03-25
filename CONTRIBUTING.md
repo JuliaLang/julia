@@ -345,13 +345,11 @@ please remove the `backport-X.Y` tag from the originating pull request for the c
 
 #### General Formatting Guidelines for Julia code contributions
 
- - 4 spaces per indentation level, no tabs
+ - Follow the latest dev version of [Julia Style Guide](https://docs.julialang.org/en/v1/manual/style-guide/).
  - use whitespace to make the code more readable
  - no whitespace at the end of a line (trailing whitespace)
  - comments are good, especially when they explain the algorithm
  - try to adhere to a 92 character line length limit
- - use upper camel case convention for modules, type names
- - use lower case with underscores for method names
  - it is generally preferred to use ASCII operators and identifiers over
    Unicode equivalents whenever possible
  - in docstrings refer to the language as "Julia" and the executable as "`julia`"

@@ -406,8 +406,8 @@ See also [`trunc`](@ref).
 julia> unsafe_trunc(Int, -2.2)
 -2
 
-julia> unsafe_trunc(Int, NaN)
--9223372036854775808
+julia> unsafe_trunc(Int, NaN) isa Int
+true
 ```
 """
 function unsafe_trunc end
