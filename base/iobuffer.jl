@@ -483,29 +483,23 @@ function seekend(io::GenericIOBuffer)
     return io
 end
 
-# Resize data to exactly size `sz`. Either resize the underlying data,
-# or allocate a new one and copy.
-# This should only be called after the offset is zero - any operation which calls
-# _resize! should reset offset before so.
+# Resize the io's data to `new_size`, which must not be > io.maxsize.
+# Use `resize!` if the data supports it, else reallocate a new one and
+# copy the old data over.
+# If not `exact` and resizing is not supported, overallocate in order to
+# prevent excessive resizing.
 function _resize!(io::GenericIOBuffer, new_size::Int, exact::Bool)
     old_data = io.data
     if applicable(resize!, old_data, new_size)
         resize!(old_data, new_size)
     else
-        size = io.size
-        # Make a new data buffer, only if there is not room in existing buffer
-        if size >= new_size && !iszero(new_size)
-            new_data = old_data
-        else
-            sz = min(io.maxsize, exact ? new_size : overallocation(new_size))
-            if sz > length(old_data)
-                new_data = _similar_data(io, sz)
-                io.data = new_data
-            else
-                new_data = old_data
-            end
-        end
-        size > 0 && copyto!(new_data, 1, old_data, 1, min(new_size, size))
+        new_size = exact ? new_size : min(io.maxsize, overallocation(new_size))
+        used_span = get_used_span(io)
+        new_data = _similar_data(io, new_size)
+        io.data = new_data
+        iszero(new_size) && return io
+        len_used = length(used_span)
+        iszero(len_used) || copyto!(new_data, 1, old_data, first(used_span), len_used)
     end
     return io
 end
@@ -522,8 +516,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
         io.data = _similar_data(io, n)
         io.reinit = false
     elseif n > min(io.maxsize, length(io.data)) - io.offset
-        # We zero the offset here because that allows us to minimize the resizing,
-        # saving memory.
+        # We compact because that allows us to minimize the resizing, saving memory.
         compact!(io)
         n > min(io.maxsize, length(io.data)) && _resize!(io, n, true)
     end
@@ -565,43 +558,40 @@ end
     return io
 end
 
+# Here, we already know there is not enough room at the end of the io's data.
 @noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
-    # Begin by zeroing out offset and check if that gives us room enough
-    if !iszero(io.offset)
-        nshort_after_zero_offset = (nshort % Int) - compact!(io)
-        nshort_after_zero_offset < 1 && return io
-        nshort = nshort_after_zero_offset % UInt
+    used_span = get_used_span(io)
+    reclaimable_bytes = first(used_span) - 1
+    available_bytes = min(lastindex(io.data), io.maxsize) - (io.append ? io.size : io.ptr - 1)
+    # Avoid resizing and instead compact the buffer, only if we gain enough bytes from
+    # doing so (at least 32 bytes and 1/8th of the data length). Also, if we would have
+    # to resize anyway, there would be no point in compacting, so also check that.
+    if (
+            reclaimable_bytes ≥ 32 &&
+            reclaimable_bytes ≥ length(io.data) >>> 3 &&
+            (reclaimable_bytes + available_bytes) % UInt ≥ nshort
+        )
+        compact!(io)
+        return io
     end
 
-    data_len = min(lastindex(io.data), io.maxsize)
-
-    # Else, try to compact the data. To do this, the buffer must not be seekable.
-    # If it's seekable, the user can recover used data by seeking before ptr,
-    # and so we can't delete it.
-    if (!io.seekable && io.ptr > 1)
-        ptr = io.ptr
-        mark = io.mark
-        size = io.size
-        data = io.data
-        to_delete = (mark > -1 ? min(mark, ptr - 1) : ptr - 1)
-
-        # We don't want to shift data too often to avoid making writing O(n),
-        # so we prefer resizing if the shift would free up too little data.
-        # Therefore, we prefer to resize if copying gets us less than 32 bytes,
-        # or less than 1/8th of the data's size.
-        # But we need to shift data if maxsize prevents us from gaining enough
-        # space through resizing
-        can_allocate_enough = (io.maxsize - (io.append ? io.size : io.ptr - 1)) % UInt ≥ nshort
-        if !can_allocate_enough || to_delete ≥ max(32, data_len >>> 3)
-            copyto!(data, 1, data, to_delete + 1, size - to_delete)
-            io.ptr = ptr - to_delete
-            io.mark = max(-1, mark - to_delete)
-            io.size = size - to_delete
-            nshort -= min(nshort, to_delete % UInt)
-            iszero(nshort) && return io
+    desired_size = length(io.data) + Int(nshort)
+    if desired_size > io.maxsize
+        # If we can't fit all the requested data in the new buffer, we need to
+        # fit as much as possible, so we must compact
+        if !iszero(reclaimable_bytes)
+            desired_size -= compact!(io)
         end
+        # Max out the buffer size if we want more than the buffer size
+        if length(io.data) < io.maxsize
+            _resize!(io, io.maxsize, true)
+        end
+    else
+        # Else, we request only the requested size, but set `exact` to `false`,
+        # in order to overallocate to avoid growing the buffer by too little
+        _resize!(io, desired_size, false)
     end
-    _resize!(io, data_len + nshort % Int, false)
+
     return io
 end
 
