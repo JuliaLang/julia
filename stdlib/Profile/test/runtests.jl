@@ -155,6 +155,20 @@ end
 @test z == 10
 end
 
+@testset "@profile no scope" begin
+    @profile no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    @profile_walltime no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    Profile.Allocs.@profile no_scope_57858_2 = 1
+    @test @isdefined no_scope_57858_2
+    Profile.Allocs.clear()
+end
+
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
