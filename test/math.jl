@@ -1443,6 +1443,7 @@ end
                     Float32=>[.51, .51, .51, 2.0, 1.5],
                     Float64=>[.55, 0.8, 1.5, 2.0, 1.5])
     for T in (Float16, Float32, Float64)
+        @inferred T T(1.1)^T(1.1) #test that we always return the right type
         for x in (0.0, -0.0, 1.0, 10.0, 2.0, Inf, NaN, -Inf, -NaN)
             for y in (0.0, -0.0, 1.0, -3.0,-10.0 , Inf, NaN, -Inf, -NaN)
                 got, expected = T(x)^T(y), T(big(x)^T(y))

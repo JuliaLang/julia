@@ -1187,7 +1187,7 @@ end
     yint = unsafe_trunc(Int32, y) # This is actually safe since julia freezes the result
     yisint = y == yint
     if yisint
-        yint == 0 && return 1.0
+        yint == 0 && return one(T)
         use_power_by_squaring(yint) && return pow_body(x, yint)
     end
     s = 1
