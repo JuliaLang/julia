@@ -194,7 +194,7 @@ See [`keys`](@ref keys(::RegexMatch)) for more information.
     Constructing NamedTuples and Dicts from RegexMatches requires Julia 1.11
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
 RegexMatch("11:30", hour="11", minute="30", 3=nothing)
 
