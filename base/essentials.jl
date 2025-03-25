@@ -147,7 +147,7 @@ macro specialize(vars...)
 end
 
 """
-    @isdefined s::Bool
+    (@isdefined s)::Bool
 
 Tests whether variable `s` is defined in the current scope.
 
