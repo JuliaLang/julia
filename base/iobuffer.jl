@@ -279,13 +279,7 @@ function copy(b::GenericIOBuffer{T}) where T
     elseif b.writable
         # Else, we just copy the reachable bytes. If buffer is seekable, all bytes
         # after offset are reachable, since they can be seeked to
-        used_span = if b.seekable
-            b.offset + 1 : b.size
-        else
-            # Even non-seekable streams can be seeked using `reset`. Therefore, we need to
-            # copy all data from mark if it's set and below ptr.
-            (b.mark > -1 ? min(b.ptr, b.mark) : b.ptr) : b.size
-        end
+        used_span = get_used_span(b)
         len = length(used_span)
         data = copyto!(_similar_data(b, len), view(b.data, used_span))
         ret = typeof(b)(data, b.readable, b.writable, b.seekable, b.append, b.maxsize)
@@ -530,7 +524,7 @@ function truncate(io::GenericIOBuffer, n::Integer)
     elseif n > min(io.maxsize, length(io.data)) - io.offset
         # We zero the offset here because that allows us to minimize the resizing,
         # saving memory.
-        zero_offset!(io)
+        compact!(io)
         n > min(io.maxsize, length(io.data)) && _resize!(io, n, true)
     end
     # Since mark is zero-indexed, we must also clear it if they're equal
@@ -574,7 +568,7 @@ end
 @noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
     # Begin by zeroing out offset and check if that gives us room enough
     if !iszero(io.offset)
-        nshort_after_zero_offset = (nshort % Int) - zero_offset!(io)
+        nshort_after_zero_offset = (nshort % Int) - compact!(io)
         nshort_after_zero_offset < 1 && return io
         nshort = nshort_after_zero_offset % UInt
     end
@@ -611,14 +605,27 @@ end
     return io
 end
 
-function zero_offset!(io::GenericIOBuffer)::Int
-    offset = io.offset
-    iszero(offset) && return 0
-    size = io.size
-    if size != offset
-        data = io.data
-        unsafe_copyto!(data, 1, data, offset + 1, size - offset)
+# Get the indices in data which cannot be deleted
+function get_used_span(io::IOBuffer)
+    # A seekable buffer can recover data before ptr
+    return if io.seekable
+        io.offset + 1 : io.size
+    # If non-seekable, the mark can be used to recover data before ptr,
+    # so data at the mark and after must also be saved
+    elseif io.mark > -1
+        min(io.ptr, io.mark + io.offset + 1) : io.size
+    else
+        io.ptr : io.size
     end
+end
+
+# Return number of bytes recovered
+function compact!(io::GenericIOBuffer)::Int
+    used_span = get_used_span(io)
+    offset = first(used_span) - 1
+    iszero(offset) && return 0
+    data = io.data
+    copyto!(data, 1, data, offset + 1, length(used_span))
     io.offset = 0
     io.ptr -= offset
     io.size -= offset
