@@ -560,8 +560,7 @@ end
 
 # Here, we already know there is not enough room at the end of the io's data.
 @noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
-    used_span = get_used_span(io)
-    reclaimable_bytes = first(used_span) - 1
+    reclaimable_bytes = first(get_used_span(io)) - 1
     available_bytes = min(lastindex(io.data), io.maxsize) - (io.append ? io.size : io.ptr - 1)
     # Avoid resizing and instead compact the buffer, only if we gain enough bytes from
     # doing so (at least 32 bytes and 1/8th of the data length). Also, if we would have
@@ -575,7 +574,7 @@ end
         return io
     end
 
-    desired_size = length(io.data) + Int(nshort)
+    desired_size = length(io.data) + Int(nshort) - available_bytes
     if desired_size > io.maxsize
         # If we can't fit all the requested data in the new buffer, we need to
         # fit as much as possible, so we must compact
