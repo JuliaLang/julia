@@ -87,7 +87,9 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
                 break
             end
         end
-        y = ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, flds, nf)
+        
+        # case when an immutable struct object is created by a non initializing inner constructor.
+        y = !isassigned(flds, 1) ? x : ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, flds, nf)
     end
     return y::T
 end
