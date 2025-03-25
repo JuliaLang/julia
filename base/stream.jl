@@ -942,20 +942,19 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     if bytesavailable(sbuf) >= nb
         nread = readbytes!(sbuf, a, nb)
     else
-        # TODO: Here, we don't read directly into `a`, but read to
-        # a new buffer, and then copy to `a`
-        newbuf = PipeBuffer(; maxsize=nb)
+        initsize = length(a)
+        newbuf = PipeBuffer(a, maxsize=nb)
+        newbuf.size = newbuf.offset # reset the write pointer to the beginning
         nread = try
             s.buffer = newbuf
             write(newbuf, sbuf)
             wait_locked(s, newbuf, nb)
-            v = take!(newbuf)
-            length(v) > length(a) && resize!(a, length(v))
-            unsafe_copyto!(a, 1, v, 1, length(v))
-            length(v)
+            bytesavailable(newbuf)
         finally
             s.buffer = sbuf
         end
+        _take!(a, _unsafe_take!(newbuf))
+        length(a) >= initsize || resize!(a, initsize)
     end
     iolock_end()
     return nread
@@ -992,17 +991,12 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     if bytesavailable(sbuf) >= nb
         unsafe_read(sbuf, p, nb)
     else
-        # TODO: This isn't great. Ideally, we would want to write directly to the
-        # pointer, instead of doing what we do here, which is to write to a new
-        # IOBuffer, and then copy the content of the IOBuffer into the pointer.
-        newbuf = PipeBuffer(; maxsize=Int(nb))
+        newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), maxsize=Int(nb))
+        newbuf.size = newbuf.offset # reset the write pointer to the beginning
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
             wait_locked(s, newbuf, Int(nb))
-            written_buffer = take!(newbuf)
-            @assert length(written_buffer) % UInt == nb
-            GC.@preserve written_buffer unsafe_copyto!(p, pointer(written_buffer), nb)
         finally
             s.buffer = sbuf
         end
@@ -1605,20 +1599,19 @@ function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
         if bytesavailable(sbuf) >= nb
             nread = readbytes!(sbuf, a, nb)
         else
-            # TODO: Copy data directly from s into a. Instead, here,
-            # we use a PipeBuffer as indirect IO.
-            newbuf = PipeBuffer(; maxsize=nb)
+            initsize = length(a)
+            newbuf = PipeBuffer(a, maxsize=nb)
+            newbuf.size = newbuf.offset # reset the write pointer to the beginning
             nread = try
                 s.buffer = newbuf
                 write(newbuf, sbuf)
                 wait_locked(s, newbuf, nb)
-                v = take!(newbuf)
-                length(v) > length(a) && resize!(a, length(v))
-                unsafe_copyto!(a, 1, v, 1, length(v))
-                length(v)
+                bytesavailable(newbuf)
             finally
                 s.buffer = sbuf
             end
+            _take!(a, _unsafe_take!(newbuf))
+            length(a) >= initsize || resize!(a, initsize)
         end
         return nread
     end
