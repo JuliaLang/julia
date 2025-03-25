@@ -16,7 +16,7 @@ const TESTNAMES = [
         "operators", "ordering", "path", "ccall", "parse", "loading", "gmp",
         "sorting", "spawn", "backtrace", "exceptions",
         "file", "read", "version", "namedtuple",
-        "mpfr", "broadcast", "complex",
+        "mpfr", "broadcast", "complex", "no_invalidations",
         "floatapprox", "stdlib", "reflection", "regex", "float16",
         "combinatorics", "sysinfo", "env", "rounding", "ranges", "mod2pi",
         "euler", "show", "client", "terminfo",
