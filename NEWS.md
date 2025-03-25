@@ -1,10 +1,8 @@
-Julia v1.12 Release Notes
+Julia v1.13 Release Notes
 ========================
 
 New language features
 ---------------------
-
-* The `@ccall` macro can now take a `gc_safe` argument, that if set to true allows the runtime to run garbage collection concurrently to the `ccall`
 
 Language changes
 ----------------
@@ -27,6 +25,8 @@ New library functions
 New library features
 --------------------
 
+`sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
+
 Standard library changes
 ------------------------
 
@@ -39,6 +39,8 @@ Standard library changes
 #### REPL
 
 #### Test
+
+* Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
 
 #### InteractiveUtils
 

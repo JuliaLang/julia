@@ -1128,7 +1128,7 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
 }
 
 // Look through instructions to find all possible allocas that might become the sret argument
-static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
+static std::optional<SmallSetVector<AllocaInst *, 8>> FindSretAllocas(Value* SRetArg) {
     SmallSetVector<AllocaInst *, 8> allocas;
     if (AllocaInst *OneSRet = dyn_cast<AllocaInst>(SRetArg)) {
         allocas.insert(OneSRet); // Found it directly
@@ -1143,7 +1143,7 @@ static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
                 for (Value *Incoming : Phi->incoming_values()) {
                     worklist.insert(Incoming);
                 }
-            } else if (SelectInst *SI = dyn_cast<SelectInst>(SRetArg)) {
+            } else if (SelectInst *SI = dyn_cast<SelectInst>(V)) {
                 auto TrueBranch = SI->getTrueValue();
                 auto FalseBranch = SI->getFalseValue();
                 if (TrueBranch && FalseBranch) {
@@ -1152,12 +1152,12 @@ static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
                 } else {
                     llvm_dump(SI);
                     dbgs() << "Malformed Select\n";
-                    abort();
+                    return {};
                 }
             } else {
                 llvm_dump(V);
                 dbgs() << "Unexpected SRet argument\n";
-                abort();
+                return {};
             }
         }
     }
@@ -1221,10 +1221,15 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
-                        SmallSetVector<AllocaInst *, 8>  allocas = FindSretAllocas((CI->arg_begin()[0])->stripInBoundsOffsets());
+                        auto allocas_opt = FindSretAllocas((CI->arg_begin()[0])->stripInBoundsOffsets());
                         // We know that with the right optimizations we can forward a sret directly from an argument
                         // This hasn't been seen without adding IPO effects to julia functions but it's possible we need to handle that too
                         // If they are tracked.all we can just pass through but if they have a roots bundle it's possible we need to emit some copies ¯\_(ツ)_/¯
+                        if (!allocas_opt.has_value()) {
+                            llvm_dump(&F);
+                            abort();
+                        }
+                        auto allocas = allocas_opt.value();
                         for (AllocaInst *SRet : allocas) {
                             if (!(SRet->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
                                 assert(!tracked.derived);
@@ -1233,7 +1238,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                 }
                                 else {
                                     Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
-                                    SmallSetVector<AllocaInst *, 8>  gc_allocas = FindSretAllocas(arg1);
+                                    auto gc_allocas_opt = FindSretAllocas(arg1);
+                                    if (!gc_allocas_opt.has_value()) {
+                                        llvm_dump(&F);
+                                        abort();
+                                    }
+                                    auto gc_allocas = gc_allocas_opt.value();
                                     if (gc_allocas.size() == 0) {
                                         llvm_dump(CI);
                                         errs() << "Expected one Alloca at least\n";

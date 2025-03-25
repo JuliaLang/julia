@@ -323,7 +323,7 @@ macro _nothrow_meta()
         #=:consistent_overlay=#false,
         #=:nortcall=#false))
 end
-# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
+# can be used in place of `@assume_effects :noub` (supposed to be used for bootstrapping)
 macro _noub_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
@@ -1115,7 +1115,7 @@ This function simply returns its argument by default, since the elements
 of a general iterator are normally considered its "values".
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> d = Dict("a"=>1, "b"=>2);
 
 julia> values(d)

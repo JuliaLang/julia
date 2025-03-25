@@ -371,7 +371,7 @@ There are three important standard modules:
 
 Modules can contain *submodules*, nesting the same syntax `module ... end`. They can be used to introduce separate namespaces, which can be helpful for organizing complex codebases. Note that each `module` introduces its own [scope](@ref scope-of-variables), so submodules do not automatically “inherit” names from their parent.
 
-It is recommended that submodules refer to other modules within the enclosing parent module (including the latter) using *relative module qualifiers* in `using` and `import` statements. A relative module qualifier starts with a period (`.`), which corresponds to the current module, and each successive `.` leads to the parent of the current module. This should be followed by modules if necessary, and eventually the actual name to access, all separated by `.`s.
+It is recommended that submodules refer to other modules within the enclosing parent module (including the latter) using *relative module qualifiers* in `using` and `import` statements. A relative module qualifier starts with a period (`.`), which corresponds to the current module, and each successive `.` leads to the parent of the current module. This should be followed by modules if necessary, and eventually the actual name to access, all separated by `.`s. As a special case, however, referring to the module root can be written without `.`, avoiding the need to count the depth to reach that module.
 
 Consider the following example, where the submodule `SubA` defines a function, which is then extended in its “sibling” module:
 
@@ -386,6 +386,7 @@ julia> module ParentModule
        export add_D # export it from ParentModule too
        module SubB
        import ..SubA: add_D # relative path for a “sibling” module
+       # import ParentModule.SubA: add_D # when in a package, such as when this is loaded by using or import, this would be equivalent to the previous import, but not at the REPL
        struct Infinity end
        add_D(x::Infinity) = x
        end
@@ -393,12 +394,16 @@ julia> module ParentModule
 
 ```
 
-You may see code in packages, which, in a similar situation, uses
+You may see code in packages, which, in a similar situation, uses import without the `.`:
+```jldoctest
+julia> import ParentModule.SubA: add_D
+ERROR: ArgumentError: Package ParentModule not found in current path.
+```
+However, since this operates through [code loading](@ref code-loading), it only works if `ParentModule` is in a package in a file. If `ParentModule` was defined at the REPL, it is necessary to use use relative paths:
 ```jldoctest module_manual
 julia> import .ParentModule.SubA: add_D
 
 ```
-However, this operates through [code loading](@ref code-loading), and thus only works if `ParentModule` is in a package. It is better to use relative paths.
 
 Note that the order of definitions also matters if you are evaluating values. Consider
 
@@ -491,8 +496,12 @@ In particular, if you define a `function __init__()` in a module, then Julia wil
 immediately *after* the module is loaded (e.g., by `import`, `using`, or `require`) at runtime
 for the *first* time (i.e., `__init__` is only called once, and only after all statements in the
 module have been executed). Because it is called after the module is fully imported, any submodules
-or other imported modules have their `__init__` functions called *before* the `__init__` of the
-enclosing module.
+or other imported modules have their `__init__` functions called *before* the `__init__` of
+the enclosing module. This is also synchronized across threads, so that code can safely rely upon
+this ordering of effects, such that all `__init__` will have run, in dependency ordering,
+before the `using` result is completed. They may run concurrently with other `__init__`
+methods which are not dependencies however, so be careful when accessing any shared state
+outside the current module to use locks when needed.
 
 Two typical uses of `__init__` are calling runtime initialization functions of external C libraries
 and initializing global constants that involve pointers returned by external libraries. For example,
@@ -523,17 +532,6 @@ includes complicated heap-allocated objects like arrays. However, any routine th
 pointer value must be called at runtime for precompilation to work ([`Ptr`](@ref) objects will turn into
 null pointers unless they are hidden inside an [`isbits`](@ref) object). This includes the return values
 of the Julia functions [`@cfunction`](@ref) and [`pointer`](@ref).
-
-Dictionary and set types, or in general anything that depends on the output of a `hash(key)` method,
-are a trickier case. In the common case where the keys are numbers, strings, symbols, ranges,
-`Expr`, or compositions of these types (via arrays, tuples, sets, pairs, etc.) they are safe to
-precompile. However, for a few other key types, such as `Function` or `DataType` and generic
-user-defined types where you haven't defined a `hash` method, the fallback `hash` method depends
-on the memory address of the object (via its `objectid`) and hence may change from run to run.
-If you have one of these key types, or if you aren't sure, to be safe you can initialize this
-dictionary from within your `__init__` function. Alternatively, you can use the [`IdDict`](@ref)
-dictionary type, which is specially handled by precompilation so that it is safe to initialize
-at compile-time.
 
 When using precompilation, it is important to keep a clear sense of the distinction between the
 compilation phase and the execution phase. In this mode, it will often be much more clearly apparent

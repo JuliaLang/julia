@@ -278,14 +278,19 @@ include("pointer.jl")
 include("refvalue.jl")
 include("cmem.jl")
 
-include("checked.jl")
-using .Checked
-function cld end
-function fld end
+function nextfloat end
+function prevfloat end
+include("rounding.jl")
+include("float.jl")
 
 # Lazy strings
 import Core: String
 include("strings/lazy.jl")
+
+function cld end
+function fld end
+include("checked.jl")
+using .Checked
 
 # array structures
 include("indices.jl")
@@ -371,3 +376,4 @@ Core._setparser!(fl_parse)
 # Further definition of Base will happen in Base.jl if loaded.
 
 end # baremodule Base
+using .Base

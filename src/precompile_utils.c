@@ -271,7 +271,7 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
         }
         else {
             assert(jl_is_simplevector(item));
-            assert(jl_svec_len(item) == 2);
+            assert(jl_svec_len(item) == 2 || jl_svec_len(item) == 3);
             jl_array_ptr_1d_push(m2, item);
         }
     }
@@ -382,7 +382,18 @@ static void *jl_precompile_trimmed(size_t world)
             jl_array_ptr_1d_push(m, ccallable);
     }
 
-    void *native_code = jl_create_native(m, NULL, jl_options.trim, 0, world);
+    void *native_code = NULL;
+    JL_TRY {
+        native_code = jl_create_native(m, NULL, jl_options.trim, 0, world);
+    } JL_CATCH {
+        jl_value_t *exc = jl_current_exception(jl_current_task);
+        if (!jl_isa(exc, (jl_value_t*)jl_trimfailure_type))
+            jl_rethrow(); // unexpected exception, expose the stacktrace
+
+        // The verification check failed. The error message should already have
+        // been printed, so give up here and exit (w/o a stack trace).
+        exit(1);
+    }
     JL_GC_POP();
     return native_code;
 }
