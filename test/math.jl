@@ -1566,8 +1566,8 @@ end
         end
     end
     Base.typemin(::Type{Int3}) = Int3(-4)
-    Base.promote_rule(::Type{Int3}, ::Type{Int}) = Int
-    Base.convert(::Type{Int64}, x::Int3) = convert(Int64, x.x)
+    Base.promote_rule(::Type{Int3}, ::Type{T}) where {T<:Integer} = T
+    Base.convert(::Type{T}, x::Int3) where {T<:Integer} = convert(T, x.x)
     Base.:-(x::Int3) = x.x == -4 ? x : Int3(-x.x)
     Base.trailing_zeros(x::Int3) = trailing_zeros(x.x)
     Base.:>>(x::Int3, n::UInt64) = Int3(x.x>>n)
