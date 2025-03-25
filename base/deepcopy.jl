@@ -75,10 +75,12 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
         y = x
     else
         flds = Vector{Any}(undef, nf)
+        defined_nonisbits = false
         for i in 1:nf
             if isdefined(x, i)
                 xi = getfield(x, i)
                 if !isbits(xi)
+                    defined_nonisbits = true
                     xi = deepcopy_internal(xi, stackdict)::typeof(xi)
                 end
                 flds[i] = xi
@@ -88,7 +90,8 @@ function deepcopy_internal(@nospecialize(x), stackdict::IdDict)
             end
         end
         # case when an immutable struct object is created by a non initializing inner constructor.
-        y = !isassigned(flds, 1) ? x : ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, flds, nf)
+        # acceptable to return x ONLY when object contains only isbits fields OR if the FIRST non isbitsfield is undef.
+        y = defined_nonisbits ? ccall(:jl_new_structv, Any, (Any, Ptr{Any}, UInt32), T, flds, nf) : x
     end
     return y::T
 end
