@@ -16,15 +16,30 @@ using Random: jump_128, jump_192, jump_128!, jump_192!
 import Future # randjump
 
 function test_uniform(xs::AbstractArray{T}) where {T<:AbstractFloat}
-    if precision(T) >= precision(Float32) # TODO: refine
-        @test allunique(xs)
+    # TODO: refine
+    prec = isempty(xs) ? precision(T) : precision(first(xs))
+    proba_nocollision = prod((1.0 - i/2.0^prec for i=1:length(xs)-1), init=1.0) # rough estimate
+    xsu = Set(xs)
+    if (1.0 - proba_nocollision) < 2.0^-64
+        @test length(xsu) == length(xs)
+    elseif prec > 52 && length(xs) < 3000
+        # if proba of collisions is high enough, allow at most one collision;
+        # with the constraints on precision and length, more than one collision would happen
+        # with proba less than 2.0^-62
+        @test length(xsu) >= length(xs)-1
     end
     @test all(x -> zero(x) <= x < one(x), xs)
 end
 
-function test_uniform(xs::AbstractArray{T}) where {T<:Integer}
-    if !Base.hastypemax(T) || widen(typemax(T)) - widen(typemin(T)) >= 2^30 # TODO: refine
-        @test allunique(xs)
+function test_uniform(xs::AbstractArray{T}) where {T<:Base.BitInteger}
+    # TODO: refine
+    prec = 8*sizeof(T)
+    proba_nocollision = prod((1.0 - i/2.0^prec for i=1:length(xs)-1), init=1.0)
+    xsu = Set(xs)
+    if (1.0 - proba_nocollision) < 2.0^-64
+        @test length(xsu) == length(xs)
+    elseif prec > 52 && length(xs) < 3000
+        @test length(xsu) >= length(xs)-1
     end
 end
 
@@ -355,9 +370,10 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
             a8  = rand!(rng..., GenericArray{T}(undef, 2, 3), cc)                ::GenericArray{T, 2}
             a9  = rand!(rng..., OffsetArray(Array{T}(undef, 5), 9), cc)          ::OffsetArray{T, 1}
             a10 = rand!(rng..., OffsetArray(Array{T}(undef, 2, 3), (-2, 4)), cc) ::OffsetArray{T, 2}
+            a11 = rand!(rng..., Memory{T}(undef, 5), cc)                         ::Memory{T}
             @test size(a1) == (5,)
             @test size(a2) == size(a3) == (2, 3)
-            for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8..., a9..., a10...]
+            for a in [a0, a1..., a2..., a3..., a4..., a5..., a6..., a7..., a8..., a9..., a10..., a11...]
                 if C isa Type
                     @test a isa C
                 else
@@ -377,6 +393,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro()])
             (T <: Tuple || T <: Pair) && continue
             X = T == Bool ? T[0,1] : T[0,1,2]
             for A in (Vector{T}(undef, 5),
+                      Memory{T}(undef, 5),
                       Matrix{T}(undef, 2, 3),
                       GenericArray{T}(undef, 5),
                       GenericArray{T}(undef, 2, 3),
@@ -1231,6 +1248,16 @@ end
     xs = rand(sp, 3)
     @test xs isa Vector{Pair{Bool, Char}}
     @test length(xs) == 3
+end
+
+@testset "Float32 RNG typo" begin
+    for T in (Float16, Float32, Float64)
+        # Make sure generated numbers are sufficiently diverse
+        # for both SIMD and non-SIMD RNG code paths for all types.
+        @test length(unique!(rand(T, 7))) > 3
+        @test length(unique!(rand(T, 14))) > 10
+        @test length(unique!(rand(T, 34))) > 20
+    end
 end
 
 @testset "Docstrings" begin

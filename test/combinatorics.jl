@@ -77,17 +77,12 @@ end
 end
 
 @testset "factorial" begin
-    @test factorial(7) == 5040
-    @test factorial(Int8(7)) == 5040
-    @test factorial(UInt8(7)) == 5040
-    @test factorial(Int16(7)) == 5040
-    @test factorial(UInt16(7)) == 5040
-    @test factorial(Int32(7)) == 5040
-    @test factorial(UInt32(7)) == 5040
-    @test factorial(Int64(7)) == 5040
-    @test factorial(UInt64(7)) == 5040
-    @test factorial(Int128(7)) == 5040
-    @test factorial(UInt128(7)) == 5040
+    for T = Base.uniontypes(Union{Base.Checked.SignedInt,Base.Checked.UnsignedInt})
+        @testset let T = T
+            @test factorial(T(7)) == 5040
+            @test Core.Compiler.is_foldable(Base.infer_effects(factorial, (T,)))
+        end
+    end
     @test factorial(0) == 1
     @test_throws DomainError factorial(-1)
     @test factorial(Int64(20)) == 2432902008176640000

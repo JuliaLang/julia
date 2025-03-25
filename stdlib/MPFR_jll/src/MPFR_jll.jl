@@ -3,7 +3,6 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/MPFR_jll.jl
 baremodule MPFR_jll
 using Base, Libdl, GMP_jll
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

@@ -331,6 +331,5 @@ end
 end; end
 
 @testset "Docstrings" begin
-    undoc = Docs.undocumented_names(Libdl)
-    @test isempty(undoc)
+    @test isempty(Docs.undocumented_names(Libdl))
 end

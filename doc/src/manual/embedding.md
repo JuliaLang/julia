@@ -247,7 +247,7 @@ Its second argument `args` is an array of `jl_value_t*` arguments and `nargs` is
 arguments.
 
 There is also an alternative, possibly simpler, way of calling Julia functions and that is via [`@cfunction`](@ref).
-Using `@cfunction` allows you to do the type conversions on the Julia side which typically is easier than doing it on
+Using `@cfunction` allows you to do the type conversions on the Julia side, which is typically easier than doing it on
 the C side. The `sqrt` example above would with `@cfunction` be written as:
 
 ```c
@@ -255,7 +255,10 @@ double (*sqrt_jl)(double) = jl_unbox_voidpointer(jl_eval_string("@cfunction(sqrt
 double ret = sqrt_jl(2.0);
 ```
 
-where we first define a C callable function in Julia, extract the function pointer from it and finally call it.
+where we first define a C callable function in Julia, extract the function pointer from it, and finally call it.
+In addition to simplifying type conversions by doing them in the higher-level language, calling Julia functions
+via `@cfunction` pointers eliminates the dynamic-dispatch overhead required by `jl_call` (for which all of the
+arguments are "boxed"), and should have performance equivalent to native C function pointers.
 
 ## Memory Management
 
@@ -409,7 +412,7 @@ per pointer using
 ```c
 jl_module_t *mod = jl_main_module;
 jl_sym_t *var = jl_symbol("var");
-jl_binding_t *bp = jl_get_binding_wr(mod, var);
+jl_binding_t *bp = jl_get_binding_wr(mod, var, 1);
 jl_checked_assignment(bp, mod, var, val);
 ```
 
@@ -446,12 +449,14 @@ jl_gc_wb(jl_array_owner(some_array), some_value);
 
 There are some functions to control the GC. In normal use cases, these should not be necessary.
 
-| Function             | Description                                  |
-|:-------------------- |:-------------------------------------------- |
-| `jl_gc_collect()`    | Force a GC run                               |
-| `jl_gc_enable(0)`    | Disable the GC, return previous state as int |
-| `jl_gc_enable(1)`    | Enable the GC,  return previous state as int |
-| `jl_gc_is_enabled()` | Return current state as int                  |
+| Function                           | Description                                                         |
+| :--------------------------------- | :------------------------------------------------------------------ |
+| `jl_gc_collect(JL_GC_FULL)`        | Force a GC run on all objects                                       |
+| `jl_gc_collect(JL_GC_INCREMENTAL)` | Force a GC run only on young objects                                |
+| `jl_gc_collect(JL_GC_AUTO)`        | Force a GC run, automatically choosing between full and incremental |
+| `jl_gc_enable(0)`                  | Disable the GC, return previous state as int                        |
+| `jl_gc_enable(1)`                  | Enable the GC, return previous state as int                         |
+| `jl_gc_is_enabled()`               | Return current state as int                                         |
 
 ## Working with Arrays
 

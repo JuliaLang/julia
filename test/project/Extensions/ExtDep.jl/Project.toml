@@ -4,3 +4,4 @@ version = "0.1.0"
 
 [deps]
 SomePackage = "678608ae-7bb3-42c7-98b1-82102067a3d8"
+SomeOtherPackage = "178f68a2-4498-45ee-a775-452b36359b63"

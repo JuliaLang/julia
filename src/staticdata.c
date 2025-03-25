@@ -44,8 +44,6 @@
 
   - step 3 combines the different sections (fields of `jl_serializer_state`) into one
 
-  - step 4 writes the values of the hard-coded tagged items and `ccallable_list`
-
 Much of the "real work" during deserialization is done by `get_item_for_reloc`. But a few items require specific
 attention:
 - uniquing: during deserialization, the target item (an "external" type or MethodInstance) must be checked against
@@ -89,6 +87,8 @@ External links:
 #include "julia_assert.h"
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
+JL_DLLEXPORT size_t jl_require_world = ~(size_t)0;
+JL_DLLEXPORT _Atomic(size_t) jl_first_image_replacement_world = ~(size_t)0;
 
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
@@ -100,7 +100,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    179
+#define NUM_TAGS    197
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -122,6 +122,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_array_type);
         INSERT_TAG(jl_expr_type);
         INSERT_TAG(jl_binding_type);
+        INSERT_TAG(jl_binding_partition_type);
         INSERT_TAG(jl_globalref_type);
         INSERT_TAG(jl_string_type);
         INSERT_TAG(jl_module_type);
@@ -213,6 +214,8 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_addrspace_type);
         INSERT_TAG(jl_addrspace_typename);
         INSERT_TAG(jl_addrspacecore_type);
+        INSERT_TAG(jl_debuginfo_type);
+        INSERT_TAG(jl_abioverride_type);
 
         // special typenames
         INSERT_TAG(jl_tuple_typename);
@@ -234,6 +237,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_loaderror_type);
         INSERT_TAG(jl_initerror_type);
         INSERT_TAG(jl_undefvarerror_type);
+        INSERT_TAG(jl_fielderror_type);
         INSERT_TAG(jl_stackovf_exception);
         INSERT_TAG(jl_diverror_exception);
         INSERT_TAG(jl_interrupt_exception);
@@ -244,6 +248,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_atomicerror_type);
         INSERT_TAG(jl_missingcodeerror_type);
         INSERT_TAG(jl_precompilable_error);
+        INSERT_TAG(jl_trimfailure_type);
 
         // other special values
         INSERT_TAG(jl_emptysvec);
@@ -264,6 +269,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_kwcall_mt);
         INSERT_TAG(jl_kwcall_func);
         INSERT_TAG(jl_opaque_closure_method);
+        INSERT_TAG(jl_nulldebuginfo);
 
         // some Core.Builtin Functions that we want to be able to reference:
         INSERT_TAG(jl_builtin_throw);
@@ -283,12 +289,18 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_swapfield);
         INSERT_TAG(jl_builtin_modifyfield);
         INSERT_TAG(jl_builtin_replacefield);
+        INSERT_TAG(jl_builtin_setfieldonce);
         INSERT_TAG(jl_builtin_fieldtype);
+        INSERT_TAG(jl_builtin_memorynew);
         INSERT_TAG(jl_builtin_memoryref);
         INSERT_TAG(jl_builtin_memoryrefoffset);
         INSERT_TAG(jl_builtin_memoryrefget);
         INSERT_TAG(jl_builtin_memoryrefset);
         INSERT_TAG(jl_builtin_memoryref_isassigned);
+        INSERT_TAG(jl_builtin_memoryrefswap);
+        INSERT_TAG(jl_builtin_memoryrefmodify);
+        INSERT_TAG(jl_builtin_memoryrefreplace);
+        INSERT_TAG(jl_builtin_memoryrefsetonce);
         INSERT_TAG(jl_builtin_apply_type);
         INSERT_TAG(jl_builtin_applicable);
         INSERT_TAG(jl_builtin_invoke);
@@ -299,6 +311,12 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_builtin_compilerbarrier);
         INSERT_TAG(jl_builtin_getglobal);
         INSERT_TAG(jl_builtin_setglobal);
+        INSERT_TAG(jl_builtin_isdefinedglobal);
+        INSERT_TAG(jl_builtin_swapglobal);
+        INSERT_TAG(jl_builtin_modifyglobal);
+        INSERT_TAG(jl_builtin_replaceglobal);
+        INSERT_TAG(jl_builtin_setglobalonce);
+        INSERT_TAG(jl_builtin_current_scope);
         // n.b. must update NUM_TAGS when you add something here
 #undef INSERT_TAG
         assert(i == NUM_TAGS - 1);
@@ -327,6 +345,8 @@ static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_
 // jl_linkage_blobs.items[2i:2i+1] correspond to build_ids[i]   (0-offset indexing)
 arraylist_t jl_linkage_blobs;
 arraylist_t jl_image_relocs;
+// Keep track of which image corresponds to which top module.
+arraylist_t jl_top_mods;
 
 // Eytzinger tree of images. Used for very fast jl_object_in_image queries
 // See https://algorithmica.org/en/eytzinger
@@ -334,6 +354,21 @@ arraylist_t eytzinger_image_tree;
 arraylist_t eytzinger_idxs;
 static uintptr_t img_min;
 static uintptr_t img_max;
+
+// HT_NOTFOUND is a valid integer ID, so we store the integer ids mangled.
+// This pair of functions mangles/demanges
+static size_t from_seroder_entry(void *entry)
+{
+    return (size_t)((char*)entry - (char*)HT_NOTFOUND - 1);
+}
+
+static void *to_seroder_entry(size_t idx)
+{
+    return (void*)((char*)HT_NOTFOUND + 1 + idx);
+}
+
+static htable_t new_methtables;
+static size_t precompilation_world;
 
 static int ptr_cmp(const void *l, const void *r)
 {
@@ -441,9 +476,21 @@ size_t external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT
     return idx;
 }
 
-uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
+JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
 {
     return eyt_obj_in_img(obj);
+}
+
+// Map an object to it's "owning" top module
+JL_DLLEXPORT jl_value_t *jl_object_top_module(jl_value_t* v) JL_NOTSAFEPOINT
+{
+    size_t idx = external_blob_index(v);
+    size_t lbids = n_linkage_blobs();
+    if (idx < lbids) {
+        return (jl_value_t*)jl_top_mods.items[idx];
+    }
+    // The object is runtime allocated
+    return (jl_value_t*)jl_nothing;
 }
 
 // hash of definitions for predefined function pointers
@@ -452,23 +499,26 @@ void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching
 
 // table of struct field addresses to rewrite during saving
 static htable_t field_replace;
+static htable_t bits_replace;
 
 // array of definitions for the predefined function pointers
 // (reverse of fptr_to_id)
 // This is a manually constructed dual of the fvars array, which would be produced by codegen for Julia code, for C.
 static const jl_fptr_args_t id_to_fptrs[] = {
-    &jl_f_throw, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
-    &jl_f_typeassert, &jl_f__apply_iterate, &jl_f__apply_pure,
-    &jl_f__call_latest, &jl_f__call_in_world, &jl_f__call_in_world_total, &jl_f_isdefined,
+    &jl_f_throw, &jl_f_throw_methoderror, &jl_f_is, &jl_f_typeof, &jl_f_issubtype, &jl_f_isa,
+    &jl_f_typeassert, &jl_f__apply_iterate,
+    &jl_f_invokelatest, &jl_f_invoke_in_world, &jl_f__call_in_world_total, &jl_f_isdefined, &jl_f_isdefinedglobal,
     &jl_f_tuple, &jl_f_svec, &jl_f_intrinsic_call,
-    &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield,
-    &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type,
-    &jl_f_memoryref, &jl_f_memoryrefoffset, &jl_f_memoryrefget, &jl_f_memoryrefset, &jl_f_memoryref_isassigned,
+    &jl_f_getfield, &jl_f_setfield, &jl_f_swapfield, &jl_f_modifyfield, &jl_f_setfieldonce,
+    &jl_f_replacefield, &jl_f_fieldtype, &jl_f_nfields, &jl_f_apply_type, &jl_f_memorynew,
+    &jl_f_memoryref, &jl_f_memoryrefoffset, &jl_f_memoryrefget, &jl_f_memoryref_isassigned,
+    &jl_f_memoryrefset,  &jl_f_memoryrefswap, &jl_f_memoryrefmodify, &jl_f_memoryrefreplace, &jl_f_memoryrefsetonce,
     &jl_f_applicable, &jl_f_invoke, &jl_f_sizeof, &jl_f__expr, &jl_f__typevar,
     &jl_f_ifelse, &jl_f__structtype, &jl_f__abstracttype, &jl_f__primitivetype,
-    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f_get_binding_type,
-    &jl_f_set_binding_type, &jl_f_opaque_closure_call, &jl_f_donotdelete, &jl_f_compilerbarrier,
-    &jl_f_getglobal, &jl_f_setglobal, &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
+    &jl_f__typebody, &jl_f__setsuper, &jl_f__equiv_typedef, &jl_f__defaultctors,
+    &jl_f_opaque_closure_call, &jl_f_donotdelete, &jl_f_compilerbarrier, &jl_f_get_binding_type,
+    &jl_f_getglobal, &jl_f_setglobal, &jl_f_swapglobal, &jl_f_modifyglobal, &jl_f_replaceglobal, &jl_f_setglobalonce,
+    &jl_f_finalizer, &jl_f__compute_sparams, &jl_f__svec_ref,
     &jl_f_current_scope,
     NULL };
 
@@ -488,7 +538,6 @@ typedef struct {
     arraylist_t uniquing_objs;  // a list of locations that reference non-types that must be de-duplicated
     arraylist_t fixup_types;    // a list of locations of types requiring (re)caching
     arraylist_t fixup_objs;     // a list of locations of objects requiring (re)caching
-    arraylist_t ccallable_list; // @ccallable entry points to install
     // mapping from a buildid_idx to a depmods_idx
     jl_array_t *buildid_depmods_idxs;
     // record of build_ids for all external linkages, in order of serialization for the current sysimg/pkgimg
@@ -500,10 +549,10 @@ typedef struct {
     jl_array_t *link_ids_gctags;
     jl_array_t *link_ids_gvars;
     jl_array_t *link_ids_external_fnvars;
+    jl_array_t *method_roots_list;
+    htable_t method_roots_index;
+    uint64_t worklist_key;
     jl_ptls_t ptls;
-    // Set (implemented has a hasmap of MethodInstances to themselves) of which MethodInstances have (forward) edges
-    // to other MethodInstances.
-    htable_t callers_with_edges;
     jl_image_t *image;
     int8_t incremental;
 } jl_serializer_state;
@@ -534,6 +583,8 @@ enum RefTags {
     ExternalLinkage     // reference to some other pkgimage
 };
 
+#define SYS_EXTERNAL_LINK_UNIT sizeof(void*)
+
 // calling conventions for internal entry points.
 // this is used to set the method-instance->invoke field
 typedef enum {
@@ -541,6 +592,7 @@ typedef enum {
     JL_API_BOXED,
     JL_API_CONST,
     JL_API_WITH_PARAMETERS,
+    JL_API_OC_CALL,
     JL_API_INTERPRETED,
     JL_API_BUILTIN,
     JL_API_MAX
@@ -578,8 +630,7 @@ typedef struct {
 } pkgcachesizes;
 
 // --- Static Compile ---
-static void *jl_sysimg_handle = NULL;
-static jl_image_t sysimage;
+static jl_image_buf_t jl_sysimage_buf = { JL_IMAGE_KIND_NONE };
 
 static inline uintptr_t *sysimg_gvars(const char *base, const int32_t *offsets, size_t idx)
 {
@@ -590,35 +641,6 @@ JL_DLLEXPORT int jl_running_on_valgrind(void)
 {
     return RUNNING_ON_VALGRIND;
 }
-
-void *system_image_data_unavailable;
-extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(system_image_data_unavailable) jl_system_image_data;
-extern void * JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(system_image_data_unavailable) jl_system_image_size;
-static void jl_load_sysimg_so(void)
-{
-    int imaging_mode = jl_generating_output() && !jl_options.incremental;
-    // in --build mode only use sysimg data, not precompiled native code
-    if (!imaging_mode && jl_options.use_sysimage_native_code==JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES) {
-        assert(sysimage.fptrs.ptrs);
-    }
-    else {
-        memset(&sysimage.fptrs, 0, sizeof(sysimage.fptrs));
-    }
-    const char *sysimg_data;
-    if (jl_sysimg_handle == jl_exe_handle &&
-            &jl_system_image_data != JL_WEAK_SYMBOL_DEFAULT(system_image_data_unavailable))
-        sysimg_data = (const char*)&jl_system_image_data;
-    else
-        jl_dlsym(jl_sysimg_handle, "jl_system_image_data", (void **)&sysimg_data, 1);
-    size_t *plen;
-    if (jl_sysimg_handle == jl_exe_handle &&
-            &jl_system_image_size != JL_WEAK_SYMBOL_DEFAULT(system_image_data_unavailable))
-        plen = (size_t *)&jl_system_image_size;
-    else
-        jl_dlsym(jl_sysimg_handle, "jl_system_image_size", (void **)&plen, 1);
-    jl_restore_system_image_data(sysimg_data, *plen);
-}
-
 
 // --- serializer ---
 
@@ -662,6 +684,14 @@ static int caching_tag(jl_value_t *v) JL_NOTSAFEPOINT
         if (jl_is_method(m) && jl_object_in_image(m))
             return 1 + type_in_worklist(mi->specTypes);
     }
+    if (jl_is_binding(v)) {
+        jl_globalref_t *gr = ((jl_binding_t*)v)->globalref;
+        if (!gr)
+            return 0;
+        if (!jl_object_in_image((jl_value_t*)gr->mod))
+            return 0;
+        return 1;
+    }
     if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
         if (jl_is_tuple_type(dt) ? !dt->isconcretetype : dt->hasfreetypevars)
@@ -689,7 +719,8 @@ static int needs_uniquing(jl_value_t *v) JL_NOTSAFEPOINT
 
 static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAFEPOINT
 {
-    ptrhash_put(&field_replace, (void*)addr, newval);
+    if (*addr != newval)
+        ptrhash_put(&field_replace, (void*)addr, newval);
 }
 
 static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_GC_DISABLED
@@ -719,32 +750,67 @@ static uintptr_t jl_fptr_id(void *fptr)
         return *(uintptr_t*)pbp;
 }
 
+static int effects_foldable(uint32_t effects)
+{
+    // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable(effects, true)
+    return ((effects & 0x7) == 0) && // is_consistent(effects)
+           (((effects >> 10) & 0x03) == 0) && // is_noub(effects)
+           (((effects >> 3) & 0x03) == 0) && // is_effect_free(effects)
+           ((effects >> 6) & 0x01); // is_terminates(effects)
+}
+
+
 // `jl_queue_for_serialization` adds items to `serialization_order`
 #define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v), 1, 0)
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED;
-
 
 static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_t *m) JL_GC_DISABLED
 {
     jl_queue_for_serialization(s, m->name);
     jl_queue_for_serialization(s, m->parent);
-    jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindings));
+    if (!jl_options.strip_metadata)
+        jl_queue_for_serialization(s, m->file);
+    if (jl_options.trim) {
+        jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->bindings), 0, 1);
+    } else {
+        jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindings));
+    }
     jl_queue_for_serialization(s, jl_atomic_load_relaxed(&m->bindingkeyset));
-    if (jl_options.strip_metadata) {
+    if (jl_options.strip_metadata || jl_options.trim) {
         jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
         for (size_t i = 0; i < jl_svec_len(table); i++) {
             jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
             if ((void*)b == jl_nothing)
                 break;
-            jl_sym_t *name = b->globalref->name;
-            if (name == jl_docmeta_sym && jl_atomic_load_relaxed(&b->value))
-                record_field_change((jl_value_t**)&b->value, jl_nothing);
+            if (jl_options.strip_metadata) {
+                jl_sym_t *name = b->globalref->name;
+                if (name == jl_docmeta_sym && jl_get_binding_value(b))
+                    record_field_change((jl_value_t**)&b->value, jl_nothing);
+            }
+            if (jl_options.trim) {
+                jl_value_t *val = jl_get_binding_value(b);
+                // keep binding objects that are defined and ...
+                if (val &&
+                    // ... point to modules ...
+                    (jl_is_module(val) ||
+                     // ... or point to __init__ methods ...
+                     !strcmp(jl_symbol_name(b->globalref->name), "__init__") ||
+                     // ... or point to Base functions accessed by the runtime
+                     (m == jl_base_module && (!strcmp(jl_symbol_name(b->globalref->name), "wait") ||
+                                              !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook"))))) {
+                    record_field_change((jl_value_t**)&b->backedges, NULL);
+                    jl_queue_for_serialization(s, b);
+                }
+            }
         }
     }
 
-    for (size_t i = 0; i < m->usings.len; i++) {
-        jl_queue_for_serialization(s, (jl_value_t*)m->usings.items[i]);
+    for (size_t i = 0; i < module_usings_length(m); i++) {
+        jl_queue_for_serialization(s, module_usings_getmod(m, i));
     }
+
+    jl_queue_for_serialization(s, m->usings_backedges);
+    jl_queue_for_serialization(s, m->scanned_methods);
 }
 
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
@@ -790,9 +856,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // we only need 3 specific fields of this (the rest are restored afterward, if valid)
             // in particular, cache is repopulated by jl_mi_cache_insert for all foreign function,
             // so must not be present here
-            record_field_change((jl_value_t**)&mi->uninferred, NULL);
             record_field_change((jl_value_t**)&mi->backedges, NULL);
-            record_field_change((jl_value_t**)&mi->callbacks, NULL);
             record_field_change((jl_value_t**)&mi->cache, NULL);
         }
         else {
@@ -804,6 +868,14 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         // them wrong and segfault. The jl_code_for_staged function should
         // prevent this from happening, so we do not need to detect that user
         // error now.
+    }
+    if (s->incremental && jl_is_binding(v)) {
+        if (needs_uniquing(v)) {
+            jl_binding_t *b = (jl_binding_t*)v;
+            jl_queue_for_serialization(s, b->globalref->mod);
+            jl_queue_for_serialization(s, b->globalref->name);
+            goto done_fields;
+        }
     }
     if (s->incremental && jl_is_globalref(v)) {
         jl_globalref_t *gr = (jl_globalref_t*)v;
@@ -823,10 +895,76 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     }
     if (s->incremental && jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
+        jl_method_instance_t *mi = jl_get_ci_mi(ci);
         // make sure we don't serialize other reachable cache entries of foreign methods
-        if (jl_object_in_image((jl_value_t*)ci->def->def.value)) {
+        // Should this now be:
+        // if (ci !in ci->defs->cache)
+        //     record_field_change((jl_value_t**)&ci->next, NULL);
+        // Why are we checking that the method/module this originates from is in_image?
+        // and then disconnect this CI?
+        if (jl_object_in_image((jl_value_t*)mi->def.value)) {
             // TODO: if (ci in ci->defs->cache)
             record_field_change((jl_value_t**)&ci->next, NULL);
+        }
+        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
+        if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
+            jl_method_t *def = mi->def.method;
+            if (jl_is_method(def)) { // don't delete toplevel code
+                int is_relocatable = jl_is_code_info(inferred) ||
+                    (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
+                if (!is_relocatable) {
+                    inferred = jl_nothing;
+                }
+                else if (def->source == NULL) {
+                    // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
+                }
+                else if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
+                    jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
+                    inferred = jl_nothing;
+                }
+                else if (native_functions && // don't delete any code if making a ji file
+                         (ci->owner == jl_nothing) && // don't delete code for external interpreters
+                         !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
+                         jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
+                    // delete the code now: if we thought it was worth keeping, it would have been converted to object code
+                    inferred = jl_nothing;
+                }
+                if (inferred == jl_nothing) {
+                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                }
+                else if (jl_is_string(inferred)) {
+                    // New roots for external methods
+                    if (jl_object_in_image((jl_value_t*)def)) {
+                        void **pfound = ptrhash_bp(&s->method_roots_index, def);
+                        if (*pfound == HT_NOTFOUND) {
+                            *pfound = def;
+                            size_t nwithkey = nroots_with_key(def, s->worklist_key);
+                            if (nwithkey) {
+                                jl_array_ptr_1d_push(s->method_roots_list, (jl_value_t*)def);
+                                jl_array_t *newroots = jl_alloc_vec_any(nwithkey);
+                                jl_array_ptr_1d_push(s->method_roots_list, (jl_value_t*)newroots);
+                                rle_iter_state rootiter = rle_iter_init(0);
+                                uint64_t *rletable = NULL;
+                                size_t nblocks2 = 0;
+                                size_t nroots = jl_array_nrows(def->roots);
+                                size_t k = 0;
+                                if (def->root_blocks) {
+                                    rletable = jl_array_data(def->root_blocks, uint64_t);
+                                    nblocks2 = jl_array_nrows(def->root_blocks);
+                                }
+                                while (rle_iter_increment(&rootiter, nroots, rletable, nblocks2)) {
+                                    if (rootiter.key == s->worklist_key) {
+                                        jl_value_t *newroot = jl_array_ptr_ref(def->roots, rootiter.i);
+                                        jl_queue_for_serialization(s, newroot);
+                                        jl_array_ptr_set(newroots, k++, newroot);
+                                    }
+                                }
+                                assert(k == nwithkey);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -852,7 +990,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_genericmemory_t *m = (jl_genericmemory_t*)v;
         const char *data = (const char*)m->ptr;
         if (jl_genericmemory_how(m) == 3) {
-            jl_queue_for_serialization_(s, jl_genericmemory_data_owner_field(v), 1, immediate);
+            assert(jl_is_string(jl_genericmemory_data_owner_field(m)));
         }
         else if (layout->flags.arrayelem_isboxed) {
             size_t i, l = m->length;
@@ -878,14 +1016,34 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     else if (jl_typetagis(v, jl_module_tag << 4)) {
         jl_queue_module_for_serialization(s, (jl_module_t*)v);
     }
+    else if (jl_is_binding_partition(v)) {
+        jl_binding_partition_t *bpart = (jl_binding_partition_t*)v;
+        jl_queue_for_serialization_(s, bpart->restriction, 1, immediate);
+        jl_queue_for_serialization_(s, get_replaceable_field((jl_value_t**)&bpart->next, 0), 1, immediate);
+    }
     else if (layout->nfields > 0) {
+        if (jl_options.trim) {
+            if (jl_is_method(v)) {
+                jl_method_t *m = (jl_method_t *)v;
+                if (jl_is_svec(jl_atomic_load_relaxed(&m->specializations)))
+                    jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->specializations), 0, 1);
+            }
+            else if (jl_typetagis(v, jl_typename_type)) {
+                jl_typename_t *tn = (jl_typename_t*)v;
+                if (tn->mt != NULL && !tn->mt->frozen) {
+                    jl_methtable_t * new_methtable = (jl_methtable_t *)ptrhash_get(&new_methtables, tn->mt);
+                    if (new_methtable != HT_NOTFOUND)
+                        record_field_change((jl_value_t **)&tn->mt, (jl_value_t*)new_methtable);
+                    else
+                        record_field_change((jl_value_t **)&tn->mt, NULL);
+                }
+            }
+        }
         char *data = (char*)jl_data_ptr(v);
         size_t i, np = layout->npointers;
         for (i = 0; i < np; i++) {
             uint32_t ptr = jl_ptr_offset(t, i);
             int mutabl = t->name->mutabl;
-            if (jl_is_binding(v) && ((jl_binding_t*)v)->constp && i == 0) // value field depends on constp field
-                mutabl = 0;
             jl_value_t *fld = get_replaceable_field(&((jl_value_t**)data)[ptr], mutabl);
             jl_queue_for_serialization_(s, fld, 1, immediate);
         }
@@ -899,7 +1057,7 @@ done_fields: ;
     arraylist_push(&serialization_queue, (void*) v);
     size_t idx = serialization_queue.len - 1;
     assert(serialization_queue.len < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many items to serialize");
-    *bp = (void*)((char*)HT_NOTFOUND + 1 + idx);
+    *bp = to_seroder_entry(idx);
 
     // DataType is very unusual, in that some of the fields need to be pre-order, and some
     // (notably super) must not be (even if `jl_queue_for_serialization_` would otherwise
@@ -925,6 +1083,7 @@ done_fields: ;
         }
     }
 }
+
 
 static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, int recursive, int immediate) JL_GC_DISABLED
 {
@@ -1020,8 +1179,8 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
         // We found the sysimg/pkg that this item links against
         // Compute the relocation code
         size_t offset = (uintptr_t)v - (uintptr_t)jl_linkage_blobs.items[2*i];
-        offset /= sizeof(void*);
-        assert(offset < ((uintptr_t)1 << DEPS_IDX_OFFSET) && "offset to external image too large");
+        assert((offset % SYS_EXTERNAL_LINK_UNIT) == 0);
+        offset /= SYS_EXTERNAL_LINK_UNIT;
         assert(n_linkage_blobs() == jl_array_nrows(s->buildid_depmods_idxs));
         size_t depsidx = jl_array_data(s->buildid_depmods_idxs, uint32_t)[i]; // map from build_id_idx -> deps_idx
         assert(depsidx < INT32_MAX);
@@ -1033,6 +1192,7 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
         jl_array_grow_end(link_ids, 1);
         uint32_t *link_id_data  = jl_array_data(link_ids, uint32_t);  // wait until after the `grow`
         link_id_data[jl_array_nrows(link_ids) - 1] = depsidx;
+        assert(offset < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "offset to external image too large");
         return ((uintptr_t)ExternalLinkage << RELOC_TAG_OFFSET) + offset;
     }
     return 0;
@@ -1045,19 +1205,19 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
 static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) JL_NOTSAFEPOINT
 {
     assert(v != NULL && "cannot get backref to NULL object");
-    void *idx = HT_NOTFOUND;
     if (jl_is_symbol(v)) {
         void **pidx = ptrhash_bp(&symbol_table, v);
-        idx = *pidx;
+        void *idx = *pidx;
         if (idx == HT_NOTFOUND) {
             size_t l = strlen(jl_symbol_name((jl_sym_t*)v));
             write_uint32(s->symbols, l);
             ios_write(s->symbols, jl_symbol_name((jl_sym_t*)v), l + 1);
             size_t offset = ++nsym_tag;
             assert(offset < ((uintptr_t)1 << RELOC_TAG_OFFSET) && "too many symbols");
-            idx = (void*)((char*)HT_NOTFOUND + ((uintptr_t)SymbolRef << RELOC_TAG_OFFSET) + offset);
+            idx = to_seroder_entry(offset - 1);
             *pidx = idx;
         }
+        return ((uintptr_t)SymbolRef << RELOC_TAG_OFFSET) + from_seroder_entry(idx);
     }
     else if (v == (jl_value_t*)s->ptls->root_task) {
         return (uintptr_t)TagRef << RELOC_TAG_OFFSET;
@@ -1085,17 +1245,15 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         assert(item && "no external linkage identified");
         return item;
     }
+    void *idx = ptrhash_get(&serialization_order, v);
     if (idx == HT_NOTFOUND) {
-        idx = ptrhash_get(&serialization_order, v);
-        if (idx == HT_NOTFOUND) {
-            jl_(jl_typeof(v));
-            jl_(v);
-        }
-        assert(idx != HT_NOTFOUND && "object missed during jl_queue_for_serialization pass");
-        assert(idx != (void*)(uintptr_t)-1 && "object missed during jl_insert_into_serialization_queue pass");
-        assert(idx != (void*)(uintptr_t)-2 && "object missed during jl_insert_into_serialization_queue pass");
+        jl_(jl_typeof(v));
+        jl_(v);
     }
-    return (char*)idx - 1 - (char*)HT_NOTFOUND;
+    assert(idx != HT_NOTFOUND && "object missed during jl_queue_for_serialization pass");
+    assert(idx != (void*)(uintptr_t)-1 && "object missed during jl_insert_into_serialization_queue pass");
+    assert(idx != (void*)(uintptr_t)-2 && "object missed during jl_insert_into_serialization_queue pass");
+    return ((uintptr_t)DataRef << RELOC_TAG_OFFSET) + from_seroder_entry(idx);
 }
 
 
@@ -1104,7 +1262,7 @@ static void record_uniquing(jl_serializer_state *s, jl_value_t *fld, uintptr_t o
     if (s->incremental && jl_needs_serialization(s, fld) && needs_uniquing(fld)) {
         if (jl_is_datatype(fld) || jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(fld)))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)offset);
-        else if (jl_is_method_instance(fld))
+        else if (jl_is_method_instance(fld) || jl_is_binding(fld))
             arraylist_push(&s->uniquing_objs, (void*)(uintptr_t)offset);
         else
             assert(0 && "unknown object type with needs_uniquing set");
@@ -1157,31 +1315,71 @@ static void jl_write_module(jl_serializer_state *s, uintptr_t item, jl_module_t 
     jl_atomic_store_relaxed(&newm->bindingkeyset, NULL);
     arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, bindingkeyset)));
     arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_atomic_load_relaxed(&m->bindingkeyset), s->link_ids_relocs));
+    newm->file = NULL;
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, file)));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, jl_options.strip_metadata ? jl_empty_sym : m->file , s->link_ids_relocs));
+    if (jl_options.strip_metadata)
+        newm->line = 0;
+    newm->usings_backedges = NULL;
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings_backedges)));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings_backedges, s->link_ids_relocs));
+    newm->scanned_methods = NULL;
+    arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, scanned_methods)));
+    arraylist_push(&s->relocs_list, (void*)backref_id(s, m->scanned_methods, s->link_ids_relocs));
+
+    // After reload, everything that has happened in this process happened semantically at
+    // (for .incremental) or before jl_require_world, so reset this flag.
+    jl_atomic_store_relaxed(&newm->export_set_changed_since_require_world, 0);
 
     // write out the usings list
     memset(&newm->usings._space, 0, sizeof(newm->usings._space));
     if (m->usings.items == &m->usings._space[0]) {
-        newm->usings.items = (void**)offsetof(jl_module_t, usings._space);
+        newm->usings.items = &newm->usings._space[0];
+        // Push these relocations here, to keep them in order. This pairs with the `newm->usings.items = ` below.
         arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings.items)));
         arraylist_push(&s->relocs_list, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + item));
         size_t i;
-        for (i = 0; i < m->usings.len; i++) {
-            arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[i])));
-            arraylist_push(&s->relocs_list, (void*)backref_id(s, m->usings._space[i], s->link_ids_relocs));
+        for (i = 0; i < module_usings_length(m); i++) {
+            struct _jl_module_using *newm_data = module_usings_getidx(newm, i);
+            struct _jl_module_using *data = module_usings_getidx(m, i);
+            // TODO: Remove dead entries
+            newm_data->min_world = data->min_world;
+            newm_data->max_world = data->max_world;
+            if (s->incremental) {
+                if (data->max_world != ~(size_t)0)
+                    newm_data->max_world = 0;
+                newm_data->min_world = jl_require_world;
+            }
+            arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings._space[3*i])));
+            arraylist_push(&s->relocs_list, (void*)backref_id(s, data->mod, s->link_ids_relocs));
         }
+        newm->usings.items = (void**)offsetof(jl_module_t, usings._space);
     }
     else {
         newm->usings.items = (void**)tot;
         arraylist_push(&s->relocs_list, (void*)(reloc_offset + offsetof(jl_module_t, usings.items)));
         arraylist_push(&s->relocs_list, (void*)(((uintptr_t)DataRef << RELOC_TAG_OFFSET) + item));
+        newm = NULL; // `write_*(s->s)` below may invalidate `newm`, so defensively set it to NULL
         size_t i;
-        for (i = 0; i < m->usings.len; i++) {
-            write_pointerfield(s, (jl_value_t*)m->usings.items[i]);
-            tot += sizeof(void*);
+        for (i = 0; i < module_usings_length(m); i++) {
+            struct _jl_module_using *data = module_usings_getidx(m, i);
+            write_pointerfield(s, (jl_value_t*)data->mod);
+            if (s->incremental) {
+                // TODO: Drop dead ones entirely?
+                write_uint(s->s, jl_require_world);
+                write_uint(s->s, data->max_world == ~(size_t)0 ? ~(size_t)0 : 1);
+            } else {
+                write_uint(s->s, data->min_world);
+                write_uint(s->s, data->max_world);
+            }
+            static_assert(sizeof(struct _jl_module_using) == 3*sizeof(void*), "_jl_module_using mismatch");
+            tot += sizeof(struct _jl_module_using);
         }
-        for (; i < m->usings.max; i++) {
+        for (; i < module_usings_max(m); i++) {
             write_pointer(s->s);
-            tot += sizeof(void*);
+            write_uint(s->s, 0);
+            write_uint(s->s, 0);
+            tot += sizeof(struct _jl_module_using);
         }
     }
     assert(ios_pos(s->s) - reloc_offset == tot);
@@ -1297,7 +1495,15 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
 
         if (s->incremental) {
             if (needs_uniquing(v)) {
-                if (jl_is_method_instance(v)) {
+                if (jl_typetagis(v, jl_binding_type)) {
+                    jl_binding_t *b = (jl_binding_t*)v;
+                    if (b->globalref == NULL)
+                        jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
+                    write_pointerfield(s, (jl_value_t*)b->globalref->mod);
+                    write_pointerfield(s, (jl_value_t*)b->globalref->name);
+                    continue;
+                }
+                else if (jl_is_method_instance(v)) {
                     assert(f == s->s);
                     jl_method_instance_t *mi = (jl_method_instance_t*)v;
                     write_pointerfield(s, mi->def.value);
@@ -1319,17 +1525,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             }
             else if (needs_recaching(v)) {
                 arraylist_push(jl_is_datatype(v) ? &s->fixup_types : &s->fixup_objs, (void*)reloc_offset);
-            }
-            else if (jl_typetagis(v, jl_binding_type)) {
-                jl_binding_t *b = (jl_binding_t*)v;
-                if (b->globalref == NULL || jl_object_in_image((jl_value_t*)b->globalref->mod))
-                    jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
-                // Assign type Any to any owned bindings that don't have a type.
-                // We don't want these accidentally managing to diverge later in different compilation units.
-                if (jl_atomic_load_relaxed(&b->owner) == b) {
-                    jl_value_t *old_ty = NULL;
-                    jl_atomic_cmpswap_relaxed(&b->ty, &old_ty, (jl_value_t*)jl_any_type);
-                }
             }
         }
 
@@ -1355,17 +1550,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             jl_genericmemory_t *m = (jl_genericmemory_t*)v;
             const jl_datatype_layout_t *layout = t->layout;
             size_t len = m->length;
-            if (jl_genericmemory_how(m) == 3 && jl_is_genericmemory(jl_genericmemory_data_owner_field(m))) {
-                jl_genericmemory_t *owner = (jl_genericmemory_t*)jl_genericmemory_data_owner_field(m);
-                size_t data = ((char*)m->ptr - (char*)owner->ptr); // relocation offset (bytes)
-                write_uint(f, len);
-                write_uint(f, data);
-                write_pointerfield(s, (jl_value_t*)owner);
-                // similar to record_memoryref, but the field is always an (offset) pointer
-                arraylist_push(&s->memowner_list, (void*)(reloc_offset + offsetof(jl_genericmemory_t, ptr))); // relocation location
-                arraylist_push(&s->memowner_list, NULL); // relocation target (ignored)
-            }
-            // else if (jl_genericmemory_how(m) == 3) {
+            // if (jl_genericmemory_how(m) == 3) {
             //     jl_value_t *owner = jl_genericmemory_data_owner_field(m);
             //     write_uint(f, len);
             //     write_pointerfield(s, owner);
@@ -1374,7 +1559,8 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             //     assert(new_mem->ptr == NULL);
             //     new_mem->ptr = (void*)((char*)m->ptr - (char*)owner); // relocation offset
             // }
-            else {
+            // else
+            {
                 size_t datasize = len * layout->size;
                 size_t tot = datasize;
                 int isbitsunion = layout->flags.arrayelem_isunion;
@@ -1421,10 +1607,13 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                             ios_write(s->const_data, (char*)m->ptr, tot);
                         }
                     }
-                    if (len == 0) // TODO: should we have a zero-page, instead of writing each type's fragment separately?
+                    if (len == 0) { // TODO: should we have a zero-page, instead of writing each type's fragment separately?
                         write_padding(s->const_data, layout->size ? layout->size : isbitsunion);
-                    else if (jl_genericmemory_how(m) == 3 && jl_is_string(jl_genericmemory_data_owner_field(m)))
+                    }
+                    else if (jl_genericmemory_how(m) == 3) {
+                        assert(jl_is_string(jl_genericmemory_data_owner_field(m)));
                         write_padding(s->const_data, 1);
+                    }
                 }
                 else {
                     // Pointer eltypes are encoded in the mutable data section
@@ -1516,6 +1705,32 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             ios_write(s->const_data, (char*)pdata, nb);
             write_pointer(f);
         }
+        else if (jl_is_binding_partition(v)) {
+            jl_binding_partition_t *bpart = (jl_binding_partition_t*)v;
+            write_pointerfield(s, bpart->restriction);
+            size_t max_world = jl_atomic_load_relaxed(&bpart->max_world);
+            if (s->incremental) {
+                if (max_world == ~(size_t)0) {
+                    // Still valid. Will be considered to be defined in jl_require_world
+                    // after reload, which is the first world before new code runs.
+                    // We use this as a quick check to determine whether a binding was
+                    // invalidated. If a binding was first defined in or before
+                    // jl_require_world, then we can assume that all precompile processes
+                    // will have seen it consistently.
+                    write_uint(f, jl_require_world);
+                    write_uint(f, max_world);
+                } else {
+                    // The world will not be reachable after loading
+                    write_uint(f, 1);
+                    write_uint(f, 0);
+                }
+            } else {
+                write_uint(f, bpart->min_world);
+                write_uint(f, max_world);
+            }
+            write_pointerfield(s, (jl_value_t*)jl_atomic_load_relaxed(&bpart->next));
+            write_uint(f, bpart->kind);
+        }
         else {
             // Generic object::DataType serialization by field
             const char *data = (const char*)v;
@@ -1527,7 +1742,23 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 write_padding(f, offset - tot);
                 tot = offset;
                 size_t fsz = jl_field_size(t, i);
-                if (t->name->mutabl && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
+                jl_value_t *replace = (jl_value_t*)ptrhash_get(&bits_replace, (void*)slot);
+                if (replace != HT_NOTFOUND) {
+                    assert(t->name->mutabl && !jl_field_isptr(t, i));
+                    jl_value_t *rty = jl_typeof(replace);
+                    size_t sz = jl_datatype_size(rty);
+                    ios_write(f, (const char*)replace, sz);
+                    jl_value_t *ft = jl_field_type_concrete(t, i);
+                    int isunion = jl_is_uniontype(ft);
+                    unsigned nth = 0;
+                    if (!jl_find_union_component(ft, rty, &nth))
+                        assert(0 && "invalid field assignment to isbits union");
+                    assert(sz <= fsz - isunion);
+                    write_padding(f, fsz - sz - isunion);
+                    if (isunion)
+                        write_uint8(f, nth);
+                }
+                else if (t->name->mutabl && jl_is_cpointer_type(jl_field_type_concrete(t, i)) && *(intptr_t*)slot != -1) {
                     // reset Ptr fields to C_NULL (but keep MAP_FAILED / INVALID_HANDLE)
                     assert(!jl_field_isptr(t, i));
                     write_pointer(f);
@@ -1542,8 +1773,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             for (i = 0; i < np; i++) {
                 size_t offset = jl_ptr_offset(t, i) * sizeof(jl_value_t*);
                 int mutabl = t->name->mutabl;
-                if (jl_is_binding(v) && ((jl_binding_t*)v)->constp && i == 0) // value field depends on constp field
-                    mutabl = 0;
                 jl_value_t *fld = get_replaceable_field((jl_value_t**)&data[offset], mutabl);
                 size_t fld_pos = offset + reloc_offset;
                 if (fld != NULL) {
@@ -1595,13 +1824,11 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 else {
                     newm->nroots_sysimg = m->roots ? jl_array_len(m->roots) : 0;
                 }
-                if (m->ccallable)
-                    arraylist_push(&s->ccallable_list, (void*)reloc_offset);
             }
             else if (jl_is_method_instance(v)) {
                 assert(f == s->s);
                 jl_method_instance_t *newmi = (jl_method_instance_t*)&f->buf[reloc_offset];
-                jl_atomic_store_relaxed(&newmi->precompiled, 0);
+                jl_atomic_store_relaxed(&newmi->flags, 0);
             }
             else if (jl_is_code_instance(v)) {
                 assert(f == s->s);
@@ -1613,6 +1840,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 if (s->incremental) {
                     if (jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
                         if (jl_atomic_load_relaxed(&newci->min_world) > 1) {
+                            //assert(jl_atomic_load_relaxed(&ci->edges) != jl_emptysvec); // some code (such as !==) might add a method lookup restriction but not keep the edges
                             jl_atomic_store_release(&newci->min_world, ~(size_t)0);
                             jl_atomic_store_release(&newci->max_world, WORLD_AGE_REVALIDATION_SENTINEL);
                             arraylist_push(&s->fixup_objs, (void*)reloc_offset);
@@ -1624,6 +1852,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                         jl_atomic_store_release(&newci->max_world, 0);
                     }
                 }
+                jl_atomic_store_relaxed(&newci->time_compile, 0.0);
                 jl_atomic_store_relaxed(&newci->invoke, NULL);
                 jl_atomic_store_relaxed(&newci->specsigflags, 0);
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
@@ -1633,7 +1862,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     fptr_id = JL_API_CONST;
                 }
                 else {
-                    if (jl_is_method(ci->def->def.method)) {
+                    if (jl_is_method(jl_get_ci_mi(ci)->def.method)) {
                         builtin_id = jl_fptr_id(jl_atomic_load_relaxed(&ci->specptr.fptr));
                         if (builtin_id) { // found in the table of builtins
                             assert(builtin_id >= 2);
@@ -1649,6 +1878,15 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                                 }
                                 else if (invokeptr_id == -2) {
                                     fptr_id = JL_API_WITH_PARAMETERS;
+                                }
+                                else if (invokeptr_id == -3) {
+                                    abort();
+                                }
+                                else if (invokeptr_id == -4) {
+                                    fptr_id = JL_API_OC_CALL;
+                                }
+                                else if (invokeptr_id == -5) {
+                                    abort();
                                 }
                                 else {
                                     assert(invokeptr_id > 0);
@@ -1718,7 +1956,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     }
                 }
                 void *superidx = ptrhash_get(&serialization_order, dt->super);
-                if (s->incremental && superidx != HT_NOTFOUND && (char*)superidx - 1 - (char*)HT_NOTFOUND > item && needs_uniquing((jl_value_t*)dt->super))
+                if (s->incremental && superidx != HT_NOTFOUND && from_seroder_entry(superidx) > item && needs_uniquing((jl_value_t*)dt->super))
                     arraylist_push(&s->uniquing_super, dt->super);
             }
             else if (jl_is_typename(v)) {
@@ -1886,10 +2124,14 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         case JL_API_BOXED:
             if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_args;
-            JL_FALLTHROUGH;
+            return (uintptr_t)NULL;
         case JL_API_WITH_PARAMETERS:
             if (s->image->fptrs.nptrs)
                 return (uintptr_t)jl_fptr_sparam;
+            return (uintptr_t)NULL;
+        case JL_API_OC_CALL:
+            if (s->image->fptrs.nptrs)
+                return (uintptr_t)jl_f_opaque_closure_call;
             return (uintptr_t)NULL;
         case JL_API_CONST:
             return (uintptr_t)jl_fptr_const_return;
@@ -1912,7 +2154,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         assert(s->buildid_depmods_idxs && depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
         assert(2*i < jl_linkage_blobs.len);
-        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*sizeof(void*);
+        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     case ExternalLinkage: {
         assert(link_ids);
@@ -1923,7 +2165,7 @@ static inline uintptr_t get_item_for_reloc(jl_serializer_state *s, uintptr_t bas
         assert(depsidx < jl_array_len(s->buildid_depmods_idxs));
         size_t i = jl_array_data(s->buildid_depmods_idxs, uint32_t)[depsidx];
         assert(2*i < jl_linkage_blobs.len);
-        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*sizeof(void*);
+        return (uintptr_t)jl_linkage_blobs.items[2*i] + offset*SYS_EXTERNAL_LINK_UNIT;
     }
     }
     abort();
@@ -2166,9 +2408,9 @@ static void jl_update_all_fptrs(jl_serializer_state *s, jl_image_t *image)
                 offset = ~offset;
             }
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + offset);
-            assert(jl_is_method(codeinst->def->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
+            assert(jl_is_method(jl_get_ci_mi(codeinst)->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
             assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
-            linfos[i] = codeinst->def;     // now it's a MethodInstance
+            linfos[i] = jl_get_ci_mi(codeinst);     // now it's a MethodInstance
             void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
                 uint32_t idx = fvars.clone_idxs[clone_idx] & jl_sysimg_val_mask;
@@ -2262,34 +2504,12 @@ static void jl_root_new_gvars(jl_serializer_state *s, jl_image_t *image, uint32_
     }
 }
 
-
-static void jl_compile_extern(jl_method_t *m, void *sysimg_handle) JL_GC_DISABLED
-{
-    // install ccallable entry point in JIT
-    assert(m); // makes clang-sa happy
-    jl_svec_t *sv = m->ccallable;
-    int success = jl_compile_extern_c(NULL, NULL, sysimg_handle, jl_svecref(sv, 0), jl_svecref(sv, 1));
-    if (!success)
-        jl_safe_printf("WARNING: @ccallable was already defined for this method name\n"); // enjoy a very bad time
-    assert(success || !sysimg_handle);
-}
-
-
-static void jl_reinit_ccallable(arraylist_t *ccallable_list, char *base, void *sysimg_handle)
-{
-    for (size_t i = 0; i < ccallable_list->len; i++) {
-        uintptr_t item = (uintptr_t)ccallable_list->items[i];
-        jl_method_t *m = (jl_method_t*)(base + item);
-        jl_compile_extern(m, sysimg_handle);
-    }
-}
-
-
 // Code below helps slim down the images by
 // removing cached types not referenced in the stream
 static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
 {
     size_t l = jl_svec_len(cache), i;
+    size_t sz = 0;
     if (l == 0)
         return cache;
     for (i = 0; i < l; i++) {
@@ -2298,14 +2518,19 @@ static jl_svec_t *jl_prune_type_cache_hash(jl_svec_t *cache) JL_GC_DISABLED
             continue;
         if (ptrhash_get(&serialization_order, ti) == HT_NOTFOUND)
             jl_svecset(cache, i, jl_nothing);
+        else
+            sz += 1;
     }
+    if (sz < HT_N_INLINE)
+        sz = HT_N_INLINE;
+
     void *idx = ptrhash_get(&serialization_order, cache);
     assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
-    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == cache);
-    cache = cache_rehash_set(cache, l);
+    assert(serialization_queue.items[from_seroder_entry(idx)] == cache);
+    cache = cache_rehash_set(cache, sz);
     // redirect all references to the old cache to relocate to the new cache object
     ptrhash_put(&serialization_order, cache, idx);
-    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = cache;
+    serialization_queue.items[from_seroder_entry(idx)] = cache;
     return cache;
 }
 
@@ -2323,35 +2548,80 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
         jl_svecset(cache, ins++, jl_nothing);
 }
 
-static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig)
+uint_t bindingkey_hash(size_t idx, jl_value_t *data);
+
+static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
+{
+    jl_svec_t *bindings = jl_atomic_load_relaxed(&m->bindings);
+    size_t l = jl_svec_len(bindings), i;
+    arraylist_t bindings_list;
+    arraylist_new(&bindings_list, 0);
+    if (l == 0)
+        return;
+    for (i = 0; i < l; i++) {
+        jl_value_t *ti = jl_svecref(bindings, i);
+        if (ti == jl_nothing)
+            continue;
+        jl_binding_t *ref = ((jl_binding_t*)ti);
+        if (!((ptrhash_get(&serialization_order, ref) == HT_NOTFOUND) &&
+            (ptrhash_get(&serialization_order, ref->globalref) == HT_NOTFOUND))) {
+            jl_svecset(bindings, i, jl_nothing);
+            arraylist_push(&bindings_list, ref);
+        }
+    }
+    jl_genericmemory_t* bindingkeyset = jl_atomic_load_relaxed(&m->bindingkeyset);
+    _Atomic(jl_genericmemory_t*)bindingkeyset2;
+    jl_atomic_store_relaxed(&bindingkeyset2,(jl_genericmemory_t*)jl_an_empty_memory_any);
+    jl_svec_t *bindings2 = jl_alloc_svec_uninit(bindings_list.len);
+    for (i = 0; i < bindings_list.len; i++) {
+        jl_binding_t *ref = (jl_binding_t*)bindings_list.items[i];
+        jl_svecset(bindings2, i, ref);
+        jl_smallintset_insert(&bindingkeyset2, (jl_value_t*)m, bindingkey_hash, i, (jl_value_t*)bindings2);
+    }
+    void *idx = ptrhash_get(&serialization_order, bindings);
+    assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
+    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == bindings);
+    ptrhash_put(&serialization_order, bindings2, idx);
+    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = bindings2;
+
+    idx = ptrhash_get(&serialization_order, bindingkeyset);
+    assert(idx != HT_NOTFOUND && idx != (void*)(uintptr_t)-1);
+    assert(serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] == bindingkeyset);
+    ptrhash_put(&serialization_order, jl_atomic_load_relaxed(&bindingkeyset2), idx);
+    serialization_queue.items[(char*)idx - 1 - (char*)HT_NOTFOUND] = jl_atomic_load_relaxed(&bindingkeyset2);
+    jl_atomic_store_relaxed(&m->bindings, bindings2);
+    jl_atomic_store_relaxed(&m->bindingkeyset, jl_atomic_load_relaxed(&bindingkeyset2));
+    jl_gc_wb(m, bindings2);
+    jl_gc_wb(m, jl_atomic_load_relaxed(&bindingkeyset2));
+}
+
+static void strip_slotnames(jl_array_t *slotnames)
+{
+    // replace slot names with `?`, except unused_sym since the compiler looks at it
+    jl_sym_t *questionsym = jl_symbol("?");
+    int i, l = jl_array_len(slotnames);
+    for (i = 0; i < l; i++) {
+        jl_value_t *s = jl_array_ptr_ref(slotnames, i);
+        if (s != (jl_value_t*)jl_unused_sym)
+            jl_array_ptr_set(slotnames, i, questionsym);
+    }
+}
+
+static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_instance_t *codeinst)
 {
     jl_code_info_t *ci = NULL;
     JL_GC_PUSH1(&ci);
     int compressed = 0;
     if (!jl_is_code_info(ci_)) {
         compressed = 1;
-        ci = jl_uncompress_ir(m, NULL, (jl_value_t*)ci_);
+        ci = jl_uncompress_ir(m, codeinst, (jl_value_t*)ci_);
     }
     else {
         ci = (jl_code_info_t*)ci_;
     }
-    // leave codelocs length the same so the compiler can assume that; just zero it
-    memset(jl_array_data(ci->codelocs, int32_t), 0, jl_array_len(ci->codelocs)*sizeof(int32_t));
-    // empty linetable
-    if (jl_is_array(ci->linetable))
-        jl_array_del_end((jl_array_t*)ci->linetable, jl_array_len(ci->linetable));
-    // replace slot names with `?`, except unused_sym since the compiler looks at it
-    jl_sym_t *questionsym = jl_symbol("?");
-    int i, l = jl_array_len(ci->slotnames);
-    for (i = 0; i < l; i++) {
-        jl_value_t *s = jl_array_ptr_ref(ci->slotnames, i);
-        if (s != (jl_value_t*)jl_unused_sym)
-            jl_array_ptr_set(ci->slotnames, i, questionsym);
-    }
-    if (orig) {
-        m->slot_syms = jl_compress_argnames(ci->slotnames);
-        jl_gc_wb(m, m->slot_syms);
-    }
+    strip_slotnames(ci->slotnames);
+    ci->debuginfo = jl_nulldebuginfo;
+    jl_gc_wb(ci, ci->debuginfo);
     jl_value_t *ret = (jl_value_t*)ci;
     if (compressed)
         ret = (jl_value_t*)jl_compress_ir(m, ci);
@@ -2370,18 +2640,20 @@ static void strip_specializations_(jl_method_instance_t *mi)
                 record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
             }
             else if (jl_options.strip_metadata) {
-                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, 0);
+                jl_value_t *stripped = strip_codeinfo_meta(mi->def.method, inferred, codeinst);
                 if (jl_atomic_cmpswap_relaxed(&codeinst->inferred, &inferred, stripped)) {
                     jl_gc_wb(codeinst, stripped);
                 }
             }
         }
+        if (jl_options.strip_ir)
+            record_field_change((jl_value_t**)&codeinst->edges, (jl_value_t*)jl_emptysvec);
+        if (jl_options.strip_metadata)
+            record_field_change((jl_value_t**)&codeinst->debuginfo, (jl_value_t*)jl_nulldebuginfo);
         codeinst = jl_atomic_load_relaxed(&codeinst->next);
     }
     if (jl_options.strip_ir) {
-        record_field_change((jl_value_t**)&mi->uninferred, NULL);
         record_field_change((jl_value_t**)&mi->backedges, NULL);
-        record_field_change((jl_value_t**)&mi->callbacks, NULL);
     }
 }
 
@@ -2391,31 +2663,46 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     if (m->source) {
         int stripped_ir = 0;
         if (jl_options.strip_ir) {
-            if (jl_atomic_load_relaxed(&m->unspecialized)) {
-                jl_code_instance_t *unspec = jl_atomic_load_relaxed(&jl_atomic_load_relaxed(&m->unspecialized)->cache);
-                if (unspec && jl_atomic_load_relaxed(&unspec->invoke)) {
-                    // we have a generic compiled version, so can remove the IR
-                    record_field_change(&m->source, jl_nothing);
-                    stripped_ir = 1;
+            int should_strip_ir = jl_options.trim;
+            if (!should_strip_ir) {
+                if (jl_atomic_load_relaxed(&m->unspecialized)) {
+                    jl_code_instance_t *unspec = jl_atomic_load_relaxed(&jl_atomic_load_relaxed(&m->unspecialized)->cache);
+                    if (unspec && jl_atomic_load_relaxed(&unspec->invoke)) {
+                        // we have a generic compiled version, so can remove the IR
+                        should_strip_ir = 1;
+                    }
                 }
             }
-            if (!stripped_ir) {
+            if (!should_strip_ir) {
                 int mod_setting = jl_get_module_compile(m->module);
-                // if the method is declared not to be compiled, keep IR for interpreter
                 if (!(mod_setting == JL_OPTIONS_COMPILE_OFF || mod_setting == JL_OPTIONS_COMPILE_MIN)) {
-                    record_field_change(&m->source, jl_nothing);
-                    stripped_ir = 1;
+                    // if the method is declared not to be compiled, keep IR for interpreter
+                    should_strip_ir = 1;
                 }
+            }
+            if (should_strip_ir) {
+                record_field_change(&m->source, jl_nothing);
+                record_field_change((jl_value_t**)&m->roots, NULL);
+                stripped_ir = 1;
             }
         }
-        if (jl_options.strip_metadata && !stripped_ir) {
-            m->source = strip_codeinfo_meta(m, m->source, 1);
-            jl_gc_wb(m, m->source);
+        if (jl_options.strip_metadata) {
+            if (!stripped_ir) {
+                m->source = strip_codeinfo_meta(m, m->source, NULL);
+                jl_gc_wb(m, m->source);
+            }
+            jl_array_t *slotnames = jl_uncompress_argnames(m->slot_syms);
+            JL_GC_PUSH1(&slotnames);
+            strip_slotnames(slotnames);
+            m->slot_syms = jl_compress_argnames(slotnames);
+            jl_gc_wb(m, m->slot_syms);
+            JL_GC_POP();
         }
     }
     if (jl_options.strip_metadata) {
         record_field_change((jl_value_t**)&m->file, (jl_value_t*)jl_empty_sym);
         m->line = 0;
+        record_field_change((jl_value_t**)&m->debuginfo, (jl_value_t*)jl_nulldebuginfo);
     }
     jl_value_t *specializations = jl_atomic_load_relaxed(&m->specializations);
     if (!jl_is_svec(specializations)) {
@@ -2453,8 +2740,65 @@ static void jl_strip_all_codeinfos(void)
 jl_genericmemory_t *jl_global_roots_list;
 jl_genericmemory_t *jl_global_roots_keyset;
 jl_mutex_t global_roots_lock;
-extern jl_mutex_t world_counter_lock;
-extern size_t jl_require_world;
+
+jl_mutex_t precompile_field_replace_lock;
+jl_svec_t *precompile_field_replace JL_GLOBALLY_ROOTED;
+
+static inline jl_value_t *get_checked_fieldindex(const char *name, jl_datatype_t *st, jl_value_t *v, jl_value_t *arg, int mutabl)
+{
+    if (mutabl) {
+        if (st == jl_module_type)
+            jl_error("cannot assign variables in other modules");
+        if (!st->name->mutabl)
+            jl_errorf("%s: immutable struct of type %s cannot be changed", name, jl_symbol_name(st->name->name));
+    }
+    size_t idx;
+    if (jl_is_long(arg)) {
+        idx = jl_unbox_long(arg) - 1;
+        if (idx >= jl_datatype_nfields(st))
+            jl_bounds_error(v, arg);
+    }
+    else if (jl_is_symbol(arg)) {
+        idx = jl_field_index(st, (jl_sym_t*)arg, 1);
+        arg = jl_box_long(idx);
+    }
+    else {
+        jl_value_t *ts[2] = {(jl_value_t*)jl_long_type, (jl_value_t*)jl_symbol_type};
+        jl_value_t *t = jl_type_union(ts, 2);
+        jl_type_error(name, t, arg);
+    }
+    if (mutabl && jl_field_isconst(st, idx)) {
+        jl_errorf("%s: const field .%s of type %s cannot be changed", name,
+                jl_symbol_name((jl_sym_t*)jl_svecref(jl_field_names(st), idx)), jl_symbol_name(st->name->name));
+    }
+    return arg;
+}
+
+JL_DLLEXPORT void jl_set_precompile_field_replace(jl_value_t *val, jl_value_t *field, jl_value_t *newval)
+{
+    if (!jl_generating_output())
+        return;
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(val);
+    jl_value_t *idx = get_checked_fieldindex("setfield!", st, val, field, 1);
+    JL_GC_PUSH1(&idx);
+    size_t idxval = jl_unbox_long(idx);
+    jl_value_t *ft = jl_field_type_concrete(st, idxval);
+    if (!jl_isa(newval, ft))
+        jl_type_error("setfield!", ft, newval);
+    JL_LOCK(&precompile_field_replace_lock);
+    if (precompile_field_replace == NULL) {
+        precompile_field_replace = jl_alloc_svec(3);
+        jl_svecset(precompile_field_replace, 0, jl_alloc_vec_any(0));
+        jl_svecset(precompile_field_replace, 1, jl_alloc_vec_any(0));
+        jl_svecset(precompile_field_replace, 2, jl_alloc_vec_any(0));
+    }
+    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace, 0), val);
+    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace, 1), idx);
+    jl_array_ptr_1d_push((jl_array_t*)jl_svecref(precompile_field_replace, 2), newval);
+    JL_GC_POP();
+    JL_UNLOCK(&precompile_field_replace_lock);
+}
+
 
 JL_DLLEXPORT int jl_is_globally_rooted(jl_value_t *val JL_MAYBE_UNROOTED) JL_NOTSAFEPOINT
 {
@@ -2520,26 +2864,21 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
     return val;
 }
 
-static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *newly_inferred, uint64_t worklist_key,
-                           /* outputs */  jl_array_t **extext_methods, jl_array_t **new_ext_cis,
-                                          jl_array_t **method_roots_list, jl_array_t **ext_targets, jl_array_t **edges)
+static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *newly_inferred,
+                           /* outputs */  jl_array_t **extext_methods JL_REQUIRE_ROOTED_SLOT,
+                                          jl_array_t **new_ext_cis JL_REQUIRE_ROOTED_SLOT,
+                                          jl_array_t **edges JL_REQUIRE_ROOTED_SLOT)
 {
     // extext_methods: [method1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
-    // ext_targets: [invokesig1, callee1, matches1, ...] non-worklist callees of worklist-owned methods
-    //              ordinary dispatch: invokesig=NULL, callee is MethodInstance
-    //              `invoke` dispatch: invokesig is signature, callee is MethodInstance
-    //              abstract call: callee is signature
-    // edges: [caller1, ext_targets_indexes1, ...] for worklist-owned methods calling external methods
-    assert(edges_map == NULL);
+    // edges: [caller1, ext_targets, ...] for worklist-owned methods calling external methods
 
     // Save the inferred code from newly inferred, external methods
     *new_ext_cis = queue_external_cis(newly_inferred);
 
     // Collect method extensions and edges data
-    JL_GC_PUSH1(&edges_map);
-    if (edges)
-        edges_map = jl_alloc_memory_any(0);
     *extext_methods = jl_alloc_vec_any(0);
+    internal_methods = jl_alloc_vec_any(0);
+    JL_GC_PUSH1(&internal_methods);
     jl_collect_methtable_from_mod(jl_type_type_mt, *extext_methods);
     jl_collect_methtable_from_mod(jl_nonfunction_mt, *extext_methods);
     size_t i, len = jl_array_len(mod_array);
@@ -2551,19 +2890,12 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     }
 
     if (edges) {
+        // Extract `edges` now (from info prepared by jl_collect_methcache_from_mod)
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
-        jl_collect_missing_backedges(jl_type_type_mt);
-        jl_collect_missing_backedges(jl_nonfunction_mt);
-        // jl_collect_extext_methods_from_mod and jl_collect_missing_backedges also accumulate data in callers_with_edges.
-        // Process this to extract `edges` and `ext_targets`.
-        *ext_targets = jl_alloc_vec_any(0);
         *edges = jl_alloc_vec_any(0);
-        *method_roots_list = jl_alloc_vec_any(0);
-        // Collect the new method roots for external specializations
-        jl_collect_new_roots(*method_roots_list, *new_ext_cis, worklist_key);
-        jl_collect_edges(*edges, *ext_targets, *new_ext_cis, world);
+        jl_collect_internal_cis(*edges, world);
     }
-    assert(edges_map == NULL); // jl_collect_edges clears this when done
+    internal_methods = NULL; // global
 
     JL_GC_POP();
 }
@@ -2571,15 +2903,94 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
 // In addition to the system image (where `worklist = NULL`), this can also save incremental images with external linkage
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *worklist, jl_array_t *extext_methods,
-                                           jl_array_t *new_ext_cis, jl_array_t *method_roots_list,
-                                           jl_array_t *ext_targets, jl_array_t *edges) JL_GC_DISABLED
+                                           jl_array_t *new_ext_cis, jl_array_t *edges)
 {
     htable_new(&field_replace, 0);
+    htable_new(&bits_replace, 0);
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
         jl_strip_all_codeinfos();
+    // collect needed methods and replace method tables that are in the tags array
+    htable_new(&new_methtables, 0);
+    arraylist_t MIs;
+    arraylist_new(&MIs, 0);
+    arraylist_t gvars;
+    arraylist_new(&gvars, 0);
+    arraylist_t external_fns;
+    arraylist_new(&external_fns, 0);
+    // prepare hash table with any fields the user wanted us to rewrite during serialization
+    if (precompile_field_replace) {
+        jl_array_t *vals = (jl_array_t*)jl_svecref(precompile_field_replace, 0);
+        jl_array_t *fields = (jl_array_t*)jl_svecref(precompile_field_replace, 1);
+        jl_array_t *newvals = (jl_array_t*)jl_svecref(precompile_field_replace, 2);
+        size_t i, l = jl_array_nrows(vals);
+        assert(jl_array_nrows(fields) == l && jl_array_nrows(newvals) == l);
+        for (i = 0; i < l; i++) {
+            jl_value_t *val = jl_array_ptr_ref(vals, i);
+            size_t field = jl_unbox_long(jl_array_ptr_ref(fields, i));
+            jl_value_t *newval = jl_array_ptr_ref(newvals, i);
+            jl_datatype_t *st = (jl_datatype_t*)jl_typeof(val);
+            size_t offs = jl_field_offset(st, field);
+            char *fldaddr = (char*)val + offs;
+            if (jl_field_isptr(st, field)) {
+                record_field_change((jl_value_t**)fldaddr, newval);
+            }
+            else {
+                // replace the bits
+                ptrhash_put(&bits_replace, (void*)fldaddr, newval);
+                // and any pointers inside
+                jl_datatype_t *rty = (jl_datatype_t*)jl_typeof(newval);
+                const jl_datatype_layout_t *layout = rty->layout;
+                size_t j, np = layout->npointers;
+                for (j = 0; j < np; j++) {
+                    uint32_t ptr = jl_ptr_offset(rty, j);
+                    record_field_change((jl_value_t**)fldaddr + ptr, *(((jl_value_t**)newval) + ptr));
+                }
+            }
+        }
+    }
 
     int en = jl_gc_enable(0);
+    if (native_functions) {
+        size_t num_gvars, num_external_fns;
+        jl_get_llvm_gvs(native_functions, &num_gvars, NULL);
+        arraylist_grow(&gvars, num_gvars);
+        jl_get_llvm_gvs(native_functions, &num_gvars, gvars.items);
+        jl_get_llvm_external_fns(native_functions, &num_external_fns, NULL);
+        arraylist_grow(&external_fns, num_external_fns);
+        jl_get_llvm_external_fns(native_functions, &num_external_fns,
+                                 (jl_code_instance_t *)external_fns.items);
+        if (jl_options.trim) {
+            size_t num_mis;
+            jl_get_llvm_mis(native_functions, &num_mis, NULL);
+            arraylist_grow(&MIs, num_mis);
+            jl_get_llvm_mis(native_functions, &num_mis, (jl_method_instance_t *)MIs.items);
+        }
+    }
+    if (jl_options.trim) {
+        jl_rebuild_methtables(&MIs, &new_methtables);
+        jl_methtable_t *mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_type_type_mt);
+        JL_GC_PROMISE_ROOTED(mt);
+        if (mt != HT_NOTFOUND)
+            jl_type_type_mt = mt;
+        else
+            jl_type_type_mt = jl_new_method_table(jl_type_type_mt->name, jl_type_type_mt->module);
+
+        mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_kwcall_mt);
+        JL_GC_PROMISE_ROOTED(mt);
+        if (mt != HT_NOTFOUND)
+            jl_kwcall_mt = mt;
+        else
+            jl_kwcall_mt = jl_new_method_table(jl_kwcall_mt->name, jl_kwcall_mt->module);
+
+        mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_nonfunction_mt);
+        JL_GC_PROMISE_ROOTED(mt);
+        if (mt != HT_NOTFOUND)
+            jl_nonfunction_mt = mt;
+        else
+            jl_nonfunction_mt = jl_new_method_table(jl_nonfunction_mt->name, jl_nonfunction_mt->module);
+    }
+
     nsym_tag = 0;
     htable_new(&symbol_table, 0);
     htable_new(&fptr_to_id, sizeof(id_to_fptrs) / sizeof(*id_to_fptrs));
@@ -2616,23 +3027,18 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_new(&s.uniquing_objs, 0);
     arraylist_new(&s.fixup_types, 0);
     arraylist_new(&s.fixup_objs, 0);
-    arraylist_new(&s.ccallable_list, 0);
     s.buildid_depmods_idxs = image_to_depmodidx(mod_array);
     s.link_ids_relocs = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.link_ids_gctags = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.link_ids_gvars = jl_alloc_array_1d(jl_array_int32_type, 0);
     s.link_ids_external_fnvars = jl_alloc_array_1d(jl_array_int32_type, 0);
-    htable_new(&s.callers_with_edges, 0);
-    jl_value_t **const*const tags = get_tags(); // worklist == NULL ? get_tags() : NULL;
-
-    arraylist_t gvars;
-    arraylist_t external_fns;
-    arraylist_new(&gvars, 0);
-    arraylist_new(&external_fns, 0);
-    if (native_functions) {
-        jl_get_llvm_gvs(native_functions, &gvars);
-        jl_get_llvm_external_fns(native_functions, &external_fns);
+    s.method_roots_list = NULL;
+    htable_new(&s.method_roots_index, 0);
+    if (worklist) {
+        s.method_roots_list = jl_alloc_vec_any(0);
+        s.worklist_key = jl_worklist_key(worklist);
     }
+    jl_value_t **const*const tags = get_tags(); // worklist == NULL ? get_tags() : NULL;
 
     if (worklist == NULL) {
         // empty!(Core.ARGS)
@@ -2670,29 +3076,33 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             // Queue the worklist itself as the first item we serialize
             jl_queue_for_serialization(&s, worklist);
             jl_queue_for_serialization(&s, jl_module_init_order);
-            // Classify the CodeInstances with respect to their need for validation
-            classify_callers(&s.callers_with_edges, edges);
         }
         // step 1.1: as needed, serialize the data needed for insertion into the running system
         if (extext_methods) {
-            assert(ext_targets);
             assert(edges);
             // Queue method extensions
             jl_queue_for_serialization(&s, extext_methods);
             // Queue the new specializations
             jl_queue_for_serialization(&s, new_ext_cis);
-            // Queue the new roots
-            jl_queue_for_serialization(&s, method_roots_list);
             // Queue the edges
-            jl_queue_for_serialization(&s, ext_targets);
             jl_queue_for_serialization(&s, edges);
         }
         jl_serialize_reachable(&s);
         // step 1.2: ensure all gvars are part of the sysimage too
         record_gvars(&s, &gvars);
         record_external_fns(&s, &external_fns);
+        if (jl_options.trim)
+            record_gvars(&s, &MIs);
         jl_serialize_reachable(&s);
-        // step 1.3: prune (garbage collect) special weak references from the jl_global_roots_list
+        // Beyond this point, all content should already have been visited, so now we can prune
+        // the rest and add some internal root arrays.
+        // step 1.3: include some other special roots
+        if (s.incremental) {
+            // Queue the new roots array
+            jl_queue_for_serialization(&s, s.method_roots_list);
+            jl_serialize_reachable(&s);
+        }
+        // step 1.4: prune (garbage collect) special weak references from the jl_global_roots_list
         if (worklist == NULL) {
             global_roots_list = jl_alloc_memory_any(0);
             global_roots_keyset = jl_alloc_memory_any(0);
@@ -2708,11 +3118,34 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, global_roots_keyset);
             jl_serialize_reachable(&s);
         }
-        // step 1.4: prune (garbage collect) some special weak references from
+        // step 1.5: prune (garbage collect) some special weak references from
         // built-in type caches too
         for (i = 0; i < serialization_queue.len; i++) {
-            jl_typename_t *tn = (jl_typename_t*)serialization_queue.items[i];
-            if (jl_is_typename(tn)) {
+            jl_value_t *v = (jl_value_t*)serialization_queue.items[i];
+            if (jl_options.trim) {
+                if (jl_is_method(v)){
+                    jl_method_t *m = (jl_method_t*)v;
+                    jl_value_t *specializations_ = jl_atomic_load_relaxed(&m->specializations);
+                    if (!jl_is_svec(specializations_))
+                        continue;
+
+                    jl_svec_t *specializations = (jl_svec_t *)specializations_;
+                    size_t l = jl_svec_len(specializations), i;
+                    for (i = 0; i < l; i++) {
+                        jl_value_t *mi = jl_svecref(specializations, i);
+                        if (mi == jl_nothing)
+                            continue;
+                        if (ptrhash_get(&serialization_order, mi) == HT_NOTFOUND)
+                            jl_svecset(specializations, i, jl_nothing);
+                    }
+                }
+                else if (jl_is_module(v)) {
+                    jl_prune_module_bindings((jl_module_t*)v);
+                }
+            }
+            // Not else
+            if (jl_is_typename(v)) {
+                jl_typename_t *tn = (jl_typename_t*)v;
                 jl_atomic_store_relaxed(&tn->cache,
                     jl_prune_type_cache_hash(jl_atomic_load_relaxed(&tn->cache)));
                 jl_gc_wb(tn, jl_atomic_load_relaxed(&tn->cache));
@@ -2751,7 +3184,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         );
         jl_exit(1);
     }
-    htable_free(&s.callers_with_edges);
 
     // step 3: combine all of the sections into one file
     assert(ios_pos(f) % JL_CACHE_BYTE_ALIGNMENT == 0);
@@ -2821,7 +3253,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, global_roots_keyset);
             jl_write_value(&s, s.ptls->root_task->tls);
             write_uint32(f, jl_get_gs_ctr());
-            write_uint(f, jl_atomic_load_acquire(&jl_world_counter));
+            size_t world = jl_atomic_load_acquire(&jl_world_counter);
+            // assert(world == precompilation_world); // This triggers on a normal build of julia
+            write_uint(f, world);
             write_uint(f, jl_typeinf_world);
         }
         else {
@@ -2837,8 +3271,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_write_value(&s, jl_module_init_order);
             jl_write_value(&s, extext_methods);
             jl_write_value(&s, new_ext_cis);
-            jl_write_value(&s, method_roots_list);
-            jl_write_value(&s, ext_targets);
+            jl_write_value(&s, s.method_roots_list);
             jl_write_value(&s, edges);
         }
         write_uint32(f, jl_array_len(s.link_ids_gctags));
@@ -2850,7 +3283,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         write_uint32(f, jl_array_len(s.link_ids_external_fnvars));
         ios_write(f, (char*)jl_array_data(s.link_ids_external_fnvars, uint32_t), jl_array_len(s.link_ids_external_fnvars) * sizeof(uint32_t));
         write_uint32(f, external_fns_begin);
-        jl_write_arraylist(s.s, &s.ccallable_list);
     }
 
     assert(object_worklist.len == 0);
@@ -2862,18 +3294,20 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&s.uniquing_objs);
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
-    arraylist_free(&s.ccallable_list);
     arraylist_free(&s.memowner_list);
     arraylist_free(&s.memref_list);
     arraylist_free(&s.relocs_list);
     arraylist_free(&s.gctags_list);
     arraylist_free(&gvars);
     arraylist_free(&external_fns);
+    htable_free(&s.method_roots_index);
     htable_free(&field_replace);
+    htable_free(&bits_replace);
     htable_free(&serialization_order);
     htable_free(&nullptrs);
     htable_free(&symbol_table);
     htable_free(&fptr_to_id);
+    htable_free(&new_methtables);
     nsym_tag = 0;
 
     jl_gc_enable(en);
@@ -2903,6 +3337,10 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *worklist, bool_t emit_split,
                                          ios_t **s, ios_t **z, jl_array_t **udeps, int64_t *srctextpos)
 {
+    if (jl_options.strip_ir || jl_options.trim) {
+        // make sure this is precompiled for jl_foreach_reachable_mtable
+        jl_get_loaded_modules();
+    }
     jl_gc_collect(JL_GC_FULL);
     jl_gc_collect(JL_GC_INCREMENTAL);   // sweep finalizers
     JL_TIMING(SYSIMG_DUMP, SYSIMG_DUMP);
@@ -2923,18 +3361,17 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
 
     jl_array_t *mod_array = NULL, *extext_methods = NULL, *new_ext_cis = NULL;
-    jl_array_t *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
+    jl_array_t *edges = NULL;
     int64_t checksumpos = 0;
     int64_t checksumpos_ff = 0;
     int64_t datastartpos = 0;
-    JL_GC_PUSH6(&mod_array, &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges);
+    JL_GC_PUSH4(&mod_array, &extext_methods, &new_ext_cis, &edges);
 
     if (worklist) {
         mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
         // Generate _native_data`
         if (_native_data != NULL) {
-            jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
-                                          &extext_methods, &new_ext_cis, NULL, NULL, NULL);
+            jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_ext_cis, NULL);
             jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
             *_native_data = jl_precompile_worklist(worklist, extext_methods, new_ext_cis);
             jl_precompile_toplevel_module = NULL;
@@ -2952,7 +3389,11 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         }
     }
     else if (_native_data != NULL) {
-        *_native_data = jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
+        precompilation_world = jl_atomic_load_acquire(&jl_world_counter);
+        if (jl_options.trim)
+            *_native_data = jl_precompile_trimmed(precompilation_world);
+        else
+            *_native_data = jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
     }
 
     // Make sure we don't run any Julia code concurrently after this point
@@ -2961,8 +3402,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     assert((ct->reentrant_timing & 0b1110) == 0);
     ct->reentrant_timing |= 0b1000;
     if (worklist) {
-        jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
-                                      &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges);
+        jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_ext_cis, &edges);
         if (!emit_split) {
             write_int32(f, 0); // No clone_targets
             write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
@@ -2974,7 +3414,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
-    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, method_roots_list, ext_targets, edges);
+    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, edges);
     if (_native_data != NULL)
         native_functions = NULL;
     // make sure we don't run any Julia code concurrently before this point
@@ -3012,33 +3452,109 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
 
 JL_DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src);
 
-// Takes in a path of the form "usr/lib/julia/sys.so" (jl_restore_system_image should be passed the same string)
-JL_DLLEXPORT void jl_preload_sysimg_so(const char *fname)
+// Takes in a path of the form "usr/lib/julia/sys.so"
+JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
 {
-    if (jl_sysimg_handle)
-        return; // embedded target already called jl_set_sysimg_so
+    if (jl_sysimage_buf.kind != JL_IMAGE_KIND_NONE)
+        return jl_sysimage_buf;
 
     char *dot = (char*) strrchr(fname, '.');
     int is_ji = (dot && !strcmp(dot, ".ji"));
 
-    // Get handle to sys.so
-    if (!is_ji) // .ji extension => load .ji file only
-        jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW, 1));
+    if (is_ji) {
+        // .ji extension => load .ji file only
+        ios_t f;
+
+        if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
+            jl_errorf("System image file \"%s\" not found.", fname);
+        ios_bufmode(&f, bm_none);
+
+        JL_SIGATOMIC_BEGIN();
+
+        ios_seek_end(&f);
+        size_t len = ios_pos(&f);
+        char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
+        ios_seek(&f, 0);
+
+        if (ios_readall(&f, sysimg, len) != len)
+            jl_errorf("Error reading system image file.");
+
+        ios_close(&f);
+
+        JL_SIGATOMIC_END();
+
+        jl_sysimage_buf = (jl_image_buf_t) {
+            .kind = JL_IMAGE_KIND_JI,
+            .pointers = NULL,
+            .data = sysimg,
+            .size = len,
+            .base = 0,
+        };
+        return jl_sysimage_buf;
+    } else {
+        // Get handle to sys.so
+        return jl_set_sysimg_so(jl_load_dynamic_library(fname, JL_RTLD_LOCAL | JL_RTLD_NOW, 1));
+    }
+}
+
+// From a shared library handle, verify consistency and return a jl_image_buf_t
+static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage)
+{
+    size_t *plen;
+    const char *data;
+    const void *pointers;
+    uint64_t base;
+
+    // verify that the linker resolved the symbols in this image against ourselves (libjulia-internal)
+    void** (*get_jl_RTLD_DEFAULT_handle_addr)(void) = NULL;
+    if (handle != jl_RTLD_DEFAULT_handle) {
+        int symbol_found = jl_dlsym(handle, "get_jl_RTLD_DEFAULT_handle_addr", (void **)&get_jl_RTLD_DEFAULT_handle_addr, 0);
+        if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != (get_jl_RTLD_DEFAULT_handle_addr()))
+            jl_error("Image file failed consistency check: maybe opened the wrong version?");
+    }
+
+    // verification passed, lookup the buffer pointers
+    if (jl_system_image_size == 0 || is_pkgimage) {
+        // in the usual case, the sysimage was not statically linked to libjulia-internal
+        // look up the external sysimage symbols via the dynamic linker
+        jl_dlsym(handle, "jl_system_image_size", (void **)&plen, 1);
+        jl_dlsym(handle, "jl_system_image_data", (void **)&data, 1);
+        jl_dlsym(handle, "jl_image_pointers", (void**)&pointers, 1);
+    } else {
+        // the sysimage was statically linked directly against libjulia-internal
+        // use the internal symbols
+        plen = &jl_system_image_size;
+        pointers = &jl_image_pointers;
+        data = &jl_system_image_data;
+    }
+
+#ifdef _OS_WINDOWS_
+    base = (intptr_t)handle;
+#else
+    Dl_info dlinfo;
+    if (dladdr((void*)pointers, &dlinfo) != 0)
+        base = (intptr_t)dlinfo.dli_fbase;
+    else
+        base = 0;
+#endif
+
+    return (jl_image_buf_t) {
+        .kind = JL_IMAGE_KIND_SO,
+        .pointers = pointers,
+        .data = data,
+        .size = *plen,
+        .base = base,
+    };
 }
 
 // Allow passing in a module handle directly, rather than a path
-JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
+JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle)
 {
-    void* *jl_RTLD_DEFAULT_handle_pointer;
-    if (handle != jl_RTLD_DEFAULT_handle) {
-        int symbol_found = jl_dlsym(handle, "jl_RTLD_DEFAULT_handle_pointer", (void **)&jl_RTLD_DEFAULT_handle_pointer, 0);
-        if (!symbol_found || (void*)&jl_RTLD_DEFAULT_handle != *jl_RTLD_DEFAULT_handle_pointer)
-            jl_error("System image file failed consistency check: maybe opened the wrong version?");
-    }
-    if (jl_options.cpu_target == NULL)
-        jl_options.cpu_target = "native";
-    jl_sysimg_handle = handle;
-    sysimage = jl_init_processor_sysimg(handle);
+    if (jl_sysimage_buf.kind != JL_IMAGE_KIND_NONE)
+        return jl_sysimage_buf;
+
+    jl_sysimage_buf = get_image_buf(handle, /* is_pkgimage */ 0);
+    return jl_sysimage_buf;
 }
 
 #ifndef JL_NDEBUG
@@ -3053,13 +3569,105 @@ JL_DLLEXPORT void jl_set_sysimg_so(void *handle)
 extern void rebuild_image_blob_tree(void);
 extern void export_jl_small_typeof(void);
 
-static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl_array_t *depmods, uint64_t checksum,
+// When an image is loaded with ignore_native, all subsequent image loads must ignore
+// native code in the cache-file since we can't gurantuee that there are no call edges
+// into the native code of the image. See https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
+int IMAGE_NATIVE_CODE_TAINTED = 0;
+
+// TODO: This should possibly be in Julia
+static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t *bpart, size_t mod_idx, int unchanged_implicit, int no_replacement)
+{
+    if (jl_atomic_load_relaxed(&bpart->max_world) != ~(size_t)0)
+        return 1;
+    size_t raw_kind = bpart->kind;
+    enum jl_partition_kind kind = (enum jl_partition_kind)(raw_kind & PARTITION_MASK_KIND);
+    if (!unchanged_implicit && jl_bkind_is_some_implicit(kind)) {
+        // TODO: Should we actually update this in place or delete it from the partitions list
+        // and allocate a fresh bpart?
+        jl_update_loaded_bpart(b, bpart);
+        bpart->kind |= (raw_kind & PARTITION_MASK_FLAG);
+        if (bpart->min_world > jl_require_world)
+            goto invalidated;
+    }
+    if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
+        return 1;
+    jl_binding_t *imported_binding = (jl_binding_t*)bpart->restriction;
+    if (no_replacement)
+        goto add_backedge;
+    jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
+    if (!latest_imported_bpart)
+        return 1;
+    if (latest_imported_bpart->min_world <= bpart->min_world) {
+add_backedge:
+        // Imported binding is still valid
+        if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
+                external_blob_index((jl_value_t*)imported_binding) != mod_idx) {
+            jl_add_binding_backedge(imported_binding, (jl_value_t*)b);
+        }
+        return 1;
+    }
+    else {
+        // Binding partition was invalidated
+        assert(bpart->min_world == jl_require_world);
+        bpart->min_world = latest_imported_bpart->min_world;
+    }
+invalidated:
+    // We need to go through and re-validate any bindings in the same image that
+    // may have imported us.
+    if (b->backedges) {
+        for (size_t i = 0; i < jl_array_len(b->backedges); i++) {
+            jl_value_t *edge = jl_array_ptr_ref(b->backedges, i);
+            if (!jl_is_binding(edge))
+                continue;
+            jl_binding_t *bedge = (jl_binding_t*)edge;
+            if (!jl_atomic_load_relaxed(&bedge->partitions))
+                continue;
+            jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0);
+        }
+    }
+    if (bpart->kind & PARTITION_FLAG_EXPORTED) {
+        jl_module_t *mod = b->globalref->mod;
+        jl_sym_t *name = b->globalref->name;
+        JL_LOCK(&mod->lock);
+        jl_atomic_store_release(&mod->export_set_changed_since_require_world, 1);
+        if (mod->usings_backedges) {
+            for (size_t i = 0; i < jl_array_len(mod->usings_backedges); i++) {
+                jl_module_t *edge = (jl_module_t*)jl_array_ptr_ref(mod->usings_backedges, i);
+                jl_binding_t *importee = jl_get_module_binding(edge, name, 0);
+                if (!importee)
+                    continue;
+                if (!jl_atomic_load_relaxed(&importee->partitions))
+                    continue;
+                JL_UNLOCK(&mod->lock);
+                jl_validate_binding_partition(importee, jl_atomic_load_relaxed(&importee->partitions), mod_idx, 0, 0);
+                JL_LOCK(&mod->lock);
+            }
+        }
+        JL_UNLOCK(&mod->lock);
+        return 0;
+    }
+    return 1;
+}
+
+static int all_usings_unchanged_implicit(jl_module_t *mod)
+{
+    int unchanged_implicit = 1;
+    for (size_t i = 0; unchanged_implicit && i < module_usings_length(mod); i++) {
+        jl_module_t *usee = module_usings_getmod(mod, i);
+        unchanged_implicit &= !jl_atomic_load_acquire(&usee->export_set_changed_since_require_world);
+    }
+    return unchanged_implicit;
+}
+
+static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
+                                                 jl_array_t *depmods, uint64_t checksum,
                                 /* outputs */    jl_array_t **restored,         jl_array_t **init_order,
                                                  jl_array_t **extext_methods, jl_array_t **internal_methods,
                                                  jl_array_t **new_ext_cis, jl_array_t **method_roots_list,
-                                                 jl_array_t **ext_targets, jl_array_t **edges,
-                                                 char **base, arraylist_t *ccallable_list, pkgcachesizes *cachesizes) JL_GC_DISABLED
+                                                 jl_array_t **edges,
+                                                 pkgcachesizes *cachesizes) JL_GC_DISABLED
 {
+    jl_task_t *ct = jl_current_task;
     int en = jl_gc_enable(0);
     ios_t sysimg, const_data, symbols, relocs, gvar_record, fptr_record;
     jl_serializer_state s = {0};
@@ -3071,11 +3679,17 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     s.relocs = &relocs;
     s.gvar_record = &gvar_record;
     s.fptr_record = &fptr_record;
-    s.ptls = jl_current_task->ptls;
+    s.ptls = ct->ptls;
     jl_value_t **const*const tags = get_tags();
     htable_t new_dt_objs;
     htable_new(&new_dt_objs, 0);
     arraylist_new(&deser_sym, 0);
+
+    if (jl_options.use_sysimage_native_code != JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES || IMAGE_NATIVE_CODE_TAINTED) {
+        memset(&image->fptrs, 0, sizeof(image->fptrs));
+        image->gvars_base = NULL;
+        IMAGE_NATIVE_CODE_TAINTED = 1;
+    }
 
     // step 1: read section map
     assert(ios_pos(f) == 0 && f->bm == bm_mem);
@@ -3119,7 +3733,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     assert(!ios_eof(f));
     s.s = f;
     uintptr_t offset_restored = 0, offset_init_order = 0, offset_extext_methods = 0, offset_new_ext_cis = 0, offset_method_roots_list = 0;
-    uintptr_t offset_ext_targets = 0, offset_edges = 0;
+    uintptr_t offset_edges = 0;
     if (!s.incremental) {
         size_t i;
         for (i = 0; tags[i] != NULL; i++) {
@@ -3152,7 +3766,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         offset_extext_methods = jl_read_offset(&s);
         offset_new_ext_cis = jl_read_offset(&s);
         offset_method_roots_list = jl_read_offset(&s);
-        offset_ext_targets = jl_read_offset(&s);
         offset_edges = jl_read_offset(&s);
     }
     s.buildid_depmods_idxs = depmod_to_imageidx(depmods);
@@ -3177,15 +3790,13 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         ios_read(f, (char*)jl_array_data(s.link_ids_external_fnvars, uint32_t), nlinks_external_fnvars * sizeof(uint32_t));
     }
     uint32_t external_fns_begin = read_uint32(f);
-    jl_read_arraylist(s.s, ccallable_list ? ccallable_list : &s.ccallable_list);
     if (s.incremental) {
-        assert(restored && init_order && extext_methods && internal_methods && new_ext_cis && method_roots_list && ext_targets && edges);
+        assert(restored && init_order && extext_methods && internal_methods && new_ext_cis && method_roots_list && edges);
         *restored = (jl_array_t*)jl_delayed_reloc(&s, offset_restored);
         *init_order = (jl_array_t*)jl_delayed_reloc(&s, offset_init_order);
         *extext_methods = (jl_array_t*)jl_delayed_reloc(&s, offset_extext_methods);
         *new_ext_cis = (jl_array_t*)jl_delayed_reloc(&s, offset_new_ext_cis);
         *method_roots_list = (jl_array_t*)jl_delayed_reloc(&s, offset_method_roots_list);
-        *ext_targets = (jl_array_t*)jl_delayed_reloc(&s, offset_ext_targets);
         *edges = (jl_array_t*)jl_delayed_reloc(&s, offset_edges);
         *internal_methods = jl_alloc_vec_any(0);
     }
@@ -3198,8 +3809,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
 
     char *image_base = (char*)&sysimg.buf[0];
     reloc_t *relocs_base = (reloc_t*)&relocs.buf[0];
-    if (base)
-        *base = image_base;
 
     s.s = &sysimg;
     jl_read_reloclist(&s, s.link_ids_gctags, GC_OLD | GC_IN_IMAGE); // gctags
@@ -3236,6 +3845,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     arraylist_new(&cleanup_list, 0);
     arraylist_t delay_list;
     arraylist_new(&delay_list, 0);
+    JL_LOCK(&typecache_lock); // Might GC--prevent other threads from changing any type caches while we inspect them all
     for (size_t i = 0; i < s.uniquing_types.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_types.items[i];
         // check whether we are operating on the typetag
@@ -3306,7 +3916,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                     // and we overwrite the name field (field 0) now so preserve it too
                     if (dt->instance) {
                         if (dt->instance == jl_nothing)
-                            dt->instance = jl_gc_permobj(0, newdt);
+                            dt->instance = jl_gc_permobj(0, newdt, 0);
                         newdt->instance = dt->instance;
                     }
                     static_assert(offsetof(jl_datatype_t, name) == 0, "");
@@ -3363,6 +3973,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     }
     arraylist_grow(&cleanup_list, -cleanup_list.len);
     // finally cache all our new types now
+    jl_safepoint_suspend_all_threads(ct); // past this point, it is now not safe to observe the intermediate states on other threads via reflection, so temporarily pause those
     for (size_t i = 0; i < new_dt_objs.size; i += 2) {
         void *dt = table[i + 1];
         if (dt != HT_NOTFOUND) {
@@ -3376,6 +3987,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         assert(jl_is_datatype(obj));
         jl_cache_type_((jl_datatype_t*)obj);
     }
+    JL_UNLOCK(&typecache_lock); // Might GC
+    jl_safepoint_resume_all_threads(ct); // TODO: move this later to also protect MethodInstance allocations, but we would need to acquire all jl_specializations_get_linfo and jl_module_globalref locks, which is hard
     // Perform fixups: things like updating world ages, inserting methods & specializations, etc.
     for (size_t i = 0; i < s.uniquing_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.uniquing_objs.items[i];
@@ -3412,6 +4025,18 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 obj[0] = newobj;
             }
         }
+        else if (otyp == (uintptr_t)jl_binding_type) {
+            jl_value_t *m = obj[0];
+            if (jl_is_binding(m)) {
+                newobj = m; // already done
+            }
+            else {
+                arraylist_push(&cleanup_list, (void*)obj);
+                jl_value_t *name = obj[1];
+                newobj = (jl_value_t*)jl_get_module_binding((jl_module_t*)m, (jl_sym_t*)name, 1);
+                obj[0] = newobj;
+            }
+        }
         else {
             abort(); // should be unreachable
         }
@@ -3427,6 +4052,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
         jl_value_t *t = jl_typeof(item);
         if (t == (jl_value_t*)jl_method_instance_type)
             memset(o, 0xba, sizeof(jl_value_t*) * 3); // only specTypes and sparams fields stored
+        else if (t == (jl_value_t*)jl_binding_type)
+            memset(o, 0xba, sizeof(jl_value_t*) * 3); // stored as mod/name
         o->bits.in_image = 1;
     }
     arraylist_free(&cleanup_list);
@@ -3462,9 +4089,41 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
                 memcpy(newitems, mod->usings.items, mod->usings.len * sizeof(void*));
                 mod->usings.items = newitems;
             }
+            size_t mod_idx = external_blob_index((jl_value_t*)mod);
+            if (s.incremental) {
+                // Rebuild cross-image usings backedges
+                for (size_t i = 0; i < module_usings_length(mod); ++i) {
+                    struct _jl_module_using *data = module_usings_getidx(mod, i);
+                    if (external_blob_index((jl_value_t*)data->mod) != mod_idx) {
+                        jl_add_usings_backedge(data->mod, mod);
+                    }
+                }
+            }
         }
         else {
             abort();
+        }
+    }
+    if (s.incremental) {
+        int no_replacement = jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0;
+        for (size_t i = 0; i < s.fixup_objs.len; i++) {
+            uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
+            jl_value_t *obj = (jl_value_t*)(image_base + item);
+            if (jl_is_module(obj)) {
+                jl_module_t *mod = (jl_module_t*)obj;
+                size_t mod_idx = external_blob_index((jl_value_t*)mod);
+                jl_svec_t *table = jl_atomic_load_relaxed(&mod->bindings);
+                int unchanged_implicit = no_replacement || all_usings_unchanged_implicit(mod);
+                for (size_t i = 0; i < jl_svec_len(table); i++) {
+                    jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
+                    if ((jl_value_t*)b == jl_nothing)
+                        continue;
+                    jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
+                    if (!jl_validate_binding_partition(b, bpart, mod_idx, unchanged_implicit, no_replacement)) {
+                        unchanged_implicit = all_usings_unchanged_implicit(mod);
+                    }
+                }
+            }
         }
     }
     arraylist_free(&s.fixup_types);
@@ -3509,11 +4168,6 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
 
     s.s = &sysimg;
     jl_update_all_fptrs(&s, image); // fptr relocs and registration
-    if (!ccallable_list) {
-        // TODO: jl_sysimg_handle or img_handle?
-        jl_reinit_ccallable(&s.ccallable_list, image_base, jl_sysimg_handle);
-        arraylist_free(&s.ccallable_list);
-    }
     s.s = NULL;
 
     ios_close(&fptr_record);
@@ -3528,6 +4182,18 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image, jl
     arraylist_push(&jl_linkage_blobs, (void*)image_base);
     arraylist_push(&jl_linkage_blobs, (void*)(image_base + sizeof_sysimg));
     arraylist_push(&jl_image_relocs, (void*)relocs_base);
+    if (restored == NULL) {
+        arraylist_push(&jl_top_mods, (void*)jl_top_module);
+    } else {
+        size_t len = jl_array_nrows(*restored);
+        assert(len > 0);
+        jl_module_t *topmod = (jl_module_t*)jl_array_ptr_ref(*restored, len-1);
+        // Ordinarily set during deserialization, but our compiler stub image,
+        // just returns a reference to the sysimage version, so we set it here.
+        topmod->build_id.hi = checksum;
+        assert(jl_is_module(topmod));
+        arraylist_push(&jl_top_mods, (void*)topmod);
+    }
     jl_timing_counter_inc(JL_TIMING_COUNTER_ImageSize, sizeof_sysimg + sizeof(uintptr_t));
     rebuild_image_blob_tree();
 
@@ -3546,7 +4212,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
                 "Precompile file header verification checks failed.");
     }
     uint8_t flags = read_uint8(f);
-    if (pkgimage && !jl_match_cache_flags(flags)) {
+    if (pkgimage && !jl_match_cache_flags_current(flags)) {
         return jl_get_exceptionf(jl_errorexception_type, "Pkgimage flags mismatch");
     }
     if (!pkgimage) {
@@ -3565,7 +4231,7 @@ static jl_value_t *jl_validate_cache_file(ios_t *f, jl_array_t *depmods, uint64_
 }
 
 // TODO?: refactor to make it easier to create the "package inspector"
-static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)
+static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Pkgimg);
     jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, pkgname);
@@ -3579,13 +4245,11 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
 
     assert(datastartpos > 0 && datastartpos < dataendpos);
     needs_permalloc = jl_options.permalloc_pkgimg || needs_permalloc;
-    char *base;
-    arraylist_t ccallable_list;
 
     jl_value_t *restored = NULL;
-    jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *new_ext_cis = NULL, *method_roots_list = NULL, *ext_targets = NULL, *edges = NULL;
+    jl_array_t *init_order = NULL, *extext_methods = NULL, *internal_methods = NULL, *new_ext_cis = NULL, *method_roots_list = NULL, *edges = NULL;
     jl_svec_t *cachesizes_sv = NULL;
-    JL_GC_PUSH9(&restored, &init_order, &extext_methods, &internal_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges, &cachesizes_sv);
+    JL_GC_PUSH8(&restored, &init_order, &extext_methods, &internal_methods, &new_ext_cis, &method_roots_list, &edges, &cachesizes_sv);
 
     { // make a permanent in-memory copy of f (excluding the header)
         ios_bufmode(f, bm_none);
@@ -3610,26 +4274,37 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
             ios_static_buffer(f, sysimg, len);
             pkgcachesizes cachesizes;
             jl_restore_system_image_from_stream_(f, image, depmods, checksum, (jl_array_t**)&restored, &init_order, &extext_methods, &internal_methods, &new_ext_cis, &method_roots_list,
-                                                 &ext_targets, &edges, &base, &ccallable_list, &cachesizes);
+                                                 &edges, &cachesizes);
             JL_SIGATOMIC_END();
 
-            // No special processing of `new_ext_cis` is required because recaching handled it
             // Add roots to methods
             jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
             // Insert method extensions and handle edges
+            int new_methods = jl_array_nrows(extext_methods) > 0;
+            if (!new_methods) {
+                size_t i, l = jl_array_nrows(internal_methods);
+                for (i = 0; i < l; i++) {
+                    jl_value_t *obj = jl_array_ptr_ref(internal_methods, i);
+                    if (jl_is_method(obj)) {
+                        new_methods = 1;
+                        break;
+                    }
+                }
+            }
             JL_LOCK(&world_counter_lock);
-              // allocate a world for the new methods, and insert them there, invalidating content as needed
-            size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
-            jl_activate_methods(extext_methods, internal_methods, world);
-              // allow users to start running in this updated world
-            jl_atomic_store_release(&jl_world_counter, world);
-              // but one of those immediate users is going to be our cache updates
-            jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)ext_targets, (jl_array_t*)new_ext_cis, world); // restore external backedges (needs to be last)
-              // now permit more methods to be added again
+            // allocate a world for the new methods, and insert them there, invalidating content as needed
+            size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+            if (new_methods)
+                world += 1;
+            jl_activate_methods(extext_methods, internal_methods, world, pkgname);
+            // TODO: inject new_ext_cis into caches here, so the system can see them immediately as potential candidates (before validation)
+            // allow users to start running in this updated world
+            if (new_methods)
+                jl_atomic_store_release(&jl_world_counter, world);
+            // now permit more methods to be added again
             JL_UNLOCK(&world_counter_lock);
-            // reinit ccallables
-            jl_reinit_ccallable(&ccallable_list, base, pkgimage_handle);
-            arraylist_free(&ccallable_list);
+
+            jl_value_t *ext_edges = new_ext_cis ? (jl_value_t*)new_ext_cis : jl_nothing;
 
             if (completeinfo) {
                 cachesizes_sv = jl_alloc_svec(7);
@@ -3640,12 +4315,11 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
                 jl_svecset(cachesizes_sv, 4, jl_box_long(cachesizes.reloclist));
                 jl_svecset(cachesizes_sv, 5, jl_box_long(cachesizes.gvarlist));
                 jl_svecset(cachesizes_sv, 6, jl_box_long(cachesizes.fptrlist));
-                restored = (jl_value_t*)jl_svec(8, restored, init_order, extext_methods,
-                                                   new_ext_cis ? (jl_value_t*)new_ext_cis : jl_nothing,
-                                                   method_roots_list, ext_targets, edges, cachesizes_sv);
+                restored = (jl_value_t*)jl_svec(7, restored, init_order, edges, ext_edges,
+                                                   extext_methods, method_roots_list, cachesizes_sv);
             }
             else {
-                restored = (jl_value_t*)jl_svec(2, restored, init_order);
+                restored = (jl_value_t*)jl_svec(6, restored, init_order, edges, ext_edges, extext_methods, internal_methods);
             }
         }
     }
@@ -3657,14 +4331,14 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
 static void jl_restore_system_image_from_stream(ios_t *f, jl_image_t *image, uint32_t checksum)
 {
     JL_TIMING(LOAD_IMAGE, LOAD_Sysimg);
-    jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    jl_restore_system_image_from_stream_(f, image, NULL, checksum | ((uint64_t)0xfdfcfbfa << 32), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
-JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(void* pkgimage_handle, const char *buf, jl_image_t *image, size_t sz, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)
+JL_DLLEXPORT jl_value_t *jl_restore_incremental_from_buf(jl_image_buf_t buf, jl_image_t *image, jl_array_t *depmods, int completeinfo, const char *pkgname, int needs_permalloc)
 {
     ios_t f;
-    ios_static_buffer(&f, (char*)buf, sz);
-    jl_value_t *ret = jl_restore_package_image_from_stream(pkgimage_handle, &f, image, depmods, completeinfo, pkgname, needs_permalloc);
+    ios_static_buffer(&f, (char*)buf.data, buf.size);
+    jl_value_t *ret = jl_restore_package_image_from_stream(&f, image, depmods, completeinfo, pkgname, needs_permalloc);
     ios_close(&f);
     return ret;
 }
@@ -3677,52 +4351,27 @@ JL_DLLEXPORT jl_value_t *jl_restore_incremental(const char *fname, jl_array_t *d
             "Cache file \"%s\" not found.\n", fname);
     }
     jl_image_t pkgimage = {};
-    jl_value_t *ret = jl_restore_package_image_from_stream(NULL, &f, &pkgimage, depmods, completeinfo, pkgname, 1);
+    jl_value_t *ret = jl_restore_package_image_from_stream(&f, &pkgimage, depmods, completeinfo, pkgname, 1);
     ios_close(&f);
     return ret;
 }
 
-// TODO: need to enforce that the alignment of the buffer is suitable for vectors
-JL_DLLEXPORT void jl_restore_system_image(const char *fname)
-{
-#ifndef JL_NDEBUG
-    char *dot = fname ? (char*)strrchr(fname, '.') : NULL;
-    int is_ji = (dot && !strcmp(dot, ".ji"));
-    assert((is_ji || jl_sysimg_handle) && "System image file not preloaded");
-#endif
-
-    if (jl_sysimg_handle) {
-        // load the pre-compiled sysimage from jl_sysimg_handle
-        jl_load_sysimg_so();
-    }
-    else {
-        ios_t f;
-        if (ios_file(&f, fname, 1, 0, 0, 0) == NULL)
-            jl_errorf("System image file \"%s\" not found.", fname);
-        ios_bufmode(&f, bm_none);
-        JL_SIGATOMIC_BEGIN();
-        ios_seek_end(&f);
-        size_t len = ios_pos(&f);
-        char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
-        ios_seek(&f, 0);
-        if (ios_readall(&f, sysimg, len) != len)
-            jl_errorf("Error reading system image file.");
-        ios_close(&f);
-        uint32_t checksum = jl_crc32c(0, sysimg, len);
-        ios_static_buffer(&f, sysimg, len);
-        jl_restore_system_image_from_stream(&f, &sysimage, checksum);
-        ios_close(&f);
-        JL_SIGATOMIC_END();
-    }
-}
-
-JL_DLLEXPORT void jl_restore_system_image_data(const char *buf, size_t len)
+JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
 {
     ios_t f;
+
+    if (buf.kind == JL_IMAGE_KIND_NONE)
+        return;
+
+    if (buf.kind == JL_IMAGE_KIND_SO)
+        assert(image->fptrs.ptrs); // jl_init_processor_sysimg should already be run
+
     JL_SIGATOMIC_BEGIN();
-    ios_static_buffer(&f, (char*)buf, len);
-    uint32_t checksum = jl_crc32c(0, buf, len);
-    jl_restore_system_image_from_stream(&f, &sysimage, checksum);
+    ios_static_buffer(&f, (char *)buf.data, buf.size);
+
+    uint32_t checksum = jl_crc32c(0, buf.data, buf.size);
+    jl_restore_system_image_from_stream(&f, image, checksum);
+
     ios_close(&f);
     JL_SIGATOMIC_END();
 }
@@ -3741,20 +4390,68 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
 #endif
         jl_errorf("Error opening package file %s: %s\n", fname, reason);
     }
-    const char *pkgimg_data;
-    jl_dlsym(pkgimg_handle, "jl_system_image_data", (void **)&pkgimg_data, 1);
-    size_t *plen;
-    jl_dlsym(pkgimg_handle, "jl_system_image_size", (void **)&plen, 1);
 
-    jl_image_t pkgimage = jl_init_processor_pkgimg(pkgimg_handle);
+    jl_image_buf_t buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
 
-    if (ignore_native){
-        memset(&pkgimage.fptrs, 0, sizeof(pkgimage.fptrs));
+    jl_gc_notify_image_load(buf.data, buf.size);
+
+    // Despite the name, this function actually parses the pkgimage
+    jl_image_t pkgimage = jl_init_processor_pkgimg(buf);
+
+    if (ignore_native) {
+        // Must disable using native code in possible downstream users of this code:
+        // https://github.com/JuliaLang/julia/pull/52123#issuecomment-1959965395.
+        // The easiest way to do that is to disable it in all of them.
+        IMAGE_NATIVE_CODE_TAINTED = 1;
     }
 
-    jl_value_t* mod = jl_restore_incremental_from_buf(pkgimg_handle, pkgimg_data, &pkgimage, *plen, depmods, completeinfo, pkgname, 0);
+    jl_value_t* mod = jl_restore_incremental_from_buf(buf, &pkgimage, depmods, completeinfo, pkgname, 0);
 
     return mod;
+}
+
+JL_DLLEXPORT void _jl_promote_ci_to_current(jl_code_instance_t *ci, size_t validated_world) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_load_relaxed(&ci->max_world) != validated_world)
+        return;
+    jl_atomic_store_relaxed(&ci->max_world, ~(size_t)0);
+    jl_svec_t *edges = jl_atomic_load_relaxed(&ci->edges);
+    for (size_t i = 0; i < jl_svec_len(edges); i++) {
+        jl_value_t *edge = jl_svecref(edges, i);
+        if (!jl_is_code_instance(edge))
+            continue;
+        _jl_promote_ci_to_current((jl_code_instance_t *)edge, validated_world);
+    }
+}
+
+JL_DLLEXPORT void jl_promote_ci_to_current(jl_code_instance_t *ci, size_t validated_world)
+{
+    size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
+    // No need to acquire the lock if we've been invalidated anyway
+    if (current_world > validated_world)
+        return;
+    JL_LOCK(&world_counter_lock);
+    current_world = jl_atomic_load_relaxed(&jl_world_counter);
+    if (current_world == validated_world) {
+        _jl_promote_ci_to_current(ci, validated_world);
+    }
+    JL_UNLOCK(&world_counter_lock);
+}
+
+JL_DLLEXPORT void jl_promote_cis_to_current(jl_code_instance_t **cis, size_t n, size_t validated_world)
+{
+    size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
+    // No need to acquire the lock if we've been invalidated anyway
+    if (current_world > validated_world)
+        return;
+    JL_LOCK(&world_counter_lock);
+    current_world = jl_atomic_load_relaxed(&jl_world_counter);
+    if (current_world == validated_world) {
+        for (size_t i = 0; i < n; i++) {
+            _jl_promote_ci_to_current(cis[i], validated_world);
+        }
+    }
+    JL_UNLOCK(&world_counter_lock);
 }
 
 #ifdef __cplusplus

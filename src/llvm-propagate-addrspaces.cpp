@@ -60,7 +60,7 @@ private:
 };
 
 static unsigned getValueAddrSpace(Value *V) {
-    return cast<PointerType>(V->getType())->getAddressSpace();
+    return V->getType()->getPointerAddressSpace();
 }
 
 static bool isSpecialAS(unsigned AS) {
@@ -139,7 +139,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
                 break;
             } else {
                 // Ok, we've reached a leaf - check if it is eligible for lifting
-                if (!CurrentV->getType()->isPointerTy() ||
+                if (!CurrentV->getType()->isPtrOrPtrVectorTy() ||
                     isSpecialAS(getValueAddrSpace(CurrentV))) {
                     // If not, poison all (recursive) users of this value, to prevent
                     // looking at them again in future iterations.
@@ -163,14 +163,14 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
             Instruction *InstV = cast<Instruction>(V);
             Instruction *NewV = InstV->clone();
             ToInsert.push_back(std::make_pair(NewV, InstV));
-            Type *NewRetTy = PointerType::getWithSamePointeeType(cast<PointerType>(InstV->getType()), allocaAddressSpace);
+            Type *NewRetTy = PointerType::get(InstV->getType(), allocaAddressSpace);
             NewV->mutateType(NewRetTy);
             LiftingMap[InstV] = NewV;
             ToRevisit.push_back(NewV);
         }
     }
     auto CollapseCastsAndLift = [&](Value *CurrentV, Instruction *InsertPt) -> Value * {
-        PointerType *TargetType = PointerType::getWithSamePointeeType(cast<PointerType>(CurrentV->getType()), allocaAddressSpace);
+        PointerType *TargetType = PointerType::get(CurrentV->getType(), allocaAddressSpace);
         while (!LiftingMap.count(CurrentV)) {
             if (isa<BitCastInst>(CurrentV))
                 CurrentV = cast<BitCastInst>(CurrentV)->getOperand(0);
@@ -184,13 +184,7 @@ Value *PropagateJuliaAddrspacesVisitor::LiftPointer(Module *M, Value *V, Instruc
         }
         if (LiftingMap.count(CurrentV))
             CurrentV = LiftingMap[CurrentV];
-        if (CurrentV->getType() != TargetType) {
-            // Shouldn't get here when using opaque pointers, so the new BitCastInst is fine
-            assert(CurrentV->getContext().supportsTypedPointers());
-            auto *BCI = new BitCastInst(CurrentV, TargetType);
-            ToInsert.push_back(std::make_pair(BCI, InsertPt));
-            CurrentV = BCI;
-        }
+        assert(CurrentV->getType() == TargetType);
         return CurrentV;
     };
 
@@ -250,7 +244,11 @@ void PropagateJuliaAddrspacesVisitor::visitMemSetInst(MemSetInst &MI) {
     Value *Replacement = LiftPointer(MI.getModule(), MI.getRawDest());
     if (!Replacement)
         return;
+#if JL_LLVM_VERSION >= 200000
+    Function *TheFn = Intrinsic::getOrInsertDeclaration(MI.getModule(), Intrinsic::memset,
+#else
     Function *TheFn = Intrinsic::getDeclaration(MI.getModule(), Intrinsic::memset,
+#endif
         {Replacement->getType(), MI.getOperand(1)->getType()});
     MI.setCalledFunction(TheFn);
     MI.setArgOperand(0, Replacement);
@@ -275,7 +273,11 @@ void PropagateJuliaAddrspacesVisitor::visitMemTransferInst(MemTransferInst &MTI)
     }
     if (Dest == MTI.getRawDest() && Src == MTI.getRawSource())
         return;
+#if JL_LLVM_VERSION >= 200000
+    Function *TheFn = Intrinsic::getOrInsertDeclaration(MTI.getModule(), MTI.getIntrinsicID(),
+#else
     Function *TheFn = Intrinsic::getDeclaration(MTI.getModule(), MTI.getIntrinsicID(),
+#endif
         {Dest->getType(), Src->getType(),
          MTI.getOperand(2)->getType()});
     MTI.setCalledFunction(TheFn);

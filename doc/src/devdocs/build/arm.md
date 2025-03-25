@@ -55,18 +55,9 @@ due to unsupported inline assembly. In that case, add `MCPU=armv7-a` to
 
 ## AArch64 (ARMv8)
 
-Julia has been successfully built on the following ARMv8 devices:
+Julia is expected to work and build on ARMv8 cpus. One should follow the general [build instructions](https://github.com/JuliaLang/julia/blob/master/README.md). Julia expects to have around 8GB of ram or swap enabled to build itself.
 
-* [nVidia Jetson TX1 & TX2](https://www.nvidia.com/object/embedded-systems-dev-kits-modules.html);
-* [X-Gene 1](https://www.apm.com/products/data-center/x-gene-family/x-gene/);
-* [Overdrive 3000](https://softiron.com/products/overdrive-3000/);
-* [Cavium ThunderX](https://www.cavium.com/ThunderX_ARM_Processors.html) on [packet.net](https://www.packet.net).
-
-Compilation on `ARMv8-A` requires that `Make.user` is configured as follows:
-
-```
-MCPU=armv8-a
-```
+### Known issues
 
 Starting from Julia v1.10, [JITLink](https://llvm.org/docs/JITLink.html) is automatically enabled on this architecture for all operating systems when linking to LLVM 15 or later versions.
 Due to a [bug in LLVM memory manager](https://github.com/llvm/llvm-project/issues/63236), non-trivial workloads may generate too many memory mappings that on Linux can exceed the limit of memory mappings (`mmap`) set in the file `/proc/sys/vm/max_map_count`, resulting in an error like
@@ -77,21 +68,3 @@ Should this happen, ask your system administrator to increase the limit of memor
 ```
 sysctl -w vm.max_map_count=262144
 ```
-
-### nVidia Jetson TX2
-
-Julia builds and runs on the [nVidia Jetson TX2](https://www.nvidia.com/object/embedded-systems-dev-kits-modules.html)
-platform with minimal configuration changes.
-
-After configuring `Make.user` as per the `AArch64` instructions in this document,
-follow the general [build instructions](https://github.com/JuliaLang/julia/blob/master/README.md).
-The majority of the build dependencies specified in the instructions are installed by
-the default configuration flashed by [Jetpack 3.0](https://developer.nvidia.com/embedded/jetpack). The remaining tools can be installed by issuing the following command:
-
-```
-sudo apt-get install gfortran wget cmake
-```
-
-A full parallel build, including LLVM,
-will complete in around two hours. All tests pass and CUDA functionality is available
-through, e.g., [CUDAdrv](https://github.com/JuliaGPU/CUDAdrv.jl).

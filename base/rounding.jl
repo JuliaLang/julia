@@ -2,7 +2,7 @@
 
 module Rounding
 
-let fenv_consts = Vector{Cint}(undef, 9)
+let fenv_consts = Array{Cint,1}(undef, 9)
     ccall(:jl_get_fenv_consts, Cvoid, (Ptr{Cint},), fenv_consts)
     global const JL_FE_INEXACT = fenv_consts[1]
     global const JL_FE_UNDERFLOW = fenv_consts[2]
@@ -131,15 +131,14 @@ rounds_away_from_zero(t::Tuple{Any,Bool}) = rounds_away_from_zero(t...)
 tie_breaker_is_to_even(t::Tuple{Any,Bool}) = tie_breaker_is_to_even(first(t))
 tie_breaker_rounds_away_from_zero(t::Tuple{Any,Bool}) = tie_breaker_rounds_away_from_zero(t...)
 
-abstract type RoundingIncrementHelper end
-struct FinalBit <: RoundingIncrementHelper end
-struct RoundBit <: RoundingIncrementHelper end
-struct StickyBit <: RoundingIncrementHelper end
+struct FinalBit end
+struct RoundBit end
+struct StickyBit end
 
 function correct_rounding_requires_increment(x, rounding_mode, sign_bit::Bool)
     r = (rounding_mode, sign_bit)
     f = let y = x
-        (z::RoundingIncrementHelper) -> y(z)::Bool
+        (z::Union{FinalBit,RoundBit,StickyBit}) -> y(z)::Bool
     end
     if rounds_to_nearest(r)
         if f(RoundBit())
@@ -282,6 +281,15 @@ function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T
         y < x ? nextfloat(y) : y
     end
 end
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:FromZero}) where T<:AbstractFloat
+    y = convert(T,x)::T
+    if x < 0.0
+        y > x ? prevfloat(y) : y
+    else
+        y < x ? nextfloat(y) : y
+    end
+end
+
 
 # Default definitions
 
@@ -339,6 +347,10 @@ The [`RoundingMode`](@ref) `r` controls the direction of the rounding; the defau
 of 0.5) being rounded to the nearest even integer. Note that `round` may give incorrect
 results if the global rounding mode is changed (see [`rounding`](@ref)).
 
+When rounding to a floating point type, will round to integers representable by that type
+(and Inf) rather than true integers. Inf is treated as one ulp greater than the
+`floatmax(T)` for purposes of determining "nearest", similar to [`convert`](@ref).
+
 # Examples
 ```jldoctest
 julia> round(1.7)
@@ -364,6 +376,12 @@ julia> round(123.456; sigdigits=2)
 
 julia> round(357.913; sigdigits=4, base=2)
 352.0
+
+julia> round(Float16, typemax(UInt128))
+Inf16
+
+julia> floor(Float16, typemax(UInt128))
+Float16(6.55e4)
 ```
 
 !!! note
@@ -467,6 +485,7 @@ floor(::Type{T}, x) where T = round(T, x, RoundDown)
  ceil(::Type{T}, x) where T = round(T, x, RoundUp)
 round(::Type{T}, x) where T = round(T, x, RoundNearest)
 
-round(::Type{T}, x, r::RoundingMode) where T = convert(T, round(x, r))
+round(::Type{T}, x, r::RoundingMode) where T = _round_convert(T, round(x, r), x, r)
+_round_convert(::Type{T}, x_integer, x, r) where T = convert(T, x_integer)
 
 round(x::Integer, r::RoundingMode) = x

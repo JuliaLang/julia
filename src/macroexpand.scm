@@ -126,6 +126,16 @@
                                  (else '())))
                                (else '()))))))
 
+   ;; for/generator
+   (pattern-lambda (for assgn body)
+                   (if (eq? (car assgn) 'block)
+                    `(varlist ,@(map cadr (cdr assgn)))
+                     (cons 'varlist (cadr assgn))))
+   (pattern-lambda (generator body (filter filt . assgn))
+                    (cons 'varlist (map (lambda (x) (cadr x)) assgn)))
+   (pattern-lambda (generator body . assgn)
+                    (cons 'varlist (map (lambda (x) (cadr x)) assgn)))
+
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
                    `(-> (tuple ,@argl) ,body))
@@ -184,18 +194,18 @@
       (unescape (cadr e))
       e))
 
-(define (unescape-global-lhs e env m parent-scope inarg)
+(define (unescape-global-lhs e env m lno parent-scope inarg)
   (cond ((not (pair? e)) e)
-        ((eq? (car e) 'escape) (unescape-global-lhs (cadr e) env m parent-scope inarg))
+        ((eq? (car e) 'escape) (unescape-global-lhs (cadr e) env m lno parent-scope inarg))
         ((memq (car e) '(parameters tuple))
          (list* (car e) (map (lambda (e)
-                          (unescape-global-lhs e env m parent-scope inarg))
+                          (unescape-global-lhs e env m lno parent-scope inarg))
                         (cdr e))))
         ((and (memq (car e) '(|::| kw)) (length= e 3))
-         (list (car e) (unescape-global-lhs (cadr e) env m parent-scope inarg)
-                       (resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
+         (list (car e) (unescape-global-lhs (cadr e) env m lno parent-scope inarg)
+                       (resolve-expansion-vars-with-new-env (caddr e) env m lno parent-scope inarg)))
         (else
-         (resolve-expansion-vars-with-new-env e env m parent-scope inarg))))
+         (resolve-expansion-vars-with-new-env e env m lno parent-scope inarg))))
 
 (define (typedef-expr-name e)
   (cond ((atom? e) e)
@@ -219,30 +229,26 @@
               lst)))
 
 ;; get the name from a function formal argument expression, allowing `(escape x)`
-(define (try-arg-name v)
-  (cond ((symbol? v) (list v))
+(define (try-arg-name v (escaped #f))
+  (cond ((symbol? v) (if escaped '() (list v)))
         ((atom? v) '())
         (else
          (case (car v)
-           ((|::|) (if (length= v 2) '() (try-arg-name (cadr v))))
-           ((... kw =) (try-arg-name (cadr v)))
-           ((escape) (list v))
-           ((hygienic-scope) (try-arg-name (cadr v)))
+           ((|::|) (if (length= v 2) '() (try-arg-name (cadr v) escaped)))
+           ((... kw =) (try-arg-name (cadr v) escaped))
+           ((escape) (if escaped (list (cadr v)) '()))
+           ((hygienic-scope) (try-arg-name (cadr v) escaped))
+           ((tuple) (apply nconc (map (lambda (e) (try-arg-name e escaped)) (cdr v))))
            ((meta)  ;; allow certain per-argument annotations
             (if (nospecialize-meta? v #t)
-                (try-arg-name (caddr v))
+                (try-arg-name (caddr v) escaped)
                 '()))
            (else '())))))
 
 ;; get names from a formal argument list, specifying whether to include escaped ones
 (define (safe-arg-names lst (escaped #f))
   (apply nconc
-         (map (lambda (v)
-                (let ((vv (try-arg-name v)))
-                  (if (eq? escaped (and (pair? vv) (pair? (car vv)) (eq? (caar vv) 'escape)))
-                      (if escaped (list (cadar vv)) vv)
-                      '())))
-              lst)))
+         (map (lambda (v) (try-arg-name v escaped)) lst)))
 
 ;; arg names, looking only at positional args
 (define (safe-llist-positional-args lst (escaped #f))
@@ -280,18 +286,18 @@
 ;; resolve-expansion-vars-with-new-env, but turn on `inarg` if we get inside
 ;; a formal argument list. `e` in general might be e.g. `(f{T}(x)::T) where T`,
 ;; and we want `inarg` to be true for the `(x)` part.
-(define (resolve-in-lhs e env m parent-scope inarg)
-  (define (recur x) (resolve-in-lhs x env m parent-scope inarg))
-  (define (other x) (resolve-expansion-vars-with-new-env x env m parent-scope inarg))
+(define (resolve-in-lhs e env m lno parent-scope inarg)
+  (define (recur x) (resolve-in-lhs x env m lno parent-scope inarg))
+  (define (other x) (resolve-expansion-vars-with-new-env x env m lno parent-scope inarg))
   (case (and (pair? e) (car e))
     ((where) `(where ,(recur (cadr e)) ,@(map other (cddr e))))
     ((|::|)  `(|::| ,(recur (cadr e)) ,(other (caddr e))))
     ((call)  `(call ,(other (cadr e))
                     ,@(map (lambda (x)
-                             (resolve-expansion-vars-with-new-env x env m parent-scope #t))
+                             (resolve-expansion-vars-with-new-env x env m lno parent-scope #t))
                            (cddr e))))
     ((tuple) `(tuple ,@(map (lambda (x)
-                              (resolve-expansion-vars-with-new-env x env m parent-scope #t))
+                              (resolve-expansion-vars-with-new-env x env m lno parent-scope #t))
                             (cdr e))))
     (else (other e))))
 
@@ -328,7 +334,7 @@
                    (keywords-introduced-by x))
               env)))))))
 
-(define (resolve-expansion-vars-with-new-env x env m parent-scope inarg (outermost #f))
+(define (resolve-expansion-vars-with-new-env x env m lno parent-scope inarg (outermost #f))
   (resolve-expansion-vars-
    x
    (if (and (pair? x) (eq? (car x) 'let))
@@ -336,7 +342,7 @@
        ;; the same expression
        env
        (new-expansion-env-for x env outermost))
-   m parent-scope inarg))
+   m lno parent-scope inarg))
 
 (define (reescape ux x)
   (if (and (pair? x) (eq? (car x) 'escape))
@@ -345,19 +351,41 @@
 
 ;; type has special behavior: identifiers inside are
 ;; field names, not expressions.
-(define (resolve-struct-field-expansion x env m parent-scope inarg)
+(define (resolve-struct-field-expansion x env m lno parent-scope inarg)
   (let ((ux (unescape x)))
     (cond
         ((atom? ux) ux)
         ((and (pair? ux) (eq? (car ux) '|::|))
          `(|::| ,(unescape (cadr ux))
-           ,(resolve-expansion-vars- (reescape (caddr ux) x) env m parent-scope inarg)))
+           ,(resolve-expansion-vars- (reescape (caddr ux) x) env m lno parent-scope inarg)))
         ((and (pair? ux) (memq (car ux) '(const atomic)))
-         `(,(car ux) ,(resolve-struct-field-expansion (reescape (cadr ux) x) env m parent-scope inarg)))
+         `(,(car ux) ,(resolve-struct-field-expansion (reescape (cadr ux) x) env m lno parent-scope inarg)))
         (else
-         (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))))
+         (resolve-expansion-vars-with-new-env x env m lno parent-scope inarg)))))
 
-(define (resolve-expansion-vars- e env m parent-scope inarg)
+(define (resolve-letlike-assign bind env newenv m lno parent-scope inarg)
+  (if (assignment? bind)
+    (make-assignment
+      ;; expand binds in newenv with dummy RHS
+      (cadr (resolve-expansion-vars- (make-assignment (cadr bind) 0)
+                                    newenv m lno parent-scope inarg))
+      ;; expand initial values in old env
+      (resolve-expansion-vars- (caddr bind) env m lno parent-scope inarg))
+    ;; Just expand everything else that's not an assignment. N.B.: This includes
+    ;; assignments inside escapes, which probably need special handling (TODO).
+    (resolve-expansion-vars- bind newenv m lno parent-scope inarg)))
+
+(define (for-ranges-list ranges)
+  (if (eq? (car ranges) 'escape)
+    (map (lambda (range) `(escape ,range)) (for-ranges-list (cadr ranges)))
+    (if (eq? (car ranges) 'block)
+      (cdr ranges)
+      (list ranges))))
+
+(define (just-line? ex)
+  (and (pair? ex) (eq? (car ex) 'line) (atom? (cadr ex)) (or (atom? (caddr ex)) (nothing? (caddr ex)))))
+
+(define (resolve-expansion-vars- e env m lno parent-scope inarg)
   (cond ((or (eq? e 'begin) (eq? e 'end) (eq? e 'ccall) (eq? e 'cglobal) (underscore-symbol? e))
          e)
         ((symbol? e)
@@ -376,23 +404,35 @@
                      (env (car scope))
                      (m (cadr scope))
                      (parent-scope (cdr parent-scope)))
-                (resolve-expansion-vars-with-new-env (cadr e) env m parent-scope inarg))))
+                (resolve-expansion-vars-with-new-env (cadr e) env m lno parent-scope inarg))))
            ((global)
             `(global
                ,@(map (lambda (arg)
                        (if (assignment? arg)
-                           `(= ,(unescape-global-lhs (cadr arg) env m parent-scope inarg)
-                               ,(resolve-expansion-vars-with-new-env (caddr arg) env m parent-scope inarg))
-                           (unescape-global-lhs arg env m parent-scope inarg)))
+                           `(= ,(unescape-global-lhs (cadr arg) env m lno parent-scope inarg)
+                               ,(resolve-expansion-vars-with-new-env (caddr arg) env m lno parent-scope inarg))
+                           (unescape-global-lhs arg env m lno parent-scope inarg)))
                       (cdr e))))
+           ((toplevel) ; re-wrap Expr(:toplevel) in the current hygienic-scope(s)
+            `(toplevel
+               ,@(map (lambda (arg)
+                       ;; Minor optimization: A lot of toplevel exprs have just bare line numbers in them.
+                       ;; don't bother with the full rewrapping in that case (even though
+                       ;; this would be semantically legal) - lowering won't touch them anyways.
+                       (if (just-line? arg) arg
+                        (let loop ((parent-scope parent-scope) (m m) (lno lno) (arg arg))
+                          (let ((wrapped `(hygienic-scope ,arg ,m ,@lno)))
+                            (if (null? parent-scope) wrapped
+                              (loop (cdr parent-scope) (cadar parent-scope) (caddar parent-scope) wrapped))))))
+                        (cdr e))))
            ((using import export meta line inbounds boundscheck loopinfo inline noinline purity) (map unescape e))
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
            ((struct)
-            `(struct ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m parent-scope inarg)
+            `(struct ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m lno parent-scope inarg)
                      ,(map (lambda (x)
-                            (resolve-struct-field-expansion x env m parent-scope inarg))
+                            (resolve-struct-field-expansion x env m lno parent-scope inarg))
                            (cadddr e))))
 
            ((parameters)
@@ -403,17 +443,17 @@
                                 (x (if (and (not inarg) (symbol? ux))
                                        `(kw ,ux ,x)
                                        x)))
-                           (resolve-expansion-vars- x env m parent-scope #f)))
+                           (resolve-expansion-vars- x env m lno parent-scope #f)))
                        (cdr e))))
 
            ((->)
-            `(-> ,(resolve-in-lhs (tuple-wrap-arrow-sig (cadr e)) env m parent-scope inarg)
-                 ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))
+            `(-> ,(resolve-in-lhs (tuple-wrap-arrow-sig (cadr e)) env m lno parent-scope inarg)
+                 ,(resolve-expansion-vars-with-new-env (caddr e) env m lno parent-scope inarg)))
 
            ((= function)
-             `(,(car e) ,(resolve-in-lhs (cadr e) env m parent-scope inarg)
+             `(,(car e) ,(resolve-in-lhs (cadr e) env m lno parent-scope inarg)
                         ,@(map (lambda (x)
-                                   (resolve-expansion-vars-with-new-env x env m parent-scope inarg))
+                                   (resolve-expansion-vars-with-new-env x env m lno parent-scope inarg))
                                  (cddr e))))
 
            ((kw)
@@ -427,55 +467,67 @@
                 `(kw (|::|
                       ,@(if argname
                             (list (if inarg
-                                      (resolve-expansion-vars- argname env m parent-scope inarg)
+                                      (resolve-expansion-vars- argname env m lno parent-scope inarg)
                                       ;; in keyword arg A=B, don't transform "A"
                                       (unescape argname)))
                             '())
-                      ,(resolve-expansion-vars- type env m parent-scope inarg))
-                     ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg))))
+                      ,(resolve-expansion-vars- type env m lno parent-scope inarg))
+                     ,(resolve-expansion-vars-with-new-env (caddr e) env m lno parent-scope inarg))))
              (else
               `(kw ,(if inarg
-                        (resolve-expansion-vars- (cadr e) env m parent-scope inarg)
+                        (resolve-expansion-vars- (cadr e) env m lno parent-scope inarg)
                         (unescape (cadr e)))
-                   ,(resolve-expansion-vars-with-new-env (caddr e) env m parent-scope inarg)))))
+                   ,(resolve-expansion-vars-with-new-env (caddr e) env m lno parent-scope inarg)))))
 
            ((let)
             (let* ((newenv (new-expansion-env-for e env))
-                   (body   (resolve-expansion-vars- (caddr e) newenv m parent-scope inarg))
+                   (body   (resolve-expansion-vars- (caddr e) newenv m lno parent-scope inarg))
                    (binds  (let-binds e)))
               `(let (block
                      ,@(map
                         (lambda (bind)
-                          (if (assignment? bind)
-                              (make-assignment
-                               ;; expand binds in old env with dummy RHS
-                               (cadr (resolve-expansion-vars- (make-assignment (cadr bind) 0)
-                                                              newenv m parent-scope inarg))
-                               ;; expand initial values in old env
-                               (resolve-expansion-vars- (caddr bind) env m parent-scope inarg))
-                              (resolve-expansion-vars- bind newenv m parent-scope inarg)))
+                          (resolve-letlike-assign bind env newenv m lno parent-scope inarg))
                         binds))
                  ,body)))
+           ((for)
+            (let* ((newenv (new-expansion-env-for e env))
+                   (body   (resolve-expansion-vars- (caddr e) newenv m lno parent-scope inarg))
+                   (expanded-ranges (map (lambda (range)
+                      (resolve-letlike-assign range env newenv m lno parent-scope inarg)) (for-ranges-list (cadr e)))))
+              (if (length= expanded-ranges 1)
+                `(for ,@expanded-ranges ,body))
+                `(for (block ,@expanded-ranges) ,body)))
+           ((generator)
+            (let* ((newenv (new-expansion-env-for e env))
+                   (body   (resolve-expansion-vars- (cadr e) newenv m lno parent-scope inarg))
+                   (filt? (eq? (car (caddr e)) 'filter))
+                   (range-exprs (if filt? (cddr (caddr e)) (cddr e)))
+                   (filt (if filt? (resolve-expansion-vars- (cadr (caddr e)) newenv m lno parent-scope inarg)))
+                   (expanded-ranges (map (lambda (range)
+                      (resolve-letlike-assign range env newenv m lno parent-scope inarg)) range-exprs)))
+              (if filt?
+                `(generator ,body (filter ,filt ,@expanded-ranges))
+                `(generator ,body ,@expanded-ranges))))
            ((hygienic-scope) ; TODO: move this lowering to resolve-scopes, instead of reimplementing it here badly
-             (let ((parent-scope (cons (list env m) parent-scope))
+             (let ((parent-scope (cons (list env m lno) parent-scope))
                    (body (cadr e))
                    (m (caddr e))
                    (lno  (cdddr e)))
-              (resolve-expansion-vars-with-new-env body env m parent-scope inarg #t)))
+              (resolve-expansion-vars-with-new-env body env m lno parent-scope inarg #t)))
            ((tuple)
             (cons (car e)
                   (map (lambda (x)
                          (if (assignment? x)
                              `(= ,(unescape (cadr x))
-                                 ,(resolve-expansion-vars-with-new-env (caddr x) env m parent-scope inarg))
-                             (resolve-expansion-vars-with-new-env x env m parent-scope inarg)))
+                                 ,(resolve-expansion-vars-with-new-env (caddr x) env m lno parent-scope inarg))
+                             (resolve-expansion-vars-with-new-env x env m lno parent-scope inarg)))
                        (cdr e))))
 
            ;; todo: trycatch
            (else
             (cons (car e)
                   (map (lambda (x)
-                         (resolve-expansion-vars-with-new-env x env m parent-scope inarg))
+                         (resolve-expansion-vars-with-new-env x env m lno parent-scope inarg))
                        (cdr e))))))))
 
 ;; decl-var that also identifies f in f()=...
@@ -576,11 +628,11 @@
         (cdr v)
         '())))
 
-(define (resolve-expansion-vars e m)
+(define (resolve-expansion-vars e m lno)
   ;; expand binding form patterns
   ;; keep track of environment, rename locals to gensyms
   ;; and wrap globals in (globalref module var) for macro's home module
-  (resolve-expansion-vars-with-new-env e '() m '() #f #t))
+  (resolve-expansion-vars-with-new-env e '() m lno '() #f #t))
 
 (define (julia-expand-quotes e)
   (cond ((not (pair? e)) e)
@@ -596,11 +648,12 @@
   (cond ((not (pair? e)) e)
         ((eq? (car e) 'inert) e)
         ((eq? (car e) 'module) e)
+        ((eq? (car e) 'toplevel) e)
         ((eq? (car e) 'hygienic-scope)
          (let ((form (cadr e)) ;; form is the expression returned from expand-macros
                (modu (caddr e)) ;; m is the macro's def module
                (lno  (cdddr e))) ;; lno is (optionally) the line number node
-           (resolve-expansion-vars form modu)))
+           (resolve-expansion-vars form modu lno)))
         (else
          (map julia-expand-macroscopes- e))))
 

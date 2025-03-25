@@ -33,8 +33,11 @@ export BINDIR,
        iswindows,
        isjsvm,
        isexecutable,
+       isreadable,
+       iswritable,
        username,
-       which
+       which,
+       detectwsl
 
 import ..Base: show
 
@@ -54,6 +57,8 @@ global STDLIB::String = "$BINDIR/../share/julia/stdlib/v$(VERSION.major).$(VERSI
 # In case STDLIB change after julia is built, the variable below can be used
 # to update cached method locations to updated ones.
 const BUILD_STDLIB_PATH = STDLIB
+# Similarly, this is the root of the julia repo directory that julia was built from
+const BUILD_ROOT_PATH = "$BINDIR/../.."
 
 # helper to avoid triggering precompile warnings
 
@@ -145,7 +150,7 @@ function __init__()
     end
     global CPU_THREADS = if env_threads !== nothing
         env_threads = tryparse(Int, env_threads)
-        if !(env_threads isa Int && env_threads > 0)
+        if env_threads === nothing || env_threads <= 0
             env_threads = Int(ccall(:jl_cpu_threads, Int32, ()))
             Core.print(Core.stderr, "WARNING: couldn't parse `JULIA_CPU_THREADS` environment variable. Defaulting Sys.CPU_THREADS to $env_threads.\n")
         end
@@ -163,7 +168,7 @@ end
 # without pulling in anything unnecessary like `CPU_NAME`
 function __init_build()
     global BINDIR = ccall(:jl_get_julia_bindir, Any, ())::String
-    vers = "v$(VERSION.major).$(VERSION.minor)"
+    vers = "v$(string(VERSION.major)).$(string(VERSION.minor))"
     global STDLIB = abspath(BINDIR, "..", "share", "julia", "stdlib", vers)
     nothing
 end
@@ -358,7 +363,7 @@ free_memory() = ccall(:uv_get_available_memory, UInt64, ())
 
 Get the total memory in RAM (including that which is currently used) in bytes.
 This amount may be constrained, e.g., by Linux control groups. For the unconstrained
-amount, see `Sys.physical_memory()`.
+amount, see `Sys.total_physical_memory()`.
 """
 function total_memory()
     constrained = ccall(:uv_get_constrained_memory, UInt64, ())
@@ -397,7 +402,7 @@ end
 
 Get the maximum resident set size utilized in bytes.
 See also:
-    - man page of `getrusage`(2) on Linux and FreeBSD.
+    - man page of `getrusage`(2) on Linux and BSD.
     - Windows API `GetProcessMemoryInfo`.
 """
 maxrss() = ccall(:jl_maxrss, Csize_t, ())
@@ -528,6 +533,27 @@ including e.g. a WebAssembly JavaScript embedding in a web browser.
 """
 isjsvm(os::Symbol) = (os === :Emscripten)
 
+"""
+    Sys.detectwsl()
+
+Runtime predicate for testing if Julia is running inside
+Windows Subsystem for Linux (WSL).
+
+!!! note
+    Unlike `Sys.iswindows`, `Sys.islinux` etc., this is a runtime test, and thus
+    cannot meaningfully be used in `@static if` constructs.
+
+!!! compat "Julia 1.12"
+    This function requires at least Julia 1.12.
+"""
+function detectwsl()
+    # We use the same approach as canonical/snapd do to detect WSL
+    islinux() && (
+        isfile("/proc/sys/fs/binfmt_misc/WSLInterop")
+        || isdir("/run/WSL")
+    )
+end
+
 for f in (:isunix, :islinux, :isbsd, :isapple, :iswindows, :isfreebsd, :isopenbsd, :isnetbsd, :isdragonfly, :isjsvm)
     @eval $f() = $(getfield(@__MODULE__, f)(KERNEL))
 end
@@ -551,24 +577,9 @@ windows_version
 
 const WINDOWS_VISTA_VER = v"6.0"
 
-"""
-    Sys.isexecutable(path::String)
-
-Return `true` if the given `path` has executable permissions.
-
-!!! note
-    Prior to Julia 1.6, this did not correctly interrogate filesystem
-    ACLs on Windows, therefore it would return `true` for any
-    file.  From Julia 1.6 on, it correctly determines whether the
-    file is marked as executable or not.
-"""
-function isexecutable(path::String)
-    # We use `access()` and `X_OK` to determine if a given path is
-    # executable by the current user.  `X_OK` comes from `unistd.h`.
-    X_OK = 0x01
-    return ccall(:jl_fs_access, Cint, (Ptr{UInt8}, Cint), path, X_OK) == 0
-end
-isexecutable(path::AbstractString) = isexecutable(String(path))
+const isexecutable = Base.isexecutable
+const isreadable   = Base.isreadable
+const iswritable   = Base.iswritable
 
 """
     Sys.which(program_name::String)

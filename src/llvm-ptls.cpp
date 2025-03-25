@@ -9,7 +9,7 @@
 #include <llvm-c/Types.h>
 
 #include <llvm/Pass.h>
-#include <llvm/ADT/Triple.h>
+#include <llvm/TargetParser/Triple.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
@@ -63,11 +63,7 @@ private:
 
 void LowerPTLS::set_pgcstack_attrs(CallInst *pgcstack) const
 {
-#if JL_LLVM_VERSION >= 160000
     pgcstack->addFnAttr(Attribute::getWithMemoryEffects(pgcstack->getContext(), MemoryEffects::none()));
-#else
-    addFnAttr(pgcstack, Attribute::ReadNone);
-#endif
     addFnAttr(pgcstack, Attribute::NoUnwind);
 }
 
@@ -91,12 +87,12 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         if (offset) {
             SmallVector<Type*, 0> args(0);
             args.push_back(offset->getType());
-            auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(builder.getContext()), args, false),
+            auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), args, false),
                                      dyn_asm_str, "=&r,r,~{dirflag},~{fpsr},~{flags}", false);
             tls = builder.CreateCall(tp, {offset}, "pgcstack");
         }
         else {
-            auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(insertBefore->getContext()), false),
+            auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), false),
                                      const_asm_str.c_str(), "=r,~{dirflag},~{fpsr},~{flags}",
                                      false);
             tls = builder.CreateCall(tp, {}, "tls_pgcstack");
@@ -113,6 +109,8 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
             asm_str = "mrs $0, tpidr_el0";
         } else if (TargetTriple.isARM()) {
             asm_str = "mrc p15, 0, $0, c13, c0, 3";
+        } else if (TargetTriple.isRISCV()) {
+            asm_str = "mv $0, tp";
         } else if (TargetTriple.getArch() == Triple::x86_64) {
             asm_str = "movq %fs:0, $0";
         } else if (TargetTriple.getArch() == Triple::x86) {
@@ -122,11 +120,10 @@ Instruction *LowerPTLS::emit_pgcstack_tp(Value *offset, Instruction *insertBefor
         }
         if (!offset)
             offset = ConstantInt::getSigned(T_size, jl_tls_offset);
-        auto tp = InlineAsm::get(FunctionType::get(Type::getInt8PtrTy(builder.getContext()), false), asm_str, "=r", false);
+        auto tp = InlineAsm::get(FunctionType::get(PointerType::get(builder.getContext(), 0), false), asm_str, "=r", false);
         tls = builder.CreateCall(tp, {}, "thread_ptr");
-        tls = builder.CreateGEP(Type::getInt8Ty(builder.getContext()), tls, {offset}, "tls_ppgcstack");
+        tls = builder.CreateInBoundsGEP(Type::getInt8Ty(builder.getContext()), tls, {offset}, "tls_ppgcstack");
     }
-    tls = builder.CreateBitCast(tls, T_pppjlvalue->getPointerTo());
     return builder.CreateLoad(T_pppjlvalue, tls, "tls_pgcstack");
 }
 
@@ -173,11 +170,11 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             *CFGModified = true;
         // emit slow branch code
         CallInst *adopt = cast<CallInst>(pgcstack->clone());
-        Function *adoptFunc = M->getFunction(XSTR(jl_adopt_thread));
+        Function *adoptFunc = M->getFunction(XSTR(jl_autoinit_and_adopt_thread));
         if (adoptFunc == NULL) {
             adoptFunc = Function::Create(pgcstack_getter->getFunctionType(),
                 pgcstack_getter->getLinkage(), pgcstack_getter->getAddressSpace(),
-                XSTR(jl_adopt_thread), M);
+                XSTR(jl_autoinit_and_adopt_thread), M);
             adoptFunc->copyAttributesFrom(pgcstack_getter);
             adoptFunc->copyMetadata(pgcstack_getter, 0);
         }
@@ -188,19 +185,28 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         builder.SetInsertPoint(fastTerm->getParent());
         fastTerm->removeFromParent();
         MDNode *tbaa = tbaa_gcframe;
-        Value *prior = emit_gc_unsafe_enter(builder, T_size, get_current_ptls_from_task(builder, T_size, get_current_task_from_pgcstack(builder, T_size, pgcstack), tbaa), true);
+        Value *prior = emit_gc_unsafe_enter(builder, T_size, get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, pgcstack), tbaa), true);
         builder.Insert(fastTerm);
         phi->addIncoming(pgcstack, fastTerm->getParent());
         // emit pre-return cleanup
         if (CountTrackedPointers(pgcstack->getParent()->getParent()->getReturnType()).count == 0) {
+#if JL_LLVM_VERSION >= 200000
+            auto last_gc_state = PHINode::Create(Type::getInt8Ty(pgcstack->getContext()), 2, "", phi->getIterator());
+#else
             auto last_gc_state = PHINode::Create(Type::getInt8Ty(pgcstack->getContext()), 2, "", phi);
+#endif
             // if we called jl_adopt_thread, we must end this cfunction back in the safe-state
             last_gc_state->addIncoming(ConstantInt::get(Type::getInt8Ty(M->getContext()), JL_GC_STATE_SAFE), slowTerm->getParent());
             last_gc_state->addIncoming(prior, fastTerm->getParent());
             for (auto &BB : *pgcstack->getParent()->getParent()) {
                 if (isa<ReturnInst>(BB.getTerminator())) {
+                    // Don't use emit_gc_safe_leave here, as that introduces a new BB while iterating BBs
                     builder.SetInsertPoint(BB.getTerminator());
-                    emit_gc_unsafe_leave(builder, T_size, get_current_ptls_from_task(builder, T_size, get_current_task_from_pgcstack(builder, T_size, phi), tbaa), last_gc_state, true);
+                    Value *ptls = get_current_ptls_from_task(builder, get_current_task_from_pgcstack(builder, phi), tbaa_gcframe);
+                    unsigned offset = offsetof(jl_tls_states_t, gc_state);
+                    Value *gc_state = builder.CreateConstInBoundsGEP1_32(Type::getInt8Ty(builder.getContext()), ptls, offset, "gc_state");
+                    builder.CreateAlignedStore(last_gc_state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
+                    emit_gc_safepoint(builder, T_size, ptls, tbaa, true);
                 }
             }
         }
@@ -280,7 +286,11 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
         if (TargetTriple.isOSDarwin()) {
             assert(sizeof(k) == sizeof(uintptr_t));
             Constant *key = ConstantInt::get(T_size, (uintptr_t)k);
+#if JL_LLVM_VERSION >= 200000
+            auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack->getIterator());
+#else
             auto new_pgcstack = CallInst::Create(FT_pgcstack_getter, val, {key}, "", pgcstack);
+#endif
             new_pgcstack->takeName(pgcstack);
             pgcstack->replaceAllUsesWith(new_pgcstack);
             pgcstack->eraseFromParent();
@@ -310,7 +320,7 @@ bool LowerPTLS::run(bool *CFGModified)
                 assert(sizeof(jl_pgcstack_key_t) == sizeof(uintptr_t));
                 FT_pgcstack_getter = FunctionType::get(FT_pgcstack_getter->getReturnType(), {T_size}, false);
             }
-            T_pgcstack_getter = FT_pgcstack_getter->getPointerTo();
+            T_pgcstack_getter = PointerType::getUnqual(FT_pgcstack_getter->getContext());
             T_pppjlvalue = cast<PointerType>(FT_pgcstack_getter->getReturnType());
             if (imaging_mode) {
                 pgcstack_func_slot = create_hidden_global(T_pgcstack_getter, "jl_pgcstack_func_slot");
@@ -320,13 +330,13 @@ bool LowerPTLS::run(bool *CFGModified)
             need_init = false;
         }
 
-        for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end();) {
+        for (auto it = pgcstack_getter->user_begin(); it != pgcstack_getter->user_end(); ) {
             auto call = cast<CallInst>(*it);
             ++it;
             auto f = call->getCaller();
             Value *pgcstack = NULL;
-            for (Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end();++arg) {
-                if (arg->hasSwiftSelfAttr()){
+            for (Function::arg_iterator arg = f->arg_begin(); arg != f->arg_end(); ++arg) {
+                if (arg->hasSwiftSelfAttr()) {
                     pgcstack = &*arg;
                     break;
                 }

@@ -3,14 +3,20 @@ include $(SRCDIR)/libsuitesparse.version
 
 ifneq ($(USE_BINARYBUILDER_LIBSUITESPARSE), 1)
 
-LIBSUITESPARSE_PROJECTS := "amd;btf;camd;ccolamd;colamd;cholmod;klu;ldl;umfpack;rbio;spqr"
+LIBSUITESPARSE_PROJECTS := "suitesparse_config;amd;btf;camd;ccolamd;colamd;cholmod;klu;ldl;umfpack;rbio;spqr"
 LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig $(subst ;, ,$(LIBSUITESPARSE_PROJECTS)))
+
+ifeq ($(OS),WINNT)
+BLAS_LIB_NAME_NO_EXT:=blastrampoline-5
+else
+BLAS_LIB_NAME_NO_EXT:=blastrampoline
+endif
 
 LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
 	  -DCMAKE_BUILD_TYPE=Release \
 	  -DBUILD_STATIC_LIBS=OFF \
 	  -DBUILD_TESTING=OFF \
-	  -DSUITESPARSE_ENABLE_PROJECTS="suitesparse_config;$(LIBSUITESPARSE_PROJECTS)" \
+	  -DSUITESPARSE_ENABLE_PROJECTS=$(LIBSUITESPARSE_PROJECTS) \
 	  -DSUITESPARSE_DEMOS=OFF \
 	  -DSUITESPARSE_USE_STRICT=ON \
 	  -DSUITESPARSE_USE_CUDA=OFF \
@@ -18,15 +24,19 @@ LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
 	  -DSUITESPARSE_USE_OPENMP=OFF \
 	  -DCHOLMOD_PARTITION=ON \
 	  -DBLAS_FOUND=1 \
-	  -DBLAS_LIBRARIES="$(build_shlibdir)/libblastrampoline.$(SHLIB_EXT)" \
-	  -DBLAS_LINKER_FLAGS="blastrampoline" \
-	  -DBLA_VENDOR="blastrampoline" \
-	  -DLAPACK_LIBRARIES="$(build_shlibdir)/libblastrampoline.$(SHLIB_EXT)" \
-	  -DLAPACK_LINKER_FLAGS="blastrampoline" \
-	  -DBLAS64_SUFFIX="_64" \
-	  -DSUITESPARSE_USE_64BIT_BLAS=YES
+	  -DBLAS_LIBRARIES="$(build_shlibdir)/lib$(BLAS_LIB_NAME_NO_EXT).$(SHLIB_EXT)" \
+	  -DBLAS_LINKER_FLAGS="$(BLAS_LIB_NAME_NO_EXT)" \
+	  -DBLA_VENDOR="$(BLAS_LIB_NAME_NO_EXT)" \
+	  -DLAPACK_LIBRARIES="$(build_shlibdir)/lib$(BLAS_LIB_NAME_NO_EXT).$(SHLIB_EXT)" \
+	  -DLAPACK_LINKER_FLAGS="${BLAS_LIB_NAME_NO_EXT}"
 
-ifneq (,$(findstring $(OS),Linux FreeBSD))
+ifeq ($(BINARY),64)
+LIBSUITESPARSE_CMAKE_FLAGS += -DBLAS64_SUFFIX="_64" -DSUITESPARSE_USE_64BIT_BLAS=YES
+else
+LIBSUITESPARSE_CMAKE_FLAGS += -DSUITESPARSE_USE_64BIT_BLAS=NO
+endif
+
+ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 LIBSUITESPARSE_CMAKE_FLAGS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
@@ -42,21 +52,15 @@ $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted: $(SRCCACHE)/Suit
 checksum-libsuitesparse: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER).tar.gz
 	$(JLCHECKSUM) $<
 
-# https://github.com/DrTimothyAldenDavis/SuiteSparse/pull/671
-$(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/suitesparse-blas-suffix.patch-applied: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
-	cd $(dir $@) && \
-		patch -p1 -f < $(SRCDIR)/patches/suitesparse-blas-suffix.patch
-	echo 1 > $@
-
-$(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/suitesparse-blas-suffix.patch-applied
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-extracted
 	echo 1 > $@
 
 $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: | $(build_prefix)/manifest/blastrampoline
 
-$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(SRCCACHE)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
-	cd $(dir $<) && $(CMAKE) .. $(LIBSUITESPARSE_CMAKE_FLAGS)
-	make
-	make install
+$(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/source-patched
+	cd $(dir $<) && $(CMAKE) . $(LIBSUITESPARSE_CMAKE_FLAGS)
+	$(MAKE) -C $(dir $<)
+	$(MAKE) -C $(dir $<) install
 	echo 1 > $@
 
 ifeq ($(OS),WINNT)
@@ -91,7 +95,7 @@ configure-libsuitesparse: extract-libsuitesparse
 compile-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-compiled
 fastcheck-libsuitesparse: #none
 check-libsuitesparse: $(BUILDDIR)/SuiteSparse-$(LIBSUITESPARSE_VER)/build-checked
-install-libsuitesparse: $(build_prefix)/manifest/libsuitesparse
+install-libsuitesparse: $(build_prefix)/manifest/libsuitesparse remove-libsuitesparse-gpl-lib
 
 else # USE_BINARYBUILDER_LIBSUITESPARSE
 
@@ -99,6 +103,7 @@ $(eval $(call bb-install,libsuitesparse,LIBSUITESPARSE,false))
 
 # libsuitesparse depends on blastrampoline
 compile-libsuitesparse: | $(build_prefix)/manifest/blastrampoline
+install-libsuitesparse: | remove-libsuitesparse-gpl-lib
 endif
 
 define manual_libsuitesparse
@@ -106,3 +111,13 @@ uninstall-libsuitesparse:
 	-rm -f $(build_prefix)/manifest/libsuitesparse
 	-rm -f $(addprefix $(build_shlibdir)/lib,$3)
 endef
+
+remove-libsuitesparse-gpl-lib:
+ifeq ($(USE_GPL_LIBS),0)
+	@echo Removing GPL libs...
+	-rm -f $(build_bindir)/libcholmod*
+	-rm -f $(build_bindir)/libklu_cholmod*
+	-rm -f $(build_bindir)/librbio*
+	-rm -f $(build_bindir)/libspqr*
+	-rm -f $(build_bindir)/libumfpack*
+endif

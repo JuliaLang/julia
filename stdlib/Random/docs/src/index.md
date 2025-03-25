@@ -94,7 +94,7 @@ There are two mostly orthogonal ways to extend `Random` functionalities:
 The API for 1) is quite functional, but is relatively recent so it may still have to evolve in subsequent releases of the `Random` module.
 For example, it's typically sufficient to implement one `rand` method in order to have all other usual methods work automatically.
 
-The API for 2) is still rudimentary, and may require more work than strictly necessary from the implementor,
+The API for 2) is still rudimentary, and may require more work than strictly necessary from the implementer,
 in order to support usual types of generated values.
 
 ### Generating random values of custom types
@@ -103,7 +103,7 @@ Generating random values for some distributions may involve various trade-offs. 
 
 The `Random` module defines a customizable framework for obtaining random values that can address these issues. Each invocation of `rand` generates a *sampler* which can be customized with the above trade-offs in mind, by adding methods to `Sampler`, which in turn can dispatch on the random number generator, the object that characterizes the distribution, and a suggestion for the number of repetitions. Currently, for the latter, `Val{1}` (for a single sample) and `Val{Inf}` (for an arbitrary number) are used, with `Random.Repetition` an alias for both.
 
-The object returned by `Sampler` is then used to generate the random values. When implementing the random generation interface for a value `X` that can be sampled from, the implementor should define the method
+The object returned by `Sampler` is then used to generate the random values. When implementing the random generation interface for a value `X` that can be sampled from, the implementer should define the method
 
 ```julia
 rand(rng, sampler)
@@ -350,8 +350,8 @@ DocTestSetup = nothing
 
 By using an RNG parameter initialized with a given seed, you can reproduce the same pseudorandom
 number sequence when running your program multiple times. However, a minor release of Julia (e.g.
-1.3 to 1.4) *may change* the sequence of pseudorandom numbers generated from a specific seed, in
-particular if `MersenneTwister` is used. (Even if the sequence produced by a low-level function like
+1.3 to 1.4) *may change* the sequence of pseudorandom numbers generated from a specific seed.
+(Even if the sequence produced by a low-level function like
 [`rand`](@ref) does not change, the output of higher-level functions like [`randsubseq`](@ref) may
 change due to algorithm updates.) Rationale: guaranteeing that pseudorandom streams never change
 prohibits many algorithmic improvements.

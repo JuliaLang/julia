@@ -39,6 +39,8 @@ Base.:(:)
 Base.range
 Base.OneTo
 Base.StepRangeLen
+Base.logrange
+Base.LogRange
 Base.:(==)
 Base.:(!=)
 Base.:(!==)
@@ -72,6 +74,7 @@ Base.Math.tand
 Base.Math.sincosd
 Base.Math.sinpi
 Base.Math.cospi
+Base.Math.tanpi
 Base.Math.sincospi
 Base.sinh(::Number)
 Base.cosh(::Number)
@@ -151,6 +154,7 @@ Base.Checked.checked_rem
 Base.Checked.checked_fld
 Base.Checked.checked_mod
 Base.Checked.checked_cld
+Base.Checked.checked_pow
 Base.Checked.add_with_overflow
 Base.Checked.sub_with_overflow
 Base.Checked.mul_with_overflow
@@ -162,6 +166,7 @@ Base.flipsign
 Base.sqrt(::Number)
 Base.isqrt
 Base.Math.cbrt(::AbstractFloat)
+Base.fourthroot(::Number)
 Base.real
 Base.imag
 Base.reim

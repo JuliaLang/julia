@@ -413,7 +413,7 @@ Since expressions are just `Expr` objects which can be constructed programmatica
 it is possible to dynamically generate arbitrary code which can then be run using [`eval`](@ref).
 Here is a simple example:
 
-```julia-repl
+```jldoctest
 julia> a = 1;
 
 julia> ex = Expr(:call, :+, a, :b)
@@ -629,6 +629,15 @@ julia> @showarg(1+1)
 
 julia> @showarg(println("Yo!"))
 :(println("Yo!"))
+
+julia> @showarg(1)        # Numeric literal
+1
+
+julia> @showarg("Yo!")    # String literal
+"Yo!"
+
+julia> @showarg("Yo! $("hello")")    # String with interpolation is an Expr rather than a String
+:("Yo! $("hello")")
 ```
 
 In addition to the given argument list, every macro is passed extra arguments named `__source__` and `__module__`.

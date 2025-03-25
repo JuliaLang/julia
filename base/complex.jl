@@ -162,12 +162,6 @@ Convert real numbers or arrays to complex. `i` defaults to zero.
 ```jldoctest
 julia> complex(7)
 7 + 0im
-
-julia> complex([1, 2, 3])
-3-element Vector{Complex{Int64}}:
- 1 + 0im
- 2 + 0im
- 3 + 0im
 ```
 """
 complex(z::Complex) = z
@@ -212,7 +206,7 @@ function show(io::IO, z::Complex)
         print(io, compact ? "+" : " + ")
         show(io, i)
     end
-    if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
+    if !(isa(i,Signed) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end
     print(io, "im")
@@ -342,7 +336,7 @@ end
 *(x::Real, z::Complex) = Complex(x * real(z), x * imag(z))
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 
-muladd(x::Real, z::Complex, y::Number) = muladd(z, x, y)
+muladd(x::Real, z::Complex, y::Union{Real,Complex}) = muladd(z, x, y)
 muladd(z::Complex, x::Real, y::Real) = Complex(muladd(real(z),x,y), imag(z)*x)
 muladd(z::Complex, x::Real, w::Complex) =
     Complex(muladd(real(z),x,real(w)), muladd(imag(z),x,imag(w)))
@@ -625,7 +619,10 @@ end
 
 Compute the phase angle in radians of a complex number `z`.
 
-See also: [`atan`](@ref), [`cis`](@ref).
+Returns a number `-pi ≤ angle(z) ≤ pi`, and is thus discontinuous
+along the negative real axis.
+
+See also: [`atan`](@ref), [`cis`](@ref), [`rad2deg`](@ref).
 
 # Examples
 ```jldoctest
@@ -635,8 +632,11 @@ julia> rad2deg(angle(1 + im))
 julia> rad2deg(angle(1 - im))
 -45.0
 
-julia> rad2deg(angle(-1 - im))
--135.0
+julia> rad2deg(angle(-1 + 1e-20im))
+180.0
+
+julia> rad2deg(angle(-1 - 1e-20im))
+-180.0
 ```
 """
 angle(z::Complex) = atan(imag(z), real(z))
@@ -1031,24 +1031,22 @@ end
 function atanh(z::Complex{T}) where T
     z = float(z)
     Tf = float(T)
-    Ω = prevfloat(typemax(Tf))
-    θ = sqrt(Ω)/4
-    ρ = 1/θ
     x, y = reim(z)
     ax = abs(x)
     ay = abs(y)
+    θ = sqrt(floatmax(Tf))/4
     if ax > θ || ay > θ #Prevent overflow
         if isnan(y)
             if isinf(x)
                 return Complex(copysign(zero(x),x), y)
             else
-                return Complex(real(1/z), y)
+                return Complex(real(inv(z)), y)
             end
         end
         if isinf(y)
             return Complex(copysign(zero(x),x), copysign(oftype(y,pi)/2, y))
         end
-        return Complex(real(1/z), copysign(oftype(y,pi)/2, y))
+        return Complex(real(inv(z)), copysign(oftype(y,pi)/2, y))
     end
     β = copysign(one(Tf), x)
     z *= β
@@ -1058,16 +1056,15 @@ function atanh(z::Complex{T}) where T
             ξ = oftype(x, Inf)
             η = y
         else
-            ym = ay+ρ
-            ξ = log(sqrt(sqrt(4+y*y))/sqrt(ym))
-            η = copysign(oftype(y,pi)/2 + atan(ym/2), y)/2
+            ξ = log(sqrt(sqrt(muladd(y, y, 4)))/sqrt(ay))
+            η = copysign(oftype(y,pi)/2 + atan(ay/2), y)/2
         end
     else #Normal case
-        ysq = (ay+ρ)^2
+        ysq = ay^2
         if x == 0
             ξ = x
         else
-            ξ = log1p(4x/((1-x)^2 + ysq))/4
+            ξ = log1p(4x/(muladd(1-x, 1-x, ysq)))/4
         end
         η = angle(Complex((1-x)*(1+x)-ysq, 2y))/2
     end
@@ -1091,7 +1088,7 @@ second is used for rounding the imaginary components.
 which rounds to the nearest integer, with ties (fractional values of 0.5)
 being rounded to the nearest even integer.
 
-# Example
+# Examples
 ```jldoctest
 julia> round(3.14 + 4.5im)
 3.0 + 4.0im
@@ -1119,7 +1116,23 @@ big(::Type{Complex{T}}) where {T<:Real} = Complex{big(T)}
 big(z::Complex{T}) where {T<:Real} = Complex{big(T)}(z)
 
 ## Array operations on complex numbers ##
+"""
+    complex(A::AbstractArray)
 
+Return an array containing the complex analog of each entry in array `A`.
+
+Equivalent to `complex.(A)`, except that the return value may share memory with all or
+part of `A` in accordance with the behavior of `convert(T, A)` given output type `T`.
+
+# Examples
+```jldoctest
+julia> complex([1, 2, 3])
+3-element Vector{Complex{Int64}}:
+ 1 + 0im
+ 2 + 0im
+ 3 + 0im
+```
+"""
 complex(A::AbstractArray{<:Complex}) = A
 
 function complex(A::AbstractArray{T}) where T

@@ -119,19 +119,6 @@ JL_DLLEXPORT void jl_init(void)
     free(libbindir);
 }
 
-// HACK: remove this for Julia 1.8 (see <https://github.com/JuliaLang/julia/issues/40730>)
-JL_DLLEXPORT void jl_init__threading(void)
-{
-    jl_init();
-}
-
-// HACK: remove this for Julia 1.8 (see <https://github.com/JuliaLang/julia/issues/40730>)
-JL_DLLEXPORT void jl_init_with_image__threading(const char *julia_bindir,
-                                     const char *image_relative_path)
-{
-    jl_init_with_image(julia_bindir, image_relative_path);
-}
-
 static void _jl_exception_clear(jl_task_t *ct) JL_NOTSAFEPOINT
 {
     ct->ptls->previous_exception = NULL;
@@ -158,7 +145,7 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         r = NULL;
     }
     return r;
@@ -170,9 +157,9 @@ JL_DLLEXPORT jl_value_t *jl_eval_string(const char *str)
  * @return A pointer to `jl_value_t` representing the current exception.
  *         Returns `NULL` if no exception is currently thrown.
  */
-JL_DLLEXPORT jl_value_t *jl_current_exception(void) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
+JL_DLLEXPORT jl_value_t *jl_current_exception(jl_task_t *ct) JL_GLOBALLY_ROOTED JL_NOTSAFEPOINT
 {
-    jl_excstack_t *s = jl_current_task->excstack;
+    jl_excstack_t *s = ct->excstack;
     return s && s->top != 0 ? jl_excstack_exception(s, s->top) : jl_nothing;
 }
 
@@ -300,7 +287,7 @@ JL_DLLEXPORT jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, uint32_t n
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -328,7 +315,7 @@ JL_DLLEXPORT jl_value_t *jl_call0(jl_function_t *f)
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -360,7 +347,7 @@ JL_DLLEXPORT jl_value_t *jl_call1(jl_function_t *f, jl_value_t *a)
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -394,7 +381,7 @@ JL_DLLEXPORT jl_value_t *jl_call2(jl_function_t *f, jl_value_t *a, jl_value_t *b
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -431,24 +418,50 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
         _jl_exception_clear(ct);
     }
     JL_CATCH {
-        ct->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
 }
 
 /**
- * @brief Yield to the Julia scheduler.
+ * @brief Call a Julia function with three arguments.
  *
- * Yields control to the Julia scheduler, allowing other Julia tasks to run.
+ * A specialized case of `jl_call` for simpler scenarios.
+ *
+ * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param a A pointer to `jl_value_t` representing the first argument.
+ * @param b A pointer to `jl_value_t` representing the second argument.
+ * @param c A pointer to `jl_value_t` representing the third argument.
+ * @param d A pointer to `jl_value_t` representing the fourth argument.
+ * @return A pointer to `jl_value_t` representing the result of the function call.
  */
-JL_DLLEXPORT void jl_yield(void)
+JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f, jl_value_t *a,
+                                  jl_value_t *b, jl_value_t *c,
+                                  jl_value_t *d)
 {
-    static jl_function_t *yieldfunc = NULL;
-    if (yieldfunc == NULL)
-        yieldfunc = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("yield"));
-    if (yieldfunc != NULL)
-        jl_call0(yieldfunc);
+    jl_value_t *v;
+    jl_task_t *ct = jl_current_task;
+    JL_TRY {
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, 5);
+        argv[0] = f;
+        argv[1] = a;
+        argv[2] = b;
+        argv[3] = c;
+        argv[4] = d;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
+        v = jl_apply(argv, 5);
+        ct->world_age = last_age;
+        JL_GC_POP();
+        _jl_exception_clear(ct);
+    }
+    JL_CATCH {
+        ct->ptls->previous_exception = jl_current_exception(ct);
+        v = NULL;
+    }
+    return v;
 }
 
 /**
@@ -461,6 +474,7 @@ JL_DLLEXPORT void jl_yield(void)
 JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld)
 {
     jl_value_t *v;
+    jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_value_t *s = (jl_value_t*)jl_symbol(fld);
         int i = jl_field_index((jl_datatype_t*)jl_typeof(o), (jl_sym_t*)s, 1);
@@ -468,7 +482,7 @@ JL_DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, const char *fld)
         jl_exception_clear();
     }
     JL_CATCH {
-        jl_current_task->ptls->previous_exception = jl_current_exception();
+        ct->ptls->previous_exception = jl_current_exception(ct);
         v = NULL;
     }
     return v;
@@ -617,41 +631,6 @@ JL_DLLEXPORT int jl_ver_is_release(void)
 JL_DLLEXPORT const char *jl_ver_string(void)
 {
    return JULIA_VERSION_STRING;
-}
-
-// return char* from String field in Base.GIT_VERSION_INFO
-static const char *git_info_string(const char *fld)
-{
-    static jl_value_t *GIT_VERSION_INFO = NULL;
-    if (!GIT_VERSION_INFO)
-        GIT_VERSION_INFO = jl_get_global(jl_base_module, jl_symbol("GIT_VERSION_INFO"));
-    jl_value_t *f = jl_get_field(GIT_VERSION_INFO, fld);
-    assert(jl_is_string(f));
-    return jl_string_data(f);
-}
-
-/**
- * @brief Get the name of the Git branch for the Julia build.
- *
- * @return A C string containing the name of the Git branch.
- */
-JL_DLLEXPORT const char *jl_git_branch(void)
-{
-    static const char *branch = NULL;
-    if (!branch) branch = git_info_string("branch");
-    return branch;
-}
-
-/**
- * @brief Get the Git commit hash for the Julia build.
- *
- * @return A C string containing the Git commit hash.
- */
-JL_DLLEXPORT const char *jl_git_commit(void)
-{
-    static const char *commit = NULL;
-    if (!commit) commit = git_info_string("commit");
-    return commit;
 }
 
 /**
@@ -858,6 +837,28 @@ JL_DLLEXPORT uint64_t jl_cumulative_recompile_time_ns(void)
 }
 
 /**
+ * @brief Enable per-task timing.
+ */
+JL_DLLEXPORT void jl_task_metrics_enable(void)
+{
+    // Increment the flag to allow reentrant callers.
+    jl_atomic_fetch_add(&jl_task_metrics_enabled, 1);
+}
+
+/**
+ * @brief Disable per-task timing.
+ */
+JL_DLLEXPORT void jl_task_metrics_disable(void)
+{
+    // Prevent decrementing the counter below zero
+    uint8_t enabled = jl_atomic_load_relaxed(&jl_task_metrics_enabled);
+    while (enabled > 0) {
+        if (jl_atomic_cmpswap(&jl_task_metrics_enabled, &enabled, enabled-1))
+            break;
+    }
+}
+
+/**
  * @brief Retrieve floating-point environment constants.
  *
  * Populates an array with constants related to the floating-point environment,
@@ -901,6 +902,7 @@ JL_DLLEXPORT int jl_set_fenv_rounding(int i)
 
 static int exec_program(char *program)
 {
+    jl_task_t *ct = jl_current_task;
     JL_TRY {
         jl_load(jl_main_module, program);
     }
@@ -909,7 +911,7 @@ static int exec_program(char *program)
         //       printing directly to STDERR_FILENO.
         int shown_err = 0;
         jl_printf(JL_STDERR, "error during bootstrap:\n");
-        jl_value_t *exc = jl_current_exception();
+        jl_value_t *exc = jl_current_exception(ct);
         jl_value_t *showf = jl_base_module ? jl_get_function(jl_base_module, "show") : NULL;
         if (showf) {
             jl_value_t *errs = jl_stderr_obj();
@@ -935,26 +937,29 @@ static NOINLINE int true_main(int argc, char *argv[])
 {
     jl_set_ARGS(argc, argv);
 
+
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_get_world_counter();
+
     jl_function_t *start_client = jl_base_module ?
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
     if (start_client) {
-        jl_task_t *ct = jl_current_task;
         int ret = 1;
         JL_TRY {
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_get_world_counter();
             jl_value_t *r = jl_apply(&start_client, 1);
             if (jl_typeof(r) != (jl_value_t*)jl_int32_type)
                 jl_type_error("typeassert", (jl_value_t*)jl_int32_type, r);
             ret = jl_unbox_int32(r);
-            ct->world_age = last_age;
         }
         JL_CATCH {
-            jl_no_exc_handler(jl_current_exception(), ct);
+            jl_no_exc_handler(jl_current_exception(ct), ct);
         }
+        ct->world_age = last_age;
         return ret;
     }
+    ct->world_age = last_age;
 
     // run program if specified, otherwise enter REPL
     if (argc > 0) {
@@ -995,7 +1000,7 @@ static NOINLINE int true_main(int argc, char *argv[])
                 line = NULL;
             }
             jl_printf((JL_STREAM*)STDERR_FILENO, "\nparser error:\n");
-            jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+            jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
             jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
             jl_print_backtrace(); // written to STDERR_FILENO
         }

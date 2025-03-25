@@ -76,7 +76,7 @@ function getproperty(stream::LibuvStream, name::Symbol)
 end
 
 # IO
-# +- GenericIOBuffer{T<:AbstractArray{UInt8,1}} (not exported)
+# +- GenericIOBuffer{T<:AbstractVector{UInt8}} (not exported)
 # +- AbstractPipe (not exported)
 # .  +- Pipe
 # .  +- Process (not exported)
@@ -89,7 +89,7 @@ end
 # .  +- TTY (not exported)
 # .  +- UDPSocket
 # .  +- BufferStream (FIXME: 2.0)
-# +- IOBuffer = Base.GenericIOBuffer{Array{UInt8,1}}
+# +- IOBuffer = Base.GenericIOBuffer{Vector{UInt8}}
 # +- IOStream
 
 # IOServer
@@ -122,7 +122,7 @@ const DEFAULT_READ_BUFFER_SZ = 10485760 # 10 MB
 if Sys.iswindows()
     const MAX_OS_WRITE = UInt(0x1FF0_0000) # 511 MB (determined semi-empirically, limited to 31 MB on XP)
 else
-    const MAX_OS_WRITE = UInt(typemax(Csize_t))
+    const MAX_OS_WRITE = UInt(0x7FFF_0000) # almost 2 GB (both macOS and linux have this kernel restriction, although only macOS documents it)
 end
 
 
@@ -304,7 +304,7 @@ function init_stdio(handle::Ptr{Cvoid})
     elseif t == UV_TTY
         io = TTY(handle, StatusOpen)
     elseif t == UV_TCP
-        Sockets = require(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
+        Sockets = require_stdlib(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
         io = Sockets.TCPSocket(handle, StatusOpen)
     elseif t == UV_NAMED_PIPE
         io = PipeEndpoint(handle, StatusOpen)
@@ -341,7 +341,7 @@ function open(h::OS_HANDLE)
     elseif t == UV_TTY
         io = TTY(h)
     elseif t == UV_TCP
-        Sockets = require(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
+        Sockets = require_stdlib(PkgId(UUID((0x6462fe0b_24de_5631, 0x8697_dd941f90decc)), "Sockets"))
         io = Sockets.TCPSocket(h)
     elseif t == UV_NAMED_PIPE
         io = PipeEndpoint(h)
@@ -453,14 +453,16 @@ function closewrite(s::LibuvStream)
     sigatomic_begin()
     uv_req_set_data(req, ct)
     iolock_end()
-    status = try
+    local status
+    try
         sigatomic_end()
-        wait()::Cint
+        status = wait()::Cint
+        sigatomic_begin()
     finally
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(req) != C_NULL
             # req is still alive,
             # so make sure we won't get spurious notifications later
@@ -567,6 +569,13 @@ displaysize(io::IO) = displaysize()
 displaysize() = (parse(Int, get(ENV, "LINES",   "24")),
                  parse(Int, get(ENV, "COLUMNS", "80")))::Tuple{Int, Int}
 
+# This is a fancy way to make de-specialize a call to `displaysize(io::IO)`
+# which is unfortunately invalidated by REPL
+#  (https://github.com/JuliaLang/julia/issues/56080)
+#
+# This makes the call less efficient, but avoids being invalidated by REPL.
+displaysize_(io::IO) = Base.invoke_in_world(Base.tls_world_age(), displaysize, io)::Tuple{Int,Int}
+
 function displaysize(io::TTY)
     check_open(io)
 
@@ -608,7 +617,7 @@ end
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
     ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    nb = min(length(buffer.data), buffer.maxsize) - ptr + 1
+    nb = min(length(buffer.data)-buffer.offset, buffer.maxsize) + buffer.offset - ptr + 1
     return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
@@ -619,6 +628,7 @@ function notify_filled(buffer::IOBuffer, nread::Int)
         buffer.size += nread
     else
         buffer.ptr += nread
+        buffer.size = max(buffer.size, buffer.ptr - 1)
     end
     nothing
 end
@@ -764,12 +774,21 @@ julia> read(err, String)
 "stderr messages"
 ```
 
-See also `Base.link_pipe!`.
+See also [`Base.link_pipe!`](@ref).
 """
 Pipe() = Pipe(PipeEndpoint(), PipeEndpoint())
 pipe_reader(p::Pipe) = p.out
 pipe_writer(p::Pipe) = p.in
 
+"""
+    link_pipe!(pipe; reader_supports_async=false, writer_supports_async=false)
+
+Initialize `pipe` and link the `in` endpoint to the `out` endpoint. The keyword
+arguments `reader_supports_async`/`writer_supports_async` correspond to
+`OVERLAPPED` on Windows and `O_NONBLOCK` on POSIX systems. They should be `true`
+unless they'll be used by an external program (e.g. the output of a command
+executed with [`run`](@ref)).
+"""
 function link_pipe!(pipe::Pipe;
                     reader_supports_async = false,
                     writer_supports_async = false)
@@ -785,6 +804,7 @@ show(io::IO, stream::Pipe) = print(io,
     uv_status_string(stream.out), ", ",
     bytesavailable(stream), " bytes waiting)")
 
+closewrite(pipe::Pipe) = close(pipe.in)
 
 ## Functions for PipeEndpoint and PipeServer ##
 
@@ -922,8 +942,9 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     if bytesavailable(sbuf) >= nb
         nread = readbytes!(sbuf, a, nb)
     else
+        initsize = length(a)
         newbuf = PipeBuffer(a, maxsize=nb)
-        newbuf.size = 0 # reset the write pointer to the beginning
+        newbuf.size = newbuf.offset # reset the write pointer to the beginning
         nread = try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -932,7 +953,8 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         finally
             s.buffer = sbuf
         end
-        compact(newbuf)
+        _take!(a, _unsafe_take!(newbuf))
+        length(a) >= initsize || resize!(a, initsize)
     end
     iolock_end()
     return nread
@@ -970,7 +992,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
         unsafe_read(sbuf, p, nb)
     else
         newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), maxsize=Int(nb))
-        newbuf.size = 0 # reset the write pointer to the beginning
+        newbuf.size = newbuf.offset # reset the write pointer to the beginning
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -1007,7 +1029,7 @@ function readavailable(this::LibuvStream)
     return bytes
 end
 
-function readuntil(x::LibuvStream, c::UInt8; keep::Bool=false)
+function copyuntil(out::IO, x::LibuvStream, c::UInt8; keep::Bool=false)
     iolock_begin()
     buf = x.buffer
     @assert buf.seekable == false
@@ -1037,9 +1059,9 @@ function readuntil(x::LibuvStream, c::UInt8; keep::Bool=false)
             end
         end
     end
-    bytes = readuntil(buf, c, keep=keep)
+    copyuntil(out, buf, c; keep)
     iolock_end()
-    return bytes
+    return out
 end
 
 uv_write(s::LibuvStream, p::Vector{UInt8}) = GC.@preserve p uv_write(s, pointer(p), UInt(sizeof(p)))
@@ -1052,17 +1074,19 @@ function uv_write(s::LibuvStream, p::Ptr{UInt8}, n::UInt)
     sigatomic_begin()
     uv_req_set_data(uvw, ct)
     iolock_end()
-    status = try
+    local status
+    try
         sigatomic_end()
         # wait for the last chunk to complete (or error)
         # assume that any errors would be sticky,
         # (so we don't need to monitor the error status of the intermediate writes)
-        wait()::Cint
+        status = wait()::Cint
+        sigatomic_begin()
     finally
         # try-finally unwinds the sigatomic level, so need to repeat sigatomic_end
         sigatomic_end()
         iolock_begin()
-        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
+        q = ct.queue; q === nothing || Base.list_deletefirst!(q::IntrusiveLinkedList{Task}, ct)
         if uv_req_data(uvw) != C_NULL
             # uvw is still alive,
             # so make sure we won't get spurious notifications later
@@ -1285,7 +1309,7 @@ the pipe.
 
 !!! note
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
-    `Pipe`, socket, or `devnull`.
+    [`Pipe`](@ref), socket, or `devnull`.
 
 See also [`redirect_stdio`](@ref).
 """
@@ -1298,7 +1322,7 @@ Like [`redirect_stdout`](@ref), but for [`stderr`](@ref).
 
 !!! note
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
-    `Pipe`, socket, or `devnull`.
+    [`Pipe`](@ref), socket, or `devnull`.
 
 See also [`redirect_stdio`](@ref).
 """
@@ -1312,7 +1336,7 @@ Note that the direction of the stream is reversed.
 
 !!! note
     `stream` must be a compatible objects, such as an `IOStream`, `TTY`,
-    `Pipe`, socket, or `devnull`.
+    [`Pipe`](@ref), socket, or `devnull`.
 
 See also [`redirect_stdio`](@ref).
 """
@@ -1322,7 +1346,8 @@ redirect_stdin
     redirect_stdio(;stdin=stdin, stderr=stderr, stdout=stdout)
 
 Redirect a subset of the streams `stdin`, `stderr`, `stdout`.
-Each argument must be an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
+Each argument must be an `IOStream`, `TTY`, [`Pipe`](@ref), socket, or
+`devnull`.
 
 !!! compat "Julia 1.7"
     `redirect_stdio` requires Julia 1.7 or later.
@@ -1342,7 +1367,7 @@ call `f()` and restore each stream.
 Possible values for each stream are:
 * `nothing` indicating the stream should not be redirected.
 * `path::AbstractString` redirecting the stream to the file at `path`.
-* `io` an `IOStream`, `TTY`, `Pipe`, socket, or `devnull`.
+* `io` an `IOStream`, `TTY`, [`Pipe`](@ref), socket, or `devnull`.
 
 # Examples
 ```julia-repl
@@ -1535,6 +1560,64 @@ function wait_readnb(s::BufferStream, nb::Int)
     end
 end
 
+function readavailable(this::BufferStream)
+    bytes = lock(this.cond) do
+        wait_readnb(this, 1)
+        buf = this.buffer
+        @assert buf.seekable == false
+        take!(buf)
+    end
+    return bytes
+end
+
+function read(stream::BufferStream)
+    bytes = lock(stream.cond) do
+        wait_close(stream)
+        take!(stream.buffer)
+    end
+    return bytes
+end
+
+function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
+    sbuf = s.buffer
+    @assert sbuf.seekable == false
+    @assert sbuf.maxsize >= nb
+
+    function wait_locked(s, buf, nb)
+        while bytesavailable(buf) < nb
+            s.readerror === nothing || throw(s.readerror)
+            isopen(s) || break
+            s.status != StatusEOF || break
+            wait_readnb(s, nb)
+        end
+    end
+
+    bytes = lock(s.cond) do
+        if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
+            wait_locked(s, sbuf, nb)
+        end
+        if bytesavailable(sbuf) >= nb
+            nread = readbytes!(sbuf, a, nb)
+        else
+            initsize = length(a)
+            newbuf = PipeBuffer(a, maxsize=nb)
+            newbuf.size = newbuf.offset # reset the write pointer to the beginning
+            nread = try
+                s.buffer = newbuf
+                write(newbuf, sbuf)
+                wait_locked(s, newbuf, nb)
+                bytesavailable(newbuf)
+            finally
+                s.buffer = sbuf
+            end
+            _take!(a, _unsafe_take!(newbuf))
+            length(a) >= initsize || resize!(a, initsize)
+        end
+        return nread
+    end
+    return bytes
+end
+
 show(io::IO, s::BufferStream) = print(io, "BufferStream(bytes waiting=", bytesavailable(s.buffer), ", isopen=", isopen(s), ")")
 
 function readuntil(s::BufferStream, c::UInt8; keep::Bool=false)
@@ -1590,7 +1673,7 @@ end
 
 skip(s::BufferStream, n) = skip(s.buffer, n)
 
-function reseteof(x::BufferStream)
+function reseteof(s::BufferStream)
     lock(s.cond) do
         s.status = StatusOpen
         nothing
