@@ -39,7 +39,12 @@ mutable struct Regex <: AbstractPattern
         end
         re = compile(new(pattern, compile_options, match_options, C_NULL))
         finalizer(re) do re
-            re.regex == C_NULL || PCRE.free_re(re.regex)
+            # don't free during exit because tasks may still be running and
+            # using it. Issue #57817
+            during_exit = Base._atexit_hooks_finished
+            if re.regex != C_NULL && !during_exit
+                PCRE.free_re(re.regex)
+            end
         end
         re
     end
