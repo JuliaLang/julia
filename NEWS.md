@@ -40,6 +40,8 @@ Standard library changes
 
 #### Test
 
+* Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
+
 #### InteractiveUtils
 
 External dependencies
