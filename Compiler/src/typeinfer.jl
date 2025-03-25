@@ -1371,8 +1371,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                 end
                 # additionally enqueue the ccallable entrypoint / adapter, which implicitly
                 # invokes the above ci
-                push!(codeinfos, rt)
-                push!(codeinfos, sig)
+                push!(codeinfos, item)
             end
         end
         while !isempty(tocompile)

@@ -1030,13 +1030,19 @@ end
 function isvisible(sym::Symbol, parent::Module, from::Module)
     isdeprecated(parent, sym) && return false
     isdefinedglobal(from, sym) || return false
+    isdefinedglobal(parent, sym) || return false
     parent_binding = convert(Core.Binding, GlobalRef(parent, sym))
     from_binding = convert(Core.Binding, GlobalRef(from, sym))
     while true
         from_binding === parent_binding && return true
         partition = lookup_binding_partition(tls_world_age(), from_binding)
-        is_some_imported(binding_kind(partition)) || break
+        is_some_explicit_imported(binding_kind(partition)) || break
         from_binding = partition_restriction(partition)::Core.Binding
+    end
+    parent_partition = lookup_binding_partition(tls_world_age(), parent_binding)
+    from_partition = lookup_binding_partition(tls_world_age(), from_binding)
+    if is_defined_const_binding(binding_kind(parent_partition)) && is_defined_const_binding(binding_kind(from_partition))
+        return parent_partition.restriction === from_partition.restriction
     end
     return false
 end
@@ -3405,7 +3411,7 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     if kind == PARTITION_KIND_BACKDATED_CONST
         print(io, "backdated constant binding to ")
         print(io, partition_restriction(partition))
-    elseif is_defined_const_binding(kind)
+    elseif kind == PARTITION_KIND_CONST
         print(io, "constant binding to ")
         print(io, partition_restriction(partition))
     elseif kind == PARTITION_KIND_UNDEF_CONST
@@ -3416,9 +3422,12 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "ambiguous binding - guard entry")
     elseif kind == PARTITION_KIND_DECLARED
         print(io, "weak global binding declared using `global` (implicit type Any)")
-    elseif kind == PARTITION_KIND_IMPLICIT
-        print(io, "implicit `using` from ")
+    elseif kind == PARTITION_KIND_IMPLICIT_GLOBAL
+        print(io, "implicit `using` resolved to global ")
         print(io, partition_restriction(partition).globalref)
+    elseif kind == PARTITION_KIND_IMPLICIT_CONST
+        print(io, "implicit `using` resolved to constant ")
+        print(io, partition_restriction(partition))
     elseif kind == PARTITION_KIND_EXPLICIT
         print(io, "explicit `using` from ")
         print(io, partition_restriction(partition).globalref)
@@ -3441,7 +3450,7 @@ function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
     print(io, "Binding ")
     print(io, bnd.globalref)
     if !isdefined(bnd, :partitions)
-        print(io, "No partitions")
+        print(io, " - No partitions")
     else
         partition = @atomic bnd.partitions
         while true

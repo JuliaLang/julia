@@ -775,7 +775,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                     params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                     Triple(clone.getModuleUnlocked()->getTargetTriple()));
             jl_llvm_functions_t decls;
-            if (jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
+            if (!(params.params->force_emit_all) && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
                 decls.functionObject = "jl_fptr_const_return";
             else
                 decls = jl_emit_codeinst(result_m, codeinst, src, params);
@@ -784,9 +784,12 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
         }
         else {
-            jl_value_t *sig = jl_array_ptr_ref(codeinfos, ++i);
-            assert(jl_is_type(item) && jl_is_type(sig));
-            jl_generate_ccallable(clone.getModuleUnlocked(), nullptr, item, sig, params);
+            assert(jl_is_simplevector(item));
+            jl_value_t *rt = jl_svecref(item, 0);
+            jl_value_t *sig = jl_svecref(item, 1);
+            jl_value_t *nameval = jl_svec_len(item) == 2 ? jl_nothing : jl_svecref(item, 2);
+            assert(jl_is_type(rt) && jl_is_type(sig));
+            jl_generate_ccallable(clone.getModuleUnlocked(), nameval, rt, sig, params);
         }
     }
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them

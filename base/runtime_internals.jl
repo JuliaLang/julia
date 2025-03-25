@@ -197,17 +197,18 @@ function _fieldnames(@nospecialize t)
 end
 
 # N.B.: Needs to be synced with julia.h
-const PARTITION_KIND_CONST        = 0x0
-const PARTITION_KIND_CONST_IMPORT = 0x1
-const PARTITION_KIND_GLOBAL       = 0x2
-const PARTITION_KIND_IMPLICIT     = 0x3
-const PARTITION_KIND_EXPLICIT     = 0x4
-const PARTITION_KIND_IMPORTED     = 0x5
-const PARTITION_KIND_FAILED       = 0x6
-const PARTITION_KIND_DECLARED     = 0x7
-const PARTITION_KIND_GUARD        = 0x8
-const PARTITION_KIND_UNDEF_CONST  = 0x9
-const PARTITION_KIND_BACKDATED_CONST = 0xa
+const PARTITION_KIND_CONST              = 0x0
+const PARTITION_KIND_CONST_IMPORT       = 0x1
+const PARTITION_KIND_GLOBAL             = 0x2
+const PARTITION_KIND_IMPLICIT_GLOBAL    = 0x3
+const PARTITION_KIND_IMPLICIT_CONST     = 0x4
+const PARTITION_KIND_EXPLICIT           = 0x5
+const PARTITION_KIND_IMPORTED           = 0x6
+const PARTITION_KIND_FAILED             = 0x7
+const PARTITION_KIND_DECLARED           = 0x8
+const PARTITION_KIND_GUARD              = 0x9
+const PARTITION_KIND_UNDEF_CONST        = 0xa
+const PARTITION_KIND_BACKDATED_CONST    = 0xb
 
 const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
@@ -218,9 +219,12 @@ const PARTITION_MASK_FLAG         = 0xf0
 
 const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
 
-is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_BACKDATED_CONST)
+is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
-is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_implicit(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED)
+is_some_explicit_imported(kind::UInt8) = (kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_binding_imported(kind::UInt8) = is_some_explicit_imported(kind) || kind == PARTITION_KIND_IMPLICIT_GLOBAL
 is_some_guard(kind::UInt8) = (kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_UNDEF_CONST)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
@@ -1348,6 +1352,24 @@ function MethodList(mt::Core.MethodTable)
     return MethodList(ms, mt)
 end
 
+function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodTable, mod)
+    # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
+    ms = Method[(ms[i]::Core.MethodMatch).method for i in 1:length(ms)]
+    # Remove shadowed methods with identical type signatures
+    prev = nothing
+    filter!(ms) do m
+        l = prev
+        repeated = (l isa Method && m.sig == l.sig)
+        prev = m
+        return !repeated
+    end
+    # Remove methods not part of module (after removing shadowed methods)
+    mod === nothing || filter!(ms) do m
+        return parentmodule(m) ∈ mod
+    end
+    return MethodList(ms, mt)
+end
+
 """
     methods(f, [types], [module])
 
@@ -1355,7 +1377,7 @@ Return the method table for `f`.
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
-A list of modules can also be specified as an array.
+A list of modules can also be specified as an array or set.
 
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
@@ -1363,16 +1385,11 @@ A list of modules can also be specified as an array.
 See also: [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which) and [`methodswith`](@ref Main.InteractiveUtils.methodswith).
 """
 function methods(@nospecialize(f), @nospecialize(t),
-                 mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
+                 mod::Union{Tuple{Module},AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
-    ms = Method[]
-    for m in _methods(f, t, -1, world)::Vector
-        m = m::Core.MethodMatch
-        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
-    end
-    MethodList(ms, typeof(f).name.mt)
+    ms = _methods(f, t, -1, world)::Vector{Any}
+    return matches_to_methods(ms, typeof(f).name.mt, mod)
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 
@@ -1382,12 +1399,12 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
-    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector
-    return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
+    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector{Any}
+    return matches_to_methods(ms, typeof(f).name.mt, nothing)
 end
 
 function methods(@nospecialize(f),
-                 mod::Union{Module,AbstractArray{Module},Nothing}=nothing)
+                 mod::Union{Module,AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end

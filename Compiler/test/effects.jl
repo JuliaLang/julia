@@ -1401,3 +1401,69 @@ end == Compiler.EFFECTS_UNKNOWN
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Float64])
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Int32}, Float16])
 @test !Compiler.intrinsic_nothrow(Core.Intrinsics.fpext, Any[Type{Float32}, Int16])
+
+# Float intrinsics require float arguments
+@test Base.infer_effects((Int16,)) do x
+    return Core.Intrinsics.abs_float(x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int32, Int32)) do x, y
+    return Core.Intrinsics.add_float(x, y)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int32, Int32)) do x, y
+    return Core.Intrinsics.add_float(x, y)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64, Int64, Int64)) do x, y, z
+    return Core.Intrinsics.fma_float(x, y, z)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.fptoui(UInt32, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.fptosi(Int32, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Int64,)) do x
+    return Core.Intrinsics.sitofp(Int64, x)
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((UInt64,)) do x
+    return Core.Intrinsics.uitofp(Int64, x)
+end |> !Compiler.is_nothrow
+
+# effects modeling for pointer-related intrinsics
+let effects = Base.infer_effects(Core.Intrinsics.pointerref, Tuple{Vararg{Any}})
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_inaccessiblememonly(effects)
+end
+let effects = Base.infer_effects(Core.Intrinsics.pointerset, Tuple{Vararg{Any}})
+    @test Compiler.is_consistent(effects)
+    @test !Compiler.is_effect_free(effects)
+end
+# effects modeling for atomic intrinsics
+# these functions especially need to be marked !effect_free since they imply synchronization
+for atomicfunc = Any[
+        Core.Intrinsics.atomic_pointerref,
+        Core.Intrinsics.atomic_pointerset,
+        Core.Intrinsics.atomic_pointerswap,
+        Core.Intrinsics.atomic_pointerreplace,
+        Core.Intrinsics.atomic_fence]
+    @test !Compiler.is_effect_free(Base.infer_effects(atomicfunc, Tuple{Vararg{Any}}))
+end
+
+# effects modeling for intrinsics that can do arbitrary things
+let effects = Base.infer_effects(Core.Intrinsics.llvmcall, Tuple{Vararg{Any}})
+    @test effects == Compiler.Effects()
+end
+let effects = Base.infer_effects(Core.Intrinsics.atomic_pointermodify, Tuple{Vararg{Any}})
+    @test effects == Compiler.Effects()
+end
+
+# JuliaLang/julia#57780
+let effects = Base.infer_effects(Base._unsetindex!, (MemoryRef{String},))
+    @test !Compiler.is_effect_free(effects)
+end
+
+# builtin functions that can do arbitrary things should have the top effects
+@test Base.infer_effects(Core._call_in_world_total, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(Core.invoke_in_world, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(invokelatest, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(invoke, Tuple{Vararg{Any}}) == Compiler.Effects()

@@ -1161,7 +1161,7 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 "with the module it should come from.")
             elseif kind === Base.PARTITION_KIND_GUARD
                 print(io, "\nSuggestion: check for spelling errors or missing imports.")
-            elseif Base.is_some_imported(kind)
+            elseif Base.is_some_explicit_imported(kind)
                 print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
             end
         elseif scope === :static_parameter
