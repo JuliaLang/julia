@@ -187,6 +187,7 @@ Base.ndims(g::e43296) = ndims(typeof(g))
 struct A57764{X,Y}
     x::X
     y::Y
+    A57764{X,Y}(x::X) where {X,Y} = new{X,Y}(x)
 end
 
 struct B57764{X}
@@ -195,8 +196,11 @@ end
 
 @test Compiler.valid_as_lattice(A57764{Int,Int}, true)
 @test Compiler.valid_as_lattice(A57764{<:Int,Int}, true)
-@test !Compiler.valid_as_lattice(A57764{Int,Union{}}, true)
-@test !Compiler.valid_as_lattice(A57764{<:Int,Union{}}, true)
+@test Compiler.valid_as_lattice(A57764{Int,Union{}}, true)
+@test Compiler.valid_as_lattice(A57764{<:Int,Union{}}, true)
+@test !Compiler.valid_as_lattice(A57764{Union{}, Int}, true)
+@test !Compiler.valid_as_lattice(A57764{Union{}, <:Int}, true)
+@test !Compiler.valid_as_lattice(A57764{<:Union{}, <:Int}, true)
 @test !Compiler.valid_as_lattice(B57764{Union{}}, true)
 @test !Compiler.valid_as_lattice(B57764{<:Union{}}, true)
 @test Compiler.valid_as_lattice(B57764{Int}, true)

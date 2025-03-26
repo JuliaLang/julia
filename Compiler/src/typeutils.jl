@@ -84,7 +84,7 @@ function valid_as_lattice(@nospecialize(x), astag::Bool=false)
             p isa Type || p isa TypeVar || return false
         elseif astag && isstructtype(x)
             datatype_fieldtypes(x) # force computation of has_concrete_subtype to be updated now
-            return invokelatest(has_concrete_subtype, x)::Bool
+            return has_concrete_subtype(x)
         end
         return true
     end

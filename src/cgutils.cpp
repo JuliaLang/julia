@@ -3009,7 +3009,8 @@ static MDNode *best_field_tbaa(jl_codectx_t &ctx, const jl_cgval_t &strct, jl_da
 {
     auto tbaa = strct.tbaa;
     if (tbaa == ctx.tbaa().tbaa_datatype)
-        if (byte_offset != offsetof(jl_datatype_t, types))
+        if (byte_offset != offsetof(jl_datatype_t, types) &&
+            byte_offset != offsetof(jl_datatype_t, hash) + 4) // flags
             return ctx.tbaa().tbaa_const;
     if (tbaa == ctx.tbaa().tbaa_array) {
         if (jl_is_genericmemory_type(jt)) {

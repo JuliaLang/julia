@@ -1210,7 +1210,7 @@ end
     nf = length(ftypes)
     # If no value has this type, then this statement should be unreachable.
     # Bail quickly now.
-    if !invokelatest(has_concrete_subtype, s)::Bool || nf == 0
+    if !has_concrete_subtype(s) || nf == 0
         return Bottom
     end
     if isa(name, Conditional)
