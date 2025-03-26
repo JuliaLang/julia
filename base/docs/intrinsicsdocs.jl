@@ -90,7 +90,7 @@ See also [`swapproperty!`](@ref Base.swapproperty!) and [`Core.memoryrefset!`](@
 Core.memoryrefswap!
 
 """
-    Core.memoryrefmodify!(::GenericMemoryRef, op, value, ordering::Symbol, boundscheck::Bool) -> Pair
+    Core.memoryrefmodify!(::GenericMemoryRef, op, value, ordering::Symbol, boundscheck::Bool)::Pair
 
 Atomically perform the operations to get and set a `MemoryRef` value after applying
 the function `op`.

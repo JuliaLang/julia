@@ -596,7 +596,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
 end
 
 """
-    callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, lineinfo}}
+    callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>])::Vector{Tuple{count, lineinfo}}
 
 Given a previous profiling run, determine who called a particular function. Supplying the
 filename (and optionally, range of line numbers over which the function is defined) allows

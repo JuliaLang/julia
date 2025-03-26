@@ -662,7 +662,7 @@ static void import_module(jl_task_t *ct, jl_module_t *JL_NONNULL m, jl_module_t 
     if (!jl_bkind_is_some_implicit(kind) && kind != PARTITION_KIND_DECLARED) {
         // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
         jl_walk_binding_inplace(&b, &bpart, ct->world_age);
-        if (jl_binding_kind(bpart) == PARTITION_KIND_CONST || jl_binding_kind(bpart) == PARTITION_KIND_BACKDATED_CONST || jl_binding_kind(bpart) == PARTITION_KIND_CONST_IMPORT) {
+        if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
             // Already declared (e.g. on another thread) or imported.
             if (bpart->restriction == (jl_value_t*)import)
                 return;
