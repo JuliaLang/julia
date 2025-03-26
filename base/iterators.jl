@@ -1631,12 +1631,11 @@ nth(itr::Count, n::Integer) = n > 0 ? itr.start + itr.step * (n - 1) : throw(Arg
 # Repeated
 nth(itr::Repeated, ::Integer) = itr.x
 # Take(Repeated)
-nth(itr::Take{Repeated{T}}, n::Integer) where T = begin
+nth(itr::Take{<:Repeated}, n::Integer) =
     n > itr.n ? throw(BoundsError(itr, n)) : nth(itr.xs, n)
-end
 
 # infinite cycle
-nth(itr::Cycle{I}, n::Integer) where {I} = begin
+function nth(itr::Cycle{I}, n::Integer) where {I}
     if IteratorSize(I) isa Union{HasShape, HasLength}
         _nth(itr.xs, mod1(n, length(itr.xs)))
     else
@@ -1645,7 +1644,7 @@ nth(itr::Cycle{I}, n::Integer) where {I} = begin
 end
 
 # finite cycle: in reality a Flatten{Take{Repeated{O}}} iterator
-nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O} = begin
+function nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
     if IteratorSize(O) isa Union{HasShape, HasLength}
         cycles = itr.it.n
         repeated = itr.it.xs.x
