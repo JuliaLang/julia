@@ -3330,6 +3330,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, @nospecializ
             exct = Union{exct, ConcurrencyViolationError}
         end
     end
+    ⊑ = partialorder(typeinf_lattice(interp))
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
