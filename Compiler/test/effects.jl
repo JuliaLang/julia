@@ -1461,3 +1461,9 @@ end
 let effects = Base.infer_effects(Base._unsetindex!, (MemoryRef{String},))
     @test !Compiler.is_effect_free(effects)
 end
+
+# builtin functions that can do arbitrary things should have the top effects
+@test Base.infer_effects(Core._call_in_world_total, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(Core.invoke_in_world, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(invokelatest, Tuple{Vararg{Any}}) == Compiler.Effects()
+@test Base.infer_effects(invoke, Tuple{Vararg{Any}}) == Compiler.Effects()
