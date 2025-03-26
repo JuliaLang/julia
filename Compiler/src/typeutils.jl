@@ -61,9 +61,7 @@ function isknownlength(t::DataType)
     return isdefined(va, :N) && va.N isa Int
 end
 
-# n.b. often computed only after setting the type and layout fields
-# if that is the case, you may need to use `invokelatest` to observe the changes
-has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020
+has_concrete_subtype(d::DataType) = d.flags & 0x0020 == 0x0020 # n.b. often computed only after setting the type and layout fields
 
 # determine whether x is a valid lattice element
 # For example, Type{v} is not valid if v is a value
