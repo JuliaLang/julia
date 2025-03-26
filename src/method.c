@@ -84,7 +84,8 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
                                    int binding_effects, int eager_resolve)
 {
     if (jl_is_symbol(expr)) {
-        jl_error("Found raw symbol in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.");
+        jl_errorf("Found raw symbol %s in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.",
+                  jl_symbol_name((jl_sym_t*)expr));
     }
 
     if (!jl_is_expr(expr)) {
