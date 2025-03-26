@@ -245,6 +245,16 @@ function julia_cmd(julia=joinpath(Sys.BINDIR, julia_exename()); cpu_target::Unio
     if opts.use_sysimage_native_code == 0
         push!(addflags, "--sysimage-native-code=no")
     end
+    if opts.quiet == 1
+        push!(addflags, "--quiet")
+    end
+    if opts.banner == 0
+        push!(addflags, "--banner=no")
+    elseif opts.banner == 1
+        push!(addflags, "--banner=yes")
+    elseif opts.banner == 2
+        push!(addflags, "--banner=short")
+    end
     return `$julia -C $cpu_target -J$image_file $addflags`
 end
 
