@@ -1027,3 +1027,8 @@ module TurnedIntoExplicit
 
     @test !occursin("jl_apply_generic", get_llvm(f, Tuple{UInt}))
 end
+
+# Test codegen for `isdefinedglobal` of constant (#57872)
+const x57872 = "Hello"
+f57872() = (Core.isdefinedglobal(@__MODULE__, Base.compilerbarrier(:const, :x57872)), x57872) # Extra globalref here to force world age bounds
+@test f57872() == (true, "Hello")
