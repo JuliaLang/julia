@@ -505,7 +505,7 @@ _prevpow2(x::Unsigned) = one(x) << unsigned(top_set_bit(x)-1)
 _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) : _prevpow2(unsigned(x)))
 
 """
-    ispow2(n::Number) -> Bool
+    ispow2(n::Number)::Bool
 
 Test whether `n` is an integer power of two.
 
@@ -1062,7 +1062,7 @@ function digits(T::Type{<:Integer}, n::Integer; base::Integer = 10, pad::Integer
 end
 
 """
-    hastypemax(T::Type) -> Bool
+    hastypemax(T::Type)::Bool
 
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """

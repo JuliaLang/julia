@@ -159,7 +159,7 @@ if false
 end
 
 """
-    time_ns() -> UInt64
+    time_ns()::UInt64
 
 Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
 between two moments in time.

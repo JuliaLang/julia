@@ -898,7 +898,7 @@ end
 ldexp(x::Float16, q::Integer) = Float16(ldexp(Float32(x), q))
 
 """
-    exponent(x::Real) -> Int
+    exponent(x::Real)::Int
 
 Return the largest integer `y` such that `2^y ≤ abs(x)`.
 For a normalized floating-point number `x`, this corresponds to the exponent of `x`.

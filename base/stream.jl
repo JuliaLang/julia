@@ -316,7 +316,7 @@ function init_stdio(handle::Ptr{Cvoid})
 end
 
 """
-    open(fd::OS_HANDLE) -> IO
+    open(fd::OS_HANDLE)::IO
 
 Take a raw file descriptor wrap it in a Julia-aware IO type,
 and take ownership of the fd handle.

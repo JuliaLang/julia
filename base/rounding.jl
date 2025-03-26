@@ -294,7 +294,7 @@ end
 # Default definitions
 
 """
-    set_zero_subnormals(yes::Bool) -> Bool
+    set_zero_subnormals(yes::Bool)::Bool
 
 If `yes` is `false`, subsequent floating-point operations follow rules for IEEE arithmetic
 on subnormal values ("denormals"). Otherwise, floating-point operations are permitted (but
@@ -311,7 +311,7 @@ break identities such as `(x-y==0) == (x==y)`.
 set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
 
 """
-    get_zero_subnormals() -> Bool
+    get_zero_subnormals()::Bool
 
 Return `false` if operations on subnormal floating-point values ("denormals") obey rules
 for IEEE arithmetic, and `true` if they might be converted to zeros.
