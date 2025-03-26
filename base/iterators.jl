@@ -1661,21 +1661,19 @@ end
     nth(n::Integer)
 
 Return a function that gets the `n`-th element from any iterator passed to it.
-Throw a `BoundsError`[@ref] if not existing.
-
-Fixes the second element. Equivalent to `Base.Fix2(nth, n)`.
-Will advance any `Stateful`[@ref] iterator.
+Equivalent to `Base.Fix2(nth, n)` or `itr -> nth(itr, n)`.
 
 See also: [`nth`](@ref), [`Base.Fix2`](@ref)
 # Examples
 ```jldoctest
 julia> fifth_element = Iterators.nth(5)
-(::Base.Fix2{typeof(nth), Int64}) (generic function with 1 method)
+(::Base.Fix2{typeof(Base.Iterators.nth), Int64}) (generic function with 2 methods)
 
 julia> fifth_element(reshape(1:30, (5,6)))
 5
 
-julia> map(Iterators.nth(3), my_vec)
+julia> map(fifth_element, ("Willis", "Jovovich", "Oldman"))
+('i', 'v', 'a')
 ```
 """
 nth(n::Integer) = Base.Fix2(nth, n)
