@@ -63,6 +63,53 @@ let deepthought(x, y) = 42
     end
 end
 
+# kwargs for @assert (issue #57503)
+@testset "@asert kwargs" begin
+    @test_throws AssertionError (@assert 1 ≈ 2 atol = 0.1)
+    @test_throws AssertionError (@assert 1 ≈ 2 "a message" atol = 0.1)
+    @test_throws AssertionError (@assert 1 ≈ 2 atol = 0.1 "a message")
+    @test_throws AssertionError (@assert 1 ≈ 2 rtol = 0.1 "a message")
+    @test_throws AssertionError (@assert 1 ≈ 2 rtol = 0.1 "a message")
+    @test_throws AssertionError (@assert 1 ≈ 2 rtol = 0.1 atol = 0.1 "a message")
+    @test_throws MethodError (@assert 1 == 2 rtol = 0.1  "a message")
+
+    # @assert only uses the first message string
+    let
+        try
+            @assert 1 ≈ 2 atol = 0.1 "this is a test" "this is another test"
+            error("unexpected")
+        catch ex
+            @test isa(ex, AssertionError)
+            @test ex.msg == "this is a test"
+        end
+    end
+    # @assert calls string() on second argument
+    let
+        try
+            @assert 1 ≈ 2 atol = 0.1 :random_object
+            error("unexpected")
+        catch ex
+            @test isa(ex, AssertionError)
+            @test !occursin("1 == 2", ex.msg)
+            @test occursin("random_object", ex.msg)
+        end
+    end
+    # if the second argument is an expression, c
+    let deepthought(x, y) = 42
+        try
+            @assert 1 ≈ 2 atol = 0.1 string(
+                "the answer to the ultimate question: ",
+                deepthought(6, 9)
+            )
+            error("unexpected")
+        catch ex
+            @test isa(ex, AssertionError)
+            @test ex.msg == "the answer to the ultimate question: 42"
+        end
+    end
+end
+
+
 let # test the process title functions, issue #9957
     oldtitle = Sys.get_process_title()
     Sys.set_process_title("julia0x1")

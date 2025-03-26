@@ -203,6 +203,26 @@ windowserror(p, code::UInt32=Libc.GetLastError(); extrainfo=nothing) = throw(Mai
 
 ## assertion macro ##
 
+# assert_expr! is modeled after test_expr!
+"""
+    assert_expr!(ex, kws...)
+
+Preprocess assert expressions of function calls with trailing keyword arguments
+so that e.g. `@assert a ≈ b atol=ε` means `@assert ≈(a, b, atol=ε)`.
+"""
+assert_expr!(m, ex) = ex
+
+function assert_expr!(m, ex, kws...)
+    ex isa Expr && ex.head === :call || @goto fail
+    for kw in kws
+        kw isa Expr && kw.head === :(=) || @goto fail
+        kw.head = :kw
+        push!(ex.args, kw)
+    end
+    return ex
+    @label fail
+    error("invalid assert macro call: $m $ex $(join(kws, " "))")
+end
 
 """
     @assert cond [text]
@@ -227,11 +247,16 @@ ERROR: AssertionError: 3 is an odd number!
 julia> @assert isodd(3) "What even are numbers?"
 ```
 """
-macro assert(ex, msgs...)
-    msg = isempty(msgs) ? ex : msgs[1]
+macro assert(ex, args...)
+
+    aargs = filter(e -> !Meta.isexpr(e, :(=)), args)
+    aakws = filter(e -> Meta.isexpr(e, :(=)), args)
+
+    msg = isempty(aargs) ? ex : first(aargs)
+
     if isa(msg, AbstractString)
         msg = msg # pass-through
-    elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
+    elseif !isempty(aargs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
         # N.B. To reduce the risk of invalidation caused by the complex callstack involved
         # with `string`, use `inferencebarrier` here to hide this `string` from the compiler.
@@ -240,8 +265,9 @@ macro assert(ex, msgs...)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(_assert_tostring($(Expr(:quote,msg))))
+        msg = :(_assert_tostring($(Expr(:quote, msg))))
     end
+    ex = assert_expr!("@assert", ex, aakws...)
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
 
