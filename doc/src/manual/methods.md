@@ -587,12 +587,13 @@ In the example above, we see that the "current world" (in which the method `newf
 is one greater than the task-local "runtime world" that was fixed when the execution of `tryeval` started.
 
 Sometimes it is necessary to get around this (for example, if you are implementing the above REPL).
-Fortunately, there is an easy solution: call the function using [`Base.invokelatest`](@ref):
+Fortunately, there is an easy solution: call the function using [`Base.invokelatest`](@ref) or
+the macro version [`Base.@invokelatest`](@ref):
 
 ```jldoctest
 julia> function tryeval2()
            @eval newfun2() = 2
-           Base.invokelatest(newfun2)
+           @invokelatest newfun2()
        end
 tryeval2 (generic function with 1 method)
 
@@ -614,7 +615,7 @@ Start some other operations that use `f(x)`:
 julia> g(x) = f(x)
 g (generic function with 1 method)
 
-julia> t = Threads.@spawn f(wait()); yield();
+julia> t = @async f(wait()); yield();
 ```
 
 Now we add some new methods to `f(x)`:
@@ -639,7 +640,7 @@ julia> g(1)
 julia> fetch(schedule(t, 1))
 "original definition"
 
-julia> t = Threads.@spawn f(wait()); yield();
+julia> t = @async f(wait()); yield();
 
 julia> fetch(schedule(t, 1))
 "definition for Int"
@@ -1001,13 +1002,13 @@ there is a terse syntax form. In the function body, `p` will refer to the object
 called. A `Polynomial` can be used as follows:
 
 ```jldoctest polynomial
-julia> p = Polynomial([1,10,100])
+julia> poly = Polynomial([1,10,100])
 Polynomial{Int64}([1, 10, 100])
 
-julia> p(3)
+julia> poly(3)
 931
 
-julia> p()
+julia> poly()
 2551
 ```
 

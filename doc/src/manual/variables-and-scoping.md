@@ -730,65 +730,28 @@ Note that `const` only affects the variable binding; the variable may be bound t
 object (such as an array), and that object may still be modified. Additionally when one tries
 to assign a value to a variable that is declared constant the following scenarios are possible:
 
-* if a new value has a different type than the type of the constant then an error is thrown:
+* Attempting to replace a constant without the const `keyword` is disallowed:
 ```jldoctest
 julia> const x = 1.0
 1.0
 
 julia> x = 1
-ERROR: invalid redefinition of constant x
+ERROR: invalid assignment to constant x. This redefinition may be permitted using the `const` keyword.
 ```
-* if a new value has the same type as the constant then a warning is printed:
+* All other defefinitions of constants are permitted, but may cause significant re-compilation:
 ```jldoctest
 julia> const y = 1.0
 1.0
 
 julia> const y = 2.0
-WARNING: redefinition of constant y. This may fail, cause incorrect answers, or produce other errors.
 2.0
 ```
-* if an assignment would not result in the change of variable value no message is given:
-```jldoctest
-julia> const z = 100
-100
 
-julia> z = 100
-100
-```
-* if an assignment would change the mutable object to which the variable points (regardless of whether those two objects are deeply equal), a warning is printed:
-```jldoctest
-julia> const a = [1]
-1-element Vector{Int64}:
- 1
-
-julia> const a = [1]
-WARNING: redefinition of constant a. This may fail, cause incorrect answers, or produce other errors.
-1-element Vector{Int64}:
- 1
-```
-
-Note that although sometimes possible, changing the value of a `const` variable is strongly
-discouraged, and is intended only for convenience during interactive use. Changing constants can
-cause various problems or unexpected behaviors. For instance, if a method references a constant and
-is already compiled before the constant is changed, then it might keep using the old value:
-
-```jldoctest
-julia> const x = 1
-1
-
-julia> f() = x
-f (generic function with 1 method)
-
-julia> f()
-1
-
-julia> const x = 2
-WARNING: redefinition of constant x. This may fail, cause incorrect answers, or produce other errors.
-2
-
-julia> f()
-1
-```
+!!! compat "Julia 1.12"
+    Prior to julia 1.12, redefinition of constants was poorly supported. It was restricted to
+    redefinition of constants of the same type and could lead to observably incorrect behavior
+    or crashes. Constant redefinition is highly discouraged in versions of julia prior to 1.12.
+    See the manual for prior julia versions for further information.
 
 ## [Typed Globals](@id man-typed-globals)
 

@@ -147,11 +147,11 @@ promote_rule(::Type{<:AnnotatedString}, ::Type{<:AbstractString}) = AnnotatedStr
 
 ## AbstractString interface ##
 
-ncodeunits(s::AnnotatedString) = ncodeunits(s.string)
+ncodeunits(s::AnnotatedString) = ncodeunits(s.string)::Int
 codeunits(s::AnnotatedString) = codeunits(s.string)
 codeunit(s::AnnotatedString) = codeunit(s.string)
 codeunit(s::AnnotatedString, i::Integer) = codeunit(s.string, i)
-isvalid(s::AnnotatedString, i::Integer) = isvalid(s.string, i)
+isvalid(s::AnnotatedString, i::Integer) = isvalid(s.string, i)::Bool
 @propagate_inbounds iterate(s::AnnotatedString, i::Integer=firstindex(s)) =
     if i <= lastindex(s.string); (s[i], nextind(s, i)) end
 eltype(::Type{<:AnnotatedString{S}}) where {S} = AnnotatedChar{eltype(S)}
@@ -410,7 +410,7 @@ annotations(s::SubString{<:AnnotatedString}, pos::UnitRange{<:Integer}) =
     annotations(s.string, first(pos)+s.offset:last(pos)+s.offset)
 
 """
-    annotations(chr::AnnotatedChar) -> Vector{$Annotation}
+    annotations(chr::AnnotatedChar)::Vector{$Annotation}
 
 Get all annotations of `chr`, in the form of a vector of annotation pairs.
 """

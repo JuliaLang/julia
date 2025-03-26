@@ -1118,6 +1118,41 @@ normally), [`close(f)`](@ref) will be executed. If the `try` block exits due to 
 the exception will continue propagating. A `catch` block may be combined with `try` and
 `finally` as well. In this case the `finally` block will run after `catch` has handled
 the error.
+
+When evaluating a `try/catch/else/finally` expression, the value of the entire
+expression is the value of the last block executed, excluding the `finally`
+block. For example:
+
+```jldoctest
+julia> try
+           1
+       finally
+           2
+       end
+1
+
+julia> try
+           error("")
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+1
+
+julia> try
+           0
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+2
+```
 """
 kw"finally"
 
@@ -1905,7 +1940,7 @@ recurses infinitely.
 StackOverflowError
 
 """
-    nfields(x) -> Int
+    nfields(x)::Int
 
 Get the number of fields in the given object.
 
@@ -2007,7 +2042,7 @@ to let `InterruptException` be thrown by CTRL+C during the execution.
 InterruptException
 
 """
-    applicable(f, args...) -> Bool
+    applicable(f, args...)::Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
 
@@ -2105,7 +2140,7 @@ Integer
 invoke
 
 """
-    isa(x, type) -> Bool
+    isa(x, type)::Bool
 
 Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
 `x isa type`.
@@ -2398,7 +2433,7 @@ iteration over characters.
 Symbol
 
 """
-    Symbol(x...) -> Symbol
+    Symbol(x...)::Symbol
 
 Create a [`Symbol`](@ref) by concatenating the string representations of the arguments together.
 
@@ -2511,8 +2546,8 @@ Atomically perform the operations to simultaneously get and set a field:
 swapfield!
 
 """
-    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
-    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol])::Pair
+    modifyfield!(value, i::Int, op, x, [order::Symbol])::Pair
 
 Atomically perform the operations to get and set a field after applying
 the function `op`.
@@ -2678,7 +2713,7 @@ See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
 swapglobal!
 
 """
-    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic]) -> Pair
+    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic])::Pair
 
 Atomically perform the operations to get and set a global after applying
 the function `op`.
@@ -2754,6 +2789,9 @@ compatible with the stores to that location. Otherwise, if not declared as
 
 To test whether an array element is defined, use [`isassigned`](@ref) instead.
 
+The global variable variant is supported for compatibility with older julia
+releases. For new code, prefer [`isdefinedglobal`](@ref).
+
 See also [`@isdefined`](@ref).
 
 # Examples
@@ -2780,6 +2818,37 @@ false
 ```
 """
 isdefined
+
+
+"""
+    isdefinedglobal(m::Module, s::Symbol, [allow_import::Bool=true, [order::Symbol=:unordered]])
+
+Tests whether a global variable `s` is defined in module `m` (in the current world age).
+A variable is considered defined if and only if a value may be read from this global variable
+and an access will not throw. This includes both constants and global variables that have
+a value set.
+
+If `allow_import` is `false`, the global variable must be defined inside `m`
+and may not be imported from another module.
+
+See also [`@isdefined`](@ref).
+
+# Examples
+```jldoctest
+julia> isdefinedglobal(Base, :sum)
+true
+
+julia> isdefinedglobal(Base, :NonExistentMethod)
+false
+
+julia> isdefinedglobal(Base, :sum, false)
+true
+
+julia> isdefinedglobal(Main, :sum, false)
+false
+```
+"""
+isdefinedglobal
 
 """
     Memory{T}(undef, n)

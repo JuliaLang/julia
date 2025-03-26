@@ -79,10 +79,12 @@ julia> Base.length
 length (generic function with 79 methods)
 ```
 
-However, if you try to redefine a built-in constant or function already in use, Julia will give
-you an error:
+However, if you try to redefine a built-in constant or function that you
+have explicitly imported, Julia will give you an error:
 
 ```jldoctest
+julia> using Base: pi, sqrt
+
 julia> pi
 π = 3.1415926535897...
 
@@ -95,6 +97,10 @@ julia> sqrt(100)
 julia> sqrt = 4
 ERROR: cannot assign a value to imported variable Base.sqrt from module Main
 ```
+
+!!! compat "Julia 1.12"
+  Note that in versions prior to Julia 1.12, these errors depended on *use* rather than definition of
+  the conflicting binding.
 
 ## [Allowed Variable Names](@id man-allowed-variable-names)
 

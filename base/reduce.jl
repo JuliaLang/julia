@@ -1110,7 +1110,7 @@ argmin(itr) = findmin(itr)[2]
 _bool(f) = x->f(x)::Bool
 
 """
-    count([f=identity,] itr; init=0) -> Integer
+    count([f=identity,] itr; init=0)::Integer
 
 Count the number of elements in `itr` for which the function `f` returns `true`.
 If `f` is omitted, count the number of `true` elements in `itr` (which
@@ -1154,4 +1154,11 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
         n = (n + x[i]) % T
     end
     return n
+end
+
+# A few common reductions for ranges with init specified
+for (fred, f) in ((maximum, max), (minimum, min), (sum, add_sum))
+    @eval function _foldl_impl(op::typeof(BottomRF($f)), init, r::AbstractRange)
+        isempty(r) ? init : op(init, $fred(r))
+    end
 end

@@ -155,6 +155,20 @@ end
 @test z == 10
 end
 
+@testset "@profile no scope" begin
+    @profile no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    @profile_walltime no_scope_57858_1 = 1
+    @test @isdefined no_scope_57858_1
+    Profile.clear()
+
+    Profile.Allocs.@profile no_scope_57858_2 = 1
+    @test @isdefined no_scope_57858_2
+    Profile.Allocs.clear()
+end
+
 @testset "setting sample count and delay in init" begin
     n_, delay_ = Profile.init()
     n_original = n_
@@ -344,6 +358,8 @@ end
     @test only(node.down).first == lidict[8]
 end
 
+# FIXME: Issue #57103: heap snapshots are currently not supported in MMTk
+@static if Base.USING_STOCK_GC
 @testset "HeapSnapshot" begin
     tmpdir = mktempdir()
 
@@ -373,6 +389,7 @@ end
 
     rm(fname)
     rm(tmpdir, force = true, recursive = true)
+end
 end
 
 @testset "PageProfile" begin
