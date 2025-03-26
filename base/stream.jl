@@ -944,7 +944,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
     else
         initsize = length(a)
         newbuf = PipeBuffer(a, maxsize=nb)
-        newbuf.size = newbuf.offset # reset the write pointer to the beginning
+        newbuf.size = get_offset(newbuf) # reset the write pointer to the beginning
         nread = try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -992,7 +992,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
         unsafe_read(sbuf, p, nb)
     else
         newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), maxsize=Int(nb))
-        newbuf.size = newbuf.offset # reset the write pointer to the beginning
+        newbuf.size = get_offset(newbuf) # reset the write pointer to the beginning
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -1601,7 +1601,7 @@ function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
         else
             initsize = length(a)
             newbuf = PipeBuffer(a, maxsize=nb)
-            newbuf.size = newbuf.offset # reset the write pointer to the beginning
+            newbuf.size = get_offset(newbuf) # reset the write pointer to the beginning
             nread = try
                 s.buffer = newbuf
                 write(newbuf, sbuf)

@@ -358,6 +358,29 @@ end
     @test take!(buf) == b"abcd\0\0\0"
 end
 
+@testset "Position of compactable buffer" begin
+    # Set maxsize, because otherwise compaction it too hard to reason about,
+    # and this test will be brittle
+    io = Base.GenericIOBuffer(Memory{UInt8}(), true, true, false, true, 100)
+    write(io, "abcd")
+    read(io, UInt16)
+    @test position(io) == 2
+    write(io, "abcde"^80)
+    @test position(io) == 2
+    read(io, 60)
+    @test position(io) == 62
+    mark(io)
+    # Trigger compaction
+    write(io, rand(UInt8, 50))
+    @test position(io) == 62
+    v1 = read(io, 20)
+    @test position(io) == 82
+    @test reset(io) == 62
+    @test position(io) == 62
+    v2 = read(io, 20)
+    @test v1 == v2
+end
+
 @testset "PipeBuffer" begin
     io = new_unseekable_buffer()
     @test_throws EOFError read(io,UInt8)
@@ -407,7 +430,6 @@ end
         end
         rm(fname)
     end
-
 end
 
 @testset "issue 5453" begin

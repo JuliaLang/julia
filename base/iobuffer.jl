@@ -8,18 +8,18 @@
 # a write operation happens.
 
 #   .....uuuuuuuuuuuuuXXXXXXXXXXXXX------------
-#   |   |            |           |            |    |
-#   |   offset       ptr         size         |    maxsize (≥ lastindex)
+#   |   |            |            |           |    |
+#   |   offset       ptr         size         |    maxsize
 #   1                                         lastindex(data)
 
-# N.B: `mark` does not correspond to any index in the buffer, but is instead equal
-# to position (== io.offset + io.ptr - 1) at the time it is set.
+# N.B: `mark` does not correspond to any index in the buffer. Instead, it stores
+# the mark at virtual offset in the buffer.
 
 #            AFTER COMPACTION
 
 #   uuuuuXXXXXXXXXXXXX---------------------
 #  ||    |           |                    |    |
-#  |1    ptr         size                 |    maxsize (≥ lastindex)
+#  |1    ptr         size                 |    maxsize
 #  |                                      lastindex(data)
 #  offset (set to zero)
 
@@ -67,19 +67,26 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # This value is always in offset + 1 : size+1
     ptr::Int
 
-    # This is used when seeking. seek(io, 0) results in ptr == offset.
-    # The offset is needed because, if a buffer is instantiated from a Vector with a non-zero
-    # memory offset, the start of the vector, and thus the start of data, does not correspond
-    # to the start of its underlying memory.
-    # Once the offset is set to zero, it will never be set to nonzero.
-    # This is always in 0:lastindex(data)
-    offset::Int
+    # This field has two distinct meanings:
+    # If the value is positive, it encodes an offset of the start of the data in `data`.
+    # This is used if the buffer is instantiated from a Vector with non-zero memory offet.
+    # Then, the IOBuffer stores the underlying memory, and so the first data in the buffer
+    # is not at index 1.
+    # If the value is negative, then `-io.offset_or_compacted` gets the number of compacted
+    # bytes. That's the number of unused bytes deleted from a non-seekable stream to make space.
+    # We need to keep track of it in order to make `mark` and `position` etc work, that is,
+    # we need to know the virtual position of the mark even when an arbitrary number
+    # of unused bytes has been deleted due to compaction.
+    # Since compaction will move data in the buffer and thereby zero the offset, either the
+    # offset or the number of compacted bytes will be zero at any point, so both can be
+    # stored in one field.
+    # If offset: Value is always in 0:lastindex(data)
+    # If compacted: Value is in typemin(Int):0
+    offset_or_compacted::Int
 
-    # mark is the position (as given by `position`, i.e. io.ptr - io.offset - 1)
-    # which can be seeked back using `reset`, even for non-seekable buffers.
-    # For non-seekable buffers that can be compacted, data before the mark can be
-    # destroyed.
-    # This value is always in -1 : size - offset
+    # The mark is -1 if offset, else the zero-indexed virtual position of ptr in the buffer.
+    # Due to compaction, this value does not correspond to any actual index in the buffer.
+    # This value is in -1:typemax(Int)
     mark::Int
 
     # Unsafe constructor which does not do any checking
@@ -137,9 +144,12 @@ function GenericIOBuffer(data::Vector{UInt8}, readable::Bool, writable::Bool, se
     buf = _new_generic_iobuffer(Memory{UInt8}, mem, readable, writable, seekable, append, mz)
     buf.size = length(data) + offset
     buf.ptr = offset + 1
-    buf.offset = offset
+    buf.offset_or_compacted = offset
     return buf
 end
+
+get_offset(io::GenericIOBuffer) = max(0, io.offset_or_compacted)
+get_compacted(io::GenericIOBuffer) = max(0, -io.offset_or_compacted)
 
 # allocate Vector{UInt8}s for IOBuffer storage that can efficiently become Strings
 StringMemory(n::Integer) = unsafe_wrap(Memory{UInt8}, _string_n(n))
@@ -218,7 +228,7 @@ function IOBuffer(
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
     buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, maxsize)
     if flags.truncate
-        buf.size = buf.offset
+        buf.size = buf.offset_or_compacted
     end
     return buf
 end
@@ -280,13 +290,15 @@ function copy(b::GenericIOBuffer{T}) where T
         # Else, we just copy the reachable bytes. If buffer is seekable, all bytes
         # after offset are reachable, since they can be seeked to
         used_span = get_used_span(b)
+        compacted = first(used_span) - get_offset(b) - 1
         len = length(used_span)
         data = copyto!(_similar_data(b, len), view(b.data, used_span))
         ret = typeof(b)(data, b.readable, b.writable, b.seekable, b.append, b.maxsize)
         ret.size = len
-        ret.offset = 0
+        # Copying data over implicitly compacts, and may add compaction
+        ret.offset_or_compacted = -get_compacted(b) - compacted
         ret.ptr = b.ptr - first(used_span) + 1
-        ret.mark = b.mark < 0 ? -1 : (b.mark - first(used_span) + 1)
+        ret.mark = b.mark
         return ret
     else
         # When the buffer is just readable, they can share the same data, so we just make
@@ -294,7 +306,7 @@ function copy(b::GenericIOBuffer{T}) where T
         # Use internal constructor because we want to allow b.maxsize to be larger than data,
         # in case that is the case for `b`.
         ret = _new_generic_iobuffer(T, b.data, b.readable, b.writable, b.seekable, b.append, b.maxsize)
-        ret.offset = b.offset
+        ret.offset_or_compacted = b.offset_or_compacted
         ret.ptr = b.ptr
         ret.mark = b.mark
         return ret
@@ -306,10 +318,10 @@ show(io::IO, b::GenericIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
                                       "writable=", b.writable, ", ",
                                       "seekable=", b.seekable, ", ",
                                       "append=",   b.append, ", ",
-                                      "size=",     b.size - b.offset, ", ",
+                                      "size=",     b.size - get_offset(b), ", ",
                                       "maxsize=",  b.maxsize == typemax(Int) ? "Inf" : b.maxsize, ", ",
-                                      "ptr=",      b.ptr - b.offset, ", ",
-                                      "mark=",     b.mark, ")")
+                                      "ptr=",      b.ptr - get_offset(b), ", ",
+                                      "mark=",     position(b), ")")
 
 @noinline function _throw_not_readable()
     # See https://github.com/JuliaLang/julia/issues/29688.
@@ -431,14 +443,16 @@ isreadable(io::GenericIOBuffer) = io.readable
 iswritable(io::GenericIOBuffer) = io.writable
 
 # Number of bytes that can be read from the buffer, if you seek to the start first.
-filesize(io::GenericIOBuffer) = (io.seekable ? io.size - io.offset : bytesavailable(io))
+filesize(io::GenericIOBuffer) = (io.seekable ? io.size - get_offset(io) : bytesavailable(io))
 
 # Number of bytes that can be read from the buffer.
 bytesavailable(io::GenericIOBuffer) = io.size - io.ptr + 1
 
-# Position is zero-indexed, but ptr is one-indexed, hence the -1
 # TODO: Document that position for an unmarked and unseekable stream is invalid (and make it error?)
-position(io::GenericIOBuffer) = io.ptr - io.offset - 1
+function position(io::GenericIOBuffer)
+    # Position is zero-indexed, but ptr is one-indexed, hence the -1
+    io.ptr - io.offset_or_compacted - 1
+end
 
 function skip(io::GenericIOBuffer, n::Integer)
     skip(io, clamp(n, Int))
@@ -465,16 +479,29 @@ function seek(io::GenericIOBuffer, n::Integer)
     seek(io, clamp(n, Int))
 end
 
+function translate_seek_position(io::GenericIOBuffer, n::Int)
+    # If there is an offset (the field F is positive), then there are F unused bytes at the beginning
+    # of the data, and we need to seek to n + F + 1. (Also compensate for `seek` being zero-
+    # indexed)
+
+    # If bytes has been compacted (field F is negative), then F bytes has been deleted from
+    # the buffer, and a virtual position n means a position n + F in the data.
+    # Remember that F is negative, so n + F is subtracting from n. So we also end up with
+    # n + F + 1.
+    clamp(widen(n) + widen(io.offset_or_compacted) + widen(1), Int)
+end
+
 function seek(io::GenericIOBuffer, n::Int)
     if !io.seekable
         ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
         n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
     end
+
     # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
     #       of an GenericIOBuffer), so that would need to be fixed in order to throw an error here
-    #(n < 0 || n > io.size - io.offset) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
-    #io.ptr = n + io.offset + 1
-    io.ptr = clamp(n, 0, io.size - io.offset) + io.offset + 1
+    max_ptr = io.size + 1
+    min_ptr = get_offset(io) + 1
+    io.ptr = clamp(translate_seek_position(io, n), min_ptr, max_ptr)
     return io
 end
 
@@ -495,11 +522,17 @@ function _resize!(io::GenericIOBuffer, new_size::Int, exact::Bool)
     else
         new_size = exact ? new_size : min(io.maxsize, overallocation(new_size))
         used_span = get_used_span(io)
+        deleted = first(used_span) - 1
+        compacted = deleted - get_offset(io)
         new_data = _similar_data(io, new_size)
         io.data = new_data
         iszero(new_size) && return io
         len_used = length(used_span)
         iszero(len_used) || copyto!(new_data, 1, old_data, first(used_span), len_used)
+        # Copying will implicitly compact, and so compaction must be updated
+        io.offset_or_compacted = -get_compacted(io) - compacted
+        io.ptr -= deleted
+        io.size = len_used
     end
     return io
 end
@@ -515,16 +548,23 @@ function truncate(io::GenericIOBuffer, n::Integer)
     if io.reinit
         io.data = _similar_data(io, n)
         io.reinit = false
-    elseif n > min(io.maxsize, length(io.data)) - io.offset
+    elseif n > min(io.maxsize, length(io.data)) - get_offset(io)
         # We compact because that allows us to minimize the resizing, saving memory.
         compact!(io)
         n > min(io.maxsize, length(io.data)) && _resize!(io, n, true)
     end
-    # Since mark is zero-indexed, we must also clear it if they're equal
-    ismarked(io) && io.mark >= n && (io.mark = -1)
-    io.data[io.size+1:n+io.offset] .= 0
-    io.size = n + io.offset
-    io.ptr = min(io.ptr, n+io.offset+1)
+    offset = get_offset(io)
+
+    # Fill any new data with zeros
+    io.data[io.size+1:n+offset] .= 0
+    io.size = n + offset
+    io.ptr = min(io.ptr, n+offset+1)
+
+    # Clear the mark if it points to data that has now been deleted.
+    if translate_seek_position(io, io.mark) > n+offset
+        io.mark = -1
+    end
+
     return io
 end
 
@@ -554,7 +594,7 @@ end
     io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     io.data = _similar_data(io, min(io.maxsize, nshort % Int))
     io.reinit = false
-    io.offset = 0
+    io.offset_or_compacted = -get_compacted(io)
     return io
 end
 
@@ -598,27 +638,30 @@ end
 function get_used_span(io::IOBuffer)
     # A seekable buffer can recover data before ptr
     return if io.seekable
-        io.offset + 1 : io.size
+        get_offset(io) + 1 : io.size
     # If non-seekable, the mark can be used to recover data before ptr,
     # so data at the mark and after must also be saved
     elseif io.mark > -1
-        min(io.ptr, io.mark + io.offset + 1) : io.size
+        min(io.ptr, translate_seek_position(io, io.mark)) : io.size
     else
         io.ptr : io.size
     end
 end
 
-# Return number of bytes recovered
+# Delete any offset, and also compact data if buffer is not seekable.
+# Return the number of bytes deleted
 function compact!(io::GenericIOBuffer)::Int
+    offset = get_offset(io)
     used_span = get_used_span(io)
-    offset = first(used_span) - 1
-    iszero(offset) && return 0
+    deleted = first(used_span) - 1
+    compacted = deleted - offset
+    iszero(deleted) && return 0
     data = io.data
-    copyto!(data, 1, data, offset + 1, length(used_span))
-    io.offset = 0
-    io.ptr -= offset
-    io.size -= offset
-    return offset
+    copyto!(data, 1, data, deleted + 1, length(used_span))
+    io.offset_or_compacted = -get_compacted(io) - compacted
+    io.ptr -= deleted
+    io.size -= deleted
+    return deleted
 end
 
 eof(io::GenericIOBuffer) = (io.ptr - 1 >= io.size)
@@ -639,7 +682,7 @@ end
     io.maxsize = 0
     io.ptr = 1
     io.mark = -1
-    io.offset = 0
+    io.offset_or_compacted = -get_compacted(io)
     nothing
 end
 
@@ -667,8 +710,9 @@ function take!(io::GenericIOBuffer)
         # If the buffer is seekable, then the previously consumed bytes from ptr+1:size
         # must still be output, as they are not truly gone.
         # Hence, we output all bytes from 1:io.size
-        nbytes = io.size - io.offset
-        data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
+        offset = get_offset(io)
+        nbytes = io.size - offset
+        data = copyto!(StringVector(nbytes), 1, io.data, offset + 1, nbytes)
     else
         # Else, if not seekable, bytes from 1:ptr-1 are truly gone and should not
         # be output. Hence, we output `bytesavailable`, which is ptr:size
@@ -679,7 +723,7 @@ function take!(io::GenericIOBuffer)
         io.reinit = true
         io.ptr = 1
         io.size = 0
-        io.offset = 0
+        io.offset_or_compacted = -get_compacted(io)
     end
     return data
 end
@@ -694,9 +738,9 @@ function take!(io::IOBuffer)
         if nbytes == 0 || io.reinit
             data = StringVector(0)
         elseif io.writable
-            data = wrap(Array, memoryref(io.data, io.offset + 1), nbytes)
+            data = wrap(Array, memoryref(io.data, get_offset(io) + 1), nbytes)
         else
-            data = copyto!(StringVector(nbytes), 1, io.data, io.offset + 1, nbytes)
+            data = copyto!(StringVector(nbytes), 1, io.data, get_offset(io) + 1, nbytes)
         end
     else
         nbytes = bytesavailable(io)
@@ -712,7 +756,7 @@ function take!(io::IOBuffer)
         io.reinit = true
         io.ptr = 1
         io.size = 0
-        io.offset = 0
+        io.offset_or_compacted = -get_compacted(io)
     end
     return data
 end
@@ -729,11 +773,15 @@ state.  This should only be used internally for performance-critical
 It might save an allocation compared to `take!` (if the compiler elides the
 Array allocation), as well as omits some checks.
 """
-_unsafe_take!(io::IOBuffer) =
-    wrap(Array, io.size == io.offset ?
-        memoryref(Memory{UInt8}()) :
-        memoryref(io.data, io.offset + 1),
-        io.size - io.offset)
+function _unsafe_take!(io::IOBuffer)
+    offset = get_offset(io)
+    mem = if io.size == offset
+        memoryref(Memory{UInt8}())
+    else
+        memoryref(io.data, offset + 1)
+    end
+    wrap(Array, mem, io.size - offset)
+end
 
 function write(to::IO, from::GenericIOBuffer)
     # This would cause an infinite loop, as it should read until the end, but more
@@ -872,7 +920,7 @@ function copyline(out::GenericIOBuffer, s::IO; keep::Bool=false)
         copyuntil(out, s, 0x0a, keep=true)
         line = out.data
         i = out.size
-        if keep || i == out.offset || line[i] != 0x0a
+        if keep || i == out.offset_or_compacted || line[i] != 0x0a
             return out
         elseif i < 2 || line[i-1] != 0x0d
             i -= 1
