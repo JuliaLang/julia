@@ -4253,3 +4253,10 @@ out = let
 end
 end
 @test M57574.out === M57574.A
+
+# Double import of CONST_IMPORT symbol
+module DoubleImport
+    import Test: Random
+    import Random
+end
+@test DoubleImport.Random === Test.Random
