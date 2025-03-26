@@ -492,10 +492,8 @@ function complete_path(path::AbstractString,
     end
     startpos = pos - lastindex(prefix) + 1
     Sys.iswindows() && map!(paths, paths) do c::PathCompletion
-        # emulation for unnecessarily complicated return value, since / is a
-        # perfectly acceptable path character which does not require quoting
-        # but is required by Pkg's awkward parser handling
-        return endswith(c.path, "/") ? PathCompletion(chop(c.path) * "\\\\") : c
+        # HACK: Pkg requires escaped backslashes
+        return PathCompletion(replace(c.path, "\\" => "\\\\"))
     end
     return paths, startpos:pos, success
 end
