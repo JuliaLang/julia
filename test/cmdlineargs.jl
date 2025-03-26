@@ -135,6 +135,11 @@ end
 
                             ("--pkgimages=yes", true),
                             ("--pkgimages=no",  false),
+
+                            ("--banner=auto", true),
+                            ("--banner=no", false),
+                            ("--banner=yes", false),
+                            ("--banner=short", false),
                         )
         @testset "$arg" begin
             str = arg isa Cmd ? join(arg.exec, ' ') : arg
