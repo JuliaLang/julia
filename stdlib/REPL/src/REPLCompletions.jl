@@ -305,7 +305,7 @@ complete_keyval!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeyvalCompletion, sorted_keyvals, s)
 
 function do_cmd_escape(s)
-    return Base.escape_raw_string(s, '`')
+    return Base.shell_escape_posixly(Base.escape_raw_string(s, '`'))
 end
 function do_shell_escape(s)
     return Base.shell_escape_posixly(s)
@@ -449,7 +449,7 @@ function complete_path(path::AbstractString;
     for entry in entries
         if startswith(entry.name, prefix)
             is_dir = try isdir(entry) catch ex; ex isa Base.IOError ? false : rethrow() end
-            push!(matches, is_dir ? entry.name * "/" : entry.name)
+            push!(matches, is_dir ? joinpath(entry.name, "") : entry.name)
         end
     end
 
@@ -1316,7 +1316,7 @@ function shell_completions(string, pos, hint::Bool=false; cmd_escape::Bool=false
         return ret, range, true
     elseif endswith(scs, ' ') && !endswith(scs, "\\ ")
         r = pos+1:pos
-        paths, dir, success = complete_path(""; use_envpath=false, shell_escape=true, cmd_escape)
+        paths, dir, success = complete_path(""; use_envpath=false, shell_escape=!cmd_escape)
         return paths, r, success
     elseif all(@nospecialize(arg) -> arg isa AbstractString, ex.args)
         # Join these and treat this as a path
@@ -1326,7 +1326,7 @@ function shell_completions(string, pos, hint::Bool=false; cmd_escape::Bool=false
         # Also try looking into the env path if the user wants to complete the first argument
         use_envpath = length(args.args) < 2
 
-        paths, success = complete_path_string(path, hint; use_envpath, shell_escape=true, cmd_escape)
+        paths, success = complete_path_string(path, hint; use_envpath, shell_escape=!cmd_escape)
         return paths, r, success
     end
     return Completion[], 1:0, false
@@ -1356,8 +1356,7 @@ function complete_path_string(path, hint::Bool=false;
         p
     end
 
-    paths, dir, success = complete_path(path; contract_user=expanded, shell_escape, cmd_escape, string_escape, kws...)
-    dir = dir == "" ? dir : escape(dir)
+    paths, dir, success = complete_path(path; kws...)
 
     # Expand '~' if the user hits TAB after exhausting completions (either
     # because we have found an existing file, or there is no such file).
@@ -1380,7 +1379,7 @@ function complete_path_string(path, hint::Bool=false;
 
     map!(paths) do c::PathCompletion
         p = joinpath(dir, c.path)
-        PathCompletion(p)
+        PathCompletion(escape(p))
     end
     return sort!(paths, by=p->p.path), success
 end

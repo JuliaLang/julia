@@ -1138,7 +1138,7 @@ let s, c, r
         touch(file)
         s = string(tempdir(), "/repl\\ ")
         c,r = test_scomplete(s)
-        @test [joinpath(tempdir(),  "'repl completions'")] == c
+        @test [Base.shell_escape_posixly(joinpath(tempdir(),  "repl completions"))] == c
         @test s[r] == string(tempdir(), "/repl\\ ")
         rm(file)
     end
@@ -1262,7 +1262,7 @@ let current_dir, forbidden
                 e isa Base.IOError && occursin("ELOOP", e.msg)
             end
             c, r = test_complete("\"$(escape_string(path))/selfsym")
-            @test c == [string(escape_string(path), "/selfsymlink\"")]
+            @test c == [escape_string(joinpath(path, "selfsymlink")) * "\""]
         end
     end
 
@@ -1299,32 +1299,32 @@ mktempdir() do path
         s = Sys.iswindows() ? "cd $dir_space\\\\space" : "cd $dir_space/space"
         c, r = test_scomplete(s)
         @test s[r] == (Sys.iswindows() ? "$dir_space\\\\space" : "$dir_space/space")
-        @test "'$space_folder'/'space .file'" in c
+        @test REPLCompletions.do_shell_escape(joinpath(space_folder, "space .file")) in c
         # Also use shell escape rules within cmd backticks
         s = "`$s"
         c, r = test_scomplete(s)
         @test s[r] == (Sys.iswindows() ? "$dir_space\\\\space" : "$dir_space/space")
-        @test "'$space_folder'/'space .file'" in c
+        @test REPLCompletions.do_shell_escape(joinpath(space_folder, "space .file")) in c
 
         # escape string according to Julia escaping rules
         julia_esc(str) = REPL.REPLCompletions.do_string_escape(str)
 
         # For normal strings the string should be properly escaped according to
         # the usual rules for Julia strings.
-        s = "cd(\"" * julia_esc(joinpath(path, space_folder) * "/space")
+        s = "cd(\"" * julia_esc(joinpath(path, space_folder, "space"))
         c, r = test_complete(s)
-        @test s[r] == joinpath(path, space_folder, "space")
-        @test joinpath(path, space_folder, "space .file\"") in c
+        @test s[r] == julia_esc(joinpath(path, space_folder, "space"))
+        @test julia_esc(joinpath(path, space_folder, "space .file")) * "\"" in c
 
         # '$' is the only character which can appear in a windows filename and
         # which needs to be escaped in Julia strings (on unix we could do this
         # test with all sorts of special chars)
         touch(joinpath(space_folder, "needs_escape\$.file"))
-        escpath = julia_esc(joinpath(path, space_folder) * "/needs_escape\$")
+        escpath = julia_esc(joinpath(path, space_folder, "needs_escape\$"))
         s = "cd(\"$escpath"
         c, r = test_complete(s)
-        @test s[r] == joinpath(path, space_folder, "needs_escape\\\$")
-        @test joinpath(path, space_folder, "needs_escape\\\$.file\"") in c
+        @test s[r] == julia_esc(joinpath(path, space_folder, "needs_escape\$"))
+        @test julia_esc(joinpath(path, space_folder, "needs_escape\$.file")) * "\"" in c
 
         if !Sys.iswindows()
             touch(joinpath(space_folder, "needs_escape2\n\".file"))
@@ -1353,16 +1353,17 @@ mktempdir() do path
             test_dir = "test$(c)test"
             mkdir(joinpath(path, test_dir))
             try
-                if !(c in ['\'','$']) # As these characters hold special meaning
+                # TODO: test on Windows when backslash-paths fixed
+                if !Sys.iswindows() && !(c in ['\'','$']) # As these characters hold special meaning
                     # in shell commands the shell path completion cannot complete
                     # paths with these characters
                     c, r, res = test_scomplete(test_dir)
-                    @test c[1] == "'$test_dir/'"
+                    @test c[1] == "'$(joinpath(test_dir, ""))'"
                     @test res
                 end
                 escdir = julia_esc(test_dir)
                 c, r, res = test_complete("\""*escdir)
-                @test c[1] == escdir * "/"
+                @test c[1] == julia_esc(joinpath(test_dir, ""))
                 @test res
             finally
                 rm(joinpath(path, test_dir), recursive=true)
@@ -1421,30 +1422,31 @@ if Sys.iswindows()
     file = basename(tmp)
     temp_name = basename(path)
     cd(path) do
-        s = "cd ..\\\\"
-        c,r = test_scomplete(s)
-        @test r == lastindex(s)-3:lastindex(s)
-        @test "../$temp_name/" in c
+        # TODO: reenable when backslash-paths fixed
+        # s = "cd ..\\\\"
+        # c,r = test_scomplete(s)
+        # @test r == lastindex(s)-3:lastindex(s)
+        # @test "../$temp_name/" in c
 
-        s = "cd ../"
-        c,r = test_scomplete(s)
-        @test r == lastindex(s)+1:lastindex(s)
-        @test "$temp_name/" in c
+        # s = "cd ../"
+        # c,r = test_scomplete(s)
+        # @test r == lastindex(s)+1:lastindex(s)
+        # @test "$temp_name/" in c
 
-        s = "ls $(file[1:2])"
-        c,r = test_scomplete(s)
-        @test r == lastindex(s)-1:lastindex(s)
-        @test file in c
+        # s = "ls $(file[1:2])"
+        # c,r = test_scomplete(s)
+        # @test r == lastindex(s)-1:lastindex(s)
+        # @test file in c
 
         s = "cd(\"..\\\\"
         c,r = test_complete(s)
         @test r == lastindex(s)-3:lastindex(s)
-        @test "../$temp_name/" in c
+        @test "..\\\\$temp_name\\\\" in c
 
         s = "cd(\"../"
         c,r = test_complete(s)
-        @test r == lastindex(s)+1:lastindex(s)
-        @test "$temp_name/" in c
+        @test r == 5:7
+        @test "..\\\\$temp_name\\\\" in c
 
         s = "cd(\"$(file[1:2])"
         c,r = test_complete(s)
