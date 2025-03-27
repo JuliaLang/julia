@@ -335,7 +335,7 @@ show(io::IO, b::GenericIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
                                       "size=",     b.size - get_offset(b), ", ",
                                       "maxsize=",  b.maxsize == typemax(Int) ? "Inf" : b.maxsize, ", ",
                                       "ptr=",      b.ptr - get_offset(b), ", ",
-                                      "mark=",     position(b), ")")
+                                      "mark=",     b.mark, ")")
 
 @noinline function _throw_not_readable()
     # See https://github.com/JuliaLang/julia/issues/29688.
