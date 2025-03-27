@@ -11,7 +11,7 @@ bufcontents(io::Base.GenericIOBuffer) = unsafe_string(pointer(io.data), io.size)
 # it anyway.
 # I make a new method here such that if the implementation of Base.PipeBuffer
 # changes, these tests will still work.
-new_unseekable_buffer() = Base.GenericIOBuffer(Memory{UInt8}(), true, true, false, true, typemax(Int))
+new_unseekable_buffer() = Base.GenericIOBuffer(Memory{UInt8}(), true, true, false, true, typemax(Int), false)
 
 @testset "Basic tests" begin
     @test_throws ArgumentError IOBuffer(;maxsize=-1)
@@ -361,7 +361,7 @@ end
 @testset "Position of compactable buffer" begin
     # Set maxsize, because otherwise compaction it too hard to reason about,
     # and this test will be brittle
-    io = Base.GenericIOBuffer(Memory{UInt8}(), true, true, false, true, 100)
+    io = Base.GenericIOBuffer(Memory{UInt8}(), true, true, false, true, 100, false)
     write(io, "abcd")
     read(io, UInt16)
     @test position(io) == 2
@@ -608,7 +608,7 @@ end
 
 @testset "Compacting" begin
     # Compacting works
-    buf = Base.GenericIOBuffer(UInt8[], true, true, false, true, 20)
+    buf = Base.GenericIOBuffer(UInt8[], true, true, false, true, 20, false)
     mark(buf)
     write(buf, "Hello"^5)
     reset(buf)
@@ -620,7 +620,7 @@ end
     @test String(take!(buf)) == "llo" * "Hello"^3 * "a!"
 
     # Compacting does not do anything when mark == 0
-    buf = Base.GenericIOBuffer(UInt8[], true, true, false, true, 5)
+    buf = Base.GenericIOBuffer(UInt8[], true, true, false, true, 5, false)
     mark(buf)
     write(buf, "Hello")
     reset(buf)
@@ -641,7 +641,7 @@ end
 end
 
 @testset "peek(::GenericIOBuffer)" begin
-    io = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int))
+    io = Base.GenericIOBuffer(UInt8[], true, true, false, true, typemax(Int), false)
     write(io, "こんにちは")
     @test peek(io) == 0xe3
     @test peek(io, Char) == 'こ'

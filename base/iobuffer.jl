@@ -111,40 +111,49 @@ function GenericIOBuffer{T}(
         seekable::Bool,
         append::Bool,
         maxsize::Integer,
+        truncate::Bool,
     ) where T<:AbstractVector{UInt8}
     require_one_based_indexing(data)
     mz = Int(maxsize)::Int
     len = Int(length(data))::Int
-    if mz < len
+    if !truncate && mz < len
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end
-    return _new_generic_iobuffer(T, data, readable, writable, seekable, append, mz)
+    buf = _new_generic_iobuffer(T, data, readable, writable, seekable, append, mz)
+    if truncate
+        buf.size = buf.offset_or_compacted
+    end
+    buf
 end
 
 const IOBuffer = GenericIOBuffer{Memory{UInt8}}
 
 function GenericIOBuffer(data::T, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
-                         maxsize::Integer) where T<:AbstractVector{UInt8}
-    GenericIOBuffer{T}(data, readable, writable, seekable, append, maxsize)
+                         maxsize::Integer, truncate::Bool) where T<:AbstractVector{UInt8}
+    GenericIOBuffer{T}(data, readable, writable, seekable, append, maxsize, truncate)
 end
 
 # For this method, we use the underlying Memory of the vector. Therefore, we need to set the,
 # ptr and size accordingly, so the buffer only uses the part of the memory that the vector does.
 function GenericIOBuffer(data::Vector{UInt8}, readable::Bool, writable::Bool, seekable::Bool, append::Bool,
-                         maxsize::Integer)
+                         maxsize::Integer, truncate::Bool)
     ref = data.ref
     mem = ref.mem
     offset = memoryrefoffset(ref) - 1
     # The user may pass a vector of length <= maxsize, but where the underlying memory
     # is larger than maxsize. Don't throw an error in that case.
     mz = Int(maxsize)::Int
-    if mz < length(data)
+    if !truncate && mz < length(data)
         throw(ArgumentError("maxsize must not be smaller than data length"))
     end
     buf = _new_generic_iobuffer(Memory{UInt8}, mem, readable, writable, seekable, append, mz)
-    buf.size = length(data) + offset
-    buf.ptr = offset + 1
     buf.offset_or_compacted = offset
+    buf.ptr = offset + 1
+    if truncate
+        buf.size = offset
+    else
+        buf.size = length(data) + offset
+    end
     return buf
 end
 
@@ -226,10 +235,7 @@ function IOBuffer(
         sizehint!(data, sizehint)
     end
     flags = open_flags(read=read, write=write, append=append, truncate=truncate)
-    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, maxsize)
-    if flags.truncate
-        buf.size = buf.offset_or_compacted
-    end
+    buf = GenericIOBuffer(data, flags.read, flags.write, true, flags.append, maxsize, flags.truncate)
     return buf
 end
 
@@ -272,8 +278,16 @@ If `data` is given, creates a `PipeBuffer` to operate on a data vector,
 optionally specifying a size beyond which the underlying `Array` may not be grown.
 """
 PipeBuffer(data::AbstractVector{UInt8}=Memory{UInt8}(); maxsize::Int = typemax(Int)) =
-    GenericIOBuffer(data, true, true, false, true, maxsize)
+    GenericIOBuffer(data, true, true, false, true, maxsize, false)
 PipeBuffer(maxsize::Integer) = (x = PipeBuffer(StringMemory(maxsize), maxsize = maxsize); x.size = 0; x)
+
+# Internal method where truncation IS supported
+function _truncated_pipebuffer(data::AbstractVector{UInt8}=Memory{UInt8}(); maxsize::Int = typemax(Int))
+    buf = PipeBuffer(data)
+    buf.size = get_offset(buf)
+    buf.maxsize = maxsize
+    buf
+end
 
 _similar_data(b::GenericIOBuffer, len::Int) = similar(b.data, len)
 _similar_data(b::IOBuffer, len::Int) = StringMemory(len)
@@ -285,7 +299,7 @@ function copy(b::GenericIOBuffer{T}) where T
     if b.reinit
         # If buffer is used up, allocate a new size-zero buffer
         # Reinit implies writable, and that ptr, size, offset and mark are already the default values
-        return typeof(b)(_similar_data(b, 0), b.readable, b.writable, b.seekable, b.append, b.maxsize)
+        return typeof(b)(_similar_data(b, 0), b.readable, b.writable, b.seekable, b.append, b.maxsize, false)
     elseif b.writable
         # Else, we just copy the reachable bytes. If buffer is seekable, all bytes
         # after offset are reachable, since they can be seeked to
@@ -293,7 +307,7 @@ function copy(b::GenericIOBuffer{T}) where T
         compacted = first(used_span) - get_offset(b) - 1
         len = length(used_span)
         data = copyto!(_similar_data(b, len), view(b.data, used_span))
-        ret = typeof(b)(data, b.readable, b.writable, b.seekable, b.append, b.maxsize)
+        ret = typeof(b)(data, b.readable, b.writable, b.seekable, b.append, b.maxsize, false)
         ret.size = len
         # Copying data over implicitly compacts, and may add compaction
         ret.offset_or_compacted = -get_compacted(b) - compacted
