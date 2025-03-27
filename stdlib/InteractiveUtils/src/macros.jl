@@ -15,13 +15,13 @@ separate_kwargs(args...; kwargs...) = (args, values(kwargs))
 # without having a value, used to support type annotations
 # in calls such as `f(1, ::Float64)` for introspection macros.
 struct InterpolatedType
-    T::Type
+    T::Any
     InterpolatedType(@nospecialize(T::Type)) = new(T)
-    InterpolatedType(@nospecialize(val)) = new(Core.Typeof(val))
+    InterpolatedType(@nospecialize(val)) = new(Base.isvarargtype(val) ? val : Core.Typeof(val))
 end
 
 _typeof(t::InterpolatedType) = t.T
-_typeof(@nospecialize(t)) = Core.Typeof(t)
+_typeof(@nospecialize(t)) = Base.isvarargtype(t) ? t : Core.Typeof(t)
 typesof(@nospecialize args...) = Tuple{Any[_typeof(arg) for arg in args]...}
 
 """

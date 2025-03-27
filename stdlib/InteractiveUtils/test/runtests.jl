@@ -347,6 +347,9 @@ end
     @test (@which "$(::Symbol) is a symbol").sig === Tuple{typeof(string), Vararg{Union{Char, String, Symbol}}}
     @test (@which +(::Any, ::Any, ::Any, ::Any...)).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
     @test (@which +(::Any, ::Any, ::Any, ::Vararg{Any})).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
+    n = length(@code_typed +(::Float64, ::Vararg{Float64}))
+    @test n ≥ 2
+    @test length(@code_typed +(::Float64, ::Float64...)) == n
     @test (@which +((1,)..., ::Float64)).sig === Tuple{typeof(+), Number, Number}
     @test (@which +((1, ::Float64)...)).sig === Tuple{typeof(+), Number, Number}
     @test (@which +((1, ::Float64)...)).sig === Tuple{typeof(+), Number, Number}
