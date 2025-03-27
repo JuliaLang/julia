@@ -328,23 +328,50 @@ try
 catch err13464
     @test startswith(err13464.msg, "expression is not a function call")
 end
-module MacroTest
-export @macrotest
-macro macrotest(x::Int, y::Symbol) end
-macro macrotest(x::Int, y::Int)
-    nothing #This is here because of #15280
+
+# PR XXXXX
+@testset "Support for type annotations as arguments" begin
+    @test (@which (::Vector{Int})[::Int]).name === :getindex
+    @test (@which (::Vector{Int})[::Int] = ::Int).name === :setindex!
+    @test (@which (::Base.RefValue{Int}).x).name === :getproperty
+    @test (@which (::Base.RefValue{Int}).x = ::Int).name === :setproperty!
+    @test (@which (::Float64)^2).name === :literal_pow
+    @test (@which [::Int]).name === :vect
+    @test (@which [::Int 2]).name === :hcat
+    @test (@which [::Int; 2]).name === :vcat
+    @test (@which Int[::Int 2]).name === :typed_hcat
+    @test (@which Int[::Int; 2]).name === :typed_vcat
+    @test (@which [::Int 2;3 (::Int)]).name === :hvcat
+    @test (@which Int[::Int 2;3 (::Int)]).name === :typed_hvcat
+    @test (@which (::Vector{Float64})').name === :adjoint
+    @test (@which "$(::Symbol) is a symbol").sig === Tuple{typeof(string), Vararg{Union{Char, String, Symbol}}}
+    @test (@which +(::Any, ::Any, ::Any, ::Any...)).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
+    @test (@which +(::Any, ::Any, ::Any, ::Vararg{Any})).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
+    @test (@which +((1,)..., ::Float64)).sig === Tuple{typeof(+), Number, Number}
+    @test (@which +((1, ::Float64)...)).sig === Tuple{typeof(+), Number, Number}
+    @test (@which +((1, ::Float64)...)).sig === Tuple{typeof(+), Number, Number}
+    @test (@which (::typeof(+))(::Int, ::Float64)).sig === Tuple{typeof(+), Number, Number}
+    @test (@code_typed .+(::Float64, ::Vector{Float64})) isa Pair
+    @test (@code_typed .+(::Float64, .*(::Vector{Float64}, ::Int))) isa Pair
+    @test (@which round(::Float64; digits=3)).name === :round
 end
+
+module MacroTest
+var"@which" = parentmodule(@__MODULE__).var"@which"
+macro macrotest(x::Int, y::Symbol) end
+macro macrotest(x::Int, y::Int) end
 end
 
 let
-    using .MacroTest
     a = 1
-    m = getfield(@__MODULE__, Symbol("@macrotest"))
-    @test which(m, Tuple{LineNumberNode, Module, Int, Symbol}) == @which @macrotest 1 a
-    @test which(m, Tuple{LineNumberNode, Module, Int, Int}) == @which @macrotest 1 1
+    m = MacroTest.var"@macrotest"
+    @test which(m, Tuple{LineNumberNode, Module, Int, Symbol}) == @eval MacroTest @which @macrotest 1 a
+    @test which(m, Tuple{LineNumberNode, Module, Int, Symbol}) == @eval MacroTest @which @macrotest 1 (::Symbol)
+    @test which(m, Tuple{LineNumberNode, Module, Int, Int}) == @eval MacroTest @which @macrotest 1 1
+    @test which(m, Tuple{LineNumberNode, Module, Int, Int}) == @eval MacroTest @which @macrotest ::Int 1
 
     @test first(methods(m, Tuple{LineNumberNode, Module, Int, Int})) == @which MacroTest.@macrotest 1 1
-    @test functionloc(@which @macrotest 1 1) == @functionloc @macrotest 1 1
+    @test functionloc(@eval MacroTest @which @macrotest 1 1) == @functionloc MacroTest.@macrotest 1 1
 end
 
 mutable struct A18434
@@ -574,6 +601,8 @@ end
     @test_throws err @code_lowered ""
     @test_throws err @code_lowered 1
     @test_throws err @code_lowered 1.0
+
+    @test_throws "is too complex" @code_lowered a .= 1 + 2
 end
 
 using InteractiveUtils: editor
