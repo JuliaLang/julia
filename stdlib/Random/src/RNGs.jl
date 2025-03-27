@@ -152,18 +152,12 @@ function show(io::IO, rng::MersenneTwister)
     print(io, sep)
     show(io, rng.adv)
     if rng.adv_vals != -1 || rng.adv_ints != -1
+        # "(0, 0)" is nicer on the eyes than (-1, 1002)
+        s = rng.adv_vals != -1
         print(io, sep)
-        if rng.adv_vals == -1
-            @assert rng.idxF == MT_CACHE_F
-            # "(0, 0)" is nicer on the eyes than (-1, 1002)
-            print(io, '0')
-            print(io, sep)
-            print(io, '0')
-        else
-            show(io, rng.adv_vals)
-            print(io, sep)
-            show(io, rng.idxF)
-        end
+        show(io, s ? rng.adv_vals : zero(rng.adv_vals))
+        print(io, sep)
+        show(io, s ? rng.idxF : zero(rng.idxF))
     end
     if rng.adv_ints != -1
         idxI = (length(rng.ints)*16 - rng.idxI) / 8 # 8 represents one Int64
