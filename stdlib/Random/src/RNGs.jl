@@ -141,38 +141,37 @@ hash(r::MersenneTwister, h::UInt) =
     foldr(hash, (r.seed, r.state, r.vals, r.ints, r.idxF, r.idxI); init=h)
 
 function show(io::IO, rng::MersenneTwister)
-    sep() = print(io, ", ")
-    sho(x) = show(io, x)
     # seed
     if rng.adv_jump == 0 && rng.adv == 0
         return print(io, MersenneTwister, "(", repr(rng.seed), ")")
     end
     print(io, MersenneTwister, "(", repr(rng.seed), ", (")
     # state
-    sho(rng.adv_jump)
-    sep()
-    sho(rng.adv)
+    sep = ", "
+    show(io, rng.adv_jump)
+    print(io, sep)
+    show(io, rng.adv)
     if rng.adv_vals != -1 || rng.adv_ints != -1
-        sep()
+        print(io, sep)
         if rng.adv_vals == -1
             @assert rng.idxF == MT_CACHE_F
             # "(0, 0)" is nicer on the eyes than (-1, 1002)
             print(io, '0')
-            sep()
+            print(io, sep)
             print(io, '0')
         else
-            sho(rng.adv_vals)
-            sep()
-            sho(rng.idxF)
+            show(io, rng.adv_vals)
+            print(io, sep)
+            show(io, rng.idxF)
         end
     end
     if rng.adv_ints != -1
         idxI = (length(rng.ints)*16 - rng.idxI) / 8 # 8 represents one Int64
         idxI = Int(idxI) # idxI should always be an integer when using public APIs
-        sep()
-        sho(rng.adv_ints)
-        sep()
-        sho(idxI)
+        print(io, sep)
+        show(io, rng.adv_ints)
+        print(io, sep)
+        show(io, idxI)
     end
     print(io, "))")
 end
