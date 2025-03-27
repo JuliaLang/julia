@@ -211,6 +211,13 @@ julia> code_typed(+, (Float64, Float64))
 1 ─ %1 = Base.add_float(x, y)::Float64
 └──      return %1
 ) => Float64
+
+julia> code_typed((typeof(-), Float64, Float64))
+1-element Vector{Any}:
+ CodeInfo(
+1 ─ %1 = Base.sub_float(x, y)::Float64
+└──      return %1
+) => Float64
 ```
 """
 function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs...)
@@ -218,6 +225,12 @@ function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs
         return code_typed_opaque_closure(f, types; kwargs...)
     end
     tt = signature_type(f, types)
+    return code_typed_by_type(tt; kwargs...)
+end
+
+# support 'functor'-like queries, such as `(::Foo)(::Int, ::Int)` via `code_typed((Foo, Int, Int))`
+function code_typed(@nospecialize(types::Union{Tuple,Array,SimpleVector}); kwargs...)
+    tt = to_tuple_type(types)
     return code_typed_by_type(tt; kwargs...)
 end
 
