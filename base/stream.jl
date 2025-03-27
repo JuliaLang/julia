@@ -990,7 +990,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     if bytesavailable(sbuf) >= nb
         unsafe_read(sbuf, p, nb)
     else
-        newbuf = _truncated_pipebuffer(a; maxsize=nb)
+        newbuf = _truncated_pipebuffer(unsafe_wrap(Array, p, nb); maxsize=nb)
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
