@@ -84,7 +84,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     # If compacted: Value is in typemin(Int):0
     offset_or_compacted::Int
 
-    # The mark is -1 if offset, else the zero-indexed virtual position of ptr in the buffer.
+    # The mark is -1 if not set, else the zero-indexed virtual position of ptr in the buffer.
     # Due to compaction, this value does not correspond to any actual index in the buffer.
     # This value is in -1:typemax(Int)
     mark::Int
