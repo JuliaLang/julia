@@ -801,7 +801,7 @@ STATIC_INLINE void jl_array_grow_at_beg(jl_array_t *a, size_t idx, size_t inc,
     size_t nbinc = inc * elsz;
     char *data = (char*)a->data;
     char *newdata;
-    char *typetagdata;
+    char *typetagdata = NULL;
     char *newtypetagdata = NULL;
     int isbitsunion = jl_array_isbitsunion(a);
     if (isbitsunion) typetagdata = jl_array_typetagdata(a);
