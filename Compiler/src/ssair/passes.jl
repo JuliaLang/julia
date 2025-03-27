@@ -271,7 +271,7 @@ Starting at `val` walk use-def chains to get all the leaves feeding into this `v
 `predecessors(def, compact)` is a callback which should return the set of possible
 predecessors for a "phi-like" node (PhiNode or Core.ifelse) or `nothing` otherwise.
 """
-function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), predecessors, 𝕃ₒ::AbstractLattice)
+function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), predecessors::Pre, 𝕃ₒ::AbstractLattice) where {Pre}
     visited_philikes = AnySSAValue[]
     isa(defssa, AnySSAValue) || return Any[defssa], visited_philikes
     def = compact[defssa][:stmt]
@@ -296,7 +296,7 @@ function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospe
             end
             possible_predecessors = Int[]
 
-            for n in 1:length(values)::Int
+            for n in 1:length(values)
                 isassigned(values, n) || continue
                 val = values[n]
                 if is_old(compact, defssa) && isa(val, SSAValue)
