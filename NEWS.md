@@ -44,6 +44,8 @@ Standard library changes
 
 #### InteractiveUtils
 
+* Introspection utilities such as `@code_typed`, `@which` and `@edit` now accept type annotations as substitutes for values, recognizing forms such as `f(1, ::Float64, 3)` ([#57909]).
+
 External dependencies
 ---------------------
 
