@@ -32,7 +32,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
 end
 
 function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instruction, irsv::IRInterpretationState)
-    stmt = inst[:stmt]
+    stmt = inst[:stmt]::Expr
     ci = stmt.args[1]
     if ci isa MethodInstance
         world = frame_world(irsv)
@@ -42,7 +42,7 @@ function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instructio
     else
         code = ci::CodeInstance
     end
-    argtypes = collect_argtypes(interp, stmt.args[2:end::Int], StatementState(nothing, false), irsv)
+    argtypes = collect_argtypes(interp, stmt.args[2:end], StatementState(nothing, false), irsv)
     argtypes === nothing && return Pair{Any,Tuple{Bool,Bool}}(Bottom, (false, false))
     return concrete_eval_invoke(interp, code, argtypes, irsv)
 end
