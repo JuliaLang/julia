@@ -329,7 +329,7 @@ catch err13464
     @test startswith(err13464.msg, "expression is not a function call")
 end
 
-# PR XXXXX
+# PR 57909
 @testset "Support for type annotations as arguments" begin
     @test (@which (::Vector{Int})[::Int]).name === :getindex
     @test (@which (::Vector{Int})[::Int] = ::Int).name === :setindex!
