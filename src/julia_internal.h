@@ -1112,6 +1112,12 @@ JL_DLLEXPORT void jl_mi_cache_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMEN
                                      jl_code_instance_t *ci JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
 JL_DLLEXPORT extern jl_value_t *(*const jl_rettype_inferred_addr)(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t min_world, size_t max_world) JL_NOTSAFEPOINT;
 
+JL_DLLEXPORT void jl_force_trace_compile_timing_enable(void);
+JL_DLLEXPORT void jl_force_trace_compile_timing_disable(void);
+
+JL_DLLEXPORT void jl_force_trace_dispatch_enable(void);
+JL_DLLEXPORT void jl_force_trace_dispatch_disable(void);
+
 uint32_t jl_module_next_counter(jl_module_t *m) JL_NOTSAFEPOINT;
 jl_tupletype_t *arg_type_tuple(jl_value_t *arg1, jl_value_t **args, size_t nargs);
 
