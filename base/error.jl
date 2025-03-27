@@ -249,8 +249,8 @@ julia> @assert isodd(3) "What even are numbers?"
 """
 macro assert(ex, args...)
 
-    aargs = filter(e -> !Meta.isexpr(e, :(=)), args)
-    aakws = filter(e -> Meta.isexpr(e, :(=)), args)
+    aargs = filter(e -> !isexpr(e, :(=)), args)
+    aakws = filter(e -> isexpr(e, :(=)), args)
 
     msg = isempty(aargs) ? ex : first(aargs)
 
