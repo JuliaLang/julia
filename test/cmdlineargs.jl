@@ -185,6 +185,8 @@ end
                             ("--banner=no", false),
                             ("--banner=yes", false),
                             ("--banner=short", false),
+
+                            ("--quiet", false),
                         )
         @testset "$arg" begin
             str = arg isa Cmd ? join(arg.exec, ' ') : arg
