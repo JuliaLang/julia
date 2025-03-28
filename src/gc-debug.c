@@ -1100,13 +1100,14 @@ void gc_stats_big_obj(void)
             v = v->next;
         }
 
-        mallocarray_t *ma = ptls2->heap.mallocarrays;
-        while (ma != NULL) {
-            if (gc_marked(jl_astaggedvalue(ma->a)->bits.gc)) {
+        void **lst = ptls2->gc_tls.heap.mallocarrays.items;
+        for (size_t i = 0, l = ptls2->gc_tls.heap.mallocarrays.len; i < l; i++) {
+            jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[i] & ~(uintptr_t)1);
+            uint8_t bits = jl_astaggedvalue(m)->bits.gc;
+            if (gc_marked(bits)) {
                 nused++;
-                nbytes += jl_genericmemory_nbytes((jl_genericmemory_t*)ma->a);
+                nbytes += jl_genericmemory_nbytes(m);
             }
-            ma = ma->next;
         }
     }
 
