@@ -344,7 +344,7 @@ function shell_escape_csh(io::IO, args::AbstractString...)
 end
 shell_escape_csh(args::AbstractString...) =
     sprint(shell_escape_csh, args...;
-           sizehint = mapreduce(sizeof, +, args; init = 0) + length(args) * 3)
+           sizehint = sum(sizeof, args) + length(args) * 3)
 
 """
     shell_escape_wincmd(s::AbstractString)
