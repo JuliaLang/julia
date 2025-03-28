@@ -44,15 +44,22 @@ function mul_parts(a::UInt64, b::UInt64)
 end
 hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
+# faster-but-weaker than hash_mix intended for small keys
+hash_mix_linear(a::UInt, b::UInt) = a - 3b
 
-function hash_64_64(data::UInt64, seed::UInt, secret::NTuple{3, UInt64})
-    return data ⊻ hash_mix(data ⊻ hash_mix(UInt64(seed), secret[1]), secret[2])
+function hash_finalizer(x)
+    # constants arduously discovered by Pelle Evensen
+    # https://mostlymangling.blogspot.com/2019/12/stronger-better-morer-moremur-better.html
+    x ⊻= (x >> 27)
+    x *= 0x3c79ac492ba7b653
+    x ⊻= x >> 33
+    x *= 0x1c69b3f74ac4ae35
+    x ⊻= x >> 27
 end
 
-hash_64_32(data::UInt64, seed::UInt, secret::NTuple{3, UInt64}) =
-    hash_64_64(data, seed, secret) % UInt32
-hash_32_32(data::UInt32, seed::UInt, secret::NTuple{3, UInt64}) =
-    hash_64_32(UInt64(data), seed, secret)
+hash_64_64(data::UInt64, seed::UInt) = hash_finalizer(hash_mix_linear(data, seed))
+hash_64_32(data::UInt64, seed::UInt) = hash_64_64(data, seed) % UInt32
+hash_32_32(data::UInt32, seed::UInt) = hash_64_32(UInt64(data), seed)
 
 if UInt === UInt64
     const hash_uint64 = hash_64_64
@@ -62,7 +69,7 @@ else
     const hash_uint = hash_32_32
 end
 
-hash(x::UInt64, h::UInt) = hash_uint64(x, h, HASH_SECRET)
+hash(x::UInt64, h::UInt) = hash_uint64(x, h)
 hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
 hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
