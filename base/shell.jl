@@ -494,4 +494,4 @@ function escape_microsoft_c_args(io::IO, args::AbstractString...)
 end
 escape_microsoft_c_args(args::AbstractString...) =
     sprint(escape_microsoft_c_args, args...;
-           sizehint = (mapreduce(sizeof, +, args; init = 0) + 3*length(args)))
+           sizehint = (sum(sizeof, args) + 3*length(args)))
