@@ -2,14 +2,14 @@
 
 ## jll artifact
 LLVM_JLL_NAME := libLLVM
-LLVM_ASSERT_JLL_VER := 16.0.6+4
+LLVM_ASSERT_JLL_VER := 16.0.6+5
 ## source build
 # Version number of LLVM
 LLVM_VER := 16.0.6
 # Git branch name in `LLVM_GIT_URL` repository
-LLVM_BRANCH=julia-16.0.6-2
+LLVM_BRANCH=julia-16.0.6-3
 # Git ref in `LLVM_GIT_URL` repository
-LLVM_SHA1=julia-16.0.6-2
+LLVM_SHA1=julia-16.0.6-3
 
 ## Following options are used to automatically fetch patchset from Julia's fork.  This is
 ## useful if you want to build an external LLVM while still applying Julia's patches.
