@@ -27,6 +27,9 @@ New library features
 
 `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 
+* `match(regex, string, idx)` now supports updating `idx::Ref{Int}` to
+  point at the first character after a successful match ([#51429])
+
 Standard library changes
 ------------------------
 
