@@ -4616,8 +4616,6 @@ JL_DLLEXPORT void jl_extern_c(jl_value_t *name, jl_value_t *declrt, jl_tupletype
         jl_error("@ccallable: function object must be a singleton");
 
     // compute / validate return type
-    if (!jl_is_concrete_type(declrt) || jl_is_kind(declrt))
-        jl_error("@ccallable: return type must be concrete and correspond to a C type");
     if (!jl_type_mappable_to_c(declrt))
         jl_error("@ccallable: return type doesn't correspond to a C type");
 
