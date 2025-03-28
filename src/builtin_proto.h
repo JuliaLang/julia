@@ -84,6 +84,8 @@ JL_CALLABLE(jl_f__equiv_typedef);
 JL_CALLABLE(jl_f_get_binding_type);
 JL_CALLABLE(jl_f__compute_sparams);
 JL_CALLABLE(jl_f__svec_ref);
+JL_CALLABLE(jl_f__module_import);
+JL_CALLABLE(jl_f__module_using);
 #ifdef __cplusplus
 }
 #endif
