@@ -8,7 +8,7 @@ const HASH_SECRET = tuple(
 )
 
 """
-    hash(x[, h::UInt]) -> UInt
+    hash(x[, h::UInt])::UInt
 
 Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The
 optional second argument `h` is another hash code to be mixed with the result.
@@ -20,7 +20,7 @@ Typically, any type that implements `hash` should also implement its own [`==`](
 
 The hash value may change when a new Julia process is started.
 
-```jldoctest
+```jldoctest; filter = r"0x[0-9a-f]{16}"
 julia> a = hash(10)
 r"0x[0-9a-f]{16}"
 

@@ -2565,7 +2565,6 @@ function abstract_eval_setglobalonce!(interp::AbstractInterpreter, sv::AbsIntSta
     end
 end
 
-
 function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
     if length(argtypes) in (5, 6, 7)
         (M, s, x, v) = argtypes[2], argtypes[3], argtypes[4], argtypes[5]
@@ -2690,11 +2689,13 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             elseif f === setfield! && length(argtypes) == 4 && isa(argtypes[3], Const)
                 # from there on we know that the struct field will never be undefined,
                 # so we try to encode that information with a `PartialStruct`
-                farg2 = ssa_def_slot(fargs[2], sv)
-                if farg2 isa SlotNumber
-                    refined = form_partially_defined_struct(𝕃ᵢ, argtypes[2], argtypes[3])
-                    if refined !== nothing
-                        refinements = SlotRefinement(farg2, refined)
+                if rt !== Bottom && isa(fargs, Vector{Any})
+                    farg2 = ssa_def_slot(fargs[2], sv)
+                    if farg2 isa SlotNumber
+                        refined = form_partially_defined_struct(𝕃ᵢ, argtypes[2], argtypes[3])
+                        if refined !== nothing
+                            refinements = SlotRefinement(farg2, refined)
+                        end
                     end
                 end
             end
@@ -3287,7 +3288,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
     if allow_import !== true
         gr = GlobalRef(mod, sym)
         partition = lookup_binding_partition!(interp, gr, sv)
-        if allow_import !== true && is_some_imported(binding_kind(partition))
+        if allow_import !== true && is_some_binding_imported(binding_kind(partition))
             if allow_import === false
                 rt = Const(false)
             else
@@ -3328,6 +3329,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, @nospecializ
             exct = Union{exct, ConcurrencyViolationError}
         end
     end
+    ⊑ = partialorder(typeinf_lattice(interp))
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
@@ -3540,7 +3542,7 @@ end
 
 function walk_binding_partition(imported_binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
     valid_worlds = WorldRange(partition.min_world, partition.max_world)
-    while is_some_imported(binding_kind(partition))
+    while is_some_binding_imported(binding_kind(partition))
         imported_binding = partition_restriction(partition)::Core.Binding
         partition = lookup_binding_partition(world, imported_binding)
         valid_worlds = intersect(valid_worlds, WorldRange(partition.min_world, partition.max_world))
@@ -3668,7 +3670,7 @@ end
 
 function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
     if saw_latestworld
-        return Pair{Any,Any}(newty, Union{ErrorException, TypeError})
+        return Pair{Any,Any}(newty, ErrorException)
     end
     (valid_worlds, ret) = scan_partitions((interp, _, partition)->global_assignment_binding_rt_exct(interp, partition, newty), interp, g, sv.world)
     update_valid_age!(sv, valid_worlds)
@@ -3685,10 +3687,10 @@ function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partitio
     ty = kind == PARTITION_KIND_DECLARED ? Any : partition_restriction(partition)
     wnewty = widenconst(newty)
     if !hasintersect(wnewty, ty)
-        return Pair{Any,Any}(Bottom, TypeError)
+        return Pair{Any,Any}(Bottom, ErrorException)
     elseif !(wnewty <: ty)
         retty = tmeet(typeinf_lattice(interp), newty, ty)
-        return Pair{Any,Any}(retty, TypeError)
+        return Pair{Any,Any}(retty, ErrorException)
     end
     return Pair{Any,Any}(newty, Bottom)
 end

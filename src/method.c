@@ -84,7 +84,8 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
                                    int binding_effects, int eager_resolve)
 {
     if (jl_is_symbol(expr)) {
-        jl_error("Found raw symbol in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.");
+        jl_errorf("Found raw symbol %s in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.",
+                  jl_symbol_name((jl_sym_t*)expr));
     }
 
     if (!jl_is_expr(expr)) {
@@ -1102,26 +1103,18 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
 {
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
-    jl_binding_t *b = jl_get_binding_for_method_def(mod, name, new_world);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
-    jl_value_t *gf = NULL;
-    enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (!jl_bkind_is_some_guard(kind) && kind != PARTITION_KIND_DECLARED && kind != PARTITION_KIND_IMPLICIT) {
-        jl_walk_binding_inplace(&b, &bpart, new_world);
-        if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
-            gf = bpart->restriction;
-            JL_GC_PROMISE_ROOTED(gf);
-            jl_check_gf(gf, b->globalref->name);
-            JL_UNLOCK(&world_counter_lock);
-            return gf;
-        }
-        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
+    jl_binding_t *b = jl_get_module_binding(mod, name, 1);
+    jl_value_t *gf = jl_get_existing_strong_gf(b, new_world);
+    if (gf) {
+        jl_check_gf(gf, name);
+        JL_UNLOCK(&world_counter_lock);
+        return gf;
     }
     gf = (jl_value_t*)jl_new_generic_function(name, mod, new_world);
     // From this point on (if we didn't error), we're committed to raising the world age,
     // because we've used it to declare the type name.
-    jl_atomic_store_release(&jl_world_counter, new_world);
     jl_declare_constant_val3(b, mod, name, gf, PARTITION_KIND_CONST, new_world);
+    jl_atomic_store_release(&jl_world_counter, new_world);
     JL_GC_PROMISE_ROOTED(gf);
     JL_UNLOCK(&world_counter_lock);
     return gf;

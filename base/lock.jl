@@ -702,10 +702,6 @@ mutable struct OncePerProcess{T, F} <: Function
 
     function OncePerProcess{T,F}(initializer::F) where {T, F}
         once = new{T,F}(nothing, PerStateInitial, true, initializer, ReentrantLock())
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :value, nothing)
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :state, PerStateInitial)
         return once
     end
 end
@@ -721,6 +717,10 @@ OncePerProcess(initializer) = OncePerProcess{Base.promote_op(initializer), typeo
             try
                 state = @atomic :monotonic once.state
                 if state == PerStateInitial
+                    ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                        once, :value, nothing)
+                    ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                        once, :state, PerStateInitial)
                     once.value = once.initializer()
                 elseif state == PerStateErrored
                     error("OncePerProcess initializer failed previously")
@@ -809,10 +809,6 @@ mutable struct OncePerThread{T, F} <: Function
     function OncePerThread{T,F}(initializer::F) where {T, F}
         xs, ss = AtomicMemory{T}(), AtomicMemory{UInt8}()
         once = new{T,F}(xs, ss, initializer)
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :xs, xs)
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :ss, ss)
         return once
     end
 end
@@ -849,6 +845,12 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                 ss = @atomic :monotonic once.ss
                 xs = @atomic :monotonic once.xs
                 if tid > length(ss)
+                    if length(ss) == 0 # We are the first to initialize
+                        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                            once, :xs, xs)
+                        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                            once, :ss, ss)
+                    end
                     @assert len <= length(ss) <= length(newss) "logical constraint violation"
                     fill_monotonic!(newss, PerStateInitial)
                     xs = copyto_monotonic!(newxs, xs)

@@ -931,12 +931,10 @@ function detect_libstdcxx_version(max_minor_version::Int=30)
         # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
         for minor_version in max_minor_version:-1:18
             if Libdl.dlsym(libstdcxx, "GLIBCXX_3.4.$(minor_version)"; throw_error=false) !== nothing
-                Libdl.dlclose(libstdcxx)
                 return VersionNumber("3.4.$(minor_version)")
             end
         end
     end
-    Libdl.dlclose(libstdcxx)
     return nothing
 end
 

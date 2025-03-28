@@ -92,7 +92,7 @@ length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 
 """
-    in!(x, s::AbstractSet) -> Bool
+    in!(x, s::AbstractSet)::Bool
 
 If `x` is in `s`, return `true`. If not, push `x` into `s` and return `false`.
 This is equivalent to `in(x, s) ? true : (push!(s, x); false)`, but may have a
@@ -104,7 +104,7 @@ See also: [`in`](@ref), [`push!`](@ref), [`Set`](@ref)
     This function requires at least 1.11.
 
 # Examples
-```jldoctest; filter = r"^  [1234]\$"
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> s = Set{Any}([1, 2, 3]); in!(4, s)
 false
 
@@ -478,8 +478,8 @@ function unique!(itr)
 end
 
 """
-    allunique(itr) -> Bool
-    allunique(f, itr) -> Bool
+    allunique(itr)::Bool
+    allunique(f, itr)::Bool
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 Or if all of `[f(x) for x in itr]` are distinct, for the second method.
@@ -602,8 +602,8 @@ function allunique(f::F, t::Tuple) where {F}
 end
 
 """
-    allequal(itr) -> Bool
-    allequal(f, itr) -> Bool
+    allequal(itr)::Bool
+    allequal(f, itr)::Bool
 
 Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
 Or if all of `[f(x) for x in itr]` are equal, for the second method.
@@ -753,7 +753,7 @@ If `count` is specified, then replace at most `count` values in total
 (replacements being defined as `new(x) !== x`).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d+(\\s+=>\\s+\\d)?\$"m
 julia> replace!(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Vector{Int64}:
  2
@@ -849,7 +849,7 @@ If `count` is specified, then replace at most `count` values in total
     Version 1.7 is required to replace elements of a `Tuple`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> replace(x -> isodd(x) ? 2x : x, [1, 2, 3, 4])
 4-element Vector{Int64}:
  2

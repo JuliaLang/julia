@@ -194,7 +194,7 @@ See [`keys`](@ref keys(::RegexMatch)) for more information.
     Constructing NamedTuples and Dicts from RegexMatches requires Julia 1.11
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
 RegexMatch("11:30", hour="11", minute="30", 3=nothing)
 
@@ -236,7 +236,7 @@ RegexMatch(match::SubString{S}, captures::Vector{Union{Nothing,SubString{S}}},
     RegexMatch{S}(match, captures, offset, offsets, regex)
 
 """
-    keys(m::RegexMatch) -> Vector
+    keys(m::RegexMatch)::Vector
 
 Return a vector of keys for all capture groups of the underlying regex.
 A key is included even if the capture group fails to match.
@@ -811,8 +811,8 @@ end
 ## String operations ##
 
 """
-    *(s::Regex, t::Union{Regex,AbstractString,AbstractChar}) -> Regex
-    *(s::Union{Regex,AbstractString,AbstractChar}, t::Regex) -> Regex
+    *(s::Regex, t::Union{Regex,AbstractString,AbstractChar})::Regex
+    *(s::Union{Regex,AbstractString,AbstractChar}, t::Regex)::Regex
 
 Concatenate regexes, strings and/or characters, producing a [`Regex`](@ref).
 String and character arguments must be matched exactly in the resulting regex,
@@ -894,7 +894,7 @@ end
 
 
 """
-    ^(s::Regex, n::Integer) -> Regex
+    ^(s::Regex, n::Integer)::Regex
 
 Repeat a regex `n` times.
 

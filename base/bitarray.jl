@@ -1338,7 +1338,7 @@ function (>>>)(B::BitVector, i::UInt)
 end
 
 """
-    >>(B::BitVector, n) -> BitVector
+    >>(B::BitVector, n)::BitVector
 
 Right bit shift operator, `B >> n`. For `n >= 0`, the result is `B`
 with elements shifted `n` positions forward, filling with `false`
@@ -1376,7 +1376,7 @@ julia> B >> -1
 
 # signed integer version of shift operators with handling of negative values
 """
-    <<(B::BitVector, n) -> BitVector
+    <<(B::BitVector, n)::BitVector
 
 Left bit shift operator, `B << n`. For `n >= 0`, the result is `B`
 with elements shifted `n` positions backwards, filling with `false`
@@ -1413,7 +1413,7 @@ julia> B << -1
 (<<)(B::BitVector, i::Int) = (i >=0 ? B << unsigned(i) : B >> unsigned(-i))
 
 """
-    >>>(B::BitVector, n) -> BitVector
+    >>>(B::BitVector, n)::BitVector
 
 Unsigned right bitshift operator, `B >>> n`. Equivalent to `B >> n`. See [`>>`](@ref) for
 details and examples.
