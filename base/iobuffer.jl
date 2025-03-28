@@ -17,7 +17,7 @@
 
 #            AFTER COMPACTION
 
-#   uuuuuXXXXXXXXXXXXX---------------------
+#   XXXXXXXXXXXXX--------------------------
 #  ||    |           |                    |    |
 #  |1    ptr         size                 |    maxsize
 #  |                                      lastindex(data)
@@ -26,7 +26,7 @@
 # * The underlying array is always 1-indexed
 # * The IOBuffer has full control (ownership) of the underlying array, only when
 #   buffer.write == true.
-# * Data before the mark can be deleted, shifting the whole thing to the left
+# * Unreachable data can be deleted in the buffer's data, shifting the whole thing to the left
 #   to make room for more data, without replacing or resizing data.
 #   This can be done only if the buffer is not seekable
 
@@ -36,12 +36,13 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     # The user can take control of `data` out of this struct. When that happens, instead of eagerly allocating
     # a new array, we set `.reinit` to true, and then allocate a new one when needed.
-    # If reinit is true, the buffer is writable, and offset and size is zero. See `take!`
+    # If reinit is true, the buffer is writable, and offset_or_compacted and size is zero. See `take!`
     reinit::Bool
     readable::Bool
     writable::Bool
 
-    # If not seekable, implementation is free to destroy (compact) data in 1:mark-1.
+    # If not seekable, implementation is free to destroy (compact) data before ptr, unless
+    # it can be recovered using the mark by using `reset`.
     # If it IS seekable, the user may always recover any data in 1:size by seeking,
     # so no data can be destroyed.
     # Non-seekable IOBuffers can only be constructed with `PipeBuffer`, which are writable,
@@ -58,7 +59,8 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     # When the buffer is resized, or a new buffer allocated, this is the maximum size of the buffer.
     # A new GenericIOBuffer may be constructed with an existing data larger than `maxsize`.
-    # When that happens, the buffer will not write to data in maxsize + 1 : lastindex(data).
+    # When that happensm we must make sure to not have more than `maxsize` bytes in the buffer,
+    # else reallocating will lose data. So, never write to indices > `maxsize + get_offset(io)`
     # This value is always in 0:typemax(Int).
     maxsize::Int
 
@@ -69,7 +71,7 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
 
     # This field has two distinct meanings:
     # If the value is positive, it encodes an offset of the start of the data in `data`.
-    # This is used if the buffer is instantiated from a Vector with non-zero memory offet.
+    # This is used if the buffer is instantiated from a Vector with non-zero memory offset.
     # Then, the IOBuffer stores the underlying memory, and so the first data in the buffer
     # is not at index 1.
     # If the value is negative, then `-io.offset_or_compacted` gets the number of compacted
@@ -85,7 +87,8 @@ mutable struct GenericIOBuffer{T<:AbstractVector{UInt8}} <: IO
     offset_or_compacted::Int
 
     # The mark is -1 if not set, else the zero-indexed virtual position of ptr in the buffer.
-    # Due to compaction, this value does not correspond to any actual index in the buffer.
+    # Due to compaction and offset, this value is not an index into the buffer, but may be translated
+    # to an index.
     # This value is in -1:typemax(Int)
     mark::Int
 
@@ -601,7 +604,7 @@ end
     end
     # The fast path here usually checks there is already room, then does nothing.
     # When append is true, new data is added after io.size, not io.ptr
-    existing_space = min(lastindex(io.data), io.maxsize) - (io.append ? io.size : io.ptr - 1)
+    existing_space = min(lastindex(io.data), io.maxsize + get_offset(io)) - (io.append ? io.size : io.ptr - 1)
     if existing_space < nshort % Int
         # Outline this function to make it more likely that ensureroom inlines itself
         return ensureroom_slowpath(io, nshort, existing_space)
@@ -821,7 +824,7 @@ function unsafe_write(to::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     append = to.append
     ptr = append ? size+1 : to.ptr
     data = to.data
-    to_write = min(nb, (min(Int(length(data))::Int, to.maxsize) - ptr + 1) % UInt) % Int
+    to_write = min(nb, (min(Int(length(data))::Int, to.maxsize + get_offset(to)) - ptr + 1) % UInt) % Int
     # Dispatch based on the type of data, to possibly allow using memcpy
     _unsafe_write(data, p, ptr, to_write % UInt)
     # Update to.size only if the ptr has advanced to higher than
@@ -864,7 +867,7 @@ end
     ptr = (to.append ? to.size+1 : to.ptr)
     # We have just ensured there is room for 1 byte, EXCEPT if we were to exceed
     # maxsize. So, we just need to check that here.
-    if ptr > to.maxsize
+    if ptr > to.maxsize + get_offset(to)
         return 0
     else
         to.data[ptr] = a
