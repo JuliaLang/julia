@@ -559,26 +559,32 @@ function truncate(io::GenericIOBuffer, n::Integer)
     n < 0 && throw(ArgumentError("truncate failed, n bytes must be ≥ 0, got $n"))
     n > io.maxsize && throw(ArgumentError("truncate failed, $(n) bytes is exceeds IOBuffer maxsize $(io.maxsize)"))
     n = Int(n)::Int
-    if io.reinit
-        io.data = _similar_data(io, n)
-        io.reinit = false
-    elseif n > min(io.maxsize, length(io.data)) - get_offset(io)
-        # We compact because that allows us to minimize the resizing, saving memory.
-        compact!(io)
-        n > min(io.maxsize, length(io.data)) && _resize!(io, n, true)
-    end
     offset = get_offset(io)
+    current_size = io.size - offset
+    if io.reinit
+        # If reinit, we don't need to truncate anything but just reinitializes
+        # the buffer with zeros. Mark, ptr and offset has already been reset.
+        io.data = fill!(_similar_data(io, n), 0x00)
+        io.reinit = false
+        io.size = n
+    elseif n < current_size
+        # Else, if we need to shrink the iobuffer, we simply change the pointers without
+        # actually shrinking the underlying storage, or copying data.
 
-    # Fill any new data with zeros
-    io.data[io.size+1:n+offset] .= 0
-    io.size = n + offset
-    io.ptr = min(io.ptr, n+offset+1)
-
-    # Clear the mark if it points to data that has now been deleted.
-    if translate_seek_position(io, io.mark) > n+offset
-        io.mark = -1
+        # Clear the mark if it points to data that has now been deleted.
+        if translate_seek_position(io, io.mark) > n+offset
+            io.mark = -1
+        end
+        io.size = n + offset
+        io.ptr = min(io.ptr, n + offset + 1)
+    elseif n > current_size
+        if n + offset > io.maxsize
+            compact!(io)
+        end
+        _resize!(io, n + get_offset(io), false)
+        fill!(view(io.data, io.size + 1:min(length(io.data), n + get_offset(io))), 0x00)
+        io.size = min(length(io.data), n + get_offset(io))
     end
-
     return io
 end
 
