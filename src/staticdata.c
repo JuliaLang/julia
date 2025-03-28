@@ -96,6 +96,16 @@ typedef struct {
     htable_t type_in_worklist;
 } jl_query_cache;
 
+static void init_query_cache(jl_query_cache *cache)
+{
+    htable_new(&cache->type_in_worklist, 0);
+}
+
+static void destroy_query_cache(jl_query_cache *cache)
+{
+    htable_free(&cache->type_in_worklist);
+}
+
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
 
@@ -3382,8 +3392,8 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     int64_t datastartpos = 0;
     JL_GC_PUSH4(&mod_array, &extext_methods, &new_ext_cis, &edges);
 
-    jl_query_cache query_cache = { 0 };
-    htable_new(&query_cache.type_in_worklist, 0);
+    jl_query_cache query_cache;
+    init_query_cache(&query_cache);
 
     if (worklist) {
         mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
@@ -3460,6 +3470,8 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
             // Next we will write the clone_targets and afterwards the srctext
         }
     }
+
+    destroy_query_cache(&query_cache);
 
     JL_GC_POP();
     *s = f;
