@@ -114,6 +114,11 @@ and above. To maintain compatibility with Julia 1.10 and below, use the `@compat
 VERSION >= v"1.11.0-DEV.469" && eval(Meta.parse("public a, b, c"))
 ```
 
+The `export` keyword can be used in both global and local scopes, whereas the `public` keyword is
+currently limited to the global scope. This limitation exists for compatibility reasons, as `public`
+was introduced as a new keyword in Julia 1.11 while `export` has existed since Julia 1.0. However,
+this restriction on `public` may be lifted in future releases.
+
 ### Standalone `using` and `import`
 
 For interactive use, the most common way of loading a module is `using ModuleName`. This [loads](@ref
