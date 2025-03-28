@@ -45,12 +45,12 @@ end
 hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
 # faster-but-weaker than hash_mix intended for small keys
-hash_mix_linear(a::UInt, b::UInt) = a - 3b
+hash_mix_linear(x::UInt64, h::UInt) = x - 3h
 
-function hash_finalizer(x)
+function hash_finalizer(x::UInt64)
     # constants arduously discovered by Pelle Evensen
     # https://mostlymangling.blogspot.com/2019/12/stronger-better-morer-moremur-better.html
-    x ⊻= (x >> 27)
+    x ⊻= x >> 27
     x *= 0x3c79ac492ba7b653
     x ⊻= x >> 33
     x *= 0x1c69b3f74ac4ae35
