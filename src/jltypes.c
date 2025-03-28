@@ -3287,10 +3287,9 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec, 0, 0, 3);
 
     core = jl_new_module(jl_symbol("Core"), NULL);
-    core->parent = core;
     jl_type_typename->mt->module = core;
     jl_core_module = core;
-    core = NULL; // not ready yet to use
+    core = NULL; // not actually ready yet to use
 
     tv = jl_svec1(tvar("Backend"));
     jl_addrspace_typename =
@@ -3381,9 +3380,8 @@ void jl_init_types(void) JL_GC_DISABLED
     core = jl_core_module;
     jl_atomic_store_relaxed(&core->bindingkeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
     // export own name, so "using Foo" makes "Foo" itself visible
-    jl_set_const(core, core->name, (jl_value_t*)core);
-    jl_module_public(core, core->name, 1);
-    jl_set_const(core, jl_symbol("CPU"), (jl_value_t*)cpumem);
+    jl_set_initial_const(core, core->name, (jl_value_t*)core, 1);
+    jl_set_initial_const(core, jl_symbol("CPU"), (jl_value_t*)cpumem, 0);
     core = NULL;
 
     jl_expr_type =
