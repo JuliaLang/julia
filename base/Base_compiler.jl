@@ -157,6 +157,31 @@ if false
     println(io::IO, x...) = Core.println(io, x...)
 end
 
+## Load essential files and libraries
+include("essentials.jl")
+
+# Because lowering inserts direct references, it is mandatory for this binding
+# to exist before we start inferring code.
+function string end
+import Core: String
+
+# For OS specific stuff
+# We need to strcat things here, before strings are really defined
+function strcat(x::String, y::String)
+    out = ccall(:jl_alloc_string, Ref{String}, (Int,), Core.sizeof(x) + Core.sizeof(y))
+    gc_x = @_gc_preserve_begin(x)
+    gc_y = @_gc_preserve_begin(y)
+    gc_out = @_gc_preserve_begin(out)
+    out_ptr = unsafe_convert(Ptr{UInt8}, out)
+    unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
+    unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
+    @_gc_preserve_end(gc_x)
+    @_gc_preserve_end(gc_y)
+    @_gc_preserve_end(gc_out)
+    return out
+end
+
+
 """
     time_ns()::UInt64
 
@@ -171,8 +196,6 @@ const _DOCS_ALIASING_WARNING = """
     Behavior can be unexpected when any mutated argument shares memory with any other argument.
 """
 
-## Load essential files and libraries
-include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
 include("generator.jl")
@@ -283,7 +306,6 @@ include("rounding.jl")
 include("float.jl")
 
 # Lazy strings
-import Core: String
 include("strings/lazy.jl")
 
 function cld end
@@ -319,22 +341,6 @@ using .Order
 
 include("coreir.jl")
 include("invalidation.jl")
-
-# Because lowering inserts direct references, it is mandatory for this binding
-# to exist before we start inferring code.
-function string end
-
-# For OS specific stuff
-# We need to strcat things here, before strings are really defined
-function strcat(x::String, y::String)
-    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), Core.sizeof(x) + Core.sizeof(y))
-    GC.@preserve x y out begin
-        out_ptr = unsafe_convert(Ptr{UInt8}, out)
-        unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
-        unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
-    end
-    return out
-end
 
 BUILDROOT::String = ""
 DATAROOT::String = ""
