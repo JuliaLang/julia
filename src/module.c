@@ -774,13 +774,15 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 
 static NOINLINE void print_backdate_admonition(jl_binding_t *b) JL_NOTSAFEPOINT
 {
-    jl_safe_printf(
-        "WARNING: Detected access to binding `%s.%s` in a world prior to its definition world.\n"
-        "  Julia 1.12 has introduced more strict world age semantics for global bindings.\n"
-        "  !!! This code may malfunction under Revise.\n"
-        "  !!! This code will error in future versions of Julia.\n"
-        "Hint: Add an appropriate `invokelatest` around the access to this binding.\n",
-        jl_symbol_name(b->globalref->mod->name), jl_symbol_name(b->globalref->name));
+    if (jl_options.depwarn != JL_OPTIONS_DEPWARN_OFF) {
+        jl_safe_printf(
+            "WARNING: Detected access to binding `%s.%s` in a world prior to its definition world.\n"
+            "  Julia 1.12 has introduced more strict world age semantics for global bindings.\n"
+            "  !!! This code may malfunction under Revise.\n"
+            "  !!! This code will error in future versions of Julia.\n"
+            "Hint: Add an appropriate `invokelatest` around the access to this binding.\n",
+            jl_symbol_name(b->globalref->mod->name), jl_symbol_name(b->globalref->name));
+    }
 }
 
 static inline void check_backdated_binding(jl_binding_t *b, enum jl_partition_kind kind) JL_NOTSAFEPOINT
