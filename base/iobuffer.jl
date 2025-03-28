@@ -736,7 +736,7 @@ function take!(io::GenericIOBuffer)
         io.reinit = true
         io.ptr = 1
         io.size = 0
-        io.offset_or_compacted = -get_compacted(io)
+        io.offset_or_compacted = 0
     end
     return data
 end
@@ -769,7 +769,7 @@ function take!(io::IOBuffer)
         io.reinit = true
         io.ptr = 1
         io.size = 0
-        io.offset_or_compacted = -get_compacted(io)
+        io.offset_or_compacted = 0
     end
     return data
 end

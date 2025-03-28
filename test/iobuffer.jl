@@ -202,6 +202,20 @@ end
     write(buf, "bcd")
     @test read(buf, UInt8) == 0x61
     @test take!(buf) == b"bcd"
+
+    # Compaction is reset after take!
+    buf = Base.GenericIOBuffer(Memory{UInt8}(), true, true, false, true, 100, false)
+    write(buf, rand(UInt8, 50))
+    read(buf, 40)
+    write(buf, rand(UInt8, 100))
+    mark(buf)
+    read(buf, 70)
+    @test position(buf) == 110
+    @test length(buf.data) <= 100
+    v = take!(buf)
+    write(buf, 0xf1)
+    @test position(buf) == 0
+    @test !ismarked(buf)
 end
 
 @testset "maxsize is preserved" begin
