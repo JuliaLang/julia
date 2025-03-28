@@ -598,7 +598,7 @@ end
     existing_space = min(lastindex(io.data), io.maxsize) - (io.append ? io.size : io.ptr - 1)
     if existing_space < nshort % Int
         # Outline this function to make it more likely that ensureroom inlines itself
-        return ensureroom_slowpath(io, nshort)
+        return ensureroom_slowpath(io, nshort, existing_space)
     end
     return io
 end
@@ -613,9 +613,8 @@ end
 end
 
 # Here, we already know there is not enough room at the end of the io's data.
-@noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt)
+@noinline function ensureroom_slowpath(io::GenericIOBuffer, nshort::UInt, available_bytes::Int)
     reclaimable_bytes = first(get_used_span(io)) - 1
-    available_bytes = min(lastindex(io.data), io.maxsize) - (io.append ? io.size : io.ptr - 1)
     # Avoid resizing and instead compact the buffer, only if we gain enough bytes from
     # doing so (at least 32 bytes and 1/8th of the data length). Also, if we would have
     # to resize anyway, there would be no point in compacting, so also check that.
