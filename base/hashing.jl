@@ -22,10 +22,10 @@ The hash value may change when a new Julia process is started.
 
 ```jldoctest; filter = r"0x[0-9a-f]{16}"
 julia> a = hash(10)
-r"0x[0-9a-f]{16}"
+0x759d18cc5346a65f
 
 julia> hash(10, a) # only use the output of another hash function as the second argument
-r"0x[0-9a-f]{16}"
+0x03158cd61b1b0bd1
 ```
 
 See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
