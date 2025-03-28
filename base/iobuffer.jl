@@ -751,7 +751,7 @@ end
 # e.g. wrap directly in an array without copying. Otherwise the logic is the same as
 # the generic method
 function take!(io::IOBuffer)
-    ismarked(io) && unmark(io)
+    io.mark = -1
     if io.seekable
         nbytes = filesize(io)
         if nbytes == 0 || io.reinit
