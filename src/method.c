@@ -1028,7 +1028,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_code_instance_t **caller) JL_NOTSAFEPOINT
 {
     jl_value_t *item = jl_array_ptr_ref(list, i);
-    if (jl_is_code_instance(item)) {
+    if (!item || jl_is_code_instance(item)) {
         // Not an `invoke` call, it's just the CodeInstance
         if (invokesig != NULL)
             *invokesig = NULL;
@@ -1053,12 +1053,47 @@ int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instan
     return i;
 }
 
+int clear_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_set(list, i++, NULL);
+    jl_array_ptr_set(list, i++, NULL);
+    return i;
+}
+
 void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_code_instance_t *caller)
 {
     if (invokesig)
         jl_array_ptr_1d_push(list, invokesig);
     jl_array_ptr_1d_push(list, (jl_value_t*)caller);
     return;
+}
+
+void jl_mi_done_backedges(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t old_flags) {
+    uint8_t flags_now = 0;
+    jl_array_t *backedges = jl_mi_get_backedges_mutate(mi, &flags_now);
+    if (backedges && !old_flags) {
+        if (flags_now & MI_FLAG_BACKEDGES_DIRTY) {
+            size_t n = jl_array_nrows(backedges);
+            size_t i = 0;
+            size_t insb = 0;
+            while (i < n) {
+                jl_value_t *invokesig;
+                jl_code_instance_t *caller;
+                i = get_next_edge(backedges, i, &invokesig, &caller);
+                if (!caller)
+                    continue;
+                insb = set_next_edge(backedges, insb, invokesig, caller);
+            }
+            if (insb == n) {
+                // All were deleted
+                mi->backedges = NULL;
+            } else {
+                jl_array_del_end(backedges, n - insb);
+            }
+        }
+        jl_atomic_fetch_and_relaxed(&mi->flags, ~MI_FLAG_BACKEDGES_ALL);
+    }
 }
 
 // method definition ----------------------------------------------------------
