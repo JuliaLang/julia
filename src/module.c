@@ -446,9 +446,9 @@ JL_DLLEXPORT void jl_add_default_names(jl_module_t *m, uint8_t default_using_cor
             jl_module_using(m, jl_core_module);
         }
         if (self_name) {
-            // export own name, so "using Foo" makes "Foo" itself visible
             jl_set_const(m, m->name, (jl_value_t*)m);
-            jl_module_public(m, m->name, 1);
+            // Do not export or publicize own name, "using Foo" already makes "Foo" itself
+            // visible and "using Foo as Bar" should not make the name "Foo" visible.
         }
     }
 }

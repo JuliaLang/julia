@@ -1744,7 +1744,7 @@ eval(Expr(:toplevel,
                Expr(:block,
                     Expr(:export, :Inner),
                     Expr(:abstract, :Inner)))))
-@test names(Mod28991) == Symbol[:Inner, :Mod28991]
+@test names(Mod28991) == Symbol[:Inner]
 
 # issue #28593
 macro a28593()
@@ -2655,9 +2655,6 @@ end
 @test B37890(1.0, 2.0f0) isa B37890{Int, Int8}
 
 # import ... as
-@test_parseerror("using A as B",       "invalid syntax \"using A as ...\"")
-@test_parseerror("using A.b as B",     "invalid syntax \"using A.b as ...\"")
-@test_parseerror("using X, A.b as B",  "invalid syntax \"using A.b as ...\"")
 @test_parseerror("import A as B: c",   "invalid syntax \"import A as B:\"")
 @test_parseerror("import A.b as B: c", "invalid syntax \"import A.b as B:\"")
 
@@ -2731,6 +2728,9 @@ import .Mod.@mac as @m
 @test_throws ErrorException eval(:(import .Mod.func as @notmacro))
 @test_throws ErrorException eval(:(using .Mod: @mac as notmacro))
 @test_throws ErrorException eval(:(using .Mod: func as @notmacro))
+
+@test_throws ErrorException eval(:(using .Mod as @M))
+@test_throws UndefVarError eval(:(using .Mod.Mod2 as @M))
 
 import .Mod2.x_from_mod
 

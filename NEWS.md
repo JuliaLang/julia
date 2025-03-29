@@ -3,6 +3,7 @@ Julia v1.13 Release Notes
 
 New language features
 ---------------------
+* The syntax `using LongPackageName as LPN` is now supported ([#52821]).
 
 Language changes
 ----------------
