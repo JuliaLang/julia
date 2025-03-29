@@ -285,6 +285,34 @@ end
     end
 end
 
+@testset "Indexing CartesianIndices as an nD range" begin
+    for (m, n) in [(4, 6), (4, 4), (6,4)]
+        C = CartesianIndices((m, n))
+        for k in -7:7
+            dlen = length = max(0, k <= 0 ? min(m+k, n) : min(m, n-k))
+            dind = StepRangeLen(CartesianIndex(1+max(0,-k),1+max(0,k)), CartesianIndex(1,1), dlen)
+            @test C[dind] === dind
+            @test C[dind[1:2:end]] === dind[1:2:end]
+        end
+    end
+    for C in [CartesianIndices((20:4:100,)),
+                CartesianIndices((20:-4:-100,)),
+                CartesianIndices((20:100,)),
+                CartesianIndices((Base.IdentityUnitRange(20:100),))]
+        r = StepRangeLen(CartesianIndex(firstindex(C)+1), CartesianIndex(3), 4)
+        @test C[r] == C[collect(r)]
+    end
+    C = CartesianIndices((3:8, 3:8, 3:8))
+    r = StepRangeLen(CartesianIndex(1,1,1), CartesianIndex(1,1,1), 6)
+    @test C[r] == StepRangeLen(CartesianIndex(3,3,3), CartesianIndex(1,1,1), 6)
+    r = StepRangeLen(CartesianIndex(1,1,1), CartesianIndex(1,0,0), 6)
+    @test C[r] == StepRangeLen(CartesianIndex(3,3,3), CartesianIndex(1,0,0), 6)
+
+    C = CartesianIndices((3:8, 3:8, Base.IdentityUnitRange(3:8)))
+    r = StepRangeLen(CartesianIndex(1,1,3), CartesianIndex(1,1,1), 6)
+    @test C[r] == StepRangeLen(CartesianIndex(3,3,3), CartesianIndex(1,1,1), 6)
+end
+
 @testset "LinearIndices" begin
     @testset "constructors" begin
         for oinds in [
