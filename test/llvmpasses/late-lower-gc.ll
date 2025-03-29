@@ -164,6 +164,21 @@ define {} addrspace(10)* @gclift_switch({} addrspace(13)* addrspace(10)* %input,
   ret {} addrspace(10)* %ret
 }
 
+; Shouldn't hang
+define void @vector_insert(<4 x {} addrspace(10)* > %0, <2 x {} addrspace(10)* > %1) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %2 = call <4 x {} addrspace(10)*> @llvm.vector.insert.v4p10.v2p10(<4 x {} addrspace(10)*> %0, <2 x {} addrspace(10)*> %1, i64 2)
+  ret void
+}
+
+define void @vector_extract(<4 x {} addrspace(10)* > %0, <2 x {} addrspace(10)* > %1) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %2 = call <2 x {} addrspace(10)*> @llvm.vector.extract.v2p10.v4p10(<4 x {} addrspace(10)* > %0, i64 2)
+  ret void
+}
+
 define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
   %v2 = call {}*** @julia.get_pgcstack()
   %e0 = extractvalue [2 x {} addrspace(10)* addrspace(11)*] %ar, 0
