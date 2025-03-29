@@ -58,6 +58,7 @@ New library features
 * `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 * `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
+* New `Base.active_manifest()` function to return the path of the active manifest, like `Base.active_project()` ([#57937]).
 
 Standard library changes
 ------------------------
