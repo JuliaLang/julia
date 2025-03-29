@@ -44,6 +44,7 @@ ans
 err
 Base.active_project
 Base.set_active_project
+Base.active_manifest
 ```
 
 ## [Keywords](@id Keywords)

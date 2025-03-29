@@ -371,6 +371,21 @@ function set_active_project(projfile::Union{AbstractString,Nothing})
     end
 end
 
+"""
+    active_manifest()
+
+Return the path of the active manifest file. See [`Project environments`](@ref) for
+details on the difference between a project and a manifest, and the naming options and
+their priority when searching for a manifest file.
+
+See also [`Base.active_project`](@ref), [`Base.set_active_project`](@ref).
+"""
+function active_manifest(search_load_path::Bool=true)
+    proj = active_project(search_load_path)
+    proj === nothing && return nothing
+    return project_file_manifest_path(proj)
+end
+
 
 """
     load_path()

@@ -78,6 +78,8 @@ New library features
 * `Base.ScopedValues.LazyScopedValue{T}` is introduced for scoped values that compute their default using a
   `OncePerProcess{T}` callback, allowing for lazy initialization of the default value. `AbstractScopedValue` is
   now the abstract base type for both `ScopedValue` and `LazyScopedValue`. ([#59372])
+* `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
+* New `Base.active_manifest()` function to return the path of the active manifest, like `Base.active_project()` ([#])
 
 Standard library changes
 ------------------------
