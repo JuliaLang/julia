@@ -17,7 +17,7 @@ end
 ==(a::PkgId, b::PkgId) = a.uuid == b.uuid && a.name == b.name
 
 function hash(pkg::PkgId, h::UInt)
-    h += 0xc9f248583a0ca36c % UInt
+    h ⊻= 0xc9f248583a0ca36c % UInt
     h = hash(pkg.uuid, h)
     h = hash(pkg.name, h)
     return h
