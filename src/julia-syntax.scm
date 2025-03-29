@@ -4109,6 +4109,7 @@ f(x) = yt(x)
                                            (capt-var-access v fname opaq)
                                            v)))
                                    cvs)))
+               (set-car! (cdddr (lam:vinfo lam2)) '()) ;; must capture static_parameters as values inside opaque_closure
                `(new_opaque_closure
                  ,(cadr e) ,(or (caddr e) '(call (core apply_type) (core Union))) ,(or (cadddr e) '(core Any)) ,allow-partial
                  (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs) parsed-method-stack))
