@@ -805,6 +805,8 @@ write(io::IO, s::CodeUnits) = write(io, s.s)
 cconvert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = cconvert(Ptr{T}, s.s)
 cconvert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = cconvert(Ptr{Int8}, s.s)
 
+similar(::Type{<:CodeUnits{T}}, dims::Dims) where {T} = Array{T}(undef, dims)
+
 """
     codeunits(s::AbstractString)
 
