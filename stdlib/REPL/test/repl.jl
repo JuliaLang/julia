@@ -1953,6 +1953,10 @@ end
     end
 end
 
+@testset "`displaysize` return type inference" begin
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{REPL.Terminals.UnixTerminal})
+end
+
 @testset "Dummy Pkg prompt" begin
     # do this in an empty depot to test default for new users
     withenv("JULIA_DEPOT_PATH" => mktempdir() * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
