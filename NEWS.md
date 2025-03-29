@@ -26,7 +26,8 @@ New library features
 --------------------
 
 * `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
-* New `Base.active_manifest()` function to return the path of the active manifest, like `Base.active_project()` ([#])
+* New `Base.active_manifest()` function to return the path of the active manifest, like `Base.active_project()`.
+  Also can return the manifest that would be used for a given project file ([#57937])
 
 Standard library changes
 ------------------------
