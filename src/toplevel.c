@@ -311,7 +311,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
         bpart = jl_get_binding_partition(b, new_world);
         enum jl_partition_kind kind = jl_binding_kind(bpart);
         if (kind != PARTITION_KIND_GLOBAL) {
-            if (jl_bkind_is_some_guard(kind) || kind == PARTITION_KIND_DECLARED || kind == PARTITION_KIND_IMPLICIT) {
+            if (jl_bkind_is_some_implicit(kind) || kind == PARTITION_KIND_DECLARED) {
                 if (kind == new_kind) {
                     if (!set_type)
                         goto done;
@@ -659,10 +659,10 @@ static void import_module(jl_task_t *ct, jl_module_t *JL_NONNULL m, jl_module_t 
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (kind != PARTITION_KIND_GUARD && kind != PARTITION_KIND_FAILED && kind != PARTITION_KIND_DECLARED && kind != PARTITION_KIND_IMPLICIT) {
+    if (!jl_bkind_is_some_implicit(kind) && kind != PARTITION_KIND_DECLARED) {
         // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
-         jl_walk_binding_inplace(&b, &bpart, ct->world_age);
-        if (jl_binding_kind(bpart) == PARTITION_KIND_CONST || jl_binding_kind(bpart) == PARTITION_KIND_BACKDATED_CONST || jl_binding_kind(bpart) == PARTITION_KIND_CONST_IMPORT) {
+        jl_walk_binding_inplace(&b, &bpart, ct->world_age);
+        if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
             // Already declared (e.g. on another thread) or imported.
             if (bpart->restriction == (jl_value_t*)import)
                 return;

@@ -25,6 +25,8 @@ New library functions
 New library features
 --------------------
 
+`sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
+
 Standard library changes
 ------------------------
 
@@ -37,6 +39,8 @@ Standard library changes
 #### REPL
 
 #### Test
+
+* Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
 
 #### InteractiveUtils
 

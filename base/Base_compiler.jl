@@ -159,7 +159,7 @@ if false
 end
 
 """
-    time_ns() -> UInt64
+    time_ns()::UInt64
 
 Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
 between two moments in time.
@@ -278,14 +278,19 @@ include("pointer.jl")
 include("refvalue.jl")
 include("cmem.jl")
 
-include("checked.jl")
-using .Checked
-function cld end
-function fld end
+function nextfloat end
+function prevfloat end
+include("rounding.jl")
+include("float.jl")
 
 # Lazy strings
 import Core: String
 include("strings/lazy.jl")
+
+function cld end
+function fld end
+include("checked.jl")
+using .Checked
 
 # array structures
 include("indices.jl")
@@ -371,3 +376,4 @@ Core._setparser!(fl_parse)
 # Further definition of Base will happen in Base.jl if loaded.
 
 end # baremodule Base
+using .Base

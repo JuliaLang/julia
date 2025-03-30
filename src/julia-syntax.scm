@@ -1429,7 +1429,7 @@
           (else
            (error "invalid \"try\" form")))))
 
-(define (expand-unionall-def name type-ex (allow-local #t))
+(define (expand-unionall-def name type-ex (const? #t))
   (if (and (pair? name)
            (eq? (car name) 'curly))
       (let ((name   (cadr name))
@@ -1440,7 +1440,7 @@
           (expand-forms
             `(block
               (= ,rr (where ,type-ex ,@params))
-              (,(if allow-local 'assign-const-if-global 'const) ,name ,rr)
+              (,(if const? 'const 'assign-const-if-global) ,name ,rr)
               (latestworld-if-toplevel)
               ,rr)))
       (expand-forms
@@ -1450,38 +1450,24 @@
   (filter (lambda (x) (not (underscore-symbol? x))) syms))
 
 ;; Expand `[global] const a::T = val`
-(define (expand-const-decl e (mustassgn #f))
-  (if (length= e 3) e
-    (let ((arg (cadr e)))
-      (if (atom? arg)
-          (if mustassgn
-            (error "expected assignment after \"const\"")
-            e)
-          (case (car arg)
-            ((global)
-              (expand-const-decl `(const ,(cadr arg)) #t))
-            ((=)
-              (cond
-                ;; `const f() = ...` - The `const` here is inoperative, but the syntax happened to work in earlier versions, so simply strip `const`.
-                ;; TODO: Consider whether to keep this in 2.0.
-                ((eventually-call? (cadr arg))
-                 (expand-forms arg))
-                ((and (pair? (cadr arg)) (eq? (caadr arg) 'curly))
-                 (expand-unionall-def (cadr arg) (caddr arg)))
-                ((and (pair? (cadr arg)) (eq? (caadr arg) 'tuple) (not (has-parameters? (cdr (cadr arg)))))
-                  ;; We need this case because `(f(), g()) = (1, 2)` goes through here, which cannot go via the `local` lowering below,
-                  ;; because the symbols come out wrong. Sigh... So much effort for such a syntax corner case.
-                  (expand-tuple-destruct (cdr (cadr arg)) (caddr arg) (lambda (assgn) `(,(car e) ,assgn))))
-                (else
-                 (let ((rr (make-ssavalue)))
-                   (expand-forms `(block
-                           (= ,rr ,(caddr arg))
-                           (scope-block (block (hardscope)
-                            (local (= ,(cadr arg) ,rr))
-                            ,.(map (lambda (v) `(,(car e) (globalref (thismodule) ,v) ,v)) (filter-not-underscore (lhs-vars (cadr arg))))
-                            (latestworld)
-                            ,rr))))))))
-            (else (error "expected assignment after \"const\"")))))))
+(define (expand-const-decl e)
+  (define (check-assignment asgn)
+    (unless (and (pair? asgn) (eq? (car asgn) '=))
+      ;; (const (global x)) is possible due to a parser quirk
+      (error "expected assignment after \"const\"")))
+  (if (length= e 3)
+      `(const ,(cadr e) ,(expand-forms (caddr e)))
+      (let ((arg (cadr e)))
+        (case (car arg)
+          ((global) (let ((asgn (cadr arg)))
+                      (check-assignment asgn)
+                      `(block
+                        ,.(map (lambda (v) `(global ,v))
+                               (lhs-bound-names (cadr asgn)))
+                        ,(expand-assignment asgn #t))))
+          ((=)      (check-assignment arg)
+                    (expand-assignment arg #t))
+          (else     (error "expected assignment after \"const\""))))))
 
 (define (expand-atomic-decl e)
   (error "unimplemented or unsupported atomic declaration"))
@@ -1526,6 +1512,152 @@
                  (loop (cdr b) (cons `(,what, x) decls) assigns))
                 (else
                  (error (string "invalid syntax in \"" what "\" declaration"))))))))
+
+(define (expand-assignment e (const? #f))
+  (define lhs (cadr e))
+  (define (function-lhs? lhs)
+    (and (pair? lhs)
+         (or (eq? (car lhs) 'call)
+             (eq? (car lhs) 'where)
+             (and (eq? (car lhs) '|::|)
+                  (pair? (cadr lhs))
+                  (eq? (car (cadr lhs)) 'call)))))
+  (define (assignment-to-function lhs e)  ;; convert '= expr to 'function expr
+    (cons 'function (cdr e)))
+  (define (maybe-wrap-const x)
+    (if const? `(const ,x) x))
+  (cond
+   ((function-lhs? lhs)
+    ;; `const f() = ...` - The `const` here is inoperative, but the syntax
+    ;; happened to work in earlier versions, so simply strip `const`.
+    (expand-forms (assignment-to-function lhs e)))
+   ((and (pair? lhs)
+         (eq? (car lhs) 'curly))
+    (expand-unionall-def (cadr e) (caddr e) const?))
+   ((assignment? (caddr e))
+    ;; chain of assignments - convert a=b=c to `b=c; a=c`
+    (let loop ((lhss (list lhs))
+               (rhs  (caddr e)))
+      (if (and (assignment? rhs) (not (function-lhs? (cadr rhs))))
+          (loop (cons (cadr rhs) lhss) (caddr rhs))
+          (let* ((rr (if (symbol-like? rhs) rhs (make-ssavalue)))
+                 (lhss (reverse lhss))
+                 (lhs0 (car lhss))
+                 (lhss (cdr lhss))
+                 (lhss (reverse lhss)))
+            (expand-forms
+             `(block ,.(if (eq? rr rhs) '() `((= ,rr ,(if (assignment? rhs)
+                                                          (assignment-to-function (cadr rhs) rhs)
+                                                          rhs))))
+                     ,@(map (lambda (l) `(= ,l ,rr)) lhss)
+                     ;; In const x = y = z, only x becomes const
+                     ,(maybe-wrap-const `(= ,lhs0 ,rr))
+                     (unnecessary ,rr)))))))
+   ((or (and (symbol-like? lhs) (valid-name? lhs))
+        (globalref? lhs))
+    ;; TODO: We currently call (latestworld) after every (const _ _), but this
+    ;; may need to be moved elsewhere if we want to avoid making one const
+    ;; visible before side effects have been performed (#57484)
+    (if const?
+        (let ((rr (make-ssavalue)))
+          `(block
+            ,(sink-assignment rr (expand-forms (caddr e)))
+            (const ,lhs ,rr)
+            (latestworld)
+            (unnecessary ,rr)))
+        (sink-assignment lhs (expand-forms (caddr e)))))
+   ((atom? lhs)
+    (error (string "invalid assignment location \"" (deparse lhs) "\"")))
+   (else
+    (case (car lhs)
+      ((|.|)
+       ;; a.b =
+       (when const?
+         (error (string "cannot declare \"" (deparse lhs) "\" `const`")))
+       (let* ((a   (cadr lhs))
+              (b  (caddr lhs))
+              (rhs (caddr e)))
+         (if (and (length= b 2) (eq? (car b) 'tuple))
+             (error (string "invalid syntax \""
+                            (string (deparse a) ".(" (deparse (cadr b)) ") = ...") "\"")))
+         (let ((aa (if (symbol-like? a) a (make-ssavalue)))
+               (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
+                       b (make-ssavalue)))
+               (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
+           `(block
+             ,.(if (eq? aa a)   '() (list (sink-assignment aa (expand-forms a))))
+             ,.(if (eq? bb b)   '() (list (sink-assignment bb (expand-forms b))))
+             ,.(if (eq? rr rhs) '() (list (sink-assignment rr (expand-forms rhs))))
+             (call (top setproperty!) ,aa ,bb ,rr)
+             (unnecessary ,rr)))))
+      ((tuple)
+       (let ((lhss (cdr lhs))
+             (x    (caddr e)))
+         (if (has-parameters? lhss)
+             ;; property destructuring
+             (expand-property-destruct lhss x maybe-wrap-const)
+             ;; multiple assignment
+             (expand-tuple-destruct lhss x maybe-wrap-const))))
+      ((typed_hcat)
+       (error "invalid spacing in left side of indexed assignment"))
+      ((typed_vcat typed_ncat)
+       (error "unexpected \";\" in left side of indexed assignment"))
+      ((ref)
+       ;; (= (ref a . idxs) rhs)
+       (when const?
+         (error (string "cannot declare \"" (deparse lhs) "\" `const`")))
+       (let ((a    (cadr lhs))
+             (idxs (cddr lhs))
+             (rhs  (caddr e)))
+         (let* ((reuse (and (pair? a)
+                            (contains (lambda (x) (eq? x 'end))
+                                      idxs)))
+                (arr   (if reuse (make-ssavalue) a))
+                (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
+                (rrhs (and (pair? rhs) (not (ssavalue? rhs)) (not (quoted? rhs))))
+                (r    (if rrhs (make-ssavalue) rhs))
+                (rini (if rrhs (list (sink-assignment r (expand-forms rhs))) '())))
+           (receive
+               (new-idxs stuff) (process-indices arr idxs)
+             `(block
+               ,@stmts
+               ,.(map expand-forms stuff)
+               ,@rini
+               ,(expand-forms
+                 `(call (top setindex!) ,arr ,r ,@new-idxs))
+               (unnecessary ,r))))))
+      ((|::|)
+       ;; (= (|::| T) rhs) is an error
+       (if (null? (cddr lhs))
+           (error (string "invalid assignment location \"" (deparse lhs) "\"")))
+       ;; (= (|::| x T) rhs)
+       (let ((x (cadr lhs))
+             (T (caddr lhs))
+             (rhs (caddr e)))
+         (let ((e (remove-argument-side-effects x)))
+           (if const?
+               ;; This could go through convert-assignment in the closure
+               ;; conversion pass, but since constants don't have declared types
+               ;; the way other variables do, we insert convert() here.
+               (expand-forms
+                ;; TODO: This behaviour (`const _:T = ...` does not call convert,
+                ;; but still evaluates RHS) should be documented.
+                `(const ,(car e) ,(if (underscore-symbol? (car e))
+                                rhs
+                                (convert-for-type-decl rhs T #t #f))))
+               (expand-forms
+                `(block ,@(cdr e)
+                        ;; TODO: When x is a complex expression, this acts as a
+                        ;; typeassert rather than a declaration.
+                        ,.(if (underscore-symbol? (car e))
+                              '() ; Assignment to _ will ultimately be discarded---don't declare anything
+                              `((decl ,(car e) ,T)))
+                        ,(maybe-wrap-const `(= ,(car e) ,rhs))))))))
+      ((vcat ncat)
+       ;; (= (vcat . args) rhs)
+       (error "use \"(a, b) = ...\" to assign multiple values"))
+      (else
+       (error (string "invalid assignment location \"" (deparse lhs) "\"")))))))
 
 ;; convert (lhss...) = (tuple ...) to assignments, eliminating the tuple
 (define (tuple-to-assignments lhss0 x wrap)
@@ -2262,7 +2394,7 @@
          (gensy))
         (else (make-ssavalue))))
 
-(define (expand-property-destruct lhs x)
+(define (expand-property-destruct lhs x (wrap identity))
   (if (not (length= lhs 1))
       (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\"")))
   (let* ((lhss (cdar lhs))
@@ -2277,7 +2409,7 @@
                                 (cadr field))
                                (else
                                 (error (string "invalid assignment location \"" (deparse `(tuple ,lhs)) "\""))))))
-               (expand-forms `(= ,field (call (top getproperty) ,xx (quote ,prop))))))
+               (expand-forms (wrap `(= ,field (call (top getproperty) ,xx (quote ,prop)))))))
            lhss)
        (unnecessary ,xx))))
 
@@ -2298,7 +2430,6 @@
   (if (null? lhss)
       '()
       (let* ((lhs  (car lhss))
-             (wrapfirst (lambda (x i) (if (= i 1) (wrap x) x)))
              (lhs- (cond ((or (symbol? lhs) (ssavalue? lhs))
                           lhs)
                          ((vararg? lhs)
@@ -2310,7 +2441,10 @@
                                              (make-ssavalue))))))
                          ;; can't use ssavalues if it's a function definition
                          ((eventually-call? lhs) (gensy))
-                         (else (make-ssavalue)))))
+                         (else (make-ssavalue))))
+             ;; If we use an intermediary lhs, don't wrap `const`.
+             (wrap-subassign (if (eq? lhs lhs-) wrap identity))
+             (wrapfirst (lambda (x i) (if (= i 1) (wrap-subassign x) x))))
         (if (and (vararg? lhs) (any vararg? (cdr lhss)))
             (error "multiple \"...\" on lhs of assignment"))
         (if (not (eq? lhs lhs-))
@@ -2322,7 +2456,7 @@
                 (if (underscore-symbol? (cadr lhs-))
                     '()
                     (list (expand-forms
-                            (wrap `(= ,(cadr lhs-) (call (top rest) ,xx ,@(if (eq? i 1) '() `(,st))))))))
+                            (wrap-subassign `(= ,(cadr lhs-) (call (top rest) ,xx ,@(if (eq? i 1) '() `(,st))))))))
                 (let ((tail (if (eventually-call? lhs) (gensy) (make-ssavalue))))
                   (cons (expand-forms
                           (lower-tuple-assignment
@@ -2498,115 +2632,7 @@
    'global expand-local-or-global-decl
    'local-def expand-local-or-global-decl
 
-   '=
-   (lambda (e)
-     (define lhs (cadr e))
-     (define (function-lhs? lhs)
-       (and (pair? lhs)
-            (or (eq? (car lhs) 'call)
-                (eq? (car lhs) 'where)
-                (and (eq? (car lhs) '|::|)
-                     (pair? (cadr lhs))
-                     (eq? (car (cadr lhs)) 'call)))))
-     (define (assignment-to-function lhs e)  ;; convert '= expr to 'function expr
-       (cons 'function (cdr e)))
-     (cond
-      ((function-lhs? lhs)
-       (expand-forms (assignment-to-function lhs e)))
-      ((and (pair? lhs)
-            (eq? (car lhs) 'curly))
-       (expand-unionall-def (cadr e) (caddr e)))
-      ((assignment? (caddr e))
-       ;; chain of assignments - convert a=b=c to `b=c; a=c`
-       (let loop ((lhss (list lhs))
-                  (rhs  (caddr e)))
-         (if (and (assignment? rhs) (not (function-lhs? (cadr rhs))))
-             (loop (cons (cadr rhs) lhss) (caddr rhs))
-             (let ((rr (if (symbol-like? rhs) rhs (make-ssavalue))))
-               (expand-forms
-                `(block ,.(if (eq? rr rhs) '() `((= ,rr ,(if (assignment? rhs)
-                                                             (assignment-to-function (cadr rhs) rhs)
-                                                             rhs))))
-                        ,@(map (lambda (l) `(= ,l ,rr))
-                               lhss)
-                        (unnecessary ,rr)))))))
-      ((or (and (symbol-like? lhs) (valid-name? lhs))
-           (globalref? lhs))
-       (sink-assignment lhs (expand-forms (caddr e))))
-      ((atom? lhs)
-       (error (string "invalid assignment location \"" (deparse lhs) "\"")))
-      (else
-       (case (car lhs)
-         ((|.|)
-          ;; a.b =
-          (let* ((a   (cadr lhs))
-                 (b  (caddr lhs))
-                 (rhs (caddr e)))
-            (if (and (length= b 2) (eq? (car b) 'tuple))
-                (error (string "invalid syntax \""
-                               (string (deparse a) ".(" (deparse (cadr b)) ") = ...") "\"")))
-            (let ((aa (if (symbol-like? a) a (make-ssavalue)))
-                  (bb (if (or (atom? b) (symbol-like? b) (and (pair? b) (quoted? b)))
-                          b (make-ssavalue)))
-                  (rr (if (or (symbol-like? rhs) (atom? rhs)) rhs (make-ssavalue))))
-              `(block
-                ,.(if (eq? aa a)   '() (list (sink-assignment aa (expand-forms a))))
-                ,.(if (eq? bb b)   '() (list (sink-assignment bb (expand-forms b))))
-                ,.(if (eq? rr rhs) '() (list (sink-assignment rr (expand-forms rhs))))
-                (call (top setproperty!) ,aa ,bb ,rr)
-                (unnecessary ,rr)))))
-         ((tuple)
-          (let ((lhss (cdr lhs))
-                (x    (caddr e)))
-            (if (has-parameters? lhss)
-                ;; property destructuring
-                (expand-property-destruct lhss x)
-                ;; multiple assignment
-                (expand-tuple-destruct lhss x))))
-         ((typed_hcat)
-          (error "invalid spacing in left side of indexed assignment"))
-         ((typed_vcat typed_ncat)
-          (error "unexpected \";\" in left side of indexed assignment"))
-         ((ref)
-          ;; (= (ref a . idxs) rhs)
-          (let ((a    (cadr lhs))
-                (idxs (cddr lhs))
-                (rhs  (caddr e)))
-            (let* ((reuse (and (pair? a)
-                               (contains (lambda (x) (eq? x 'end))
-                                         idxs)))
-                   (arr   (if reuse (make-ssavalue) a))
-                   (stmts (if reuse `((= ,arr ,(expand-forms a))) '()))
-                   (rrhs (and (pair? rhs) (not (ssavalue? rhs)) (not (quoted? rhs))))
-                   (r    (if rrhs (make-ssavalue) rhs))
-                   (rini (if rrhs (list (sink-assignment r (expand-forms rhs))) '())))
-              (receive
-               (new-idxs stuff) (process-indices arr idxs)
-               `(block
-                 ,@stmts
-                 ,.(map expand-forms stuff)
-                 ,@rini
-                 ,(expand-forms
-                   `(call (top setindex!) ,arr ,r ,@new-idxs))
-                 (unnecessary ,r))))))
-         ((|::|)
-          ;; (= (|::| T) rhs) is an error
-          (if (null? (cddr lhs))
-              (error (string "invalid assignment location \"" (deparse lhs) "\"")))
-          ;; (= (|::| x T) rhs)
-          (let ((x (cadr lhs))
-                (T (caddr lhs))
-                (rhs (caddr e)))
-            (let ((e (remove-argument-side-effects x)))
-              (expand-forms
-               `(block ,@(cdr e)
-                       (decl ,(car e) ,T)
-                       (= ,(car e) ,rhs))))))
-         ((vcat ncat)
-          ;; (= (vcat . args) rhs)
-          (error "use \"(a, b) = ...\" to assign multiple values"))
-         (else
-          (error (string "invalid assignment location \"" (deparse lhs) "\"")))))))
+   '= expand-assignment
 
    'abstract
    (lambda (e)
@@ -2977,6 +3003,16 @@
 (define (lhs-vars e)
   (map decl-var (lhs-decls e)))
 
+;; Return all the names that will be bound by the assignment LHS, including
+;; curlies and calls.
+(define (lhs-bound-names e)
+  (cond ((underscore-symbol? e) '())
+        ((atom? e) (list e))
+        ((and (pair? e) (memq (car e) '(call curly where |::|)))
+         (lhs-bound-names (cadr e)))
+        ((and (pair? e) (memq (car e) '(tuple parameters)))
+         (apply append (map lhs-bound-names (cdr e))))))
+
 (define (all-decl-vars e)  ;; map decl-var over every level of an assignment LHS
   (cond ((eventually-call? e) e)
         ((decl? e)   (decl-var e))
@@ -3003,7 +3039,7 @@
             ;; like v = val, except that if `v` turns out global(either
             ;; implicitly or by explicit `global`), it gains an implicit `const`
             (set! vars (cons (cadr e) vars)))
-          ((=)
+          ((= const)
            (let ((v (decl-var (cadr e))))
              (find-assigned-vars- (caddr e))
              (if (or (ssavalue? v) (globalref? v) (underscore-symbol? v))
@@ -3129,14 +3165,18 @@
         ((eq? (car e) 'global)
          (check-valid-name (cadr e))
          e)
+
         ((eq? (car e) 'assign-const-if-global)
            (if (eq? (var-kind (cadr e) scope) 'local)
-               (if (length= e 2) (null) `(= ,@(cdr e)))
-               `(const ,@(cdr e))))
+               (if (length= e 2)
+                   (null)
+                   (resolve-scopes- `(= ,@(cdr e)) scope sp loc))
+               (resolve-scopes- `(const ,@(cdr e)) scope sp loc)))
         ((eq? (car e) 'global-if-global)
            (if (eq? (var-kind (cadr e) scope) 'local)
                '(null)
                `(global ,@(cdr e))))
+
         ((memq (car e) '(local local-def))
          (check-valid-name (cadr e))
          ;; remove local decls
@@ -3289,7 +3329,7 @@
            ,(resolve-scopes- (caddr  e) scope)
            ,(resolve-scopes- (cadddr e) scope (method-expr-static-parameters e))))
         (else
-         (if (and (eq? (car e) '=) (symbol? (cadr e))
+         (if (and (memq (car e) '(= const)) (symbol? (cadr e))
                   scope (null? (lam:args (scope:lam scope)))
                   (warn-var?! (cadr e) scope)
                   (= *scopewarn-opt* 1))
@@ -3317,11 +3357,11 @@
 (define (lambda-all-vars e)
   (append (lam:argnames e) (caddr e)))
 
-;; compute set of variables referenced in a lambda but not bound by it
+;; compute set of non-global variables referenced in a lambda but not bound by it
 (define (free-vars- e tab)
   (cond ((or (eq? e UNUSED) (underscore-symbol? e)) tab)
         ((symbol? e) (put! tab e #t))
-        ((and (pair? e) (eq? (car e) 'globalref)) tab)
+        ((and (pair? e) (memq (car e) '(global globalref))) tab)
         ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
@@ -3345,9 +3385,15 @@
               vi)
     tab))
 
+;; env:      list of vinfo (includes any closure #self#; should not include globals)
+;; captvars: list of vinfo
+;; sp:       list of symbol
+;; new-sp:   list of symbol (static params declared here)
+;; methsig:  `(call (core svec) ...)
+;; tab:      table of (name . var-info)
 (define (analyze-vars-lambda e env captvars sp new-sp methsig tab)
   (let* ((args (lam:args e))
-         (locl (caddr e))
+         (locl (lam:vinfo e))
          (allv (nconc (map arg-name args) locl))
          (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
                       ;; add variables referenced in declared types for free vars
@@ -3357,27 +3403,23 @@
                                             fv))))
                  (append (diff dv fv) fv)))
          (sig-fv (if methsig (free-vars methsig) '()))
-         (glo  (find-global-decls (lam:body e)))
          ;; make var-info records for vars introduced by this lambda
          (vi   (nconc
                 (map (lambda (decl) (make-var-info (decl-var decl)))
                      args)
                 (map make-var-info locl)))
-         (capt-sp (filter (lambda (v) (or (and (memq v fv) (not (memq v glo)) (not (memq v new-sp)))
+         (capt-sp (filter (lambda (v) (or (and (memq v fv) (not (memq v new-sp)))
                                           (memq v sig-fv)))
                           sp))
          ;; captured vars: vars from the environment that occur
          ;; in our set of free variables (fv).
          (cv    (append (filter (lambda (v) (and (memq (vinfo:name v) fv)
-                                                 (not (memq (vinfo:name v) new-sp))
-                                                 (not (memq (vinfo:name v) glo))))
+                                                 (not (memq (vinfo:name v) new-sp))))
                                 env)
                         (map make-var-info capt-sp)))
          (new-env (append vi
                           ;; new environment: add our vars
-                          (filter (lambda (v)
-                                    (and (not (memq (vinfo:name v) allv))
-                                         (not (memq (vinfo:name v) glo))))
+                          (filter (lambda (v) (not (memq (vinfo:name v) allv)))
                                   env))))
     (analyze-vars (lam:body e)
                   new-env
@@ -3409,7 +3451,7 @@
         ((local-def) ;; a local that we know has an assignment that dominates all usages
          (let ((vi (get tab (cadr e) #f)))
               (vinfo:set-never-undef! vi #t)))
-        ((=)
+        ((= const)
          (let ((vi (and (symbol? (cadr e)) (get tab (cadr e) #f))))
            (if vi ; if local or captured
                (begin (if (vinfo:asgn vi)
@@ -4003,7 +4045,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref thismodule lineinfo line break inert module toplevel null true false meta) e)
+          ((quote top core global globalref thismodule lineinfo line break inert module toplevel null true false meta import using) e)
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)
@@ -4026,7 +4068,10 @@ f(x) = yt(x)
                      '(null)
                      `(newvar ,(cadr e))))))
           ((const)
-           (put! globals (binding-to-globalref (cadr e)) #f)
+           ;; Check we've expanded surface `const` (1 argument form)
+           (assert (and (length= e 3)))
+           (when (globalref? (cadr e))
+             (put! globals (cadr e) #f))
            e)
           ((atomic) e)
           ((isdefined) ;; convert isdefined expr to function for closure converted variables
@@ -4378,7 +4423,6 @@ f(x) = yt(x)
         (first-line #t)
         (current-loc #f)
         (rett #f)
-        (global-const-error #f)
         (vinfo-table (vinfo-to-table (car (lam:vinfo lam))))
         (arg-map #f)          ;; map arguments to new names if they are assigned
         (label-counter 0)     ;; counter for generating label addresses
@@ -4591,18 +4635,19 @@ f(x) = yt(x)
                                  (cdr cnd)
                                  (list cnd))))))
           tests))
-    (define (emit-assignment-or-setglobal lhs rhs)
-      (if (globalref? lhs)
+    (define (emit-assignment-or-setglobal lhs rhs (op '=))
+      ;; (const (globalref _ _) _) does not use setglobal!
+      (if (and (globalref? lhs) (eq? op '=))
         (emit `(call (top setglobal!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs))
-        (emit `(= ,lhs ,rhs))))
-    (define (emit-assignment lhs rhs)
+        (emit `(,op ,lhs ,rhs))))
+    (define (emit-assignment lhs rhs (op '=))
       (if rhs
           (if (valid-ir-rvalue? lhs rhs)
-              (emit-assignment-or-setglobal lhs rhs)
+              (emit-assignment-or-setglobal lhs rhs op)
               (let ((rr (make-ssavalue)))
                 (emit `(= ,rr ,rhs))
-                (emit-assignment-or-setglobal lhs rr)))
-          (emit-assignment-or-setglobal lhs `(null))) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
+                (emit-assignment-or-setglobal lhs rr op)))
+          (emit-assignment-or-setglobal lhs `(null) op)) ; in unreachable code (such as after return), still emit the assignment so that the structure of those uses is preserved
       #f)
     ;; the interpreter loop. `break-labels` keeps track of the labels to jump to
     ;; for all currently closing break-blocks.
@@ -4616,9 +4661,9 @@ f(x) = yt(x)
           (let ((e1 (if (and arg-map (symbol? e))
                         (get arg-map e e)
                         e)))
-            (if (and value (or (underscore-symbol? e)
-                               (and (pair? e) (eq? (car e) 'globalref)
-                                    (underscore-symbol? (cadr e)))))
+            (if (or (underscore-symbol? e)
+                    (and (pair? e) (eq? (car e) 'globalref)
+                         (underscore-symbol? (cadr e))))
                 (error (string "all-underscore identifiers are write-only and their values cannot be used in expressions" (format-loc current-loc))))
             (cond (tail  (emit-return tail e1))
                   (value e1)
@@ -4668,7 +4713,12 @@ f(x) = yt(x)
                (cond (tail (emit-return tail callex))
                      (value callex)
                      (else (emit callex)))))
-            ((=)
+            ((= const)
+             (when (eq? (car e) 'const)
+               (when (local-in? (cadr e) lam)
+                 (error (string "unsupported `const` declaration on local variable" (format-loc current-loc))))
+               (when (pair? (cadr lam))
+                 (error (string "`global const` declaration not allowed inside function" (format-loc current-loc)))))
              (let ((lhs (cadr e)))
                (if (and (symbol? lhs) (underscore-symbol? lhs))
                    (compile (caddr e) break-labels value tail)
@@ -4681,10 +4731,10 @@ f(x) = yt(x)
                                        rhs (make-ssavalue))))
                            (if (not (eq? rr rhs))
                                (emit `(= ,rr ,rhs)))
-                           (emit-assignment-or-setglobal lhs rr)
+                           (emit-assignment-or-setglobal lhs rr (car e))
                            (if tail (emit-return tail rr))
                            rr)
-                         (emit-assignment lhs rhs))))))
+                         (emit-assignment lhs rhs (car e)))))))
             ((block)
              (let* ((last-fname filename)
                     (fnm        (first-non-meta e))
@@ -4927,14 +4977,6 @@ f(x) = yt(x)
             ((moved-local)
              (set-car! (lam:vinfo lam) (append (car (lam:vinfo lam)) `((,(cadr e) Any 2))))
              #f)
-            ((const)
-             (if (local-in? (cadr e) lam)
-                 (error (string "unsupported `const` declaration on local variable" (format-loc current-loc)))
-                 (if (pair? (cadr lam))
-                     ;; delay this error to allow "misplaced struct" errors to happen first
-                     (if (not global-const-error)
-                         (set! global-const-error current-loc))
-                     (emit e))))
             ((atomic) (error "misplaced atomic declaration"))
             ((isdefined throw_undef_if_not) (if tail (emit-return tail e) e))
             ((boundscheck) (if tail (emit-return tail e) e))
@@ -5065,8 +5107,6 @@ f(x) = yt(x)
                       (let ((pexc (pop-exc-expr src-catch-tokens target-catch-tokens)))
                         (if pexc (set-cdr! point (cons pexc (cdr point)))))))))
               handler-goto-fixups)
-    (if global-const-error
-        (error (string "`global const` declaration not allowed inside function" (format-loc global-const-error))))
     (let* ((stmts (reverse! code))
            (di    (definitely-initialized-vars stmts vi))
            (body  (cons 'block (filter (lambda (e)

@@ -1280,17 +1280,21 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
         sv = try
             if ocachepath !== nothing
                 @debug "Loading object cache file $ocachepath for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_package_image_from_file, Ref{SimpleVector}, (Cstring, Any, Cint, Cstring, Cint),
+                ccall(:jl_restore_package_image_from_file, Any, (Cstring, Any, Cint, Cstring, Cint),
                     ocachepath, depmods, #=completeinfo=#false, pkg.name, ignore_native)
             else
                 @debug "Loading cache file $path for $(repr("text/plain", pkg))"
-                ccall(:jl_restore_incremental, Ref{SimpleVector}, (Cstring, Any, Cint, Cstring),
+                ccall(:jl_restore_incremental, Any, (Cstring, Any, Cint, Cstring),
                     path, depmods, #=completeinfo=#false, pkg.name)
             end
         finally
             lock(require_lock)
         end
+        if isa(sv, Exception)
+            return sv
+        end
 
+        sv = sv::SimpleVector
         edges = sv[3]::Vector{Any}
         ext_edges = sv[4]::Union{Nothing,Vector{Any}}
         extext_methods = sv[5]::Vector{Any}
@@ -1438,7 +1442,6 @@ function run_module_init(mod::Module, i::Int=1)
 end
 
 function run_package_callbacks(modkey::PkgId)
-    @assert modkey != precompilation_target
     run_extension_callbacks(modkey)
     assert_havelock(require_lock)
     unlock(require_lock)
@@ -1568,7 +1571,7 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
             uuid_trigger = UUID(totaldeps[trigger]::String)
             trigger_id = PkgId(uuid_trigger, trigger)
             push!(trigger_ids, trigger_id)
-            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id) || (trigger_id == precompilation_target)
+            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
                 trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
                 push!(trigger1, gid)
             else
@@ -1581,7 +1584,6 @@ end
 loading_extension::Bool = false
 loadable_extensions::Union{Nothing,Vector{PkgId}} = nothing
 precompiling_extension::Bool = false
-precompilation_target::Union{Nothing,PkgId} = nothing
 function run_extension_callbacks(extid::ExtensionId)
     assert_havelock(require_lock)
     succeeded = try
@@ -2178,7 +2180,6 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
     # load already in progress for this module on the task
     task, cond = loading
     deps = String[modkey.name]
-    pkgid = modkey
     assert_havelock(cond.lock)
     if debug_loading_deadlocks && current_task() !== task
         waiters = Dict{Task,Pair{Task,PkgId}}() # invert to track waiting tasks => loading tasks
@@ -2198,18 +2199,26 @@ function canstart_loading(modkey::PkgId, build_id::UInt128, stalecheck::Bool)
         end
     end
     if current_task() === task
-        others = String[modkey.name] # repeat this to emphasize the cycle here
+        push!(deps, modkey.name) # repeat this to emphasize the cycle here
+        others = Set{String}()
         for each in package_locks # list the rest of the packages being loaded too
             if each[2][1] === task
                 other = each[1].name
-                other == modkey.name || other == pkgid.name || push!(others, other)
+                other == modkey.name || push!(others, other)
             end
+        end
+        # remove duplicates from others already in deps
+        for dep in deps
+            delete!(others, dep)
         end
         msg = sprint(deps, others) do io, deps, others
             print(io, "deadlock detected in loading ")
-            join(io, deps, " -> ")
-            print(io, " -> ")
-            join(io, others, " && ")
+            join(io, deps, " using ")
+            if !isempty(others)
+                print(io, " (while loading ")
+                join(io, others, " and ")
+                print(io, ")")
+            end
         end
         throw(ConcurrencyViolationError(msg))
     end
@@ -2383,6 +2392,10 @@ function __require(into::Module, mod::Symbol)
         error("`using/import $mod` outside of a Module detected. Importing a package outside of a module \
          is not allowed during package precompilation.")
     end
+    topmod = moduleroot(into)
+    if nameof(topmod) === mod
+        return topmod
+    end
     @lock require_lock begin
     LOADING_CACHE[] = LoadingCache()
     try
@@ -2491,10 +2504,7 @@ function _require_prelocked(uuidkey::PkgId, env=nothing)
         try
             toplevel_load[] = false
             m = __require_prelocked(uuidkey, env)
-            if m === nothing
-                error("package `$(uuidkey.name)` did not define the expected \
-                      module `$(uuidkey.name)`, check for typos in package module name")
-            end
+            m isa Module || check_package_module_loaded_error(uuidkey)
         finally
             toplevel_load[] = last
             end_loading(uuidkey, m)
@@ -2984,6 +2994,9 @@ const newly_inferred = CodeInstance[]
 function include_package_for_output(pkg::PkgId, input::String, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
                                     concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String})
 
+    @lock require_lock begin
+    m = start_loading(pkg, UInt128(0), false)
+    @assert m === nothing
     append!(empty!(Base.DEPOT_PATH), depot_path)
     append!(empty!(Base.DL_LOAD_PATH), dl_load_path)
     append!(empty!(Base.LOAD_PATH), load_path)
@@ -2992,6 +3005,8 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
     append!(empty!(Base._concrete_dependencies), concrete_deps)
+    end
+
     uuid_tuple = pkg.uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, pkg.uuid)
 
     ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
@@ -3010,21 +3025,22 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         ccall(:jl_set_newly_inferred, Cvoid, (Any,), nothing)
     end
     # check that the package defined the expected module so we can give a nice error message if not
-    Base.check_package_module_loaded(pkg)
+    m = maybe_root_module(pkg)
+    m isa Module || check_package_module_loaded_error(pkg)
 
     # Re-populate the runtime's newly-inferred array, which will be included
     # in the output. We removed it above to avoid including any code we may
     # have compiled for error handling and validation.
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
+    @lock require_lock end_loading(pkg, m)
+    # insert_extension_triggers(pkg)
+    # run_package_callbacks(pkg)
 end
 
-function check_package_module_loaded(pkg::PkgId)
-    if !haskey(Base.loaded_modules, pkg)
-        # match compilecache error type for non-125 errors
-        error("$(repr("text/plain", pkg)) did not define the expected module `$(pkg.name)`, \
-            check for typos in package module name")
-    end
-    return nothing
+function check_package_module_loaded_error(pkg)
+    # match compilecache error type for non-125 errors
+    error("package `$(pkg.name)` did not define the expected \
+          module `$(pkg.name)`, check for typos in package module name")
 end
 
 # protects against PkgId and UUID being imported and losing Base prefix
@@ -3100,7 +3116,6 @@ function create_expr_cache(pkg::PkgId, input::String, output::String, output_o::
         Base.track_nested_precomp($(_pkg_str(vcat(Base.precompilation_stack, pkg))))
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
-        Base.precompilation_target = $(_pkg_str(pkg))
         Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input))), $(repr(depot_path)), $(repr(dl_load_path)),
             $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))))
         """)

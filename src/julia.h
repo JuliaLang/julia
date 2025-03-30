@@ -450,9 +450,9 @@ typedef struct _jl_code_instance_t {
     _Atomic(jl_value_t *) inferred;
     _Atomic(jl_debuginfo_t *) debuginfo; // stored information about edges from this object (set once, with a happens-before both source and invoke)
     _Atomic(jl_svec_t *) edges; // forward edge info
-    //TODO: uint8_t absolute_max; // whether true max world is unknown
 
     // purity results
+    jl_value_t *analysis_results; // Analysis results about this code (IPO-safe)
     // see also encode_effects() and decode_effects() in `base/compiler/effects.jl`,
     _Atomic(uint32_t) ipo_purity_bits;
     // purity_flags:
@@ -464,9 +464,14 @@ typedef struct _jl_code_instance_t {
     //     uint8_t inaccessiblememonly : 2;
     //     uint8_t noub                : 2;
     //     uint8_t nonoverlayed        : 2;
-    jl_value_t *analysis_results; // Analysis results about this code (IPO-safe)
 
     // compilation state cache
+    // these time fields have units of seconds (60 ns minimum resolution and 18 hour maximum saturates to Infinity) and are stored in Float16 format
+    uint16_t time_infer_total; // total cost of computing `inferred` originally
+    uint16_t time_infer_cache_saved; // adjustment to total cost, reflecting how much time was saved by having caches, to give a stable real cost without caches for comparisons
+    uint16_t time_infer_self; // self cost of julia inference for `inferred` (included in time_infer_total)
+    _Atomic(uint16_t) time_compile; // self cost of llvm compilation (e.g. of computing `invoke`)
+    //TODO: uint8_t absolute_max; // whether true max world is unknown
     _Atomic(uint8_t) specsigflags; // & 0b001 == specptr is a specialized function signature for specTypes->rettype
                                    // & 0b010 == invokeptr matches specptr
                                    // & 0b100 == From image
@@ -627,7 +632,8 @@ typedef struct _jl_weakref_t {
 //   These binding kinds depend solely on the set of using'd packages and are not explicitly
 //   declared:
 //
-//      PARTITION_KIND_IMPLICIT
+//      PARTITION_KIND_IMPLICIT_CONST
+//      PARTITION_KIND_IMPLICIT_GLOBAL
 //      PARTITION_KIND_GUARD
 //      PARTITION_KIND_FAILED
 //
@@ -678,37 +684,41 @@ enum jl_partition_kind {
     // `global x::T` to implicitly through a syntactic global assignment.
     //  -> restriction holds the type restriction
     PARTITION_KIND_GLOBAL       = 0x2,
-    // Implicit: The binding was implicitly imported from a `using`'d module.
-    //  ->restriction holds the imported binding
-    PARTITION_KIND_IMPLICIT     = 0x3,
+    // Implicit: The binding was a global, implicitly imported from a `using`'d module.
+    //  ->restriction holds the ultimately imported global binding
+    PARTITION_KIND_IMPLICIT_GLOBAL     = 0x3,
+    // Implicit: The binding was a constant, implicitly imported from a `using`'d module.
+    //  ->restriction holds the ultimately imported constant value
+    PARTITION_KIND_IMPLICIT_CONST     = 0x4,
     // Explicit: The binding was explicitly `using`'d by name
     //  ->restriction holds the imported binding
-    PARTITION_KIND_EXPLICIT     = 0x4,
+    PARTITION_KIND_EXPLICIT     = 0x5,
     // Imported: The binding was explicitly `import`'d by name
     //  ->restriction holds the imported binding
-    PARTITION_KIND_IMPORTED     = 0x5,
+    PARTITION_KIND_IMPORTED     = 0x6,
     // Failed: We attempted to import the binding, but the import was ambiguous
     //  ->restriction is NULL.
-    PARTITION_KIND_FAILED       = 0x6,
+    PARTITION_KIND_FAILED       = 0x7,
     // Declared: The binding was declared using `global` or similar. This acts in most ways like
     // PARTITION_KIND_GLOBAL with an `Any` restriction, except that it may be redefined to a stronger
     // binding like `const` or an explicit import.
     //  ->restriction is NULL.
-    PARTITION_KIND_DECLARED     = 0x7,
+    PARTITION_KIND_DECLARED     = 0x8,
     // Guard: The binding was looked at, but no global or import was resolved at the time
     //  ->restriction is NULL.
-    PARTITION_KIND_GUARD        = 0x8,
+    PARTITION_KIND_GUARD        = 0x9,
     // Undef Constant: This binding partition is a constant declared using `const`, but
     // without a value.
     //  ->restriction is NULL
-    PARTITION_KIND_UNDEF_CONST  = 0x9,
+    PARTITION_KIND_UNDEF_CONST  = 0xa,
     // Backated constant. A constant that was backdated for compatibility. In all other
     // ways equivalent to PARTITION_KIND_CONST, but prints a warning on access
-    PARTITION_KIND_BACKDATED_CONST = 0xa,
+    PARTITION_KIND_BACKDATED_CONST = 0xb,
 
     // This is not a real binding kind, but can be used to ask for a re-resolution
     // of the implicit binding kind
-    PARTITION_KIND_IMPLICIT_RECOMPUTE = 0xb
+    PARTITION_FAKE_KIND_IMPLICIT_RECOMPUTE = 0xc,
+    PARTITION_FAKE_KIND_CYCLE = 0xd
 };
 
 static const uint8_t PARTITION_MASK_KIND = 0x0f;
@@ -740,9 +750,9 @@ typedef struct JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
     /* union {
      *   // For ->kind == PARTITION_KIND_GLOBAL
      *   jl_value_t *type_restriction;
-     *   // For ->kind == PARTITION_KIND_CONST(_IMPORT)
+     *   // For ->kind in (PARTITION_KIND_CONST(_IMPORT), PARTITION_KIND_IMPLICIT_CONST)
      *   jl_value_t *constval;
-     *   // For ->kind in (PARTITION_KIND_IMPLICIT, PARTITION_KIND_EXPLICIT, PARTITION_KIND_IMPORT)
+     *   // For ->kind in (PARTITION_KIND_IMPLICIT_GLOBAL, PARTITION_KIND_EXPLICIT, PARTITION_KIND_IMPORT)
      *   jl_binding_t *imported;
      * } restriction;
      */
@@ -1915,6 +1925,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_new_method_instance_uninit(void);
 JL_DLLEXPORT jl_svec_t *jl_svec(size_t n, ...) JL_MAYBE_UNROOTED;
 JL_DLLEXPORT jl_svec_t *jl_svec1(void *a);
 JL_DLLEXPORT jl_svec_t *jl_svec2(void *a, void *b);
+JL_DLLEXPORT jl_svec_t *jl_svec3(void *a, void *b, void *c);
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_alloc_svec_uninit(size_t n);
 JL_DLLEXPORT jl_svec_t *jl_svec_copy(jl_svec_t *a);
@@ -2080,7 +2091,7 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_type(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
 JL_DLLEXPORT void jl_check_binding_currently_writable(jl_binding_t *b, jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
-JL_DLLEXPORT jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var, size_t new_world);
+JL_DLLEXPORT jl_value_t *jl_get_existing_strong_gf(jl_binding_t *b JL_PROPAGATES_ROOT, size_t new_world);
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import);
 JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
@@ -2201,7 +2212,6 @@ typedef enum {
 // A loaded, but unparsed .ji or .so image file
 typedef struct {
     jl_image_kind_t kind;
-    void *handle;
     const void *pointers; // jl_image_pointers_t *
     const char *data;
     size_t size;
@@ -2719,6 +2729,7 @@ typedef struct {
     int gcstack_arg; // Pass the ptls value as an argument with swiftself
 
     int use_jlplt; // Whether to use the Julia PLT mechanism or emit symbols directly
+    int force_emit_all; // Force emission of code for const return functions
 } jl_cgparams_t;
 extern JL_DLLEXPORT int jl_default_debug_info_kind;
 extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
