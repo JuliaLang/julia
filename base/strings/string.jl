@@ -102,12 +102,6 @@ true
 """
 takestring!(v::Vector{UInt8}) = String(v)
 
-"Create a string re-using the memory, if possible.
-Mutating the memory after calling this function is undefined behaviour."
-function unsafe_takestring(m::Memory{UInt8})
-    ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))
-end
-
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
 

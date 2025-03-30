@@ -789,16 +789,17 @@ Using the buffer after calling unsafe_takestring! may cause undefined behaviour.
 This function is meant to be used when the buffer is only used as a temporary
 string builder, which is discarded after the string is built."
 function unsafe_takestring!(io::IOBuffer)
-    start = io.seekable ? io.offset + 1 : io.ptr
-    nbytes = io.size - start + 1
-    iszero(nbytes) && return ""
+    used_span = get_used_span(io)
+    nbytes = length(used_span)
+    from = first(used_span)
+    isempty(used_span) && return ""
     # The C function can only copy from the start of the memory.
     # Fortunately, in most cases, the offset will be zero.
-    return if isone(start)
+    return if isone(from)
         ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), io.data, nbytes)
     else
         mem = StringMemory(nbytes)
-        unsafe_copyto!(mem, 1, io.data, start, nbytes)
+        unsafe_copyto!(mem, 1, io.data, from, nbytes)
         unsafe_takestring(mem)
     end
 end
@@ -832,25 +833,28 @@ function takestring!(io::IOBuffer)
     # we can return an empty string without interacting with the buffer at all.
     io.reinit && return ""
 
-    s = unsafe_takestring!(io)
-
-    # Restore the buffer to a usable state, making it no longer undefined behaviour to
-    # use the buffer after the `unsafe_takestring!` call.
-    # Note that if the buffer is not writable, there is no need to reinitialize the buffer,
-    # since it doesn't matter that the returned string looks into the same memory -
-    # this is because the buffer is not mutable through either the string nor the buffer.
-    if io.writable
+    # If the iobuffer is writable, taking will remove the buffer from `io`.
+    # So, we reset the iobuffer, and directly unsafe takestring.
+    return if io.writable
+        s = unsafe_takestring!(io)
         io.reinit = true
         io.mark = -1
         io.ptr = 1
         io.size = 0
-        io.offset = 0
+        io.offset_or_compacted = 0
+        s
+    else
+        # If the buffer is not writable, taking will NOT remove the buffer,
+        # so if we just converted the buffer to a string, garbage collecting
+        # the string would free the memory underneath the iobuffer
+        used_span = get_used_span(io)
+        mem = StringMemory(length(used_span))
+        unsafe_copyto!(mem, 1, io.buffer, first(used_span), length(used_span))
+        unsafe_takestring(mem)
     end
-    s
 end
 
 # Fallback methods
-unsafe_takestring!(io::GenericIOBuffer) = takestring!(io)
 takestring!(io::GenericIOBuffer) = String(take!(io))
 
 """
