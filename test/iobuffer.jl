@@ -333,6 +333,16 @@ end
     buf = IOBuffer(v)
     s = String(copy(v))
     @test takestring!(buf) == s
+
+    # Test with a non-writable IOBuffer
+    buf = IOBuffer(b"abcdef")
+    read(buf, UInt8)
+    @test takestring!(buf) == "abcdef"
+
+    buf = new_unseekable_buffer()
+    write(buf, "abcde")
+    read(buf, UInt16)
+    @test takestring!(buf) == "cde"
 end
 
 @testset "Read/write readonly IOBuffer" begin

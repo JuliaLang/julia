@@ -798,7 +798,7 @@ function unsafe_takestring!(io::IOBuffer)
     return if isone(from)
         ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), io.data, nbytes)
     else
-        mem = StringMemory(nbytes)
+        mem = StringMemory(nbytes % UInt)
         unsafe_copyto!(mem, 1, io.data, from, nbytes)
         unsafe_takestring(mem)
     end
@@ -849,7 +849,7 @@ function takestring!(io::IOBuffer)
         # the string would free the memory underneath the iobuffer
         used_span = get_used_span(io)
         mem = StringMemory(length(used_span))
-        unsafe_copyto!(mem, 1, io.buffer, first(used_span), length(used_span))
+        unsafe_copyto!(mem, 1, io.data, first(used_span), length(used_span))
         unsafe_takestring(mem)
     end
 end
