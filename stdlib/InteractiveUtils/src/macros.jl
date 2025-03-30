@@ -143,7 +143,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                     getproperty_ex = :($(fcn)(Base.getproperty, $(typesof_expr(ex0.args))))
                     isexpr(ex0.args[1], :(::), 1) && return getproperty_ex
                     return quote
-                        local arg1 = $(ex0.args[1])
+                        local arg1 = $(esc(ex0.args[1]))
                         if isa(arg1, Module)
                             $(if string(fcn) == "which"
                                   :(which(arg1, $(ex0.args[2])))
@@ -217,7 +217,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
         end
     end
     if isa(ex0, Expr) && ex0.head === :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
-        return Expr(:call, fcn, extract_farg(ex0.args[1]), :(Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, $(Any[_typeof_expr(a) for a in ex0.args[3:end]]...)}), kws...)
+        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...}, kws...)
     end
 
     ex = Meta.lower(__module__, ex0)
