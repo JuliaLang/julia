@@ -350,13 +350,12 @@ end
     n = length(@code_typed +(::Float64, ::Vararg{Float64}))
     @test n ≥ 2
     @test length(@code_typed +(::Float64, ::Float64...)) == n
-    @test (@which +((1,)..., ::Float64)).sig === Tuple{typeof(+), Number, Number}
-    @test (@which +((1, ::Float64)...)).sig === Tuple{typeof(+), Number, Number}
-    @test (@which +((1, ::Float64)...)).sig === Tuple{typeof(+), Number, Number}
+    @test (@which +(1, ::Float64)).sig === Tuple{typeof(+), Number, Number}
     @test (@which (::typeof(+))(::Int, ::Float64)).sig === Tuple{typeof(+), Number, Number}
     @test (@code_typed .+(::Float64, ::Vector{Float64})) isa Pair
     @test (@code_typed .+(::Float64, .*(::Vector{Float64}, ::Int))) isa Pair
     @test (@which round(::Float64; digits=3)).name === :round
+    @test (@which round(1.2; digits = ::Int)).name === :round
 end
 
 module MacroTest
@@ -606,6 +605,7 @@ end
     @test_throws err @code_lowered 1.0
 
     @test_throws "is too complex" @code_lowered a .= 1 + 2
+    @test_throws "invalid keyword argument syntax" @eval @which round(1; digits(3))
 end
 
 using InteractiveUtils: editor

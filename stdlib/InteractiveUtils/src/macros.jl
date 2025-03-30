@@ -9,20 +9,18 @@ using Base: insert!, replace_ref_begin_end!,
 # via. `Base.@time_imports` etc.
 import Base: @time_imports, @trace_compile, @trace_dispatch
 
-separate_kwargs(args...; kwargs...) = (args, values(kwargs))
+typesof_expr(args) = Expr(:tuple, get_typeof.(args)...)
 
-# This structure allows encoding the type of an argument
-# without having a value, used to support type annotations
-# in calls such as `f(1, ::Float64)` for introspection macros.
-struct InterpolatedType
-    T::Any
-    InterpolatedType(@nospecialize(T::Type)) = new(T)
-    InterpolatedType(@nospecialize(val)) = new(Base.isvarargtype(val) ? val : Core.Typeof(val))
+function extract_type_annotation(ex)
+    isexpr(ex, :(::), 1) && return esc(ex.args[1])
+    if isexpr(ex, :(...), 1)
+        splatted = ex.args[1]
+        isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, splatted.args[1])
+    end
+    nothing
 end
 
-_typeof(t::InterpolatedType) = t.T
-_typeof(@nospecialize(t)) = Base.isvarargtype(t) ? t : Core.Typeof(t)
-typesof(@nospecialize args...) = Tuple{Any[_typeof(arg) for arg in args]...}
+get_typeof(arg) = @something extract_type_annotation(arg) :(Core.Typeof($(esc(arg))))
 
 """
 Transform a dot expression into one where each argument has been replaced by a
@@ -50,15 +48,9 @@ function recursive_dotcalls!(ex, args, i=1)
     return ex, i
 end
 
-is_interpolated_type(arg) = isexpr(arg, :call, 2) && arg.args[1] === InterpolatedType
-function _typeof_expr(ex)
-    is_interpolated_type(ex) && return esc(ex.args[2])
-    Core.Typeof(ex)
-end
-
 function extract_farg(arg)
-    !is_interpolated_type(arg) && return esc(arg)
-    fT = esc(arg.args[2])
+    !isexpr(arg, :(::), 1) && return esc(arg)
+    fT = esc(arg.args[1])
     :($construct_callable($fT))
 end
 
@@ -71,21 +63,38 @@ function construct_callable(@nospecialize(func::Type))
     throw(ArgumentError("If a function type is explicitly provided, it must be a singleton whose only instance is the callable object"))
 end
 
-typesof_expr(args) = :(typesof($(esc.(args)...)))
-
-function process_type_annotations!(ex::Expr)
-    for (i, subex) in enumerate(ex.args)
-        isa(subex, Expr) || continue
-        if isexpr(subex, :(::), 1)
-            ex.args[i] = :($InterpolatedType($(subex.args[1])))
-        elseif isexpr(subex, :...) && isexpr(subex.args[1], :(::), 1)
-            T = subex.args[1].args[1]
-            ex.args[i] = :(Vararg{$T})
+function separate_kwargs(exs)
+    args = []
+    kwargs = []
+    for ex in exs
+        if isexpr(ex, :kw)
+            push!(kwargs, ex)
+        elseif isexpr(ex, :parameters)
+            for kw in ex.args
+                push!(kwargs, kw)
+            end
         else
-            process_type_annotations!(subex)
+            push!(args, ex)
         end
     end
-    ex
+    args, kwargs
+end
+
+function namedtuple_type(kwargs)
+    names = Expr(:tuple)
+    types = Expr(:curly, :Tuple)
+    for ex in kwargs
+        if isexpr(ex, :kw, 2)
+            name, value = ex.args[1], ex.args[2]
+            push!(names.args, QuoteNode(name))
+            push!(types.args, get_typeof(value))
+        else
+            isa(ex, Symbol) || return nothing
+            push!(names.args, QuoteNode(x))
+            push!(types.args, get_typeof(x))
+        end
+    end
+    :(NamedTuple{$names, $types})
 end
 
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
@@ -97,7 +106,6 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
         return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
     end
     if isa(ex0, Expr)
-        process_type_annotations!(ex0)
         if ex0.head === :do && isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
                 return Expr(:call, :error, "ill-formed do call")
@@ -131,9 +139,11 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                     ex1 = ex1.args[1]
                 end
                 fully_qualified_symbol &= ex1 isa Symbol
-                if fully_qualified_symbol || is_interpolated_type(ex1)
+                if fully_qualified_symbol || isexpr(ex1, :(::), 1)
+                    getproperty_ex = :($(fcn)(Base.getproperty, $(typesof_expr(ex0.args))))
+                    isexpr(ex0.args[1], :(::), 1) && return getproperty_ex
                     return quote
-                        local arg1 = $(esc(ex0.args[1]))
+                        local arg1 = $(ex0.args[1])
                         if isa(arg1, Module)
                             $(if string(fcn) == "which"
                                   :(which(arg1, $(ex0.args[2])))
@@ -141,8 +151,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                                   :(error("expression is not a function call"))
                               end)
                         else
-                            local args = $(typesof_expr(ex0.args))
-                            $(fcn)(Base.getproperty, args)
+                            $getproperty_ex
                         end
                     end
                 else
@@ -154,21 +163,23 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             end
         end
         if any(a->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args)
-            return quote
-                local arg1 = $(esc(ex0.args[1]))
-                local args, kwargs = $separate_kwargs($(map(esc, ex0.args[2:end])...))
-                $(fcn)(Core.kwcall, typesof(kwargs, arg1, args...); $(kws...))
+            args, kwargs = separate_kwargs(ex0.args)
+            nt = namedtuple_type(kwargs)
+            isnothing(nt) && return quote
+                Expr(:call, :error, "keyword argument format unrecognized; they must be of the form `x` or `x = <value>`")
+                $(esc(ex0)) # trigger syntax errors if any
             end
+            return :($(fcn)(Core.kwcall, Tuple{$nt, $(get_typeof.(args)...)}; $(kws...)))
         elseif ex0.head === :call
-            argtypes = ex0.args[2:end]
+            argtypes = Any[get_typeof(arg) for arg in ex0.args[2:end]]
             if ex0.args[1] === :^ && length(ex0.args) >= 3 && isa(ex0.args[3], Int)
                 farg = :(Base.literal_pow)
-                pushfirst!(argtypes, :^)
-                argtypes[3] = InterpolatedType(Val(ex0.args[3]))
+                pushfirst!(argtypes, :(typeof(^)))
+                argtypes[3] = :(Val{$(ex0.args[3])})
             else
                 farg = extract_farg(ex0.args[1])
             end
-            return Expr(:call, fcn, farg, typesof_expr(argtypes), kws...)
+            return Expr(:call, fcn, farg, Expr(:tuple, argtypes...), kws...)
         elseif ex0.head === :(=) && length(ex0.args) == 2
             lhs, rhs = ex0.args
             if isa(lhs, Expr)
