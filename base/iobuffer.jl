@@ -825,8 +825,8 @@ julia> isempty(take!(io)) # io is now empty
 true
 ```
 
-!!! compat "Julia 1.12"
-    This function requires at least Julia 1.12.
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
 """
 function takestring!(io::IOBuffer)
     # If the buffer has been used up and needs to be replaced, there are no bytes, and
