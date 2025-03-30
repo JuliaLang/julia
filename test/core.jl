@@ -8094,6 +8094,10 @@ end
 f_isdefined_one(@nospecialize(x)) = isdefined(x, 1)
 @test (try; f_isdefined_one(@__MODULE__); catch err; err; end).got === 1
 
+@testset "worst case abstract type inference for `oftype`" begin
+    @test Number === Base.infer_return_type(oftype, Tuple{Number, Any})
+end
+
 # Unspecialized retrieval of vararg length
 fvarargN(x::Tuple{Vararg{Int, N}}) where {N} = N
 fvarargN(args...) = fvarargN(args)
