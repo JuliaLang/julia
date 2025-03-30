@@ -354,8 +354,11 @@ end
     @test (@which (::typeof(+))(::Int, ::Float64)).sig === Tuple{typeof(+), Number, Number}
     @test (@code_typed .+(::Float64, ::Vector{Float64})) isa Pair
     @test (@code_typed .+(::Float64, .*(::Vector{Float64}, ::Int))) isa Pair
+    @test (@which +(::T, ::T) where {T<:Number}).sig === Tuple{typeof(+), T, T} where {T<:Number}
     @test (@which round(::Float64; digits=3)).name === :round
     @test (@which round(1.2; digits = ::Int)).name === :round
+    @test (@code_typed round(::T; digits = ::T) where {T<:Float64})[2] === Union{}
+    @test (@code_typed round(::T; digits = ::T) where {T<:Int})[2] === Float64
 end
 
 module MacroTest
