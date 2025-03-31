@@ -258,9 +258,18 @@ function serialize_testset_result_file(dir::String, testset::Test.DefaultTestSet
 end
 
 # deserilalizes the results files and writes them to collated JSON files of 5000 max results
-function write_testset_json_files(dir::String)
+function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
     data = Dict{String,Any}[]
     read_files = String[]
+    # Set one result to represent the overall duration, given results have no duration
+    overall_ts = result_dict(testset)
+    overall_ts["location"] = "unknown"
+    overall_ts["result"] = "unknown"
+    job_label = replace(get(ENV, "BUILDKITE_LABEL", "job label not found"), r":\w+:\s*" => "")
+    overall_ts["name"] = job_label
+    overall_ts["file_name"] = "unknown"
+    push!(data, overall_ts)
+    # Load all the serialized results files
     for res_dat in filter!(x -> occursin(r"^results.*\.dat$", x), readdir(dir))
         res_file = joinpath(dir, res_dat)
         append!(data, Serialization.deserialize(res_file))
