@@ -835,8 +835,8 @@ function _precompilepkgs(pkgs::Vector{String},
                         # window between print cycles
                         termwidth = displaysize(io)[2] - 4
                         if !final_loop
-                            str = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
-                            print(iostr, Base._truncate_at_width_or_chars(true, str, termwidth), "\n")
+                            s = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
+                            print(iostr, Base._truncate_at_width_or_chars(true, s, termwidth), "\n")
                         end
                         for pkg_config in pkg_queue_show
                             dep, config = pkg_config
