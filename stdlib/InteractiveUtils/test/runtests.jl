@@ -351,6 +351,7 @@ end
     @test n ≥ 2
     @test length(@code_typed +(::Float64, ::Float64...)) == n
     @test (@which +(1, ::Float64)).sig === Tuple{typeof(+), Number, Number}
+    @test (@which +((1, 2)...)).name === :+
     @test (@which (::typeof(+))(::Int, ::Float64)).sig === Tuple{typeof(+), Number, Number}
     @test (@code_typed .+(::Float64, ::Vector{Float64})) isa Pair
     @test (@code_typed .+(::Float64, .*(::Vector{Float64}, ::Int))) isa Pair
@@ -359,8 +360,12 @@ end
     @test (@which round(1.2; digits = ::Int)).name === :round
     @test (@code_typed round(::T; digits = ::T) where {T<:Float64})[2] === Union{}
     @test (@code_typed round(::T; digits = ::T) where {T<:Int})[2] === Float64
-    args = (1, 2)
-    @test (@which +(args...)).name === :+
+    kwargs_1 = (; digits = 3)
+    kwargs_2 = (; sigdigits = 3)
+    @test (@which round(1.2; kwargs_1...)).name === :round
+    @test_throws "is not unique" @which round(1.2; digits = 1, kwargs_1...)
+    @test (@which round(1.2; sigdigits = ::Int, kwargs_1...)).name === :round
+    @test (@which round(1.2; kwargs_1..., kwargs_2..., base = 10)).name === :round
 end
 
 module MacroTest
@@ -609,7 +614,6 @@ end
 
     @test_throws "is too complex" @code_lowered a .= 1 + 2
     @test_throws "invalid keyword argument syntax" @eval @which round(1; digits(3))
-    @test_throws "keyword argument format unrecognized" @eval @which round(1; kwargs...)
 end
 
 using InteractiveUtils: editor

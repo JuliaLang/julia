@@ -23,7 +23,7 @@ end
 
 function get_typeof(ex)
     isexpr(ex, :(::), 1) && return esc(ex.args[1])
-    if isexpr(ex, :(...), 1)
+    if isexpr(ex, :..., 1)
         splatted = ex.args[1]
         isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, splatted.args[1])
         return :(Core.Typeof.($(esc(splatted)))...)
@@ -92,18 +92,30 @@ end
 function namedtuple_type(kwargs)
     names = Expr(:tuple)
     types = Expr(:curly, :Tuple)
+    splats = Expr[]
     for ex in kwargs
         if isexpr(ex, :kw, 2)
             name, value = ex.args[1], ex.args[2]
             push!(names.args, QuoteNode(name))
             push!(types.args, get_typeof(value))
+        elseif isexpr(ex, :..., 1)
+            push!(splats, :(typeof($(esc(ex.args[1])))))
         else
             isa(ex, Symbol) || return nothing
             push!(names.args, QuoteNode(x))
             push!(types.args, get_typeof(x))
         end
     end
-    :(NamedTuple{$names, $types})
+    nt = :(NamedTuple{$names, $types})
+    isempty(splats) && return nt
+    length(splats) == 1 && return :(namedtuple_type($nt, $(splats[1])))
+    :(foldl(namedtuple_type, Any[$(splats...)]; init = $nt))
+end
+
+function namedtuple_type(@nospecialize(nt1::Type{<:NamedTuple}), @nospecialize(nt2::Type{<:NamedTuple}))
+    names = tuple(fieldnames(nt1)..., fieldnames(nt2)...)
+    types = Tuple{fieldtypes(nt1)..., fieldtypes(nt2)...}
+    NamedTuple{names, types}
 end
 
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
@@ -239,7 +251,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
 
     exret = Expr(:none)
     if ex.head === :call
-        if any(e->(isa(e, Expr) && e.head === :(...)), ex0.args) &&
+        if any(x -> isexpr(x, :...), ex0.args) &&
             (ex.args[1] === GlobalRef(Core,:_apply_iterate) ||
              ex.args[1] === GlobalRef(Base,:_apply_iterate))
             # check for splatting
