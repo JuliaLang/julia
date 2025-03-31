@@ -263,11 +263,9 @@ function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
     read_files = String[]
     # Set one result to represent the overall duration, given results have no duration
     overall_ts = result_dict(testset)
-    overall_ts["location"] = "unknown"
+    # don't set location or file name for this result. They aren't required by BK
     overall_ts["result"] = "unknown"
-    job_label = replace(get(ENV, "BUILDKITE_LABEL", "job label not found"), r":\w+:\s*" => "")
-    overall_ts["name"] = job_label
-    overall_ts["file_name"] = "unknown"
+    overall_ts["name"] = replace(get(ENV, "BUILDKITE_LABEL", "job label not found"), r":\w+:\s*" => "")
     push!(data, overall_ts)
     # Load all the serialized results files
     for res_dat in filter!(x -> occursin(r"^results.*\.dat$", x), readdir(dir))
