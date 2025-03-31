@@ -841,7 +841,6 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
                      // ... or point to Base functions accessed by the runtime
                      (m == jl_base_module && (!strcmp(jl_symbol_name(b->globalref->name), "wait") ||
                                               !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook"))))) {
-                    record_field_change((jl_value_t**)&b->backedges, NULL);
                     jl_queue_for_serialization(s, b);
                 }
             }
@@ -1080,6 +1079,9 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                     else
                         record_field_change((jl_value_t **)&tn->mt, NULL);
                 }
+            }
+            else if (jl_is_binding(v)) {
+                record_field_change((jl_value_t**)&((jl_binding_t*)v)->backedges, NULL);
             }
         }
         char *data = (char*)jl_data_ptr(v);
