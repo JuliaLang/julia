@@ -26,7 +26,7 @@ function get_typeof(ex)
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
         isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, splatted.args[1])
-        return :(Core.Typeof.($(esc(splatted)))...)
+        return :(Any[Core.Typeof(x) for x in $(esc(splatted))]...)
     end
     return :(Core.Typeof($(esc(ex))))
 end
@@ -102,8 +102,8 @@ function namedtuple_type(kwargs)
             push!(splats, :(typeof($(esc(ex.args[1])))))
         else
             isa(ex, Symbol) || return nothing
-            push!(names.args, QuoteNode(x))
-            push!(types.args, get_typeof(x))
+            push!(names.args, QuoteNode(ex))
+            push!(types.args, get_typeof(ex))
         end
     end
     nt = :(NamedTuple{$names, $types})
