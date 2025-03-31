@@ -607,6 +607,7 @@ end
 
     @test_throws "is too complex" @code_lowered a .= 1 + 2
     @test_throws "invalid keyword argument syntax" @eval @which round(1; digits(3))
+    @test_throws "keyword argument format unrecognized" @eval @which round(1; kwargs...)
 end
 
 using InteractiveUtils: editor
@@ -860,6 +861,12 @@ end
 @test Base.infer_exception_type(sin, (Int,)) == InteractiveUtils.@infer_exception_type sin(42)
 @test first(InteractiveUtils.@code_ircode sin(42)) isa Core.Compiler.IRCode
 @test first(InteractiveUtils.@code_ircode optimize_until="Inlining" sin(42)) isa Core.Compiler.IRCode
+# Test.@inferred also uses `gen_call_with_extracted_types`
+@test Test.@inferred round(1.2) isa Float64
+@test Test.@inferred round(1.3; digits = 3) isa Float64
+# ensure proper inference of the macro output of `@inferred`
+@test Base.infer_return_type(x -> Test.@inferred(round(x)), (Float64,)) === Float64
+@test Base.infer_return_type(x -> Test.@inferred(round(x; digits = 3)), (Float64,)) === Float64
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(InteractiveUtils))

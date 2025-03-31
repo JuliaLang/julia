@@ -177,7 +177,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             args, kwargs = separate_kwargs(ex0.args)
             nt = namedtuple_type(kwargs)
             isnothing(nt) && return quote
-                Expr(:call, :error, "keyword argument format unrecognized; they must be of the form `x` or `x = <value>`")
+                error("keyword argument format unrecognized; they must be of the form `x` or `x = <value>`")
                 $(esc(ex0)) # trigger syntax errors if any
             end
             tt = rewrap_where(:(Tuple{$nt, $(get_typeof.(args)...)}), where_params)
