@@ -2408,6 +2408,7 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
                                 if (replaced_edge) {
                                     invalidate_code_instance(caller, max_world, 1);
                                     invalidated = 1;
+                                    nb = jl_array_nrows(backedges);
                                 }
                                 else {
                                     insb = set_next_edge(backedges, insb, invokeTypes, caller);
