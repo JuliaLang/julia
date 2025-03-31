@@ -21,16 +21,15 @@ function rewrap_where(ex, where_params)
     Expr(:where, ex, esc.(where_params)...)
 end
 
-function extract_type_annotation(ex)
+function get_typeof(ex)
     isexpr(ex, :(::), 1) && return esc(ex.args[1])
     if isexpr(ex, :(...), 1)
         splatted = ex.args[1]
         isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, splatted.args[1])
+        return :(Core.Typeof.($(esc(splatted)))...)
     end
-    nothing
+    return :(Core.Typeof($(esc(ex))))
 end
-
-get_typeof(arg) = @something extract_type_annotation(arg) :(Core.Typeof($(esc(arg))))
 
 """
 Transform a dot expression into one where each argument has been replaced by a

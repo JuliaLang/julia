@@ -359,6 +359,8 @@ end
     @test (@which round(1.2; digits = ::Int)).name === :round
     @test (@code_typed round(::T; digits = ::T) where {T<:Float64})[2] === Union{}
     @test (@code_typed round(::T; digits = ::T) where {T<:Int})[2] === Float64
+    args = (1, 2)
+    @test (@which +(args...)).name === :+
 end
 
 module MacroTest
