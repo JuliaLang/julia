@@ -1152,7 +1152,7 @@ end
 end
 
 const get_sched_task = OncePerThread{Task}() do
-    @task wait_forever()
+    Task(wait_forever)
 end
 
 function ensure_rescheduled(othertask::Task)
