@@ -314,11 +314,12 @@ function do_string_escape(s)
     return escape_string(s, ('\"','$'))
 end
 function do_string_unescape(s)
+    s = replace(s, "\\\$"=>"\$")
     try
-        unescape_string(replace(s, "\\\$"=>"\$"))
+        unescape_string(s)
     catch e
         e isa ArgumentError || rethrow()
-        s
+        s # it is unlikely, but if it isn't a valid string, maybe it was a valid path, and just needs escape_string called?
     end
 end
 
