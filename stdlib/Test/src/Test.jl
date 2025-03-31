@@ -2116,16 +2116,43 @@ macro inferred(allow, ex)
     _inferred(ex, __module__, allow)
 end
 function _inferred(ex, mod, allow = :(Union{}))
-    inferred_ex = gen_call_with_extracted_types(mod, Base.infer_return_type, ex)
-    quote
-        allow = $(esc(allow))
-        allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
-        result = $(esc(ex))
-        inferred = $inferred_ex
-        rettype = result isa Type ? Type{result} : typeof(result)
-        rettype <: allow || rettype == typesplit(inferred, allow) || error("return type $rettype does not match inferred return type $inferred")
-        result
+    if Meta.isexpr(ex, :ref)
+        ex = Expr(:call, :getindex, ex.args...)
     end
+    Meta.isexpr(ex, :call)|| error("@inferred requires a call expression")
+    farg = ex.args[1]
+    if isa(farg, Symbol) && farg !== :.. && first(string(farg)) == '.'
+        farg = Symbol(string(farg)[2:end])
+        ex = Expr(:call, GlobalRef(Test, :_materialize_broadcasted),
+            farg, ex.args[2:end]...)
+    end
+    result = let ex = ex
+        quote
+            let allow = $(esc(allow))
+                allow isa Type || throw(ArgumentError("@inferred requires a type as second argument"))
+                $(if any(@nospecialize(a)->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex.args)
+                    # Has keywords
+                    args = gensym()
+                    kwargs = gensym()
+                    quote
+                        $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
+                        inftype = $(gen_call_with_extracted_types(mod, Base.infer_return_type, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                    end
+                else
+                    # No keywords
+                    quote
+                        args = ($([esc(ex.args[i]) for i = 2:length(ex.args)]...),)
+                        result = $(esc(ex.args[1]))(args...)
+                        inftype = Base.infer_return_type($(esc(ex.args[1])), Base.typesof(args...))
+                    end
+                end)
+                rettype = result isa Type ? Type{result} : typeof(result)
+                rettype <: allow || rettype == typesplit(inftype, allow) || error("return type $rettype does not match inferred return type $inftype")
+                result
+            end
+        end
+    end
+    return remove_linenums!(result)
 end
 
 function is_in_mods(m::Module, recursive::Bool, mods)

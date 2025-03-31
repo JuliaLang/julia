@@ -99,7 +99,7 @@ function namedtuple_type(kwargs)
             push!(names.args, QuoteNode(name))
             push!(types.args, get_typeof(value))
         elseif isexpr(ex, :..., 1)
-            push!(splats, :(typeof($(esc(ex.args[1])))))
+            push!(splats, :($typeof_nt($(esc(ex.args[1])))))
         else
             isa(ex, Symbol) || return nothing
             push!(names.args, QuoteNode(ex))
@@ -108,9 +108,12 @@ function namedtuple_type(kwargs)
     end
     nt = :(NamedTuple{$names, $types})
     isempty(splats) && return nt
-    length(splats) == 1 && return :(namedtuple_type($nt, $(splats[1])))
-    :(foldl(namedtuple_type, Any[$(splats...)]; init = $nt))
+    length(splats) == 1 && return :($namedtuple_type($nt, $(splats[1])))
+    :(foldl($namedtuple_type, Any[$(splats...)]; init = $nt))
 end
+
+typeof_nt(nt::NamedTuple) = typeof(nt)
+typeof_nt(nt::Base.Pairs) = typeof(values(nt))
 
 function namedtuple_type(@nospecialize(nt1::Type{<:NamedTuple}), @nospecialize(nt2::Type{<:NamedTuple}))
     names = tuple(fieldnames(nt1)..., fieldnames(nt2)...)
