@@ -287,7 +287,7 @@ suffix `": "` will be appended to `message`.
 
 # Examples
 
-```jldoctest
+```jldoctest; setup = :(import Base)
 julia> Base.getpass("Secret")
 Secret: SecretBuffer("*******")
 
@@ -393,7 +393,7 @@ See also `Base.winprompt` (for Windows) and `Base.getpass` for secure entry of p
 
 # Examples
 
-```jldoctest
+```jldoctest; setup = :(import Base)
 julia> your_name = Base.prompt("Enter your name");
 Enter your name: Logan
 
