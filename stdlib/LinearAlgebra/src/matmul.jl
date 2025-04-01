@@ -541,7 +541,7 @@ function herk_wrapper!(C::Union{StridedMatrix{T}, StridedMatrix{Complex{T}}}, tA
     # Result array does not need to be initialized as long as beta==0
     #    C = Matrix{T}(undef, mA, mA)
 
-    if iszero(_add.beta) || issymmetric(C)
+    if iszero(_add.beta) || ishermitian(C)
         alpha, beta = promote(_add.alpha, _add.beta, zero(T))
         if (alpha isa Union{Bool,T} &&
             beta isa Union{Bool,T} &&
