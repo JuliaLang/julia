@@ -1708,6 +1708,13 @@ end
         "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
 end
 
+@testset "`displaysize` return type inference" begin
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{})
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{IO})
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{IOContext})
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{Base.TTY})
+end
+
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
