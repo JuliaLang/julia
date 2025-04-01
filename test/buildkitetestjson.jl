@@ -69,6 +69,8 @@ function result_dict(testset::Test.DefaultTestSet, prefix::String="")
             "arch" => string(Sys.ARCH),
             "julia_version" => string(VERSION),
             "testset" => testset.description,
+            "job_group" => get(ENV, "BUILDKITE_GROUP_LABEL", "unknown"),
+            "job_label" => get(ENV, "BUILDKITE_LABEL", "unknown"),
         ),
         # note we drop some of this from common_data before merging into individual results
         "history" => if !isnothing(testset.time_end)
