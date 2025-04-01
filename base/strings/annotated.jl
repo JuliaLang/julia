@@ -170,8 +170,8 @@ end
 # To make `AnnotatedString`s repr-evaluable, we need to override
 # the generic `AbstractString` 2-arg show method.
 
-function show(io::IO, s::A) where {A <: AnnotatedString}
-    show(io, A)
+function show(io::IO, s::AnnotatedString)
+    show(io, typeof(s))
     print(io, '(')
     show(io, s.string)
     print(io, ", ")
