@@ -1123,7 +1123,7 @@ static int eq_bindings(jl_binding_partition_t *owner, jl_binding_t *alias, size_
 }
 
 // NOTE: we use explici since explicit is a C++ keyword
-static void module_import_(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici)
+JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici)
 {
     check_safe_import_from(from);
     jl_binding_t *b = jl_get_binding(from, s);
@@ -1198,26 +1198,6 @@ static void module_import_(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl
         }
     }
     JL_UNLOCK(&world_counter_lock);
-}
-
-JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s)
-{
-    module_import_(ct, to, from, s, s, 1);
-}
-
-JL_DLLEXPORT void jl_module_import_as(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname)
-{
-    module_import_(ct, to, from, asname, s, 1);
-}
-
-JL_DLLEXPORT void jl_module_use(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s)
-{
-    module_import_(ct, to, from, s, s, 0);
-}
-
-JL_DLLEXPORT void jl_module_use_as(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname)
-{
-    module_import_(ct, to, from, asname, s, 0);
 }
 
 void jl_add_usings_backedge(jl_module_t *from, jl_module_t *to)

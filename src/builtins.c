@@ -1482,7 +1482,234 @@ JL_CALLABLE(jl_f_setglobalonce)
     return old == NULL ? jl_true : jl_false;
 }
 
+// import, using --------------------------------------------------------------
 
+extern size_t jl_require_world;
+static jl_module_t *call_require(jl_task_t *ct, jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_ROOTED
+{
+    JL_TIMING(LOAD_IMAGE, LOAD_Require);
+    jl_timing_printf(JL_TIMING_DEFAULT_BLOCK, "%s", jl_symbol_name(var));
+
+    int build_mode = jl_options.incremental && jl_generating_output();
+    jl_module_t *m = NULL;
+    static jl_value_t *require_func = NULL;
+    if (require_func == NULL && jl_base_module != NULL) {
+        require_func = jl_get_global(jl_base_module, jl_symbol("require"));
+    }
+    if (require_func != NULL) {
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        if (build_mode && jl_require_world < ct->world_age)
+            ct->world_age = jl_require_world;
+        jl_value_t *reqargs[3];
+        reqargs[0] = require_func;
+        reqargs[1] = (jl_value_t*)mod;
+        reqargs[2] = (jl_value_t*)var;
+        m = (jl_module_t*)jl_apply(reqargs, 3);
+    }
+    if (m == NULL || !jl_is_module(m)) {
+        jl_errorf("failed to load module %s", jl_symbol_name(var));
+    }
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    return m;
+}
+
+// either:
+//   - sets *name and returns the module to import *name from
+//   - sets *name to NULL and returns a module to import
+// also updates world_age
+static jl_module_t *eval_import_path(jl_task_t *ct, jl_module_t *where, jl_module_t *from JL_PROPAGATES_ROOT,
+                                     jl_array_t *args, jl_sym_t **name, const char *keyword) JL_GLOBALLY_ROOTED
+{
+    if (jl_array_nrows(args) == 0)
+        jl_errorf("malformed \"%s\" statement", keyword);
+    jl_sym_t *var = (jl_sym_t*)jl_array_ptr_ref(args, 0);
+    size_t i = 1;
+    jl_module_t *m = NULL;
+    *name = NULL;
+    if (!jl_is_symbol(var))
+        jl_type_error(keyword, (jl_value_t*)jl_symbol_type, (jl_value_t*)var);
+
+    if (from != NULL) {
+        m = from;
+        i = 0;
+    }
+    else if (var != jl_dot_sym) {
+        // `A.B`: call the loader to obtain the root A in the current environment.
+        if (jl_core_module && var == jl_core_module->name) {
+            m = jl_core_module;
+        }
+        else if (jl_base_module && var == jl_base_module->name) {
+            m = jl_base_module;
+        }
+        else {
+            m = call_require(ct, where, var);
+        }
+        if (i == jl_array_nrows(args))
+            return m;
+    }
+    else {
+        // `.A.B.C`: strip off leading dots by following parent links
+        m = where;
+        while (1) {
+            if (i >= jl_array_nrows(args))
+                jl_error("invalid module path");
+            var = (jl_sym_t*)jl_array_ptr_ref(args, i);
+            if (var != jl_dot_sym)
+                break;
+            i++;
+            assert(m);
+            m = m->parent;
+        }
+    }
+
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+
+    while (1) {
+        var = (jl_sym_t*)jl_array_ptr_ref(args, i);
+        if (!jl_is_symbol(var))
+            jl_type_error(keyword, (jl_value_t*)jl_symbol_type, (jl_value_t*)var);
+        if (var == jl_dot_sym)
+            jl_errorf("invalid %s path: \".\" in identifier path", keyword);
+        if (i == jl_array_nrows(args)-1)
+            break;
+        m = (jl_module_t*)jl_eval_global_var(m, var);
+        JL_GC_PROMISE_ROOTED(m);
+        if (!jl_is_module(m))
+            jl_errorf("invalid %s path: \"%s\" does not name a module", keyword, jl_symbol_name(var));
+        i++;
+    }
+    *name = var;
+    return m;
+}
+
+static jl_module_t *eval_import_path_all(jl_task_t *ct, jl_module_t *where, jl_array_t *args, const char *keyword)
+{
+    jl_sym_t *name = NULL;
+    jl_module_t *from = eval_import_path(ct, where, NULL, args, &name, keyword);
+    if (name) {
+        from = (jl_module_t *)jl_eval_global_var(from, name);
+        if (!jl_is_module(from))
+            jl_errorf("invalid using path: \"%s\" does not name a module", jl_symbol_name(name));
+    }
+    return from;
+}
+
+static void import_module(jl_task_t *ct, jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym_t *asname)
+{
+    assert(m);
+    jl_sym_t *name = asname ? asname : import->name;
+    // TODO: this is a bit race-y with what error message we might print
+    jl_binding_t *b = jl_get_module_binding(m, name, 1);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (!jl_bkind_is_some_implicit(kind) && kind != PARTITION_KIND_DECLARED) {
+        // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
+        jl_walk_binding_inplace(&b, &bpart, ct->world_age);
+        if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
+            // Already declared (e.g. on another thread) or imported.
+            if (bpart->restriction == (jl_value_t*)import)
+                return;
+        }
+        jl_errorf("importing %s into %s conflicts with an existing global",
+                    jl_symbol_name(name), jl_symbol_name(m->name));
+    }
+    jl_declare_constant_val2(b, m, name, (jl_value_t*)import, PARTITION_KIND_CONST_IMPORT);
+}
+
+static void check_macro_rename(jl_sym_t *from, jl_sym_t *to, const char *keyword)
+{
+    char *n1 = jl_symbol_name(from), *n2 = jl_symbol_name(to);
+    if (n1[0] == '@' && n2[0] != '@')
+        jl_errorf("cannot rename macro \"%s\" to non-macro \"%s\" in \"%s\"", n1, n2, keyword);
+    if (n1[0] != '@' && n2[0] == '@')
+        jl_errorf("cannot rename non-macro \"%s\" to macro \"%s\" in \"%s\"", n1, n2, keyword);
+}
+
+// _module_import(explicit::Bool, to::Module, ctx::Union{Expr, Nothing}, names::Expr...)
+//   import A             => _module_import(true,  Main, nothing,          Expr(:., :A))
+//   import A.b           => _module_import(true,  Main, nothing,          Expr(:., :A, :b))
+//   import A.b as c      => _module_import(true,  Main, nothing,          Expr(:as, Expr(:., :A, :b), :c))
+//   import A.B: C.d, e   => _module_import(true,  Main, Expr(:., :A, :B), Expr(:., :C, :d), Expr(:., :e))
+//   import A.B: C.d as e => _module_import(true,  Main, Expr(:., :A, :B), Expr(:as, Expr(:., :C, :d), :e))
+//   using  A.B: C.d, e   => _module_import(false, Main, Expr(:., :A, :B), Expr(:., :C, :d), Expr(:., :e))
+JL_CALLABLE(jl_f__module_import)
+{
+    JL_NARGSV(_module_import, 4);
+    JL_TYPECHK(_module_import, bool, args[0]);
+    JL_TYPECHK(_module_import, module, args[1]);
+    if (!(jl_is_expr(args[2]) || args[2] == jl_nothing))
+        jl_type_error("_module_import", (jl_value_t *)jl_expr_type, args[2]);
+    for (int i = 3; i < nargs; i++)
+        JL_TYPECHK(_module_import, expr, args[i]);
+
+    jl_value_t **roots;
+    JL_GC_PUSHARGS(roots, nargs - 2);
+    memcpy(roots, args + 2, (nargs - 2) * sizeof *roots);
+
+    int explici = args[0] == jl_true;
+    jl_module_t *to = (jl_module_t *)args[1];
+    const char *keyword = explici ? "import" : "using";
+    jl_task_t *ct = jl_current_task;
+    jl_module_t *ctx = NULL;
+    if (args[2] != jl_nothing)
+        ctx = eval_import_path_all(ct, to, ((jl_expr_t *)args[2])->args, keyword);
+
+    for (int i = 3; i < nargs; i++) {
+        jl_expr_t *ex = (jl_expr_t *)args[i];
+        jl_sym_t *name, *asname = NULL;
+
+        if (ex->head == jl_as_sym && jl_expr_nargs(ex) == 2) {
+            asname = (jl_sym_t *)jl_exprarg(ex, 1);
+            ex = (jl_expr_t *)jl_exprarg(ex, 0);
+            if (!jl_is_expr(ex) || ex->head != jl_dot_sym)
+                goto malformed_err;
+        }
+        else if (ex->head == jl_dot_sym) {
+        }
+        else {
+            goto malformed_err;
+        }
+        jl_module_t *from = eval_import_path(ct, to, ctx, ex->args, &name, keyword);
+        if (!asname)
+            asname = name;
+
+        if (name) {
+            check_macro_rename(name, asname, keyword);
+            jl_module_import(ct, to, from, asname, name, explici);
+        }
+        else {
+            import_module(ct, to, from, asname);
+        }
+    }
+
+    JL_GC_POP();
+    return jl_nothing;
+
+malformed_err:
+    jl_errorf("malformed \"%s\" statement", keyword);
+}
+
+// _module_using(to::Module, from::Expr{Symbol})
+//   using A.B            => _module_using(Main, Expr(:., :A, :B))
+JL_CALLABLE(jl_f__module_using)
+{
+    JL_NARGS(_module_using, 2, 2);
+    jl_module_t *to = (jl_module_t *)args[0];
+    jl_expr_t *ex = (jl_expr_t *)args[1];
+
+    jl_task_t *ct = jl_current_task;
+    jl_module_t *from = eval_import_path_all(ct, to, ex->args, "using");
+
+    jl_module_using(to, from);
+    int is_package = jl_expr_nargs(ex) == 2 && (jl_sym_t *)jl_exprarg(ex, 1) != jl_dot_sym;
+    if (to == jl_main_module && is_package) {
+        // TODO: for now, `using A` in Main also creates an explicit binding for `A`
+        // This will possibly be extended to all modules.
+        import_module(ct, to, from, NULL);
+    }
+
+    return jl_nothing;
+}
 
 // apply_type -----------------------------------------------------------------
 
@@ -2487,6 +2714,9 @@ void jl_init_primitives(void) JL_GC_DISABLED
     jl_builtin_replaceglobal = add_builtin_func("replaceglobal!", jl_f_replaceglobal);
     jl_builtin_modifyglobal = add_builtin_func("modifyglobal!", jl_f_modifyglobal);
     jl_builtin_setglobalonce = add_builtin_func("setglobalonce!", jl_f_setglobalonce);
+
+    add_builtin_func("_module_import", jl_f__module_import);
+    add_builtin_func("_module_using", jl_f__module_using);
 
     // memory primitives
     jl_builtin_memorynew = add_builtin_func("memorynew", jl_f_memorynew);
