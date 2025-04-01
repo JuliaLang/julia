@@ -358,6 +358,31 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     return event;
 }
 
+JL_DLLEXPORT int _jl_tracy_enabled() {
+#ifdef USE_TRACY
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+JL_DLLEXPORT int _jl_ittapi_enabled() {
+#ifdef USE_ITTAPI
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+JL_DLLEXPORT int _jl_nvtx_enabled() {
+#ifdef USE_NVTX
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+
 JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event) {
     if (size < sizeof(jl_timing_block_t)) {
         jl_errorf("jl_timing_block_t buffer must be at least %d bytes", sizeof(jl_timing_block_t));

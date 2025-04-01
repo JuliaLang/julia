@@ -1013,16 +1013,16 @@ end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
+    @zone "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
     return finish(interp, opt, ir, caller)
 end
 
-macro pass(name, expr)
+macro pass(name::String, expr)
     optimize_until = esc(:optimize_until)
     stage = esc(:__stage__)
-    macrocall = :(@timeit $(esc(name)) $(esc(expr)))
-    macrocall.args[2] = __source__  # `@timeit` may want to use it
+    macrocall = :(@zone $name $(esc(expr)))
+    macrocall.args[2] = __source__  # `@zone` may want to use it
     quote
         $macrocall
         matchpass($optimize_until, ($stage += 1), $(esc(name))) && $(esc(:(@goto __done__)))
@@ -1045,7 +1045,7 @@ function run_passes_ipo_safe(
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "compact 1" ir = compact!(ir)
     @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
-    # @timeit "verify 2" verify_ir(ir)
+    # @zone "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
     @pass "ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
@@ -1053,7 +1053,7 @@ function run_passes_ipo_safe(
         @pass "compact 3" ir = compact!(ir, true)
     end
     if is_asserts()
-        @timeit "verify 3" begin
+        @zone "verify 3" begin
             verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp), sv.linfo)
             verify_linetable(ir.debuginfo, length(ir.stmts))
         end
@@ -1314,10 +1314,10 @@ end
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     svdef = sv.linfo.def
-    @timeit "domtree 1" domtree = construct_domtree(ir)
+    @zone "domtree 1" domtree = construct_domtree(ir)
     defuse_insts = scan_slot_def_use(Int(ci.nargs), ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
+    @zone "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
     resize!(ir.argtypes, ci.nargs)
