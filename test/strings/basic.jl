@@ -872,6 +872,11 @@ end
             end
         end
     end
+
+    @testset "return type infers to `Int`" begin
+        @test all(==(Int64), Base.return_types(prevind, Tuple{AbstractString, Vararg}))
+        @test all(==(Int64), Base.return_types(nextind, Tuple{AbstractString, Vararg}))
+    end
 end
 
 @testset "first and last" begin

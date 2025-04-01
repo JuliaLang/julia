@@ -286,8 +286,14 @@ function mod(x::T, y::T) where T<:Integer
     y == -1 && return T(0)   # avoid potential overflow in fld
     return x - fld(x, y) * y
 end
-mod(x::BitSigned, y::Unsigned) = rem(y + unsigned(rem(x, y)), y)
-mod(x::Unsigned, y::Signed) = rem(y + signed(rem(x, y)), y)
+function mod(x::BitSigned, y::Unsigned)
+    remval = rem(x, y) # correct iff  remval>=0
+    return unsigned(remval + (remval<zero(remval))*y)
+end
+function mod(x::Unsigned, y::Signed)
+    remval =  signed(rem(x, y)) #remval>0 so correct iff y>0 or remval==0
+    return remval + (!iszero(remval) && y<zero(y))*y
+end
 mod(x::T, y::T) where {T<:Unsigned} = rem(x, y)
 
 # Don't promote integers for div/rem/mod since there is no danger of overflow,
@@ -711,7 +717,7 @@ ERROR: LoadError: ArgumentError: invalid base 10 digit '.' in "123456789123.4"
 [...]
 ```
 """
-macro int128_str(s)
+macro int128_str(s::String)
     return parse(Int128, s)
 end
 
@@ -731,7 +737,7 @@ ERROR: LoadError: ArgumentError: invalid base 10 digit '-' in "-123456789123"
 [...]
 ```
 """
-macro uint128_str(s)
+macro uint128_str(s::String)
     return parse(UInt128, s)
 end
 
@@ -755,7 +761,7 @@ ERROR: ArgumentError: invalid number format _ for BigInt or BigFloat
 [...]
 ```
 """
-macro big_str(s)
+macro big_str(s::String)
     message = "invalid number format $s for BigInt or BigFloat"
     throw_error =  :(throw(ArgumentError($message)))
     if '_' in s
