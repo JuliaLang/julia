@@ -358,7 +358,7 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     return event;
 }
 
-JL_DLLEXPORT int _jl_tracy_enabled() {
+JL_DLLEXPORT int _jl_tracy_enabled(void) {
 #ifdef USE_TRACY
     return 1;
 #else
@@ -366,7 +366,7 @@ JL_DLLEXPORT int _jl_tracy_enabled() {
 #endif
 }
 
-JL_DLLEXPORT int _jl_ittapi_enabled() {
+JL_DLLEXPORT int _jl_ittapi_enabled(void) {
 #ifdef USE_ITTAPI
     return 1;
 #else
@@ -374,7 +374,7 @@ JL_DLLEXPORT int _jl_ittapi_enabled() {
 #endif
 }
 
-JL_DLLEXPORT int _jl_nvtx_enabled() {
+JL_DLLEXPORT int _jl_nvtx_enabled(void) {
 #ifdef USE_NVTX
     return 1;
 #else

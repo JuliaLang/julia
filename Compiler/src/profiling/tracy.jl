@@ -21,10 +21,7 @@ mutable struct TracySrcLoc
     file_sym::Symbol
 end
 TracySrcLoc(zone_name::String, function_name::Symbol, file::Symbol, line::UInt32, color::UInt32) =
-    TracySrcLoc(_strpointer(zone_name),
-                unsafe_convert(Ptr{UInt8}, function_name),
-                unsafe_convert(Ptr{UInt8}, file),
-                line, color, zone_name, function_name, file)
+    TracySrcLoc(C_NULL, C_NULL, C_NULL, line, color, zone_name, function_name, file)
 
 @noinline function reinit!(srcloc::TracySrcLoc)
     srcloc.zone_name = _strpointer(srcloc.zone_name_str)
@@ -56,6 +53,7 @@ function _tracy_zone_begin(loc, active)
     if loc.zone_name === Ptr{UInt8}(0)
         reinit!(loc)
     end
+    # `loc` is rooted in the global `srclocls`
     ptr = Ptr{TracySrcLoc}(pointer_from_objref(loc))
     return ccall((:___tracy_emit_zone_begin, "libTracyClient"), TracyZoneCtx, (Ptr{TracySrcLoc}, Cint), ptr, active)
 end
