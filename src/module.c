@@ -401,7 +401,7 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_bindin
     return NULL;
 }
 
-JL_DLLEXPORT jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
+static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
 {
     jl_task_t *ct = jl_current_task;
     const jl_uuid_t uuid_zero = {0, 0};
@@ -410,7 +410,7 @@ JL_DLLEXPORT jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     jl_set_typetagof(m, jl_module_tag, 0);
     assert(jl_is_symbol(name));
     m->name = name;
-    m->parent = parent;
+    m->parent = parent ? parent : m;
     m->istopmod = 0;
     m->uuid = uuid_zero;
     static unsigned int mcounter; // simple counter backup, in case hrtime is not incrementing
@@ -437,23 +437,22 @@ JL_DLLEXPORT jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     return m;
 }
 
-JL_DLLEXPORT void jl_add_default_names(jl_module_t *m, uint8_t default_using_core, uint8_t self_name)
+static void jl_add_default_names(jl_module_t *m, uint8_t default_using_core, uint8_t self_name)
 {
     if (jl_core_module) {
         // Bootstrap: Before jl_core_module is defined, we don't have enough infrastructure
         // for bindings, so Core itself gets special handling in jltypes.c
         if (default_using_core) {
-            jl_module_using(m, jl_core_module);
+            jl_module_initial_using(m, jl_core_module);
         }
         if (self_name) {
             // export own name, so "using Foo" makes "Foo" itself visible
-            jl_set_const(m, m->name, (jl_value_t*)m);
-            jl_module_public(m, m->name, 1);
+            jl_set_initial_const(m, m->name, (jl_value_t*)m, 1);
         }
     }
 }
 
-JL_DLLEXPORT jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_using_core, uint8_t self_name)
+jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default_using_core, uint8_t self_name)
 {
     jl_module_t *m = jl_new_module__(name, parent);
     JL_GC_PUSH1(&m);
@@ -1231,6 +1230,19 @@ void jl_add_usings_backedge(jl_module_t *from, jl_module_t *to)
     JL_UNLOCK(&from->lock);
 }
 
+void jl_module_initial_using(jl_module_t *to, jl_module_t *from)
+{
+    struct _jl_module_using new_item = {
+        .mod = from,
+        .min_world = 0,
+        .max_world = ~(size_t)0
+    };
+    arraylist_grow(&to->usings, sizeof(struct _jl_module_using)/sizeof(void*));
+    memcpy(&to->usings.items[to->usings.len-3], &new_item, sizeof(struct _jl_module_using));
+    jl_gc_wb(to, from);
+    jl_add_usings_backedge(from, to);
+}
+
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from)
 {
     if (to == from)
@@ -1323,11 +1335,10 @@ JL_DLLEXPORT jl_value_t *jl_get_module_binding_or_nothing(jl_module_t *m, jl_sym
     return (jl_value_t*)b;
 }
 
-JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
+int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_world)
 {
+    // caller must hold world_counter_lock
     jl_binding_t *b = jl_get_module_binding(from, s, 1);
-    JL_LOCK(&world_counter_lock);
-    size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
     int was_exported = (bpart->kind & PARTITION_FLAG_EXPORTED) != 0;
     if (jl_atomic_load_relaxed(&b->flags) & BINDING_FLAG_PUBLICP) {
@@ -1342,9 +1353,9 @@ JL_DLLEXPORT void jl_module_public(jl_module_t *from, jl_sym_t *s, int exported)
     jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_PUBLICP);
     if (was_exported != exported) {
         jl_replace_binding_locked2(b, bpart, bpart->restriction, bpart->kind | PARTITION_FLAG_EXPORTED, new_world);
-        jl_atomic_store_release(&jl_world_counter, new_world);
+        return 1;
     }
-    JL_UNLOCK(&world_counter_lock);
+    return 0;
 }
 
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // unlike most queries here, this is currently seq_cst
@@ -1368,13 +1379,6 @@ JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import) // u
         return 1;
     }
     return jl_atomic_load(&b->value) != NULL;
-}
-
-JL_DLLEXPORT int jl_defines_or_exports_p(jl_module_t *m, jl_sym_t *var)
-{
-    jl_binding_t *b = jl_get_module_binding(m, var, 0);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    return b && ((bpart->kind & PARTITION_FLAG_EXPORTED) || jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL);
 }
 
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var)
@@ -1475,9 +1479,25 @@ JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *va
     jl_checked_assignment(bp, m, var, val);
 }
 
+JL_DLLEXPORT void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported)
+{
+    // this function is only valid during initialization, so there is no risk of data races her are not too important to use
+    int kind = PARTITION_KIND_CONST | (exported ? PARTITION_FLAG_EXPORTED : 0);
+    // jl_declare_constant_val3(NULL, m, var, (jl_value_t*)jl_any_type, kind, 0);
+    jl_binding_t *bp = jl_get_module_binding(m, var, 1);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(bp, 0);
+    assert(bpart->min_world == 0);
+    jl_atomic_store_relaxed(&bpart->max_world, ~(size_t)0); // jl_check_new_binding_implicit likely incorrectly truncated it
+    if (exported)
+        jl_atomic_fetch_or_relaxed(&bp->flags, BINDING_FLAG_PUBLICP);
+    bpart->kind = kind | (bpart->kind & PARTITION_MASK_FLAG);
+    bpart->restriction = val;
+    jl_gc_wb(bpart, val);
+}
+
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
 {
-    // this function is mostly only used during initialization, so the data races here are not too important to us
+    // this function is dangerous and unsound. do not use.
     jl_binding_t *bp = jl_get_module_binding(m, var, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(bp, jl_current_task->world_age);
     bpart->min_world = 0;
