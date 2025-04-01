@@ -223,11 +223,14 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     arraylist_push(stack, (void*)mi);
     int depth = stack->len;
     *bp = (void*)((char*)HT_NOTFOUND + 4 + depth); // preliminarily mark as in-progress
-    size_t i = 0, n = jl_array_nrows(mi->backedges);
+    jl_array_t *backedges = jl_mi_get_backedges(mi);
+    size_t i = 0, n = jl_array_nrows(backedges);
     int cycle = depth;
     while (i < n) {
         jl_code_instance_t *be;
-        i = get_next_edge(mi->backedges, i, NULL, &be);
+        i = get_next_edge(backedges, i, NULL, &be);
+        if (!be)
+            continue;
         JL_GC_PROMISE_ROOTED(be); // get_next_edge propagates the edge for us here
         int child_found = has_backedge_to_worklist(jl_get_ci_mi(be), visited, stack, query_cache);
         if (child_found == 1 || child_found == 2) {
