@@ -745,7 +745,7 @@ function _precompilepkgs(pkgs::Vector{String},
         notify(interrupted_or_done)
         in_printloop || wait(t_print) # wait to let the print loop cease first
         if err isa InterruptException
-            lock(print_lock) do
+            @lock print_lock begin
                 println(io, " Interrupted: Exiting precompilation...", ansi_cleartoendofline)
             end
             interrupted = true
@@ -766,7 +766,7 @@ function _precompilepkgs(pkgs::Vector{String},
             while !eof(pipe)
                 str = readline(pipe, keep=true)
                 if single_requested_pkg && (liveprinting || !isempty(str))
-                    lock(print_lock) do
+                    @lock print_lock begin
                         if !liveprinting
                             printpkgstyle(io, :Info, "Given $(pkg.name) was explicitly requested, output will be shown live $ansi_cleartoendofline",
                                 color = Base.info_color())
@@ -778,13 +778,13 @@ function _precompilepkgs(pkgs::Vector{String},
                 end
                 write(get!(IOBuffer, std_outputs, pkg_config), str)
                 if !in(pkg_config, taskwaiting) && occursin("waiting for IO to finish", str)
-                    !fancyprint && lock(print_lock) do
+                    !fancyprint && @lock print_lock begin
                         println(io, pkg.name, color_string(" Waiting for background task / IO / timer.", Base.warn_color()))
                     end
                     push!(taskwaiting, pkg_config)
                 end
                 if !fancyprint && in(pkg_config, taskwaiting)
-                    lock(print_lock) do
+                    @lock print_lock begin
                         print(io, str)
                     end
                 end
@@ -799,7 +799,7 @@ function _precompilepkgs(pkgs::Vector{String},
         try
             wait(first_started)
             (isempty(pkg_queue) || interrupted_or_done.set) && return
-            lock(print_lock) do
+            @lock print_lock begin
                 if target !== nothing
                     printpkgstyle(io, :Precompiling, target)
                 end
@@ -817,7 +817,7 @@ function _precompilepkgs(pkgs::Vector{String},
             final_loop = false
             n_print_rows = 0
             while !printloop_should_exit
-                lock(print_lock) do
+                @lock print_lock begin
                     term_size = displaysize(io)
                     num_deps_show = max(term_size[1] - 3, 2) # show at least 2 deps
                     pkg_queue_show = if !interrupted_or_done.set && length(pkg_queue) > num_deps_show
@@ -931,7 +931,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg)
 
                         name = describe_pkg(pkg, is_project_dep, flags, cacheflags)
-                        lock(print_lock) do
+                        @lock print_lock begin
                             if !fancyprint && isempty(pkg_queue)
                                 printpkgstyle(io, :Precompiling, something(target, "packages..."))
                             end
@@ -960,11 +960,11 @@ function _precompilepkgs(pkgs::Vector{String},
                             end
                             if ret isa Base.PrecompilableError
                                 push!(precomperr_deps, pkg_config)
-                                !fancyprint && lock(print_lock) do
+                                !fancyprint && @lock print_lock begin
                                     println(io, _timing_string(t), color_string("  ? ", Base.warn_color()), name)
                                 end
                             else
-                                !fancyprint && lock(print_lock) do
+                                !fancyprint && @lock print_lock begin
                                     println(io, _timing_string(t), color_string("  ✓ ", loaded ? Base.warn_color() : :green), name)
                                 end
                                 was_recompiled[pkg_config] = true
@@ -978,7 +978,7 @@ function _precompilepkgs(pkgs::Vector{String},
                                 errmsg = String(take!(get(IOBuffer, std_outputs, pkg_config)))
                                 delete!(std_outputs, pkg_config) # so it's not shown as warnings, given error report
                                 failed_deps[pkg_config] = (strict || is_project_dep) ? string(sprint(showerror, err), "\n", strip(errmsg)) : ""
-                                !fancyprint && lock(print_lock) do
+                                !fancyprint && @lock print_lock begin
                                     println(io, " "^9, color_string("  ✗ ", Base.error_color()), name)
                                 end
                             else
@@ -1079,7 +1079,7 @@ function _precompilepkgs(pkgs::Vector{String},
             end
         end
         let str=str
-            lock(print_lock) do
+            @lock print_lock begin
                 println(io, str)
             end
         end
@@ -1157,7 +1157,7 @@ function precompile_pkgs_maybe_cachefile_lock(f, io::IO, print_lock::ReentrantLo
         else
             "another machine (hostname: $hostname, pid: $pid, pidfile: $pidfile)"
         end
-        !fancyprint && lock(print_lock) do
+        !fancyprint && @lock print_lock begin
             println(io, "    ", pkg.name, _color_string(" Being precompiled by $(pkgspidlocked[pkg_config])", Base.info_color(), hascolor))
         end
         Base.release(parallel_limiter) # release so other work can be done while waiting
