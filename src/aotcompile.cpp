@@ -675,6 +675,20 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     fargs[0] = (jl_value_t*)codeinfos;
     void *data = jl_emit_native(codeinfos, llvmmod, &cgparams, external_linkage);
 
+    // examine everything just emitted and save it to the caches
+    if (!external_linkage) {
+        for (size_t i = 0, l = jl_array_nrows(codeinfos); i < l; i++) {
+            jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
+            if (jl_is_code_instance(item)) {
+                // now add it to our compilation results
+                jl_code_instance_t *codeinst = (jl_code_instance_t*)item;
+                jl_code_info_t *src = (jl_code_info_t*)jl_array_ptr_ref(codeinfos, ++i);
+                assert(jl_is_code_info(src));
+                jl_add_codeinst_to_cache(codeinst, src);
+            }
+        }
+    }
+
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
     ((jl_native_code_desc_t*)data)->M.withModuleDo([&](Module &M) {

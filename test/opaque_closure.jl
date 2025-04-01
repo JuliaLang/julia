@@ -390,3 +390,20 @@ let ir = first(only(Base.code_ircode(sin, (Int,))))
     oc = Core.OpaqueClosure(ir; do_compile=false)
     @test oc(1) == sin(1)
 end
+
+function typed_add54236(::Type{T}) where T
+    return @opaque (x::Int)->T(x) + T(1)
+end
+let f = typed_add54236(Float64)
+    @test f isa Core.OpaqueClosure
+    @test f(32) === 33.0
+end
+
+f54357(g, ::Type{AT}) where {AT} = Base.Experimental.@opaque AT->_ (args...) -> g((args::AT)...)
+let f = f54357(+, Tuple{Int,Int})
+    @test f isa Core.OpaqueClosure
+    @test f(32, 34) === 66
+    g = f54357(+, Tuple{Float64,Float64})
+    @test g isa Core.OpaqueClosure
+    @test g(32.0, 34.0) === 66.0
+end

@@ -6194,3 +6194,8 @@ f57292(xs::Union{Tuple{String}, Int}...) = getfield(xs...)
 g57292(xs::String...) = getfield(("abc",), 1, :not_atomic, xs...)
 @test Base.infer_return_type(f57292) == String
 @test Base.infer_return_type(g57292) == String
+
+global invalid_setglobal!_exct_modeling::Int
+@test Base.infer_exception_type((Float64,)) do x
+    setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
+end == ErrorException
