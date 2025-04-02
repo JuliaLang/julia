@@ -2410,4 +2410,9 @@ precompile_test_harness("Package top-level load itself") do load_path
     end
 end
 
+# Verify that inference / caching was not performed for any macros in the sysimage
+let m = only(methods(Base.var"@big_str"))
+    @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
+end
+
 finish_precompile_test!()

@@ -3357,11 +3357,11 @@
 (define (lambda-all-vars e)
   (append (lam:argnames e) (caddr e)))
 
-;; compute set of variables referenced in a lambda but not bound by it
+;; compute set of non-global variables referenced in a lambda but not bound by it
 (define (free-vars- e tab)
   (cond ((or (eq? e UNUSED) (underscore-symbol? e)) tab)
         ((symbol? e) (put! tab e #t))
-        ((and (pair? e) (eq? (car e) 'globalref)) tab)
+        ((and (pair? e) (memq (car e) '(global globalref))) tab)
         ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
@@ -3385,9 +3385,15 @@
               vi)
     tab))
 
+;; env:      list of vinfo (includes any closure #self#; should not include globals)
+;; captvars: list of vinfo
+;; sp:       list of symbol
+;; new-sp:   list of symbol (static params declared here)
+;; methsig:  `(call (core svec) ...)
+;; tab:      table of (name . var-info)
 (define (analyze-vars-lambda e env captvars sp new-sp methsig tab)
   (let* ((args (lam:args e))
-         (locl (caddr e))
+         (locl (lam:vinfo e))
          (allv (nconc (map arg-name args) locl))
          (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
                       ;; add variables referenced in declared types for free vars
@@ -3397,27 +3403,23 @@
                                             fv))))
                  (append (diff dv fv) fv)))
          (sig-fv (if methsig (free-vars methsig) '()))
-         (glo  (find-global-decls (lam:body e)))
          ;; make var-info records for vars introduced by this lambda
          (vi   (nconc
                 (map (lambda (decl) (make-var-info (decl-var decl)))
                      args)
                 (map make-var-info locl)))
-         (capt-sp (filter (lambda (v) (or (and (memq v fv) (not (memq v glo)) (not (memq v new-sp)))
+         (capt-sp (filter (lambda (v) (or (and (memq v fv) (not (memq v new-sp)))
                                           (memq v sig-fv)))
                           sp))
          ;; captured vars: vars from the environment that occur
          ;; in our set of free variables (fv).
          (cv    (append (filter (lambda (v) (and (memq (vinfo:name v) fv)
-                                                 (not (memq (vinfo:name v) new-sp))
-                                                 (not (memq (vinfo:name v) glo))))
+                                                 (not (memq (vinfo:name v) new-sp))))
                                 env)
                         (map make-var-info capt-sp)))
          (new-env (append vi
                           ;; new environment: add our vars
-                          (filter (lambda (v)
-                                    (and (not (memq (vinfo:name v) allv))
-                                         (not (memq (vinfo:name v) glo))))
+                          (filter (lambda (v) (not (memq (vinfo:name v) allv)))
                                   env))))
     (analyze-vars (lam:body e)
                   new-env
@@ -4043,7 +4045,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref thismodule lineinfo line break inert module toplevel null true false meta import using) e)
+          ((quote top core global globalref thismodule lineinfo line break inert module toplevel null true false meta import using) e)
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)
@@ -4107,6 +4109,7 @@ f(x) = yt(x)
                                            (capt-var-access v fname opaq)
                                            v)))
                                    cvs)))
+               (set-car! (cdddr (lam:vinfo lam2)) '()) ;; must capture static_parameters as values inside opaque_closure
                `(new_opaque_closure
                  ,(cadr e) ,(or (caddr e) '(call (core apply_type) (core Union))) ,(or (cadddr e) '(core Any)) ,allow-partial
                  (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs) parsed-method-stack))

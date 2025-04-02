@@ -618,7 +618,7 @@ julia> println(raw"\\\\x \\\\\\"")
 macro raw_str(s); s; end
 
 """
-    escape_raw_string(s::AbstractString, delim='"') -> AbstractString
+    escape_raw_string(s::AbstractString, delim='"')::AbstractString
     escape_raw_string(io, s::AbstractString, delim='"')
 
 Escape a string in the manner used for parsing raw string literals.
@@ -674,7 +674,7 @@ end
 ## multiline strings ##
 
 """
-    indentation(str::AbstractString; tabwidth=8) -> (Int, Bool)
+    indentation(str::AbstractString; tabwidth=8) -> (width::Int, empty::Bool)
 
 Calculate the width of leading white space. Return the width and a flag to indicate
 if the string is empty.

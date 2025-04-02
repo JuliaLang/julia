@@ -505,7 +505,7 @@ _prevpow2(x::Unsigned) = one(x) << unsigned(top_set_bit(x)-1)
 _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) : _prevpow2(unsigned(x)))
 
 """
-    ispow2(n::Number) -> Bool
+    ispow2(n::Number)::Bool
 
 Test whether `n` is an integer power of two.
 
@@ -845,7 +845,7 @@ function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
     while i >= 2
         d, c = divrem(digits, 0x64)
         digits = oftype(digits, d)
-        @inbounds d100 = _dec_d100[(c % Int) + 1]
+        @inbounds d100 = _dec_d100[(c % Int)::Int + 1]
         @inbounds buf[pos + i - 2] = d100 % UInt8
         @inbounds buf[pos + i - 1] = (d100 >> 0x8) % UInt8
         i -= 2
@@ -1062,7 +1062,7 @@ function digits(T::Type{<:Integer}, n::Integer; base::Integer = 10, pad::Integer
 end
 
 """
-    hastypemax(T::Type) -> Bool
+    hastypemax(T::Type)::Bool
 
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """

@@ -147,7 +147,7 @@ macro specialize(vars...)
 end
 
 """
-    @isdefined s -> Bool
+    @isdefined(s)::Bool
 
 Tests whether variable `s` is defined in the current scope.
 
@@ -387,7 +387,7 @@ getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
-    nameof(m::Module) -> Symbol
+    nameof(m::Module)::Symbol
 
 Get the name of a `Module` as a [`Symbol`](@ref).
 
@@ -995,7 +995,7 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 unsafe_convert(::Type{Ptr{Any}}, sv::SimpleVector) = convert(Ptr{Any},pointer_from_objref(sv)) + sizeof(Ptr)
 
 """
-    isassigned(array, i) -> Bool
+    isassigned(array, i)::Bool
 
 Test whether the given array has a value associated with index `i`. Return `false`
 if the index is out of bounds, or has an undefined reference.
@@ -1079,7 +1079,7 @@ See [`Base.compilerbarrier`](@ref) for more info.
 inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """
-    isempty(collection) -> Bool
+    isempty(collection)::Bool
 
 Determine whether a collection is empty (has no elements).
 
@@ -1198,7 +1198,7 @@ end
 
 # Iteration
 """
-    isdone(itr, [state]) -> Union{Bool, Missing}
+    isdone(itr, [state])::Union{Bool, Missing}
 
 This function provides a fast-path hint for iterator completion.
 This is useful for stateful iterators that want to avoid having elements
@@ -1217,7 +1217,7 @@ See also [`iterate`](@ref), [`isempty`](@ref)
 isdone(itr, state...) = missing
 
 """
-    iterate(iter [, state]) -> Union{Nothing, Tuple{Any, Any}}
+    iterate(iter [, state])::Union{Nothing, Tuple{Any, Any}}
 
 Advance the iterator to obtain the next element. If no elements
 remain, `nothing` should be returned. Otherwise, a 2-tuple of the
@@ -1226,7 +1226,7 @@ next element and the new iteration state should be returned.
 function iterate end
 
 """
-    isiterable(T) -> Bool
+    isiterable(T)::Bool
 
 Test if type `T` is an iterable collection type or not,
 that is whether it has an `iterate` method or not.

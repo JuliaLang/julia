@@ -6408,4 +6408,9 @@ let src = code_typed1((Base.RefValue{String}, String)) do x, val
     @test isa(retval, Core.SSAValue)
 end
 
+global invalid_setglobal!_exct_modeling::Int
+@test Base.infer_exception_type((Float64,)) do x
+    setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
+end == ErrorException
+
 end # module inference

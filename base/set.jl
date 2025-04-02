@@ -92,7 +92,7 @@ length(s::Set)  = length(s.dict)
 in(x, s::Set) = haskey(s.dict, x)
 
 """
-    in!(x, s::AbstractSet) -> Bool
+    in!(x, s::AbstractSet)::Bool
 
 If `x` is in `s`, return `true`. If not, push `x` into `s` and return `false`.
 This is equivalent to `in(x, s) ? true : (push!(s, x); false)`, but may have a
@@ -478,8 +478,8 @@ function unique!(itr)
 end
 
 """
-    allunique(itr) -> Bool
-    allunique(f, itr) -> Bool
+    allunique(itr)::Bool
+    allunique(f, itr)::Bool
 
 Return `true` if all values from `itr` are distinct when compared with [`isequal`](@ref).
 Or if all of `[f(x) for x in itr]` are distinct, for the second method.
@@ -602,8 +602,8 @@ function allunique(f::F, t::Tuple) where {F}
 end
 
 """
-    allequal(itr) -> Bool
-    allequal(f, itr) -> Bool
+    allequal(itr)::Bool
+    allequal(f, itr)::Bool
 
 Return `true` if all values from `itr` are equal when compared with [`isequal`](@ref).
 Or if all of `[f(x) for x in itr]` are equal, for the second method.

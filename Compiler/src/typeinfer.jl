@@ -156,7 +156,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 # when compiling the compiler to inject everything eagerly
                 # where codegen can start finding and using it right away
                 mi = result.linfo
-                if mi.def isa Method && isa_compileable_sig(mi)
+                if mi.def isa Method && isa_compileable_sig(mi) && is_cached(caller)
                     ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, uncompressed)
                 end
             end
@@ -1113,10 +1113,10 @@ end
 """
     SOURCE_MODE_NOT_REQUIRED
 
-Indicates to inference that the source is not required and the only fields
-of the resulting `CodeInstance` that the caller is interested in are types
-and effects. Inference is still free to create a CodeInstance with source,
-but is not required to do so.
+Indicates to inference that the source is not required and the only fields of
+the resulting `CodeInstance` that the caller is interested in are return or
+exception types and IPO effects. Inference is still free to create source for
+it or add it to the JIT even, but is not required or expected to do so.
 """
 const SOURCE_MODE_NOT_REQUIRED = 0x0
 
@@ -1124,28 +1124,51 @@ const SOURCE_MODE_NOT_REQUIRED = 0x0
     SOURCE_MODE_ABI
 
 Indicates to inference that it should return a CodeInstance that can
-either be `->invoke`'d (because it has already been compiled or because
-it has constabi) or one that can be made so by compiling its `->inferred`
-field.
-
-N.B.: The `->inferred` field is volatile and the compiler may delete it.
+be `->invoke`'d (because it has already been compiled).
 """
 const SOURCE_MODE_ABI = 0x1
 
 """
-    ci_has_abi(code::CodeInstance)
+    SOURCE_MODE_GET_SOURCE
 
-Determine whether this CodeInstance is something that could be invoked if we gave it
-to the runtime system (either because it already has an ->invoke ptr, or
-because it has source that could be compiled). Note that this information may
-be stale by the time the user see it, so the user will need to perform their
-own checks if they actually need the abi from it.
+Indicates to inference that it should return a CodeInstance after it has
+prepared interp to be able to provide source code for it.
 """
-function ci_has_abi(code::CodeInstance)
+const SOURCE_MODE_GET_SOURCE = 0xf
+
+"""
+    ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
+
+Determine whether this CodeInstance is something that could be invoked if
+interp gave it to the runtime system (either because it already has an ->invoke
+ptr, or because interp has source that could be compiled).
+"""
+function ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
     (@atomic :acquire code.invoke) !== C_NULL && return true
+    return ci_has_source(interp, code)
+end
+
+"""
+    ci_has_source(interp::AbstractInterpreter, code::CodeInstance)
+
+Determine whether this CodeInstance is something that could be compiled from
+source that interp has.
+"""
+function ci_has_source(interp::AbstractInterpreter, code::CodeInstance)
+    codegen = codegen_cache(interp)
+    codegen === nothing && return false
+    use_const_api(code) && return true
+    haskey(codegen, code) && return true
     inf = @atomic :monotonic code.inferred
-    if code.owner === nothing ? (isa(inf, CodeInfo) || isa(inf, String)) : inf !== nothing
-        # interp.codegen[code] = maybe_uncompress(code, inf) # TODO: the correct way to ensure this information doesn't become stale would be to push it into the stable codegen cache
+    if isa(inf, String)
+        inf = _uncompressed_ir(code, inf)
+    end
+    if code.owner === nothing
+        if isa(inf, CodeInfo)
+            codegen[code] = inf
+            return true
+        end
+    elseif inf !== nothing
         return true
     end
     return false
@@ -1155,9 +1178,10 @@ function ci_has_invoke(code::CodeInstance)
     return (@atomic :monotonic code.invoke) !== C_NULL
 end
 
-function ci_meets_requirement(code::CodeInstance, source_mode::UInt8)
+function ci_meets_requirement(interp::AbstractInterpreter, code::CodeInstance, source_mode::UInt8)
     source_mode == SOURCE_MODE_NOT_REQUIRED && return true
-    source_mode == SOURCE_MODE_ABI && return ci_has_abi(code)
+    source_mode == SOURCE_MODE_ABI && return ci_has_abi(interp, code)
+    source_mode == SOURCE_MODE_GET_SOURCE && return ci_has_source(interp, code)
     return false
 end
 
@@ -1167,7 +1191,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     let code = get(code_cache(interp), mi, nothing)
         if code isa CodeInstance
             # see if this code already exists in the cache
-            if ci_meets_requirement(code, source_mode)
+            if ci_meets_requirement(interp, code, source_mode)
                 ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
                 return code
             end
@@ -1179,7 +1203,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     let code = get(code_cache(interp), mi, nothing)
         if code isa CodeInstance
             # see if this code already exists in the cache
-            if ci_meets_requirement(code, source_mode)
+            if ci_meets_requirement(interp, code, source_mode)
                 engine_reject(interp, ci)
                 ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
                 return code
@@ -1210,18 +1234,11 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
 
     ci = result.ci # reload from result in case it changed
+    codegen = codegen_cache(interp)
     @assert frame.cache_mode != CACHE_MODE_NULL
-    @assert is_result_constabi_eligible(result) || begin
-            codegen = codegen_cache(interp)
-            codegen === nothing || haskey(codegen, ci)
-        end
+    @assert is_result_constabi_eligible(result) || codegen === nothing || haskey(codegen, ci)
     @assert is_result_constabi_eligible(result) == use_const_api(ci)
     @assert isdefined(ci, :inferred) "interpreter did not fulfill our expectations"
-    if !is_cached(frame) && source_mode == SOURCE_MODE_ABI
-        # XXX: jl_type_infer somewhat ambiguously assumes this must be cached
-        # XXX: this should be using the CI from the cache, if possible instead: haskey(cache, mi) && (ci = cache[mi])
-        code_cache(interp)[mi] = ci
-    end
     return ci
 end
 
@@ -1235,35 +1252,9 @@ end
 typeinf_type(interp::AbstractInterpreter, match::MethodMatch) =
     typeinf_type(interp, specialize_method(match))
 function typeinf_type(interp::AbstractInterpreter, mi::MethodInstance)
-    # n.b.: this could be replaced with @something(typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED), return nothing).rettype
-    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
-    let code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            # see if this rettype already exists in the cache
-            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-            return code.rettype
-        end
-    end
-    ci = engine_reserve(interp, mi)
-    let code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            engine_reject(interp, ci)
-            # see if this rettype already exists in the cache
-            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-            return code.rettype
-        end
-    end
-    result = InferenceResult(mi, typeinf_lattice(interp))
-    result.ci = ci
-    frame = InferenceState(result, #=cache_mode=#:global, interp)
-    if frame === nothing
-        engine_reject(interp, ci)
-        return nothing
-    end
-    typeinf(interp, frame)
-    ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-    is_inferred(result) || return nothing
-    return widenconst(ignorelimited(result.result))
+    ci = typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED)
+    ci isa CodeInstance || return nothing
+    return ci.rettype
 end
 
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
@@ -1300,18 +1291,31 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
                 src = _uncompressed_ir(callee, src)
             end
             if !isa(src, CodeInfo)
-                newcallee = typeinf_ext(interp, callee.def, source_mode)
+                newcallee = typeinf_ext(interp, callee.def, source_mode) # always SOURCE_MODE_ABI
                 if newcallee isa CodeInstance
                     callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
                     push!(tocompile, newcallee)
-                #else
-                #    println("warning: could not get source code for ", callee.def)
+                end
+                if newcallee !== callee
+                    push!(inspected, callee)
                 end
                 continue
             end
         end
         push!(inspected, callee)
         collectinvokes!(tocompile, src)
+        mi = get_ci_mi(callee)
+        if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
+            cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(interp))::CodeInstance
+            if cached === callee
+                # make sure callee is gc-rooted and cached, as required by jl_add_codeinst_to_jit
+                code_cache(interp)[mi] = callee
+            else
+                # use an existing CI from the cache, if there is available one that is compatible
+                callee === ci && (ci = cached)
+                callee = cached
+            end
+        end
         ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
     end
     return ci
@@ -1355,7 +1359,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                 # and this is either the primary world, or not applicable in the primary world
                 # then we want to compile and emit this
                 if item.def.primary_world <= this_world <= item.def.deleted_world
-                    ci = typeinf_ext(interp, item, SOURCE_MODE_NOT_REQUIRED)
+                    ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
                     ci isa CodeInstance && push!(tocompile, ci)
                 end
             elseif item isa SimpleVector && latest
@@ -1366,7 +1370,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                             sig, this_world, #= mt_cache =# 0)
                 if ptr !== C_NULL
                     mi = unsafe_pointer_to_objref(ptr)::MethodInstance
-                    ci = typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED)
+                    ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
                     ci isa CodeInstance && push!(tocompile, ci)
                 end
                 # additionally enqueue the ccallable entrypoint / adapter, which implicitly
@@ -1377,26 +1381,37 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         while !isempty(tocompile)
             callee = pop!(tocompile)
             callee in inspected && continue
-            push!(inspected, callee)
             # now make sure everything has source code, if desired
             mi = get_ci_mi(callee)
             def = mi.def
             if use_const_api(callee)
                 src = codeinfo_for_const(interp, mi, callee.rettype_const)
-            elseif haskey(interp.codegen, callee)
-                src = interp.codegen[callee]
-            elseif isa(def, Method) && !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0
-                src = retrieve_code_info(mi, get_inference_world(interp))
             else
-                # TODO: typeinf_code could return something with different edges/ages/owner/abi (needing an update to callee), which we don't handle here
-                src = typeinf_code(interp, mi, true)
+                src = get(interp.codegen, callee, nothing)
+                if src === nothing
+                    newcallee = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
+                    if newcallee isa CodeInstance
+                        @assert use_const_api(newcallee) || haskey(interp.codegen, newcallee)
+                        push!(tocompile, newcallee)
+                    end
+                    if newcallee !== callee
+                        push!(inspected, callee)
+                    end
+                    continue
+                end
             end
+            push!(inspected, callee)
             if src isa CodeInfo
                 collectinvokes!(tocompile, src)
-                # It is somewhat ambiguous if typeinf_ext might have callee in the caches,
-                # but for the purpose of native compile, we always want them put there.
+                # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-                    code_cache(interp)[mi] = callee
+                    cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, this_world)::CodeInstance
+                    if cached === callee
+                        code_cache(interp)[mi] = callee
+                    else
+                        # Use an existing CI from the cache, if there is available one that is compatible
+                        callee = cached
+                    end
                 end
                 push!(codeinfos, callee)
                 push!(codeinfos, src)

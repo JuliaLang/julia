@@ -1,9 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-baremodule Base
+module Base
 
-using Core
-using Core.Intrinsics, Core.IR
+using .Core.Intrinsics, .Core.IR
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
@@ -159,7 +158,7 @@ if false
 end
 
 """
-    time_ns() -> UInt64
+    time_ns()::UInt64
 
 Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
 between two moments in time.
@@ -375,5 +374,5 @@ Core._setparser!(fl_parse)
 
 # Further definition of Base will happen in Base.jl if loaded.
 
-end # baremodule Base
+end # module Base
 using .Base

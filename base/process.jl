@@ -639,7 +639,7 @@ kill(ps::Vector{Process}, signum::Integer=SIGTERM) = for p in ps; kill(p, signum
 kill(ps::ProcessChain, signum::Integer=SIGTERM) = kill(ps.processes, signum)
 
 """
-    getpid(process) -> Int32
+    getpid(process)::Int32
 
 Get the child process ID, if it still exists.
 

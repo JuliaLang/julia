@@ -1185,7 +1185,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TE
 end
 
 """
-    print_verbose(::AbstractTestSet) -> Bool
+    print_verbose(::AbstractTestSet)::Bool
 
 Whether printing involving this `AbstractTestSet` should be verbose or not.
 
@@ -1368,7 +1368,7 @@ function filter_errors(ts::DefaultTestSet)
 end
 
 """
-    Test.get_rng(ts::AbstractTestSet) -> Union{Nothing,AbstractRNG}
+    Test.get_rng(ts::AbstractTestSet)::Union{Nothing,AbstractRNG}
 
 Return the global random number generator (RNG) associated to the input testset `ts`.
 If no RNG is associated to it, return `nothing`.
@@ -1376,7 +1376,7 @@ If no RNG is associated to it, return `nothing`.
 get_rng(::AbstractTestSet) = nothing
 get_rng(ts::DefaultTestSet) = ts.rng
 """
-    Test.set_rng!(ts::AbstractTestSet, rng::AbstractRNG) -> AbstractRNG
+    Test.set_rng!(ts::AbstractTestSet, rng::AbstractRNG)::AbstractRNG
 
 Set the global random number generator (RNG) associated to the input testset `ts` to `rng`.
 If no RNG is associated to it, do nothing.
@@ -1419,7 +1419,7 @@ struct TestCounts
 end
 
 """"
-    get_test_counts(::AbstractTestSet) -> TestCounts
+    get_test_counts(::AbstractTestSet)::TestCounts
 
 Recursive function that counts the number of test results of each
 type directly in the testset, and totals across the child testsets.
