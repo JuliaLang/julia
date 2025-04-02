@@ -778,13 +778,24 @@ In other words, the range would be equivalent to a `Base.OneTo`.
 isoneto(::Type) = false
 isoneto(::Type{<:AbstractOneTo}) = true
 isoneto(::Type{<:Integer}) = true
-struct IsOneTo end
-struct IsOffset end
-struct AxesOffset{T, I}
-    style :: T
+"""
+    HasOneToAxes(inds)
+
+Encode whether the all the indices in `inds` correspond to `Base.OneTo` axes.
+The type `HasOneToAxes{true}` indicates that the condition is satisfied, and that
+each of the indices is equivalent to a `Base.OneTo` or an `Integer`, when passed to `similar`.
+On the other hand, a `HasOneToAxes{false}` indicates the presence of offset axes in `inds`.
+
+The `inds` argument is stored as a field by the same name, and may be used in
+`similar` to construct the array.
+"""
+struct HasOneToAxes{T, I}
     inds :: I
+    function HasOneToAxes(inds::Tuple)
+        oneto_axes = all(isoneto, map(typeof, inds))
+        new{oneto_axes, typeof(inds)}(inds)
+    end
 end
-AxesOffset(inds::Tuple) = AxesOffset(all(isoneto, map(typeof, inds)) ? IsOneTo() : IsOffset(), inds)
 
 # See also specializations in multidimensional
 
@@ -847,11 +858,11 @@ similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, 
 # in which case a combination of Integers and such ranges
 # may be converted to `Int`s, representing the sizes along each axis.
 # An offset array package may define
-# similar(a, T, ax::AxesOffset{IsOffset}), and use ax.inds to construct the array.
+# similar(a, T, ax::HasOneToAxes{false}), and use ax.inds to construct the array.
 function similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, AbstractUnitRange}, Vararg{Union{Integer, AbstractUnitRange}}}) where {T}
-    similar(a, T, AxesOffset(dims))
+    similar(a, T, HasOneToAxes(dims))
 end
-similar(a, T, ax::AxesOffset{IsOneTo}) = similar(a, T, to_shape(ax.inds))
+similar(a, T, ax::HasOneToAxes{true}) = similar(a, T, to_shape(ax.inds))
 # legacy method for packages that specialize similar(A::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}}}
 # leaving this method in ensures that Base owns the more specific method
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
