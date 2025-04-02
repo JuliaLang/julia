@@ -305,7 +305,7 @@ complete_keyval!(suggestions::Vector{Completion}, s::String) =
     complete_from_list!(suggestions, KeyvalCompletion, sorted_keyvals, s)
 
 function do_cmd_escape(s)
-    return Base.shell_escape_posixly(Base.escape_raw_string(s, '`'))
+    return Base.escape_raw_string(Base.shell_escape_posixly(s), '`')
 end
 function do_shell_escape(s)
     return Base.shell_escape_posixly(s)
@@ -321,6 +321,11 @@ function do_string_unescape(s)
         e isa ArgumentError || rethrow()
         s # it is unlikely, but if it isn't a valid string, maybe it was a valid path, and just needs escape_string called?
     end
+end
+
+function joinpath_withsep(dir, path; dirsep)
+    dir == "" && return path
+    dir[end] == dirsep ? dir * path : dir * dirsep * path
 end
 
 const PATH_cache_lock = Base.ReentrantLock()
@@ -421,7 +426,8 @@ function complete_path(path::AbstractString;
                        shell_escape=false,
                        cmd_escape=false,
                        string_escape=false,
-                       contract_user=false)
+                       contract_user=false,
+                       dirsep='/')
     @assert !(shell_escape && string_escape)
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
@@ -450,7 +456,7 @@ function complete_path(path::AbstractString;
     for entry in entries
         if startswith(entry.name, prefix)
             is_dir = try isdir(entry) catch ex; ex isa Base.IOError ? false : rethrow() end
-            push!(matches, is_dir ? joinpath(entry.name, "") : entry.name)
+            push!(matches, is_dir ? joinpath_withsep(entry.name, ""; dirsep) : entry.name)
         end
     end
 
@@ -1056,7 +1062,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     r, closed = find_str(cur)
     if r !== nothing
         s = do_string_unescape(string[r])
-        ret, success = complete_path_string(s, hint; string_escape=true)
+        ret, success = complete_path_string(s, hint; string_escape=true,
+                                            dirsep=Sys.iswindows() ? '\\' : '/')
         if length(ret) == 1 && !closed && close_path_completion(ret[1].path)
             ret[1] = PathCompletion(ret[1].path * '"')
         end
@@ -1292,9 +1299,9 @@ function method_search(partial::AbstractString, context_module::Module, shift::B
     end
 end
 
-function shell_completions(string, pos, hint::Bool=false; cmd_escape::Bool=false)
+function shell_completions(str, pos, hint::Bool=false; cmd_escape::Bool=false)
     # First parse everything up to the current position
-    scs = string[1:pos]
+    scs = str[1:pos]
     args, last_arg_start = try
         Base.shell_parse(scs, true)::Tuple{Expr,Int}
     catch ex
@@ -1304,18 +1311,20 @@ function shell_completions(string, pos, hint::Bool=false; cmd_escape::Bool=false
     ex = args.args[end]::Expr
     # Now look at the last thing we parsed
     isempty(ex.args) && return Completion[], 1:0, false
-    lastarg = ex.args[end]
+    # Concatenate every string fragment so dir\file completes correctly.
+    lastarg = all(x -> x isa String, ex.args) ? string(ex.args...) : ex.args[end]
+
     # As Base.shell_parse throws away trailing spaces (unless they are escaped),
     # we need to special case here.
     # If the last char was a space, but shell_parse ignored it search on "".
     if isexpr(lastarg, :incomplete) || isexpr(lastarg, :error)
-        partial = string[last_arg_start:pos]
+        partial = str[last_arg_start:pos]
         ret, range = completions(partial, lastindex(partial), Main, true, hint)
         range = range .+ (last_arg_start - 1)
         return ret, range, true
     elseif endswith(scs, ' ') && !endswith(scs, "\\ ")
         r = pos+1:pos
-        paths, dir, success = complete_path(""; use_envpath=false, shell_escape=!cmd_escape)
+        paths, dir, success = complete_path(""; use_envpath=false, shell_escape=!cmd_escape, cmd_escape)
         return paths, r, success
     elseif all(@nospecialize(arg) -> arg isa AbstractString, ex.args)
         # Join these and treat this as a path
@@ -1325,7 +1334,7 @@ function shell_completions(string, pos, hint::Bool=false; cmd_escape::Bool=false
         # Also try looking into the env path if the user wants to complete the first argument
         use_envpath = length(args.args) < 2
 
-        paths, success = complete_path_string(path, hint; use_envpath, shell_escape=!cmd_escape)
+        paths, success = complete_path_string(path, hint; use_envpath, shell_escape=!cmd_escape, cmd_escape)
         return paths, r, success
     end
     return Completion[], 1:0, false
@@ -1335,6 +1344,7 @@ function complete_path_string(path, hint::Bool=false;
                               shell_escape::Bool=false,
                               cmd_escape::Bool=false,
                               string_escape::Bool=false,
+                              dirsep='/',
                               kws...)
     # Expand "~" and remember if we expanded it.
     local expanded
@@ -1355,7 +1365,7 @@ function complete_path_string(path, hint::Bool=false;
         p
     end
 
-    paths, dir, success = complete_path(path; kws...)
+    paths, dir, success = complete_path(path; dirsep, kws...)
 
     # Expand '~' if the user hits TAB after exhausting completions (either
     # because we have found an existing file, or there is no such file).
@@ -1377,7 +1387,7 @@ function complete_path_string(path, hint::Bool=false;
     expanded && (hint || path != dir * "/") && (dir = contractuser(dir))
 
     map!(paths) do c::PathCompletion
-        p = joinpath(dir, c.path)
+        p = joinpath_withsep(dir, c.path; dirsep)
         PathCompletion(escape(p))
     end
     return sort!(paths, by=p->p.path), success

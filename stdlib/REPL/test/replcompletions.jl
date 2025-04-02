@@ -1299,12 +1299,12 @@ mktempdir() do path
         s = Sys.iswindows() ? "cd $dir_space\\\\space" : "cd $dir_space/space"
         c, r = test_scomplete(s)
         @test s[r] == (Sys.iswindows() ? "$dir_space\\\\space" : "$dir_space/space")
-        @test REPLCompletions.do_shell_escape(joinpath(space_folder, "space .file")) in c
+        @test "'$space_folder/space .file'" in c
         # Also use shell escape rules within cmd backticks
         s = "`$s"
         c, r = test_scomplete(s)
         @test s[r] == (Sys.iswindows() ? "$dir_space\\\\space" : "$dir_space/space")
-        @test REPLCompletions.do_shell_escape(joinpath(space_folder, "space .file")) in c
+        @test "'$space_folder/space .file'" in c
 
         # escape string according to Julia escaping rules
         julia_esc(str) = REPL.REPLCompletions.do_string_escape(str)
@@ -1422,21 +1422,20 @@ if Sys.iswindows()
     file = basename(tmp)
     temp_name = basename(path)
     cd(path) do
-        # TODO: reenable when backslash-paths fixed
-        # s = "cd ..\\\\"
-        # c,r = test_scomplete(s)
-        # @test r == lastindex(s)-3:lastindex(s)
-        # @test "../$temp_name/" in c
+        s = "cd ..\\\\"
+        c,r = test_scomplete(s)
+        @test r == lastindex(s)-3:lastindex(s)
+        @test "../$temp_name/" in c
 
-        # s = "cd ../"
-        # c,r = test_scomplete(s)
-        # @test r == lastindex(s)+1:lastindex(s)
-        # @test "$temp_name/" in c
+        s = "cd ../"
+        c,r = test_scomplete(s)
+        @test r == 4:6
+        @test "../$temp_name/" in c
 
-        # s = "ls $(file[1:2])"
-        # c,r = test_scomplete(s)
-        # @test r == lastindex(s)-1:lastindex(s)
-        # @test file in c
+        s = "ls $(file[1:2])"
+        c,r = test_scomplete(s)
+        @test r == lastindex(s)-1:lastindex(s)
+        @test file in c
 
         s = "cd(\"..\\\\"
         c,r = test_complete(s)
