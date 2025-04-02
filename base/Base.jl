@@ -21,7 +21,6 @@ include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_g
 
 # Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
 # a slightly more verbose fashion than usual, because we're running so early.
-const DL_LOAD_PATH = String[]
 let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
         if Base.DARWIN_FRAMEWORK
@@ -31,11 +30,13 @@ let os = ccall(:jl_get_UNAME, Any, ())
     end
 end
 
+# subarrays
+include("subarray.jl")
+include("views.jl")
+
 # numeric operations
 include("hashing.jl")
-include("rounding.jl")
 include("div.jl")
-include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
 include("rational.jl")
@@ -91,12 +92,21 @@ include("osutils.jl")
 include("io.jl")
 include("iobuffer.jl")
 
+# Concurrency (part 1)
+include("linked_list.jl")
+include("condition.jl")
+include("threads.jl")
+include("lock.jl")
+
 # strings & printing
 include("intfuncs.jl")
 include("strings/strings.jl")
 include("regex.jl")
 include("parse.jl")
 include("shell.jl")
+const IRShow = Compiler.IRShow # an alias for compatibility
+include("stacktraces.jl")
+using .StackTraces
 include("show.jl")
 include("arrayshow.jl")
 include("methodshow.jl")
@@ -117,16 +127,12 @@ include("missing.jl")
 # version
 include("version.jl")
 
-# Concurrency (part 1)
-include("linked_list.jl")
-include("condition.jl")
-include("threads.jl")
-include("lock.jl")
-
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
+
+const USING_STOCK_GC = occursin("stock", GC.gc_active_impl())
 
 # These used to be in build_h.jl and are retained for backwards compatibility.
 # NOTE: keep in sync with `libblastrampoline_jll.libblastrampoline`.
@@ -205,9 +211,6 @@ using .PermutedDimsArrays
 include("sort.jl")
 using .Sort
 
-# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
-include("binaryplatforms.jl")
-
 # Fast math
 include("fastmath.jl")
 using .FastMath
@@ -237,10 +240,6 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
-# Stack frames and traces
-include("stacktraces.jl")
-using .StackTraces
-
 # experimental API's
 include("experimental.jl")
 
@@ -262,7 +261,11 @@ include("uuid.jl")
 include("pkgid.jl")
 include("toml_parser.jl")
 include("linking.jl")
+include("staticdata.jl")
 include("loading.jl")
+
+# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
+include("binaryplatforms.jl")
 
 # misc useful functions & macros
 include("timing.jl")
@@ -400,6 +403,7 @@ end
 # we know whether the .ji can just give the Base copy or not.
 # TODO: We may want to do this earlier to avoid TOCTOU issues.
 const _compiler_require_dependencies = Any[]
+@Core.latestworld
 for i = 1:length(_included_files)
     isassigned(_included_files, i) || continue
     (mod, file) = _included_files[i]

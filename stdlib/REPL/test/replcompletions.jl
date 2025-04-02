@@ -214,8 +214,6 @@ end
 let s = "using REP"
     c, r = test_complete_32377(s)
     @test count(isequal("REPL"), c) == 1
-    # issue #30234
-    @test !Base.isbindingresolved(M32377, :tanh)
     # check what happens if REPL is already imported
     M32377.eval(:(using REPL))
     c, r = test_complete_32377(s)
@@ -1187,7 +1185,7 @@ let s, c, r
                     REPL.REPLCompletions.next_cache_update = 0
                 end
                 c,r = test_scomplete(s)
-                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
+                timedwait(()->REPL.REPLCompletions.next_cache_update != 0, 5) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test "tmp-executable" in c
                 @test r == 1:9
@@ -1221,7 +1219,7 @@ let s, c, r
                     REPL.REPLCompletions.next_cache_update = 0
                 end
                 c,r = test_scomplete(s)
-                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
+                timedwait(()->REPL.REPLCompletions.next_cache_update != 0, 5) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
@@ -2486,3 +2484,9 @@ let (c, r, res) = test_complete_context("global xxx::Number = Base.", Main)
     @test res
     @test "pi" ∈ c
 end
+
+# JuliaLang/julia#57780
+const issue57780 = ["a", "b", "c"]
+const issue57780_orig = copy(issue57780)
+test_complete_context("empty!(issue57780).", Main)
+@test issue57780 == issue57780_orig

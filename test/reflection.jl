@@ -110,6 +110,7 @@ not_const = 1
 @test isconst(@__MODULE__, :a_const) == true
 @test isconst(Base, :pi) == true
 @test isconst(@__MODULE__, :pi) == true
+@test isconst(GlobalRef(@__MODULE__, :pi)) == true
 @test isconst(@__MODULE__, :not_const) == false
 @test isconst(@__MODULE__, :is_not_defined) == false
 
@@ -568,7 +569,7 @@ fLargeTable() = 4
 fLargeTable(::Union, ::Union) = "a"
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "a"
 fLargeTable(::Union, ::Union) = "b"
-@test length(methods(fLargeTable)) == 206
+@test length(methods(fLargeTable)) == 205
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
 # issue #15280
@@ -969,10 +970,6 @@ f20872(::Val, ::Val) = false
 @test_throws ErrorException which(f20872, Tuple{Any,Val{N}} where N)
 @test which(Tuple{typeof(f20872), Val{1}, Val{2}}).sig == Tuple{typeof(f20872), Val, Val}
 
-module M29962 end
-# make sure checking if a binding is deprecated does not resolve it
-@test !Base.isdeprecated(M29962, :sin) && !Base.isbindingresolved(M29962, :sin)
-
 # @locals
 using Base: @locals
 let
@@ -1214,6 +1211,8 @@ end
 
 @test Base.ismutationfree(Type{Union{}})
 
+@test !Base.ismutationfree(Core.SimpleVector)
+
 module TestNames
 
 public publicized
@@ -1298,3 +1297,24 @@ end
 @test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
 
 @test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187
+
+# which should not look through const bindings, even if they have the same value
+# as a previous implicit import
+module SinConst
+const sin = Base.sin
+end
+
+@test which(SinConst, :sin) === SinConst
+
+# `which` should error if there is not a unique binding that a constant was imported from
+module X1ConstConflict
+const xconstconflict = 1
+export xconstconflict
+end
+module X2ConstConflict
+const xconstconflict = 1
+export xconstconflict
+end
+using .X1ConstConflict, .X2ConstConflict
+
+@test_throws ErrorException which(@__MODULE__, :xconstconflict)

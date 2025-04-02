@@ -1,8 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-baremodule Base
+module Base
 
-using Core.Intrinsics, Core.IR
+using .Core.Intrinsics, .Core.IR
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
@@ -135,6 +135,9 @@ include("coreio.jl")
 
 import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_str, @cmd
 
+# Export list
+include("exports.jl")
+
 # core docsystem
 include("docs/core.jl")
 Core.atdoc!(CoreDocs.docm)
@@ -142,7 +145,6 @@ Core.atdoc!(CoreDocs.docm)
 eval(x) = Core.eval(Base, x)
 eval(m::Module, x) = Core.eval(m, x)
 
-include("exports.jl")
 include("public.jl")
 
 if false
@@ -156,7 +158,7 @@ if false
 end
 
 """
-    time_ns() -> UInt64
+    time_ns()::UInt64
 
 Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
 between two moments in time.
@@ -199,6 +201,63 @@ function Core._hasmethod(@nospecialize(f), @nospecialize(t)) # this function has
     return Core._hasmethod(tt)
 end
 
+"""
+    invokelatest(f, args...; kwargs...)
+
+Calls `f(args...; kwargs...)`, but guarantees that the most recent method of `f`
+will be executed.   This is useful in specialized circumstances,
+e.g. long-running event loops or callback functions that may
+call obsolete versions of a function `f`.
+(The drawback is that `invokelatest` is somewhat slower than calling
+`f` directly, and the type of the result cannot be inferred by the compiler.)
+
+!!! compat "Julia 1.9"
+    Prior to Julia 1.9, this function was not exported, and was called as `Base.invokelatest`.
+"""
+const invokelatest = Core.invokelatest
+
+# define invokelatest(f, args...; kwargs...), without kwargs wrapping
+# to forward to invokelatest
+function Core.kwcall(kwargs::NamedTuple, ::typeof(invokelatest), f, args...)
+    @inline
+    return Core.invokelatest(Core.kwcall, kwargs, f, args...)
+end
+setfield!(typeof(invokelatest).name.mt, :max_args, 2, :monotonic) # invokelatest, f, args...
+
+"""
+    invoke_in_world(world, f, args...; kwargs...)
+
+Call `f(args...; kwargs...)` in a fixed world age, `world`.
+
+This is useful for infrastructure running in the user's Julia session which is
+not part of the user's program. For example, things related to the REPL, editor
+support libraries, etc. In these cases it can be useful to prevent unwanted
+method invalidation and recompilation latency, and to prevent the user from
+breaking supporting infrastructure by mistake.
+
+The current world age can be queried using [`Base.get_world_counter()`](@ref)
+and stored for later use within the lifetime of the current Julia session, or
+when serializing and reloading the system image.
+
+Technically, `invoke_in_world` will prevent any function called by `f` from
+being extended by the user during their Julia session. That is, generic
+function method tables seen by `f` (and any functions it calls) will be frozen
+as they existed at the given `world` age. In a sense, this is like the opposite
+of [`invokelatest`](@ref).
+
+!!! note
+    It is not valid to store world ages obtained in precompilation for later use.
+    This is because precompilation generates a "parallel universe" where the
+    world age refers to system state unrelated to the main Julia session.
+"""
+const invoke_in_world = Core.invoke_in_world
+
+function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke_in_world), world::UInt, f, args...)
+    @inline
+    return Core.invoke_in_world(world, Core.kwcall, kwargs, f, args...)
+end
+setfield!(typeof(invoke_in_world).name.mt, :max_args, 3, :monotonic) # invoke_in_world, world, f, args...
+
 # core operations & types
 include("promotion.jl")
 include("tuple.jl")
@@ -218,31 +277,35 @@ include("pointer.jl")
 include("refvalue.jl")
 include("cmem.jl")
 
-include("checked.jl")
-using .Checked
-function cld end
-function fld end
+function nextfloat end
+function prevfloat end
+include("rounding.jl")
+include("float.jl")
 
 # Lazy strings
+import Core: String
 include("strings/lazy.jl")
+
+function cld end
+function fld end
+include("checked.jl")
+using .Checked
 
 # array structures
 include("indices.jl")
 include("genericmemory.jl")
 include("array.jl")
 include("abstractarray.jl")
-include("subarray.jl")
-include("views.jl")
 include("baseext.jl")
 
 include("c.jl")
-include("ntuple.jl")
 include("abstractset.jl")
 include("bitarray.jl")
 include("bitset.jl")
 include("abstractdict.jl")
 include("iddict.jl")
 include("idset.jl")
+include("ntuple.jl")
 include("iterators.jl")
 using .Iterators: zip, enumerate, only
 using .Iterators: Flatten, Filter, product  # for generators
@@ -255,6 +318,11 @@ include("ordering.jl")
 using .Order
 
 include("coreir.jl")
+include("invalidation.jl")
+
+# Because lowering inserts direct references, it is mandatory for this binding
+# to exist before we start inferring code.
+function string end
 
 # For OS specific stuff
 # We need to strcat things here, before strings are really defined
@@ -270,13 +338,13 @@ end
 
 BUILDROOT::String = ""
 DATAROOT::String = ""
+const DL_LOAD_PATH = String[]
 
 baremodule BuildSettings end
 
 function process_sysimg_args!()
     let i = 2 # skip file name
         while i <= length(Core.ARGS)
-            Core.println(Core.ARGS[i])
             if Core.ARGS[i] == "--buildsettings"
                 include(BuildSettings, ARGS[i+1])
             elseif Core.ARGS[i] == "--buildroot"
@@ -306,4 +374,5 @@ Core._setparser!(fl_parse)
 
 # Further definition of Base will happen in Base.jl if loaded.
 
-end # baremodule Base
+end # module Base
+using .Base

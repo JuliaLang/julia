@@ -98,9 +98,13 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             }
             uintptr_t oldsp = thesp;
             have_more_frames = jl_unw_step(cursor, from_signal_handler, &return_ip, &thesp);
-            if (oldsp >= thesp && !jl_running_under_rr(0)) {
-                // The stack pointer is clearly bad, as it must grow downwards.
+            if ((n < 2 ? oldsp > thesp : oldsp >= thesp) && !jl_running_under_rr(0)) {
+                // The stack pointer is clearly bad, as it must grow downwards,
                 // But sometimes the external unwinder doesn't check that.
+                // Except for n==0 when there is no oldsp and n==1 on all platforms but i686/x86_64.
+                // (on x86, the platform first pushes the new stack frame, then does the
+                // call, on almost all other platforms, the platform first does the call,
+                // then the user pushes the link register to the frame).
                 have_more_frames = 0;
             }
             if (return_ip == 0) {
@@ -132,11 +136,11 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             // * The way that libunwind handles it in `unw_get_proc_name`:
             //   https://lists.nongnu.org/archive/html/libunwind-devel/2014-06/msg00025.html
             uintptr_t call_ip = return_ip;
+            #if defined(_CPU_ARM_)
             // ARM instruction pointer encoding uses the low bit as a flag for
             // thumb mode, which must be cleared before further use. (Note not
             // needed for ARM AArch64.) See
             // https://github.com/libunwind/libunwind/pull/131
-            #ifdef _CPU_ARM_
             call_ip &= ~(uintptr_t)0x1;
             #endif
             // Now there's two main cases to adjust for:
@@ -1249,6 +1253,36 @@ return 0;
 #endif
 }
 
+typedef struct {
+    int16_t old;
+    bt_context_t *c;
+    int success;
+} suspend_t;
+static void suspend(void *ctx)
+{
+    suspend_t *suspenddata = (suspend_t*)ctx;
+    suspenddata->success = jl_thread_suspend_and_get_state(suspenddata->old, 1, suspenddata->c);
+}
+
+JL_DLLEXPORT size_t jl_try_record_thread_backtrace(jl_ptls_t ptls2, jl_bt_element_t *bt_data, size_t max_bt_size) JL_NOTSAFEPOINT
+{
+    int16_t tid = ptls2->tid;
+    jl_task_t *t = NULL;
+    bt_context_t *context = NULL;
+    bt_context_t c;
+    suspend_t suspenddata = {tid, &c};
+    jl_with_stackwalk_lock(suspend, &suspenddata);
+    if (!suspenddata.success) {
+        return 0;
+    }
+    // thread is stopped, safe to read the task it was running before we stopped it
+    t = jl_atomic_load_relaxed(&ptls2->current_task);
+    context = &c;
+    size_t bt_size = rec_backtrace_ctx(bt_data, max_bt_size, context, ptls2->previous_task ? NULL : t->gcstack);
+    jl_thread_resume(tid);
+    return bt_size;
+}
+
 JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_bt_element_t *bt_data, size_t max_bt_size, int all_tasks_profiler) JL_NOTSAFEPOINT
 {
     int16_t tid = INT16_MAX;
@@ -1270,15 +1304,14 @@ JL_DLLEXPORT jl_record_backtrace_result_t jl_record_backtrace(jl_task_t *t, jl_b
     bt_context_t c;
     int16_t old;
     for (old = -1; !jl_atomic_cmpswap(&t->tid, &old, tid) && old != tid; old = -1) {
-        int lockret = jl_lock_stackwalk();
         // if this task is already running somewhere, we need to stop the thread it is running on and query its state
-        if (!jl_thread_suspend_and_get_state(old, 1, &c)) {
-            jl_unlock_stackwalk(lockret);
+        suspend_t suspenddata = {old, &c};
+        jl_with_stackwalk_lock(suspend, &suspenddata);
+        if (!suspenddata.success) {
             if (jl_atomic_load_relaxed(&t->tid) != old)
                 continue;
             return result;
         }
-        jl_unlock_stackwalk(lockret);
         if (jl_atomic_load_relaxed(&t->tid) == old) {
             jl_ptls_t ptls2 = jl_atomic_load_relaxed(&jl_all_tls_states)[old];
             if (ptls2->previous_task == t || // we might print the wrong stack here, since we can't know whether we executed the swapcontext yet or not, but it at least avoids trying to access the state inside uc_mcontext which might not be set yet

@@ -452,13 +452,20 @@ if isdefined(Main, :Base)
 end
 
 """
+    Base.AbstractOneTo
+
+Abstract type for ranges that start at 1 and have a step size of 1.
+"""
+abstract type AbstractOneTo{T} <: AbstractUnitRange{T} end
+
+"""
     Base.OneTo(n)
 
 Define an `AbstractUnitRange` that behaves like `1:n`, with the added
 distinction that the lower limit is guaranteed (by the type system) to
 be 1.
 """
-struct OneTo{T<:Integer} <: AbstractUnitRange{T}
+struct OneTo{T<:Integer} <: AbstractOneTo{T}
     stop::T # invariant: stop >= zero(stop)
     function OneTo{T}(stop) where {T<:Integer}
         throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
@@ -1105,7 +1112,11 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
 end
 
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
-show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
+function show(io::IO, r::UnitRange)
+    show(io, first(r))
+    print(io, ':')
+    show(io, last(r))
+end
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 function show(io::IO, r::StepRangeLen)
     if !iszero(step(r))
@@ -1321,14 +1332,18 @@ function promote_rule(::Type{StepRange{T1a,T1b}}, ::Type{StepRange{T2a,T2b}}) wh
     el_same(promote_type(T1a, T2a), StepRange{T1a,Tb}, StepRange{T2a,Tb})
 end
 StepRange{T1,T2}(r::StepRange{T1,T2}) where {T1,T2} = r
+StepRange{T}(r::StepRange{T}) where {T} = r
+StepRange(r::StepRange) = r
 
 promote_rule(a::Type{StepRange{T1a,T1b}}, ::Type{UR}) where {T1a,T1b,UR<:AbstractUnitRange} =
     promote_rule(a, StepRange{eltype(UR), eltype(UR)})
 StepRange{T1,T2}(r::AbstractRange) where {T1,T2} =
     StepRange{T1,T2}(convert(T1, first(r)), convert(T2, step(r)), convert(T1, last(r)))
-StepRange(r::AbstractUnitRange{T}) where {T} =
-    StepRange{T,T}(first(r), step(r), last(r))
+StepRange(r::OrdinalRange{T,S}) where {T,S} = StepRange{T,S}(first(r), step(r), last(r))
+StepRange{T}(r::OrdinalRange{<:Any,S}) where {T,S} = StepRange{T,S}(first(r), step(r), last(r))
 (StepRange{T1,T2} where T1)(r::AbstractRange) where {T2} = StepRange{eltype(r),T2}(r)
+StepRange(r::StepRangeLen) = StepRange{eltype(r)}(r)
+StepRange{T}(r::StepRangeLen{<:Any,<:Any,S}) where {T,S} = StepRange{T,S}(r)
 
 function promote_rule(::Type{StepRangeLen{T1,R1,S1,L1}},::Type{StepRangeLen{T2,R2,S2,L2}}) where {T1,T2,R1,R2,S1,S2,L1,L2}
     R, S, L = promote_type(R1, R2), promote_type(S1, S2), promote_type(L1, L2)

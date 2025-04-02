@@ -72,11 +72,24 @@ let e = Event(true), started1 = Event(true), started2 = Event(true), done = Even
     end
 end
 
-let cmd = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`
-    for test_nthreads in (1, 2, 4, 4) # run once to try single-threaded mode, then try a couple times to trigger bad races
+
+let cmd1 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no threads_exec.jl`,
+    cmd2 = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no -e 'print(Threads.threadpoolsize(:default), ",", Threads.threadpoolsize(:interactive))'`
+    for (test_nthreads, test_nthreadsi) in (
+            (1, 0),
+            (1, 1),
+            (2, 0),
+            (2, 1),
+            (4, 0),
+            (4, 0)) # try a couple times to trigger bad races
         new_env = copy(ENV)
-        new_env["JULIA_NUM_THREADS"] = string(test_nthreads)
-        run(pipeline(setenv(cmd, new_env), stdout = stdout, stderr = stderr))
+        new_env["JULIA_NUM_THREADS"] = string(test_nthreads, ",", test_nthreadsi)
+        run(pipeline(setenv(cmd1, new_env), stdout = stdout, stderr = stderr))
+        threads_config = "$test_nthreads,$test_nthreadsi"
+        # threads set via env var
+        @test chomp(read(setenv(cmd2, new_env), String)) == threads_config
+        # threads set via -t
+        @test chomp(read(`$cmd2 -t$test_nthreads,$test_nthreadsi`, String)) == threads_config
     end
 end
 
@@ -123,10 +136,11 @@ if AFFINITY_SUPPORTED
     end
 end
 
-function get_nthreads(options = ``; cpus = nothing)
+function get_nthreads(options = ``; cpus = nothing, exclusive = false)
     cmd = `$(Base.julia_cmd()) --startup-file=no $(options)`
     cmd = `$cmd -e "print(Threads.threadpoolsize())"`
-    cmd = addenv(cmd, "JULIA_EXCLUSIVE" => "0", "JULIA_NUM_THREADS" => "auto")
+    cmd = addenv(cmd, "JULIA_EXCLUSIVE" => exclusive ? "1" : "0",
+        "JULIA_NUM_THREADS" => "auto")
     if cpus !== nothing
         cmd = setcpuaffinity(cmd, cpus)
     end
@@ -138,6 +152,7 @@ end
         allowed_cpus = findall(uv_thread_getaffinity())
         if length(allowed_cpus) ≥ 2
             @test get_nthreads() ≥ 2
+            @test get_nthreads(exclusive = true) ≥ 2
             @test get_nthreads(cpus = allowed_cpus[1:1]) == 1
             @test get_nthreads(cpus = allowed_cpus[2:2]) == 1
             @test get_nthreads(cpus = allowed_cpus[1:2]) == 2
@@ -424,7 +439,7 @@ end
 
 let once = OncePerProcess(() -> return [nothing])
     @test typeof(once) <: OncePerProcess{Vector{Nothing}}
-    x = once()
+    x = @inferred once()
     @test x === once()
     @atomic once.state = 0xff
     @test_throws ErrorException("invalid state for OncePerProcess") once()
@@ -441,7 +456,7 @@ let e = Base.Event(true),
     started = Channel{Int16}(Inf),
     finish = Channel{Nothing}(Inf),
     exiting = Channel{Nothing}(Inf),
-    starttest2 = Event(),
+    starttest2 = Base.Event(),
     once = OncePerThread() do
         push!(started, threadid())
         take!(finish)
@@ -453,7 +468,7 @@ let e = Base.Event(true),
     @test typeof(once) <: OncePerThread{Vector{Nothing}}
     push!(finish, nothing)
     @test_throws ArgumentError once[0]
-    x = once()
+    x = @inferred once()
     @test_throws ArgumentError once[0]
     @test x === once() === fetch(@async once()) === once[threadid()]
     @test take!(started) == threadid()
@@ -543,7 +558,7 @@ end
 
 let once = OncePerTask(() -> return [nothing])
     @test typeof(once) <: OncePerTask{Vector{Nothing}}
-    x = once()
+    x = @inferred once()
     @test x === once() !== fetch(@async once())
     delete!(task_local_storage(), once)
     @test x !== once() === once()

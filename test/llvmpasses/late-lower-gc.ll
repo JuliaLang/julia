@@ -90,6 +90,20 @@ top:
     ret void
 }
 
+; Confirm that `invariant.load` on other loads survive
+define void @gc_keep_invariant(float addrspace(1)* %0) {
+top:
+; CHECK-LABEL: @gc_keep_invariant
+    %pgcstack = call {}*** @julia.get_pgcstack()
+    %1 = bitcast {}*** %pgcstack to {}**
+    %current_task = getelementptr inbounds {}*, {}** %1, i64 -12
+
+; CHECK: %current_task = getelementptr inbounds ptr, ptr %1, i64 -12
+    %2 = load float, ptr addrspace(1) %0, align 4, !invariant.load !1
+; CHECK-NEXT: %2 = load float, ptr addrspace(1) %0, align 4, !invariant.load
+    ret void
+}
+
 define i32 @callee_root({} addrspace(10)* %v0, {} addrspace(10)* %v1) {
 top:
 ; CHECK-LABEL: @callee_root
@@ -193,3 +207,4 @@ define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
 ; CHECK-NEXT: !10 = distinct !{!10}
 ; CHECK-NEXT: !11 = !{!12, !12, i64 0}
 ; CHECK-NEXT: !12 = !{!"jtbaa_const", !3}
+

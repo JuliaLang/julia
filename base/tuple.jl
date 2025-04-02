@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Tuple
+
 # Document NTuple here where we have everything needed for the doc system
 """
     NTuple{N, T}
@@ -653,19 +655,6 @@ prod(x::Tuple{}) = 1
 # It is defined here separately in order to support bootstrap, because it's needed earlier
 # than the general prod definition is available.
 prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
-
-all(x::Tuple{}) = true
-all(x::Tuple{Bool}) = x[1]
-all(x::Tuple{Bool, Bool}) = x[1]&x[2]
-all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
-all(x::Tuple{Any}) = x[1] || return false
-all(f, x::Tuple{}) = true
-all(f, x::Tuple{Any}) = all((f(x[1]),))
-
-any(x::Tuple{}) = false
-any(x::Tuple{Bool}) = x[1]
-any(x::Tuple{Bool, Bool}) = x[1]|x[2]
-any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
