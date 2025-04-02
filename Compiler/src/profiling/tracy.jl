@@ -1,11 +1,8 @@
-#=
-# TODO: Enable submodule, seems to hit some bug right now with === not defined?
 module Tracy
 
 import ..@noinline, ..Cint, ..Vector, ..push!, ..unsafe_convert, ..esc,
        ..pointer_from_objref, ..String, ..Ptr, ..UInt8, ..Cvoid,
-       ..Expr, ..LineNumberNode, ..Symbol, ..UInt32
-=#
+       ..Expr, ..LineNumberNode, ..Symbol, ..UInt32, ..C_NULL, ..(===)
 
 _strpointer(s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
 
@@ -36,7 +33,7 @@ end
 
 const srclocs = Vector{TracySrcLoc}()
 
-function _tracy_zone_create(name::String, ex::Expr, linfo::LineNumberNode)
+function tracy_zone_create(name::String, ex::Expr, linfo::LineNumberNode)
     # Intern strings
     for loc in srclocs
         if loc.zone_name_str === name
@@ -45,21 +42,22 @@ function _tracy_zone_create(name::String, ex::Expr, linfo::LineNumberNode)
         end
     end
     loc = TracySrcLoc(name, Symbol("unknown"), linfo.file, UInt32(linfo.line), UInt32(0))
+    # Also roots `loc` in `srclocs`
     push!(srclocs, loc)
     return loc
 end
 
-function _tracy_zone_begin(loc, active)
+function tracy_zone_begin(loc, active)
     if loc.zone_name === Ptr{UInt8}(0)
         reinit!(loc)
     end
-    # `loc` is rooted in the global `srclocls`
+    # `loc` is rooted in the global `srclocs`
     ptr = Ptr{TracySrcLoc}(pointer_from_objref(loc))
     return ccall((:___tracy_emit_zone_begin, "libTracyClient"), TracyZoneCtx, (Ptr{TracySrcLoc}, Cint), ptr, active)
 end
 
-function _tracy_zone_end(ctx)
+function tracy_zone_end(ctx)
     ccall((:___tracy_emit_zone_end, "libTracyClient"), Cvoid, (TracyZoneCtx,), ctx)
 end
 
-# end
+end
