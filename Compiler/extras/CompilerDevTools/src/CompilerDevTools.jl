@@ -45,8 +45,8 @@ function lookup_method_instance(f, args...)
     @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t, Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
 end
 
-function Compiler.optimize(interp::SplitCacheInterp, opt::Compiler.OptimizationState, caller::Compiler.InferenceResult)
-    @invoke Compiler.optimize(interp::Compiler.AbstractInterpreter, opt::Compiler.OptimizationState, caller::Compiler.InferenceResult)
+function Compiler.transform_result_for_cache(interp::SplitCacheInterp, result::Compiler.InferenceResult, edges::Compiler.SimpleVector)
+    opt = result.src::Compiler.OptimizationState
     ir = opt.result.ir::Compiler.IRCode
     override = GlobalRef(@__MODULE__(), :with_new_compiler)
     for inst in ir.stmts
@@ -61,6 +61,7 @@ function Compiler.optimize(interp::SplitCacheInterp, opt::Compiler.OptimizationS
         insert!(stmt.args, 1, override)
         insert!(stmt.args, 3, interp.owner)
     end
+    @invoke Compiler.transform_result_for_cache(interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult, edges::Compiler.SimpleVector)
 end
 
 with_new_compiler(f, args...; owner::SplitCacheOwner = SplitCacheOwner()) = with_new_compiler(f, owner, args...)
