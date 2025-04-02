@@ -1,13 +1,18 @@
 # Stubs
+module ITTAPI
 
-function _ittapi_zone_create(name::String, ex::Expr, linfo::LineNumberNode)
+import ..String, ..Expr, ..LineNumberNode
+
+function ittapi_zone_create(name::String, ex::Expr, linfo::LineNumberNode)
     return nothing
 end
 
-function _ittapi_zone_begin(loc, active)
+function ittapi_zone_begin(loc, active)
    return nothing
 end
 
-function _ittapi_zone_end(ctx)
+function ittapi_zone_end(ctx)
     return nothing
+end
+
 end
