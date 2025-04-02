@@ -249,14 +249,14 @@ julia> @assert isodd(3) "What even are numbers?"
 """
 macro assert(ex, args...)
 
-    aargs = filter(e -> !isexpr(e, :(=)), args)
-    aakws = filter(e -> isexpr(e, :(=)), args)
+    args_filtered = filter(e -> isexpr(e, :(=)), args)
+    kwargs_filtered = filter(e -> isexpr(e, :(=)), args)
 
-    msg = isempty(aargs) ? ex : first(aargs)
+    msg = isempty(args_filtered) ? ex : first(args_filtered)
 
     if isa(msg, AbstractString)
         msg = msg # pass-through
-    elseif !isempty(aargs) && (isa(msg, Expr) || isa(msg, Symbol))
+    elseif !isempty(args_filtered) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
         # N.B. To reduce the risk of invalidation caused by the complex callstack involved
         # with `string`, use `inferencebarrier` here to hide this `string` from the compiler.
@@ -267,7 +267,7 @@ macro assert(ex, args...)
         # string() might not be defined during bootstrap
         msg = :(_assert_tostring($(Expr(:quote, msg))))
     end
-    ex = assert_expr!("@assert", ex, aakws...)
+    ex = assert_expr!("@assert", ex, kwargs_filtered...)
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
 
