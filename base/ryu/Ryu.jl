@@ -83,9 +83,9 @@ function writefixed(x::T,
     hash::Bool=false,
     decchar::UInt8=UInt8('.'),
     trimtrailingzeros::Bool=false) where {T <: Base.IEEEFloat}
-    buf = Base.StringMemory(precision + neededdigits(T))
+    buf = Base.StringVector(precision + neededdigits(T))
     pos = writefixed(buf, 1, x, precision, plus, space, hash, decchar, trimtrailingzeros)
-    return String(view(buf, 1:pos - 1))
+    return String(resize!(buf, pos - 1))
 end
 
 """
