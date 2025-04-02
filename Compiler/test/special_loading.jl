@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Only run when testing Base compiler
-if Base.identify_package("Compiler") == nothing
+if Base.identify_package("Compiler") === nothing
     mktempdir() do dir
         withenv("JULIA_DEPOT_PATH" => dir * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
             cd(joinpath(@__DIR__, "CompilerLoadingTest")) do
