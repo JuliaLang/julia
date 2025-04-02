@@ -1461,3 +1461,13 @@ end
 let effects = Base.infer_effects(Base._unsetindex!, (MemoryRef{String},))
     @test !Compiler.is_effect_free(effects)
 end
+
+# Core._svec_ref effects modeling (required for external abstract interpreter that doesn't run optimization)
+let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
+        Core._svec_ref(svec, i)
+    end
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+end
