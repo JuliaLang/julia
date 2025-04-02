@@ -197,28 +197,37 @@ function readinto!(io::IO, v::AbstractVector{UInt8})
 end
 
 # Default implementation for buffered readers
-function unsafe_read(io::IO, ref, nbytes::UInt)
-    GC.@preserve ref unsafe_read(io, Ptr{UInt8}(pointer(ref))::Ptr{UInt8}, nbytes)
+function read(io::IO, ::Type{UInt8})
+    buf = @something get_nonempty_reading_buffer(io) throw(EOFError())
+    byte = buf[1]
+    consume(io, UInt(1))
+    byte
 end
 
-function unsafe_read(io::IO, dst::Ptr{UInt8}, nbytes::UInt)
-    iszero(nbytes) && return nothing
-    buf = getbuffer(io)::AbstractVector{UInt8}
-    while !iszero(nbytes)
-        if isempty(buf)
-            nfilled = something(fillbuffer(io))::Int
-            iszero(nfilled) && throw(EOFError())
-            buf = getbuffer(io)::AbstractVector{UInt8}
-        end
-        mn = min(UInt(length(buf))::UInt, nbytes)
-        GC.@preserve buf unsafe_copyto!(dst, pointer(buf), mn)
-        dst += mn
-        nbytes -= mn
-        consume(io, mn)
-        buf = getbuffer(io)::AbstractVector{UInt8}
-    end
-    nothing
-end
+
+# TODO: This only works for memory-backed buffers.
+# function unsafe_read(io::IO, ref, nbytes::UInt)
+#     GC.@preserve ref unsafe_read(io, Ptr{UInt8}(pointer(ref))::Ptr{UInt8}, nbytes)
+# end
+
+# function unsafe_read(io::IO, dst::Ptr{UInt8}, nbytes::UInt)
+#     iszero(nbytes) && return nothing
+#     buf = getbuffer(io)::AbstractVector{UInt8}
+#     while !iszero(nbytes)
+#         if isempty(buf)
+#             nfilled = something(fillbuffer(io))::Int
+#             iszero(nfilled) && throw(EOFError())
+#             buf = getbuffer(io)::AbstractVector{UInt8}
+#         end
+#         mn = min(UInt(length(buf))::UInt, nbytes)
+#         GC.@preserve buf unsafe_copyto!(dst, pointer(buf), mn)
+#         dst += mn
+#         nbytes -= mn
+#         consume(io, mn)
+#         buf = getbuffer(io)::AbstractVector{UInt8}
+#     end
+#     nothing
+# end
 
 ################### Helper functions ###########################
 
@@ -245,6 +254,7 @@ end
 # * readbytes!
 # * read(::IO)
 # * read(::IO, String)
+# X read(::IO, UInt8)
 # * read!
 # X readall! (new function)
 # X eof (buffered)
