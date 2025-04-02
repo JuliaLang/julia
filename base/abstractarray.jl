@@ -862,7 +862,7 @@ similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, 
 function similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, AbstractUnitRange}, Vararg{Union{Integer, AbstractUnitRange}}}) where {T}
     similar(a, T, HasOneToAxes(dims))
 end
-similar(a, T, ax::HasOneToAxes{true}) = similar(a, T, to_shape(ax.inds))
+similar(a::AbstractArray, ::Type{T}, ax::HasOneToAxes{true}) where {T} = similar(a, T, to_shape(ax.inds))
 # legacy method for packages that specialize similar(A::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}}}
 # leaving this method in ensures that Base owns the more specific method
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
