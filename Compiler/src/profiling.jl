@@ -6,13 +6,13 @@ include("profiling/ittapi.jl")
 
 if WITH_TRACY || WITH_ITTAPI
     macro zone(name, ex::Expr)
-        srcloc = WITH_TRACY && _tracy_zone_create(name, ex, __source__)
-        tracy_begin_expr = WITH_TRACY ? :(ctx_tracy = _tracy_zone_begin($srcloc, true)) : :()
-        tracy_end_expr = WITH_TRACY ? :(_tracy_zone_end(ctx_tracy)) : :()
+        srcloc = WITH_TRACY && Tracy.tracy_zone_create(name, ex, __source__)
+        tracy_begin_expr = WITH_TRACY ? :(ctx_tracy = Tracy.tracy_zone_begin($srcloc, true)) : :()
+        tracy_end_expr = WITH_TRACY ? :(Tracy.tracy_zone_end(ctx_tracy)) : :()
 
-        event = WITH_ITTAPI && ittapi_zone_create(name, ex, __source__)
-        ittapi_begin_expr = WITH_ITTAPI ? :(ctx_ittapi = ittapi_zone_begin($event, true)) : :()
-        ittapi_end_expr = WITH_ITTAPI ? :(ittapi_zone_end(ctx_ittapi)) : :()
+        event = WITH_ITTAPI && ITTAPI.ittapi_zone_create(name, ex, __source__)
+        ittapi_begin_expr = WITH_ITTAPI ? :(ctx_ittapi = ITTAPI.ittapi_zone_begin($event, true)) : :()
+        ittapi_end_expr = WITH_ITTAPI ? :(ITTAPI.ittapi_zone_end(ctx_ittapi)) : :()
 
         return quote
             $tracy_begin_expr
