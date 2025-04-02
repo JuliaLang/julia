@@ -13,6 +13,7 @@ public
     AbstractOneTo,
     AbstractPipe,
     AsyncCondition,
+    AxesOffset,
     CodeUnits,
     Event,
     Fix,
@@ -20,6 +21,8 @@ public
     Fix2,
     Generator,
     ImmutableDict,
+    IsOffset,
+    IsOneTo,
     OneTo,
     Pairs,
     LogRange,
@@ -31,6 +34,7 @@ public
     release,
 
 # arrays
+    isoneto,
     has_offset_axes,
     require_one_based_indexing,
 

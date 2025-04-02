@@ -769,16 +769,22 @@ function checkindex(::Type{Bool}, inds, I::AbstractArray)
     b
 end
 
-isoneto(::Any) = false
-isoneto(::AbstractOneTo) = true
-isoneto(::Integer) = true
+"""
+    isoneto(T::Type{<:AbstractUnitRange})
+
+Return if the first value of each instance of type `T` is known to start at `1`.
+In other words, the range would be equivalent to a `Base.OneTo`.
+"""
+isoneto(::Type) = false
+isoneto(::Type{<:AbstractOneTo}) = true
+isoneto(::Type{<:Integer}) = true
 struct IsOneTo end
 struct IsOffset end
 struct AxesOffset{T, I}
     style :: T
     inds :: I
 end
-AxesOffset(inds::Tuple) = AxesOffset(all(isoneto, inds) ? IsOneTo() : IsOffset(), inds)
+AxesOffset(inds::Tuple) = AxesOffset(all(isoneto, map(typeof, inds)) ? IsOneTo() : IsOffset(), inds)
 
 # See also specializations in multidimensional
 
@@ -858,8 +864,8 @@ to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
 # each dimension
 to_shape(i::Int) = i
 to_shape(i::Integer) = Int(i)
-to_shape(r::AbstractOneTo) = Int(last(r))
-to_shape(r::AbstractUnitRange) = r
+to_shape(r::AbstractOneTo) = to_shape(last(r))
+to_shape(r::AbstractUnitRange) = isoneto(typeof(r)) ? to_shape(last(r)) : r
 
 """
     similar(storagetype, axes)
