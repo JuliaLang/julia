@@ -28,6 +28,7 @@ public
 # Semaphores
     Semaphore,
     acquire,
+    @acquire,
     release,
 
 # arrays
