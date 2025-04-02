@@ -1749,7 +1749,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     write_uint(f, 0);
                 }
             } else {
-                write_uint(f, bpart->min_world);
+                write_uint(f, jl_atomic_load_relaxed(&bpart->min_world));
                 write_uint(f, max_world);
             }
             write_pointerfield(s, (jl_value_t*)jl_atomic_load_relaxed(&bpart->next));
@@ -3618,7 +3618,7 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
         // and allocate a fresh bpart?
         jl_update_loaded_bpart(b, bpart);
         bpart->kind |= (raw_kind & PARTITION_MASK_FLAG);
-        if (bpart->min_world > jl_require_world)
+        if (jl_atomic_load_relaxed(&bpart->min_world) > jl_require_world)
             goto invalidated;
     }
     if (!jl_bkind_is_some_explicit_import(kind) && kind != PARTITION_KIND_IMPLICIT_GLOBAL)
@@ -3629,7 +3629,8 @@ static int jl_validate_binding_partition(jl_binding_t *b, jl_binding_partition_t
     jl_binding_partition_t *latest_imported_bpart = jl_atomic_load_relaxed(&imported_binding->partitions);
     if (!latest_imported_bpart)
         return 1;
-    if (latest_imported_bpart->min_world <= bpart->min_world) {
+    if (jl_atomic_load_relaxed(&latest_imported_bpart->min_world) <=
+        jl_atomic_load_relaxed(&bpart->min_world)) {
 add_backedge:
         // Imported binding is still valid
         if ((kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED) &&
@@ -3640,8 +3641,9 @@ add_backedge:
     }
     else {
         // Binding partition was invalidated
-        assert(bpart->min_world == jl_require_world);
-        bpart->min_world = latest_imported_bpart->min_world;
+        assert(jl_atomic_load_relaxed(&bpart->min_world) == jl_require_world);
+        jl_atomic_store_relaxed(&bpart->min_world,
+            jl_atomic_load_relaxed(&latest_imported_bpart->min_world));
     }
 invalidated:
     // We need to go through and re-validate any bindings in the same image that
