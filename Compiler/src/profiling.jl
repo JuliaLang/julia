@@ -1,5 +1,5 @@
-const WITH_ITTAPI = ccall(:_jl_ittapi_enabled, Cint, ()) != 0
-const WITH_TRACY = ccall(:_jl_tracy_enabled, Cint, ()) != 0
+const WITH_ITTAPI = ccall(:jl_ittapi_enabled, Cint, ()) != 0
+const WITH_TRACY = ccall(:jl_tracy_enabled, Cint, ()) != 0
 
 include("profiling/tracy.jl")
 include("profiling/ittapi.jl")
