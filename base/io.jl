@@ -3,6 +3,251 @@
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
 """
+    abstract type IO
+
+Supertype for all IO types. New subtypes of `IO` can be writable and/or readable,
+and buffered or unbuffered.
+
+New subtypes should implement:
+* If writable: `unsafe_write` and `flush`.
+* If writable and buffered: Also `getwritebuffer`, `fillwritebuffer`, `consumewrite`,
+  and `write_buffering`.
+* If readable and unbuffered: `read_buffering`, `readinto!`.
+* If readable and buffered: `getbuffer`, `fillbuffer`, and `consume`.
+"""
+IO
+
+"""
+    IOBuffering
+
+Trait to signal if an IO type is buffered.
+Call `read_buffering(T)` or `write_buffering(T)` on a type `T <: IO`
+to determine if an IO is buffered.
+The returned value is `IsBuffered()` or `NotBuffered()`.
+By default, IO types are read buffered, but not write buffered.
+
+New concrete subtypes `T` of `IO` should signal otherwise by implementing
+`read_buffering` and/or `write_buffering` for `T`.
+"""
+abstract type IOBuffering end
+
+"See `IOBuffering`"
+struct IsBuffered <: IOBuffering end
+
+"See `IOBuffering`"
+struct NotBuffered <: IOBuffering end
+
+# TODO: What about Union{}?
+read_buffering(::Type{<:IO}) = IsBuffered()
+write_buffering(::Type{<:IO}) = NotBuffered()
+
+# TODO: More docs about when this kind of error should be thrown
+"""
+    IOError
+
+Common supertype for IO errors.
+"""
+abstract type IOError <: Exception end
+
+# TODO: Bad name. But this is basically just: Throw a non-specific IOError
+struct BaseIOError <: IOError
+    s::String
+end
+
+"""
+    ConsumedTooMuch <: IOError
+
+Exception thrown when calling `consume(io, n)` or `consumewrite(io, n)`
+with a value larger than the current buffer size.
+"""
+struct ConsumedTooMuch <: IOError end
+
+"""
+    getbuffer(io::IO)::AbstractVector{UInt8}
+
+Get the available bytes of `io`.
+
+The returned vector `v` must have indices `1:length(v)`. Users should avoid
+mutating the buffer.
+Calling this function when the buffer is empty should not attempt to fill the buffer.
+"""
+function getbuffer end
+
+"""
+    fillbuffer(io::IO)::Union{Int, Nothing}
+
+Fill more bytes into the reading buffer from `io`'s underlying buffer, returning
+the number of bytes added. After calling `fillbuffer` and getting `n`,
+the buffer obtained by `getbuffer` should have `n` new bytes appended.
+
+This function must fill at least one byte, except
+* If the underlying io is EOF, return `0`
+* If the buffer is not empty, and cannot be expanded, return `nothing`.
+
+`IO`s which do not wrap another underlying buffer, and therefore can't fill
+its buffer should return `0` unconditionally.
+"""
+function fillbuffer end
+
+"""
+    consume(io::IO, n::UInt)::Nothing
+
+Consume the first `n` bytes of the reading buffer of `io`.
+Consumed bytes will not be returned by future calls to `getbuffer`.
+If `n` is larger than the current reading buffer size, throw a `ConsumedTooMuch` error.
+"""
+function consume end
+
+"""
+    readinto!(io::IO, v::AbstractVector{UInt8})::Int
+
+Read bytes from `io` into the beginning of `v`, returning the number of bytes read.
+This function should read at least one byte, except if `io` is EOF, or `v` is empty,
+in which case it should return `0`.
+Where possible, implementations should make sure `readinto!` performs at most one
+blocking reading IO operation, even when it means only filling part of `v`.
+"""
+function readinto! end
+
+"""
+    readall!(io::IO, v::AbstractVector{UInt8})::Int
+
+Read as many bytes as possible from `io` into the beginning of `v`, returning
+the number of bytes read. This function will continue to read until `io` is EOF,
+or `v` has been filled.
+"""
+function readall! end
+
+# TODO: Still not sure about this write buffer trio of functions below.
+# Should they even exist? Their use is probably limited, and they're not
+# that useful to implement derived functions.
+
+"""
+    getwritebuffer(io::IO)::AbstractVector{UInt8}
+
+Get a mutable write buffer users can fill to write to `io`.
+
+The returned vector `v` must have indices `1:length(v)`.
+Users are free to mutate all bytes in the returned buffer.
+Use `consumewrite` `io` to write bytes from the buffer into the `io`.
+"""
+function getwritebuffer end
+
+"""
+    fillwritebuffer(io::IO)::Int
+
+Expand the writable buffer of `io`, returning the number of bytes the buffer was
+expanded.
+If the buffer cannot be expanded, return `0`.
+"""
+function fillwritebuffer end
+
+"""
+    consumewrite(io::IO, n::UInt)::Nothing
+
+Write the first `n` bytes of the write buffer to `io`, and remove these bytes from the write buffer.
+If `n` is larger than the write buffer, throw a `ConsumedTooMuch` error.
+"""
+function consumewrite end
+
+################### Derived methods ############################
+
+eof(io::IO) = !isnothing(get_nonempty_reading_buffer(io))
+
+bytesavailable(io::IO) = length(getbuffer(io))
+
+function readavailable(io::IO)
+    ba = bytesavailable(io)
+    v = Vector{UInt8}(undef, ba)
+    n = readinto!(io, v)
+    # This should never occur and indicates an implementation error
+    # or race condition or something like that
+    n == ba || throw(BaseIOError("IO were not able to read all its available bytes"))
+    v
+end
+
+function readall!(io::IO, v::AbstractVector{UInt8})
+    n_read = 0
+    vw = view(v, firstindex(v):lastindex(v))
+    while true
+        n = readinto!(io, vw)
+        iszero(n) && break
+        n_read += n
+        vw = view(v, firstindex(v) + n:lastindex(v))
+    end
+    return n_read
+end
+
+# Default implementation assumes buffering, because it's part of the core interface
+# to implement this for non-buffered IOs
+function readinto!(io::IO, v::AbstractVector{UInt8})
+    isempty(v) && return 0
+    buffer = @something get_nonempty_reading_buffer(io) return 0
+    mn = min(length(v), length(buffer))
+    copyto!(v, firstindex(v), buffer, 1, mn)
+    mn
+end
+
+# Default implementation for buffered readers
+function unsafe_read(io::IO, ref, nbytes::UInt)
+    iszero(nbytes) && return nothing
+    GC.@preserve ref begin
+        dst = pointer(ref)
+        buf = getbuffer(io)
+        while !iszero(nbytes)
+            if isempty(buf)
+                nfilled = something(fillbuffer(buf))
+                iszero(filled) && throw(EOFError())
+                buf = getbuffer(io)
+            end
+            mn = min(UInt(length(buf), nbytes)
+            GC.@preserve buf unsafe_copyto!(dst, pointer(buf), mn)
+            dst += mn
+            consume(io, mn)
+            buf = getbuffer(io)
+        end
+    end
+    nothing
+end
+
+################### Helper functions ###########################
+
+# Get a nonempty reading buffer, or nothing if the io is eof.
+function get_nonempty_reading_buffer(io::IO)::Union{Nothing, AbstractVector{UInt8}}
+    buf = getbuffer(io)
+    if isempty(buf)
+        n = fillbuffer(io)
+        (isnothing(n) || iszero(n)) && return nothing
+        buf = getbuffer(io)
+        @assert !isempty(buf)
+    end
+    buf
+end
+
+# TODO: The following functions can be implemented generically in terms of the
+# above core interface.
+# Try implementing them one at a time and see what breaks.
+
+# X unsafe_read (buffered)
+# X readinto! (buffered)
+# * readbytes!
+# * read(::IO)
+# * read(::IO, String)
+# * read!
+# X readall! (new function)
+# X eof (buffered)
+# X bytesavailable (buffered)
+# X readavailable (buffered)
+# * copyline (buffered)
+# * readline (buffered)
+# * readlines (buffered)
+# * eachline (buffered)
+# * readuntil (buffered)
+# * copyuntil (buffered)
+# * peek (buffered)
+# * readeach
+
+"""
     EOFError()
 
 No more data was available to read from a file or stream.
