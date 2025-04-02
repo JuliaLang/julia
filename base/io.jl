@@ -5,13 +5,12 @@
 """
     abstract type IO
 
-Supertype for all IO types. New subtypes of `IO` can be writable and/or readable,
-and buffered or unbuffered.
+Supertype for all IO types that support reading and/or writing.
 
 New subtypes should implement:
 * If writable: `unsafe_write` and `flush`.
-* If writable and buffered: Also `getwritebuffer`, `fillwritebuffer`, `consumewrite`,
-  and `write_buffering`.
+* If writable and buffered: Also `write_buffering`, `getwritebuffer`,
+  `fillwritebuffer`, and `consumewrite`.
 * If readable and unbuffered: `read_buffering`, `readinto!`.
 * If readable and buffered: `getbuffer`, `fillbuffer`, and `consume`.
 """
@@ -47,10 +46,10 @@ write_buffering(::Type{<:IO}) = NotBuffered()
 
 Common supertype for IO errors.
 """
-abstract type IOError <: Exception end
+abstract type AbstractIOError <: Exception end
 
 # TODO: Bad name. But this is basically just: Throw a non-specific IOError
-struct BaseIOError <: IOError
+struct NonSpecificIOError <: AbstractIOError
     s::String
 end
 
@@ -60,7 +59,7 @@ end
 Exception thrown when calling `consume(io, n)` or `consumewrite(io, n)`
 with a value larger than the current buffer size.
 """
-struct ConsumedTooMuch <: IOError end
+struct ConsumedTooMuch <: AbstractIOError end
 
 """
     getbuffer(io::IO)::AbstractVector{UInt8}
@@ -81,11 +80,12 @@ the number of bytes added. After calling `fillbuffer` and getting `n`,
 the buffer obtained by `getbuffer` should have `n` new bytes appended.
 
 This function must fill at least one byte, except
-* If the underlying io is EOF, return `0`
+* If the underlying io is EOF, or there is no underlying io, return `0`
 * If the buffer is not empty, and cannot be expanded, return `nothing`.
 
 `IO`s which do not wrap another underlying buffer, and therefore can't fill
-its buffer should return `0` unconditionally.
+its buffer should return `0` unconditionally. This function should never return `nothing`
+if the buffer is empty.
 """
 function fillbuffer end
 
@@ -152,17 +152,24 @@ function consumewrite end
 
 ################### Derived methods ############################
 
-eof(io::IO) = !isnothing(get_nonempty_reading_buffer(io))
+eof(io::IO) = isnothing(get_nonempty_reading_buffer(io))
 
 bytesavailable(io::IO) = length(getbuffer(io))
 
 function readavailable(io::IO)
-    ba = bytesavailable(io)
+    ba = bytesavailable(io)::Int
+
+    # Annoyingly, `readavailable` is documented to do I/O if no data has been buffered.
+    if iszero(ba)
+        iszero(something(fillbuffer(io))::Int) && return UInt8[]
+        ba = bytesavailable(io)::Int
+    end
+
     v = Vector{UInt8}(undef, ba)
-    n = readinto!(io, v)
+    n = readinto!(io, v)::Int
     # This should never occur and indicates an implementation error
     # or race condition or something like that
-    n == ba || throw(BaseIOError("IO were not able to read all its available bytes"))
+    n == ba || throw(NonSpecificIOError("IO were not able to read all its available bytes"))
     v
 end
 
@@ -170,7 +177,8 @@ function readall!(io::IO, v::AbstractVector{UInt8})
     n_read = 0
     vw = view(v, firstindex(v):lastindex(v))
     while true
-        n = readinto!(io, vw)
+        isempty(vw) && break
+        n = readinto!(io, vw)::Int
         iszero(n) && break
         n_read += n
         vw = view(v, firstindex(v) + n:lastindex(v))
@@ -190,22 +198,24 @@ end
 
 # Default implementation for buffered readers
 function unsafe_read(io::IO, ref, nbytes::UInt)
+    GC.@preserve ref unsafe_read(io, Ptr{UInt8}(pointer(ref))::Ptr{UInt8}, nbytes)
+end
+
+function unsafe_read(io::IO, dst::Ptr{UInt8}, nbytes::UInt)
     iszero(nbytes) && return nothing
-    GC.@preserve ref begin
-        dst = pointer(ref)
-        buf = getbuffer(io)
-        while !iszero(nbytes)
-            if isempty(buf)
-                nfilled = something(fillbuffer(buf))
-                iszero(filled) && throw(EOFError())
-                buf = getbuffer(io)
-            end
-            mn = min(UInt(length(buf), nbytes)
-            GC.@preserve buf unsafe_copyto!(dst, pointer(buf), mn)
-            dst += mn
-            consume(io, mn)
-            buf = getbuffer(io)
+    buf = getbuffer(io)::AbstractVector{UInt8}
+    while !iszero(nbytes)
+        if isempty(buf)
+            nfilled = something(fillbuffer(io))::Int
+            iszero(nfilled) && throw(EOFError())
+            buf = getbuffer(io)::AbstractVector{UInt8}
         end
+        mn = min(UInt(length(buf))::UInt, nbytes)
+        GC.@preserve buf unsafe_copyto!(dst, pointer(buf), mn)
+        dst += mn
+        nbytes -= mn
+        consume(io, mn)
+        buf = getbuffer(io)::AbstractVector{UInt8}
     end
     nothing
 end
@@ -216,8 +226,10 @@ end
 function get_nonempty_reading_buffer(io::IO)::Union{Nothing, AbstractVector{UInt8}}
     buf = getbuffer(io)
     if isempty(buf)
-        n = fillbuffer(io)
-        (isnothing(n) || iszero(n)) && return nothing
+        # Per the docs, this function is not allowed to return `nothing`
+        # when the buffer is empty.
+        n = fillbuffer(io)::Int
+        iszero(n) && return nothing
         buf = getbuffer(io)
         @assert !isempty(buf)
     end
@@ -252,7 +264,7 @@ end
 
 No more data was available to read from a file or stream.
 """
-struct EOFError <: Exception end
+struct EOFError <: AbstractIOError end
 
 """
     SystemError(prefix::AbstractString, [errno::Int32])
