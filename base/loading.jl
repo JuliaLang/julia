@@ -1243,21 +1243,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
-function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}, ignore_native::Union{Nothing,Bool}=nothing; register::Bool=true)
-    if isnothing(ignore_native)
-        if JLOptions().code_coverage == 0 && JLOptions().malloc_log == 0
-            ignore_native = false
-        else
-            io = open(path, "r")
-            try
-                iszero(isvalid_cache_header(io)) && return ArgumentError("Incompatible header in cache file $path.")
-                _, (includes, _, _), _, _, _, _, _, _ = parse_cache_header(io, path)
-                ignore_native = pkg_tracked(includes)
-            finally
-                close(io)
-            end
-        end
-    end
+function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}; register::Bool=true)
     assert_havelock(require_lock)
     timing_imports = TIMING_IMPORTS[] > 0
     try
@@ -1276,6 +1262,7 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
             depmods[i] = dep
         end
 
+        ignore_native = false
         unlock(require_lock) # temporarily _unlock_ during these operations
         sv = try
             if ocachepath !== nothing
@@ -1949,44 +1936,16 @@ function _tryrequire_from_serialized(modkey::PkgId, build_id::UInt128)
     return ErrorException("Required dependency $modkey failed to load from a cache file.")
 end
 
-# returns whether the package is tracked in coverage or malloc tracking based on
-# JLOptions and includes
-function pkg_tracked(includes)
-    if JLOptions().code_coverage == 0 && JLOptions().malloc_log == 0
-        return false
-    elseif JLOptions().code_coverage == 1 || JLOptions().malloc_log == 1 # user
-        # Just say true. Pkgimages aren't in Base
-        return true
-    elseif JLOptions().code_coverage == 2 || JLOptions().malloc_log == 2 # all
-        return true
-    elseif JLOptions().code_coverage == 3 || JLOptions().malloc_log == 3 # tracked path
-        if JLOptions().tracked_path == C_NULL
-            return false
-        else
-            tracked_path = unsafe_string(JLOptions().tracked_path)
-            if isempty(tracked_path)
-                return false
-            else
-                return any(includes) do inc
-                    startswith(inc.filename, tracked_path)
-                end
-            end
-        end
-    end
-end
-
 # loads a precompile cache file, ignoring stale_cachefile tests
 # load all dependent modules first
 function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String})
     assert_havelock(require_lock)
     local depmodnames
     io = open(path, "r")
-    ignore_native = false
     try
         iszero(isvalid_cache_header(io)) && return ArgumentError("Incompatible header in cache file $path.")
         _, (includes, _, _), depmodnames, _, _, _, clone_targets, _ = parse_cache_header(io, path)
 
-        ignore_native = pkg_tracked(includes)
 
         pkgimage = !isempty(clone_targets)
         if pkgimage
@@ -2013,7 +1972,7 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         depmods[i] = dep
     end
     # then load the file
-    loaded = _include_from_serialized(pkg, path, ocachepath, depmods, ignore_native; register = true)
+    loaded = _include_from_serialized(pkg, path, ocachepath, depmods; register = true)
     return loaded
 end
 
