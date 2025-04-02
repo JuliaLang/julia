@@ -295,6 +295,18 @@ end
 _similar_data(b::GenericIOBuffer, len::Int) = similar(b.data, len)
 _similar_data(b::IOBuffer, len::Int) = StringMemory(len)
 
+function getbuffer(io::GenericIOBuffer)
+    @inbounds view(io.data, io.ptr:io.size)
+end
+
+fillbuffer(::GenericIOBuffer) = 0
+
+function consume(io::GenericIOBuffer, n::UInt)
+    (io.size - io.ptr + 1) % UInt < n && throw(ConsumedTooMuch())
+    io.ptr += n % Int
+    nothing
+end
+
 # Note: Copying may change the value of the position (and mark) for un-seekable streams.
 # However, these values are not stable anyway due to compaction.
 
@@ -345,22 +357,25 @@ show(io::IO, b::GenericIOBuffer) = print(io, "IOBuffer(data=UInt8[...], ",
     throw(ArgumentError("read failed, IOBuffer is not readable"))
 end
 
+function unsafe_read(from::IOBuffer, p::Ptr{UInt8}, nb::UInt)
+    isreadable(from) || _throw_not_readable()
+    @invoke unsafe_read(from::IO, p::Ptr{UInt8}, nb::UInt)
+end
+
 function unsafe_read(from::GenericIOBuffer, p::Ptr{UInt8}, nb::UInt)
     from.readable || _throw_not_readable()
     avail = bytesavailable(from) % UInt
     adv = min(avail, nb)
-    unsafe_read!(p, from.data, from.ptr, adv)
+    so = from.ptr
+    data = from.data
+    for i in 1:adv
+        unsafe_store!(p, @inbounds(data[so+i-1]), i)
+    end
     from.ptr += adv
     if nb > avail
         throw(EOFError())
     end
     nothing
-end
-
-function unsafe_read!(dest::Ptr{UInt8}, src::AbstractVector{UInt8}, so::Integer, nbytes::UInt)
-    for i in 1:nbytes
-        unsafe_store!(dest, @inbounds(src[so+i-1]), i)
-    end
 end
 
 # Note: Currently, CodeUnits <: DenseVector, which makes this union redundant w.r.t
@@ -370,11 +385,6 @@ const DenseBytes = Union{
     <:DenseArrayType{UInt8},
     CodeUnits{UInt8, <:Union{String, SubString{String}}},
 }
-
-function unsafe_read!(dest::Ptr{UInt8}, src::DenseBytes, so::Integer, nbytes::UInt)
-    GC.@preserve src unsafe_copyto!(dest, pointer(src, so), nbytes)
-    nothing
-end
 
 const MultiByteBitNumberType = Union{
     Type{UInt16},
@@ -461,9 +471,6 @@ iswritable(io::GenericIOBuffer) = io.writable
 
 # Number of bytes that can be read from the buffer, if you seek to the start first.
 filesize(io::GenericIOBuffer) = (io.seekable ? io.size - get_offset(io) : bytesavailable(io))
-
-# Number of bytes that can be read from the buffer.
-bytesavailable(io::GenericIOBuffer) = io.size - io.ptr + 1
 
 # TODO: Document that position for an unmarked and unseekable stream is invalid (and make it error?)
 function position(io::GenericIOBuffer)
@@ -686,8 +693,6 @@ function compact!(io::GenericIOBuffer)::Int
     return deleted
 end
 
-eof(io::GenericIOBuffer) = (io.ptr - 1 >= io.size)
-
 function closewrite(io::GenericIOBuffer)
     io.writable = false
     nothing
@@ -893,14 +898,9 @@ function readbytes!(io::GenericIOBuffer, b::MutableDenseArrayType{UInt8}, nb::In
 end
 read(io::GenericIOBuffer) = read!(io, StringVector(bytesavailable(io)))
 
-# For IO buffers, all the data is immediately available.
-readavailable(io::GenericIOBuffer) = read(io)
-
 read(io::GenericIOBuffer, nb::Integer) = read!(io, StringVector(min(nb, bytesavailable(io))))
 
-function occursin(delim::UInt8, buf::GenericIOBuffer)
-    return in(delim, view(buf.data, buf.ptr:buf.size))
-end
+occursin(delim::UInt8, buf::GenericIOBuffer) = in(delim, getbuffer(buf))
 
 function copyuntil(out::IO, io::GenericIOBuffer, delim::UInt8; keep::Bool=false)
     data = view(io.data, io.ptr:io.size)
