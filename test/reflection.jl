@@ -1211,6 +1211,8 @@ end
 
 @test Base.ismutationfree(Type{Union{}})
 
+@test !Base.ismutationfree(Core.SimpleVector)
+
 module TestNames
 
 public publicized
