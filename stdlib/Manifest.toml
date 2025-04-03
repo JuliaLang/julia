@@ -230,10 +230,6 @@ weakdeps = ["SparseArrays"]
     [deps.Statistics.extensions]
     SparseArraysExt = ["SparseArrays"]
 
-[[deps.StyledStrings]]
-uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
-version = "1.11.0"
-
 [[deps.SuiteSparse_jll]]
 deps = ["Artifacts", "Libdl", "libblastrampoline_jll"]
 uuid = "bea87d4a-7f5b-5778-9afe-8cc45184846c"

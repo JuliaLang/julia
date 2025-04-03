@@ -261,14 +261,6 @@ let
         end
     end
 
-    StyledStrings = find_loaded_root_module(Base.PkgId(
-        Base.UUID("f489334b-da3d-4c2e-b8f0-e476e12c162b"), "StyledStrings"))
-    if StyledStrings !== nothing
-        @eval StyledStrings begin
-            __init__() = rand()
-        end
-    end
-
     Markdown = find_loaded_root_module(Base.PkgId(
         Base.UUID("d6f4376e-aef5-505a-96c1-9c027394607a"), "Markdown"))
     if Markdown !== nothing

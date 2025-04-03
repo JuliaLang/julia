@@ -235,10 +235,6 @@ version = "1.11.0"
 uuid = "6462fe0b-24de-5631-8697-dd941f90decc"
 version = "1.11.0"
 
-[[deps.StyledStrings]]
-uuid = "f489334b-da3d-4c2e-b8f0-e476e12c162b"
-version = "1.11.0"
-
 [[deps.TOML]]
 deps = ["Dates"]
 uuid = "fa267f1f-6049-4f14-aa54-33bafae1ed76"
