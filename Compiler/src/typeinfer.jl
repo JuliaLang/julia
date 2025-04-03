@@ -1243,8 +1243,29 @@ function typeinf_type(interp::AbstractInterpreter, mi::MethodInstance)
     return ci.rettype
 end
 
+# Resolve a call, as described by `argtype` to a single matching
+# Method and return a compilable MethodInstance for the call, if
+# it will be runtime-dispatched to exactly that MethodInstance
+function compileable_specialization_for_call(interp::AbstractInterpreter, @nospecialize(argtype))
+    matches = findall(argtype, method_table(interp); limit = 1)
+    matches === nothing && return nothing
+    length(matches.matches) == 0 && return nothing
+    match = only(matches.matches)
+
+    compileable_atype = get_compileable_sig(match.method, match.spec_types, match.sparams)
+    compileable_atype === nothing && return nothing
+    if match.spec_types !== compileable_atype
+        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), compileable_atype, method.sig)::SimpleVector
+        sparams = sp_[2]::SimpleVector
+        mi = specialize_method(match.method, compileable_atype, sparams)
+    else
+        mi = specialize_method(match.method, compileable_atype, match.sparams)
+    end
+    return mi
+end
+
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
-function collectinvokes!(wq::Vector{CodeInstance}, ci::CodeInfo)
+function collectinvokes!(wq::Vector{CodeInstance}, ci::CodeInfo, sptypes::Vector{VarState}, seen::Union{Nothing,IdSet{MethodInstance}})
     src = ci.code
     for i = 1:length(src)
         stmt = src[i]
@@ -1252,6 +1273,34 @@ function collectinvokes!(wq::Vector{CodeInstance}, ci::CodeInfo)
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
             edge isa CodeInstance && isdefined(edge, :inferred) && push!(wq, edge)
+        end
+
+        if isexpr(stmt, :call) && seen !== nothing
+            farg = stmt.args[1]
+            !applicable(argextype, farg, ci, sptypes) && continue # TODO: Why is this failing during bootstrap
+            ftyp = widenconst(argextype(farg, ci, sptypes))
+            if ftyp <: Builtin
+                # TODO: Make interp elsewhere
+                interp = NativeInterpreter(Base.get_world_counter())
+                if Core.finalizer isa ftyp && length(stmt.args) == 3
+                    finalizer = argextype(stmt.args[2], ci, sptypes)
+                    obj = argextype(stmt.args[3], ci, sptypes)
+                    atype = argtypes_to_type(Any[finalizer, obj])
+
+                    mi = compileable_specialization_for_call(interp, atype)
+                    mi === nothing && continue
+
+                    mi in seen && continue
+                    push!(seen, mi)
+
+                    if mi.def.primary_world <= Base.get_world_counter() <= mi.def.deleted_world
+                        ci = typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED)
+                        # TODO: separate workqueue for NativeInterpreter
+                        ci isa CodeInstance && push!(wq, ci)
+                    end
+                    # push!(wq, mi)
+                end
+            end
         end
         # TODO: handle other StmtInfo like @cfunction and OpaqueClosure?
     end
@@ -1289,7 +1338,10 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
             end
         end
         push!(inspected, callee)
-        collectinvokes!(tocompile, src)
+        mi = get_ci_mi(callee)
+        sptypes = sptypes_from_meth_instance(mi)
+        collectinvokes!(tocompile, src, sptypes, nothing)
+        # collectinvokes!(tocompile, src)
         mi = get_ci_mi(callee)
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
             cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(interp))::CodeInstance
@@ -1328,6 +1380,7 @@ const TRIM_UNSAFE_WARN = 3
 function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
     inspected = IdSet{CodeInstance}()
     tocompile = Vector{CodeInstance}()
+    inspected_mis = IdSet{MethodInstance}()
     codeinfos = []
     # first compute the ABIs of everything
     latest = true # whether this_world == world_counter()
@@ -1389,7 +1442,8 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
             end
             push!(inspected, callee)
             if src isa CodeInfo
-                collectinvokes!(tocompile, src)
+                sptypes = sptypes_from_meth_instance(mi)
+                collectinvokes!(tocompile, src, sptypes, inspected_mis)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
                     cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, this_world)::CodeInstance
