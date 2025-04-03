@@ -39,7 +39,7 @@ end
 # Headers
 # –––––––
 
-mutable struct Header{level}
+mutable struct Header{level} <: MarkdownElement
     text
 end
 
