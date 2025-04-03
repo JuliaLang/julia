@@ -301,9 +301,9 @@ end
 
 fillbuffer(::GenericIOBuffer) = 0
 
-function consume(io::GenericIOBuffer, n::UInt)
-    (io.size - io.ptr + 1) % UInt < n && throw(ConsumedTooMuch())
-    io.ptr += n % Int
+function consume(io::GenericIOBuffer, n::Int)
+    (io.size - io.ptr + 1) % UInt < n % UInt && throw(ConsumeBufferError())
+    io.ptr += n
     nothing
 end
 

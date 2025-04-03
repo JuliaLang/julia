@@ -8,10 +8,7 @@
 Supertype for all IO types that support reading and/or writing.
 
 New subtypes should implement:
-* If writable: `unsafe_write` and `flush`.
-* If writable and buffered: Also `write_buffering`, `getwritebuffer`,
-  `fillwritebuffer`, and `consumewrite`.
-* If readable and unbuffered: `read_buffering`, `readinto!`.
+* If readable and unbuffered: `readbuffering`, `readinto!`.
 * If readable and buffered: `getbuffer`, `fillbuffer`, and `consume`.
 """
 IO
@@ -20,13 +17,11 @@ IO
     IOBuffering
 
 Trait to signal if an IO type is buffered.
-Call `read_buffering(T)` or `write_buffering(T)` on a type `T <: IO`
-to determine if an IO is buffered.
-The returned value is `IsBuffered()` or `NotBuffered()`.
-By default, IO types are read buffered, but not write buffered.
+Call `readbuffering(T)` on a type `T <: IO` to determine if an IO is buffered.
+The returned value is `IsBuffered()` (the default) or `NotBuffered()`.
 
 New concrete subtypes `T` of `IO` should signal otherwise by implementing
-`read_buffering` and/or `write_buffering` for `T`.
+`readbuffering` for `T`.
 """
 abstract type IOBuffering end
 
@@ -37,8 +32,8 @@ struct IsBuffered <: IOBuffering end
 struct NotBuffered <: IOBuffering end
 
 # TODO: What about Union{}?
-read_buffering(::Type{<:IO}) = IsBuffered()
-write_buffering(::Type{<:IO}) = NotBuffered()
+# This function is called `readbuffering` because we might introduce writebuffering in the future
+readbuffering(::Type{<:IO}) = IsBuffered()
 
 # TODO: More docs about when this kind of error should be thrown
 """
@@ -54,21 +49,23 @@ struct NonSpecificIOError <: AbstractIOError
 end
 
 """
-    ConsumedTooMuch <: IOError
+    ConsumeBufferError <: IOError
 
-Exception thrown when calling `consume(io, n)` or `consumewrite(io, n)`
-with a value larger than the current buffer size.
+Exception thrown when calling `consume(io, n)` with a value larger than the current buffer size.
 """
-struct ConsumedTooMuch <: AbstractIOError end
+struct ConsumeBufferError <: AbstractIOError end
 
 """
     getbuffer(io::IO)::AbstractVector{UInt8}
 
 Get the available bytes of `io`.
 
-The returned vector `v` must have indices `1:length(v)`. Users should avoid
+The returned vector `v` must have indices `1:length(v)`. Callers should avoid
 mutating the buffer.
 Calling this function when the buffer is empty should not attempt to fill the buffer.
+
+This function should be implemented for buffered readers only, and together with
+[`fillbufer`](@ref) and [`consume`](@ref).
 """
 function getbuffer end
 
@@ -84,17 +81,24 @@ This function must fill at least one byte, except
 * If the buffer is not empty, and cannot be expanded, return `nothing`.
 
 `IO`s which do not wrap another underlying buffer, and therefore can't fill
-its buffer should return `0` unconditionally. This function should never return `nothing`
-if the buffer is empty.
+its buffer should return `0` unconditionally.
+This function should never return `nothing` if the buffer is empty.
+
+This function should be implemented for buffered readers only, and together with
+[`getbuffer`](@ref) and [`consume`](@ref).
 """
 function fillbuffer end
 
 """
-    consume(io::IO, n::UInt)::Nothing
+    consume(io::IO, n::Int)::Nothing
 
-Consume the first `n` bytes of the reading buffer of `io`.
+Remove the first `n` bytes of the reading buffer of `io`.
 Consumed bytes will not be returned by future calls to `getbuffer`.
-If `n` is larger than the current reading buffer size, throw a `ConsumedTooMuch` error.
+If `n` is negative, or larger than the current reading buffer size,
+throw a `ConsumeBufferError` error.
+
+This function should be implemented for buffered readers only, and together with
+[`getbuffer`](@ref) and [`fillbuffer`](@ref).
 """
 function consume end
 
@@ -117,38 +121,6 @@ the number of bytes read. This function will continue to read until `io` is EOF,
 or `v` has been filled.
 """
 function readall! end
-
-# TODO: Still not sure about this write buffer trio of functions below.
-# Should they even exist? Their use is probably limited, and they're not
-# that useful to implement derived functions.
-
-"""
-    getwritebuffer(io::IO)::AbstractVector{UInt8}
-
-Get a mutable write buffer users can fill to write to `io`.
-
-The returned vector `v` must have indices `1:length(v)`.
-Users are free to mutate all bytes in the returned buffer.
-Use `consumewrite` `io` to write bytes from the buffer into the `io`.
-"""
-function getwritebuffer end
-
-"""
-    fillwritebuffer(io::IO)::Int
-
-Expand the writable buffer of `io`, returning the number of bytes the buffer was
-expanded.
-If the buffer cannot be expanded, return `0`.
-"""
-function fillwritebuffer end
-
-"""
-    consumewrite(io::IO, n::UInt)::Nothing
-
-Write the first `n` bytes of the write buffer to `io`, and remove these bytes from the write buffer.
-If `n` is larger than the write buffer, throw a `ConsumedTooMuch` error.
-"""
-function consumewrite end
 
 ################### Derived methods ############################
 
@@ -200,34 +172,9 @@ end
 function read(io::IO, ::Type{UInt8})
     buf = @something get_nonempty_reading_buffer(io) throw(EOFError())
     byte = buf[1]
-    consume(io, UInt(1))
+    consume(io, 1)
     byte
 end
-
-
-# TODO: This only works for memory-backed buffers.
-# function unsafe_read(io::IO, ref, nbytes::UInt)
-#     GC.@preserve ref unsafe_read(io, Ptr{UInt8}(pointer(ref))::Ptr{UInt8}, nbytes)
-# end
-
-# function unsafe_read(io::IO, dst::Ptr{UInt8}, nbytes::UInt)
-#     iszero(nbytes) && return nothing
-#     buf = getbuffer(io)::AbstractVector{UInt8}
-#     while !iszero(nbytes)
-#         if isempty(buf)
-#             nfilled = something(fillbuffer(io))::Int
-#             iszero(nfilled) && throw(EOFError())
-#             buf = getbuffer(io)::AbstractVector{UInt8}
-#         end
-#         mn = min(UInt(length(buf))::UInt, nbytes)
-#         GC.@preserve buf unsafe_copyto!(dst, pointer(buf), mn)
-#         dst += mn
-#         nbytes -= mn
-#         consume(io, mn)
-#         buf = getbuffer(io)::AbstractVector{UInt8}
-#     end
-#     nothing
-# end
 
 ################### Helper functions ###########################
 
@@ -249,7 +196,7 @@ end
 # above core interface.
 # Try implementing them one at a time and see what breaks.
 
-# X unsafe_read (buffered)
+# * unsafe_read (buffered)
 # X readinto! (buffered)
 # * readbytes!
 # * read(::IO)
