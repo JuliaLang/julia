@@ -43,7 +43,6 @@ Common supertype for IO errors.
 """
 abstract type AbstractIOError <: Exception end
 
-# TODO: Bad name. But this is basically just: Throw a non-specific IOError
 struct NonSpecificIOError <: AbstractIOError
     s::String
 end
@@ -176,6 +175,70 @@ function read(io::IO, ::Type{UInt8})
     byte
 end
 
+# NB: The documentation says `b` must be `AbstractVector`, but the implementation has
+# supported AbstractArray for years, so we must continue to support it.
+"""
+    readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b))
+
+Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
+The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
+and enough bytes could be read), but it will never be decreased.
+"""
+function readbytes!(io::IO, b::AbstractArray{UInt8}, nb=length(b))
+    nb = Int(nb)::Int
+    require_one_based_indexing(b)
+    iszero(nb) && return 0
+    # Use the documented, more efficient API if the arguments conform to the
+    # API of `IO` and `readbytes!`, fall back to a more generic function
+    # for backwards compatibility.
+    if b isa AbstractVector && (
+            readbuffering(typeof(io)) == NotBuffered() ||
+            hasmethod(getbuffer, Tuple{typeof(io)})
+        )
+        readbytes_readinto!(io, b, nb)
+    else
+        readbytes_readbyte!(io, b, nb)
+    end
+end
+
+function readbytes_readinto!(io::IO, b::AbstractVector{UInt8}, nb::Int)
+    n_read = 0
+    vw = view(b, n_read + 1 : min(lastindex(b), nb))
+    resized = false
+    # Unfortunately, we need this to robustly detect EOF. Hopefully, it can be stack
+    # allocated.
+    buffer = Memory{UInt8}(undef, 1)
+    while n_read < nb
+        if n_read == length(b)
+            # If we need to read more bytes, but there is no more room, we only resize if the IO
+            # is not EOF. To check this, we read 1 byte into a separate buffer.
+            n = readinto!(io, buffer)
+            iszero(n) && return n_read
+            # Else, resize with some extra space for new allocations.
+            resize!(b, overallocation(length(b)))
+            n_read += 1
+            b[n_read] = only(buffer)
+            resized = true
+            vw = view(b, n_read + 2 : min(lastindex(b), nb))
+        end
+        # This can't be empty, because either we just resized, or else n_read < b,
+        # and we know n_read < nb.
+        # The only case this could be empty is if the resize only add one extra byte,
+        # despite requesting more (which is presumably a bug in resize)
+        @assert !isempty(vw)
+        n = readinto!(io, vw)
+        # Since vw is nonempty, this indicates io is EOF
+        if iszero(n)
+            # If we resized the buffer before, we need to shrink it to fit,
+            # We don't shrink if we didn't resize the buffer, as per the docs.
+            resized == resize!(b, n_read)
+            return n_read
+        end
+        n_read += n
+    end
+    return n_read
+end
+
 ################### Helper functions ###########################
 
 # Get a nonempty reading buffer, or nothing if the io is eof.
@@ -198,7 +261,7 @@ end
 
 # * unsafe_read (buffered)
 # X readinto! (buffered)
-# * readbytes!
+# X readbytes!
 # * read(::IO)
 # * read(::IO, String)
 # X read(::IO, UInt8)
@@ -516,7 +579,6 @@ Base.RefValue{MyStruct}(MyStruct(42.0))
 """
 function write end
 
-read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
 write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
 
 """
@@ -1349,16 +1411,7 @@ julia> rm("my_file.txt");
 """
 readchomp(x) = chomp(read(x, String))
 
-# read up to nb bytes into nb, returning # bytes read
-
-"""
-    readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b))
-
-Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
-The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
-and enough bytes could be read), but it will never be decreased.
-"""
-function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
+function readbytes_readbyte!(s::IO, b::AbstractArray{UInt8}, nb::Int)
     require_one_based_indexing(b)
     olb = lb = length(b)
     nr = 0
