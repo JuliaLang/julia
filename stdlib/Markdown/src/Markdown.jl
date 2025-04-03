@@ -12,8 +12,12 @@ module Markdown
 import Base: AnnotatedString, AnnotatedIOBuffer, show, ==, with_output_color, mapany
 using Base64: stringmime
 
-using StyledStrings: StyledStrings, Face, addface!, @styled_str, styled
-using JuliaSyntaxHighlighting: highlight, highlight!
+# using StyledStrings: StyledStrings, Face, addface!, @styled_str, styled
+# using JuliaSyntaxHighlighting: highlight, highlight!
+
+macro styled_str(str)
+    return str
+end
 
 # Margin for printing in terminal.
 const margin = 2
@@ -37,6 +41,7 @@ export @md_str, @doc_str
 
 public MD, parse
 
+#=
 const MARKDOWN_FACES = [
     :markdown_header => Face(weight=:bold),
     :markdown_h1 => Face(height=1.25, inherit=:markdown_header),
@@ -55,8 +60,9 @@ const MARKDOWN_FACES = [
     :markdown_link => Face(underline=:bright_blue),
     :markdown_list => Face(foreground=:blue),
 ]
+=#
 
-__init__() = foreach(addface!, MARKDOWN_FACES)
+# __init__() = foreach(addface!, MARKDOWN_FACES)
 
 parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
 
