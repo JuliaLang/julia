@@ -199,6 +199,8 @@ function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspec
                 if !may_dispatch(ftyp)
                     continue
                 end
+                # TODO: Make interp elsewhere
+                interp = NativeInterpreter(Base.get_world_counter())
                 if Core._apply_iterate isa ftyp
                     if length(stmt.args) >= 3
                         # args[1] is _apply_iterate object
@@ -219,9 +221,17 @@ function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspec
                     end
                 elseif Core.finalizer isa ftyp
                     if length(stmt.args) == 3
-                        # TODO: check that calling `args[1](args[2])` is defined before warning
+                        finalizer = argextype(stmt.args[2], ci, sptypes)
+                        obj = argextype(stmt.args[3], ci, sptypes)
+                        atype = argtypes_to_type(Any[finalizer, obj])
+
+                        mi = compileable_specialization_for_call(interp, atype)
+                        if mi !== nothing
+                            ci = get(caches, mi, nothing)
+                            ci isa CodeInstance && continue
+                        end
+
                         error = "unresolved finalizer registered"
-                        warn = true
                     end
                 else
                     error = "unresolved call to builtin"
