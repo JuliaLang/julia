@@ -1176,7 +1176,7 @@ Suppose:
 * a newly defined method may take more than argument
 * the argument types of the method may be heterogeneous, such that one argument type comes from a different package than another, and these packages have unrelated ownership
 
-Some examples of such functions that the below advice applies to:
+Some examples of such functions that this advice applies to:
 * [`==`](@ref)
 * [`isequal`](@ref)
 * [`<`](@ref)
