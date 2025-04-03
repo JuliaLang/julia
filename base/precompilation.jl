@@ -301,7 +301,7 @@ function show_progress(io::IO, p::MiniProgressBar; termwidth=nothing, carriagere
     else
         string(p.current, "/",  p.max)
     end
-    termwidth = @something termwidth displaysize(io)[2]
+    termwidth = @something termwidth (displaysize(io)::Tuple{Int,Int})[2]
     max_progress_width = max(0, min(termwidth - textwidth(p.header) - textwidth(progress_text) - 10 , p.width))
     n_filled = floor(Int, max_progress_width * perc / 100)
     partial_filled = (max_progress_width * perc / 100) - n_filled
@@ -822,7 +822,7 @@ function _precompilepkgs(pkgs::Vector{String},
             n_print_rows = 0
             while !printloop_should_exit[]
                 @lock print_lock begin
-                    term_size = displaysize(io)
+                    term_size = displaysize(io)::Tuple{Int, Int}
                     num_deps_show = max(term_size[1] - 3, 2) # show at least 2 deps
                     pkg_queue_show = if !interrupted_or_done.set && length(pkg_queue) > num_deps_show
                         last(pkg_queue, num_deps_show)
@@ -837,7 +837,7 @@ function _precompilepkgs(pkgs::Vector{String},
                         bar.max = n_total - n_already_precomp[]
                         # when sizing to the terminal width subtract a little to give some tolerance to resizing the
                         # window between print cycles
-                        termwidth = displaysize(io)[2] - 4
+                        termwidth = (displaysize(io)::Tuple{Int,Int})[2] - 4
                         if !final_loop
                             s = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
                             print(iostr, Base._truncate_at_width_or_chars(true, s, termwidth), "\n")
