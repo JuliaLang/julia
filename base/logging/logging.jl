@@ -699,9 +699,6 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     end
     buf = IOBuffer()
     stream::IO = logger.stream
-    if !(isopen(stream)::Bool)
-        stream = stderr
-    end
     iob = IOContext(buf, stream)
     levelstr = level == Warn ? "Warning" : string(level)
     msglines = eachsplit(chomp(convert(String, string(message))::String), '\n')
@@ -716,7 +713,12 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     end
     println(iob, "└ @ ", _module, " ", filepath, ":", line)
     b = take!(buf)
-    @lock logger.lock write(stream, b)
+    @lock logger.lock begin
+        if !(isopen(stream)::Bool)
+            stream = stderr
+        end
+        write(stream, b)
+    end
     nothing
 end
 
