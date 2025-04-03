@@ -163,7 +163,8 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
                     meth = callee::Method
                 end
                 min_valid2, max_valid2 = verify_invokesig(edge, meth, world)
-                matches = nothing
+                match, _ = Base.invoke_default_compiler(:_findsup, edge, nothing, world)
+                matches = match === nothing ? nothing : Any[match.method]
                 j += 2
             end
             if minworld < min_valid2
