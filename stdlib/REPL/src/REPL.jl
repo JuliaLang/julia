@@ -39,7 +39,6 @@ function __init__()
 end
 
 using Base.Meta, Sockets, StyledStrings
-using JuliaSyntaxHighlighting
 import InteractiveUtils
 
 export
@@ -511,8 +510,7 @@ function show_limited(io::IO, mime::MIME, x)
         # We unpack `IOContext`s, since we will pass the properties on the outside.
         inner = io isa IOContext ? io.io : io
         wrapped_limiter = IOContext(LimitIO(inner, SHOW_MAXIMUM_BYTES), io)
-        # `show_repl` to allow the hook with special syntax highlighting
-        show_repl(wrapped_limiter, mime, x)
+        show(wrapped_limiter, mime, x)
     catch e
         e isa LimitIOException || rethrow()
         printstyled(io, """…[printing stopped after displaying $(Base.format_bytes(e.maxbytes)); call `show(stdout, MIME"text/plain"(), ans)` to print without truncation]"""; color=:light_yellow, bold=true)
@@ -542,12 +540,6 @@ function display(d::REPLDisplay, mime::MIME"text/plain", x)
 end
 
 display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
-
-show_repl(io::IO, mime::MIME"text/plain", x) = show(io, mime, x)
-
-show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
-    print(io, JuliaSyntaxHighlighting.highlight(
-        sprint(show, ex, context=IOContext(io, :color => false))))
 
 function print_response(repl::AbstractREPL, response, show_value::Bool, have_color::Bool)
     repl.waserror = response[2]
