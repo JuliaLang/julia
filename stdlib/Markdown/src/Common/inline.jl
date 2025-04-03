@@ -4,7 +4,7 @@
 # Emphasis
 # ––––––––
 
-mutable struct Italic <: MarkdownElement
+mutable struct Italic
     text
 end
 
@@ -20,7 +20,7 @@ function underscore_italic(stream::IO, md::MD)
     return result === nothing ? nothing : Italic(parseinline(result, md))
 end
 
-mutable struct Bold <: MarkdownElement
+mutable struct Bold
     text
 end
 
@@ -66,7 +66,7 @@ end
 # Images & Links
 # ––––––––––––––
 
-mutable struct Image <: MarkdownElement
+mutable struct Image
     url::String
     alt::String
 end
@@ -85,7 +85,7 @@ function image(stream::IO, md::MD)
     end
 end
 
-mutable struct Link <: MarkdownElement
+mutable struct Link
     text
     url::String
 end
@@ -156,7 +156,7 @@ end
 # Punctuation
 # –––––––––––
 
-mutable struct LineBreak <: MarkdownElement end
+mutable struct LineBreak end
 
 @trigger '\\' ->
 function linebreak(stream::IO, md::MD)
