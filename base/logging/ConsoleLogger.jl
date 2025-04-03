@@ -116,8 +116,8 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     if maxlog isa Core.BuiltinInts
         @lock logger.message_limits_lock begin
             remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
+            remaining == 0 && return
             logger.message_limits[id] = remaining - 1
-            remaining > 0 || return
         end
     end
 
