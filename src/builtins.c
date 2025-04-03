@@ -1701,7 +1701,7 @@ JL_CALLABLE(jl_f__module_using)
     jl_module_t *from = eval_import_path_all(ct, to, ex->args, "using");
 
     jl_module_using(to, from);
-    int is_package = jl_expr_nargs(ex) == 2 && (jl_sym_t *)jl_exprarg(ex, 1) != jl_dot_sym;
+    int is_package = jl_expr_nargs(ex) == 1 && (jl_sym_t *)jl_exprarg(ex, 0) != jl_dot_sym;
     if (to == jl_main_module && is_package) {
         // TODO: for now, `using A` in Main also creates an explicit binding for `A`
         // This will possibly be extended to all modules.
