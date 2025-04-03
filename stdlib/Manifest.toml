@@ -65,11 +65,6 @@ deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 version = "1.11.0"
 
-[[deps.JuliaSyntaxHighlighting]]
-deps = ["StyledStrings"]
-uuid = "ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"
-version = "1.12.0"
-
 [[deps.LLD_jll]]
 deps = ["Artifacts", "Libdl", "Zlib_jll", "libLLVM_jll"]
 uuid = "d55e3150-da41-5e91-b323-ecfd1eec6109"
