@@ -52,15 +52,6 @@ end
     end
     @test String(take!(buf)) == ""
 
-    # Check that the AnnotatedString path works too
-    with_logger(logger) do
-        @info Base.AnnotatedString("test")
-    end
-    @test String(take!(buf)) ==
-    """
-    [ Info: test
-    """
-
     @testset "Default metadata formatting" begin
         @test Logging.default_metafmt(Logging.Debug, Base, :g, :i, expanduser("~/somefile.jl"), 42) ==
             (:blue,      "Debug:",   "@ Base ~/somefile.jl:42")

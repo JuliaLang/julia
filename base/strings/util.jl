@@ -470,11 +470,9 @@ function lpad(
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 )
-    stringfn = if _isannotated(s) || _isannotated(p)
-        annotatedstring else string end
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
-    m ≤ 0 && return stringfn(s)
+    m ≤ 0 && return string(s)
     l = Int(textwidth(p))::Int
     if l == 0
         throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
@@ -482,7 +480,7 @@ function lpad(
             (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
     end
     q, r = divrem(m, l)
-    r == 0 ? stringfn(p^q, s) : stringfn(p^q, first(p, r), s)
+    r == 0 ? string(p^q, s) : string(p^q, first(p, r), s)
 end
 
 """
@@ -507,11 +505,9 @@ function rpad(
     n::Integer,
     p::Union{AbstractChar,AbstractString}=' ',
 )
-    stringfn = if _isannotated(s) || _isannotated(p)
-        annotatedstring else string end
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
-    m ≤ 0 && return stringfn(s)
+    m ≤ 0 && return string(s)
     l = Int(textwidth(p))::Int
     if l == 0
         throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
@@ -519,7 +515,7 @@ function rpad(
             (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
     end
     q, r = divrem(m, l)
-    r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
+    r == 0 ? string(s, p^q) : string(s, p^q, first(p, r))
 end
 
 """

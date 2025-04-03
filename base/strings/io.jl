@@ -349,29 +349,9 @@ function join(io::IO, iterator, delim="")
     end
 end
 
-function _join_preserve_annotations(iterator, args...)
-    et = @default_eltype(iterator)
-    if isconcretetype(et) && !_isannotated(et) && !any(_isannotated, args)
-        sprint(join, iterator, args...)
-    else
-        io = AnnotatedIOBuffer()
-        join(io, iterator, args...)
-        # If we know (from compile time information, or dynamically in the case
-        # of iterators with a non-concrete eltype), that the result is annotated
-        # in nature, we extract an `AnnotatedString`, otherwise we just extract
-        # a plain `String` from `io`.
-        if isconcretetype(et) || !isempty(io.annotations)
-            seekstart(io)
-            read(io, AnnotatedString{String})
-        else
-            String(take!(io.io))
-        end
-    end
-end
-
-join(iterator) = _join_preserve_annotations(iterator)
-join(iterator, delim) = _join_preserve_annotations(iterator, delim)
-join(iterator, delim, last) = _join_preserve_annotations(iterator, delim, last)
+join(iterator) = sprint(join, iterator)
+join(iterator, delim) = sprint(join, iterator, delim)
+join(iterator, delim, last) = sprint(join, iterator, delim, last)
 
 ## string escaping & unescaping ##
 
@@ -796,27 +776,4 @@ function String(chars::AbstractVector{<:AbstractChar})
             print(io, c)
         end
     end
-end
-
-function AnnotatedString(chars::AbstractVector{C}) where {C<:AbstractChar}
-    str = if C <: AnnotatedChar
-        String(getfield.(chars, :char))
-    else
-        sprint(sizehint=length(chars)) do io
-            for c in chars
-                print(io, c)
-            end
-        end
-    end
-    annots = RegionAnnotation[]
-    point = 1
-    for c in chars
-        if c isa AnnotatedChar
-            for annot in c.annotations
-                push!(annots, (point:point, annot...))
-            end
-        end
-        point += ncodeunits(c)
-    end
-    AnnotatedString(str, annots)
 end

@@ -445,35 +445,9 @@ function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
     return result
 end
 
-function _annotatedmatch(m::RegexMatch{S}, str::AnnotatedString{S}) where {S<:AbstractString}
-    RegexMatch{AnnotatedString{S}}(
-        (@inbounds SubString{AnnotatedString{S}}(
-            str, m.match.offset, m.match.ncodeunits, Val(:noshift))),
-        Union{Nothing,SubString{AnnotatedString{S}}}[
-            if !isnothing(cap)
-                (@inbounds SubString{AnnotatedString{S}}(
-                    str, cap.offset, cap.ncodeunits, Val(:noshift)))
-            end for cap in m.captures],
-        m.offset, m.offsets, m.regex)
-end
-
-function match(re::Regex, str::AnnotatedString)
-    m = match(re, str.string)
-    if !isnothing(m)
-        _annotatedmatch(m, str)
-    end
-end
-
-function match(re::Regex, str::AnnotatedString, idx::Integer, add_opts::UInt32=UInt32(0))
-    m = match(re, str.string, idx, add_opts)
-    if !isnothing(m)
-        _annotatedmatch(m, str)
-    end
-end
-
 match(r::Regex, s::AbstractString) = match(r, s, firstindex(s))
 match(r::Regex, s::AbstractString, i::Integer) = throw(ArgumentError(
-    "regex matching is only available for the String and AnnotatedString types; use String(s) to convert"
+    "regex matching is only available for the String type; use String(s) to convert"
 ))
 
 findnext(re::Regex, str::Union{String,SubString}, idx::Integer) = _findnext_re(re, str, idx, C_NULL)
@@ -726,8 +700,6 @@ struct RegexMatchIterator{S <: AbstractString}
 
     RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false) =
         new{String}(regex, String(string), ovr)
-    RegexMatchIterator(regex::Regex, string::AnnotatedString, ovr::Bool=false) =
-        new{AnnotatedString{String}}(regex, AnnotatedString(String(string.string), string.annotations), ovr)
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{<:RegexMatchIterator}) = RegexMatch

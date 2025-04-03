@@ -96,17 +96,3 @@ Base.escape_string
 Base.escape_raw_string
 Base.unescape_string
 ```
-
-## `AnnotatedString`s
-
-!!! note
-    The API for AnnotatedStrings is considered experimental and is subject to change between
-    Julia versions.
-
-```@docs
-Base.AnnotatedString
-Base.AnnotatedChar
-Base.annotatedstring
-Base.annotations
-Base.annotate!
-```

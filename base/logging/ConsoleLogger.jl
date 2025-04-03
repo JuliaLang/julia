@@ -118,14 +118,8 @@ function handle_message(logger::ConsoleLogger, level::LogLevel, message, _module
     # split into lines.  This is specialised to improve type inference,
     # and reduce the risk of resulting method invalidations.
     message = string(message)
-    msglines = if Base._isannotated(message) && !isempty(Base.annotations(message))
-        message = Base.AnnotatedString(String(message), Base.annotations(message))
-        @NamedTuple{indent::Int, msg::Union{SubString{Base.AnnotatedString{String}}, SubString{String}}}[
-            (indent=0, msg=l) for l in split(chomp(message), '\n')]
-    else
-        [(indent=0, msg=l) for l in split(
-             chomp(convert(String, message)::String), '\n')]
-    end
+    msglines = [(indent=0, msg=l) for l in split(
+        chomp(convert(String, message)::String), '\n')]
     stream::IO = logger.stream
     if !(isopen(stream)::Bool)
         stream = stderr
