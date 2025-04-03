@@ -980,14 +980,13 @@ mutable struct StackFrameTree{T} # where T <: Union{UInt64, StackFrame}
     flat_count::Int     # number of times this frame was in the flattened representation (unlike count, this'll sum to 100% of parent)
     max_recur::Int      # maximum number of times this frame was the *top* of the recursion in the stack
     count_recur::Int    # sum of the number of times this frame was the *top* of the recursion in a stack (divide by count to get an average)
-    sleeping::Bool      # whether this frame was in a sleeping state
     down::Dict{T, StackFrameTree{T}}
     # construction workers:
     recur::Int
     builder_key::Vector{UInt64}
     builder_value::Vector{StackFrameTree{T}}
     up::StackFrameTree{T}
-    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, 0, 0, 0, 0, true, Dict{T, StackFrameTree{T}}(), 0, UInt64[], StackFrameTree{T}[])
+    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, 0, 0, 0, 0, Dict{T, StackFrameTree{T}}(), 0, UInt64[], StackFrameTree{T}[])
 end
 
 
@@ -1028,10 +1027,6 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
             base = string(base, "+", nextra, " ")
         end
         strcount = rpad(string(frame.count), ndigcounts, " ")
-        if frame.sleeping
-            stroverhead = styled"{gray:$(stroverhead)}"
-            strcount = styled"{gray:$(strcount)}"
-        end
         if li != UNKNOWN
             if li.line == li.pointer
                 strs[i] = string(stroverhead, "╎", base, strcount, " ",
@@ -1044,7 +1039,6 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 else
                     fname = string(li.func)
                 end
-                frame.sleeping && (fname = styled"{gray:$(fname)}")
                 path, pkgname, filename = short_path(li.file, filenamemap)
                 if showpointer
                     fname = string(
@@ -1088,15 +1082,15 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     skip = false
     nsleeping = 0
     is_task_profile = false
-    is_sleeping = true
     for i in startframe:-1:1
         (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (it's read ahead below) and extra block end NULL IP
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
             thread_sleeping_state = all[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            is_sleeping = thread_sleeping_state == 1
-            is_task_profile = thread_sleeping_state == 2
+            if thread_sleeping_state == 2
+                is_task_profile = true
+            end
             # cpu_cycle_clock = all[i - META_OFFSET_CPUCYCLECLOCK]
             taskid = all[i - META_OFFSET_TASKID]
             threadid = all[i - META_OFFSET_THREADID]
@@ -1151,7 +1145,6 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                         parent = build[j]
                         parent.recur += 1
                         parent.count_recur += 1
-                        parent.sleeping &= is_sleeping
                         found = true
                         break
                     end
@@ -1171,7 +1164,6 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                     while this !== parent && (recur === :off || this.recur == 0)
                         this.count += 1
                         this.recur = 1
-                        this.sleeping &= is_sleeping
                         this = this.up
                     end
                 end
@@ -1193,7 +1185,6 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                     this.up = parent
                     this.count += 1
                     this.recur = 1
-                    this.sleeping &= is_sleeping
                 end
                 parent = this
             end
@@ -1338,6 +1329,23 @@ function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoFlatDict)
 end
 
 ## Utilities
+function rtruncto(str::String, w::Int)
+    if textwidth(str) <= w
+        return str
+    else
+        return string("…", str[prevind(str, end, w-2):end])
+    end
+end
+function ltruncto(str::String, w::Int)
+    if textwidth(str) <= w
+        return str
+    else
+        return string(str[1:nextind(str, 1, w-2)], "…")
+    end
+end
+
+
+truncto(str::Symbol, w::Int) = truncto(string(str), w)
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
