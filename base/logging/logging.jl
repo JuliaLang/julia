@@ -671,16 +671,15 @@ limits i.e. `maxlog`, and writes to the stream.
 """
 struct SimpleLogger <: AbstractLogger
     stream::IO
-    stream_lock::ReentrantLock
+    lock::ReentrantLock
     min_level::LogLevel
     message_limits::Dict{Any,Int}
-    message_limits_lock::ReentrantLock
 end
-SimpleLogger(stream::IO, level=Info) = SimpleLogger(stream, ReentrantLock(), level, Dict{Any,Int}(), ReentrantLock())
+SimpleLogger(stream::IO, level=Info) = SimpleLogger(stream, ReentrantLock(), level, Dict{Any,Int}())
 SimpleLogger(level=Info) = SimpleLogger(closed_stream, level)
 
 shouldlog(logger::SimpleLogger, level, _module, group, id) =
-    @lock logger.message_limits_lock get(logger.message_limits, id, 1) > 0
+    @lock logger.lock get(logger.message_limits, id, 1) > 0
 
 min_enabled_level(logger::SimpleLogger) = logger.min_level
 
@@ -691,7 +690,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     @nospecialize
     maxlog = get(kwargs, :maxlog, nothing)
     if maxlog isa Core.BuiltinInts
-        @lock logger.message_limits_lock begin
+        @lock logger.lock begin
             remaining = get!(logger.message_limits, id, Int(maxlog)::Int)
             remaining == 0 && return
             logger.message_limits[id] = remaining - 1
@@ -716,7 +715,7 @@ function handle_message(logger::SimpleLogger, level::LogLevel, message, _module,
     end
     println(iob, "└ @ ", _module, " ", filepath, ":", line)
     b = take!(buf)
-    @lock logger.stream_lock write(stream, b)
+    @lock logger.lock write(stream, b)
     nothing
 end
 
