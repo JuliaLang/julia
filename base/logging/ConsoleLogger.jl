@@ -27,7 +27,7 @@ Message formatting can be controlled by setting keyword arguments:
 """
 struct ConsoleLogger <: AbstractLogger
     stream::IO
-    lock::ReentrantLock
+    lock::ReentrantLock # do not log within this lock
     min_level::LogLevel
     meta_formatter
     show_limited::Bool
