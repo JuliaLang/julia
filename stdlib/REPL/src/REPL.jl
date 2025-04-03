@@ -38,7 +38,7 @@ function __init__()
     return nothing
 end
 
-using Base.Meta, Sockets, StyledStrings
+using Base.Meta, Sockets
 import InteractiveUtils
 
 export
