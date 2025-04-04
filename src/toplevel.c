@@ -309,7 +309,7 @@ void jl_declare_global(jl_module_t *m, jl_value_t *arg, jl_value_t *set_type, in
                     goto check_type;
                 }
                 check_safe_newbinding(gm, gs);
-                if (bpart->min_world == new_world) {
+                if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
                     bpart->kind = new_kind | (bpart->kind & PARTITION_MASK_FLAG);
                     bpart->restriction = global_type;
                     if (global_type)
@@ -730,7 +730,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
     jl_binding_partition_t *bpart = jl_declare_constant_val3(b, mod, var, val, constant_kind, new_world);
-    if (bpart->min_world == new_world)
+    if (jl_atomic_load_relaxed(&bpart->min_world) == new_world)
         jl_atomic_store_release(&jl_world_counter, new_world);
     JL_UNLOCK(&world_counter_lock);
     return bpart;
