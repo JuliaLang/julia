@@ -239,8 +239,7 @@ end
 """
     *(s::Union{AbstractString, AbstractChar}, t::Union{AbstractString, AbstractChar}...)::AbstractString
 
-Concatenate strings and/or characters, producing a [`String`](@ref) or
-[`AnnotatedString`](@ref) (as appropriate). This is equivalent to calling the
+Concatenate strings and/or characters, producing a [`String`](@ref). This is equivalent to calling the
 [`string`](@ref) or [`annotatedstring`](@ref) function on the arguments. Concatenation of built-in string
 types always produces a value of type `String` but other string types may choose
 to return a string of a different type as appropriate.
@@ -255,20 +254,10 @@ julia> 'j' * "ulia"
 ```
 """
 function (*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...)
-    if _isannotated(s1) || any(_isannotated, ss)
-        annotatedstring(s1, ss...)
-    else
-        string(s1, ss...)
-    end
+    string(s1, ss...)
 end
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
-
-# This could be written as a single statement with three ||-clauses, however then effect
-# analysis thinks it may throw and runtime checks are added.
-# Also see `substring.jl` for the `::SubString{T}` method.
-_isannotated(S::Type) = S != Union{} && (S <: AnnotatedString || S <: AnnotatedChar)
-_isannotated(s) = _isannotated(typeof(s))
 
 ## generic string comparison ##
 
@@ -320,8 +309,7 @@ end
     ==(a::AbstractString, b::AbstractString)::Bool
 
 Test whether two strings are equal character by character (technically, Unicode
-code point by code point). Should either string be a [`AnnotatedString`](@ref) the
-string properties must match too.
+code point by code point).
 
 # Examples
 ```jldoctest

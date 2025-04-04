@@ -38,8 +38,6 @@ public clear,
     Allocs
 
 import Base.StackTraces: lookup, UNKNOWN, show_spec_linfo, StackFrame
-import Base: AnnotatedString
-using StyledStrings: @styled_str
 
 const nmeta = 4 # number of metadata fields per block (threadid, taskid, cpu_cycle_clock, thread_sleeping)
 
@@ -89,10 +87,10 @@ end
 
 # An internal function called to show the report after an information request (SIGINFO or SIGUSR1).
 function _peek_report()
-    iob = Base.AnnotatedIOBuffer()
+    iob = IOBuffer()
     ioc = IOContext(IOContext(iob, stderr), :displaysize=>displaysize(stderr))
     print(ioc, groupby = [:thread, :task])
-    Base.print(stderr, read(seekstart(iob), AnnotatedString))
+    Base.print(stderr, String(take!(iob)))
 end
 # This is a ref so that it can be overridden by other profile info consumers.
 const peek_report = Ref{Function}(_peek_report)
@@ -853,40 +851,6 @@ function flat(io::IO, data::Vector{UInt64}, lidict::Union{LineInfoDict, LineInfo
     return false
 end
 
-# make a terminal-clickable link to the file and linenum.
-# Similar to `define_default_editors` in `Base.Filesystem` but for creating URIs not commands
-function editor_link(path::String, linenum::Int)
-    # Note: the editor path can include spaces (if escaped) and flags.
-    editor = nothing
-    for var in ["JULIA_EDITOR", "VISUAL", "EDITOR"]
-        str = get(ENV, var, nothing)
-        str isa String || continue
-        editor = str
-        break
-    end
-    path_encoded = Base.Filesystem.encode_uri_component(path)
-    if editor !== nothing
-        if editor == "code"
-            return "vscode://file/$path_encoded:$linenum"
-        elseif editor == "subl" || editor == "sublime_text"
-            return "subl://open?url=file://$path_encoded&line=$linenum"
-        elseif editor == "idea" || occursin("idea", editor)
-            return "idea://open?file=$path_encoded&line=$linenum"
-        elseif editor == "pycharm"
-            return "pycharm://open?file=$path_encoded&line=$linenum"
-        elseif editor == "atom"
-            return "atom://core/open/file?filename=$path_encoded&line=$linenum"
-        elseif editor == "emacsclient" || editor == "emacs"
-            return "emacs://open?file=$path_encoded&line=$linenum"
-        elseif editor == "vim" || editor == "nvim"
-            # Note: Vim/Nvim may not support standard URI schemes without specific plugins
-            return "vim://open?file=$path_encoded&line=$linenum"
-        end
-    end
-    # fallback to generic URI, but line numbers are not supported by generic URI
-    return Base.Filesystem.uripath(path)
-end
-
 function print_flat(io::IO, lilist::Vector{StackFrame},
         n::Vector{Int}, m::Vector{Int},
         cols::Int, filenamemap::FileNameMap,
@@ -950,12 +914,7 @@ function print_flat(io::IO, lilist::Vector{StackFrame},
                 Base.print(io, slash)
                 wpad -= 1
             end
-            if isempty(path)
-                Base.print(io, rpad(file_trunc, wpad, " "))
-            else
-                link = editor_link(path, li.line)
-                Base.print(io, rpad(styled"{link=$link:$file_trunc}", wpad, " "))
-            end
+            Base.print(io, rpad(file_trunc, wpad, " "))
             Base.print(io, lpad(li.line > 0 ? string(li.line) : "?", wline, " "), " ")
             fname = funcnames[i]
             if !li.from_c && li.linfo !== nothing
@@ -980,14 +939,13 @@ mutable struct StackFrameTree{T} # where T <: Union{UInt64, StackFrame}
     flat_count::Int     # number of times this frame was in the flattened representation (unlike count, this'll sum to 100% of parent)
     max_recur::Int      # maximum number of times this frame was the *top* of the recursion in the stack
     count_recur::Int    # sum of the number of times this frame was the *top* of the recursion in a stack (divide by count to get an average)
-    sleeping::Bool      # whether this frame was in a sleeping state
     down::Dict{T, StackFrameTree{T}}
     # construction workers:
     recur::Int
     builder_key::Vector{UInt64}
     builder_value::Vector{StackFrameTree{T}}
     up::StackFrameTree{T}
-    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, 0, 0, 0, 0, true, Dict{T, StackFrameTree{T}}(), 0, UInt64[], StackFrameTree{T}[])
+    StackFrameTree{T}() where {T} = new(UNKNOWN, 0, 0, 0, 0, 0, Dict{T, StackFrameTree{T}}(), 0, UInt64[], StackFrameTree{T}[])
 end
 
 
@@ -1004,7 +962,6 @@ end
 
 # mimics Stacktraces
 const PACKAGE_FIXEDCOLORS = Dict{String, Any}("@Base" => :gray, "@Core" => :gray)
-
 function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, maxes, filenamemap::FileNameMap, showpointer::Bool)
     nindent = min(cols>>1, level)
     ndigoverhead = ndigits(maxes.overhead)
@@ -1012,7 +969,7 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
     ndigline = ndigits(maximum(frame.frame.line for frame in frames)) + 6
     ntext = max(30, cols - ndigoverhead - nindent - ndigcounts - ndigline - 6)
     widthfile = 2*ntext÷5 # min 12
-    strs = Vector{AnnotatedString{String}}(undef, length(frames))
+    strs = Vector{String}(undef, length(frames))
     showextra = false
     if level > nindent
         nextra = level - nindent
@@ -1028,10 +985,6 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
             base = string(base, "+", nextra, " ")
         end
         strcount = rpad(string(frame.count), ndigcounts, " ")
-        if frame.sleeping
-            stroverhead = styled"{gray:$(stroverhead)}"
-            strcount = styled"{gray:$(strcount)}"
-        end
         if li != UNKNOWN
             if li.line == li.pointer
                 strs[i] = string(stroverhead, "╎", base, strcount, " ",
@@ -1044,7 +997,6 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                 else
                     fname = string(li.func)
                 end
-                frame.sleeping && (fname = styled"{gray:$(fname)}")
                 path, pkgname, filename = short_path(li.file, filenamemap)
                 if showpointer
                     fname = string(
@@ -1053,21 +1005,12 @@ function tree_format(frames::Vector{<:StackFrameTree}, level::Int, cols::Int, ma
                         " ",
                         fname)
                 end
-                pkgcolor = get!(() -> popfirst!(Base.STACKTRACE_MODULECOLORS), PACKAGE_FIXEDCOLORS, pkgname)
-                remaining_path = ltruncate(filename, max(1, widthfile - textwidth(pkgname) - 1))
-                linenum = li.line == -1 ? "?" : string(li.line)
-                _slash = (!isempty(pkgname) && !startswith(remaining_path, slash)) ? slash : ""
-                styled_path = styled"{$pkgcolor:$pkgname}$(_slash)$remaining_path:$linenum"
-                rich_file = if isempty(path)
-                    styled_path
-                else
-                    link = editor_link(path, li.line)
-                    styled"{link=$link:$styled_path}"
-                end
-                strs[i] = Base.annotatedstring(stroverhead, "╎", base, strcount, " ", rich_file, "  ", fname)
-                if frame.overhead > 0
-                    strs[i] = styled"{bold:$(strs[i])}"
-                end
+                strs[i] = string(stroverhead, "╎", base, strcount, " ",
+                    rtruncto(filename, widthfile),
+                    ":",
+                    li.line == -1 ? "?" : string(li.line),
+                    "; ",
+                    fname)
             end
         else
             strs[i] = string(stroverhead, "╎", base, strcount, " [unknown stackframe]")
@@ -1088,15 +1031,15 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
     skip = false
     nsleeping = 0
     is_task_profile = false
-    is_sleeping = true
     for i in startframe:-1:1
         (startframe - 1) >= i >= (startframe - (nmeta + 1)) && continue # skip metadata (it's read ahead below) and extra block end NULL IP
         ip = all[i]
         if is_block_end(all, i)
             # read metadata
             thread_sleeping_state = all[i - META_OFFSET_SLEEPSTATE] - 1 # subtract 1 as state is incremented to avoid being equal to 0
-            is_sleeping = thread_sleeping_state == 1
-            is_task_profile = thread_sleeping_state == 2
+            if thread_sleeping_state == 2
+                is_task_profile = true
+            end
             # cpu_cycle_clock = all[i - META_OFFSET_CPUCYCLECLOCK]
             taskid = all[i - META_OFFSET_TASKID]
             threadid = all[i - META_OFFSET_THREADID]
@@ -1151,7 +1094,6 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                         parent = build[j]
                         parent.recur += 1
                         parent.count_recur += 1
-                        parent.sleeping &= is_sleeping
                         found = true
                         break
                     end
@@ -1171,7 +1113,6 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                     while this !== parent && (recur === :off || this.recur == 0)
                         this.count += 1
                         this.recur = 1
-                        this.sleeping &= is_sleeping
                         this = this.up
                     end
                 end
@@ -1193,7 +1134,6 @@ function tree!(root::StackFrameTree{T}, all::Vector{UInt64}, lidict::Union{LineI
                     this.up = parent
                     this.count += 1
                     this.recur = 1
-                    this.sleeping &= is_sleeping
                 end
                 parent = this
             end
@@ -1239,7 +1179,7 @@ end
 function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat, is_subsection::Bool) where T
     maxes = maxstats(bt)
     filenamemap = FileNameMap()
-    worklist = [(bt, 0, 0, AnnotatedString(""))]
+    worklist = [(bt, 0, 0, "")]
     if !is_subsection
         Base.print(io, "Overhead ╎ [+additional indent] Count File:Line  Function\n")
         Base.print(io, "=========================================================\n")
@@ -1272,7 +1212,7 @@ function print_tree(io::IO, bt::StackFrameTree{T}, cols::Int, fmt::ProfileFormat
             count = down.count
             count < fmt.mincount && continue
             count < noisefloor && continue
-            str = strs[i]::AnnotatedString
+            str = strs[i]::String
             noisefloor_down = fmt.noisefloor > 0 ? floor(Int, fmt.noisefloor * sqrt(count)) : 0
             pushfirst!(worklist, (down, level + 1, noisefloor_down, str))
         end
@@ -1338,6 +1278,23 @@ function callersf(matchfunc::Function, bt::Vector, lidict::LineInfoFlatDict)
 end
 
 ## Utilities
+function rtruncto(str::String, w::Int)
+    if textwidth(str) <= w
+        return str
+    else
+        return string("…", str[prevind(str, end, w-2):end])
+    end
+end
+function ltruncto(str::String, w::Int)
+    if textwidth(str) <= w
+        return str
+    else
+        return string(str[1:nextind(str, 1, w-2)], "…")
+    end
+end
+
+
+truncto(str::Symbol, w::Int) = truncto(string(str), w)
 
 # Order alphabetically (file, function) and then by line number
 function liperm(lilist::Vector{StackFrame})
