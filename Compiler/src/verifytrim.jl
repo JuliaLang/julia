@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import ..Compiler: verify_typeinf_trim
+import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call
 
 using ..Compiler:
      # operators
@@ -221,8 +221,8 @@ function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspec
                     end
                 elseif Core.finalizer isa ftyp
                     if length(stmt.args) == 3
-                        finalizer = argextype(stmt.args[2], ci, sptypes)
-                        obj = argextype(stmt.args[3], ci, sptypes)
+                        finalizer = argextype(stmt.args[2], codeinfo, sptypes)
+                        obj = argextype(stmt.args[3], codeinfo, sptypes)
                         atype = argtypes_to_type(Any[finalizer, obj])
 
                         mi = compileable_specialization_for_call(interp, atype)
