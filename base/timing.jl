@@ -289,6 +289,10 @@ macro __tryfinally(ex, fin)
        )
 end
 
+macro latestworld_if_toplevel()
+    Expr(Symbol("latestworld-if-toplevel"))
+end
+
 """
     @time expr
     @time "description" expr
@@ -618,6 +622,7 @@ macro timed(ex)
         local elapsedtime = time_ns()
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
+        @latestworld_if_toplevel
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() - elapsedtime;
             cumulative_compile_timing(false);
@@ -644,6 +649,7 @@ end
 macro time_imports(ex)
     quote
         Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+        @latestworld_if_toplevel
         @__tryfinally(
             # try
             $(esc(ex)),
@@ -656,6 +662,7 @@ end
 macro trace_compile(ex)
     quote
         ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+        @latestworld_if_toplevel
         @__tryfinally(
             # try
             $(esc(ex)),
@@ -668,6 +675,7 @@ end
 macro trace_dispatch(ex)
     quote
         ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+        @latestworld_if_toplevel
         @__tryfinally(
             # try
             $(esc(ex)),
