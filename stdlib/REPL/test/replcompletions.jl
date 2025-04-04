@@ -2511,7 +2511,7 @@ Base.getproperty(::F54131, ::Symbol) = Any[cos, sin, g54131][rand(1:3)]
     f = F54131()
     s = "f.x("
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)
-    @test isempty(a)
+    @test only(a) isa REPLCompletions.TextCompletion
     @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
 
     s = "f.x(kwa"
