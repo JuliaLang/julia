@@ -1683,7 +1683,7 @@ answer_color(r::StreamREPL) = r.answer_color
 input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
-let matchend = Dict("\"" => r"\"", "\"\"\"" => r"\"\"\"", "'" => r"'",
+let matchend = Dict("\"" => r"\"", "\"\"\"" => r"\"\"\"", "[^ =<>≠≤≥(]'" => r"'",
     "`" => r"`", "```" => r"```", "#" => r"$"m, "#=" => r"=#|#=")
     global _rm_strings_and_comments
     function _rm_strings_and_comments(code::Union{String,SubString{String}})
