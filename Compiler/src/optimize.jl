@@ -240,6 +240,22 @@ include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
+function ir_to_codeinf!(opt::OptimizationState, frame::InferenceState, edges::SimpleVector)
+    ir_to_codeinf!(opt, edges, compute_inlining_cost(frame.interp, frame.result, opt.optresult))
+end
+
+function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector, inlining_cost::InlineCostType)
+    src = ir_to_codeinf!(opt, edges)
+    src.inlining_cost = inlining_cost
+    src
+end
+
+function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector)
+    src = ir_to_codeinf!(opt)
+    src.edges = edges
+    src
+end
+
 function ir_to_codeinf!(opt::OptimizationState)
     (; linfo, src, optresult) = opt
     if optresult === nothing

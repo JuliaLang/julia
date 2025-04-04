@@ -126,6 +126,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
         if !discard_src
             inferred_result = transform_result_for_cache(interp, result, edges)
+            if inferred_result !== nothing
+                uncompressed = inferred_result
+            end
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
             if inferred_result isa CodeInfo
                 result.src = inferred_result
@@ -135,7 +138,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                     resize!(inferred_result.slotnames, nslots)
                 end
                 di = inferred_result.debuginfo
-                uncompressed = inferred_result
                 inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result)
                 result.is_src_volatile = false
             elseif ci.owner === nothing
@@ -156,10 +158,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         codegen = codegen_cache(interp)
         if !discard_src && codegen !== nothing && (isa(uncompressed, CodeInfo) || isa(uncompressed, OptimizationState))
             if isa(uncompressed, OptimizationState)
-                inlining_cost = compute_inlining_cost(interp, result, uncompressed.optresult)
-                uncompressed = ir_to_codeinf!(uncompressed)
-                uncompressed.edges = edges
-                uncompressed.inlining_cost = inlining_cost
+                uncompressed = ir_to_codeinf!(uncompressed, caller, edges)
             end
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
             codegen[ci] = uncompressed
@@ -377,37 +376,34 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
 end
 
 function transform_result_for_cache(interp::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
+    inlining_cost = nothing
     src = result.src
-    inline_cost = MAX_INLINE_COST
     if isa(src, OptimizationState)
-        can_discard_trees = may_discard_trees(interp)
-        or = src.optresult
-        if can_discard_trees && or.inline_flag == SRC_FLAG_DECLARED_NOINLINE
-            src.src.inlining_cost = inline_cost
+        opt = src
+        inlining_cost = compute_inlining_cost(interp, result, opt.optresult)
+        if discard_optimized_result(interp, opt, inlining_cost)
+            opt.src.inlining_cost = inlining_cost
             return nothing
         end
-        inline_cost = inline_cost_model(interp, result, or.inline_flag, or.ir)
-        if can_discard_trees && inline_cost == MAX_INLINE_COST
-            src.src.inlining_cost = inline_cost
-            return nothing
-        end
-        src = ir_to_codeinf!(src)
+        src = ir_to_codeinf!(opt)
     end
     if isa(src, CodeInfo)
         src.edges = edges
-        src.inlining_cost = inline_cost
+        src.inlining_cost = inlining_cost !== nothing ? inlining_cost : compute_inlining_cost(interp, result)
     end
     return src
+end
+
+function discard_optimized_result(interp::AbstractInterpreter, opt#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
+    may_discard_trees(interp) || return false
+    return inlining_cost == MAX_INLINE_COST
 end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
     isa(def, Method) || return ci # don't compress toplevel code
-    if may_compress(interp)
-        return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
-    else
-        return ci
-    end
+    may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
+    return ci
 end
 
 function cache_result!(interp::AbstractInterpreter, result::InferenceResult, ci::CodeInstance)
@@ -1180,8 +1176,7 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
         else
             opt = OptimizationState(frame, interp)
             optimize(interp, opt, frame.result)
-            src = ir_to_codeinf!(opt)
-            src.edges = Core.svec(opt.inlining.edges...)
+            src = ir_to_codeinf!(opt, frame, Core.svec(opt.inlining.edges...))
         end
         result.src = frame.src = src
     end
