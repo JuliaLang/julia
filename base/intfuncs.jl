@@ -1338,7 +1338,13 @@ function clamp(x, ::Type{T}) where {T<:Integer}
     # think of, e.g., clamp(big(2) ^ 200, Int16)
     lo = typemin(T)
     hi = typemax(T)
-    return (x > hi) ? hi : (x < lo) ? lo : x % T
+    return if x > hi
+        hi
+    elseif x < lo
+        lo
+    else
+        x isa Integer ? x % T : T(x)
+    end
 end
 
 
