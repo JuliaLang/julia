@@ -316,7 +316,7 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
                 maxworld = 0
             else
                 matched = Any[matched.method]
-                if matched[] != expected
+                if matched[] !== expected
                     maxworld = 0
                 end
             end
