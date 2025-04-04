@@ -115,7 +115,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             store_backedges(ci, edges)
         end
         inferred_result = nothing
-        uncompressed = inferred_result
+        uncompressed = result.src
         const_flag = is_result_constabi_eligible(result)
         discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
         if !discard_src
@@ -148,7 +148,10 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, di, edges)
         engine_reject(interp, ci)
         codegen = codegen_cache(interp)
-        if !discard_src && codegen !== nothing && uncompressed isa CodeInfo
+        if !discard_src && codegen !== nothing && uncompressed !== nothing
+            if !(uncompressed isa CodeInfo)
+                uncompressed = ir_to_codeinf!(uncompressed)
+            end
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
             codegen[ci] = uncompressed
             if bootstrapping_compiler && inferred_result == nothing
@@ -304,13 +307,69 @@ function is_result_constabi_eligible(result::InferenceResult)
     return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
 
-function transform_result_for_cache(::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
+function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
+        declared_inline::Bool, ir::IRCode)
+    mi = result.linfo
+    (; def, specTypes) = mi
+    if !isa(def, Method)
+        return MAX_INLINE_COST
+    end
+
+    rt = result.result
+    @assert !(rt isa LimitedAccuracy)
+    rt = widenslotwrapper(rt)
+
+    sig = unwrap_unionall(specTypes)
+    if !(isa(sig, DataType) && sig.name === Tuple.name)
+        return MAX_INLINE_COST
+    end
+    if !declared_inline && rt === Bottom
+        return MAX_INLINE_COST
+    end
+
+    if declared_inline && isdispatchtuple(specTypes)
+        # obey @inline declaration if a dispatch barrier would not help
+        return MIN_INLINE_COST
+    else
+        # compute the cost (size) of inlining this code
+        params = OptimizationParams(interp)
+        cost_threshold = default = params.inline_cost_threshold
+        if ⊑(optimizer_lattice(interp), rt, Tuple) && !isconcretetype(widenconst(rt))
+            cost_threshold += params.inline_tupleret_bonus
+        end
+        # if the method is declared as `@inline`, increase the cost threshold 20x
+        if declared_inline
+            cost_threshold += 19*default
+        end
+        # a few functions get special treatment
+        if def.module === _topmod(def.module)
+            name = def.name
+            if name === :iterate || name === :unsafe_convert || name === :cconvert
+                cost_threshold += 4*default
+            end
+        end
+        return inline_cost_model(ir, params, cost_threshold)
+    end
+end
+
+function transform_result_for_cache(interp::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
     src = result.src
+    inline_cost = MAX_INLINE_COST
     if isa(src, OptimizationState)
+        can_discard_trees = may_discard_trees(interp)
+        or = src.optresult
+        if can_discard_trees && or.inline_flag == SRC_FLAG_DECLARED_NOINLINE
+            return nothing
+        end
+        inline_cost = inline_cost_model(interp, result, or.inline_flag == SRC_FLAG_DECLARED_INLINE, or.ir)
+        if can_discard_trees && inline_cost == MAX_INLINE_COST
+            return nothing
+        end
         src = ir_to_codeinf!(src)
     end
     if isa(src, CodeInfo)
         src.edges = edges
+        src.inlining_cost = inline_cost
     end
     return src
 end
@@ -318,16 +377,10 @@ end
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
     isa(def, Method) || return ci # don't compress toplevel code
-    can_discard_trees = may_discard_trees(interp)
-    cache_the_tree = !can_discard_trees || is_inlineable(ci)
-    if cache_the_tree
-        if may_compress(interp)
-            return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
-        else
-            return ci
-        end
+    if may_compress(interp)
+        return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
     else
-        return nothing
+        return ci
     end
 end
 
