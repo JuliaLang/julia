@@ -477,3 +477,5 @@ module GeneratedScope57417
     end
     @test g() == 1
 end
+
+@test_throws "syntax: expression too large" code_lowered(ntuple, (Returns{Nothing}, Val{1000000}))
