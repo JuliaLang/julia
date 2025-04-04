@@ -30,29 +30,53 @@ end
     # Only sensible for buffered streams, not defined by default
     # for old IOs
     io = buffered("")
-    @test iszero(bytesavailable)
+    @test iszero(bytesavailable(io))
     v = readavailable(io)
     @test v isa Vector{UInt8} && v == UInt8[]
 
     io = buffered("abcdefghij")
     @test bytesavailable(io) == 0
-    @test isempty(readavailable(io))
     fillbuffer(io)
+    n = bytesavailable(io)
     @test bytesavailable(io) == 8
     @test readavailable(io) == b"abcdefgh"
     @test bytesavailable(io) == 0
-    @test isempty(readavailable(io))
+
     fillbuffer(io)
     @test bytesavailable(io) == 2
     @test readavailable(io) == b"ij"
     @test bytesavailable(io) == 0
     @test isempty(readavailable(io))
+
+    # Test: readavailable will fill buffer if empty
+    io = buffered("abcdefghij")
+    @test bytesavailable(io) == 0
+    @test readavailable(io) == b"abcdefgh"
+    @test bytesavailable(io) == 0
+    @test readavailable(io) == b"ij"
 end
+
+# The following function requires `eof`, so define it here.
+Base.eof(io::GenericOldIO) = eof(io.inner)
+Base.eof(io::GenericUnbufferedIO) = eof(io.inner)
 
 @testset "readbytes!" begin
-    @testset "buffered" begin
+    for T in [GenericBufferedIO, GenericUnbufferedIO, GenericOldIO]
+        # Resizing
+        s = "abcdefg"
+        io = T(IOBuffer(s))
+        v = UInt8[]
+        @test readbytes!(io, v, 7) == 7
+        @test v == b"abcdefg"
+
+        # With exact/larger buffer
+        io = T(IOBuffer(s))
+        v = zeros(UInt8, 4)
+        @test readbytes!(io, v) == 4
+        @test v == b"abcd"
+        @test readbytes!(io, v) == 3
+        @test v == b"efgd"
     end
 end
-
 
 end # module

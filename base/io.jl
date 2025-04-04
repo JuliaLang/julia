@@ -164,6 +164,7 @@ function readinto!(io::IO, v::AbstractVector{UInt8})
     buffer = @something get_nonempty_reading_buffer(io) return 0
     mn = min(length(v), length(buffer))
     copyto!(v, firstindex(v), buffer, 1, mn)
+    consume(io, mn)
     mn
 end
 
@@ -195,49 +196,53 @@ function readbytes!(io::IO, b::AbstractArray{UInt8}, nb=length(b))
             readbuffering(typeof(io)) == NotBuffered() ||
             hasmethod(getbuffer, Tuple{typeof(io)})
         )
-        readbytes_readinto!(io, b, nb)
+        readbytes_new!(io, b, nb)
     else
         readbytes_readbyte!(io, b, nb)
     end
 end
 
-function readbytes_readinto!(io::IO, b::AbstractVector{UInt8}, nb::Int)
+function readbytes_new!(io::IO, b::AbstractVector{UInt8}, nb::Int)
     n_read = 0
-    vw = view(b, n_read + 1 : min(lastindex(b), nb))
+    vw = view(b, 1 : min(lastindex(b), nb))
     resized = false
-    # Unfortunately, we need this to robustly detect EOF. Hopefully, it can be stack
-    # allocated.
-    buffer = Memory{UInt8}(undef, 1)
     while n_read < nb
         if n_read == length(b)
-            # If we need to read more bytes, but there is no more room, we only resize if the IO
-            # is not EOF. To check this, we read 1 byte into a separate buffer.
-            n = readinto!(io, buffer)
-            iszero(n) && return n_read
-            # Else, resize with some extra space for new allocations.
-            resize!(b, overallocation(length(b)))
-            n_read += 1
-            b[n_read] = only(buffer)
+            eof(io) && return n_read
+            resize!(b, min(nb, overallocation(length(b))))
             resized = true
-            vw = view(b, n_read + 2 : min(lastindex(b), nb))
+            vw = view(b, n_read + 1 : min(lastindex(b), nb))
         end
-        # This can't be empty, because either we just resized, or else n_read < b,
-        # and we know n_read < nb.
-        # The only case this could be empty is if the resize only add one extra byte,
-        # despite requesting more (which is presumably a bug in resize)
         @assert !isempty(vw)
         n = readinto!(io, vw)
-        # Since vw is nonempty, this indicates io is EOF
         if iszero(n)
-            # If we resized the buffer before, we need to shrink it to fit,
-            # We don't shrink if we didn't resize the buffer, as per the docs.
-            resized == resize!(b, n_read)
+            resized && resize!(b, n_read)
             return n_read
         end
         n_read += n
     end
     return n_read
 end
+
+function readbytes_readbyte!(s::IO, b::AbstractArray{UInt8}, nb::Int)
+    require_one_based_indexing(b)
+    olb = lb = length(b)
+    nr = 0
+    while nr < nb && !eof(s)
+        a = read(s, UInt8)
+        nr += 1
+        if nr > lb
+            lb = nr * 2
+            resize!(b, lb)
+        end
+        b[nr] = a
+    end
+    if lb > olb
+        resize!(b, nr) # shrink to just contain input data if was resized
+    end
+    return nr
+end
+
 
 ################### Helper functions ###########################
 
@@ -1410,25 +1415,6 @@ julia> rm("my_file.txt");
 ```
 """
 readchomp(x) = chomp(read(x, String))
-
-function readbytes_readbyte!(s::IO, b::AbstractArray{UInt8}, nb::Int)
-    require_one_based_indexing(b)
-    olb = lb = length(b)
-    nr = 0
-    while nr < nb && !eof(s)
-        a = read(s, UInt8)
-        nr += 1
-        if nr > lb
-            lb = nr * 2
-            resize!(b, lb)
-        end
-        b[nr] = a
-    end
-    if lb > olb
-        resize!(b, nr) # shrink to just contain input data if was resized
-    end
-    return nr
-end
 
 """
     read(s::IO, nb=typemax(Int))
