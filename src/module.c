@@ -20,7 +20,7 @@ static jl_binding_partition_t *new_binding_partition(void)
     jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_gc_alloc(jl_current_task->ptls, sizeof(jl_binding_partition_t), jl_binding_partition_type);
     bpart->restriction = NULL;
     bpart->kind = (size_t)PARTITION_KIND_GUARD;
-    bpart->min_world = 0;
+    jl_atomic_store_relaxed(&bpart->min_world, 0);
     jl_atomic_store_relaxed(&bpart->max_world, (size_t)-1);
     jl_atomic_store_relaxed(&bpart->next, NULL);
     return bpart;
@@ -40,9 +40,12 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition__(jl_binding_t *b
 {
     // Iterate through the list of binding partitions, keeping track of where to insert a new one for an implicit
     // resolution if necessary.
-    while (gap->replace && world < gap->replace->min_world) {
+    while (gap->replace) {
+        size_t replace_min_world = jl_atomic_load_relaxed(&gap->replace->min_world);
+        if (world >= replace_min_world)
+            break;
         gap->insert = &gap->replace->next;
-        gap->max_world = gap->replace->min_world - 1;
+        gap->max_world = replace_min_world - 1;
         gap->parent = (jl_value_t*)gap->replace;
         gap->replace = jl_atomic_load_relaxed(gap->insert);
     }
@@ -126,13 +129,70 @@ static void update_implicit_resolution(struct implicit_search_resolution *to_upd
 
 static jl_binding_partition_t *jl_implicit_import_resolved(jl_binding_t *b, struct implicit_search_gap gap, struct implicit_search_resolution resolution)
 {
+    size_t new_kind = resolution.ultimate_kind | gap.inherited_flags;
+    size_t new_max_world = gap.max_world < resolution.max_world ? gap.max_world : resolution.max_world;
+    size_t new_min_world = gap.min_world > resolution.min_world ? gap.min_world : resolution.min_world;
+    jl_binding_partition_t *next = gap.replace;
+    if (jl_is_binding_partition(gap.parent)) {
+        // Check if we can merge this into the previous binding partition
+        jl_binding_partition_t *prev = (jl_binding_partition_t *)gap.parent;
+        size_t expected_prev_min_world = new_max_world + 1;
+        if (prev->restriction == resolution.binding_or_const && prev->kind == new_kind) {
+            if (!jl_atomic_cmpswap(&prev->min_world, &expected_prev_min_world, new_min_world)) {
+                if (expected_prev_min_world <= new_min_world) {
+                    return prev;
+                }
+                else if (expected_prev_min_world <= new_max_world) {
+                    // Concurrent modification by another thread - bail.
+                    return NULL;
+                }
+                // There remains a gap - proceed
+            } else {
+                if (next) {
+                    size_t next_min_world = jl_atomic_load_relaxed(&next->min_world);
+                    expected_prev_min_world = new_min_world;
+                    for (;;) {
+                        // We've updated the previous partition - check if we've closed a gap
+                        size_t next_max_world = jl_atomic_load_relaxed(&next->max_world);
+                        if (next_max_world == expected_prev_min_world-1 && next->kind == new_kind && next->restriction == resolution.binding_or_const) {
+                            if (jl_atomic_cmpswap(&prev->min_world, &expected_prev_min_world, next_min_world)) {
+                                jl_binding_partition_t *nextnext = jl_atomic_load_relaxed(&next->next);
+                                if (!jl_atomic_cmpswap(&prev->next, &next, nextnext)) {
+                                    // `next` may have been merged into its subsequent partition - we need to retry
+                                    assert(next);
+                                    continue;
+                                }
+                                // N.B.: This can lose modifications to next->{min_world, next}.
+                                // However, those modifications could only have been for another implicit
+                                // partition, so we are ok to lose them and recompute them later if necessary.
+                            }
+                            assert(expected_prev_min_world <= new_min_world);
+                        }
+                        break;
+                    }
+                }
+                return prev;
+            }
+        }
+    }
     jl_binding_partition_t *new_bpart = new_binding_partition();
-    jl_atomic_store_relaxed(&new_bpart->max_world, gap.max_world < resolution.max_world ? gap.max_world : resolution.max_world);
-    new_bpart->min_world = gap.min_world > resolution.min_world ? gap.min_world : resolution.min_world;
-    new_bpart->kind = resolution.ultimate_kind | gap.inherited_flags;
+    jl_atomic_store_relaxed(&new_bpart->max_world, new_max_world);
+    new_bpart->kind = new_kind;
     new_bpart->restriction = resolution.binding_or_const;
     jl_gc_wb_fresh(new_bpart, new_bpart->restriction);
-    jl_atomic_store_relaxed(&new_bpart->next, gap.replace);
+
+    if (next) {
+        // See if we can merge the next partition into this one
+        size_t next_max_world = jl_atomic_load_relaxed(&next->max_world);
+        if (next_max_world == new_min_world - 1 && next->kind == new_kind && next->restriction == resolution.binding_or_const) {
+            // See above for potentially losing modifications to next.
+            new_min_world = jl_atomic_load_acquire(&next->min_world);
+            next = jl_atomic_load_relaxed(&next->next);
+        }
+    }
+
+    jl_atomic_store_relaxed(&new_bpart->min_world, new_min_world);
+    jl_atomic_store_relaxed(&new_bpart->next, next);
     if (!jl_atomic_cmpswap(gap.insert, &gap.replace, new_bpart))
         return NULL;
     jl_gc_wb(gap.parent, new_bpart);
@@ -170,13 +230,11 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
         struct _jl_module_using data = *module_usings_getidx(m, i);
         JL_UNLOCK(&m->lock);
         if (data.min_world > world) {
-            if (max_world > data.min_world)
-                max_world = data.min_world - 1;
+            max_world = WORLDMIN(max_world, data.min_world - 1);
             continue;
         }
         if (data.max_world < world) {
-            if (min_world < data.max_world)
-                min_world = data.max_world + 1;
+            min_world = WORLDMAX(min_world, data.max_world + 1);
             continue;
         }
 
@@ -198,7 +256,7 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
 
         while (tempbpart && jl_bkind_is_some_explicit_import(jl_binding_kind(tempbpart))) {
             max_world = WORLDMIN(max_world, jl_atomic_load_relaxed(&tempbpart->max_world));
-            min_world = WORLDMAX(min_world, tempbpart->min_world);
+            min_world = WORLDMAX(min_world, jl_atomic_load_relaxed(&tempbpart->min_world));
 
             tempb = (jl_binding_t*)tempbpart->restriction;
             tempbpart = jl_get_binding_partition_if_present(tempb, world, &gap);
@@ -206,7 +264,7 @@ struct implicit_search_resolution jl_resolve_implicit_import(jl_binding_t *b, mo
 
         int tempbpart_valid = tempbpart && (trust_cache || !jl_bkind_is_some_implicit(jl_binding_kind(tempbpart)));
         size_t tembppart_max_world = tempbpart_valid ? jl_atomic_load_relaxed(&tempbpart->max_world) : gap.max_world;
-        size_t tembppart_min_world = tempbpart ? WORLDMAX(tempbpart->min_world, gap.min_world) : gap.min_world;
+        size_t tembppart_min_world = tempbpart ? WORLDMAX(jl_atomic_load_relaxed(&tempbpart->min_world), gap.min_world) : gap.min_world;
 
         max_world = WORLDMIN(max_world, tembppart_max_world);
         min_world = WORLDMAX(min_world, tembppart_min_world);
@@ -279,8 +337,15 @@ JL_DLLEXPORT jl_binding_partition_t *jl_maybe_reresolve_implicit(jl_binding_t *b
         assert(bpart == jl_atomic_load_relaxed(&b->partitions));
         assert(bpart);
         struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, new_max_world+1, 0);
-        if (resolution.min_world == bpart->min_world) {
-            assert(bpart->restriction == resolution.binding_or_const && jl_binding_kind(bpart) == resolution.ultimate_kind);
+        int resolution_unchanged = bpart->restriction == resolution.binding_or_const && jl_binding_kind(bpart) == resolution.ultimate_kind;
+        size_t bpart_min_world = jl_atomic_load_relaxed(&bpart->min_world);
+        if (resolution.min_world == bpart_min_world) {
+            // The resolution has the same world bounds - it must be unchanged
+            assert(resolution_unchanged);
+            return bpart;
+        } else if (resolution_unchanged) {
+            // If the resolution is unchanged, we can still keep the bpart
+            assert(resolution.min_world > bpart_min_world);
             return bpart;
         }
         assert(resolution.min_world == new_max_world+1 && "Missed an invalidation or bad resolution bounds");
@@ -299,7 +364,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_maybe_reresolve_implicit(jl_binding_t *b
 JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t *bpart)
 {
     struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, jl_atomic_load_relaxed(&jl_world_counter), 0);
-    bpart->min_world = resolution.min_world;
+    jl_atomic_store_relaxed(&bpart->min_world, resolution.min_world);
     jl_atomic_store_relaxed(&bpart->max_world, resolution.max_world);
     bpart->restriction = resolution.binding_or_const;
     bpart->kind = resolution.ultimate_kind;
@@ -336,7 +401,8 @@ jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) 
 jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b, jl_binding_partition_t *prev, size_t world) JL_GLOBALLY_ROOTED {
     // Helper for getting a binding partition for an older world after we've already looked up the partition for a newer world
     assert(b);
-    assert(prev->min_world > world);
+    // TODO: Is it possible for a concurrent lookup to have expanded this bpart, making this false?
+    assert(jl_atomic_load_relaxed(&prev->min_world) > world);
     return jl_get_binding_partition_(b, (jl_value_t*)prev, &prev->next, world, NULL);
 }
 
@@ -362,10 +428,11 @@ JL_DLLEXPORT int jl_get_binding_leaf_partitions_restriction_kind(jl_binding_t *b
     while (validated_min_world > min_world) {
         bpart = bpart ? jl_get_binding_partition_with_hint(b, bpart, validated_min_world - 1) :
                         jl_get_binding_partition(b, validated_min_world - 1);
-        while (validated_min_world > min_world && validated_min_world > bpart->min_world) {
+        size_t bpart_min_world = jl_atomic_load_relaxed(&bpart->min_world);
+        while (validated_min_world > min_world && validated_min_world > bpart_min_world) {
             jl_binding_t *curb = b;
             jl_binding_partition_t *curbpart = bpart;
-            size_t cur_min_world = bpart->min_world;
+            size_t cur_min_world = bpart_min_world;
             size_t cur_max_world = validated_min_world - 1;
             jl_walk_binding_inplace_worlds(&curb, &curbpart, &cur_min_world, &cur_max_world, &maybe_depwarn, cur_max_world);
             enum jl_partition_kind kind = jl_binding_kind(curbpart);
@@ -494,7 +561,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
             jl_errorf("cannot declare %s.%s constant; it was already declared global",
                       jl_symbol_name(mod->name), jl_symbol_name(var));
         }
-        if (bpart->min_world == new_world) {
+        if (jl_atomic_load_relaxed(&bpart->min_world) == new_world) {
             bpart->kind = constant_kind | (bpart->kind & PARTITION_MASK_FLAG);
             bpart->restriction = val;
             if (val)
@@ -515,9 +582,10 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
                     need_backdate = 0;
                     break;
                 }
-                if (prev_bpart->min_world == 0)
+                size_t prev_bpart_min_world = jl_atomic_load_relaxed(&prev_bpart->min_world);
+                if (prev_bpart_min_world == 0)
                     break;
-                prev_bpart = jl_get_binding_partition(b, prev_bpart->min_world - 1);
+                prev_bpart = jl_get_binding_partition(b, prev_bpart_min_world - 1);
             }
         }
         // If backdate is required, replace each existing partition by a new one.
@@ -530,7 +598,8 @@ JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val3(
             while (1) {
                 backdate_bpart->kind = (size_t)PARTITION_KIND_BACKDATED_CONST | (prev_bpart->kind & 0xf0);
                 backdate_bpart->restriction = val;
-                backdate_bpart->min_world = prev_bpart->min_world;
+                jl_atomic_store_relaxed(&backdate_bpart->min_world,
+                    jl_atomic_load_relaxed(&prev_bpart->min_world));
                 jl_gc_wb_fresh(backdate_bpart, val);
                 jl_atomic_store_relaxed(&backdate_bpart->max_world,
                     jl_atomic_load_relaxed(&prev_bpart->max_world));
@@ -861,17 +930,19 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_const(jl_binding_t *b)
     return bpart->restriction;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_and_const(jl_binding_t *b)
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_latest_resolved_and_const_debug_only(jl_binding_t *b)
 {
     // Unlike jl_get_binding_value_if_const this doesn't try to allocate new binding partitions if they
-    // don't already exist, making this JL_NOTSAFEPOINT.
+    // don't already exist, making this JL_NOTSAFEPOINT. However, as a result, this may fail to return
+    // a value - even if one does exist. It should only be used for reflection/debugging when the integrity
+    // of the runtime is not guaranteed.
     if (!b)
         return NULL;
     jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
     if (!bpart)
         return NULL;
     size_t max_world = jl_atomic_load_relaxed(&bpart->max_world);
-    if (bpart->min_world > jl_current_task->world_age || jl_current_task->world_age > max_world)
+    if (jl_atomic_load_relaxed(&bpart->min_world) > jl_current_task->world_age || jl_current_task->world_age > max_world)
         return NULL;
     enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (jl_bkind_is_some_guard(kind))
@@ -882,17 +953,16 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_and_const(jl_binding_t
     return bpart->restriction;
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved(jl_binding_t *b)
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_debug_only(jl_binding_t *b)
 {
-    // Unlike jl_get_binding_value this doesn't try to allocate new binding partitions if they
-    // don't already exist, making this JL_NOTSAFEPOINT.
+    // See note above. Use for debug/reflection purposes only.
     if (!b)
         return NULL;
     jl_binding_partition_t *bpart = jl_atomic_load_relaxed(&b->partitions);
     if (!bpart)
         return NULL;
     size_t max_world = jl_atomic_load_relaxed(&bpart->max_world);
-    if (bpart->min_world > jl_current_task->world_age || jl_current_task->world_age > max_world)
+    if (jl_atomic_load_relaxed(&bpart->min_world) > jl_current_task->world_age || jl_current_task->world_age > max_world)
         return NULL;
     enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (jl_bkind_is_some_guard(kind))
@@ -1486,7 +1556,7 @@ JL_DLLEXPORT void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sy
     // jl_declare_constant_val3(NULL, m, var, (jl_value_t*)jl_any_type, kind, 0);
     jl_binding_t *bp = jl_get_module_binding(m, var, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(bp, 0);
-    assert(bpart->min_world == 0);
+    assert(jl_atomic_load_relaxed(&bpart->min_world) == 0);
     jl_atomic_store_relaxed(&bpart->max_world, ~(size_t)0); // jl_check_new_binding_implicit likely incorrectly truncated it
     if (exported)
         jl_atomic_fetch_or_relaxed(&bp->flags, BINDING_FLAG_PUBLICP);
@@ -1500,7 +1570,7 @@ JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var
     // this function is dangerous and unsound. do not use.
     jl_binding_t *bp = jl_get_module_binding(m, var, 1);
     jl_binding_partition_t *bpart = jl_get_binding_partition(bp, jl_current_task->world_age);
-    bpart->min_world = 0;
+    jl_atomic_store_relaxed(&bpart->min_world, 0);
     jl_atomic_store_release(&bpart->max_world, ~(size_t)0);
     bpart->kind = PARTITION_KIND_CONST | (bpart->kind & PARTITION_MASK_FLAG);
     bpart->restriction = val;
@@ -1583,7 +1653,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     assert(jl_atomic_load_relaxed(&b->partitions) == old_bpart);
     jl_binding_partition_t *new_bpart = new_binding_partition();
     JL_GC_PUSH1(&new_bpart);
-    new_bpart->min_world = new_world;
+    jl_atomic_store_relaxed(&new_bpart->min_world, new_world);
     if ((kind & PARTITION_MASK_KIND) == PARTITION_FAKE_KIND_IMPLICIT_RECOMPUTE) {
         assert(!restriction_val);
         struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, new_world, 0);
@@ -1635,7 +1705,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding(jl_binding_t *b,
 
     size_t new_world = jl_atomic_load_acquire(&jl_world_counter)+1;
     jl_binding_partition_t *bpart = jl_replace_binding_locked(b, old_bpart, restriction_val, kind, new_world);
-    if (bpart && bpart->min_world == new_world)
+    if (bpart && jl_atomic_load_relaxed(&bpart->min_world) == new_world)
         jl_atomic_store_release(&jl_world_counter, new_world);
 
     JL_UNLOCK(&world_counter_lock);
