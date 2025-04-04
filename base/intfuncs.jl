@@ -526,7 +526,8 @@ function nextpow(a::Real, x::Real)
     n = ceil(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
     p = a^(n-1)
-    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    hastypemax(typeof(p)) && x > typemax(p) &&
+        throw(DomainError(x,"argument is beyond the range of type of the base"))
     p >= x && return p
     wp = a^n
     wp > p || throw(OverflowError("result is beyond the range of type of the base"))
@@ -567,9 +568,10 @@ function prevpow(a::T, x::Real) where T <: Real
     n = floor(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
     p = a^n
-    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    hastypemax(typeof(p)) && x > typemax(p) &&
+        throw(DomainError(x,"argument is beyond the range of type of the base"))
     if a isa Integer
-        wp, overflow = mul_with_overflow(a, p)
+        wp, overflow = mul_with_overflow(promote(a, p)...)
         wp <= x && !overflow && return wp
     else
         wp = a^(n+1)
