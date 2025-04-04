@@ -391,7 +391,7 @@ julia> twothreearr()
  3
 ```
 
-## Types, type declarations, and constructors
+## Types, type annotations, and constructors
 
 ### [What does "type-stable" mean?](@id man-type-stability)
 

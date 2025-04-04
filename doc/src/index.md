@@ -79,13 +79,13 @@ The most significant departures of Julia from typical dynamic languages are:
   * The core language imposes very little; Julia Base and the standard library are written in Julia itself, including
     primitive operations like integer arithmetic
   * A rich language of types for constructing and describing objects, that can also optionally be
-    used to make type declarations
+    used to write type annotations
   * The ability to define function behavior across many combinations of argument types via [multiple dispatch](https://en.wikipedia.org/wiki/Multiple_dispatch)
   * Automatic generation of efficient, specialized code for different argument types
   * Good performance, approaching that of statically-compiled languages like C
 
-Although one sometimes speaks of dynamic languages as being "typeless", they are definitely not.
-Every object, whether primitive or user-defined, has a type. The lack of type declarations in
+Although one sometimes speaks of dynamic languages as being "typeless", they are definitely not:
+every object, whether primitive or user-defined, has a type. The lack of type annotations in
 most dynamic languages, however, means that one cannot instruct the compiler about the types of
 values, and often cannot explicitly talk about types at all. In static languages, on the other
 hand, while one can -- and usually must -- annotate types for the compiler, types exist only at

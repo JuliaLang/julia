@@ -3408,7 +3408,7 @@ converted to type `T` by calling [`convert`](@ref).
 In a method declaration, the syntax `function f(x)::T` causes any value returned by
 the method to be converted to type `T`.
 
-See the manual section on [Type Declarations](@ref).
+See the manual section on [Type Annotations](@ref).
 
 # Examples
 ```jldoctest

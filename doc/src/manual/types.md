@@ -1,66 +1,56 @@
 # [Types](@id man-types)
 
-Type systems have traditionally fallen into two quite different camps: static type systems, where
-every program expression must have a type computable before the execution of the program, and
-dynamic type systems, where nothing is known about types until run time, when the actual values
-manipulated by the program are available. Object orientation allows some flexibility in statically
-typed languages by letting code be written without the precise types of values being known at
-compile time. The ability to write code that can operate on different types is called polymorphism.
-All code in classic dynamically typed languages is polymorphic: only by explicitly checking types,
-or when objects fail to support operations at run-time, are the types of any values ever restricted.
+Types in Julia establish distinctions between different kinds of data,
+and are used by the compiler to infer the intended use of those data.
+Programming languages have traditionally employed one of two quite different type systems:
+static type systems, where expressions must have a computable type before the execution of the program,
+and dynamic type systems, where types are only computed at run time,
+when the actual values manipulated by the program are available.
+Statically typed languages typically offer faster execution of programs,
+while treating any data of unknown or invalid type as an error.
+In these languages, the programmer is responsible for ensuring the validity of all types of data that the program may encounter.
+Dynamically typed languages, on the other hand, do not explicitly check types,
+and types of data only become invalid when they fail to support run-time operations.
 
-Julia's type system is dynamic, but gains some of the advantages of static type systems by making
-it possible to indicate that certain values are of specific types. This can be of great assistance
-in generating efficient code, but even more significantly, it allows method dispatch on the types
-of function arguments to be deeply integrated with the language. Method dispatch is explored in
-detail in [Methods](@ref), but is rooted in the type system presented here.
+Julia's type system is dynamic, but gains some of the advantages of static type systems
+by allowing optional type annotations. Type annotations are important for defining efficient new data structures,
+can help enforce correctness and clarity, and can sometimes improve efficiency
+(although in many contexts the Julia compiler infers types automatically.
+Type annotations also play a central role in Julia because they control method dispatch:
+functions can be extended to new behaviours for different argument types.
+Method dispatch is explored in detail in the [Methods](@ref) section, but is rooted in the type system presented here.
 
-The default behavior in Julia when types are omitted is to allow values to be of any type. Thus,
-one can write many useful Julia functions without ever explicitly using types. When additional
-expressiveness is needed, however, it is easy to gradually introduce explicit type annotations
-into previously "untyped" code. Adding annotations serves three primary purposes: to take advantage
-of Julia's powerful multiple-dispatch mechanism,  to improve human readability, and to catch
-programmer errors.
-
-Describing Julia in the lingo of [type systems](https://en.wikipedia.org/wiki/Type_system), it
-is: dynamic, nominative and parametric. Generic types can be parameterized, and the hierarchical
-relationships between types are [explicitly declared](https://en.wikipedia.org/wiki/Nominal_type_system),
-rather than [implied by compatible structure](https://en.wikipedia.org/wiki/Structural_type_system).
-One particularly distinctive feature of Julia's type system is that concrete types may not subtype
-each other: all concrete types are final and may only have abstract types as their supertypes.
+All values in a Julia program belong to exactly one concrete type.
+All types belong to a single type tree, i.e. they are all at least related to the [`Any`](@ref) type.
+For additional flexibility, types can be defined as concrete, abstract or parametric.
+Their relation to other types must be explicitly declared.
+Concrete types are final, and may not subtype each other.
 While this might at first seem unduly restrictive, it has many beneficial consequences with surprisingly
-few drawbacks. It turns out that being able to inherit behavior is much more important than being
-able to inherit structure, and inheriting both causes significant difficulties in traditional
-object-oriented languages. Other high-level aspects of Julia's type system that should be mentioned
-up front are:
+few drawbacks. Both [abstract types](#man-abstract-types) and [parametric types](#Parametric-Types)
+can be used to create flexible interfaces while leveraging method dispatch and mitigating type errors.
 
-  * There is no division between object and non-object values: all values in Julia are true objects
-    having a type that belongs to a single, fully connected type graph, all nodes of which are equally
-    first-class as types.
-  * There is no meaningful concept of a "compile-time type": the only type a value has is its actual
-    type when the program is running. This is called a "run-time type" in object-oriented languages
-    where the combination of static compilation with polymorphism makes this distinction significant.
-  * Only values, not variables, have types -- variables are simply names bound to values, although for
-    simplicity we may say "type of a variable" as shorthand for "type of the value to which a variable refers".
-  * Both abstract and concrete types can be parameterized by other types. They can also be parameterized
-    by symbols, by values of any type for which [`isbits`](@ref) returns true (essentially, things
-    like numbers and bools that are stored like C types or `struct`s with no pointers to other objects),
-    and also by tuples thereof. Type parameters may be omitted when they do not need to be referenced
-    or restricted.
+The methods [`isabstracttype`](@ref) and [`isconcretetype`](@ref) can be used
+to check if a type is abstract or concrete.
+They may both return `false` if the type is parametrized but not abstract.
+The [`subtypes`](@ref) and [`supertypes`](@ref) methods
+are also provided for dynamic inspection of the type tree.
+The [`typeof`](@ref) and [`isa`](@ref) methods facilitate checking the type of a value.
 
 Julia's type system is designed to be powerful and expressive, yet clear, intuitive and unobtrusive.
 Many Julia programmers may never feel the need to write code that explicitly uses types. Some
-kinds of programming, however, become clearer, simpler, faster and more robust with declared types.
+kinds of programming, however, become clearer, simpler, faster and more robust with annotated types.
 
-## Type Declarations
+## Type Annotations
+
+The default behavior in Julia when type annotations are omitted is to allow values to be of any type.
+When additional expressiveness is needed, however,
+it is easy to gradually introduce explicit annotations into previously "untyped" code.
+Adding annotations serves four primary purposes: to take advantage
+of Julia's powerful multiple-dispatch mechanism, to improve human readability,
+to catch programmer errors, and to assist the compiler (especially when defining new types).
 
 The `::` operator can be used to attach type annotations to expressions and variables in programs.
-There are two primary reasons to do this:
-
-1. As an assertion to help confirm that your program works the way you expect, and
-2. To provide extra type information to the compiler, which can then improve performance in some
-   cases.
-
+It is also used for type assertions in method signatures (see [Defining Methods](#Defining-Methods)).
 When appended to an expression computing a value, the `::` operator is read as "is an instance
 of". It can be used anywhere to assert that the value of the expression on the left is an instance
 of the type on the right. When the type on the right is concrete, the value on the left must have
@@ -78,9 +68,12 @@ julia> (1+2)::Int
 ```
 
 This allows a type assertion to be attached to any expression in-place.
-
+When the type on the right is concrete,
+the value on the left must have that type as its implementation.
+When the type is abstract,
+it suffices for the value to have a concrete type that is a subtype of the abstract type.
 When appended to a variable on the left-hand side of an assignment, or as part of a `local` declaration,
-the `::` operator means something a bit different: it declares the variable to always have the
+the `::` operator means something a bit different: it annotates the variable to always have the
 specified type, like a type declaration in a statically-typed language such as C. Every value
 assigned to the variable will be converted to the declared type using [`convert`](@ref):
 
@@ -110,7 +103,7 @@ x::Int8 = 10   # as the left-hand side of an assignment
 
 and applies to the whole current scope, even before the declaration.
 
-As of Julia 1.8, type declarations can now be used in global scope i.e.
+As of Julia 1.8, type annotations can now be used in global scope i.e.
 type annotations can be added to global variables to make accessing them type stable.
 ```julia
 julia> x::Int = 10
@@ -567,26 +560,34 @@ See [this FAQ entry](@ref faq-nothing) for more information.
 
 An important and powerful feature of Julia's type system is that it is parametric: types can take
 parameters, so that type declarations actually introduce a whole family of new types -- one for
-each possible combination of parameter values. There are many languages that support some version
-of [generic programming](https://en.wikipedia.org/wiki/Generic_programming), wherein data structures
-and algorithms to manipulate them may be specified without specifying the exact types involved.
-For example, some form of generic programming exists in ML, Haskell, Ada, Eiffel, C++, Java, C#,
-F#, and Scala, just to name a few. Some of these languages support true parametric polymorphism
-(e.g. ML, Haskell, Scala), while others support ad-hoc, template-based styles of generic programming
-(e.g. C++, Java). With so many different varieties of generic programming and parametric types
-in various languages, we won't even attempt to compare Julia's parametric types to other languages,
-but will instead focus on explaining Julia's system in its own right. We will note, however, that
-because Julia is a dynamically typed language and doesn't need to make all type decisions at compile
-time, many traditional difficulties encountered in static parametric type systems can be relatively
-easily handled.
+each possible combination of parameter values. This is often referred to as "generic programming".
+There are two kinds of explicitly declared parametric types.
+[Parametric composite types](#man-parametric-composite-types)
+declare a family of concrete, [composite types](#Composite-Types),
+whereas [parametric abstract types](#Parametric-Abstract-Types)
+declare a family of [abstract types](#man-abstract-types).
+Other kinds of built-in parametric types such as tuple types are discussed in this section as well.
+Parametric types can also be used in [type annotations](#Type-Annotations) when the parameters are specified.
 
-All declared types (the `DataType` variety) can be parameterized, with the same syntax in each
-case. We will discuss them in the following order: first, parametric composite types, then parametric
-abstract types, and finally parametric primitive types.
+!!! note
+    Parametric types do not represent a single node in the type graph.
+    Therefore, [`typeof`](@ref) can never return a parametric type name.
+    To dynamically verify a (parametric) subtype relation, use [`isa`](@ref) instead.
+
+!!! warning
+    Type parameters are invariant: even though `Float64 <: Real`,
+    the relation `Foo{Float64} <: Foo{Real}` does NOT hold for any parametric type `Foo`.
+    However, `Foo{Float64} <: Foo{<:Real}` is `true`.
+    This subtle but important point is the reason for the common use of
+    `Container{<:Element}` syntax in type annotations.
 
 ### [Parametric Composite Types](@id man-parametric-composite-types)
 
-Type parameters are introduced immediately after the type name, surrounded by curly braces:
+!!! note
+    For any parametric composite type,
+    both [`isabstracttype`](@ref) and [`isconcretetype`](@ref) will return `false`.
+
+Type parameters are introduced immediately after the type name, and surrounded by curly braces:
 
 ```jldoctest pointtype
 julia> struct Point{T}
@@ -595,13 +596,13 @@ julia> struct Point{T}
        end
 ```
 
-This declaration defines a new parametric type, `Point{T}`, holding two "coordinates" of type
-`T`. What, one may ask, is `T`? Well, that's precisely the point of parametric types: it can be
-any type at all (or a value of any bits type, actually, although here it's clearly used as a type).
-`Point{Float64}` is a concrete type equivalent to the type defined by replacing `T` in the definition
-of `Point` with [`Float64`](@ref). Thus, this single declaration actually declares an unlimited
-number of types: `Point{Float64}`, `Point{AbstractString}`, `Point{Int64}`, etc. Each of these
-is now a usable concrete type:
+This declaration defines a new parametric type, `Point{T}`,
+holding two "coordinates" of the same type `T`.
+The parameter `T` is a placeholder, which will be replaced by a particular type
+when an instance of this type is created.
+Thus, this single annotation actually declares an unlimited number of types:
+`Point{Float64}`, `Point{AbstractString}`, `Point{Int64}`, etc.
+Each of these is now a usable concrete type:
 
 ```jldoctest pointtype
 julia> Point{Float64}
@@ -610,9 +611,6 @@ Point{Float64}
 julia> Point{AbstractString}
 Point{AbstractString}
 ```
-
-The type `Point{Float64}` is a point whose coordinates are 64-bit floating-point values, while
-the type `Point{AbstractString}` is a "point" whose "coordinates" are string objects (see [Strings](@ref)).
 
 `Point` itself is also a valid type object, containing all instances `Point{Float64}`, `Point{AbstractString}`,
 etc. as subtypes:
@@ -625,17 +623,7 @@ julia> Point{AbstractString} <: Point
 true
 ```
 
-Other types, of course, are not subtypes of it:
-
-```jldoctest pointtype
-julia> Float64 <: Point
-false
-
-julia> AbstractString <: Point
-false
-```
-
-Concrete `Point` types with different values of `T` are never subtypes of each other:
+Concrete `Point` variants with different values of `T` are never subtypes of each other:
 
 ```jldoctest pointtype
 julia> Point{Float64} <: Point{Int64}
@@ -645,13 +633,9 @@ julia> Point{Float64} <: Point{Real}
 false
 ```
 
-!!! warning
-    This last point is *very* important: even though `Float64 <: Real` we **DO NOT** have `Point{Float64} <: Point{Real}`.
-
-In other words, in the parlance of type theory, Julia's type parameters are *invariant*, rather
-than being [covariant (or even contravariant)](https://en.wikipedia.org/wiki/Covariance_and_contravariance_%28computer_science%29). This is for practical reasons: while any instance
-of `Point{Float64}` may conceptually be like an instance of `Point{Real}` as well, the two types
-have different representations in memory:
+In other words, in the parlance of type theory, Julia's type parameters are *invariant*.
+This is for practical reasons: while any instance of `Point{Float64}` may conceptually be
+like an instance of `Point{Real}` as well, the two types have different representations in memory:
 
   * An instance of `Point{Float64}` can be represented compactly and efficiently as an immediate pair
     of 64-bit values;
@@ -660,9 +644,9 @@ have different representations in memory:
     practice an instance of `Point{Real}` must be represented as a pair of pointers to
     individually allocated `Real` objects.
 
-The efficiency gained by being able to store `Point{Float64}` objects with immediate values is
-magnified enormously in the case of arrays: an `Array{Float64}` can be stored as a contiguous
-memory block of 64-bit floating-point values, whereas an `Array{Real}` must be an array of pointers
+The efficiency gained by imposing this restriction is magnified enormously in the case of arrays:
+an `Array{Float64}` can be stored as a contiguous memory block of 64-bit floating-point values,
+whereas an `Array{Real}` must be an array of pointers
 to individually allocated [`Real`](@ref) objects -- which may well be
 [boxed](https://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing)
 64-bit floating-point values, but also might be arbitrarily large, complex objects, which are
@@ -691,8 +675,7 @@ end
 
 More examples will be discussed later in [Methods](@ref).
 
-How does one construct a `Point` object? It is possible to define custom constructors for composite
-types, which will be discussed in detail in [Constructors](@ref man-constructors), but in the absence of any special
+How does one construct a `Point` object? In the absence of any special
 constructor declarations, there are two default ways of creating new composite objects, one in
 which the type parameters are explicitly given and the other in which they are implied by the
 arguments to the object constructor.
@@ -760,8 +743,23 @@ Stacktrace:
 [...]
 ```
 
-Constructor methods to appropriately handle such mixed cases can be defined, but that will not
-be discussed until later on in [Constructors](@ref man-constructors).
+For that to work, we could change our definition of the `Point` type:
+
+```jldoctest
+julia> struct Point{T1,T2}
+           x::T1
+           y::T2
+       end
+
+julia> p = Point(1, 2.5)
+Point{Int64, Float64}(1, 2.5)
+
+julia> p2 = Point(1, 2)
+Point{Int64, Int64}(1, 2)
+```
+
+Constructor methods to appropriately handle more complex cases can also be defined,
+see the [Constructors](@ref man-constructors) section.
 
 ### Parametric Abstract Types
 
@@ -1368,7 +1366,7 @@ julia> isa(1, AbstractFloat)
 false
 ```
 
-The [`typeof`](@ref) function, already used throughout the manual in examples, returns the type
+The [`typeof`](@ref) function, already used throughout the manual in examples, returns the concrete type
 of its argument. Since, as noted above, types are objects, they also have types, and we can ask
 what their types are:
 

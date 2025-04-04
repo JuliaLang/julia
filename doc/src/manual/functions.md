@@ -106,9 +106,9 @@ the call site that at least one of the arguments (often the first one) is being 
     The behavior of a mutating function can be unexpected when a mutated argument shares memory with another argument, a situation known as aliasing (e.g. when one is a view of the other).
     Unless the function docstring explicitly indicates that aliasing produces the expected result, it is the responsibility of the caller to ensure proper behavior on such inputs.
 
-## Argument-type declarations
+## Argument-type annotations
 
-You can declare the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Declarations](@ref) in Julia.
+You can annotate the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Annotations](@ref) in Julia.
 For example, the following function computes [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number) recursively:
 ```
 fib(n::Integer) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)
@@ -204,9 +204,9 @@ Int8
 ```
 
 This function will always return an `Int8` regardless of the types of `x` and `y`.
-See [Type Declarations](@ref) for more on return types.
+See [Type Annotations](@ref) for more on return types.
 
-Return type declarations are **rarely used** in Julia: in general, you should
+Return type annotations are **rarely used** in Julia: in general, you should
 instead write "type-stable" functions in which Julia's compiler can automatically
 infer the return type. For more information, see the [Performance Tips](@ref man-performance-tips) chapter.
 
