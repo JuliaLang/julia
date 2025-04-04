@@ -611,6 +611,7 @@ julia> stats.recompile_time
 """
 macro timed(ex)
     quote
+        Expr(Symbol("latestworld-if-toplevel"))
         Experimental.@force_compile
         Threads.lock_profiling(true)
         local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
@@ -643,6 +644,7 @@ end
 # here so it's possible to time/trace all imports, including InteractiveUtils and its deps
 macro time_imports(ex)
     quote
+        Expr(Symbol("latestworld-if-toplevel"))
         Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
         @__tryfinally(
             # try
@@ -655,6 +657,7 @@ end
 
 macro trace_compile(ex)
     quote
+        Expr(Symbol("latestworld-if-toplevel"))
         ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
         @__tryfinally(
             # try
@@ -667,6 +670,7 @@ end
 
 macro trace_dispatch(ex)
     quote
+        Expr(Symbol("latestworld-if-toplevel"))
         ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
         @__tryfinally(
             # try
