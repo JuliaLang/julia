@@ -136,6 +136,31 @@ function destroy(ref::REPLBackendRef, state::Task)
     close(ref.response_channel)
 end
 
+const introspection_macros = [
+    Symbol("@time"),
+    Symbol("@timing_imports"),
+    Symbol("@trace_compile"),
+    Symbol("@trace_dispatch"),
+]
+
+# work around compilation happening before e.g. `@time` has turned its measurements on
+# i.e. remove the need for `@time @eval foo()` in the REPL (only)
+function delay_compilation_for_introspection_macros(expr)
+    if expr isa Expr && expr.head == :toplevel && length(expr.args) >= 2
+        expr = expr.args[2]
+    end
+    if expr isa Expr &&
+       expr.head == :macrocall &&
+       expr.args[1] in introspection_macros
+        return quote
+            Core.@latestworld
+            $(expr)
+        end
+    else
+        return expr
+    end
+end
+
 """
     softscope(ex)
 
@@ -285,7 +310,7 @@ function warn_on_non_owning_accesses(current_mod, ast)
 end
 warn_on_non_owning_accesses(ast) = warn_on_non_owning_accesses(Base.active_module(), ast)
 
-const repl_ast_transforms = Any[softscope, warn_on_non_owning_accesses] # defaults for new REPL backends
+const repl_ast_transforms = Any[delay_compilation_for_introspection_macros, softscope, warn_on_non_owning_accesses] # defaults for new REPL backends
 
 # Allows an external package to add hooks into the code loading.
 # The hook should take a Vector{Symbol} of package names and
