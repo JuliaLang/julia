@@ -1386,7 +1386,7 @@ function compileable_specialization_for_call(interp::AbstractInterpreter, @nospe
     compileable_atype = get_compileable_sig(match.method, match.spec_types, match.sparams)
     compileable_atype === nothing && return nothing
     if match.spec_types !== compileable_atype
-        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), compileable_atype, method.sig)::SimpleVector
+        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), compileable_atype, match.method.sig)::SimpleVector
         sparams = sp_[2]::SimpleVector
         mi = specialize_method(match.method, compileable_atype, sparams)
     else
