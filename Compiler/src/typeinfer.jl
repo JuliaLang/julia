@@ -104,6 +104,12 @@ end
 function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     result = caller.result
     #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
+    if !isdefined(result, :ci) && isa(result.src, OptimizationState)
+        # Even if we are not going to cache the optimized code, compute and store the corresponding
+        # inlining cost into the source `CodeInfo` for future callers.
+        opt = result.src
+        opt.src.inlining_cost = compute_inlining_cost(interp, result)
+    end
     if isdefined(result, :ci)
         edges = result_edges(interp, caller)
         ci = result.ci
@@ -148,9 +154,12 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, di, edges)
         engine_reject(interp, ci)
         codegen = codegen_cache(interp)
-        if !discard_src && codegen !== nothing && uncompressed !== nothing
-            if !(uncompressed isa CodeInfo)
+        if !discard_src && codegen !== nothing && (isa(uncompressed, CodeInfo) || isa(uncompressed, OptimizationState))
+            if isa(uncompressed, OptimizationState)
+                inlining_cost = compute_inlining_cost(interp, result, uncompressed.optresult)
                 uncompressed = ir_to_codeinf!(uncompressed)
+                uncompressed.edges = edges
+                uncompressed.inlining_cost = inlining_cost
             end
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
             codegen[ci] = uncompressed
@@ -307,13 +316,28 @@ function is_result_constabi_eligible(result::InferenceResult)
     return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
 
+function compute_inlining_cost(interp::AbstractInterpreter, result::InferenceResult)
+    src = result.src
+    isa(src, OptimizationState) || return MAX_INLINE_COST
+    compute_inlining_cost(interp, result, src.optresult)
+end
+
+function compute_inlining_cost(interp::AbstractInterpreter, result::InferenceResult, optresult#=::OptimizationResult=#)
+    return inline_cost_model(interp, result, optresult.inline_flag, optresult.ir)
+end
+
 function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
-        declared_inline::Bool, ir::IRCode)
+        inline_flag::UInt8, ir::IRCode)
+
+    inline_flag === SRC_FLAG_DECLARED_NOINLINE && return MAX_INLINE_COST
+
     mi = result.linfo
     (; def, specTypes) = mi
     if !isa(def, Method)
         return MAX_INLINE_COST
     end
+
+    declared_inline = inline_flag === SRC_FLAG_DECLARED_INLINE
 
     rt = result.result
     @assert !(rt isa LimitedAccuracy)
@@ -359,10 +383,12 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
         can_discard_trees = may_discard_trees(interp)
         or = src.optresult
         if can_discard_trees && or.inline_flag == SRC_FLAG_DECLARED_NOINLINE
+            src.src.inlining_cost = inline_cost
             return nothing
         end
-        inline_cost = inline_cost_model(interp, result, or.inline_flag == SRC_FLAG_DECLARED_INLINE, or.ir)
+        inline_cost = inline_cost_model(interp, result, or.inline_flag, or.ir)
         if can_discard_trees && inline_cost == MAX_INLINE_COST
+            src.src.inlining_cost = inline_cost
             return nothing
         end
         src = ir_to_codeinf!(src)
