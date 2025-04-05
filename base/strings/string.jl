@@ -9,7 +9,7 @@ struct StringIndexError <: Exception
     string::AbstractString
     index::Integer
 end
-@noinline string_index_err(s::AbstractString, i::Integer) =
+@noinline string_index_err((@nospecialize s::AbstractString), i::Integer) =
     throw(StringIndexError(s, Int(i)))
 function Base.showerror(io::IO, exc::StringIndexError)
     s = exc.string
