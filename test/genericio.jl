@@ -60,6 +60,7 @@ end
 Base.eof(io::GenericOldIO) = eof(io.inner)
 Base.eof(io::GenericUnbufferedIO) = eof(io.inner)
 
+# Requires: `eof`, and `readinto!` if new else `read(::IO, UInt8)`
 @testset "readbytes!" begin
     for T in [GenericBufferedIO, GenericUnbufferedIO, GenericOldIO]
         # Resizing
@@ -77,12 +78,56 @@ Base.eof(io::GenericUnbufferedIO) = eof(io.inner)
         @test readbytes!(io, v) == 3
         @test v == b"efgd"
     end
+
+    s = "abcdefg"
+    v = zeros(UInt8, 32)
+    io = GenericBufferedIO(IOBuffer(s), 5)
+    @test readbytes!(io, v) == 7
+    @test v == vcat(codeunits(s), fill(0x00, 32-7))
 end
 
-Base.delete_method(Base.which(eof, Tuple{GenericOldIO}))
-@test_throws MethodError eof(GenericOldIO(IOBuffer()))
+# Requires: `readbytes!`
+@testset "read" begin
+    for T in [GenericBufferedIO, GenericUnbufferedIO, GenericOldIO]
+        s = "abcdefghijklmnopqrstuv"
+        io = T(IOBuffer(s))
+        v = read(io)
+        @test v == codeunits(s)[1:length(v)]
+        if length(v) == ncodeunits(s) # not guaranteed
+            @test read(io) == UInt8[]
+        end
 
-Base.delete_method(Base.which(eof, Tuple{GenericUnbufferedIO}))
-@test_throws MethodError eof(GenericUnbufferedIO(IOBuffer()))
+        io = T(IOBuffer(s))
+        v = read(io, 6)
+        @test length(v) ≤ 6
+        @test v == codeunits(s)[1:length(v)]
+        v2 = read(io)
+        @test length(v2) ≤ ncodeunits(s) - length(v)
+        @test vcat(v, v2) == codeunits(s)[1:length(v)+length(v2)]
+
+        io = T(IOBuffer(collect(codeunits(s))))
+        @test read(io, String) === s
+    end
+end
+
+
+Base.read(io::GenericUnbufferedIO, ::Type{UInt8}) = read(io.inner, UInt8)
+
+# read(::IO, UInt8) and eof
+@testset "readeach" begin
+    @testset "UInt8" begin
+        for T in [GenericBufferedIO, GenericUnbufferedIO, GenericOldIO]
+            s = "abcdefg"
+            v = UInt8[]
+            io = T(IOBuffer(collect(codeunits(s))))
+            for i in readeach(io, UInt8)
+                push!(v, i)
+            end
+            @test v == codeunits(s)
+            @test_throws EOFError read(io, UInt8)
+        end
+    end
+end
+
 
 end # module

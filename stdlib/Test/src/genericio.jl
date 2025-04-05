@@ -91,7 +91,7 @@ Mutating the inner buffer directly invalidates the wrapper.
 ```
 julia> buf = GenericUnbufferedIO(IOBuffer("abcde\r\nfg"));
 
-julia> readall!(buf)
+julia> read(buf, String)
 "abcde\r\nfg"
 ```
 """

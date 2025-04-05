@@ -918,4 +918,3 @@ Alternatively, users of an unbuffered type can wrap it in a buffered wrapper typ
 | `ismarked`                               | should not be used                                  | as `mark`                                         |
 | `reset`                                  | should not be used                                  | as `mark`                                         |
 | `unmark`                                 | should not be used                                  | as `mark`                                         |
-
