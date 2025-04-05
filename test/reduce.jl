@@ -403,6 +403,15 @@ A = circshift(reshape(1:24,2,3,4), (0,1,1))
     maximum([NaN;zeros(255);missing]) === missing
 end
 
+@testset "maximum & minimum & extrema with init" begin
+    @test maximum(1:10, init=11)      == 11
+    @test maximum(1:10, init=0)       == 10
+    @test minimum(1:10, init=11)      == 1
+    @test minimum(1:10, init=0)       == 0
+    @test extrema(1:10, init=(0, 5))  == (0, 10)
+    @test extrema(1:10, init=(5, 11)) == (1, 11)
+end
+
 # findmin, findmax, argmin, argmax
 
 @testset "findmin(f, domain)" begin
