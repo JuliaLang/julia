@@ -244,6 +244,7 @@ function readbytes_new!(io::IO, b::AbstractVector{UInt8}, nb::Int)
             return n_read
         end
         n_read += n
+        vw = view(b, n_read + 1 : min(lastindex(b), nb))
     end
     return n_read
 end
@@ -283,30 +284,6 @@ function get_nonempty_reading_buffer(io::IO)::Union{Nothing, AbstractVector{UInt
     end
     buf
 end
-
-# TODO: The following functions can be implemented generically in terms of the
-# above core interface.
-# Try implementing them one at a time and see what breaks.
-
-# * unsafe_read (buffered)
-# X readinto! (buffered)
-# X readbytes!
-# * read(::IO)
-# * read(::IO, String)
-# X read(::IO, UInt8)
-# * read!
-# X readall! (new function)
-# X eof (buffered)
-# X bytesavailable (buffered)
-# X readavailable (buffered)
-# * copyline (buffered)
-# * readline (buffered)
-# * readlines (buffered)
-# * eachline (buffered)
-# * readuntil (buffered)
-# * copyuntil (buffered)
-# * peek (buffered)
-# * readeach
 
 """
     EOFError()
