@@ -1898,30 +1898,6 @@ std::pair<SmallVector<int, 0>, int> LateLowerGCFrame::ColorRoots(const State &S)
     return {Colors, PreAssignedColors};
 }
 
-// Size of T is assumed to be `sizeof(void*)`
-Value *LateLowerGCFrame::EmitTagPtr(IRBuilder<> &builder, Type *T, Type *T_size, Value *V)
-{
-    assert(T == T_size || isa<PointerType>(T));
-    return builder.CreateInBoundsGEP(T, V, ConstantInt::get(T_size, -1), V->getName() + ".tag_addr");
-}
-
-Value *LateLowerGCFrame::EmitLoadTag(IRBuilder<> &builder, Type *T_size, Value *V)
-{
-    auto addr = EmitTagPtr(builder, T_size, T_size, V);
-    auto &M = *builder.GetInsertBlock()->getModule();
-    LoadInst *load = builder.CreateAlignedLoad(T_size, addr, M.getDataLayout().getPointerABIAlignment(0), V->getName() + ".tag");
-    load->setOrdering(AtomicOrdering::Unordered);
-    load->setMetadata(LLVMContext::MD_tbaa, tbaa_tag);
-    MDBuilder MDB(load->getContext());
-    auto *NullInt = ConstantInt::get(T_size, 0);
-    // We can be sure that the tag is at least 16 (1<<4)
-    // Hopefully this is enough to convince LLVM that the value is still not NULL
-    // after masking off the tag bits
-    auto *NonNullInt = ConstantExpr::getAdd(NullInt, ConstantInt::get(T_size, 16));
-    load->setMetadata(LLVMContext::MD_range, MDB.createRange(NonNullInt, NullInt));
-    return load;
-}
-
 // Enable this optimization only on LLVM 4.0+ since this cause LLVM to optimize
 // constant store loop to produce a `memset_pattern16` with a global variable
 // that's initialized by `addrspacecast`. Such a global variable is not supported by the backend.
@@ -1980,7 +1956,7 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
 
         IRBuilder<> builder(CI);
         builder.SetCurrentDebugLocation(CI->getDebugLoc());
-        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent), GC_OLD_MARKED, "parent_bits");
+        auto parBits = builder.CreateAnd(EmitLoadTag(builder, T_size, parent, tbaa_tag), GC_OLD_MARKED, "parent_bits");
         auto parOldMarked = builder.CreateICmpEQ(parBits, ConstantInt::get(T_size, GC_OLD_MARKED), "parent_old_marked");
         auto mayTrigTerm = SplitBlockAndInsertIfThen(parOldMarked, CI, false);
         builder.SetInsertPoint(mayTrigTerm);
@@ -1988,7 +1964,7 @@ void LateLowerGCFrame::CleanupWriteBarriers(Function &F, State *S, const SmallVe
         Value *anyChldNotMarked = NULL;
         for (unsigned i = 1; i < CI->arg_size(); i++) {
             Value *child = CI->getArgOperand(i);
-            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child), GC_MARKED, "child_bit");
+            Value *chldBit = builder.CreateAnd(EmitLoadTag(builder, T_size, child, tbaa_tag), GC_MARKED, "child_bit");
             Value *chldNotMarked = builder.CreateICmpEQ(chldBit, ConstantInt::get(T_size, 0), "child_not_marked");
             anyChldNotMarked = anyChldNotMarked ? builder.CreateOr(anyChldNotMarked, chldNotMarked) : chldNotMarked;
         }
@@ -2179,7 +2155,7 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 assert(CI->arg_size() == 1);
                 IRBuilder<> builder(CI);
                 builder.SetCurrentDebugLocation(CI->getDebugLoc());
-                auto tag = EmitLoadTag(builder, T_size, CI->getArgOperand(0));
+                auto tag = EmitLoadTag(builder, T_size, CI->getArgOperand(0), tbaa_tag);
                 auto masked = builder.CreateAnd(tag, ConstantInt::get(T_size, ~(uintptr_t)15));
                 auto typ = builder.CreateAddrSpaceCast(builder.CreateIntToPtr(masked, JuliaType::get_pjlvalue_ty(masked->getContext())),
                                                        T_prjlvalue);
@@ -2575,30 +2551,6 @@ bool LateLowerGCFrame::runOnFunction(Function &F, bool *CFGModified) {
     std::map<Value *, std::pair<int, int>> CallFrames; // = OptimizeCallFrames(S, Ordering);
     PlaceRootsAndUpdateCalls(Colors.first, Colors.second, S, CallFrames);
     CleanupIR(F, &S, CFGModified);
-
-
-    // We lower the julia.gc_alloc_bytes intrinsic in this pass to insert slowpath/fastpath blocks for MMTk
-    // For now, we do nothing for the Stock GC
-    auto GCAllocBytes = getOrNull(jl_intrinsics::GCAllocBytes);
-
-    if (GCAllocBytes) {
-        for (auto it = GCAllocBytes->user_begin(); it != GCAllocBytes->user_end(); ) {
-            if (auto *CI = dyn_cast<CallInst>(*it)) {
-                *CFGModified = true;
-
-                assert(CI->getCalledOperand() == GCAllocBytes);
-
-                auto newI = lowerGCAllocBytesLate(CI, F);
-                if (newI != CI) {
-                    ++it;
-                    CI->replaceAllUsesWith(newI);
-                    CI->eraseFromParent();
-                    continue;
-                }
-            }
-            ++it;
-        }
-    }
 
     return true;
 }
