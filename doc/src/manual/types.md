@@ -31,9 +31,9 @@ each other: all concrete types are final and may only have abstract types as the
 While this might at first seem unduly restrictive, it has many beneficial consequences with surprisingly
 few drawbacks. It turns out that being able to inherit behavior is much more important than being
 able to inherit structure, and inheriting both causes significant difficulties in traditional
-object-oriented languages. Despite these restrictions, concrete types may have abstract subtypes, but
-there are only few examples of this (see e.g. [Abstract Types](@ref man-abstract-types)) and subtypes
-of concrete types cannot be declared manually inside the language.
+object-oriented languages. While concrete types do have abstract subtypes, there are only two examples of this
+([`Union{}`](@ref man-abstract-types) and [`Type{T}`](@ref man-typet-type))) and additional subtypes
+of concrete types cannot be declared.
 
 Other high-level aspects of Julia's type system that should be mentioned up front are:
 
@@ -185,8 +185,7 @@ When no supertype is given, the default supertype is `Any` -- a predefined abstr
 all objects are instances of and all types are subtypes of. In type theory, `Any` is commonly
 called "top" because it is at the apex of the type graph. Julia also has a predefined abstract
 "bottom" type, at the nadir of the type graph, which is written as `Union{}`. It is the exact
-opposite of `Any`: no object is an instance of `Union{}` and all types are supertypes of `Union{}`.
-This also means that concrete types formally have `Union{}` as a (abstract) subtype.
+opposite of `Any`: no object is an instance of `Union{}` and all types (including concrete types) are supertypes of `Union{}`.
 
 Let's consider some of the abstract types that make up Julia's numerical hierarchy:
 
@@ -1310,7 +1309,7 @@ julia> WrapType(Float64) # sharpened constructor, note more precise Type{Float64
 WrapType{Type{Float64}}(Float64)
 ```
 
-This behavior of `Type{Float64}` is another example of an abstract type subtyping a
+This behavior of `Type{Float64}` is an example of an abstract type subtyping a
 concrete type (here `DataType`).
 
 ## Type Aliases
