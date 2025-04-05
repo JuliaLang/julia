@@ -31,8 +31,11 @@ each other: all concrete types are final and may only have abstract types as the
 While this might at first seem unduly restrictive, it has many beneficial consequences with surprisingly
 few drawbacks. It turns out that being able to inherit behavior is much more important than being
 able to inherit structure, and inheriting both causes significant difficulties in traditional
-object-oriented languages. Other high-level aspects of Julia's type system that should be mentioned
-up front are:
+object-oriented languages. Despite these restrictions, concrete types may have abstract subtypes, but
+there are only few examples of this (see e.g. [Abstract Types](@ref man-abstract-types)) and subtypes
+of concrete types cannot be declared manually inside the language.
+
+Other high-level aspects of Julia's type system that should be mentioned up front are:
 
   * There is no division between object and non-object values: all values in Julia are true objects
     having a type that belongs to a single, fully connected type graph, all nodes of which are equally
@@ -183,6 +186,7 @@ all objects are instances of and all types are subtypes of. In type theory, `Any
 called "top" because it is at the apex of the type graph. Julia also has a predefined abstract
 "bottom" type, at the nadir of the type graph, which is written as `Union{}`. It is the exact
 opposite of `Any`: no object is an instance of `Union{}` and all types are supertypes of `Union{}`.
+This also means that concrete types formally have `Union{}` as a (abstract) subtype.
 
 Let's consider some of the abstract types that make up Julia's numerical hierarchy:
 
@@ -1305,6 +1309,9 @@ WrapType
 julia> WrapType(Float64) # sharpened constructor, note more precise Type{Float64}
 WrapType{Type{Float64}}(Float64)
 ```
+
+This behavior of `Type{Float64}` is another example of an abstract type subtyping a
+concrete type (here `DataType`).
 
 ## Type Aliases
 
