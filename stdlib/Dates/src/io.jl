@@ -460,7 +460,7 @@ but creates the DateFormat object once during macro expansion.
 
 See [`DateFormat`](@ref) for details about format specifiers.
 """
-macro dateformat_str(str)
+macro dateformat_str(str::String)
     DateFormat(str)
 end
 

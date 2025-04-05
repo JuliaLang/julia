@@ -141,15 +141,16 @@ function ExplicitEnv(envpath::String=Base.active_project())
 
             # Extensions
             deps_pkg = get(Dict{String, Any}, pkg_info, "extensions")::Dict{String, Any}
+            deps_pkg_concrete = Dict{String, Vector{String}}()
             for (ext, triggers) in deps_pkg
                 if triggers isa String
                     triggers = [triggers]
                 else
                     triggers = triggers::Vector{String}
                 end
-                deps_pkg[ext] = triggers
+                deps_pkg_concrete[ext] = triggers
             end
-            extensions[m_uuid] = deps_pkg
+            extensions[m_uuid] = deps_pkg_concrete
 
             # Determine strategy to find package
             lookup_strat = begin
@@ -810,8 +811,8 @@ function _precompilepkgs(pkgs::Vector{String},
                         # window between print cycles
                         termwidth = displaysize(io)[2] - 4
                         if !final_loop
-                            str = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
-                            print(iostr, Base._truncate_at_width_or_chars(true, str, termwidth), "\n")
+                            s = sprint(io -> show_progress(io, bar; termwidth, carriagereturn=false); context=io)
+                            print(iostr, Base._truncate_at_width_or_chars(true, s, termwidth), "\n")
                         end
                         for pkg_config in pkg_queue_show
                             dep, config = pkg_config

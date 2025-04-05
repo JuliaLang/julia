@@ -5668,6 +5668,13 @@ let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     @test reinterpret(UInt128, arr[2].fp) == expected
 end
 
+# make sure VecElement Tuple has the C alignment and ABI for supported types
+primitive type Int24 24 end
+@test Base.datatype_alignment(NTuple{10,VecElement{Int16}}) == 32
+@test Base.datatype_alignment(NTuple{10,VecElement{Int24}}) == 4
+@test Base.datatype_alignment(NTuple{10,VecElement{Int64}}) == 128
+@test Base.datatype_alignment(NTuple{10,VecElement{Int128}}) == 256
+
 # issue #21516
 struct T21516
     x::Vector{Float64}
@@ -8151,3 +8158,8 @@ let M = @__MODULE__
 end
 
 @test Base.unsafe_convert(Ptr{Int}, [1]) !== C_NULL
+
+myfun57023a(::Type{T}) where {T} = (x = @ccall mycfun()::Ptr{T}; x)
+@test only(code_lowered(myfun57023a)).has_fcall
+myfun57023b(::Type{T}) where {T} = (x = @cfunction myfun57023a Ptr{T} (Ref{T},); x)
+@test only(code_lowered(myfun57023b)).has_fcall

@@ -6,7 +6,7 @@ module Precompile
 import ..REPL
 # Prepare this staging area with all the loaded packages available
 for (_pkgid, _mod) in Base.loaded_modules
-    if !(_pkgid.name in ("Main", "Core", "Base", "REPL"))
+    if !(_pkgid.name in ("Main", "Core", "Base", "REPL")) && Base.is_stdlib(_pkgid)
         eval(:(const $(Symbol(_mod)) = $_mod))
     end
 end

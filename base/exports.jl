@@ -1095,6 +1095,7 @@ public
     ImmutableDict,
     Lockable,
     OneTo,
+    Pairs,
     LogRange,
     UUID,
 

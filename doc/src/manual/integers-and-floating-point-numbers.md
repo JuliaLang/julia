@@ -334,8 +334,8 @@ julia> typeof(x)
 Float64
 ```
 
-Half-precision floating-point numbers are also supported ([`Float16`](@ref)), but they are
-implemented in software and use [`Float32`](@ref) for calculations.
+Half-precision floating-point numbers are also supported ([`Float16`](@ref)) on all platforms, with native instructions used on hardware which supports this number format. Otherwise, operations are implemented in software, and use [`Float32`](@ref) for intermediate calculations.
+As an internal implementation detail, this is achieved under the hood by using LLVM's [`half`](https://llvm.org/docs/LangRef.html#half-precision-floating-point-intrinsics) type, which behaves similarly to what the GCC [`-fexcess-precision=16`](https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html#index-fexcess-precision) flag does for C/C++ code.
 
 ```jldoctest
 julia> sizeof(Float16(4.))

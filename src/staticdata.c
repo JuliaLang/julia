@@ -90,6 +90,22 @@ External links:
 
 static const size_t WORLD_AGE_REVALIDATION_SENTINEL = 0x1;
 
+// This structure is used to store hash tables for the memoization
+// of queries in staticdata.c (currently only `type_in_worklist`).
+typedef struct {
+    htable_t type_in_worklist;
+} jl_query_cache;
+
+static void init_query_cache(jl_query_cache *cache)
+{
+    htable_new(&cache->type_in_worklist, 0);
+}
+
+static void destroy_query_cache(jl_query_cache *cache)
+{
+    htable_free(&cache->type_in_worklist);
+}
+
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
 
@@ -512,6 +528,7 @@ typedef struct {
     jl_array_t *link_ids_gctags;
     jl_array_t *link_ids_gvars;
     jl_array_t *link_ids_external_fnvars;
+    jl_query_cache *query_cache;
     jl_ptls_t ptls;
     // Set (implemented has a hasmap of MethodInstances to themselves) of which MethodInstances have (forward) edges
     // to other MethodInstances.
@@ -658,38 +675,37 @@ static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTS
     return 1;
 }
 
-
-static int caching_tag(jl_value_t *v) JL_NOTSAFEPOINT
+static int caching_tag(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAFEPOINT
 {
     if (jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
         jl_value_t *m = mi->def.value;
         if (jl_is_method(m) && jl_object_in_image(m))
-            return 1 + type_in_worklist(mi->specTypes);
+            return 1 + type_in_worklist(mi->specTypes, query_cache);
     }
     if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
         if (jl_is_tuple_type(dt) ? !dt->isconcretetype : dt->hasfreetypevars)
             return 0; // aka !is_cacheable from jltypes.c
         if (jl_object_in_image((jl_value_t*)dt->name))
-            return 1 + type_in_worklist(v);
+            return 1 + type_in_worklist(v, query_cache);
     }
     jl_value_t *dtv = jl_typeof(v);
     if (jl_is_datatype_singleton((jl_datatype_t*)dtv)) {
-        return 1 - type_in_worklist(dtv); // these are already recached in the datatype in the image
+        return 1 - type_in_worklist(dtv, query_cache); // these are already recached in the datatype in the image
     }
     return 0;
 }
 
-static int needs_recaching(jl_value_t *v) JL_NOTSAFEPOINT
+static int needs_recaching(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAFEPOINT
 {
-    return caching_tag(v) == 2;
+    return caching_tag(v, query_cache) == 2;
 }
 
-static int needs_uniquing(jl_value_t *v) JL_NOTSAFEPOINT
+static int needs_uniquing(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAFEPOINT
 {
     assert(!jl_object_in_image(v));
-    return caching_tag(v) == 1;
+    return caching_tag(v, query_cache) == 1;
 }
 
 static void record_field_change(jl_value_t **addr, jl_value_t *newval) JL_NOTSAFEPOINT
@@ -724,16 +740,6 @@ static uintptr_t jl_fptr_id(void *fptr)
     else
         return *(uintptr_t*)pbp;
 }
-
-static int effects_foldable(uint32_t effects)
-{
-    // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable(effects, true)
-    return ((effects & 0x7) == 0) && // is_consistent(effects)
-           (((effects >> 10) & 0x03) == 0) && // is_noub(effects)
-           (((effects >> 3) & 0x03) == 0) && // is_effect_free(effects)
-           ((effects >> 6) & 0x01); // is_terminates(effects)
-}
-
 
 // `jl_queue_for_serialization` adds items to `serialization_order`
 #define jl_queue_for_serialization(s, v) jl_queue_for_serialization_((s), (jl_value_t*)(v), 1, 0)
@@ -784,7 +790,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         jl_datatype_t *dt = (jl_datatype_t*)v;
         // ensure all type parameters are recached
         jl_queue_for_serialization_(s, (jl_value_t*)dt->parameters, 1, 1);
-        if (jl_is_datatype_singleton(dt) && needs_uniquing(dt->instance)) {
+        if (jl_is_datatype_singleton(dt) && needs_uniquing(dt->instance, s->query_cache)) {
             assert(jl_needs_serialization(s, dt->instance)); // should be true, since we visited dt
             // do not visit dt->instance for our template object as it leads to unwanted cycles here
             // (it may get serialized from elsewhere though)
@@ -795,7 +801,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
     if (s->incremental && jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
         jl_value_t *def = mi->def.value;
-        if (needs_uniquing(v)) {
+        if (needs_uniquing(v, s->query_cache)) {
             // we only need 3 specific fields of this (the rest are not used)
             jl_queue_for_serialization(s, mi->def.value);
             jl_queue_for_serialization(s, mi->specTypes);
@@ -811,7 +817,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             record_field_change((jl_value_t**)&mi->cache, NULL);
         }
         else {
-            assert(!needs_recaching(v));
+            assert(!needs_recaching(v, s->query_cache));
         }
         // n.b. opaque closures cannot be inspected and relied upon like a
         // normal method since they can get improperly introduced by generated
@@ -848,25 +854,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // TODO: if (ci in ci->defs->cache)
             record_field_change((jl_value_t**)&ci->next, NULL);
         }
-        jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
-        if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
-            if (!is_relocatable_ci(&relocatable_ext_cis, ci))
-                record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
-            else if (jl_is_method(ci->def->def.method) && // don't delete toplevel code
-                     ci->def->def.method->source) { // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
-                if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
-                    jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
-                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
-                }
-                else if (native_functions && // don't delete any code if making a ji file
-                         (ci->owner == jl_nothing) && // don't delete code for external interpreters
-                         !effects_foldable(ci->ipo_purity_bits) && // don't delete code we may want for irinterp
-                         jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
-                    // delete the code now: if we thought it was worth keeping, it would have been converted to object code
-                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
-                }
-            }
-        }
+        if (jl_atomic_load_relaxed(&ci->inferred) && !is_relocatable_ci(&relocatable_ext_cis, ci))
+            record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
     }
 
     if (immediate) // must be things that can be recursively handled, and valid as type parameters
@@ -974,9 +963,9 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     // Items that require postorder traversal must visit their children prior to insertion into
     // the worklist/serialization_order (and also before their first use)
     if (s->incremental && !immediate) {
-        if (jl_is_datatype(t) && needs_uniquing(v))
+        if (jl_is_datatype(t) && needs_uniquing(v, s->query_cache))
             immediate = 1;
-        if (jl_is_datatype_singleton((jl_datatype_t*)t) && needs_uniquing(v))
+        if (jl_is_datatype_singleton((jl_datatype_t*)t) && needs_uniquing(v, s->query_cache))
             immediate = 1;
     }
 
@@ -1140,7 +1129,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
 
 static void record_uniquing(jl_serializer_state *s, jl_value_t *fld, uintptr_t offset) JL_NOTSAFEPOINT
 {
-    if (s->incremental && jl_needs_serialization(s, fld) && needs_uniquing(fld)) {
+    if (s->incremental && jl_needs_serialization(s, fld) && needs_uniquing(fld, s->query_cache)) {
         if (jl_is_datatype(fld) || jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(fld)))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)offset);
         else if (jl_is_method_instance(fld))
@@ -1324,7 +1313,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         // write header
         if (object_id_expected)
             write_uint(f, jl_object_id(v));
-        if (s->incremental && jl_needs_serialization(s, (jl_value_t*)t) && needs_uniquing((jl_value_t*)t))
+        if (s->incremental && jl_needs_serialization(s, (jl_value_t*)t) && needs_uniquing((jl_value_t*)t, s->query_cache))
             arraylist_push(&s->uniquing_types, (void*)(uintptr_t)(ios_pos(f)|1));
         if (f == s->const_data)
             write_uint(s->const_data, ((uintptr_t)t->smalltag << 4) | GC_OLD_MARKED | GC_IN_IMAGE);
@@ -1335,7 +1324,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
         layout_table.items[item] = (void*)(reloc_offset | (f == s->const_data)); // store the inverse mapping of `serialization_order` (`id` => object-as-streampos)
 
         if (s->incremental) {
-            if (needs_uniquing(v)) {
+            if (needs_uniquing(v, s->query_cache)) {
                 if (jl_is_method_instance(v)) {
                     assert(f == s->s);
                     jl_method_instance_t *mi = (jl_method_instance_t*)v;
@@ -1356,7 +1345,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     assert(jl_is_datatype_singleton(t) && "unreachable");
                 }
             }
-            else if (needs_recaching(v)) {
+            else if (needs_recaching(v, s->query_cache)) {
                 arraylist_push(jl_is_datatype(v) ? &s->fixup_types : &s->fixup_objs, (void*)reloc_offset);
             }
             else if (jl_typetagis(v, jl_binding_type)) {
@@ -1758,7 +1747,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     }
                 }
                 void *superidx = ptrhash_get(&serialization_order, dt->super);
-                if (s->incremental && superidx != HT_NOTFOUND && (char*)superidx - 1 - (char*)HT_NOTFOUND > item && needs_uniquing((jl_value_t*)dt->super))
+                if (s->incremental && superidx != HT_NOTFOUND && (char*)superidx - 1 - (char*)HT_NOTFOUND > item && needs_uniquing((jl_value_t*)dt->super, s->query_cache))
                     arraylist_push(&s->uniquing_super, dt->super);
             }
             else if (jl_is_typename(v)) {
@@ -2567,7 +2556,8 @@ JL_DLLEXPORT jl_value_t *jl_as_global_root(jl_value_t *val, int insert)
 
 static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *newly_inferred, uint64_t worklist_key,
                            /* outputs */  jl_array_t **extext_methods, jl_array_t **new_ext_cis,
-                                          jl_array_t **method_roots_list, jl_array_t **ext_targets, jl_array_t **edges)
+                                          jl_array_t **method_roots_list, jl_array_t **ext_targets, jl_array_t **edges,
+                                          jl_query_cache *query_cache)
 {
     // extext_methods: [method1, ...], worklist-owned "extending external" methods added to functions owned by modules outside the worklist
     // ext_targets: [invokesig1, callee1, matches1, ...] non-worklist callees of worklist-owned methods
@@ -2578,7 +2568,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     assert(edges_map == NULL);
 
     // Save the inferred code from newly inferred, external methods
-    *new_ext_cis = queue_external_cis(newly_inferred);
+    *new_ext_cis = queue_external_cis(newly_inferred, query_cache);
 
     // Collect method extensions and edges data
     JL_GC_PUSH1(&edges_map);
@@ -2617,7 +2607,8 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
 static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                                            jl_array_t *worklist, jl_array_t *extext_methods,
                                            jl_array_t *new_ext_cis, jl_array_t *method_roots_list,
-                                           jl_array_t *ext_targets, jl_array_t *edges) JL_GC_DISABLED
+                                           jl_array_t *ext_targets, jl_array_t *edges,
+                                           jl_query_cache *query_cache) JL_GC_DISABLED
 {
     htable_new(&field_replace, 0);
     // strip metadata and IR when requested
@@ -2644,6 +2635,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     ios_mem(&gvar_record, 0);
     ios_mem(&fptr_record, 0);
     jl_serializer_state s = {0};
+    s.query_cache = query_cache;
     s.incremental = !(worklist == NULL);
     s.s = &sysimg;
     s.const_data = &const_data;
@@ -2974,12 +2966,15 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     int64_t datastartpos = 0;
     JL_GC_PUSH6(&mod_array, &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges);
 
+    jl_query_cache query_cache;
+    init_query_cache(&query_cache);
+
     if (worklist) {
         mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
         // Generate _native_data`
         if (_native_data != NULL) {
             jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
-                                          &extext_methods, &new_ext_cis, NULL, NULL, NULL);
+                                          &extext_methods, &new_ext_cis, NULL, NULL, NULL, &query_cache);
             jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
             *_native_data = jl_precompile_worklist(worklist, extext_methods, new_ext_cis);
             jl_precompile_toplevel_module = NULL;
@@ -3008,7 +3003,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     if (worklist) {
         htable_new(&relocatable_ext_cis, 0);
         jl_prepare_serialization_data(mod_array, newly_inferred, jl_worklist_key(worklist),
-                                      &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges);
+                                      &extext_methods, &new_ext_cis, &method_roots_list, &ext_targets, &edges, &query_cache);
         if (!emit_split) {
             write_int32(f, 0); // No clone_targets
             write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
@@ -3020,7 +3015,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
-    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, method_roots_list, ext_targets, edges);
+    jl_save_system_image_to_stream(ff, mod_array, worklist, extext_methods, new_ext_cis, method_roots_list, ext_targets, edges, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;
     if (worklist)
@@ -3050,6 +3045,8 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
             // Next we will write the clone_targets and afterwards the srctext
         }
     }
+
+    destroy_query_cache(&query_cache);
 
     JL_GC_POP();
     *s = f;
