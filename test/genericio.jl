@@ -79,4 +79,10 @@ Base.eof(io::GenericUnbufferedIO) = eof(io.inner)
     end
 end
 
+Base.delete_method(Base.which(eof, Tuple{GenericOldIO}))
+@test_throws MethodError eof(GenericOldIO(IOBuffer()))
+
+Base.delete_method(Base.which(eof, Tuple{GenericUnbufferedIO}))
+@test_throws MethodError eof(GenericUnbufferedIO(IOBuffer()))
+
 end # module
