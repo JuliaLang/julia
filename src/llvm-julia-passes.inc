@@ -16,6 +16,7 @@ FUNCTION_PASS("AllocOpt", AllocOptPass())
 FUNCTION_PASS("PropagateJuliaAddrspaces", PropagateJuliaAddrspacesPass())
 FUNCTION_PASS("GCInvariantVerifier", GCInvariantVerifierPass())
 FUNCTION_PASS("FinalLowerGC", FinalLowerGCPass())
+FUNCTION_PASS("ExpandAtomicModify", ExpandAtomicModifyPass())
 #endif
 
 //Loop passes
