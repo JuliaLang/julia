@@ -224,6 +224,21 @@ end
         @test isequal(f(abs2, A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
     end
 
+    # extrema, findextrema
+    @test_throws "reducing over an empty collection is not allowed" extrema(A, dims=1)
+    @test isequal(extrema(A, dims=2), Matrix{Tuple{Int,Int}}(undef, 0,1))
+    @test_throws "reducing over an empty collection is not allowed" extrema(A, dims=(1, 2))
+    @test isequal(extrema(A, dims=3), Matrix{Tuple{Int,Int}}(undef, 0,1))
+
+    @test_throws ArgumentError findextrema(A, dims=1)
+    @test isequal(findextrema(A, dims=2), ((zeros(Int, 0, 1), zeros(Int, 0, 1)), (zeros(Int, 0, 1), zeros(Int, 0, 1))))
+    @test_throws ArgumentError findextrema(A, dims=(1, 2))
+    @test isequal(findextrema(A, dims=3), ((zeros(Int, 0, 1), zeros(Int, 0, 1)), (zeros(Int, 0, 1), zeros(Int, 0, 1))))
+    @test_throws ArgumentError findextrema(abs2, A, dims=1)
+    @test isequal(findextrema(abs2, A, dims=2), ((zeros(Int, 0, 1), zeros(Int, 0, 1)), (zeros(Int, 0, 1), zeros(Int, 0, 1))))
+    @test_throws ArgumentError findextrema(abs2, A, dims=(1, 2))
+    @test isequal(findextrema(abs2, A, dims=3), ((zeros(Int, 0, 1), zeros(Int, 0, 1)), (zeros(Int, 0, 1), zeros(Int, 0, 1))))
+
 end
 
 ## findmin/findmax/minimum/maximum
@@ -250,6 +265,10 @@ for (tup, rval, rind) in [((1,), [5.0 5.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(maximum!(copy(rval), A, init=false), rval)
 end
 
+for tup in [(1,), (2,), (1,2)]
+    @test findextrema(A, dims=tup) == (findmin(A, dims=tup), findmax(A, dims=tup))
+end
+
 @testset "findmin/findmax transformed arguments, numeric values" begin
     A = [1.0 -5.0 -6.0;
          -5.0 2.0 4.0]
@@ -270,6 +289,8 @@ end
             @test rind′ == rind
             @test findmin(f, A, dims=tup) == (rval, rind)
             @test (rval′, rind′) == findmin(A′, dims=tup)
+            @test findextrema(A′, dims=tup)[1] == (rval, rind)
+            @test findextrema(f, A, dims=tup)[1] == (rval, rind)
         end
     end
 
@@ -290,6 +311,8 @@ end
             @test rind′ == rind
             @test findmax(f, A, dims=tup) == (rval, rind)
             @test (rval′, rind′) == findmax(A′, dims=tup)
+            @test findextrema(A′, dims=tup)[2] == (rval, rind)
+            @test findextrema(f, A, dims=tup)[2] == (rval, rind)
         end
     end
 end
@@ -303,6 +326,9 @@ end
         rval′, rind′ = findmin(length, A, dims=tup)
         @test (rval, rind) == (rval′, rind′)
         @test typeof(rval′) == Matrix{Int}
+        rval′, rind′ = findextrema(length, A, dims=tup)[1]
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval′) == Matrix{Int}
     end
     for (tup, rval, rind) in [((1,), [3 4], [CartesianIndex(2, 1) CartesianIndex(2, 2)]),
                               ((2,), reshape([2, 4], 2, 1), reshape([CartesianIndex(1, 2), CartesianIndex(2, 2)], 2, 1)),
@@ -310,6 +336,9 @@ end
         rval′, rind′ = findmax(length, A, dims=tup)
         @test (rval, rind) == (rval′, rind′)
         @test typeof(rval) == Matrix{Int}
+        rval′, rind′ = findextrema(length, A, dims=tup)[2]
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval′) == Matrix{Int}
     end
     B = [1.5 1.0; 5.5 6.0]
     for (tup, rval, rind) in [((1,), [3//2 1//1], [CartesianIndex(1, 1) CartesianIndex(1, 2)]),
@@ -318,7 +347,13 @@ end
         rval′, rind′ = findmin(Rational, B, dims=tup)
         @test (rval, rind) == (rval′, rind′)
         @test typeof(rval) == Matrix{Rational{Int}}
+        rval′, rind′ = findextrema(Rational, B, dims=tup)[1]
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval) == Matrix{Rational{Int}}
         rval′, rind′ = findmin(Rational ∘ abs ∘ complex, B, dims=tup)
+        @test (rval, rind) == (rval′, rind′)
+        @test typeof(rval) == Matrix{Rational{Int}}
+        rval′, rind′ = findextrema(Rational ∘ abs ∘ complex, B, dims=tup)[1]
         @test (rval, rind) == (rval′, rind′)
         @test typeof(rval) == Matrix{Rational{Int}}
     end
@@ -337,6 +372,7 @@ end
         @test all(rind′ .== rind)
         @test all(maximum(B, dims=tup) .=== rval)
         @test isequal(findmax(abs, B′, dims=tup), (rval′, rind′))
+        @test isequal(findextrema(abs, B′, dims=tup)[2], (rval′, rind′))
     end
 
     for (tup, rval, rind) in [(1, [1.0 missing missing], [CartesianIndex(1, 1) CartesianIndex(1, 2) CartesianIndex(2, 3)]),
@@ -346,6 +382,7 @@ end
         @test all(rind′ .== rind)
         @test all(minimum(B, dims=tup) .=== rval)
         @test isequal(findmin(abs, B′, dims=tup), (rval′, rind′))
+        @test isequal(findextrema(abs, B′, dims=tup)[1], (rval′, rind′))
     end
 end
 
@@ -372,6 +409,8 @@ for (tup, rval, rind) in [((1,), [NaN 2.0 4.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(findmin(A, dims=tup), (rval, rind))
     @test isequal(findmin(abs, A, dims=tup), (rval, rind))
     @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+    @test isequal(findextrema(A, dims=tup)[1], (rval, rind))
+    @test isequal(findextrema(abs, A, dims=tup)[1], (rval, rind))
     @test isequal(minimum(A, dims=tup), rval)
     @test isequal(minimum!(similar(rval), A), rval)
     @test isequal(minimum!(copy(rval), A, init=false), rval)
@@ -384,6 +423,8 @@ for (tup, rval, rind) in [((1,), [NaN 3.0 6.0], [CartesianIndex(2,1) CartesianIn
     @test isequal(findmax(A, dims=tup), (rval, rind))
     @test isequal(findmax(abs, A, dims=tup), (rval, rind))
     @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+    @test isequal(findextrema(A, dims=tup)[2], (rval, rind))
+    @test isequal(findextrema(abs, A, dims=tup)[2], (rval, rind))
     @test isequal(maximum(A, dims=tup), rval)
     @test isequal(maximum!(similar(rval), A), rval)
     @test isequal(maximum!(copy(rval), A, init=false), rval)
@@ -400,6 +441,10 @@ end
         @test minimum(abs2, A, dims=2) == reshape([0.25], 1, 1)
         @test findmin(abs2, A, dims=2) == (fill(0.25, 1, 1), fill(CartesianIndex(1, 2), 1, 1))
         @test findmax(abs2, A, dims=2) == (fill(2.25, 1, 1), fill(CartesianIndex(1, 1), 1, 1))
+        mn, mx = findextrema(abs2, A, dims=2)
+        @test mn == (fill(0.25, 1, 1), fill(CartesianIndex(1, 2), 1, 1))
+        @test mx == (fill(2.25, 1, 1), fill(CartesianIndex(1, 1), 1, 1))
+        # @test findextrema(abs2, A, dims=2) == ((fill(0.25, 1, 1), fill(CartesianIndex(1, 2), 1, 1)), (fill(2.25, 1, 1), fill(CartesianIndex(1, 1), 1, 1)))
     end
 end
 
@@ -414,6 +459,9 @@ end
         @test isequal(findmin(A, dims=tup), (rval, rind))
         @test isequal(findmin(abs, A′, dims=tup), (rval, rind))
         @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema(abs, A, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[1], (rval, rind))
         @test isequal(minimum(A, dims=tup), rval)
         @test isequal(minimum!(similar(rval), A), rval)
         @test isequal(minimum!(copy(rval), A, init=false), rval)
@@ -425,6 +473,9 @@ end
         @test isequal(findmax(A, dims=tup), (rval, rind))
         @test isequal(findmax(abs, A′, dims=tup), (rval, rind))
         @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema(abs, A, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[2], (rval, rind))
         @test isequal(maximum(A, dims=tup), rval)
         @test isequal(maximum!(similar(rval), A), rval)
         @test isequal(maximum!(copy(rval), A, init=false), rval)
@@ -442,6 +493,9 @@ end
         @test isequal(findmin(A, dims=tup), (rval, rind))
         @test isequal(findmin(x -> x == 1 ? Inf : -Inf, A′, dims=tup), (rval, rind))
         @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema(x -> x == 1 ? Inf : -Inf, A′, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[1], (rval, rind))
         @test isequal(minimum(A, dims=tup), rval)
         @test isequal(minimum!(similar(rval), A), rval)
         @test isequal(minimum!(copy(rval), A, init=false), rval)
@@ -453,6 +507,9 @@ end
         @test isequal(findmax(A, dims=tup), (rval, rind))
         @test isequal(findmax(x -> x == 1 ? Inf : -Inf, A′, dims=tup), (rval, rind))
         @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema(x -> x == 1 ? Inf : -Inf, A′, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[2], (rval, rind))
         @test isequal(maximum(A, dims=tup), rval)
         @test isequal(maximum!(similar(rval), A), rval)
         @test isequal(maximum!(copy(rval), A, init=false), rval)
@@ -466,6 +523,9 @@ end
         @test isequal(findmin(A, dims=tup), (rval, rind))
         @test isequal(findmin(x -> 10^x, A′, dims=tup), (rval, rind))
         @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema(x -> 10^x, A′, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[1], (rval, rind))
         @test isequal(minimum(A, dims=tup), rval)
         @test isequal(minimum!(similar(rval), A), rval)
         @test isequal(minimum!(copy(rval), A, init=false), rval)
@@ -475,6 +535,9 @@ end
         @test isequal(findmax(A, dims=tup), (rval, rind))
         @test isequal(findmax(x -> 10^x, A′, dims=tup), (rval, rind))
         @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema(x -> 10^x, A′, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[2], (rval, rind))
         @test isequal(maximum(A, dims=tup), rval)
         @test isequal(maximum!(similar(rval), A), rval)
         @test isequal(maximum!(copy(rval), A, init=false), rval)
@@ -485,6 +548,9 @@ end
         @test isequal(findmin(A, dims=tup), (rval, rind))
         @test isequal(findmin(x -> -(x + 20), A, dims=tup), (rval, rind))
         @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema(x -> -(x + 20), A, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[1], (rval, rind))
         @test isequal(minimum(A, dims=tup), rval)
         @test isequal(minimum!(similar(rval), A), rval)
         @test isequal(minimum!(copy(rval), A, init=false), rval)
@@ -494,6 +560,9 @@ end
         @test isequal(findmax(A, dims=tup), (rval, rind))
         @test isequal(findmax(x -> -(x + 20), A, dims=tup), (rval, rind))
         @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema(x -> -(x + 20), A, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[2], (rval, rind))
         @test isequal(maximum(A, dims=tup), rval)
         @test isequal(maximum!(similar(rval), A), rval)
         @test isequal(maximum!(copy(rval), A, init=false), rval)
@@ -505,6 +574,9 @@ end
         @test isequal(findmin(A, dims=tup), (rval, rind))
         @test isequal(findmin(x -> x == 1 ? 10^x : x - 20, A′, dims=tup), (rval, rind))
         @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema(x -> x == 1 ? 10^x : x - 20, A′, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[1], (rval, rind))
         @test isequal(minimum(A, dims=tup), rval)
         @test isequal(minimum!(similar(rval), A), rval)
         @test isequal(minimum!(copy(rval), A, init=false), rval)
@@ -514,6 +586,9 @@ end
         @test isequal(findmax(A, dims=tup), (rval, rind))
         @test isequal(findmax(x -> x == 1 ? 10^x : x - 20, A′, dims=tup), (rval, rind))
         @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema(x -> x == 1 ? 10^x : x - 20, A′, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[2], (rval, rind))
         @test isequal(maximum(A, dims=tup), rval)
         @test isequal(maximum!(similar(rval), A), rval)
         @test isequal(maximum!(copy(rval), A, init=false), rval)
@@ -526,6 +601,9 @@ end
         @test isequal(findmin(A, dims=tup), (rval, rind))
         @test isequal(findmin(x -> (x^2)[1:1], A, dims=tup), (rval, rind))
         @test isequal(findmin!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema(x -> (x^2)[1:1], A, dims=tup)[1], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[1], (rval, rind))
         @test isequal(minimum(A, dims=tup), rval)
         @test isequal(minimum!(similar(rval), A), rval)
         @test isequal(minimum!(copy(rval), A, init=false), rval)
@@ -535,6 +613,9 @@ end
         @test isequal(findmax(A, dims=tup), (rval, rind))
         @test isequal(findmax(x -> (x^2)[1:1], A, dims=tup), (rval, rind))
         @test isequal(findmax!(similar(rval), similar(rind), A), (rval, rind))
+        @test isequal(findextrema(A, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema(x -> (x^2)[1:1], A, dims=tup)[2], (rval, rind))
+        @test isequal(findextrema!(similar(rval), similar(rind), similar(rval), similar(rind), A)[2], (rval, rind))
         @test isequal(maximum(A, dims=tup), rval)
         @test isequal(maximum!(similar(rval), A), rval)
         @test isequal(maximum!(copy(rval), A, init=false), rval)
