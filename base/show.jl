@@ -442,7 +442,7 @@ get(io::IO, key, default) = default
 keys(io::IOContext) = keys(io.dict)
 keys(io::IO) = keys(ImmutableDict{Symbol,Any}())
 
-displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)
+displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)::Tuple{Int,Int}
 
 show_circular(io::IO, @nospecialize(x)) = false
 function show_circular(io::IOContext, @nospecialize(x))
@@ -3413,6 +3413,9 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, partition_restriction(partition))
     elseif kind == PARTITION_KIND_CONST
         print(io, "constant binding to ")
+        print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_CONST_IMPORT
+        print(io, "constant binding (declared with `import`) to ")
         print(io, partition_restriction(partition))
     elseif kind == PARTITION_KIND_UNDEF_CONST
         print(io, "undefined const binding")

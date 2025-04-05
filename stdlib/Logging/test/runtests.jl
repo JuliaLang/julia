@@ -306,4 +306,47 @@ end
     @test isempty(undoc)
 end
 
+@testset "Logging when multithreaded" begin
+    n = 10000
+    cmd = `$(Base.julia_cmd()) -t4 --color=no $(joinpath(@__DIR__, "threads_exec.jl")) $n`
+    fname = tempname()
+    @testset "Thread safety" begin
+        f = open(fname, "w")
+        @test success(run(pipeline(cmd, stderr=f)))
+        close(f)
+    end
+
+    @testset "No tearing in log printing" begin
+        # Check for print tearing by verifying that each log entry starts and ends correctly
+        f = open(fname, "r")
+        entry_start = r"┌ (Info|Warning|Error): iteration"
+        entry_end = r"└ "
+
+        open_entries = 0
+        total_entries = 0
+        for line in eachline(fname)
+            starts = count(entry_start, line)
+            starts > 1 && error("Interleaved logs: Multiple log entries started on one line")
+            if starts == 1
+                startswith(line, entry_start) || error("Interleaved logs: Log entry started in the middle of a line")
+                open_entries += 1
+                total_entries += 1
+            end
+
+            ends = count(entry_end, line)
+            starts == 1 && ends == 1 && error("Interleaved logs: Log entry started and and another ended on one line")
+            ends > 1 && error("Interleaved logs: Multiple log entries ended on one line")
+            if ends == 1
+                startswith(line, entry_end) || error("Interleaved logs: Log entry ended in the middle of a line")
+                open_entries -= 1
+            end
+            # Ensure no mismatched log entries
+            open_entries >= 0 || error("Interleaved logs")
+        end
+
+        @test open_entries == 0  # Ensure all entries closed properly
+        @test total_entries == n * 3  # Ensure all logs were printed (3 because @debug is hidden)
+    end
+end
+
 end
