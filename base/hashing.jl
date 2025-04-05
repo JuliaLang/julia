@@ -193,8 +193,6 @@ end
         secret::NTuple{3, UInt64}
     )
     # Adapted with gratitude from [rapidhash](https://github.com/Nicoshev/rapidhash)
-    # while the integer hashing methods defined in this file share the mixing function
-    # used by rapidhash, only this method implements the algorithm in its entirety.
     buflen = UInt64(n)
     seed = seed ⊻ (hash_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
 
