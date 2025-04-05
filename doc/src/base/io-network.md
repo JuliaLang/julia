@@ -21,7 +21,15 @@ Base.closewrite
 Base.write
 Base.read
 Base.read!
+Base.readinto!
+Base.readall!
 Base.readbytes!
+Base.getbuffer
+Base.fillbuffer
+Base.consume
+Base.readbuffering
+Base.IsBuffered
+Base.NotBuffered
 Base.unsafe_read
 Base.unsafe_write
 Base.readeach
