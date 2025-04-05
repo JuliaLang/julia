@@ -884,3 +884,38 @@ Interval{Float64}(2.0, 3.0)
 julia> trunc(x)
 Interval{Float64}(1.0, 2.0)
 ```
+
+## [IO](@id man-interface-io)
+Julia's abstract type `IO` has an interface that revolves around moving bytes to or from the IO.
+Currently, only reading operations (i.e. copying *from* the IO) have a specified interface.
+
+Readers can either be buffered (the default), or unbuffered, depending on whether they
+provide consumers access to an internal buffer containing data to read from.
+Buffered IOs are typically more efficient and convenient, so new IO types should be buffered
+if their implementation allows it.
+Alternatively, users of an unbuffered type can wrap it in a buffered wrapper type for efficiency and convenience.
+
+| Methods to implement                     | Default definition                                  | When to implement                                 |
+|:---------------------------------------- |:--------------------------------------------------- |:------------------------------------------------- |
+| **Core methods**                         |                                                     |                                                   |
+| `getbuffer(io)`                          | none                                                | if reading is buffered                            |
+| `fillbuffer(io)`                         | none                                                | if reading is buffered                            |
+| `consume(io, ::Int)`                     | none                                                | if reading is buffered                            |
+| `readinto!(io, ::AbstractVector{UInt8})` | in terms of `getbuffer`, `fillbuffer` and `consume` | if reading is not buffered                        |
+| `Base.readbuffering`                     | `Base.IsBuffered()`                                 | if reading is not buffered                        |
+| **Optional methods**                     |                                                     |                                                   |
+| `eof(io)`                                | for buffered readers                                | when possible                                     |
+| `close(io)`                              | none                                                | when underlying object needs explicit destruction |
+| `isopen(io)`                             | none                                                | if `close` is implemented                         |
+| `isreadable(io)`                         | `isopen(io)`                                        | when possible                                     |
+| `iswritable(io)`                         | `isopen(io)`                                        | when possible                                     |
+| `position(io)`                           | none                                                | with `seek`, if supported                         |
+| `seek(io, ::Int)`                        | none                                                | with `position`, if supported                     |
+| `seekend(io)`                            | none                                                | with `seek`, if IO length is known                |
+| `lock`                                   | none                                                | with `unlock`, if IO has mutex                    |
+| `unlock`                                 | none                                                | with `lock`, if IO has mutex                      |
+| `mark`                                   | should not be used                                  | with `ismarked`, `reset`, and `unmark`            |
+| `ismarked`                               | should not be used                                  | as `mark`                                         |
+| `reset`                                  | should not be used                                  | as `mark`                                         |
+| `unmark`                                 | should not be used                                  | as `mark`                                         |
+
