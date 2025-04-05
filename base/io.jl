@@ -3,36 +3,60 @@
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
 """
-    abstract type IO
+    abstract type IO <: Any
 
-Supertype for all IO types that support reading and/or writing.
+Supertype for IO types that support reading and/or writing.
 
 New subtypes should implement:
-* If readable and unbuffered: `readbuffering`, `readinto!`.
-* If readable and buffered: `getbuffer`, `fillbuffer`, and `consume`.
+* If readable and unbuffered: [`Base.readbuffering`](@ref), [`readinto!`](@ref).
+* If readable and buffered: [`getbuffer`](@ref), [`fillbuffer`](@ref),
+  and [`consume`](@ref).
+
+Currently, only a reading interface is defined for `IO`. A writing interface may
+be added in the future.
 """
 IO
 
 """
     IOBuffering
 
-Trait to signal if an IO type is buffered.
-Call `readbuffering(T)` on a type `T <: IO` to determine if an IO is buffered.
-The returned value is `IsBuffered()` (the default) or `NotBuffered()`.
+Trait to signal if an IO type is buffered. Subtypes are `IsBuffered` and
+`NotBuffered`.
 
-New concrete subtypes `T` of `IO` should signal otherwise by implementing
-`readbuffering` for `T`.
+# Examples
+```jldoctest
+julia> isbuf = Base.readbuffering(IOBuffer)
+Base.IsBuffered()
+
+julia> isbuf isa Base.IOBuffering
+true
+```
+
+See also: [`readbuffering`](@ref)
 """
 abstract type IOBuffering end
 
-"See `IOBuffering`"
+"See [`IOBuffering`](@ref)"
 struct IsBuffered <: IOBuffering end
 
-"See `IOBuffering`"
+"See [`IOBuffering`](@ref)"
 struct NotBuffered <: IOBuffering end
 
-# TODO: What about Union{}?
 # This function is called `readbuffering` because we might introduce writebuffering in the future
+"""
+    (Base.readbuffering(::Type{T})::Base.IOBuffering) where {T <: IO}
+
+Check is a readable `IO` type implements buffering.
+Buffered and unbuffered IO types should implement different methods,
+see the documentation for IO.
+The default implementation returns `Base.IsBuffered()`, so unbuffered IO types
+should implement this.
+
+!!! compat "Julia 1.13"
+    This function was added in Julia 1.13. IO types defined before Julia 1.13
+    may not implement buffering, even if this function returns `IsBuffered()`
+    for the type, since it is the default.
+"""
 readbuffering(::Type{<:IO}) = IsBuffered()
 
 # TODO: More docs about when this kind of error should be thrown
@@ -64,7 +88,7 @@ mutating the buffer.
 Calling this function when the buffer is empty should not attempt to fill the buffer.
 
 This function should be implemented for buffered readers only, and together with
-[`fillbufer`](@ref) and [`consume`](@ref).
+[`fillbuffer`](@ref) and [`consume`](@ref).
 """
 function getbuffer end
 

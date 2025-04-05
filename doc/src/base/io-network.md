@@ -28,6 +28,7 @@ Base.getbuffer
 Base.fillbuffer
 Base.consume
 Base.readbuffering
+Base.IOBuffering
 Base.IsBuffered
 Base.NotBuffered
 Base.unsafe_read
