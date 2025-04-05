@@ -58,7 +58,7 @@ end
     [option]
     """
     d = TOML.parse(s)
-    @test toml_str(d) == "user = \"me\"\n\n[julia]\n\n[option]\n"
+    @test toml_str(d; sorted=true) == "user = \"me\"\n\n[julia]\n\n[option]\n"
 end
 
 @testset "special characters" begin
