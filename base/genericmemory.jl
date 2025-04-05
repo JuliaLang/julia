@@ -115,14 +115,13 @@ isassigned(a::GenericMemoryRef) = memoryref_isassigned(a, default_access_order(a
 ## copy ##
 function unsafe_copyto!(dest::MemoryRef{T}, src::MemoryRef{T}, n) where {T}
     @_terminates_globally_notaskstate_meta
-    n == 0 && return dest
-    @boundscheck memoryref(dest, n), memoryref(src, n)
+    iszero(n) && return dest
     if isbitstype(T)
         tdest = @_gc_preserve_begin dest
         tsrc = @_gc_preserve_begin src
         pdest = unsafe_convert(Ptr{Cvoid}, dest)
         psrc = unsafe_convert(Ptr{Cvoid}, src)
-        memmove(pdest, psrc, aligned_sizeof(T) * n)
+        memmove(pdest, psrc, (aligned_sizeof(T) * n) % UInt)
         @_gc_preserve_end tdest
         @_gc_preserve_end tsrc
     else
@@ -133,14 +132,13 @@ end
 
 function unsafe_copyto!(dest::GenericMemoryRef, src::GenericMemoryRef, n)
     n == 0 && return dest
-    @boundscheck memoryref(dest, n), memoryref(src, n)
     unsafe_copyto!(dest.mem, memoryrefoffset(dest), src.mem, memoryrefoffset(src), n)
     return dest
 end
 
 function unsafe_copyto!(dest::Memory{T}, doffs, src::Memory{T}, soffs, n) where{T}
     n == 0 && return dest
-    unsafe_copyto!(memoryref(dest, doffs), memoryref(src, soffs), n)
+    @inbounds unsafe_copyto!(memoryref(dest, doffs), memoryref(src, soffs), n)
     return dest
 end
 
@@ -183,6 +181,8 @@ end
 copyto!(dest::Memory, src::Memory) = copyto!(dest, 1, src, 1, length(src))
 function copyto!(dest::Memory, doffs::Integer, src::Memory, soffs::Integer, n::Integer)
     n < 0 && _throw_argerror("Number of elements to copy must be non-negative.")
+    @boundscheck checkbounds(dest, doffs:doffs+n-1)
+    @boundscheck checkbounds(src, soffs:soffs+n-1)
     unsafe_copyto!(dest, doffs, src, soffs, n)
     return dest
 end
