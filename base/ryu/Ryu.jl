@@ -22,9 +22,9 @@ neededdigits(::Type{Float16}) = 9 + 5 + 9
 
 Number of digits necessary to represent type `T` in shortest precision.
 """
-neededfloatdigits(::Type{Float64}) = 23
+neededfloatdigits(::Type{Float64}) = 24
 neededfloatdigits(::Type{Float32}) = 15
-neededfloatdigits(::Type{Float16}) = 18
+neededfloatdigits(::Type{Float16}) = 20
 
 """
     Ryu.writeshortest(x, plus=false, space=false, hash=true, precision=-1, expchar=UInt8('e'), padexp=false, decchar=UInt8('.'), typed=false, compact=false)
