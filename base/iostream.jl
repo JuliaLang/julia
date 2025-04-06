@@ -135,6 +135,14 @@ end
 
 Seek a stream to the given position.
 
+The `pos` argument should be a value that can be returned by `position(s)`.
+Seeking before the first position should throw an error. Seeking after the
+final position should throw an error if the stream is not writable.
+If the stream is writable, reading will throw an error, and writing will fill
+in zeros (`0x00`) between the largest previous position and the new position.
+
+See also: [`position`](@ref), [`skip`](@ref), [`seekstart`](@ref).
+
 # Examples
 ```jldoctest
 julia> io = IOBuffer("JuliaLang is a GitHub organization.");
@@ -156,6 +164,9 @@ end
     seekstart(s)
 
 Seek a stream to its beginning.
+By default, this is defined as `seekstart(s::IO) = seek(s, 0)`.
+
+See also: [`seek`](@ref), [`seekend`](@ref), [`position`](@ref)
 
 # Examples
 ```jldoctest
@@ -178,6 +189,8 @@ seekstart(s::IO) = seek(s,0)
     seekend(s)
 
 Seek a stream to its end.
+
+See also: [`seek`](@ref), [`seekstart`](@ref), [`skip`](@ref)
 """
 function seekend(s::IOStream)
     err = @_lock_ios s ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
@@ -189,6 +202,14 @@ end
     skip(s, offset)
 
 Seek a stream relative to the current position.
+
+This is equivalent to `seek(s, position(s) + offset)`, except where seeking would
+seek beyond the end of the stream, where `skip` will throw an `EOFError`.
+Where `offset` is non-negative may be implemented by reading and discarding `offset`
+bytes, and therefore may be supported by IO types which do not support `seek` or
+`position`.
+
+See also: [`seek`](@ref), [`position`](@ref)
 
 # Examples
 ```jldoctest
@@ -210,9 +231,19 @@ function skip(s::IOStream, delta::Integer)
 end
 
 """
-    position(s)
+    position(s::IO)
 
 Get the current position of a stream.
+
+The position is the zero-based offset in the stream's data.
+This value may not correspond to the offset in the underlying stored data of `s`,
+e.g. for streams of compressed data.
+Unless otherwise specified, generic code assumes this is a zero-based `Int`.
+
+The value returned by `position` is used for seeking,
+so IOs which neither supports seeking nor marking need not implement this function.
+
+See also: [`seek`](@ref), [`skip`](@ref), [`mark`](@ref)
 
 # Examples
 ```jldoctest
