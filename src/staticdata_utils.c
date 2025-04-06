@@ -717,6 +717,12 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             jl_atomic_store_relaxed(&ci->min_world, world);
             // n.b. ci->max_world is not updated until edges are verified
         }
+        else if (jl_is_methtable(obj)) {
+            jl_methtable_t *mt = (jl_methtable_t*)obj;
+            assert(jl_atomic_load_relaxed(&mt->last_update_world) == 0);
+            if (jl_atomic_load_relaxed(&mt->local_age) != 0)
+                jl_atomic_store_relaxed(&mt->last_update_world, world);
+        }
         else {
             abort();
         }
@@ -731,7 +737,15 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
             jl_methtable_t *mt = jl_method_get_table(entry->func.method);
             assert((jl_value_t*)mt != jl_nothing);
+
             jl_method_table_activate(mt, entry);
+
+            // XXX: It is required for soundness that de-serialized pkgimages increment
+            // the `local_age` of a MethodTable exactly the same number of times that it
+            // was incremented during their serialization process.
+            size_t local_age = jl_atomic_load_acquire(&mt->local_age);
+            jl_atomic_store_release(&mt->local_age, local_age + 1);
+            jl_atomic_store_release(&mt->last_update_world, world);
         }
     }
 }
