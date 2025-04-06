@@ -120,18 +120,35 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
         while j ≤ length(callees)
             local min_valid2::UInt, max_valid2::UInt
             edge = callees[j]
-            @assert !(edge isa Method) # `Method`-edge isn't allowed for the optimized one-edge format
-            if edge isa CodeInstance
-                edge = get_ci_mi(edge)
-            end
-            if edge isa MethodInstance
-                sig = typeintersect((edge.def::Method).sig, edge.specTypes) # TODO??
-                min_valid2, max_valid2, matches = verify_call(sig, callees, j, 1, world)
+            @assert !(edge isa Method) "`Method`-edge isn't allowed for the optimized one-edge format"
+            if edge isa MethodInstance || edge isa CodeInstance || edge isa UInt
+                if edge isa UInt
+                    mt_age = edge
+                    j += 1
+                    edge = callees[j]
+                end
+                edge = edge isa CodeInstance ? get_ci_mi(edge) : edge::MethodInstance
+                m = edge.def::Method
+                sig = typeintersect(m.sig, edge.specTypes) # TODO??
+                mt = Base.get_methodtable(m)
+                if mt !== nothing && mt.local_age == mt_age
+                    # Fast path: the MethodTable has seen no updates beyond those present when originally queried
+                    (min_valid2, max_valid2, matches) = (mt.last_update_world, typemax(UInt), nothing)
+                else
+                    (min_valid2, max_valid2, matches) = verify_call(sig, callees, j, 1, world)
+                end
                 j += 1
             elseif edge isa Int
-                sig = callees[j+1]
-                min_valid2, max_valid2, matches = verify_call(sig, callees, j+2, edge, world)
-                j += 2 + edge
+                mt_age = callees[j+1]
+                sig = callees[j+2]
+                mt = ccall(:jl_method_table_for, Any, (Any,), sig)
+                if mt !== nothing && mt.local_age == mt_age
+                    # Fast path: the MethodTable has seen no updates beyond those present when originally queried
+                    (min_valid2, max_valid2, matches) = (mt.last_update_world, typemax(UInt), nothing)
+                else
+                    (min_valid2, max_valid2, matches) = verify_call(sig, callees, j+3, edge, world)
+                end
+                j += 3 + edge
                 edge = sig
             elseif edge isa Core.Binding
                 j += 1
