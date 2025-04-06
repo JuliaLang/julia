@@ -2087,8 +2087,7 @@ let A = Tuple{Any, Type{Ref{_A}} where _A},
     I = typeintersect(A, B)
     @test I != Union{}
     @test Tuple{Type{Ref{Integer}}, Type{Ref{Integer}}} <: I
-    # TODO: this intersection result seems too wide (I == B) ?
-    @test_broken !<:(Tuple{Type{Int}, Type{Int}}, I)
+    @test !<:(Tuple{Type{Int}, Type{Int}}, I)
 end
 
 @testintersect(Tuple{Type{T}, T} where T<:(Tuple{Vararg{_A, _B}} where _B where _A),
@@ -2756,4 +2755,16 @@ end
     Pair{N, T} where {N,NTuple{N,Int}<:T<:NTuple{N,Int}},
     Pair{N, T} where {N,NTuple{N,Int}<:T<:Tuple{Int,Vararg{Int}}},
     !Union{}
+)
+
+#issue 57852
+@testintersect(
+    Tuple{Type{T}, Type{<:F}, Type{<:F}} where {T, F<:Union{String, T}},
+    Tuple{Type{Complex{T}} where T, Type{Complex{T}} where T, Type{String}},
+    Tuple{Type{Complex{T}}, Type{Complex{T}}, Type{String}} where T
+)
+@testintersect(
+    Tuple{Type{T}, Type{<:Union{F, Nothing}}, Type{<:Union{F, Nothing}}} where {T, F<:Union{String, T}},
+    Tuple{Type{Complex{T}} where T, Type{Complex{T}} where T, Type{String}},
+    Tuple{Type{Complex{T}}, Type{Complex{T}}, Type{String}} where T
 )
