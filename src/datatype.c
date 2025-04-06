@@ -51,6 +51,8 @@ JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *mo
     jl_atomic_store_relaxed(&mt->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
     jl_atomic_store_relaxed(&mt->cache, jl_nothing);
     jl_atomic_store_relaxed(&mt->max_args, 0);
+    jl_atomic_store_relaxed(&mt->local_age, 0);
+    jl_atomic_store_relaxed(&mt->last_update_world, 0);
     mt->backedges = NULL;
     JL_MUTEX_INIT(&mt->writelock, "methodtable->writelock");
     mt->offs = 0;

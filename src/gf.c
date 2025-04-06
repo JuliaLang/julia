@@ -803,7 +803,7 @@ int foreach_mtable_in_module(
                         return 0;
                 }
             }
-            else if (jl_is_mtable(v)) {
+            else if (jl_is_methtable(v)) {
                 jl_methtable_t *mt = (jl_methtable_t*)v;
                 if (mt->module == m && mt->name == name) {
                     // this is probably an external method table here, so let's
@@ -2250,6 +2250,12 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     jl_atomic_store_relaxed(&method->deleted_world, world);
     jl_atomic_store_relaxed(&methodentry->max_world, world);
     jl_method_table_invalidate(mt, method, world);
+
+    // Record the "local age" and the "world age" it started applying in
+    size_t local_age = jl_atomic_load_acquire(&mt->local_age);
+    jl_atomic_store_release(&mt->local_age, local_age + 1);
+    jl_atomic_store_release(&mt->last_update_world, world + 1);
+
     jl_atomic_store_release(&jl_world_counter, world + 1);
     JL_UNLOCK(&mt->writelock);
     JL_UNLOCK(&world_counter_lock);
@@ -2285,7 +2291,7 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
 {
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     assert(jl_is_method(method));
-    assert(jl_is_mtable(mt));
+    assert(jl_is_methtable(mt));
     jl_timing_show_method(method, JL_TIMING_DEFAULT_BLOCK);
     jl_typemap_entry_t *newentry = NULL;
     JL_GC_PUSH1(&newentry);
@@ -2306,7 +2312,7 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
 {
     JL_TIMING(ADD_METHOD, ADD_METHOD);
     jl_method_t *method = newentry->func.method;
-    assert(jl_is_mtable(mt));
+    assert(jl_is_methtable(mt));
     assert(jl_is_method(method));
     jl_timing_show_method(method, JL_TIMING_DEFAULT_BLOCK);
     jl_value_t *type = (jl_value_t*)newentry->sig;
@@ -2500,6 +2506,12 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
     jl_atomic_store_relaxed(&method->primary_world, world);
     jl_atomic_store_relaxed(&method->deleted_world, ~(size_t)0);
     jl_method_table_activate(mt, newentry);
+
+    // Record the "local age" and the "world age" it started applying in
+    size_t local_age = jl_atomic_load_acquire(&mt->local_age);
+    jl_atomic_store_release(&mt->local_age, local_age + 1);
+    jl_atomic_store_release(&mt->last_update_world, world);
+
     jl_atomic_store_release(&jl_world_counter, world);
     JL_UNLOCK(&world_counter_lock);
     JL_GC_POP();
@@ -2554,7 +2566,7 @@ JL_DLLEXPORT jl_value_t *jl_method_lookup_by_tt(jl_tupletype_t *tt, size_t world
     if (_mt == jl_nothing)
         mt = jl_gf_ft_mtable(jl_tparam0(tt));
     else {
-        assert(jl_isa(_mt, (jl_value_t*)jl_methtable_type));
+        assert(jl_is_methtable(_mt));
         mt = (jl_methtable_t*) _mt;
     }
     jl_method_instance_t* mi = jl_mt_assoc_by_type(mt, tt, world);

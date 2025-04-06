@@ -881,6 +881,8 @@ typedef struct _jl_methtable_t {
     _Atomic(jl_genericmemory_t*) leafcache;
     _Atomic(jl_typemap_t*) cache;
     _Atomic(intptr_t) max_args;  // max # of non-vararg arguments in a signature
+    _Atomic(size_t) local_age; // total # of operations applied to this portion of the method table
+    _Atomic(size_t) last_update_world; // world age when last update to MethodTable was made
     jl_module_t *module; // sometimes used for debug printing
     jl_array_t *backedges; // (sig, caller::CodeInstance) pairs
     jl_mutex_t writelock;
@@ -1656,7 +1658,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_code_info(v)   jl_typetagis(v,jl_code_info_type)
 #define jl_is_method(v)      jl_typetagis(v,jl_method_type)
 #define jl_is_module(v)      jl_typetagis(v,jl_module_tag<<4)
-#define jl_is_mtable(v)      jl_typetagis(v,jl_methtable_type)
+#define jl_is_methtable(v)   jl_typetagis(v,jl_methtable_type)
 #define jl_is_task(v)        jl_typetagis(v,jl_task_tag<<4)
 #define jl_is_string(v)      jl_typetagis(v,jl_string_tag<<4)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
@@ -1983,23 +1985,29 @@ JL_DLLEXPORT uint8_t *jl_unbox_uint8pointer(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_get_size(jl_value_t *val, size_t *pnt);
 
 #ifdef _P64
-#define jl_box_long(x)   jl_box_int64(x)
-#define jl_box_ulong(x)  jl_box_uint64(x)
-#define jl_unbox_long(x) jl_unbox_int64(x)
-#define jl_unbox_ulong(x) jl_unbox_uint64(x)
-#define jl_is_long(x)    jl_is_int64(x)
-#define jl_is_ulong(x)   jl_is_uint64(x)
-#define jl_long_type     jl_int64_type
-#define jl_ulong_type    jl_uint64_type
+#define jl_box_long(x)       jl_box_int64(x)
+#define jl_box_ulong(x)      jl_box_uint64(x)
+#define jl_unbox_long(x)     jl_unbox_int64(x)
+#define jl_unbox_ulong(x)    jl_unbox_uint64(x)
+#define jl_is_long(x)        jl_is_int64(x)
+#define jl_is_ulong(x)       jl_is_uint64(x)
+#define jl_long_type         jl_int64_type
+#define jl_ulong_type        jl_uint64_type
+#define jl_memory_ulong_type jl_memory_uint64_type
+#define jl_array_long_type   jl_array_int64_type
+#define jl_array_ulong_type  jl_array_uint64_type
 #else
-#define jl_box_long(x)   jl_box_int32(x)
-#define jl_box_ulong(x)  jl_box_uint32(x)
-#define jl_unbox_long(x) jl_unbox_int32(x)
-#define jl_unbox_ulong(x) jl_unbox_uint32(x)
-#define jl_is_long(x)    jl_is_int32(x)
-#define jl_is_ulong(x)   jl_is_uint32(x)
-#define jl_long_type     jl_int32_type
-#define jl_ulong_type    jl_uint32_type
+#define jl_box_long(x)       jl_box_int32(x)
+#define jl_box_ulong(x)      jl_box_uint32(x)
+#define jl_unbox_long(x)     jl_unbox_int32(x)
+#define jl_unbox_ulong(x)    jl_unbox_uint32(x)
+#define jl_is_long(x)        jl_is_int32(x)
+#define jl_is_ulong(x)       jl_is_uint32(x)
+#define jl_long_type         jl_int32_type
+#define jl_ulong_type        jl_uint32_type
+#define jl_memory_ulong_type jl_memory_uint32_type
+#define jl_array_long_type   jl_array_int32_type
+#define jl_array_ulong_type  jl_array_uint32_type
 #endif
 
 // structs
