@@ -35,7 +35,7 @@ hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 # Types can't be deleted, so marking as total allows the compiler to look up the hash
 hash(T::Type, h::UInt) =
-    hash((Base.@assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)), h)
+    hash((@assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)), h)
 hash(@nospecialize(data), h::UInt) = hash(objectid(data), h)
 
 function mul_parts(a::UInt64, b::UInt64)
@@ -45,17 +45,8 @@ end
 hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
 # faster-but-weaker than hash_mix intended for small keys
-hash_mix_linear(x::UInt64, h::UInt) = x - 3h
-
-function hash_finalizer(x::UInt64)
-    # constants arduously discovered by Pelle Evensen
-    # https://mostlymangling.blogspot.com/2019/12/stronger-better-morer-moremur-better.html
-    x ⊻= x >> 27
-    x *= 0x3c79ac492ba7b653
-    x ⊻= x >> 33
-    x *= 0x1c69b3f74ac4ae35
-    x ⊻= x >> 27
-end
+hash_mix_linear(x::UInt64, h::UInt) = 3h - x
+hash_finalizer(x::UInt64) = (x ⊻ 0x8d95d0cb4f172723) * 0xd32df181e077609d
 
 hash_64_64(data::UInt64, seed::UInt) = hash_finalizer(hash_mix_linear(data, seed))
 hash_64_32(data::UInt64, seed::UInt) = hash_64_64(data, seed) % UInt32
