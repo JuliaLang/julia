@@ -35,13 +35,19 @@ This info is illegal on any statement that is not a call to a generic function.
 struct MethodMatchInfo <: CallInfo
     results::MethodLookupResult
     mt::MethodTable
+    mt_age::Union{UInt,Nothing}
     atype
     fullmatch::Bool
     edges::Vector{Union{Nothing,CodeInstance}}
     function MethodMatchInfo(
-        results::MethodLookupResult, mt::MethodTable, @nospecialize(atype), fullmatch::Bool)
+        results::MethodLookupResult,
+        mt::MethodTable,
+        mt_age::Union{Nothing,UInt},
+        @nospecialize(atype),
+        fullmatch::Bool
+    )
         edges = fill!(Vector{Union{Nothing,CodeInstance}}(undef, length(results)), nothing)
-        return new(results, mt, atype, fullmatch, edges)
+        return new(results, mt, mt_age, atype, fullmatch, edges)
     end
 end
 add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo) = _add_edges_impl(edges, info)
@@ -74,18 +80,18 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
             mi = edge.def::MethodInstance
         end
         if mi.specTypes === m.spec_types
-            add_one_edge!(edges, edge)
+            add_one_edge!(edges, edge, info.mt_age)
             return nothing
         end
     end
     # add check for whether this lookup already existed in the edges list
-    for i in 1:length(edges)
-        if edges[i] === nmatches && edges[i+1] == info.atype
+    for i in 1:(length(edges)-2)
+        if edges[i] === (nmatches::Int) && edges[i+2] == info.atype
             # TODO: must also verify the CodeInstance match too
             return nothing
         end
     end
-    push!(edges, nmatches, info.atype)
+    push!(edges, nmatches, info.mt_age, info.atype)
     for i = 1:nmatches
         edge = info.edges[i]
         m = info.results[i]
@@ -98,11 +104,11 @@ function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Boo
     end
     nothing
 end
-function add_one_edge!(edges::Vector{Any}, edge::MethodInstance)
+function add_one_edge!(edges::Vector{Any}, edge::MethodInstance, mt_age::Union{Nothing,UInt})
     i = 1
     while i <= length(edges)
         edgeᵢ = edges[i]
-        edgeᵢ isa Int && (i += 2 + edgeᵢ; continue)
+        edgeᵢ isa Int && (i += 3 + edgeᵢ; continue)
         edgeᵢ isa CodeInstance && (edgeᵢ = get_ci_mi(edgeᵢ))
         edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge && !(i > 1 && edges[i-1] isa Type)
@@ -110,14 +116,15 @@ function add_one_edge!(edges::Vector{Any}, edge::MethodInstance)
         end
         i += 1
     end
+    mt_age !== nothing && push!(edges, mt_age)
     push!(edges, edge)
     nothing
 end
-function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
+function add_one_edge!(edges::Vector{Any}, edge::CodeInstance, mt_age::Union{Nothing,UInt})
     i = 1
     while i <= length(edges)
         edgeᵢ_orig = edgeᵢ = edges[i]
-        edgeᵢ isa Int && (i += 2 + edgeᵢ; continue)
+        edgeᵢ isa Int && (i += 3 + edgeᵢ; continue)
         edgeᵢ isa CodeInstance && (edgeᵢ = get_ci_mi(edgeᵢ))
         edgeᵢ isa MethodInstance || (i += 1; continue)
         if edgeᵢ === edge.def && !(i > 1 && edges[i-1] isa Type)
@@ -131,6 +138,7 @@ function add_one_edge!(edges::Vector{Any}, edge::CodeInstance)
         end
         i += 1
     end
+    mt_age !== nothing && push!(edges, mt_age)
     push!(edges, edge)
     nothing
 end
@@ -406,7 +414,7 @@ end
 function add_edges_impl(edges::Vector{Any}, info::OpaqueClosureCallInfo)
     edge = info.edge
     if edge !== nothing
-        add_one_edge!(edges, edge)
+        add_one_edge!(edges, edge, #= mt_age =# nothing)
     end
     nothing
 end

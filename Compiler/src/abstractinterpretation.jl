@@ -372,7 +372,9 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         end
         valid_worlds = intersect(valid_worlds, thismatches.valid_worlds)
         thisfullmatch = any(match::MethodMatch->match.fully_covers, thismatches)
-        thisinfo = MethodMatchInfo(thismatches, mt, sig_n, thisfullmatch)
+        thismaxworld = thismatches.valid_worlds.max_world
+        mt_age = (thismaxworld == typemax(UInt)) ? mt.local_age : nothing
+        thisinfo = MethodMatchInfo(thismatches, mt, mt_age, sig_n, thisfullmatch)
         push!(infos, thisinfo)
         for idx = 1:length(thismatches)
             push!(applicable, MethodMatchTarget(thismatches[idx], thisinfo.edges, idx))
@@ -397,7 +399,9 @@ function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(a
         return FailedMethodMatch("Too many methods matched")
     end
     fullmatch = any(match::MethodMatch->match.fully_covers, matches)
-    info = MethodMatchInfo(matches, mt, atype, fullmatch)
+    max_world = matches.valid_worlds.max_world
+    mt_age = (max_world == typemax(UInt)) ? mt.local_age : nothing
+    info = MethodMatchInfo(matches, mt, mt_age, atype, fullmatch)
     applicable = MethodMatchTarget[MethodMatchTarget(matches[idx], info.edges, idx) for idx = 1:length(matches)]
     return MethodMatches(applicable, info, matches.valid_worlds)
 end

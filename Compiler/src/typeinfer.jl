@@ -586,8 +586,11 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
         i > length(edges) && return nothing
         item = edges[i]
         if item isa Int
-            i += 2
+            i += 3
             continue # ignore the query information if present but process the contents
+        elseif item isa UInt
+            i += 1
+            continue # ignore the local age information but process the contents
         elseif isa(item, Method)
             # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
             i += 1
