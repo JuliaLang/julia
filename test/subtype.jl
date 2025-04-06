@@ -2652,10 +2652,10 @@ let S = Type{T53371{A, B, C, D, E}} where {A, B<:R53371{A}, C<:R53371{A}, D<:R53
 end
 
 #issue 54356
-# let S = Tuple{Val{Val{Union{Val{A2}, A2}}}, Val{Val{Union{Val{A2}, Val{A4}, A4}}}} where {A2, A4<:Union{Val{A2}, A2}},
-#     T = Tuple{Vararg{Val{V}}} where {V}
-#     @testintersect(S, T, !Union{})
-# end
+let S = Tuple{Val{Val{Union{Val{A2}, A2}}}, Val{Val{Union{Val{A2}, Val{A4}, A4}}}} where {A2, A4<:Union{Val{A2}, A2}},
+    T = Tuple{Vararg{Val{V}}} where {V}
+    @testintersect(S, T, !Union{})
+end
 
 #issue 54356
 abstract type A54356{T<:Real} end
