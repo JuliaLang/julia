@@ -149,7 +149,7 @@ end
     copyuntil(b, a, UInt8('a'); keep=true)
     @test read(b) == b"xxbcdea"
     seekstart(b)
-    copyuntil(b, a, UInt('w'))
+    copyuntil(b, a, UInt8('w'))
     @test read(b) == b"xxbcdeajdgabdfg"
 end
 
