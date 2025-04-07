@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # Test that the Core._apply_iterate bail path taints effects
@@ -1467,3 +1469,13 @@ end
 @test Base.infer_effects(Core.invoke_in_world, Tuple{Vararg{Any}}) == Compiler.Effects()
 @test Base.infer_effects(invokelatest, Tuple{Vararg{Any}}) == Compiler.Effects()
 @test Base.infer_effects(invoke, Tuple{Vararg{Any}}) == Compiler.Effects()
+
+# Core._svec_ref effects modeling (required for external abstract interpreter that doesn't run optimization)
+let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do svec, i
+        Core._svec_ref(svec, i)
+    end
+    @test !Compiler.is_consistent(effects)
+    @test Compiler.is_effect_free(effects)
+    @test !Compiler.is_nothrow(effects)
+    @test Compiler.is_terminates(effects)
+end

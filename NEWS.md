@@ -4,6 +4,8 @@ Julia v1.13 Release Notes
 New language features
 ---------------------
 
+  - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
+
 Language changes
 ----------------
 
@@ -25,7 +27,8 @@ New library functions
 New library features
 --------------------
 
-`sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
+* `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
+* `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 
 Standard library changes
 ------------------------
