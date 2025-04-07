@@ -760,7 +760,7 @@ typedef struct JL_ALIGNED_ATTR(8) _jl_binding_partition_t {
      * } restriction;
      */
     jl_value_t *restriction;
-    size_t min_world;
+    _Atomic(size_t) min_world;
     _Atomic(size_t) max_world;
     _Atomic(struct _jl_binding_partition_t *) next;
     size_t kind;
@@ -1942,8 +1942,8 @@ JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b JL_PROPAGATES_ROOT);
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world);
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT);
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_and_const(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_debug_only(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_latest_resolved_and_const_debug_only(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world, jl_code_instance_t **cache);

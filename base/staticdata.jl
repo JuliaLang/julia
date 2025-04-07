@@ -162,8 +162,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
                 else
                     meth = callee::Method
                 end
-                min_valid2, max_valid2 = verify_invokesig(edge, meth, world)
-                matches = nothing
+                min_valid2, max_valid2, matches = verify_invokesig(edge, meth, world)
                 j += 2
             end
             if minworld < min_valid2
@@ -295,6 +294,7 @@ end
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt)
     @assert invokesig isa Type
     local minworld::UInt, maxworld::UInt
+    matched = nothing
     if invokesig === expected.sig
         # the invoke match is `expected` for `expected->sig`, unless `expected` is invalid
         minworld = expected.primary_world
@@ -314,12 +314,15 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
             minworld, maxworld = valid_worlds.min_world, valid_worlds.max_world
             if matched === nothing
                 maxworld = 0
-            elseif matched.method != expected
-                maxworld = 0
+            else
+                matched = Any[matched.method]
+                if matched[] !== expected
+                    maxworld = 0
+                end
             end
         end
     end
-    return minworld, maxworld
+    return minworld, maxworld, matched
 end
 
 end # module StaticData
