@@ -1079,8 +1079,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     ok && return ret
 
     # Don't fall back to symbol completion inside strings or comments.
-    inside_str = find_parent(cur, K"string") !== nothing || find_parent(cur, K"cmdstring") !== nothing
-    (kind(cur) in KSet"Comment ErrorEofMultiComment" || inside_str) &&
+    inside_cmdstr = find_parent(cur, K"cmdstring") !== nothing
+    (kind(cur) in KSet"String Comment ErrorEofMultiComment" || inside_cmdstr) &&
          return Completion[], 1:0, false
 
     if (n = find_prefix_call(cur_not_ws)) !== nothing

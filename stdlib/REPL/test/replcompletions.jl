@@ -2621,3 +2621,22 @@ const issue57780 = ["a", "b", "c"]
 const issue57780_orig = copy(issue57780)
 test_complete_context("empty!(issue57780).", Main)
 @test issue57780 == issue57780_orig
+
+# Completion inside string interpolation
+let s = "\"example: \$varflo"
+    c, r = test_complete_foo(s)
+    @test "varfloat" in c
+    @test r == 12:17
+end
+
+let s = "\"example: \$(3 + findfir"
+    c, r = test_complete(s)
+    @test "findfirst" in c
+    @test r == 17:23
+end
+
+let s = "\"example: \$(named.len"
+    c, r = test_complete_foo(s)
+    @test "len2" in c
+    @test r == 19:21
+end
