@@ -3,7 +3,7 @@
 # name and module reflection
 
 """
-    parentmodule(m::Module) -> Module
+    parentmodule(m::Module)::Module
 
 Get a module's enclosing `Module`. `Main` is its own parent.
 
@@ -23,7 +23,7 @@ parentmodule(m::Module) = (@_total_meta; ccall(:jl_module_parent, Ref{Module}, (
 is_root_module(m::Module) = parentmodule(m) === m || m === Compiler || (isdefined(Main, :Base) && m === Main.Base)
 
 """
-    moduleroot(m::Module) -> Module
+    moduleroot(m::Module)::Module
 
 Find the root module of a given module. This is the first module in the chain of
 parent modules of `m` which is either a registered root module or which is its
@@ -77,7 +77,7 @@ function fullname(m::Module)
 end
 
 """
-    moduleloc(m::Module) -> LineNumberNode
+    moduleloc(m::Module)::LineNumberNode
 
 Get the location of the `module` definition.
 """
@@ -88,7 +88,7 @@ function moduleloc(m::Module)
 end
 
 """
-    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false) -> Vector{Symbol}
+    names(x::Module; all::Bool=false, imported::Bool=false, usings::Bool=false)::Vector{Symbol}
 
 Get a vector of the public names of a `Module`, excluding deprecated names.
 If `all` is true, then the list also includes non-public names defined in the module,
@@ -117,7 +117,7 @@ unsorted_names(m::Module; all::Bool=false, imported::Bool=false, usings::Bool=fa
     ccall(:jl_module_names, Array{Symbol,1}, (Any, Cint, Cint, Cint), m, all, imported, usings)
 
 """
-    isexported(m::Module, s::Symbol) -> Bool
+    isexported(m::Module, s::Symbol)::Bool
 
 Returns whether a symbol is exported from a module.
 
@@ -143,7 +143,7 @@ false
 isexported(m::Module, s::Symbol) = ccall(:jl_module_exports_p, Cint, (Any, Any), m, s) != 0
 
 """
-    ispublic(m::Module, s::Symbol) -> Bool
+    ispublic(m::Module, s::Symbol)::Bool
 
 Returns whether a symbol is marked as public in a module.
 
@@ -197,17 +197,18 @@ function _fieldnames(@nospecialize t)
 end
 
 # N.B.: Needs to be synced with julia.h
-const PARTITION_KIND_CONST        = 0x0
-const PARTITION_KIND_CONST_IMPORT = 0x1
-const PARTITION_KIND_GLOBAL       = 0x2
-const PARTITION_KIND_IMPLICIT     = 0x3
-const PARTITION_KIND_EXPLICIT     = 0x4
-const PARTITION_KIND_IMPORTED     = 0x5
-const PARTITION_KIND_FAILED       = 0x6
-const PARTITION_KIND_DECLARED     = 0x7
-const PARTITION_KIND_GUARD        = 0x8
-const PARTITION_KIND_UNDEF_CONST  = 0x9
-const PARTITION_KIND_BACKDATED_CONST = 0xa
+const PARTITION_KIND_CONST              = 0x0
+const PARTITION_KIND_CONST_IMPORT       = 0x1
+const PARTITION_KIND_GLOBAL             = 0x2
+const PARTITION_KIND_IMPLICIT_GLOBAL    = 0x3
+const PARTITION_KIND_IMPLICIT_CONST     = 0x4
+const PARTITION_KIND_EXPLICIT           = 0x5
+const PARTITION_KIND_IMPORTED           = 0x6
+const PARTITION_KIND_FAILED             = 0x7
+const PARTITION_KIND_DECLARED           = 0x8
+const PARTITION_KIND_GUARD              = 0x9
+const PARTITION_KIND_UNDEF_CONST        = 0xa
+const PARTITION_KIND_BACKDATED_CONST    = 0xb
 
 const PARTITION_FLAG_EXPORTED     = 0x10
 const PARTITION_FLAG_DEPRECATED   = 0x20
@@ -218,9 +219,12 @@ const PARTITION_MASK_FLAG         = 0xf0
 
 const BINDING_FLAG_ANY_IMPLICIT_EDGES = 0x8
 
-is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_BACKDATED_CONST)
+is_defined_const_binding(kind::UInt8) = (kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_BACKDATED_CONST)
 is_some_const_binding(kind::UInt8) = (is_defined_const_binding(kind) || kind == PARTITION_KIND_UNDEF_CONST)
-is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_imported(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_implicit(kind::UInt8) = (kind == PARTITION_KIND_IMPLICIT_GLOBAL || kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED)
+is_some_explicit_imported(kind::UInt8) = (kind == PARTITION_KIND_EXPLICIT || kind == PARTITION_KIND_IMPORTED)
+is_some_binding_imported(kind::UInt8) = is_some_explicit_imported(kind) || kind == PARTITION_KIND_IMPLICIT_GLOBAL
 is_some_guard(kind::UInt8) = (kind == PARTITION_KIND_GUARD || kind == PARTITION_KIND_FAILED || kind == PARTITION_KIND_UNDEF_CONST)
 
 function lookup_binding_partition(world::UInt, b::Core.Binding)
@@ -359,7 +363,7 @@ false
 hasfield(T::Type, name::Symbol) = fieldindex(T, name, false) > 0
 
 """
-    nameof(t::DataType) -> Symbol
+    nameof(t::DataType)::Symbol
 
 Get the name of a (potentially `UnionAll`-wrapped) `DataType` (without its parent module)
 as a symbol.
@@ -380,7 +384,7 @@ nameof(t::DataType) = t.name.name
 nameof(t::UnionAll) = nameof(unwrap_unionall(t))::Symbol
 
 """
-    parentmodule(t::DataType) -> Module
+    parentmodule(t::DataType)::Module
 
 Determine the module containing the definition of a (potentially `UnionAll`-wrapped) `DataType`.
 
@@ -402,8 +406,8 @@ parentmodule(t::DataType) = t.name.module
 parentmodule(t::UnionAll) = parentmodule(unwrap_unionall(t))
 
 """
-    isconst(m::Module, s::Symbol) -> Bool
-    isconst(g::GlobalRef)
+    isconst(m::Module, s::Symbol)::Bool
+    isconst(g::GlobalRef)::Bool
 
 Determine whether a global is `const` in a given module `m`, either
 because it was declared constant or because it was imported from a
@@ -419,7 +423,7 @@ function isconst(g::GlobalRef)
 end
 
 """
-    isconst(t::DataType, s::Union{Int,Symbol}) -> Bool
+    isconst(t::DataType, s::Union{Int,Symbol})::Bool
 
 Determine whether a field `s` is const in a given type `t`
 in the sense that a read from said field is consistent
@@ -447,7 +451,7 @@ function isconst(@nospecialize(t::Type), s::Int)
 end
 
 """
-    isfieldatomic(t::DataType, s::Union{Int,Symbol}) -> Bool
+    isfieldatomic(t::DataType, s::Union{Int,Symbol})::Bool
 
 Determine whether a field `s` is declared `@atomic` in a given type `t`.
 """
@@ -527,7 +531,7 @@ struct DataTypeLayout
 end
 
 """
-    Base.datatype_alignment(dt::DataType) -> Int
+    Base.datatype_alignment(dt::DataType)::Int
 
 Memory allocation minimum alignment for instances of this type.
 Can be called on any `isconcretetype`, although for Memory it will give the
@@ -570,7 +574,7 @@ gc_alignment(sz::Integer) = Int(ccall(:jl_alignment, Cint, (Csize_t,), sz))
 gc_alignment(T::Type) = gc_alignment(Core.sizeof(T))
 
 """
-    Base.datatype_haspadding(dt::DataType) -> Bool
+    Base.datatype_haspadding(dt::DataType)::Bool
 
 Return whether the fields of instances of this type are packed in memory,
 with no intervening padding bits (defined as bits whose value does not impact
@@ -585,7 +589,7 @@ function datatype_haspadding(dt::DataType)
 end
 
 """
-    Base.datatype_isbitsegal(dt::DataType) -> Bool
+    Base.datatype_isbitsegal(dt::DataType)::Bool
 
 Return whether egality of the (non-padding bits of the) in-memory representation
 of an instance of this type implies semantic egality of the instance itself.
@@ -600,7 +604,7 @@ function datatype_isbitsegal(dt::DataType)
 end
 
 """
-    Base.datatype_nfields(dt::DataType) -> UInt32
+    Base.datatype_nfields(dt::DataType)::UInt32
 
 Return the number of fields known to this datatype's layout. This may be
 different from the number of actual fields of the type for opaque types.
@@ -613,7 +617,7 @@ function datatype_nfields(dt::DataType)
 end
 
 """
-    Base.datatype_npointers(dt::DataType) -> Int
+    Base.datatype_npointers(dt::DataType)::Int
 
 Return the number of pointers in the layout of a datatype.
 """
@@ -624,7 +628,7 @@ function datatype_npointers(dt::DataType)
 end
 
 """
-    Base.datatype_pointerfree(dt::DataType) -> Bool
+    Base.datatype_pointerfree(dt::DataType)::Bool
 
 Return whether instances of this type can contain references to gc-managed memory.
 Can be called on any `isconcretetype`.
@@ -635,7 +639,7 @@ function datatype_pointerfree(dt::DataType)
 end
 
 """
-    Base.datatype_fielddesc_type(dt::DataType) -> Int
+    Base.datatype_fielddesc_type(dt::DataType)::Int
 
 Return the size in bytes of each field-description entry in the layout array,
 located at `(dt.layout + sizeof(DataTypeLayout))`.
@@ -651,7 +655,7 @@ function datatype_fielddesc_type(dt::DataType)
 end
 
 """
-    Base.datatype_arrayelem(dt::DataType) -> Int
+    Base.datatype_arrayelem(dt::DataType)::Int
 
 Return the behavior of the trailing array types allocations.
 Can be called on any `isconcretetype`, but only meaningful on `Memory`.
@@ -719,7 +723,7 @@ function getindex(dtfd::DataTypeFieldDesc, i::Int)
 end
 
 """
-    ismutable(v) -> Bool
+    ismutable(v)::Bool
 
 Return `true` if and only if value `v` is mutable.  See [Mutable Composite Types](@ref)
 for a discussion of immutability. Note that this function works on values, so if you
@@ -748,7 +752,7 @@ ismutable(@nospecialize(x)) = (@_total_meta; (typeof(x).name::Core.TypeName).fla
 # See also https://github.com/JuliaLang/julia/issues/52134
 
 """
-    ismutabletype(T) -> Bool
+    ismutabletype(T)::Bool
 
 Determine whether type `T` was declared as a mutable type
 (i.e. using `mutable struct` keyword).
@@ -767,7 +771,7 @@ end
 ismutabletypename(tn::Core.TypeName) = tn.flags & 0x2 == 0x2
 
 """
-    isstructtype(T) -> Bool
+    isstructtype(T)::Bool
 
 Determine whether type `T` was declared as a struct type
 (i.e. using the `struct` or `mutable struct` keyword).
@@ -782,7 +786,7 @@ function isstructtype(@nospecialize t)
 end
 
 """
-    isprimitivetype(T) -> Bool
+    isprimitivetype(T)::Bool
 
 Determine whether type `T` was declared as a primitive type
 (i.e. using the `primitive type` syntax).
@@ -830,9 +834,10 @@ Return `true` if `x` is an instance of an [`isbitstype`](@ref) type.
 isbits(@nospecialize x) = isbitstype(typeof(x))
 
 """
-    objectid(x) -> UInt
+    objectid(x)::UInt
 
-Get a hash value for `x` based on object identity.
+Get a hash value for `x` based on object identity. This value is not unique nor
+stable between Julia processes or versions.
 
 If `x === y` then `objectid(x) == objectid(y)`, and usually when `x !== y`, `objectid(x) != objectid(y)`.
 
@@ -1252,7 +1257,7 @@ function get_methodtable(m::Method)
 end
 
 """
-    has_bottom_parameter(t) -> Bool
+    has_bottom_parameter(t)::Bool
 
 Determine whether `t` is a Type for which one or more of its parameters is `Union{}`.
 """
@@ -1347,6 +1352,24 @@ function MethodList(mt::Core.MethodTable)
     return MethodList(ms, mt)
 end
 
+function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodTable, mod)
+    # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
+    ms = Method[(ms[i]::Core.MethodMatch).method for i in 1:length(ms)]
+    # Remove shadowed methods with identical type signatures
+    prev = nothing
+    filter!(ms) do m
+        l = prev
+        repeated = (l isa Method && m.sig == l.sig)
+        prev = m
+        return !repeated
+    end
+    # Remove methods not part of module (after removing shadowed methods)
+    mod === nothing || filter!(ms) do m
+        return parentmodule(m) ∈ mod
+    end
+    return MethodList(ms, mt)
+end
+
 """
     methods(f, [types], [module])
 
@@ -1354,7 +1377,7 @@ Return the method table for `f`.
 
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
-A list of modules can also be specified as an array.
+A list of modules can also be specified as an array or set.
 
 !!! compat "Julia 1.4"
     At least Julia 1.4 is required for specifying a module.
@@ -1362,16 +1385,11 @@ A list of modules can also be specified as an array.
 See also: [`which`](@ref), [`@which`](@ref Main.InteractiveUtils.@which) and [`methodswith`](@ref Main.InteractiveUtils.methodswith).
 """
 function methods(@nospecialize(f), @nospecialize(t),
-                 mod::Union{Tuple{Module},AbstractArray{Module},Nothing}=nothing)
+                 mod::Union{Tuple{Module},AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
-    # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
-    ms = Method[]
-    for m in _methods(f, t, -1, world)::Vector
-        m = m::Core.MethodMatch
-        (mod === nothing || parentmodule(m.method) ∈ mod) && push!(ms, m.method)
-    end
-    MethodList(ms, typeof(f).name.mt)
+    ms = _methods(f, t, -1, world)::Vector{Any}
+    return matches_to_methods(ms, typeof(f).name.mt, mod)
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 
@@ -1381,12 +1399,12 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
-    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector
-    return MethodList(Method[(m::Core.MethodMatch).method for m in ms], typeof(f).name.mt)
+    ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector{Any}
+    return matches_to_methods(ms, typeof(f).name.mt, nothing)
 end
 
 function methods(@nospecialize(f),
-                 mod::Union{Module,AbstractArray{Module},Nothing}=nothing)
+                 mod::Union{Module,AbstractArray{Module},AbstractSet{Module},Nothing}=nothing)
     # return all matches
     return methods(f, Tuple{Vararg{Any}}, mod)
 end
@@ -1459,7 +1477,7 @@ const SLOT_USED = 0x8
 ast_slotflag(@nospecialize(code), i) = ccall(:jl_ir_slotflag, UInt8, (Any, Csize_t), code, i - 1)
 
 """
-    may_invoke_generator(method, atype, sparams) -> Bool
+    may_invoke_generator(method, atype, sparams)::Bool
 
 Computes whether or not we may invoke the generator for the given `method` on
 the given `atype` and `sparams`. For correctness, all generated function are

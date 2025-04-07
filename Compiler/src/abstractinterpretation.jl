@@ -1352,6 +1352,8 @@ function const_prop_call(interp::AbstractInterpreter,
     end
     assign_parentchild!(frame, sv)
     if !typeinf(interp, frame)
+        sv.time_caches += frame.time_caches
+        sv.time_paused += frame.time_paused
         add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
         @assert frame.frameid != 0 && frame.cycleid == frame.frameid
         callstack = frame.callstack::Vector{AbsIntState}
@@ -1736,8 +1738,8 @@ function abstract_apply(interp::AbstractInterpreter, argtypes::Vector{Any}, si::
     retinfos = ApplyCallInfo[]
     retinfo = UnionSplitApplyCallInfo(retinfos)
     exctype = Union{}
-    ctypes´ = Vector{Any}[]
-    infos´ = Vector{MaybeAbstractIterationInfo}[]
+    ctypes´::Vector{Vector{Any}} = Vector{Any}[]
+    infos´::Vector{Vector{MaybeAbstractIterationInfo}} = Vector{MaybeAbstractIterationInfo}[]
     local ti, argtypesi
     local ctfuture::Future{AbstractIterationResult}
     local callfuture::Future{CallMeta}
@@ -2156,7 +2158,11 @@ function form_partially_defined_struct(𝕃ᵢ::AbstractLattice, @nospecialize(o
     if fields[fldidx] === Union{}
         return nothing # `Union{}` field never transitions to be defined
     end
-    undefs = partialstruct_init_undefs(objt, fldcnt)
+    undefs = partialstruct_init_undefs(objt, fields)
+    if undefs === nothing
+        # this object never exists at runtime, avoid creating unprofitable `PartialStruct`
+        return nothing
+    end
     undefs[fldidx] = false
     return PartialStruct(𝕃ᵢ, objt0, undefs, fields)
 end
@@ -2559,7 +2565,6 @@ function abstract_eval_setglobalonce!(interp::AbstractInterpreter, sv::AbsIntSta
     end
 end
 
-
 function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
     if length(argtypes) in (5, 6, 7)
         (M, s, x, v) = argtypes[2], argtypes[3], argtypes[4], argtypes[5]
@@ -2618,6 +2623,8 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState,
         max_methods::Int = get_max_methods(interp, f, sv))
     (; fargs, argtypes) = arginfo
+    argtypes::Vector{Any} = arginfo.argtypes  # declare type because the closure below captures `argtypes`
+    fargs = arginfo.fargs
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
@@ -2682,11 +2689,13 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             elseif f === setfield! && length(argtypes) == 4 && isa(argtypes[3], Const)
                 # from there on we know that the struct field will never be undefined,
                 # so we try to encode that information with a `PartialStruct`
-                farg2 = ssa_def_slot(fargs[2], sv)
-                if farg2 isa SlotNumber
-                    refined = form_partially_defined_struct(𝕃ᵢ, argtypes[2], argtypes[3])
-                    if refined !== nothing
-                        refinements = SlotRefinement(farg2, refined)
+                if rt !== Bottom && isa(fargs, Vector{Any})
+                    farg2 = ssa_def_slot(fargs[2], sv)
+                    if farg2 isa SlotNumber
+                        refined = form_partially_defined_struct(𝕃ᵢ, argtypes[2], argtypes[3])
+                        if refined !== nothing
+                            refinements = SlotRefinement(farg2, refined)
+                        end
                     end
                 end
             end
@@ -3279,7 +3288,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
     if allow_import !== true
         gr = GlobalRef(mod, sym)
         partition = lookup_binding_partition!(interp, gr, sv)
-        if allow_import !== true && is_some_imported(binding_kind(partition))
+        if allow_import !== true && is_some_binding_imported(binding_kind(partition))
             if allow_import === false
                 rt = Const(false)
             else
@@ -3320,6 +3329,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, @nospecializ
             exct = Union{exct, ConcurrencyViolationError}
         end
     end
+    ⊑ = partialorder(typeinf_lattice(interp))
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
@@ -3532,7 +3542,7 @@ end
 
 function walk_binding_partition(imported_binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
     valid_worlds = WorldRange(partition.min_world, partition.max_world)
-    while is_some_imported(binding_kind(partition))
+    while is_some_binding_imported(binding_kind(partition))
         imported_binding = partition_restriction(partition)::Core.Binding
         partition = lookup_binding_partition(world, imported_binding)
         valid_worlds = intersect(valid_worlds, WorldRange(partition.min_world, partition.max_world))
@@ -3660,7 +3670,7 @@ end
 
 function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
     if saw_latestworld
-        return Pair{Any,Any}(newty, Union{ErrorException, TypeError})
+        return Pair{Any,Any}(newty, ErrorException)
     end
     (valid_worlds, ret) = scan_partitions((interp, _, partition)->global_assignment_binding_rt_exct(interp, partition, newty), interp, g, sv.world)
     update_valid_age!(sv, valid_worlds)
@@ -3677,10 +3687,10 @@ function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partitio
     ty = kind == PARTITION_KIND_DECLARED ? Any : partition_restriction(partition)
     wnewty = widenconst(newty)
     if !hasintersect(wnewty, ty)
-        return Pair{Any,Any}(Bottom, TypeError)
+        return Pair{Any,Any}(Bottom, ErrorException)
     elseif !(wnewty <: ty)
         retty = tmeet(typeinf_lattice(interp), newty, ty)
-        return Pair{Any,Any}(retty, TypeError)
+        return Pair{Any,Any}(retty, ErrorException)
     end
     return Pair{Any,Any}(newty, Bottom)
 end
@@ -4351,6 +4361,7 @@ end
 # make as much progress on `frame` as possible (by handling cycles)
 warnlength::Int = 2500
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
+    time_before = _time_ns()
     callstack = frame.callstack::Vector{AbsIntState}
     nextstates = CurrentState[]
     takenext = frame.frameid
@@ -4382,7 +4393,6 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             # get_compileable_sig), but still must be finished up since it may see and
             # change the local variables of the InferenceState at currpc, we do this
             # even if the nextresult status is already completed.
-            continue
         elseif isdefined(nextstates[nextstateid], :result) || !isempty(callee.ip)
             # Next make progress on this frame
             prev = length(callee.tasks) + 1
@@ -4390,16 +4400,23 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             reverse!(callee.tasks, prev)
         elseif callee.cycleid == length(callstack)
             # With no active ip's and no cycles, frame is done
-            finish_nocycle(interp, callee)
+            time_now = _time_ns()
+            callee.time_self_ns += (time_now - time_before)
+            time_before = time_now
+            finish_nocycle(interp, callee, time_before)
             callee.frameid == 0 && break
             takenext = length(callstack)
             nextstateid = takenext + 1 - frame.frameid
             #@assert length(nextstates) == nextstateid + 1
             #@assert all(i -> !isdefined(nextstates[i], :result), nextstateid+1:length(nextstates))
             resize!(nextstates, nextstateid)
+            continue
         elseif callee.cycleid == callee.frameid
             # If the current frame is the top part of a cycle, check if the whole cycle
             # is done, and if not, pick the next item to work on.
+            time_now = _time_ns()
+            callee.time_self_ns += (time_now - time_before)
+            time_before = time_now
             no_active_ips_in_cycle = true
             for i = callee.cycleid:length(callstack)
                 caller = callstack[i]::InferenceState
@@ -4410,7 +4427,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
                 end
             end
             if no_active_ips_in_cycle
-                finish_cycle(interp, callstack, callee.cycleid)
+                finish_cycle(interp, callstack, callee.cycleid, time_before)
             end
             takenext = length(callstack)
             nextstateid = takenext + 1 - frame.frameid
@@ -4420,10 +4437,14 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             else
                 #@assert length(nextstates) == nextstateid
             end
+            continue
         else
             # Continue to the next frame in this cycle
             takenext = takenext - 1
         end
+        time_now = _time_ns()
+        callee.time_self_ns += (time_now - time_before)
+        time_before = time_now
     end
     #@assert all(nextresult -> !isdefined(nextresult, :result), nextstates)
     return is_inferred(frame)

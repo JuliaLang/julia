@@ -6382,4 +6382,35 @@ g57292(xs::String...) = getfield(("abc",), 1, :not_atomic, xs...)
 @test Base.infer_return_type(f57292) == String
 @test Base.infer_return_type(g57292) == String
 
+mutable struct Issue57673{C<:Union{Int,Float64}}
+    c::C
+    d
+    Issue57673(c::C, d) where C = new{C}(c, d)
+    Issue57673(c::C) where C = new{C}(c)
+end
+@test Base.infer_return_type((Issue57673,)) do a::Issue57673{<:String}
+    setfield!(a, :d, nothing)
+    a
+end === Union{} # `setfield!` tfunc should be able to figure out this object is runtime invalid
+
+# only refine with `PartialStruct` on `setfield!` when we have full argument type information
+let src = code_typed1((Base.RefValue{String}, String)) do x, val
+        setfield!(x, :x, val)
+        isdefined(x, :x)
+    end
+    retval = src.code[end].val
+    @test retval === true
+    src = code_typed1((Base.RefValue{String}, String)) do x, args...
+        setfield!(x, :x, args...)
+        isdefined(x, :x)
+    end
+    retval = src.code[end].val
+    @test isa(retval, Core.SSAValue)
+end
+
+global invalid_setglobal!_exct_modeling::Int
+@test Base.infer_exception_type((Float64,)) do x
+    setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
+end == ErrorException
+
 end # module inference

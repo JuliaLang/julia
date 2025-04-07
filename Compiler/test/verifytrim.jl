@@ -33,7 +33,7 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Base.SecretBuffer, Tuple{Type{Bas
     @test occursin("finalizer", desc.desc)
     repr = sprint(verify_print_error, desc, parents)
     @test occursin(
-        r"""^unresolved finalizer registered from \(Core.finalizer\)\(Base.final_shred!, %new\(\)::Base.SecretBuffer\)::Nothing
+        r"""^unresolved finalizer registered from statement \(Core.finalizer\)\(Base.final_shred!, %new\(\)::Base.SecretBuffer\)::Nothing
             Stacktrace:
              \[1\] finalizer\(f::typeof\(Base.final_shred!\), o::Base.SecretBuffer\)
                @ Base gcutils.jl:(\d+) \[inlined\]
@@ -44,8 +44,8 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Base.SecretBuffer, Tuple{Type{Bas
 
             $""", repr)
 
-    resize!(infos, 2)
-    @test infos[1] isa Type && infos[2] isa Type
+    resize!(infos, 1)
+    @test infos[1] isa Core.SimpleVector && infos[1][1] isa Type && infos[1][2] isa Type
     errors, parents = get_verify_typeinf_trim(infos)
     desc = only(errors)
     @test !desc.first

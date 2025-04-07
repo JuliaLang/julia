@@ -758,7 +758,9 @@ void Optimizer::moveToStack(CallInst *orig_inst, size_t sz, bool has_ref, AllocF
     auto replace_inst = [&] (Instruction *user) {
         Instruction *orig_i = cur.orig_i;
         Instruction *new_i = cur.new_i;
-        if (isa<LoadInst>(user) || isa<StoreInst>(user)) {
+        if (isa<LoadInst>(user) || isa<StoreInst>(user) ||
+            isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            // TODO: these atomics are likely removable if the user is the first argument
             user->replaceUsesOfWith(orig_i, new_i);
         }
         else if (auto call = dyn_cast<CallInst>(user)) {
@@ -1131,6 +1133,7 @@ void Optimizer::splitOnStack(CallInst *orig_inst)
             return;
         }
         else if (isa<AtomicCmpXchgInst>(user) || isa<AtomicRMWInst>(user)) {
+            // TODO: Downgrade atomics here potentially
             auto slot_idx = find_slot(offset);
             auto &slot = slots[slot_idx];
             assert(slot.offset <= offset && slot.offset + slot.size >= offset);

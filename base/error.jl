@@ -240,13 +240,14 @@ macro assert(ex, msgs...)
         msg = Main.Base.string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(Main.Base.inferencebarrier(_assert_tostring)($(Expr(:quote,msg))))
+        msg = :(_assert_tostring($(Expr(:quote,msg))))
     end
     return :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end
 
 # this may be overridden in contexts where `string(::Expr)` doesn't work
-_assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
+_assert_tostring(@nospecialize(msg)) = Core.compilerbarrier(:type, __assert_tostring)(msg)
+__assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
     (Core.println(msg); "Error during bootstrap. See stdout.")
 
 struct ExponentialBackOff

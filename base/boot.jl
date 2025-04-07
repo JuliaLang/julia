@@ -475,6 +475,7 @@ struct ABIOverride
 end
 
 struct PrecompilableError <: Exception end
+struct TrimFailure <: Exception end
 
 String(s::String) = s  # no constructor yet
 
@@ -1016,7 +1017,7 @@ _setparser!(parser) = setglobal!(Core, :_parse, parser)
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)
-_apply_pure(x...) = invoke_in_world_total(typemax_UInt, x...)
+const _apply_pure = _apply
 const _call_latest = invokelatest
 const _call_in_world = invoke_in_world
 
