@@ -3414,6 +3414,9 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     elseif kind == PARTITION_KIND_CONST
         print(io, "constant binding to ")
         print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_CONST_IMPORT
+        print(io, "constant binding (declared with `import`) to ")
+        print(io, partition_restriction(partition))
     elseif kind == PARTITION_KIND_UNDEF_CONST
         print(io, "undefined const binding")
     elseif kind == PARTITION_KIND_GUARD

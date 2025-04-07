@@ -10,6 +10,7 @@ public
 
 # Types
     AbstractLock,
+    AbstractOneTo,
     AbstractPipe,
     AsyncCondition,
     CodeUnits,
@@ -27,6 +28,7 @@ public
 # Semaphores
     Semaphore,
     acquire,
+    @acquire,
     release,
 
 # arrays

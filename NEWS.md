@@ -4,6 +4,8 @@ Julia v1.13 Release Notes
 New language features
 ---------------------
 
+  - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
+
 Language changes
 ----------------
 
