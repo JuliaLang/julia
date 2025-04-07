@@ -133,9 +133,9 @@ top:
     %1 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %1, i64 -12
 
-; CHECK: %current_task = getelementptr inbounds ptr, ptr %1, i64 -12
-    %2 = load float, ptr addrspace(1) %0, align 4, !invariant.load !1
-; CHECK-NEXT: %2 = load float, ptr addrspace(1) %0, align 4, !invariant.load
+; OPAQUE: %current_task = getelementptr inbounds ptr, ptr %1, i64 -12
+    %2 = load float, float addrspace(1)* %0, align 4, !invariant.load !1
+; OPAQUE-NEXT: %2 = load float, ptr addrspace(1) %0, align 4, !invariant.load
     ret void
 }
 
