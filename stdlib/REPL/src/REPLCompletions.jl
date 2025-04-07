@@ -427,7 +427,7 @@ function complete_path(path::AbstractString;
                        cmd_escape=false,
                        string_escape=false,
                        contract_user=false,
-                       dirsep='/')
+                       dirsep=Sys.iswindows() ? '\\' : '/')
     @assert !(shell_escape && string_escape)
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
@@ -485,7 +485,7 @@ function complete_path(path::AbstractString,
                        contract_user=false)
     ## TODO: enable this depwarn once Pkg is fixed
     #Base.depwarn("complete_path with pos argument is deprecated because the return value [2] is incorrect to use", :complete_path)
-    paths, dir, success = complete_path(path; use_envpath, shell_escape, string_escape)
+    paths, dir, success = complete_path(path; use_envpath, shell_escape, string_escape, dirsep='/')
 
     if Base.Sys.isunix() && occursin(r"^~(?:/|$)", path)
         # if the path is just "~", don't consider the expanded username as a prefix
@@ -499,8 +499,10 @@ function complete_path(path::AbstractString,
     end
     startpos = pos - lastindex(prefix) + 1
     Sys.iswindows() && map!(paths, paths) do c::PathCompletion
-        # HACK: Pkg requires escaped backslashes
-        return PathCompletion(replace(c.path, "\\" => "\\\\"))
+        # emulation for unnecessarily complicated return value, since / is a
+        # perfectly acceptable path character which does not require quoting
+        # but is required by Pkg's awkward parser handling
+        return endswith(c.path, "/") ? PathCompletion(chop(c.path) * "\\\\") : c
     end
     return paths, startpos:pos, success
 end
@@ -1324,7 +1326,7 @@ function shell_completions(str, pos, hint::Bool=false; cmd_escape::Bool=false)
         return ret, range, true
     elseif endswith(scs, ' ') && !endswith(scs, "\\ ")
         r = pos+1:pos
-        paths, dir, success = complete_path(""; use_envpath=false, shell_escape=!cmd_escape, cmd_escape)
+        paths, dir, success = complete_path(""; use_envpath=false, shell_escape=!cmd_escape, cmd_escape, dirsep='/')
         return paths, r, success
     elseif all(@nospecialize(arg) -> arg isa AbstractString, ex.args)
         # Join these and treat this as a path
@@ -1334,7 +1336,7 @@ function shell_completions(str, pos, hint::Bool=false; cmd_escape::Bool=false)
         # Also try looking into the env path if the user wants to complete the first argument
         use_envpath = length(args.args) < 2
 
-        paths, success = complete_path_string(path, hint; use_envpath, shell_escape=!cmd_escape, cmd_escape)
+        paths, success = complete_path_string(path, hint; use_envpath, shell_escape=!cmd_escape, cmd_escape, dirsep='/')
         return paths, r, success
     end
     return Completion[], 1:0, false
