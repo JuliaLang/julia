@@ -110,6 +110,9 @@ public
     reseteof,
     link_pipe!,
     dup,
+    # errors
+    AbstractIOError,
+    NonSpecificIOError,
 
 # filesystem operations
     rename,

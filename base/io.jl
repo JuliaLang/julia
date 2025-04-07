@@ -67,6 +67,12 @@ Common supertype for IO errors.
 """
 abstract type AbstractIOError <: Exception end
 
+"""
+    NonSpecificIOError <: AbstractIOError
+
+Exception thrown when an IO error occurs, but the type of exception doesn't match the other
+subtypes of [`AbstractIOError`](@ref).
+"""
 struct NonSpecificIOError <: AbstractIOError
     s::String
 end
@@ -85,7 +91,7 @@ Get the available bytes of `io`.
 
 The returned vector `v` must have indices `1:length(v)`. Callers should avoid
 mutating the buffer.
-Calling this function when the buffer is empty should not attempt to fill the buffer.
+This function should not mutate, or append to, the buffer.
 
 This function should be implemented for buffered readers only, and together with
 [`fillbuffer`](@ref) and [`consume`](@ref).
@@ -97,11 +103,12 @@ function getbuffer end
 
 Fill more bytes into the reading buffer from `io`'s underlying buffer, returning
 the number of bytes added. After calling `fillbuffer` and getting `n`,
-the buffer obtained by `getbuffer` should have `n` new bytes appended.
+the buffer obtained by `getbuffer` should have `n` new bytes appended,
+but otherwise be unchanged.
 
 This function must fill at least one byte, except
 * If the underlying io is EOF, or there is no underlying io, return `0`
-* If the buffer is not empty, and cannot be expanded, return `nothing`.
+* If the buffer is full and cannot be expanded, return `nothing`.
 
 `IO`s which do not wrap another underlying buffer, and therefore can't fill
 its buffer should return `0` unconditionally.
@@ -282,6 +289,7 @@ function get_nonempty_reading_buffer(io::IO)::Union{Nothing, AbstractVector{UInt
         buf = getbuffer(io)
         @assert !isempty(buf)
     end
+    require_one_based_indexing(buf)
     buf
 end
 

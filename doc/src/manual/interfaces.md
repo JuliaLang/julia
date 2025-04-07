@@ -891,8 +891,8 @@ Currently, only reading operations (i.e. copying *from* the IO) have a specified
 
 Readers can either be buffered (the default), or unbuffered, depending on whether they
 provide consumers access to an internal buffer containing data to read from.
-Buffered IOs are typically more efficient and convenient, so new IO types should be buffered
-if their implementation allows it.
+Buffered IOs are typically more efficient, and have more generic methods defined for them,
+so new IO types should be buffered if their implementation allows it.
 Alternatively, users of an unbuffered type can wrap it in a buffered wrapper type for efficiency and convenience.
 
 | Methods to implement                     | Default definition                                  | When to implement                                 |
