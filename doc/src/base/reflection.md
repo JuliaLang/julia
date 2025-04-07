@@ -87,7 +87,7 @@ be passed instead!). For example:
 
 ```jldoctest; setup = :(using InteractiveUtils)
 julia> InteractiveUtils.macroexpand(@__MODULE__, :(@edit println("")) )
-:(InteractiveUtils.edit(println, (Base.typesof)("")))
+:(InteractiveUtils.edit(println, InteractiveUtils.Tuple{(InteractiveUtils.Core).Typeof("")}))
 ```
 
 The functions `Base.Meta.show_sexpr` and [`dump`](@ref) are used to display S-expr style views

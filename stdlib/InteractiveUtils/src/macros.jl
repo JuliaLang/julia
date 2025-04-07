@@ -2,14 +2,34 @@
 
 # macro wrappers for various reflection functions
 
-using Base: typesof, insert!, replace_ref_begin_end!,
-    infer_return_type, infer_exception_type, infer_effects, code_ircode
+using Base: insert!, replace_ref_begin_end!,
+    infer_return_type, infer_exception_type, infer_effects, code_ircode, isexpr
 
 # defined in Base so it's possible to time all imports, including InteractiveUtils and its deps
 # via. `Base.@time_imports` etc.
 import Base: @time_imports, @trace_compile, @trace_dispatch
 
-separate_kwargs(args...; kwargs...) = (args, values(kwargs))
+typesof_expr(args, where_params = nothing) = rewrap_where(:(Tuple{$(get_typeof.(args)...)}), where_params)
+
+function extract_where_parameters(ex0)
+    isexpr(ex0, :where) || return ex0, nothing
+    ex0.args[1], ex0.args[2:end]
+end
+
+function rewrap_where(ex, where_params)
+    isnothing(where_params) && return ex
+    Expr(:where, ex, esc.(where_params)...)
+end
+
+function get_typeof(ex)
+    isexpr(ex, :(::), 1) && return esc(ex.args[1])
+    if isexpr(ex, :..., 1)
+        splatted = ex.args[1]
+        isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, esc(splatted.args[1]))
+        return :(Any[Core.Typeof(x) for x in $(esc(splatted))]...)
+    end
+    return :(Core.Typeof($(esc(ex))))
+end
 
 """
 Transform a dot expression into one where each argument has been replaced by a
@@ -20,7 +40,7 @@ function recursive_dotcalls!(ex, args, i=1)
     if !(ex isa Expr) || ((ex.head !== :. || !(ex.args[2] isa Expr)) &&
                           (ex.head !== :call || string(ex.args[1])[1] != '.'))
         newarg = Symbol('x', i)
-        if Meta.isexpr(ex, :...)
+        if isexpr(ex, :...)
             push!(args, only(ex.args))
             return Expr(:..., newarg), i+1
         else
@@ -37,8 +57,72 @@ function recursive_dotcalls!(ex, args, i=1)
     return ex, i
 end
 
+function extract_farg(arg)
+    !isexpr(arg, :(::), 1) && return esc(arg)
+    fT = esc(arg.args[1])
+    :($construct_callable($fT))
+end
+
+function construct_callable(@nospecialize(func::Type))
+    # Support function singleton types such as `(::typeof(f))(args...)`
+    Base.issingletontype(func) && isdefined(func, :instance) && return func.instance
+    # Don't support type annotations otherwise, we don't want to give wrong answers
+    # for callables such as `(::Returns{Int})(args...)` where using `Returns{Int}`
+    # would give us code for the constructor, not for the callable object.
+    throw(ArgumentError("If a function type is explicitly provided, it must be a singleton whose only instance is the callable object"))
+end
+
+function separate_kwargs(exs)
+    args = []
+    kwargs = []
+    for ex in exs
+        if isexpr(ex, :kw)
+            push!(kwargs, ex)
+        elseif isexpr(ex, :parameters)
+            for kw in ex.args
+                push!(kwargs, kw)
+            end
+        else
+            push!(args, ex)
+        end
+    end
+    args, kwargs
+end
+
+function namedtuple_type(kwargs)
+    names = Expr(:tuple)
+    types = Expr(:curly, :Tuple)
+    splats = Expr[]
+    for ex in kwargs
+        if isexpr(ex, :kw, 2)
+            name, value = ex.args[1], ex.args[2]
+            push!(names.args, QuoteNode(name::Symbol))
+            push!(types.args, get_typeof(value))
+        elseif isexpr(ex, :..., 1)
+            push!(splats, Expr(:call, typeof_nt, esc(ex.args[1])))
+        else
+            isa(ex, Symbol) || return nothing
+            push!(names.args, QuoteNode(ex))
+            push!(types.args, get_typeof(ex))
+        end
+    end
+    nt = :(NamedTuple{$names, $types})
+    isempty(splats) && return nt
+    length(splats) == 1 && return :($namedtuple_type($nt, $(splats[1])))
+    :(foldl($namedtuple_type, Any[$(splats...)]; init = $nt))
+end
+
+typeof_nt(nt::NamedTuple) = typeof(nt)
+typeof_nt(nt::Base.Pairs) = typeof(values(nt))
+
+function namedtuple_type(@nospecialize(nt1::Type{<:NamedTuple}), @nospecialize(nt2::Type{<:NamedTuple}))
+    names = tuple(fieldnames(nt1)..., fieldnames(nt2)...)
+    types = Tuple{fieldtypes(nt1)..., fieldtypes(nt2)...}
+    NamedTuple{names, types}
+end
+
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
-    if Meta.isexpr(ex0, :ref)
+    if isexpr(ex0, :ref)
         ex0 = replace_ref_begin_end!(ex0)
     end
     # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
@@ -46,11 +130,12 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
         return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
     end
     if isa(ex0, Expr)
-        if ex0.head === :do && Meta.isexpr(get(ex0.args, 1, nothing), :call)
+        ex0, where_params = extract_where_parameters(ex0)
+        if ex0.head === :do && isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
                 return Expr(:call, :error, "ill-formed do call")
             end
-            i = findlast(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args[1].args)
+            i = findlast(a->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args[1].args)
             args = copy(ex0.args[1].args)
             insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
             ex0 = Expr(:call, args...)
@@ -66,8 +151,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 dotfuncdef = Expr(:local, Expr(:(=), Expr(:call, dotfuncname, xargs...), ex))
                 return quote
                     $(esc(dotfuncdef))
-                    local args = $typesof($(map(esc, args)...))
-                    $(fcn)($(esc(dotfuncname)), args; $(kws...))
+                    $(fcn)($(esc(dotfuncname)), $(typesof_expr(args, where_params)); $(kws...))
                 end
             elseif !codemacro
                 fully_qualified_symbol = true # of the form A.B.C.D
@@ -80,7 +164,9 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                     ex1 = ex1.args[1]
                 end
                 fully_qualified_symbol &= ex1 isa Symbol
-                if fully_qualified_symbol
+                if fully_qualified_symbol || isexpr(ex1, :(::), 1)
+                    getproperty_ex = :($(fcn)(Base.getproperty, $(typesof_expr(ex0.args, where_params))))
+                    isexpr(ex0.args[1], :(::), 1) && return getproperty_ex
                     return quote
                         local arg1 = $(esc(ex0.args[1]))
                         if isa(arg1, Module)
@@ -90,8 +176,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                                   :(error("expression is not a function call"))
                               end)
                         else
-                            local args = $typesof($(map(esc, ex0.args)...))
-                            $(fcn)(Base.getproperty, args)
+                            $getproperty_ex
                         end
                     end
                 else
@@ -102,32 +187,35 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 end
             end
         end
-        if any(a->(Meta.isexpr(a, :kw) || Meta.isexpr(a, :parameters)), ex0.args)
-            return quote
-                local arg1 = $(esc(ex0.args[1]))
-                local args, kwargs = $separate_kwargs($(map(esc, ex0.args[2:end])...))
-                $(fcn)(Core.kwcall,
-                       Tuple{typeof(kwargs), Core.Typeof(arg1), map(Core.Typeof, args)...};
-                       $(kws...))
+        if any(a->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args)
+            args, kwargs = separate_kwargs(ex0.args)
+            nt = namedtuple_type(kwargs)
+            isnothing(nt) && return quote
+                error("keyword argument format unrecognized; they must be of the form `x` or `x = <value>`")
+                $(esc(ex0)) # trigger syntax errors if any
             end
+            tt = rewrap_where(:(Tuple{$nt, $(get_typeof.(args)...)}), where_params)
+            return :($(fcn)(Core.kwcall, $tt; $(kws...)))
         elseif ex0.head === :call
+            argtypes = Any[get_typeof(arg) for arg in ex0.args[2:end]]
             if ex0.args[1] === :^ && length(ex0.args) >= 3 && isa(ex0.args[3], Int)
-                return Expr(:call, fcn, :(Base.literal_pow),
-                            Expr(:call, typesof, esc(ex0.args[1]), esc(ex0.args[2]),
-                                 esc(Val(ex0.args[3]))))
+                farg = :(Base.literal_pow)
+                pushfirst!(argtypes, :(typeof(^)))
+                argtypes[3] = :(Val{$(ex0.args[3])})
+            else
+                farg = extract_farg(ex0.args[1])
             end
-            return Expr(:call, fcn, esc(ex0.args[1]),
-                        Expr(:call, typesof, map(esc, ex0.args[2:end])...),
-                        kws...)
+            tt = rewrap_where(:(Tuple{$(argtypes...)}), where_params)
+            return Expr(:call, fcn, farg, tt, kws...)
         elseif ex0.head === :(=) && length(ex0.args) == 2
             lhs, rhs = ex0.args
             if isa(lhs, Expr)
                 if lhs.head === :(.)
                     return Expr(:call, fcn, Base.setproperty!,
-                                Expr(:call, typesof, map(esc, lhs.args)..., esc(rhs)), kws...)
+                                typesof_expr(Any[lhs.args..., rhs], where_params), kws...)
                 elseif lhs.head === :ref
                     return Expr(:call, fcn, Base.setindex!,
-                                Expr(:call, typesof, esc(lhs.args[1]), esc(rhs), map(esc, lhs.args[2:end])...), kws...)
+                                typesof_expr(Any[lhs.args[1], rhs, lhs.args[2:end]...], where_params), kws...)
                 end
             end
         elseif ex0.head === :vcat || ex0.head === :typed_vcat
@@ -141,20 +229,16 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             if any(a->isa(a,Expr) && a.head === :row, args)
                 rows = Any[ (isa(x,Expr) && x.head === :row ? x.args : Any[x]) for x in args ]
                 lens = map(length, rows)
-                return Expr(:call, fcn, hf,
-                            Expr(:call, typesof,
-                                 (ex0.head === :vcat ? [] : Any[esc(ex0.args[1])])...,
-                                 Expr(:tuple, lens...),
-                                 map(esc, vcat(rows...))...), kws...)
+                args = Any[Expr(:tuple, lens...); vcat(rows...)]
+                ex0.head === :typed_vcat && pushfirst!(args, ex0.args[1])
+                return Expr(:call, fcn, hf, typesof_expr(args, where_params), kws...)
             else
-                return Expr(:call, fcn, f,
-                            Expr(:call, typesof, map(esc, ex0.args)...), kws...)
+                return Expr(:call, fcn, f, typesof_expr(ex0.args, where_params), kws...)
             end
         else
             for (head, f) in (:ref => Base.getindex, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect, Symbol("'") => Base.adjoint, :typed_hcat => Base.typed_hcat, :string => string)
                 if ex0.head === head
-                    return Expr(:call, fcn, f,
-                                Expr(:call, typesof, map(esc, ex0.args)...), kws...)
+                    return Expr(:call, fcn, f, typesof_expr(ex0.args, where_params), kws...)
                 end
             end
         end
@@ -170,16 +254,14 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
 
     exret = Expr(:none)
     if ex.head === :call
-        if any(e->(isa(e, Expr) && e.head === :(...)), ex0.args) &&
+        if any(x -> isexpr(x, :...), ex0.args) &&
             (ex.args[1] === GlobalRef(Core,:_apply_iterate) ||
              ex.args[1] === GlobalRef(Base,:_apply_iterate))
             # check for splatting
             exret = Expr(:call, ex.args[2], fcn,
-                        Expr(:tuple, esc(ex.args[3]),
-                            Expr(:call, typesof, map(esc, ex.args[4:end])...)))
+                        Expr(:tuple, extract_farg(ex.args[3]), typesof_expr(ex.args[4:end], where_params)))
         else
-            exret = Expr(:call, fcn, esc(ex.args[1]),
-                         Expr(:call, typesof, map(esc, ex.args[2:end])...), kws...)
+            exret = Expr(:call, fcn, extract_farg(ex.args[1]), typesof_expr(ex.args[2:end], where_params), kws...)
         end
     end
     if ex.head === :thunk || exret.head === :none
@@ -460,7 +542,7 @@ For `@activate Compiler`, the following options are available:
 """
 macro activate(what)
     options = Symbol[]
-    if Meta.isexpr(what, :ref)
+    if isexpr(what, :ref)
         Component = what.args[1]
         for i = 2:length(what.args)
             arg = what.args[i]
