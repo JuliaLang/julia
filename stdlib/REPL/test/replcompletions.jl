@@ -2498,6 +2498,7 @@ end
 g54131(::Val{499}; kwarg=true) = 499*kwarg
 struct F54131; end
 Base.getproperty(::F54131, ::Symbol) = Any[cos, sin, g54131][rand(1:3)]
+f54131 = F54131()
 @testset "performance of kwarg completion with large method tables" begin
     # The goal here is to simply ensure we aren't hitting catestrophically bad
     # behaviors when shift isn't pressed. The difference between good and bad
@@ -2508,13 +2509,12 @@ Base.getproperty(::F54131, ::Symbol) = Any[cos, sin, g54131][rand(1:3)]
     @test REPLCompletions.KeywordArgumentCompletion("kwarg") in a
     @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
 
-    f = F54131()
-    s = "f.x("
+    s = "f54131.x("
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)
     @test only(a) isa REPLCompletions.TextCompletion
     @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
 
-    s = "f.x(kwa"
+    s = "f54131.x(kwa"
     a, b, c = completions(s, lastindex(s), @__MODULE__, false)
     @test_broken REPLCompletions.KeywordArgumentCompletion("kwarg") in a
     @test (@elapsed completions(s, lastindex(s), @__MODULE__, false)) < 1
