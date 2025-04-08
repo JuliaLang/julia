@@ -1459,7 +1459,7 @@ function f_with_early_try_catch_exit()
     result
 end
 
-let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="compact")))
+let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="slot2reg")))
     for i = 1:length(ir.stmts)
         expr = ir.stmts[i][:stmt]
         if isa(expr, PhiCNode)
