@@ -1727,16 +1727,20 @@ JL_DLLEXPORT void jl_disable_binding(jl_globalref_t *gr)
     jl_binding_t *b = gr->binding;
     if (!b)
         b = jl_get_module_binding(gr->mod, gr->name, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
 
-    if (jl_binding_kind(bpart) == PARTITION_KIND_GUARD) {
-        // Already guard
+    for (;;) {
+        jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_atomic_load_acquire(&jl_world_counter));
+
+        if (jl_binding_kind(bpart) == PARTITION_KIND_GUARD) {
+            // Already guard
+            return;
+        }
+
+        if (!jl_replace_binding(b, bpart, NULL, PARTITION_KIND_GUARD))
+            continue;
+
         return;
     }
-
-    for (;;)
-        if (jl_replace_binding(b, bpart, NULL, PARTITION_KIND_GUARD))
-            break;
 }
 
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
