@@ -1068,8 +1068,6 @@ end
 
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
-hastypemax(::Base.BitIntegerType) = true
-hastypemax(::Type{Bool}) = true
 hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
 
 """
