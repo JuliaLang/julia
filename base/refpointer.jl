@@ -3,7 +3,7 @@
 import Core: Ref
 
 """
-    Ref{T}
+    Ref{T} <: ShapefulIterator{0}
 
 An object that safely references data of type `T`. This type is guaranteed to point to
 valid, Julia-allocated memory of the correct type. The underlying data is protected from
@@ -100,11 +100,8 @@ size(x::Ref) = ()
 axes(x::Ref) = ()
 length(x::Ref) = 1
 isempty(x::Ref) = false
-ndims(x::Ref) = 0
-ndims(::Type{<:Ref}) = 0
 iterate(r::Ref) = (r[], nothing)
 iterate(r::Ref, s) = nothing
-IteratorSize(::Type{<:Ref}) = HasShape{0}()
 
 # create Ref objects for general object conversion
 unsafe_convert(::Type{Ref{T}}, x::Ref{T}) where {T} = unsafe_convert(Ptr{T}, x)

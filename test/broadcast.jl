@@ -703,7 +703,7 @@ end
 
 @testset "scalar .= and promotion" begin
     A = [[1, 2, 3], 4:5, 6]
-    @test A isa Vector{Any}
+    @test A isa Vector{ShapefulIterator}
     A[1] .= 0
     @test A[1] == [0, 0, 0]
     @test_throws Base.CanonicalIndexError A[2] .= 0

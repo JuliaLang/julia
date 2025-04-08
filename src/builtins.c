@@ -2570,6 +2570,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     //add_builtin("GenericPtr", (jl_value_t*)jl_genericpointer_type);
+    add_builtin("ShapefulIterator", (jl_value_t*)jl_shapefuliterator_type);
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
     add_builtin("DenseArray", (jl_value_t*)jl_densearray_type);
     add_builtin("Array", (jl_value_t*)jl_array_type);

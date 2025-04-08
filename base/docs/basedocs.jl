@@ -115,10 +115,10 @@ which are their descendants. Abstract types form the conceptual hierarchy which 
 Julia’s type system more than just a collection of object implementations. For example:
 
 ```julia
-abstract type Number end
+abstract type ShapefulIterator{N} end
 abstract type Real <: Number end
 ```
-[`Number`](@ref) has no supertype, whereas [`Real`](@ref) is an abstract subtype of `Number`.
+[`ShapefulIterator`](@ref) has no supertype, whereas [`Real`](@ref) is an abstract subtype of `Number`.
 """
 kw"abstract type", kw"abstract"
 
@@ -2184,7 +2184,23 @@ Stacktrace:
 DivideError
 
 """
-    Number
+    ShapefulIterator{N}
+
+`N`-dimensional [iterator](@ref man-interface-iteration) type, where `N isa Int`.
+
+These functions have methods defined for all subtypes of `ShapefulIterator`, no need to add new methods - if you do add new methods they must be consistent with the following definitions:
+* [`ndims`](@ref): returns `N`
+* [`Base.IteratorSize`](@ref): returns `Base.HasShape{N}()`
+
+New subtypes must implement:
+* [`length`](@ref)
+* [`size`](@ref)
+* [`axes`](@ref), if the new subtype uses non-traditional indices
+"""
+ShapefulIterator
+
+"""
+    Number <: ShapefulIterator{0}
 
 Abstract supertype for all number types.
 """
