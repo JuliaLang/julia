@@ -1082,6 +1082,11 @@ function complete_keyword_argument(partial::String, last_idx::Int, context_modul
     kwargs_flag == 2 && return fail # one of the previous kwargs is invalid
 
     methods = Completion[]
+    # limit the number of methods to prevent performance issues while allowing
+    # completions for nearly all common functions. This is distinct from the other
+    # uses of MAX_METHOD_COMPLETIONS, which primarily used to limit the number
+    # of methods to _display_ before showing an alternative message; here we're 
+    # searching a larger number to find a subset that contains matching kwargs
     complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : 500, kwargs_flag == 1)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
