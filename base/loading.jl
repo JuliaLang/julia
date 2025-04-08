@@ -772,6 +772,11 @@ function manifest_uuid_path(env::String, pkg::PkgId)::Union{Nothing,String,Missi
     return nothing
 end
 
+function find_sub_path(project_path::String, subname::String)
+    subfiledir = joinpath(project_path, "sub", subname, subname * ".jl")
+    isfile(subfiledir) && return subfiledir
+    return joinpath(project_path, "sub", subname * ".jl")
+end
 
 function find_ext_path(project_path::String, extname::String)
     extfiledir = joinpath(project_path, "ext", extname, extname * ".jl")
@@ -991,7 +996,8 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                         end
                     end
                 end
-            else # Check for extensions
+            else
+                # Check for extensions
                 extensions = get(entry, "extensions", nothing)
                 if extensions !== nothing
                     if haskey(extensions, where.name) && where.uuid == uuid5(UUID(uuid), where.name)
@@ -1019,6 +1025,38 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                                     end
                                 end
                             end
+                        # `name` is not an ext, do standard lookup as if this was the parent
+                        return identify_package(PkgId(UUID(uuid), dep_name), name)
+                    end
+                end
+                # Check for submodules
+                submodules = get(entry, "submodules", nothing)
+                if submodules !== nothing
+                    if haskey(submodules, where.name) && where.uuid == uuid5(UUID(uuid), where.name)
+                        found_where = true
+                        if name == dep_name
+                            return PkgId(UUID(uuid), name)
+                        end
+                        subs = submodules[where.name]::Union{String, Vector{String}}
+                        # weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+                        if (subs isa String && name == subs) || (subs isa Vector{String} && name in subs)
+                            for deps′ in deps#[weakdeps, deps]
+                                if deps′ !== nothing
+                                    if deps′ isa Vector{String}
+                                        found_name = name in deps′
+                                        found_name && @goto done
+                                    elseif deps′ isa Dict{String, Any}
+                                        deps′ = deps′::Dict{String, Any}
+                                        for (dep, uuid) in deps′
+                                            uuid::String
+                                            if dep === name
+                                                return PkgId(UUID(uuid), name)
+                                            end
+                                        end
+                                    end
+                                end
+                            end
+                        end
                         # `name` is not an ext, do standard lookup as if this was the parent
                         return identify_package(PkgId(UUID(uuid), dep_name), name)
                     end
@@ -1057,19 +1095,33 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
             end
         end
     end
-    # Extensions
     for (name, entries) in d
         entries = entries::Vector{Any}
         for entry in entries
             uuid = get(entry, "uuid", nothing)::Union{Nothing, String}
-            extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
-            if extensions !== nothing && haskey(extensions, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
-                parent_path = locate_package(PkgId(UUID(uuid), name))
-                if parent_path === nothing
-                    error("failed to find source of parent package: \"$name\"")
+            # Extensions
+            let extensions = get(entry, "extensions", nothing)::Union{Nothing, Dict{String, Any}}
+                if extensions !== nothing && haskey(extensions, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
+                    parent_path = locate_package(PkgId(UUID(uuid), name))
+                    if parent_path === nothing
+                        error("failed to find source of parent package: \"$name\"")
+                    end
+                    p = normpath(dirname(parent_path), "..")
+                    return find_ext_path(p, pkg.name)
                 end
-                p = normpath(dirname(parent_path), "..")
-                return find_ext_path(p, pkg.name)
+            end
+            # Submodules
+            let submodules = get(entry, "submodules", nothing)::Union{Nothing, Dict{String, Any}}
+                if submodules !== nothing
+                    if haskey(submodules, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
+                        parent_path = locate_package(PkgId(UUID(uuid), name))
+                        if parent_path === nothing
+                            error("failed to find source of parent package: \"$name\"")
+                        end
+                        p = normpath(dirname(parent_path), "..")
+                        return find_sub_path(p, pkg.name)
+                    end
+                end
             end
         end
     end
@@ -1668,6 +1720,31 @@ function get_extension(parentid::PkgId, ext::Symbol)
 end
 
 # End extensions
+
+
+##############
+# Submodules #
+##############
+function load_submodule(mod::Module, subname::Union{Symbol, String})
+    parent_id = PkgId(mod)
+    str_subname = string(subname)
+    id = PkgId(uuid5(parent_id.uuid, str_subname), str_subname)
+    __require(id)
+end
+
+macro submodule_using(parent_sub)
+    if isexpr(parent_sub, :(.), 2)
+        parent, sub = parent_sub.args
+        @gensym mod
+        esc(quote
+                $mod = $load_submodule($parent, $sub)
+                using .$mod
+            end)
+    else
+        throw(ArgumentError("Malformed expression, `@submodule_using` only takes expressions of the form `Parent.Submodule`"))
+    end
+end
+# End submodules
 
 
 struct CacheFlags

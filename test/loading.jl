@@ -1264,6 +1264,30 @@ end
     end
 end
 
+@testset "Submodules" begin
+    old_depot_path = copy(DEPOT_PATH)
+    try
+        tmp = mktempdir()
+        push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
+        proj = joinpath(@__DIR__, "project", "Submodules", "HasDepWithSubmodules.jl")
+        for i in 1:2 # Once when requiring precomilation, once where it is already precompiled
+            cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
+                    begin
+                    using HasSubmodules
+                    HasSubmodules.sub_loaded && error("sub_loaded set")
+                    using HasDepWithSubmodules
+                    HasSubmodules.sub_loaded || error("sub_loaded not set")
+                    HasDepWithSubmodules.g(1) == 1 || error("g failed")
+                    end
+                '`
+            @test success(cmd)
+        end
+    finally
+        copy!(DEPOT_PATH, old_depot_path)
+    end
+end
+
+
 pkgimage(val) = val == 1 ? `--pkgimages=yes` : `--pkgimages=no`
 opt_level(val) = `-O$val`
 debug_level(val) = `-g$val`
