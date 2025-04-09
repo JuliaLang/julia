@@ -323,11 +323,11 @@ eachindex(A::AbstractVector) = (@inline(); axes1(A))
 
 @noinline function throw_eachindex_mismatch_indices(::IndexLinear, A...)
     inds = map(x -> eachindex(IndexLinear(), x), A)
-    throw(DimensionMismatch(lazy"all inputs to eachindex must have the same indices, got $(join(inds, \", \", \" and \"))"))
+    throw(DimensionMismatch(LazyString("all inputs to eachindex must have the same indices, got ", join(inds, ", ", " and "))))
 end
 @noinline function throw_eachindex_mismatch_indices(::IndexCartesian, A...)
     inds = map(x -> eachindex(IndexCartesian(), x), A)
-    throw(DimensionMismatch(lazy"all inputs to eachindex must have the same axes, got $(join(inds, \", \", \" and \"))"))
+    throw(DimensionMismatch(LazyString("all inputs to eachindex must have the same axes, got ", join(inds, ", ", " and "))))
 end
 
 """
