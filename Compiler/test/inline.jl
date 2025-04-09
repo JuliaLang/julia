@@ -4,6 +4,7 @@ using Test
 using Base.Meta
 using Core: ReturnNode
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
@@ -2217,7 +2218,7 @@ struct Issue52644
 end
 issue52644(::DataType) = :DataType
 issue52644(::UnionAll) = :UnionAll
-let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
+let ir = Base.code_ircode((Issue52644,); optimize_until="inlining") do t
         issue52644(t.tuple)
     end |> only |> first
     ir.argtypes[1] = Tuple{}
@@ -2226,7 +2227,7 @@ let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
     @test irfunc(Issue52644(Tuple{<:Integer})) === :UnionAll
 end
 issue52644_single(x::DataType) = :DataType
-let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
+let ir = Base.code_ircode((Issue52644,); optimize_until="inlining") do t
         issue52644_single(t.tuple)
     end |> only |> first
     ir.argtypes[1] = Tuple{}

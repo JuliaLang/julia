@@ -1,6 +1,8 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test
+
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # Test that the Core._apply_iterate bail path taints effects
