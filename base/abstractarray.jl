@@ -321,11 +321,13 @@ eachindex(itrs...) = keys(itrs...)
 eachindex(A::AbstractVector) = (@inline(); axes1(A))
 
 
-@noinline function throw_eachindex_mismatch_indices(::IndexLinear, inds...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(inds, ", ", " and "))"))
+@noinline function throw_eachindex_mismatch_indices(::IndexLinear, A...)
+    inds = map(x -> eachindex(IndexLinear(), x), A)
+    throw(DimensionMismatch(lazy"all inputs to eachindex must have the same indices, got $(join(inds, \", \", \" and \"))"))
 end
-@noinline function throw_eachindex_mismatch_indices(::IndexCartesian, inds...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(inds, ", ", " and "))"))
+@noinline function throw_eachindex_mismatch_indices(::IndexCartesian, A...)
+    inds = map(x -> eachindex(IndexCartesian(), x), A)
+    throw(DimensionMismatch(lazy"all inputs to eachindex must have the same axes, got $(join(inds, \", \", \" and \"))"))
 end
 
 """
@@ -390,8 +392,8 @@ eachindex(::IndexLinear, A::AbstractVector) = (@inline; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @inline
     indsA = eachindex(IndexLinear(), A)
-    _all_match_first(X->eachindex(IndexLinear(), X), indsA, B...) ||
-        throw_eachindex_mismatch_indices(IndexLinear(), eachindex(A), eachindex.(B)...)
+    all(==(indsA), map(X -> eachindex(IndexLinear(), X), B)) ||
+        throw_eachindex_mismatch_indices(IndexLinear(), A, B...)
     indsA
 end
 function _all_match_first(f::F, inds, A, B...) where F<:Function
