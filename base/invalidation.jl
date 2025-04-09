@@ -124,12 +124,12 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
     (_, (ib, ibpart)) = Compiler.walk_binding_partition(b, invalidated_bpart, new_max_world)
     (_, (nb, nbpart)) = Compiler.walk_binding_partition(b, new_bpart, new_max_world+1)
 
-    # abstract_eval_globalref_partition is the maximum amount of information that inference
+    # `abstract_eval_partition_load` is the maximum amount of information that inference
     # reads from a binding partition. If this information does not change - we do not need to
     # invalidate any code that inference created, because we know that the result will not change.
     need_to_invalidate_code =
-        Compiler.abstract_eval_globalref_partition(nothing, ib, ibpart) !==
-        Compiler.abstract_eval_globalref_partition(nothing, nb, nbpart)
+        Compiler.abstract_eval_partition_load(nothing, ib, ibpart) !==
+        Compiler.abstract_eval_partition_load(nothing, nb, nbpart)
 
     need_to_invalidate_export = export_affecting_partition_flags(invalidated_bpart) !==
                                 export_affecting_partition_flags(new_bpart)
