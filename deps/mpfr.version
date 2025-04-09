@@ -1,3 +1,4 @@
+# -*- makefile -*-
 ## jll artifact
 MPFR_JLL_NAME := MPFR
 
