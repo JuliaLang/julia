@@ -15,7 +15,7 @@ version = "0.1.0"
 
     [deps.HasSubpackages.subpackages]
     Subpackage1 = "HasSubpackages"
-    Subpackage2 = "ADep"
+    Subpackage2 = ["HasSubpackages", "ADep"]
     Subpackage3 = ""
 
 [[deps.ADep]]

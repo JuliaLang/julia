@@ -7,5 +7,5 @@ ADep = "81016d05-d0fa-4c22-8125-5c67d6cf9f2f"
 
 [subpackages]
 Subpackage1 = "HasSubpackages"
-Subpackage2 = "HasSubpackages, ADep"
+Subpackage2 = ["HasSubpackages", "ADep"]
 Subpackage3 = ""
