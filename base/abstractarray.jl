@@ -396,11 +396,6 @@ function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
         throw_eachindex_mismatch_indices(IndexLinear(), A, B...)
     indsA
 end
-function _all_match_first(f::F, inds, A, B...) where F<:Function
-    @inline
-    (inds == f(A)) & _all_match_first(f, inds, B...)
-end
-_all_match_first(f::F, inds) where F<:Function = true
 
 # keys with an IndexStyle
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
