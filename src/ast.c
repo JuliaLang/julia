@@ -1358,17 +1358,16 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
     }
 
     jl_value_t **args;
-    JL_GC_PUSHARGS(args, 4);
+    JL_GC_PUSHARGS(args, 5);
     args[0] = core_lower;
-    args[1] = (jl_value_t*)jl_alloc_svec(2);
-    jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
-    jl_svecset(args[1], 1, jl_box_long(text_len));
-    args[2] = filename;
-    args[3] = jl_box_long(lineno);
+    args[1] = expr
+    args[2] = inmodule
+    args[3] = filename;
+    args[4] = jl_box_long(lineno);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *result = jl_apply(args, 4);
+    jl_value_t *result = jl_apply(args, 5);
     ct->world_age = last_age;
     args[0] = result; // root during error checks below
     JL_GC_POP();
