@@ -158,7 +158,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         codegen = codegen_cache(interp)
         if !discard_src && codegen !== nothing && (isa(uncompressed, CodeInfo) || isa(uncompressed, OptimizationState))
             if isa(uncompressed, OptimizationState)
-                uncompressed = ir_to_codeinf!(uncompressed, caller, edges)
+                uncompressed = ir_to_codeinf!(uncompressed, edges)
             end
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
             codegen[ci] = uncompressed
@@ -381,10 +381,7 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     if isa(src, OptimizationState)
         opt = src
         inlining_cost = compute_inlining_cost(interp, result, opt.optresult)
-        if discard_optimized_result(interp, opt, inlining_cost)
-            opt.src.inlining_cost = inlining_cost
-            return nothing
-        end
+        discard_optimized_result(interp, opt, inlining_cost) && return nothing
         src = ir_to_codeinf!(opt)
     end
     if isa(src, CodeInfo)
