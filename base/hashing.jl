@@ -46,7 +46,12 @@ hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
 # faster-but-weaker than hash_mix intended for small keys
 hash_mix_linear(x::UInt64, h::UInt) = 3h - x
-hash_finalizer(x::UInt64) = (x ⊻ 0x8d95d0cb4f172723) * 0xd32df181e077609d
+function hash_finalizer(x::UInt64)
+    x ⊻= (x >> 32)
+    x *= 0x63652a4cd374b267
+    x ⊻= (x >> 33)
+    return x
+end
 
 hash_64_64(data::UInt64, seed::UInt) = hash_finalizer(hash_mix_linear(data, seed))
 hash_64_32(data::UInt64, seed::UInt) = hash_64_64(data, seed) % UInt32
