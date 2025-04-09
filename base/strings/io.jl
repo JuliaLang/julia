@@ -557,7 +557,7 @@ julia> v[2]
 0x32
 ```
 """
-macro b_str(s)
+macro b_str(s::String)
     v = codeunits(unescape_string(s))
     QuoteNode(v)
 end
