@@ -505,13 +505,11 @@ end
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
 
 """
-    finishopt!(interp::AbstractInterpreter, opt::OptimizationState,
-           ir::IRCode, caller::InferenceResult)
+    finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
 
 Called at the end of optimization to store the resulting IR back into the OptimizationState.
 """
-function finishopt!(interp::AbstractInterpreter, opt::OptimizationState,
-                   ir::IRCode, caller::InferenceResult)
+function finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
     opt.optresult = OptimizationResult(ir, ccall(:jl_ir_flag_inlining, UInt8, (Any,), opt.src), false)
     return nothing
 end
@@ -986,7 +984,7 @@ end
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
     @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
-    finishopt!(interp, opt, ir, caller)
+    finishopt!(interp, opt, ir)
     return nothing
 end
 
