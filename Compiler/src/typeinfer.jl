@@ -104,13 +104,10 @@ end
 function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     result = caller.result
     #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
-    if !isdefined(result, :ci) && isa(result.src, OptimizationState)
-        # Even if we are not going to cache the optimized code, compute and store the corresponding
-        # inlining cost into the source `CodeInfo` for future callers.
-        opt = result.src
-        opt.src.inlining_cost = compute_inlining_cost(interp, result)
-    end
-    if isdefined(result, :ci)
+    if caller.cache_mode === CACHE_MODE_LOCAL
+        @assert !isdefined(result, :ci)
+        result.src = transform_result_for_local_cache(interp, result)
+    elseif isdefined(result, :ci)
         edges = result_edges(interp, caller)
         ci = result.ci
         # if we aren't cached, we don't need this edge
@@ -373,6 +370,16 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
         end
         return inline_cost_model(ir, params, cost_threshold)
     end
+end
+
+function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult)
+    src = result.src
+    if isa(src, OptimizationState)
+        # Compute and store any information required to determine the inlineability of the callee.
+        opt = src
+        opt.src.inlining_cost = compute_inlining_cost(interp, result)
+    end
+    return src
 end
 
 function transform_result_for_cache(interp::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
