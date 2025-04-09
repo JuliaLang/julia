@@ -25,8 +25,12 @@ _counttuple(::Type) = nothing
 
 ## indexing ##
 
+function firstindex(@nospecialize t::Tuple)
+    @_nospecializeinfer_meta
+    1
+end
+
 length(@nospecialize t::Tuple) = nfields(t)
-firstindex(@nospecialize t::Tuple) = 1
 lastindex(@nospecialize t::Tuple) = length(t)
 size(@nospecialize(t::Tuple), d::Integer) = (d == 1) ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
 axes(@nospecialize t::Tuple) = (OneTo(length(t)),)
