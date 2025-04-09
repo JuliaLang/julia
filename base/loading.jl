@@ -1038,9 +1038,9 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                             return PkgId(UUID(uuid), name)
                         end
                         subs = submodules[where.name]::Union{String, Vector{String}}
-                        # weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
+                        weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
                         if (subs isa String && name == subs) || (subs isa Vector{String} && name in subs)
-                            for deps′ in deps#[weakdeps, deps]
+                            for deps′ in [weakdeps, deps]
                                 if deps′ !== nothing
                                     if deps′ isa Vector{String}
                                         found_name = name in deps′
@@ -1057,7 +1057,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                                 end
                             end
                         end
-                        # `name` is not an ext, do standard lookup as if this was the parent
+                        # `name` is not a submodule, do standard lookup as if this was the parent
                         return identify_package(PkgId(UUID(uuid), dep_name), name)
                     end
                 end
@@ -1732,6 +1732,11 @@ function load_submodule(mod::Module, subname::Union{Symbol, String})
     __require(id)
 end
 
+"""
+    @submodule_using Parent.Sub
+
+Load the `Sub` submodule from the `Parent` package.
+"""
 macro submodule_using(parent_sub)
     if isexpr(parent_sub, :(.), 2)
         parent, sub = parent_sub.args

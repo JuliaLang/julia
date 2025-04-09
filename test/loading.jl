@@ -1269,18 +1269,29 @@ end
     try
         tmp = mktempdir()
         push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
-        proj = joinpath(@__DIR__, "project", "Submodules", "HasDepWithSubmodules.jl")
+        proj = joinpath(@__DIR__, "project", "Submodules", "HasDepWithSubmodules")
         for i in 1:2 # Once when requiring precomilation, once where it is already precompiled
             cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
                     begin
                     using HasSubmodules
-                    HasSubmodules.sub_loaded && error("sub_loaded set")
+                    HasSubmodules.sub1_loaded && error("sub1_loaded set")
                     using HasDepWithSubmodules
-                    HasSubmodules.sub_loaded || error("sub_loaded not set")
+                    HasSubmodules.sub1_loaded || error("sub1_loaded not set")
                     HasDepWithSubmodules.g(1) == 1 || error("g failed")
                     end
                 '`
             @test success(cmd)
+        end
+        let cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
+                    begin
+                    using HasSubmodules
+                    using ADep
+                    HasSubmodules.sub2_loaded && error("sub2_loaded set!")
+                    @submodule_using HasSubmodules.Submodule2 # currently broken
+                    HasSubmodules.sub2_loaded && error("sub2_loaded set!")
+                    end
+                '`
+            @test_broken success(cmd)
         end
     finally
         copy!(DEPOT_PATH, old_depot_path)
