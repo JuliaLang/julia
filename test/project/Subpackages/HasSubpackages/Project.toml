@@ -1,10 +1,11 @@
-name = "HasSubmodules"
+name = "HasSubpackages"
 uuid = "0f595f7f-271a-49d7-b31d-0f5ff0a9189a"
 version = "0.1.0"
 
 [weakdeps]
 ADep = "81016d05-d0fa-4c22-8125-5c67d6cf9f2f"
 
-[submodules]
-Submodule1 = ""
-Submodule2 = "ADep"
+[subpackages]
+Subpackage1 = "HasSubpackages"
+Subpackage2 = "HasSubpackages, ADep"
+Subpackage3 = ""

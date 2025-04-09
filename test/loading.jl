@@ -1264,34 +1264,43 @@ end
     end
 end
 
-@testset "Submodules" begin
+@testset "Subpackages" begin
     old_depot_path = copy(DEPOT_PATH)
     try
         tmp = mktempdir()
         push!(empty!(DEPOT_PATH), joinpath(tmp, "depot"))
-        proj = joinpath(@__DIR__, "project", "Submodules", "HasDepWithSubmodules")
+        proj = joinpath(@__DIR__, "project", "Subpackages", "HasDepWithSubpackages")
         for i in 1:2 # Once when requiring precomilation, once where it is already precompiled
             cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
                     begin
-                    using HasSubmodules
-                    HasSubmodules.sub1_loaded && error("sub1_loaded set")
-                    using HasDepWithSubmodules
-                    HasSubmodules.sub1_loaded || error("sub1_loaded not set")
-                    HasDepWithSubmodules.g(1) == 1 || error("g failed")
+                    using HasSubpackages
+                    HasSubpackages.sub1_loaded && error("sub1_loaded set")
+                    using HasDepWithSubpackages
+                    HasSubpackages.sub1_loaded || error("sub1_loaded not set")
+                    HasDepWithSubpackages.g(1) == 1 || error("g failed")
                     end
                 '`
             @test success(cmd)
         end
         let cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
                     begin
-                    using HasSubmodules
+                    using HasSubpackages
                     using ADep
-                    HasSubmodules.sub2_loaded && error("sub2_loaded set!")
-                    @submodule_using HasSubmodules.Submodule2 # currently broken
-                    HasSubmodules.sub2_loaded && error("sub2_loaded set!")
+                    HasSubpackages.sub2_loaded && error("sub2_loaded set!")
+                    @submodule_using HasSubpackages.Subpackage2 # currently broken
+                    HasSubpackages.sub2_loaded && error("sub2_loaded set!")
                     end
                 '`
             @test_broken success(cmd)
+        end
+        let cmd = `$(Base.julia_cmd()) --project=$proj --startup-file=no -e '
+                        begin
+                        @subpackage_using HasSubpackages.Subpackage3
+                        Subpackage3.x == 1 || error("Something went wrong with HasSubpackages.Subpackage3")
+                        "HasSubpackages" ∉ string.(values(Base.loaded_modules)) || error("HasSubpackages was loaded when it was not needed!")
+                        end
+                   '`
+            @test success(cmd)
         end
     finally
         copy!(DEPOT_PATH, old_depot_path)

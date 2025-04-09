@@ -2,20 +2,21 @@ julia_version = "1.13.0-DEV"
 manifest_format = "2.0"
 project_hash = "cd51eae9e59902fd893210e4f8a4d4dc2ac81722"
 
-[[deps.HasDepWithSubmodules]]
-deps = ["HasSubmodules"]
+[[deps.HasDepWithSubpackages]]
+deps = ["HasSubpackages"]
 path = "."
 uuid = "0237f425-1828-4bb9-8eeb-a4f4cdb55107"
 version = "0.1.0"
 
-[[deps.HasSubmodules]]
-path = "../HasSubmodules"
+[[deps.HasSubpackages]]
+path = "../HasSubpackages"
 uuid = "0f595f7f-271a-49d7-b31d-0f5ff0a9189a"
 version = "0.1.0"
 
-    [deps.HasSubmodules.submodules]
-    Submodule1 = ""
-    Submodule2 = "ADep"
+    [deps.HasSubpackages.subpackages]
+    Subpackage1 = "HasSubpackages"
+    Subpackage2 = "ADep"
+    Subpackage3 = ""
 
 [[deps.ADep]]
 path = "../ADep"

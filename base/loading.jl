@@ -1029,15 +1029,15 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                         return identify_package(PkgId(UUID(uuid), dep_name), name)
                     end
                 end
-                # Check for submodules
-                submodules = get(entry, "submodules", nothing)
-                if submodules !== nothing
-                    if haskey(submodules, where.name) && where.uuid == uuid5(UUID(uuid), where.name)
+                # Check for subpackages
+                subpackages = get(entry, "subpackages", nothing)
+                if subpackages !== nothing
+                    if haskey(subpackages, where.name) && where.uuid == uuid5(UUID(uuid), where.name)
                         found_where = true
                         if name == dep_name
                             return PkgId(UUID(uuid), name)
                         end
-                        subs = submodules[where.name]::Union{String, Vector{String}}
+                        subs = subpackages[where.name]::Union{String, Vector{String}}
                         weakdeps = get(entry, "weakdeps", nothing)::Union{Vector{String}, Dict{String, Any}, Nothing}
                         if (subs isa String && name == subs) || (subs isa Vector{String} && name in subs)
                             for deps′ in [weakdeps, deps]
@@ -1057,7 +1057,7 @@ function explicit_manifest_deps_get(project_file::String, where::PkgId, name::St
                                 end
                             end
                         end
-                        # `name` is not a submodule, do standard lookup as if this was the parent
+                        # `name` is not a subpackage, do standard lookup as if this was the parent
                         return identify_package(PkgId(UUID(uuid), dep_name), name)
                     end
                 end
@@ -1110,10 +1110,10 @@ function explicit_manifest_uuid_path(project_file::String, pkg::PkgId)::Union{No
                     return find_ext_path(p, pkg.name)
                 end
             end
-            # Submodules
-            let submodules = get(entry, "submodules", nothing)::Union{Nothing, Dict{String, Any}}
-                if submodules !== nothing
-                    if haskey(submodules, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
+            # Subpackages
+            let subpackages = get(entry, "subpackages", nothing)::Union{Nothing, Dict{String, Any}}
+                if subpackages !== nothing
+                    if haskey(subpackages, pkg.name) && uuid !== nothing && uuid5(UUID(uuid), pkg.name) == pkg.uuid
                         parent_path = locate_package(PkgId(UUID(uuid), name))
                         if parent_path === nothing
                             error("failed to find source of parent package: \"$name\"")
@@ -1722,34 +1722,61 @@ end
 # End extensions
 
 
-##############
-# Submodules #
-##############
-function load_submodule(mod::Module, subname::Union{Symbol, String})
+###############
+# Subpackages #
+###############
+function load_subpackage(into::Module, parentname::Symbol, subname::Union{Symbol, String})
+    str_parentname = string(parentname)
+    str_subname = string(subname)
+    parent_uuid = @lock require_lock begin
+        uuidkey_env = identify_package_env(into, String(parentname))
+        if uuidkey_env === nothing
+            where = PkgId(into)
+            if where.uuid === nothing
+                throw(ArgumentError("Package $parentname not found in current path."))
+            else
+                manifest_warnings = collect_manifest_warnings()
+                throw(ArgumentError("""
+                Package $(where.name) does not have $parentname in its dependencies:
+                $manifest_warnings- You may have a partially installed environment. Try `Pkg.instantiate()`
+                  to ensure all packages in the environment are installed.
+                - Or, if you have $(where.name) checked out for development and have
+                  added $parentname as a dependency but haven't updated your primary
+                  environment's manifest file, try `Pkg.resolve()`.
+                - Otherwise you may need to report an issue with $(where.name)"""))
+            end
+        end
+        uuidkey, env = uuidkey_env
+        uuidkey.uuid
+    end
+    sub_id = PkgId(uuid5(parent_uuid, str_subname), str_subname)
+    __require(sub_id)
+end
+function load_subpackage(mod::Module, subname::Union{Symbol, String})
     parent_id = PkgId(mod)
     str_subname = string(subname)
-    id = PkgId(uuid5(parent_id.uuid, str_subname), str_subname)
-    __require(id)
+    sub_id = PkgId(uuid5(parent_id.uuid, str_subname), str_subname)
+    __require(sub_id)
 end
 
 """
-    @submodule_using Parent.Sub
+    @subpackage_using Parent.Sub
 
-Load the `Sub` submodule from the `Parent` package.
+Load the `Sub` subpackage from the `Parent` package.
 """
-macro submodule_using(parent_sub)
+macro subpackage_using(parent_sub)
     if isexpr(parent_sub, :(.), 2)
         parent, sub = parent_sub.args
         @gensym mod
         esc(quote
-                $mod = $load_submodule($parent, $sub)
+                $mod = $load_subpackage($__module__, $(QuoteNode(parent)), $sub)
                 using .$mod
             end)
     else
-        throw(ArgumentError("Malformed expression, `@submodule_using` only takes expressions of the form `Parent.Submodule`"))
+        throw(ArgumentError("Malformed expression, `@subpackage_using` only takes expressions of the form `Parent.Subpackage`"))
     end
 end
-# End submodules
+# End subpackages
 
 
 struct CacheFlags

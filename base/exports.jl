@@ -864,7 +864,7 @@ export
     evalfile,
     include_string,
     include_dependency,
-    @submodule_using,
+    @subpackage_using,
 
 # RTS internals
     GC,
