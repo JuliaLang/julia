@@ -1015,6 +1015,21 @@ _parse = nothing
 
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 
+
+# Binding for the julia lowerer, called as
+#
+#    Core._lower(expr, module, filename, linenum)
+#
+# Lower Julia code from the buffer `expr`, attributing
+# it to `filename`. `expr` must be the result of `_parse`
+#
+# `_lower` must return an Expr with appropriate internals to be evaled
+#
+# The internal jl_expand_with_loc_warn will call into Core._lower if not `nothing`.
+_lower = nothing
+
+_setlowerer!(lowerer) = setglobal!(Core, :_lowerer, lowerer)
+
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)
 const _apply_pure = _apply

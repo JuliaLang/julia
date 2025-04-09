@@ -1307,13 +1307,13 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
                                                  const char *file, int line)
 {
     JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
     jl_value_t *core_lower = NULL;
     if (jl_core_module) {
-        core_lower = jl_get_global(jl_core_module, jl_symbol("_lower"));
+        core_lower = jl_get_global(jl_core_module, jl_symbol("_parse"));
     }
     if (!core_lower || core_lower == jl_nothing) {
         // In bootstrap, directly call the builtin lowerer.
-        jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
         jl_array_t *kwargs = NULL;
         JL_GC_PUSH2(&expr, &kwargs);
         expr = jl_copy_ast(expr);
@@ -1356,20 +1356,18 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
         JL_GC_POP();
         return expr;
     }
-
     jl_value_t **args;
-    JL_GC_PUSHARGS(args, 5);
+    JL_GC_PUSHARGS(args, 4);
     args[0] = core_lower;
-    args[1] = expr
-    args[2] = inmodule
-    args[3] = filename;
-    args[4] = jl_box_long(lineno);
+    args[1] = inmodule;
+    args[2] = filename;
+    args[3] = jl_box_long(lineno);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_value_t *result = jl_apply(args, 5);
+    jl_value_t *result = jl_apply(args, 6);
     ct->world_age = last_age;
-    args[0] = result; // root during error checks below
+    JL_TYPECHK(parse, expr, result);
     JL_GC_POP();
     return result;
 }
