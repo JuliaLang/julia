@@ -1307,48 +1307,72 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
                                                  const char *file, int line)
 {
     JL_TIMING(LOWERING, LOWERING);
-    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
-    jl_array_t *kwargs = NULL;
-    JL_GC_PUSH2(&expr, &kwargs);
-    expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0, ~(size_t)0, 1);
-    jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
-    fl_context_t *fl_ctx = &ctx->fl;
-    value_t arg = julia_to_scm(fl_ctx, expr);
-    value_t e = fl_applyn(fl_ctx, 4, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk-warn")), arg,
-                          symbol(fl_ctx, file), fixnum(line), fl_ctx->F);
-    expr = scm_to_julia(fl_ctx, e, inmodule);
-    jl_ast_ctx_leave(ctx);
-    jl_sym_t *warn_sym = jl_symbol("warn");
-    if (jl_is_expr(expr) && ((jl_expr_t*)expr)->head == warn_sym) {
-        size_t nargs = jl_expr_nargs(expr);
-        for (int i = 0; i < nargs - 1; i++) {
-            jl_value_t *warning = jl_exprarg(expr, i);
-            size_t nargs = 0;
-            if (jl_is_expr(warning) && ((jl_expr_t*)warning)->head == warn_sym)
-                 nargs = jl_expr_nargs(warning);
-            int kwargs_len = (int)nargs - 6;
-            if (nargs < 6 || kwargs_len % 2 != 0) {
-                jl_error("julia-logmsg: bad argument list - expected "
-                         ":warn level (symbol) group (symbol) id file line msg . kwargs");
-            }
-            jl_value_t *level = jl_exprarg(warning, 0);
-            jl_value_t *group = jl_exprarg(warning, 1);
-            jl_value_t *id = jl_exprarg(warning, 2);
-            jl_value_t *file = jl_exprarg(warning, 3);
-            jl_value_t *line = jl_exprarg(warning, 4);
-            jl_value_t *msg = jl_exprarg(warning, 5);
-            kwargs = jl_alloc_vec_any(kwargs_len);
-            for (int i = 0; i < kwargs_len; ++i) {
-                jl_array_ptr_set(kwargs, i, jl_exprarg(warning, i + 6));
-            }
-            JL_TYPECHK(logmsg, long, level);
-            jl_log(jl_unbox_long(level), NULL, group, id, file, line, (jl_value_t*)kwargs, msg);
-        }
-        expr = jl_exprarg(expr, nargs - 1);
+    jl_value_t *core_lower = NULL;
+    if (jl_core_module) {
+        core_lower = jl_get_global(jl_core_module, jl_symbol("_lower"));
     }
+    if (!core_lower || core_lower == jl_nothing) {
+        // In bootstrap, directly call the builtin lowerer.
+        jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
+        jl_array_t *kwargs = NULL;
+        JL_GC_PUSH2(&expr, &kwargs);
+        expr = jl_copy_ast(expr);
+        expr = jl_expand_macros(expr, inmodule, NULL, 0, ~(size_t)0, 1);
+        jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
+        fl_context_t *fl_ctx = &ctx->fl;
+        value_t arg = julia_to_scm(fl_ctx, expr);
+        value_t e = fl_applyn(fl_ctx, 4, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk-warn")), arg,
+                              symbol(fl_ctx, file), fixnum(line), fl_ctx->F);
+        expr = scm_to_julia(fl_ctx, e, inmodule);
+        jl_ast_ctx_leave(ctx);
+        jl_sym_t *warn_sym = jl_symbol("warn");
+        if (jl_is_expr(expr) && ((jl_expr_t*)expr)->head == warn_sym) {
+            size_t nargs = jl_expr_nargs(expr);
+            for (int i = 0; i < nargs - 1; i++) {
+                jl_value_t *warning = jl_exprarg(expr, i);
+                size_t nargs = 0;
+                if (jl_is_expr(warning) && ((jl_expr_t*)warning)->head == warn_sym)
+                     nargs = jl_expr_nargs(warning);
+                int kwargs_len = (int)nargs - 6;
+                if (nargs < 6 || kwargs_len % 2 != 0) {
+                    jl_error("julia-logmsg: bad argument list - expected "
+                             ":warn level (symbol) group (symbol) id file line msg . kwargs");
+                }
+                jl_value_t *level = jl_exprarg(warning, 0);
+                jl_value_t *group = jl_exprarg(warning, 1);
+                jl_value_t *id = jl_exprarg(warning, 2);
+                jl_value_t *file = jl_exprarg(warning, 3);
+                jl_value_t *line = jl_exprarg(warning, 4);
+                jl_value_t *msg = jl_exprarg(warning, 5);
+                kwargs = jl_alloc_vec_any(kwargs_len);
+                for (int i = 0; i < kwargs_len; ++i) {
+                    jl_array_ptr_set(kwargs, i, jl_exprarg(warning, i + 6));
+                }
+                JL_TYPECHK(logmsg, long, level);
+                jl_log(jl_unbox_long(level), NULL, group, id, file, line, (jl_value_t*)kwargs, msg);
+            }
+            expr = jl_exprarg(expr, nargs - 1);
+        }
+        JL_GC_POP();
+        return expr;
+    }
+
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 4);
+    args[0] = core_lower;
+    args[1] = (jl_value_t*)jl_alloc_svec(2);
+    jl_svecset(args[1], 0, jl_box_uint8pointer((uint8_t*)text));
+    jl_svecset(args[1], 1, jl_box_long(text_len));
+    args[2] = filename;
+    args[3] = jl_box_long(lineno);
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    jl_value_t *result = jl_apply(args, 4);
+    ct->world_age = last_age;
+    args[0] = result; // root during error checks below
     JL_GC_POP();
-    return expr;
+    return result;
 }
 
 // expand in a context where the expression value is unused
