@@ -644,7 +644,11 @@ end
 ## functions ##
 
 isempty(x::Tuple{}) = true
-isempty(@nospecialize x::Tuple) = false
+
+function isempty(@nospecialize x::Tuple)
+    @_nospecializeinfer_meta
+    false
+end
 
 revargs() = ()
 revargs(x, r...) = (revargs(r...)..., x)
@@ -661,9 +665,10 @@ prod(x::Tuple{}) = 1
 prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
-function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})
+function sym_in(x::Symbol, @nospecialize(itr::Tuple{Vararg{Symbol}}))
     @noinline
     @_total_meta
+    @_nospecializeinfer_meta
     for y in itr
         y === x && return true
     end
