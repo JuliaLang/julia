@@ -1374,34 +1374,6 @@ end
 # of the tuple, skipping values that are statically known to be != at compile time.
 in(x, itr::Tuple) = _in_tuple(x, itr, false)
 
-# Specialized variant to also skip the complicated inference of the function above,
-# if the tuple is homogenous
-function in(x, itr::NTuple)
-    for i in itr
-        i == x && return true
-    end
-    false
-end
-
-# Special methods to handle Missing
-function in(::Missing, itr::Tuple{T, Vararg{T}}) where T
-    @nospecialize
-    @_nospecializeinfer_meta
-    missing
-end
-
-function in(::Any, itr::Tuple{Missing, Vararg{Missing}})
-    @nospecialize
-    @_nospecializeinfer_meta
-    missing
-end
-
-function in(::Missing, itr::Tuple{Missing, Vararg{Missing}})
-    @nospecialize
-    @_nospecializeinfer_meta
-    missing
-end
-
 # This recursive function will be unrolled at compiletime, and will not generate separate
 # llvm-compiled specializations for each step of the recursion.
 function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)
