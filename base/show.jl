@@ -182,7 +182,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        hascolor = get(recur_io, :color, false)
+        hascolor = get(recur_io, :color, false)::Bool
         ks = Vector{String}(undef, min(rows, length(t)))
         vs = Vector{String}(undef, min(rows, length(t)))
         keywidth = 0
