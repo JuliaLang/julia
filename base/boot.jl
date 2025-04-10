@@ -1028,7 +1028,7 @@ _setparser!(parser) = setglobal!(Core, :_parse, parser)
 # The internal jl_expand_with_loc_warn will call into Core._lower if not `nothing`.
 _lower = nothing
 
-_setlowerer!(lowerer) = setglobal!(Core, :_lowerer, lowerer)
+_setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)

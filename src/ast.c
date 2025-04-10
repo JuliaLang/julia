@@ -1310,7 +1310,7 @@ JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *
     jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
     jl_value_t *core_lower = NULL;
     if (jl_core_module) {
-        core_lower = jl_get_global(jl_core_module, jl_symbol("_parse"));
+        core_lower = jl_get_global(jl_core_module, jl_symbol("_lower"));
     }
     if (!core_lower || core_lower == jl_nothing) {
         // In bootstrap, directly call the builtin lowerer.
