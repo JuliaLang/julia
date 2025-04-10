@@ -2003,7 +2003,7 @@ function show_unquoted_expr_fallback(io::IO, ex::Expr, indent::Int, quote_level:
 end
 
 # TODO: implement interpolated strings
-function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::Int = 0)
+@nospecializeinfer function show_unquoted(@nospecialize(io::IO), ex::Expr, indent::Int, prec::Int, quote_level::Int = 0)
     head, args, nargs = ex.head, ex.args, length(ex.args)
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
