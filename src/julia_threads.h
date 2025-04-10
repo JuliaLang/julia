@@ -130,8 +130,7 @@ typedef struct {
     small_arraylist_t live_tasks;
 
     // variables for tracking malloc'd arrays
-    struct _mallocarray_t *mallocarrays;
-    struct _mallocarray_t *mafreelist;
+    small_arraylist_t mallocarrays;
 
     // variables for tracking big objects
     struct _bigval_t *big_objects;

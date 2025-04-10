@@ -1,5 +1,5 @@
 ## jll artifact
 # LLVM_tools (downloads LLVM_jll to get things like `lit` and `opt`)
 LLVM_TOOLS_JLL_NAME := LLVM
-LLVM_TOOLS_JLL_VER := 16.0.6+4
-LLVM_TOOLS_ASSERT_JLL_VER := 16.0.6+4
+LLVM_TOOLS_JLL_VER := 16.0.6+5
+LLVM_TOOLS_ASSERT_JLL_VER := 16.0.6+5

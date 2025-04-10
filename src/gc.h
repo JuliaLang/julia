@@ -143,11 +143,6 @@ JL_EXTENSION typedef struct _bigval_t {
 
 // data structure for tracking malloc'd arrays and genericmemory.
 
-typedef struct _mallocarray_t {
-    jl_value_t *a;
-    struct _mallocarray_t *next;
-} mallocarray_t;
-
 // pool page metadata
 typedef struct _jl_gc_pagemeta_t {
     // next metadata structure in per-thread list

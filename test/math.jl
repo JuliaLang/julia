@@ -1466,6 +1466,14 @@ end
     @test 8.758520413376658e-5^70.55863059215994 == 5.052076767078296e-287
 end
 
+@testset "special function `::Real` fallback shouldn't recur without bound, issue #57789" begin
+    mutable struct Issue57789 <: Real end
+    Base.float(::Issue57789) = Issue57789()
+    for f ∈ (sin, sinpi, log, exp)
+        @test_throws MethodError f(Issue57789())
+    end
+end
+
 # Test that sqrt behaves correctly and doesn't exhibit fp80 double rounding.
 # This happened on old glibc versions.
 # Test case from https://sourceware.org/bugzilla/show_bug.cgi?id=14032.

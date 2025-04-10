@@ -61,6 +61,9 @@ using StyledStrings # see https://github.com/JuliaLang/StyledStrings.jl/issues/6
         "AnnotatedString{String}(\"some string\", [(1:4, :thing, 0x01), (6:11, :other, 0x02), (1:11, :all, 0x03)])"
     @test eval(Meta.parse(repr(str))) == str
     @test sprint(show, MIME("text/plain"), str) == "\"some string\""
+
+    @test Bool === Base.infer_return_type(isvalid, Tuple{Base.AnnotatedString, Vararg})
+    @test Int === Base.infer_return_type(ncodeunits, Tuple{Base.AnnotatedString})
 end
 
 @testset "AnnotatedChar" begin
