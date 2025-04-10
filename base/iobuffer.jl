@@ -811,8 +811,8 @@ function write(to::IO, from::GenericIOBuffer)
     if to === from
         throw(ArgumentError("Writing all content fron an IOBuffer into itself in invalid"))
     else
-        available = bytesavailable(from)
-        written = GC.@preserve from unsafe_write(to, pointer(from.data, from.ptr), UInt(available))
+        from.readable || _throw_not_readable()
+        written = write(to, view(from.data, from.ptr:from.size))
         from.ptr = from.size + 1
     end
     return written
