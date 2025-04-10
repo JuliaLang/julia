@@ -1838,8 +1838,6 @@ int jl_is_type_valid_for_concrete_subtype(jl_value_t *dt) {
         return 0;
     if (jl_is_typevar(dt))
         dt = ((jl_tvar_t*)dt)->ub;
-    if (jl_is_vararg(dt))
-        dt = ((jl_vararg_t*)dt)->T;
     if (dt == jl_bottom_type || (dt && !jl_is_type(dt)))
         return 0;
     return 1;
@@ -1862,6 +1860,8 @@ int jl_are_tparams_valid_for_concrete_subtype(jl_datatype_t *dt) {
         size_t i, l = jl_nparams(dt);
         for (i = 0; i < l; i++) {
             jl_value_t *t = jl_tparam(dt, i);
+            if (t && jl_is_vararg(t))
+                t = ((jl_vararg_t*)t)->T;
             if (!jl_is_type_valid_for_concrete_subtype(t))
                 return 0;
         }

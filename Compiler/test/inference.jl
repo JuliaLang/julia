@@ -210,6 +210,7 @@ end
 @test !Compiler.valid_as_lattice(Array{1}, true)
 @test !Compiler.valid_as_lattice(Memory{1}, true)
 @test !Compiler.valid_as_lattice(Tuple{1}, true)
+@test !Compiler.valid_as_lattice(Tuple{<:Union{}}, true)
 @test !Compiler.valid_as_lattice(Type{1}, true)
 
 # PR 22120
