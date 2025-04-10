@@ -14,7 +14,7 @@ include("testenv.jl")
 # sanity tests that our built-in types are marked correctly for const fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results]),
+        (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results, :time_infer_total, :time_infer_cache_saved, :time_infer_self]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
         (Core.MethodTable, [:module]),
@@ -33,7 +33,7 @@ end
 # sanity tests that our built-in types are marked correctly for atomic fields
 for (T, c) in (
         (Core.CodeInfo, []),
-        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile]),
+        (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
         (Core.Method, [:primary_world, :deleted_world]),
         (Core.MethodInstance, [:cache, :flags]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
@@ -2852,7 +2852,7 @@ mutable struct Obj; x; end
         push!(wr, WeakRef(x))
         nothing
     end
-    @noinline test_wr(r, wr) = @test r[1] == wr[1].value
+    @noinline test_wr(r, wr) = r[1] == wr[1].value
     function test_wr()
         # we need to be very careful here that we never
         # use the value directly in this function, so we aren't dependent
@@ -2860,7 +2860,7 @@ mutable struct Obj; x; end
         ref = []
         wref = []
         mk_wr(ref, wref)
-        test_wr(ref, wref)
+        @test test_wr(ref, wref)
         GC.gc()
         test_wr(ref, wref)
         empty!(ref)
@@ -5773,6 +5773,13 @@ let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     @test reinterpret(UInt128, arr[2].fp) == expected
 end
 
+# make sure VecElement Tuple has the C alignment and ABI for supported types
+primitive type Int24 24 end
+@test Base.datatype_alignment(NTuple{10,VecElement{Int16}}) == 32
+@test Base.datatype_alignment(NTuple{10,VecElement{Int24}}) == 4
+@test Base.datatype_alignment(NTuple{10,VecElement{Int64}}) == 128
+@test Base.datatype_alignment(NTuple{10,VecElement{Int128}}) == 256
+
 # issue #21516
 struct T21516
     x::Vector{Float64}
@@ -6113,7 +6120,6 @@ module GlobalDef18933
         global sincos
         nothing
     end
-    @test which(@__MODULE__, :sincos) === Base.Math
     @test @isdefined sincos
     @test sincos === Base.sincos
 end
@@ -7684,7 +7690,7 @@ end
 # issue #31696
 foo31696(x::Int8, y::Int8) = 1
 foo31696(x::T, y::T) where {T <: Int8} = 2
-@test length(methods(foo31696)) == 2
+@test length(methods(foo31696)) == 1
 let T1 = Tuple{Int8}, T2 = Tuple{T} where T<:Int8, a = T1[(1,)], b = T2[(1,)]
     b .= a
     @test b[1] == (1,)
@@ -8471,3 +8477,54 @@ module GlobalAssign57446
     (@__MODULE__).theglobal = 1
     @test theglobal == 1
 end
+
+# issue #57638 - circular imports
+module M57638
+module I
+    using ..M57638
+end
+using .I
+end
+convert(Core.Binding, GlobalRef(M57638.I, :Base))
+@test M57638.Base === Base
+
+module M57638_2
+module I
+    using ..M57638_2
+    export Base
+end
+using .I
+export Base
+end
+@test M57638_2.Base === Base
+
+module M57638_3
+    module M2
+        using ..M57638_3
+        module M3
+            const x = 1
+            export x
+        end
+        using .M3
+        export x
+    end
+    using .M2
+    export x
+end
+@test M57638_3.x === 1
+
+module GlobalBindingMulti
+    module M
+        export S
+        module C
+            export S
+            struct A end
+            S = A() # making S const makes the error go away
+        end
+        using .C
+    end
+
+    using .M
+    using .M.C
+end
+@test GlobalBindingMulti.S === GlobalBindingMulti.M.C.S

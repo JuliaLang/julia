@@ -32,7 +32,7 @@ function concrete_eval_invoke(interp::AbstractInterpreter, ci::CodeInstance, arg
 end
 
 function abstract_eval_invoke_inst(interp::AbstractInterpreter, inst::Instruction, irsv::IRInterpretationState)
-    stmt = inst[:stmt]
+    stmt = inst[:stmt]::Expr
     ci = stmt.args[1]
     if ci isa MethodInstance
         world = frame_world(irsv)

@@ -5,7 +5,7 @@ module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
                   convert, show, iterate, promote_rule, to_indices, copy,
-                  isassigned
+                  isassigned, lastindex, firstindex
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
@@ -91,7 +91,11 @@ module IteratorsMD
     flatten(I::Tuple{Any}) = Tuple(I[1])
     @inline flatten(I::Tuple) = (Tuple(I[1])..., flatten(tail(I))...)
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
-    show(io::IO, i::CartesianIndex) = (print(io, "CartesianIndex"); show(io, i.I))
+    function show(io::IO, i::CartesianIndex)
+        print(io, "CartesianIndex(")
+        join(io, i.I, ", ")
+        print(io, ")")
+    end
 
     # length
     length(::CartesianIndex{N}) where {N} = N
@@ -99,6 +103,8 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
+    firstindex(index::CartesianIndex) = firstindex(index.I)
+    lastindex(index::CartesianIndex) = lastindex(index.I)
     Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 

@@ -386,8 +386,8 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
         }
         if (preal_decl.empty()) {
             // there may be an equivalent method already compiled (or at least registered with the JIT to compile), in which case we should be using that instead
-            jl_code_instance_t *compiled_ci = jl_get_ci_equiv(codeinst, 1);
-            if ((jl_value_t*)compiled_ci != jl_nothing) {
+            jl_code_instance_t *compiled_ci = jl_get_ci_equiv(codeinst, 0);
+            if (compiled_ci != codeinst) {
                 codeinst = compiled_ci;
                 uint8_t specsigflags;
                 void *fptr;
@@ -630,15 +630,18 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
             // If logging of the compilation stream is enabled,
             // then dump the method-instance specialization type to the stream
             jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+            uint64_t end_time = jl_hrtime();
             if (jl_is_method(mi->def.method)) {
                 auto stream = *jl_ExecutionEngine->get_dump_compiles_stream();
                 if (stream) {
-                    uint64_t end_time = jl_hrtime();
                     ios_printf(stream, "%" PRIu64 "\t\"", end_time - start_time);
                     jl_static_show((JL_STREAM*)stream, mi->specTypes);
                     ios_printf(stream, "\"\n");
                 }
             }
+            jl_atomic_store_relaxed(&codeinst->time_compile,
+                julia_double_to_half(julia_half_to_float(jl_atomic_load_relaxed(&codeinst->time_compile))
+                    + (end_time - start_time) * 1e-9));
             lock.native.lock();
         }
         else {
@@ -804,140 +807,6 @@ void jl_emit_codeinst_to_jit_impl(
     emittedmodules[codeinst] = std::move(result_m);
 }
 
-
-const char *jl_generate_ccallable(Module *llvmmod, void *sysimg_handle, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
-
-// compile a C-callable alias
-extern "C" JL_DLLEXPORT_CODEGEN
-int jl_compile_extern_c_impl(LLVMOrcThreadSafeModuleRef llvmmod, void *p, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
-{
-    auto ct = jl_current_task;
-    bool timed = (ct->reentrant_timing & 1) == 0;
-    if (timed)
-        ct->reentrant_timing |= 1;
-    uint64_t compiler_start_time = 0;
-    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
-    if (measure_compile_time_enabled)
-        compiler_start_time = jl_hrtime();
-    jl_codegen_params_t *pparams = (jl_codegen_params_t*)p;
-    DataLayout DL = pparams ? pparams->DL : jl_ExecutionEngine->getDataLayout();
-    Triple TargetTriple = pparams ? pparams->TargetTriple : jl_ExecutionEngine->getTargetTriple();
-    orc::ThreadSafeContext ctx;
-    auto into = unwrap(llvmmod);
-    orc::ThreadSafeModule backing;
-    bool success = true;
-    const char *name = "";
-    if (into == NULL) {
-        ctx = pparams ? pparams->tsctx : jl_ExecutionEngine->makeContext();
-        backing = jl_create_ts_module("cextern", ctx, DL, TargetTriple);
-        into = &backing;
-    }
-    { // params scope
-        jl_codegen_params_t params(into->getContext(), DL, TargetTriple);
-        if (pparams == NULL) {
-            params.cache = p == NULL;
-            params.imaging_mode = 0;
-            params.tsctx.getContext()->setDiscardValueNames(true);
-            pparams = &params;
-        }
-        Module &M = *into->getModuleUnlocked();
-        assert(pparams->tsctx.getContext() == &M.getContext());
-        name = jl_generate_ccallable(&M, sysimg, declrt, sigt, *pparams);
-        if (!sysimg && !p) {
-            { // drop lock to keep analyzer happy (since it doesn't know we have the only reference to it)
-                auto release = std::move(params.tsctx_lock);
-            }
-            { // lock scope
-                jl_unique_gcsafe_lock lock(extern_c_lock);
-                if (jl_ExecutionEngine->getGlobalValueAddress(name))
-                    success = false;
-            }
-            params.tsctx_lock = params.tsctx.getLock(); // re-acquire lock
-            if (success && params.cache) {
-                size_t newest_world = jl_atomic_load_acquire(&jl_world_counter);
-                for (auto &it : params.workqueue) { // really just zero or one, and just the ABI not the rest of the metadata
-                    jl_code_instance_t *codeinst = it.first;
-                    JL_GC_PROMISE_ROOTED(codeinst);
-                    jl_code_instance_t *newest_ci = jl_type_infer(jl_get_ci_mi(codeinst), newest_world, SOURCE_MODE_ABI);
-                    if (newest_ci) {
-                        if (jl_egal(codeinst->rettype, newest_ci->rettype))
-                            it.first = codeinst;
-                        jl_compile_codeinst_now(newest_ci);
-                    }
-                }
-                jl_analyze_workqueue(nullptr, params, true);
-                assert(params.workqueue.empty());
-                finish_params(&M, params, sharedmodules);
-            }
-        }
-        pparams = nullptr;
-    }
-    if (!sysimg && success && llvmmod == NULL) {
-        { // lock scope
-            jl_unique_gcsafe_lock lock(extern_c_lock);
-            if (!jl_ExecutionEngine->getGlobalValueAddress(name)) {
-                {
-                    auto Lock = backing.getContext().getLock();
-                    jl_ExecutionEngine->optimizeDLSyms(*backing.getModuleUnlocked()); // safepoint
-                }
-                jl_ExecutionEngine->addModule(std::move(backing));
-                success = jl_ExecutionEngine->getGlobalValueAddress(name);
-                assert(success);
-            }
-        }
-    }
-    if (timed) {
-        if (measure_compile_time_enabled) {
-            auto end = jl_hrtime();
-            jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
-        }
-        ct->reentrant_timing &= ~1ull;
-    }
-    return success;
-}
-
-// declare a C-callable entry point; called during code loading from the toplevel
-extern "C" JL_DLLEXPORT_CODEGEN
-void jl_extern_c_impl(jl_value_t *declrt, jl_tupletype_t *sigt)
-{
-    // validate arguments. try to do as many checks as possible here to avoid
-    // throwing errors later during codegen.
-    JL_TYPECHK(@ccallable, type, declrt);
-    if (!jl_is_tuple_type(sigt))
-        jl_type_error("@ccallable", (jl_value_t*)jl_anytuple_type_type, (jl_value_t*)sigt);
-    // check that f is a guaranteed singleton type
-    jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
-    if (!jl_is_datatype(ft) || !jl_is_datatype_singleton(ft))
-        jl_error("@ccallable: function object must be a singleton");
-
-    // compute / validate return type
-    if (!jl_is_concrete_type(declrt) || jl_is_kind(declrt))
-        jl_error("@ccallable: return type must be concrete and correspond to a C type");
-    if (!jl_type_mappable_to_c(declrt))
-        jl_error("@ccallable: return type doesn't correspond to a C type");
-
-    // validate method signature
-    size_t i, nargs = jl_nparams(sigt);
-    for (i = 1; i < nargs; i++) {
-        jl_value_t *ati = jl_tparam(sigt, i);
-        if (!jl_is_concrete_type(ati) || jl_is_kind(ati) || !jl_type_mappable_to_c(ati))
-            jl_error("@ccallable: argument types must be concrete");
-    }
-
-    // save a record of this so that the alias is generated when we write an object file
-    jl_method_t *meth = (jl_method_t*)jl_methtable_lookup(ft->name->mt, (jl_value_t*)sigt, jl_atomic_load_acquire(&jl_world_counter));
-    if (!jl_is_method(meth))
-        jl_error("@ccallable: could not find requested method");
-    JL_GC_PUSH1(&meth);
-    meth->ccallable = jl_svec2(declrt, (jl_value_t*)sigt);
-    jl_gc_wb(meth, meth->ccallable);
-    JL_GC_POP();
-
-    // create the alias in the current runtime environment
-    int success = jl_compile_extern_c(NULL, NULL, NULL, declrt, (jl_value_t*)sigt);
-    if (!success)
-        jl_error("@ccallable was already defined for this method name");
-}
 
 extern "C" JL_DLLEXPORT_CODEGEN
 int jl_compile_codeinst_impl(jl_code_instance_t *ci)

@@ -602,7 +602,7 @@ CC.cache_owner(::REPLInterpreter) = REPLCacheToken()
 CC.may_optimize(::REPLInterpreter) = false
 
 # REPLInterpreter doesn't need any sources to be cached, so discard them aggressively
-CC.transform_result_for_cache(::REPLInterpreter, ::CC.InferenceResult) = nothing
+CC.transform_result_for_cache(::REPLInterpreter, ::CC.InferenceResult, edges::Core.SimpleVector) = nothing
 
 # REPLInterpreter analyzes a top-level frame, so better to not bail out from it
 CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.InferenceState) = false
@@ -648,7 +648,7 @@ function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, baile
             return CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL)
         else
             b = convert(Core.Binding, g)
-            if CC.binding_kind(partition) == CC.BINDING_KIND_GLOBAL && isdefined(b, :value)
+            if CC.binding_kind(partition) == CC.PARTITION_KIND_GLOBAL && isdefined(b, :value)
                 return CC.RTEffects(Const(b.value), Union{}, CC.EFFECTS_TOTAL)
             end
         end

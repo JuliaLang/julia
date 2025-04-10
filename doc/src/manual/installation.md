@@ -18,7 +18,7 @@ On Windows Julia can be installed directly from the Windows store
 exactly the same version by executing
 
 ```
-winget install julia -s msstore
+winget install --name Julia --id 9NJNWW8PVKMN -e -s msstore
 ```
 
 in any shell.

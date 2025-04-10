@@ -675,6 +675,20 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     fargs[0] = (jl_value_t*)codeinfos;
     void *data = jl_emit_native(codeinfos, llvmmod, &cgparams, external_linkage);
 
+    // examine everything just emitted and save it to the caches
+    if (!external_linkage) {
+        for (size_t i = 0, l = jl_array_nrows(codeinfos); i < l; i++) {
+            jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
+            if (jl_is_code_instance(item)) {
+                // now add it to our compilation results
+                jl_code_instance_t *codeinst = (jl_code_instance_t*)item;
+                jl_code_info_t *src = (jl_code_info_t*)jl_array_ptr_ref(codeinfos, ++i);
+                assert(jl_is_code_info(src));
+                jl_add_codeinst_to_cache(codeinst, src);
+            }
+        }
+    }
+
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
     ((jl_native_code_desc_t*)data)->M.withModuleDo([&](Module &M) {
@@ -775,7 +789,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                     params.tsctx, clone.getModuleUnlocked()->getDataLayout(),
                     Triple(clone.getModuleUnlocked()->getTargetTriple()));
             jl_llvm_functions_t decls;
-            if (jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
+            if (!(params.params->force_emit_all) && jl_atomic_load_relaxed(&codeinst->invoke) == jl_fptr_const_return_addr)
                 decls.functionObject = "jl_fptr_const_return";
             else
                 decls = jl_emit_codeinst(result_m, codeinst, src, params);
@@ -784,9 +798,12 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 compiled_functions[codeinst] = {std::move(result_m), std::move(decls)};
         }
         else {
-            jl_value_t *sig = jl_array_ptr_ref(codeinfos, ++i);
-            assert(jl_is_type(item) && jl_is_type(sig));
-            jl_compile_extern_c(wrap(&clone), &params, NULL, item, sig);
+            assert(jl_is_simplevector(item));
+            jl_value_t *rt = jl_svecref(item, 0);
+            jl_value_t *sig = jl_svecref(item, 1);
+            jl_value_t *nameval = jl_svec_len(item) == 2 ? jl_nothing : jl_svecref(item, 2);
+            assert(jl_is_type(rt) && jl_is_type(sig));
+            jl_generate_ccallable(clone.getModuleUnlocked(), nameval, rt, sig, params);
         }
     }
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them

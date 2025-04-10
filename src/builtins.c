@@ -2396,8 +2396,7 @@ static void add_intrinsic(jl_module_t *inm, const char *name, enum intrinsic f) 
 {
     jl_value_t *i = jl_permbox32(jl_intrinsic_type, 0, (int32_t)f);
     jl_sym_t *sym = jl_symbol(name);
-    jl_set_const(inm, sym, i);
-    jl_module_public(inm, sym, 1);
+    jl_set_initial_const(inm, sym, i, 1);
 }
 
 void jl_init_intrinsic_properties(void) JL_GC_DISABLED
@@ -2413,9 +2412,8 @@ void jl_init_intrinsic_properties(void) JL_GC_DISABLED
 
 void jl_init_intrinsic_functions(void) JL_GC_DISABLED
 {
-    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"), NULL);
-    inm->parent = jl_core_module;
-    jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
+    jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module, 0, 1);
+    jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);
     jl_mk_builtin_func(jl_intrinsic_type, "IntrinsicFunction", jl_f_intrinsic_call);
     jl_mk_builtin_func(
         (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type),
@@ -2437,7 +2435,7 @@ void jl_init_intrinsic_functions(void) JL_GC_DISABLED
 
 static void add_builtin(const char *name, jl_value_t *v)
 {
-    jl_set_const(jl_core_module, jl_symbol(name), v);
+    jl_set_initial_const(jl_core_module, jl_symbol(name), v, 0);
 }
 
 jl_fptr_args_t jl_get_builtin_fptr(jl_datatype_t *dt)

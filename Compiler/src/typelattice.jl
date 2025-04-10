@@ -755,7 +755,9 @@ end
 
 # Legacy constructor
 function Core.PartialStruct(𝕃::AbstractLattice, @nospecialize(typ), fields::Vector{Any})
-    return PartialStruct(𝕃, typ, partialstruct_init_undefs(typ, fields), fields)
+    undefs = partialstruct_init_undefs(typ, fields)
+    undefs === nothing && error("This object never exists at runtime")
+    return PartialStruct(𝕃, typ, undefs, fields)
 end
 
 function Core.PartialStruct(::AbstractLattice, @nospecialize(typ), undefs::Vector{Union{Nothing,Bool}}, fields::Vector{Any})

@@ -129,6 +129,25 @@ function retrieve_code_info(mi::MethodInstance, world::UInt)
         else
             c = copy(src::CodeInfo)
         end
+        if (def.did_scan_source & 0x1) == 0x0
+            # This scan must happen:
+            #   1. After method definition
+            #   2. Before any code instances that may have relied on information
+            #      from implicit GlobalRefs for this method are added to the cache
+            #   3. Preferably while the IR is already uncompressed
+            #   4. As late as possible, as early adding of the backedges may cause
+            #      spurious invalidations.
+            #
+            # At the moment we do so here, because
+            #  1. It's reasonably late
+            #  2. It has easy access to the uncompressed IR
+            #  3. We necessarily pass through here before relying on any
+            #     information obtained from implicit GlobalRefs.
+            #
+            # However, the exact placement of this scan is not as important as
+            # long as the above conditions are met.
+            ccall(:jl_scan_method_source_now, Cvoid, (Any, Any), def, c)
+        end
     end
     if c isa CodeInfo
         c.parent = mi
@@ -155,14 +174,14 @@ isa_compileable_sig(m::ABIOverride) = false
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
 
 """
-    is_declared_inline(method::Method) -> Bool
+    is_declared_inline(method::Method)::Bool
 
 Check if `method` is declared as `@inline`.
 """
 is_declared_inline(method::Method) = _is_declared_inline(method, true)
 
 """
-    is_declared_noinline(method::Method) -> Bool
+    is_declared_noinline(method::Method)::Bool
 
 Check if `method` is declared as `@noinline`.
 """
@@ -176,14 +195,14 @@ function _is_declared_inline(method::Method, inline::Bool)
 end
 
 """
-    is_aggressive_constprop(method::Union{Method,CodeInfo}) -> Bool
+    is_aggressive_constprop(method::Union{Method,CodeInfo})::Bool
 
 Check if `method` is declared as `Base.@constprop :aggressive`.
 """
 is_aggressive_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x01
 
 """
-    is_no_constprop(method::Union{Method,CodeInfo}) -> Bool
+    is_no_constprop(method::Union{Method,CodeInfo})::Bool
 
 Check if `method` is declared as `Base.@constprop :none`.
 """
@@ -332,3 +351,5 @@ function inbounds_option()
 end
 
 is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+
+_time_ns() = ccall(:jl_hrtime, UInt64, ())

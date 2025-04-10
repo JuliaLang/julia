@@ -1,21 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Can be loaded on top of either an existing system image built from
-# `Base_compiler.jl` or standalone, in which case we will build it now.
-let had_compiler = isdefined(Main, :Base)
-if had_compiler; else
-include("Base_compiler.jl")
-end
+Base.Core.include(Base, "Base.jl") # finish populating Base (currently just has the Compiler)
 
-Core.include(Base, "Base.jl")
-
-had_compiler && ccall(:jl_init_restored_module, Cvoid, (Any,), Base)
-end
-
+# Set up Main module by importing from Base
 using .Base
+using .Base.MainInclude # ans, err, and sometimes Out
 
-# Set up Main module
-using Base.MainInclude # ans, err, and sometimes Out
+ccall(:jl_init_restored_module, Cvoid, (Any,), Base)
 
 # These definitions calls Base._include rather than Base.include to get
 # one-frame stacktraces for the common case of using include(fname) in Main.
@@ -61,7 +52,7 @@ definition of `eval`, which evaluates expressions in that module.
 const eval = Core.EvalInto(Main)
 
 # Ensure this file is also tracked
-pushfirst!(Base._included_files, (@__MODULE__, abspath(@__FILE__)))
+pushfirst!(Base._included_files, (Main, abspath(@__FILE__)))
 
 # set up depot & load paths to be able to find stdlib packages
 Base.init_depot_path()

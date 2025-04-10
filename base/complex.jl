@@ -123,7 +123,7 @@ real(C::Type{<:Complex}) = fieldtype(C, 1)
 real(::Type{Union{}}, slurp...) = Union{}(im)
 
 """
-    isreal(x) -> Bool
+    isreal(x)::Bool
 
 Test whether `x` or all its elements are numerically equal to some real number
 including infinities and NaNs. `isreal(x)` is true if `isequal(x, real(x))`
@@ -206,7 +206,7 @@ function show(io::IO, z::Complex)
         print(io, compact ? "+" : " + ")
         show(io, i)
     end
-    if !(isa(i,Integer) && !isa(i,Bool) || isa(i,AbstractFloat) && isfinite(i))
+    if !(isa(i,Signed) || isa(i,AbstractFloat) && isfinite(i))
         print(io, "*")
     end
     print(io, "im")

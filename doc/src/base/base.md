@@ -399,6 +399,7 @@ Base.Sys.loadavg
 Base.Sys.isexecutable
 Base.Sys.isreadable
 Base.Sys.iswritable
+Base.Sys.which
 Base.Sys.username
 Base.@static
 ```
