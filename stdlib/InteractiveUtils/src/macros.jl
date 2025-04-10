@@ -455,6 +455,9 @@ For `@activate Compiler`, the following options are available:
 2. `:codegen`   - Activate the compiler for internal codegen purposes. The new compiler
                   will be invoked whenever the runtime requests compilation.
 
+For `@activate JuliaSyntax`, the following options are available:
+1. `:for_lowering` - Activate JuliaSyntax such that it is compatible with JuliaLowering
+
 `@activate Compiler` without options is equivalent to `@activate Compiler[:reflection]`.
 
 """
