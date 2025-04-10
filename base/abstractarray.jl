@@ -321,13 +321,13 @@ eachindex(itrs...) = keys(itrs...)
 eachindex(A::AbstractVector) = (@inline(); axes1(A))
 
 
+# we unroll the join for easier inference
+_join_comma_and(indsA, indsB) = LazyString(indsA, " and ", indsB)
+_join_comma_and(indsA, indsB, indsC...) = LazyString(indsA, ", ", _join_comma_and(indsB, indsC...))
 @noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsBs...)
-    inds = (indsA, indsBs...)
-    throw(DimensionMismatch(LazyString("all inputs to eachindex must have the same ", indices_str, ", got ", join(inds, ", ", " and "))))
-end
-@noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsB)
-    inds = (indsA, indsB)
-    throw(DimensionMismatch(LazyString("all inputs to eachindex must have the same ", indices_str, ", got ", indsA, " and ", indsB)))
+    throw(DimensionMismatch(
+            LazyString("all inputs to eachindex must have the same ", indices_str, ", got ",
+                _join_comma_and(indsA, indsBs...))))
 end
 
 """
