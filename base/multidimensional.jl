@@ -416,8 +416,9 @@ module IteratorsMD
 
     @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
         axsA = axes(A)
-        all(==(axsA), map(axes, B)) ||
-            Base.throw_eachindex_mismatch_indices(IndexCartesian(), A, B...)
+        axsBs = map(axes, B)
+        all(==(axsA), axsBs) ||
+            Base.throw_eachindex_mismatch_indices("axes", axsA, axsBs...)
         CartesianIndices(axsA)
     end
 
