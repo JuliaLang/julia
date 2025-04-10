@@ -63,7 +63,7 @@ function parseinline(stream::IO, md::MD, config::Config)
         char = peek(stream, Char)
         if haskey(config.inner, char) &&
                 (inner = parseinline(stream, md, config.inner[char])) !== nothing
-            c = String(take!(buffer))
+            c = takestring!(buffer)
             !isempty(c) && push!(content, c)
             buffer = IOBuffer()
             push!(content, inner)
@@ -71,7 +71,7 @@ function parseinline(stream::IO, md::MD, config::Config)
             write(buffer, read(stream, Char))
         end
     end
-    c = String(take!(buffer))
+    c = takestring!(buffer)
     !isempty(c) && push!(content, c)
     return content
 end
