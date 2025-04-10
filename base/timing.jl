@@ -289,6 +289,10 @@ macro __tryfinally(ex, fin)
        )
 end
 
+macro latestworld_if_toplevel()
+    Expr(Symbol("latestworld-if-toplevel"))
+end
+
 """
     @time expr
     @time "description" expr
@@ -611,7 +615,6 @@ julia> stats.recompile_time
 """
 macro timed(ex)
     quote
-        Expr(Symbol("latestworld-if-toplevel"))
         Experimental.@force_compile
         Threads.lock_profiling(true)
         local lock_conflicts = Threads.LOCK_CONFLICT_COUNT[]
@@ -619,6 +622,7 @@ macro timed(ex)
         local elapsedtime = time_ns()
         cumulative_compile_timing(true)
         local compile_elapsedtimes = cumulative_compile_time_ns()
+        @latestworld_if_toplevel
         local val = @__tryfinally($(esc(ex)),
             (elapsedtime = time_ns() - elapsedtime;
             cumulative_compile_timing(false);
@@ -644,8 +648,8 @@ end
 # here so it's possible to time/trace all imports, including InteractiveUtils and its deps
 macro time_imports(ex)
     quote
-        Expr(Symbol("latestworld-if-toplevel"))
         Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+        @latestworld_if_toplevel
         @__tryfinally(
             # try
             $(esc(ex)),
@@ -657,8 +661,8 @@ end
 
 macro trace_compile(ex)
     quote
-        Expr(Symbol("latestworld-if-toplevel"))
         ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+        @latestworld_if_toplevel
         @__tryfinally(
             # try
             $(esc(ex)),
@@ -670,8 +674,8 @@ end
 
 macro trace_dispatch(ex)
     quote
-        Expr(Symbol("latestworld-if-toplevel"))
         ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+        @latestworld_if_toplevel
         @__tryfinally(
             # try
             $(esc(ex)),
