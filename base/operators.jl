@@ -1376,7 +1376,7 @@ in(x, itr::Tuple) = _in_tuple(x, itr, false)
 
 # Specialized variant to also skip the complicated inference of the function above,
 # if the tuple is homogenous
-function in(x, itr::NTuple{N, T}) where {N, T}
+function in(x, itr::NTuple)
     for i in itr
         i == x && return true
     end
