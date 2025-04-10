@@ -846,6 +846,7 @@ JL_CALLABLE(jl_f__apply_iterate)
 // this is like a regular call, but always runs in the newest world
 JL_CALLABLE(jl_f_invokelatest)
 {
+    JL_NARGSV(invokelatest, 1);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     if (!ct->ptls->in_pure_callback)
@@ -859,10 +860,10 @@ JL_CALLABLE(jl_f_invokelatest)
 // If world > jl_atomic_load_acquire(&jl_world_counter), run in the latest world.
 JL_CALLABLE(jl_f_invoke_in_world)
 {
-    JL_NARGSV(_apply_in_world, 2);
+    JL_NARGSV(invoke_in_world, 2);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
-    JL_TYPECHK(_apply_in_world, ulong, args[0]);
+    JL_TYPECHK(invoke_in_world, ulong, args[0]);
     size_t world = jl_unbox_ulong(args[0]);
     if (!ct->ptls->in_pure_callback) {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
@@ -877,7 +878,7 @@ JL_CALLABLE(jl_f_invoke_in_world)
 JL_CALLABLE(jl_f__call_in_world_total)
 {
     JL_NARGSV(_call_in_world_total, 2);
-    JL_TYPECHK(_apply_in_world, ulong, args[0]);
+    JL_TYPECHK(_call_in_world_total, ulong, args[0]);
     jl_task_t *ct = jl_current_task;
     int last_in = ct->ptls->in_pure_callback;
     jl_value_t *ret = NULL;
