@@ -9,7 +9,8 @@ Create a async condition that wakes up tasks waiting for it
 (by calling [`wait`](@ref) on the object)
 when notified from C by a call to `uv_async_send`.
 Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
-Use [`isopen`](@ref) to check whether it is still active.
+Use [`isopen`](@ref) to check whether it is still active. A closed condition will
+not wake up tasks.
 
 This provides an implicit acquire & release memory ordering between the sending and waiting threads.
 """
@@ -74,7 +75,8 @@ Create a timer that wakes up tasks waiting for it (by calling [`wait`](@ref) on 
 Waiting tasks are woken after an initial delay of at least `delay` seconds, and then repeating after
 at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
 once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
-[`isopen`](@ref) to check whether a timer is still active. Use `t.timeout` and `t.interval` to read
+[`isopen`](@ref) to check whether a timer is still active. A closed timer will not fire.
+Use `t.timeout` and `t.interval` to read
 the setup conditions of a `Timer` `t`.
 
 ```julia-repl
@@ -206,6 +208,14 @@ end
 
 isopen(t::Union{Timer, AsyncCondition}) = @atomic :acquire t.isopen
 
+"""
+    close(t::Union{Timer, AsyncCondition})
+
+Close an object `t`. Once a timer or condition is closed, it will not produce
+a new event.
+
+See also: [`isopen`](@ref)
+"""
 function close(t::Union{Timer, AsyncCondition})
     t.handle == C_NULL && !t.isopen && return # short-circuit path, :monotonic
     iolock_begin()
