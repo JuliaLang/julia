@@ -48,7 +48,7 @@ end
 function Compiler.transform_result_for_cache(interp::SplitCacheInterp, result::Compiler.InferenceResult, edges::Compiler.SimpleVector)
     opt = result.src::Compiler.OptimizationState
     ir = opt.result.ir::Compiler.IRCode
-    override = GlobalRef(@__MODULE__(), :with_new_compiler)
+    override = with_new_compiler
     for inst in ir.stmts
         stmt = inst[:stmt]
         isexpr(stmt, :call) || continue
