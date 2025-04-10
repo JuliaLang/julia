@@ -1010,8 +1010,17 @@ function run_passes_ipo_safe(
     sv::OptimizationState,
     optimize_until::Union{Nothing, Int, String} = nothing,  # run all passes by default
 )
-    if optimize_until isa String && !(optimize_until in ALL_PASS_NAMES)
-        error("invalid `optimize_until` argument, no such optimization pass")
+    if optimize_until isa String
+        found_pass = false
+        for pass in ALL_PASS_NAMES
+            if optimize_until == pass
+                found_pass = true
+                break
+            end
+        end
+        if !found_pass
+            error("invalid `optimize_until` argument, no such optimization pass")
+        end
     end
 
     __stage__ = 0  # used by @pass
