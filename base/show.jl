@@ -1782,8 +1782,8 @@ end
 
 const keyword_syms = Set([
     :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
-    :end, :export, :false, :finally, :for, :function, :global, :if, :import,
-    :let, :local, :macro, :module, :public, :quote, :return, :struct, :true,
+    :end, :export, :var"false", :finally, :for, :function, :global, :if, :import,
+    :let, :local, :macro, :module, :public, :quote, :return, :struct, :var"true",
     :try, :using, :while ])
 
 function is_valid_identifier(sym)
