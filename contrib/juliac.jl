@@ -123,16 +123,33 @@ function compile_products(enable_trim::Bool)
     end
 
     # Compile the initialization code
-    open(initsrc_path, "w") do io
-        print(io, """
-                  #include <julia.h>
-                  __attribute__((constructor)) void static_init(void) {
-                      if (jl_is_initialized())
-                          return;
-                      julia_init(JL_IMAGE_IN_MEMORY);
-                      jl_exception_clear();
-                  }
-                  """)
+    if output_type == "--output-exe"
+        open(initsrc_path, "w") do io
+            print(io, """
+                      #include <julia.h>
+                      int juliac_main(void*);
+                      int main(int argc, char *argv[])
+                      {
+                          julia_init(JL_IMAGE_IN_MEMORY);
+                          jl_exception_clear();
+                          jl_set_ARGS(argc, argv);
+                          return juliac_main(jl_get_global(jl_core_module, jl_symbol("ARGS")));
+                      }
+                      """)
+        end
+    else
+        open(initsrc_path, "w") do io
+            print(io, """
+                      #include <julia.h>
+                      __attribute__((constructor)) void static_init(void)
+                      {
+                          if (jl_is_initialized())
+                              return;
+                          julia_init(JL_IMAGE_IN_MEMORY);
+                          jl_exception_clear();
+                      }
+                      """)
+        end
     end
     run(`cc $(cflags) -g -c -o $init_path $initsrc_path`)
 end
