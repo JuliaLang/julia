@@ -194,31 +194,26 @@ f_gen265(x::Type{Int}) = 3
 # would have capped those specializations if they were still valid
 f26506(@nospecialize(x)) = 1
 g26506(x) = Base.inferencebarrier(f26506)(x[1])
-z = Any["ABC"]
+z26506 = Any["ABC"]
 f26506(x::Int) = 2
-g26506(z) # Places an entry for f26506(::String) in mt.name.cache
+g26506(z26506) # Places an entry for f26506(::String) in MethodTable cache
+w26506 = Base.get_world_counter()
+cache26506 = ccall(:jl_mt_find_cache_entry, Any, (Any, Any, UInt), Core._.cache, Tuple{typeof(f26506),String}, w26506)::Core.TypeMapEntry
+@test cache26506.max_world === typemax(UInt)
+w26506 = Base.get_world_counter()
 f26506(x::String) = 3
-let cache = typeof(f26506).name.mt.cache
-    # The entry we created above should have been truncated
-    @test cache.min_world == cache.max_world
-end
-c26506_1, c26506_2 = Condition(), Condition()
-# Captures the world age
-result26506 = Any[]
-t = Task(()->begin
-    wait(c26506_1)
-    push!(result26506, g26506(z))
-    notify(c26506_2)
-end)
-yield(t)
+@test w26506+1 === Base.get_world_counter()
+# The entry we created above should have been truncated
+@test cache26506.max_world == w26506
+# Captures the world age on creation
+t26506 = @task g26506(z26506)
 f26506(x::Float64) = 4
-let cache = typeof(f26506).name.mt.cache
-    # The entry we created above should have been truncated
-    @test cache.min_world == cache.max_world
-end
-notify(c26506_1)
-wait(c26506_2)
-@test result26506[1] == 3
+@test cache26506.max_world == w26506
+f26506(x::String) = 5
+# The entry we created above should not have been changed
+@test cache26506.max_world == w26506
+@test fetch(schedule(t26506)) === 3
+@test g26506(z26506) === 5
 
 # issue #38435
 f38435(::Int, ::Any) = 1

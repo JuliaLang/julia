@@ -933,13 +933,7 @@ this is a compiler-generated name. For explicitly-declared subtypes of
 `Function`, it is the name of the function's type.
 """
 function nameof(f::Function)
-    t = typeof(f)
-    mt = t.name.mt
-    if mt === Symbol.name.mt
-        # uses shared method table, so name is not unique to this function type
-        return nameof(t)
-    end
-    return mt.name
+    return typeof(f).name.singletonname
 end
 
 function nameof(f::Core.IntrinsicFunction)

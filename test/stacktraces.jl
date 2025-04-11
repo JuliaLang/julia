@@ -90,7 +90,7 @@ f(x) = (y = h(x); y)
 trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
-    @test frame.func === typeof(func).name.mt.name
+    @test frame.func === typeof(func).name.singletonname
     # broken until #50082 can be addressed
     mi = isa(frame.linfo, Core.CodeInstance) ? frame.linfo.def : frame.linfo
     @test mi.def.module === which(func, (Any,)).module broken=inlined
@@ -109,10 +109,10 @@ let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo
     repr = string(sf)
     @test repr == "Toplevel MethodInstance thunk at b:3"
 end
-let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
+let li = only(methods(fieldtype)).unspecialized,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
-    @test repr == "fieldtype(...) at b:3"
+    @test repr == "fieldtype(::Vararg{Any}) at b:3"
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
