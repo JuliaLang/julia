@@ -414,8 +414,6 @@ end
 
 OLD_STDOUT = stdout
 OLD_STDERR = stderr
-catch_out = IOStream("")
-catch_err = IOStream("")
 rde, wre = redirect_stderr()
 rdo, wro = redirect_stdout()
 

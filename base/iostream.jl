@@ -18,18 +18,20 @@ mutable struct IOStream <: IO
     lock::ReentrantLock
     _dolock::Bool
 
-    IOStream(name::AbstractString, buf::Array{UInt8,1}) = new(pointer(buf), buf, name, -1, ReentrantLock(), true)
+    global function new_iostream(name::AbstractString, buf::Array{UInt8,1})
+        new(pointer(buf), buf, name, -1, ReentrantLock(), true)
+    end
 end
 
-function IOStream(name::AbstractString, finalize::Bool)
+function new_iostream(name::AbstractString, finalize::Bool)
     buf = zeros(UInt8,sizeof_ios_t)
-    x = IOStream(name, buf)
+    x = new_iostream(name, buf)
     if finalize
         finalizer(close, x)
     end
     return x
 end
-IOStream(name::AbstractString) = IOStream(name, true)
+new_iostream(name::AbstractString) = new_iostream(name, true)
 
 unsafe_convert(T::Type{Ptr{Cvoid}}, s::IOStream) = convert(T, pointer(s.ios))
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
@@ -264,7 +266,7 @@ this object will close the underlying descriptor. By default, an `IOStream` is c
 it is garbage collected. `name` allows you to associate the descriptor with a named file.
 """
 function fdio(name::AbstractString, fd::Integer, own::Bool=false)
-    s = IOStream(name)
+    s = new_iostream(name)
     ccall(:ios_fd, Ptr{Cvoid}, (Ptr{Cvoid}, Clong, Cint, Cint),
           s.ios, fd, 0, own)
     return s
@@ -307,7 +309,7 @@ function open(fname::String; lock = true,
         truncate = truncate,
         append = append,
     )
-    s = IOStream(string("<file ",fname,">"))
+    s = new_iostream(string("<file ",fname,">"))
     if !lock
         s._dolock = false
     end
