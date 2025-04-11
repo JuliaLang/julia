@@ -380,6 +380,9 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
 end
 
 function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult)
+    if is_result_constabi_eligible(result)
+        return nothing
+    end
     src = result.src
     if isa(src, OptimizationState)
         # Compute and store any information required to determine the inlineability of the callee.
