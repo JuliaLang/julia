@@ -1827,7 +1827,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     jl_atomic_store_release(&newentry->max_world, 0);
                 }
             }
-            else if (jl_is_method(v)) {
+            else if (s->incremental && jl_is_methtable(v)) {
+                assert(f == s->s);
+                jl_methtable_t *new_mt = (jl_methtable_t*)&s->s->buf[reloc_offset];
+                jl_atomic_store_release(&new_mt->last_update_world, 0);
+                arraylist_push(&s->fixup_objs, (void*)reloc_offset);
+            } else if (jl_is_method(v)) {
                 assert(f == s->s);
                 write_padding(f, sizeof(jl_method_t) - tot); // hidden fields
                 jl_method_t *m = (jl_method_t*)v;
@@ -4094,9 +4099,9 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     for (size_t i = 0; i < s.fixup_objs.len; i++) {
         uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
         jl_value_t *obj = (jl_value_t*)(image_base + item);
-        if (jl_typetagis(obj, jl_typemap_entry_type) || jl_is_method(obj) || jl_is_code_instance(obj)) {
-            jl_array_ptr_1d_push(*internal_methods, obj);
+        if (jl_typetagis(obj, jl_typemap_entry_type) || jl_is_method(obj) || jl_is_code_instance(obj) || jl_is_methtable(obj)) {
             assert(s.incremental);
+            jl_array_ptr_1d_push(*internal_methods, obj);
         }
         else if (jl_is_method_instance(obj)) {
             jl_method_instance_t *newobj = jl_specializations_get_or_insert((jl_method_instance_t*)obj);

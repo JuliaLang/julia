@@ -801,7 +801,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
                     else if (jl_is_binding(kind)) {
                         jl_add_binding_backedge((jl_binding_t*)kind, (jl_value_t*)ci);
                     }
-                    else if (jl_is_mtable(kind)) {
+                    else if (jl_is_methtable(kind)) {
                         assert(i < l);
                         ex = data[i++];
                         jl_method_table_add_backedge((jl_methtable_t*)kind, ex, ci);
@@ -809,6 +809,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
                     else {
                         assert(i < l);
                         ex = data[i++];
+                        assert(jl_is_method_instance(ex));
                         jl_method_instance_add_backedge((jl_method_instance_t*)ex, kind, ci);
                     }
                 }

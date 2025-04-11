@@ -652,11 +652,6 @@ void *jl_create_native_impl(jl_array_t *methods, LLVMOrcThreadSafeModuleRef llvm
     if (jl_typeinf_func) {
         fargs[0] = (jl_value_t*)jl_typeinf_func;
         fargs[1] = (jl_value_t*)methods;
-#ifdef _P64
-        jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
-#else
-        jl_value_t *jl_array_ulong_type = jl_array_uint32_type;
-#endif
         jl_array_t *worlds = jl_alloc_array_1d(jl_array_ulong_type, 1 + compiler_world);
         fargs[2] = (jl_value_t*)worlds;
         jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
