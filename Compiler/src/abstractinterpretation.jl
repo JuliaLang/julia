@@ -3409,7 +3409,7 @@ function abstract_eval_statement_expr(interp::AbstractInterpreter, e::Expr, ssta
     elseif ehead === :cfunction
         return abstract_eval_cfunction(interp, e, sstate, sv)
     elseif ehead === :method
-        rt = (length(e.args) == 1) ? Any : Nothing
+        rt = (length(e.args) == 1) ? Any : Method
         return RTEffects(rt, Any, EFFECTS_UNKNOWN)
     elseif ehead === :copyast
         return abstract_eval_copyast(interp, e, sstate, sv)
