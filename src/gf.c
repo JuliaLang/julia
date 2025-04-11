@@ -2651,18 +2651,28 @@ JL_DLLEXPORT jl_value_t *jl_rettype_inferred_native(jl_method_instance_t *mi, si
 
 JL_DLLEXPORT jl_value_t *(*const jl_rettype_inferred_addr)(jl_method_instance_t *mi, size_t min_world, size_t max_world) JL_NOTSAFEPOINT = jl_rettype_inferred_native;
 
-jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world)
+STATIC_INLINE jl_callptr_t jl_method_compiled_callptr(jl_method_instance_t *mi, size_t world, jl_code_instance_t **codeinst_out) JL_NOTSAFEPOINT
 {
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     for (; codeinst; codeinst = jl_atomic_load_relaxed(&codeinst->next)) {
         if (codeinst->owner != jl_nothing)
             continue;
         if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
-            if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL)
-                return codeinst;
+            jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+            if (!invoke)
+                continue;
+            *codeinst_out = codeinst;
+            return invoke;
         }
     }
     return NULL;
+}
+
+jl_code_instance_t *jl_method_compiled(jl_method_instance_t *mi, size_t world) JL_NOTSAFEPOINT
+{
+    jl_code_instance_t *codeinst = NULL;
+    jl_method_compiled_callptr(mi, world, &codeinst);
+    return codeinst;
 }
 
 jl_mutex_t precomp_statement_out_lock;
@@ -3465,17 +3475,11 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
 
 STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world)
 {
-    // manually inlined copy of jl_method_compiled
-    jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mfunc->cache);
-    while (codeinst) {
-        if (jl_atomic_load_relaxed(&codeinst->min_world) <= world && world <= jl_atomic_load_relaxed(&codeinst->max_world)) {
-            jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
-            if (invoke != NULL) {
-                jl_value_t *res = invoke(F, args, nargs, codeinst);
-                return verify_type(res);
-            }
-        }
-        codeinst = jl_atomic_load_relaxed(&codeinst->next);
+    jl_code_instance_t *codeinst = NULL;
+    jl_callptr_t invoke = jl_method_compiled_callptr(mfunc, world, &codeinst);
+    if (invoke) {
+        jl_value_t *res = invoke(F, args, nargs, codeinst);
+        return verify_type(res);
     }
     int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
     int last_errno = errno;
@@ -3489,7 +3493,7 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
     errno = last_errno;
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
-    jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
+    invoke = jl_atomic_load_acquire(&codeinst->invoke);
     jl_value_t *res = invoke(F, args, nargs, codeinst);
     return verify_type(res);
 }

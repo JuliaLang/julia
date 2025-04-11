@@ -6348,14 +6348,28 @@ end === Int
     swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
 end === Union{}
 
+@newinterp AssumeBindingsStaticInterp
+Compiler.InferenceParams(::AssumeBindingsStaticInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
+
 eval(Expr(:const, :swapglobal!_must_throw))
-@newinterp SwapGlobalInterp
-Compiler.InferenceParams(::SwapGlobalInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
 function func_swapglobal!_must_throw(x)
     swapglobal!(@__MODULE__, :swapglobal!_must_throw, x)
 end
-@test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
-@test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+@test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=AssumeBindingsStaticInterp()) === Union{}
+@test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=AssumeBindingsStaticInterp()) )
+
+global global_decl_defined
+global_decl_defined = 42
+@test Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
+    global global_decl_defined
+    return global_decl_defined
+end |> Compiler.is_nothrow
+global global_decl_defined2::Int
+global_decl_defined2 = 42
+@test Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
+    global global_decl_defined2
+    return global_decl_defined2
+end |> Compiler.is_nothrow
 
 @eval get_exception() = $(Expr(:the_exception))
 @test Base.infer_return_type() do
