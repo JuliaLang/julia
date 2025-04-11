@@ -497,6 +497,13 @@ end
     end
 end
 
+@testset "issue #57962" begin
+    io = IOBuffer(repeat("x", 400))
+    skip(io, 10)
+    skip(io, 400)
+    @test isempty(read(io))
+end
+
 @testset "pr #11554" begin
     io  = IOBuffer(SubString("***αhelloworldω***", 4, 16))
     io2 = IOBuffer(Vector{UInt8}(b"goodnightmoon"), read=true, write=true)

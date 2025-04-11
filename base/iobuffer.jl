@@ -486,8 +486,8 @@ function skip(io::GenericIOBuffer, n::Int)
     else
         # Don't use seek in order to allow a non-seekable IO to still skip bytes.
         # Handle overflow.
-        maxptr = io.size + 1
-        io.ptr = n > maxptr || io.ptr - n > maxptr ? maxptr : io.ptr + n
+        n_max = io.size + 1 - io.ptr
+        io.ptr += min(n, n_max)
         io
     end
 end
