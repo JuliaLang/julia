@@ -1407,7 +1407,7 @@ julia> supertype(Float64)
 AbstractFloat
 
 julia> supertype(Number)
-Any
+ShapefulIterator{0}
 
 julia> supertype(AbstractString)
 Any

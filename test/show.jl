@@ -1506,8 +1506,8 @@ end
 
 @test sprint(show, Main) == "Main"
 
-@test sprint(Base.show_supertypes, Int64) == "Int64 <: Signed <: Integer <: Real <: Number <: Any"
-@test sprint(Base.show_supertypes, Vector{String}) == "Vector{String} <: DenseVector{String} <: AbstractVector{String} <: Any"
+@test sprint(Base.show_supertypes, Int64) == "Int64 <: Signed <: Integer <: Real <: Number <: ShapefulIterator{0} <: Any"
+@test sprint(Base.show_supertypes, Vector{String}) == "Vector{String} <: DenseVector{String} <: AbstractVector{String} <: ShapefulIterator{1} <: Any"
 
 # static_show
 

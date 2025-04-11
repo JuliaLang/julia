@@ -97,10 +97,29 @@ IteratorSize(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not 
 IteratorSize(::Type{Any}) = SizeUnknown()
 
 IteratorSize(::Type{<:Tuple}) = HasLength()
-IteratorSize(::Type{<:AbstractArray{<:Any,N}})  where {N} = HasShape{N}()
+IteratorSize(::Type{<:ShapefulIterator{N}})  where {N} = HasShape{N::Int}()
 IteratorSize(::Type{Generator{I,F}}) where {I,F} = IteratorSize(I)
 
 haslength(iter) = IteratorSize(iter) isa Union{HasShape, HasLength}
+
+"""
+    ndims(A::ShapefulIterator)::Int
+
+Return the number of dimensions of `A`.
+
+See also: [`size`](@ref), [`axes`](@ref).
+
+# Examples
+```jldoctest
+julia> A = fill(1, (3,4,5));
+
+julia> ndims(A)
+3
+```
+"""
+ndims(::ShapefulIterator{N}) where {N} = N::Int
+ndims(::Type{<:ShapefulIterator{N}}) where {N} = N::Int
+ndims(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 
 abstract type IteratorEltype end
 struct EltypeUnknown <: IteratorEltype end

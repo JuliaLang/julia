@@ -891,7 +891,7 @@ end
     f = replace(d, (1=>2) => (1=>missing), (3=>4)=>(3=>missing))
     @test valtype(f) == Union{Missing,Int}
     f = replace(d, (1=>2) => (1=>'a'), (3=>4)=>(3=>'b'))
-    @test valtype(f) == Any
+    @test valtype(f) == ShapefulIterator{0}
     @test f == Dict(3=>'b', 1=>'a')
 
     # eltype promotion for sets
@@ -900,7 +900,7 @@ end
     @test f == Set([1, missing, nothing])
     @test eltype(f) == Union{Int,Missing,Nothing}
     f = replace(s, 2=>'a')
-    @test eltype(f) == Any
+    @test eltype(f) == ShapefulIterator{0}
     @test f == Set([1, 3, 'a'])
 
     # test that isequal is used

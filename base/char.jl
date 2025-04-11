@@ -3,6 +3,8 @@
 import Core: AbstractChar, Char
 
 """
+    AbstractChar <: ShapefulIterator{0}
+
 The `AbstractChar` type is the supertype of all character implementations
 in Julia. A character represents a Unicode code point, and can be converted
 to an integer via the [`codepoint`](@ref) function in order to obtain the
@@ -202,10 +204,7 @@ typemin(::Type{Char}) = bitcast(Char, typemin(UInt32))
 
 size(c::AbstractChar) = ()
 size(c::AbstractChar, d::Integer) = d < 1 ? throw(BoundsError()) : 1
-ndims(c::AbstractChar) = 0
-ndims(::Type{<:AbstractChar}) = 0
 length(c::AbstractChar) = 1
-IteratorSize(::Type{Char}) = HasShape{0}()
 firstindex(c::AbstractChar) = 1
 lastindex(c::AbstractChar) = 1
 getindex(c::AbstractChar) = c

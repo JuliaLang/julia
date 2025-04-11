@@ -46,12 +46,14 @@ Fully implemented by:
   * `EachLine`
   * [`AbstractString`](@ref)
   * [`Set`](@ref)
+  * [`ShapefulIterator`](@ref)
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
 
 ## Constructors and Types
 
 ```@docs
+Base.ShapefulIterator
 Base.AbstractRange
 Base.OrdinalRange
 Base.AbstractUnitRange

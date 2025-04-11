@@ -314,7 +314,7 @@ See also [`subtypes`](@ref).
 # Examples
 ```jldoctest
 julia> supertypes(Int)
-(Int64, Signed, Integer, Real, Number, Any)
+(Int64, Signed, Integer, Real, Number, ShapefulIterator{0}, Any)
 ```
 """
 function supertypes(T::Type)

@@ -49,7 +49,8 @@
 #end
 #const nothing = Nothing()
 
-#abstract type AbstractArray{T,N} end
+#abstract type ShapefulIterator{N} end
+#abstract type AbstractArray{T,N} <: ShapefulIterator{N} end
 #abstract type DenseArray{T,N} <: AbstractArray{T,N} end
 
 #primitive type AddrSpace{Backend::Module} 8 end
@@ -208,7 +209,7 @@ export
     # key types
     Any, DataType, Vararg, NTuple,
     Tuple, Type, UnionAll, TypeVar, Union, Nothing, Cvoid,
-    AbstractArray, DenseArray, NamedTuple, Pair,
+    AbstractArray, DenseArray, NamedTuple, Pair, ShapefulIterator,
     # special objects
     Function, Method, Module, Symbol, Task, UndefInitializer, undef, WeakRef, VecElement,
     Array, Memory, MemoryRef, AtomicMemory, AtomicMemoryRef, GenericMemory, GenericMemoryRef,
@@ -245,7 +246,7 @@ export
 const getproperty = getfield # TODO: use `getglobal` for modules instead
 const setproperty! = setfield!
 
-abstract type Number end
+abstract type Number   <: ShapefulIterator{0} end
 abstract type Real     <: Number end
 abstract type AbstractFloat <: Real end
 abstract type Integer  <: Real end
@@ -259,7 +260,7 @@ primitive type Float64 <: AbstractFloat 64 end
 primitive type BFloat16 <: AbstractFloat 16 end
 
 #primitive type Bool <: Integer 8 end
-abstract type AbstractChar end
+abstract type AbstractChar <: ShapefulIterator{0} end
 primitive type Char <: AbstractChar 32 end
 
 primitive type Int8    <: Signed   8 end

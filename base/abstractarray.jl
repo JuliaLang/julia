@@ -3,7 +3,7 @@
 ## Basic functions ##
 
 """
-    AbstractArray{T,N}
+    AbstractArray{T,N} <: ShapefulIterator{N}
 
 Supertype for `N`-dimensional arrays (or array-like types) with elements of type `T`.
 [`Array`](@ref) and other types are subtypes of this. See the manual section on the
@@ -255,25 +255,6 @@ julia> Base.elsize(rand(Float32, 10))
 ```
 """
 elsize(A::AbstractArray) = elsize(typeof(A))
-
-"""
-    ndims(A::AbstractArray)::Integer
-
-Return the number of dimensions of `A`.
-
-See also: [`size`](@ref), [`axes`](@ref).
-
-# Examples
-```jldoctest
-julia> A = fill(1, (3,4,5));
-
-julia> ndims(A)
-3
-```
-"""
-ndims(::AbstractArray{T,N}) where {T,N} = N::Int
-ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N::Int
-ndims(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 
 """
     length(collection)::Integer

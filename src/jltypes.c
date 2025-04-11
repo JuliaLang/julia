@@ -3300,9 +3300,16 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_addrspacecore_type = (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_addrspace_type, (jl_value_t*)jl_core_module);
     jl_value_t *cpumem = jl_permbox8(jl_addrspacecore_type, 0, 0);
 
+    tv = jl_svec1(tvar("N"));
+    jl_shapefuliterator_type = (jl_unionall_t*)
+        jl_new_abstracttype((jl_value_t*)jl_symbol("ShapefulIterator"), core,
+                            jl_any_type, tv)->name->wrapper;
+
     tv = jl_svec1(tvar("T"));
     jl_ref_type = (jl_unionall_t*)
-        jl_new_abstracttype((jl_value_t*)jl_symbol("Ref"), core, jl_any_type, tv)->name->wrapper;
+        jl_new_abstracttype((jl_value_t*)jl_symbol("Ref"), core,
+                            (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_shapefuliterator_type, jl_box_long(0)),
+                            tv)->name->wrapper;
 
     tv = jl_svec1(tvar("T"));
     jl_pointer_typename =
@@ -3317,7 +3324,8 @@ void jl_init_types(void) JL_GC_DISABLED
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_abstractarray_type = (jl_unionall_t*)
         jl_new_abstracttype((jl_value_t*)jl_symbol("AbstractArray"), core,
-                            jl_any_type, tv)->name->wrapper;
+                            (jl_datatype_t*)jl_apply_type1((jl_value_t*)jl_shapefuliterator_type, jl_svecref(tv, 1)),
+                            tv)->name->wrapper;
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_densearray_type = (jl_unionall_t*)

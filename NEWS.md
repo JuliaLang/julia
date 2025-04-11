@@ -24,6 +24,13 @@ Build system changes
 New library functions
 ---------------------
 
+* a new abstract type for iterators with `HasShape{N}` is added: `ShapefulIterator{N}`. It supertypes existing abstract types:
+    * `AbstractArray`
+    * `AbstractChar`
+    * `Number`
+    * `Ref`
+  It's still acceptable to define a new shapeful iterator type that does not subtype `ShapefulIterator`, however choosing to subtype `ShapefulIterator{N}` means there's no need to add certain methods for one's newly-defined type.
+
 New library features
 --------------------
 
