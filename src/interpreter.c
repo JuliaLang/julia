@@ -101,9 +101,8 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 
     fname = eval_value(args[0], s);
     jl_methtable_t *mt = NULL;
-    if (jl_typetagis(fname, jl_methtable_type)) {
+    if (jl_is_mtable(fname))
         mt = (jl_methtable_t*)fname;
-    }
     atypes = eval_value(args[1], s);
     meth = eval_value(args[2], s);
     jl_method_t *ret = jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);

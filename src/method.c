@@ -16,7 +16,6 @@
 extern "C" {
 #endif
 
-jl_methtable_t *jl_kwcall_mt;
 jl_method_t *jl_opaque_closure_method;
 
 static void check_c_types(const char *where, jl_value_t *rt, jl_value_t *at)
@@ -803,7 +802,8 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
                     else if (jl_is_mtable(kind)) {
                         assert(i < l);
                         ex = data[i++];
-                        jl_method_table_add_backedge((jl_methtable_t*)kind, ex, ci);
+                        if ((jl_methtable_t*)kind == jl_method_table)
+                            jl_method_table_add_backedge(ex, ci);
                     }
                     else {
                         assert(i < l);
@@ -1154,54 +1154,71 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
     return gf;
 }
 
-static jl_methtable_t *nth_methtable(jl_value_t *a JL_PROPAGATES_ROOT, int n) JL_NOTSAFEPOINT
+static void foreach_top_nth_typename(void (*f)(jl_typename_t*, void*), jl_value_t *a JL_PROPAGATES_ROOT, int n, void *env)
 {
     if (jl_is_datatype(a)) {
         if (n == 0) {
-            jl_methtable_t *mt = ((jl_datatype_t*)a)->name->mt;
-            if (mt != NULL)
-                return mt;
+            jl_datatype_t *dt = ((jl_datatype_t*)a);
+            jl_typename_t *tn = NULL;
+            while (1) {
+                if (dt != jl_any_type && dt != jl_function_type)
+                    tn = dt->name;
+                if (dt->super == dt)
+                    break;
+                dt = dt->super;
+            }
+            if (tn)
+                f(tn, env);
         }
         else if (jl_is_tuple_type(a)) {
             if (jl_nparams(a) >= n)
-                return nth_methtable(jl_tparam(a, n - 1), 0);
+                foreach_top_nth_typename(f, jl_tparam(a, n - 1), 0, env);
         }
     }
     else if (jl_is_typevar(a)) {
-        return nth_methtable(((jl_tvar_t*)a)->ub, n);
+        foreach_top_nth_typename(f, ((jl_tvar_t*)a)->ub, n, env);
     }
     else if (jl_is_unionall(a)) {
-        return nth_methtable(((jl_unionall_t*)a)->body, n);
+        foreach_top_nth_typename(f, ((jl_unionall_t*)a)->body, n, env);
     }
     else if (jl_is_uniontype(a)) {
         jl_uniontype_t *u = (jl_uniontype_t*)a;
-        jl_methtable_t *m1 = nth_methtable(u->a, n);
-        if ((jl_value_t*)m1 != jl_nothing) {
-            jl_methtable_t *m2 = nth_methtable(u->b, n);
-            if (m1 == m2)
-                return m1;
-        }
+        foreach_top_nth_typename(f, u->a, n, env);
+        foreach_top_nth_typename(f, u->b, n, env);
     }
-    return (jl_methtable_t*)jl_nothing;
 }
 
 // get the MethodTable for dispatch, or `nothing` if cannot be determined
 JL_DLLEXPORT jl_methtable_t *jl_method_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return nth_methtable(argtypes, 1);
+    return jl_method_table;
 }
 
-jl_methtable_t *jl_kwmethod_table_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+// get a MethodCache for dispatch
+JL_DLLEXPORT jl_methcache_t *jl_method_cache_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    jl_methtable_t *kwmt = nth_methtable(argtypes, 3);
-    if ((jl_value_t*)kwmt == jl_nothing)
-        return NULL;
-    return kwmt;
+    return jl_method_table->cache;
+}
+
+void jl_foreach_top_typename_for(void (*f)(jl_typename_t*, void*), jl_value_t *argtypes JL_PROPAGATES_ROOT, void *env)
+{
+    foreach_top_nth_typename(f, argtypes, 1, env);
+}
+
+jl_methcache_t *jl_kwmethod_cache_for(jl_value_t *argtypes JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    return jl_method_table->cache;
 }
 
 JL_DLLEXPORT jl_methtable_t *jl_method_get_table(jl_method_t *method JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
 {
-    return method->external_mt ? (jl_methtable_t*)method->external_mt : jl_method_table_for(method->sig);
+    return method->external_mt ? (jl_methtable_t*)method->external_mt : jl_method_table;
+}
+
+// get an arbitrary MethodCache for dispatch optimizations of method
+JL_DLLEXPORT jl_methcache_t *jl_method_get_cache(jl_method_t *method JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+{
+    return jl_method_get_table(method)->cache;
 }
 
 JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
@@ -1218,25 +1235,29 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     size_t nargs = jl_svec_len(atypes);
     assert(nargs > 0);
     int isva = jl_is_vararg(jl_svecref(atypes, nargs - 1));
-    if (!jl_is_type(jl_svecref(atypes, 0)) || (isva && nargs == 1))
+    jl_value_t *ft = jl_svecref(atypes, 0);
+    if (!jl_is_type(ft) || (isva && nargs == 1))
         jl_error("function type in method definition is not a type");
     jl_sym_t *name;
     jl_method_t *m = NULL;
     jl_value_t *argtype = NULL;
-    JL_GC_PUSH3(&f, &m, &argtype);
+    JL_GC_PUSH4(&ft, &f, &m, &argtype);
     size_t i, na = jl_svec_len(atypes);
 
     argtype = jl_apply_tuple_type(atypes, 1);
     if (!jl_is_datatype(argtype))
         jl_error("invalid type in method definition (Union{})");
 
-    jl_methtable_t *external_mt = mt;
     if (!mt)
-        mt = jl_method_table_for(argtype);
-    if ((jl_value_t*)mt == jl_nothing)
-        jl_error("Method dispatch is unimplemented currently for this method signature");
-    if (mt->frozen)
-        jl_error("cannot add methods to a builtin function");
+        mt = jl_method_table;
+    jl_methtable_t *external_mt = mt == jl_method_table ? NULL : mt;
+
+    //if (!external_mt) {
+    //    jl_value_t **ttypes = { jl_builtin_type, jl_tparam0(jl_anytuple_type) };
+    //    jl_value_t *invalidt = jl_apply_tuple_type_v(ttypes, 2); // Tuple{Union{Builtin,OpaqueClosure}, Vararg}
+    //    if (!jl_has_empty_intersection(argtype, invalidt))
+    //        jl_error("cannot add methods to a builtin function");
+    //}
 
     assert(jl_is_linenode(functionloc));
     jl_sym_t *file = (jl_sym_t*)jl_linenode_file(functionloc);
@@ -1245,21 +1266,13 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
     int32_t line = jl_linenode_line(functionloc);
 
     // TODO: derive our debug name from the syntax instead of the type
-    jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(argtype) : mt;
     // if we have a kwcall, try to derive the name from the callee argument method table
-    name = (kwmt ? kwmt : mt)->name;
-    if (kwmt == jl_type_type_mt || kwmt == jl_nonfunction_mt || external_mt) {
-        // our value for `name` is bad, try to guess what the syntax might have had,
-        // like `jl_static_show_func_sig` might have come up with
-        jl_datatype_t *dt = jl_nth_argument_datatype(argtype, mt == jl_kwcall_mt ? 3 : 1);
-        if (dt != NULL) {
-            name = dt->name->name;
-            if (jl_is_type_type((jl_value_t*)dt)) {
-                dt = (jl_datatype_t*)jl_argument_datatype(jl_tparam0(dt));
-                if ((jl_value_t*)dt != jl_nothing) {
-                    name = dt->name->name;
-                }
-            }
+    jl_datatype_t *dtname = (jl_datatype_t*)jl_argument_datatype(jl_kwcall_type && ft == (jl_value_t*)jl_kwcall_type && nargs >= 3 ? jl_svecref(atypes, 2) : ft);
+    name = (jl_value_t*)dtname != jl_nothing ? dtname->name->singletonname : jl_any_type->name->singletonname;
+    if (jl_is_type_type((jl_value_t*)dtname)) {
+        dtname = (jl_datatype_t*)jl_argument_datatype(jl_tparam0(dtname));
+        if ((jl_value_t*)dtname != jl_nothing) {
+            name = dtname->name->singletonname;
         }
     }
 
@@ -1320,6 +1333,9 @@ JL_DLLEXPORT jl_method_t* jl_method_def(jl_svec_t *argdata,
                       jl_symbol_name(file),
                       line);
     }
+    ft = jl_rewrap_unionall(ft, argtype);
+    if (!external_mt && !jl_has_empty_intersection(ft, (jl_value_t*)jl_builtin_type)) // disallow adding methods to Any, Function, Builtin, and subtypes, or Unions of those
+        jl_error("cannot add methods to a builtin function");
 
     m = jl_new_method_uninit(module);
     m->external_mt = (jl_value_t*)external_mt;

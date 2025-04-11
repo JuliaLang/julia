@@ -7561,16 +7561,11 @@ static const char *derive_sigt_name(jl_value_t *jargty)
     jl_datatype_t *dt = (jl_datatype_t*)jl_argument_datatype(jargty);
     if ((jl_value_t*)dt == jl_nothing)
         return NULL;
-    jl_sym_t *name = dt->name->name;
-    // if we have a kwcall, use that as the name anyways
-    jl_methtable_t *mt = dt->name->mt;
-    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt || mt == NULL) {
-        // our value for `name` from MethodTable is not good, try to come up with something better
-        if (jl_is_type_type((jl_value_t*)dt)) {
-            dt = (jl_datatype_t*)jl_argument_datatype(jl_tparam0(dt));
-            if ((jl_value_t*)dt != jl_nothing) {
-                name = dt->name->name;
-            }
+    jl_sym_t *name = dt->name->singletonname;
+    if (jl_is_type_type((jl_value_t*)dt)) {
+        dt = (jl_datatype_t*)jl_argument_datatype(jl_tparam0(dt));
+        if ((jl_value_t*)dt != jl_nothing) {
+            name = dt->name->singletonname;
         }
     }
     return jl_symbol_name(name);
@@ -7747,7 +7742,7 @@ const char *jl_generate_ccallable(Module *llvmmod, jl_value_t *nameval, jl_value
     assert(jl_is_datatype(ft));
     jl_value_t *ff = ft->instance;
     assert(ff);
-    const char *name = !jl_is_string(nameval) ? jl_symbol_name(ft->name->mt->name) : jl_string_data(nameval);
+    const char *name = !jl_is_string(nameval) ? jl_symbol_name(ft->name->singletonname) : jl_string_data(nameval);
     jl_value_t *crt = declrt;
     if (jl_is_abstract_ref_type(declrt)) {
         declrt = jl_tparam0(declrt);
