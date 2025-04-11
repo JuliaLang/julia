@@ -130,7 +130,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 end
                 di = inferred_result.debuginfo
                 uncompressed = inferred_result
-                inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result)
+                inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result, result.ipo_effects)
                 result.is_src_volatile = false
             elseif ci.owner === nothing
                 # The global cache can only handle objects that codegen understands
@@ -315,11 +315,11 @@ function transform_result_for_cache(::AbstractInterpreter, result::InferenceResu
     return src
 end
 
-function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
+function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo, effects::Effects)
     def = mi.def
     isa(def, Method) || return ci # don't compress toplevel code
     can_discard_trees = may_discard_trees(interp)
-    cache_the_tree = !can_discard_trees || is_inlineable(ci)
+    cache_the_tree = !can_discard_trees || is_inlineable(ci) || is_foldable(effects, true)
     if cache_the_tree
         if may_compress(interp)
             return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
