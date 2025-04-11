@@ -399,7 +399,7 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     if isa(src, OptimizationState)
         opt = src
         inlining_cost = compute_inlining_cost(interp, result, opt.optresult)
-        discard_optimized_result(interp, opt, inlining_cost) && return nothing
+        discard_optimized_result(interp, opt, inlining_cost, result.ipo_effects) && return nothing
         src = ir_to_codeinf!(opt)
     end
     if isa(src, CodeInfo)
@@ -409,9 +409,8 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     return src
 end
 
-function discard_optimized_result(interp::AbstractInterpreter, opt#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
-    may_discard_trees(interp) || return false
-    return inlining_cost == MAX_INLINE_COST
+function discard_optimized_result(interp::AbstractInterpreter, opt#=::OptimizationState=#, inlining_cost#=::InlineCostType=#, effects::Effects)
+    return may_discard_trees(interp) && inlining_cost == MAX_INLINE_COST && !is_foldable(effects, #=check_rtcall=#true)
 end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
