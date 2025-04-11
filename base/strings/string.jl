@@ -559,7 +559,7 @@ isascii(s::String) = isascii(codeunits(s))
 @assume_effects :foldable repeat(c::Char, r::BitInteger) = @invoke repeat(c::Char, r::Integer)
 
 """
-    repeat(c::AbstractChar, r::Integer) -> String
+    repeat(c::AbstractChar, r::Integer)::String
 
 Repeat a character `r` times. This can equivalently be accomplished by calling
 [`c^r`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer)).

@@ -4,6 +4,7 @@ using Test
 using Base.Meta
 using Core.IR
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # domsort
@@ -920,7 +921,7 @@ let # Test that CFG simplify doesn't try to merge every block in a loop into
 end
 
 # `cfg_simplify!` shouldn't error in a presence of `try/catch` block
-let ir = Base.code_ircode(; optimize_until="slot2ssa") do
+let ir = Base.code_ircode(; optimize_until="slot2reg") do
         v = try
         catch
         end

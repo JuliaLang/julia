@@ -2417,15 +2417,6 @@ macro a35391(b)
 end
 @test @a35391(0) === (0,)
 
-# global declarations from the top level are not inherited by functions.
-# don't allow such a declaration to override an outer local, since it's not
-# clear what it should do.
-@test Meta.lower(Main, :(let
-                           x = 1
-                           let
-                             global x
-                           end
-                         end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
 # note: this `begin` block must be at the top level
 _temp_33553 = begin
     global _x_this_remains_undefined
@@ -2436,6 +2427,70 @@ _temp_33553 = begin
 end
 @test _temp_33553 == 2
 @test !@isdefined(_x_this_remains_undefined)
+
+module GlobalContainment
+using Test
+@testset "scope of global declarations" begin
+
+    # global declarations from the top level are not inherited by functions.
+    # don't allow such a declaration to override an outer local, since it's not
+    # clear what it should do.
+    @test Meta.lower(
+        Main,
+        :(let
+              x = 1
+              let
+                  global x
+              end
+          end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
+
+    # a declared global can shadow a local in an outer scope
+    @test let
+        function f()
+            g0 = 2
+            let; global g0 = 1; end
+            a = () -> (global g0 = 1); a();
+            return g0
+        end
+        (f(), g0);
+    end === (2, 1)
+    @test let
+        function f()
+            let; global g2 = 1; end;
+            let; try; g2 = 2; catch _; end; end;
+        end
+        (f(), g2)
+    end === (2, 1)
+
+    # an inner global declaration should not interfere with the closure (#57547)
+    @test let
+        g3 = 1
+        function f()
+            let; global g3 = 2; end;
+            return g3
+        end
+        f()
+    end === 1
+    @test_throws UndefVarError let
+        function returns_global()
+            for i in 1
+                global ge = 2
+            end
+            return ge # local declared below
+        end
+        ge = returns_global()
+    end
+    @test let
+        function f(x::T) where T
+            function g(x)
+                let; global T = 1; end
+                x::T
+            end; g(x)
+        end; f(1)
+    end === 1
+
+end
+end
 
 # lowering of adjoint
 @test (1 + im)' == 1 - im
@@ -2830,6 +2885,20 @@ macro m38386()
 end
 @m38386
 @test isempty(methods(f38386))
+
+@testset "non-lhs all-underscore vars should fail in lowering" begin
+    # OK
+    @test (_ = 1) === 1
+    @test ((_, _) = (1, 2)) == (1, 2)
+    @test Meta.isexpr(Meta.lower(Main, :(for _ in 1:2; 1; end)), :thunk)
+    @test (try; throw(1); catch _; 2; end) === 2
+    @test (let _ = 1; 2; end) === 2
+    # ERROR: syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+    @test Meta.isexpr(Meta.lower(Main, :(_ = 1; a = _)), :error)
+    @test Meta.isexpr(Meta.lower(Main, :(let; function f(); _; end; end)), :error)
+    @test Meta.isexpr(Meta.lower(Main, :(let; function f(); _; 1; end; end)), :error)
+    @test Meta.isexpr(Meta.lower(Main, :(begin; _; 1; end)), :error)
+end
 
 @testset "all-underscore varargs on the rhs" begin
     @test ncalls_in_lowered(quote _..., = a end, GlobalRef(Base, :rest)) == 0
@@ -4239,3 +4308,10 @@ out = let
 end
 end
 @test M57574.out === M57574.A
+
+# Double import of CONST_IMPORT symbol
+module DoubleImport
+    import Test: Random
+    import Random
+end
+@test DoubleImport.Random === Test.Random

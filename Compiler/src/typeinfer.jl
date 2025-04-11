@@ -104,7 +104,10 @@ end
 function finish!(interp::AbstractInterpreter, caller::InferenceState, validation_world::UInt, time_before::UInt64)
     result = caller.result
     #@assert last(result.valid_worlds) <= get_world_counter() || isempty(caller.edges)
-    if isdefined(result, :ci)
+    if caller.cache_mode === CACHE_MODE_LOCAL
+        @assert !isdefined(result, :ci)
+        result.src = transform_result_for_local_cache(interp, result)
+    elseif isdefined(result, :ci)
         edges = result_edges(interp, caller)
         ci = result.ci
         # if we aren't cached, we don't need this edge
@@ -115,11 +118,16 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             store_backedges(ci, edges)
         end
         inferred_result = nothing
-        uncompressed = inferred_result
+        uncompressed = result.src
         const_flag = is_result_constabi_eligible(result)
+        debuginfo = get_debuginfo(result.src)
         discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
         if !discard_src
             inferred_result = transform_result_for_cache(interp, result, edges)
+            if inferred_result !== nothing
+                uncompressed = inferred_result
+                debuginfo = get_debuginfo(inferred_result)
+            end
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
             if inferred_result isa CodeInfo
                 result.src = inferred_result
@@ -128,8 +136,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                     resize!(inferred_result.slottypes::Vector{Any}, nslots)
                     resize!(inferred_result.slotnames, nslots)
                 end
-                di = inferred_result.debuginfo
-                uncompressed = inferred_result
                 inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result)
                 result.is_src_volatile = false
             elseif ci.owner === nothing
@@ -137,18 +143,21 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 inferred_result = nothing
             end
         end
-        if !@isdefined di
-            di = DebugInfo(result.linfo)
+        if debuginfo === nothing
+            debuginfo = DebugInfo(result.linfo)
         end
         time_now = _time_ns()
         time_self_ns = caller.time_self_ns + (time_now - time_before)
         time_total = (time_now - caller.time_start - caller.time_paused) * 1e-9
         ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
             ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
-            result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, di, edges)
+            result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
         engine_reject(interp, ci)
         codegen = codegen_cache(interp)
-        if !discard_src && codegen !== nothing && uncompressed isa CodeInfo
+        if !discard_src && codegen !== nothing && (isa(uncompressed, CodeInfo) || isa(uncompressed, OptimizationState))
+            if isa(uncompressed, OptimizationState)
+                uncompressed = ir_to_codeinf!(uncompressed, edges)
+            end
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
             codegen[ci] = uncompressed
             if bootstrapping_compiler && inferred_result == nothing
@@ -156,7 +165,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 # when compiling the compiler to inject everything eagerly
                 # where codegen can start finding and using it right away
                 mi = result.linfo
-                if mi.def isa Method && isa_compileable_sig(mi)
+                if mi.def isa Method && isa_compileable_sig(mi) && is_cached(caller)
                     ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, uncompressed)
                 end
             end
@@ -299,36 +308,113 @@ function adjust_cycle_frame!(sv::InferenceState, cycle_valid_worlds::WorldRange,
     return nothing
 end
 
+function get_debuginfo(src)
+    isa(src, CodeInfo) && return src.debuginfo
+    isa(src, OptimizationState) && return src.src.debuginfo
+    return nothing
+end
+
 function is_result_constabi_eligible(result::InferenceResult)
     result_type = result.result
     return isa(result_type, Const) && is_foldable_nothrow(result.ipo_effects) && is_inlineable_constant(result_type.val)
 end
 
-function transform_result_for_cache(::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
+function compute_inlining_cost(interp::AbstractInterpreter, result::InferenceResult)
+    src = result.src
+    isa(src, OptimizationState) || return MAX_INLINE_COST
+    compute_inlining_cost(interp, result, src.optresult)
+end
+
+function compute_inlining_cost(interp::AbstractInterpreter, result::InferenceResult, optresult#=::OptimizationResult=#)
+    return inline_cost_model(interp, result, optresult.inline_flag, optresult.ir)
+end
+
+function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
+        inline_flag::UInt8, ir::IRCode)
+
+    inline_flag === SRC_FLAG_DECLARED_NOINLINE && return MAX_INLINE_COST
+
+    mi = result.linfo
+    (; def, specTypes) = mi
+    if !isa(def, Method)
+        return MAX_INLINE_COST
+    end
+
+    declared_inline = inline_flag === SRC_FLAG_DECLARED_INLINE
+
+    rt = result.result
+    @assert !(rt isa LimitedAccuracy)
+    rt = widenslotwrapper(rt)
+
+    sig = unwrap_unionall(specTypes)
+    if !(isa(sig, DataType) && sig.name === Tuple.name)
+        return MAX_INLINE_COST
+    end
+    if !declared_inline && rt === Bottom
+        return MAX_INLINE_COST
+    end
+
+    if declared_inline && isdispatchtuple(specTypes)
+        # obey @inline declaration if a dispatch barrier would not help
+        return MIN_INLINE_COST
+    else
+        # compute the cost (size) of inlining this code
+        params = OptimizationParams(interp)
+        cost_threshold = default = params.inline_cost_threshold
+        if ⊑(optimizer_lattice(interp), rt, Tuple) && !isconcretetype(widenconst(rt))
+            cost_threshold += params.inline_tupleret_bonus
+        end
+        # if the method is declared as `@inline`, increase the cost threshold 20x
+        if declared_inline
+            cost_threshold += 19*default
+        end
+        # a few functions get special treatment
+        if def.module === _topmod(def.module)
+            name = def.name
+            if name === :iterate || name === :unsafe_convert || name === :cconvert
+                cost_threshold += 4*default
+            end
+        end
+        return inline_cost_model(ir, params, cost_threshold)
+    end
+end
+
+function transform_result_for_local_cache(interp::AbstractInterpreter, result::InferenceResult)
     src = result.src
     if isa(src, OptimizationState)
-        src = ir_to_codeinf!(src)
+        # Compute and store any information required to determine the inlineability of the callee.
+        opt = src
+        opt.src.inlining_cost = compute_inlining_cost(interp, result)
+    end
+    return src
+end
+
+function transform_result_for_cache(interp::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
+    inlining_cost = nothing
+    src = result.src
+    if isa(src, OptimizationState)
+        opt = src
+        inlining_cost = compute_inlining_cost(interp, result, opt.optresult)
+        discard_optimized_result(interp, opt, inlining_cost) && return nothing
+        src = ir_to_codeinf!(opt)
     end
     if isa(src, CodeInfo)
         src.edges = edges
+        src.inlining_cost = inlining_cost !== nothing ? inlining_cost : compute_inlining_cost(interp, result)
     end
     return src
+end
+
+function discard_optimized_result(interp::AbstractInterpreter, opt#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
+    may_discard_trees(interp) || return false
+    return inlining_cost == MAX_INLINE_COST
 end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
     isa(def, Method) || return ci # don't compress toplevel code
-    can_discard_trees = may_discard_trees(interp)
-    cache_the_tree = !can_discard_trees || is_inlineable(ci)
-    if cache_the_tree
-        if may_compress(interp)
-            return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
-        else
-            return ci
-        end
-    else
-        return nothing
-    end
+    may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
+    return ci
 end
 
 function cache_result!(interp::AbstractInterpreter, result::InferenceResult, ci::CodeInstance)
@@ -1101,8 +1187,7 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
         else
             opt = OptimizationState(frame, interp)
             optimize(interp, opt, frame.result)
-            src = ir_to_codeinf!(opt)
-            src.edges = Core.svec(opt.inlining.edges...)
+            src = ir_to_codeinf!(opt, frame, Core.svec(opt.inlining.edges...))
         end
         result.src = frame.src = src
     end
@@ -1113,10 +1198,10 @@ end
 """
     SOURCE_MODE_NOT_REQUIRED
 
-Indicates to inference that the source is not required and the only fields
-of the resulting `CodeInstance` that the caller is interested in are types
-and effects. Inference is still free to create a CodeInstance with source,
-but is not required to do so.
+Indicates to inference that the source is not required and the only fields of
+the resulting `CodeInstance` that the caller is interested in are return or
+exception types and IPO effects. Inference is still free to create source for
+it or add it to the JIT even, but is not required or expected to do so.
 """
 const SOURCE_MODE_NOT_REQUIRED = 0x0
 
@@ -1124,28 +1209,51 @@ const SOURCE_MODE_NOT_REQUIRED = 0x0
     SOURCE_MODE_ABI
 
 Indicates to inference that it should return a CodeInstance that can
-either be `->invoke`'d (because it has already been compiled or because
-it has constabi) or one that can be made so by compiling its `->inferred`
-field.
-
-N.B.: The `->inferred` field is volatile and the compiler may delete it.
+be `->invoke`'d (because it has already been compiled).
 """
 const SOURCE_MODE_ABI = 0x1
 
 """
-    ci_has_abi(code::CodeInstance)
+    SOURCE_MODE_GET_SOURCE
 
-Determine whether this CodeInstance is something that could be invoked if we gave it
-to the runtime system (either because it already has an ->invoke ptr, or
-because it has source that could be compiled). Note that this information may
-be stale by the time the user see it, so the user will need to perform their
-own checks if they actually need the abi from it.
+Indicates to inference that it should return a CodeInstance after it has
+prepared interp to be able to provide source code for it.
 """
-function ci_has_abi(code::CodeInstance)
+const SOURCE_MODE_GET_SOURCE = 0xf
+
+"""
+    ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
+
+Determine whether this CodeInstance is something that could be invoked if
+interp gave it to the runtime system (either because it already has an ->invoke
+ptr, or because interp has source that could be compiled).
+"""
+function ci_has_abi(interp::AbstractInterpreter, code::CodeInstance)
     (@atomic :acquire code.invoke) !== C_NULL && return true
+    return ci_has_source(interp, code)
+end
+
+"""
+    ci_has_source(interp::AbstractInterpreter, code::CodeInstance)
+
+Determine whether this CodeInstance is something that could be compiled from
+source that interp has.
+"""
+function ci_has_source(interp::AbstractInterpreter, code::CodeInstance)
+    codegen = codegen_cache(interp)
+    codegen === nothing && return false
+    use_const_api(code) && return true
+    haskey(codegen, code) && return true
     inf = @atomic :monotonic code.inferred
-    if code.owner === nothing ? (isa(inf, CodeInfo) || isa(inf, String)) : inf !== nothing
-        # interp.codegen[code] = maybe_uncompress(code, inf) # TODO: the correct way to ensure this information doesn't become stale would be to push it into the stable codegen cache
+    if isa(inf, String)
+        inf = _uncompressed_ir(code, inf)
+    end
+    if code.owner === nothing
+        if isa(inf, CodeInfo)
+            codegen[code] = inf
+            return true
+        end
+    elseif inf !== nothing
         return true
     end
     return false
@@ -1155,9 +1263,10 @@ function ci_has_invoke(code::CodeInstance)
     return (@atomic :monotonic code.invoke) !== C_NULL
 end
 
-function ci_meets_requirement(code::CodeInstance, source_mode::UInt8)
+function ci_meets_requirement(interp::AbstractInterpreter, code::CodeInstance, source_mode::UInt8)
     source_mode == SOURCE_MODE_NOT_REQUIRED && return true
-    source_mode == SOURCE_MODE_ABI && return ci_has_abi(code)
+    source_mode == SOURCE_MODE_ABI && return ci_has_abi(interp, code)
+    source_mode == SOURCE_MODE_GET_SOURCE && return ci_has_source(interp, code)
     return false
 end
 
@@ -1167,7 +1276,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     let code = get(code_cache(interp), mi, nothing)
         if code isa CodeInstance
             # see if this code already exists in the cache
-            if ci_meets_requirement(code, source_mode)
+            if ci_meets_requirement(interp, code, source_mode)
                 ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
                 return code
             end
@@ -1179,7 +1288,7 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     let code = get(code_cache(interp), mi, nothing)
         if code isa CodeInstance
             # see if this code already exists in the cache
-            if ci_meets_requirement(code, source_mode)
+            if ci_meets_requirement(interp, code, source_mode)
                 engine_reject(interp, ci)
                 ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
                 return code
@@ -1210,18 +1319,11 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
     ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
 
     ci = result.ci # reload from result in case it changed
+    codegen = codegen_cache(interp)
     @assert frame.cache_mode != CACHE_MODE_NULL
-    @assert is_result_constabi_eligible(result) || begin
-            codegen = codegen_cache(interp)
-            codegen === nothing || haskey(codegen, ci)
-        end
+    @assert is_result_constabi_eligible(result) || codegen === nothing || haskey(codegen, ci)
     @assert is_result_constabi_eligible(result) == use_const_api(ci)
     @assert isdefined(ci, :inferred) "interpreter did not fulfill our expectations"
-    if !is_cached(frame) && source_mode == SOURCE_MODE_ABI
-        # XXX: jl_type_infer somewhat ambiguously assumes this must be cached
-        # XXX: this should be using the CI from the cache, if possible instead: haskey(cache, mi) && (ci = cache[mi])
-        code_cache(interp)[mi] = ci
-    end
     return ci
 end
 
@@ -1235,35 +1337,9 @@ end
 typeinf_type(interp::AbstractInterpreter, match::MethodMatch) =
     typeinf_type(interp, specialize_method(match))
 function typeinf_type(interp::AbstractInterpreter, mi::MethodInstance)
-    # n.b.: this could be replaced with @something(typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED), return nothing).rettype
-    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
-    let code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            # see if this rettype already exists in the cache
-            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-            return code.rettype
-        end
-    end
-    ci = engine_reserve(interp, mi)
-    let code = get(code_cache(interp), mi, nothing)
-        if code isa CodeInstance
-            engine_reject(interp, ci)
-            # see if this rettype already exists in the cache
-            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-            return code.rettype
-        end
-    end
-    result = InferenceResult(mi, typeinf_lattice(interp))
-    result.ci = ci
-    frame = InferenceState(result, #=cache_mode=#:global, interp)
-    if frame === nothing
-        engine_reject(interp, ci)
-        return nothing
-    end
-    typeinf(interp, frame)
-    ccall(:jl_typeinf_timing_end, Cvoid, (UInt64,), start_time)
-    is_inferred(result) || return nothing
-    return widenconst(ignorelimited(result.result))
+    ci = typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED)
+    ci isa CodeInstance || return nothing
+    return ci.rettype
 end
 
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
@@ -1300,18 +1376,31 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
                 src = _uncompressed_ir(callee, src)
             end
             if !isa(src, CodeInfo)
-                newcallee = typeinf_ext(interp, callee.def, source_mode)
+                newcallee = typeinf_ext(interp, callee.def, source_mode) # always SOURCE_MODE_ABI
                 if newcallee isa CodeInstance
                     callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
                     push!(tocompile, newcallee)
-                #else
-                #    println("warning: could not get source code for ", callee.def)
+                end
+                if newcallee !== callee
+                    push!(inspected, callee)
                 end
                 continue
             end
         end
         push!(inspected, callee)
         collectinvokes!(tocompile, src)
+        mi = get_ci_mi(callee)
+        if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
+            cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(interp))::CodeInstance
+            if cached === callee
+                # make sure callee is gc-rooted and cached, as required by jl_add_codeinst_to_jit
+                code_cache(interp)[mi] = callee
+            else
+                # use an existing CI from the cache, if there is available one that is compatible
+                callee === ci && (ci = cached)
+                callee = cached
+            end
+        end
         ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), callee, src)
     end
     return ci
@@ -1355,7 +1444,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                 # and this is either the primary world, or not applicable in the primary world
                 # then we want to compile and emit this
                 if item.def.primary_world <= this_world <= item.def.deleted_world
-                    ci = typeinf_ext(interp, item, SOURCE_MODE_NOT_REQUIRED)
+                    ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
                     ci isa CodeInstance && push!(tocompile, ci)
                 end
             elseif item isa SimpleVector && latest
@@ -1366,7 +1455,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                             sig, this_world, #= mt_cache =# 0)
                 if ptr !== C_NULL
                     mi = unsafe_pointer_to_objref(ptr)::MethodInstance
-                    ci = typeinf_ext(interp, mi, SOURCE_MODE_NOT_REQUIRED)
+                    ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
                     ci isa CodeInstance && push!(tocompile, ci)
                 end
                 # additionally enqueue the ccallable entrypoint / adapter, which implicitly
@@ -1377,26 +1466,37 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         while !isempty(tocompile)
             callee = pop!(tocompile)
             callee in inspected && continue
-            push!(inspected, callee)
             # now make sure everything has source code, if desired
             mi = get_ci_mi(callee)
             def = mi.def
             if use_const_api(callee)
                 src = codeinfo_for_const(interp, mi, callee.rettype_const)
-            elseif haskey(interp.codegen, callee)
-                src = interp.codegen[callee]
-            elseif isa(def, Method) && !InferenceParams(interp).force_enable_inference && ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0
-                src = retrieve_code_info(mi, get_inference_world(interp))
             else
-                # TODO: typeinf_code could return something with different edges/ages/owner/abi (needing an update to callee), which we don't handle here
-                src = typeinf_code(interp, mi, true)
+                src = get(interp.codegen, callee, nothing)
+                if src === nothing
+                    newcallee = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
+                    if newcallee isa CodeInstance
+                        @assert use_const_api(newcallee) || haskey(interp.codegen, newcallee)
+                        push!(tocompile, newcallee)
+                    end
+                    if newcallee !== callee
+                        push!(inspected, callee)
+                    end
+                    continue
+                end
             end
+            push!(inspected, callee)
             if src isa CodeInfo
                 collectinvokes!(tocompile, src)
-                # It is somewhat ambiguous if typeinf_ext might have callee in the caches,
-                # but for the purpose of native compile, we always want them put there.
+                # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-                    code_cache(interp)[mi] = callee
+                    cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, this_world)::CodeInstance
+                    if cached === callee
+                        code_cache(interp)[mi] = callee
+                    else
+                        # Use an existing CI from the cache, if there is available one that is compatible
+                        callee = cached
+                    end
                 end
                 push!(codeinfos, callee)
                 push!(codeinfos, src)

@@ -257,7 +257,7 @@ julia> Base.elsize(rand(Float32, 10))
 elsize(A::AbstractArray) = elsize(typeof(A))
 
 """
-    ndims(A::AbstractArray) -> Integer
+    ndims(A::AbstractArray)::Integer
 
 Return the number of dimensions of `A`.
 
@@ -276,7 +276,7 @@ ndims(::Type{<:AbstractArray{<:Any,N}}) where {N} = N::Int
 ndims(::Type{Union{}}, slurp...) = throw(ArgumentError("Union{} does not have elements"))
 
 """
-    length(collection) -> Integer
+    length(collection)::Integer
 
 Return the number of elements in the collection.
 
@@ -404,8 +404,8 @@ _all_match_first(f::F, inds) where F<:Function = true
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
 
 """
-    lastindex(collection) -> Integer
-    lastindex(collection, d) -> Integer
+    lastindex(collection)::Integer
+    lastindex(collection, d)::Integer
 
 Return the last index of `collection`. If `d` is given, return the last index of `collection` along dimension `d`.
 
@@ -427,8 +427,8 @@ lastindex(a::AbstractArray) = (@inline; last(eachindex(IndexLinear(), a)))
 lastindex(a, d) = (@inline; last(axes(a, d)))
 
 """
-    firstindex(collection) -> Integer
-    firstindex(collection, d) -> Integer
+    firstindex(collection)::Integer
+    firstindex(collection, d)::Integer
 
 Return the first index of `collection`. If `d` is given, return the first index of `collection` along dimension `d`.
 
@@ -818,15 +818,18 @@ julia> similar(falses(10), Float64, 2, 4)
 See also: [`undef`](@ref), [`isassigned`](@ref).
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
-similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, to_shape(axes(a)))
-similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, to_shape(dims))
-similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, to_shape(dims))
-similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
+similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, axes(a))
+similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, dims)
+similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, dims)
+similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, dims)
 # Similar supports specifying dims as either Integers or AbstractUnitRanges or any mixed combination
 # thereof. Ideally, we'd just convert Integers to OneTos and then call a canonical method with the axes,
 # but we don't want to require all AbstractArray subtypes to dispatch on Base.OneTo. So instead we
 # define this method to convert supported axes to Ints, with the expectation that an offset array
 # package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
+similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T} = similar(a, T, to_shape(dims))
+# legacy method for packages that specialize similar(A::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}}}
+# leaving this method in ensures that Base owns the more specific method
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
@@ -837,7 +840,7 @@ to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
 # each dimension
 to_shape(i::Int) = i
 to_shape(i::Integer) = Int(i)
-to_shape(r::OneTo) = Int(last(r))
+to_shape(r::AbstractOneTo) = Int(last(r))
 to_shape(r::AbstractUnitRange) = r
 
 """
@@ -863,6 +866,8 @@ would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
 """
 similar(::Type{T}, dims::DimOrInd...) where {T<:AbstractArray} = similar(T, dims)
+similar(::Type{T}, shape::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
+# legacy method for packages that specialize similar(::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}})
 similar(::Type{T}, shape::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
 similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
@@ -3147,7 +3152,7 @@ end
 ## iteration utilities ##
 
 """
-    foreach(f, c...) -> Nothing
+    foreach(f, c...) -> nothing
 
 Call function `f` on each element of iterable `c`.
 For multiple iterable arguments, `f` is called elementwise, and iteration stops when

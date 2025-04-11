@@ -3,7 +3,7 @@
 ## hashing a single value ##
 
 """
-    hash(x[, h::UInt]) -> UInt
+    hash(x[, h::UInt])::UInt
 
 Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The
 optional second argument `h` is another hash code to be mixed with the result.
