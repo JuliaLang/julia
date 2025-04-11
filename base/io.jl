@@ -464,8 +464,8 @@ unsafe_read(io::AbstractPipe, p::Ptr{UInt8}, nb::UInt) = unsafe_read(pipe_reader
 copyuntil(out::IO, io::AbstractPipe, arg::UInt8; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
 copyuntil(out::IO, io::AbstractPipe, arg::AbstractChar; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
 copyuntil(out::IO, io::AbstractPipe, arg::AbstractString; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
-copyuntil(out::IO, io::AbstractPipe, arg::AbstractVector; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
-readuntil_vector!(io::AbstractPipe, target::AbstractVector, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
+copyuntil(out::IO, io::AbstractPipe, arg::AbstractVector{UInt8}; kw...) = copyuntil(out, pipe_reader(io)::IO, arg; kw...)
+readuntil_vector!(io::AbstractPipe, target::AbstractVector{UInt8}, keep::Bool, out) = readuntil_vector!(pipe_reader(io)::IO, target, keep, out)
 readbytes!(io::AbstractPipe, target::AbstractVector{UInt8}, n=length(target)) = readbytes!(pipe_reader(io)::IO, target, n)
 peek(io::AbstractPipe, ::Type{T}) where {T} = peek(pipe_reader(io)::IO, T)::T
 wait_readnb(io::AbstractPipe, nb::Int) = wait_readnb(pipe_reader(io)::IO, nb)
@@ -521,12 +521,13 @@ read!(filename::AbstractString, a) = open(io->read!(io, a), convert(String, file
     readuntil(filename::AbstractString, delim; keep::Bool = false)
 
 Read a string from an I/O `stream` or a file, up to the given delimiter.
-The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
+The delimiter can be a `UInt8`, `AbstractChar`, string, or `AbstractVector{UInt8}`.
 Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
+If `delim` is empty, no bytes are read, and the result will be empty.
 
 Return a `String` if `delim` is an `AbstractChar` or a string
-or otherwise return a `Vector{typeof(delim)}`.   See also [`copyuntil`](@ref)
+or otherwise return a `Vector{UInt8}`. See also [`copyuntil`](@ref)
 to instead write in-place to another stream (which can be a preallocated [`IOBuffer`](@ref)).
 
 # Examples
@@ -545,8 +546,11 @@ julia> rm("my_file.txt")
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
 readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
 readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(_unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...)))
-readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
-
+function readuntil(stream::IO, delim::Vector{UInt8}; keep::Bool=false)
+    v = UInt8[]
+    readuntil_vector!(stream, delim, keep, v)
+    v
+end
 
 """
     copyuntil(out::IO, stream::IO, delim; keep::Bool = false)
@@ -554,9 +558,10 @@ readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}
 
 Copy a string from an I/O `stream` or a file, up to the given delimiter, to
 the `out` stream, returning `out`.
-The delimiter can be a `UInt8`, `AbstractChar`, string, or vector.
+The delimiter can be a `UInt8`, `AbstractChar`, string, or `AbstractVector{UInt8}`.
 Keyword argument `keep` controls whether the delimiter is included in the result.
 The text is assumed to be encoded in UTF-8.
+If `delim` is empty, no bytes are copied.
 
 Similar to [`readuntil`](@ref), which returns a `String`; in contrast,
 `copyuntil` writes directly to `out`, without allocating a string.
@@ -995,9 +1000,9 @@ end
 copyuntil(out::IO, s::IO, delim; keep::Bool=false) = _copyuntil(out, s, delim, keep)
 
 # supports out::Union{IO, AbstractVector} for use with both copyuntil & readuntil
-function _copyuntil(out, s::IO, delim::T, keep::Bool) where T
+function _copyuntil(out, s::IO, delim::UInt8, keep::Bool)
     output! = isa(out, IO) ? write : push!
-    for c in readeach(s, T)
+    for c in readeach(s, UInt8)
         if c == delim
             keep && output!(out, c)
             break
@@ -1022,7 +1027,7 @@ end
 #    0 0 0 1 2 3 4 0
 # So after if we mismatch after the second aδc sequence,
 # we can immediately jump back to index 5 (4 + 1).
-function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) where {T}
+function readuntil_vector!(io::IO, target::AbstractVector{UInt8}, keep::Bool, out)
     first = firstindex(target)
     last = lastindex(target)
     len = last - first + 1
@@ -1033,7 +1038,7 @@ function readuntil_vector!(io::IO, target::AbstractVector{T}, keep::Bool, out) w
     max_pos = 1 # array-offset in cache
     local cache # will be lazy initialized when needed
     output! = (isa(out, IO) ? write : push!)
-    for c in readeach(io, T)
+    for c in readeach(io, UInt8)
         # Backtrack until the next target character matches what was found
         while true
             c1 = target[pos + first]
@@ -1109,12 +1114,12 @@ function copyuntil(out::IO, io::IO, target::AbstractString; keep::Bool=false)
     return copyuntil(out, io, target, keep=keep)
 end
 
-function readuntil(io::IO, target::AbstractVector{T}; keep::Bool=false) where T
-    out = (T === UInt8 ? resize!(StringVector(16), 0) : Vector{T}())
+function readuntil(io::IO, target::AbstractVector{UInt8}; keep::Bool=false)
+    out = resize!(StringVector(16), 0)
     readuntil_vector!(io, target, keep, out)
     return out
 end
-copyuntil(out::IO, io::IO, target::AbstractVector; keep::Bool=false) =
+copyuntil(out::IO, io::IO, target::AbstractVector{UInt8}; keep::Bool=false) =
     (readuntil_vector!(io, target, keep, out); out)
 
 """
