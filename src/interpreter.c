@@ -106,9 +106,9 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
     }
     atypes = eval_value(args[1], s);
     meth = eval_value(args[2], s);
-    jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);
+    jl_method_t *ret = jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);
     JL_GC_POP();
-    return jl_nothing;
+    return (jl_value_t *)ret;
 }
 
 // expression evaluator
@@ -626,7 +626,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             else if (toplevel) {
                 if (head == jl_method_sym && jl_expr_nargs(stmt) > 1) {
-                    eval_methoddef((jl_expr_t*)stmt, s);
+                    jl_value_t *res = eval_methoddef((jl_expr_t*)stmt, s);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = res;
                 }
                 else if (head == jl_toplevel_sym) {
                     jl_value_t *res = jl_toplevel_eval(s->module, stmt);
