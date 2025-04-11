@@ -532,7 +532,7 @@ end
 Determine whether a collection has a mapping for a given `key`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -554,7 +554,7 @@ in(key, v::KeySet{<:Any, <:Dict}) = (ht_keyindex(v.dict, key) >= 0)
 Return the key matching argument `key` if one exists in `collection`, otherwise return `default`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
