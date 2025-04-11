@@ -559,6 +559,7 @@ static int thread0_exit_signo = 0;
 static void JL_NORETURN jl_exit_thread0_cb(void)
 {
 CFI_NORETURN
+    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
     jl_critical_error(thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(thread0_exit_signo);
@@ -1089,6 +1090,10 @@ static void *signal_listener(void *arg)
 //#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L && !HAVE_KEVENT
 //            si_code = info.si_code;
 //#endif
+            // Let's forbid threads from running GC while we're trying to exit,
+            // also let's make sure we're not in the middle of GC.
+            jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+            jl_safepoint_wait_gc(NULL);
             jl_exit_thread0(sig, signal_bt_data, signal_bt_size);
         }
         else if (critical) {

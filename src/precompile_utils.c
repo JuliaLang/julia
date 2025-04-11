@@ -170,6 +170,10 @@ static void jl_compile_all_defs(jl_array_t *mis, int all)
     size_t i, l = jl_array_nrows(allmeths);
     for (i = 0; i < l; i++) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(allmeths, i);
+        int is_macro_method = jl_symbol_name(m->name)[0] == '@';
+        if (is_macro_method && !all)
+            continue; // Avoid inference / pre-compilation for macros
+
         if (jl_is_datatype(m->sig) && jl_isa_compileable_sig((jl_tupletype_t*)m->sig, jl_emptysvec, m)) {
             // method has a single compilable specialization, e.g. its definition
             // signature is concrete. in this case we can just hint it.
@@ -271,7 +275,7 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
         }
         else {
             assert(jl_is_simplevector(item));
-            assert(jl_svec_len(item) == 2);
+            assert(jl_svec_len(item) == 2 || jl_svec_len(item) == 3);
             jl_array_ptr_1d_push(m2, item);
         }
     }

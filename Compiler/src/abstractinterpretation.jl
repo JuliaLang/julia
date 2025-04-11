@@ -1380,6 +1380,8 @@ function const_prop_call(interp::AbstractInterpreter,
     end
     assign_parentchild!(frame, sv)
     if !typeinf(interp, frame)
+        sv.time_caches += frame.time_caches
+        sv.time_paused += frame.time_paused
         add_remark!(interp, sv, "[constprop] Fresh constant inference hit a cycle")
         @assert frame.frameid != 0 && frame.cycleid == frame.frameid
         callstack = frame.callstack::Vector{AbsIntState}
@@ -2591,7 +2593,6 @@ function abstract_eval_setglobalonce!(interp::AbstractInterpreter, sv::AbsIntSta
     end
 end
 
-
 function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, argtypes::Vector{Any})
     if length(argtypes) in (5, 6, 7)
         (M, s, x, v) = argtypes[2], argtypes[3], argtypes[4], argtypes[5]
@@ -2601,9 +2602,9 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
             M isa Module || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
             s isa Symbol || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
             gr = GlobalRef(M, s)
-            (valid_worlds, (rte, T)) = scan_leaf_partitions(interp, gr, sv.world) do interp, _, partition
+            (valid_worlds, (rte, T)) = scan_leaf_partitions(interp, gr, sv.world) do interp, binding, partition
                 partition_T = nothing
-                partition_rte = abstract_eval_partition_load(interp, partition)
+                partition_rte = abstract_eval_partition_load(interp, binding, partition)
                 if binding_kind(partition) == PARTITION_KIND_GLOBAL
                     partition_T = partition_restriction(partition)
                 end
@@ -2716,11 +2717,13 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
             elseif f === setfield! && length(argtypes) == 4 && isa(argtypes[3], Const)
                 # from there on we know that the struct field will never be undefined,
                 # so we try to encode that information with a `PartialStruct`
-                farg2 = ssa_def_slot(fargs[2], sv)
-                if farg2 isa SlotNumber
-                    refined = form_partially_defined_struct(𝕃ᵢ, argtypes[2], argtypes[3])
-                    if refined !== nothing
-                        refinements = SlotRefinement(farg2, refined)
+                if rt !== Bottom && isa(fargs, Vector{Any})
+                    farg2 = ssa_def_slot(fargs[2], sv)
+                    if farg2 isa SlotNumber
+                        refined = form_partially_defined_struct(𝕃ᵢ, argtypes[2], argtypes[3])
+                        if refined !== nothing
+                            refinements = SlotRefinement(farg2, refined)
+                        end
                     end
                 end
             end
@@ -3313,7 +3316,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, mod::Module,
     if allow_import !== true
         gr = GlobalRef(mod, sym)
         partition = lookup_binding_partition!(interp, gr, sv)
-        if allow_import !== true && is_some_imported(binding_kind(partition))
+        if allow_import !== true && is_some_binding_imported(binding_kind(partition))
             if allow_import === false
                 rt = Const(false)
             else
@@ -3354,6 +3357,7 @@ function abstract_eval_isdefinedglobal(interp::AbstractInterpreter, @nospecializ
             exct = Union{exct, ConcurrencyViolationError}
         end
     end
+    ⊑ = partialorder(typeinf_lattice(interp))
     if M isa Const && s isa Const
         M, s = M.val, s.val
         if M isa Module && s isa Symbol
@@ -3566,7 +3570,7 @@ end
 
 function walk_binding_partition(imported_binding::Core.Binding, partition::Core.BindingPartition, world::UInt)
     valid_worlds = WorldRange(partition.min_world, partition.max_world)
-    while is_some_imported(binding_kind(partition))
+    while is_some_binding_imported(binding_kind(partition))
         imported_binding = partition_restriction(partition)::Core.Binding
         partition = lookup_binding_partition(world, imported_binding)
         valid_worlds = intersect(valid_worlds, WorldRange(partition.min_world, partition.max_world))
@@ -3582,13 +3586,11 @@ function abstract_eval_binding_partition!(interp::AbstractInterpreter, g::Global
     return partition
 end
 
-abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing}, ::Core.Binding, partition::Core.BindingPartition) =
-    abstract_eval_partition_load(interp, partition)
-function abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing}, partition::Core.BindingPartition)
+function abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing}, binding::Core.Binding, partition::Core.BindingPartition)
     kind = binding_kind(partition)
     isdepwarn = (partition.kind & PARTITION_FLAG_DEPWARN) != 0
     local_getglobal_effects = Effects(generic_getglobal_effects, effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE)
-    if is_some_guard(kind) || kind == PARTITION_KIND_UNDEF_CONST
+    if is_some_guard(kind)
         if interp !== nothing && InferenceParams(interp).assume_bindings_static
             return RTEffects(Union{}, UndefVarError, EFFECTS_THROWS)
         else
@@ -3614,12 +3616,23 @@ function abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing
         # Could be replaced by a backdated const which has an effect, so we can't assume it won't.
         # Besides, we would prefer not to merge the world range for this into the world range for
         # _GLOBAL, because that would pessimize codegen.
-        local_getglobal_effects = Effects(local_getglobal_effects, effect_free=ALWAYS_FALSE)
+        effects = Effects(local_getglobal_effects, effect_free=ALWAYS_FALSE)
         rt = Any
     else
         rt = partition_restriction(partition)
+        effects = local_getglobal_effects
     end
-    return RTEffects(rt, UndefVarError, local_getglobal_effects)
+    if (interp !== nothing && InferenceParams(interp).assume_bindings_static &&
+        kind in (PARTITION_KIND_GLOBAL, PARTITION_KIND_DECLARED) &&
+        isdefined(binding, :value))
+        exct = Union{}
+        effects = Effects(generic_getglobal_effects; nothrow=true)
+    else
+        # We do not assume in general that assigned global bindings remain assigned.
+        # The existence of pkgimages allows them to revert in practice.
+        exct = UndefVarError
+    end
+    return RTEffects(rt, exct, effects)
 end
 
 function scan_specified_partitions(query::Function, walk_binding_partition::Function, interp, g::GlobalRef, wwr::WorldWithRange)
@@ -3667,34 +3680,21 @@ scan_partitions(query::Function, interp, g::GlobalRef, wwr::WorldWithRange) =
 abstract_load_all_consistent_leaf_partitions(interp, g::GlobalRef, wwr::WorldWithRange) =
     scan_leaf_partitions(abstract_eval_partition_load, interp, g, wwr)
 
-function abstract_eval_globalref_partition(interp, binding::Core.Binding, partition::Core.BindingPartition)
-    # For inference purposes, we don't particularly care which global binding we end up loading, we only
-    # care about its type. However, we would still like to terminate the world range for the particular
-    # binding we end up reaching such that codegen can emit a simpler pointer load.
-    Pair{RTEffects, Union{Nothing, Core.Binding}}(
-        abstract_eval_partition_load(interp, partition),
-        binding_kind(partition) in (PARTITION_KIND_GLOBAL, PARTITION_KIND_DECLARED) ? binding : nothing)
-end
-
 function abstract_eval_globalref(interp, g::GlobalRef, saw_latestworld::Bool, sv::AbsIntState)
     if saw_latestworld
         return RTEffects(Any, Any, generic_getglobal_effects)
     end
-    (valid_worlds, (ret, binding_if_global)) = scan_leaf_partitions(abstract_eval_globalref_partition, interp, g, sv.world)
+    # For inference purposes, we don't particularly care which global binding we end up loading, we only
+    # care about its type. However, we would still like to terminate the world range for the particular
+    # binding we end up reaching such that codegen can emit a simpler pointer load.
+    (valid_worlds, ret) = scan_leaf_partitions(abstract_eval_partition_load, interp, g, sv.world)
     update_valid_age!(sv, valid_worlds)
-    if ret.rt !== Union{} && ret.exct === UndefVarError && binding_if_global !== nothing && InferenceParams(interp).assume_bindings_static
-        if isdefined(binding_if_global, :value)
-            ret = RTEffects(ret.rt, Union{}, Effects(generic_getglobal_effects, nothrow=true))
-        end
-        # We do not assume in general that assigned global bindings remain assigned.
-        # The existence of pkgimages allows them to revert in practice.
-    end
     return ret
 end
 
 function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState, saw_latestworld::Bool, g::GlobalRef, @nospecialize(newty))
     if saw_latestworld
-        return Pair{Any,Any}(newty, Union{ErrorException, TypeError})
+        return Pair{Any,Any}(newty, ErrorException)
     end
     (valid_worlds, ret) = scan_partitions((interp, _, partition)->global_assignment_binding_rt_exct(interp, partition, newty), interp, g, sv.world)
     update_valid_age!(sv, valid_worlds)
@@ -3711,10 +3711,10 @@ function global_assignment_binding_rt_exct(interp::AbstractInterpreter, partitio
     ty = kind == PARTITION_KIND_DECLARED ? Any : partition_restriction(partition)
     wnewty = widenconst(newty)
     if !hasintersect(wnewty, ty)
-        return Pair{Any,Any}(Bottom, TypeError)
+        return Pair{Any,Any}(Bottom, ErrorException)
     elseif !(wnewty <: ty)
         retty = tmeet(typeinf_lattice(interp), newty, ty)
-        return Pair{Any,Any}(retty, TypeError)
+        return Pair{Any,Any}(retty, ErrorException)
     end
     return Pair{Any,Any}(newty, Bottom)
 end
@@ -3728,6 +3728,107 @@ function abstract_eval_ssavalue(s::SSAValue, ssavaluetypes::Vector{Any})
         return Bottom
     end
     return typ
+end
+
+struct AbstractEvalBasicStatementResult
+    rt
+    exct
+    effects::Union{Nothing,Effects}
+    changes::Union{Nothing,StateUpdate}
+    refinements # ::Union{Nothing,SlotRefinement,Vector{Any}}
+    currsaw_latestworld::Bool
+    function AbstractEvalBasicStatementResult(rt, exct, effects::Union{Nothing,Effects},
+        changes::Union{Nothing,StateUpdate}, refinements, currsaw_latestworld::Bool)
+        @nospecialize rt exct refinements
+        return new(rt, exct, effects, changes, refinements, currsaw_latestworld)
+    end
+end
+
+function abstract_eval_basic_statement(interp::AbstractInterpreter, @nospecialize(stmt), sstate::StatementState, frame::InferenceState,
+                                       result::Union{Nothing,Future{RTEffects}}=nothing)
+    rt = nothing
+    exct = Bottom
+    changes = nothing
+    refinements = nothing
+    effects = nothing
+    currsaw_latestworld = sstate.saw_latestworld
+    if result !== nothing
+        @goto injectresult
+    end
+    if isa(stmt, NewvarNode)
+        changes = StateUpdate(stmt.slot, VarState(Bottom, true))
+    elseif isa(stmt, PhiNode)
+        add_curr_ssaflag!(frame, IR_FLAGS_REMOVABLE)
+        # Implement convergence for PhiNodes. In particular, PhiNodes need to tmerge over
+        # the incoming values from all iterations, but `abstract_eval_phi` will only tmerge
+        # over the first and last iterations. By tmerging in the current old_rt, we ensure that
+        # we will not lose an intermediate value.
+        rt = abstract_eval_phi(interp, stmt, sstate, frame)
+        old_rt = frame.ssavaluetypes[frame.currpc]
+        rt = old_rt === NOT_FOUND ? rt : tmerge(typeinf_lattice(interp), old_rt, rt)
+    else
+        lhs = nothing
+        if isexpr(stmt, :(=))
+            lhs = stmt.args[1]
+            stmt = stmt.args[2]
+        end
+        if !isa(stmt, Expr)
+            (; rt, exct, effects, refinements) = abstract_eval_special_value(interp, stmt, sstate, frame)
+        else
+            hd = stmt.head
+            if hd === :method
+                fname = stmt.args[1]
+                if isa(fname, SlotNumber)
+                    changes = StateUpdate(fname, VarState(Any, false))
+                end
+            elseif (hd === :code_coverage_effect ||
+                    # :boundscheck can be narrowed to Bool
+                    (hd !== :boundscheck && is_meta_expr(stmt)))
+                rt = Nothing
+            elseif hd === :latestworld
+                currsaw_latestworld = true
+                rt = Nothing
+            else
+                result = abstract_eval_statement_expr(interp, stmt, sstate, frame)::Future{RTEffects}
+                if !isready(result) || !isempty(frame.tasks)
+                    return result
+
+                    @label injectresult
+                    # reload local variables
+                    lhs = nothing
+                    if isexpr(stmt, :(=))
+                        lhs = stmt.args[1]
+                        stmt = stmt.args[2]
+                    end
+                end
+                result = result[]
+                (; rt, exct, effects, refinements) = result
+                if effects.noub === NOUB_IF_NOINBOUNDS
+                    if has_curr_ssaflag(frame, IR_FLAG_INBOUNDS)
+                        effects = Effects(effects; noub=ALWAYS_FALSE)
+                    elseif !propagate_inbounds(frame)
+                        # The callee read our inbounds flag, but unless we propagate inbounds,
+                        # we ourselves don't read our parent's inbounds.
+                        effects = Effects(effects; noub=ALWAYS_TRUE)
+                    end
+                end
+                @assert !isa(rt, TypeVar) "unhandled TypeVar"
+                rt = maybe_singleton_const(rt)
+                if !isempty(frame.pclimitations)
+                    if rt isa Const || rt === Union{}
+                        empty!(frame.pclimitations)
+                    else
+                        rt = LimitedAccuracy(rt, frame.pclimitations)
+                        frame.pclimitations = IdSet{InferenceState}()
+                    end
+                end
+            end
+        end
+        if lhs !== nothing && rt !== Bottom
+            changes = StateUpdate(lhs::SlotNumber, VarState(rt, false))
+        end
+    end
+    return AbstractEvalBasicStatementResult(rt, exct, effects, changes, refinements, currsaw_latestworld)
 end
 
 struct BestguessInfo{Interp<:AbstractInterpreter}
@@ -4010,14 +4111,16 @@ end
 
 # make as much progress on `frame` as possible (without handling cycles)
 struct CurrentState
-    result::Future
+    result::Future{RTEffects}
     currstate::VarTable
     currsaw_latestworld::Bool
     bbstart::Int
     bbend::Int
-    CurrentState(result::Future, currstate::VarTable, currsaw_latestworld::Bool, bbstart::Int, bbend::Int) = new(result, currstate, currsaw_latestworld, bbstart, bbend)
+    CurrentState(result::Future{RTEffects}, currstate::VarTable, currsaw_latestworld::Bool, bbstart::Int, bbend::Int) =
+        new(result, currstate, currsaw_latestworld, bbstart, bbend)
     CurrentState() = new()
 end
+
 function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextresult::CurrentState)
     @assert !is_inferred(frame)
     W = frame.ip
@@ -4037,7 +4140,9 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
         bbend = nextresult.bbend
         currstate = nextresult.currstate
         currsaw_latestworld = nextresult.currsaw_latestworld
-        @goto injectresult
+        stmt = frame.src.code[currpc]
+        result = abstract_eval_basic_statement(interp, stmt, StatementState(currstate, currsaw_latestworld), frame, nextresult.result)
+        @goto injected_result
     end
 
     if currbb != 1
@@ -4194,87 +4299,15 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             end
             # Process non control-flow statements
             @assert isempty(frame.tasks)
-            rt = nothing
-            exct = Bottom
-            changes = nothing
-            refinements = nothing
-            effects = nothing
-            if isa(stmt, NewvarNode)
-                changes = StateUpdate(stmt.slot, VarState(Bottom, true))
-            elseif isa(stmt, PhiNode)
-                add_curr_ssaflag!(frame, IR_FLAGS_REMOVABLE)
-                # Implement convergence for PhiNodes. In particular, PhiNodes need to tmerge over
-                # the incoming values from all iterations, but `abstract_eval_phi` will only tmerge
-                # over the first and last iterations. By tmerging in the current old_rt, we ensure that
-                # we will not lose an intermediate value.
-                rt = abstract_eval_phi(interp, stmt, StatementState(currstate, currsaw_latestworld), frame)
-                old_rt = frame.ssavaluetypes[currpc]
-                rt = old_rt === NOT_FOUND ? rt : tmerge(typeinf_lattice(interp), old_rt, rt)
+            sstate = StatementState(currstate, currsaw_latestworld)
+            result = abstract_eval_basic_statement(interp, stmt, sstate, frame)
+            if result isa Future{RTEffects}
+                return CurrentState(result, currstate, currsaw_latestworld, bbstart, bbend)
             else
-                lhs = nothing
-                if isexpr(stmt, :(=))
-                    lhs = stmt.args[1]
-                    stmt = stmt.args[2]
-                end
-                if !isa(stmt, Expr)
-                    (; rt, exct, effects, refinements) = abstract_eval_special_value(interp, stmt, StatementState(currstate, currsaw_latestworld), frame)
-                else
-                    hd = stmt.head
-                    if hd === :method
-                        fname = stmt.args[1]
-                        if isa(fname, SlotNumber)
-                            changes = StateUpdate(fname, VarState(Any, false))
-                        end
-                    elseif (hd === :code_coverage_effect || (
-                            hd !== :boundscheck && # :boundscheck can be narrowed to Bool
-                            is_meta_expr(stmt)))
-                        rt = Nothing
-                    elseif hd === :latestworld
-                        currsaw_latestworld = true
-                        rt = Nothing
-                    else
-                        result = abstract_eval_statement_expr(interp, stmt, StatementState(currstate, currsaw_latestworld), frame)::Future
-                        if !isready(result) || !isempty(frame.tasks)
-                            return CurrentState(result, currstate, currsaw_latestworld, bbstart, bbend)
-                            @label injectresult
-                            # reload local variables
-                            stmt = frame.src.code[currpc]
-                            changes = nothing
-                            lhs = nothing
-                            if isexpr(stmt, :(=))
-                                lhs = stmt.args[1]
-                                stmt = stmt.args[2]
-                            end
-                            result = nextresult.result::Future{RTEffects}
-                        end
-                        result = result[]
-                        (; rt, exct, effects, refinements) = result
-                        if effects.noub === NOUB_IF_NOINBOUNDS
-                            if has_curr_ssaflag(frame, IR_FLAG_INBOUNDS)
-                                effects = Effects(effects; noub=ALWAYS_FALSE)
-                            elseif !propagate_inbounds(frame)
-                                # The callee read our inbounds flag, but unless we propagate inbounds,
-                                # we ourselves don't read our parent's inbounds.
-                                effects = Effects(effects; noub=ALWAYS_TRUE)
-                            end
-                        end
-                        @assert !isa(rt, TypeVar) "unhandled TypeVar"
-                        rt = maybe_singleton_const(rt)
-                        if !isempty(frame.pclimitations)
-                            if rt isa Const || rt === Union{}
-                                empty!(frame.pclimitations)
-                            else
-                                rt = LimitedAccuracy(rt, frame.pclimitations)
-                                frame.pclimitations = IdSet{InferenceState}()
-                            end
-                        end
-                    end
-                end
-                effects === nothing || merge_override_effects!(interp, effects, frame)
-                if lhs !== nothing && rt !== Bottom
-                    changes = StateUpdate(lhs::SlotNumber, VarState(rt, false))
-                end
+                @label injected_result
+                (; rt, exct, effects, changes, refinements, currsaw_latestworld) = result
             end
+            effects === nothing || merge_override_effects!(interp, effects, frame)
             if !has_curr_ssaflag(frame, IR_FLAG_NOTHROW)
                 if exct !== Union{}
                     update_exc_bestguess!(interp, exct, frame)
@@ -4561,6 +4594,7 @@ end
 # make as much progress on `frame` as possible (by handling cycles)
 warnlength::Int = 2500
 function typeinf(interp::AbstractInterpreter, frame::InferenceState)
+    time_before = _time_ns()
     callstack = frame.callstack::Vector{AbsIntState}
     nextstates = CurrentState[]
     takenext = frame.frameid
@@ -4592,7 +4626,6 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             # get_compileable_sig), but still must be finished up since it may see and
             # change the local variables of the InferenceState at currpc, we do this
             # even if the nextresult status is already completed.
-            continue
         elseif isdefined(nextstates[nextstateid], :result) || !isempty(callee.ip)
             # Next make progress on this frame
             prev = length(callee.tasks) + 1
@@ -4600,16 +4633,23 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             reverse!(callee.tasks, prev)
         elseif callee.cycleid == length(callstack)
             # With no active ip's and no cycles, frame is done
-            finish_nocycle(interp, callee)
+            time_now = _time_ns()
+            callee.time_self_ns += (time_now - time_before)
+            time_before = time_now
+            finish_nocycle(interp, callee, time_before)
             callee.frameid == 0 && break
             takenext = length(callstack)
             nextstateid = takenext + 1 - frame.frameid
             #@assert length(nextstates) == nextstateid + 1
             #@assert all(i -> !isdefined(nextstates[i], :result), nextstateid+1:length(nextstates))
             resize!(nextstates, nextstateid)
+            continue
         elseif callee.cycleid == callee.frameid
             # If the current frame is the top part of a cycle, check if the whole cycle
             # is done, and if not, pick the next item to work on.
+            time_now = _time_ns()
+            callee.time_self_ns += (time_now - time_before)
+            time_before = time_now
             no_active_ips_in_cycle = true
             for i = callee.cycleid:length(callstack)
                 caller = callstack[i]::InferenceState
@@ -4620,7 +4660,7 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
                 end
             end
             if no_active_ips_in_cycle
-                finish_cycle(interp, callstack, callee.cycleid)
+                finish_cycle(interp, callstack, callee.cycleid, time_before)
             end
             takenext = length(callstack)
             nextstateid = takenext + 1 - frame.frameid
@@ -4630,10 +4670,14 @@ function typeinf(interp::AbstractInterpreter, frame::InferenceState)
             else
                 #@assert length(nextstates) == nextstateid
             end
+            continue
         else
             # Continue to the next frame in this cycle
             takenext = takenext - 1
         end
+        time_now = _time_ns()
+        callee.time_self_ns += (time_now - time_before)
+        time_before = time_now
     end
     #@assert all(nextresult -> !isdefined(nextresult, :result), nextstates)
     return is_inferred(frame)

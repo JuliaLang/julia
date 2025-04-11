@@ -291,7 +291,9 @@ function showerror(io::IO, ex::MethodError)
     elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
-        print(io, "objects of type ", ft, " are not callable")
+        println(io, "objects of type ", ft, " are not callable.")
+        print(io, "In case you did not try calling it explicitly, check if a ", ft,
+            " has been passed as an argument to a method that expects a callable instead.")
     else
         if ft <: Function && isempty(ft.parameters) && _isself(ft)
             f_is_function = true
@@ -323,7 +325,7 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     if ft <: AbstractArray
-        print(io, "\nUse square brackets [] for indexing an Array.")
+        print(io, "\nIn case you're trying to index into the array, use square brackets [] instead of parentheses ().")
     end
     # Check for local functions that shadow methods in Base
     let name = ft.name.mt.name
@@ -1159,7 +1161,7 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 "with the module it should come from.")
             elseif kind === Base.PARTITION_KIND_GUARD
                 print(io, "\nSuggestion: check for spelling errors or missing imports.")
-            elseif Base.is_some_imported(kind)
+            elseif Base.is_some_explicit_imported(kind)
                 print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
             end
         elseif scope === :static_parameter

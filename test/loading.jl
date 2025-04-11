@@ -1345,9 +1345,9 @@ module loaded_pkgid4 end
     end
     wait(e)
     reset(e)
-    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 -> pkgid2 -> pkgid1 -> pkgid3 && pkgid4"),
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 using pkgid2 using pkgid1 using pkgid3 (while loading pkgid4)"),
         @lock Base.require_lock Base.start_loading(pkid3, build_id, false)).value            # try using pkgid3
-    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 -> pkgid4 && pkgid1"),
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 using pkgid4 (while loading pkgid1)"),
         @lock Base.require_lock Base.start_loading(pkid4, build_id, false)).value            # try using pkgid4
     @lock Base.require_lock Base.end_loading(pkid1, loaded_pkgid1)        # end
     @lock Base.require_lock Base.end_loading(pkid4, loaded_pkgid4)        # end

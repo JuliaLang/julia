@@ -452,13 +452,20 @@ if isdefined(Main, :Base)
 end
 
 """
+    Base.AbstractOneTo
+
+Abstract type for ranges that start at 1 and have a step size of 1.
+"""
+abstract type AbstractOneTo{T} <: AbstractUnitRange{T} end
+
+"""
     Base.OneTo(n)
 
 Define an `AbstractUnitRange` that behaves like `1:n`, with the added
 distinction that the lower limit is guaranteed (by the type system) to
 be 1.
 """
-struct OneTo{T<:Integer} <: AbstractUnitRange{T}
+struct OneTo{T<:Integer} <: AbstractOneTo{T}
     stop::T # invariant: stop >= zero(stop)
     function OneTo{T}(stop) where {T<:Integer}
         throwbool(r)  = (@noinline; throw(ArgumentError("invalid index: $r of type Bool")))
@@ -1105,7 +1112,11 @@ function getindex(r::LinRange{T}, s::OrdinalRange{S}) where {T, S<:Integer}
 end
 
 show(io::IO, r::AbstractRange) = print(io, repr(first(r)), ':', repr(step(r)), ':', repr(last(r)))
-show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
+function show(io::IO, r::UnitRange)
+    show(io, first(r))
+    print(io, ':')
+    show(io, last(r))
+end
 show(io::IO, r::OneTo) = print(io, "Base.OneTo(", r.stop, ")")
 function show(io::IO, r::StepRangeLen)
     if !iszero(step(r))

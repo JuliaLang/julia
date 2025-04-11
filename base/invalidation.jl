@@ -124,12 +124,12 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
     (_, (ib, ibpart)) = Compiler.walk_binding_partition(b, invalidated_bpart, new_max_world)
     (_, (nb, nbpart)) = Compiler.walk_binding_partition(b, new_bpart, new_max_world+1)
 
-    # abstract_eval_globalref_partition is the maximum amount of information that inference
+    # `abstract_eval_partition_load` is the maximum amount of information that inference
     # reads from a binding partition. If this information does not change - we do not need to
     # invalidate any code that inference created, because we know that the result will not change.
     need_to_invalidate_code =
-        Compiler.abstract_eval_globalref_partition(nothing, ib, ibpart) !==
-        Compiler.abstract_eval_globalref_partition(nothing, nb, nbpart)
+        Compiler.abstract_eval_partition_load(nothing, ib, ibpart) !==
+        Compiler.abstract_eval_partition_load(nothing, nb, nbpart)
 
     need_to_invalidate_export = export_affecting_partition_flags(invalidated_bpart) !==
                                 export_affecting_partition_flags(new_bpart)
@@ -151,7 +151,9 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                     latest_bpart = edge.partitions
                     latest_bpart.max_world == typemax(UInt) || continue
                     is_some_imported(binding_kind(latest_bpart)) || continue
-                    partition_restriction(latest_bpart) === b || continue
+                    if is_some_binding_imported(binding_kind(latest_bpart))
+                        partition_restriction(latest_bpart) === b || continue
+                    end
                     invalidate_code_for_globalref!(edge, latest_bpart, latest_bpart, new_max_world)
                 else
                     invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
@@ -171,9 +173,9 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                 isdefined(user_binding, :partitions) || continue
                 latest_bpart = user_binding.partitions
                 latest_bpart.max_world == typemax(UInt) || continue
-                binding_kind(latest_bpart) in (PARTITION_KIND_IMPLICIT, PARTITION_KIND_FAILED, PARTITION_KIND_GUARD) || continue
+                is_some_implicit(binding_kind(latest_bpart)) || continue
                 new_bpart = need_to_invalidate_export ?
-                    ccall(:jl_maybe_reresolve_implicit, Any, (Any, Any, Csize_t), user_binding, latest_bpart, new_max_world) :
+                    ccall(:jl_maybe_reresolve_implicit, Any, (Any, Csize_t), user_binding, new_max_world) :
                     latest_bpart
                 if need_to_invalidate_code || new_bpart !== latest_bpart
                     invalidate_code_for_globalref!(convert(Core.Binding, user_binding), latest_bpart, new_bpart, new_max_world)

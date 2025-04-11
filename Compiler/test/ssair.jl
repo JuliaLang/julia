@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 using Test
@@ -600,6 +601,7 @@ import .Compiler: NewInstruction, insert_node!
 let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         a^b
     end |> only |> first
+    ir = Compiler.compact!(ir)
     nstmts = length(ir.stmts)
     invoke_idx = findfirst(@nospecialize(stmt)->Meta.isexpr(stmt, :invoke), ir.stmts.stmt)
     @test invoke !== nothing
@@ -661,6 +663,7 @@ end
 let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
         a^b
     end |> only |> first
+    ir = Compiler.compact!(ir)
     invoke_idx = findfirst(@nospecialize(stmt)->Meta.isexpr(stmt, :invoke), ir.stmts.stmt)
     @test invoke_idx !== nothing
     invoke_expr = ir.stmts.stmt[invoke_idx]
