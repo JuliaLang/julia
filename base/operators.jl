@@ -1373,6 +1373,7 @@ end
 # Specialized variant of in for Tuple, which can generate typed comparisons for each element
 # of the tuple, skipping values that are statically known to be != at compile time.
 in(x, itr::Tuple) = _in_tuple(x, itr, false)
+
 # This recursive function will be unrolled at compiletime, and will not generate separate
 # llvm-compiled specializations for each step of the recursion.
 function _in_tuple(x, @nospecialize(itr::Tuple), anymissing::Bool)

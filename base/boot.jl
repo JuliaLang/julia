@@ -590,10 +590,10 @@ const undef = UndefInitializer()
 # empty vector constructor
 (self::Type{GenericMemory{kind,T,addrspace}})() where {T,kind,addrspace} = self(undef, 0)
 
-memoryref(mem::GenericMemory) = memoryrefnew(mem)
+memoryref(@nospecialize(mem::GenericMemory)) = memoryrefnew(mem)
 memoryref(mem::GenericMemory, i::Integer) = memoryrefnew(memoryrefnew(mem), Int(i), @_boundscheck)
 memoryref(ref::GenericMemoryRef, i::Integer) = memoryrefnew(ref, Int(i), @_boundscheck)
-GenericMemoryRef(mem::GenericMemory) = memoryref(mem)
+GenericMemoryRef(@nospecialize(mem::GenericMemory)) = memoryref(mem)
 GenericMemoryRef(mem::GenericMemory, i::Integer) = memoryref(mem, i)
 GenericMemoryRef(mem::GenericMemoryRef, i::Integer) = memoryref(mem, i)
 
