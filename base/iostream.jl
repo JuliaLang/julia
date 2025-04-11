@@ -137,7 +137,7 @@ Seek a stream to the given position.
 
 The `pos` argument should be a value that can be returned by `position(s)`.
 Seeking before the first position should throw an error. Seeking after the
-final position should throw an error if the stream is not writable.
+final position may throw an error, if the seek is too large.
 If the stream is writable, reading will throw an error, and writing will fill
 in zeros (`0x00`) between the largest previous position and the new position.
 
