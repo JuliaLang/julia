@@ -120,11 +120,13 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         inferred_result = nothing
         uncompressed = result.src
         const_flag = is_result_constabi_eligible(result)
+        debuginfo = get_debuginfo(result.src)
         discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
         if !discard_src
             inferred_result = transform_result_for_cache(interp, result, edges)
             if inferred_result !== nothing
                 uncompressed = inferred_result
+                debuginfo = get_debuginfo(inferred_result)
             end
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
             if inferred_result isa CodeInfo
@@ -134,7 +136,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                     resize!(inferred_result.slottypes::Vector{Any}, nslots)
                     resize!(inferred_result.slotnames, nslots)
                 end
-                di = inferred_result.debuginfo
                 inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result)
                 result.is_src_volatile = false
             elseif ci.owner === nothing
@@ -142,15 +143,15 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 inferred_result = nothing
             end
         end
-        if !@isdefined di
-            di = DebugInfo(result.linfo)
+        if debuginfo === nothing
+            debuginfo = DebugInfo(result.linfo)
         end
         time_now = _time_ns()
         time_self_ns = caller.time_self_ns + (time_now - time_before)
         time_total = (time_now - caller.time_start - caller.time_paused) * 1e-9
         ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
             ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
-            result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, di, edges)
+            result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
         engine_reject(interp, ci)
         codegen = codegen_cache(interp)
         if !discard_src && codegen !== nothing && (isa(uncompressed, CodeInfo) || isa(uncompressed, OptimizationState))
@@ -304,6 +305,12 @@ function adjust_cycle_frame!(sv::InferenceState, cycle_valid_worlds::WorldRange,
         set_curr_ssaflag!(callee, new_flags, IR_FLAGS_EFFECTS)
         callee.currpc = old_currpc
     end
+    return nothing
+end
+
+function get_debuginfo(src)
+    isa(src, CodeInfo) && return src.debuginfo
+    isa(src, OptimizationState) && return src.src.debuginfo
     return nothing
 end
 
