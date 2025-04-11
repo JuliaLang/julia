@@ -2246,5 +2246,7 @@ end
         b = similar(A, SizedArrays.SOneTo(1), 2, Base.OneTo(2))
         @test b isa Array{Int, 3}
         @test size(b) == (1, 2, 2)
+
+        @test_throws "no method matching $Int(::$Infinity)" similar(ones(2), OneToInf())
     end
 end
