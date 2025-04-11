@@ -4129,6 +4129,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                             if else_change !== nothing
                                 elsestate = copy(currstate)
                                 stoverwrite1!(elsestate, else_change)
+                                refinement = SlotRefinement(else_change.var, else_change.vtype.typ)
+                                record_refinements!(refinement_propagation, falsebb, interp, refinement)
                             elseif condslot isa SlotNumber
                                 elsestate = copy(currstate)
                             else
@@ -4141,6 +4143,8 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                             then_change = conditional_change(𝕃ᵢ, currstate, condt, #=then_or_else=#true)
                             thenstate = currstate
                             if then_change !== nothing
+                                refinement = SlotRefinement(then_change.var, then_change.vtype.typ)
+                                record_refinements!(refinement_propagation, truebb, interp, refinement)
                                 stoverwrite1!(thenstate, then_change)
                             end
                             if condslot isa SlotNumber # refine the type of this conditional object itself for this then branch
@@ -4296,7 +4300,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                 if should_eagerly_apply_refinements(refinement_propagation, currbb)
                     apply_refinements!(𝕃ᵢ, refinements, frame.refinements, changes)
                 else
-                    record_refinements!(refinement_propagation.updates[currbb], interp, refinements, changes)
+                    record_refinements!(refinement_propagation, currbb, interp, refinements, changes)
                 end
             end
             if rt === nothing
@@ -4366,17 +4370,17 @@ function SlotRefinementPropagationState(cfg::CFG)
     postdomtree = construct_postdomtree(cfg)
     n = length(cfg.blocks)
 
-    terminating_blocks = BBIndex[]
-    top_level_blocks = BBIndex[]
-    merge_points = BBIndex[]
+    terminating_blocks = IdSet{BBIndex}()
+    top_level_blocks = IdSet{BBIndex}()
+    merge_points = IdSet{BBIndex}()
 
     # Initialize paths.
     paths = PathIndex[0 for _ in 1:n]
     paths[1] = 1
     path_bound = 1
-    next = Int[1]
+    next = BBIndex[1]
     v = 1
-    seen = IdSet{Int}()
+    seen = IdSet{BBIndex}()
     while !isempty(next)
         v = popfirst!(next)
         in(v, seen) && continue # don't process backedges
@@ -4419,10 +4423,18 @@ function SlotRefinementPropagationState(cfg::CFG)
     end
 
     # Allocate slot refinement information
-    initial_refinements = Vector{SlotRefinement}[SlotRefinement[] for _ in 1:length(paths)]
-    updates = IdDict{Int,SlotRefinement}[IdDict{Int,SlotRefinement}() for _ in 1:length(paths)]
+    initial_refinements = Vector{SlotRefinement}[SlotRefinement[] for _ in 1:path_bound]
+    updates = IdDict{Int,SlotRefinement}[IdDict{Int,SlotRefinement}() for _ in 1:path_bound]
 
     SlotRefinementPropagationState(postdomtree, paths, initial_refinements, updates, merge_points, terminating_blocks, top_level_blocks)
+end
+
+function record_refinements!(state::SlotRefinementPropagationState, block::BBIndex,
+                             interp::AbstractInterpreter, refinements#=::Iterable{SlotRefinement}=#,
+                             changes::Union{Nothing,StateUpdate} = nothing)
+    path = state.paths[block]
+    updates = state.updates[path]
+    record_refinements!(updates, interp, refinements, changes)
 end
 
 function record_refinements!(updates::IdDict{Int, SlotRefinement}, interp::AbstractInterpreter,
@@ -4448,10 +4460,11 @@ function record_refinements!(updates::IdDict{Int, SlotRefinement}, interp::Abstr
     end
 end
 
-function merge_updates_from_paths(𝕃ᵢ::AbstractLattice, state::SlotRefinementPropagationState, paths::Vector{PathIndex})
-    @assert length(paths) ≥ 2
-    ⊔ = join(𝕃ᵢ)
+function merge_updates_from_paths(𝕃ᵢ::AbstractLattice, state::SlotRefinementPropagationState, paths::Vector{PathIndex}, frame::InferenceState)
+    isempty(paths) && return nothing
     result = copy(state.updates[paths[1]])
+    length(paths) == 1 && return result
+    ⊔ = join(𝕃ᵢ)
     for i in 2:length(paths)
         path = paths[i]
         path == 0 && continue
@@ -4476,14 +4489,17 @@ function merge_refinements_from_predecessors!(frame::InferenceState, currstate::
     state = frame.refinement_propagation
     in(block, state.merge_points) || return
     𝕃ᵢ = typeinf_lattice(interp)
-    paths = PathIndex[state.paths[v] for v in frame.cfg.blocks[block].preds]
-    updates = merge_updates_from_paths(𝕃ᵢ, state, paths)
+    preds = frame.cfg.blocks[block].preds
+    paths = nonthrowing_paths(state, frame, preds)
+    updates = merge_updates_from_paths(𝕃ᵢ, state, paths, frame)
+    updates === nothing && return
     refinements = values(updates)
     apply_refinements!(𝕃ᵢ, refinements, currstate)
     if should_eagerly_apply_refinements(state, block)
         apply_refinements!(𝕃ᵢ, refinements, frame.refinements)
     else
-        state.updates[block] = updates
+        path = state.paths[block]
+        state.updates[path] = updates
     end
 end
 
@@ -4491,10 +4507,22 @@ function finish_merging_global_refinements!(frame::InferenceState, interp::Abstr
     state = frame.refinement_propagation
     length(state.terminating_blocks) ≥ 2 || return
     𝕃ᵢ = typeinf_lattice(interp)
-    paths = PathIndex[state.paths[v] for v in state.terminating_blocks]
-    updates = merge_updates_from_paths(𝕃ᵢ, state, paths)
+    paths = nonthrowing_paths(state, frame, state.terminating_blocks)
+    updates = merge_updates_from_paths(𝕃ᵢ, state, paths, frame)
+    updates === nothing && return
     refinements = values(updates)
     apply_refinements!(𝕃ᵢ, refinements, frame.refinements)
+end
+
+function nonthrowing_paths(state::SlotRefinementPropagationState, frame::InferenceState, blocks)
+    paths = PathIndex[]
+    for v in blocks
+        i = last(frame.cfg.blocks[v].stmts)
+        inferred = frame.src.ssavaluetypes[i]
+        inferred === Union{} && continue
+        push!(paths, state.paths[v])
+    end
+    paths
 end
 
 function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt::Conditional, then_or_else::Bool)

@@ -276,9 +276,9 @@ struct SlotRefinementPropagationState
     paths::Vector{PathIndex} # indexed by basic block
     initial_refinements::Vector{Vector{SlotRefinement}} # indexed by path
     updates::Vector{IdDict{Int,SlotRefinement}} # indexed by path
-    merge_points::Vector{BBIndex} # these blocks are those where refinements from different paths are to be merged
-    terminating_blocks::Vector{BBIndex} # these blocks (excluding those that throw) will be processed after inference to derive global refinements
-    top_level_blocks::Vector{BBIndex} # indicates whether we need to stage refinements or if we can apply them directly
+    merge_points::IdSet{BBIndex} # these blocks are those where refinements from different paths are to be merged
+    terminating_blocks::IdSet{BBIndex} # these blocks (excluding those that throw) will be processed after inference to derive global refinements
+    top_level_blocks::IdSet{BBIndex} # indicates whether we need to stage refinements or if we can apply them directly
 end
 
 mutable struct InferenceState
