@@ -1082,12 +1082,15 @@ function complete_keyword_argument(partial::String, last_idx::Int, context_modul
     kwargs_flag == 2 && return fail # one of the previous kwargs is invalid
 
     methods = Completion[]
-    # limit the number of methods to prevent performance issues while allowing
-    # completions for nearly all common functions. This is distinct from the other
-    # uses of MAX_METHOD_COMPLETIONS, which primarily used to limit the number
-    # of methods to _display_ before showing an alternative message; here we're
-    # searching a larger number to find a subset that contains matching kwargs
-    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : 500, kwargs_flag == 1)
+    # Limit kwarg completions to cases when function is concretely known; looking up
+    # matching methods for abstract functions — particularly `Any` or `Function` — can
+    # take many seconds to run over the thousands of possible methods. Note that
+    # isabstracttype would return naively return true for common constructor calls
+    # like Array, but the REPL's introspection here may know their Type{T}.
+    isabstract(f) = isabstracttype(f)
+    isabstract(::Type{Type{T}}) where {T} = isabstracttype(T)
+    isabstract(funct) && return fail
+    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, kwargs_flag == 1)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
 
