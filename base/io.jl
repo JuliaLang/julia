@@ -3,11 +3,302 @@
 # Generic IO stubs -- all subtypes should implement these (if meaningful)
 
 """
+    abstract type IO <: Any
+
+Supertype for IO types that support reading and/or writing.
+
+New subtypes should implement:
+* If readable and unbuffered: [`Base.readbuffering`](@ref), [`readinto!`](@ref).
+* If readable and buffered: [`getbuffer`](@ref), [`fillbuffer`](@ref),
+  and [`consume`](@ref).
+
+Currently, only a reading interface is defined for `IO`. A writing interface may
+be added in the future.
+"""
+IO
+
+"""
+    IOBuffering
+
+Trait to signal if an IO type is buffered. Subtypes are `IsBuffered` and
+`NotBuffered`.
+
+# Examples
+```jldoctest
+julia> isbuf = Base.readbuffering(IOBuffer)
+Base.IsBuffered()
+
+julia> isbuf isa Base.IOBuffering
+true
+```
+
+See also: [`readbuffering`](@ref)
+"""
+abstract type IOBuffering end
+
+"See [`IOBuffering`](@ref)"
+struct IsBuffered <: IOBuffering end
+
+"See [`IOBuffering`](@ref)"
+struct NotBuffered <: IOBuffering end
+
+# This function is called `readbuffering` because we might introduce writebuffering in the future
+"""
+    (Base.readbuffering(::Type{T})::Base.IOBuffering) where {T <: IO}
+
+Check is a readable `IO` type implements buffering.
+Buffered and unbuffered IO types should implement different methods,
+see the documentation for IO.
+The default implementation returns `Base.IsBuffered()`, so unbuffered IO types
+should implement this.
+
+!!! compat "Julia 1.13"
+    This function was added in Julia 1.13. IO types defined before Julia 1.13
+    may not implement buffering, even if this function returns `IsBuffered()`
+    for the type, since it is the default.
+"""
+readbuffering(::Type{<:IO}) = IsBuffered()
+
+# TODO: More docs about when this kind of error should be thrown
+"""
+    IOError
+
+Common supertype for IO errors.
+"""
+abstract type AbstractIOError <: Exception end
+
+"""
+    NonSpecificIOError <: AbstractIOError
+
+Exception thrown when an IO error occurs, but the type of exception doesn't match the other
+subtypes of [`AbstractIOError`](@ref).
+"""
+struct NonSpecificIOError <: AbstractIOError
+    s::String
+end
+
+"""
+    ConsumeBufferError <: IOError
+
+Exception thrown when calling `consume(io, n)` with a value larger than the current buffer size.
+"""
+struct ConsumeBufferError <: AbstractIOError end
+
+"""
+    getbuffer(io::IO)::AbstractVector{UInt8}
+
+Get the available bytes of `io`.
+
+The returned vector `v` must have indices `1:length(v)`. Callers should avoid
+mutating the buffer.
+This function should not mutate, or append to, the buffer.
+
+This function should be implemented for buffered readers only, and together with
+[`fillbuffer`](@ref) and [`consume`](@ref).
+"""
+function getbuffer end
+
+"""
+    fillbuffer(io::IO)::Union{Int, Nothing}
+
+Fill more bytes into the reading buffer from `io`'s underlying buffer, returning
+the number of bytes added. After calling `fillbuffer` and getting `n`,
+the buffer obtained by `getbuffer` should have `n` new bytes appended,
+but otherwise be unchanged.
+
+This function must fill at least one byte, except
+* If the underlying io is EOF, or there is no underlying io, return `0`
+* If the buffer is full and cannot be expanded, return `nothing`.
+
+`IO`s which do not wrap another underlying buffer, and therefore can't fill
+its buffer should return `0` unconditionally.
+This function should never return `nothing` if the buffer is empty.
+
+This function should be implemented for buffered readers only, and together with
+[`getbuffer`](@ref) and [`consume`](@ref).
+"""
+function fillbuffer end
+
+"""
+    consume(io::IO, n::Int)::Nothing
+
+Remove the first `n` bytes of the reading buffer of `io`.
+Consumed bytes will not be returned by future calls to `getbuffer`.
+If `n` is negative, or larger than the current reading buffer size,
+throw a `ConsumeBufferError` error.
+
+This function should be implemented for buffered readers only, and together with
+[`getbuffer`](@ref) and [`fillbuffer`](@ref).
+"""
+function consume end
+
+"""
+    readinto!(io::IO, v::AbstractVector{UInt8})::Int
+
+Read bytes from `io` into the beginning of `v`, returning the number of bytes read.
+This function should read at least one byte, except if `io` is EOF, or `v` is empty,
+in which case it should return `0`.
+Where possible, implementations should make sure `readinto!` performs at most one
+blocking reading IO operation, even when it means only filling part of `v`.
+"""
+function readinto! end
+
+"""
+    readall!(io::IO, v::AbstractVector{UInt8})::Int
+
+Read as many bytes as possible from `io` into the beginning of `v`, returning
+the number of bytes read. This function will continue to read until `io` is EOF,
+or `v` has been filled.
+"""
+function readall! end
+
+################### Derived methods ############################
+
+eof(io::IO) = isnothing(get_nonempty_reading_buffer(io))
+
+bytesavailable(io::IO) = length(getbuffer(io))
+
+function readavailable(io::IO)
+    ba = bytesavailable(io)::Int
+
+    # Annoyingly, `readavailable` is documented to do I/O if no data has been buffered.
+    if iszero(ba)
+        iszero(something(fillbuffer(io))::Int) && return UInt8[]
+        ba = bytesavailable(io)::Int
+    end
+
+    v = Vector{UInt8}(undef, ba)
+    n = readinto!(io, v)::Int
+    # This should never occur and indicates an implementation error
+    # or race condition or something like that
+    n == ba || throw(NonSpecificIOError("IO were not able to read all its available bytes"))
+    v
+end
+
+function readall!(io::IO, v::AbstractVector{UInt8})
+    n_read = 0
+    vw = view(v, firstindex(v):lastindex(v))
+    while true
+        isempty(vw) && break
+        n = readinto!(io, vw)::Int
+        iszero(n) && break
+        n_read += n
+        vw = view(v, firstindex(v) + n:lastindex(v))
+    end
+    return n_read
+end
+
+# Default implementation assumes buffering, because it's part of the core interface
+# to implement this for non-buffered IOs
+function readinto!(io::IO, v::AbstractVector{UInt8})
+    isempty(v) && return 0
+    buffer = @something get_nonempty_reading_buffer(io) return 0
+    mn = min(length(v), length(buffer))
+    copyto!(v, firstindex(v), buffer, 1, mn)
+    consume(io, mn)
+    mn
+end
+
+# Default implementation for buffered readers
+function read(io::IO, ::Type{UInt8})
+    buf = @something get_nonempty_reading_buffer(io) throw(EOFError())
+    byte = buf[1]
+    consume(io, 1)
+    byte
+end
+
+# NB: The documentation says `b` must be `AbstractVector`, but the implementation has
+# supported AbstractArray for years, so we must continue to support it.
+"""
+    readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b))
+
+Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
+The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
+and enough bytes could be read), but it will never be decreased.
+"""
+function readbytes!(io::IO, b::AbstractArray{UInt8}, nb=length(b))
+    nb = Int(nb)::Int
+    require_one_based_indexing(b)
+    iszero(nb) && return 0
+    # Use the documented, more efficient API if the arguments conform to the
+    # API of `IO` and `readbytes!`, fall back to a more generic function
+    # for backwards compatibility.
+    if b isa AbstractVector && (
+            readbuffering(typeof(io)) == NotBuffered() ||
+            hasmethod(getbuffer, Tuple{typeof(io)})
+        )
+        readbytes_new!(io, b, nb)
+    else
+        readbytes_readbyte!(io, b, nb)
+    end
+end
+
+function readbytes_new!(io::IO, b::AbstractVector{UInt8}, nb::Int)
+    n_read = 0
+    vw = view(b, 1 : min(lastindex(b), nb))
+    resized = false
+    while n_read < nb
+        if n_read == length(b)
+            eof(io) && return n_read
+            resize!(b, min(nb, overallocation(length(b))))
+            resized = true
+            vw = view(b, n_read + 1 : min(lastindex(b), nb))
+        end
+        @assert !isempty(vw)
+        n = readinto!(io, vw)
+        if iszero(n)
+            resized && resize!(b, n_read)
+            return n_read
+        end
+        n_read += n
+        vw = view(b, n_read + 1 : min(lastindex(b), nb))
+    end
+    return n_read
+end
+
+function readbytes_readbyte!(s::IO, b::AbstractArray{UInt8}, nb::Int)
+    require_one_based_indexing(b)
+    olb = lb = length(b)
+    nr = 0
+    while nr < nb && !eof(s)
+        a = read(s, UInt8)
+        nr += 1
+        if nr > lb
+            lb = nr * 2
+            resize!(b, lb)
+        end
+        b[nr] = a
+    end
+    if lb > olb
+        resize!(b, nr) # shrink to just contain input data if was resized
+    end
+    return nr
+end
+
+
+################### Helper functions ###########################
+
+# Get a nonempty reading buffer, or nothing if the io is eof.
+function get_nonempty_reading_buffer(io::IO)::Union{Nothing, AbstractVector{UInt8}}
+    buf = getbuffer(io)
+    if isempty(buf)
+        # Per the docs, this function is not allowed to return `nothing`
+        # when the buffer is empty.
+        n = fillbuffer(io)::Int
+        iszero(n) && return nothing
+        buf = getbuffer(io)
+        @assert !isempty(buf)
+    end
+    require_one_based_indexing(buf)
+    buf
+end
+
+"""
     EOFError()
 
 No more data was available to read from a file or stream.
 """
-struct EOFError <: Exception end
+struct EOFError <: AbstractIOError end
 
 """
     SystemError(prefix::AbstractString, [errno::Int32])
@@ -302,7 +593,6 @@ Base.RefValue{MyStruct}(MyStruct(42.0))
 """
 function write end
 
-read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
 write(s::IO, x::UInt8) = error(typeof(s)," does not support byte I/O")
 
 """
@@ -1134,34 +1424,6 @@ julia> rm("my_file.txt");
 ```
 """
 readchomp(x) = chomp(read(x, String))
-
-# read up to nb bytes into nb, returning # bytes read
-
-"""
-    readbytes!(stream::IO, b::AbstractVector{UInt8}, nb=length(b))
-
-Read at most `nb` bytes from `stream` into `b`, returning the number of bytes read.
-The size of `b` will be increased if needed (i.e. if `nb` is greater than `length(b)`
-and enough bytes could be read), but it will never be decreased.
-"""
-function readbytes!(s::IO, b::AbstractArray{UInt8}, nb=length(b))
-    require_one_based_indexing(b)
-    olb = lb = length(b)
-    nr = 0
-    while nr < nb && !eof(s)
-        a = read(s, UInt8)
-        nr += 1
-        if nr > lb
-            lb = nr * 2
-            resize!(b, lb)
-        end
-        b[nr] = a
-    end
-    if lb > olb
-        resize!(b, nr) # shrink to just contain input data if was resized
-    end
-    return nr
-end
 
 """
     read(s::IO, nb=typemax(Int))
