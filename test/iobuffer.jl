@@ -501,7 +501,7 @@ end
     io = IOBuffer(repeat("x", 400))
     skip(io, 10)
     skip(io, 400)
-    @test position(io) == 400
+    @test isempty(read(io))
 end
 
 @testset "pr #11554" begin
