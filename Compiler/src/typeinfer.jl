@@ -1438,25 +1438,27 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
             edge isa CodeInstance && isdefined(edge, :inferred) && push!(workqueue, edge)
         end
 
+        invokelatest_queue === nothing && continue
         if isexpr(stmt, :call)
             farg = stmt.args[1]
             !applicable(argextype, farg, ci, sptypes) && continue # TODO: Why is this failing during bootstrap
             ftyp = widenconst(argextype(farg, ci, sptypes))
-            if ftyp <: Builtin
-                if Core.finalizer isa ftyp && length(stmt.args) == 3
-                    finalizer = argextype(stmt.args[2], ci, sptypes)
-                    obj = argextype(stmt.args[3], ci, sptypes)
-                    atype = argtypes_to_type(Any[finalizer, obj])
 
-                    invokelatest_queue === nothing && continue
-                    let workqueue = invokelatest_queue
-                        # make a best-effort attempt to enqueue the relevant code for the finalizer
-                        mi = compileable_specialization_for_call(workqueue.interp, atype)
-                        mi === nothing && continue
+            if ftyp === typeof(Core.finalizer) && length(stmt.args) == 3
+                finalizer = argextype(stmt.args[2], ci, sptypes)
+                obj = argextype(stmt.args[3], ci, sptypes)
+                atype = argtypes_to_type(Any[finalizer, obj])
+            else
+                # No dynamic dispatch to resolve / enqueue
+                continue
+            end
 
-                        push!(workqueue, mi)
-                    end
-                end
+            let workqueue = invokelatest_queue
+                # make a best-effort attempt to enqueue the relevant code for the finalizer
+                mi = compileable_specialization_for_call(workqueue.interp, atype)
+                mi === nothing && continue
+
+                push!(workqueue, mi)
             end
         end
         # TODO: handle other StmtInfo like @cfunction and OpaqueClosure?
