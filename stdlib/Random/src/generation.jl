@@ -375,25 +375,21 @@ function rand(rng::AbstractRNG, sp::SamplerRangeNDL{U,T}) where {U,T}
     s = sp.s
     x = widen(rand(rng, U))
     m = x * s
-    l = m % U
-    if l < s
-        rand_unlikely(rng, sp, x, m, l)
-    else
-        (s == 0 ? x : m >> (8*sizeof(U))) % T + sp.a
-    end
+    r = (m % U) < s ? rand_unlikely(rng, s, m) % T :
+        iszero(s)   ? x % T :
+                      (m >> (8*sizeof(U))) % T
+    r + sp.a
 end
 
 # similar to `randn_unlikely` : splitting out this unlikely path leads to faster code
-@noinline function rand_unlikely(rng::AbstractRNG, sp::SamplerRangeNDL{U,T}, x, m, l) where {U, T}
-    s = sp.s
+@noinline function rand_unlikely(rng, s::U, m)::U where {U}
+    # m needs to be passed, because the while loop below might have no iterations
     t = mod(-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
-    while l < t
+    while (m % U) < t
         x = widen(rand(rng, U))
         m = x * s
-        l = m % U
     end
-    # s != 0
-    m >> (8*sizeof(U)) % T + sp.a
+    (m >> (8*sizeof(U))) % U
 end
 
 
