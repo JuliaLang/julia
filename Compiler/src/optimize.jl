@@ -1008,19 +1008,11 @@ matchpass(::Nothing, _, _) = false
 function run_passes_ipo_safe(
     ci::CodeInfo,
     sv::OptimizationState,
-    optimize_until::Union{Nothing, Int, String} = nothing,  # run all passes by default
-)
-    if optimize_until isa String
-        found_pass = false
-        for pass in ALL_PASS_NAMES
-            if optimize_until == pass
-                found_pass = true
-                break
-            end
-        end
-        if !found_pass
-            error("invalid `optimize_until` argument, no such optimization pass")
-        end
+    optimize_until::Union{Nothing, Int, String} = nothing)  # run all passes by default
+    if optimize_until isa String && !contains_is(ALL_PASS_NAMES, optimize_until)
+        error("invalid `optimize_until` argument, no such optimization pass")
+    elseif optimize_until isa Int && (optimize_until < 1 || optimize_until > length(ALL_PASS_NAMES))
+        error("invalid `optimize_until` argument, no such optimization pass")
     end
 
     __stage__ = 0  # used by @pass
