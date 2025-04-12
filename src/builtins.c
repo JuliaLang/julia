@@ -1685,6 +1685,17 @@ JL_CALLABLE(jl_f_invoke)
     return jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
 }
 
+JL_CALLABLE(jl_f__predeclare_call)
+{
+    JL_NARGSV(_predeclare_call, 1);
+
+    // jl_datatype_t *tt = jl_inst_arg_tuple_type(args[0], &args[1], nargs, 1);
+    // JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
+    // jl_compile_hint(tt)
+
+    return jl_nothing;
+}
+
 // Expr constructor for internal use ------------------------------------------
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)

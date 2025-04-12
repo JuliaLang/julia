@@ -1448,6 +1448,11 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 finalizer = argextype(stmt.args[2], ci, sptypes)
                 obj = argextype(stmt.args[3], ci, sptypes)
                 atype = argtypes_to_type(Any[finalizer, obj])
+            elseif ftyp === typeof(Core._predeclare_call) && length(stmt.args) > 1
+                atype = argtypes_to_type(Any[
+                    argextype(stmt.args[i], ci, sptypes)
+                    for i in 2:length(stmt.args)
+                ])
             else
                 # No dynamic dispatch to resolve / enqueue
                 continue

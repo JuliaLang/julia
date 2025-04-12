@@ -17,6 +17,7 @@ extern "C" {
     XX(_equiv_typedef,"_equiv_typedef") \
     XX(_expr,"_expr") \
     XX(_import, "_import") \
+    XX(_predeclare_call,"_predeclare_call") \
     XX(_primitivetype,"_primitivetype") \
     XX(_setsuper,"_setsuper!") \
     XX(_structtype,"_structtype") \
