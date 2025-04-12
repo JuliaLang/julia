@@ -127,10 +127,11 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             if inferred_result !== nothing
                 uncompressed = inferred_result
                 debuginfo = get_debuginfo(inferred_result)
+                # Inlining may fast-path the global cache via `VolatileInferenceResult`, so store it back here
+                result.src = inferred_result
             end
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
             if inferred_result isa CodeInfo
-                result.src = inferred_result
                 if may_compress(interp)
                     nslots = length(inferred_result.slotflags)
                     resize!(inferred_result.slottypes::Vector{Any}, nslots)
