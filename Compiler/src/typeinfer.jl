@@ -1415,21 +1415,32 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
         invokelatest_queue === nothing && continue
         if isexpr(stmt, :call)
             farg = stmt.args[1]
+
+            invokelatest_queue === nothing && continue
             !applicable(argextype, farg, ci, sptypes) && continue # TODO: Why is this failing during bootstrap
+
             ftyp = widenconst(argextype(farg, ci, sptypes))
 
             if ftyp === typeof(Core.finalizer) && length(stmt.args) == 3
-                finalizer = argextype(stmt.args[2], ci, sptypes)
-                obj = argextype(stmt.args[3], ci, sptypes)
-                atype = argtypes_to_type(Any[finalizer, obj])
+                finalizer_fn = argextype(stmt.args[2], ci, sptypes)
+                object = argextype(stmt.args[3], ci, sptypes)
+                atype = argtypes_to_type(Any[finalizer_fn, object])
+            elseif ftyp === typeof(Core._predeclare_call) && length(stmt.args) > 1
+                atype = argtypes_to_type(Any[
+                    argextype(stmt.args[i], ci, sptypes)
+                    for i in 2:length(stmt.args)
+                ])
+            else
+                # No dynamic dispatch to resolve / enqueue
+                continue
+            end
 
-                let workqueue = invokelatest_queue
-                    # make a best-effort attempt to enqueue the relevant code for the finalizer
-                    mi = compileable_specialization_for_call(workqueue.interp, atype)
-                    mi === nothing && continue
+            let workqueue = invokelatest_queue
+                # make a best-effort attempt to enqueue the relevant code for the finalizer
+                mi = compileable_specialization_for_call(workqueue.interp, atype)
+                mi === nothing && continue
 
-                    push!(workqueue, mi)
-                end
+                push!(workqueue, mi)
             end
         end
         # TODO: handle other StmtInfo like @cfunction and OpaqueClosure?
