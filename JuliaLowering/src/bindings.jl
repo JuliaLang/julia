@@ -34,6 +34,44 @@ function BindingInfo(id::IdTag, name::AbstractString, kind::Symbol, node_id::Int
                 is_internal, is_ambiguous_local, is_nospecialize)
 end
 
+function Base.show(io::IO, binfo::BindingInfo)
+    print(io, "BindingInfo(", binfo.id, ", ",
+          repr(binfo.name), ", ",
+          repr(binfo.kind), ", ",
+          binfo.node_id)
+    if !isnothing(binfo.mod)
+        print(io, ", mod=", binfo.mod)
+    end
+    if !isnothing(binfo.type)
+        print(io, ", type=", binfo.type)
+    end
+    if binfo.n_assigned != 0
+        print(io, ", n_assigned=", binfo.n_assigned)
+    end
+    if binfo.is_const
+        print(io, ", is_const=", binfo.is_const)
+    end
+    if binfo.is_ssa
+        print(io, ", is_ssa=", binfo.is_ssa)
+    end
+    if binfo.is_captured
+        print(io, ", is_captured=", binfo.is_captured)
+    end
+    if binfo.is_always_defined != binfo.is_ssa
+        print(io, ", is_always_defined=", binfo.is_always_defined)
+    end
+    if binfo.is_internal
+        print(io, ", is_internal=", binfo.is_internal)
+    end
+    if binfo.is_ambiguous_local
+        print(io, ", is_ambiguous_local=", binfo.is_ambiguous_local)
+    end
+    if binfo.is_nospecialize
+        print(io, ", is_nospecialize=", binfo.is_nospecialize)
+    end
+    print(io, ")")
+end
+
 """
 Metadata about "entities" (variables, constants, etc) in the program. Each
 entity is associated to a unique integer id, the BindingId. A binding will be
