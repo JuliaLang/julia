@@ -166,6 +166,7 @@ Core.replacefield!
 Core.swapfield!
 Core.setfieldonce!
 Core.isdefined
+Core.isdefinedglobal
 Base.@isdefined
 Base.convert
 Base.promote
@@ -396,6 +397,7 @@ Base.Sys.loadavg
 Base.Sys.isexecutable
 Base.Sys.isreadable
 Base.Sys.iswritable
+Base.Sys.which
 Base.Sys.username
 Base.@static
 ```

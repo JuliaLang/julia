@@ -183,7 +183,7 @@ function find_def_for_use(
 end
 
 function collect_leaves(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typeconstraint), 𝕃ₒ::AbstractLattice,
-                        predecessors = ((@nospecialize(def), compact::IncrementalCompact) -> isa(def, PhiNode) ? def.values : nothing))
+                        predecessors::Pre = ((@nospecialize(def), compact::IncrementalCompact) -> isa(def, PhiNode) ? def.values : nothing)) where {Pre}
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
     end
@@ -271,7 +271,7 @@ Starting at `val` walk use-def chains to get all the leaves feeding into this `v
 `predecessors(def, compact)` is a callback which should return the set of possible
 predecessors for a "phi-like" node (PhiNode or Core.ifelse) or `nothing` otherwise.
 """
-function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), predecessors, 𝕃ₒ::AbstractLattice)
+function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), predecessors::Pre, 𝕃ₒ::AbstractLattice) where {Pre}
     visited_philikes = AnySSAValue[]
     isa(defssa, AnySSAValue) || return Any[defssa], visited_philikes
     def = compact[defssa][:stmt]
@@ -1027,17 +1027,19 @@ end
     sig = sig.body
     isa(sig, DataType) || return nothing
     sig.name === Tuple.name || return nothing
-    length(sig.parameters) >= 1 || return nothing
+    sig_parameters = sig.parameters::SimpleVector
+    length_sig_parameters = length(sig_parameters)
+    length_sig_parameters >= 1 || return nothing
 
-    i = let sig=sig
-        findfirst(j::Int->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
+    function has_typevar_closure(j::Int)
+        has_typevar(sig_parameters[j], tvar)
     end
-    i === nothing && return nothing
-    let sig=sig
-        any(j::Int->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
-    end && return nothing
 
-    arg = sig.parameters[i]
+    i = findfirst(has_typevar_closure, 1:length_sig_parameters)
+    i === nothing && return nothing
+    any(has_typevar_closure, i+1:length_sig_parameters) && return nothing
+
+    arg = sig_parameters[i]
 
     rarg = def.args[2 + i]
     isa(rarg, SSAValue) || return nothing
@@ -1511,6 +1513,10 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             used_ssas[x.id] -= 1
         end
         ir = complete(compact)
+        # remove any use that has been optimized away by the DCE
+        for (intermediaries, defuse) in values(defuses)
+            filter!(x -> ir[SSAValue(x.idx)][:stmt] !== nothing, defuse.uses)
+        end
         sroa_mutables!(ir, defuses, used_ssas, lazydomtree, inlining)
         return ir
     else
@@ -2570,51 +2576,50 @@ function cfg_simplify!(ir::IRCode)
                     values = phi.values
                     (; ssa_rename, late_fixup, used_ssas, new_new_used_ssas) = compact
                     ssa_rename[i] = SSAValue(compact.result_idx)
-                    already_inserted = function (i::Int, val::OldSSAValue)
+                    already_inserted = function (branch::Int, val::OldSSAValue)
                         if val.id in old_bb_stmts
                             return val.id <= i
                         end
-                        return bb_rename_pred[phi.edges[i]] < idx
+                        return 0 < bb_rename_pred[phi.edges[branch]] < idx
                     end
-                    renamed_values = process_phinode_values(values, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                     edges = Int32[]
                     values = Any[]
-                    sizehint!(edges, length(phi.edges)); sizehint!(values, length(renamed_values))
+                    sizehint!(edges, length(phi.edges)); sizehint!(values, length(phi.values))
                     for old_index in 1:length(phi.edges)
                         old_edge = phi.edges[old_index]
                         new_edge = bb_rename_pred[old_edge]
                         if new_edge > 0
                             push!(edges, new_edge)
-                            if isassigned(renamed_values, old_index)
-                                push!(values, renamed_values[old_index])
+                            if isassigned(phi.values, old_index)
+                                val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
+                                push!(values, val)
                             else
                                 resize!(values, length(values)+1)
                             end
                         elseif new_edge == -1
                             @assert length(phi.edges) == 1
-                            if isassigned(renamed_values, old_index)
+                            if isassigned(phi.values, old_index)
+                                val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
                                 push!(edges, -1)
-                                push!(values, renamed_values[old_index])
+                                push!(values, val)
                             end
                         elseif new_edge == -3
                             # Multiple predecessors, we need to expand out this phi
                             all_new_preds = Int32[]
                             add_preds!(all_new_preds, bbs, bb_rename_pred, old_edge)
                             append!(edges, all_new_preds)
-                            if isassigned(renamed_values, old_index)
-                                val = renamed_values[old_index]
-                                for _ in 1:length(all_new_preds)
-                                    push!(values, val)
+                            np = length(all_new_preds)
+                            if np > 0
+                                if isassigned(phi.values, old_index)
+                                    val = process_phinode_value(phi.values, old_index, late_fixup, already_inserted, compact.result_idx, ssa_rename, used_ssas, new_new_used_ssas, true, nothing)
+                                    for p in 1:np
+                                        push!(values, val)
+                                        p > 2 && count_added_node!(compact, val)
+                                    end
+                                else
+                                    resize!(values, length(values)+np)
                                 end
-                                length(all_new_preds) == 0 && kill_current_use!(compact, val)
-                                for _ in 2:length(all_new_preds)
-                                    count_added_node!(compact, val)
-                                end
-                            else
-                                resize!(values, length(values)+length(all_new_preds))
                             end
-                        else
-                            isassigned(renamed_values, old_index) && kill_current_use!(compact, renamed_values[old_index])
                         end
                     end
                     if length(edges) == 0 || (length(edges) == 1 && !isassigned(values, 1))

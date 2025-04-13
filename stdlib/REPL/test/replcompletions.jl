@@ -170,16 +170,22 @@ end
 
 function map_completion_text(completions)
     c, r, res = completions
-    return map(completion_text, c), r, res
+    return map(x -> named_completion(x).completion, c), r, res
+end
+
+function map_named_completion(completions)
+    c, r, res = completions
+    return map(named_completion, c), r, res
 end
 
 test_complete(s) = map_completion_text(@inferred(completions(s, lastindex(s))))
 test_scomplete(s) =  map_completion_text(@inferred(shell_completions(s, lastindex(s))))
-test_bslashcomplete(s) =  map_completion_text(@inferred(bslash_completions(s, lastindex(s)))[2])
 test_complete_context(s, m=@__MODULE__; shift::Bool=true) =
     map_completion_text(@inferred(completions(s,lastindex(s), m, shift)))
 test_complete_foo(s) = test_complete_context(s, Main.CompletionFoo)
 test_complete_noshift(s) = map_completion_text(@inferred(completions(s, lastindex(s), Main, false)))
+
+test_bslashcomplete(s) =  map_named_completion(@inferred(bslash_completions(s, lastindex(s)))[2])
 
 test_methods_list(@nospecialize(f), tt) = map(x -> string(x.method), Base._methods_by_ftype(Base.signature_type(f, tt), 10, Base.get_world_counter()))
 
@@ -208,8 +214,6 @@ end
 let s = "using REP"
     c, r = test_complete_32377(s)
     @test count(isequal("REPL"), c) == 1
-    # issue #30234
-    @test !Base.isbindingresolved(M32377, :tanh)
     # check what happens if REPL is already imported
     M32377.eval(:(using REPL))
     c, r = test_complete_32377(s)
@@ -350,7 +354,8 @@ end
 # test latex symbol completions
 let s = "\\alpha"
     c, r = test_bslashcomplete(s)
-    @test c[1] == "α"
+    @test c[1].completion == "α"
+    @test c[1].name == "α"
     @test r == 1:lastindex(s)
     @test length(c) == 1
 end
@@ -358,7 +363,8 @@ end
 # test latex symbol completions after unicode #9209
 let s = "α\\alpha"
     c, r = test_bslashcomplete(s)
-    @test c[1] == "α"
+    @test c[1].completion == "α"
+    @test c[1].name == "α"
     @test r == 3:sizeof(s)
     @test length(c) == 1
 end
@@ -366,20 +372,25 @@ end
 # test emoji symbol completions
 let s = "\\:koala:"
     c, r = test_bslashcomplete(s)
-    @test c[1] == "🐨"
+    @test c[1].completion == "🐨"
+    @test c[1].name == "🐨"
     @test r == 1:sizeof(s)
     @test length(c) == 1
 end
 
 let s = "\\:ko"
     c, r = test_bslashcomplete(s)
-    @test "\\:koala:" in c
+    ko = only(filter(c) do namedcompletion
+        namedcompletion.completion == "\\:koala:"
+    end)
+    @test ko.name == "🐨 \\:koala:"
 end
 
 # test emoji symbol completions after unicode #9209
 let s = "α\\:koala:"
     c, r = test_bslashcomplete(s)
-    @test c[1] == "🐨"
+    @test c[1].name == "🐨"
+    @test c[1].completion == "🐨"
     @test r == 3:sizeof(s)
     @test length(c) == 1
 end
@@ -1069,8 +1080,8 @@ let s, c, r
     # Issue #8047
     s = "@show \"/dev/nul\""
     c,r = completions(s, 15)
-    c = map(completion_text, c)
-    @test "null\"" in c
+    c = map(named_completion, c)
+    @test "null\"" in [_c.completion for _c in c]
     @test r == 13:15
     @test s[r] == "nul"
 
@@ -1174,7 +1185,7 @@ let s, c, r
                     REPL.REPLCompletions.next_cache_update = 0
                 end
                 c,r = test_scomplete(s)
-                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
+                timedwait(()->REPL.REPLCompletions.next_cache_update != 0, 5) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test "tmp-executable" in c
                 @test r == 1:9
@@ -1208,7 +1219,7 @@ let s, c, r
                     REPL.REPLCompletions.next_cache_update = 0
                 end
                 c,r = test_scomplete(s)
-                wait(REPL.REPLCompletions.PATH_cache_task::Task) # wait for caching to complete
+                timedwait(()->REPL.REPLCompletions.next_cache_update != 0, 5) # wait for caching to complete
                 c,r = test_scomplete(s)
                 @test ["repl-completion"] == c
                 @test s[r] == "repl-completio"
@@ -1476,7 +1487,7 @@ function test_dict_completion(dict_name)
     @test c == Any["\"abcd\"]"]
     s = "$dict_name[\"abcd]"  # trailing close bracket
     c, r = completions(s, lastindex(s) - 1)
-    c = map(completion_text, c)
+    c = map(x -> named_completion(x).completion, c)
     @test c == Any["\"abcd\""]
     s = "$dict_name[:b"
     c, r = test_complete(s)
@@ -2473,3 +2484,9 @@ let (c, r, res) = test_complete_context("global xxx::Number = Base.", Main)
     @test res
     @test "pi" ∈ c
 end
+
+# JuliaLang/julia#57780
+const issue57780 = ["a", "b", "c"]
+const issue57780_orig = copy(issue57780)
+test_complete_context("empty!(issue57780).", Main)
+@test issue57780 == issue57780_orig

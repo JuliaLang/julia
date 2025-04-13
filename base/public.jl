@@ -10,6 +10,7 @@ public
 
 # Types
     AbstractLock,
+    AbstractOneTo,
     AbstractPipe,
     AsyncCondition,
     CodeUnits,
@@ -20,12 +21,14 @@ public
     Generator,
     ImmutableDict,
     OneTo,
+    Pairs,
     LogRange,
     UUID,
 
 # Semaphores
     Semaphore,
     acquire,
+    @acquire,
     release,
 
 # arrays

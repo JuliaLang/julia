@@ -2,6 +2,7 @@
 
 # N.B.: This file is also run from interpreter.jl, so needs to be standalone-executable
 using Test
+
 include("setup_Compiler.jl")
 
 # Cassette

@@ -347,9 +347,12 @@ let (bt, did_gc) = make_oc_and_collect_bt()
     GC.gc(true); GC.gc(true); GC.gc(true);
     @test did_gc[]
     @test any(stacktrace(bt)) do frame
-        isa(frame.linfo, Core.MethodInstance) || return false
-        isa(frame.linfo.def, Method) || return false
-        return frame.linfo.def.is_for_opaque_closure
+        li = frame.linfo
+        isa(li, Core.CodeInstance) && (li = li.def)
+        isa(li, Core.ABIOverride) && (li = li.def)
+        isa(li, Core.MethodInstance) || return false
+        isa(li.def, Method) || return false
+        return li.def.is_for_opaque_closure
     end
 end
 
@@ -386,4 +389,21 @@ let ir = first(only(Base.code_ircode(sin, (Int,))))
     ir.argtypes[1] = Tuple{}
     oc = Core.OpaqueClosure(ir; do_compile=false)
     @test oc(1) == sin(1)
+end
+
+function typed_add54236(::Type{T}) where T
+    return @opaque (x::Int)->T(x) + T(1)
+end
+let f = typed_add54236(Float64)
+    @test f isa Core.OpaqueClosure
+    @test f(32) === 33.0
+end
+
+f54357(g, ::Type{AT}) where {AT} = Base.Experimental.@opaque AT->_ (args...) -> g((args::AT)...)
+let f = f54357(+, Tuple{Int,Int})
+    @test f isa Core.OpaqueClosure
+    @test f(32, 34) === 66
+    g = f54357(+, Tuple{Float64,Float64})
+    @test g isa Core.OpaqueClosure
+    @test g(32.0, 34.0) === 66.0
 end

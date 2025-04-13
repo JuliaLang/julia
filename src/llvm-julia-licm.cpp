@@ -238,7 +238,11 @@ struct JuliaLICM : public JuliaPassContext {
                     });
                     for (unsigned i = 1; i < exit_pts.size(); i++) {
                         // Clone exit
+#if JL_LLVM_VERSION >= 200000
+                        auto CI = CallInst::Create(call, {}, exit_pts[i]->getIterator());
+#else
                         auto CI = CallInst::Create(call, {}, exit_pts[i]);
+#endif
                         exit_pts[i] = CI;
                         createNewInstruction(CI, call, MSSAU);
                         LLVM_DEBUG(dbgs() << "Cloned and sunk gc_preserve_end: " << *CI << "\n");
@@ -342,11 +346,7 @@ struct JuliaLICM : public JuliaPassContext {
             }
         }
         if (changed && SE) {
-#if JL_LLVM_VERSION >= 160000
             SE->forgetLoopDispositions();
-#else
-            SE->forgetLoopDispositions(L);
-#endif
         }
 #ifdef JL_VERIFY_PASSES
         assert(!verifyLLVMIR(*L));

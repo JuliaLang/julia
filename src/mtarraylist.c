@@ -14,8 +14,8 @@ extern "C" {
 // but there can be any number of observers
 
 typedef struct {
-    _Atomic(uint32_t) len;
-    uint32_t max;
+    _Atomic(size_t) len;
+    size_t max;
     _Atomic(_Atomic(void*)*) items;
     _Atomic(void*) _space[SMALL_AL_N_INLINE];
 } small_mtarraylist_t;

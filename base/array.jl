@@ -346,12 +346,13 @@ See also [`copy!`](@ref Base.copy!), [`copyto!`](@ref), [`deepcopy`](@ref).
 """
 copy
 
-@eval function copy(a::Array{T}) where {T}
-    # `jl_genericmemory_copy_slice` only throws when the size exceeds the max allocation
-    # size, but since we're copying an existing array, we're guaranteed that this will not happen.
+@eval function copy(a::Array)
+    # `copy` only throws when the size exceeds the max allocation size,
+    # but since we're copying an existing array, we're guaranteed that this will not happen.
     @_nothrow_meta
     ref = a.ref
-    newmem = ccall(:jl_genericmemory_copy_slice, Ref{Memory{T}}, (Any, Ptr{Cvoid}, Int), ref.mem, ref.ptr_or_offset, length(a))
+    newmem = typeof(ref.mem)(undef, length(a))
+    @inbounds unsafe_copyto!(memoryref(newmem), ref, length(a))
     return $(Expr(:new, :(typeof(a)), :(memoryref(newmem)), :(a.size)))
 end
 
@@ -910,7 +911,7 @@ Retrieve the value(s) stored at the given key or index within a collection. The 
 See also [`get`](@ref), [`keys`](@ref), [`eachindex`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> A = Dict("a" => 1, "b" => 2)
 Dict{String, Int64} with 2 entries:
   "b" => 2
@@ -966,7 +967,7 @@ Store the given value at the given key or index within a collection. The syntax 
 x` is converted by the compiler to `(setindex!(a, x, i, j, ...); x)`.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> a = Dict("a"=>1)
 Dict{String, Int64} with 1 entry:
   "a" => 1
@@ -1347,7 +1348,7 @@ function append! end
 
 function append!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
     items isa Tuple && (items = map(x -> convert(T, x), items))
-    n = length(items)
+    n = Int(length(items))::Int
     _growend!(a, n)
     copyto!(a, length(a)-n+1, items, firstindex(items), n)
     return a
@@ -1355,7 +1356,7 @@ end
 
 append!(a::AbstractVector, iter) = _append!(a, IteratorSize(iter), iter)
 push!(a::AbstractVector, iter...) = append!(a, iter)
-append!(a::AbstractVector, iter...) = (for v in iter; append!(a, v); end; return a)
+append!(a::AbstractVector, iter...) = (foreach(v -> append!(a, v), iter); a)
 
 function _append!(a::AbstractVector, ::Union{HasLength,HasShape}, iter)
     n = Int(length(iter))::Int
@@ -1442,7 +1443,7 @@ function _prepend!(a::Vector, ::IteratorSize, iter)
 end
 
 """
-    resize!(a::Vector, n::Integer) -> Vector
+    resize!(a::Vector, n::Integer) -> a
 
 Resize `a` to contain `n` elements. If `n` is smaller than the current collection
 length, the first `n` elements will be retained. If `n` is larger, the new elements are not
@@ -1471,7 +1472,8 @@ julia> a[1:6]
  1
 ```
 """
-function resize!(a::Vector, nl::Integer)
+function resize!(a::Vector, nl_::Integer)
+    nl = Int(nl_)::Int
     l = length(a)
     if nl > l
         _growend!(a, nl-l)
@@ -2808,14 +2810,14 @@ function indexin(a, b::AbstractArray)
     ]
 end
 
-function _findin(a::Union{AbstractArray, Tuple}, b)
+function _findin(a::Union{AbstractArray, Tuple}, b::AbstractSet)
     ind  = Vector{eltype(keys(a))}()
-    bset = Set(b)
     @inbounds for (i,ai) in pairs(a)
-        ai in bset && push!(ind, i)
+        ai in b && push!(ind, i)
     end
     ind
 end
+_findin(a::Union{AbstractArray, Tuple}, b) = _findin(a, Set(b))
 
 # If two collections are already sorted, _findin can be computed with
 # a single traversal of the two collections. This is much faster than

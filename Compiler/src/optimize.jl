@@ -17,37 +17,41 @@ const SLOT_USEDUNDEF    = 32 # slot has uses that might raise UndefVarError
 
 const IR_FLAG_NULL        = zero(UInt32)
 # This statement is marked as @inbounds by user.
-# Ff replaced by inlining, any contained boundschecks may be removed.
+# If replaced by inlining, any contained boundschecks may be removed.
 const IR_FLAG_INBOUNDS    = one(UInt32) << 0
 # This statement is marked as @inline by user
 const IR_FLAG_INLINE      = one(UInt32) << 1
 # This statement is marked as @noinline by user
 const IR_FLAG_NOINLINE    = one(UInt32) << 2
+# This statement is proven :consistent
+const IR_FLAG_CONSISTENT  = one(UInt32) << 3
+# This statement is proven :effect_free
+const IR_FLAG_EFFECT_FREE = one(UInt32) << 4
+# This statement is proven :nothrow
+const IR_FLAG_NOTHROW     = one(UInt32) << 5
+# This statement is proven :terminates_globally
+const IR_FLAG_TERMINATES  = one(UInt32) << 6
+#const IR_FLAG_TERMINATES_LOCALLY = one(UInt32) << 7
+#const IR_FLAG_NOTASKSTATE = one(UInt32) << 8
+#const IR_FLAG_INACCESSIBLEMEM = one(UInt32) << 9
+const IR_FLAG_NOUB        = one(UInt32) << 10
+#const IR_FLAG_NOUBINIB   = one(UInt32) << 11
+#const IR_FLAG_CONSISTENTOVERLAY = one(UInt32) << 12
+# This statement is :nortcall
+const IR_FLAG_NORTCALL = one(UInt32) << 13
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
-const IR_FLAG_REFINED     = one(UInt32) << 3
-# This statement is proven :consistent
-const IR_FLAG_CONSISTENT  = one(UInt32) << 4
-# This statement is proven :effect_free
-const IR_FLAG_EFFECT_FREE = one(UInt32) << 5
-# This statement is proven :nothrow
-const IR_FLAG_NOTHROW     = one(UInt32) << 6
-# This statement is proven :terminates
-const IR_FLAG_TERMINATES  = one(UInt32) << 7
-# This statement is proven :noub
-const IR_FLAG_NOUB        = one(UInt32) << 8
-# TODO: Both of these should eventually go away once
-# This statement is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
-const IR_FLAG_EFIIMO      = one(UInt32) << 9
-# This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
-const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 10
-# This statement is :nortcall
-const IR_FLAG_NORTCALL    = one(UInt32) << 11
+const IR_FLAG_REFINED     = one(UInt32) << 16
 # This statement has no users and may be deleted if flags get refined to IR_FLAGS_REMOVABLE
-const IR_FLAG_UNUSED      = one(UInt32) << 12
+const IR_FLAG_UNUSED      = one(UInt32) << 17
+# TODO: Both of these next two should eventually go away once
+# This statement is :effect_free == EFFECT_FREE_IF_INACCESSIBLEMEMONLY
+const IR_FLAG_EFIIMO      = one(UInt32) << 18
+# This statement is :inaccessiblememonly == INACCESSIBLEMEM_OR_ARGMEMONLY
+const IR_FLAG_INACCESSIBLEMEM_OR_ARGMEM = one(UInt32) << 19
 
-const NUM_IR_FLAGS = 13 # sync with julia.h
+const NUM_IR_FLAGS = 3 # sync with julia.h
 
 const IR_FLAGS_EFFECTS =
     IR_FLAG_CONSISTENT | IR_FLAG_EFFECT_FREE | IR_FLAG_NOTHROW |
@@ -112,11 +116,14 @@ function inline_cost_clamp(x::Int)
     return convert(InlineCostType, x)
 end
 
+const SRC_FLAG_DECLARED_INLINE = 0x1
+const SRC_FLAG_DECLARED_NOINLINE = 0x2
+
 is_declared_inline(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 1
+    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == SRC_FLAG_DECLARED_INLINE
 
 is_declared_noinline(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 2
+    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == SRC_FLAG_DECLARED_NOINLINE
 
 #####################
 # OptimizationState #
@@ -125,6 +132,7 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
 function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
+    isa(src, OptimizationState) && (src = src.src)
     if isa(src, MaybeCompressed)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable
@@ -150,10 +158,21 @@ end
 # get `code_cache(::AbstractInterpreter)` from `state::InliningState`
 code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.world)
 
+mutable struct OptimizationResult
+    ir::IRCode
+    inline_flag::UInt8
+    simplified::Bool # indicates whether the IR was processed with `cfg_simplify!`
+end
+
+function simplify_ir!(result::OptimizationResult)
+    result.ir = cfg_simplify!(result.ir)
+    result.simplified = true
+end
+
 mutable struct OptimizationState{Interp<:AbstractInterpreter}
     linfo::MethodInstance
     src::CodeInfo
-    ir::Union{Nothing, IRCode}
+    optresult::Union{Nothing, OptimizationResult}
     stmt_info::Vector{CallInfo}
     mod::Module
     sptypes::Vector{VarState}
@@ -221,11 +240,30 @@ include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
+function ir_to_codeinf!(opt::OptimizationState, frame::InferenceState, edges::SimpleVector)
+    ir_to_codeinf!(opt, edges, compute_inlining_cost(frame.interp, frame.result, opt.optresult))
+end
+
+function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector, inlining_cost::InlineCostType)
+    src = ir_to_codeinf!(opt, edges)
+    src.inlining_cost = inlining_cost
+    src
+end
+
+function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector)
+    src = ir_to_codeinf!(opt)
+    src.edges = edges
+    src
+end
+
 function ir_to_codeinf!(opt::OptimizationState)
-    (; linfo, src) = opt
-    src = ir_to_codeinf!(src, opt.ir::IRCode)
-    src.edges = Core.svec(opt.inlining.edges...)
-    opt.ir = nothing
+    (; linfo, src, optresult) = opt
+    if optresult === nothing
+        return src
+    end
+    src = ir_to_codeinf!(src, optresult.ir)
+    opt.optresult = nothing
+    opt.src = src
     maybe_validate_code(linfo, src, "optimized")
     return src
 end
@@ -467,63 +505,12 @@ end
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
 
 """
-    finish(interp::AbstractInterpreter, opt::OptimizationState,
-           ir::IRCode, caller::InferenceResult)
+    finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
 
-Post-process information derived by Julia-level optimizations for later use.
-In particular, this function determines the inlineability of the optimized code.
+Called at the end of optimization to store the resulting IR back into the OptimizationState.
 """
-function finish(interp::AbstractInterpreter, opt::OptimizationState,
-                ir::IRCode, caller::InferenceResult)
-    (; src, linfo) = opt
-    (; def, specTypes) = linfo
-
-    force_noinline = is_declared_noinline(src)
-
-    # compute inlining and other related optimizations
-    result = caller.result
-    @assert !(result isa LimitedAccuracy)
-    result = widenslotwrapper(result)
-
-    opt.ir = ir
-
-    # determine and cache inlineability
-    if !force_noinline
-        sig = unwrap_unionall(specTypes)
-        if !(isa(sig, DataType) && sig.name === Tuple.name)
-            force_noinline = true
-        end
-        if !is_declared_inline(src) && result === Bottom
-            force_noinline = true
-        end
-    end
-    if force_noinline
-        set_inlineable!(src, false)
-    elseif isa(def, Method)
-        if is_declared_inline(src) && isdispatchtuple(specTypes)
-            # obey @inline declaration if a dispatch barrier would not help
-            set_inlineable!(src, true)
-        else
-            # compute the cost (size) of inlining this code
-            params = OptimizationParams(interp)
-            cost_threshold = default = params.inline_cost_threshold
-            if ⊑(optimizer_lattice(interp), result, Tuple) && !isconcretetype(widenconst(result))
-                cost_threshold += params.inline_tupleret_bonus
-            end
-            # if the method is declared as `@inline`, increase the cost threshold 20x
-            if is_declared_inline(src)
-                cost_threshold += 19*default
-            end
-            # a few functions get special treatment
-            if def.module === _topmod(def.module)
-                name = def.name
-                if name === :iterate || name === :unsafe_convert || name === :cconvert
-                    cost_threshold += 4*default
-                end
-            end
-            src.inlining_cost = inline_cost(ir, params, cost_threshold)
-        end
-    end
+function finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
+    opt.optresult = OptimizationResult(ir, ccall(:jl_ir_flag_inlining, UInt8, (Any,), opt.src), false)
     return nothing
 end
 
@@ -643,9 +630,11 @@ struct GetNativeEscapeCache{CodeCache}
     GetNativeEscapeCache(code_cache::CodeCache) where CodeCache = new{CodeCache}(code_cache)
 end
 GetNativeEscapeCache(interp::AbstractInterpreter) = GetNativeEscapeCache(code_cache(interp))
-function ((; code_cache)::GetNativeEscapeCache)(mi::MethodInstance)
-    codeinst = get(code_cache, mi, nothing)
-    codeinst isa CodeInstance || return false
+function ((; code_cache)::GetNativeEscapeCache)(codeinst::Union{CodeInstance,MethodInstance})
+    if codeinst isa MethodInstance
+        codeinst = get(code_cache, codeinst, nothing)
+        codeinst isa CodeInstance || return false
+    end
     argescapes = traverse_analysis_results(codeinst) do @nospecialize result
         return result isa EscapeAnalysis.ArgEscapeCache ? result : nothing
     end
@@ -815,6 +804,7 @@ function scan_non_dataflow_flags!(inst::Instruction, sv::PostOptAnalysisState)
             sv.nortcall = false
         end
     end
+    nothing
 end
 
 function scan_inconsistency!(inst::Instruction, sv::PostOptAnalysisState)
@@ -994,7 +984,8 @@ end
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
     @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
-    return finish(interp, opt, ir, caller)
+    finishopt!(interp, opt, ir)
+    return nothing
 end
 
 macro pass(name, expr)
@@ -1018,12 +1009,12 @@ function run_passes_ipo_safe(
     optimize_until = nothing,  # run all passes by default
 )
     __stage__ = 0  # used by @pass
-    # NOTE: The pass name MUST be unique for `optimize_until::AbstractString` to work
+    # NOTE: The pass name MUST be unique for `optimize_until::String` to work
     @pass "convert"   ir = convert_to_ircode(ci, sv)
     @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
     @pass "compact 1" ir = compact!(ir)
-    @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    @pass "inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
     # @timeit "verify 2" verify_ir(ir)
     @pass "compact 2" ir = compact!(ir)
     @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
@@ -1279,7 +1270,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
     # types of call arguments only once `slot2reg` converts this `IRCode` to the SSA form
     # and eliminates slots (see below)
     argtypes = sv.slottypes
-    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes, WorldRange(ci.min_world, ci.max_world))
+    return IRCode(stmts, sv.cfg, di, argtypes, meta, sv.sptypes, world_range(ci))
 end
 
 function process_meta!(meta::Vector{Expr}, @nospecialize stmt)
@@ -1408,16 +1399,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
         extyp = line == -1 ? Any : argextype(SSAValue(line), src, sptypes)
         return extyp === Union{} ? 0 : UNKNOWN_CALL_COST
     elseif head === :(=)
-        if ex.args[1] isa GlobalRef
-            cost = UNKNOWN_CALL_COST
-        else
-            cost = 0
-        end
-        a = ex.args[2]
-        if a isa Expr
-            cost = plus_saturate(cost, statement_cost(a, -1, src, sptypes, params))
-        end
-        return cost
+        return statement_cost(ex.args[2], -1, src, sptypes, params)
     elseif head === :copyast
         return 100
     end
@@ -1447,7 +1429,7 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
+function inline_cost_model(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
     bodycost = 0
     for i = 1:length(ir.stmts)
         stmt = ir[SSAValue(i)][:stmt]
