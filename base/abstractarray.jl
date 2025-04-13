@@ -838,7 +838,9 @@ to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
 # each dimension
 to_shape(i::Int) = i
 to_shape(i::Integer) = Int(i)
-to_shape(r::AbstractOneTo) = Int(last(r))
+to_shape(r::AbstractOneTo) = _to_shape(last(r))
+_to_shape(x::Integer) = to_shape(x)
+_to_shape(x) = Int(x)
 to_shape(r::AbstractUnitRange) = r
 
 """
