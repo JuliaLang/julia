@@ -1714,6 +1714,12 @@ end
     end
 end
 
+@testset "reverse zero dims" begin
+    a = fill(3)
+    @test a == reverse(a)
+    @test a === reverse!(a)
+end
+
 @testset "isdiag, istril, istriu" begin
     # Scalar
     @test isdiag(3)
