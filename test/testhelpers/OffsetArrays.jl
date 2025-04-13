@@ -515,7 +515,8 @@ end
 
 Base.similar(A::OffsetArray, ::Type{T}, dims::Dims) where T =
     similar(parent(A), T, dims)
-function Base.similar(A::AbstractArray, ::Type{T}, shape::Tuple{OffsetAxisKnownLength,Vararg{OffsetAxisKnownLength}}) where T
+function Base.similar(A::AbstractArray, ::Type{T}, ax::Base.HasOneToAxes{false}) where T
+    shape = ax.inds
     # strip IdOffsetRanges to extract the parent range and use it to generate the array
     new_shape = map(_strip_IdOffsetRange, shape)
     # route through _similar_axes_or_length to avoid a stack overflow if map(_strip_IdOffsetRange, shape) === shape
