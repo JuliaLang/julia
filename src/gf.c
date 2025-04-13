@@ -2763,8 +2763,33 @@ JL_DLLEXPORT void jl_force_trace_dispatch_disable(void)
     jl_atomic_fetch_add(&jl_force_trace_dispatch_enabled, -1);
 }
 
+jl_array_t *_jl_log_dispatch_backtrace JL_GLOBALLY_ROOTED = NULL;
+JL_DLLEXPORT jl_value_t *jl_log_dispatch_backtrace(int state)
+{
+    /* After calling with `state = 1`, caller is responsible for
+       holding a reference to the returned array until this is called
+       again with `state = 0`. */
+    if (state) {
+        if (_jl_log_dispatch_backtrace)
+            return (jl_value_t*) _jl_log_dispatch_backtrace;
+        _jl_log_dispatch_backtrace = jl_alloc_array_1d(jl_array_any_type, 0);
+        jl_options.trace_dispatch = (const char*)-1;
+        return (jl_value_t*) _jl_log_dispatch_backtrace;
+    }
+    _jl_log_dispatch_backtrace = NULL;
+    jl_options.trace_dispatch = (const char*)0;
+    return jl_nothing;
+}
+
+
 static void record_dispatch_statement(jl_method_instance_t *mi)
 {
+    if (_jl_log_dispatch_backtrace != NULL) {
+        jl_array_ptr_1d_push(_jl_log_dispatch_backtrace, (jl_value_t*)mi);
+        jl_array_ptr_1d_push(_jl_log_dispatch_backtrace, jl_backtrace_from_here(0, 1));
+        return;
+    }
+
     static ios_t f_dispatch;
     static JL_STREAM* s_dispatch = NULL;
     jl_method_t *def = mi->def.method;
@@ -2775,6 +2800,7 @@ static void record_dispatch_statement(jl_method_instance_t *mi)
     JL_LOCK(&dispatch_statement_out_lock);
     if (s_dispatch == NULL) {
         const char *t = jl_options.trace_dispatch;
+        assert (t != (const char*)-1);
         if (force_trace_dispatch || !strncmp(t, "stderr", 6)) {
             s_dispatch = JL_STDERR;
         }
