@@ -988,14 +988,16 @@ function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::I
     return nothing
 end
 
-macro pass(name, expr)
+const ALL_PASS_NAMES = String[]
+macro pass(name::String, expr)
     optimize_until = esc(:optimize_until)
     stage = esc(:__stage__)
-    macrocall = :(@timeit $(esc(name)) $(esc(expr)))
+    macrocall = :(@timeit $name $(esc(expr)))
     macrocall.args[2] = __source__  # `@timeit` may want to use it
+    push!(ALL_PASS_NAMES, name)
     quote
         $macrocall
-        matchpass($optimize_until, ($stage += 1), $(esc(name))) && $(esc(:(@goto __done__)))
+        matchpass($optimize_until, ($stage += 1), $name) && $(esc(:(@goto __done__)))
     end
 end
 
@@ -1006,8 +1008,13 @@ matchpass(::Nothing, _, _) = false
 function run_passes_ipo_safe(
     ci::CodeInfo,
     sv::OptimizationState,
-    optimize_until = nothing,  # run all passes by default
-)
+    optimize_until::Union{Nothing, Int, String} = nothing)  # run all passes by default
+    if optimize_until isa String && !contains_is(ALL_PASS_NAMES, optimize_until)
+        error("invalid `optimize_until` argument, no such optimization pass")
+    elseif optimize_until isa Int && (optimize_until < 1 || optimize_until > length(ALL_PASS_NAMES))
+        error("invalid `optimize_until` argument, no such optimization pass")
+    end
+
     __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
     @pass "convert"   ir = convert_to_ircode(ci, sv)
