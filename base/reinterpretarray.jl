@@ -271,7 +271,8 @@ SCartesianIndices2{K}(indices2::AbstractUnitRange{Int}) where {K} = (@assert K::
 eachindex(::IndexSCartesian2{K}, A::ReshapedReinterpretArray) where {K} = SCartesianIndices2{K}(eachindex(IndexLinear(), parent(A)))
 @inline function eachindex(style::IndexSCartesian2{K}, A::AbstractArray, B::AbstractArray...) where {K}
     iter = eachindex(style, A)
-    _all_match_first(C->eachindex(style, C), iter, B...) || throw_eachindex_mismatch_indices(IndexSCartesian2{K}(), axes(A), axes.(B)...)
+    itersBs = map(C->eachindex(style, C), B)
+    all(==(iter), itersBs) || throw_eachindex_mismatch_indices("axes", axes(A), map(axes, B)...)
     return iter
 end
 

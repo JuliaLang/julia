@@ -8308,11 +8308,12 @@ end
 module OverlayModule
 
 using Base.Experimental: @MethodTable, @overlay
+using Test
 
 @MethodTable mt
 # long function def
-@overlay mt function sin(x::Float64)
-    1
+let m = @overlay mt function sin(x::Float64); 1; end
+    @test isa(m, Method)
 end
 # short function def
 @overlay mt cos(x::Float64) = 2

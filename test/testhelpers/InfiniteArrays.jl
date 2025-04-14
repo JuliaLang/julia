@@ -37,7 +37,7 @@ Define an `AbstractInfUnitRange` that behaves like `1:∞`, with the added
 distinction that the limits are guaranteed (by the type system) to
 be 1 and ∞.
 """
-struct OneToInf{T<:Integer} <: AbstractUnitRange{T} end
+struct OneToInf{T<:Integer} <: Base.AbstractOneTo{T} end
 
 OneToInf() = OneToInf{Int}()
 

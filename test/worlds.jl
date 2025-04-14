@@ -5,6 +5,9 @@
 using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
+# issue #58013
+@test_throws ArgumentError invokelatest()
+
 # test simple method replacement
 begin
     g265a() = f265a(0)

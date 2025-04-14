@@ -225,7 +225,7 @@ function _reshape(parent::AbstractArray, dims::Dims)
 end
 
 @noinline function _throw_dmrs(n, str, dims)
-    throw(DimensionMismatch("parent has $n elements, which is incompatible with $str $dims"))
+    throw(DimensionMismatch("parent has $n elements, which is incompatible with $str $dims ($(prod(dims)) elements)"))
 end
 
 # Reshaping a ReshapedArray

@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 module Linking
 
+import Base: isdebugbuild
 import Base.Libc: Libdl
 
 # from LLD_jll
@@ -123,7 +124,6 @@ else
     "-shared"
 end
 
-is_debug() = ccall(:jl_is_debugbuild, Cint, ()) == 1
 libdir() = abspath(Sys.BINDIR, Base.LIBDIR)
 private_libdir() = abspath(Sys.BINDIR, Base.PRIVATE_LIBDIR)
 if Sys.iswindows()
@@ -137,7 +137,7 @@ verbose_linking() = something(Base.get_bool_env("JULIA_VERBOSE_LINKING", false),
 function link_image_cmd(path, out)
     PRIVATE_LIBDIR = "-L$(private_libdir())"
     SHLIBDIR = "-L$(shlibdir())"
-    LIBS = is_debug() ? ("-ljulia-debug", "-ljulia-internal-debug") :
+    LIBS = isdebugbuild() ? ("-ljulia-debug", "-ljulia-internal-debug") :
                         ("-ljulia", "-ljulia-internal")
     @static if Sys.iswindows()
         LIBS = (LIBS..., "-lopenlibm", "-lssp", "-lgcc_s", "-lgcc", "-lmsvcrt")

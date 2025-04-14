@@ -2563,7 +2563,7 @@ end
     mktemp() do f, io
         redirect_stdout(io) do
             let io = IOBuffer()
-                for i = 1:10
+                for i = 1:length(Base.Compiler.ALL_PASS_NAMES)
                     # make sure we don't error on printing IRs at any optimization level
                     ir = only(Base.code_ircode(sin, (Float64,); optimize_until=i))[1]
                     @test try; show(io, ir); true; catch; false; end

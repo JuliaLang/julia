@@ -5,7 +5,7 @@ module Libdl
 Interface to libdl. Provides dynamic linking support.
 """ Libdl
 
-import Base.DL_LOAD_PATH
+import Base: DL_LOAD_PATH, isdebugbuild
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
@@ -341,7 +341,8 @@ Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
 # Helper to get `$(private_shlibdir)` at runtime
 struct PrivateShlibdirGetter; end
 const private_shlibdir = Base.OncePerProcess{String}() do
-    dirname(dlpath("libjulia-internal"))
+    libname = ifelse(isdebugbuild(), "libjulia-internal-debug", "libjulia-internal")
+    dirname(dlpath(libname))
 end
 Base.string(::PrivateShlibdirGetter) = private_shlibdir()
 
