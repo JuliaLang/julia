@@ -12,6 +12,19 @@
 
 jl_module_t *jl_module_root(jl_module_t *m);
 
+static jl_mutex_t jl_timing_lock; // lock for timing subsystem
+JL_DLLEXPORT void jl_mutex_timing_lock_init(void) {
+    JL_MUTEX_INIT(&jl_timing_lock, "jl_timing_lock");
+}
+
+JL_DLLEXPORT void jl_timing_lock_lock(void) {
+    JL_LOCK_NOGC(&jl_timing_lock);
+}
+
+JL_DLLEXPORT void jl_timing_lock_unlock(void) {
+    JL_UNLOCK_NOGC(&jl_timing_lock);
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -65,12 +78,10 @@ JL_DLLEXPORT jl_timing_counter_t jl_timing_counters[JL_TIMING_COUNTER_LAST];
 
 #ifdef USE_TIMING_COUNTS
 static arraylist_t jl_timing_counts_events;
-static jl_mutex_t jl_timing_counts_events_lock;
 #endif //USE_TIMING_COUNTS
 
 #ifdef USE_ITTAPI
 static arraylist_t jl_timing_ittapi_events;
-static jl_mutex_t jl_timing_ittapi_events_lock;
 #endif //USE_ITTAPI
 
 #ifdef USE_NVTX
@@ -91,7 +102,7 @@ void jl_print_timings(void)
     qsort(jl_timing_counts_events.items, jl_timing_counts_events.len,
           sizeof(jl_timing_counts_event_t *), cmp_counts_events);
 
-    JL_LOCK_NOGC(&jl_timing_counts_events_lock);
+    JL_LOCK_NOGC(&jl_timing_lock);
     uint64_t total_time = cycleclock() - t0;
     uint64_t root_time = total_time;
     jl_timing_counts_event_t *root_event;
@@ -118,7 +129,7 @@ void jl_print_timings(void)
                     self, 100 * (((double)self) / total_time),
                     total, 100 * (((double)total) / total_time));
     }
-    JL_UNLOCK_NOGC(&jl_timing_counts_events_lock);
+    JL_UNLOCK_NOGC(&jl_timing_lock);
 
     fprintf(stderr, "\nJULIA COUNTERS\n");
     fprintf(stderr, "%-25s, %-20s\n", "Counter", "Value");
@@ -144,7 +155,6 @@ void jl_init_timing(void)
     _Static_assert(JL_TIMING_SUBSYSTEM_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing subsystems!");
 
 #ifdef USE_TIMING_COUNTS
-    JL_MUTEX_INIT(&jl_timing_counts_events_lock, "jl_timing_counts_events_lock");
 
     // Create events list for counts backend
     arraylist_new(&jl_timing_counts_events, 1);
@@ -159,7 +169,6 @@ void jl_init_timing(void)
 
 #ifdef USE_ITTAPI
     // Create events list for ITTAPI backend
-    JL_MUTEX_INIT(&jl_timing_ittapi_events_lock, "jl_timing_ittapi_events_lock");
     arraylist_new(&jl_timing_ittapi_events, 0);
 #endif
 
@@ -247,12 +256,12 @@ typedef struct {
 } cached_ittapi_event_t;
 
 static __itt_event _jl_timing_ittapi_event_create(const char *event) {
-    JL_LOCK_NOGC(&jl_timing_ittapi_events_lock);
+    JL_LOCK_NOGC(&jl_timing_lock);
     const size_t n = jl_timing_ittapi_events.len;
     for (size_t i = 0; i < n; i++) {
         cached_ittapi_event_t *other_event = (cached_ittapi_event_t *)jl_timing_ittapi_events.items[i];
         if (strcmp(event, other_event->name) == 0) {
-            JL_UNLOCK_NOGC(&jl_timing_ittapi_events_lock);
+            JL_UNLOCK_NOGC(&jl_timing_lock);
             return other_event->event;
         }
     }
@@ -262,7 +271,7 @@ static __itt_event _jl_timing_ittapi_event_create(const char *event) {
     arraylist_push(&jl_timing_ittapi_events, (void *)new_event);
     new_event->name = event;
     new_event->event = __itt_event_create(event, strlen(event));
-    JL_UNLOCK_NOGC(&jl_timing_ittapi_events_lock);
+    JL_UNLOCK_NOGC(&jl_timing_lock);
 
     return new_event->event;
 }
@@ -275,12 +284,12 @@ static __itt_event _jl_timing_ittapi_event_create(const char *event) {
 //
 // `event` is required to live forever
 static jl_timing_counts_event_t *_jl_timing_counts_event_create(const char *event) {
-    JL_LOCK_NOGC(&jl_timing_counts_events_lock);
+    JL_LOCK_NOGC(&jl_timing_lock);
     const size_t n = jl_timing_counts_events.len;
     for (size_t i = 0; i < n; i++) {
         jl_timing_counts_event_t *other_event = (jl_timing_counts_event_t *)jl_timing_counts_events.items[i];
         if (strcmp(event, other_event->name) == 0) {
-            JL_UNLOCK_NOGC(&jl_timing_counts_events_lock);
+            JL_UNLOCK_NOGC(&jl_timing_lock);
             return other_event;
         }
     }
@@ -291,7 +300,7 @@ static jl_timing_counts_event_t *_jl_timing_counts_event_create(const char *even
     new_event->name = event;
     jl_atomic_store_relaxed(&new_event->self, 0);
     jl_atomic_store_relaxed(&new_event->total, 0);
-    JL_UNLOCK_NOGC(&jl_timing_counts_events_lock);
+    JL_UNLOCK_NOGC(&jl_timing_lock);
 
     return new_event;
 }

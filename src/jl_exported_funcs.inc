@@ -462,6 +462,8 @@
     XX(jl_typeassert) \
     XX(jl_typeinf_timing_begin) \
     XX(jl_typeinf_timing_end) \
+    XX(jl_timing_lock_lock) \
+    XX(jl_timing_lock_unlock) \
     XX(jl_typename_str) \
     XX(jl_typeof_str) \
     XX(jl_types_equal) \
