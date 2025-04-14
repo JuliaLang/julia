@@ -16,11 +16,11 @@ integers are promoted to `Int`/`UInt`.
 add_sum(x, y) = x + y
 add_sum(x::BitSigned, y::BitSigned) = is_small_int_type(x) && is_small_int_type(y) ?
     Int(x) + Int(y) :
-    (x + y)::BitSigned
+    (x + y)::Real
 
 add_sum(x::BitUnsigned, y::BitUnsigned) = is_small_int_type(x) && is_small_int_type(y) ?
     UInt(x) + UInt(y) :
-    (x + y)::BitUnsigned
+    (x + y)::Real
 
 add_sum(x::Real, y::Real)::Real = x + y
 
