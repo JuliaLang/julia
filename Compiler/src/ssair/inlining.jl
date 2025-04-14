@@ -979,6 +979,7 @@ function retrieve_ir_for_inlining(mi::MethodInstance, ir::IRCode, preserve_local
     return ir, spec_info, DebugInfo(ir.debuginfo, length(ir.stmts))
 end
 function retrieve_ir_for_inlining(mi::MethodInstance, optresult::OptimizationResult, preserve_local_sources::Bool)
+    isdefined(optresult, :code_info) && return retrieve_ir_for_inlining(mi, optresult.code_info, preserve_local_sources)
     !optresult.simplified && simplify_ir!(optresult)
     return retrieve_ir_for_inlining(mi, optresult.ir, preserve_local_sources)
 end
