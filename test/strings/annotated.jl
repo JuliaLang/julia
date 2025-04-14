@@ -258,3 +258,51 @@ end
     write(aio, Base.AnnotatedString("hello", [(1:5, :tag, 1)]))
     @test sprint(show, aio) == "Base.AnnotatedIOBuffer(5 bytes, 1 annotation)"
 end
+
+@testset "Eachregion" begin
+    annregions(str::String, annots::Vector{<:Tuple{UnitRange{Int}, Symbol, <:Any}}) =
+        [(s, Tuple.(a)) for (s, a) in Base.eachregion(Base.AnnotatedString(str, annots))]
+    # Regions that do/don't extend to the left/right edges
+    @test annregions(" abc ", [(2:4, :face, :bold)]) ==
+        [(" ", []),
+         ("abc", [(:face, :bold)]),
+         (" ", [])]
+    @test annregions(" x ", [(2:2, :face, :bold)]) ==
+        [(" ", []),
+         ("x", [(:face, :bold)]),
+         (" ", [])]
+    @test annregions(" x", [(2:2, :face, :bold)]) ==
+        [(" ", []),
+         ("x", [(:face, :bold)])]
+    @test annregions("x ", [(1:1, :face, :bold)]) ==
+        [("x", [(:face, :bold)]),
+         (" ", [])]
+    @test annregions("x", [(1:1, :face, :bold)]) ==
+        [("x", [(:face, :bold)])]
+    # Overlapping/nested regions
+    @test annregions(" abc ", [(2:4, :face, :bold), (3:3, :face, :italic)]) ==
+        [(" ", []),
+         ("a", [(:face, :bold)]),
+         ("b", [(:face, :bold), (:face, :italic)]),
+         ("c", [(:face, :bold)]),
+         (" ", [])]
+    @test annregions("abc-xyz", [(1:7, :face, :bold), (1:3, :face, :green), (4:4, :face, :yellow), (4:7, :face, :italic)]) ==
+        [("abc", [(:face, :bold), (:face, :green)]),
+         ("-", [(:face, :bold), (:face, :yellow), (:face, :italic)]),
+         ("xyz", [(:face, :bold), (:face, :italic)])]
+    # Preserving annotation order
+    @test annregions("abcd", [(1:3, :face, :red), (2:2, :face, :yellow), (2:3, :face, :green), (2:4, :face, :blue)]) ==
+        [("a", [(:face, :red)]),
+         ("b", [(:face, :red), (:face, :yellow), (:face, :green), (:face, :blue)]),
+         ("c", [(:face, :red), (:face, :green), (:face, :blue)]),
+         ("d", [(:face, :blue)])]
+    @test annregions("abcd", [(2:4, :face, :blue), (1:3, :face, :red), (2:3, :face, :green), (2:2, :face, :yellow)]) ==
+        [("a", [(:face, :red)]),
+         ("b", [(:face, :blue), (:face, :red), (:face, :green), (:face, :yellow)]),
+         ("c", [(:face, :blue), (:face, :red), (:face, :green)]),
+         ("d", [(:face, :blue)])]
+    # Region starting after a character spanning multiple codepoints.
+    @test annregions("𝟏x", [(1:4, :face, :red)]) ==
+        [("𝟏", [(:face, :red)]),
+         ("x", [])]
+end

@@ -154,7 +154,7 @@ Send a printed form of `x` to the operating system clipboard ("copy").
 clipboard(x)
 
 """
-    clipboard() -> String
+    clipboard()::String
 
 Return a string with the contents of the operating system clipboard ("paste").
 """

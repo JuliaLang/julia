@@ -17,6 +17,7 @@ using .Base:
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
     afoldl
+using Core
 using Core: @doc
 
 using .Base:

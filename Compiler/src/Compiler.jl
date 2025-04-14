@@ -35,10 +35,6 @@ else
 
 @eval baremodule Compiler
 
-# Needs to match UUID defined in Project.toml
-ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
-    (0x807dbc54_b67e_4c79, 0x8afb_eafe4df6f2e1))
-
 using Core.Intrinsics, Core.IR
 
 using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstance, MethodMatch,
@@ -61,7 +57,7 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     generating_output, get_nospecializeinfer_sig, get_world_counter, has_free_typevars,
     hasgenerator, hasintersect, indexed_iterate, isType, is_file_tracked, is_function_def,
     is_meta_expr, is_meta_expr_head, is_nospecialized, is_nospecializeinfer, is_defined_const_binding,
-    is_some_const_binding, is_some_guard, is_some_imported, is_valid_intrinsic_elptr,
+    is_some_const_binding, is_some_guard, is_some_imported, is_some_explicit_imported, is_some_binding_imported, is_valid_intrinsic_elptr,
     isbitsunion, isconcretedispatch, isdispatchelem, isexpr, isfieldatomic, isidentityfree,
     iskindtype, ismutabletypename, ismutationfree, issingletontype, isvarargtype, isvatuple,
     kwerr, lookup_binding_partition, may_invoke_generator, methods, midpoint, moduleroot,
@@ -75,6 +71,10 @@ using Base.Order
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
     getindex, haskey, in, isempty, isready, iterate, iterate, last, length, max_world,
     min_world, popfirst!, push!, resize!, setindex!, size, intersect
+
+# Needs to match UUID defined in Project.toml
+ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Compiler,
+    (0x807dbc54_b67e_4c79, 0x8afb_eafe4df6f2e1))
 
 const getproperty = Core.getfield
 const setproperty! = Core.setfield!
@@ -131,7 +131,7 @@ something(x::Any, y...) = x
 ############
 
 baremodule BuildSettings
-using Core: ARGS, include
+using Core: ARGS, include, Int, ===
 using ..Compiler: >, getindex, length
 
 global MAX_METHODS::Int = 3
@@ -191,7 +191,7 @@ macro __SOURCE_FILE__()
 end
 
 module IRShow end # relies on string and IO operations defined in Base
-baremodule TrimVerifier end # relies on IRShow, so define this afterwards
+baremodule TrimVerifier using Core end # relies on IRShow, so define this afterwards
 
 if isdefined(Base, :end_base_include)
     # When this module is loaded as the standard library, include these files as usual

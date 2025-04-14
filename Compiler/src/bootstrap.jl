@@ -67,16 +67,9 @@ function bootstrap!()
                     end
                     mi = specialize_method(m.method, Tuple{params...}, m.sparams)
                     #isa_compileable_sig(mi) || println(stderr, "WARNING: inferring `", mi, "` which isn't expected to be called.")
-                    push!(methods, mi)
+                    typeinf_ext_toplevel(mi, world, isa_compileable_sig(mi) ? SOURCE_MODE_ABI : SOURCE_MODE_NOT_REQUIRED)
                 end
             end
-        end
-        codeinfos = typeinf_ext_toplevel(methods, [world], TRIM_NO)
-        for i = 1:2:length(codeinfos)
-            ci = codeinfos[i]::CodeInstance
-            src = codeinfos[i + 1]::CodeInfo
-            isa_compileable_sig(ci.def) || continue # println(stderr, "WARNING: compiling `", ci.def, "` which isn't expected to be called.")
-            ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, src)
         end
         endtime = time()
         println("Base.Compiler ──── ", sub_float(endtime,starttime), " seconds")

@@ -271,7 +271,7 @@ function securezero! end
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
-    Base.getpass(message::AbstractString; with_suffix::Bool=true) -> Base.SecretBuffer
+    Base.getpass(message::AbstractString; with_suffix::Bool=true)::Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
 object containing the secret. If `with_suffix` is `true` (the default), the
@@ -383,7 +383,7 @@ end
 getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
-    prompt(message; default="") -> Union{String, Nothing}
+    prompt(message; default="")::Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided

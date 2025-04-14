@@ -47,7 +47,7 @@ macro _lock_ios(s, expr)
 end
 
 """
-    fd(x) -> RawFD
+    fd(x)::RawFD
 
 Return the file descriptor backing the stream, file, or socket.
 
@@ -257,7 +257,7 @@ eof(s::IOStream) = @_lock_ios s _eof_nolock(s)
 # "own" means the descriptor will be closed with the IOStream
 
 """
-    fdio([name::AbstractString, ]fd::Integer[, own::Bool=false]) -> IOStream
+    fdio([name::AbstractString, ]fd::Integer[, own::Bool=false])::IOStream
 
 Create an [`IOStream`](@ref) object from an integer file descriptor. If `own` is `true`, closing
 this object will close the underlying descriptor. By default, an `IOStream` is closed when
@@ -272,7 +272,7 @@ end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
 """
-    open(filename::AbstractString; lock = true, keywords...) -> IOStream
+    open(filename::AbstractString; lock = true, keywords...)::IOStream
 
 Open a file in a mode specified by five boolean keyword arguments:
 
@@ -326,7 +326,7 @@ end
 open(fname::AbstractString; kwargs...) = open(convert(String, fname)::String; kwargs...)
 
 """
-    open(filename::AbstractString, [mode::AbstractString]; lock = true) -> IOStream
+    open(filename::AbstractString, [mode::AbstractString]; lock = true)::IOStream
 
 Alternate syntax for open, where a string-based mode specifier is used instead of the five
 booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are

@@ -3,7 +3,7 @@
 # Conversion/Promotion
 
 """
-    Date(dt::DateTime) -> Date
+    Date(dt::DateTime)
 
 Convert a `DateTime` to a `Date`. The hour, minute, second, and millisecond parts of
 the `DateTime` are truncated, so only the year, month and day parts are used in
@@ -12,7 +12,7 @@ construction.
 Date(dt::TimeType) = convert(Date, dt)
 
 """
-    DateTime(dt::Date) -> DateTime
+    DateTime(dt::Date)
 
 Convert a `Date` to a `DateTime`. The hour, minute, second, and millisecond parts of
 the new `DateTime` are assumed to be zero.
@@ -20,7 +20,7 @@ the new `DateTime` are assumed to be zero.
 DateTime(dt::TimeType) = convert(DateTime, dt)
 
 """
-    Time(dt::DateTime) -> Time
+    Time(dt::DateTime)
 
 Convert a `DateTime` to a `Time`. The hour, minute, second, and millisecond parts of
 the `DateTime` are used to create the new `Time`. Microsecond and nanoseconds are zero by default.
@@ -40,7 +40,7 @@ Base.convert(::Type{Day},dt::Date) = Day(value(dt))            # Converts Date t
 const UNIXEPOCH = value(DateTime(1970)) #Rata Die milliseconds for 1970-01-01T00:00:00
 
 """
-    unix2datetime(x) -> DateTime
+    unix2datetime(x)::DateTime
 
 Take the number of seconds since unix epoch `1970-01-01T00:00:00` and convert to the
 corresponding `DateTime`.
@@ -52,7 +52,7 @@ function unix2datetime(x)
 end
 
 """
-    datetime2unix(dt::DateTime) -> Float64
+    datetime2unix(dt::DateTime)::Float64
 
 Take the given `DateTime` and return the number of seconds
 since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
@@ -60,7 +60,7 @@ since the unix epoch `1970-01-01T00:00:00` as a [`Float64`](@ref).
 datetime2unix(dt::DateTime) = (value(dt) - UNIXEPOCH) / 1000.0
 
 """
-    now() -> DateTime
+    now()::DateTime
 
 Return a `DateTime` corresponding to the user's system time including the system timezone
 locale.
@@ -72,14 +72,14 @@ function now()
 end
 
 """
-    today() -> Date
+    today()::Date
 
 Return the date portion of `now()`.
 """
 today() = Date(now())
 
 """
-    now(::Type{UTC}) -> DateTime
+    now(::Type{UTC})::DateTime
 
 Return a `DateTime` corresponding to the user's system time as UTC/GMT.
 For other time zones, see the TimeZones.jl package.
@@ -93,7 +93,7 @@ julia> now(UTC)
 now(::Type{UTC}) = unix2datetime(time())
 
 """
-    rata2datetime(days) -> DateTime
+    rata2datetime(days)::DateTime
 
 Take the number of Rata Die days since epoch `0000-12-31T00:00:00` and return the
 corresponding `DateTime`.
@@ -101,7 +101,7 @@ corresponding `DateTime`.
 rata2datetime(days) = DateTime(yearmonthday(days)...)
 
 """
-    datetime2rata(dt::TimeType) -> Int64
+    datetime2rata(dt::TimeType)::Int64
 
 Return the number of Rata Die days since epoch from the given `Date` or `DateTime`.
 """
@@ -111,7 +111,7 @@ datetime2rata(dt::TimeType) = days(dt)
 const JULIANEPOCH = value(DateTime(-4713, 11, 24, 12))
 
 """
-    julian2datetime(julian_days) -> DateTime
+    julian2datetime(julian_days)::DateTime
 
 Take the number of Julian calendar days since epoch `-4713-11-24T12:00:00` and return the
 corresponding `DateTime`.
@@ -122,7 +122,7 @@ function julian2datetime(f)
 end
 
 """
-    datetime2julian(dt::DateTime) -> Float64
+    datetime2julian(dt::DateTime)::Float64
 
 Take the given `DateTime` and return the number of Julian calendar days since the julian
 epoch `-4713-11-24T12:00:00` as a [`Float64`](@ref).

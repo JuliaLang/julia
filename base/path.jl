@@ -61,7 +61,7 @@ end
 
 
 """
-    splitdrive(path::AbstractString) -> (AbstractString, AbstractString)
+    splitdrive(path::AbstractString) -> (drive::AbstractString, path::AbstractString)
 
 On Windows, split a path into the drive letter part and the path part. On Unix systems, the
 first component is always the empty string.
@@ -69,7 +69,7 @@ first component is always the empty string.
 splitdrive(path::AbstractString)
 
 """
-    homedir() -> String
+    homedir()::String
 
 Return the current user's home directory.
 
@@ -104,7 +104,7 @@ else
 end
 
 """
-    isabspath(path::AbstractString) -> Bool
+    isabspath(path::AbstractString)::Bool
 
 Determine whether a path is absolute (begins at the root directory).
 
@@ -120,7 +120,7 @@ false
 isabspath(path::AbstractString)
 
 """
-    isdirpath(path::AbstractString) -> Bool
+    isdirpath(path::AbstractString)::Bool
 
 Determine whether a path refers to a directory (for example, ends with a path separator).
 
@@ -136,7 +136,7 @@ true
 isdirpath(path::String) = occursin(path_directory_re, splitdrive(path)[2])
 
 """
-    splitdir(path::AbstractString) -> (AbstractString, AbstractString)
+    splitdir(path::AbstractString) -> (dir::AbstractString, file::AbstractString)
 
 Split a path into a tuple of the directory name and file name.
 
@@ -164,7 +164,7 @@ function _splitdir_nodrive(a::String, b::String)
 end
 
 """
-    dirname(path::AbstractString) -> String
+    dirname(path::AbstractString)::String
 
 Get the directory part of a path. Trailing characters ('/' or '\\') in the path are
 counted as part of the path.
@@ -183,7 +183,7 @@ See also [`basename`](@ref).
 dirname(path::AbstractString) = splitdir(path)[1]
 
 """
-    basename(path::AbstractString) -> String
+    basename(path::AbstractString)::String
 
 Get the file name part of a path.
 
@@ -205,7 +205,7 @@ See also [`dirname`](@ref).
 basename(path::AbstractString) = splitdir(path)[2]
 
 """
-    splitext(path::AbstractString) -> (String, String)
+    splitext(path::AbstractString) -> (path_without_extension::String, extension::String)
 
 If the last component of a path contains one or more dots, split the path into everything before the
 last dot and everything including and after the dot. Otherwise, return a tuple of the argument
@@ -234,7 +234,7 @@ end
 pathsep() = path_separator
 
 """
-    splitpath(path::AbstractString) -> Vector{String}
+    splitpath(path::AbstractString)::Vector{String}
 
 Split a file path into all its path components. This is the opposite of
 `joinpath`. Returns an array of substrings, one for each directory or file in
@@ -346,9 +346,9 @@ end # os-test
 joinpath(paths::AbstractString...)::String = joinpath(paths)
 
 """
-    joinpath(parts::AbstractString...) -> String
-    joinpath(parts::Vector{AbstractString}) -> String
-    joinpath(parts::Tuple{AbstractString}) -> String
+    joinpath(parts::AbstractString...)::String
+    joinpath(parts::Vector{AbstractString})::String
+    joinpath(parts::Tuple{AbstractString})::String
 
 Join path components into a full path. If some argument is an absolute path or
 (on Windows) has a drive specification that doesn't match the drive computed for
@@ -373,7 +373,7 @@ julia> joinpath(["/home/myuser", "example.jl"])
 joinpath
 
 """
-    normpath(path::AbstractString) -> String
+    normpath(path::AbstractString)::String
 
 Normalize a path, removing "." and ".." entries and changing "/" to the canonical path separator
 for the system.
@@ -422,7 +422,7 @@ function normpath(path::String)
 end
 
 """
-    normpath(path::AbstractString, paths::AbstractString...) -> String
+    normpath(path::AbstractString, paths::AbstractString...)::String
 
 Convert a set of paths to a normalized path by joining them together and removing
 "." and ".." entries. Equivalent to `normpath(joinpath(path, paths...))`.
@@ -430,7 +430,7 @@ Convert a set of paths to a normalized path by joining them together and removin
 normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
 """
-    abspath(path::AbstractString) -> String
+    abspath(path::AbstractString)::String
 
 Convert a path to an absolute path by adding the current directory if necessary.
 Also normalizes the path as in [`normpath`](@ref).
@@ -460,7 +460,7 @@ function abspath(a::String)::String
 end
 
 """
-    abspath(path::AbstractString, paths::AbstractString...) -> String
+    abspath(path::AbstractString, paths::AbstractString...)::String
 
 Convert a set of paths to an absolute path by joining them together and adding the
 current directory if necessary. Equivalent to `abspath(joinpath(path, paths...))`.
@@ -487,7 +487,7 @@ end # os-test
 
 
 """
-    realpath(path::AbstractString) -> String
+    realpath(path::AbstractString)::String
 
 Canonicalize a path by expanding symbolic links and removing "." and ".." entries.
 On case-insensitive case-preserving filesystems (typically Mac and Windows), the
@@ -542,7 +542,7 @@ end
 
 
 """
-    expanduser(path::AbstractString) -> AbstractString
+    expanduser(path::AbstractString)::AbstractString
 
 On Unix systems, replace a tilde character at the start of a path with the current user's home directory.
 
@@ -551,7 +551,7 @@ See also: [`contractuser`](@ref).
 expanduser(path::AbstractString)
 
 """
-    contractuser(path::AbstractString) -> AbstractString
+    contractuser(path::AbstractString)::AbstractString
 
 On Unix systems, if the path starts with `homedir()`, replace it with a tilde character.
 
@@ -561,7 +561,7 @@ contractuser(path::AbstractString)
 
 
 """
-    relpath(path::AbstractString, startpath::AbstractString = ".") -> String
+    relpath(path::AbstractString, startpath::AbstractString = ".")::String
 
 Return a relative filepath to `path` either from the current directory or from an optional
 start directory. This is a path computation: the filesystem is not accessed to confirm the

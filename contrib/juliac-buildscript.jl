@@ -17,6 +17,9 @@ task.rngState3 = 0x3a77f7189200c20b
 task.rngState4 = 0x5502376d099035ae
 uuid_tuple = (UInt64(0), UInt64(0))
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
+if Base.get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
+    Base.JuliaSyntax.enable_in_core!()
+end
 
 # Patch methods in Core and Base
 
@@ -194,6 +197,7 @@ let mod = Base.include(Base.__toplevel__, inputfile)
     #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
     entrypoint(Base.task_done_hook, (Task,))
     entrypoint(Base.wait, ())
+    entrypoint(Base.wait_forever, ())
     entrypoint(Base.trypoptask, (Base.StickyWorkqueue,))
     entrypoint(Base.checktaskempty, ())
     if add_ccallables

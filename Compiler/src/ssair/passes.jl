@@ -183,7 +183,7 @@ function find_def_for_use(
 end
 
 function collect_leaves(compact::IncrementalCompact, @nospecialize(val), @nospecialize(typeconstraint), 𝕃ₒ::AbstractLattice,
-                        predecessors = ((@nospecialize(def), compact::IncrementalCompact) -> isa(def, PhiNode) ? def.values : nothing))
+                        predecessors::Pre = ((@nospecialize(def), compact::IncrementalCompact) -> isa(def, PhiNode) ? def.values : nothing)) where {Pre}
     if isa(val, Union{OldSSAValue, SSAValue})
         val, typeconstraint = simple_walk_constraint(compact, val, typeconstraint)
     end
@@ -271,7 +271,7 @@ Starting at `val` walk use-def chains to get all the leaves feeding into this `v
 `predecessors(def, compact)` is a callback which should return the set of possible
 predecessors for a "phi-like" node (PhiNode or Core.ifelse) or `nothing` otherwise.
 """
-function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), predecessors, 𝕃ₒ::AbstractLattice)
+function walk_to_defs(compact::IncrementalCompact, @nospecialize(defssa), @nospecialize(typeconstraint), predecessors::Pre, 𝕃ₒ::AbstractLattice) where {Pre}
     visited_philikes = AnySSAValue[]
     isa(defssa, AnySSAValue) || return Any[defssa], visited_philikes
     def = compact[defssa][:stmt]
@@ -1027,17 +1027,19 @@ end
     sig = sig.body
     isa(sig, DataType) || return nothing
     sig.name === Tuple.name || return nothing
-    length(sig.parameters) >= 1 || return nothing
+    sig_parameters = sig.parameters::SimpleVector
+    length_sig_parameters = length(sig_parameters)
+    length_sig_parameters >= 1 || return nothing
 
-    i = let sig=sig
-        findfirst(j::Int->has_typevar(sig.parameters[j], tvar), 1:length(sig.parameters))
+    function has_typevar_closure(j::Int)
+        has_typevar(sig_parameters[j], tvar)
     end
-    i === nothing && return nothing
-    let sig=sig
-        any(j::Int->has_typevar(sig.parameters[j], tvar), i+1:length(sig.parameters))
-    end && return nothing
 
-    arg = sig.parameters[i]
+    i = findfirst(has_typevar_closure, 1:length_sig_parameters)
+    i === nothing && return nothing
+    any(has_typevar_closure, i+1:length_sig_parameters) && return nothing
+
+    arg = sig_parameters[i]
 
     rarg = def.args[2 + i]
     isa(rarg, SSAValue) || return nothing

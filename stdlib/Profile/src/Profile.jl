@@ -56,12 +56,12 @@ appended to an internal buffer of backtraces.
 """
 macro profile(ex)
     return quote
-        try
-            start_timer()
+        start_timer()
+        Base.@__tryfinally(
             $(esc(ex))
-        finally
+            ,
             stop_timer()
-        end
+        )
     end
 end
 
@@ -78,12 +78,12 @@ it can be used to diagnose performance issues such as lock contention, IO bottle
 """
 macro profile_walltime(ex)
     return quote
-        try
-            start_timer(true)
+        start_timer(true);
+        Base.@__tryfinally(
             $(esc(ex))
-        finally
+            ,
             stop_timer()
-        end
+        )
     end
 end
 
@@ -596,7 +596,7 @@ function short_path(spath::Symbol, filenamecache::Dict{Symbol, Tuple{String,Stri
 end
 
 """
-    callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{Tuple{count, lineinfo}}
+    callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>])::Vector{Tuple{count, lineinfo}}
 
 Given a previous profiling run, determine who called a particular function. Supplying the
 filename (and optionally, range of line numbers over which the function is defined) allows

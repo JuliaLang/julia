@@ -495,7 +495,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
 }
 
 // emit code to store a raw value into a destination
-static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest, MDNode *tbaa_dest, Align alignment, bool isVolatile)
+static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest, MDNode *tbaa_dest, MaybeAlign align_src, Align align_dst, bool isVolatile)
 {
     if (x.isghost) {
         // this can happen when a branch yielding a different type ends
@@ -507,14 +507,14 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     auto dest_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
 
     if (!x.inline_roots.empty()) {
-        recombine_value(ctx, x, dest, dest_ai, alignment, isVolatile);
+        recombine_value(ctx, x, dest, dest_ai, align_dst, isVolatile);
         return;
     }
 
     if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
         assert(x.V);
         Value *unboxed = zext_struct(ctx, x.V);
-        StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, alignment);
+        StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, align_dst);
         store->setVolatile(isVolatile);
         dest_ai.decorateInst(store);
         return;
@@ -522,7 +522,7 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
 
     Value *src = data_pointer(ctx, x);
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
-    emit_memcpy(ctx, dest, dest_ai, src, src_ai, jl_datatype_size(x.typ), Align(alignment), Align(julia_alignment(x.typ)), isVolatile);
+    emit_memcpy(ctx, dest, dest_ai, src, src_ai, jl_datatype_size(x.typ), Align(align_dst), align_src ? *align_src : Align(julia_alignment(x.typ)), isVolatile);
 }
 
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
@@ -676,17 +676,23 @@ static jl_cgval_t generic_cast(
     Type *to = bitstype_to_llvm((jl_value_t*)jlto, ctx.builder.getContext(), true);
     Type *vt = bitstype_to_llvm(v.typ, ctx.builder.getContext(), true);
 
-    // fptrunc fpext depend on the specific floating point format to work
-    // correctly, and so do not pun their argument types.
+    // fptrunc and fpext depend on the specific floating point
+    // format to work correctly, and so do not pun their argument types.
     if (!(f == fpext || f == fptrunc)) {
-        if (toint)
-            to = INTT(to, DL);
-        else
-            to = FLOATT(to);
-        if (fromint)
-            vt = INTT(vt, DL);
-        else
-            vt = FLOATT(vt);
+        // uitofp/sitofp require a specific float type argument
+        if (!(f == uitofp || f == sitofp)){
+            if (toint)
+                to = INTT(to, DL);
+            else
+                to = FLOATT(to);
+        }
+        // fptoui/fptosi require a specific float value argument
+        if (!(f == fptoui || f == fptosi)) {
+            if (fromint)
+                vt = INTT(vt, DL);
+            else
+                vt = FLOATT(vt);
+        }
     }
 
     if (!to || !vt)
@@ -1428,10 +1434,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         if (!jl_is_primitivetype(xinfo.typ))
             return emit_runtime_call(ctx, f, argv, nargs);
         Type *xtyp = bitstype_to_llvm(xinfo.typ, ctx.builder.getContext(), true);
-        if (float_func()[f])
-            xtyp = FLOATT(xtyp);
-        else
+        if (float_func()[f]) {
+            if (!xtyp->isFloatingPointTy())
+                return emit_runtime_call(ctx, f, argv, nargs);
+        }
+        else {
             xtyp = INTT(xtyp, DL);
+        }
         if (!xtyp)
             return emit_runtime_call(ctx, f, argv, nargs);
         ////Bool are required to be in the range [0,1]

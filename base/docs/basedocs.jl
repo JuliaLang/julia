@@ -1940,7 +1940,7 @@ recurses infinitely.
 StackOverflowError
 
 """
-    nfields(x) -> Int
+    nfields(x)::Int
 
 Get the number of fields in the given object.
 
@@ -2042,7 +2042,7 @@ to let `InterruptException` be thrown by CTRL+C during the execution.
 InterruptException
 
 """
-    applicable(f, args...) -> Bool
+    applicable(f, args...)::Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
 
@@ -2140,7 +2140,7 @@ Integer
 invoke
 
 """
-    isa(x, type) -> Bool
+    isa(x, type)::Bool
 
 Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
 `x isa type`.
@@ -2433,7 +2433,7 @@ iteration over characters.
 Symbol
 
 """
-    Symbol(x...) -> Symbol
+    Symbol(x...)::Symbol
 
 Create a [`Symbol`](@ref) by concatenating the string representations of the arguments together.
 
@@ -2546,8 +2546,8 @@ Atomically perform the operations to simultaneously get and set a field:
 swapfield!
 
 """
-    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
-    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol])::Pair
+    modifyfield!(value, i::Int, op, x, [order::Symbol])::Pair
 
 Atomically perform the operations to get and set a field after applying
 the function `op`.
@@ -2713,7 +2713,7 @@ See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
 swapglobal!
 
 """
-    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic]) -> Pair
+    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic])::Pair
 
 Atomically perform the operations to get and set a global after applying
 the function `op`.

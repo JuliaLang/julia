@@ -527,7 +527,7 @@ function task_metrics(b::Bool)
 end
 
 """
-    Base.Experimental.task_running_time_ns(t::Task) -> Union{UInt64, Nothing}
+    Base.Experimental.task_running_time_ns(t::Task)::Union{UInt64, Nothing}
 
 Return the total nanoseconds that the task `t` has spent running.
 This metric is only updated when `t` yields or completes unless `t` is the current task, in
@@ -556,7 +556,7 @@ function task_running_time_ns(t::Task=current_task())
 end
 
 """
-    Base.Experimental.task_wall_time_ns(t::Task) -> Union{UInt64, Nothing}
+    Base.Experimental.task_wall_time_ns(t::Task)::Union{UInt64, Nothing}
 
 Return the total nanoseconds that the task `t` was runnable.
 This is the time since the task first entered the run queue until the time at which it

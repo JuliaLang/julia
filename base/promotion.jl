@@ -199,7 +199,7 @@ end
 
 function typejoin_union_tuple(T::DataType)
     @_foldable_meta
-    p = T.parameters
+    p = T.parameters::Core.SimpleVector
     lr = length(p)
     if lr == 0
         return Tuple{}

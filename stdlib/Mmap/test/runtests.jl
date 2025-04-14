@@ -47,6 +47,7 @@ close(s)
 @test_throws ErrorException mmap(file, Vector{Ref}) # must be bit-type
 GC.gc(); GC.gc()
 
+file = tempname() # new name to reduce chance of issues due slow windows fs
 s = open(f->f,file,"w")
 @test mmap(file) == Vector{UInt8}() # requested len=0 on empty file
 @test mmap(file,Vector{UInt8},0) == Vector{UInt8}()
@@ -191,6 +192,7 @@ m = mmap(file,Vector{UInt8},2,6)
 @test_throws BoundsError m[3]
 finalize(m); m = nothing; GC.gc()
 
+file = tempname() # new name to reduce chance of issues due slow windows fs
 s = open(file, "w")
 write(s, [0xffffffffffffffff,
           0xffffffffffffffff,

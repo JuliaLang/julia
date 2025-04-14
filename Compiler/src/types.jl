@@ -441,7 +441,7 @@ may_compress(::AbstractInterpreter) = true
 may_discard_trees(::AbstractInterpreter) = true
 
 """
-    method_table(interp::AbstractInterpreter) -> MethodTableView
+    method_table(interp::AbstractInterpreter)::MethodTableView
 
 Returns a method table this `interp` uses for method lookup.
 External `AbstractInterpreter` can optionally return `OverlayMethodTable` here
@@ -519,7 +519,7 @@ add_edges_impl(::Vector{Any}, ::CallInfo) = error("""
     All `CallInfo` is required to implement `add_edges_impl(::Vector{Any}, ::CallInfo)`""")
 nsplit_impl(::CallInfo) = nothing
 getsplit_impl(::CallInfo, ::Int) = error("""
-    A `info::CallInfo` that implements `nsplit_impl(info::CallInfo) -> Int` must implement `getsplit_impl(info::CallInfo, idx::Int) -> MethodLookupResult`
+    A `info::CallInfo` that implements `nsplit_impl(info::CallInfo)::Int` must implement `getsplit_impl(info::CallInfo, idx::Int)::MethodLookupResult`
     in order to correctly opt in to inlining""")
 getresult_impl(::CallInfo, ::Int) = nothing
 

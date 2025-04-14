@@ -174,14 +174,14 @@ isa_compileable_sig(m::ABIOverride) = false
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
 
 """
-    is_declared_inline(method::Method) -> Bool
+    is_declared_inline(method::Method)::Bool
 
 Check if `method` is declared as `@inline`.
 """
 is_declared_inline(method::Method) = _is_declared_inline(method, true)
 
 """
-    is_declared_noinline(method::Method) -> Bool
+    is_declared_noinline(method::Method)::Bool
 
 Check if `method` is declared as `@noinline`.
 """
@@ -195,14 +195,14 @@ function _is_declared_inline(method::Method, inline::Bool)
 end
 
 """
-    is_aggressive_constprop(method::Union{Method,CodeInfo}) -> Bool
+    is_aggressive_constprop(method::Union{Method,CodeInfo})::Bool
 
 Check if `method` is declared as `Base.@constprop :aggressive`.
 """
 is_aggressive_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x01
 
 """
-    is_no_constprop(method::Union{Method,CodeInfo}) -> Bool
+    is_no_constprop(method::Union{Method,CodeInfo})::Bool
 
 Check if `method` is declared as `Base.@constprop :none`.
 """
@@ -351,3 +351,5 @@ function inbounds_option()
 end
 
 is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+
+_time_ns() = ccall(:jl_hrtime, UInt64, ())

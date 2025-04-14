@@ -661,7 +661,7 @@ end
 which(program_name::AbstractString) = which(String(program_name))
 
 """
-    Sys.username() -> String
+    Sys.username()::String
 
 Return the username for the current user. If the username cannot be determined
 or is empty, this function throws an error.

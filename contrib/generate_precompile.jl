@@ -54,8 +54,6 @@ precompile(Tuple{typeof(Base.append!), Array{String, 1}, Array{String, 1}})
 precompile(Tuple{typeof(Base.join), Array{String, 1}, Char})
 precompile(Tuple{typeof(Base.getindex), Base.Dict{Any, Any}, Char})
 precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, Char})
-precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Base.Dict{String, String}}}, Base.Dict{String, Any}})
-precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Array{String, 1}}}, Base.Dict{String, Any}})
 
 # REPL
 precompile(isequal, (String, String))

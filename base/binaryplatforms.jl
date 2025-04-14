@@ -841,20 +841,48 @@ function parse_dl_name_version(path::AbstractString, os::AbstractString)
     return parse_dl_name_version(string(path)::String, string(os)::String)
 end
 
+function get_csl_member(member::Symbol)
+    # If CompilerSupportLibraries_jll is an stdlib, we can just grab things from it
+    csl_pkgids = filter(pkgid -> pkgid.name == "CompilerSupportLibraries_jll", keys(Base.loaded_modules))
+    if !isempty(csl_pkgids)
+        CSL_mod = Base.loaded_modules[first(csl_pkgids)]
+
+        # This can fail during bootstrap, so we skip in that case.
+        if isdefined(CSL_mod, member)
+            return getproperty(CSL_mod, member)
+        end
+    end
+
+    return nothing
+end
+
 """
     detect_libgfortran_version()
 
 Inspects the current Julia process to determine the libgfortran version this Julia is
-linked against (if any).
+linked against (if any).  Returns `nothing` if no libgfortran version dependence is
+detected.
 """
 function detect_libgfortran_version()
-    libgfortran_paths = filter!(x -> occursin("libgfortran", x), Libdl.dllist())
-    if isempty(libgfortran_paths)
+    function get_libgfortran_path()
+        # If CompilerSupportLibraries_jll is an stdlib, we can just directly ask for
+        # the path here, without checking `dllist()`:
+        libgfortran_path = get_csl_member(:libgfortran_path)
+        if libgfortran_path !== nothing
+            return libgfortran_path::String
+        end
+
+        # Otherwise, look for it having already been loaded by something
+        libgfortran_paths = filter!(x -> occursin("libgfortran", x), Libdl.dllist())
+        if !isempty(libgfortran_paths)
+            return first(libgfortran_paths)::String
+        end
+
         # One day, I hope to not be linking against libgfortran in base Julia
         return nothing
     end
-    libgfortran_path = first(libgfortran_paths)
 
+    libgfortran_path = get_libgfortran_path()
     name, version = parse_dl_name_version(libgfortran_path, os())
     if version === nothing
         # Even though we complain about this, we allow it to continue in the hopes that
@@ -878,24 +906,35 @@ it is linked against (if any).  `max_minor_version` is the latest version in the
 3.4 series of GLIBCXX where the search is performed.
 """
 function detect_libstdcxx_version(max_minor_version::Int=30)
-    libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
-    if isempty(libstdcxx_paths)
-        # This can happen if we were built by clang, so we don't link against
-        # libstdc++ at all.
+    function get_libstdcxx_handle()
+        # If CompilerSupportLibraries_jll is an stdlib, we can just directly open it
+        libstdcxx = get_csl_member(:libstdcxx)
+        if libstdcxx !== nothing
+            return nothing
+        end
+
+        # Otherwise, look for it having already been loaded by something
+        libstdcxx_paths = filter!(x -> occursin("libstdc++", x), Libdl.dllist())
+        if !isempty(libstdcxx_paths)
+            return Libdl.dlopen(first(libstdcxx_paths), Libdl.RTLD_NOLOAD)::Ptr{Cvoid}
+        end
+
+        # One day, I hope to not be linking against libgfortran in base Julia
         return nothing
     end
 
     # Brute-force our way through GLIBCXX_* symbols to discover which version we're linked against
-    hdl = Libdl.dlopen(first(libstdcxx_paths))::Ptr{Cvoid}
-    # Try all GLIBCXX versions down to GCC v4.8:
-    # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
-    for minor_version in max_minor_version:-1:18
-        if Libdl.dlsym(hdl, "GLIBCXX_3.4.$(minor_version)"; throw_error=false) !== nothing
-            Libdl.dlclose(hdl)
-            return VersionNumber("3.4.$(minor_version)")
+    libstdcxx = get_libstdcxx_handle()
+
+    if libstdcxx !== nothing
+        # Try all GLIBCXX versions down to GCC v4.8:
+        # https://gcc.gnu.org/onlinedocs/libstdc++/manual/abi.html
+        for minor_version in max_minor_version:-1:18
+            if Libdl.dlsym(libstdcxx, "GLIBCXX_3.4.$(minor_version)"; throw_error=false) !== nothing
+                return VersionNumber("3.4.$(minor_version)")
+            end
         end
     end
-    Libdl.dlclose(hdl)
     return nothing
 end
 

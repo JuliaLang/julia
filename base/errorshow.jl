@@ -291,7 +291,9 @@ function showerror(io::IO, ex::MethodError)
     elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
-        print(io, "objects of type ", ft, " are not callable")
+        println(io, "objects of type ", ft, " are not callable.")
+        print(io, "In case you did not try calling it explicitly, check if a ", ft,
+            " has been passed as an argument to a method that expects a callable instead.")
     else
         if ft <: Function && isempty(ft.parameters) && _isself(ft)
             f_is_function = true
@@ -323,7 +325,7 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     if ft <: AbstractArray
-        print(io, "\nUse square brackets [] for indexing an Array.")
+        print(io, "\nIn case you're trying to index into the array, use square brackets [] instead of parentheses ().")
     end
     # Check for local functions that shadow methods in Base
     let name = ft.name.mt.name
@@ -920,7 +922,7 @@ function _collapse_repeated_frames(trace)
             m, last_m = StackTraces.frame_method_or_module(frame),
                         StackTraces.frame_method_or_module(last_frame)
             if m isa Method && last_m isa Method
-                params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
+                params, last_params = Base.unwrap_unionall(m.sig).parameters::SimpleVector, Base.unwrap_unionall(last_m.sig).parameters::SimpleVector
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
                     issame = true
@@ -1142,6 +1144,96 @@ function _propertynames_bytype(T::Type)
 end
 
 Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
+
+function UndefVarError_hint(io::IO, ex::UndefVarError)
+    var = ex.var
+    if isdefined(ex, :scope)
+        scope = ex.scope
+        if scope isa Module
+            bpart = Base.lookup_binding_partition(ex.world, GlobalRef(scope, var))
+            kind = Base.binding_kind(bpart)
+            if kind === Base.PARTITION_KIND_GLOBAL || kind === Base.PARTITION_KIND_UNDEF_CONST || kind == Base.PARTITION_KIND_DECLARED
+                print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
+            elseif kind === Base.PARTITION_KIND_FAILED
+                print(io, "\nHint: It looks like two or more modules export different ",
+                "bindings with this name, resulting in ambiguity. Try explicitly ",
+                "importing it from a particular module, or qualifying the name ",
+                "with the module it should come from.")
+            elseif kind === Base.PARTITION_KIND_GUARD
+                print(io, "\nSuggestion: check for spelling errors or missing imports.")
+            elseif Base.is_some_explicit_imported(kind)
+                print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
+            end
+        elseif scope === :static_parameter
+            print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
+        elseif scope === :local
+            print(io, "\nSuggestion: check for an assignment to a local variable that shadows a global of the same name.")
+        end
+    else
+        scope = undef
+    end
+    if scope !== Base
+        warned = _UndefVarError_warnfor(io, [Base], var)
+
+        if !warned
+            modules_to_check = (m for m in Base.loaded_modules_order
+                                if m !== Core && m !== Base && m !== Main && m !== scope)
+            warned |= _UndefVarError_warnfor(io, modules_to_check, var)
+        end
+
+        warned || _UndefVarError_warnfor(io, [Core, Main], var)
+    end
+    return nothing
+end
+
+function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
+    active_mod = Base.active_module()
+
+    warned = false
+    # collect modules which export or make public the variable by
+    # the module in which the variable is defined
+    to_warn_about = Dict{Module, Vector{Module}}()
+    for m in modules
+        # only include in info if binding has a value and is exported or public
+        if !Base.isdefined(m, var) || (!Base.isexported(m, var) && !Base.ispublic(m, var))
+            continue
+        end
+        warned = true
+
+        # handle case where the undefined variable is the name of a loaded module
+        if Symbol(m) == var && !isdefined(active_mod, var)
+            print(io, "\nHint: $m is loaded but not imported in the active module $active_mod.")
+            continue
+        end
+
+        binding_m = Base.binding_module(m, var)
+        if !haskey(to_warn_about, binding_m)
+            to_warn_about[binding_m] = [m]
+        else
+            push!(to_warn_about[binding_m], m)
+        end
+    end
+
+    for (binding_m, modules) in pairs(to_warn_about)
+        print(io, "\nHint: a global variable of this name also exists in ", binding_m, ".")
+        for m in modules
+            m == binding_m && continue
+            how_available = if Base.isexported(m, var)
+                "exported by"
+            elseif Base.ispublic(m, var)
+                "declared public in"
+            end
+            print(io, "\n    - Also $how_available $m")
+            if !isdefined(active_mod, nameof(m)) || (getproperty(active_mod, nameof(m)) !== m)
+                print(io, " (loaded but not imported in $active_mod)")
+            end
+            print(io, ".")
+        end
+    end
+    return warned
+end
+
+Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

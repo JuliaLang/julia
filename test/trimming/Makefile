@@ -33,14 +33,14 @@ LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs) -ljulia-internal
 release: hello$(EXE) basic_jll$(EXE)
 
 hello.o: $(SRCDIR)/hello.jl $(BUILDSCRIPT)
-	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.so --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(BUILDSCRIPT) $(SRCDIR)/hello.jl --output-exe true
+	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(BUILDSCRIPT) $(SRCDIR)/hello.jl --output-exe true
 
 init.o: $(SRCDIR)/init.c
 	$(CC) -c -o $@ $< $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
 
 basic_jll.o: $(SRCDIR)/basic_jll.jl $(BUILDSCRIPT)
-	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.so --startup-file=no --history-file=no --project=$(SRCDIR) -e "using Pkg; Pkg.instantiate()"
-	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.so --startup-file=no --history-file=no --project=$(SRCDIR) --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(BUILDSCRIPT) $(SRCDIR)/basic_jll.jl --output-exe true
+	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) -e "using Pkg; Pkg.instantiate()"
+	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(BUILDSCRIPT) $(SRCDIR)/basic_jll.jl --output-exe true
 
 hello$(EXE): hello.o init.o
 	$(CC) -o $@ $(WHOLE_ARCHIVE) hello.o $(NO_WHOLE_ARCHIVE) init.o $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)

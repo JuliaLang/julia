@@ -406,8 +406,8 @@ See also [`trunc`](@ref).
 julia> unsafe_trunc(Int, -2.2)
 -2
 
-julia> unsafe_trunc(Int, NaN)
--9223372036854775808
+julia> unsafe_trunc(Int, NaN) isa Int
+true
 ```
 """
 function unsafe_trunc end
@@ -527,7 +527,8 @@ function _to_float(number::U, ep) where {U<:Unsigned}
     return reinterpret(F, bits)
 end
 
-@assume_effects :terminates_locally :nothrow function rem_internal(x::T, y::T) where {T<:IEEEFloat}
+function rem_internal(x::T, y::T) where {T<:IEEEFloat}
+    @_terminates_locally_meta
     xuint = reinterpret(Unsigned, x)
     yuint = reinterpret(Unsigned, y)
     if xuint <= yuint
@@ -622,13 +623,15 @@ end
 isequal(x::T, y::T) where {T<:IEEEFloat} = fpiseq(x, y)
 
 # interpret as sign-magnitude integer
-@inline function _fpint(x)
+function _fpint(x)
+    @inline
     IntT = inttype(typeof(x))
     ix = reinterpret(IntT, x)
     return ifelse(ix < zero(IntT), ix ⊻ typemax(IntT), ix)
 end
 
-@inline function isless(a::T, b::T) where T<:IEEEFloat
+function isless(a::T, b::T) where T<:IEEEFloat
+    @inline
     (isnan(a) || isnan(b)) && return !isnan(a)
 
     return _fpint(a) < _fpint(b)
@@ -693,7 +696,7 @@ end
 abs(x::IEEEFloat) = abs_float(x)
 
 """
-    isnan(f) -> Bool
+    isnan(f)::Bool
 
 Test whether a number value is a NaN, an indeterminate value which is neither an infinity
 nor a finite number ("not a number").
@@ -708,7 +711,7 @@ isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
 """
-    isinf(f) -> Bool
+    isinf(f)::Bool
 
 Test whether a number is infinite.
 
@@ -716,84 +719,6 @@ See also: [`Inf`](@ref), [`iszero`](@ref), [`isfinite`](@ref), [`isnan`](@ref).
 """
 isinf(x::Real) = !isnan(x) & !isfinite(x)
 isinf(x::IEEEFloat) = abs(x) === oftype(x, Inf)
-
-const hx_NaN = hash_uint64(reinterpret(UInt64, NaN))
-function hash(x::Float64, h::UInt)
-    # see comments on trunc and hash(Real, UInt)
-    if typemin(Int64) <= x < typemax(Int64)
-        xi = fptosi(Int64, x)
-        if isequal(xi, x)
-            return hash(xi, h)
-        end
-    elseif typemin(UInt64) <= x < typemax(UInt64)
-        xu = fptoui(UInt64, x)
-        if isequal(xu, x)
-            return hash(xu, h)
-        end
-    elseif isnan(x)
-        return hx_NaN ⊻ h # NaN does not have a stable bit pattern
-    end
-    return hash_uint64(bitcast(UInt64, x)) - 3h
-end
-
-hash(x::Float32, h::UInt) = hash(Float64(x), h)
-
-function hash(x::Float16, h::UInt)
-    # see comments on trunc and hash(Real, UInt)
-    if isfinite(x) # all finite Float16 fit in Int64
-        xi = fptosi(Int64, x)
-        if isequal(xi, x)
-            return hash(xi, h)
-        end
-    elseif isnan(x)
-        return hx_NaN ⊻ h # NaN does not have a stable bit pattern
-    end
-    return hash_uint64(bitcast(UInt64, Float64(x))) - 3h
-end
-
-## generic hashing for rational values ##
-function hash(x::Real, h::UInt)
-    # decompose x as num*2^pow/den
-    num, pow, den = decompose(x)
-
-    # handle special values
-    num == 0 && den == 0 && return hash(NaN, h)
-    num == 0 && return hash(ifelse(den > 0, 0.0, -0.0), h)
-    den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
-
-    # normalize decomposition
-    if den < 0
-        num = -num
-        den = -den
-    end
-    num_z = trailing_zeros(num)
-    num >>= num_z
-    den_z = trailing_zeros(den)
-    den >>= den_z
-    pow += num_z - den_z
-    # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
-    # To be an Integer the denominator must be 1 and the power must be non-negative.
-    if den == 1
-        # left = ceil(log2(num*2^pow))
-        left = top_set_bit(abs(num)) + pow
-        # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
-        if -1074 <= pow
-            if 0 <= pow # if pow is non-negative, it is an integer
-                left <= 63 && return hash(Int64(num) << Int(pow), h)
-                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
-            end # typemin(Int64) handled by Float64 case
-            # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
-            # Float64s only have 53 mantisa bits (including implicit bit)
-            left <= 1024 && left - pow <= 53 && return hash(ldexp(Float64(num), pow), h)
-        end
-    else
-        h = hash_integer(den, h)
-    end
-    # handle generic rational values
-    h = hash_integer(pow, h)
-    h = hash_integer(num, h)
-    return h
-end
 
 #=
 `decompose(x)`: non-canonical decomposition of rational values as `num*2^pow/den`.
@@ -1001,7 +926,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
 end
 
 """
-    issubnormal(f) -> Bool
+    issubnormal(f)::Bool
 
 Test whether a floating point number is subnormal.
 
@@ -1070,6 +995,8 @@ end
 Return the smallest positive normal number representable by the floating-point
 type `T`.
 
+See also: [`typemin`](@ref), [`maxintfloat`](@ref), [`floatmax`](@ref), [`eps`](@ref).
+
 # Examples
 ```jldoctest
 julia> floatmin(Float16)
@@ -1089,7 +1016,7 @@ floatmin(x::T) where {T<:AbstractFloat} = floatmin(T)
 
 Return the largest finite number representable by the floating-point type `T`.
 
-See also: [`typemax`](@ref), [`floatmin`](@ref), [`eps`](@ref).
+See also: [`typemax`](@ref), [`maxintfloat`](@ref), [`floatmin`](@ref), [`eps`](@ref).
 
 # Examples
 ```jldoctest

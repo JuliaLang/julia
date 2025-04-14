@@ -32,7 +32,7 @@ export
 # get and set current directory
 
 """
-    pwd() -> String
+    pwd()::String
 
 Get the current working directory.
 
@@ -758,7 +758,7 @@ end # os-test
 
 
 """
-    tempname(parent=tempdir(); cleanup=true, suffix="") -> String
+    tempname(parent=tempdir(); cleanup=true, suffix="")::String
 
 Generate a temporary file path. This function only returns a path; no file is
 created. The path is likely to be unique, but this cannot be guaranteed due to
@@ -921,7 +921,7 @@ end
     readdir(dir::AbstractString=pwd();
         join::Bool = false,
         sort::Bool = true,
-    ) -> Vector{String}
+    )::Vector{String}
 
 Return the names in the directory `dir` or the current working directory if not
 given. When `join` is false, `readdir` returns just the names in the directory
@@ -1043,7 +1043,7 @@ isblockdev(obj::DirEntry) = (isunknown(obj) || islink(obj)) ? isblockdev(obj.pat
 realpath(obj::DirEntry) = realpath(obj.path)
 
 """
-    _readdirx(dir::AbstractString=pwd(); sort::Bool = true) -> Vector{DirEntry}
+    _readdirx(dir::AbstractString=pwd(); sort::Bool = true)::Vector{DirEntry}
 
 Return a vector of [`DirEntry`](@ref) objects representing the contents of the directory `dir`,
 or the current working directory if not given. If `sort` is true, the returned vector is
@@ -1354,7 +1354,7 @@ function symlink(target::AbstractString, link::AbstractString;
 end
 
 """
-    readlink(path::AbstractString) -> String
+    readlink(path::AbstractString)::String
 
 Return the target location a symbolic link `path` points to.
 """

@@ -98,9 +98,13 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             }
             uintptr_t oldsp = thesp;
             have_more_frames = jl_unw_step(cursor, from_signal_handler, &return_ip, &thesp);
-            if (oldsp >= thesp && !jl_running_under_rr(0)) {
-                // The stack pointer is clearly bad, as it must grow downwards.
+            if ((n < 2 ? oldsp > thesp : oldsp >= thesp) && !jl_running_under_rr(0)) {
+                // The stack pointer is clearly bad, as it must grow downwards,
                 // But sometimes the external unwinder doesn't check that.
+                // Except for n==0 when there is no oldsp and n==1 on all platforms but i686/x86_64.
+                // (on x86, the platform first pushes the new stack frame, then does the
+                // call, on almost all other platforms, the platform first does the call,
+                // then the user pushes the link register to the frame).
                 have_more_frames = 0;
             }
             if (return_ip == 0) {
@@ -132,11 +136,11 @@ static int jl_unw_stepn(bt_cursor_t *cursor, jl_bt_element_t *bt_data, size_t *b
             // * The way that libunwind handles it in `unw_get_proc_name`:
             //   https://lists.nongnu.org/archive/html/libunwind-devel/2014-06/msg00025.html
             uintptr_t call_ip = return_ip;
+            #if defined(_CPU_ARM_)
             // ARM instruction pointer encoding uses the low bit as a flag for
             // thumb mode, which must be cleared before further use. (Note not
             // needed for ARM AArch64.) See
             // https://github.com/libunwind/libunwind/pull/131
-            #ifdef _CPU_ARM_
             call_ip &= ~(uintptr_t)0x1;
             #endif
             // Now there's two main cases to adjust for:

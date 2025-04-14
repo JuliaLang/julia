@@ -60,7 +60,7 @@ end
 end
 
 """
-    isperm(v) -> Bool
+    isperm(v)::Bool
 
 Return `true` if `v` is a valid permutation.
 

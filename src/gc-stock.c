@@ -948,6 +948,7 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
 
 done:
     if (re_use_page) {
+        gc_update_page_fragmentation_data(pg);
         push_lf_back(allocd, pg);
     }
     else {
@@ -956,7 +957,6 @@ done:
         push_lf_back(&global_page_pool_lazily_freed, pg);
     }
     gc_page_profile_write_to_file(s);
-    gc_update_page_fragmentation_data(pg);
     gc_time_count_page(freedall, pg_skpd);
     jl_ptls_t ptls = jl_current_task->ptls;
     // Note that we aggregate the `pool_live_bytes` over all threads before returning this

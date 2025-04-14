@@ -3,6 +3,7 @@
 # setup
 # -----
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 using Test
@@ -142,8 +143,8 @@ begin
     # this redefinition below should invalidate the cache of `pr48932_callee` but not that of `pr48932_caller`
     pr48932_callee(x) = (print(GLOBAL_BUFFER, x); nothing)
 
-    @test length(Base.methods(pr48932_callee)) == 2
-    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === first(Base.methods(pr48932_callee))
+    @test length(Base.methods(pr48932_callee)) == 1
+    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === only(Base.methods(pr48932_callee))
     @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee, Tuple{Any}))))
     let mi = only(Base.specializations(Base.only(Base.methods(pr48932_caller))))
         # Base.method_instance(pr48932_callee, (Any,))
@@ -283,3 +284,8 @@ begin take!(GLOBAL_BUFFER)
     @test isnothing(pr48932_caller_inlined(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
 end
+
+# Issue #57696
+# This test checks for invalidation of recursive backedges. However, unfortunately, the original failure
+# manifestation was an unreliable segfault or an assertion failure, so we don't have a more compact test.
+@test success(`$(Base.julia_cmd()) -e 'Base.typejoin(x, ::Type) = 0; exit()'`)

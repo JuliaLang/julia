@@ -56,7 +56,7 @@ struct State
 end
 
 """
-    head(pkg::AbstractString) -> String
+    head(pkg::AbstractString)::String
 
 Return current HEAD [`GitHash`](@ref) of
 the `pkg` repo as a string.
@@ -81,7 +81,7 @@ function need_update(repo::GitRepo)
 end
 
 """
-    iscommit(id::AbstractString, repo::GitRepo) -> Bool
+    iscommit(id::AbstractString, repo::GitRepo)::Bool
 
 Check if commit `id` (which is a [`GitHash`](@ref) in string form)
 is in the repository.
@@ -114,7 +114,7 @@ function iscommit(id::AbstractString, repo::GitRepo)
 end
 
 """
-    LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=""; cached::Bool=false) -> Bool
+    LibGit2.isdirty(repo::GitRepo, pathspecs::AbstractString=""; cached::Bool=false)::Bool
 
 Check if there have been any changes to tracked files in the working tree (if
 `cached=false`) or the index (if `cached=true`).
@@ -168,7 +168,7 @@ function isdiff(repo::GitRepo, treeish::AbstractString, paths::AbstractString=""
 end
 
 """
-    diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...) -> Vector{AbstractString}
+    diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractString; kwarg...)::Vector{AbstractString}
 
 Show which files have changed in the git repository `repo` between branches `branch1`
 and `branch2`.
@@ -224,7 +224,7 @@ function diff_files(repo::GitRepo, branch1::AbstractString, branch2::AbstractStr
 end
 
 """
-    is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo) -> Bool
+    is_ancestor_of(a::AbstractString, b::AbstractString, repo::GitRepo)::Bool
 
 Return `true` if `a`, a [`GitHash`](@ref) in string form, is an ancestor of
 `b`, a [`GitHash`](@ref) in string form.
@@ -727,7 +727,7 @@ function revcount(repo::GitRepo, commit1::AbstractString, commit2::AbstractStrin
 end
 
 """
-    merge!(repo::GitRepo; kwargs...) -> Bool
+    merge!(repo::GitRepo; kwargs...)::Bool
 
 Perform a git merge on the repository `repo`, merging commits
 with diverging history into the current branch. Return `true`
@@ -898,7 +898,7 @@ end
 
 
 """
-    authors(repo::GitRepo) -> Vector{Signature}
+    authors(repo::GitRepo)::Vector{Signature}
 
 Return all authors of commits to the `repo` repository.
 
@@ -931,7 +931,7 @@ function authors(repo::GitRepo)
 end
 
 """
-    snapshot(repo::GitRepo) -> State
+    snapshot(repo::GitRepo)::State
 
 Take a snapshot of the current state of the repository `repo`,
 storing the current HEAD, index, and any uncommitted work.
@@ -1042,24 +1042,20 @@ function set_ssl_cert_locations(cert_loc)
     else # files, /dev/null, non-existent paths, etc.
         cert_file = cert_loc
     end
-        ret = @ccall libgit2.git_libgit2_opts(
+    ret = @ccall libgit2.git_libgit2_opts(
         Consts.SET_SSL_CERT_LOCATIONS::Cint;
         cert_file::Cstring,
         cert_dir::Cstring)::Cint
     ret >= 0 && return ret
+    # On macOS and Windows LibGit2_jll is built without a TLS backend that supports
+    # certificate locations; don't throw on this expected error so we allow certificate
+    # location environment variables to be set for other purposes.
+    # We still try doing so to support other LibGit2 builds.
     err = Error.GitError(ret)
     err.class == Error.SSL &&
         err.msg == "TLS backend doesn't support certificate locations" ||
         throw(err)
-    var = nothing
-    for v in NetworkOptions.CA_ROOTS_VARS
-        haskey(ENV, v) && (var = v)
-    end
-    @assert var !== nothing # otherwise we shouldn't be here
-    msg = """
-    Your Julia is built with a SSL/TLS engine that libgit2 doesn't know how to configure to use a file or directory of certificate authority roots, but your environment specifies one via the $var variable. If you believe your system's root certificates are safe to use, you can `export JULIA_SSL_CA_ROOTS_PATH=""` in your environment to use those instead.
-    """
-    throw(Error.GitError(err.class, err.code, chomp(msg)))
+    return ret
 end
 
 """

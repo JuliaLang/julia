@@ -12,7 +12,6 @@ Base.Experimental.register_error_hint(Base.methods_on_iterable, MethodError)
 Base.Experimental.register_error_hint(Base.nonsetable_type_hint_handler, MethodError)
 Base.Experimental.register_error_hint(Base.fielderror_listfields_hint_handler, FieldError)
 Base.Experimental.register_error_hint(Base.fielderror_dict_hint_handler, FieldError)
-
 @testset "SystemError" begin
     err = try; systemerror("reason", Cint(0)); false; catch ex; ex; end::SystemError
     errs = sprint(Base.showerror, err)
@@ -420,7 +419,10 @@ let err_str,
     err_str = @except_str FunctionLike()() MethodError
     @test occursin("MethodError: no method matching (::$(curmod_prefix)FunctionLike)()", err_str)
     err_str = @except_str [1,2](1) MethodError
-    @test occursin("MethodError: objects of type Vector{$Int} are not callable\nUse square brackets [] for indexing an Array.", err_str)
+    @test occursin("MethodError: objects of type Vector{$Int} are not callable.\n"*
+        "In case you did not try calling it explicitly, check if a Vector{$Int}"*
+        " has been passed as an argument to a method that expects a callable instead.\n"*
+        "In case you're trying to index into the array, use square brackets [] instead of parentheses ().", err_str)
     # Issue 14940
     err_str = @except_str randn(1)() MethodError
     @test occursin("MethodError: objects of type Vector{Float64} are not callable", err_str)
@@ -876,6 +878,67 @@ end
     # Check hint message
     hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
     @test occursin(hintExpected, errorMsg)
+end
+
+# UndefVar error hints
+module A53000
+    export f
+    f() = 0.0
+end
+
+module C_outer_53000
+    import ..A53000: f
+    public f
+
+    module C_inner_53000
+    import ..C_outer_53000: f
+    export f
+    end
+end
+
+module D_53000
+    public f
+    f() = 1.0
+end
+
+C_inner_53000 = "I'm a decoy with the same name as C_inner_53000!"
+
+Base.Experimental.register_error_hint(Base.UndefVarError_hint, UndefVarError)
+
+@testset "undefvar error hints" begin
+    old_modules_order = Base.loaded_modules_order
+    append!(Base.loaded_modules_order, [A53000, C_outer_53000, C_outer_53000.C_inner_53000, D_53000])
+    test = @test_throws UndefVarError f
+    ex = test.value::UndefVarError
+    errormsg = sprint(Base.showerror, ex)
+    mod = @__MODULE__
+    @test occursin("Hint: a global variable of this name also exists in $mod.A53000.", errormsg)
+    @test occursin("Hint: a global variable of this name also exists in $mod.D_53000.", errormsg)
+    @test occursin("- Also declared public in $mod.C_outer_53000", errormsg)
+    @test occursin("- Also exported by $mod.C_outer_53000.C_inner_53000 (loaded but not imported in Main).", errormsg)
+    copy!(Base.loaded_modules_order, old_modules_order)
+end
+@testset " test the functionality of `UndefVarError_hint` against import clashes" begin
+    @eval module X
+        module A
+        export x
+        x = 1
+        end # A
+
+        module B
+        export x
+        x = 2
+        end # B
+
+        using .A, .B
+
+    end # X
+
+    expected_message = string("\nHint: It looks like two or more modules export different ",
+                              "bindings with this name, resulting in ambiguity. Try explicitly ",
+                              "importing it from a particular module, or qualifying the name ",
+                              "with the module it should come from.")
+    @test_throws expected_message X.x
 end
 
 # test showing MethodError with type argument

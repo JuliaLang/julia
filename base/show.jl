@@ -12,6 +12,13 @@ end
 
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
+function show(io::IO, ::MIME"text/plain", r::UnitRange)
+    show(io, r)
+    if !(get(io, :compact, false)::Bool) && isempty(r)
+        print(io, " (empty range)")
+    end
+end
+
 function show(io::IO, ::MIME"text/plain", r::LinRange)
     isempty(r) && return show(io, r)
     # show for LinRange, e.g.
@@ -435,7 +442,7 @@ get(io::IO, key, default) = default
 keys(io::IOContext) = keys(io.dict)
 keys(io::IO) = keys(ImmutableDict{Symbol,Any}())
 
-displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)
+displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)::Tuple{Int,Int}
 
 show_circular(io::IO, @nospecialize(x)) = false
 function show_circular(io::IOContext, @nospecialize(x))
@@ -1023,13 +1030,19 @@ end
 function isvisible(sym::Symbol, parent::Module, from::Module)
     isdeprecated(parent, sym) && return false
     isdefinedglobal(from, sym) || return false
+    isdefinedglobal(parent, sym) || return false
     parent_binding = convert(Core.Binding, GlobalRef(parent, sym))
     from_binding = convert(Core.Binding, GlobalRef(from, sym))
     while true
         from_binding === parent_binding && return true
         partition = lookup_binding_partition(tls_world_age(), from_binding)
-        is_some_imported(binding_kind(partition)) || break
+        is_some_explicit_imported(binding_kind(partition)) || break
         from_binding = partition_restriction(partition)::Core.Binding
+    end
+    parent_partition = lookup_binding_partition(tls_world_age(), parent_binding)
+    from_partition = lookup_binding_partition(tls_world_age(), from_binding)
+    if is_defined_const_binding(binding_kind(parent_partition)) && is_defined_const_binding(binding_kind(from_partition))
+        return parent_partition.restriction === from_partition.restriction
     end
     return false
 end
@@ -1769,8 +1782,8 @@ end
 
 const keyword_syms = Set([
     :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
-    :end, :export, :false, :finally, :for, :function, :global, :if, :import,
-    :let, :local, :macro, :module, :public, :quote, :return, :struct, :true,
+    :end, :export, :var"false", :finally, :for, :function, :global, :if, :import,
+    :let, :local, :macro, :module, :public, :quote, :return, :struct, :var"true",
     :try, :using, :while ])
 
 function is_valid_identifier(sym)
@@ -1819,7 +1832,7 @@ function show_sym(io::IO, sym::Symbol; allow_macroname=false)
         print(io, '@')
         show_sym(io, Symbol(sym_str[2:end]))
     else
-        print(io, "var", repr(string(sym))) # TODO: this is not quite right, since repr uses String escaping rules, and Symbol uses raw string rules
+        print(io, "var\"", escape_raw_string(string(sym)), '"')
     end
 end
 
@@ -3398,8 +3411,11 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     if kind == PARTITION_KIND_BACKDATED_CONST
         print(io, "backdated constant binding to ")
         print(io, partition_restriction(partition))
-    elseif is_defined_const_binding(kind)
+    elseif kind == PARTITION_KIND_CONST
         print(io, "constant binding to ")
+        print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_CONST_IMPORT
+        print(io, "constant binding (declared with `import`) to ")
         print(io, partition_restriction(partition))
     elseif kind == PARTITION_KIND_UNDEF_CONST
         print(io, "undefined const binding")
@@ -3409,9 +3425,12 @@ function print_partition(io::IO, partition::Core.BindingPartition)
         print(io, "ambiguous binding - guard entry")
     elseif kind == PARTITION_KIND_DECLARED
         print(io, "weak global binding declared using `global` (implicit type Any)")
-    elseif kind == PARTITION_KIND_IMPLICIT
-        print(io, "implicit `using` from ")
+    elseif kind == PARTITION_KIND_IMPLICIT_GLOBAL
+        print(io, "implicit `using` resolved to global ")
         print(io, partition_restriction(partition).globalref)
+    elseif kind == PARTITION_KIND_IMPLICIT_CONST
+        print(io, "implicit `using` resolved to constant ")
+        print(io, partition_restriction(partition))
     elseif kind == PARTITION_KIND_EXPLICIT
         print(io, "explicit `using` from ")
         print(io, partition_restriction(partition).globalref)
@@ -3434,7 +3453,7 @@ function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
     print(io, "Binding ")
     print(io, bnd.globalref)
     if !isdefined(bnd, :partitions)
-        print(io, "No partitions")
+        print(io, " - No partitions")
     else
         partition = @atomic bnd.partitions
         while true

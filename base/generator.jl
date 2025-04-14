@@ -66,7 +66,7 @@ struct HasShape{N} <: IteratorSize end
 struct IsInfinite <: IteratorSize end
 
 """
-    IteratorSize(itertype::Type) -> IteratorSize
+    IteratorSize(itertype::Type)::IteratorSize
 
 Given the type of an iterator, return one of the following values:
 
@@ -107,7 +107,7 @@ struct EltypeUnknown <: IteratorEltype end
 struct HasEltype <: IteratorEltype end
 
 """
-    IteratorEltype(itertype::Type) -> IteratorEltype
+    IteratorEltype(itertype::Type)::IteratorEltype
 
 Given the type of an iterator, return one of the following values:
 

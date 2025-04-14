@@ -1073,31 +1073,26 @@ typedef void (fintrinsic_op1)(unsigned, jl_value_t*, void*, void*);
 static inline jl_value_t *jl_fintrinsic_1(jl_value_t *ty, jl_value_t *a, const char *name, fintrinsic_op1 *bfloatop, fintrinsic_op1 *halfop, fintrinsic_op1 *floatop, fintrinsic_op1 *doubleop)
 {
     jl_task_t *ct = jl_current_task;
-    if (!jl_is_primitivetype(jl_typeof(a)))
+    jl_datatype_t *aty = (jl_datatype_t *)jl_typeof(a);
+    if (!jl_is_primitivetype(aty))
         jl_errorf("%s: value is not a primitive type", name);
     if (!jl_is_primitivetype(ty))
         jl_errorf("%s: type is not a primitive type", name);
     unsigned sz2 = jl_datatype_size(ty);
     jl_value_t *newv = jl_gc_alloc(ct->ptls, sz2, ty);
     void *pa = jl_data_ptr(a), *pr = jl_data_ptr(newv);
-    unsigned sz = jl_datatype_size(jl_typeof(a));
-    switch (sz) {
-    /* choose the right size c-type operation based on the input */
-    case 2:
-        if (jl_typeof(a) == (jl_value_t*)jl_float16_type)
-            halfop(sz2 * host_char_bit, ty, pa, pr);
-        else /*if (jl_typeof(a) == (jl_value_t*)jl_bfloat16_type)*/
-            bfloatop(sz2 * host_char_bit, ty, pa, pr);
-        break;
-    case 4:
+
+    if (aty == jl_float16_type)
+        halfop(sz2 * host_char_bit, ty, pa, pr);
+    else if (aty == jl_bfloat16_type)
+        bfloatop(sz2 * host_char_bit, ty, pa, pr);
+    else if (aty == jl_float32_type)
         floatop(sz2 * host_char_bit, ty, pa, pr);
-        break;
-    case 8:
+    else if (aty == jl_float64_type)
         doubleop(sz2 * host_char_bit, ty, pa, pr);
-        break;
-    default:
-        jl_errorf("%s: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64", name);
-    }
+    else
+        jl_errorf("%s: runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64", name);
+
     return newv;
 }
 
@@ -1273,6 +1268,7 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
     jl_task_t *ct = jl_current_task; \
     jl_value_t *ty = jl_typeof(a); \
+    jl_datatype_t *aty = (jl_datatype_t *)ty; \
     if (jl_typeof(b) != ty) \
         jl_error(#name ": types of a and b must match"); \
     if (!jl_is_primitivetype(ty)) \
@@ -1280,23 +1276,16 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
     int sz = jl_datatype_size(ty); \
     jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pr = jl_data_ptr(newv); \
-    switch (sz) { \
-    /* choose the right size c-type operation */ \
-    case 2: \
-        if ((jl_datatype_t*)ty == jl_float16_type) \
-            jl_##name##16(16, pa, pb, pr); \
-        else /*if ((jl_datatype_t*)ty == jl_bfloat16_type)*/ \
-            jl_##name##bf16(16, pa, pb, pr); \
-        break; \
-    case 4: \
+    if (aty == jl_float16_type) \
+        jl_##name##16(16, pa, pb, pr); \
+    else if (aty == jl_bfloat16_type) \
+        jl_##name##bf16(16, pa, pb, pr); \
+    else if (aty == jl_float32_type) \
         jl_##name##32(32, pa, pb, pr); \
-        break; \
-    case 8: \
+    else if (aty == jl_float64_type) \
         jl_##name##64(64, pa, pb, pr); \
-        break; \
-    default: \
-        jl_error(#name ": runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64"); \
-    } \
+    else \
+        jl_error(#name ": runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64"); \
     return newv; \
 }
 
@@ -1308,30 +1297,24 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b) \
 { \
     jl_value_t *ty = jl_typeof(a); \
+    jl_datatype_t *aty = (jl_datatype_t *)ty; \
     if (jl_typeof(b) != ty) \
         jl_error(#name ": types of a and b must match"); \
     if (!jl_is_primitivetype(ty)) \
         jl_error(#name ": values are not primitive types"); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b); \
-    int sz = jl_datatype_size(ty); \
     int cmp; \
-    switch (sz) { \
-    /* choose the right size c-type operation */ \
-    case 2: \
-        if ((jl_datatype_t*)ty == jl_float16_type) \
-            cmp = jl_##name##16(16, pa, pb); \
-        else /*if ((jl_datatype_t*)ty == jl_bfloat16_type)*/ \
-            cmp = jl_##name##bf16(16, pa, pb); \
-        break; \
-    case 4: \
+    if (aty == jl_float16_type) \
+        cmp = jl_##name##16(16, pa, pb); \
+    else if (aty == jl_bfloat16_type) \
+        cmp = jl_##name##bf16(16, pa, pb); \
+    else if (aty == jl_float32_type) \
         cmp = jl_##name##32(32, pa, pb); \
-        break; \
-    case 8: \
+    else if (aty == jl_float64_type) \
         cmp = jl_##name##64(64, pa, pb); \
-        break; \
-    default: \
-        jl_error(#name ": runtime floating point intrinsics are not implemented for bit sizes other than 32 and 64"); \
-    } \
+    else \
+        jl_error(#name ": runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64"); \
+ \
     return cmp ? jl_true : jl_false; \
 }
 
@@ -1344,6 +1327,7 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
 { \
     jl_task_t *ct = jl_current_task; \
     jl_value_t *ty = jl_typeof(a); \
+    jl_datatype_t *aty = (jl_datatype_t *)ty; \
     if (jl_typeof(b) != ty || jl_typeof(c) != ty) \
         jl_error(#name ": types of a, b, and c must match"); \
     if (!jl_is_primitivetype(ty)) \
@@ -1351,23 +1335,16 @@ JL_DLLEXPORT jl_value_t *jl_##name(jl_value_t *a, jl_value_t *b, jl_value_t *c) 
     int sz = jl_datatype_size(ty); \
     jl_value_t *newv = jl_gc_alloc(ct->ptls, sz, ty); \
     void *pa = jl_data_ptr(a), *pb = jl_data_ptr(b), *pc = jl_data_ptr(c), *pr = jl_data_ptr(newv); \
-    switch (sz) { \
-    /* choose the right size c-type operation */ \
-    case 2: \
-        if ((jl_datatype_t*)ty == jl_float16_type) \
+    if (aty == jl_float16_type) \
             jl_##name##16(16, pa, pb, pc, pr); \
-        else /*if ((jl_datatype_t*)ty == jl_bfloat16_type)*/ \
+    else if (aty == jl_bfloat16_type) \
             jl_##name##bf16(16, pa, pb, pc, pr); \
-        break; \
-    case 4: \
+    else if (aty == jl_float32_type) \
         jl_##name##32(32, pa, pb, pc, pr); \
-        break; \
-    case 8: \
+    else if (aty == jl_float64_type) \
         jl_##name##64(64, pa, pb, pc, pr); \
-        break; \
-    default: \
-        jl_error(#name ": runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64"); \
-    } \
+    else \
+        jl_error(#name ": runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64"); \
     return newv; \
 }
 
@@ -1629,8 +1606,8 @@ cvt_iintrinsic(LLVMFPtoUI, fptoui)
 #define fintrinsic_read_float32(p)   *(float *)p
 #define fintrinsic_read_float64(p)   *(double *)p
 
-#define fintrinsic_write_float16(p, x)  *(uint16_t *)p = float_to_half(x)
-#define fintrinsic_write_bfloat16(p, x) *(uint16_t *)p = float_to_bfloat(x)
+#define fintrinsic_write_float16(p, x)  *(uint16_t *)p = double_to_half(x)
+#define fintrinsic_write_bfloat16(p, x) *(uint16_t *)p = double_to_bfloat(x)
 #define fintrinsic_write_float32(p, x)  *(float *)p = x
 #define fintrinsic_write_float64(p, x)  *(double *)p = x
 
@@ -1661,7 +1638,7 @@ static inline void fptrunc(jl_datatype_t *aty, void *pa, jl_datatype_t *ty, void
     fptrunc_convert(float64, bfloat16);
     fptrunc_convert(float64, float32);
     else
-        jl_error("fptrunc: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
+        jl_error("fptrunc: runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64");
 #undef fptrunc_convert
 }
 
@@ -1685,7 +1662,7 @@ static inline void fpext(jl_datatype_t *aty, void *pa, jl_datatype_t *ty, void *
     fpext_convert(bfloat16, float64);
     fpext_convert(float32, float64);
     else
-        jl_error("fptrunc: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
+        jl_error("fptrunc: runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64");
 #undef fpext_convert
 }
 

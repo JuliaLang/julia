@@ -3,7 +3,7 @@
 ## hashing a single value ##
 
 """
-    hash(x[, h::UInt]) -> UInt
+    hash(x[, h::UInt])::UInt
 
 Compute an integer hash code such that `isequal(x,y)` implies `hash(x)==hash(y)`. The
 optional second argument `h` is another hash code to be mixed with the result.
@@ -15,7 +15,7 @@ Typically, any type that implements `hash` should also implement its own [`==`](
 
 The hash value may change when a new Julia process is started.
 
-```jldoctest
+```jldoctest; filter = r"0x[0-9a-f]{16}"
 julia> a = hash(10)
 0x95ea2955abd45275
 
@@ -97,6 +97,87 @@ function hash_integer(n::Integer, h::UInt)
     end
     return h
 end
+
+## efficient value-based hashing of floats ##
+
+const hx_NaN = hash_uint64(reinterpret(UInt64, NaN))
+function hash(x::Float64, h::UInt)
+    # see comments on trunc and hash(Real, UInt)
+    if typemin(Int64) <= x < typemax(Int64)
+        xi = fptosi(Int64, x)
+        if isequal(xi, x)
+            return hash(xi, h)
+        end
+    elseif typemin(UInt64) <= x < typemax(UInt64)
+        xu = fptoui(UInt64, x)
+        if isequal(xu, x)
+            return hash(xu, h)
+        end
+    elseif isnan(x)
+        return hx_NaN ⊻ h # NaN does not have a stable bit pattern
+    end
+    return hash_uint64(bitcast(UInt64, x)) - 3h
+end
+
+hash(x::Float32, h::UInt) = hash(Float64(x), h)
+
+function hash(x::Float16, h::UInt)
+    # see comments on trunc and hash(Real, UInt)
+    if isfinite(x) # all finite Float16 fit in Int64
+        xi = fptosi(Int64, x)
+        if isequal(xi, x)
+            return hash(xi, h)
+        end
+    elseif isnan(x)
+        return hx_NaN ⊻ h # NaN does not have a stable bit pattern
+    end
+    return hash_uint64(bitcast(UInt64, Float64(x))) - 3h
+end
+
+## generic hashing for rational values ##
+function hash(x::Real, h::UInt)
+    # decompose x as num*2^pow/den
+    num, pow, den = decompose(x)
+
+    # handle special values
+    num == 0 && den == 0 && return hash(NaN, h)
+    num == 0 && return hash(ifelse(den > 0, 0.0, -0.0), h)
+    den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
+
+    # normalize decomposition
+    if den < 0
+        num = -num
+        den = -den
+    end
+    num_z = trailing_zeros(num)
+    num >>= num_z
+    den_z = trailing_zeros(den)
+    den >>= den_z
+    pow += num_z - den_z
+    # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
+    # To be an Integer the denominator must be 1 and the power must be non-negative.
+    if den == 1
+        # left = ceil(log2(num*2^pow))
+        left = top_set_bit(abs(num)) + pow
+        # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
+        if -1074 <= pow
+            if 0 <= pow # if pow is non-negative, it is an integer
+                left <= 63 && return hash(Int64(num) << Int(pow), h)
+                left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
+            end # typemin(Int64) handled by Float64 case
+            # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
+            # Float64s only have 53 mantisa bits (including implicit bit)
+            left <= 1024 && left - pow <= 53 && return hash(ldexp(Float64(num), pow), h)
+        end
+    else
+        h = hash_integer(den, h)
+    end
+    # handle generic rational values
+    h = hash_integer(pow, h)
+    h = hash_integer(num, h)
+    return h
+end
+
 
 ## symbol & expression hashing ##
 

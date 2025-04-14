@@ -316,7 +316,7 @@ function init_stdio(handle::Ptr{Cvoid})
 end
 
 """
-    open(fd::OS_HANDLE) -> IO
+    open(fd::OS_HANDLE)::IO
 
 Take a raw file descriptor wrap it in a Julia-aware IO type,
 and take ownership of the fd handle.
@@ -615,9 +615,9 @@ end
 ## BUFFER ##
 ## Allocate space in buffer (for immediate use)
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
-    ensureroom(buffer, Int(recommended_size))
+    ensureroom(buffer, recommended_size)
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
-    nb = min(length(buffer.data)-buffer.offset, buffer.maxsize) + buffer.offset - ptr + 1
+    nb = min(length(buffer.data), buffer.maxsize + get_offset(buffer)) - ptr + 1
     return (Ptr{Cvoid}(pointer(buffer.data, ptr)), nb)
 end
 
@@ -943,8 +943,7 @@ function readbytes!(s::LibuvStream, a::Vector{UInt8}, nb::Int)
         nread = readbytes!(sbuf, a, nb)
     else
         initsize = length(a)
-        newbuf = PipeBuffer(a, maxsize=nb)
-        newbuf.size = newbuf.offset # reset the write pointer to the beginning
+        newbuf = _truncated_pipebuffer(a; maxsize=nb)
         nread = try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -991,8 +990,7 @@ function unsafe_read(s::LibuvStream, p::Ptr{UInt8}, nb::UInt)
     if bytesavailable(sbuf) >= nb
         unsafe_read(sbuf, p, nb)
     else
-        newbuf = PipeBuffer(unsafe_wrap(Array, p, nb), maxsize=Int(nb))
-        newbuf.size = newbuf.offset # reset the write pointer to the beginning
+        newbuf = _truncated_pipebuffer(unsafe_wrap(Array, p, nb); maxsize=Int(nb))
         try
             s.buffer = newbuf
             write(newbuf, sbuf)
@@ -1600,8 +1598,7 @@ function readbytes!(s::BufferStream, a::Vector{UInt8}, nb::Int)
             nread = readbytes!(sbuf, a, nb)
         else
             initsize = length(a)
-            newbuf = PipeBuffer(a, maxsize=nb)
-            newbuf.size = newbuf.offset # reset the write pointer to the beginning
+            newbuf = _truncated_pipebuffer(a; maxsize=nb)
             nread = try
                 s.buffer = newbuf
                 write(newbuf, sbuf)
