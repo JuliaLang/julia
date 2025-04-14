@@ -959,8 +959,7 @@ function retrieve_ir_for_inlining(cached_result::CodeInstance, src::CodeInfo)
     return inflate_ir!(copy(src), cached_result.def), SpecInfo(src), src.debuginfo
 end
 function retrieve_ir_for_inlining(cached_result::CodeInstance, optresult::OptimizationResult)
-    code_info = ir_to_codeinf!(optresult)
-    return retrieve_ir_for_inlining(cached_result, code_info)
+    return retrieve_ir_for_inlining(cached_result.def, optresult, true)
 end
 function retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo, preserve_local_sources::Bool)
     if preserve_local_sources
