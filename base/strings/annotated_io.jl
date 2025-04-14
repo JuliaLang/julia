@@ -264,7 +264,6 @@ show_annot(io::IO, ::MIME, ::Any) = nothing
 show_annot_(io::IO, @nospecialize(x::Any)) =
     invoke_in_world(tls_world_age(), show_annot, io, x)::Nothing
 
-
 show_annot_(io::IO, m::MIME, @nospecialize(x::Any)) =
     invoke_in_world(tls_world_age(), show_annot, io, m, x)::Nothing
 
