@@ -2408,10 +2408,10 @@ let S = Tuple{F1, Dict{Int, S1}} where {F1, S1<:Union{Int8, Val{F1}}},
 end
 
 let S = Tuple{F1, Val{S1}} where {F1, S1<:Dict{F1}}
-    T = Tuple{Any, Val{S2}} where {F2, S2<:Union{map(T->Dict{T}, Base.BitInteger_types)...}}
+    T = Tuple{Any, Val{S2}} where {F2, S2<:Union{map(T->Dict{T}, Base.BitInteger128_types)...}}
     ST = typeintersect(S, T)
     TS = typeintersect(S, T)
-    for U in Base.BitInteger_types
+    for U in Base.BitInteger128_types
         @test Tuple{U, Val{Dict{U,Nothing}}} <: S
         @test Tuple{U, Val{Dict{U,Nothing}}} <: T
         @test Tuple{U, Val{Dict{U,Nothing}}} <: ST
@@ -2523,8 +2523,8 @@ end
 abstract type MyAbstract47877{C}; end
 struct MyType47877{A,B} <: MyAbstract47877{A} end
 let A = Tuple{Type{T}, T} where T,
-    B = Tuple{Type{MyType47877{W, V} where V<:Union{Base.BitInteger, MyAbstract47877{W}}}, MyAbstract47877{<:Base.BitInteger}} where W
-    C = Tuple{Type{MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger}}, MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger}} where W<:Base.BitInteger
+    B = Tuple{Type{MyType47877{W, V} where V<:Union{Base.BitInteger128, MyAbstract47877{W}}}, MyAbstract47877{<:Base.BitInteger128}} where W
+    C = Tuple{Type{MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger128}}, MyType47877{W, V} where V<:Union{MyAbstract47877{W}, Base.BitInteger128}} where W<:Base.BitInteger128
     # ensure that merge_env for innervars does not blow up (the large Unions ensure this will take excessive memory if it does)
     @testintersect(A, B, C)
 end
@@ -2537,8 +2537,8 @@ let
 end
 
 #issue 48582
-@test !<:(Tuple{Pair{<:T,<:T}, Val{S} where {S}} where {T<:Base.BitInteger},
-          Tuple{Pair{<:T,<:T}, Val{Int}} where {T<:Base.BitInteger})
+@test !<:(Tuple{Pair{<:T,<:T}, Val{S} where {S}} where {T<:Base.BitInteger128},
+          Tuple{Pair{<:T,<:T}, Val{Int}} where {T<:Base.BitInteger128})
 
 struct T48695{T, N, H<:AbstractArray} <: AbstractArray{Union{Missing, T}, N} end
 struct S48695{T, N, H<:AbstractArray{T, N}} <: AbstractArray{T, N} end
@@ -2602,7 +2602,7 @@ let T = Tuple{Union{Type{T}, Type{S}}, Union{Val{T}, Val{S}}, Union{Val{T}, S}} 
 end
 
 #issue #49857
-@test !<:(Type{Vector{Union{Base.BitInteger, Base.IEEEFloat, StridedArray, Missing, Nothing, Val{T}}}} where {T}, Type{Array{T}} where {T})
+@test !<:(Type{Vector{Union{Base.BitInteger128, Base.IEEEFloat, StridedArray, Missing, Nothing, Val{T}}}} where {T}, Type{Array{T}} where {T})
 
 #issue 50195
 let a = Tuple{Type{X} where X<:Union{Nothing, Val{X1} where {X4, X1<:(Pair{X2, Val{X2}} where X2<:Val{X4})}}},

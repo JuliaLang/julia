@@ -1258,7 +1258,7 @@ end
     @test (Complex(1,2)/Complex(2.5,3.0))*Complex(2.5,3.0) ≈ Complex(1,2)
     @test 0.7 < real(sqrt(Complex(0,1))) < 0.707107
 end
-for T in Base.BitSigned_types
+for T in Base.BitSigned128_types
     @test abs(typemin(T)) == -typemin(T)
     #for x in (typemin(T),convert(T,-1),zero(T),one(T),typemax(T))
     #    @test signed(unsigned(x)) == x
@@ -2634,7 +2634,7 @@ end
 end
 
 @testset "PR #16995" begin
-    let types = (Base.BitInteger_types..., BigInt, Bool,
+    let types = (Base.BitInteger128_types..., BigInt, Bool,
                  Rational{Int}, Rational{BigInt},
                  Float16, Float32, Float64, BigFloat,
                  Complex{Int}, Complex{UInt}, ComplexF16, ComplexF32, ComplexF64)
@@ -2657,7 +2657,7 @@ end
         @test @inferred(Base.promote_op(!, Bool)) === Bool
     end
 
-    let types = (Base.BitInteger_types..., BigInt, Bool,
+    let types = (Base.BitInteger128_types..., BigInt, Bool,
                  Rational{Int}, Rational{BigInt},
                  Float16, Float32, Float64, BigFloat)
         for S in types, T in types
@@ -2667,7 +2667,7 @@ end
         end
     end
 
-    let types = (Base.BitInteger_types..., BigInt, Bool)
+    let types = (Base.BitInteger128_types..., BigInt, Bool)
         for S in types
             T = @inferred Base.promote_op(~, S)
             t = @inferred ~one(S)

@@ -577,7 +577,7 @@ end
     end
     _rand(F::Type{<:AbstractFloat}) = F(_rand(BigInt, round(Int, log2(floatmax(F))))) + rand(F)
     _rand(T) = rand(T)
-    for T in (Base.BitInteger_types..., BigInt, Float64, Float32, Float16)
+    for T in (Base.BitInteger128_types..., BigInt, Float64, Float32, Float16)
         @test cmp(big(2)^130, one(T)) === 1
         @test cmp(-big(2)^130, one(T)) === -1
         c = cmp(_rand(BigInt), _rand(T))

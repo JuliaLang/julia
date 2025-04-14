@@ -268,7 +268,7 @@ end
 
 # don't assume effects for general integers since we cannot know their implementation
 # not nothrow because r<0 throws
-@assume_effects :foldable repeat(s::String, r::BitInteger) = @invoke repeat(s::String, r::Integer)
+@assume_effects :foldable repeat(s::String, r::BitInteger128) = @invoke repeat(s::String, r::Integer)
 
 function repeat(s::Union{String, SubString{String}}, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))

@@ -749,7 +749,7 @@ end
 end
 
 @testset "Promotions on binary operations with Rationals (#36277)" begin
-    inttypes = (Base.BitInteger_types..., BigInt)
+    inttypes = (Base.BitInteger128_types..., BigInt)
     for T in inttypes, S in inttypes
         U = Rational{promote_type(T, S)}
         @test typeof(one(Rational{T}) + one(S)) == typeof(one(S) + one(Rational{T})) == typeof(one(Rational{T}) + one(Rational{S})) == U
