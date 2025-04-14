@@ -117,31 +117,34 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             # we can now widen our applicability in the global cache too
             store_backedges(ci, edges)
         end
-        inferred_result = nothing
-        uncompressed = result.src
-        const_flag = is_result_constabi_eligible(result)
         debuginfo = get_debuginfo(result.src)
+        const_flag = is_result_constabi_eligible(result)
         discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
-        if !discard_src
-            inferred_result = transform_result_for_cache(interp, result, edges)
-            if inferred_result !== nothing
-                uncompressed = inferred_result
-                debuginfo = get_debuginfo(inferred_result)
-                # Inlining may fast-path the global cache via `VolatileInferenceResult`, so store it back here
-                result.src = inferred_result
+        codegen = codegen_cache(interp)
+        may_add_to_codegen = !discard_src && codegen !== nothing
+        if discard_src
+            cached = nothing
+            result.src = nothing
+        else
+            cached = transform_result_for_cache(interp, result, edges)
+            if may_add_to_codegen
+                uncompressed = code_info_for_codegen(result, cached, edges)
             end
+            # Inlining may fast-path the global cache via `VolatileInferenceResult`, so store it back here
+            result.src = cached
+            debuginfo = get_debuginfo(cached)
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
-            if inferred_result isa CodeInfo
+            if cached isa CodeInfo
                 if may_compress(interp)
-                    nslots = length(inferred_result.slotflags)
-                    resize!(inferred_result.slottypes::Vector{Any}, nslots)
-                    resize!(inferred_result.slotnames, nslots)
+                    nslots = length(cached.slotflags)
+                    resize!(cached.slottypes::Vector{Any}, nslots)
+                    resize!(cached.slotnames, nslots)
                 end
-                inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result)
+                cached = maybe_compress_codeinfo(interp, result.linfo, cached)
                 result.is_src_volatile = false
             elseif ci.owner === nothing
                 # The global cache can only handle objects that codegen understands
-                inferred_result = nothing
+                cached = nothing
             end
         end
         if debuginfo === nothing
@@ -151,17 +154,13 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         time_self_ns = caller.time_self_ns + (time_now - time_before)
         time_total = (time_now - caller.time_start - caller.time_paused) * 1e-9
         ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
-            ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
+            ci, cached, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
             result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
         engine_reject(interp, ci)
-        codegen = codegen_cache(interp)
-        if !discard_src && codegen !== nothing && (isa(uncompressed, CodeInfo) || isa(uncompressed, OptimizationState))
-            if isa(uncompressed, OptimizationState)
-                uncompressed = ir_to_codeinf!(uncompressed, edges)
-            end
+        if may_add_to_codegen && uncompressed !== nothing
             # record that the caller could use this result to generate code when required, if desired, to avoid repeating n^2 work
             codegen[ci] = uncompressed
-            if bootstrapping_compiler && inferred_result == nothing
+            if bootstrapping_compiler && cached === nothing
                 # This is necessary to get decent bootstrapping performance
                 # when compiling the compiler to inject everything eagerly
                 # where codegen can start finding and using it right away
@@ -171,6 +170,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 end
             end
         end
+    elseif isa(result.src, OptimizationState)
+        # XXX: what should we do with the edges?
+        result.src = result.src.optresult
     end
     return nothing
 end
@@ -323,27 +325,24 @@ end
 function compute_inlining_cost(interp::AbstractInterpreter, result::InferenceResult)
     src = result.src
     isa(src, OptimizationState) || return MAX_INLINE_COST
-    compute_inlining_cost(interp, result, src.optresult)
+    return compute_inlining_cost(interp, src.optresult)
 end
 
-function compute_inlining_cost(interp::AbstractInterpreter, result::InferenceResult, optresult#=::OptimizationResult=#)
-    return inline_cost_model(interp, result, optresult.inline_flag, optresult.ir)
+function compute_inlining_cost(interp::AbstractInterpreter, optresult#=::OptimizationResult=#)
+    return inline_cost_model(interp, optresult)
 end
 
-function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
-        inline_flag::UInt8, ir::IRCode)
+function inline_cost_model(interp::AbstractInterpreter, optresult#=::OptimizationResult=#)
+    optresult.inline_flag === SRC_FLAG_DECLARED_NOINLINE && return MAX_INLINE_COST
 
-    inline_flag === SRC_FLAG_DECLARED_NOINLINE && return MAX_INLINE_COST
-
-    mi = result.linfo
-    (; def, specTypes) = mi
+    (; def, specTypes) = optresult.mi
     if !isa(def, Method)
         return MAX_INLINE_COST
     end
 
-    declared_inline = inline_flag === SRC_FLAG_DECLARED_INLINE
+    declared_inline = optresult.inline_flag === SRC_FLAG_DECLARED_INLINE
 
-    rt = result.result
+    rt = optresult.rt
     @assert !(rt isa LimitedAccuracy)
     rt = widenslotwrapper(rt)
 
@@ -376,7 +375,7 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
                 cost_threshold += 4*default
             end
         end
-        return inline_cost_model(ir, params, cost_threshold)
+        return inline_cost_model(optresult.ir, params, cost_threshold)
     end
 end
 
@@ -385,33 +384,37 @@ function transform_result_for_local_cache(interp::AbstractInterpreter, result::I
         return nothing
     end
     src = result.src
-    if isa(src, OptimizationState)
-        # Compute and store any information required to determine the inlineability of the callee.
-        opt = src
-        opt.src.inlining_cost = compute_inlining_cost(interp, result)
-    end
-    return src
+    !isa(src, OptimizationState) && return src
+    # Compute and store any information required to determine the inlineability of the callee.
+    compute_inlining_cost!(src.optresult, interp)
+    return src.optresult
 end
 
 function transform_result_for_cache(interp::AbstractInterpreter, result::InferenceResult, edges::SimpleVector)
-    inlining_cost = nothing
     src = result.src
     if isa(src, OptimizationState)
-        opt = src
-        inlining_cost = compute_inlining_cost(interp, result, opt.optresult)
-        discard_optimized_result(interp, opt, inlining_cost) && return nothing
-        src = ir_to_codeinf!(opt)
-    end
-    if isa(src, CodeInfo)
+        optresult = src.optresult
+        inlining_cost = compute_inlining_cost!(optresult, interp)
+        discard_optimized_result(interp, optresult) && return optresult
+        return ir_to_codeinf!(optresult, edges)
+    elseif isa(src, CodeInfo)
         src.edges = edges
-        src.inlining_cost = inlining_cost !== nothing ? inlining_cost : compute_inlining_cost(interp, result)
+        src.inlining_cost = compute_inlining_cost(interp, result)
     end
     return src
 end
 
-function discard_optimized_result(interp::AbstractInterpreter, opt#=::OptimizationState=#, inlining_cost#=::InlineCostType=#)
+function discard_optimized_result(interp::AbstractInterpreter, optresult#=::OptimizationResult=#)
     may_discard_trees(interp) || return false
-    return inlining_cost == MAX_INLINE_COST
+    return optresult.inlining_cost == MAX_INLINE_COST
+end
+
+function code_info_for_codegen(result::InferenceResult, @nospecialize(cached), edges::SimpleVector)
+    isa(cached, CodeInfo) && return cached
+    isa(cached, OptimizationResult) && return ir_to_codeinf!(cached, edges)
+    isa(result.src, CodeInfo) && return result.src
+    isa(result.src, OptimizationState) && return ir_to_codeinf!(result.src.optresult, edges)
+    return nothing
 end
 
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
@@ -1190,8 +1193,10 @@ function typeinf_frame(interp::AbstractInterpreter, mi::MethodInstance, run_opti
             src = codeinfo_for_const(interp, frame.linfo, rt.val)
         else
             opt = OptimizationState(frame, interp)
-            optimize(interp, opt, frame.result)
-            src = ir_to_codeinf!(opt, frame, Core.svec(opt.inlining.edges...))
+            optresult = optimize(interp, opt, frame.result)
+            compute_inlining_cost!(optresult, frame.interp)
+            edges = Core.svec(opt.inlining.edges...)
+            src = ir_to_codeinf!(optresult, edges)
         end
         result.src = frame.src = src
     end

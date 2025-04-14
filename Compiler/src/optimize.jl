@@ -132,8 +132,10 @@ is_declared_noinline(@nospecialize src::MaybeCompressed) =
 # return whether this src should be inlined. If so, retrieve_ir_for_inlining must return an IRCode from it
 function src_inlining_policy(interp::AbstractInterpreter,
     @nospecialize(src), @nospecialize(info::CallInfo), stmt_flag::UInt32)
-    isa(src, OptimizationState) && (src = src.src)
-    if isa(src, MaybeCompressed)
+    if isa(src, OptimizationResult)
+        src_inlineable = is_stmt_inline(stmt_flag) || src.inlining_cost != MAX_INLINE_COST
+        return src_inlineable
+    elseif isa(src, MaybeCompressed)
         src_inlineable = is_stmt_inline(stmt_flag) || is_inlineable(src)
         return src_inlineable
     elseif isa(src, IRCode)
@@ -159,14 +161,27 @@ end
 code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.world)
 
 mutable struct OptimizationResult
+    const mi::MethodInstance
+    const src::CodeInfo
     ir::IRCode
-    inline_flag::UInt8
     simplified::Bool # indicates whether the IR was processed with `cfg_simplify!`
+    const inline_flag::UInt8
+    inlining_cost::InlineCostType # `MAX_INLINE_COST` if not computed yet via `compute_inlining_cost!`
+    const rt::Any # return type computed by inference
+
+    # uninitialized fields
+    code_info::CodeInfo
+
+    OptimizationResult(mi::MethodInstance, src::CodeInfo, ir::IRCode, inline_flag::UInt8, rt::Any; simplified::Bool = false) = new(mi, src, ir, simplified, inline_flag, MAX_INLINE_COST, rt)
 end
 
-function simplify_ir!(result::OptimizationResult)
-    result.ir = cfg_simplify!(result.ir)
-    result.simplified = true
+function simplify_ir!(optresult::OptimizationResult)
+    optresult.ir = cfg_simplify!(optresult.ir)
+    optresult.simplified = true
+end
+
+function compute_inlining_cost!(optresult::OptimizationResult, interp::AbstractInterpreter)
+    optresult.inlining_cost = compute_inlining_cost(interp, optresult)
 end
 
 mutable struct OptimizationState{Interp<:AbstractInterpreter}
@@ -228,6 +243,12 @@ function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
     return OptimizationState(mi, src, interp)
 end
 
+function OptimizationResult(opt::OptimizationState, ir::IRCode, result::InferenceResult)
+    inline_flag = ccall(:jl_ir_flag_inlining, UInt8, (Any,), opt.src)
+    rt = result.result
+    OptimizationResult(result.linfo, opt.src, ir, inline_flag, rt)
+end
+
 function argextype end # imported by EscapeAnalysis
 function try_compute_field end # imported by EscapeAnalysis
 
@@ -240,32 +261,19 @@ include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
-function ir_to_codeinf!(opt::OptimizationState, frame::InferenceState, edges::SimpleVector)
-    ir_to_codeinf!(opt, edges, compute_inlining_cost(frame.interp, frame.result, opt.optresult))
-end
-
-function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector, inlining_cost::InlineCostType)
-    src = ir_to_codeinf!(opt, edges)
-    src.inlining_cost = inlining_cost
-    src
-end
-
-function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector)
-    src = ir_to_codeinf!(opt)
+function ir_to_codeinf!(optresult::OptimizationResult, edges::SimpleVector)
+    src = ir_to_codeinf!(optresult)
     src.edges = edges
     src
 end
 
-function ir_to_codeinf!(opt::OptimizationState)
-    (; linfo, src, optresult) = opt
-    if optresult === nothing
-        return src
-    end
-    src = ir_to_codeinf!(src, optresult.ir)
-    opt.optresult = nothing
-    opt.src = src
-    maybe_validate_code(linfo, src, "optimized")
-    return src
+function ir_to_codeinf!(optresult::OptimizationResult)
+    isdefined(optresult, :code_info) && return optresult.code_info
+    code_info = ir_to_codeinf!(optresult.src, optresult.ir)
+    code_info.inlining_cost = optresult.inlining_cost
+    optresult.code_info = code_info
+    maybe_validate_code(optresult.mi, code_info, "optimized")
+    code_info
 end
 
 function ir_to_codeinf!(src::CodeInfo, ir::IRCode)
@@ -509,9 +517,9 @@ abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = typ
 
 Called at the end of optimization to store the resulting IR back into the OptimizationState.
 """
-function finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
-    opt.optresult = OptimizationResult(ir, ccall(:jl_ir_flag_inlining, UInt8, (Any,), opt.src), false)
-    return nothing
+function finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode, caller::InferenceResult)
+    opt.optresult = OptimizationResult(opt, ir, caller)
+    return opt.optresult
 end
 
 function visit_bb_phis!(callback, ir::IRCode, bb::Int)
@@ -984,8 +992,7 @@ end
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
     @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
-    finishopt!(interp, opt, ir)
-    return nothing
+    return finishopt!(interp, opt, ir, caller)
 end
 
 const ALL_PASS_NAMES = String[]
