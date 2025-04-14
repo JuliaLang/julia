@@ -394,7 +394,7 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     src = result.src
     if isa(src, OptimizationState)
         optresult = src.optresult
-        inlining_cost = compute_inlining_cost!(optresult, interp)
+        compute_inlining_cost!(optresult, interp)
         discard_optimized_result(interp, optresult) && return optresult
         return ir_to_codeinf!(optresult, edges)
     elseif isa(src, CodeInfo)
