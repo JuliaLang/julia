@@ -28,7 +28,7 @@ function rand!(rd::RandomDevice, A::Array{Bool}, ::SamplerType{Bool})
     end
     return A
 end
-for T in BitInteger_types
+for T in BitInteger128_types
     @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = Libc.getrandom!(A)
 end
 
@@ -664,7 +664,7 @@ function rand!(r::MersenneTwister, A::UnsafeView{UInt128}, ::SamplerType{UInt128
     A
 end
 
-for T in BitInteger_types
+for T in BitInteger128_types
     @eval function rand!(r::MersenneTwister, A::Array{$T}, sp::SamplerType{$T})
         GC.@preserve A rand!(r, UnsafeView(pointer(A), length(A)), sp)
         A

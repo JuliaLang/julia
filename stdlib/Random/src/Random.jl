@@ -15,7 +15,7 @@ using Base.GMP.MPZ
 using Base.GMP: Limb
 import SHA
 
-using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
+using Base: BitInteger, BitInteger128_types, BitUnsigned, require_one_based_indexing
 import Base: copymutable, copy, copy!, ==, hash, convert,
              rand, randn, show
 
@@ -295,7 +295,7 @@ rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X
 
 # SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
 SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
-const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
+const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger128_types...)
 
 
 include("Xoshiro.jl")

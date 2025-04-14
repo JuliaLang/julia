@@ -2583,9 +2583,9 @@ end
 
 @test length(range(1, length=typemax(Int128))) === typemax(Int128)
 
-@testset "firstindex(::StepRange{<:Base.BitInteger})" begin
+@testset "firstindex(::StepRange{<:Base.BitInteger128})" begin
     test_firstindex(x) = firstindex(x) === first(Base.axes1(x))
-    for T in Base.BitInteger_types, S in Base.BitInteger_types
+    for T in Base.BitInteger128_types, S in Base.BitInteger128_types
         @test test_firstindex(StepRange{T,S}(1, 1, 1))
         @test test_firstindex(StepRange{T,S}(1, 1, 0))
     end

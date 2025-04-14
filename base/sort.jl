@@ -5,7 +5,7 @@ module Sort
 using Base.Order
 
 using Base: copymutable, midpoint, require_one_based_indexing, uinttype, tail,
-    sub_with_overflow, add_with_overflow, OneTo, BitSigned, BitIntegerType, top_set_bit
+    sub_with_overflow, add_with_overflow, OneTo, BitSigned, top_set_bit
 
 import Base:
     sort,
@@ -2270,7 +2270,8 @@ uint_map(x::Signed, ::ForwardOrdering) =
 uint_unmap(::Type{T}, u::Unsigned, ::ForwardOrdering) where T <: Signed =
     xor(signed(u), typemin(T))
 
-UIntMappable(T::BitIntegerType, ::ForwardOrdering) = unsigned(T)
+UIntMappable(T::Type{<:Base.BitInteger}, ::ForwardOrdering) =
+    isconcretetype(T) ? unsigned(T) : nothing
 
 # Floats are not UIntMappable under regular orderings because they fail on NaN edge cases.
 # uint mappings for floats are defined in Float, where the Left and Right orderings

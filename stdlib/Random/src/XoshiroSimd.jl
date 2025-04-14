@@ -4,7 +4,7 @@ module XoshiroSimd
 # Getting the xoroshiro RNG to reliably vectorize is somewhat of a hassle without Simd.jl.
 import ..Random: rand!
 using ..Random: TaskLocalRNG, rand, Xoshiro, CloseOpen01, UnsafeView, SamplerType, SamplerTrivial, getstate, setstate!, _uint2float
-using Base: BitInteger_types
+using Base: BitInteger128_types
 using Base.Libc: memcpy
 using Core.Intrinsics: llvmcall
 
@@ -299,7 +299,7 @@ function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::MutableDenseArray{T}, ::S
     dst
 end
 
-for T in BitInteger_types
+for T in BitInteger128_types
     @eval function rand!(rng::Union{TaskLocalRNG, Xoshiro}, dst::MutableDenseArray{$T}, ::SamplerType{$T})
         GC.@preserve dst xoshiro_bulk(rng, convert(Ptr{UInt8}, pointer(dst)), length(dst)*sizeof($T), UInt8, xoshiroWidth())
         dst

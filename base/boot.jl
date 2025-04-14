@@ -251,6 +251,8 @@ abstract type AbstractFloat <: Real end
 abstract type Integer  <: Real end
 abstract type Signed   <: Integer end
 abstract type Unsigned <: Integer end
+abstract type BitSigned   <: Signed end
+abstract type BitUnsigned <: Unsigned end
 
 primitive type Float16 <: AbstractFloat 16 end
 primitive type Float32 <: AbstractFloat 32 end
@@ -262,16 +264,16 @@ primitive type BFloat16 <: AbstractFloat 16 end
 abstract type AbstractChar end
 primitive type Char <: AbstractChar 32 end
 
-primitive type Int8    <: Signed   8 end
-#primitive type UInt8   <: Unsigned 8 end
-primitive type Int16   <: Signed   16 end
-#primitive type UInt16  <: Unsigned 16 end
-#primitive type Int32   <: Signed   32 end
-#primitive type UInt32  <: Unsigned 32 end
-#primitive type Int64   <: Signed   64 end
-#primitive type UInt64  <: Unsigned 64 end
-primitive type Int128  <: Signed   128 end
-primitive type UInt128 <: Unsigned 128 end
+primitive type Int8    <: BitSigned   8 end
+#primitive type UInt8   <: BitUnsigned 8 end
+primitive type Int16   <: BitSigned   16 end
+#primitive type UInt16  <: BitUnsigned 16 end
+#primitive type Int32   <: BitSigned   32 end
+#primitive type UInt32  <: BitUnsigned 32 end
+#primitive type Int64   <: BitSigned   64 end
+#primitive type UInt64  <: BitUnsigned 64 end
+primitive type Int128  <: BitSigned   128 end
+primitive type UInt128 <: BitUnsigned 128 end
 
 if Int === Int64
     const UInt = UInt64

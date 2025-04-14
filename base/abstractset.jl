@@ -90,7 +90,11 @@ function union!(s::AbstractSet, sets...)
 end
 
 max_values(::Type) = typemax(Int)
-max_values(T::Union{map(X -> Type{X}, BitIntegerSmall_types)...}) = 1 << (8*sizeof(T))
+max_values(::Type{T}) where {T <: BitInteger} =
+    T isa Union ? invoke(max_values, Tuple{Union}, T) :
+    is_small_int_type(T) ? 1 << (8*sizeof(T)) :
+    typemax(Int)
+
 # saturated addition to prevent overflow with typemax(Int)
 function max_values(T::Union)
     a = max_values(T.a)::Int

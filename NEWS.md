@@ -9,6 +9,10 @@ New language features
 Language changes
 ----------------
 
+  - `Base` internal types `BitSigned` and `BitUnsigned` now refer to abstract types instead of unions, and
+    `BitInteger` is defined to `Union{BitSigned, BitUnsigned}`; builtin integer types inherit either from
+    `BitSigned` or `BitUnsigned`.
+
 Compiler/Runtime improvements
 -----------------------------
 
