@@ -1007,10 +1007,26 @@ morespecific(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type
 morespecific(a::Method, b::Method) = ccall(:jl_method_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
-    fieldoffset(type, i)
+    fieldoffset(type, name::Symbol | i::Int)
 
-The byte offset of field `i` of a type relative to the data start. For example, we could
-use it in the following manner to summarize information about a struct:
+The byte offset of a field (specified by name or index) of a type relative to its start.
+
+# Examples
+```jldoctest
+julia> struct Foo
+           x::Int64
+           y::String
+       end
+
+julia> fieldoffset(Foo, 2)
+0x0000000000000008
+
+julia> fieldoffset(Foo, :x)
+0x0000000000000000
+```
+
+We can use it to summarize information about a struct (see
+[`About.jl`](https://juliapackages.com/p/about) for a package with similar functionality):
 
 ```jldoctest
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
@@ -1034,6 +1050,7 @@ julia> structinfo(Base.Filesystem.StatStruct)
 ```
 """
 fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
+fieldoffset(x::DataType, name::Symbol) = fieldoffset(x, fieldindex(x, name))
 
 """
     fieldtype(T, name::Symbol | index::Int)
