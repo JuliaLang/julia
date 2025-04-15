@@ -21,9 +21,11 @@ TracySrcLoc(zone_name::String, function_name::Symbol, file::Symbol, line::UInt32
     TracySrcLoc(C_NULL, C_NULL, C_NULL, line, color, zone_name, function_name, file)
 
 @noinline function reinit!(srcloc::TracySrcLoc)
+    lock_timing()
     srcloc.zone_name = _strpointer(srcloc.zone_name_str)
     srcloc.function_name = unsafe_convert(Ptr{UInt8}, srcloc.function_name_sym)
     srcloc.file = unsafe_convert(Ptr{UInt8}, srcloc.file_sym)
+    unlock_timing()
 end
 
 struct TracyZoneCtx
@@ -35,6 +37,7 @@ const srclocs = Vector{TracySrcLoc}()
 
 function tracy_zone_create(name::String, ex::Expr, linfo::LineNumberNode)
     # Intern strings
+    lock_timing()
     for loc in srclocs
         if loc.zone_name_str === name
             name = loc.zone_name_str
@@ -44,6 +47,7 @@ function tracy_zone_create(name::String, ex::Expr, linfo::LineNumberNode)
     loc = TracySrcLoc(name, Symbol("unknown"), linfo.file, UInt32(linfo.line), UInt32(0))
     # Also roots `loc` in `srclocs`
     push!(srclocs, loc)
+    unlock_timing()
     return loc
 end
 
