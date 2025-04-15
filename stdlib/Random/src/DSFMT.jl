@@ -159,7 +159,7 @@ end
 const JumpPolys = Base.Lockable(Dict{BigInt,GF2X}())
 
 # OncePerProcess because it can not be initialized at load time
-const CharPoly = OncePerProcess{GF2X}(Returns(GF2X(Poly19937)))
+const CharPoly = OncePerProcess{GF2X}(() -> GF2X(Poly19937))
 
 """
     calc_jump(steps::Integer)
