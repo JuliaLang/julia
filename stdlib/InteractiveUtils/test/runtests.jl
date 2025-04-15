@@ -867,7 +867,7 @@ end
 @test Base.infer_return_type(sin, (Int,)) == InteractiveUtils.@infer_return_type sin(42)
 @test Base.infer_exception_type(sin, (Int,)) == InteractiveUtils.@infer_exception_type sin(42)
 @test first(InteractiveUtils.@code_ircode sin(42)) isa Core.Compiler.IRCode
-@test first(InteractiveUtils.@code_ircode optimize_until="Inlining" sin(42)) isa Core.Compiler.IRCode
+@test first(InteractiveUtils.@code_ircode optimize_until="inlining" sin(42)) isa Core.Compiler.IRCode
 # Test.@inferred also uses `gen_call_with_extracted_types`
 @test Test.@inferred round(1.2) isa Float64
 @test Test.@inferred round(1.3; digits = 3) isa Float64

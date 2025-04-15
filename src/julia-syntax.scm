@@ -439,9 +439,11 @@
                           ,body))))
        (if (or (symbol? name) (globalref? name))
            `(block ,@generator (method ,name) (latestworld-if-toplevel) ,mdef (unnecessary ,name))  ;; return the function
-           (if (not (null? generator))
-               `(block ,@generator ,mdef)
-               mdef))))))
+           (if (overlay? name)
+             (if (not (null? generator))
+                `(block ,@generator ,mdef)
+                mdef)
+            `(block ,@generator ,mdef (null))))))))
 
 ;; wrap expr in nested scopes assigning names to vals
 (define (scopenest names vals expr)
@@ -4127,6 +4129,7 @@ f(x) = yt(x)
                                 '()
                                 (map-cl-convert (butlast (cdr sig))
                                                 fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))
+                  (r        (make-ssavalue))
                   (sig      (and sig (if (eq? (car sig) 'block)
                                          (last sig)
                                          sig))))
@@ -4150,7 +4153,7 @@ f(x) = yt(x)
                        ((null? cvs)
                         `(block
                           ,@sp-inits
-                          (method ,(cadr e) ,(cl-convert
+                          (= ,r (method ,(cadr e) ,(cl-convert
                                           ;; anonymous functions with keyword args generate global
                                           ;; functions that refer to the type of a local function
                                           (rename-sig-types sig namemap)
@@ -4162,17 +4165,19 @@ f(x) = yt(x)
                                      `(lambda ,(cadr lam2)
                                         (,(clear-capture-bits (car vis))
                                          ,@(cdr vis))
-                                        ,body)))
-                          (latestworld)))
+                                        ,body))))
+                          (latestworld)
+                          ,r))
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '() #f parsed-method-stack)))
                                (top-stmts (cdr exprs))
                                (newlam    (compact-and-renumber (linearize (car exprs)) 'none 0)))
                           `(toplevel-butfirst
                             (block ,@sp-inits
-                                   (method ,(cadr e) ,(cl-convert sig fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)
-                                           ,(julia-bq-macro newlam))
-                                   (latestworld))
+                                   (= ,r (method ,(cadr e) ,(cl-convert sig fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)
+                                           ,(julia-bq-macro newlam)))
+                                   (latestworld)
+                                   ,r)
                             ,@top-stmts))))
 
                  ;; local case - lift to a new type at top level
@@ -4999,8 +5004,10 @@ f(x) = yt(x)
                                  (let ((l  (make-ssavalue)))
                                    (emit `(= ,l ,(compile lam break-labels #t #f)))
                                    l))))
-                   (emit `(method ,(or (cadr e) '(false)) ,sig ,lam))
-                   (if value (compile '(null) break-labels value tail)))
+                   (let ((val (make-ssavalue)))
+                    (emit `(= ,val (method ,(or (cadr e) '(false)) ,sig ,lam)))
+                    (if tail (emit-return tail val))
+                    val))
                  (cond (tail  (emit-return tail e))
                        (value e)
                        (else  (emit e)))))

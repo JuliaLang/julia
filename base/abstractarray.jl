@@ -321,11 +321,13 @@ eachindex(itrs...) = keys(itrs...)
 eachindex(A::AbstractVector) = (@inline(); axes1(A))
 
 
-@noinline function throw_eachindex_mismatch_indices(::IndexLinear, inds...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same indices, got $(join(inds, ", ", " and "))"))
-end
-@noinline function throw_eachindex_mismatch_indices(::IndexCartesian, inds...)
-    throw(DimensionMismatch("all inputs to eachindex must have the same axes, got $(join(inds, ", ", " and "))"))
+# we unroll the join for easier inference
+_join_comma_and(indsA, indsB) = LazyString(indsA, " and ", indsB)
+_join_comma_and(indsA, indsB, indsC...) = LazyString(indsA, ", ", _join_comma_and(indsB, indsC...))
+@noinline function throw_eachindex_mismatch_indices(indices_str, indsA, indsBs...)
+    throw(DimensionMismatch(
+            LazyString("all inputs to eachindex must have the same ", indices_str, ", got ",
+                _join_comma_and(indsA, indsBs...))))
 end
 
 """
@@ -390,15 +392,11 @@ eachindex(::IndexLinear, A::AbstractVector) = (@inline; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
     @inline
     indsA = eachindex(IndexLinear(), A)
-    _all_match_first(X->eachindex(IndexLinear(), X), indsA, B...) ||
-        throw_eachindex_mismatch_indices(IndexLinear(), eachindex(A), eachindex.(B)...)
+    indsBs = map(X -> eachindex(IndexLinear(), X), B)
+    all(==(indsA), indsBs) ||
+        throw_eachindex_mismatch_indices("indices", indsA, indsBs...)
     indsA
 end
-function _all_match_first(f::F, inds, A, B...) where F<:Function
-    @inline
-    (inds == f(A)) & _all_match_first(f, inds, B...)
-end
-_all_match_first(f::F, inds) where F<:Function = true
 
 # keys with an IndexStyle
 keys(s::IndexStyle, A::AbstractArray, B::AbstractArray...) = eachindex(s, A, B...)
@@ -818,15 +816,18 @@ julia> similar(falses(10), Float64, 2, 4)
 See also: [`undef`](@ref), [`isassigned`](@ref).
 """
 similar(a::AbstractArray{T}) where {T}                             = similar(a, T)
-similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, to_shape(axes(a)))
-similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, to_shape(dims))
-similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, to_shape(dims))
-similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, to_shape(dims))
+similar(a::AbstractArray, ::Type{T}) where {T}                     = similar(a, T, axes(a))
+similar(a::AbstractArray{T}, dims::Tuple) where {T}                = similar(a, T, dims)
+similar(a::AbstractArray{T}, dims::DimOrInd...) where {T}          = similar(a, T, dims)
+similar(a::AbstractArray, ::Type{T}, dims::DimOrInd...) where {T}  = similar(a, T, dims)
 # Similar supports specifying dims as either Integers or AbstractUnitRanges or any mixed combination
 # thereof. Ideally, we'd just convert Integers to OneTos and then call a canonical method with the axes,
 # but we don't want to require all AbstractArray subtypes to dispatch on Base.OneTo. So instead we
 # define this method to convert supported axes to Ints, with the expectation that an offset array
 # package will define a method with dims::Tuple{Union{Integer, UnitRange}, Vararg{Union{Integer, UnitRange}}}
+similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T} = similar(a, T, to_shape(dims))
+# legacy method for packages that specialize similar(A::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}}}
+# leaving this method in ensures that Base owns the more specific method
 similar(a::AbstractArray, ::Type{T}, dims::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T} = similar(a, T, to_shape(dims))
 # similar creates an Array by default
 similar(a::AbstractArray, ::Type{T}, dims::Dims{N}) where {T,N}    = Array{T,N}(undef, dims)
@@ -837,7 +838,9 @@ to_shape(dims::DimsOrInds) = map(to_shape, dims)::DimsOrInds
 # each dimension
 to_shape(i::Int) = i
 to_shape(i::Integer) = Int(i)
-to_shape(r::OneTo) = Int(last(r))
+to_shape(r::AbstractOneTo) = _to_shape(last(r))
+_to_shape(x::Integer) = to_shape(x)
+_to_shape(x) = Int(x)
 to_shape(r::AbstractUnitRange) = r
 
 """
@@ -863,6 +866,8 @@ would create a 1-dimensional logical array whose indices match those
 of the columns of `A`.
 """
 similar(::Type{T}, dims::DimOrInd...) where {T<:AbstractArray} = similar(T, dims)
+similar(::Type{T}, shape::Tuple{Union{Integer, AbstractOneTo}, Vararg{Union{Integer, AbstractOneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
+# legacy method for packages that specialize similar(::Type{T}, dims::Tuple{Union{Integer, OneTo, CustomAxis}, Vararg{Union{Integer, OneTo, CustomAxis}})
 similar(::Type{T}, shape::Tuple{Union{Integer, OneTo}, Vararg{Union{Integer, OneTo}}}) where {T<:AbstractArray} = similar(T, to_shape(shape))
 similar(::Type{T}, dims::Dims) where {T<:AbstractArray} = T(undef, dims)
 
