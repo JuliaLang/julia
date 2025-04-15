@@ -329,7 +329,7 @@ end
 
 inlining_enabled() = (JLOptions().can_inline == 1)
 
-function coverage_enabled(m::Module)
+function instrumentation_enabled(m::Module, only_if_affects_optimizer::Bool)
     generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
     if cov == 1 # user
@@ -339,6 +339,17 @@ function coverage_enabled(m::Module)
         return true
     elseif cov == 2 # all
         return true
+    end
+    if !only_if_affects_optimizer
+        log = JLOptions().malloc_log
+        if log == 1 # user
+            m = moduleroot(m)
+            m === Core && return false
+            isdefined(Main, :Base) && m === Main.Base && return false
+            return true
+        elseif log == 2 # all
+            return true
+        end
     end
     return false
 end
