@@ -1047,6 +1047,9 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000060, :ctime, Float64)
  (0x0000000000000068, :ioerrno, Int32)
 ```
+
+!!! compat "Julia 1.13"
+    Specifying the field by name rather than index requires Julia 1.13 or later.
 """
 fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
 fieldoffset(x::DataType, name::Symbol) = fieldoffset(x, fieldindex(x, name))
