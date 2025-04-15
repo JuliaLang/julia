@@ -1133,6 +1133,14 @@ end
     end
 end
 
+@testset "noniterator has no element type" begin
+    for x ∈ (nothing, missing)
+        @test_throws ArgumentError eltype(x)
+        @test_throws ArgumentError eltype(typeof(x))
+    end
+    @test_throws ArgumentError eltype(Union{Nothing, Missing})
+end
+
 @testset "Iterators docstrings" begin
     @test isempty(Docs.undocumented_names(Iterators))
 end

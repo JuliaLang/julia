@@ -457,3 +457,5 @@ macro coalesce(args...)
     end
     return :(let val; $expr; end)
 end
+
+eltype(::Type{<:Union{Nothing, Missing}}) = throw(ArgumentError("not an iterator, doesn't have an element type"))
