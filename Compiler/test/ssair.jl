@@ -447,7 +447,7 @@ let # #self#, a, b, c, d
     # #self#, a, b
     opt = code_typed1(f_with_slots, (Int,Int); optimize=true)
     @test length(opt.slotnames) == length(opt.slotflags) == length(opt.slottypes) == 3
-    ir_ssa = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="slot2reg (ERRONOUS PASS NAME)")))
+    ir_ssa = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="CC: SLOT2REG")))
     @test length(ir_ssa.argtypes) == 3
 end
 
@@ -598,7 +598,7 @@ import Core: SSAValue
 import .Compiler: NewInstruction, insert_node!
 
 # insert_node! for pending node
-let ir = Base.code_ircode((Int,Int); optimize_until="inlining (ERRONOUS PASS NAME)") do a, b
+let ir = Base.code_ircode((Int,Int); optimize_until="CC: INLINING") do a, b
         a^b
     end |> only |> first
     ir = Compiler.compact!(ir)
@@ -660,7 +660,7 @@ let code = Any[
 end
 
 # insert_node! with new instruction with flag computed
-let ir = Base.code_ircode((Int,Int); optimize_until="inlining (ERRONOUS PASS NAME)") do a, b
+let ir = Base.code_ircode((Int,Int); optimize_until="CC: INLINING") do a, b
         a^b
     end |> only |> first
     ir = Compiler.compact!(ir)
@@ -725,7 +725,7 @@ end
         @test any(j -> isa(unopt.code[j], Core.Const) && unopt.ssavaluetypes[j] == Union{}, 1:length(unopt.code))
 
         # Any GotoIfNot destinations after IRCode conversion should not be statically unreachable
-        ircode = first(only(Base.code_ircode(f_with_maybe_nonbool_cond, (Int, Bool); optimize_until="convert (ERRONOUS PASS NAME)")))
+        ircode = first(only(Base.code_ircode(f_with_maybe_nonbool_cond, (Int, Bool); optimize_until="CC: CONVERT")))
         for i = 1:length(ircode.stmts)
             expr = ircode.stmts[i][:stmt]
             if isa(expr, GotoIfNot)
