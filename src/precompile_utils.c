@@ -302,7 +302,7 @@ JL_DLLEXPORT void jl_suppress_precompile(int suppress)
     suppress_precompile = suppress;
 }
 
-static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_methods, jl_array_t *new_ext_cis)
+static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_methods)
 {
     if (!worklist)
         return NULL;
@@ -332,13 +332,6 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
                     if (mi != jl_nothing)
                         precompile_enq_specialization_((jl_method_instance_t*)mi, m);
                 }
-            }
-        }
-        if (new_ext_cis) {
-            n = jl_array_nrows(new_ext_cis);
-            for (i = 0; i < n; i++) {
-                jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_ext_cis, i);
-                precompile_enq_specialization_(jl_get_ci_mi(ci), m);
             }
         }
     }
