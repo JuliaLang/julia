@@ -706,6 +706,8 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
             # `invoke` edge
             elseif isa(callee, CodeInstance)
                 callee = get_ci_mi(callee)
+            else
+                callee = callee::MethodInstance
             end
             ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
             i += 2

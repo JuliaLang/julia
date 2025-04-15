@@ -2004,7 +2004,7 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
                 if (ciedge != (jl_value_t*)caller)
                     continue;
                 jl_value_t *invokeTypes = i > 0 ? jl_array_ptr_ref(backedges, i - 1) : NULL;
-                if (invokeTypes && jl_is_method_instance(invokeTypes))
+                if (invokeTypes && jl_is_code_instance(invokeTypes))
                     invokeTypes = NULL;
                 if ((invokesig == NULL && invokeTypes == NULL) ||
                     (invokesig && invokeTypes && jl_types_equal(invokesig, invokeTypes))) {
