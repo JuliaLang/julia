@@ -171,7 +171,8 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             end
         end
     elseif isa(result.src, OptimizationState)
-        # XXX: what should we do with the edges?
+        @assert caller.cache_mode === CACHE_MODE_NULL || caller.cache_mode === CACHE_MODE_VOLATILE
+        # Result won't be cached, so we can discard inlining edges.
         result.src = result.src.optresult
     end
     return nothing
