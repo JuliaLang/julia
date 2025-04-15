@@ -898,7 +898,7 @@ function _atthreads_greedy_dynamic_schedule()
 end
 @test _atthreads_greedy_dynamic_schedule() == threadpoolsize(:default) * threadpoolsize(:default)
 
-function _atthreads_dymamic_greedy_schedule()
+function _atthreads_dynamic_greedy_schedule()
     inc = Threads.Atomic{Int}(0)
     Threads.@threads :dynamic for _ = 1:threadpoolsize(:default)
         Threads.@threads :greedy for _ = 1:threadpoolsize(:default)
@@ -907,7 +907,7 @@ function _atthreads_dymamic_greedy_schedule()
     end
     return inc[]
 end
-@test _atthreads_dymamic_greedy_schedule() == threadpoolsize(:default) * threadpoolsize(:default)
+@test _atthreads_dynamic_greedy_schedule() == threadpoolsize(:default) * threadpoolsize(:default)
 
 function _atthreads_static_greedy_schedule()
     ids = zeros(Int, threadpoolsize(:default))

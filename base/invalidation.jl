@@ -210,7 +210,7 @@ function scan_new_method!(methods_with_invalidated_source::IdSet{Method}, method
         b = convert(Core.Binding, gr)
         if binding_was_invalidated(b)
             # TODO: We could turn this into an addition if condition. For now, use it as a reasonably cheap
-            # additional consistency chekc
+            # additional consistency check
             @assert !image_backedges_only
             push!(methods_with_invalidated_source, method)
         end
