@@ -1598,7 +1598,7 @@ struct f_with_params{t} <: Function end
 end
 
 let io = IOBuffer()
-    show(io, MIME"text/html"(), ModFWithParams.f_with_params.body.name.mt)
+    show(io, MIME"text/html"(), methods(ModFWithParams.f_with_params{Int}()))
     @test occursin("ModFWithParams.f_with_params", String(take!(io)))
 end
 

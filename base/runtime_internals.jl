@@ -1331,14 +1331,14 @@ hasproperty(x, s::Symbol) = s in propertynames(x)
 Make method `m` uncallable and force recompilation of any methods that use(d) it.
 """
 function delete_method(m::Method)
-    ccall(:jl_method_table_disable, Cvoid, (Any, Any), get_methodtable(m), m)
+    ccall(:jl_method_table_disable, Cvoid, (Any,), m)
 end
 
 
 # type for reflecting and pretty-printing a subset of methods
 mutable struct MethodList <: AbstractArray{Method,1}
     ms::Array{Method,1}
-    mt::Core.MethodTable
+    mt::Core.MethodCache # contains module.name globalref for pretty printing
 end
 
 size(m::MethodList) = size(m.ms)
@@ -1349,10 +1349,10 @@ function MethodList(mt::Core.MethodTable)
     visit(mt) do m
         push!(ms, m)
     end
-    return MethodList(ms, mt)
+    return MethodList(ms, mt.cache)
 end
 
-function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodTable, mod)
+function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodCache, mod)
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[(ms[i]::Core.MethodMatch).method for i in 1:length(ms)]
     # Remove shadowed methods with identical type signatures
@@ -1589,10 +1589,8 @@ end
 
 function get_nospecializeinfer_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return method.sig
-    mt = ccall(:jl_method_get_table, Any, (Any,), method)
-    mt === nothing && return method.sig
-    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
-        mt, atype, sparams, method, #=int return_if_compileable=#0)
+    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint),
+        atype, sparams, method, #=int return_if_compileable=#0)
 end
 
 is_nospecialized(method::Method) = method.nospecialize ≠ 0

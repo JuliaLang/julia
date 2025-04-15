@@ -81,7 +81,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
     if m.sig !== Tuple # OpaqueClosure or Builtin
         kwtype = typeof(Core.kwcall)
         sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
-        kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
+        kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
             slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
@@ -271,15 +271,15 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     if hasname
         what = (startswith(sname, '@') ?
                     "macro"
-               : mt.module === Core && mt.defs isa Core.TypeMapEntry && (mt.defs.func::Method).sig === Tuple ?
+                : mt.module === Core && mt.cache isa Core.TypeMapEntry && ((mt.cache.func::MethodInstance).def::Method).sig === Tuple ?
                     "builtin function"
                : # else
                     "generic function")
         print(io, " for ", what, " ", namedisplay, " from ")
 
-        col = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(ms.mt.module))
+        col = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(mt.module))
 
-        printstyled(io, ms.mt.module, color=col)
+        printstyled(io, mt.module, color=col)
     elseif '#' in sname
         print(io, " for anonymous function ", namedisplay)
     elseif mt === _TYPE_NAME.mt
@@ -293,6 +293,8 @@ end
 # Determine the `modulecolor` value to pass to `show_method`
 function _modulecolor(method::Method)
     mmt = get_methodtable(method)
+    # TODO: this looks like a buggy bit of internal hacking, so disable for now
+    return nothing
     if mmt === nothing || mmt.module === parentmodule(method)
         return nothing
     end

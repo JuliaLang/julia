@@ -467,6 +467,20 @@ function serialize(s::AbstractSerializer, meth::Method)
     nothing
 end
 
+function serialize(s::AbstractSerializer, mt::Core.MethodTable)
+    serialize_type(s, typeof(mt))
+    serialize(s, mt.cache)
+    nothing
+end
+
+function serialize(s::AbstractSerializer, mc::Core.MethodCache)
+    serialize_type(s, typeof(mc))
+    serialize(s, mc.name)
+    serialize(s, mc.module)
+    nothing
+end
+
+
 function serialize(s::AbstractSerializer, linfo::Core.MethodInstance)
     serialize_cycle(s, linfo) && return
     writetag(s.io, METHODINSTANCE_TAG)
@@ -536,9 +550,9 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
     serialize(s, Int32(length(primary.types) - t.n_uninitialized))
     serialize(s, t.max_methods)
-    if isdefined(t, :mt) && t.mt !== Symbol.name.mt
+    if isdefined(t, :mt)
         serialize(s, t.mt.name)
-        serialize(s, collect(Base.MethodList(t.mt)))
+        serialize(s, Base.matches_to_methods(Base._methods_by_ftype(Tuple{t.wrapper, Vararg}, -1, Base.get_world_counter()), t.mt, nothing).ms)
         serialize(s, t.mt.max_args)
         kws = collect(methods(Core.kwcall, (Any, t.wrapper, Vararg)))
         if isempty(kws)
@@ -1112,14 +1126,34 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
             meth.recursion_relation = recursion_relation
         end
         if !is_for_opaque_closure
-            mt = ccall(:jl_method_table_for, Any, (Any,), sig)
-            if mt !== nothing && nothing === ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), mt, sig, Base.get_world_counter())
+            mt = getglobal(Core, :_)
+            if nothing === ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, Base.get_world_counter()) # XXX: quite sketchy?
                 ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, meth, C_NULL)
             end
         end
         remember_object(s, meth, lnumber)
     end
     return meth
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.MethodTable})
+    mc = deserialize(s)::Core.MethodCache
+    mc === Core._.cache && return Core._
+    return getglobal(mc.mod, mc.name)::Core.MethodTable
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Core.MethodCache})
+    name = deserialize(s)::Symbol
+    mod = deserialize(s)::Module
+    f = Base.unwrap_unionall(getglobal(mod, name))
+    if f isa Core.MethodTable
+        return f.cache
+    elseif f isa DataType
+        return f.name.mt
+    else
+        return typeof(f::Function).name.mt
+    end
+    nothing
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})
@@ -1471,20 +1505,11 @@ function deserialize_typename(s::AbstractSerializer, number)
     if tag != UNDEFREF_TAG
         mtname = handle_deserialize(s, tag)
         defs = deserialize(s)
-        maxa = deserialize(s)::Int
+        maxa = deserialize(s)::Union{Int,Int32}
         if makenew
-            mt = ccall(:jl_new_method_table, Any, (Any, Any), name, tn.module)
-            if !isempty(parameters)
-                mt.offs = 0
-            end
+            mt = tn.mt
             mt.name = mtname
-            setfield!(mt, :max_args, maxa, :monotonic)
-            ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
-            for def in defs
-                if isdefined(def, :sig)
-                    ccall(:jl_method_table_insert, Cvoid, (Any, Any, Ptr{Cvoid}), mt, def, C_NULL)
-                end
-            end
+            setfield!(mt, :max_args, Int32(maxa), :monotonic)
         end
         tag = Int32(read(s.io, UInt8)::UInt8)
         if tag != UNDEFREF_TAG
@@ -1494,9 +1519,6 @@ function deserialize_typename(s::AbstractSerializer, number)
                 @eval Core.kwcall(kwargs::NamedTuple, f::$ty, args...) = $kws(kwargs, f, args...)
             end
         end
-    elseif makenew
-        mt = Symbol.name.mt
-        ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
     end
     return tn
 end

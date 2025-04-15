@@ -15,36 +15,6 @@ function iterate(gri::GlobalRefIterator, i = 1)
     return ((b::Core.Binding).globalref, i+1)
 end
 
-const TYPE_TYPE_MT = Type.body.name.mt
-const NONFUNCTION_MT = Core.MethodTable.name.mt
-function foreach_module_mtable(visit, m::Module, world::UInt)
-    for gb in globalrefs(m)
-        binding = gb.binding
-        bpart = lookup_binding_partition(world, binding)
-        if is_defined_const_binding(binding_kind(bpart))
-            v = partition_restriction(bpart)
-            uw = unwrap_unionall(v)
-            name = gb.name
-            if isa(uw, DataType)
-                tn = uw.name
-                if tn.module === m && tn.name === name && tn.wrapper === v && isdefined(tn, :mt)
-                    # this is the original/primary binding for the type (name/wrapper)
-                    mt = tn.mt
-                    if mt !== nothing && mt !== TYPE_TYPE_MT && mt !== NONFUNCTION_MT
-                        @assert mt.module === m
-                        visit(mt) || return false
-                    end
-                end
-            elseif isa(v, Core.MethodTable) && v.module === m && v.name === name
-                # this is probably an external method table here, so let's
-                # assume so as there is no way to precisely distinguish them
-                visit(v) || return false
-            end
-        end
-    end
-    return true
-end
-
 function foreachgr(visit, src::CodeInfo)
     stmts = src.code
     for i = 1:length(stmts)

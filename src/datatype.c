@@ -39,28 +39,41 @@ static jl_sym_t *jl_demangle_typename(jl_sym_t *s) JL_NOTSAFEPOINT
     return _jl_symbol(&n[1], len);
 }
 
-JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
+JL_DLLEXPORT jl_methcache_t *jl_new_method_cache(jl_sym_t *name, jl_module_t *module)
 {
     jl_task_t *ct = jl_current_task;
+    jl_methcache_t *mc =
+        (jl_methcache_t*)jl_gc_alloc(ct->ptls, sizeof(jl_methcache_t),
+                                     jl_methcache_type);
+    mc->name = jl_demangle_typename(name);
+    mc->module = module;
+    jl_atomic_store_relaxed(&mc->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
+    jl_atomic_store_relaxed(&mc->cache, jl_nothing);
+    jl_atomic_store_relaxed(&mc->max_args, 0);
+    mc->backedges = NULL;
+    JL_MUTEX_INIT(&mc->writelock, "methodtable->writelock");
+    mc->offs = 0;
+    return mc;
+}
+
+JL_DLLEXPORT jl_methtable_t *jl_new_method_table(jl_sym_t *name, jl_module_t *module)
+{
+    jl_methcache_t *mc = jl_new_method_cache(name, module);
+    JL_GC_PUSH1(&mc);
+    jl_task_t *ct = jl_current_task;
     jl_methtable_t *mt =
-        (jl_methtable_t*)jl_gc_alloc(ct->ptls, sizeof(jl_methtable_t),
-                                     jl_methtable_type);
-    mt->name = jl_demangle_typename(name);
-    mt->module = module;
+        (jl_methtable_t*)jl_gc_alloc(ct->ptls, sizeof(jl_methtable_t), jl_methtable_type);
     jl_atomic_store_relaxed(&mt->defs, jl_nothing);
-    jl_atomic_store_relaxed(&mt->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
-    jl_atomic_store_relaxed(&mt->cache, jl_nothing);
-    jl_atomic_store_relaxed(&mt->max_args, 0);
-    mt->backedges = NULL;
-    JL_MUTEX_INIT(&mt->writelock, "methodtable->writelock");
-    mt->offs = 0;
-    mt->frozen = 0;
+    mt->cache = mc;
+    JL_GC_POP();
     return mt;
 }
 
 JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *module, int abstract, int mutabl)
 {
     jl_task_t *ct = jl_current_task;
+    jl_methcache_t *mc = abstract ? NULL : jl_new_method_cache(name, module);
+    JL_GC_PUSH1(&mc);
     jl_typename_t *tn =
         (jl_typename_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typename_t),
                                     jl_typename_type);
@@ -76,12 +89,13 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->abstract = abstract;
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;
-    tn->mt = NULL;
+    tn->mt = mc;
     tn->partial = NULL;
     tn->atomicfields = NULL;
     tn->constfields = NULL;
     tn->max_methods = 0;
     tn->constprop_heustic = 0;
+    JL_GC_POP();
     return tn;
 }
 
@@ -848,18 +862,8 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
     }
     else {
         tn = jl_new_typename_in((jl_sym_t*)name, module, abstract, mutabl);
-        if (super == jl_function_type || super == jl_builtin_type || is_anonfn_typename(jl_symbol_name(name))) {
-            // Callable objects (including compiler-generated closures) get independent method tables
-            // as an optimization
-            tn->mt = jl_new_method_table(name, module);
-            jl_gc_wb(tn, tn->mt);
-            if (jl_svec_len(parameters) == 0 && !abstract)
-                tn->mt->offs = 1;
-        }
-        else {
-            // Everything else, gets to use the unified table
-            tn->mt = jl_nonfunction_mt;
-        }
+        if (jl_svec_len(parameters) == 0 && !abstract)
+            tn->mt->offs = 1;
     }
     t->name = tn;
     jl_gc_wb(t, t->name);

@@ -91,13 +91,13 @@
     XX(jl_method_match_type) \
     XX(jl_method_type) \
     XX(jl_methtable_type) \
+    XX(jl_methcache_type) \
     XX(jl_missingcodeerror_type) \
     XX(jl_module_type) \
     XX(jl_n_threads_per_pool) \
     XX(jl_namedtuple_type) \
     XX(jl_namedtuple_typename) \
     XX(jl_newvarnode_type) \
-    XX(jl_nonfunction_mt) \
     XX(jl_nothing) \
     XX(jl_nothing_type) \
     XX(jl_number_type) \
