@@ -573,6 +573,16 @@ end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Expr), 100)
 add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVector), 20)
+@nospecs function _svec_ref_tfunc(𝕃::AbstractLattice, s, i)
+    if isa(s, Const) && isa(i, Const)
+        s, i = s.val, i.val
+        if isa(s, SimpleVector) && isa(i, Int)
+            return 1 ≤ i ≤ length(s) ? Const(s[i]) : Bottom
+        end
+    end
+    return Any
+end
+add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
 @nospecs function typevar_tfunc(𝕃::AbstractLattice, n, lb_arg, ub_arg)
     lb = Union{}
     ub = Any
@@ -2316,6 +2326,9 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === Core.compilerbarrier
         na == 2 || return false
         return compilerbarrier_nothrow(argtypes[1], nothing)
+    elseif f === Core._svec_ref
+        na == 2 || return false
+        return _svec_ref_tfunc(𝕃, argtypes[1], argtypes[2]) isa Const
     end
     return false
 end
@@ -2346,7 +2359,9 @@ const _CONSISTENT_BUILTINS = Any[
     throw,
     Core.throw_methoderror,
     setfield!,
-    donotdelete
+    donotdelete,
+    memoryrefnew,
+    memoryrefoffset,
 ]
 
 # known to be effect-free (but not necessarily nothrow)
@@ -2371,6 +2386,7 @@ const _EFFECT_FREE_BUILTINS = [
     Core.throw_methoderror,
     getglobal,
     compilerbarrier,
+    Core._svec_ref,
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[
@@ -2404,6 +2420,7 @@ const _ARGMEM_BUILTINS = Any[
     replacefield!,
     setfield!,
     swapfield!,
+    Core._svec_ref,
 ]
 
 const _INCONSISTENT_INTRINSICS = Any[
@@ -2546,7 +2563,7 @@ const _EFFECTS_KNOWN_BUILTINS = Any[
     # Core._primitivetype,
     # Core._setsuper!,
     # Core._structtype,
-    # Core._svec_ref,
+    Core._svec_ref,
     # Core._typebody!,
     Core._typevar,
     apply_type,
@@ -2650,9 +2667,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryrefnew || f === memoryrefoffset
-            consistent = ALWAYS_TRUE
-        elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
+        elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
@@ -2838,6 +2853,8 @@ _istypemin(@nospecialize x) = !_iszero(x) && Intrinsics.neg_int(x) === x
 function builtin_exct(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any}, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
         return intrinsic_exct(𝕃, f, argtypes)
+    elseif f === Core._svec_ref
+        return BoundsError
     end
     return Any
 end

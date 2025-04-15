@@ -131,63 +131,81 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
     JL_UNLOCK(&newly_inferred_mutex);
 }
 
-
 // compute whether a type references something internal to worklist
 // and thus could not have existed before deserialize
 // and thus does not need delayed unique-ing
-static int type_in_worklist(jl_value_t *v) JL_NOTSAFEPOINT
+static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOINT
 {
     if (jl_object_in_image(v))
         return 0; // fast-path for rejection
+
+    void *cached = HT_NOTFOUND;
+    if (cache != NULL)
+        cached = ptrhash_get(&cache->type_in_worklist, v);
+
+    // fast-path for memoized results
+    if (cached != HT_NOTFOUND)
+        return cached == v;
+
+    int result = 0;
     if (jl_is_uniontype(v)) {
         jl_uniontype_t *u = (jl_uniontype_t*)v;
-        return type_in_worklist(u->a) ||
-               type_in_worklist(u->b);
+        result = type_in_worklist(u->a, cache) ||
+                 type_in_worklist(u->b, cache);
     }
     else if (jl_is_unionall(v)) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
-        return type_in_worklist((jl_value_t*)ua->var) ||
-               type_in_worklist(ua->body);
+        result = type_in_worklist((jl_value_t*)ua->var, cache) ||
+                 type_in_worklist(ua->body, cache);
     }
     else if (jl_is_typevar(v)) {
         jl_tvar_t *tv = (jl_tvar_t*)v;
-        return type_in_worklist(tv->lb) ||
-               type_in_worklist(tv->ub);
+        result = type_in_worklist(tv->lb, cache) ||
+                 type_in_worklist(tv->ub, cache);
     }
     else if (jl_is_vararg(v)) {
         jl_vararg_t *tv = (jl_vararg_t*)v;
-        if (tv->T && type_in_worklist(tv->T))
-            return 1;
-        if (tv->N && type_in_worklist(tv->N))
-            return 1;
+        result = ((tv->T && type_in_worklist(tv->T, cache)) ||
+                  (tv->N && type_in_worklist(tv->N, cache)));
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
-        if (!jl_object_in_image((jl_value_t*)dt->name))
-            return 1;
-        jl_svec_t *tt = dt->parameters;
-        size_t i, l = jl_svec_len(tt);
-        for (i = 0; i < l; i++)
-            if (type_in_worklist(jl_tparam(dt, i)))
-                return 1;
+        if (!jl_object_in_image((jl_value_t*)dt->name)) {
+            result = 1;
+        }
+        else {
+            jl_svec_t *tt = dt->parameters;
+            size_t i, l = jl_svec_len(tt);
+            for (i = 0; i < l; i++) {
+                if (type_in_worklist(jl_tparam(dt, i), cache)) {
+                    result = 1;
+                    break;
+                }
+            }
+        }
     }
     else {
-        return type_in_worklist(jl_typeof(v));
+        return type_in_worklist(jl_typeof(v), cache);
     }
-    return 0;
+
+    // Memoize result
+    if (cache != NULL)
+        ptrhash_put(&cache->type_in_worklist, (void*)v, result ? (void*)v : NULL);
+
+    return result;
 }
 
 // When we infer external method instances, ensure they link back to the
 // package. Otherwise they might be, e.g., for external macros.
 // Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
-static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited, arraylist_t *stack)
+static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited, arraylist_t *stack, jl_query_cache *query_cache)
 {
     jl_module_t *mod = mi->def.module;
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
     assert(jl_is_module(mod));
     uint8_t is_precompiled = jl_atomic_load_relaxed(&mi->flags) & JL_MI_FLAGS_MASK_PRECOMPILED;
-    if (is_precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
+    if (is_precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes, query_cache)) {
         return 1;
     }
     if (!mi->backedges) {
@@ -205,13 +223,16 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     arraylist_push(stack, (void*)mi);
     int depth = stack->len;
     *bp = (void*)((char*)HT_NOTFOUND + 4 + depth); // preliminarily mark as in-progress
-    size_t i = 0, n = jl_array_nrows(mi->backedges);
+    jl_array_t *backedges = jl_mi_get_backedges(mi);
+    size_t i = 0, n = jl_array_nrows(backedges);
     int cycle = depth;
     while (i < n) {
         jl_code_instance_t *be;
-        i = get_next_edge(mi->backedges, i, NULL, &be);
+        i = get_next_edge(backedges, i, NULL, &be);
+        if (!be)
+            continue;
         JL_GC_PROMISE_ROOTED(be); // get_next_edge propagates the edge for us here
-        int child_found = has_backedge_to_worklist(jl_get_ci_mi(be), visited, stack);
+        int child_found = has_backedge_to_worklist(jl_get_ci_mi(be), visited, stack, query_cache);
         if (child_found == 1 || child_found == 2) {
             // found what we were looking for, so terminate early
             found = 1;
@@ -243,7 +264,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
 // from the worklist or explicitly added by a `precompile` statement, and
 // (4) are the most recently computed result for that method.
 // These will be preserved in the image.
-static jl_array_t *queue_external_cis(jl_array_t *list)
+static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_cache)
 {
     if (list == NULL)
         return NULL;
@@ -262,7 +283,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
         jl_method_t *m = mi->def.method;
         if (ci->owner == jl_nothing && jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
-            int found = has_backedge_to_worklist(mi, &visited, &stack);
+            int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);
             if (found == 1 && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {

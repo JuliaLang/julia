@@ -197,6 +197,7 @@ let mod = Base.include(Base.__toplevel__, inputfile)
     #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
     entrypoint(Base.task_done_hook, (Task,))
     entrypoint(Base.wait, ())
+    entrypoint(Base.wait_forever, ())
     entrypoint(Base.trypoptask, (Base.StickyWorkqueue,))
     entrypoint(Base.checktaskempty, ())
     if add_ccallables

@@ -582,3 +582,9 @@ end
     c = CartesianIndex(3, 3)
     @test sprint(show, c) == "CartesianIndex(3, 3)"
 end
+
+@testset "CartesianIndex indexing with begin/end" begin
+    I = CartesianIndex(3,4)
+    @test I[begin] == I[1]
+    @test I[end] == I[2]
+end

@@ -342,8 +342,6 @@ cd(@__DIR__) do
         end
     end
 
-    BuildkiteTestJSON.write_testset_json_files(@__DIR__)
-
     #=
 `   Construct a testset on the master node which will hold results from all the
     test files run on workers and on node1. The loop goes through the results,
@@ -369,6 +367,7 @@ cd(@__DIR__) do
     Test.TESTSET_PRINT_ENABLE[] = false
     o_ts = Test.DefaultTestSet("Overall")
     o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
+    BuildkiteTestJSON.write_testset_json_files(@__DIR__, o_ts)
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
     for (testname, (resp,), duration) in results

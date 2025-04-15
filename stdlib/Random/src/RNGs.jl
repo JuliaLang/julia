@@ -278,20 +278,7 @@ end
 
 ### seeding
 
-#### random_seed() & hash_seed()
-
-# random_seed tries to produce a random seed of type UInt128 from system entropy
-function random_seed()
-    try
-        # as MersenneTwister prints its seed when `show`ed, 128 bits is a good compromise for
-        # almost surely always getting distinct seeds, while having them printed reasonably tersely
-        return rand(RandomDevice(), UInt128)
-    catch ex
-        ex isa IOError || rethrow()
-        @warn "Entropy pool not available to seed RNG; using ad-hoc entropy sources."
-        return Libc.rand()
-    end
-end
+#### hash_seed()
 
 function hash_seed(seed::Integer)
     ctx = SHA.SHA2_256_CTX()
@@ -370,11 +357,13 @@ function initstate!(r::MersenneTwister, data::StridedVector, seed)
     return r
 end
 
-# when a seed is not provided, we generate one via `RandomDevice()` in `random_seed()` rather
+# When a seed is not provided, we generate one via `RandomDevice()` rather
 # than calling directly `initstate!` with `rand(RandomDevice(), UInt32, whatever)` because the
 # seed is printed in `show(::MersenneTwister)`, so we need one; the cost of `hash_seed` is a
-# small overhead compared to `initstate!`, so this simple solution is fine
-seed!(r::MersenneTwister, ::Nothing) = seed!(r, random_seed())
+# small overhead compared to `initstate!`, so this simple solution is fine.
+# A random seed with 128 bits is a good compromise for almost surely always getting distinct
+# seeds, while having them printed reasonably tersely.
+seed!(r::MersenneTwister, ::Nothing) = seed!(r, rand(RandomDevice(), UInt128))
 seed!(r::MersenneTwister, seed) = initstate!(r, hash_seed(seed), seed)
 
 
