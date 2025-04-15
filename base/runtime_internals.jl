@@ -1025,8 +1025,7 @@ julia> fieldoffset(Foo, :x)
 0x0000000000000000
 ```
 
-We can use it to summarize information about a struct (see
-[`About.jl`](https://juliapackages.com/p/about) for a package with similar functionality):
+We can use it to summarize information about a struct:
 
 ```jldoctest
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
