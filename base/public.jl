@@ -74,6 +74,9 @@ public
     isoperator,
     isunaryoperator,
 
+# Integer math
+    mul_hi,
+
 # C interface
     cconvert,
     unsafe_convert,
