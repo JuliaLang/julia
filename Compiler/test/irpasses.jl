@@ -1181,7 +1181,7 @@ end
 
 @test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
 
-# We consider a potential deprecatio warning an effect, so for completely unkown getglobal,
+# We consider a potential deprecatio warning an effect, so for completely unknown getglobal,
 # we taint the effect_free bit.
 @test !Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
 

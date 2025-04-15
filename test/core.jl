@@ -7340,7 +7340,7 @@ Array{Int}(undef, bignum, bignum, 0, bignum, bignum)
 # but also test that it does throw if the axes multiply to a multiple of typemax(UInt)
 @test_throws ArgumentError Array{Int}(undef, bignum, bignum)
 @test_throws ArgumentError Array{Int}(undef, 1, bignum, bignum)
-# also test that we always throw erros for negative dims even if other dims are 0 or the product is positive
+# also test that we always throw errors for negative dims even if other dims are 0 or the product is positive
 @test_throws ArgumentError Array{Int}(undef, 0, -4, -4)
 @test_throws ArgumentError Array{Int}(undef, -4, 1, 0)
 @test_throws ArgumentError Array{Int}(undef, -4, -4, 1)
