@@ -334,14 +334,14 @@ function compute_inlining_cost(interp::AbstractInterpreter, optresult#=::Optimiz
 end
 
 function inline_cost_model(interp::AbstractInterpreter, optresult#=::OptimizationResult=#)
-    optresult.inline_flag === SRC_FLAG_DECLARED_NOINLINE && return MAX_INLINE_COST
+    is_declared_noinline(optresult.src) && return MAX_INLINE_COST
 
     (; def, specTypes) = optresult.mi
     if !isa(def, Method)
         return MAX_INLINE_COST
     end
 
-    declared_inline = optresult.inline_flag === SRC_FLAG_DECLARED_INLINE
+    force_inline = is_declared_inline(optresult.src)
 
     rt = optresult.rt
     @assert !(rt isa LimitedAccuracy)
@@ -351,11 +351,11 @@ function inline_cost_model(interp::AbstractInterpreter, optresult#=::Optimizatio
     if !(isa(sig, DataType) && sig.name === Tuple.name)
         return MAX_INLINE_COST
     end
-    if !declared_inline && rt === Bottom
+    if !force_inline && rt === Bottom
         return MAX_INLINE_COST
     end
 
-    if declared_inline && isdispatchtuple(specTypes)
+    if force_inline && isdispatchtuple(specTypes)
         # obey @inline declaration if a dispatch barrier would not help
         return MIN_INLINE_COST
     else
@@ -366,7 +366,7 @@ function inline_cost_model(interp::AbstractInterpreter, optresult#=::Optimizatio
             cost_threshold += params.inline_tupleret_bonus
         end
         # if the method is declared as `@inline`, increase the cost threshold 20x
-        if declared_inline
+        if force_inline
             cost_threshold += 19*default
         end
         # a few functions get special treatment

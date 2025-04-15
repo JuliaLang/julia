@@ -165,14 +165,13 @@ mutable struct OptimizationResult
     const src::CodeInfo
     ir::IRCode
     simplified::Bool # indicates whether the IR was processed with `cfg_simplify!`
-    const inline_flag::UInt8
     inlining_cost::InlineCostType # `MAX_INLINE_COST` if not computed yet via `compute_inlining_cost!`
     const rt::Any # return type computed by inference
 
     # uninitialized fields
     code_info::CodeInfo
 
-    OptimizationResult(mi::MethodInstance, src::CodeInfo, ir::IRCode, inline_flag::UInt8, rt::Any; simplified::Bool = false) = new(mi, src, ir, simplified, inline_flag, MAX_INLINE_COST, rt)
+    OptimizationResult(mi::MethodInstance, src::CodeInfo, ir::IRCode, rt::Any; simplified::Bool = false) = new(mi, src, ir, simplified, MAX_INLINE_COST, rt)
 end
 
 function simplify_ir!(optresult::OptimizationResult)
@@ -244,9 +243,8 @@ function OptimizationState(mi::MethodInstance, interp::AbstractInterpreter)
 end
 
 function OptimizationResult(opt::OptimizationState, ir::IRCode, result::InferenceResult)
-    inline_flag = ccall(:jl_ir_flag_inlining, UInt8, (Any,), opt.src)
     rt = result.result
-    OptimizationResult(result.linfo, opt.src, ir, inline_flag, rt)
+    OptimizationResult(result.linfo, opt.src, ir, rt)
 end
 
 function argextype end # imported by EscapeAnalysis
