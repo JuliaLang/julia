@@ -2445,13 +2445,14 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
                         // found that this specialization dispatch got replaced by m
                         // call invalidate_backedges(mi, max_world, "jl_method_table_insert");
                         // but ignore invoke-type edges
-                        invalidated = _invalidate_dispatch_backedges(mi, type, m, d, n, replaced_dispatch, ambig, max_world, morespec);
+                        int invalidatedmi = _invalidate_dispatch_backedges(mi, type, m, d, n, replaced_dispatch, ambig, max_world, morespec);
                         jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
-                        if (_jl_debug_method_invalidation && invalidated) {
+                        if (_jl_debug_method_invalidation && invalidatedmi) {
                             jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
                             loctag = jl_cstr_to_string("jl_method_table_insert");
                             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
                         }
+                        invalidated |= invalidatedmi;
                     }
                 }
             }
@@ -2836,30 +2837,10 @@ void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_c
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
-JL_DLLEXPORT void jl_add_codeinst_to_cache(jl_code_instance_t *codeinst, jl_code_info_t *src)
-{
-    assert(jl_is_code_info(src));
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-    if (jl_generating_output() && jl_is_method(mi->def.method) && jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
-        jl_value_t *compressed = jl_compress_ir(mi->def.method, src);
-        // These should already be compatible (and should be an assert), but make sure of it anyways
-        if (jl_is_svec(src->edges)) {
-            jl_atomic_store_release(&codeinst->edges, (jl_svec_t*)src->edges);
-            jl_gc_wb(codeinst, src->edges);
-        }
-        jl_atomic_store_release(&codeinst->debuginfo, src->debuginfo);
-        jl_gc_wb(codeinst, src->debuginfo);
-        jl_atomic_store_release(&codeinst->inferred, compressed);
-        jl_gc_wb(codeinst, compressed);
-    }
-}
-
-
 JL_DLLEXPORT void jl_add_codeinst_to_jit(jl_code_instance_t *codeinst, jl_code_info_t *src)
 {
     assert(jl_is_code_info(src));
     jl_emit_codeinst_to_jit(codeinst, src);
-    jl_add_codeinst_to_cache(codeinst, src);
 }
 
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
