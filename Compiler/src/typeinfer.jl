@@ -1499,14 +1499,12 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     codeinfos = []
     is_latest_world = true # whether this_world == world_counter()
     workqueue = CompilationQueue(; interp = nothing)
-    for (i, this_world) in enumerate(sort!(worlds))
+    for this_world in reverse!(sort!(worlds))
         workqueue = CompilationQueue(workqueue;
             interp = NativeInterpreter(this_world; inf_params)
         )
 
         append!(workqueue, methods)
-
-        is_latest_world = (i == length(worlds))
         if is_latest_world
             # Provide the `invokelatest` queue so that we trigger "best-effort" code generation
             # for, e.g., finalizers and cfunction.
@@ -1517,6 +1515,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         else
             compile!(codeinfos, workqueue)
         end
+        is_latest_world = false
     end
 
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
