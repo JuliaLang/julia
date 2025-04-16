@@ -2754,6 +2754,38 @@ See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@re
 setglobalonce!
 
 """
+    setconst!(module::Module, name::Symbol, [x])
+
+Create or replace the constant `name` in `module` with the new value `x`.  When
+replacing, `x` does not need to have the same type as the original constant.
+
+When `x` is not given, `name` becomes an undefined constant; it cannot be read
+or written to, but can be redefined.
+
+Note that this function does not update the world age of the current task:
+```
+julia> begin
+           const x = 1
+           println(x)
+           const x = 2
+           println(x)
+           Core.setconst!(Main, :x, 3)
+           println(x)
+       end
+1
+2
+2
+```
+
+!!! compat "Julia 1.12"
+    This function requires Julia 1.12 or later.  Redefining constants on earlier
+    versions of Julia is unpredictable.
+
+See also [`const`](@ref).
+"""
+Core.setconst!
+
+"""
     typeof(x)
 
 Get the concrete type of `x`.

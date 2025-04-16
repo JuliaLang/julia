@@ -58,6 +58,7 @@ extern "C" {
     XX(opaque_closure_call,"opaque_closure_call") \
     XX(replacefield,"replacefield!") \
     XX(replaceglobal,"replaceglobal!") \
+    XX(setconst,"setconst!") \
     XX(setfield,"setfield!") \
     XX(setfieldonce,"setfieldonce!") \
     XX(setglobal,"setglobal!") \
