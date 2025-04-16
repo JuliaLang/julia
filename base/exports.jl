@@ -805,6 +805,7 @@ export
     replaceproperty!,
     setpropertyonce!,
     fieldoffset,
+    fieldoffsets,
     fieldname,
     fieldnames,
     fieldcount,

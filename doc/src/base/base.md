@@ -224,6 +224,7 @@ Base.isconcretetype
 Base.isbits
 Base.isbitstype
 Base.fieldoffset
+Base.fieldoffsets
 Base.datatype_alignment
 Base.datatype_haspadding
 Base.datatype_pointerfree
