@@ -489,17 +489,17 @@ typedef struct _jl_abi_override_t {
 
 typedef struct {
     JL_DATA_TYPE
-    jl_sym_t *name;
-    jl_value_t *lb;   // lower bound
-    jl_value_t *ub;   // upper bound
+    jl_sym_t *JL_NONNULL name;
+    jl_value_t *JL_NONNULL lb;   // lower bound
+    jl_value_t *JL_NONNULL ub;   // upper bound
 } jl_tvar_t;
 
 // UnionAll type (iterated union over all values of a variable in certain bounds)
 // written `body where lb<:var<:ub`
 typedef struct {
     JL_DATA_TYPE
-    jl_tvar_t *var;
-    jl_value_t *body;
+    jl_tvar_t *JL_NONNULL var;
+    jl_value_t *JL_NONNULL body;
 } jl_unionall_t;
 
 // represents the "name" part of a DataType, describing the syntactic structure
@@ -534,8 +534,8 @@ typedef struct {
 
 typedef struct {
     JL_DATA_TYPE
-    jl_value_t *a;
-    jl_value_t *b;
+    jl_value_t *JL_NONNULL a;
+    jl_value_t *JL_NONNULL b;
 } jl_uniontype_t;
 
 // in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
