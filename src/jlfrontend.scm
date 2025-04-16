@@ -173,7 +173,11 @@
                         `(block ,expr (null)))
                     file line))
 
-(define (jl-expand-to-thunk-warn expr file line stmt)
+;; Returns a list `(,lowered-code ,warnings) where
+;; - warnings (currently only ambiguous soft scope assignments) may be ignored,
+;;   e.g. when running interactively
+;; - more items may be added to the list later
+(define (jl-lower-to-thunk expr file line stmt)
   (let ((warnings '()))
     (with-bindings
      ;; Abuse scm_to_julia here to convert arguments to warn. This is meant for
@@ -186,13 +190,7 @@
      (let ((thunk (if stmt
                       (expand-to-thunk-stmt- expr file line)
                       (expand-to-thunk- expr file line))))
-       (if (pair? warnings) `(warn ,@(reverse warnings) ,thunk) thunk)))))
-
-(define (jl-expand-to-thunk expr file line)
-  (expand-to-thunk- expr file line))
-
-(define (jl-expand-to-thunk-stmt expr file line)
-  (expand-to-thunk-stmt- expr file line))
+       `(,thunk ,(reverse warnings))))))
 
 (define (jl-expand-macroscope expr)
   (error-wrap (lambda ()
