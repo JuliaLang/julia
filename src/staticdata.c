@@ -863,39 +863,59 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         }
         goto done_fields; // for now
     }
-    if (s->incremental && jl_is_method_instance(v)) {
+    if (jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
-        jl_value_t *def = mi->def.value;
-        if (needs_uniquing(v, s->query_cache)) {
-            // we only need 3 specific fields of this (the rest are not used)
-            jl_queue_for_serialization(s, mi->def.value);
-            jl_queue_for_serialization(s, mi->specTypes);
-            jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals);
-            goto done_fields;
+        if (s->incremental) {
+            jl_value_t *def = mi->def.value;
+            if (needs_uniquing(v, s->query_cache)) {
+                // we only need 3 specific fields of this (the rest are not used)
+                jl_queue_for_serialization(s, mi->def.value);
+                jl_queue_for_serialization(s, mi->specTypes);
+                jl_queue_for_serialization(s, (jl_value_t*)mi->sparam_vals);
+                goto done_fields;
+            }
+            else if (jl_is_method(def) && jl_object_in_image(def)) {
+                // we only need 3 specific fields of this (the rest are restored afterward, if valid)
+                // in particular, cache is repopulated by jl_mi_cache_insert for all foreign function,
+                // so must not be present here
+                record_field_change((jl_value_t**)&mi->backedges, NULL);
+                record_field_change((jl_value_t**)&mi->cache, NULL);
+            }
+            else {
+                assert(!needs_recaching(v, s->query_cache));
+            }
+            // n.b. opaque closures cannot be inspected and relied upon like a
+            // normal method since they can get improperly introduced by generated
+            // functions, so if they appeared at all, we will probably serialize
+            // them wrong and segfault. The jl_code_for_staged function should
+            // prevent this from happening, so we do not need to detect that user
+            // error now.
         }
-        else if (jl_is_method(def) && jl_object_in_image(def)) {
-            // we only need 3 specific fields of this (the rest are restored afterward, if valid)
-            // in particular, cache is repopulated by jl_mi_cache_insert for all foreign function,
-            // so must not be present here
-            record_field_change((jl_value_t**)&mi->backedges, NULL);
-            record_field_change((jl_value_t**)&mi->cache, NULL);
+        // don't recurse into all backedges memory (yet)
+        jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);
+        if (backedges) {
+            jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
+            size_t i = 0, n = jl_array_nrows(backedges);
+            while (i < n) {
+                jl_value_t *invokeTypes;
+                jl_code_instance_t *caller;
+                i = get_next_edge((jl_array_t*)backedges, i, &invokeTypes, &caller);
+                if (invokeTypes)
+                    jl_queue_for_serialization(s, invokeTypes);
+            }
         }
-        else {
-            assert(!needs_recaching(v, s->query_cache));
-        }
-        // n.b. opaque closures cannot be inspected and relied upon like a
-        // normal method since they can get improperly introduced by generated
-        // functions, so if they appeared at all, we will probably serialize
-        // them wrong and segfault. The jl_code_for_staged function should
-        // prevent this from happening, so we do not need to detect that user
-        // error now.
     }
-    if (s->incremental && jl_is_binding(v)) {
-        if (needs_uniquing(v, s->query_cache)) {
-            jl_binding_t *b = (jl_binding_t*)v;
+    if (jl_is_binding(v)) {
+        jl_binding_t *b = (jl_binding_t*)v;
+        if (s->incremental && needs_uniquing(v, s->query_cache)) {
             jl_queue_for_serialization(s, b->globalref->mod);
             jl_queue_for_serialization(s, b->globalref->name);
             goto done_fields;
+        }
+        // don't recurse into backedges memory (yet)
+        jl_value_t *backedges = get_replaceable_field((jl_value_t**)&b->backedges, 1);
+        if (backedges) {
+            jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
         }
     }
     if (s->incremental && jl_is_globalref(v)) {
@@ -914,18 +934,20 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
         }
     }
-    if (s->incremental && jl_is_code_instance(v)) {
+    if (jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
-        // make sure we don't serialize other reachable cache entries of foreign methods
-        // Should this now be:
-        // if (ci !in ci->defs->cache)
-        //     record_field_change((jl_value_t**)&ci->next, NULL);
-        // Why are we checking that the method/module this originates from is in_image?
-        // and then disconnect this CI?
-        if (jl_object_in_image((jl_value_t*)mi->def.value)) {
-            // TODO: if (ci in ci->defs->cache)
-            record_field_change((jl_value_t**)&ci->next, NULL);
+        if (s->incremental) {
+            // make sure we don't serialize other reachable cache entries of foreign methods
+            // Should this now be:
+            // if (ci !in ci->defs->cache)
+            //     record_field_change((jl_value_t**)&ci->next, NULL);
+            // Why are we checking that the method/module this originates from is in_image?
+            // and then disconnect this CI?
+            if (jl_object_in_image((jl_value_t*)mi->def.value)) {
+                // TODO: if (ci in ci->defs->cache)
+                record_field_change((jl_value_t**)&ci->next, NULL);
+            }
         }
         jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
         if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
@@ -953,7 +975,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 if (inferred == jl_nothing) {
                     record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
                 }
-                else if (jl_is_string(inferred)) {
+                else if (s->incremental && jl_is_string(inferred)) {
                     // New roots for external methods
                     if (jl_object_in_image((jl_value_t*)def)) {
                         void **pfound = ptrhash_bp(&s->method_roots_index, def);
@@ -2572,6 +2594,35 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
         jl_svecset(cache, ins++, jl_nothing);
 }
 
+static void jl_prune_mi_backedges(jl_array_t *backedges)
+{
+    if (backedges == NULL)
+        return;
+    size_t i = 0, ins = 0, n = jl_array_nrows(backedges);
+    while (i < n) {
+        jl_value_t *invokeTypes;
+        jl_code_instance_t *caller;
+        i = get_next_edge(backedges, i, &invokeTypes, &caller);
+        if (ptrhash_get(&serialization_order, caller) != HT_NOTFOUND)
+            ins = set_next_edge(backedges, ins, invokeTypes, caller);
+    }
+    jl_array_del_end(backedges, n - ins);
+}
+
+static void jl_prune_binding_backedges(jl_array_t *backedges)
+{
+    if (backedges == NULL)
+        return;
+    size_t i = 0, ins = 0, n = jl_array_nrows(backedges);
+    for (i = 0; i < n; i++) {
+        jl_value_t *b = jl_array_ptr_ref(backedges, i);
+        if (ptrhash_get(&serialization_order, b) != HT_NOTFOUND)
+            jl_array_ptr_set(backedges, ins, b);
+    }
+    jl_array_del_end(backedges, n - ins);
+}
+
+
 uint_t bindingkey_hash(size_t idx, jl_value_t *data);
 
 static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
@@ -3145,12 +3196,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, global_roots_keyset);
             jl_serialize_reachable(&s);
         }
-        // step 1.5: prune (garbage collect) some special weak references from
-        // built-in type caches too
+        // step 1.5: prune (garbage collect) some special weak references known caches
         for (i = 0; i < serialization_queue.len; i++) {
             jl_value_t *v = (jl_value_t*)serialization_queue.items[i];
             if (jl_options.trim) {
-                if (jl_is_method(v)){
+                if (jl_is_method(v)) {
                     jl_method_t *m = (jl_method_t*)v;
                     jl_value_t *specializations_ = jl_atomic_load_relaxed(&m->specializations);
                     if (!jl_is_svec(specializations_))
@@ -3177,6 +3227,16 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                     jl_prune_type_cache_hash(jl_atomic_load_relaxed(&tn->cache)));
                 jl_gc_wb(tn, jl_atomic_load_relaxed(&tn->cache));
                 jl_prune_type_cache_linear(jl_atomic_load_relaxed(&tn->linearcache));
+            }
+            else if (jl_is_method_instance(v)) {
+                jl_method_instance_t *mi = (jl_method_instance_t*)v;
+                jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);
+                jl_prune_mi_backedges((jl_array_t*)backedges);
+            }
+            else if (jl_is_binding(v)) {
+                jl_binding_t *b = (jl_binding_t*)v;
+                jl_value_t *backedges = get_replaceable_field((jl_value_t**)&b->backedges, 1);
+                jl_prune_binding_backedges((jl_array_t*)backedges);
             }
         }
     }
