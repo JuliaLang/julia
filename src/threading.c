@@ -455,87 +455,19 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
-static char * get_path_from_sym(void *sym)
-{
-    char *lib_dir = NULL;
-#if defined(_OS_WINDOWS_)
-    // On Windows, we use GetModuleFileNameW
-    HMODULE handle = NULL;
-
-    // Get a handle to libjulia
-    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                            (LPCWSTR)sym, &handle)) {
-        DWORD err = GetLastError();
-        fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
-            "%s\n"
-            "       (this should not happen, please file a bug report)\n", );
-        char msg[2048];
-        win32_formatmessage(err, msg, sizeof(msg));
-        fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
-            "%s\n"
-            "       (this should not happen, please file a bug report)\n", msg);
-        exit(1);
-    }
-
-    wchar_t *image_path = (wchar_t*)malloc(32768 * sizeof(wchar_t)); // max long path length
-    if (!GetModuleFileNameW(libjulia, image_path, 32768)) {
-        fprintf(stderr, "ERROR: GetModuleFileName() failed\n");
-        exit(1);
-    }
-    lib_dir = wchar_to_utf8(image_path);
-    if (!lib_dir) {
-        fprintf(stderr, "ERROR: Unable to convert julia path to UTF-8\n");
-        exit(1);
-    }
-    free(libjulia_path);
-#else
-    // On all other platforms, use dladdr()
-    Dl_info info;
-    if (!dladdr(sym, &info)) {
-        fprintf(stderr, "ERROR: Unable to dladdr(&jl_get_libdir)!\n");
-        char *dlerr = dlerror();
-        if (dlerr != NULL) {
-            fprintf(stderr, "Message: %s\n", dlerr);
-        }
-        exit(1);
-    }
-    lib_dir = strdup(info.dli_fname);
-#endif
-    return lib_dir;
-}
-
 JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
 {
     if (!jl_is_initialized()) {
         void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
-
-        if (retaddr == NULL) {
+        void *handle = jl_find_dynamic_library_by_addr(retaddr, 0);
+        if (handle == NULL) {
             fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
                             "       (this should not happen, please file a bug report)\n");
             exit(1);
         }
-        char *image_path = get_path_from_sym(retaddr);
-        char* lib_dir = strdup(image_path);
-            // Finally, convert to dirname
-        const char * new_dir = dirname(lib_dir);
-        if (new_dir != lib_dir) {
-            // On some platforms, dirname() mutates.  On others, it does not.
-            memcpy(lib_dir, new_dir, strlen(new_dir)+1);
-            free((void*)new_dir);
-        }
-        char *libbindir = NULL;
-#ifdef _OS_WINDOWS_
-        libbindir = lib_dir;
-#else
-        (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s",lib_dir, "bin");
-#endif
-        if (!libbindir) {
-            printf("jl_init unable to find libjulia!\n");
-            abort();
-        }
-        jl_init_with_image(libbindir, image_path);
-        free(libbindir);
-        free(lib_dir);
+        const char *image_path = jl_pathname_for_handle(handle);
+        jl_enter_threaded_region(); // This should maybe be behind a lock, but it's harmless if done twice
+        jl_init_with_image(NULL, image_path);
         return &jl_get_current_task()->gcstack;
     }
 

@@ -88,7 +88,20 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
     if (jl_is_initialized())
         return;
     libsupport_init();
-    jl_options.julia_bindir = julia_bindir;
+    if (julia_bindir) {
+        jl_options.julia_bindir = julia_bindir;
+    } else {
+        char *libbindir = NULL;
+#ifdef _OS_WINDOWS_
+        libbindir = strdup(jl_get_libdir());
+#else
+        (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
+#endif
+        if (!libbindir) {
+            printf("jl_init unable to find libjulia!\n");
+            abort();
+        }
+    }
     if (image_path != NULL)
         jl_options.image_file = image_path;
     else
