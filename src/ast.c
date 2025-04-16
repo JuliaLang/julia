@@ -1281,21 +1281,7 @@ JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
     return jl_lower(expr, inmodule, "none", 0, ~(size_t)0, 0, 0);
 }
 
-// Lowering, with starting program location specified
-JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                            const char *file, int line)
-{
-    return jl_lower(expr, inmodule, file, line, ~(size_t)0, 0, 0);
-}
-
-// Lowering, with starting program location and worldage specified
-JL_DLLEXPORT jl_value_t *jl_expand_in_world(jl_value_t *expr, jl_module_t *inmodule,
-                                            const char *file, int line, size_t world)
-{
-    return jl_lower(expr, inmodule, file, line, world, 0, 0);
-}
-
-// Main entry point to flisp lowering
+// Main entry point to flisp lowering.  Most arguments are optional; see `jl_expand`.
 // warn: Print any lowering warnings returned; otherwise ignore
 // stmt: Lower knowing that the value of expr is unused
 JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
@@ -1349,17 +1335,6 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
 {
     // TODO: Allow change of lowerer
     return jl_fl_lower(expr, inmodule, file, line, world, warn, stmt);
-}
-
-JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                                 const char *file, int line)
-{
-    return jl_lower(expr, inmodule, file, line, ~(size_t)0, 0, 1);
-}
-
-JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
-{
-    return jl_lower(expr, inmodule, "none", 0, ~(size_t)0, 0, 1);
 }
 
 jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)
