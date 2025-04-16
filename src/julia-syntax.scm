@@ -5331,7 +5331,7 @@ f(x) = yt(x)
 
 ;; expander entry point
 
-(define (julia-expand1 ex file line)
+(define (julia-lower1 ex file line)
   (compact-and-renumber
    (linearize
     (closure-convert
@@ -5340,7 +5340,7 @@ f(x) = yt(x)
 
 (define *current-desugar-loc* #f)
 
-(define (julia-expand0 ex lno)
+(define (julia-lower0 ex lno)
   (with-bindings ((*current-desugar-loc* lno))
    (trycatch (expand-forms ex)
              (lambda (e)
@@ -5353,7 +5353,7 @@ f(x) = yt(x)
                    (error (string (cadr e) (format-loc *current-desugar-loc*))))
                    (raise e)))))
 
-(define (julia-expand ex (file 'none) (line 0))
-  (julia-expand1
-   (julia-expand0
+(define (julia-lower ex (file 'none) (line 0))
+  (julia-lower1
+   (julia-lower0
     (julia-expand-macroscope ex) `(line ,line ,file)) file line))
