@@ -1275,13 +1275,7 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     return expr;
 }
 
-// Lower an expression tree into Julia's intermediate-representation.
-JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
-{
-    return jl_lower(expr, inmodule, "none", 0, ~(size_t)0, 0, 0);
-}
-
-// Main entry point to flisp lowering.  Most arguments are optional; see `jl_expand`.
+// Main entry point to flisp lowering.  Most arguments are optional; see `jl_lower_expr_mod`.
 // warn: Print any lowering warnings returned; otherwise ignore
 // stmt: Lower knowing that the value of expr is unused
 JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
@@ -1330,11 +1324,17 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
     return expr;
 }
 
+// Lower an expression tree into Julia's intermediate-representation.
 JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *file, int line, size_t world, bool_t warn, bool_t stmt)
 {
     // TODO: Allow change of lowerer
     return jl_fl_lower(expr, inmodule, file, line, world, warn, stmt);
+}
+
+JL_DLLEXPORT jl_value_t *jl_lower_expr_mod(jl_value_t *expr, jl_module_t *inmodule)
+{
+    return jl_lower(expr, inmodule, "none", 0, ~(size_t)0, 0, 0);
 }
 
 jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)

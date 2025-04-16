@@ -125,7 +125,6 @@
     XX(jl_exit) \
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
-    XX(jl_expand) \
     XX(jl_field_index) \
     XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \
@@ -286,6 +285,7 @@
     XX(jl_load_file_string) \
     XX(jl_lookup_code_address) \
     XX(jl_lower) \
+    XX(jl_lower_expr_mod) \
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \
