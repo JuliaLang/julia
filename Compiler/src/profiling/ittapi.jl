@@ -1,7 +1,7 @@
 # Stubs
 module ITTAPI
 
-import ..String, ..Expr, ..LineNumberNode
+import ..String, ..Expr, ..LineNumberNode, ..nothing
 
 function ittapi_zone_create(name::String, ex::Expr, linfo::LineNumberNode)
     return nothing
