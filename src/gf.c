@@ -2445,13 +2445,14 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
                         // found that this specialization dispatch got replaced by m
                         // call invalidate_backedges(mi, max_world, "jl_method_table_insert");
                         // but ignore invoke-type edges
-                        invalidated |= _invalidate_dispatch_backedges(mi, type, m, d, n, replaced_dispatch, ambig, max_world, morespec);
+                        int invalidatedmi = _invalidate_dispatch_backedges(mi, type, m, d, n, replaced_dispatch, ambig, max_world, morespec);
                         jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
-                        if (_jl_debug_method_invalidation && invalidated) {
+                        if (_jl_debug_method_invalidation && invalidatedmi) {
                             jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
                             loctag = jl_cstr_to_string("jl_method_table_insert");
                             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
                         }
+                        invalidated |= invalidatedmi;
                     }
                 }
             }
