@@ -2952,18 +2952,22 @@
       (set! *current-desugar-loc* e)
       e)
 
+    ;; We insert (latestworld) after every call to _eval_import or _eval_using
+    ;; to avoid having to do it in eval_import_path (#57316)
     'import
     (lambda (e)
       (check-import-paths "import" (cdr e))
       `(block
         (toplevel-only import)
         ,.(if (eq? (caadr e) ':)
-              `((call (core _module_import) (true) (thismodule)
-                      ,.(map (lambda (x) `(inert ,x)) (cdadr e))))
+              `((call (core _eval_import) (true) (thismodule)
+                      ,.(map (lambda (x) `(inert ,x)) (cdadr e)))
+                (latestworld))
               (map (lambda (x)
-                     `(call (core _module_import) (true) (thismodule) (null) (inert ,x)))
-                   (cdr e)))
-        (latestworld)))
+                     `(block
+                       (call (core _eval_import) (true) (thismodule) (null) (inert ,x))
+                       (latestworld)))
+                   (cdr e)))))
 
     'using
     (lambda (e)
@@ -2971,12 +2975,14 @@
       `(block
         (toplevel-only using)
         ,.(if (eq? (caadr e) ':)
-              `((call (core _module_import) (false) (thismodule)
-                      ,.(map (lambda (x) `(inert ,x)) (cdadr e))))
+              `((call (core _eval_import) (false) (thismodule)
+                      ,.(map (lambda (x) `(inert ,x)) (cdadr e)))
+                (latestworld))
               (map (lambda (x)
-                     `(call (core _module_using) (thismodule) (inert ,x)))
-                   (cdr e)))
-        (latestworld)))
+                     `(block
+                       (call (core _eval_using) (thismodule) (inert ,x))
+                       (latestworld)))
+                   (cdr e)))))
     ))
 
 (define (has-return? e)

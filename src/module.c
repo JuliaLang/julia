@@ -1269,6 +1269,28 @@ JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *
     JL_UNLOCK(&world_counter_lock);
 }
 
+JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym_t *asname)
+{
+    assert(m);
+    jl_sym_t *name = asname ? asname : import->name;
+    // TODO: this is a bit race-y with what error message we might print
+    jl_binding_t *b = jl_get_module_binding(m, name, 1);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
+    enum jl_partition_kind kind = jl_binding_kind(bpart);
+    if (!jl_bkind_is_some_implicit(kind) && kind != PARTITION_KIND_DECLARED) {
+        // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
+        jl_walk_binding_inplace(&b, &bpart, ct->world_age);
+        if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
+            // Already declared (e.g. on another thread) or imported.
+            if (bpart->restriction == (jl_value_t*)import)
+                return;
+        }
+        jl_errorf("importing %s into %s conflicts with an existing global",
+                    jl_symbol_name(name), jl_symbol_name(m->name));
+    }
+    jl_declare_constant_val2(b, m, name, (jl_value_t*)import, PARTITION_KIND_CONST_IMPORT);
+}
+
 void jl_add_usings_backedge(jl_module_t *from, jl_module_t *to)
 {
     JL_LOCK(&from->lock);
