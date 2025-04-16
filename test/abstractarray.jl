@@ -910,7 +910,7 @@ include("generic_map_tests.jl")
 generic_map_tests(map, map!)
 @test map!(-, [1]) == [-1]
 
-function test_30624()
+@testset "#30624" begin
     ### unstructured
     @test map!(+, ones(3), ones(3), ones(3), [1]) == [3, 1, 1]
     @test map!(+, ones(3), [1], ones(3), ones(3)) == [3, 1, 1]
@@ -928,7 +928,6 @@ function test_30624()
     @test map!(+, ones(4), ones(2, 2), ones(1, 2)) == [2, 2, 1, 1]
     @test_throws BoundsError map!(+, ones(3), ones(2, 2), ones(2, 2))
 end
-test_30624()
 
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)

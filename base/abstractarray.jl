@@ -3400,7 +3400,8 @@ map(f, ::AbstractSet) = error("map is not defined on sets")
 
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
-    inds = intersect(eachindex(LinearIndices(A)), eachindex(LinearIndices(B)))
+    IL = IndexLinear()
+    inds = intersect(eachindex(IL, A), eachindex(IL, B))
     @boundscheck checkbounds(dest, inds)
     for i = inds
         dest[i] = f(A[i], B[i])
@@ -3417,7 +3418,7 @@ function ith_all(i, as)
 end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    inds = mapreduce(eachindex ∘ LinearIndices, intersect, As)
+    inds = mapreduce(Fix1(eachindex, IndexLinear()), intersect, As)
     @boundscheck checkbounds(dest, inds)
     for i = inds
         dest[i] = f(ith_all(i, As)...)
