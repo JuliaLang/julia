@@ -1,29 +1,29 @@
 module Tracy
 
-import ..@noinline, ..Cint, ..Vector, ..push!, ..unsafe_convert, ..esc,
+import ..@noinline, ..@atomic, ..Cint, ..Vector, ..push!, ..unsafe_convert, ..esc,
        ..pointer_from_objref, ..String, ..Ptr, ..UInt8, ..Cvoid,
        ..Expr, ..LineNumberNode, ..Symbol, ..UInt32, ..C_NULL, ..(===)
 
 _strpointer(s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
 
 mutable struct TracySrcLoc
-    zone_name::Ptr{UInt8}
-    function_name::Ptr{UInt8}
-    file::Ptr{UInt8}
-    line::UInt32
-    color::UInt32
+    @atomic zone_name::Ptr{UInt8}
+    @atomic function_name::Ptr{UInt8}
+    @atomic file::Ptr{UInt8}
+    const line::UInt32
+    const color::UInt32
     # Roots
-    zone_name_str::String
-    function_name_sym::Symbol
-    file_sym::Symbol
+    const zone_name_str::String
+    const function_name_sym::Symbol
+    const file_sym::Symbol
 end
 TracySrcLoc(zone_name::String, function_name::Symbol, file::Symbol, line::UInt32, color::UInt32) =
     TracySrcLoc(C_NULL, C_NULL, C_NULL, line, color, zone_name, function_name, file)
 
 @noinline function reinit!(srcloc::TracySrcLoc)
-    srcloc.zone_name = _strpointer(srcloc.zone_name_str)
-    srcloc.function_name = unsafe_convert(Ptr{UInt8}, srcloc.function_name_sym)
-    srcloc.file = unsafe_convert(Ptr{UInt8}, srcloc.file_sym)
+    @atomic :monotonic srcloc.file = unsafe_convert(Ptr{UInt8}, srcloc.file_sym)
+    @atomic :monotonic srcloc.function_name = unsafe_convert(Ptr{UInt8}, srcloc.function_name_sym)
+    @atomic :release srcloc.zone_name = _strpointer(srcloc.zone_name_str)
 end
 
 struct TracyZoneCtx
@@ -48,7 +48,7 @@ function tracy_zone_create(name::String, ex::Expr, linfo::LineNumberNode)
 end
 
 function tracy_zone_begin(loc, active)
-    if loc.zone_name === Ptr{UInt8}(0)
+    if (@atomic :acquire loc.zone_name) === Ptr{UInt8}(0)
         reinit!(loc)
     end
     # `loc` is rooted in the global `srclocs`
