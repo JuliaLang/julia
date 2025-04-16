@@ -151,7 +151,7 @@ static int indirect_strcmp(const void *a, const void *b) {
 void jl_init_timing(void)
 {
     t0 = cycleclock();
-    jl_mutex_timing_lock_init();
+
     _Static_assert(JL_TIMING_SUBSYSTEM_LAST < sizeof(uint64_t) * CHAR_BIT, "Too many timing subsystems!");
 
 #ifdef USE_TIMING_COUNTS

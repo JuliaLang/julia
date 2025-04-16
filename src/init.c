@@ -750,6 +750,7 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
     JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
+    jl_mutex_timing_lock_init();
 }
 
 JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
