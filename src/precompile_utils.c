@@ -61,7 +61,7 @@ static int _compile_all_tvar_union(jl_value_t *methsig)
         if (sig) {
             roots[0] = sig;
             if (jl_is_datatype(sig) && jl_has_concrete_subtype(sig))
-                all = all && jl_compile_hint((jl_tupletype_t*)sig);
+                all = all && jl_compile_hint((jl_tupletype_t*)sig, 0);
             else
                 all = 0;
         }

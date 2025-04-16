@@ -3365,7 +3365,7 @@ JL_DLLEXPORT void jl_compile_method_sig(jl_method_t *m, jl_value_t *types, jl_sv
     jl_compile_method_instance(mi, NULL, world);
 }
 
-JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
+JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types, int check_only)
 {
     size_t world = jl_atomic_load_acquire(&jl_world_counter);
     size_t min_valid = 0;
@@ -3373,8 +3373,10 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types)
     jl_method_instance_t *mi = jl_get_compile_hint_specialization(types, world, &min_valid, &max_valid, 1);
     if (mi == NULL)
         return 0;
-    JL_GC_PROMISE_ROOTED(mi);
-    jl_compile_method_instance(mi, types, world);
+    if (!check_only) {
+        JL_GC_PROMISE_ROOTED(mi);
+        jl_compile_method_instance(mi, types, world);
+    }
     return 1;
 }
 

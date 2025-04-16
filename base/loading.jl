@@ -4166,17 +4166,19 @@ end
 compiler_chi(tup::Tuple) = CacheHeaderIncludes(expand_compiler_path(tup))
 
 """
-    precompile(f, argtypes::Tuple{Vararg{Any}})
+    precompile(f, argtypes::Tuple{Vararg{Any}}; check_only::Bool=false)
 
 Compile the given function `f` for the argument tuple (of types) `argtypes`, but do not execute it.
+If `check_only` is `true`, do not compile `f`; check whether `f` should be compileable for `argtypes`
+and return `true` or `false` accordingly.
 """
-function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple))
-    precompile(Tuple{Core.Typeof(f), argtypes...})
+function precompile(@nospecialize(f), @nospecialize(argtypes::Tuple); check_only::Bool=false)
+    precompile(Tuple{Core.Typeof(f), argtypes...}; check_only)
 end
 
 const ENABLE_PRECOMPILE_WARNINGS = Ref(false)
-function precompile(@nospecialize(argt::Type))
-    ret = ccall(:jl_compile_hint, Int32, (Any,), argt) != 0
+function precompile(@nospecialize(argt::Type); check_only::Bool=false)
+    ret = ccall(:jl_compile_hint, Int32, (Any, Cint), argt, check_only) != 0
     if !ret && ENABLE_PRECOMPILE_WARNINGS[]
         @warn "Inactive precompile statement" maxlog=100 form=argt _module=nothing _file=nothing _line=0
     end
