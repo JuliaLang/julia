@@ -808,7 +808,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     size_t last_age = ct->world_age;
     if (!expanded && jl_needs_lowering(e)) {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        ex = (jl_expr_t*)jl_expand_with_loc_warn(e, m, *toplevel_filename, *toplevel_lineno);
+        ex = (jl_expr_t*)jl_lower(e, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1, 0);
         ct->world_age = last_age;
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
@@ -972,7 +972,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             root = jl_array_ptr_ref(ex->args, i);
             if (jl_needs_lowering(root)) {
                 ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-                root = jl_expand_with_loc_warn(root, m, *toplevel_filename, *toplevel_lineno);
+                root = jl_lower(root, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1, 0);
             }
             ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             res = jl_toplevel_eval_flex(m, root, fast, 1, toplevel_filename, toplevel_lineno);
@@ -1151,8 +1151,8 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
                 continue;
             }
             ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
-            expression = jl_expand_with_loc_warn(expression, module,
-                                                 jl_string_data(filename), lineno);
+            expression = jl_lower(expression, module,
+                                                 jl_string_data(filename), lineno, ~(size_t)0, 1, 0);
             ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }
