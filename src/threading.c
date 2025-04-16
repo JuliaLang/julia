@@ -7,10 +7,6 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
-#ifndef _OS_WINDOWS_
-#include <dlfcn.h>
-#endif
-#include <libgen.h> // defines dirname
 
 #ifdef USE_ITTAPI
 #include "ittapi/ittnotify.h"
