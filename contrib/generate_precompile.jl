@@ -185,7 +185,7 @@ end
 write(IOBuffer(), "")
 
 # precompile @time report generation and printing
-@time @eval Base.Experimental.@force_compile
+@time Base.Experimental.@force_compile
 """
 
 julia_exepath() = joinpath(Sys.BINDIR, Base.julia_exename())

@@ -9,6 +9,9 @@ New language features
 Language changes
 ----------------
 
+* Calling `@time expr` in the repl or top-level no longer requires `@time @eval expr` to capture all compilation
+  time spent compiling `expr`. ([#58015])
+
 Compiler/Runtime improvements
 -----------------------------
 

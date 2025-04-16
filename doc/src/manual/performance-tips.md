@@ -1412,15 +1412,12 @@ compiled. The [`@time`](@ref) macro family illustrates this.
 julia> foo() = rand(2,2) * rand(2,2)
 foo (generic function with 1 method)
 
-julia> @time @eval foo();
+julia> @time foo();
   0.252395 seconds (1.12 M allocations: 56.178 MiB, 2.93% gc time, 98.12% compilation time)
 
-julia> @time @eval foo();
+julia> @time foo();
   0.000156 seconds (63 allocations: 2.453 KiB)
 ```
-
-Note that `@time @eval` is better for measuring compilation time because without [`@eval`](@ref), some compilation may
-already be done before timing starts.
 
 When developing a package, you may be able to improve the experience of your users with *precompilation*
 so that when they use the package, the code they use is already compiled. To precompile package code effectively, it's
