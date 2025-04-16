@@ -91,16 +91,13 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
     if (julia_bindir) {
         jl_options.julia_bindir = julia_bindir;
     } else {
-        char *libbindir = NULL;
 #ifdef _OS_WINDOWS_
-        libbindir = strdup(jl_get_libdir());
+        jl_options.julia_bindir = strdup(jl_get_libdir());
 #else
-        (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
+        int written = asprintf((char**)&jl_options.julia_bindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
+        if (written < 0)
+            abort(); // unexpected: memory allocation failed
 #endif
-        if (!libbindir) {
-            printf("jl_init unable to find libjulia!\n");
-            abort();
-        }
     }
     if (image_path != NULL)
         jl_options.image_file = image_path;
@@ -118,18 +115,7 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
  */
 JL_DLLEXPORT void jl_init(void)
 {
-    char *libbindir = NULL;
-#ifdef _OS_WINDOWS_
-    libbindir = strdup(jl_get_libdir());
-#else
-    (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
-#endif
-    if (!libbindir) {
-        printf("jl_init unable to find libjulia!\n");
-        abort();
-    }
-    jl_init_with_image(libbindir, jl_get_default_sysimg_path());
-    free(libbindir);
+    jl_init_with_image(NULL, jl_get_default_sysimg_path());
 }
 
 static void _jl_exception_clear(jl_task_t *ct) JL_NOTSAFEPOINT
