@@ -638,6 +638,19 @@ end
 @test Base.infer_effects(gcdx, (Int,Int)) |> Core.Compiler.is_foldable
 @test Base.infer_effects(invmod, (Int,Int)) |> Core.Compiler.is_foldable
 @test Base.infer_effects(binomial, (Int,Int)) |> Core.Compiler.is_foldable
+@testset "concrete-foldability: `hastypemax`" begin
+    @test Base.infer_effects(Base.hastypemax, (Type,)) |> Core.Compiler.is_foldable
+    @test Base.infer_effects(Base.hastypemax, (DataType,)) |> Core.Compiler.is_foldable
+    for t in (Bool, Int, BigInt)
+        @test Base.infer_effects(Base.hastypemax, (Type{t},)) |> Core.Compiler.is_foldable
+    end
+end
+
+@testset "`hastypemax`" begin
+    @test Base.hastypemax(Bool)
+    @test Base.hastypemax(Int)
+    @test !Base.hastypemax(BigInt)
+end
 
 @testset "literal power" begin
     @testset for T in Base.uniontypes(Base.HWReal)

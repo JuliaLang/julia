@@ -1393,7 +1393,7 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int param)
         x = pick_union_element(x, e, 0);
     }
     if (jl_is_uniontype(y)) {
-        if (x == ((jl_uniontype_t*)y)->a || x == ((jl_uniontype_t*)y)->b)
+        if (obviously_in_union(y, x))
             return 1;
         if (jl_is_unionall(x))
             return subtype_unionall(y, (jl_unionall_t*)x, e, 0, param);
@@ -2539,9 +2539,6 @@ static jl_value_t *intersect_aside(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, 
 
 static jl_value_t *intersect_union(jl_value_t *x, jl_uniontype_t *u, jl_stenv_t *e, int8_t R, int param)
 {
-    // band-aid for #56040
-    if (!jl_is_uniontype(x) && obviously_in_union((jl_value_t *)u, x))
-        return x;
     int no_free = !jl_has_free_typevars(x) && !jl_has_free_typevars((jl_value_t*)u);
     if (param == 2 || no_free) {
         jl_value_t *a=NULL, *b=NULL;
@@ -2678,7 +2675,7 @@ static void set_bound(jl_value_t **bound, jl_value_t *val, jl_tvar_t *v, jl_sten
 // subtype, treating all vars as existential
 static int subtype_in_env_existential(jl_value_t *x, jl_value_t *y, jl_stenv_t *e)
 {
-    if (x == jl_bottom_type || y == (jl_value_t*)jl_any_type)
+    if (x == jl_bottom_type || y == (jl_value_t*)jl_any_type || obviously_in_union(y, x))
         return 1;
     int8_t *rs = (int8_t*)alloca(current_env_length(e));
     jl_varbinding_t *v = e->vars;
@@ -2801,7 +2798,7 @@ static jl_value_t *intersect_var(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, int
     jl_value_t *ub = R ? intersect_aside(a, bb->ub, e, bb->depth0) : intersect_aside(bb->ub, a, e, bb->depth0);
     if (ub == jl_bottom_type)
         return jl_bottom_type;
-    if (bb->constraintkind == 1 || e->triangular) {
+    if (bb->constraintkind == 1 || (e->triangular && param == 1)) {
         if (e->triangular && check_unsat_bound(ub, b, e))
             return jl_bottom_type;
         set_bound(&bb->ub, ub, b, e);
@@ -4116,12 +4113,14 @@ static jl_value_t *intersect(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, int pa
         if (jl_subtype(y, x)) return y;
     }
     if (jl_is_uniontype(x)) {
-        if (y == ((jl_uniontype_t*)x)->a || y == ((jl_uniontype_t*)x)->b)
+        if (obviously_in_union(x, y))
             return y;
+        if (jl_is_uniontype(y) && obviously_in_union(y, x))
+            return x;
         return intersect_union(y, (jl_uniontype_t*)x, e, 0, param);
     }
     if (jl_is_uniontype(y)) {
-        if (x == ((jl_uniontype_t*)y)->a || x == ((jl_uniontype_t*)y)->b)
+        if (obviously_in_union(y, x))
             return x;
         if (jl_is_unionall(x) && (jl_has_free_typevars(x) || jl_has_free_typevars(y)))
             return intersect_unionall(y, (jl_unionall_t*)x, e, 0, param);

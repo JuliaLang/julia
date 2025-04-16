@@ -383,3 +383,12 @@ end
 
 # M3 connects all, so we should have a single partition
 @test access_and_count(:afterM3) == 1
+
+# Test that delete_binding in an outdated world age works
+module BindingTestModule; end
+function create_and_delete_binding()
+    Core.eval(BindingTestModule, :(const x = 1))
+    Base.delete_binding(BindingTestModule, :x)
+end
+create_and_delete_binding()
+@test Base.binding_kind(BindingTestModule, :x) == Base.PARTITION_KIND_GUARD

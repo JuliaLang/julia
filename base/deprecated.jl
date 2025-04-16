@@ -87,7 +87,7 @@ else
 end
 ```
 
-To find out the correct verrsion to use as the first argument, you may use
+To find out the correct version to use as the first argument, you may use
 `Base.__next_removal_version`, which is set to the next version number in which
 the list of changes will be cleared.
 

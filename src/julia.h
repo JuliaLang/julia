@@ -1491,7 +1491,7 @@ JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL
 #define jl_inlinedatatype_layout(t) (((jl_datatype_t*)t)->layout)
 STATIC_INLINE const jl_datatype_layout_t *jl_datatype_layout(jl_datatype_t *t) JL_NOTSAFEPOINT
 {
-    if (jl_is_layout_opaque(t->layout)) // e.g. GenericMemory
+    if (t->layout == NULL || jl_is_layout_opaque(t->layout)) // e.g. GenericMemory
         t = (jl_datatype_t*)jl_unwrap_unionall(t->name->wrapper);
     return t->layout;
 }

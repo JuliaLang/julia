@@ -993,7 +993,7 @@ the xoshiro256 state. There are two problems with that fix, however:
    need four variations of the internal RNG stream for the four xoshiro256
    registers. That means we'd have to apply the PCG finalizer, add it to
    our dot product accumulator field in the child task, then apply the
-   MurmurHash3 finalizer to that dot product and use the result to purturb
+   MurmurHash3 finalizer to that dot product and use the result to perturb
    the main RNG state.
 
 We avoid both problems by recognizing that the mixing function can be much less
