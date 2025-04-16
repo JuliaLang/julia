@@ -7,13 +7,12 @@ $(eval $(call git-external,openlibm,OPENLIBM,,,$(BUILDDIR)))
 OPENLIBM_FLAGS := ARCH="$(ARCH)" REAL_ARCH="$(MARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
 
-$(BUILDDIR)/$(OPENLIBM_SRC_DIR)/source-extracted/openlibm-stack-markings.patch-applied: $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/source-extracted
-	mkdir -p $(dir $@)
-	cd $(SRCCACHE)/openlibm-$(OPENLIBM_VER) && \
+$(BUILDDIR)/$(OPENLIBM_SRC_DIR)/openlibm-stack-markings.patch-applied: $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/source-extracted
+	cd $(dir $@) && \
 		patch -p1 -f < $(SRCDIR)/patches/openlibm-stack-markings.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(OPENLIBM_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/source-extracted/openlibm-stack-markings.patch-applied
+$(BUILDDIR)/$(OPENLIBM_SRC_DIR)/build-compiled: $(BUILDDIR)/$(OPENLIBM_SRC_DIR)/openlibm-stack-markings.patch-applied
 	$(MAKE) -C $(dir $<) $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	echo 1 > $@
 
