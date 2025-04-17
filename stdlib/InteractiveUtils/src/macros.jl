@@ -21,7 +21,7 @@ function rewrap_where(ex, where_params)
     Expr(:where, ex, esc.(where_params)...)
 end
 
-function get_typeof(ex)
+function get_typeof(@nospecialize ex)
     isexpr(ex, :(::), 1) && return esc(ex.args[1])
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
@@ -57,7 +57,7 @@ function recursive_dotcalls!(ex, args, i=1)
     return ex, i
 end
 
-function extract_farg(arg)
+function extract_farg(@nospecialize arg)
     !isexpr(arg, :(::), 1) && return esc(arg)
     fT = esc(arg.args[1])
     :($construct_callable($fT))
@@ -135,7 +135,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             if length(ex0.args) != 2
                 return Expr(:call, :error, "ill-formed do call")
             end
-            i = findlast(a->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args[1].args)
+            i = findlast(@nospecialize(a)->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args[1].args)
             args = copy(ex0.args[1].args)
             insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
             ex0 = Expr(:call, args...)
@@ -187,7 +187,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 end
             end
         end
-        if any(a->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args)
+        if any(@nospecialize(a)->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args)
             args, kwargs = separate_kwargs(ex0.args)
             nt = namedtuple_type(kwargs)
             isnothing(nt) && return quote
@@ -254,7 +254,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
 
     exret = Expr(:none)
     if ex.head === :call
-        if any(x -> isexpr(x, :...), ex0.args) &&
+        if any(@nospecialize(x) -> isexpr(x, :...), ex0.args) &&
             (ex.args[1] === GlobalRef(Core,:_apply_iterate) ||
              ex.args[1] === GlobalRef(Base,:_apply_iterate))
             # check for splatting
