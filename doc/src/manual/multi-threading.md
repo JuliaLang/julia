@@ -301,7 +301,9 @@ bad_read2(a) # it is NOT safe to access `a` here
 ```
 
 ### [Using locks to avoid data-races](@id man-using-locks)
-An important tool to avoid data-races, and thereby write thread-safe code, is the concept of a "lock". A lock can be locked and unlocked. If a thread has locked a lock, and not unlocked it, it is said to "hold" the lock. If there is only one lock, and we write code the requires holding the lock to access some data, we can ensure that multiple threads will never access the same data simultaneously. Note that the link between a lock and a variable is made by the programmer, and not the program.
+An important tool to avoid data-races, and thereby write thread-safe code, is the concept of a "lock". A lock can be locked and unlocked. If a thread has locked a lock, and not unlocked it, it is said to "hold" the lock. If there is only one lock, and we write code the requires holding the lock to access some data, we can ensure that multiple threads will never access the same data simultaneously. 
+
+Note that the link between a lock and a variable is made by the programmer, and not the program. A helper-type [`Base.Lockable`](@ref) exists that helps you associate a lock and a value. This is often more safe than keeping track yourself, and is detailed under [Using Base.Lockable to associate a lock and a value](@ref man-lockable).
 
 For example, we can create a lock `my_lock`, and lock it while we mutate a variable `my_variable`. This is done most simply with the `@lock` macro:
 
@@ -336,6 +338,32 @@ julia> begin
 
 All three options are equivalent. Note how the final version requires an explicit `try`-block to ensure that the lock is always unlocked, whereas the first two version do this internally. One should always use the lock pattern above when changing data (such as assigning
 to a global or closure variable) accessed by other threads. Failing to do this could have unforeseen and serious consequences.
+
+#### [Using Base.Lockable to associate a lock and a value](@id man-lockable)
+As mentioned in the previous section, the helper-type [`Base.Lockable`](@ref) can be used to programmatically ensure the association between a lock and a value. This is generally recommended, as it is both less prone to error and more readable for others compared to having the association only by convention.
+
+
+```julia-repl
+julia> my_array = [];                   # Simple empty array
+
+julia> my_locked_array = Base.Lockable(my_array);  # The lock type defaults toReentrantLock(), which is fine in most cases
+
+julia> lock(identity, my_locked_array)  # The first argument is a function that is applied to the "unlocked" array, so `identity` is good for inspecting the associated value in a thread-safe manner
+Any[]
+
+julia> lock(my_locked_array) do x       # The functional version of lock` along with the do-syntax` is a convenient way to work with a Lockable object
+           push!(x, 1)
+       end;
+
+julia> lock(identity, my_locked_array)  # The array is now mutated, without any risk of data-races
+1-element Vector{Any}:
+ 1
+
+julia> my_array                         # The original array is identical to the one contained in my_locked_array``
+1-element Vector{Any}:
+ 1
+
+```
 
 ### [Atomic Operations](@id man-atomic-operations)
 
