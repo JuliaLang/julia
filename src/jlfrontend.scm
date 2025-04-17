@@ -167,17 +167,11 @@
   (error-wrap (lambda ()
                 (lower-toplevel-expr expr file line))))
 
-(define (lower-to-thunk-stmt- expr file line)
-  (lower-to-thunk- (if (toplevel-only-expr? expr)
-                        expr
-                        `(block ,expr (null)))
-                    file line))
-
 ;; Returns a list `(,lowered-code ,warnings) where
 ;; - warnings (currently only ambiguous soft scope assignments) may be ignored,
 ;;   e.g. when running interactively
 ;; - more items may be added to the list later
-(define (jl-lower-to-thunk expr file line stmt)
+(define (jl-lower-to-thunk expr file line)
   (let ((warnings '()))
     (with-bindings
      ;; Abuse scm_to_julia here to convert arguments to warn. This is meant for
@@ -187,10 +181,8 @@
         (let ((line (if (= warn_line 0) line warn_line))
               (file (if (eq? warn_file 'none) file warn_file)))
           (set! warnings (cons (list* 'warn level group (symbol (string file line)) file line lst) warnings))))))
-     (let ((thunk (if stmt
-                      (lower-to-thunk-stmt- expr file line)
-                      (lower-to-thunk- expr file line))))
-       `(,thunk ,(reverse warnings))))))
+     `(,(lower-to-thunk- expr file line)
+       ,(reverse warnings)))))
 
 (define (jl-expand-macroscope expr)
   (error-wrap (lambda ()

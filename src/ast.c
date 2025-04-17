@@ -1277,9 +1277,8 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
 
 // Main entry point to flisp lowering.  Most arguments are optional; see `jl_lower_expr_mod`.
 // warn: Print any lowering warnings returned; otherwise ignore
-// stmt: Lower knowing that the value of expr is unused
 JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
-                                     const char *file, int line, size_t world, bool_t warn, bool_t stmt)
+                                     const char *file, int line, size_t world, bool_t warn)
 {
     JL_TIMING(LOWERING, LOWERING);
     jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
@@ -1290,8 +1289,8 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
     jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
     fl_context_t *fl_ctx = &ctx->fl;
     value_t arg = julia_to_scm(fl_ctx, expr);
-    value_t e = fl_applyn(fl_ctx, 4, symbol_value(symbol(fl_ctx, "jl-lower-to-thunk")), arg,
-                          symbol(fl_ctx, file), fixnum(line), stmt ? fl_ctx->T : fl_ctx->F);
+    value_t e = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, "jl-lower-to-thunk")), arg,
+                          symbol(fl_ctx, file), fixnum(line));
     value_t lwr = car_(e);
     value_t warnings = car_(cdr_(e));
     expr = scm_to_julia(fl_ctx, lwr, inmodule);
@@ -1326,15 +1325,15 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
 
 // Lower an expression tree into Julia's intermediate-representation.
 JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
-                                  const char *file, int line, size_t world, bool_t warn, bool_t stmt)
+                                  const char *file, int line, size_t world, bool_t warn)
 {
     // TODO: Allow change of lowerer
-    return jl_fl_lower(expr, inmodule, file, line, world, warn, stmt);
+    return jl_fl_lower(expr, inmodule, file, line, world, warn);
 }
 
 JL_DLLEXPORT jl_value_t *jl_lower_expr_mod(jl_value_t *expr, jl_module_t *inmodule)
 {
-    return jl_lower(expr, inmodule, "none", 0, ~(size_t)0, 0, 0);
+    return jl_lower(expr, inmodule, "none", 0, ~(size_t)0, 0);
 }
 
 jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)
