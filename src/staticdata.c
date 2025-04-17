@@ -1767,7 +1767,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 tot = offset;
                 size_t fsz = jl_field_size(t, i);
                 jl_value_t *replace = (jl_value_t*)ptrhash_get(&bits_replace, (void*)slot);
-                if (replace != HT_NOTFOUND) {
+                if (replace != HT_NOTFOUND && fsz > 0) {
                     assert(t->name->mutabl && !jl_field_isptr(t, i));
                     jl_value_t *rty = jl_typeof(replace);
                     size_t sz = jl_datatype_size(rty);
@@ -2961,7 +2961,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             if (jl_field_isptr(st, field)) {
                 record_field_change((jl_value_t**)fldaddr, newval);
             }
-            else {
+            else if (jl_field_size(st, field) > 0) {
                 // replace the bits
                 ptrhash_put(&bits_replace, (void*)fldaddr, newval);
                 // and any pointers inside
