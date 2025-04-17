@@ -129,8 +129,11 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
     if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
         return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
     end
+    where_params = nothing
     if isa(ex0, Expr)
         ex0, where_params = extract_where_parameters(ex0)
+    end
+    if isa(ex0, Expr)
         if ex0.head === :do && isexpr(get(ex0.args, 1, nothing), :call)
             if length(ex0.args) != 2
                 return Expr(:call, :error, "ill-formed do call")
