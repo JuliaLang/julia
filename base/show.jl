@@ -182,7 +182,7 @@ function show(io::IO, ::MIME"text/plain", t::AbstractDict{K,V}) where {K,V}
         rows -= 1 # Subtract the summary
 
         # determine max key width to align the output, caching the strings
-        hascolor = get(recur_io, :color, false)
+        hascolor = get(recur_io, :color, false)::Bool
         ks = Vector{String}(undef, min(rows, length(t)))
         vs = Vector{String}(undef, min(rows, length(t)))
         keywidth = 0
@@ -2003,7 +2003,7 @@ function show_unquoted_expr_fallback(io::IO, ex::Expr, indent::Int, quote_level:
 end
 
 # TODO: implement interpolated strings
-function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::Int = 0)
+@nospecializeinfer function show_unquoted(@nospecialize(io::IO), ex::Expr, indent::Int, prec::Int, quote_level::Int = 0)
     head, args, nargs = ex.head, ex.args, length(ex.args)
     unhandled = false
     # dot (i.e. "x.y"), but not compact broadcast exps
