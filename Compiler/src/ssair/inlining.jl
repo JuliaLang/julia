@@ -73,10 +73,10 @@ add_inlining_edge!(et::InliningEdgeTracker, edge::MethodInstance) = add_inlining
 function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds::Bool)
     # Go through the function, performing simple inlining (e.g. replacing call by constants
     # and analyzing legality of inlining).
-    @timeit "analysis" todo = assemble_inline_todo!(ir, state)
+    @zone "CC: ANALYSIS" todo = assemble_inline_todo!(ir, state)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
-    @timeit "execution" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp)
+    @zone "CC: EXECUTION" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp)
     return ir
 end
 
