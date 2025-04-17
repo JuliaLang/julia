@@ -229,7 +229,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
                 f, hf = Base.typed_vcat, Base.typed_hvcat
                 args = ex0.args[2:end]
             end
-            if any(a->isa(a,Expr) && a.head === :row, args)
+            if any(@nospecialize(a)->isa(a,Expr) && a.head === :row, args)
                 rows = Any[ (isa(x,Expr) && x.head === :row ? x.args : Any[x]) for x in args ]
                 lens = map(length, rows)
                 args = Any[Expr(:tuple, lens...); vcat(rows...)]
