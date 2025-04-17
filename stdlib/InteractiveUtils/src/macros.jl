@@ -9,14 +9,14 @@ using Base: insert!, replace_ref_begin_end!,
 # via. `Base.@time_imports` etc.
 import Base: @time_imports, @trace_compile, @trace_dispatch
 
-typesof_expr(args, where_params = nothing) = rewrap_where(:(Tuple{$(get_typeof.(args)...)}), where_params)
+typesof_expr(args::Vector{Any}, where_params::Union{Nothing, Vector{Any}} = nothing) = rewrap_where(:(Tuple{$(get_typeof.(args)...)}), where_params)
 
-function extract_where_parameters(ex0)
-    isexpr(ex0, :where) || return ex0, nothing
-    ex0.args[1], ex0.args[2:end]
+function extract_where_parameters(ex::Expr)
+    isexpr(ex, :where) || return ex, nothing
+    ex.args[1], ex.args[2:end]
 end
 
-function rewrap_where(ex, where_params)
+function rewrap_where(ex::Expr, where_params::Union{Nothing, Vector{Any}})
     isnothing(where_params) && return ex
     Expr(:where, ex, esc.(where_params)...)
 end
@@ -72,7 +72,7 @@ function construct_callable(@nospecialize(func::Type))
     throw(ArgumentError("If a function type is explicitly provided, it must be a singleton whose only instance is the callable object"))
 end
 
-function separate_kwargs(exs)
+function separate_kwargs(exs::Vector{Any})
     args = []
     kwargs = []
     for ex in exs
