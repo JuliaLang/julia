@@ -364,7 +364,10 @@ end
     kwargs_1 = (; digits = 3)
     kwargs_2 = (; sigdigits = 3)
     @test (@which round(1.2; kwargs_1...)).name === :round
-    @test_throws "is not unique" @which round(1.2; digits = 1, kwargs_1...)
+    @test (@which round(1.2; digits = 1, kwargs_1...)).name === :round
+    @test (@code_typed round(1.2; digits = ::Float64, kwargs_1...))[2] === Float64 # picks `3::Int` from `kwargs_1`
+    @test (@code_typed round(1.2; kwargs_1..., digits = ::Float64))[2] === Union{} # picks `::Float64` from parameters
+    @test (@which round(1.2; digits = ::Float64, kwargs_1...)).name === :round
     @test (@which round(1.2; sigdigits = ::Int, kwargs_1...)).name === :round
     @test (@which round(1.2; kwargs_1..., kwargs_2..., base)).name === :round
 end

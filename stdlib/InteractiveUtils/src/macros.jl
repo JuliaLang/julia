@@ -89,36 +89,69 @@ function separate_kwargs(exs::Vector{Any})
     args, kwargs
 end
 
-function namedtuple_type(kwargs)
-    names = Expr(:tuple)
-    types = Expr(:curly, :Tuple)
-    splats = Expr[]
+function are_kwargs_valid(kwargs::Vector{Any})
+    for kwarg in kwargs
+        isexpr(kwarg, :..., 1) && continue
+        isexpr(kwarg, :kw, 2) && isa(kwarg.args[1], Symbol) && continue
+        isa(kwarg, Symbol) && continue
+        return false
+    end
+    return true
+end
+
+# Generate an expression that merges `kwargs` onto a single `NamedTuple`
+function generate_merged_namedtuple_type(kwargs::Vector{Any})
+    nts = Any[]
+    ntargs = Pair{Symbol, Any}[]
     for ex in kwargs
-        if isexpr(ex, :kw, 2)
-            name, value = ex.args[1], ex.args[2]
-            push!(names.args, QuoteNode(name::Symbol))
-            push!(types.args, get_typeof(value))
-        elseif isexpr(ex, :..., 1)
-            push!(splats, Expr(:call, typeof_nt, esc(ex.args[1])))
+        if isexpr(ex, :..., 1)
+            if !isempty(ntargs)
+                # Construct a `NamedTuple` containing the previous parameters.
+                push!(nts, generate_namedtuple_type(ntargs))
+                empty!(ntargs)
+            end
+            push!(nts, Expr(:call, typeof_nt, esc(ex.args[1])))
+        elseif isexpr(ex, :kw, 2)
+            push!(ntargs, ex.args[1]::Symbol => get_typeof(ex.args[2]))
         else
-            isa(ex, Symbol) || return nothing
-            push!(names.args, QuoteNode(ex))
-            push!(types.args, get_typeof(ex))
+            ex::Symbol
+            push!(ntargs, ex => get_typeof(ex))
         end
     end
-    nt = :(NamedTuple{$names, $types})
-    isempty(splats) && return nt
-    length(splats) == 1 && return :($namedtuple_type($nt, $(splats[1])))
-    :(foldl($namedtuple_type, Any[$(splats...)]; init = $nt))
+    !isempty(ntargs) && push!(nts, generate_namedtuple_type(ntargs))
+    return :($merge_namedtuple_types($(nts...)))
+end
+
+function generate_namedtuple_type(ntargs::Vector{Pair{Symbol, Any}})
+    names = Expr(:tuple)
+    tt = Expr(:curly, :Tuple)
+    for (name, type) in ntargs
+        push!(names.args, QuoteNode(name))
+        push!(tt.args, type)
+    end
+    return :(NamedTuple{$names, $tt})
 end
 
 typeof_nt(nt::NamedTuple) = typeof(nt)
 typeof_nt(nt::Base.Pairs) = typeof(values(nt))
 
-function namedtuple_type(@nospecialize(nt1::Type{<:NamedTuple}), @nospecialize(nt2::Type{<:NamedTuple}))
-    names = tuple(fieldnames(nt1)..., fieldnames(nt2)...)
-    types = Tuple{fieldtypes(nt1)..., fieldtypes(nt2)...}
-    NamedTuple{names, types}
+function merge_namedtuple_types(nt::Type{<:NamedTuple}, nts::Type{<:NamedTuple}...)
+    @nospecialize
+    isempty(nts) && return nt
+    names = Symbol[]
+    types = Any[]
+    for nt in (nt, nts...)
+        for (name, type) in zip(fieldnames(nt), fieldtypes(nt))
+            i = findfirst(==(name), names)
+            if isnothing(i)
+                push!(names, name)
+                push!(types, type)
+            else
+                types[i] = type
+            end
+        end
+    end
+    NamedTuple{Tuple(names), Tuple{types...}}
 end
 
 function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
@@ -192,11 +225,11 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
         end
         if any(@nospecialize(a)->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args)
             args, kwargs = separate_kwargs(ex0.args)
-            nt = namedtuple_type(kwargs)
-            isnothing(nt) && return quote
+            are_kwargs_valid(kwargs) || return quote
                 error("keyword argument format unrecognized; they must be of the form `x` or `x = <value>`")
                 $(esc(ex0)) # trigger syntax errors if any
             end
+            nt = generate_merged_namedtuple_type(kwargs)
             tt = rewrap_where(:(Tuple{$nt, $(get_typeof.(args)...)}), where_params)
             return :($(fcn)(Core.kwcall, $tt; $(kws...)))
         elseif ex0.head === :call
