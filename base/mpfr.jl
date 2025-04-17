@@ -1229,7 +1229,7 @@ function _prettify_bigfloat(s::String)::String
             string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac == "0" ? "" : frac)
         end
     else
-        string(mantissa, 'e', exponent)
+        string(mantissa, 'e', expo)
     end
 end
 
