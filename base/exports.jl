@@ -807,6 +807,7 @@ export
     fieldoffset,
     fieldname,
     fieldnames,
+    fieldindex,
     fieldcount,
     fieldtypes,
     hasfield,

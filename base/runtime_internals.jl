@@ -1057,7 +1057,7 @@ String
 fieldtype
 
 """
-    Base.fieldindex(T, name::Symbol, err:Bool=true)
+    fieldindex(T, name::Symbol, err:Bool=true)
 
 Get the index of a named field, throwing an error if the field does not exist (when err==true)
 or returning 0 (when err==false).
@@ -1069,14 +1069,20 @@ julia> struct Foo
            y::String
        end
 
-julia> Base.fieldindex(Foo, :z)
+julia> fieldindex(Foo, :y)
+2
+
+julia> fieldindex(Foo, :z)
 ERROR: FieldError: type Foo has no field `z`, available fields: `x`, `y`
 Stacktrace:
 [...]
 
-julia> Base.fieldindex(Foo, :z, false)
+julia> fieldindex(Foo, :z, false)
 0
 ```
+
+!!! compat "Julia 1.13"
+    This function is exported as of Julia 1.13.
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return err ? _fieldindex_maythrow(T, name) : _fieldindex_nothrow(T, name)
