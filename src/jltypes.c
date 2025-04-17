@@ -3034,19 +3034,22 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_methtable_type->name->mt = jl_nonfunction_mt;
     jl_methtable_type->super = jl_any_type;
     jl_methtable_type->parameters = jl_emptysvec;
-    jl_methtable_type->name->n_uninitialized = 11 - 6;
-    jl_methtable_type->name->names = jl_perm_symsvec(11, "name", "defs",
+    jl_methtable_type->name->n_uninitialized = 13 - 8;
+    jl_methtable_type->name->names = jl_perm_symsvec(13, "name", "defs",
                                                      "leafcache", "cache", "max_args",
+                                                     "local_age", "last_update_world",
                                                      "module", "backedges",
                                                      "", "", "offs", "");
-    const static uint32_t methtable_constfields[1] = { 0x00000020 }; // (1<<5);
-    const static uint32_t methtable_atomicfields[1] = { 0x0000001e }; // (1<<1)|(1<<2)|(1<<3)|(1<<4);
+    const static uint32_t methtable_constfields[1]  = { 0b0000010000000 }; // (1<<7);
+    const static uint32_t methtable_atomicfields[1] = { 0b0000001111110 }; // (1<<1)|(1<<2)|(1<<3)|(1<<4)|(1<<5)|(1<<6);
     jl_methtable_type->name->constfields = methtable_constfields;
     jl_methtable_type->name->atomicfields = methtable_atomicfields;
     jl_precompute_memoized_dt(jl_methtable_type, 1);
-    jl_methtable_type->types = jl_svec(11, jl_symbol_type, jl_any_type, jl_any_type,
+    jl_methtable_type->types = jl_svec(13, jl_symbol_type, jl_any_type, jl_any_type,
                                        jl_any_type, jl_any_type/*jl_long*/,
-                                       jl_any_type/*module*/, jl_any_type/*any vector*/,
+                                       jl_any_type/*jl_ulong*/, jl_any_type/*jl_ulong*/,
+                                       jl_any_type/*module*/,
+                                       jl_any_type/*any vector*/,
                                        jl_any_type/*voidpointer*/, jl_any_type/*int32*/,
                                        jl_any_type/*uint8*/, jl_any_type/*uint8*/);
 
@@ -3857,12 +3860,14 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_typename_type->types, 14, jl_uint8_type);
     jl_svecset(jl_typename_type->types, 15, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 4, jl_long_type);
-    jl_svecset(jl_methtable_type->types, 5, jl_module_type);
-    jl_svecset(jl_methtable_type->types, 6, jl_array_any_type);
-    jl_svecset(jl_methtable_type->types, 7, jl_long_type); // voidpointer
-    jl_svecset(jl_methtable_type->types, 8, jl_long_type); // uint32_t plus alignment
-    jl_svecset(jl_methtable_type->types, 9, jl_uint8_type);
-    jl_svecset(jl_methtable_type->types, 10, jl_uint8_type);
+    jl_svecset(jl_methtable_type->types, 5, jl_ulong_type);
+    jl_svecset(jl_methtable_type->types, 6, jl_ulong_type);
+    jl_svecset(jl_methtable_type->types, 7, jl_module_type);
+    jl_svecset(jl_methtable_type->types, 8, jl_array_any_type);
+    jl_svecset(jl_methtable_type->types, 9, jl_long_type); // voidpointer
+    jl_svecset(jl_methtable_type->types, 10, jl_long_type); // uint32_t plus alignment
+    jl_svecset(jl_methtable_type->types, 11, jl_uint8_type);
+    jl_svecset(jl_methtable_type->types, 12, jl_uint8_type);
     jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
     //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
     jl_svecset(jl_method_instance_type->types, 4, jl_code_instance_type);
