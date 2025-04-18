@@ -344,8 +344,6 @@ map!(+, dest, am, am)
 am = map(identity, a)
 @test isa(am, OffsetArray)
 @test am == a
-@test_throws BoundsError map!(identity, fill(0, 1:3), fill(1, 2:4))
-
 
 # https://github.com/JuliaArrays/OffsetArrays.jl/issues/106
 @test isequal(map(!, OffsetArray([true,missing],2)), OffsetArray([false, missing], 2))

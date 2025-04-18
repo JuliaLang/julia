@@ -3355,9 +3355,9 @@ concatenate_setindex!(R, X::AbstractArray, I...) = (R[I...] = X)
 ## 1 argument
 
 function map!(f::F, dest::AbstractArray, A::AbstractArray) where F
-    inds = LinearIndices(A)
-    for i = inds
-        dest[i] = f(A[i])
+    for (i,j) in zip(eachindex(dest),eachindex(A))
+        val = f(@inbounds A[j])
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -3400,11 +3400,10 @@ map(f, ::AbstractSet) = error("map is not defined on sets")
 
 ## 2 argument
 function map!(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray) where F
-    IL = IndexLinear()
-    inds = intersect(eachindex(IL, A), eachindex(IL, B))
-    @boundscheck checkbounds(dest, inds)
-    for i = inds
-        dest[i] = f(A[i], B[i])
+    for (i, j, k) in zip(eachindex(dest), eachindex(A), eachindex(B))
+        @inbounds a, b = A[j], B[k]
+        val = f(a, b)
+        @inbounds dest[i] = val
     end
     return dest
 end
@@ -3418,10 +3417,19 @@ function ith_all(i, as)
 end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    inds = mapreduce(Fix1(eachindex, IndexLinear()), intersect, As)
-    @boundscheck checkbounds(dest, inds)
-    for i = inds
-        dest[i] = f(ith_all(i, As)...)
+    idxs = LinearIndices(dest)
+    if all(x -> LinearIndices(x) == idxs, As)
+        for i in idxs
+            @inbounds as = ith_all(i, As)
+            val = f(as...)
+            @inbounds dest[i] = val
+        end
+    else
+        for (i, Is...) in zip(eachindex(dest), map(eachindex, As)...)
+            as = ntuple(j->getindex(As[j], Is[j]), length(As))
+            val = f(as...)
+            dest[i] = val
+        end
     end
     return dest
 end
