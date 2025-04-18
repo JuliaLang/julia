@@ -152,7 +152,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     if (((uintptr_t)data) & ((align > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : align) - 1))
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
-    size_t nbytes;
+    size_t nbytes = 0; // workaround clang sa bug: https://github.com/llvm/llvm-project/issues/136292
     int overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
     if (isunion) {
         // an extra byte for each isbits union memory element, stored at m->ptr + m->length
