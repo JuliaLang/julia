@@ -88,8 +88,6 @@ allflags = Base.shell_split(allflags)
 rpath = get_rpath(; relative = relative_rpath)
 rpath = Base.shell_split(rpath)
 tmpdir = mktempdir(cleanup=false)
-initsrc_path = joinpath(tmpdir, "init.c")
-init_path = joinpath(tmpdir, "init.a")
 img_path = joinpath(tmpdir, "img.a")
 bc_path = joinpath(tmpdir, "img-bc.a")
 
@@ -122,19 +120,6 @@ function compile_products(enable_trim::Bool)
         exit(1)
     end
 
-    # Compile the initialization code
-    open(initsrc_path, "w") do io
-        print(io, """
-                  #include <julia.h>
-                  __attribute__((constructor)) void static_init(void) {
-                      if (jl_is_initialized())
-                          return;
-                      julia_init(JL_IMAGE_IN_MEMORY);
-                      jl_exception_clear();
-                  }
-                  """)
-    end
-    run(`cc $(cflags) -g -c -o $init_path $initsrc_path`)
 end
 
 function link_products()
@@ -150,11 +135,11 @@ function link_products()
     julia_libs = Base.shell_split(Base.isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : "-ljulia -ljulia-internal")
     try
         if output_type == "--output-lib"
-            cmd2 = `cc $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  $(julia_libs)`
+            cmd2 = `cc $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)  $(julia_libs)`
         elseif output_type == "--output-sysimage"
             cmd2 = `cc $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             $(julia_libs)`
         else
-            cmd2 = `cc $(allflags) $(rpath) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path $(julia_libs)`
+            cmd2 = `cc $(allflags) $(rpath) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)  $(julia_libs)`
         end
         verbose && println("Running: $cmd2")
         run(cmd2)

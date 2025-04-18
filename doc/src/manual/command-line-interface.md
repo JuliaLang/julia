@@ -148,7 +148,8 @@ atreplinit() do repl
     # ...
 end
 ```
-
+If [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) is set, the startup file should be located there
+`$JULIA_DEPOT_PATH/config/startup.jl`.
 
 ## [Command-line switches for Julia](@id command-line-interface)
 

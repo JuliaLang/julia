@@ -2437,6 +2437,7 @@ function abstract_eval_getglobal(interp::AbstractInterpreter, sv::AbsIntState, s
 end
 
 @nospecs function abstract_eval_get_binding_type(interp::AbstractInterpreter, sv::AbsIntState, M, s)
+    @nospecialize M s
     ⊑ = partialorder(typeinf_lattice(interp))
     if isa(M, Const) && isa(s, Const)
         (M, s) = (M.val, s.val)
@@ -2444,7 +2445,7 @@ end
             return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
         end
         gr = GlobalRef(M, s)
-        (valid_worlds, rt) = scan_leaf_partitions(interp, gr, sv.world) do interp, _, partition
+        (valid_worlds, rt) = scan_leaf_partitions(interp, gr, sv.world) do interp::AbstractInterpreter, ::Core.Binding, partition::Core.BindingPartition
             local rt
             kind = binding_kind(partition)
             if is_some_guard(kind) || kind == PARTITION_KIND_DECLARED
@@ -2574,13 +2575,14 @@ function abstract_eval_replaceglobal!(interp::AbstractInterpreter, sv::AbsIntSta
             M isa Module || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
             s isa Symbol || return CallMeta(Union{}, TypeError, EFFECTS_THROWS, NoCallInfo())
             gr = GlobalRef(M, s)
-            (valid_worlds, (rte, T)) = scan_leaf_partitions(interp, gr, sv.world) do interp, binding, partition
+            v′ = RefValue{Any}(v)
+            (valid_worlds, (rte, T)) = scan_leaf_partitions(interp, gr, sv.world) do interp::AbstractInterpreter, binding::Core.Binding, partition::Core.BindingPartition
                 partition_T = nothing
                 partition_rte = abstract_eval_partition_load(interp, binding, partition)
                 if binding_kind(partition) == PARTITION_KIND_GLOBAL
                     partition_T = partition_restriction(partition)
                 end
-                partition_exct = Union{partition_rte.exct, global_assignment_binding_rt_exct(interp, partition, v)[2]}
+                partition_exct = Union{partition_rte.exct, global_assignment_binding_rt_exct(interp, partition, v′[])[2]}
                 partition_rte = RTEffects(partition_rte.rt, partition_exct, partition_rte.effects)
                 Pair{RTEffects, Any}(partition_rte, partition_T)
             end
@@ -3558,7 +3560,7 @@ function abstract_eval_binding_partition!(interp::AbstractInterpreter, g::Global
     return partition
 end
 
-function abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing}, binding::Core.Binding, partition::Core.BindingPartition)
+function abstract_eval_partition_load(interp::Union{AbstractInterpreter,Nothing}, binding::Core.Binding, partition::Core.BindingPartition)
     kind = binding_kind(partition)
     isdepwarn = (partition.kind & PARTITION_FLAG_DEPWARN) != 0
     local_getglobal_effects = Effects(generic_getglobal_effects, effect_free=isdepwarn ? ALWAYS_FALSE : ALWAYS_TRUE)
@@ -3607,7 +3609,7 @@ function abstract_eval_partition_load(interp::Union{AbstractInterpreter, Nothing
     return RTEffects(rt, exct, effects)
 end
 
-function scan_specified_partitions(query::Function, walk_binding_partition::Function, interp, g::GlobalRef, wwr::WorldWithRange)
+function scan_specified_partitions(query::Function, walk_binding_partition::Function, interp::Union{AbstractInterpreter,Nothing}, g::GlobalRef, wwr::WorldWithRange)
     local total_validity, rte, binding_partition
     binding = convert(Core.Binding, g)
     lookup_world = max_world(wwr.valid_worlds)
@@ -3640,19 +3642,25 @@ function scan_specified_partitions(query::Function, walk_binding_partition::Func
     return Pair{WorldRange, typeof(rte)}(total_validity, rte)
 end
 
-scan_leaf_partitions(query::Function, interp, g::GlobalRef, wwr::WorldWithRange) =
+scan_leaf_partitions(query::Function, ::Nothing, g::GlobalRef, wwr::WorldWithRange) =
+    scan_specified_partitions(query, walk_binding_partition, nothing, g, wwr)
+scan_leaf_partitions(query::Function, interp::AbstractInterpreter, g::GlobalRef, wwr::WorldWithRange) =
     scan_specified_partitions(query, walk_binding_partition, interp, g, wwr)
 
-scan_partitions(query::Function, interp, g::GlobalRef, wwr::WorldWithRange) =
-    scan_specified_partitions(query,
-        (b::Core.Binding, bpart::Core.BindingPartition, world::UInt)->
-            Pair{WorldRange, Pair{Core.Binding, Core.BindingPartition}}(WorldRange(bpart.min_world, bpart.max_world), b=>bpart),
-        interp, g, wwr)
+function scan_partitions(query::Function, interp::AbstractInterpreter, g::GlobalRef, wwr::WorldWithRange)
+    walk_binding_partition = function (b::Core.Binding, partition::Core.BindingPartition, world::UInt)
+        Pair{WorldRange, Pair{Core.Binding, Core.BindingPartition}}(
+            WorldRange(partition.min_world, partition.max_world), b=>partition)
+    end
+    return scan_specified_partitions(query, walk_binding_partition, interp, g, wwr)
+end
 
-abstract_load_all_consistent_leaf_partitions(interp, g::GlobalRef, wwr::WorldWithRange) =
+abstract_load_all_consistent_leaf_partitions(interp::AbstractInterpreter, g::GlobalRef, wwr::WorldWithRange) =
     scan_leaf_partitions(abstract_eval_partition_load, interp, g, wwr)
+abstract_load_all_consistent_leaf_partitions(::Nothing, g::GlobalRef, wwr::WorldWithRange) =
+    scan_leaf_partitions(abstract_eval_partition_load, nothing, g, wwr)
 
-function abstract_eval_globalref(interp, g::GlobalRef, saw_latestworld::Bool, sv::AbsIntState)
+function abstract_eval_globalref(interp::AbstractInterpreter, g::GlobalRef, saw_latestworld::Bool, sv::AbsIntState)
     if saw_latestworld
         return RTEffects(Any, Any, generic_getglobal_effects)
     end
@@ -3668,7 +3676,10 @@ function global_assignment_rt_exct(interp::AbstractInterpreter, sv::AbsIntState,
     if saw_latestworld
         return Pair{Any,Any}(newty, ErrorException)
     end
-    (valid_worlds, ret) = scan_partitions((interp, _, partition)->global_assignment_binding_rt_exct(interp, partition, newty), interp, g, sv.world)
+    newty′ = RefValue{Any}(newty)
+    (valid_worlds, ret) = scan_partitions(interp, g, sv.world) do interp::AbstractInterpreter, ::Core.Binding, partition::Core.BindingPartition
+        global_assignment_binding_rt_exct(interp, partition, newty′[])
+    end
     update_valid_age!(sv, valid_worlds)
     return ret
 end

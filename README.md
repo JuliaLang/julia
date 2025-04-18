@@ -66,7 +66,7 @@ helpful to start contributing to the Julia codebase.
 The recommended way of installing Julia is to use `juliaup` which will install
 the latest stable `julia` for you and help keep it up to date. It can also let
 you install and run different Julia versions simultaneously. Instructions for
-this can be find [here](https://julialang.org/install/). If you want to manually
+this can be found [here](https://julialang.org/install/). If you want to manually
 download specific Julia binaries, you can find those on the [downloads
 page](https://julialang.org/downloads/). The downloads page also provides
 details on the [different tiers of

@@ -420,6 +420,27 @@ ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
     "jl_method_table_insert"
 ]
 
+# logging issue #58080
+f58080(::Integer) = 1
+callsf58080rts(x) = f58080(Base.inferencebarrier(x)::Signed)
+invokesf58080s(x) = invoke(f58080, Tuple{Signed}, x)
+# compilation
+invokesf58080s(1)                        # invoked callee
+callsf58080rts(1)                        # runtime-dispatched callee
+# invalidation
+logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1);
+f58080(::Int) = 2
+f58080(::Signed) = 4
+ccall(:jl_debug_method_invalidation, Any, (Cint,), 0);
+@test logmeths[1].def.name === :callsf58080rts
+m58080i = which(f58080, (Int,))
+m58080s = which(f58080, (Signed,))
+idxi = findfirst(==(m58080i), logmeths)
+@test logmeths[idxi+1] == "jl_method_table_insert"
+@test logmeths[idxi+2].def.name === :invokesf58080s
+@test logmeths[end-1] == m58080s
+@test logmeths[end] == "jl_method_table_insert"
+
 # issue #50091 -- missing invoke edge affecting nospecialized dispatch
 module ExceptionUnwrapping
 @nospecialize
