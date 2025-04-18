@@ -3334,6 +3334,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     arraylist_free(&s.gctags_list);
     arraylist_free(&gvars);
     arraylist_free(&external_fns);
+    arraylist_free(&MIs);
     htable_free(&s.method_roots_index);
     htable_free(&field_replace);
     htable_free(&bits_replace);
@@ -3439,7 +3440,14 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     assert((ct->reentrant_timing & 0b1110) == 0);
     ct->reentrant_timing |= 0b1000;
     if (worklist) {
-        jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, NULL, &edges, &query_cache);
+        jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_ext_cis, &edges, &query_cache);
+
+        // Merge the internal / external edges into a single list of CI's to serialize
+        int i, l = jl_array_nrows(new_ext_cis);
+        for (i = 0; i < l; i++) {
+            jl_value_t *ci = jl_array_ptr_ref(new_ext_cis, i);
+            jl_array_ptr_1d_push(edges, ci);
+        }
         if (!emit_split) {
             write_int32(f, 0); // No clone_targets
             write_padding(f, LLT_ALIGN(ios_pos(f), JL_CACHE_BYTE_ALIGNMENT) - ios_pos(f));
