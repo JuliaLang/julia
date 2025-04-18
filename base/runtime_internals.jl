@@ -1036,6 +1036,36 @@ julia> structinfo(Base.Filesystem.StatStruct)
 fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
 
 """
+    fieldoffsets(T::Type)
+
+The field offsets of all fields in a composite DataType `T` as a tuple.
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+# Examples
+```jldoctest
+julia> struct Foo
+           a::Int32
+           b::Int16
+           c::UInt8
+       end
+
+julia> fieldoffsets(Foo)
+(0x0000000000000000, 0x0000000000000004, 0x0000000000000006)
+
+julia> struct Bar
+           x::Int16
+           y::Int32
+       end
+
+julia> fieldoffsets(Bar)
+(0x0000000000000000, 0x0000000000000004)
+```
+"""
+fieldoffsets(T::Type) = (@_foldable_meta; ntupleany(i -> fieldoffset(T, i), fieldcount(T)))
+
+"""
     fieldtype(T, name::Symbol | index::Int)
 
 Determine the declared type of a field (specified by name or index) in a composite DataType `T`.

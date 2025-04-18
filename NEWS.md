@@ -5,6 +5,10 @@ New language features
 ---------------------
 
   - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
+  - More consistent struct introspection methods:
+    - `fieldname`, `fieldoffset` and `fieldtype` now all have a plural form returning the information for all fields
+    - `fieldoffset` and `fieldtype` now both accept a field index or a field name
+    - `fieldindex` and `fieldname` can be used to convert between the field's index and its name
 
 Language changes
 ----------------
@@ -24,9 +28,13 @@ Build system changes
 New library functions
 ---------------------
 
+* New function `fieldoffsets` to get all offsets of the fields of a struct
+* Exporting function `fieldindex` to get the index of a field of a struct
+
 New library features
 --------------------
 
+* `fieldtype` now also accepts the field name as a symbol as `fieldtype` already did.
 * `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 
