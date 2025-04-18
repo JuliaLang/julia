@@ -22,7 +22,7 @@ end
 # Restore backedges to external targets
 # `edges` = [caller1, ...], the list of worklist-owned code instances internally
 # `ext_ci_list` = [caller1, ...], the list of worklist-owned code instances externally
-function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{Any}}, extext_methods::Vector{Any}, internal_methods::Vector{Any})
+function insert_backedges(edges::Vector{Any}, extext_methods::Vector{Any}, internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
     backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
@@ -30,12 +30,9 @@ function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{
     stack = CodeInstance[]
     visiting = IdDict{CodeInstance,Int}()
     _insert_backedges(edges, stack, visiting, methods_with_invalidated_source)
-    if ext_ci_list !== nothing
-        _insert_backedges(ext_ci_list, stack, visiting, methods_with_invalidated_source, #=external=#true)
-    end
 end
 
-function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method}, external::Bool=false)
+function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method})
     for i = 1:length(edges)
         codeinst = edges[i]::CodeInstance
         validation_world = get_world_counter()
@@ -46,6 +43,7 @@ function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visi
         @ccall jl_promote_ci_to_current(codeinst::Any, validation_world::UInt)::Cvoid
         minvalid = codeinst.min_world
         maxvalid = codeinst.max_world
+        external = codeinst.specsigflags & 0b1000 != 0
         # Finally, if this CI is still valid in some world age and and belongs to an external method(specialization),
         # poke it that mi's cache
         if maxvalid ≥ minvalid && external

@@ -475,9 +475,10 @@ typedef struct _jl_code_instance_t {
     uint16_t time_infer_self; // self cost of julia inference for `inferred` (included in time_infer_total)
     _Atomic(uint16_t) time_compile; // self cost of llvm compilation (e.g. of computing `invoke`)
     //TODO: uint8_t absolute_max; // whether true max world is unknown
-    _Atomic(uint8_t) specsigflags; // & 0b001 == specptr is a specialized function signature for specTypes->rettype
-                                   // & 0b010 == invokeptr matches specptr
-                                   // & 0b100 == From image
+    _Atomic(uint8_t) specsigflags; // & 0b0001 == specptr is a specialized function signature for specTypes->rettype
+                                   // & 0b0010 == invokeptr matches specptr
+                                   // & 0b0100 == from image
+                                   // & 0b1000 == targets external method (serialized in another pkgimage), implies from image
     _Atomic(uint8_t) precompile;  // if set, this will be added to the output system image
     _Atomic(jl_callptr_t) invoke; // jlcall entry point usually, but if this codeinst belongs to an OC Method, then this is an jl_fptr_args_t fptr1 instead, unless it is not, because it is a special token object instead
     union _jl_generic_specptr_t {
