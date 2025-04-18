@@ -3,6 +3,7 @@ Julia v1.13 Release Notes
 
 New language features
 ---------------------
+* The syntax `using LongPackageName as LPN` is now supported ([#52821]).
 
   - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
 
