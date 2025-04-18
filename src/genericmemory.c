@@ -283,6 +283,9 @@ JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t 
         memcpy(jl_genericmemory_typetagdata(new_mem), jl_genericmemory_typetagdata(mem) + (size_t)data, len);
     }
     else if (layout->first_ptr != -1) {
+        if (data == NULL) {
+            assert(len * elsz / sizeof(void*) == 0); // make static analyzer happy
+        }
         memmove_refs((_Atomic(void*)*)new_mem->ptr, (_Atomic(void*)*)data, len * elsz / sizeof(void*));
     }
     else if (data != NULL) {
