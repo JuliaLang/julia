@@ -500,7 +500,13 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
     jl_value_t *kind = jl_tparam0(st);
     jl_value_t *eltype = jl_tparam1(st);
     jl_value_t *addrspace = jl_tparam2(st);
-    if (!jl_is_typevar(eltype) && !jl_is_type(eltype)) {
+    if (!st->isconcretetype) {
+        // Since parent dt has an opaque layout, we may end up here being asked to copy that layout to subtypes,
+        // but we don't actually want to do that unless this object is constructable (or at least has a layout).
+        // The real layout is stored only on the wrapper.
+        return;
+    }
+    if (!jl_is_type(eltype)) {
         // this is expected to have a layout, but since it is not constructable, we don't care too much what it is
         static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, sizeof(void*), {0}};
         st->layout = &opaque_ptr_layout;

@@ -575,21 +575,23 @@ function (::ComputeTryCatch{Handler})(code::Vector{Any}, bbs::Union{Vector{Basic
 end
 
 # check if coverage mode is enabled
-function should_insert_coverage(mod::Module, debuginfo::DebugInfo)
-    coverage_enabled(mod) && return true
-    JLOptions().code_coverage == 3 || return false
+should_insert_coverage(mod::Module, debuginfo::DebugInfo) = should_instrument(mod, debuginfo, true)
+
+function should_instrument(mod::Module, debuginfo::DebugInfo, only_if_affects_optimizer::Bool=false)
+    instrumentation_enabled(mod, only_if_affects_optimizer) && return true
+    JLOptions().code_coverage == 3 || JLOptions().malloc_log == 3 || return false
     # path-specific coverage mode: if any line falls in a tracked file enable coverage for all
-    return _should_insert_coverage(debuginfo)
+    return _should_instrument(debuginfo)
 end
 
-_should_insert_coverage(mod::Symbol) = is_file_tracked(mod)
-_should_insert_coverage(mod::Method) = _should_insert_coverage(mod.file)
-_should_insert_coverage(mod::MethodInstance) = _should_insert_coverage(mod.def)
-_should_insert_coverage(mod::Module) = false
-function _should_insert_coverage(info::DebugInfo)
+_should_instrument(loc::Symbol) = is_file_tracked(loc)
+_should_instrument(loc::Method) = _should_instrument(loc.file)
+_should_instrument(loc::MethodInstance) = _should_instrument(loc.def)
+_should_instrument(loc::Module) = false
+function _should_instrument(info::DebugInfo)
     linetable = info.linetable
-    linetable === nothing || (_should_insert_coverage(linetable) && return true)
-    _should_insert_coverage(info.def) && return true
+    linetable === nothing || (_should_instrument(linetable) && return true)
+    _should_instrument(info.def) && return true
     return false
 end
 
