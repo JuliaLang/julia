@@ -1412,9 +1412,15 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     return ci
 end
 
+const collect_dispatch_backtrace = fill(false)
+const dispatch_backtrace = IdDict{CodeInstance,Any}()
+
 function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, source_mode::UInt8)
     ci = typeinf_ext(interp, mi, source_mode)
     ci = add_codeinsts_to_jit!(interp, ci, source_mode)
+    if collect_dispatch_backtrace[]
+        dispatch_backtrace[ci] = backtrace()
+    end
     return ci
 end
 
@@ -1434,6 +1440,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     inspected = IdSet{CodeInstance}()
     tocompile = Vector{CodeInstance}()
     codeinfos = []
+    bt = collect_dispatch_backtrace[] ? backtrace() : nothing
     # first compute the ABIs of everything
     latest = true # whether this_world == world_counter()
     for this_world in reverse(sort!(worlds))
@@ -1471,6 +1478,9 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         end
         while !isempty(tocompile)
             callee = pop!(tocompile)
+            if collect_dispatch_backtrace[]
+                dispatch_backtrace[callee] = bt
+            end
             callee in inspected && continue
             # now make sure everything has source code, if desired
             mi = get_ci_mi(callee)
