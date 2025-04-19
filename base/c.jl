@@ -2,7 +2,7 @@
 
 # definitions related to C interface
 
-import Core.Intrinsics: cglobal
+import .Intrinsics: cglobal
 
 """
     cglobal((symbol, library) [, type=Cvoid])

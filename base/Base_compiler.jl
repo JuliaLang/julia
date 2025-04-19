@@ -340,6 +340,7 @@ include("ordering.jl")
 using .Order
 
 include("coreir.jl")
+include("module.jl")
 include("invalidation.jl")
 
 BUILDROOT::String = ""
