@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Prevent this from putting anything into the Main namespace
-@eval Core.Module() begin
+@eval Base module __precompile_script
 
 if Threads.maxthreadid() != 1
     @warn "Running this file with multiple Julia threads may lead to a build error" Threads.maxthreadid()
