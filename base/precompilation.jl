@@ -813,7 +813,7 @@ function _precompilepkgs(pkgs::Vector{String},
             end
             t = Timer(0; interval=1/10)
             anim_chars = ["◐","◓","◑","◒"]
-            i = 1
+            i::Int = 1
             last_length = 0
             bar = MiniProgressBar(; indent=0, header = "Precompiling packages ", color = :green, percentage=false, always_reprint=true)
             n_total = length(direct_deps) * length(configs)
