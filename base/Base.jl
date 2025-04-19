@@ -391,7 +391,7 @@ function __init__()
     if get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
         JuliaSyntax.enable_in_core!()
     end
-
+    Base.Experimental.make_io_thread()
     CoreLogging.global_logger(CoreLogging.ConsoleLogger())
     nothing
 end
