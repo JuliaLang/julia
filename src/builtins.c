@@ -1625,6 +1625,17 @@ JL_CALLABLE(jl_f_invoke)
     return jl_gf_invoke(argtypes, args[0], &args[2], nargs - 1);
 }
 
+JL_CALLABLE(jl_f__predeclare_call)
+{
+    JL_NARGSV(_predeclare_call, 1);
+
+    // jl_datatype_t *tt = jl_inst_arg_tuple_type(args[0], &args[1], nargs, 1);
+    // JL_GC_PROMISE_ROOTED(tt); // it is a concrete type
+    // jl_compile_hint(tt)
+
+    return jl_nothing;
+}
+
 // Expr constructor for internal use ------------------------------------------
 
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
@@ -2511,6 +2522,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin_func("invokelatest", jl_f_invokelatest);
     add_builtin_func("invoke_in_world", jl_f_invoke_in_world);
     add_builtin_func("_call_in_world_total", jl_f__call_in_world_total);
+    add_builtin_func("_predeclare_call", jl_f__predeclare_call);
     add_builtin_func("_typevar", jl_f__typevar);
     add_builtin_func("_structtype", jl_f__structtype);
     add_builtin_func("_abstracttype", jl_f__abstracttype);

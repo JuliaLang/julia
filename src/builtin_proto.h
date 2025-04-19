@@ -27,6 +27,7 @@ DECLARE_BUILTIN(_call_in_world_total);
 DECLARE_BUILTIN(invokelatest);
 DECLARE_BUILTIN(_compute_sparams);
 DECLARE_BUILTIN(_expr);
+DECLARE_BUILTIN(_predeclare_call);
 DECLARE_BUILTIN(_svec_ref);
 DECLARE_BUILTIN(_typebody);
 DECLARE_BUILTIN(_typevar);
