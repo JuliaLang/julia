@@ -156,7 +156,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
         maxworld = 0
         invalidations = _jl_debug_method_invalidation[]
         if invalidations !== nothing
-            push!(invalidations, def, "method_globalref", codeinst, nothing)
+            push!(invalidations, "method_globalref", def, codeinst)
         end
     end
     # verify current edges
@@ -168,7 +168,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
         j = 1
         while j ≤ length(callees)
             local min_valid2::UInt, max_valid2::UInt
-            edge = callees[j]
+            jedge, edge = j, callees[j]
             @assert !(edge isa Method) # `Method`-edge isn't allowed for the optimized one-edge format
             if edge isa CodeInstance
                 edge = get_ci_mi(edge)
@@ -222,7 +222,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             end
             invalidations = _jl_debug_method_invalidation[]
             if max_valid2 ≠ typemax(UInt) && invalidations !== nothing
-                push!(invalidations, edge, "insert_backedges_callee", codeinst, matches)
+                push!(invalidations, "insert_backedges_callee", codeinst, jedge, matches)
             end
             if max_valid2 == 0 && invalidations === nothing
                 break
@@ -231,10 +231,10 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     end
     # verify recursive edges (if valid, or debugging)
     cycle = depth
-    cause = codeinst
+    cause = 0
     if maxworld ≠ 0 || _jl_debug_method_invalidation[] !== nothing
         for j = 1:length(callees)
-            edge = callees[j]
+            jedge, edge = j, callees[j]
             if !(edge isa CodeInstance)
                 continue
             end
@@ -248,7 +248,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
                 max_valid2 = 0
             end
             if maxworld > max_valid2
-                cause = callee
+                cause = jedge
                 maxworld = max_valid2
             end
             if max_valid2 == 0
@@ -279,8 +279,8 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
         @assert visiting[child] == length(stack) + 1
         delete!(visiting, child)
         invalidations = _jl_debug_method_invalidation[]
-        if invalidations !== nothing && maxworld < validation_world
-            push!(invalidations, child, "verify_methods", cause)
+        if invalidations !== nothing && maxworld < validation_world && cause != 0
+            push!(invalidations, "verify_methods", child, cause)
         end
     end
     return 0, minworld, maxworld

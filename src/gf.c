@@ -1797,13 +1797,16 @@ JL_DLLEXPORT jl_value_t *jl_debug_method_invalidation(int state)
 static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth);
 
 // recursively invalidate cached methods that had an edge to a replaced method
-static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_world, int depth)
+static void invalidate_code_instance(jl_value_t *invokesig, jl_code_instance_t *replaced, size_t max_world, int depth)
 {
     jl_timing_counter_inc(JL_TIMING_COUNTER_Invalidations, 1);
     if (_jl_debug_method_invalidation) {
         jl_value_t *boxeddepth = NULL;
         JL_GC_PUSH1(&boxeddepth);
-        jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)replaced->def);
+        if (invokesig) {
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, invokesig);
+        }
+        jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)replaced);
         boxeddepth = jl_box_int32(depth);
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, boxeddepth);
         JL_GC_POP();
@@ -1827,7 +1830,7 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
 
 JL_DLLEXPORT void jl_invalidate_code_instance(jl_code_instance_t *replaced, size_t max_world)
 {
-    invalidate_code_instance(replaced, max_world, 1);
+    invalidate_code_instance(NULL, replaced, max_world, 1);
 }
 
 static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth) {
@@ -1870,7 +1873,7 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_ins
             jl_atomic_fetch_or(&replaced_mi->flags, MI_FLAG_BACKEDGES_DIRTY);
             /* fallthrough */
         }
-        invalidate_code_instance(replaced, max_world, depth);
+        invalidate_code_instance(invokesig, replaced, max_world, depth);
         if (replaced_ci && !replaced_mi->backedges) {
             // Fast-path early out. If `invalidate_code_instance` invalidated
             // the entire mi via a recursive edge, there's no point to keep
@@ -1947,7 +1950,7 @@ static int _invalidate_dispatch_backedges(jl_method_instance_t *mi, jl_value_t *
             replaced_edge = replaced_dispatch;
         }
         if (replaced_edge) {
-            invalidate_code_instance(caller, max_world, 1);
+            invalidate_code_instance(invokeTypes, caller, max_world, 1);
             insb = clear_next_edge(backedges, insb, invokeTypes, caller);
             jl_atomic_fetch_or(&mi->flags, MI_FLAG_BACKEDGES_DIRTY);
             invalidated_any = 1;
@@ -2386,10 +2389,8 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
                 if (missing) {
                     jl_code_instance_t *backedge = (jl_code_instance_t*)backedges[i];
                     JL_GC_PROMISE_ROOTED(backedge);
-                    invalidate_code_instance(backedge, max_world, 0);
+                    invalidate_code_instance(backedgetyp, backedge, max_world, 0);
                     invalidated = 1;
-                    if (_jl_debug_method_invalidation)
-                        jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)backedgetyp);
                 }
                 else {
                     backedges[ins++] = backedges[i - 1];
