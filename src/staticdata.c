@@ -882,11 +882,37 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // prevent this from happening, so we do not need to detect that user
             // error now.
         }
+        // don't recurse into all backedges memory (yet)
+        jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);
+        if (backedges) {
+            assert(!jl_options.trim && !jl_options.strip_ir);
+            jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
+            size_t i = 0, n = jl_array_nrows(backedges);
+            while (i < n) {
+                jl_value_t *invokeTypes;
+                jl_code_instance_t *caller;
+                i = get_next_edge((jl_array_t*)backedges, i, &invokeTypes, &caller);
+                if (invokeTypes)
+                    jl_queue_for_serialization(s, invokeTypes);
+            }
+        }
     }
     if (jl_is_mtable(v)) {
         jl_methtable_t *mt = (jl_methtable_t*)v;
         if (jl_options.trim || jl_options.strip_ir) {
             record_field_change((jl_value_t**)&mt->backedges, NULL);
+        }
+        else {
+            // don't recurse into all backedges memory (yet)
+            jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mt->backedges, 1);
+            if (backedges) {
+                jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
+                for (size_t i = 0, n = jl_array_nrows(backedges); i < n; i += 2) {
+                    jl_value_t *t = jl_array_ptr_ref(backedges, i);
+                    assert(!jl_is_code_instance(t));
+                    jl_queue_for_serialization(s, t);
+                }
+            }
         }
     }
     if (jl_is_binding(v)) {
@@ -898,6 +924,18 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         }
         if (jl_options.trim || jl_options.strip_ir) {
             record_field_change((jl_value_t**)&b->backedges, NULL);
+        }
+        else {
+            // don't recurse into all backedges memory (yet)
+            jl_value_t *backedges = get_replaceable_field((jl_value_t**)&b->backedges, 1);
+            if (backedges) {
+                jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
+                for (size_t i = 0, n = jl_array_nrows(backedges); i < n; i++) {
+                    jl_value_t *b = jl_array_ptr_ref(backedges, i);
+                    if (!jl_is_code_instance(b) && !jl_is_method_instance(b) && !jl_is_method(b)) // otherwise usually a Binding?
+                        jl_queue_for_serialization(s, b);
+                }
+            }
         }
     }
     if (s->incremental && jl_is_globalref(v)) {
@@ -2572,6 +2610,52 @@ static void jl_prune_type_cache_linear(jl_svec_t *cache)
         jl_svecset(cache, ins++, jl_nothing);
 }
 
+static void jl_prune_mi_backedges(jl_array_t *backedges)
+{
+    if (backedges == NULL)
+        return;
+    size_t i = 0, ins = 0, n = jl_array_nrows(backedges);
+    while (i < n) {
+        jl_value_t *invokeTypes;
+        jl_code_instance_t *caller;
+        i = get_next_edge(backedges, i, &invokeTypes, &caller);
+        if (ptrhash_get(&serialization_order, caller) != HT_NOTFOUND)
+            ins = set_next_edge(backedges, ins, invokeTypes, caller);
+    }
+    jl_array_del_end(backedges, n - ins);
+}
+
+static void jl_prune_mt_backedges(jl_array_t *backedges)
+{
+    if (backedges == NULL)
+        return;
+    size_t i = 0, ins = 0, n = jl_array_nrows(backedges);
+    for (i = 1; i < n; i += 2) {
+        jl_value_t *ci = jl_array_ptr_ref(backedges, i);
+        if (ptrhash_get(&serialization_order, ci) != HT_NOTFOUND) {
+            jl_array_ptr_set(backedges, ins++, jl_array_ptr_ref(backedges, i - 1));
+            jl_array_ptr_set(backedges, ins++, ci);
+        }
+    }
+    jl_array_del_end(backedges, n - ins);
+}
+
+
+static void jl_prune_binding_backedges(jl_array_t *backedges)
+{
+    if (backedges == NULL)
+        return;
+    size_t i = 0, ins = 0, n = jl_array_nrows(backedges);
+    for (i = 0; i < n; i++) {
+        jl_value_t *b = jl_array_ptr_ref(backedges, i);
+        if (ptrhash_get(&serialization_order, b) != HT_NOTFOUND) {
+            jl_array_ptr_set(backedges, ins, b);
+            ins++;
+        }
+    }
+    jl_array_del_end(backedges, n - ins);
+}
+
 
 uint_t bindingkey_hash(size_t idx, jl_value_t *data);
 
@@ -3228,6 +3312,21 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                     jl_prune_type_cache_hash(jl_atomic_load_relaxed(&tn->cache)));
                 jl_gc_wb(tn, jl_atomic_load_relaxed(&tn->cache));
                 jl_prune_type_cache_linear(jl_atomic_load_relaxed(&tn->linearcache));
+            }
+            else if (jl_is_method_instance(v)) {
+                jl_method_instance_t *mi = (jl_method_instance_t*)v;
+                jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mi->backedges, 1);
+                jl_prune_mi_backedges((jl_array_t*)backedges);
+            }
+            else if (jl_is_mtable(v)) {
+                jl_methtable_t *mt = (jl_methtable_t*)v;
+                jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mt->backedges, 1);
+                jl_prune_mt_backedges((jl_array_t*)backedges);
+            }
+            else if (jl_is_binding(v)) {
+                jl_binding_t *b = (jl_binding_t*)v;
+                jl_value_t *backedges = get_replaceable_field((jl_value_t**)&b->backedges, 1);
+                jl_prune_binding_backedges((jl_array_t*)backedges);
             }
         }
     }
