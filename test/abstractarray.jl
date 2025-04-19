@@ -910,6 +910,26 @@ include("generic_map_tests.jl")
 generic_map_tests(map, map!)
 @test map!(-, [1]) == [-1]
 
+@testset "#30624" begin
+    ### unstructured
+    @test map!(+, ones(3), ones(3), ones(3), [1]) == [3, 1, 1]
+    @test map!(+, ones(3), [1], ones(3), ones(3)) == [3, 1, 1]
+    @test map!(+, [1], [1], [], []) == [1]
+    @test map!(+, [[1]], [1], [], []) == [[1]]
+
+    # TODO: decide if input axes & lengths should be validated
+    # @test_throws BoundsError map!(+, ones(1), ones(2))
+    # @test_throws BoundsError map!(+, ones(1), ones(2, 2))
+
+    @test map!(+, ones(3), view(ones(2, 3), 1:2, 2:3), ones(3)) == [2, 2, 2]
+    @test map!(+, ones(3), ones(2, 2), ones(3)) == [2, 2, 2]
+
+    ### structured (all mapped arguments are <:AbstractArray equal ndims > 1)
+    @test map!(+, ones(4), ones(2, 2), ones(2, 2)) == [2, 2, 2, 2]
+    @test map!(+, ones(4), ones(2, 2), ones(1, 2)) == [2, 2, 1, 1]
+    # @test_throws BoundsError map!(+, ones(3), ones(2, 2), ones(2, 2))
+end
+
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
 test_checksquare()
