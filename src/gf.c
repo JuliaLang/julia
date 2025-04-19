@@ -1618,6 +1618,15 @@ jl_method_instance_t *cache_method(
     }
     else {
          jl_typemap_insert(cache, parent, newentry, offs);
+         if (mt) {
+             jl_datatype_t *dt = jl_nth_argument_datatype((jl_value_t*)tt, 1);
+             if (dt) {
+                 jl_typename_t *tn = dt->name;
+                 int cache_entry_count = jl_atomic_load_relaxed(&tn->cache_entry_count);
+                 if (cache_entry_count < 31)
+                     jl_atomic_store_relaxed(&tn->cache_entry_count, cache_entry_count + 1);
+             }
+         }
     }
 
     JL_GC_POP();
@@ -3620,9 +3629,9 @@ STATIC_INLINE jl_method_instance_t *jl_lookup_generic_(jl_value_t *F, jl_value_t
         mt = jl_gf_mtable(F);
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
         entry = NULL;
-        if (leafcache != (jl_genericmemory_t*)jl_an_empty_memory_any &&
-                jl_typetagis(jl_atomic_load_relaxed(&mt->cache), jl_typemap_level_type)) {
-            // hashing args is expensive, but looking at mt->cache is probably even more expensive
+        int cache_entry_count = jl_atomic_load_relaxed(&((jl_datatype_t*)FT)->name->cache_entry_count);
+        if (leafcache != (jl_genericmemory_t*)jl_an_empty_memory_any && (cache_entry_count == 0 || cache_entry_count >= 8)) {
+            // hashing args is expensive, but so do that only if looking at mc->cache is probably even more expensive
             tt = lookup_arg_type_tuple(F, args, nargs);
             if (tt != NULL)
                 entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
