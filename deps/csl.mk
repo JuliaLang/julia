@@ -120,6 +120,7 @@ ifeq ($(OS),WINNT)
 GCC_VERSION = 14
 install-csl:
 	mkdir -p $(build_private_libdir)/
+	cp -a $(build_shlibdir)/$(call versioned_libname,libstdc++,6) $(build_shlibdir)/libstdc++.$(SHLIB_EXT)
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc_s.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmsvcrt.a $(build_private_libdir)/
