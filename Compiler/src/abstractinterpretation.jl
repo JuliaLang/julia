@@ -3609,7 +3609,8 @@ function abstract_eval_partition_load(interp::Union{AbstractInterpreter,Nothing}
     return RTEffects(rt, exct, effects)
 end
 
-function scan_specified_partitions(query::Function, walk_binding_partition::Function, interp::Union{AbstractInterpreter,Nothing}, g::GlobalRef, wwr::WorldWithRange)
+function scan_specified_partitions(query::F1, walk_binding_partition::F2,
+    interp::Union{AbstractInterpreter,Nothing}, g::GlobalRef, wwr::WorldWithRange) where {F1,F2}
     local total_validity, rte, binding_partition
     binding = convert(Core.Binding, g)
     lookup_world = max_world(wwr.valid_worlds)
@@ -3642,12 +3643,12 @@ function scan_specified_partitions(query::Function, walk_binding_partition::Func
     return Pair{WorldRange, typeof(rte)}(total_validity, rte)
 end
 
-scan_leaf_partitions(query::Function, ::Nothing, g::GlobalRef, wwr::WorldWithRange) =
+scan_leaf_partitions(query::F, ::Nothing, g::GlobalRef, wwr::WorldWithRange) where F =
     scan_specified_partitions(query, walk_binding_partition, nothing, g, wwr)
-scan_leaf_partitions(query::Function, interp::AbstractInterpreter, g::GlobalRef, wwr::WorldWithRange) =
+scan_leaf_partitions(query::F, interp::AbstractInterpreter, g::GlobalRef, wwr::WorldWithRange) where F =
     scan_specified_partitions(query, walk_binding_partition, interp, g, wwr)
 
-function scan_partitions(query::Function, interp::AbstractInterpreter, g::GlobalRef, wwr::WorldWithRange)
+function scan_partitions(query::F, interp::AbstractInterpreter, g::GlobalRef, wwr::WorldWithRange) where F
     walk_binding_partition = function (b::Core.Binding, partition::Core.BindingPartition, world::UInt)
         Pair{WorldRange, Pair{Core.Binding, Core.BindingPartition}}(
             WorldRange(partition.min_world, partition.max_world), b=>partition)
