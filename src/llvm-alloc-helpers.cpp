@@ -250,7 +250,8 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 required.use_info.addrescaped = true;
                 return true;
             }
-            if (required.pass.gc_loaded_func == callee) {
+            if (required.pass.gc_loaded_func == callee ||
+                callee->getName().starts_with("julia.gc_loaded")) {
                 // TODO add manual load->store forwarding
                 push_inst(inst);
                 return true;
