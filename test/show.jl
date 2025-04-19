@@ -1957,7 +1957,7 @@ end
     @test replstr(view(A, [1], :)) == "1×1 view(::Matrix{Float64}, [1], :) with eltype Float64:\n 0.0"
 
     # issue #27680
-    @test showstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+    @test showstr(Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
               "Set([(1.0, 1.0), (3.0, 3.0), (2.0, 2.0)])" :
               "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
 
