@@ -731,3 +731,38 @@ end
     @test_broken @inferred(maximum(exp, A; dims = 1))[1] === missing
     @test_broken @inferred(extrema(exp, A; dims = 1))[1] === (missing, missing)
 end
+
+some_exception(op) = try return (Some(op()), nothing); catch ex; return (nothing, ex); end
+reduced_shape(sz, dims) = ntuple(d -> d in dims ? 1 : sz[d], length(sz))
+
+@testset "Ensure that calling, e.g., sum(empty; dims) has the same behavior as sum(empty)" begin
+    @testset "$r(Array{$T}(undef, $sz); dims=$dims)" for
+        r in (minimum, maximum, findmin, findmax, extrema, sum, prod, mapreduce, all, any, count),
+        T in (Int, Union{Missing, Int}, Number, Union{Missing, Number}, Bool, Union{Missing, Bool}, Any),
+        sz in ((0,), (0,1), (1,0), (0,0), (0,0,1), (1,0,1)),
+        dims in (1, 2, 3, 4, (1,2), (1,3), (2,3,4), (1,2,3))
+
+        A = Array{T}(undef, sz)
+        rsz = reduced_shape(sz, dims)
+
+        v, ex = some_exception() do; r(A); end
+        if isnothing(v)
+            @test_throws typeof(ex) r(A; dims)
+        else
+            actual = fill(something(v), rsz)
+            @test isequal(r(A; dims), actual)
+            @test eltype(r(A; dims)) === eltype(actual)
+        end
+
+        for f in (identity, abs, abs2)
+            v, ex = some_exception() do; r(f, A); end
+            if isnothing(v)
+                @test_throws typeof(ex) r(f, A; dims)
+            else
+                actual = fill(something(v), rsz)
+                @test isequal(r(f, A; dims), actual)
+                @test eltype(r(f, A; dims)) === eltype(actual)
+            end
+        end
+    end
+end
