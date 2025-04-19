@@ -207,23 +207,34 @@ end
     @test isequal(prod(A, dims=(1, 2)), fill(1, 1, 1))
     @test isequal(prod(A, dims=3), fill(1, 0, 1))
 
-    for f in (minimum, maximum)
+    for f in (minimum, maximum, findmin, findmax)
         @test_throws "reducing over an empty collection is not allowed" f(A, dims=1)
-        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=2), zeros(Int, 0, 1))
+        @test_throws "reducing over an empty collection is not allowed" f(A, dims=2)
         @test_throws "reducing over an empty collection is not allowed" f(A, dims=(1, 2))
-        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=3), zeros(Int, 0, 1))
+        @test_throws "reducing over an empty collection is not allowed" f(A, dims=3)
+        if f === maximum
+            # maximum allows some empty reductions with abs/abs2
+            z = f(abs, A)
+            @test isequal(f(abs, A, dims=1), fill(z, (1,1)))
+            @test isequal(f(abs, A, dims=2), fill(z, (0,1)))
+            @test isequal(f(abs, A, dims=(1,2)), fill(z, (1,1)))
+            @test isequal(f(abs, A, dims=3), fill(z, (0,1)))
+            z = f(abs2, A)
+            @test isequal(f(abs2, A, dims=1), fill(z, (1,1)))
+            @test isequal(f(abs2, A, dims=2), fill(z, (0,1)))
+            @test isequal(f(abs2, A, dims=(1,2)), fill(z, (1,1)))
+            @test isequal(f(abs2, A, dims=3), fill(z, (0,1)))
+        else
+            @test_throws "reducing over an empty collection is not allowed" f(abs, A, dims=1)
+            @test_throws "reducing over an empty collection is not allowed" f(abs, A, dims=2)
+            @test_throws "reducing over an empty collection is not allowed" f(abs, A, dims=(1, 2))
+            @test_throws "reducing over an empty collection is not allowed" f(abs, A, dims=3)
+            @test_throws "reducing over an empty collection is not allowed" f(abs2, A, dims=1)
+            @test_throws "reducing over an empty collection is not allowed" f(abs2, A, dims=2)
+            @test_throws "reducing over an empty collection is not allowed" f(abs2, A, dims=(1, 2))
+            @test_throws "reducing over an empty collection is not allowed" f(abs2, A, dims=3)
+        end
     end
-    for f in (findmin, findmax)
-        @test_throws "reducing over an empty collection is not allowed" f(A, dims=1)
-        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
-        @test_throws "reducing over an empty collection is not allowed" f(A, dims=(1, 2))
-        @test_throws "reducing over an empty collection is not allowed" isequal(f(A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
-        @test_throws "reducing over an empty collection is not allowed" f(abs2, A, dims=1)
-        @test_throws "reducing over an empty collection is not allowed" isequal(f(abs2, A, dims=2), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
-        @test_throws "reducing over an empty collection is not allowed" f(abs2, A, dims=(1, 2))
-        @test_throws "reducing over an empty collection is not allowed" isequal(f(abs2, A, dims=3), (zeros(Int, 0, 1), zeros(Int, 0, 1)))
-    end
-
 end
 
 ## findmin/findmax/minimum/maximum
