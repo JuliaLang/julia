@@ -958,6 +958,9 @@ end
 function retrieve_ir_for_inlining(cached_result::CodeInstance, src::CodeInfo)
     return inflate_ir!(copy(src), cached_result.def), SpecInfo(src), src.debuginfo
 end
+function retrieve_ir_for_inlining(cached_result::CodeInstance, optresult::OptimizationResult)
+    return retrieve_ir_for_inlining(cached_result.def, optresult, true)
+end
 function retrieve_ir_for_inlining(mi::MethodInstance, src::CodeInfo, preserve_local_sources::Bool)
     if preserve_local_sources
         src = copy(src)
@@ -975,13 +978,10 @@ function retrieve_ir_for_inlining(mi::MethodInstance, ir::IRCode, preserve_local
     ir.debuginfo.def = mi
     return ir, spec_info, DebugInfo(ir.debuginfo, length(ir.stmts))
 end
-function retrieve_ir_for_inlining(mi::MethodInstance, opt::OptimizationState, preserve_local_sources::Bool)
-    result = opt.optresult
-    if result !== nothing
-        !result.simplified && simplify_ir!(result)
-        return retrieve_ir_for_inlining(mi, result.ir, preserve_local_sources)
-    end
-    retrieve_ir_for_inlining(mi, opt.src, preserve_local_sources)
+function retrieve_ir_for_inlining(mi::MethodInstance, optresult::OptimizationResult, preserve_local_sources::Bool)
+    isdefined(optresult, :code_info) && return retrieve_ir_for_inlining(mi, optresult.code_info, preserve_local_sources)
+    !optresult.simplified && simplify_ir!(optresult)
+    return retrieve_ir_for_inlining(mi, optresult.ir, preserve_local_sources)
 end
 
 function handle_single_case!(todo::Vector{Pair{Int,Any}},

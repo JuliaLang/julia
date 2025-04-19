@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module effects_tests
+
 using Test
 
 include("setup_Compiler.jl")
@@ -1479,3 +1481,5 @@ let effects = Base.infer_effects((Core.SimpleVector,Int); optimize=false) do sve
     @test !Compiler.is_nothrow(effects)
     @test Compiler.is_terminates(effects)
 end
+
+end # module effects_tests
