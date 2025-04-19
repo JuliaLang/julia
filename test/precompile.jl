@@ -105,6 +105,11 @@ precompile_test_harness(false) do dir
               process_state_calls = 0
               @assert process_state() === process_state()
               @assert process_state_calls === 0
+
+              const empty_state = Base.OncePerProcess{Nothing}() do
+                  return nothing
+              end
+              @assert empty_state() === nothing
           end
           """)
     write(Foo2_file,
