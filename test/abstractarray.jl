@@ -1069,6 +1069,11 @@ end
     @test length(S0) == 0
 end
 
+@testset "abstract return type inference of function that calls `length(::Array)`" begin
+    f(x) = length(x)
+    @test Int === Base.infer_return_type(f, Tuple{Array})
+end
+
 @testset "CartesianIndices" begin
     xrng = 2:4
     yrng = 1:5
