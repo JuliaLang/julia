@@ -161,7 +161,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
             end
         end
     end
-    ccall(:jl_maybe_log_binding_invalidation, Cvoid, (Any,), b)
+    ccall(:jl_maybe_log_binding_invalidation, Cvoid, (Any,), invalidated_bpart)
 
     if need_to_invalidate_code || need_to_invalidate_export
         # This binding was exported - we need to check all modules that `using` us to see if they
