@@ -13,7 +13,7 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
-import SHA
+using SHA: SHA, SHA2_256_CTX, SHA2_512_CTX, SHA_CTX
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 import Base: copymutable, copy, copy!, ==, hash, convert,
@@ -414,8 +414,10 @@ sequence of numbers if and only if a `seed` is provided. Some RNGs
 don't accept a seed, like `RandomDevice`.
 After the call to `seed!`, `rng` is equivalent to a newly created
 object initialized with the same seed.
+
 The types of accepted seeds depend on the type of `rng`, but in general,
-integer seeds should work.
+integer seeds should work. Providing `nothing` as the seed should be
+equivalent to not providing one.
 
 If `rng` is not specified, it defaults to seeding the state of the
 shared task-local generator.
@@ -455,11 +457,15 @@ julia> rand(Xoshiro(), Bool) # not reproducible either
 true
 ```
 """
-seed!(rng::AbstractRNG) = seed!(rng, nothing)
-#=
-We have this generic definition instead of the alternative option
-`seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)`
-because it would lead too easily to ambiguities, e.g. when we define `seed!(::Xoshiro, seed)`.
-=#
+function seed!(rng::AbstractRNG, seed::Any=nothing)
+    if seed === nothing
+        seed!(rng, RandomDevice())
+    elseif seed isa AbstractRNG
+        # avoid getting into an infinite recursive call from the other branches
+        throw(MethodError(seed!, (rng, seed)))
+    else
+        seed!(rng, SeedHasher(seed))
+    end
+end
 
 end # module
