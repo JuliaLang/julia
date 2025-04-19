@@ -38,7 +38,7 @@ else
 using Core.Intrinsics, Core.IR
 
 using Core: ABIOverride, Builtin, CodeInstance, IntrinsicFunction, MethodInstance, MethodMatch,
-    MethodTable, PartialOpaque, SimpleVector, TypeofVararg,
+    MethodTable, MethodCache, PartialOpaque, SimpleVector, TypeofVararg,
     _apply_iterate, apply_type, compilerbarrier, donotdelete, memoryref_isassigned,
     memoryrefget, memoryrefnew, memoryrefoffset, memoryrefset!, print, println, show, svec,
     typename, unsafe_write, write

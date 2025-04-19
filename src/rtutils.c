@@ -814,6 +814,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (v == (jl_value_t*)jl_methtable_type) {
         n += jl_printf(out, "Core.MethodTable");
     }
+    else if (v == (jl_value_t*)jl_methcache_type) {
+        n += jl_printf(out, "Core.MethodCache");
+    }
     else if (v == (jl_value_t*)jl_any_type) {
         n += jl_printf(out, "Any");
     }
@@ -996,6 +999,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (v == jl_nothing || (jl_nothing && (jl_value_t*)vt == jl_typeof(jl_nothing))) {
         n += jl_printf(out, "nothing");
+    }
+    else if (v == (jl_value_t*)jl_method_table) {
+        n += jl_printf(out, "Core._");
     }
     else if (vt == jl_string_type) {
         n += jl_static_show_string(out, jl_string_data(v), jl_string_len(v), 1);
@@ -1427,8 +1433,7 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
     }
     if ((jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) &&
             ((jl_datatype_t*)ftype)->name->mt &&
-            ((jl_datatype_t*)ftype)->name->mt != jl_type_type_mt &&
-            ((jl_datatype_t*)ftype)->name->mt != jl_nonfunction_mt) {
+            ((jl_datatype_t*)ftype)->name->mt != jl_type_type_mt) {
         n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->mt->name);
     }
     else {

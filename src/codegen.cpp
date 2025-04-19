@@ -7535,8 +7535,8 @@ static const char *derive_sigt_name(jl_value_t *jargty)
         return NULL;
     jl_sym_t *name = dt->name->name;
     // if we have a kwcall, use that as the name anyways
-    jl_methtable_t *mt = dt->name->mt;
-    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt || mt == NULL) {
+    jl_methcache_t *mt = dt->name->mt;
+    if (mt == jl_type_type_mt || mt == NULL) {
         // our value for `name` from MethodTable is not good, try to come up with something better
         if (jl_is_type_type((jl_value_t*)dt)) {
             dt = (jl_datatype_t*)jl_argument_datatype(jl_tparam0(dt));

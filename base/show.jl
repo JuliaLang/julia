@@ -41,7 +41,7 @@ function _isself(ft::DataType)
     ftname = ft.name
     isdefined(ftname, :mt) || return false
     name = ftname.mt.name
-    mod = parentmodule(ft)  # NOTE: not necessarily the same as ft.name.mt.module
+    mod = parentmodule(ft)  # NOTE: the same as ft.name.mt.module
     return invokelatest(isdefinedglobal, mod, name) && ft == typeof(invokelatest(getglobal, mod, name))
 end
 
@@ -542,10 +542,9 @@ module UsesCoreAndBaseOnly
 end
 
 function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
-    ft = typeof(f)
-    mt = ft.name.mt
-    if mt === Symbol.name.mt
-        # uses shared method table
+    fname = typeof(f).name
+    mt = fname.mt
+    if fname.name === mt.name
         fallback(io, f)
     elseif compact
         print(io, mt.name)

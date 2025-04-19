@@ -116,7 +116,7 @@ extern "C" {
 // TODO: put WeakRefs on the weak_refs list during deserialization
 // TODO: handle finalizers
 
-#define NUM_TAGS    197
+#define NUM_TAGS    198
 
 // An array of references that need to be restored from the sysimg
 // This is a manually constructed dual of the gvars array, which would be produced by codegen for Julia code, for C.
@@ -185,6 +185,7 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_array_any_type);
         INSERT_TAG(jl_intrinsic_type);
         INSERT_TAG(jl_methtable_type);
+        INSERT_TAG(jl_methcache_type);
         INSERT_TAG(jl_typemap_level_type);
         INSERT_TAG(jl_typemap_entry_type);
         INSERT_TAG(jl_voidpointer_type);
@@ -281,11 +282,11 @@ jl_value_t **const*const get_tags(void) {
         INSERT_TAG(jl_top_module);
         INSERT_TAG(jl_typeinf_func);
         INSERT_TAG(jl_type_type_mt);
-        INSERT_TAG(jl_nonfunction_mt);
         INSERT_TAG(jl_kwcall_mt);
         INSERT_TAG(jl_kwcall_func);
         INSERT_TAG(jl_opaque_closure_method);
         INSERT_TAG(jl_nulldebuginfo);
+        INSERT_TAG(jl_method_table);
 
         // some Core.Builtin Functions that we want to be able to reference:
         INSERT_TAG(jl_builtin_throw);
@@ -1034,7 +1035,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
         }
     }
-    else if (jl_typetagis(v, jl_module_tag << 4)) {
+    else if (jl_is_module(v)) {
         jl_queue_module_for_serialization(s, (jl_module_t*)v);
     }
     else if (jl_is_binding_partition(v)) {
@@ -1049,15 +1050,22 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 if (jl_is_svec(jl_atomic_load_relaxed(&m->specializations)))
                     jl_queue_for_serialization_(s, (jl_value_t*)jl_atomic_load_relaxed(&m->specializations), 0, 1);
             }
-            else if (jl_typetagis(v, jl_typename_type)) {
-                jl_typename_t *tn = (jl_typename_t*)v;
-                if (tn->mt != NULL && !tn->mt->frozen) {
-                    jl_methtable_t * new_methtable = (jl_methtable_t *)ptrhash_get(&new_methtables, tn->mt);
-                    if (new_methtable != HT_NOTFOUND)
-                        record_field_change((jl_value_t **)&tn->mt, (jl_value_t*)new_methtable);
-                    else
-                        record_field_change((jl_value_t **)&tn->mt, NULL);
+            else if (jl_is_mtable(v)) {
+                jl_methtable_t *mt = (jl_methtable_t*)v;
+                jl_methtable_t *newmt = (jl_methtable_t*)ptrhash_get(&new_methtables, mt);
+                if (newmt != HT_NOTFOUND)
+                    record_field_change((jl_value_t **)&mt->defs, (jl_value_t*)jl_atomic_load_relaxed(&newmt->defs));
+                else
+                    record_field_change((jl_value_t **)&mt->defs, jl_nothing);
+            }
+            else if (jl_is_mcache(v)) {
+                jl_methcache_t *mc = (jl_methcache_t*)v;
+                jl_value_t *cache = jl_atomic_load_relaxed(&mc->cache);
+                if (!jl_typetagis(cache, jl_typemap_entry_type) || ((jl_typemap_entry_t*)cache)->sig != jl_tuple_type) { // aka Builtins (maybe sometimes OpaqueClosure too)
+                    record_field_change((jl_value_t **)&mc->cache, jl_nothing);
                 }
+                record_field_change((jl_value_t **)&mc->leafcache, jl_an_empty_memory_any);
+                record_field_change((jl_value_t**)&mc->backedges, NULL);
             }
             else if (jl_is_binding(v)) {
                 record_field_change((jl_value_t**)&((jl_binding_t*)v)->backedges, NULL);
@@ -1114,7 +1122,20 @@ static void jl_queue_for_serialization_(jl_serializer_state *s, jl_value_t *v, i
     if (!jl_needs_serialization(s, v))
         return;
 
-    jl_value_t *t = jl_typeof(v);
+    jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
+    // check early from errors, so we have a little bit of contextual state for debugging them
+    if (t == jl_task_type) {
+        jl_error("Task cannot be serialized");
+    }
+    if (s->incremental && needs_uniquing(v, s->query_cache) && t == jl_binding_type) {
+        jl_binding_t *b = (jl_binding_t*)v;
+        if (b->globalref == NULL)
+            jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
+    }
+    if (jl_is_foreign_type(t) == 1) {
+        jl_error("Cannot serialize instances of foreign datatypes");
+    }
+
     // Items that require postorder traversal must visit their children prior to insertion into
     // the worklist/serialization_order (and also before their first use)
     if (s->incremental && !immediate) {
@@ -1521,8 +1542,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             if (needs_uniquing(v, s->query_cache)) {
                 if (jl_typetagis(v, jl_binding_type)) {
                     jl_binding_t *b = (jl_binding_t*)v;
-                    if (b->globalref == NULL)
-                        jl_error("Binding cannot be serialized"); // no way (currently) to recover its identity
                     write_pointerfield(s, (jl_value_t*)b->globalref->mod);
                     write_pointerfield(s, (jl_value_t*)b->globalref->name);
                     continue;
@@ -1687,7 +1706,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             jl_write_module(s, item, (jl_module_t*)v);
         }
         else if (jl_typetagis(v, jl_task_tag << 4)) {
-            jl_error("Task cannot be serialized");
+            abort(); // unreachable
         }
         else if (jl_is_svec(v)) {
             assert(f == s->s);
@@ -1703,7 +1722,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
             write_uint8(f, '\0'); // null-terminated strings for easier C-compatibility
         }
         else if (jl_is_foreign_type(t) == 1) {
-            jl_error("Cannot serialize instances of foreign datatypes");
+            abort(); // unreachable
         }
         else if (jl_datatype_nfields(t) == 0) {
             // The object has no fields, so we just snapshot its byte representation
@@ -2747,16 +2766,14 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
     return 1;
 }
 
-static int strip_all_codeinfos_(jl_methtable_t *mt, void *_env)
+static int strip_all_codeinfos_mt(jl_methtable_t *mt, void *_env)
 {
-    if (jl_options.strip_ir && mt->backedges)
-        record_field_change((jl_value_t**)&mt->backedges, NULL);
     return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), strip_all_codeinfos__, NULL);
 }
 
-static void jl_strip_all_codeinfos(void)
+static void jl_strip_all_codeinfos(jl_array_t *mod_array)
 {
-    jl_foreach_reachable_mtable(strip_all_codeinfos_, NULL);
+    jl_foreach_reachable_mtable(strip_all_codeinfos_mt, mod_array, NULL);
 }
 
 // --- entry points ---
@@ -2904,15 +2921,7 @@ static void jl_prepare_serialization_data(jl_array_t *mod_array, jl_array_t *new
     *extext_methods = jl_alloc_vec_any(0);
     internal_methods = jl_alloc_vec_any(0);
     JL_GC_PUSH1(&internal_methods);
-    jl_collect_methtable_from_mod(jl_type_type_mt, *extext_methods);
-    jl_collect_methtable_from_mod(jl_nonfunction_mt, *extext_methods);
-    size_t i, len = jl_array_len(mod_array);
-    for (i = 0; i < len; i++) {
-        jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
-        assert(jl_is_module(m));
-        if (m->parent == m) // some toplevel modules (really just Base) aren't actually
-            jl_collect_extext_methods_from_mod(*extext_methods, m);
-    }
+    jl_collect_extext_methods(*extext_methods, mod_array);
 
     if (edges) {
         // Extract `edges` now (from info prepared by jl_collect_methcache_from_mod)
@@ -2935,7 +2944,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     htable_new(&bits_replace, 0);
     // strip metadata and IR when requested
     if (jl_options.strip_metadata || jl_options.strip_ir)
-        jl_strip_all_codeinfos();
+        jl_strip_all_codeinfos(mod_array);
     // collect needed methods and replace method tables that are in the tags array
     htable_new(&new_methtables, 0);
     arraylist_t MIs;
@@ -2990,31 +2999,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             size_t num_mis;
             jl_get_llvm_mis(native_functions, &num_mis, NULL);
             arraylist_grow(&MIs, num_mis);
-            jl_get_llvm_mis(native_functions, &num_mis, (jl_method_instance_t *)MIs.items);
+            jl_get_llvm_mis(native_functions, &num_mis, (jl_method_instance_t*)MIs.items);
         }
     }
     if (jl_options.trim) {
         jl_rebuild_methtables(&MIs, &new_methtables);
-        jl_methtable_t *mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_type_type_mt);
-        JL_GC_PROMISE_ROOTED(mt);
-        if (mt != HT_NOTFOUND)
-            jl_type_type_mt = mt;
-        else
-            jl_type_type_mt = jl_new_method_table(jl_type_type_mt->name, jl_type_type_mt->module);
-
-        mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_kwcall_mt);
-        JL_GC_PROMISE_ROOTED(mt);
-        if (mt != HT_NOTFOUND)
-            jl_kwcall_mt = mt;
-        else
-            jl_kwcall_mt = jl_new_method_table(jl_kwcall_mt->name, jl_kwcall_mt->module);
-
-        mt = (jl_methtable_t *)ptrhash_get(&new_methtables, jl_nonfunction_mt);
-        JL_GC_PROMISE_ROOTED(mt);
-        if (mt != HT_NOTFOUND)
-            jl_nonfunction_mt = mt;
-        else
-            jl_nonfunction_mt = jl_new_method_table(jl_nonfunction_mt->name, jl_nonfunction_mt->module);
     }
 
     nsym_tag = 0;
@@ -3397,8 +3386,8 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
 
+    mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
     if (worklist) {
-        mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
         // Generate _native_data`
         if (_native_data != NULL) {
             jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_ext_cis, NULL, &query_cache);
@@ -3423,7 +3412,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         if (jl_options.trim)
             *_native_data = jl_precompile_trimmed(precompilation_world);
         else
-            *_native_data = jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL);
+            *_native_data = jl_precompile(jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, mod_array);
     }
 
     // Make sure we don't run any Julia code concurrently after this point
