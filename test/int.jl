@@ -20,10 +20,10 @@ using Random
     end
 
     # Result type must be type of first argument, except for Bool
-    for U in (Base.BitInteger_types..., BigInt,
+    for U in (Base.BitInteger128_types..., BigInt,
               Rational{Int}, Rational{BigInt},
               Float16, Float32, Float64)
-        for T in (Base.BitInteger_types..., BigInt,
+        for T in (Base.BitInteger128_types..., BigInt,
                   Rational{Int}, Rational{BigInt},
                   Float16, Float32, Float64)
             @test typeof(copysign(T(3), U(4))) === T
@@ -39,8 +39,8 @@ using Random
         end
     end
 
-    @testset "flipsign/copysign(typemin($T), -1)" for T in Base.BitInteger_types
-        for U in (Base.BitSigned_types..., BigInt, Float16, Float32, Float64)
+    @testset "flipsign/copysign(typemin($T), -1)" for T in Base.BitInteger128_types
+        for U in (Base.BitSigned128_types..., BigInt, Float16, Float32, Float64)
             @test flipsign(typemin(T), U(-1)) == typemin(T)
             @test copysign(typemin(T), U(-1)) == typemin(T)
         end
@@ -131,8 +131,8 @@ primitive type MyBitsType <: Signed 8 end
 @test_throws MethodError ~reinterpret(MyBitsType, 0x7b)
 @test signed(MyBitsType) === MyBitsType
 
-UItypes = Base.BitUnsigned_types
-SItypes = Base.BitSigned_types
+UItypes = Base.BitUnsigned128_types
+SItypes = Base.BitSigned128_types
 
 @testset "promotions" begin
     for T in UItypes, S in UItypes
@@ -171,7 +171,7 @@ end
     end
 end
 @testset "bit shifts" begin
-    for T in Base.BitInteger_types
+    for T in Base.BitInteger128_types
         nbits = 8*sizeof(T)
         issigned = typemin(T) < 0
         highbit = T(2) ^ (nbits-1)
@@ -203,7 +203,7 @@ end
                 @test val >> -scount === val << ucount
             end
         end
-        for T2 in Base.BitInteger_types
+        for T2 in Base.BitInteger128_types
             for op in (>>, <<, >>>)
                 if sizeof(T2)==sizeof(Int) || T <: Signed || (op==>>>) || T2 <: Unsigned
                     @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(op, (T, T2)))
@@ -223,7 +223,7 @@ end
     @test 0b01101100 === bitrotate(val1, -3)
     @test val1 === bitrotate(val1, 0)
 
-    for T in Base.BitInteger_types
+    for T in Base.BitInteger128_types
         @test val1 === bitrotate(val1, sizeof(T) * 8) === bitrotate(val1, sizeof(T) * -8)
     end
 
@@ -288,13 +288,13 @@ end
     @test unsafe_trunc(Int8, -128) === Int8(-128)
     @test unsafe_trunc(Int8, -129) === Int8(127)
 end
-@testset "x % T returns a T, T = $T" for T in [Base.BitInteger_types..., BigInt],
-    U in [Base.BitInteger_types..., BigInt]
+@testset "x % T returns a T, T = $T" for T in [Base.BitInteger128_types..., BigInt],
+    U in [Base.BitInteger128_types..., BigInt]
     @test typeof(rand(U(0):U(127)) % T) === T
 end
 
 @testset "Signed, Unsigned, signed, unsigned for bitstypes" begin
-    for (S,U) in zip(Base.BitSigned_types, Base.BitUnsigned_types)
+    for (S,U) in zip(Base.BitSigned128_types, Base.BitUnsigned128_types)
         @test signed(U) === S
         @test unsigned(S) === U
         @test typemin(S) % Signed === typemin(S)
@@ -344,8 +344,8 @@ end
 
 # issue #9292
 @testset "mixed signedness arithmetic" begin
-    for T in Base.BitInteger_types
-        for S in Base.BitInteger_types
+    for T in Base.BitInteger128_types
+        for S in Base.BitInteger128_types
             a, b = one(T), one(S)
             for c in (a+b, a-b, a*b)
                 if T === S
@@ -456,7 +456,7 @@ end
 end
 
 @testset "bitreverse" begin
-    for T in Base.BitInteger_types
+    for T in Base.BitInteger128_types
         x = rand(T)::T
         @test bitreverse(x) isa T
         @test reverse(bitstring(x)) == bitstring(bitreverse(x))
@@ -467,8 +467,8 @@ end
 end
 
 @testset "BitIntegerType" begin
-    @test Int isa Base.BitIntegerType
-    @test Base.BitIntegerType === Union{
+    @test Int isa Base.BitInteger128Type
+    @test Base.BitInteger128Type === Union{
         Type{ Int8}, Type{ Int16}, Type{ Int32}, Type{ Int64}, Type{ Int128},
         Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}, Type{UInt128}}
 end

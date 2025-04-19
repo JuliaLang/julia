@@ -696,7 +696,7 @@ end
         for (U, T) in [(UInt16, Float16), (UInt32, Float32), (UInt64, Float64)]]
 
     ints = [T[17, -T(17), 0, -one(T), 1, typemax(T), typemin(T), typemax(T)-1, typemin(T)+1]
-        for T in Base.BitInteger_types]
+        for T in Base.BitInteger128_types]
 
     char = Char['\n', ' ', Char(0), Char(8), Char(17), typemax(Char)]
 

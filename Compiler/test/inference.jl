@@ -229,12 +229,12 @@ tuplemerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 @test Compiler.tmerge(Vector{Int}, Compiler.tmerge(Vector{String}, Vector{Bool})) ==
     Union{Vector{Bool}, Vector{Int}, Vector{String}}
 @test Compiler.tmerge(Vector{Int}, Compiler.tmerge(Vector{String}, Union{Vector{Bool}, Vector{Symbol}})) == Vector
-@test Compiler.tmerge(Base.BitIntegerType, Union{}) === Base.BitIntegerType
-@test Compiler.tmerge(Union{}, Base.BitIntegerType) === Base.BitIntegerType
+@test Compiler.tmerge(Base.BitInteger128Type, Union{}) === Base.BitInteger128Type
+@test Compiler.tmerge(Union{}, Base.BitInteger128Type) === Base.BitInteger128Type
 @test Compiler.tmerge(Compiler.fallback_ipo_lattice, Compiler.InterConditional(1, Int, Union{}), Compiler.InterConditional(2, String, Union{})) === Compiler.Const(true)
 # test issue behind https://github.com/JuliaLang/julia/issues/50458
-@test Compiler.tmerge(Nothing, Tuple{Base.BitInteger, Int}) == Union{Nothing, Tuple{Base.BitInteger, Int}}
-@test Compiler.tmerge(Union{Nothing, Tuple{Int, Int}}, Tuple{Base.BitInteger, Int}) == Union{Nothing, Tuple{Any, Int}}
+@test Compiler.tmerge(Nothing, Tuple{Base.BitInteger128, Int}) == Union{Nothing, Tuple{Base.BitInteger128, Int}}
+@test Compiler.tmerge(Union{Nothing, Tuple{Int, Int}}, Tuple{Base.BitInteger128, Int}) == Union{Nothing, Tuple{Any, Int}}
 @test Compiler.tmerge(Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}}
 @test Compiler.tmerge(Union{Nothing, Tuple{Char, Int}}, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}) == Union{Nothing, Tuple{Union{Char, String, SubString{String}, Symbol}, Int}}
 @test Compiler.tmerge(Nothing, Tuple{Integer, Int}) == Union{Nothing, Tuple{Integer, Int}}
@@ -254,7 +254,7 @@ tuplemerge_test(Tuple{}, Tuple{Complex, Vararg{Union{ComplexF32, ComplexF64}}},
 
 # test that recursively more complicated types don't widen all the way to Any when there is a useful valid type upper bound
 # Specifically test with base types of a trivial type, a simple union, a complicated union, and a tuple.
-for T in (Nothing, Base.BitInteger, Union{Int, Int32, Int16, Int8}, Tuple{Int, Int})
+for T in (Nothing, Base.BitInteger128, Union{Int, Int32, Int16, Int8}, Tuple{Int, Int})
     Ta, Tb = T, T
     for i in 1:10
         Ta = Union{Tuple{Ta}, Nothing}
@@ -264,9 +264,9 @@ for T in (Nothing, Base.BitInteger, Union{Int, Int32, Int16, Int8}, Tuple{Int, I
 end
 
 struct SomethingBits
-    x::Base.BitIntegerType
+    x::Base.BitInteger128Type
 end
-@test Base.return_types(getproperty, (SomethingBits, Symbol)) == Any[Base.BitIntegerType]
+@test Base.return_types(getproperty, (SomethingBits, Symbol)) == Any[Base.BitInteger128Type]
 
 
 # issue 9770

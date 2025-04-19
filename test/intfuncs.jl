@@ -406,7 +406,7 @@ end
 
     # issue #29148
     @test ndigits(typemax(UInt64), base=-2) == ndigits(big(typemax(UInt64)), base=-2)
-    for T in Base.BitInteger_types
+    for T in Base.BitInteger128_types
         n = rand(T)
         b = -rand(2:100)
         @test ndigits(n, base=b) == ndigits(big(n), base=b)

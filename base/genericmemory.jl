@@ -299,9 +299,9 @@ function cmp(a::Memory{UInt8}, b::Memory{UInt8})
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
-const BitIntegerMemory{N} = Union{map(T->Memory{T}, BitInteger_types)...}
 # use memcmp for == on bit integer types
-function ==(a::M, b::M) where {M <: BitIntegerMemory}
+function ==(a::M, b::M) where {M <: Memory{<:BitInteger}}
+    isconcretetype(eltype(M)) || return invoke((==), Tuple{AbstractArray, AbstractArray}, a, b)
     if length(a) == length(b)
         ta = @_gc_preserve_begin a
         tb = @_gc_preserve_begin b
