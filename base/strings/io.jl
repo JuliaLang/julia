@@ -25,7 +25,7 @@ julia> io = IOBuffer();
 
 julia> print(io, "Hello", ' ', :World!)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Hello World!"
 ```
 """
@@ -70,7 +70,7 @@ julia> io = IOBuffer();
 
 julia> println(io, "Hello", ',', " world.")
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Hello, world.\\n"
 ```
 """
@@ -112,7 +112,7 @@ function sprint(f::Function, args...; context=nothing, sizehint::Integer=0)
     else
         f(s, args...)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 function _str_sizehint(x)
@@ -146,7 +146,7 @@ function print_to_string(xs...)
     for x in xs
         print(s, x)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 setfield!(typeof(print_to_string).name.mt, :max_args, 10, :monotonic)
 
@@ -164,7 +164,7 @@ function string_with_env(env, xs...)
     for x in xs
         print(env_io, x)
     end
-    String(_unsafe_take!(s))
+    takestring!(s)
 end
 
 """
@@ -294,10 +294,10 @@ Create a read-only `IOBuffer` on the data underlying the given string.
 ```jldoctest
 julia> io = IOBuffer("Haho");
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Haho"
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Haho"
 ```
 """
@@ -774,7 +774,7 @@ function unindent(str::AbstractString, indent::Int; tabwidth=8)
             print(buf, ' ')
         end
     end
-    String(take!(buf))
+    takestring!(buf)
 end
 
 function String(a::AbstractVector{Char})
