@@ -538,7 +538,7 @@ julia> A # both A[1] and A[2] are the very same vector
 function fill end
 
 fill(v, dims::DimOrInd...) = fill(v, dims)
-fill(v, dims::NTuple{N, Union{Integer, OneTo}}) where {N} = fill(v, map(to_dim, dims))
+fill(v, dims::NTuple{N, Union{Integer, AbstractOneTo}}) where {N} = fill(v, to_shape(dims))
 fill(v, dims::NTuple{N, Integer}) where {N} = (a=Array{typeof(v),N}(undef, dims); fill!(a, v); a)
 fill(v, dims::NTuple{N, DimOrInd}) where {N} = (a=similar(Array{typeof(v),N}, dims); fill!(a, v); a)
 fill(v, dims::Tuple{}) = (a=Array{typeof(v),0}(undef, dims); fill!(a, v); a)
@@ -585,15 +585,23 @@ julia> ones(ComplexF64, 2, 3)
 """
 function ones end
 
-for (fname, felt) in ((:zeros, :zero), (:ones, :one))
+for (fname, _fname, felt) in ((:zeros, :_zeros, :zero), (:ones, :_ones, :one))
     @eval begin
         $fname(dims::DimOrInd...) = $fname(dims)
         $fname(::Type{T}, dims::DimOrInd...) where {T} = $fname(T, dims)
         $fname(dims::Tuple{Vararg{DimOrInd}}) = $fname(Float64, dims)
-        $fname(::Type{T}, dims::NTuple{N, Union{Integer, OneTo}}) where {T,N} = $fname(T, map(to_dim, dims))
-        $fname(::Type{T}, dims::NTuple{N, Integer}) where {T,N} = fill($felt(T), dims)
-        $fname(::Type{T}, dims::Tuple{}) where {T} = fill($felt(T), dims)
-        $fname(::Type{T}, dims::NTuple{N, DimOrInd}) where {T,N} = fill($felt(T), dims)
+        function $fname(::Type{T}, dims::Tuple{Vararg{DimOrInd}}) where {T}
+            # check if the zero or one element is of the same type
+            # if yes, delegate to `fill` to construct the container
+            # if not, construct a container of the correct type and fill it up
+            $_fname(T, $felt(T), dims)
+        end
+        $_fname(::Type{T}, el::T, dims) where {T} = fill(el, dims)
+        function $_fname(::Type{T}, el, dims) where {T}
+            a = similar(Array{T,length(dims)}, dims)
+            fill!(a, $felt(T))
+            return a
+        end
     end
 end
 

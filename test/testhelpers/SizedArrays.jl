@@ -70,6 +70,7 @@ function Base.reshape(x::AbstractArray, shape::Tuple{SOneTo, Vararg{SOneTo}})
     sz = map(length, shape)
     SizedArray{length.(sz)}(reshape(x, length.(sz)))
 end
+Base.fill(x, ax::Tuple{SOneTo, Vararg{SOneTo}}) = SizedArray{length.(ax)}(fill(x, length.(ax)))
 
 const SizedMatrixLike = Union{SizedMatrix, Transpose{<:Any, <:SizedMatrix}, Adjoint{<:Any, <:SizedMatrix}}
 
