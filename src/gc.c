@@ -153,6 +153,9 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t 
 static jl_mutex_t finalizers_lock;
 static uv_mutex_t gc_cache_lock;
 
+// lock to prevent gc race conditions
+static uv_mutex_t gc_mutex;  
+
 // mutex for gc-heap-snapshot.
 jl_mutex_t heapsnapshot_lock;
 
@@ -4011,6 +4014,8 @@ void jl_gc_init(void)
     uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
     uv_mutex_init(&gc_queue_observer_lock);
+    uv_mutex_init(&gc_mutex);  
+
 
     jl_gc_init_page();
     jl_gc_debug_init();

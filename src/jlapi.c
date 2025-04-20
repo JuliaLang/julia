@@ -736,8 +736,12 @@ JL_DLLEXPORT void (jl_gc_safe_leave)(int8_t state)
  */
 JL_DLLEXPORT void jl_gc_safepoint(void)
 {
+    uv_mutex_lock(&gc_mutex);  
+
     jl_task_t *ct = jl_current_task;
     jl_gc_safepoint_(ct->ptls);
+
+    uv_mutex_unlock(&gc_mutex);  
 }
 
 /**
