@@ -585,24 +585,28 @@ julia> ones(ComplexF64, 2, 3)
 """
 function ones end
 
-for (fname, _fname, felt) in ((:zeros, :_zeros, :zero), (:ones, :_ones, :one))
+for (fname, felt) in ((:zeros, :zero), (:ones, :one))
     @eval begin
         $fname(dims::DimOrInd...) = $fname(dims)
         $fname(::Type{T}, dims::DimOrInd...) where {T} = $fname(T, dims)
         $fname(dims::Tuple{Vararg{DimOrInd}}) = $fname(Float64, dims)
+        # this method isn't strictly necessary, but is provided anyway to avoid
+        # ambiguities if packages define zeros(::Type{T}, ::Tuple{Vararg{AxisType}})
+        $fname(::Type{T}, ::Tuple{}) where {T} = _fill_similar(T, (), $felt(T))
         function $fname(::Type{T}, dims::Tuple{Vararg{DimOrInd}}) where {T}
             # check if the zero or one element is of the same type
             # if yes, delegate to `fill` to construct the container
             # if not, construct a container of the correct type and fill it up
-            $_fname(T, $felt(T), dims)
-        end
-        $_fname(::Type{T}, el::T, dims) where {T} = fill(el, dims)
-        function $_fname(::Type{T}, el, dims) where {T}
-            a = similar(Array{T,length(dims)}, dims)
-            fill!(a, $felt(T))
-            return a
+            el = $felt(T)
+            typeof(el) == T && return fill(el, dims)
+            return _fill_similar(T, dims, el)
         end
     end
+end
+function _fill_similar(::Type{T}, dims, el) where {T}
+    a = similar(Array{T,length(dims)}, dims)
+    fill!(a, el)
+    return a
 end
 
 ## Conversions ##
