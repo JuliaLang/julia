@@ -686,6 +686,10 @@ end
     @test any([true, true,  true], dims = 1) == [true]
     @test_throws TypeError all([3, 3, 3], dims = 1)
     @test_throws TypeError any([3, 3, 3], dims = 1)
+    @test reduce(|, Bool[]) == false
+    @test reduce(&, Bool[]) == true
+    @test reduce(|, Bool[], dims=1) == [false]
+    @test reduce(&, Bool[], dims=1) == [true]
 end
 
 # issue #45748

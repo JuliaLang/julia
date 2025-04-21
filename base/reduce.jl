@@ -339,6 +339,8 @@ reduce_empty(::typeof(+), ::Type{T}) where {T} = zero(T)
 reduce_empty(::typeof(+), ::Type{Bool}) = zero(Int)
 reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
+reduce_empty(::typeof(&), ::Type{Bool}) = true
+reduce_empty(::typeof(|), ::Type{Bool}) = false
 reduce_empty(::typeof(and_all), ::Type{T}) where {T} = true
 reduce_empty(::typeof(or_any), ::Type{T}) where {T} = false
 
