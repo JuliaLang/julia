@@ -353,3 +353,44 @@ end
         @test jl_setaffinity(0, mask, cpumasksize) == 0
     end
 end
+
+@testset "Threads.@spawn" begin  
+    x = Threads.Atomic{Int}(0)  
+    tasks = [Threads.@spawn Threads.atomic_add!(x, 1) for _ in 1:100]  
+    wait.(tasks)  
+    @test x[] == 100  
+end  
+
+@testset "Thread synchronization" begin
+    # Create a ReentrantLock (which is recursive by default)
+    lk = ReentrantLock()
+    shared_counter = 0
+
+    @testset "Basic locking" begin
+        @threads for i in 1:100
+            lock(lk)
+            try
+                shared_counter += 1
+            finally
+                unlock(lk)
+            end
+        end
+        @test shared_counter == 100
+    end
+
+    @testset "Recursive locking" begin
+        # First lock should succeed
+        lock(lk)
+        
+        # Second lock should succeed because it's reentrant
+        @test trylock(lk) === true
+        
+        # Verify we can unlock both
+        unlock(lk)
+        unlock(lk)
+        
+        # Final state should be unlocked
+        @test trylock(lk) === true  # Can acquire again
+        unlock(lk)
+    end
+end
