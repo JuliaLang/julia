@@ -182,7 +182,7 @@ unsafe_store!(p::Ptr{T}, x, order::Symbol) where {T} = atomic_pointerset(p, x is
 function unsafe_store!(p::Ptr, x, i::Integer, order::Symbol)
     unsafe_store!(p + (elsize(typeof(p)) * (Int(i) - 1)), x, order)
 end
-
+ 
 """
     unsafe_store!(p::Ptr{T}, x::T, [i::Integer=1])
 
