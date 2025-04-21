@@ -536,6 +536,7 @@ typedef struct {
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
     uint8_t _reserved:5;
+    _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
 } jl_typename_t;
