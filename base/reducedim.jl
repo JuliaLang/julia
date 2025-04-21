@@ -176,6 +176,10 @@ reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractA
 reducedim_init(f, op::typeof(and_all), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, true)
 reducedim_init(f, op::typeof(or_any), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, false)
 
+# These definitions are wrong in general; Cf. JuliaLang/julia#45562
+reducedim_init(f, op::typeof(&), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, true)
+reducedim_init(f, op::typeof(|), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, false)
+
 # specialize to make initialization more efficient for common cases
 
 let
