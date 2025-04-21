@@ -25,7 +25,7 @@ let lk = ReentrantLock()
     unlock(lk)
     @test t1.queue !== lk.cond_wait.waitq
     @test fetch(t1)
-end
+end 
 
 let e = Event(), started1 = Event(false), started2 = Event(false)
     for i = 1:3
