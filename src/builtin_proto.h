@@ -32,6 +32,7 @@ extern "C" {
     XX(get_binding_type,"get_binding_type") \
     XX(getfield,"getfield") \
     XX(getglobal,"getglobal") \
+    XX(globaldecl,"globaldecl") \
     XX(ifelse,"ifelse") \
     XX(intrinsic_call,"intrinsic_call") \
     XX(invoke,"invoke") \

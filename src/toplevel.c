@@ -347,15 +347,6 @@ done:
     JL_UNLOCK(&world_counter_lock);
 }
 
-void jl_eval_global_expr(jl_module_t *m, jl_expr_t *ex, int set_type)
-{
-    size_t i, l = jl_array_nrows(ex->args);
-    for (i = 0; i < l; i++) {
-        jl_value_t *arg = jl_exprarg(ex, i);
-        jl_declare_global(m, arg, NULL, 0);
-    }
-}
-
 // module referenced by (top ...) from within m
 // this is only needed because of the bootstrapping process:
 // - initially Base doesn't exist and top === Core
@@ -585,8 +576,6 @@ int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT
          ((jl_expr_t*)e)->head == jl_export_sym ||
          ((jl_expr_t*)e)->head == jl_public_sym ||
          ((jl_expr_t*)e)->head == jl_thunk_sym ||
-         ((jl_expr_t*)e)->head == jl_global_sym ||
-         ((jl_expr_t*)e)->head == jl_globaldecl_sym ||
          ((jl_expr_t*)e)->head == jl_const_sym ||
          ((jl_expr_t*)e)->head == jl_toplevel_sym ||
          ((jl_expr_t*)e)->head == jl_error_sym ||
@@ -600,12 +589,12 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
     jl_expr_t *ex = (jl_expr_t*)e;
     jl_sym_t *head = ex->head;
     if (head == jl_module_sym || head == jl_import_sym || head == jl_using_sym ||
-        head == jl_export_sym || head == jl_public_sym || head == jl_thunk_sym ||
+        head == jl_public_sym || head == jl_thunk_sym ||
         head == jl_toplevel_sym || head == jl_error_sym || head == jl_incomplete_sym ||
         head == jl_method_sym) {
         return 0;
     }
-    if (head == jl_global_sym || head == jl_const_sym) {
+    if (head == jl_const_sym) {
         size_t i, l = jl_array_nrows(ex->args);
         for (i = 0; i < l; i++) {
             jl_value_t *a = jl_exprarg(ex, i);
@@ -948,15 +937,6 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         if (any_new)
             jl_atomic_store_release(&jl_world_counter, new_world);
         JL_UNLOCK(&world_counter_lock);
-        JL_GC_POP();
-        return jl_nothing;
-    }
-    else if (head == jl_global_sym) {
-        size_t i, l = jl_array_nrows(ex->args);
-        for (i = 0; i < l; i++) {
-            jl_value_t *arg = jl_exprarg(ex, i);
-            jl_declare_global(m, arg, NULL, 0);
-        }
         JL_GC_POP();
         return jl_nothing;
     }
