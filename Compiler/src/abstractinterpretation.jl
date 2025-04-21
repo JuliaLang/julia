@@ -3728,8 +3728,9 @@ struct AbstractEvalBasicStatementResult
     end
 end
 
-function abstract_eval_basic_statement(interp::AbstractInterpreter, @nospecialize(stmt), sstate::StatementState, frame::InferenceState,
-                                       result::Union{Nothing,Future{RTEffects}}=nothing)
+@inline function abstract_eval_basic_statement(
+    interp::AbstractInterpreter, @nospecialize(stmt), sstate::StatementState, frame::InferenceState,
+    result::Union{Nothing,Future{RTEffects}}=nothing)
     rt = nothing
     exct = Bottom
     changes = nothing
