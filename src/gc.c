@@ -12,7 +12,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif 
 
 // Number of GC threads that may run parallel marking
 int jl_n_markthreads;

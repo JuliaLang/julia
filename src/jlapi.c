@@ -1031,7 +1031,7 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
     uv_setup_args(argc, argv);
 
     // No-op on non-windows
-    lock_low32();
+    lock_low32(); 
 
     libsupport_init();
     int lisp_prompt = (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0);
