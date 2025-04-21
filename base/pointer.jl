@@ -184,6 +184,40 @@ function unsafe_store!(p::Ptr, x, i::Integer, order::Symbol)
 end
 
 """
+    unsafe_store!(p::Ptr{T}, x::T, [i::Integer=1])
+
+Store a value to a pointer location with optional offset, bypassing safety checks.
+
+# Arguments
+- `p`: Pointer to memory location
+- `x`: Value to store (must match pointer type `T`)
+- `i`: Optional index offset (in units of `sizeof(T)`)
+
+# Safety
+- `p` must be a valid, aligned pointer to allocated memory of proper type
+- No bounds checking is performed
+- May cause undefined behavior or segmentation faults if misused
+- Not thread-safe - concurrent access may cause data races
+
+# Examples
+```jldoctest
+julia> a = [1, 2, 3]
+julia> ptr = pointer(a)
+julia> unsafe_store!(ptr, 4)  # Modify first element
+julia> a
+3-element Vector{Int64}:
+ 4
+ 2
+ 3
+
+julia> unsafe_store!(ptr, 5, 2)  # Modify second element
+julia> a
+3-element Vector{Int64}:
+ 4
+ 5
+ 3
+
+"""
     unsafe_modify!(p::Ptr{T}, op, x, [order::Symbol]) -> Pair
 
 These atomically perform the operations to get and set a memory address after applying
@@ -206,6 +240,20 @@ Incorrect usage may segfault your program.
 
 See also: [`modifyproperty!`](@ref Base.modifyproperty!), [`atomic`](@ref)
 """
+"""  
+    unsafe_load(ptr::Ptr{T}, i::Integer=1)  
+
+Dereference a pointer to type `T` at offset `i`.  
+
+# Safety  
+- `ptr` must be valid (e.g., not null or freed).  
+- `i` must be within allocated bounds.  
+- Incorrect use may cause **segmentation faults** or undefined behavior.  
+
+# Example  
+```jldoctest  
+julia> ptr = pointer([1, 2, 3])  
+julia> unsafe_load(ptr, 2) # Returns 2  
 function unsafe_modify!(p::Ptr, op, x, order::Symbol=:not_atomic)
     return atomic_pointermodify(p, op, x, order)
 end
