@@ -110,13 +110,13 @@ function Core._eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing
         end
         old_from = from
         from, name = eval_import_path(to, from, path, keyword)
-        asname = asname === nothing ? name : asname
 
         if name !== nothing
+            asname = asname === nothing ? name : asname
             check_macro_rename(name, asname, keyword)
             Core._import(to, from, asname, name, imported)
         else
-            Core._import(to, from, nameof(from))
+            Core._import(to, from, asname === nothing ? nameof(from) : asname)
         end
     end
 end
