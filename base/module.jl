@@ -26,7 +26,7 @@ end
 function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, keyword::String)
     isempty(path.args) && error("malformed import statement")
 
-    i = 1
+    i::Int = 1
     function next!()
         i <= length(path.args) || error("invalid module path")
         v = path.args[i]
