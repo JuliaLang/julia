@@ -954,24 +954,26 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
         }
     }
-    if (s->incremental && jl_is_code_instance(v)) {
+    if (jl_is_code_instance(v)) {
         jl_code_instance_t *ci = (jl_code_instance_t*)v;
         jl_method_instance_t *mi = jl_get_ci_mi(ci);
-        // make sure we don't serialize other reachable cache entries of foreign methods
-        // Should this now be:
-        // if (ci !in ci->defs->cache)
-        //     record_field_change((jl_value_t**)&ci->next, NULL);
-        // Why are we checking that the method/module this originates from is in_image?
-        // and then disconnect this CI?
-        if (jl_object_in_image((jl_value_t*)mi->def.value)) {
-            // TODO: if (ci in ci->defs->cache)
-            record_field_change((jl_value_t**)&ci->next, NULL);
+        if (s->incremental) {
+            // make sure we don't serialize other reachable cache entries of foreign methods
+            // Should this now be:
+            // if (ci !in ci->defs->cache)
+            //     record_field_change((jl_value_t**)&ci->next, NULL);
+            // Why are we checking that the method/module this originates from is in_image?
+            // and then disconnect this CI?
+            if (jl_object_in_image((jl_value_t*)mi->def.value)) {
+                // TODO: if (ci in ci->defs->cache)
+                record_field_change((jl_value_t**)&ci->next, NULL);
+            }
         }
         jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
         if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
             jl_method_t *def = mi->def.method;
             if (jl_is_method(def)) { // don't delete toplevel code
-                int is_relocatable = jl_is_code_info(inferred) ||
+                int is_relocatable = !s->incremental || jl_is_code_info(inferred) ||
                     (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
                 if (!is_relocatable) {
                     inferred = jl_nothing;
@@ -993,7 +995,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 if (inferred == jl_nothing) {
                     record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
                 }
-                else if (jl_is_string(inferred)) {
+                else if (s->incremental && jl_is_string(inferred)) {
                     // New roots for external methods
                     if (jl_object_in_image((jl_value_t*)def)) {
                         void **pfound = ptrhash_bp(&s->method_roots_index, def);
