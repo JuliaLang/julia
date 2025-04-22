@@ -426,7 +426,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
             if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
                 *has_ccall = 1;
             }
-            if (called == jl_builtin__typebody) { // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
+            if (called == BUILTIN(_typebody)) { // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
                 *has_defs = 1;
             }
         }
@@ -705,7 +705,7 @@ static void jl_eval_throw(jl_module_t *m, jl_value_t *exc, const char *filename,
 {
     jl_value_t *throw_ex = (jl_value_t*)jl_exprn(jl_call_sym, 2);
     JL_GC_PUSH1(&throw_ex);
-    jl_exprargset(throw_ex, 0, jl_builtin_throw);
+    jl_exprargset(throw_ex, 0, BUILTIN(throw));
     jl_exprargset(throw_ex, 1, exc);
     jl_toplevel_eval_flex(m, throw_ex, 0, 0, &filename, &lineno);
     JL_GC_POP();
