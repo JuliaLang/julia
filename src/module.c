@@ -1275,11 +1275,12 @@ JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *JL_NONNULL m, jl_
     jl_sym_t *name = asname ? asname : import->name;
     // TODO: this is a bit race-y with what error message we might print
     jl_binding_t *b = jl_get_module_binding(m, name, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, ct->world_age);
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (!jl_bkind_is_some_implicit(kind) && kind != PARTITION_KIND_DECLARED) {
         // Unlike regular constant declaration, we allow this as long as we eventually end up at a constant.
-        jl_walk_binding_inplace(&b, &bpart, ct->world_age);
+        jl_walk_binding_inplace(&b, &bpart, world);
         if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
             // Already declared (e.g. on another thread) or imported.
             if (bpart->restriction == (jl_value_t*)import)
