@@ -94,7 +94,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // trace_compile_timing
                         NULL, // safe_crash_log_file
                         0, // task_metrics
-                        60, // timeout_for_safepoint_straggler_s
+                        25, // timeout_for_safepoint_straggler_s
     };
     jl_options_initialized = 1;
 }
