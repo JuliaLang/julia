@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module abstractinterpreter_tests
+
 using Test
 
 include("setup_Compiler.jl")
@@ -549,3 +551,5 @@ let interp = InvokeInterp()
     ci = Compiler.typeinf_ext_toplevel(interp, mi, source_mode)
     @test invoke(f, ci, args...) == 2
 end
+
+end # module abstractinterpreter_tests

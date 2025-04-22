@@ -110,7 +110,7 @@ module MiniCassette
     end
 end
 
-using .MiniCassette
+import .MiniCassette: overdub, Ctx
 
 # Test #265 for Cassette
 f() = 1
