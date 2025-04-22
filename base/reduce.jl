@@ -29,8 +29,11 @@ mul_prod(x::BitSignedSmall, y::BitSignedSmall) = Int(x) * Int(y)
 mul_prod(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) * UInt(y)
 mul_prod(x::Real, y::Real)::Real = x * y
 
-and_all(x,y) = Bool(x && y)
-or_any(x,y) = Bool(x || y)
+and_all(x, y) = (x && y)::Bool
+or_any(x, y) = (x || y)::Bool
+# As a performance optimization, avoid runtime branches:
+and_all(x::Bool, y::Bool) = (x & y)::Bool
+or_any(x::Bool, y::Bool) = (x | y)::Bool
 
 ## foldl && mapfoldl
 
