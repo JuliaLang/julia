@@ -49,7 +49,7 @@ Standard library changes
 
 #### Random
 
-* it's now possible to efficiently create a new `Xoshiro` RNG from an existing one via `Random.fork`, which
+* It's now possible to efficiently create a new `Xoshiro` RNG from an existing one via `Random.fork`, which
   can be useful in parallel computations ([#58193]).
 
 #### REPL

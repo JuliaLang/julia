@@ -349,7 +349,7 @@ fork!(dst::Union{Xoshiro, TaskLocalRNG}, src::Union{Xoshiro, TaskLocalRNG}=TaskL
 
 Create a new `Xoshiro` object from `src`, in the same way that the task local RNG of a new
 task is created from the task local RNG of the parent task.
-This is the recommanded way to initialize a fresh RNG from an existing one.
+This is the recommended way to initialize a fresh RNG from an existing one.
 
 !!! note
     When `src` is of type `TaskLocalRNG`, this function is guaranteed to return an RNG of
