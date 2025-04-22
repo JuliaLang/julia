@@ -368,7 +368,7 @@ function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
     end
     ast.head === :quote && return mods # don't search if it's not going to be run during this eval
     if ast.head == :call
-        if length(ast.args) == 5 && ast.args[1] === GlobalRef(Core, :_eval_import)
+        if length(ast.args) == 5 && ast.args[1] === GlobalRef(Base, :_eval_import)
             ctx = ast.args[4]
             if ctx isa QuoteNode # i.e. `Foo: bar`
                 ctx = ctx.value
@@ -376,7 +376,7 @@ function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
                 ctx = ast.args[5].value
             end
             add!(ctx)
-        elseif length(ast.args) == 3 && ast.args[1] == GlobalRef(Core, :_eval_using)
+        elseif length(ast.args) == 3 && ast.args[1] == GlobalRef(Base, :_eval_using)
             add!(ast.args[3].value)
         end
     end

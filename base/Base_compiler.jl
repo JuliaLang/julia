@@ -2,6 +2,9 @@
 
 module Base
 
+Core._import(Base, Core, :_eval_import, :_eval_import, true)
+Core._import(Base, Core, :_eval_using, :_eval_using, true)
+
 using .Core.Intrinsics, .Core.IR
 
 # to start, we're going to use a very simple definition of `include`

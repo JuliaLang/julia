@@ -2962,12 +2962,12 @@
       `(block
         (toplevel-only import)
         ,.(if (eq? (caadr e) ':)
-              `((call (core _eval_import) (true) (thismodule)
+              `((call (top _eval_import) (true) (thismodule)
                       ,.(map (lambda (x) `(inert ,x)) (cdadr e)))
                 (latestworld))
               (map (lambda (x)
                      `(block
-                       (call (core _eval_import) (true) (thismodule) (null) (inert ,x))
+                       (call (top _eval_import) (true) (thismodule) (null) (inert ,x))
                        (latestworld)))
                    (cdr e)))))
 
@@ -2977,12 +2977,12 @@
       `(block
         (toplevel-only using)
         ,.(if (eq? (caadr e) ':)
-              `((call (core _eval_import) (false) (thismodule)
+              `((call (top _eval_import) (false) (thismodule)
                       ,.(map (lambda (x) `(inert ,x)) (cdadr e)))
                 (latestworld))
               (map (lambda (x)
                      `(block
-                       (call (core _eval_using) (thismodule) (inert ,x))
+                       (call (top _eval_using) (thismodule) (inert ,x))
                        (latestworld)))
                    (cdr e)))))
     ))

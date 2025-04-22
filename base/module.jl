@@ -2,10 +2,10 @@
 
 # Full-featured versions of _eval_import and _eval_using
 
-for m in methods(Core._eval_import)
+for m in methods(_eval_import)
     delete_method(m)
 end
-for m in methods(Core._eval_using)
+for m in methods(_eval_using)
     delete_method(m)
 end
 
@@ -95,7 +95,7 @@ using  A.B: C.d, e   => _eval_import(false, Main, Expr(:., :A, :B), Expr(:., :C,
 See also [`_import`](@ref Core._import).
 ```
 """
-function Core._eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
+function _eval_import(imported::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
     keyword = imported ? "import" : "using"
     fail() = error("malformed \"$keyword\" statement")
     from = from !== nothing ? eval_import_path_all(to, from, keyword) : nothing
@@ -134,7 +134,7 @@ using A.B            => _module_using(Main, Expr(:., :A, :B))
 
 See also [`_using`](@ref Core._using).
 """
-function Core._eval_using(to::Module, path::Expr)
+function _eval_using(to::Module, path::Expr)
     from = eval_import_path_all(to, path, "using")
     Core._using(to, from)
     is_package = length(path.args) == 1 && path.args[1] !== :.
