@@ -340,14 +340,13 @@ end
 function chomp(s::Union{String, SubString{String}})
     cu = codeunits(s)
     ncu = length(cu)
-    len = if ncu > 0 && @inbounds(cu[ncu]) == 0x0a
-        if ncu > 1 && @inbounds(cu[ncu-1]) == 0x0d
-            ncu - 2
-        else
-            ncu - 1
-        end
+    len = if iszero(ncu)
+        0
     else
-        ncu
+        has_lf = @inbounds(cu[ncu]) == 0x0a
+        two_bytes = ncu > 1
+        has_cr = has_lf & two_bytes & (@inbounds(cu[ncu - two_bytes]) == 0x0d)
+        ncu - (has_lf + has_cr)
     end
     off = s isa String ? 0 : s.offset
     par = s isa String ? s : s.string
