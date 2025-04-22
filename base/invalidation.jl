@@ -67,19 +67,21 @@ function invalidate_method_for_globalref!(gr::GlobalRef, method::Method, invalid
     binding = convert(Core.Binding, gr)
     if isdefined(method, :source)
         src = _uncompressed_ir(method)
-        old_stmts = src.code
         invalidate_all = should_invalidate_code_for_globalref(gr, src)
     end
     for mi in specializations(method)
         isdefined(mi, :cache) || continue
         ci = mi.cache
+        invalidated = false
         while true
             if ci.max_world > new_max_world && (invalidate_all || scan_edge_list(ci, binding))
                 ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), ci, new_max_world)
+                invalidated = true
             end
             isdefined(ci, :next) || break
             ci = ci.next
         end
+        invalidated && ccall(:jl_maybe_log_binding_invalidation, Cvoid, (Any,), mi)
     end
 end
 
@@ -130,6 +132,8 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                 end
             end
         end
+        # This assumes that we haven't gotten here unless something needed to be invalidated
+        ccall(:jl_maybe_log_binding_invalidation, Cvoid, (Any,), invalidated_bpart)
     end
 
     if need_to_invalidate_code || need_to_invalidate_export

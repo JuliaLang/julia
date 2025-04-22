@@ -436,6 +436,30 @@ idxi = findfirst(==(m58080i), logmeths)
 @test logmeths[end-1] == m58080s
 @test logmeths[end] == "jl_method_table_insert"
 
+# logging binding invalidations
+struct LogBindingInvalidation
+    x::Int
+end
+const glbi = LogBindingInvalidation(1)
+oLBI, oglbi = LogBindingInvalidation, glbi
+flbi() = @__MODULE__().glbi.x
+flbi()
+milbi = only(Base.specializations(only(methods(flbi))))
+logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+struct LogBindingInvalidation
+    x::Float64
+end
+const glbi = LogBindingInvalidation(2.0)
+@test flbi() === 2.0
+ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+@test milbi.cache.next.def ∈ logmeths
+T = logmeths[1].restriction
+@test T === oLBI
+@test logmeths[2] == "jl_maybe_log_binding_invalidation"
+T = logmeths[end-1].restriction
+@test T === oglbi
+@test logmeths[end] == "jl_maybe_log_binding_invalidation"
+
 # issue #50091 -- missing invoke edge affecting nospecialized dispatch
 module ExceptionUnwrapping
 @nospecialize
