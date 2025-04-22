@@ -9,20 +9,6 @@ for m in methods(Core._eval_using)
     delete_method(m)
 end
 
-function call_require(into::Module, name::Symbol)
-    # TODO: JL_TIMING(LOAD_IMAGE, LOAD_Require)
-    build_mode = Bool(Base.JLOptions().incremental) && Bool(ccall(:jl_generating_output, Cint, ()))
-    m = nothing
-    req_w = unsafe_load(cglobal(:jl_require_world, UInt))
-    cur_w, tls_w = get_world_counter(), tls_world_age()
-    if isdefined(Base, :require)
-        w = build_mode && req_w < tls_w ? req_w : cur_w
-        m = invoke_in_world(w, getglobal(Base, :require), into, name)
-    end
-    m isa Module || error("failed to load module $v")
-    m
-end
-
 function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, keyword::String)
     isempty(path.args) && error("malformed import statement")
 
@@ -46,7 +32,9 @@ function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, 
         elseif v === :Base
             m = Base
         else
-            m = call_require(at, v)
+            # TODO: JL_TIMING(LOAD_IMAGE, LOAD_Require)
+            m = require(at, v)
+            m isa Module || error("failed to load module $v")
         end
         i > lastindex(path.args) && return m, nothing
         v = next!()
