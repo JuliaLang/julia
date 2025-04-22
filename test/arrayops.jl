@@ -2908,6 +2908,11 @@ end
     @inferred accumulate(+, randn(3))
     @inferred accumulate(+, randn(3); init=1)
 
+    # inbounds propagation
+    Base.@propagate_inbounds op_bounds(a, b) = (1, 2)[a] + (1, 2)[b]
+    @test_throws BoundsError accumulate(op_bounds, 1:10)
+    @test_throws BoundsError Base.accumulate_pairwise(op_bounds, 1:10)
+
     # asymmetric operation
     op(x,y) = 2x+y
     @test accumulate(op, [10, 20, 30]) == [10, op(10, 20), op(op(10, 20), 30)] == [10, 40, 110]
