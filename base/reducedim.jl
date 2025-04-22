@@ -963,12 +963,12 @@ julia> A = [true false; true false]
  1  0
 
 julia> any!(Bool[1; 1], A)
-2-element Vector{Int64}:
+2-element Vector{Bool}:
  1
  1
 
 julia> any!(Bool[1 1], A)
-1×2 Matrix{Int64}:
+1×2 Matrix{Bool}:
  1  0
 ```
 """
