@@ -336,17 +336,23 @@ function chomp(s::AbstractString)
     (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
     return SubString(s, 1, prevind(s,j))
 end
-function chomp(s::String)
-    i = lastindex(s)
-    if i < 1 || codeunit(s,i) != 0x0a
-        return @inbounds SubString(s, 1, i)
-    elseif i < 2 || codeunit(s,i-1) != 0x0d
-        return @inbounds SubString(s, 1, prevind(s, i))
-    else
-        return @inbounds SubString(s, 1, prevind(s, i-1))
-    end
-end
 
+function chomp(s::Union{String, SubString{String}})
+    cu = codeunits(s)
+    ncu = length(cu)
+    len = if ncu > 0 && @inbounds(cu[ncu]) == 0x0a
+        if ncu > 1 && @inbounds(cu[ncu-1]) == 0x0d
+            ncu - 2
+        else
+            ncu - 1
+        end
+    else
+        ncu
+    end
+    off = s isa String ? 0 : s.offset
+    par = s isa String ? s : s.string
+    @inbounds @inline SubString{String}(par, off, len, Val{:noshift}())
+end
 """
     lstrip([pred=isspace,] str::AbstractString)::SubString
     lstrip(str::AbstractString, chars)::SubString
