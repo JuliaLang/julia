@@ -296,3 +296,69 @@ for FT in (Float16, Float32, Float64)
     @eval rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{CloseOpen01{$(FT)}}) =
         _uint2float(rand(r, $(UT)), $(FT))
 end
+
+
+## fork Xoshiro RNGs, in the same way that TaskLocalRNG() is forked upon task spawning
+## cf. jl_rng_split in src/task.c
+
+const xoshiro_split_a = (
+    0x214c146c88e47cb7,
+    0xa66d8cc21285aafa,
+    0x68c7ef2d7b1a54d4,
+    0xb053a7d7aa238c61,
+)
+
+const xoshiro_split_m = (
+    0xaef17502108ef2d9,
+    0xf34026eeb86766af,
+    0x38fd70ad58dd9fbb,
+    0x6677f9b93ab0c04d,
+)
+
+function _fork(src::Union{Xoshiro, TaskLocalRNG})
+    s0, s1, s2, s3, s4 = getstate(src)
+    x = s4
+    s4 = x * 0xd1342543de82ef95 + 1
+
+    state = map((s0, s1, s2, s3), xoshiro_split_a, xoshiro_split_m) do c, ai, mi
+        w = x ⊻ ai
+        c += w * (2*c + 1)
+        c ⊻= c >> ((c >> 59) + 5)
+        c *= mi
+        c ⊻= c >> 43
+        c
+    end
+    setstate!(src, (s0, s1, s2, s3, s4)) # only for s4, other values are unchanged
+    (state..., s4)
+end
+
+"""
+    Random.fork!(dst::Union{Xoshiro, TaskLocalRNG}, src::Union{Xoshiro, TaskLocalRNG} = TaskLocalRNG()) -> dst
+
+Equivalent to `copy!(dst, fork(src))`.
+See also [`fork`](@ref).
+
+!!! compat "Julia 1.13"
+    This function was introduced in Julia 1.13.
+"""
+fork!(dst::Union{Xoshiro, TaskLocalRNG}, src::Union{Xoshiro, TaskLocalRNG}=TaskLocalRNG()) =
+    setstate!(dst, _fork(src))
+
+"""
+    Random.fork(src::Union{Xoshiro, TaskLocalRNG} = TaskLocalRNG())::Xoshiro
+
+Create a new `Xoshiro` object from `src`, in the same way that the task local RNG of a new
+task is created from the task local RNG of the parent task.
+This is the recommanded way to initialize a fresh RNG from an existing one.
+
+!!! note
+    When `src` is of type `TaskLocalRNG`, this function is guaranteed to return an RNG of
+    type `Xoshiro` only as long as `Xoshiro` and `TaskLocalRNG` are implementing the same
+    underlying generator. It may change in the future.
+
+!!! compat "Julia 1.13"
+    This function was introduced in Julia 1.13.
+
+See also [`Random.fork!`](@ref).
+"""
+fork(src::Union{Xoshiro, TaskLocalRNG}=TaskLocalRNG()) = Xoshiro(_fork(src)...)

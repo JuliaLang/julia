@@ -1299,3 +1299,43 @@ end
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Random))
 end
+
+@testset "fork" begin
+    xx = copy(TaskLocalRNG())
+    x1 = Random.fork(xx)
+    x2 = fetch(@async copy(TaskLocalRNG()))
+    @test x1 isa Xoshiro && x2 isa Xoshiro
+    @test x1 == x2 # currently, equality involves all 5 UInt64 words of the state
+    @test xx == TaskLocalRNG()
+
+    x3 = Random.fork(TaskLocalRNG())
+    @test x3 isa Xoshiro
+    copy!(TaskLocalRNG(), xx) # reset its state
+    x4 = Random.fork(xx)
+    @test x4 isa Xoshiro
+    @test x3 == x4
+    copy!(xx, TaskLocalRNG())
+
+    @test xx == TaskLocalRNG() # check assumptions
+    x5 = Random.fork()
+    @test xx != TaskLocalRNG() # TaskLocalRNG() was forked off
+    copy!(TaskLocalRNG(), xx)
+    @test x5 == x4
+
+    x6 = Xoshiro(0, 0, 0, 0, 0)
+    @test x6 === Random.fork!(x6, xx)
+    copy!(xx, TaskLocalRNG())
+    @test x6 == x5
+    @test x6 === Random.fork!(x6, TaskLocalRNG())
+    copy!(TaskLocalRNG(), xx)
+    @test x6 == x5
+    @test xx == TaskLocalRNG() # check assumptions
+    @test x6 === Random.fork!(x6)
+    @test xx != TaskLocalRNG()
+    copy!(TaskLocalRNG(), xx)
+    @test x6 == x5
+
+    @test TaskLocalRNG() === Random.fork!(TaskLocalRNG(), copy(xx))
+    @test x6 === Random.fork!(x6, copy(xx))
+    @test TaskLocalRNG() == x6
+end
