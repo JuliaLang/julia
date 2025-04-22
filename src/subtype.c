@@ -1124,7 +1124,7 @@ static int subtype_tuple_varargs(
         !jl_has_free_typevars(xp0) && !jl_has_free_typevars(yp0)) {
         // fast path for repeated elements
     }
-    else if (e->Runions.depth == 0 && !jl_has_free_typevars(xp0) && !jl_has_free_typevars(yp0)) {
+    else if ((e->Runions.depth == 0 ? !jl_has_free_typevars(xp0) : jl_is_concrete_type(xp0)) && !jl_has_free_typevars(yp0)) {
         // fast path for separable sub-formulas
         if (!jl_subtype(xp0, yp0))
             return 0;
@@ -1287,7 +1287,7 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
              (yi == lastx && !vx && vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements
         }
-        else if (e->Runions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
+        else if ((e->Runions.depth == 0 ? !jl_has_free_typevars(xi) : jl_is_concrete_type(xi)) && !jl_has_free_typevars(yi)) {
             // fast path for separable sub-formulas
             if (!jl_subtype(xi, yi))
                 return 0;
