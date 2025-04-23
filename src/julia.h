@@ -2260,7 +2260,6 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
 JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *file, int line, size_t world,
                                   bool_t warn);
-JL_DLLEXPORT jl_value_t *jl_lower_expr_mod(jl_value_t *expr, jl_module_t *inmodule);
 // deprecated; use jl_parse_all
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *text, size_t text_len,
                                              const char *filename, size_t filename_len);

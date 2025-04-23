@@ -1359,11 +1359,6 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
     return result;
 }
 
-JL_DLLEXPORT jl_value_t *jl_lower_expr_mod(jl_value_t *expr, jl_module_t *inmodule)
-{
-    return jl_lower(expr, inmodule, "none", 0, ~(size_t)0, 0);
-}
-
 jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)
 {
     JL_TIMING(LOWERING, LOWERING);
