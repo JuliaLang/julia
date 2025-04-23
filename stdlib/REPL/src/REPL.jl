@@ -298,12 +298,12 @@ const install_packages_hooks = Any[]
 # N.B.: Any functions starting with __repl_entry cut off backtraces when printing in the REPL.
 # We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
 # code to run (and error).
-__repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
-    ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, Cint, Csize_t, Cint), ast, mod, toplevel_file[], toplevel_line[], typemax(Csize_t), 0)
-__repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
-    ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Cint}), mod, ast, 1, 1, toplevel_file, toplevel_line)
+__repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Csize_t}) =
+    Core._lower(ast, mod, toplevel_file[], toplevel_line[])[1]
+__repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Csize_t}) =
+    ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Csize_t}), mod, ast, 1, 1, toplevel_file, toplevel_line)
 
-function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Cint}(1))
+function toplevel_eval_with_hooks(mod::Module, @nospecialize(ast), toplevel_file=Ref{Ptr{UInt8}}(Base.unsafe_convert(Ptr{UInt8}, :REPL)), toplevel_line=Ref{Csize_t}(1))
     if !isexpr(ast, :toplevel)
         ast = invokelatest(__repl_entry_lower_with_loc, mod, ast, toplevel_file, toplevel_line)
         check_for_missing_packages_and_run_hooks(ast)
