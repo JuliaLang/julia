@@ -72,7 +72,10 @@ end
 const libgfortran = LazyLibrary(_libgfortran_path, dependencies=libgfortran_deps)
 const libstdcxx = LazyLibrary(_libstdcxx_path, dependencies=[libgcc_s])
 const libgomp = LazyLibrary(_libgomp_path)
-if @isdefined _libssp_path
+
+# Some installations (such as those from-source) may not have `libssp`
+# So let's do a compile-time check to see if we've got it.
+if @isdefined(_libssp_path) && isfile(string(_libssp_path))
     const libssp = LazyLibrary(_libssp_path)
 end
 
