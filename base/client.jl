@@ -442,11 +442,11 @@ function run_fallback_repl(interactive::Bool)
                 eval_user_input(stderr, ex, true)
             end
         else
+            if interactive
+                print("julia> ")
+                flush(stdout)
+            end
             while !eof(input)
-                if interactive
-                    print("julia> ")
-                    flush(stdout)
-                end
                 try
                     line = ""
                     ex = nothing
@@ -460,6 +460,10 @@ function run_fallback_repl(interactive::Bool)
                     eval_user_input(stderr, ex, true)
                 catch err
                     isa(err, InterruptException) ? print("\n\n") : rethrow()
+                end
+                if interactive
+                    print("julia> ")
+                    flush(stdout)
                 end
             end
         end
