@@ -103,7 +103,6 @@ JL_DLLEXPORT void jl_tag_newly_inferred_disable(void)
     jl_atomic_fetch_add(&jl_tag_newly_inferred_enabled, -1);  // FIXME underflow?
 }
 
-
 // Register array of newly-inferred MethodInstances
 // This gets called as the first step of Base.include_package_for_output
 JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
@@ -193,116 +192,6 @@ static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOIN
         ptrhash_put(&cache->type_in_worklist, (void*)v, result ? (void*)v : NULL);
 
     return result;
-}
-
-// When we infer external method instances, ensure they link back to the
-// package. Otherwise they might be, e.g., for external macros.
-// Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
-static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited, arraylist_t *stack, jl_query_cache *query_cache)
-{
-    jl_module_t *mod = mi->def.module;
-    if (jl_is_method(mod))
-        mod = ((jl_method_t*)mod)->module;
-    assert(jl_is_module(mod));
-    uint8_t is_precompiled = jl_atomic_load_relaxed(&mi->flags) & JL_MI_FLAGS_MASK_PRECOMPILED;
-    if (is_precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes, query_cache)) {
-        return 1;
-    }
-    if (!mi->backedges) {
-        return 0;
-    }
-    void **bp = ptrhash_bp(visited, mi);
-    // HT_NOTFOUND: not yet analyzed
-    // HT_NOTFOUND + 1: no link back
-    // HT_NOTFOUND + 2: does link back
-    // HT_NOTFOUND + 3: does link back, and included in new_ext_cis already
-    // HT_NOTFOUND + 4 + depth: in-progress
-    int found = (char*)*bp - (char*)HT_NOTFOUND;
-    if (found)
-        return found - 1;
-    arraylist_push(stack, (void*)mi);
-    int depth = stack->len;
-    *bp = (void*)((char*)HT_NOTFOUND + 4 + depth); // preliminarily mark as in-progress
-    jl_array_t *backedges = jl_mi_get_backedges(mi);
-    size_t i = 0, n = jl_array_nrows(backedges);
-    int cycle = depth;
-    while (i < n) {
-        jl_code_instance_t *be;
-        i = get_next_edge(backedges, i, NULL, &be);
-        if (!be)
-            continue;
-        JL_GC_PROMISE_ROOTED(be); // get_next_edge propagates the edge for us here
-        int child_found = has_backedge_to_worklist(jl_get_ci_mi(be), visited, stack, query_cache);
-        if (child_found == 1 || child_found == 2) {
-            // found what we were looking for, so terminate early
-            found = 1;
-            break;
-        }
-        else if (child_found >= 3 && child_found - 3 < cycle) {
-            // record the cycle will resolve at depth "cycle"
-            cycle = child_found - 3;
-            assert(cycle);
-        }
-    }
-    if (!found && cycle != depth)
-        return cycle + 3;
-    // If we are the top of the current cycle, now mark all other parts of
-    // our cycle with what we found.
-    // Or if we found a backedge, also mark all of the other parts of the
-    // cycle as also having an backedge.
-    while (stack->len >= depth) {
-        void *mi = arraylist_pop(stack);
-        bp = ptrhash_bp(visited, mi);
-        assert((char*)*bp - (char*)HT_NOTFOUND == 5 + stack->len);
-        *bp = (void*)((char*)HT_NOTFOUND + 1 + found);
-    }
-    return found;
-}
-
-// Given the list of CodeInstances that were inferred during the build, select
-// those that are (1) external, (2) still valid, (3) are inferred to be called
-// from the worklist or explicitly added by a `precompile` statement, and
-// (4) are the most recently computed result for that method.
-// These will be preserved in the image.
-static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_cache)
-{
-    if (list == NULL)
-        return NULL;
-    size_t i;
-    htable_t visited;
-    arraylist_t stack;
-    assert(jl_is_array(list));
-    size_t n0 = jl_array_nrows(list);
-    htable_new(&visited, n0);
-    arraylist_new(&stack, 0);
-    jl_array_t *new_ext_cis = jl_alloc_vec_any(0);
-    JL_GC_PUSH1(&new_ext_cis);
-    for (i = n0; i-- > 0; ) {
-        jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(list, i);
-        assert(jl_is_code_instance(ci));
-        jl_method_instance_t *mi = jl_get_ci_mi(ci);
-        jl_method_t *m = mi->def.method;
-        if (ci->owner == jl_nothing && jl_atomic_load_relaxed(&ci->inferred) && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
-            int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
-            assert(found == 0 || found == 1 || found == 2);
-            assert(stack.len == 0);
-            if (found == 1 && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) {
-                jl_array_ptr_1d_push(new_ext_cis, (jl_value_t*)ci);
-            }
-        }
-    }
-    htable_free(&visited);
-    arraylist_free(&stack);
-    JL_GC_POP();
-    // reverse new_ext_cis
-    n0 = jl_array_nrows(new_ext_cis);
-    jl_value_t **news = jl_array_data(new_ext_cis, jl_value_t*);
-    for (i = 0; i < n0; i++) {
-        jl_value_t *temp = news[i];
-        news[i] = news[n0 - i - 1];
-        news[n0 - i - 1] = temp;
-    }
-    return new_ext_cis;
 }
 
 // For every method:
