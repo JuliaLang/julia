@@ -1066,7 +1066,7 @@ end
 
 array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
 
-@noinline function _growbeg_internal!(a::Vector, delta::Int, len::Int)
+function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     @_terminates_locally_meta
     ref = a.ref
     mem = ref.mem
@@ -1116,12 +1116,12 @@ function _growbeg!(a::Vector, delta::Integer)
     if delta <= offset - 1
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
     else
-        _growbeg_internal!(a, delta, len)
+        @noinline _growbeg_internal!(a, delta, len)
     end
     return
 end
 
-@noinline function _growend_internal!(a::Vector, delta::Int, len::Int)
+function _growend_internal!(a::Vector, delta::Int, len::Int)
     ref = a.ref
     mem = ref.mem
     memlen = length(mem)
@@ -1169,7 +1169,7 @@ function _growend!(a::Vector, delta::Integer)
     setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
-        _growend_internal!(a, delta, len)
+        @noinline _growend_internal!(a, delta, len)
     end
     return
 end
