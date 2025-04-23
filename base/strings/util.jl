@@ -319,7 +319,7 @@ end
 """
     chomp(s::AbstractString)::SubString
 
-Remove a single trailing newline from a string.
+Remove a single trailing newline (i.e. "\\r\\n" or "\\n") from a string.
 
 See also [`chop`](@ref).
 
@@ -327,6 +327,12 @@ See also [`chop`](@ref).
 ```jldoctest
 julia> chomp("Hello\\n")
 "Hello"
+
+julia> chomp("World\\r\\n")
+"World"
+
+julia> chomp("Julia\\r\\n\\n")
+"Julia\\r\\n"
 ```
 """
 function chomp(s::AbstractString)
@@ -337,7 +343,7 @@ function chomp(s::AbstractString)
     return SubString(s, 1, prevind(s,j))
 end
 
-function chomp(s::Union{String, SubString{String}})
+@assume_effects :removable :foldable function chomp(s::Union{String, SubString{String}})
     cu = codeunits(s)
     ncu = length(cu)
     len = if iszero(ncu)
