@@ -421,6 +421,9 @@ end
 function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
     def = mi.def
     isa(def, Method) || return ci # don't compress toplevel code
+    can_discard_trees = may_discard_trees(interp)
+    cache_the_tree = !can_discard_trees || is_inlineable(ci)
+    cache_the_tree || return nothing
     may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
     return ci
 end
