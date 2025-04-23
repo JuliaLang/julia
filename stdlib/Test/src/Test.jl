@@ -1650,9 +1650,9 @@ trigonometric identities |    4      4  0.2s
 
 # `@testset for`
 
-When `@testset for` is used, the macro starts a new test for each iteration of
+When `@testset for` is used, the macro starts a new test set for each iteration of
 the provided loop. The semantics of each test set are otherwise identical to that
-of that `begin/end` case (as if used for each loop iteration).
+of the `begin/end` case (as if used for each loop iteration).
 
 # `@testset let`
 
