@@ -404,7 +404,11 @@ function transform_result_for_cache(interp::AbstractInterpreter, result::Inferen
     end
     if isa(src, CodeInfo)
         src.edges = edges
-        src.inlining_cost = inlining_cost !== nothing ? inlining_cost : compute_inlining_cost(interp, result)
+        if inlining_cost !== nothing
+            src.inlining_cost = inlining_cost
+        elseif may_optimize(interp)
+            src.inlining_cost = compute_inlining_cost(interp, result)
+        end
     end
     return src
 end
