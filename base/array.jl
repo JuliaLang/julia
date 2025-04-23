@@ -1066,6 +1066,41 @@ end
 
 array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when implemented, this should attempt to first expand mem
 
+@noinline function _growbeg_internal!(a::Vector, delta::Int, len::Int)
+    @_terminates_locally_meta
+    ref = a.ref
+    mem = ref.mem
+    offset = memoryrefoffset(ref)
+    newlen = len + delta
+    memlen = length(mem)
+    if offset + len - 1 > memlen || offset < 1
+        throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
+    end
+    # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
+    # the +1 is because I didn't want to have an off by 1 error.
+    newmemlen = max(overallocation(len), len + 2 * delta + 1)
+    newoffset = div(newmemlen - newlen, 2) + 1
+    # If there is extra data after the end of the array we can use that space so long as there is enough
+    # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
+    # Specifically, we want to ensure that we will only do this operation once before
+    # increasing the size of the array, and that we leave enough space at both the beginning and the end.
+    if newoffset + newlen < memlen
+        newoffset = div(memlen - newlen, 2) + 1
+        newmem = mem
+        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+        for j in offset:newoffset+delta-1
+            @inbounds _unsetindex!(mem, j)
+        end
+    else
+        newmem = array_new_memory(mem, newmemlen)
+        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+    end
+    if ref !== a.ref
+        throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+    end
+    setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
+end
+
 function _growbeg!(a::Vector, delta::Integer)
     @_noub_meta
     delta = Int(delta)
@@ -1081,42 +1116,12 @@ function _growbeg!(a::Vector, delta::Integer)
     if delta <= offset - 1
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
     else
-        @noinline (function()
-        @_terminates_locally_meta
-        memlen = length(mem)
-        if offset + len - 1 > memlen || offset < 1
-            throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
-        end
-        # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
-        # the +1 is because I didn't want to have an off by 1 error.
-        newmemlen = max(overallocation(len), len + 2 * delta + 1)
-        newoffset = div(newmemlen - newlen, 2) + 1
-        # If there is extra data after the end of the array we can use that space so long as there is enough
-        # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
-        # Specifically, we want to ensure that we will only do this operation once before
-        # increasing the size of the array, and that we leave enough space at both the beginning and the end.
-        if newoffset + newlen < memlen
-            newoffset = div(memlen - newlen, 2) + 1
-            newmem = mem
-            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-            for j in offset:newoffset+delta-1
-                @inbounds _unsetindex!(mem, j)
-            end
-        else
-            newmem = array_new_memory(mem, newmemlen)
-            unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-        end
-        if ref !== a.ref
-            @noinline throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
-        end
-        setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
-        end)()
+        _growbeg_internal!(a, delta, len)
     end
     return
 end
 
 @noinline function _growend_internal!(a::Vector, delta::Int, len::Int)
-    @_noub_meta
     ref = a.ref
     mem = ref.mem
     memlen = length(mem)
