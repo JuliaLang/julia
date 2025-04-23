@@ -248,9 +248,9 @@ const setproperty! = setfield!
 abstract type Number end
 abstract type Real     <: Number end
 abstract type AbstractFloat <: Real end
-abstract type Integer  <: Real end
-abstract type Signed   <: Integer end
-abstract type Unsigned <: Integer end
+abstract type Integer     <: Real end
+abstract type Signed      <: Integer end
+abstract type Unsigned    <: Integer end
 abstract type BitSigned   <: Signed end
 abstract type BitUnsigned <: Unsigned end
 

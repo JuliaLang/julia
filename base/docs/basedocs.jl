@@ -2255,6 +2255,28 @@ julia> unsigned(true)
 Unsigned
 
 """
+    Core.BitSigned <: Signed
+
+Internal abstract supertype for all builtin signed integers (`Int8`, `Int128`, ...)
+They are defined via `primitive type`, and most of the basic arithmetic operations
+defined on them are handled directly by LLVM.
+Subtypes of `Core.BitSigned` must behave like builtin signed integers in all respects,
+but their `sizeof` can be arbitrarily large, and can't be assumed to be a power of two.
+"""
+Core.BitSigned
+
+"""
+    Core.BitUnsigned <: Signed
+
+Internal abstract supertype for all builtin unsigned integers (`UInt8`, `UInt128`, ...)
+They are defined via `primitive type`, and most of the basic arithmetic operations
+defined on them are handled directly by LLVM.
+Subtypes of `Core.BitUnsigned` must behave like builtin unsigned integers in all respects,
+but their `sizeof` can be arbitrarily large, and can't be assumed to be a power of two.
+"""
+Core.BitUnsigned
+
+"""
     Bool <: Integer
 
 Boolean type, containing the values `true` and `false`.
