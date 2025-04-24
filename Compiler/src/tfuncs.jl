@@ -450,7 +450,12 @@ end
                     return Const(true)
                 end
             end
-        elseif (a1.name === _NAMEDTUPLE_NAME ? length(ns) : fieldcount(a1)) == 0
+        elseif a1.name === _NAMEDTUPLE_NAME
+            ns = a1.parameters[1]
+            if isa(ns, Tuple) && length(ns) == 0
+                return Const(false)
+            end
+        elseif fieldcount(a1) == 0
             return Const(false)
         end
     elseif isa(a1, Union)
