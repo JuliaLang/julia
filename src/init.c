@@ -23,9 +23,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#define DEFINE_BUILTIN_GLOBALS
 #include "builtin_proto.h"
-#undef DEFINE_BUILTIN_GLOBALS
 #include "threading.h"
 #include "julia_assert.h"
 #include "processor.h"
