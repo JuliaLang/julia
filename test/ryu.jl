@@ -367,7 +367,7 @@ end
     @test "1.23456" == Ryu.writeshortest(Float32(1.23456))
     @test "1.234567" == Ryu.writeshortest(Float32(1.234567))
     @test "1.2345678" == Ryu.writeshortest(Float32(1.2345678))
-    @test "1.23456735e-36" == Ryu.writeshortest(Float32(1.23456735e-36))
+    @test "1.23456735f-36" == Ryu.writeshortest(Float32(1.23456735e-36))
 end
 
 end # Float32
