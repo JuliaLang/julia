@@ -441,9 +441,11 @@ fma(x::Rational, y::Rational, z::Rational) = x*y+z
 <=(x::Rational, y::Integer ) = x.num <= widemul(x.den,y)
 <=(x::Integer , y::Rational) = widemul(x,y.den) <= y.num
 
+widen_float16(x) = x
+widen_float16(x::Float16) = widen(x)
 function ==(x::AbstractFloat, q::Rational)
     if isfinite(x)
-        (count_ones(q.den) == 1) & (x*q.den == q.num)
+        (count_ones(q.den) == 1) & (widen_float16(x)*q.den == q.num)
     else
         x == q.num/q.den
     end
