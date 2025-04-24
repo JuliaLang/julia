@@ -259,7 +259,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
         nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i in eachindex(R)
-            r = op(@inbounds(R[i]), mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
+            r = op(@inbounds(R[i]), mapreduce_impl(f, op, A, _InitialValue(), ibase+1, ibase+lsiz))
             @inbounds R[i] = r
             ibase += lsiz
         end
@@ -329,10 +329,10 @@ mapreduce(f, op, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...
     reduce(op, map(f, A, B...); kw...)
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
-    mapfoldl_impl(f, op, nt, A)
+    _mapreduce(f, op, IndexStyle(A), A, nt)
 
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
-    _mapreduce(f, op, IndexStyle(A), A)
+_mapreduce_dim(f, op, nt::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
+    _mapreduce(f, op, IndexStyle(A), A, nt)
 
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
     mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)

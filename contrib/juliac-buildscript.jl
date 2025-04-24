@@ -106,10 +106,10 @@ end
         reduce(op, map(f, A...); kw...)
 
     _mapreduce_dim(f::F, op::F2, nt, A::AbstractArrayOrBroadcasted, ::Colon) where {F, F2} =
-        mapfoldl_impl(f, op, nt, A)
+        _mapreduce(f, op, IndexStyle(A), A, nt)
 
-    _mapreduce_dim(f::F, op::F2, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) where {F, F2} =
-        _mapreduce(f, op, IndexStyle(A), A)
+    _mapreduce_dim(f::F, op::F2, nt::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) where {F, F2} =
+        _mapreduce(f, op, IndexStyle(A), A, nt)
 
     _mapreduce_dim(f::F, op::F2, nt, A::AbstractArrayOrBroadcasted, dims) where {F, F2} =
         mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
@@ -121,7 +121,7 @@ end
         reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
         mapreduce_first(f::F, op::F2, x) where {F,F2} = reduce_first(op, f(x))
 
-    _mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted) where {F,F2} = _mapreduce(f, op, IndexStyle(A), A)
+    _mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted, init) where {F,F2} = _mapreduce(f, op, IndexStyle(A), A, init)
     mapreduce_empty(::typeof(identity), op::F, T) where {F} = reduce_empty(op, T)
     mapreduce_empty(::typeof(abs), op::F, T) where {F}     = abs(reduce_empty(op, T))
     mapreduce_empty(::typeof(abs2), op::F, T) where {F}    = abs2(reduce_empty(op, T))
