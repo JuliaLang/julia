@@ -411,6 +411,8 @@ end
         if a1 === Module
             hasintersect(widenconst(sym), Symbol) || return Bottom
             # isa(sym, Const) case intercepted in abstract interpretation
+        elseif fieldcount(a1) == 0
+            return Const(false)
         elseif isa(sym, Const)
             val = sym.val
             if isa(val, Symbol)
