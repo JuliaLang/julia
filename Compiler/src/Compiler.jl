@@ -120,7 +120,7 @@ function is_return_type(Core.@nospecialize(f))
     return false
 end
 
-include("profiling.jl")
+include("timing.jl")
 include("sort.jl")
 
 # We don't include some.jl, but this definition is still useful.
