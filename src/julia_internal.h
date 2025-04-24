@@ -21,6 +21,9 @@
 #include <llvm-c/Orc.h>
 #include <llvm-version.h>
 
+#define STR(x) #x
+#define XSTR(x) STR(x)
+
 #if !defined(_WIN32)
 #include <unistd.h>
 #else
@@ -770,15 +773,10 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t);
 #define JL_CALLABLE(name)                                               \
     JL_DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
-JL_CALLABLE(jl_f_svec);
 JL_CALLABLE(jl_f_tuple);
-JL_CALLABLE(jl_f_intrinsic_call);
-JL_CALLABLE(jl_f_opaque_closure_call);
 void jl_install_default_signal_handlers(void);
 void restore_signals(void);
 void jl_install_thread_signal_handler(jl_ptls_t ptls);
-
-JL_DLLEXPORT jl_fptr_args_t jl_get_builtin_fptr(jl_datatype_t *dt);
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream);
@@ -806,7 +804,7 @@ jl_tupletype_t *jl_lookup_arg_tuple_type(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype);
 void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry);
 jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method, jl_tupletype_t *simpletype);
-jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED;
+void jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *name, jl_fptr_args_t fptr) JL_GC_DISABLED;
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
 int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_array_t *jl_find_free_typevars(jl_value_t *v);
