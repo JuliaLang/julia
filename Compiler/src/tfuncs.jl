@@ -452,7 +452,7 @@ end
             end
         elseif a1.name === _NAMEDTUPLE_NAME
             ns = a1.parameters[1]
-            if isa(ns, Tuple) && length(ns) == 0
+            if ns === ()
                 return Const(false)
             end
         elseif fieldcount(a1) == 0
