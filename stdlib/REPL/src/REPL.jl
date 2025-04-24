@@ -86,6 +86,7 @@ import .LineEdit:
     PromptState,
     mode_idx
 
+include("SyntaxUtil.jl")
 include("REPLCompletions.jl")
 using .REPLCompletions
 
@@ -297,7 +298,7 @@ const install_packages_hooks = Any[]
 # We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
 # code to run (and error).
 __repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
-    ccall(:jl_expand_with_loc, Any, (Any, Any, Ptr{UInt8}, Cint), ast, mod, toplevel_file[], toplevel_line[])
+    ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, Cint, Csize_t, Cint), ast, mod, toplevel_file[], toplevel_line[], typemax(Csize_t), 0)
 __repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
     ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Cint}), mod, ast, 1, 1, toplevel_file, toplevel_line)
 
@@ -799,27 +800,29 @@ end
 
 beforecursor(buf::IOBuffer) = String(buf.data[1:buf.ptr-1])
 
+# Convert inclusive-inclusive 1-based char indexing to inclusive-exclusive byte Region.
+to_region(s, r) = first(r)-1 => (length(r) > 0 ? nextind(s, last(r))-1 : first(r)-1)
+
 function complete_line(c::REPLCompletionProvider, s::PromptState, mod::Module; hint::Bool=false)
-    partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = completions(full, lastindex(partial), mod, c.modifiers.shift, hint)
+    ret, range, should_complete = completions(full, thisind(full, position(s)), mod, c.modifiers.shift, hint)
+    range = to_region(full, range)
     c.modifiers = LineEdit.Modifiers()
-    return unique!(LineEdit.NamedCompletion[named_completion(x) for x in ret]), partial[range], should_complete
+    return unique!(LineEdit.NamedCompletion[named_completion(x) for x in ret]), range, should_complete
 end
 
 function complete_line(c::ShellCompletionProvider, s::PromptState; hint::Bool=false)
-    # First parse everything up to the current position
-    partial = beforecursor(s.input_buffer)
     full = LineEdit.input_string(s)
-    ret, range, should_complete = shell_completions(full, lastindex(partial), hint)
-    return unique!(LineEdit.NamedCompletion[named_completion(x) for x in ret]), partial[range], should_complete
+    ret, range, should_complete = shell_completions(full, thisind(full, position(s)), hint)
+    range = to_region(full, range)
+    return unique!(LineEdit.NamedCompletion[named_completion(x) for x in ret]), range, should_complete
 end
 
 function complete_line(c::LatexCompletions, s; hint::Bool=false)
-    partial = beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)::String
-    ret, range, should_complete = bslash_completions(full, lastindex(partial), hint)[2]
-    return unique!(LineEdit.NamedCompletion[named_completion(x) for x in ret]), partial[range], should_complete
+    ret, range, should_complete = bslash_completions(full, thisind(full, position(s)), hint)[2]
+    range = to_region(full, range)
+    return unique!(LineEdit.NamedCompletion[named_completion(x) for x in ret]), range, should_complete
 end
 
 with_repl_linfo(f, repl) = f(outstream(repl))

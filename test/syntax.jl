@@ -4315,3 +4315,11 @@ module DoubleImport
     import Random
 end
 @test DoubleImport.Random === Test.Random
+
+# Expr(:method) returns the method
+let ex = @Meta.lower function return_my_method(); 1; end
+    code = ex.args[1].code
+    idx = findfirst(ex->Meta.isexpr(ex, :method) && length(ex.args) > 1, code)
+    code[end] = Core.ReturnNode(Core.SSAValue(idx))
+    @test isa(Core.eval(@__MODULE__, ex), Method)
+end
