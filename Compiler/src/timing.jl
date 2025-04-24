@@ -1,4 +1,4 @@
-if ccall(:jl_timings_enabled, Cint, ()) != 0
+if ccall(:jl_timing_enabled, Cint, ()) != 0
     function getzonedexpr(name::Union{Symbol, String}, ex::Expr, func::Symbol, file::Symbol, line::Integer, color::Integer)
         event = RefValue{Ptr{Cvoid}}(C_NULL)
         name = QuoteNode(Symbol(name))

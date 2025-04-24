@@ -16,7 +16,7 @@ jl_module_t *jl_module_root(jl_module_t *m);
 extern "C" {
 #endif
 
-JL_DLLEXPORT int jl_timings_enabled(void) {
+JL_DLLEXPORT int jl_timing_enabled(void) {
 #ifdef ENABLE_TIMINGS
     return 1;
 #else
