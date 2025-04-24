@@ -456,6 +456,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
     if (!jl_is_initialized()) {
         void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
         void *handle = jl_find_dynamic_library_by_addr(retaddr, 0);
+        jl_image_handle = handle;
         if (handle == NULL) {
             fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
                             "       (this should not happen, please file a bug report)\n");

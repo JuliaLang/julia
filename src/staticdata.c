@@ -3736,8 +3736,9 @@ JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle)
 {
     if (jl_sysimage_buf.kind != JL_IMAGE_KIND_NONE)
         return jl_sysimage_buf;
-
     jl_sysimage_buf = get_image_buf(handle, /* is_pkgimage */ 0);
+    if (jl_image_handle == NULL)
+        jl_image_handle = handle;
     return jl_sysimage_buf;
 }
 
