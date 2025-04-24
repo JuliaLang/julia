@@ -346,7 +346,7 @@ end
     @test "1.00014165e-36" == Ryu.writeshortest(1.00014165f-36)
     @test "200.0" == Ryu.writeshortest(200f0)
     @test "3.3554432e7" == Ryu.writeshortest(3.3554432f7)
-    @test "-1.00000075f-36" == Ryu.writeshortest(-1.00000075f-36) #longest Float32
+    @test "-1.00000075e-36" == Ryu.writeshortest(-1.00000075f-36) #longest Float32
 end
 
 @testset "LooksLikePow5" begin
@@ -367,7 +367,7 @@ end
     @test "1.23456" == Ryu.writeshortest(Float32(1.23456))
     @test "1.234567" == Ryu.writeshortest(Float32(1.234567))
     @test "1.2345678" == Ryu.writeshortest(Float32(1.2345678))
-    @test "1.23456735f-36" == Ryu.writeshortest(Float32(1.23456735e-36))
+    @test "1.23456735e-36" == Ryu.writeshortest(Float32(1.23456735e-36))
 end
 
 end # Float32
