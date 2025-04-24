@@ -1209,7 +1209,7 @@ let isdefined_tfunc(@nospecialize xs...) =
     end
     @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
     @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
-    @test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool=== Const(false)
+    @test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Const(false)
     @test isdefined_tfunc(Nothing, Any) === Const(false)
 end
 
