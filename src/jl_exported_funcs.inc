@@ -2,7 +2,6 @@
 
 #define JL_RUNTIME_EXPORTED_FUNCS(XX) \
     XX(jl_active_task_stack) \
-    XX(jl_add_standard_imports) \
     XX(jl_adopt_thread) \
     XX(jl_alignment) \
     XX(jl_alloc_array_1d) \
@@ -98,7 +97,6 @@
     XX(jl_cstr_to_string) \
     XX(jl_current_exception) \
     XX(jl_debug_method_invalidation) \
-    XX(jl_defines_or_exports_p) \
     XX(jl_deprecate_binding) \
     XX(jl_dlclose) \
     XX(jl_dlopen) \
@@ -127,11 +125,6 @@
     XX(jl_exit) \
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
-    XX(jl_expand) \
-    XX(jl_expand_stmt) \
-    XX(jl_expand_stmt_with_loc) \
-    XX(jl_expand_with_loc) \
-    XX(jl_expand_with_loc_warn) \
     XX(jl_field_index) \
     XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \
@@ -193,7 +186,6 @@
     XX(jl_get_ARCH) \
     XX(jl_get_backtrace) \
     XX(jl_get_binding) \
-    XX(jl_get_binding_for_method_def) \
     XX(jl_get_binding_wr) \
     XX(jl_check_binding_currently_writable) \
     XX(jl_get_cpu_name) \
@@ -292,6 +284,8 @@
     XX(jl_load_dynamic_library) \
     XX(jl_load_file_string) \
     XX(jl_lookup_code_address) \
+    XX(jl_lower) \
+    XX(jl_lower_expr_mod) \
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \
@@ -316,7 +310,6 @@
     XX(jl_module_names) \
     XX(jl_module_parent) \
     XX(jl_module_getloc) \
-    XX(jl_module_public) \
     XX(jl_module_public_p) \
     XX(jl_module_use) \
     XX(jl_module_using) \
@@ -515,7 +508,6 @@
     YY(jl_dump_function_ir) \
     YY(jl_dump_method_asm) \
     YY(jl_emit_codeinst_to_jit) \
-    YY(jl_extern_c) \
     YY(jl_get_llvmf_defn) \
     YY(jl_get_llvm_function) \
     YY(jl_get_llvm_module) \
@@ -532,7 +524,6 @@
     YY(jl_register_fptrs) \
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_codeinst) \
-    YY(jl_compile_extern_c) \
     YY(jl_teardown_codegen) \
     YY(jl_jit_total_bytes) \
     YY(jl_create_native) \

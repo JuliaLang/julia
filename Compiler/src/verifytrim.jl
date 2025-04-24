@@ -110,7 +110,7 @@ end
 function verify_print_error(io::IOContext{IO}, desc::CallMissing, parents::ParentMap)
     (; codeinst, codeinfo, sptypes, stmtidx, desc) = desc
     frames = verify_create_stackframes(codeinst, stmtidx, parents)
-    print(io, desc, " from ")
+    print(io, desc, " from statement ")
     verify_print_stmt(io, codeinfo, sptypes, stmtidx)
     Base.show_backtrace(io, frames)
     print(io, "\n\n")
@@ -181,6 +181,11 @@ function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspec
             if edge isa CodeInstance
                 haskey(parents, edge) || (parents[edge] = (codeinst, i))
                 edge in inspected && continue
+                edge_mi = get_ci_mi(edge)
+                if edge_mi === edge.def
+                    ci = get(caches, edge_mi, nothing)
+                    ci isa CodeInstance && continue # assume that only this_world matters for trim
+                end
             end
             # TODO: check for calls to Base.atexit?
         elseif isexpr(stmt, :call)
@@ -256,7 +261,7 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
     caches = IdDict{MethodInstance,CodeInstance}()
     errors = ErrorList()
     parents = ParentMap()
-    for i = 1:2:length(codeinfos)
+    for i = 1:length(codeinfos)
         item = codeinfos[i]
         if item isa CodeInstance
             push!(inspected, item)
@@ -268,14 +273,14 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
             end
         end
     end
-    for i = 1:2:length(codeinfos)
+    for i = 1:length(codeinfos)
         item = codeinfos[i]
         if item isa CodeInstance
             src = codeinfos[i + 1]::CodeInfo
             verify_codeinstance!(item, src, inspected, caches, parents, errors)
-        else
-            rt = item::Type
-            sig = codeinfos[i + 1]::Type
+        elseif item isa SimpleVector
+            rt = item[1]::Type
+            sig = item[2]::Type
             ptr = ccall(:jl_get_specialization1,
                         #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
                         sig, this_world, #= mt_cache =# 0)
@@ -287,7 +292,7 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
                     # TODO: should we find a way to indicate to the user that this gets called via ccallable?
                     # parent[ci] = something
                     asrt = ci.rettype
-                    ci in inspected
+                    true
                 else
                     false
                 end
@@ -326,17 +331,28 @@ function verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool)
         verify_print_error(io, desc, parents)
     end
 
+    ## TODO: compute and display the minimum and/or full call graph instead of merely the first parent stacktrace?
+    #for i = 1:length(codeinfos)
+    #    item = codeinfos[i]
+    #    if item isa CodeInstance
+    #        println(item, "::", item.rettype)
+    #    end
+    #end
+
     let severity = 0
-        if counts[2] > 0
-            print("Trim verify finished with ", counts[2], counts[2] == 1 ? " warning.\n\n" : " warnings.\n\n")
+        if counts[1] > 0 || counts[2] > 0
+            print("Trim verify finished with ")
+            print(counts[1], counts[1] == 1 ? " error" : " errors")
+            print(", ")
+            print(counts[2], counts[2] == 1 ? " warning" : " warnings")
+            print(".\n")
             severity = 2
         end
         if counts[1] > 0
-            print("Trim verify finished with ", counts[1], counts[1] == 1 ? " error.\n\n" : " errors.\n\n")
             severity = 1
         end
         # messages classified as errors are fatal, warnings are not
-        0 < severity <= 1 && !onlywarn && error("verify_typeinf_trim failed")
+        0 < severity <= 1 && !onlywarn && throw(Core.TrimFailure())
     end
     nothing
 end

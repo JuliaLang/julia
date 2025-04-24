@@ -1708,6 +1708,13 @@ end
         "[3.141592653589793 3.141592653589793; 3.141592653589793 3.141592653589793]"
 end
 
+@testset "`displaysize` return type inference" begin
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{})
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{IO})
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{IOContext})
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{Base.TTY})
+end
+
 @testset "Array printing with limited rows" begin
     arrstr = let buf = IOBuffer()
         function (A, rows)
@@ -2556,7 +2563,7 @@ end
     mktemp() do f, io
         redirect_stdout(io) do
             let io = IOBuffer()
-                for i = 1:10
+                for i = 1:length(Base.Compiler.ALL_PASS_NAMES)
                     # make sure we don't error on printing IRs at any optimization level
                     ir = only(Base.code_ircode(sin, (Float64,); optimize_until=i))[1]
                     @test try; show(io, ir); true; catch; false; end
@@ -2814,4 +2821,14 @@ end
 @testset "code printing of var\"keyword\" identifiers" begin
     @test_repr """:(var"do" = 1)"""
     @weak_test_repr """:(let var"let" = 1; var"let"; end)"""
+end
+
+# Issue 57076
+@testset "show raw string given var\"str\"" begin
+    # In show_sym, only backslashes and quotes should be escaped when printing var"this".
+    @test_repr """:(var"\$" = 1)"""
+    @test_repr """:(var"\\"" = 1)""" # var name is one quote character
+    @test_repr """:(var"~!@#\$%^&*[]_+?" = 1)"""
+    @test_repr """:(var"\a\b\t\n\v\f\r\e" = 1)"""
+    @test_repr """:(var"\x01\u03c0\U03c0" = 1)"""
 end

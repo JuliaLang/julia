@@ -223,10 +223,13 @@ function incomplete_tag(ex::Expr)
         return :none
     elseif isempty(ex.args)
         return :other
-    elseif ex.args[1] isa String
-        return fl_incomplete_tag(ex.args[1])
     else
-        return incomplete_tag(ex.args[1])
+        a = ex.args[1]
+        if a isa String
+            return fl_incomplete_tag(a)::Symbol
+        else
+            return incomplete_tag(a)::Symbol
+        end
     end
 end
 incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)

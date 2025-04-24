@@ -910,6 +910,26 @@ include("generic_map_tests.jl")
 generic_map_tests(map, map!)
 @test map!(-, [1]) == [-1]
 
+@testset "#30624" begin
+    ### unstructured
+    @test map!(+, ones(3), ones(3), ones(3), [1]) == [3, 1, 1]
+    @test map!(+, ones(3), [1], ones(3), ones(3)) == [3, 1, 1]
+    @test map!(+, [1], [1], [], []) == [1]
+    @test map!(+, [[1]], [1], [], []) == [[1]]
+
+    # TODO: decide if input axes & lengths should be validated
+    # @test_throws BoundsError map!(+, ones(1), ones(2))
+    # @test_throws BoundsError map!(+, ones(1), ones(2, 2))
+
+    @test map!(+, ones(3), view(ones(2, 3), 1:2, 2:3), ones(3)) == [2, 2, 2]
+    @test map!(+, ones(3), ones(2, 2), ones(3)) == [2, 2, 2]
+
+    ### structured (all mapped arguments are <:AbstractArray equal ndims > 1)
+    @test map!(+, ones(4), ones(2, 2), ones(2, 2)) == [2, 2, 2, 2]
+    @test map!(+, ones(4), ones(2, 2), ones(1, 2)) == [2, 2, 1, 1]
+    # @test_throws BoundsError map!(+, ones(3), ones(2, 2), ones(2, 2))
+end
+
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
 test_checksquare()
@@ -2225,5 +2245,28 @@ end
         @test isreal(F) == true
         G = ["a", "b", "c"]
         @test_throws MethodError isreal(G)
+    end
+end
+
+@testset "similar/reshape for AbstractOneTo" begin
+    A = [1,2]
+    @testset "reshape" begin
+        @test reshape(A, 2, SizedArrays.SOneTo(1)) == reshape(A, 2, 1)
+        @test reshape(A, Base.OneTo(2), SizedArrays.SOneTo(1)) == reshape(A, 2, 1)
+        @test reshape(A, SizedArrays.SOneTo(1), 2) == reshape(A, 1, 2)
+        @test reshape(A, SizedArrays.SOneTo(1), Base.OneTo(2)) == reshape(A, 1, 2)
+    end
+    @testset "similar" begin
+        b = similar(A, SizedArrays.SOneTo(1), big(2))
+        @test b isa Array{Int, 2}
+        @test size(b) == (1, 2)
+        b = similar(A, SizedArrays.SOneTo(1), Base.OneTo(2))
+        @test b isa Array{Int, 2}
+        @test size(b) == (1, 2)
+        b = similar(A, SizedArrays.SOneTo(1), 2, Base.OneTo(2))
+        @test b isa Array{Int, 3}
+        @test size(b) == (1, 2, 2)
+
+        @test_throws "no method matching $Int(::$Infinity)" similar(ones(2), OneToInf())
     end
 end

@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Prevent this from putting anything into the Main namespace
-@eval Core.Module() begin
+@eval Base module __precompile_script
 
 if Threads.maxthreadid() != 1
     @warn "Running this file with multiple Julia threads may lead to a build error" Threads.maxthreadid()
@@ -54,8 +54,6 @@ precompile(Tuple{typeof(Base.append!), Array{String, 1}, Array{String, 1}})
 precompile(Tuple{typeof(Base.join), Array{String, 1}, Char})
 precompile(Tuple{typeof(Base.getindex), Base.Dict{Any, Any}, Char})
 precompile(Tuple{typeof(Base.delete!), Base.Set{Any}, Char})
-precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Base.Dict{String, String}}}, Base.Dict{String, Any}})
-precompile(Tuple{typeof(Base.convert), Type{Base.Dict{String, Array{String, 1}}}, Base.Dict{String, Any}})
 
 # REPL
 precompile(isequal, (String, String))

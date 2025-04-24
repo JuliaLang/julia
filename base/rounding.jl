@@ -2,7 +2,7 @@
 
 module Rounding
 
-let fenv_consts = Vector{Cint}(undef, 9)
+let fenv_consts = Array{Cint,1}(undef, 9)
     ccall(:jl_get_fenv_consts, Cvoid, (Ptr{Cint},), fenv_consts)
     global const JL_FE_INEXACT = fenv_consts[1]
     global const JL_FE_UNDERFLOW = fenv_consts[2]
@@ -281,11 +281,20 @@ function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T
         y < x ? nextfloat(y) : y
     end
 end
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:FromZero}) where T<:AbstractFloat
+    y = convert(T,x)::T
+    if x < 0.0
+        y > x ? prevfloat(y) : y
+    else
+        y < x ? nextfloat(y) : y
+    end
+end
+
 
 # Default definitions
 
 """
-    set_zero_subnormals(yes::Bool) -> Bool
+    set_zero_subnormals(yes::Bool)::Bool
 
 If `yes` is `false`, subsequent floating-point operations follow rules for IEEE arithmetic
 on subnormal values ("denormals"). Otherwise, floating-point operations are permitted (but
@@ -302,7 +311,7 @@ break identities such as `(x-y==0) == (x==y)`.
 set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
 
 """
-    get_zero_subnormals() -> Bool
+    get_zero_subnormals()::Bool
 
 Return `false` if operations on subnormal floating-point values ("denormals") obey rules
 for IEEE arithmetic, and `true` if they might be converted to zeros.

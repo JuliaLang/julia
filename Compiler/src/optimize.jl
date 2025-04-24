@@ -1013,19 +1013,21 @@ end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
+    @zone "CC: OPTIMIZER" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
     return finish(interp, opt, ir, caller)
 end
 
-macro pass(name, expr)
+const ALL_PASS_NAMES = String[]
+macro pass(name::String, expr)
     optimize_until = esc(:optimize_until)
     stage = esc(:__stage__)
-    macrocall = :(@timeit $(esc(name)) $(esc(expr)))
+    macrocall = :(@zone $name $(esc(expr)))
     macrocall.args[2] = __source__  # `@timeit` may want to use it
+    push!(ALL_PASS_NAMES, name)
     quote
         $macrocall
-        matchpass($optimize_until, ($stage += 1), $(esc(name))) && $(esc(:(@goto __done__)))
+        matchpass($optimize_until, ($stage += 1), $name) && $(esc(:(@goto __done__)))
     end
 end
 
@@ -1036,24 +1038,29 @@ matchpass(::Nothing, _, _) = false
 function run_passes_ipo_safe(
     ci::CodeInfo,
     sv::OptimizationState,
-    optimize_until = nothing,  # run all passes by default
-)
+    optimize_until::Union{Nothing, Int, String} = nothing)  # run all passes by default
+    if optimize_until isa String && !contains_is(ALL_PASS_NAMES, optimize_until)
+        error("invalid `optimize_until` argument, no such optimization pass")
+    elseif optimize_until isa Int && (optimize_until < 1 || optimize_until > length(ALL_PASS_NAMES))
+        error("invalid `optimize_until` argument, no such optimization pass")
+    end
+
     __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
-    @pass "convert"   ir = convert_to_ircode(ci, sv)
-    @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
+    @pass "CC: CONVERT"   ir = convert_to_ircode(ci, sv)
+    @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @pass "compact 1" ir = compact!(ir)
-    @pass "Inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
-    # @timeit "verify 2" verify_ir(ir)
-    @pass "compact 2" ir = compact!(ir)
-    @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    @pass "CC: COMPACT_1" ir = compact!(ir)
+    @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    # @zone "CC: VERIFY 2" verify_ir(ir)
+    @pass "CC: COMPACT_2" ir = compact!(ir)
+    @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
+    @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
     if made_changes
-        @pass "compact 3" ir = compact!(ir, true)
+        @pass "CC: COMPACT_3" ir = compact!(ir, true)
     end
     if is_asserts()
-        @timeit "verify 3" begin
+        @zone "CC: VERIFY_3" begin
             verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp), sv.linfo)
             verify_linetable(ir.debuginfo, length(ir.stmts))
         end
@@ -1314,10 +1321,10 @@ end
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     svdef = sv.linfo.def
-    @timeit "domtree 1" domtree = construct_domtree(ir)
+    @zone "CC: DOMTREE_1" domtree = construct_domtree(ir)
     defuse_insts = scan_slot_def_use(Int(ci.nargs), ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
+    @zone "CC: CONSTRUCT_SSA" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
     resize!(ir.argtypes, ci.nargs)

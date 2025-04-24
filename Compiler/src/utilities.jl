@@ -4,7 +4,7 @@
 # generic #
 ###########
 
-if !@isdefined(var"@timeit")
+if !@isdefined(var"@zone")
     # This is designed to allow inserting timers when loading a second copy
     # of inference for performing performance experiments.
     macro timeit(args...)
@@ -174,14 +174,14 @@ isa_compileable_sig(m::ABIOverride) = false
 has_typevar(@nospecialize(t), v::TypeVar) = ccall(:jl_has_typevar, Cint, (Any, Any), t, v) != 0
 
 """
-    is_declared_inline(method::Method) -> Bool
+    is_declared_inline(method::Method)::Bool
 
 Check if `method` is declared as `@inline`.
 """
 is_declared_inline(method::Method) = _is_declared_inline(method, true)
 
 """
-    is_declared_noinline(method::Method) -> Bool
+    is_declared_noinline(method::Method)::Bool
 
 Check if `method` is declared as `@noinline`.
 """
@@ -195,14 +195,14 @@ function _is_declared_inline(method::Method, inline::Bool)
 end
 
 """
-    is_aggressive_constprop(method::Union{Method,CodeInfo}) -> Bool
+    is_aggressive_constprop(method::Union{Method,CodeInfo})::Bool
 
 Check if `method` is declared as `Base.@constprop :aggressive`.
 """
 is_aggressive_constprop(method::Union{Method,CodeInfo}) = method.constprop == 0x01
 
 """
-    is_no_constprop(method::Union{Method,CodeInfo}) -> Bool
+    is_no_constprop(method::Union{Method,CodeInfo})::Bool
 
 Check if `method` is declared as `Base.@constprop :none`.
 """
@@ -329,7 +329,7 @@ end
 
 inlining_enabled() = (JLOptions().can_inline == 1)
 
-function coverage_enabled(m::Module)
+function instrumentation_enabled(m::Module, only_if_affects_optimizer::Bool)
     generating_output() && return false # don't alter caches
     cov = JLOptions().code_coverage
     if cov == 1 # user
@@ -339,6 +339,17 @@ function coverage_enabled(m::Module)
         return true
     elseif cov == 2 # all
         return true
+    end
+    if !only_if_affects_optimizer
+        log = JLOptions().malloc_log
+        if log == 1 # user
+            m = moduleroot(m)
+            m === Core && return false
+            isdefined(Main, :Base) && m === Main.Base && return false
+            return true
+        elseif log == 2 # all
+            return true
+        end
     end
     return false
 end
@@ -351,3 +362,5 @@ function inbounds_option()
 end
 
 is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+
+_time_ns() = ccall(:jl_hrtime, UInt64, ())

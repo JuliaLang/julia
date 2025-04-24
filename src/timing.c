@@ -16,6 +16,30 @@ jl_module_t *jl_module_root(jl_module_t *m);
 extern "C" {
 #endif
 
+JL_DLLEXPORT int jl_tracy_enabled(void) {
+#ifdef USE_TRACY
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+JL_DLLEXPORT int jl_ittapi_enabled(void) {
+#ifdef USE_ITTAPI
+    return 1;
+#else
+    return 0;
+#endif
+}
+
+JL_DLLEXPORT int jl_nvtx_enabled(void) {
+#ifdef USE_NVTX
+    return 1;
+#else
+    return 0;
+#endif
+}
+
 #ifdef ENABLE_TIMINGS
 
 #ifndef HAVE_TIMING_SUPPORT

@@ -472,6 +472,35 @@ function gc_bytes()
     b[]
 end
 
+function allocated(f, args::Vararg{Any,N}) where {N}
+    b0 = Ref{Int64}(0)
+    b1 = Ref{Int64}(0)
+    Base.gc_bytes(b0)
+    f(args...)
+    Base.gc_bytes(b1)
+    return b1[] - b0[]
+end
+only(methods(allocated)).called = 0xff
+
+function allocations(f, args::Vararg{Any,N}) where {N}
+    stats = Base.gc_num()
+    f(args...)
+    diff = Base.GC_Diff(Base.gc_num(), stats)
+    return Base.gc_alloc_count(diff)
+end
+only(methods(allocations)).called = 0xff
+
+function is_simply_call(@nospecialize ex)
+    Meta.isexpr(ex, :call) || return false
+    for a in ex.args
+        a isa QuoteNode && continue
+        a isa Symbol && continue
+        Base.is_self_quoting(a) && continue
+        return false
+    end
+    return true
+end
+
 """
     @allocated
 
@@ -487,15 +516,11 @@ julia> @allocated rand(10^6)
 ```
 """
 macro allocated(ex)
-    quote
-        Experimental.@force_compile
-        local b0 = Ref{Int64}(0)
-        local b1 = Ref{Int64}(0)
-        gc_bytes(b0)
-        $(esc(ex))
-        gc_bytes(b1)
-        b1[] - b0[]
+    if !is_simply_call(ex)
+        ex = :((() -> $ex)())
     end
+    pushfirst!(ex.args, GlobalRef(Base, :allocated))
+    return esc(ex)
 end
 
 """
@@ -516,14 +541,13 @@ julia> @allocations rand(10^6)
     This macro was added in Julia 1.9.
 """
 macro allocations(ex)
-    quote
-        Experimental.@force_compile
-        local stats = Base.gc_num()
-        $(esc(ex))
-        local diff = Base.GC_Diff(Base.gc_num(), stats)
-        Base.gc_alloc_count(diff)
+    if !is_simply_call(ex)
+        ex = :((() -> $ex)())
     end
+    pushfirst!(ex.args, GlobalRef(Base, :allocations))
+    return esc(ex)
 end
+
 
 """
     @lock_conflicts
@@ -643,33 +667,36 @@ end
 # here so it's possible to time/trace all imports, including InteractiveUtils and its deps
 macro time_imports(ex)
     quote
-        try
-            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
-            $(esc(ex))
-        finally
+        Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+        @__tryfinally(
+            # try
+            $(esc(ex)),
+            # finally
             Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
-        end
+        )
     end
 end
 
 macro trace_compile(ex)
     quote
-        try
-            ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
-            $(esc(ex))
-        finally
+        ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+        @__tryfinally(
+            # try
+            $(esc(ex)),
+            # finally
             ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
-        end
+        )
     end
 end
 
 macro trace_dispatch(ex)
     quote
-        try
-            ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
-            $(esc(ex))
-        finally
+        ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+        @__tryfinally(
+            # try
+            $(esc(ex)),
+            # finally
             ccall(:jl_force_trace_dispatch_disable, Cvoid, ())
-        end
+        )
     end
 end

@@ -1669,10 +1669,11 @@ end
 
 # Implementation of generated functions
 function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
-    ci = ccall(:jl_expand, Any, (Any, Any), ex, defmod)
+    ci = ccall(:jl_lower_expr_mod, Any, (Any, Any), ex, defmod)
     if !isa(ci, CodeInfo)
         if isa(ci, Expr) && ci.head === :error
-            error("syntax: $(ci.args[1])")
+            msg = ci.args[1]
+            error(msg isa String ? strcat("syntax: ", msg) : msg)
         end
         error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.")
     end

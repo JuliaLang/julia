@@ -17,6 +17,9 @@ task.rngState3 = 0x3a77f7189200c20b
 task.rngState4 = 0x5502376d099035ae
 uuid_tuple = (UInt64(0), UInt64(0))
 ccall(:jl_set_module_uuid, Cvoid, (Any, NTuple{2, UInt64}), Base.__toplevel__, uuid_tuple)
+if Base.get_bool_env("JULIA_USE_FLISP_PARSER", false) === false
+    Base.JuliaSyntax.enable_in_core!()
+end
 
 # Patch methods in Core and Base
 
@@ -33,9 +36,6 @@ end
     JuliaSyntax.enable_in_core!() = nothing
     init_active_project() = ACTIVE_PROJECT[] = nothing
     set_active_project(projfile::Union{AbstractString,Nothing}) = ACTIVE_PROJECT[] = projfile
-    init_depot_path() = nothing
-    init_load_path() = nothing
-    init_active_project() = nothing
     disable_library_threading() = nothing
     start_profile_listener() = nothing
     invokelatest_trimmed(f, args...; kwargs...) = f(args...; kwargs...)
@@ -197,6 +197,7 @@ let mod = Base.include(Base.__toplevel__, inputfile)
     #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
     entrypoint(Base.task_done_hook, (Task,))
     entrypoint(Base.wait, ())
+    entrypoint(Base.wait_forever, ())
     entrypoint(Base.trypoptask, (Base.StickyWorkqueue,))
     entrypoint(Base.checktaskempty, ())
     if add_ccallables
@@ -205,14 +206,11 @@ let mod = Base.include(Base.__toplevel__, inputfile)
 end
 
 # Additional method patches depending on whether user code loads certain stdlibs
-let loaded = Base.loaded_modules_array()
-    function find_loaded_module(name)
-        idx = findfirst((m) -> Symbol(m) === name, loaded)
-        idx === nothing && return nothing
-        return loaded[idx]
-    end
+let
+    find_loaded_root_module(key::Base.PkgId) = Base.maybe_root_module(key)
 
-    SparseArrays = find_loaded_module(:SparseArrays)
+    SparseArrays = find_loaded_root_module(Base.PkgId(
+        Base.UUID("2f01184e-e22b-5df5-ae63-d93ebab69eaf"), "SparseArrays"))
     if SparseArrays !== nothing
         @eval SparseArrays.CHOLMOD begin
             function __init__()
@@ -228,10 +226,20 @@ let loaded = Base.loaded_modules_array()
         end
     end
 
-    Artifacts = find_loaded_module(:Artifacts)
+    Artifacts = find_loaded_root_module(Base.PkgId(
+        Base.UUID("56f22d72-fd6d-98f1-02f0-08ddc0907c33"), "Artifacts"))
     if Artifacts !== nothing
         @eval Artifacts begin
-            function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, _::Val{lazyartifacts}) where lazyartifacts
+            function _artifact_str(
+                __module__,
+                artifacts_toml,
+                name,
+                path_tail,
+                artifact_dict,
+                hash,
+                platform,
+                _::Val{LazyArtifacts}
+            ) where LazyArtifacts
                 # If the artifact exists, we're in the happy path and we can immediately
                 # return the path to the artifact:
                 dirs = artifacts_dirs(bytes2hex(hash.bytes))
@@ -245,28 +253,32 @@ let loaded = Base.loaded_modules_array()
         end
     end
 
-    Pkg = find_loaded_module(:Pkg)
+    Pkg = find_loaded_root_module(Base.PkgId(
+        Base.UUID("44cfe95a-1eb2-52ea-b672-e2afdf69b78f"), "Pkg"))
     if Pkg !== nothing
         @eval Pkg begin
             __init__() = rand() #TODO, methods that do nothing don't get codegened
         end
     end
 
-    StyledStrings = find_loaded_module(:StyledStrings)
+    StyledStrings = find_loaded_root_module(Base.PkgId(
+        Base.UUID("f489334b-da3d-4c2e-b8f0-e476e12c162b"), "StyledStrings"))
     if StyledStrings !== nothing
         @eval StyledStrings begin
             __init__() = rand()
         end
     end
 
-    Markdown = find_loaded_module(:Markdown)
+    Markdown = find_loaded_root_module(Base.PkgId(
+        Base.UUID("d6f4376e-aef5-505a-96c1-9c027394607a"), "Markdown"))
     if Markdown !== nothing
         @eval Markdown begin
             __init__() = rand()
         end
     end
 
-    JuliaSyntaxHighlighting = find_loaded_module(:JuliaSyntaxHighlighting)
+    JuliaSyntaxHighlighting = find_loaded_root_module(Base.PkgId(
+        Base.UUID("ac6e5ff7-fb65-4e79-a425-ec3bc9c03011"), "JuliaSyntaxHighlighting"))
     if JuliaSyntaxHighlighting !== nothing
         @eval JuliaSyntaxHighlighting begin
             __init__() = rand()
