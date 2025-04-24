@@ -382,8 +382,10 @@ end
 keys(nt::NamedTuple{names}) where {names} = names::Tuple{Vararg{Symbol}}
 values(nt::NamedTuple) = Tuple(nt)
 haskey(nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key)
+get(::NamedTuple{}, key::Union{Integer, Symbol}, default) = default
 get(nt::NamedTuple, key::Union{Integer, Symbol}, default) = isdefined(nt, key) ? getfield(nt, key) : default
 get(f::Callable, nt::NamedTuple, key::Union{Integer, Symbol}) = isdefined(nt, key) ? getfield(nt, key) : f()
+get(f::Callable, ::NamedTuple{}, key::Union{Integer, Symbol}) = f()
 tail(t::NamedTuple{names}) where names = NamedTuple{tail(names::Tuple)}(t)
 front(t::NamedTuple{names}) where names = NamedTuple{front(names::Tuple)}(t)
 reverse(nt::NamedTuple) = NamedTuple{reverse(keys(nt))}(reverse(values(nt)))
