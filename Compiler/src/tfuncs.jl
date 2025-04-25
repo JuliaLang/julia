@@ -451,7 +451,7 @@ end
                 end
             end
         # datatype_fieldcount is what `fieldcount` uses internally
-        # and returns nothing (!==0) for non-definite field counts rat
+        # and returns nothing (!==0) for non-definite field counts.
         elseif datatype_fieldcount(a1) === 0
             return Const(false)
         end
