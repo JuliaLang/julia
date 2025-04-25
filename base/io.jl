@@ -277,13 +277,13 @@ julia> io = IOBuffer();
 julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
 56
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization. It has many members."
 
 julia> write(io, "Sometimes those members") + write(io, " write documentation.")
 44
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Sometimes those members write documentation."
 ```
 User-defined plain-data types without `write` methods can be written when wrapped in a `Ref`:
@@ -544,7 +544,7 @@ julia> rm("my_file.txt")
 """
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
 readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
-readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(_unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...)))
+readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = takestring!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
 readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
 
 
@@ -566,10 +566,10 @@ Similar to [`readuntil`](@ref), which returns a `String`; in contrast,
 ```jldoctest
 julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
-julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", 'L')))
+julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", 'L'))
 "Julia"
 
-julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true)))
+julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true))
 "JuliaLang is a GitHub organization."
 
 julia> rm("my_file.txt")
@@ -616,8 +616,7 @@ Logan
 """
 readline(filename::AbstractString; keep::Bool=false) =
     open(io -> readline(io; keep), filename)
-readline(s::IO=stdin; keep::Bool=false) =
-    String(_unsafe_take!(copyline(IOBuffer(sizehint=16), s; keep)))
+readline(s::IO=stdin; keep::Bool=false) = takestring!(copyline(IOBuffer(sizehint=16), s; keep))
 
 """
     copyline(out::IO, io::IO=stdin; keep::Bool=false)
@@ -642,10 +641,10 @@ See also [`copyuntil`](@ref) for reading until more general delimiters.
 ```jldoctest
 julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
-julia> String(take!(copyline(IOBuffer(), "my_file.txt")))
+julia> takestring!(copyline(IOBuffer(), "my_file.txt"))
 "JuliaLang is a GitHub organization."
 
-julia> String(take!(copyline(IOBuffer(), "my_file.txt", keep=true)))
+julia> takestring!(copyline(IOBuffer(), "my_file.txt", keep=true))
 "JuliaLang is a GitHub organization.\\n"
 
 julia> rm("my_file.txt")
@@ -1290,7 +1289,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
         empty!(chunks) # will cause next iteration to terminate
         seekend(r.itr.stream) # reposition to end of stream for isdone
-        s = String(_unsafe_take!(buf))
+        s = unsafe_takestring!(buf)
     else
         # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
         if ichunk == jchunk # common case: current and previous newline in same chunk
@@ -1307,7 +1306,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             end
             write(buf, view(chunks[jchunk], 1:jnewline))
             buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
-            s = String(_unsafe_take!(buf))
+            s = unsafe_takestring!(buf)
 
             # overwrite obsolete chunks (ichunk+1:jchunk)
             i = jchunk
