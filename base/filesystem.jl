@@ -139,7 +139,7 @@ export File,
 import .Base:
     IOError, _UVError, _sizeof_uv_fs, check_open, close, closewrite, eof, eventloop, fd, isopen,
     bytesavailable, position, read, read!, readbytes!, readavailable, seek, seekend, show,
-    skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error,
+    skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error, _uv_error,
     setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize,
     isexecutable, isreadable, iswritable, MutableDenseArrayType, truncate
 
