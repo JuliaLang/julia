@@ -622,7 +622,7 @@ static const char *absformat(const char *in)
     return out;
 }
 
-static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
+static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir)
 {
     // this function resolves the paths in jl_options to absolute file locations as needed
     // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
@@ -642,11 +642,13 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     jl_options.julia_bin = (char*)malloc_s(path_size + 1);
     memcpy((char*)jl_options.julia_bin, free_path, path_size);
     ((char*)jl_options.julia_bin)[path_size] = '\0';
-    if (!jl_options.julia_bindir) {
+    if (!julia_bindir) {
         jl_options.julia_bindir = getenv("JULIA_BINDIR");
         if (!jl_options.julia_bindir) {
             jl_options.julia_bindir = dirname(free_path);
         }
+    } else {
+        jl_options.julia_bindir = julia_bindir;
     }
     if (jl_options.julia_bindir)
         jl_options.julia_bindir = absrealpath(jl_options.julia_bindir, 0);
@@ -721,8 +723,85 @@ static void restore_fp_env(void)
         jl_error("Failed to configure floating point environment");
     }
 }
+static NOINLINE void _finish_julia_init(jl_image_buf_t sysimage, jl_ptls_t ptls, jl_task_t *ct)
+{
+    JL_TIMING(JULIA_INIT, JULIA_INIT);
 
-static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct);
+    if (sysimage.kind == JL_IMAGE_KIND_SO)
+        jl_gc_notify_image_load(sysimage.data, sysimage.size);
+
+    if (jl_options.cpu_target == NULL)
+        jl_options.cpu_target = "native";
+
+    // Parse image, perform relocations, and init JIT targets, etc.
+    jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
+
+    jl_init_codegen();
+    jl_init_common_symbols();
+
+    if (sysimage.kind != JL_IMAGE_KIND_NONE) {
+        // Load the .ji or .so sysimage
+        jl_restore_system_image(&parsed_image, sysimage);
+    } else {
+        // No sysimage provided, init a minimal environment
+        jl_init_types();
+        jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
+        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    }
+
+    jl_init_flisp();
+    jl_init_serializer();
+
+    if (sysimage.kind == JL_IMAGE_KIND_NONE) {
+        jl_top_module = jl_core_module;
+        jl_init_intrinsic_functions();
+        jl_init_primitives();
+        jl_init_main_module();
+        jl_load(jl_core_module, "boot.jl");
+        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        post_boot_hooks();
+    }
+
+    if (jl_base_module == NULL) {
+        // nthreads > 1 requires code in Base
+        jl_atomic_store_relaxed(&jl_n_threads, 1);
+        jl_n_markthreads = 0;
+        jl_n_sweepthreads = 0;
+        jl_n_gcthreads = 0;
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
+    } else {
+        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        post_image_load_hooks();
+    }
+    jl_start_threads();
+    jl_start_gc_threads();
+    uv_barrier_wait(&thread_init_done);
+
+    jl_gc_enable(1);
+
+    if ((sysimage.kind != JL_IMAGE_KIND_NONE) &&
+            (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
+        jl_array_t *init_order = jl_module_init_order;
+        JL_GC_PUSH1(&init_order);
+        jl_module_init_order = NULL;
+        int i, l = jl_array_nrows(init_order);
+        for (i = 0; i < l; i++) {
+            jl_value_t *mod = jl_array_ptr_ref(init_order, i);
+            jl_module_run_initializer((jl_module_t*)mod);
+        }
+        JL_GC_POP();
+    }
+
+    if (jl_options.trim) {
+        jl_entrypoint_mis = (arraylist_t *)malloc_s(sizeof(arraylist_t));
+        arraylist_new(jl_entrypoint_mis, 0);
+    }
+
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_sigint_handler();
+}
+
 
 JL_DLLEXPORT int jl_default_debug_info_kind;
 JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
@@ -750,7 +829,7 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
 }
 
-JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
+static void julia_init(jl_image_buf_t sysimage)
 {
     // initialize many things, in no particular order
     // but generally running from simple platform things to optional
@@ -860,96 +939,27 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
 #pragma GCC diagnostic pop
     JL_GC_PROMISE_ROOTED(ct);
-    _finish_julia_init(rel, ptls, ct);
+    _finish_julia_init(sysimage, ptls, ct);
 }
 
-static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
-{
-    JL_TIMING(JULIA_INIT, JULIA_INIT);
-    jl_resolve_sysimg_location(rel);
+
+// This function is responsible for loading the image and initializing paths in jl_options
+JL_DLLEXPORT void jl_load_image_and_init(JL_IMAGE_SEARCH rel, const char* julia_bindir, void *handle) {
+    libsupport_init();
+
+    jl_resolve_sysimg_location(rel, julia_bindir);
 
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
     jl_image_buf_t sysimage = { JL_IMAGE_KIND_NONE };
-    if (rel == JL_IMAGE_IN_MEMORY) {
+    if (handle != NULL) {
+        sysimage = jl_set_sysimg_so(handle);
+    } else if (rel == JL_IMAGE_IN_MEMORY) {
         sysimage = jl_set_sysimg_so(jl_exe_handle);
         jl_options.image_file = jl_options.julia_bin;
-    }
-    else if (jl_options.image_file)
+    } else if (jl_options.image_file)
         sysimage = jl_preload_sysimg(jl_options.image_file);
 
-    if (sysimage.kind == JL_IMAGE_KIND_SO)
-        jl_gc_notify_image_load(sysimage.data, sysimage.size);
-
-    if (jl_options.cpu_target == NULL)
-        jl_options.cpu_target = "native";
-
-    // Parse image, perform relocations, and init JIT targets, etc.
-    jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
-
-    jl_init_codegen();
-    jl_init_common_symbols();
-
-    if (sysimage.kind != JL_IMAGE_KIND_NONE) {
-        // Load the .ji or .so sysimage
-        jl_restore_system_image(&parsed_image, sysimage);
-    } else {
-        // No sysimage provided, init a minimal environment
-        jl_init_types();
-        jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
-        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
-    }
-
-    jl_init_flisp();
-    jl_init_serializer();
-
-    if (sysimage.kind == JL_IMAGE_KIND_NONE) {
-        jl_top_module = jl_core_module;
-        jl_init_intrinsic_functions();
-        jl_init_primitives();
-        jl_init_main_module();
-        jl_load(jl_core_module, "boot.jl");
-        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        post_boot_hooks();
-    }
-
-    if (jl_base_module == NULL) {
-        // nthreads > 1 requires code in Base
-        jl_atomic_store_relaxed(&jl_n_threads, 1);
-        jl_n_markthreads = 0;
-        jl_n_sweepthreads = 0;
-        jl_n_gcthreads = 0;
-        jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
-        jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
-    } else {
-        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        post_image_load_hooks();
-    }
-    jl_start_threads();
-    jl_start_gc_threads();
-    uv_barrier_wait(&thread_init_done);
-
-    jl_gc_enable(1);
-
-    if ((sysimage.kind != JL_IMAGE_KIND_NONE) &&
-            (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
-        jl_array_t *init_order = jl_module_init_order;
-        JL_GC_PUSH1(&init_order);
-        jl_module_init_order = NULL;
-        int i, l = jl_array_nrows(init_order);
-        for (i = 0; i < l; i++) {
-            jl_value_t *mod = jl_array_ptr_ref(init_order, i);
-            jl_module_run_initializer((jl_module_t*)mod);
-        }
-        JL_GC_POP();
-    }
-
-    if (jl_options.trim) {
-        jl_entrypoint_mis = (arraylist_t *)malloc_s(sizeof(arraylist_t));
-        arraylist_new(jl_entrypoint_mis, 0);
-    }
-
-    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
-        jl_install_sigint_handler();
+    julia_init(sysimage);
 }
 
 #ifdef __cplusplus

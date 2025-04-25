@@ -68,6 +68,15 @@ JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
     }
 }
 
+JL_DLLEXPORT void jl_init_with_handle(void *handle) {
+    if (jl_is_initialized())
+        return;
+    const char *image_path = jl_pathname_for_handle(handle);
+    jl_enter_threaded_region(); // This should maybe be behind a lock, but it's harmless if done twice
+    jl_options.image_file = image_path;
+    jl_load_image_and_init(JL_IMAGE_JULIA_HOME, NULL, handle);
+    jl_exception_clear();
+}
 /**
  * @brief Initialize Julia with a specified system image file.
  *
@@ -87,23 +96,11 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
 {
     if (jl_is_initialized())
         return;
-    libsupport_init();
-    if (julia_bindir) {
-        jl_options.julia_bindir = julia_bindir;
-    } else {
-#ifdef _OS_WINDOWS_
-        jl_options.julia_bindir = strdup(jl_get_libdir());
-#else
-        int written = asprintf((char**)&jl_options.julia_bindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
-        if (written < 0)
-            abort(); // unexpected: memory allocation failed
-#endif
-    }
     if (image_path != NULL)
         jl_options.image_file = image_path;
     else
         jl_options.image_file = jl_get_default_sysimg_path();
-    julia_init(JL_IMAGE_JULIA_HOME);
+    jl_load_image_and_init(JL_IMAGE_JULIA_HOME, julia_bindir, NULL);
     jl_exception_clear();
 }
 
@@ -1100,8 +1097,7 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
 #endif
         jl_error("Failed to self-execute");
     }
-
-    julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
+    jl_load_image_and_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME, NULL, NULL);
     if (lisp_prompt) {
         jl_current_task->world_age = jl_get_world_counter();
         jl_lisp_prompt();
