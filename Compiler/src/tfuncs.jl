@@ -450,12 +450,9 @@ end
                     return Const(true)
                 end
             end
-        elseif a1.name === _NAMEDTUPLE_NAME
-            ns = a1.parameters[1]
-            if ns === ()
-                return Const(false)
-            end
-        elseif fieldcount(a1) == 0
+        # datatype_fieldcount is what `fieldcount` uses internally
+        # and returns nothing (!==0) for non-definite field counts rat
+        elseif datatype_fieldcount(a1) === 0
             return Const(false)
         end
     elseif isa(a1, Union)
