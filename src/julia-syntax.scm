@@ -4651,7 +4651,7 @@ f(x) = yt(x)
       ;; (= (globalref _ _) _)     => setglobal!
       ;; (const (globalref _ _) _) => setconst!
       (cond ((and (globalref? lhs) (eq? op '=))
-             (emit `(call (top setglobal!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs)))
+             (emit `(call (core setglobal!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs)))
             ((and (globalref? lhs) (eq? op 'const))
              (emit `(call (core setconst!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs)))
             (else
