@@ -386,6 +386,14 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
         // might still need to be optimized.
         return;
     }
+    else if (head == jl_latestworld_sym) {
+        // Detects:
+        //   const
+        //   using, import
+        //   export (public is not lowered)
+        //   global, globaldecl
+        *has_defs = 1;
+    }
     else if (head == jl_copyast_sym) {
         // Note: `copyast` is included here since it indicates the presence of
         // `quote` and probably `eval`.
