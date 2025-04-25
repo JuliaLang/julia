@@ -18,7 +18,7 @@ import Base: UUID
     uuid_version(u::UUID) -> Int
 
 Inspects the given UUID and returns its version
-(see [RFC 4122](https://www.ietf.org/rfc/rfc4122)).
+(see [RFC 4122](https://tools.ietf.org/html/rfc4122)).
 
 # Examples
 ```jldoctest
@@ -39,7 +39,7 @@ const namespace_x500 = UUID(0x6ba7b8149dad11d180b400c04fd430c8) # 6ba7b814-9dad-
     uuid1([rng::AbstractRNG]) -> UUID
 
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
-by [RFC 4122](https://www.ietf.org/rfc/rfc4122). Note that the Node ID is randomly generated (does not identify the host)
+by [RFC 4122](https://tools.ietf.org/html/rfc4122). Note that the Node ID is randomly generated (does not identify the host)
 according to section 4.5 of the RFC.
 
 The default rng used by `uuid1` is not `Random.default_rng()` and every invocation of `uuid1()` without
@@ -92,7 +92,7 @@ end
     uuid4([rng::AbstractRNG]) -> UUID
 
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
-as specified by [RFC 4122](https://www.ietf.org/rfc/rfc4122).
+as specified by [RFC 4122](https://tools.ietf.org/html/rfc4122).
 
 The default rng used by `uuid4` is not `Random.default_rng()` and every invocation of `uuid4()` without
 an argument should be expected to return a unique identifier. Importantly, the outputs of
@@ -124,7 +124,7 @@ end
     uuid5(ns::UUID, name::String) -> UUID
 
 Generates a version 5 (namespace and domain-based) universally unique identifier (UUID),
-as specified by RFC 4122.
+as specified by [RFC 4122](https://tools.ietf.org/html/rfc4122).
 
 !!! compat "Julia 1.1"
     This function requires at least Julia 1.1.
@@ -165,7 +165,7 @@ end
     uuid7([rng::AbstractRNG]) -> UUID
 
 Generates a version 7 (random or pseudo-random) universally unique identifier (UUID),
-as specified by [RFC 9652](https://www.rfc-editor.org/rfc/rfc9562).
+as specified by [RFC 9562](https://tools.ietf.org/html/rfc9562).
 
 The default rng used by `uuid7` is not `Random.default_rng()` and every invocation of `uuid7()` without
 an argument should be expected to return a unique identifier. Importantly, the outputs of

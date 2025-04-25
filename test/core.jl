@@ -39,7 +39,7 @@ for (T, c) in (
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
-        (Core.TypeName, [:cache, :linearcache]),
+        (Core.TypeName, [:cache, :linearcache, :cache_entry_count]),
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
@@ -4950,6 +4950,9 @@ end
 let ft = Base.datatype_fieldtypes
     @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
 end
+
+# issue #54969
+@test !isdefined(Memory.body, :instance)
 
 # `where` syntax in constructor definitions
 (A12238{T} where T<:Real)(x) = 0

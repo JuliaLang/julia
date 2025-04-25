@@ -643,33 +643,36 @@ end
 # here so it's possible to time/trace all imports, including InteractiveUtils and its deps
 macro time_imports(ex)
     quote
-        try
-            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
-            $(esc(ex))
-        finally
+        Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+        @__tryfinally(
+            # try
+            $(esc(ex)),
+            # finally
             Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
-        end
+        )
     end
 end
 
 macro trace_compile(ex)
     quote
-        try
-            ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
-            $(esc(ex))
-        finally
+        ccall(:jl_force_trace_compile_timing_enable, Cvoid, ())
+        @__tryfinally(
+            # try
+            $(esc(ex)),
+            # finally
             ccall(:jl_force_trace_compile_timing_disable, Cvoid, ())
-        end
+        )
     end
 end
 
 macro trace_dispatch(ex)
     quote
-        try
-            ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
-            $(esc(ex))
-        finally
+        ccall(:jl_force_trace_dispatch_enable, Cvoid, ())
+        @__tryfinally(
+            # try
+            $(esc(ex)),
+            # finally
             ccall(:jl_force_trace_dispatch_disable, Cvoid, ())
-        end
+        )
     end
 end
