@@ -26,6 +26,7 @@ for (T, c) in (
         (Core.Memory, [:length, :ptr]),
         (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
         (Task, [:metrics_enabled]),
+        (Core.BindingPartition, [:restriction, :kind]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
 end
@@ -39,11 +40,12 @@ for (T, c) in (
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
-        (Core.TypeName, [:cache, :linearcache]),
+        (Core.TypeName, [:cache, :linearcache, :cache_entry_count]),
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
         (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
+        (Core.BindingPartition, [:min_world, :max_world, :next]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end

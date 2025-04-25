@@ -4,7 +4,6 @@
 
 using Random
 using InteractiveUtils
-using InteractiveUtils: code_llvm, code_native
 using Libdl
 using Test
 

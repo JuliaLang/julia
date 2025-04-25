@@ -265,6 +265,12 @@ end
     write(to, from)
     @test String(take!(to)) == "abcd"
     @test eof(from)
+
+    # Write to another IOBuffer when closed
+    to = IOBuffer()
+    from = IOBuffer(collect(b"abcdefghi"))
+    close(from)
+    @test_throws ArgumentError write(to, from)
 end
 
 @testset "Read/write empty IOBuffer" begin
@@ -701,6 +707,11 @@ end
     data = 0x00:0xFF
     io = IOBuffer(data)
     @test read(io) == data
+    seekstart(io)
+    @test read(io, UInt16) === ltoh(0x0100)
+    out = IOBuffer()
+    write(out, io)
+    @test take!(out) == data[3:end]
 
     data = @view(collect(0x00:0x0f)[begin:2:end])
     io = IOBuffer(data)

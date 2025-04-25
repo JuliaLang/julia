@@ -24,6 +24,8 @@ Build system changes
 New library functions
 ---------------------
 
+* Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
+
 New library features
 --------------------
 
@@ -46,6 +48,8 @@ Standard library changes
 * Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
 
 #### InteractiveUtils
+
+* Introspection utilities such as `@code_typed`, `@which` and `@edit` now accept type annotations as substitutes for values, recognizing forms such as `f(1, ::Float64, 3)` or even `sum(::Vector{T}; init = ::T) where {T<:Real}` ([#57909]).
 
 External dependencies
 ---------------------

@@ -3417,12 +3417,19 @@ function ith_all(i, as)
 end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    idxs1 = LinearIndices(As[1])
-    @boundscheck LinearIndices(dest) == idxs1 && all(x -> LinearIndices(x) == idxs1, As)
-    for i = idxs1
-        @inbounds I = ith_all(i, As)
-        val = f(I...)
-        @inbounds dest[i] = val
+    idxs = LinearIndices(dest)
+    if all(x -> LinearIndices(x) == idxs, As)
+        for i in idxs
+            @inbounds as = ith_all(i, As)
+            val = f(as...)
+            @inbounds dest[i] = val
+        end
+    else
+        for (i, Is...) in zip(eachindex(dest), map(eachindex, As)...)
+            as = ntuple(j->getindex(As[j], Is[j]), length(As))
+            val = f(as...)
+            dest[i] = val
+        end
     end
     return dest
 end

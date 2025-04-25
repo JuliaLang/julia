@@ -10,13 +10,12 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "builtin_proto.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern jl_value_t *jl_builtin_getfield;
-extern jl_value_t *jl_builtin_tuple;
 jl_methtable_t *jl_kwcall_mt;
 jl_method_t *jl_opaque_closure_method;
 
@@ -225,7 +224,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_sym_t *fe_sym = jl_globalref_name(fe);
         // look at some known called functions
         jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
-        if (jl_get_binding_value_if_const(b) == jl_builtin_tuple) {
+        if (jl_get_binding_value_if_const(b) == BUILTIN(tuple)) {
             size_t j;
             for (j = 1; j < nargs; j++) {
                 if (!jl_is_quotenode(jl_exprarg(e, j)))
