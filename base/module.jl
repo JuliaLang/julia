@@ -32,7 +32,6 @@ function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, 
         elseif v === :Base
             m = Base
         else
-            # TODO: JL_TIMING(LOAD_IMAGE, LOAD_Require)
             m = require(at, v)
             m isa Module || error("failed to load module $v")
         end
