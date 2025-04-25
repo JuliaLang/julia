@@ -66,6 +66,7 @@ public
     isexported,
     ispublic,
     remove_linenums!,
+    fieldindex,
 
 # Operators
     operator_associativity,
