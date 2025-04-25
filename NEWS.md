@@ -24,6 +24,8 @@ Build system changes
 New library functions
 ---------------------
 
+* Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
+
 New library features
 --------------------
 
