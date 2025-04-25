@@ -198,7 +198,7 @@ julia> io = IOBuffer();
 julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
 56
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization. It has many members."
 
 julia> io = IOBuffer(b"JuliaLang is a GitHub organization.")
@@ -216,7 +216,7 @@ IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=fa
 julia> write(io, "JuliaLang is a GitHub organization.")
 34
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization"
 
 julia> length(read(IOBuffer(b"data", read=true, truncate=false)))
