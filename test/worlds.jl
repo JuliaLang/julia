@@ -440,22 +440,26 @@ idxi = findfirst(==(m58080i), logmeths)
 struct LogBindingInvalidation
     x::Int
 end
-const glbi = LogBindingInvalidation(1)
+makelbi(x) = LogBindingInvalidation(x)
+const glbi = makelbi(1)
 oLBI, oglbi = LogBindingInvalidation, glbi
 flbi() = @__MODULE__().glbi.x
 flbi()
-milbi = only(Base.specializations(only(methods(flbi))))
+milbi1 = only(Base.specializations(only(methods(makelbi))))
+milbi2 = only(Base.specializations(only(methods(flbi))))
 logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
 struct LogBindingInvalidation
     x::Float64
 end
-const glbi = LogBindingInvalidation(2.0)
+const glbi = makelbi(2.0)
 @test flbi() === 2.0
 ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
-@test milbi.cache.next.def ∈ logmeths
-T = logmeths[1].restriction
+@test milbi1.cache.def ∈ logmeths
+@test milbi2.cache.next.def ∈ logmeths
+i = findfirst(x -> isa(x, Core.BindingPartition), logmeths)
+T = logmeths[i].restriction
 @test T === oLBI
-@test logmeths[2] == "jl_maybe_log_binding_invalidation"
+@test logmeths[i+1] == "jl_maybe_log_binding_invalidation"
 T = logmeths[end-1].restriction
 @test T === oglbi
 @test logmeths[end] == "jl_maybe_log_binding_invalidation"
