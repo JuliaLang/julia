@@ -23,6 +23,7 @@ end
 
 function get_typeof(@nospecialize ex)
     isexpr(ex, :(::), 1) && return esc(ex.args[1])
+    isexpr(ex, :(::), 2) && return esc(ex.args[2])
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
         isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, esc(splatted.args[1]))
@@ -93,6 +94,7 @@ function are_kwargs_valid(kwargs::Vector{Any})
     for kwarg in kwargs
         isexpr(kwarg, :..., 1) && continue
         isexpr(kwarg, :kw, 2) && isa(kwarg.args[1], Symbol) && continue
+        isexpr(kwarg, :(::), 2) && continue
         isa(kwarg, Symbol) && continue
         return false
     end
@@ -113,6 +115,8 @@ function generate_merged_namedtuple_type(kwargs::Vector{Any})
             push!(nts, Expr(:call, typeof_nt, esc(ex.args[1])))
         elseif isexpr(ex, :kw, 2)
             push!(ntargs, ex.args[1]::Symbol => get_typeof(ex.args[2]))
+        elseif isexpr(ex, :(::), 2)
+            push!(ntargs, ex.args[1]::Symbol => get_typeof(ex))
         else
             ex::Symbol
             push!(ntargs, ex => get_typeof(ex))
