@@ -2191,6 +2191,22 @@ end
 
     @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
     @test one(Mat([1 2; 3 4])) isa Mat
+
+    @testset "SizedArray" begin
+        S = [1 2; 3 4]
+        A = SizedArrays.SizedArray{(2,2)}(S)
+        @test one(A) == one(typeof(A))
+        @test oneunit(A) == oneunit(typeof(A))
+        M = fill(A, 2, 2)
+        O = one(M)
+        for I in CartesianIndices(M)
+            if I[1] == I[2]
+                @test O[I] == one(S)
+            else
+                @test O[I] == zero(S)
+            end
+        end
+    end
 end
 
 @testset "copyto! with non-AbstractArray src" begin
