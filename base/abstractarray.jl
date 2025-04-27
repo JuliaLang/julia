@@ -3571,8 +3571,15 @@ function hash(A::AbstractArray, h::UInt)
 
     # For short arrays, it's not worth doing anything complicated
     if length(A) < 8192
-        for x in A
-            h = hash(x, h)
+        num_streams = min(length(A), 8)
+        partials = fill(h, num_streams)
+        for (i, x) in enumerate(A)
+            stream_idx = mod1(i, num_streams)
+            partials[stream_idx] = hash(x, partials[stream_idx])
+        end
+
+        for p in partials
+            h = hash(p, h)
         end
         return h
     end
@@ -3603,12 +3610,17 @@ function hash(A::AbstractArray, h::UInt)
     linidx = key_to_linear[keyidx]
     fibskip = prevfibskip = oneunit(linidx)
     first_linear = first(LinearIndices(linear_to_key))
+
+    num_streams = 8
+    partials = fill(h, num_streams)
     n = 0
     while true
         n += 1
         # Hash the element
         elt = A[keyidx]
-        h = hash(keyidx=>elt, h)
+
+        stream_idx = mod1(n, num_streams)
+        partials[stream_idx] = hash(keyidx=>elt, partials[stream_idx])
 
         # Skip backwards a Fibonacci number of indices -- this is a linear index operation
         linidx = key_to_linear[keyidx]
@@ -3629,6 +3641,10 @@ function hash(A::AbstractArray, h::UInt)
         # Find a key index with a value distinct from `elt` -- might be `keyidx` itself
         keyidx = findprev(!isequal(elt), A, keyidx)
         keyidx === nothing && break
+    end
+
+    for p in partials
+        h = hash(p, h)
     end
 
     return h
