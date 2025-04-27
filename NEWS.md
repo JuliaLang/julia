@@ -19,6 +19,7 @@ New language features
   a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
   version. This makes managing environments for multiple julia versions at the same time
   easier ([#43845]).
+* `Project.toml` files now support a `[sources]` section for specifying paths and repository locations for dependencies ([#3783](https://github.com/JuliaLang/Pkg.jl/pull/3783))
 * Support for Unicode 15.1 ([#51799]).
 
 Language changes
