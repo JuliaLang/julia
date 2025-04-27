@@ -235,7 +235,10 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 
 ## reduce & mapreduce
 
-_mapreduce_start(f, op, A, ::_InitialValue) = mapreduce_empty(f, op, eltype(A))
+_empty_eltype(x) = _empty_eltype(x, IteratorEltype(x))
+_empty_eltype(x, ::HasEltype) = eltype(x)
+_empty_eltype(_, _) = _empty_reduce_error()
+_mapreduce_start(f, op, A, ::_InitialValue) = mapreduce_empty(f, op, _empty_eltype(A))
 _mapreduce_start(f, op, A, ::_InitialValue, a1) = mapreduce_first(f, op, a1)
 _mapreduce_start(f, op, A, ::_InitialValue, a1, a2) = op(f(a1), f(a2))
 _mapreduce_start(f, op, A, init) = init
