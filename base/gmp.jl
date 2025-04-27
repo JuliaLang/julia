@@ -847,7 +847,7 @@ if Limb === UInt64 === UInt
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
 
-    using .Base: hash
+    using .Base: hash_finalizer
 
     function hash_integer(n::BigInt, h::UInt)
         GC.@preserve n begin
