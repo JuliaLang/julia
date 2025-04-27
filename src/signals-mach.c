@@ -146,8 +146,6 @@ static void jl_mach_gc_wait(jl_ptls_t ptls2, mach_port_t thread, int16_t tid)
 
 static mach_port_t segv_port = 0;
 
-#define STR(x) #x
-#define XSTR(x) STR(x)
 #define HANDLE_MACH_ERROR(msg, retval) \
     if (retval != KERN_SUCCESS) { mach_error(msg XSTR(: __FILE__:__LINE__:), (retval)); abort(); }
 
