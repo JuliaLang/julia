@@ -695,7 +695,10 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
     return true
 end
 
-function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector)
+show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector) =
+    show(io, string_typeparams(io, env, orig, wheres))
+
+function string_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector)
     n = length(env)
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
@@ -716,29 +719,31 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
             end
         end
     end
-    if n > 0
-        print(io, "{")
-        for i = 1:n
-            p = env[i]
-            if p isa TypeVar
-                if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
-                    print(io, "<:")
-                    show(io, p.ub)
-                elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
-                    print(io, ">:")
-                    show(io, p.lb)
+
+    s_result = if n > 0
+        params_string = join(
+            map(1:n) do i
+                p = env[i]
+                suffix = i < n ? ", " : ""
+                if p isa TypeVar
+                    if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
+                        string("<:", p.ub, suffix)
+                    elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
+                        string(">:", p.lb, suffix)
+                    else
+                        string(p, suffix)
+                    end
                 else
-                    show(io, p)
+                    string(p, suffix)
                 end
-            else
-                show(io, p)
             end
-            i < n && print(io, ", ")
-        end
-        print(io, "}")
+        )
+        string("{", params_string, "}")
+    else
+        ""
     end
     resize!(wheres, elide)
-    nothing
+    return s_result
 end
 
 function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
