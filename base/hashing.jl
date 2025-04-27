@@ -53,9 +53,9 @@ function hash_finalizer(x::UInt64)
     return x
 end
 
-hash_64_64(data::UInt64, seed::UInt) = hash_finalizer(hash_mix_linear(data, seed))
-hash_64_32(data::UInt64, seed::UInt) = hash_64_64(data, seed) % UInt32
-hash_32_32(data::UInt32, seed::UInt) = hash_64_32(UInt64(data), seed)
+hash_64_64(data::UInt64) = hash_finalizer(data)
+hash_64_32(data::UInt64) = hash_64_64(data) % UInt32
+hash_32_32(data::UInt32) = hash_64_32(UInt64(data))
 
 if UInt === UInt64
     const hash_uint64 = hash_64_64
@@ -65,16 +65,16 @@ else
     const hash_uint = hash_32_32
 end
 
-hash(x::UInt64, h::UInt) = hash_uint64(x, h)
+hash(x::UInt64, h::UInt) = hash_uint64(hash_mix_linear(x, h))
 hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
 hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
 function hash_integer(n::Integer, h::UInt)
-    h ⊻= hash((n % UInt) ⊻ h)
+    h ⊻= hash_uint((n % UInt) ⊻ h)
     n = abs(n)
     n >>>= sizeof(UInt) << 3
     while n != 0
-        h ⊻= hash((n % UInt) ⊻ h)
+        h ⊻= hash_uint((n % UInt) ⊻ h)
         n >>>= sizeof(UInt) << 3
     end
     return h
