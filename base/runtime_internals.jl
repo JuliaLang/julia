@@ -1007,7 +1007,7 @@ morespecific(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type
 morespecific(a::Method, b::Method) = ccall(:jl_method_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
-    fieldoffset(type, name::Symbol | i::Int)
+    fieldoffset(type, name::Symbol | i::Integer)
 
 The byte offset of a field (specified by name or index) of a type relative to its start.
 
