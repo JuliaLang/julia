@@ -1,4 +1,4 @@
-STATISTICS_BRANCH = master
-STATISTICS_SHA1 = 77bd5707f143eb624721a7df28ddef470e70ecef
-STATISTICS_GIT_URL := https://github.com/JuliaStats/Statistics.jl.git
-STATISTICS_TAR_URL = https://api.github.com/repos/JuliaStats/Statistics.jl/tarball/$1
+STATISTICS_BRANCH = mb/mapreduceinit
+STATISTICS_SHA1 = 01c1c43c879d31c1a948b30e964cbdbcbc96d958
+STATISTICS_GIT_URL := https://github.com/mbauman/Statistics.jl.git
+STATISTICS_TAR_URL = https://api.github.com/repos/mbauman/Statistics.jl/tarball/$1

@@ -1,4 +1,4 @@
-SPARSEARRAYS_BRANCH = main
-SPARSEARRAYS_SHA1 = f3610c07fe0403792743d9c9802a25642a5f2d18
-SPARSEARRAYS_GIT_URL := https://github.com/JuliaSparse/SparseArrays.jl.git
-SPARSEARRAYS_TAR_URL = https://api.github.com/repos/JuliaSparse/SparseArrays.jl/tarball/$1
+SPARSEARRAYS_BRANCH = mb/mapreduceinit
+SPARSEARRAYS_SHA1 = f035300524563dd756fbab5f9a017e509ba97ec7
+SPARSEARRAYS_GIT_URL := https://github.com/mbauman/SparseArrays.jl.git
+SPARSEARRAYS_TAR_URL = https://api.github.com/repos/mbauman/SparseArrays.jl/tarball/$1
