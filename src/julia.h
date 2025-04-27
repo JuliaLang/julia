@@ -536,6 +536,7 @@ typedef struct {
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
     uint8_t _reserved:5;
+    _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
 } jl_typename_t;
@@ -1491,7 +1492,7 @@ JL_DLLEXPORT jl_value_t *jl_unwrap_unionall(jl_value_t *v JL_PROPAGATES_ROOT) JL
 #define jl_inlinedatatype_layout(t) (((jl_datatype_t*)t)->layout)
 STATIC_INLINE const jl_datatype_layout_t *jl_datatype_layout(jl_datatype_t *t) JL_NOTSAFEPOINT
 {
-    if (jl_is_layout_opaque(t->layout)) // e.g. GenericMemory
+    if (t->layout == NULL || jl_is_layout_opaque(t->layout)) // e.g. GenericMemory
         t = (jl_datatype_t*)jl_unwrap_unionall(t->name->wrapper);
     return t->layout;
 }
@@ -2256,16 +2257,10 @@ JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
                                          int offset, int greedy);
 // lowering
-JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule);
-JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                            const char *file, int line);
-JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *inmodule,
-                                                 const char *file, int line);
-JL_DLLEXPORT jl_value_t *jl_expand_in_world(jl_value_t *expr, jl_module_t *inmodule,
-                                            const char *file, int line, size_t world);
-JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule);
-JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                                 const char *file, int line);
+JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
+                                  const char *file, int line, size_t world,
+                                  bool_t warn);
+JL_DLLEXPORT jl_value_t *jl_lower_expr_mod(jl_value_t *expr, jl_module_t *inmodule);
 // deprecated; use jl_parse_all
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *text, size_t text_len,
                                              const char *filename, size_t filename_len);

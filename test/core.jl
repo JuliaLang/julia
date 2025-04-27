@@ -26,6 +26,7 @@ for (T, c) in (
         (Core.Memory, [:length, :ptr]),
         (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
         (Task, [:metrics_enabled]),
+        (Core.BindingPartition, [:restriction, :kind]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
 end
@@ -39,11 +40,12 @@ for (T, c) in (
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
-        (Core.TypeName, [:cache, :linearcache]),
+        (Core.TypeName, [:cache, :linearcache, :cache_entry_count]),
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
         (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
+        (Core.BindingPartition, [:min_world, :max_world, :next]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end
@@ -4951,6 +4953,9 @@ let ft = Base.datatype_fieldtypes
     @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
 end
 
+# issue #54969
+@test !isdefined(Memory.body, :instance)
+
 # `where` syntax in constructor definitions
 (A12238{T} where T<:Real)(x) = 0
 @test A12238{<:Real}(0) == 0
@@ -7340,7 +7345,7 @@ Array{Int}(undef, bignum, bignum, 0, bignum, bignum)
 # but also test that it does throw if the axes multiply to a multiple of typemax(UInt)
 @test_throws ArgumentError Array{Int}(undef, bignum, bignum)
 @test_throws ArgumentError Array{Int}(undef, 1, bignum, bignum)
-# also test that we always throw erros for negative dims even if other dims are 0 or the product is positive
+# also test that we always throw errors for negative dims even if other dims are 0 or the product is positive
 @test_throws ArgumentError Array{Int}(undef, 0, -4, -4)
 @test_throws ArgumentError Array{Int}(undef, -4, 1, 0)
 @test_throws ArgumentError Array{Int}(undef, -4, -4, 1)

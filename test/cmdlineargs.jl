@@ -257,6 +257,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
+    # --project=@script handling
+    let expanded = abspath(joinpath(@__DIR__, "project", "ScriptProject"))
+        script = joinpath(expanded, "bin", "script.jl")
+        # Check running julia with --project=@script both within and outside the script directory
+        @testset "--@script from $name" for (name, dir) in [("project", expanded), ("outside", pwd())]
+            @test joinpath(expanded, "Project.toml") == readchomp(Cmd(`$exename --project=@script $script`; dir))
+            @test joinpath(expanded, "SubProject", "Project.toml") == readchomp(Cmd(`$exename --project=@script/../SubProject $script`; dir))
+        end
+    end
+
     # handling of `@temp` in --project and JULIA_PROJECT
     @test tempdir() == readchomp(`$exename --project=@temp -e 'println(Base.active_project())'`)[1:lastindex(tempdir())]
     @test tempdir() == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@temp", "HOME" => homedir()))[1:lastindex(tempdir())]
