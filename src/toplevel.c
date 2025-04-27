@@ -36,12 +36,15 @@ jl_mutex_t jl_modules_mutex;
 // During incremental compilation, the following gets set
 jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
 
+static void import_module(jl_module_t *JL_NONNULL m, jl_module_t *import, jl_sym_t *asname);
+
 jl_module_t *jl_add_standard_imports(jl_module_t *m)
 {
     jl_module_t *base_module = jl_base_relative_to(m);
     assert(base_module != NULL);
     // using Base
     jl_module_initial_using(m, base_module);
+    import_module(m, base_module, NULL);
     return base_module;
 }
 
@@ -845,26 +848,33 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                                        jl_symbol_name(name));
                     // `using A` and `using A.B` syntax
                     jl_module_using(m, u);
-                    if (m == jl_main_module && name == NULL) {
-                        // TODO: for now, `using A` in Main also creates an explicit binding for `A`
-                        // This will possibly be extended to all modules.
-                        import_module(ct, m, u, NULL);
-                    }
+                    import_module(ct, m, u, name);
                 }
                 continue;
             }
-            else if (from && jl_is_expr(a) && ((jl_expr_t*)a)->head == jl_as_sym && jl_expr_nargs(a) == 2 &&
+            else if (jl_is_expr(a) && ((jl_expr_t*)a)->head == jl_as_sym && jl_expr_nargs(a) == 2 &&
                      jl_is_expr(jl_exprarg(a, 0)) && ((jl_expr_t*)jl_exprarg(a, 0))->head == jl_dot_sym) {
                 jl_sym_t *asname = (jl_sym_t*)jl_exprarg(a, 1);
                 if (jl_is_symbol(asname)) {
                     jl_expr_t *path = (jl_expr_t*)jl_exprarg(a, 0);
                     name = NULL;
                     jl_module_t *import = eval_import_path(ct, m, from, ((jl_expr_t*)path)->args, &name, "using");
-                    assert(name);
-                    check_macro_rename(name, asname, "using");
-                    // `using A: B as C` syntax
-                    jl_module_use_as(ct, m, import, name, asname);
-                    continue;
+                    if (from) {
+                        // `using A: B as C` and `using A: B.C as D` syntax
+                        assert(name);
+                        check_macro_rename(name, asname, "using");
+                        jl_module_use_as(ct, m, import, name, asname);
+                        continue;
+                    }
+                    else {
+                        // `using A as B` and `using A.B as C syntax
+                        if (name != NULL)
+                            import = (jl_module_t*)jl_eval_global_var(import, name);
+                        check_macro_rename(import->name, asname, "using");
+                        jl_module_using(m, import);
+                        import_module(ct, m, import, asname);
+                        continue;
+                    }
                 }
             }
             jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno,

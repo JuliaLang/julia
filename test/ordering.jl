@@ -55,5 +55,5 @@ struct SomeOtherOrder <: Base.Order.Ordering end
 @testset "Base.Order docstrings" begin
     undoc = Docs.undocumented_names(Base.Order)
     @test_broken isempty(undoc)
-    @test undoc == [:DirectOrdering, :ForwardOrdering, :Order, :ordtype]
+    @test undoc == [:DirectOrdering, :ForwardOrdering, :ordtype]
 end

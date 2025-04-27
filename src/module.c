@@ -513,8 +513,9 @@ static void jl_add_default_names(jl_module_t *m, uint8_t default_using_core, uin
             jl_module_initial_using(m, jl_core_module);
         }
         if (self_name) {
-            // export own name, so "using Foo" makes "Foo" itself visible
-            jl_set_initial_const(m, m->name, (jl_value_t*)m, 1);
+            // Do not export or publicize own name, "using Foo" already makes "Foo" itself
+            // visible and "using Foo as Bar" should not make the name "Foo" visible.
+            jl_set_initial_const(m, m->name, (jl_value_t*)m, 0);
         }
     }
 }
