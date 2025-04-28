@@ -3585,9 +3585,9 @@ f(x) = yt(x)
 (define (clear-capture-bits vinfos)
   (map vinfo:not-capt vinfos))
 
-(define (convert-lambda lam fname interp capt-sp opaq parsed-method-stack)
+(define (convert-lambda lam fname interp capt-sp opaq toplevel-pure parsed-method-stack)
   (let ((body (add-box-inits-to-body
-               lam (cl-convert (cadddr lam) fname lam (table) (table) #f interp opaq parsed-method-stack (table) (vinfo-to-table (car (lam:vinfo lam)))))))
+               lam (cl-convert (cadddr lam) fname lam (table) (table) #f interp opaq toplevel-pure parsed-method-stack (table) (vinfo-to-table (car (lam:vinfo lam)))))))
     `(lambda ,(lam:args lam)
        (,(clear-capture-bits (car (lam:vinfo lam)))
         ()
@@ -3640,7 +3640,7 @@ f(x) = yt(x)
       `(call (core getfield) ,fname ,(get opaq var))
       `(call (core getfield) ,fname (inert ,var))))
 
-(define (convert-global-assignment var rhs0 globals lam)
+(define (convert-global-assignment var rhs0 globals lam toplevel-pure)
   (let* ((rhs1 (if (or (simple-atom? rhs0)
                        (equal? rhs0 '(the_exception)))
                    rhs0
@@ -3658,7 +3658,7 @@ f(x) = yt(x)
       ;; If this assignment is associated with a type declaration, we will have
       ;; inserted it into the `globals` table before reaching this point.  If it
       ;; isn't there, we must generate a globaldecl call now.
-      ,.(if (get globals ref #f)
+      ,.(if (or toplevel-pure (get globals ref #f))
             '()
             `((call (core globaldecl) ,(cadr ref) (inert ,(caddr ref)) (true))
               (latestworld))))))
@@ -3668,7 +3668,7 @@ f(x) = yt(x)
 ;; declared types.
 ;; when doing this, the original value needs to be preserved, to
 ;; ensure the expression `a=b` always returns exactly `b`.
-(define (convert-assignment var rhs0 fname lam interp opaq parsed-method-stack globals locals)
+(define (convert-assignment var rhs0 fname lam interp opaq toplevel-pure parsed-method-stack globals locals)
   (cond
     ((symbol? var)
      (let* ((vi (get locals var #f))
@@ -3681,12 +3681,12 @@ f(x) = yt(x)
        (if (and (not closed) (not capt) (equal? vt '(core Any)))
            (if (or (local-in? var lam) (underscore-symbol? var))
                `(= ,var ,rhs0)
-               (convert-global-assignment var rhs0 globals lam))
+               (convert-global-assignment var rhs0 globals lam toplevel-pure))
            (let* ((rhs1 (if (or (simple-atom? rhs0)
                                 (equal? rhs0 '(the_exception)))
                             rhs0
                             (make-ssavalue)))
-                  (rhs  (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq parsed-method-stack (table) locals) #t lam))
+                  (rhs  (convert-for-type-decl rhs1 (cl-convert vt fname lam #f #f #f interp opaq toplevel-pure parsed-method-stack (table) locals) #t lam))
                   (ex (cond (closed `(call (core setfield!)
                                            ,(if interp
                                                 `($ ,var)
@@ -3701,7 +3701,7 @@ f(x) = yt(x)
                          ,ex
                          ,rhs1))))))
      ((globalref? var)
-      (convert-global-assignment var rhs0 globals lam))
+      (convert-global-assignment var rhs0 globals lam toplevel-pure))
      ((ssavalue? var)
       `(= ,var ,rhs0))
      (else
@@ -3976,17 +3976,17 @@ f(x) = yt(x)
 (define (toplevel-preserving? e)
   (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse))))
 
-(define (map-cl-convert exprs fname lam namemap defined toplevel interp opaq parsed-method-stack (globals (table)) (locals (table)))
+(define (map-cl-convert exprs fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack (globals (table)) (locals (table)))
   (if toplevel
       (map (lambda (x)
              (let ((tl (lift-toplevel (cl-convert x fname lam namemap defined
                                                   (and toplevel (toplevel-preserving? x))
-                                                  interp opaq parsed-method-stack globals locals))))
+                                                  interp opaq toplevel-pure parsed-method-stack globals locals))))
                (if (null? (cdr tl))
                    (car tl)
                    `(block ,@(cdr tl) ,(car tl)))))
            exprs)
-      (map (lambda (x) (cl-convert x fname lam namemap defined #f interp opaq parsed-method-stack globals locals)) exprs)))
+      (map (lambda (x) (cl-convert x fname lam namemap defined #f interp opaq toplevel-pure parsed-method-stack globals locals)) exprs)))
 
 (define (prepare-lambda! lam)
   ;; mark all non-arguments as assigned, since locals that are never assigned
@@ -4001,11 +4001,11 @@ f(x) = yt(x)
        (char=? (string.char str 0) #\#)
        (char-numeric? (string.char str 1))))
 
-(define (cl-convert- e fname lam namemap defined toplevel interp opaq parsed-method-stack (globals (table)) (locals (table)))
+(define (cl-convert- e fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack (globals (table)) (locals (table)))
   (if (and (not lam)
            (not (and (pair? e) (memq (car e) '(lambda method macro opaque_closure)))))
       (if (atom? e) e
-          (cons (car e) (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))
+          (cons (car e) (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
       (cond
        ((symbol? e)
         (define (new-undef-var name)
@@ -4024,7 +4024,7 @@ f(x) = yt(x)
                  (val (if (equal? typ '(core Any))
                           val
                           `(call (core typeassert) ,val
-                                 ,(let ((convt (cl-convert typ fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))
+                                 ,(let ((convt (cl-convert typ fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
                                     (if (or (symbol-like? convt) (quoted? convt))
                                         convt
                                         (renumber-assigned-ssavalues convt)))))))
@@ -4052,6 +4052,10 @@ f(x) = yt(x)
        (else
         (case (car e)
           ((quote top core globalref thismodule lineinfo line break inert module toplevel null true false meta import using) e)
+          ((toplevel_pure)
+           ;; Used to wrap the Expr returned from generation functions: do not
+           ;; generate top-level side effects for this Expr (declare_global).
+           (cl-convert- (cadr e) fname lam namemap defined toplevel interp opaq #t parsed-method-stack globals locals))
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)
@@ -4059,8 +4063,8 @@ f(x) = yt(x)
            e)
           ((=)
            (let ((var (cadr e))
-                 (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))
-             (convert-assignment var rhs fname lam interp opaq parsed-method-stack globals locals)))
+                 (rhs (cl-convert (caddr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
+             (convert-assignment var rhs fname lam interp opaq toplevel-pure parsed-method-stack globals locals)))
           ((local-def) ;; make new Box for local declaration of defined variable
            (let ((vi (get locals (cadr e) #f)))
              (if (and vi (vinfo:asgn vi) (vinfo:capt vi))
@@ -4077,8 +4081,10 @@ f(x) = yt(x)
            `(toplevel-butfirst
              (unused-only global)
              ;; Leftover `global` forms become weak globaldecls.
-             (call (core globaldecl) (thismodule) (inert ,(cadr e)) (false))
-             (latestworld)))
+             ,.(if toplevel-pure
+                   '()
+                   `((call (core globaldecl) (thismodule) (inert ,(cadr e)) (false))
+                     (latestworld)))))
           ((const)
            ;; Check we've expanded surface `const` (1 argument form)
            (assert (and (length= e 3)))
@@ -4124,7 +4130,7 @@ f(x) = yt(x)
                (set-car! (cdddr (lam:vinfo lam2)) '()) ;; must capture static_parameters as values inside opaque_closure
                `(new_opaque_closure
                  ,(cadr e) ,(or (caddr e) '(call (core apply_type) (core Union))) ,(or (cadddr e) '(core Any)) ,allow-partial
-                 (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs) parsed-method-stack))
+                 (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs) toplevel-pure parsed-method-stack))
                  ,@var-exprs))))
           ((method)
            (let* ((name  (method-expr-name e))
@@ -4138,7 +4144,7 @@ f(x) = yt(x)
                   (sp-inits (if (or short (not (eq? (car sig) 'block)))
                                 '()
                                 (map-cl-convert (butlast (cdr sig))
-                                                fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))
+                                                fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
                   (r        (make-ssavalue))
                   (sig      (and sig (if (eq? (car sig) 'block)
                                          (last sig)
@@ -4167,10 +4173,10 @@ f(x) = yt(x)
                                           ;; anonymous functions with keyword args generate global
                                           ;; functions that refer to the type of a local function
                                           (rename-sig-types sig namemap)
-                                          fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)
+                                          fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)
                                   ,(let ((body (add-box-inits-to-body
                                                 lam2
-                                                (cl-convert (cadddr lam2) 'anon lam2 (table) (table) #f interp opaq parsed-method-stack (table)
+                                                (cl-convert (cadddr lam2) 'anon lam2 (table) (table) #f interp opaq toplevel-pure parsed-method-stack (table)
                                                             (vinfo-to-table (car (lam:vinfo lam2)))))))
                                      `(lambda ,(cadr lam2)
                                         (,(clear-capture-bits (car vis))
@@ -4179,12 +4185,12 @@ f(x) = yt(x)
                           (latestworld)
                           ,r))
                        (else
-                        (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '() #f parsed-method-stack)))
+                        (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '() #f toplevel-pure parsed-method-stack)))
                                (top-stmts (cdr exprs))
                                (newlam    (compact-and-renumber (linearize (car exprs)) 'none 0)))
                           `(toplevel-butfirst
                             (block ,@sp-inits
-                                   (= ,r (method ,(cadr e) ,(cl-convert sig fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)
+                                   (= ,r (method ,(cadr e) ,(cl-convert sig fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)
                                            ,(julia-bq-macro newlam)))
                                    (latestworld)
                                    ,r)
@@ -4291,12 +4297,12 @@ f(x) = yt(x)
                                (append (map (lambda (gs tvar)
                                               (make-assignment gs `(call (core TypeVar) ',tvar (core Any))))
                                             closure-param-syms closure-param-names)
-                                       `((method #f ,(cl-convert arg-defs fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)
+                                       `((method #f ,(cl-convert arg-defs fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)
                                                  ,(convert-lambda lam2
                                                                   (if iskw
                                                                       (caddr (lam:args lam2))
                                                                       (car (lam:args lam2)))
-                                                                  #f closure-param-names #f parsed-method-stack)))))))
+                                                                  #f closure-param-names #f toplevel-pure parsed-method-stack)))))))
                         (mk-closure  ;; expression to make the closure
                          (let* ((var-exprs (map (lambda (v)
                                                   (let ((cv (assq v (cadr (lam:vinfo lam)))))
@@ -4332,7 +4338,7 @@ f(x) = yt(x)
                        (begin
                          (put! defined name #t)
                          `(toplevel-butfirst
-                           ,(convert-assignment name mk-closure fname lam interp opaq parsed-method-stack globals locals)
+                           ,(convert-assignment name mk-closure fname lam interp opaq toplevel-pure parsed-method-stack globals locals)
                            ,@typedef
                            (latestworld)
                            ,@(map (lambda (v) `(moved-local ,v)) moved-vars)
@@ -4348,14 +4354,14 @@ f(x) = yt(x)
                                        (table)
                                        (table)
                                        (null? (cadr e)) ;; only toplevel thunks have 0 args
-                                       interp opaq parsed-method-stack globals (vinfo-to-table (car (lam:vinfo e))))))
+                                       interp opaq toplevel-pure parsed-method-stack globals (vinfo-to-table (car (lam:vinfo e))))))
              `(lambda ,(cadr e)
                 (,(clear-capture-bits (car (lam:vinfo e)))
                  () ,@(cddr (lam:vinfo e)))
                 (block ,@body))))
           ;; remaining `::` expressions are type assertions
           ((|::|)
-           (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals))
+           (cl-convert `(call (core typeassert) ,@(cdr e)) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals))
           ;; remaining `decl` expressions are only type assertions if the
           ;; argument is global or a non-symbol.
           ((decl)
@@ -4374,22 +4380,22 @@ f(x) = yt(x)
                               (call (core globaldecl) ,(cadr ref) (inert ,(caddr ref)) (true) ,(caddr e))
                               (latestworld))))
                          `(call (core typeassert) ,@(cdr e))))
-                   fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals))))
+                   fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals))))
           ;; `with-static-parameters` expressions can be removed now; used only by analyze-vars
           ((with-static-parameters)
-           (cl-convert (cadr e) fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals))
+           (cl-convert (cadr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals))
           (else
            (cons (car e)
-                 (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals))))))))
+                 (map-cl-convert (cdr e) fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals))))))))
 
 ;; wrapper for `cl-convert-`
-(define (cl-convert e fname lam namemap defined toplevel interp opaq (parsed-method-stack '()) (globals (table)) (locals (table)))
+(define (cl-convert e fname lam namemap defined toplevel interp opaq toplevel-pure (parsed-method-stack '()) (globals (table)) (locals (table)))
   (if (is-method? e)
       (let ((name (method-expr-name e)))
-        (cl-convert- e fname lam namemap defined toplevel interp opaq (cons name parsed-method-stack) globals locals))
-      (cl-convert- e fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))
+        (cl-convert- e fname lam namemap defined toplevel interp opaq toplevel-pure (cons name parsed-method-stack) globals locals))
+      (cl-convert- e fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals)))
 
-(define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f))
+(define (closure-convert e) (cl-convert e #f #f (table) (table) #f #f #f #f))
 
 ;; pass 5: convert to linear IR
 
