@@ -2074,7 +2074,7 @@ function hash(A::AbstractArray, h::UInt)
     h = hash(map(last, axes(A)), h)
 
     len = length(A)
-    
+
     if len < 8
         # for the shortest arrays we chain directly
         for elt in A
