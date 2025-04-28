@@ -182,7 +182,7 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n")
             if t.backtrace !== nothing
                 # Capture error message and indent to match
-                join(io, ("      " * line for line in split(t.backtrace, "\n")), "\n")
+                join(io, ("      " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
             end
         end
     elseif t.test_type === :test_throws_nothing
@@ -199,7 +199,6 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n     Context: ", t.context)
         end
     end
-    println(io) # add some visual space to separate sequential failures
 end
 
 """
@@ -269,7 +268,7 @@ function Base.show(io::IO, t::Error)
         println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        join(io, ("  " * line for line in split(t.backtrace, "\n")), "\n")
+        join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     elseif t.test_type === :test_unbroken
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
@@ -279,7 +278,7 @@ function Base.show(io::IO, t::Error)
         # we had an error outside of a @test
         println(io, "  Got exception outside of a @test")
         # Capture error message and indent to match
-        join(io, ("  " * line for line in split(t.backtrace, "\n")), "\n")
+        join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     end
 end
 
@@ -1169,12 +1168,13 @@ end
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TESTSET_PRINT_ENABLE[])
     if print_result
+        println() # add some visual space to separate sequential failures
         print(ts.description, ": ")
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
             if !isa(t, Error) # if not gets printed in the show method
-                Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)))
+                Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)); prefix="  ")
             end
             println()
         end
@@ -1687,7 +1687,6 @@ Test Failed at none:3
   Expression: !(iszero(real(logi)))
    Evaluated: !(iszero(0.0))
      Context: logi = 0.0 + 1.5707963267948966im
-
 ERROR: There was an error during testing
 
 julia> @testset let logi = log(im), op = !iszero
@@ -1699,7 +1698,6 @@ Test Failed at none:3
    Evaluated: op(0.0)
      Context: logi = 0.0 + 1.5707963267948966im
               op = !iszero
-
 ERROR: There was an error during testing
 ```
 """
