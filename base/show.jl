@@ -695,10 +695,7 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
     return true
 end
 
-show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector) =
-    show(io, string_typeparams(io, env, orig, wheres))
-
-function string_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector)
+function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector, depth::Int)
     n = length(env)
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
@@ -719,34 +716,32 @@ function string_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres
             end
         end
     end
-
-    s_result = if n > 0
-        params_string = join(
-            map(1:n) do i
-                p = env[i]
-                suffix = i < n ? ", " : ""
-                if p isa TypeVar
-                    if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
-                        string("<:", p.ub, suffix)
-                    elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
-                        string(">:", p.lb, suffix)
-                    else
-                        string(p, suffix)
-                    end
+    if n > 0
+        print(io, "{")
+        for i = 1:n
+            p = env[i]
+            if p isa TypeVar
+                if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
+                    print(io, "<:")
+                    show(io, p.ub)
+                elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
+                    print(io, ">:")
+                    show(io, p.lb)
                 else
-                    string(p, suffix)
+                    show(io, p)
                 end
+            else
+                show(io, p)
             end
-        )
-        string("{", params_string, "}")
-    else
-        ""
+            i < n && print(io, ", ")
+        end
+        print(io, "}")
     end
     resize!(wheres, elide)
-    return s_result
+    nothing
 end
 
-function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
+function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector, depth)
     if !(get(io, :compact, false)::Bool)
         # Print module prefix unless alias is visible from module passed to
         # IOContext. If :module is not set, default to Main.
@@ -769,7 +764,7 @@ function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, whe
         push!(vars, orig.var)
         orig = orig.body
     end
-    show_typeparams(io, env, Core.svec(vars...), wheres)
+    show_typeparams(io, env, Core.svec(vars...), wheres, depth)
     nothing
 end
 
@@ -817,12 +812,12 @@ function show_wheres(io::IO, wheres::Vector{TypeVar})
     nothing
 end
 
-function show_typealias(io::IO, @nospecialize(x::Type))
+function show_typealias(io::IO, @nospecialize(x::Type), depth::Int)
     properx = makeproper(io, x)
     alias = make_typealias(properx)
     alias === nothing && return false
     wheres = make_wheres(io, alias[2], x)
-    show_typealias(io, alias[1], x, alias[2], wheres)
+    show_typealias(io, alias[1], x, alias[2], wheres, depth)
     show_wheres(io, wheres)
     return true
 end
@@ -929,7 +924,7 @@ function show_unionaliases(io::IO, x::Union)
         alias = aliases[1]
         env = alias[2]::SimpleVector
         wheres = make_wheres(io, env, x)
-        show_typealias(io, alias[1], x, env, wheres)
+        show_typealias(io, alias[1], x, env, wheres, depth)
         show_wheres(io, wheres)
     else
         for alias in aliases
@@ -937,7 +932,7 @@ function show_unionaliases(io::IO, x::Union)
             first = false
             env = alias[2]::SimpleVector
             wheres = make_wheres(io, env, x)
-            show_typealias(io, alias[1], x, env, wheres)
+            show_typealias(io, alias[1], x, env, wheres, depth)
             show_wheres(io, wheres)
         end
         if tvar
@@ -979,15 +974,15 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     end
 end
 
-show(io::IO, @nospecialize(x::Type)) = _show_type(io, inferencebarrier(x))
-function _show_type(io::IO, @nospecialize(x::Type))
+show(io::IO, @nospecialize(x::Type), depth::Int = 0) = _show_type(io, inferencebarrier(x), depth)
+function _show_type(io::IO, @nospecialize(x::Type), depth::Int)
     if print_without_params(x)
         show_type_name(io, (unwrap_unionall(x)::DataType).name)
         return
-    elseif get(io, :compact, true)::Bool && show_typealias(io, x)
+    elseif get(io, :compact, true)::Bool && show_typealias(io, x, depth)
         return
     elseif x isa DataType
-        show_datatype(io, x)
+        show_datatype(io, x, TypeVar[], depth)
         return
     elseif x isa Union
         if get(io, :compact, true)::Bool && show_unionaliases(io, x)
@@ -1021,7 +1016,7 @@ function _show_type(io::IO, @nospecialize(x::Type))
             io = IOContext(io, :unionall_env => var)
         end
         if x isa DataType
-            show_datatype(io, x, wheres)
+            show_datatype(io, x, wheres, depth)
         else
             show(io, x)
         end
@@ -1135,7 +1130,7 @@ function maybe_kws_nt(x::DataType)
     return nothing
 end
 
-function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
+function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[], depth = 0)
     parameters = x.parameters::SimpleVector
     istuple = x.name === Tuple.name
     isnamedtuple = x.name === typename(NamedTuple)
@@ -1190,21 +1185,21 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         if (vakind == :bound && n == 1 == taillen) || (vakind === :fixed && taillen == fulln > max_n) ||
            (vakind === :none && taillen == fulln > max_n)
             print(io, "NTuple{")
-            vakind === :bound ? show(io, vaN) : print(io, fulln)
+            vakind === :bound ? show(io, vaN, depth) : print(io, fulln)
             print(io, ", ")
-            show(io, pn)
+            show(io, pn, depth)
             print(io, "}")
         else
             print(io, "Tuple{")
             headlen = (taillen > max_n ? fulln - taillen : fulln)
             for i = 1:headlen
                 i > 1 && print(io, ", ")
-                show(io, vakind === :fixed && i >= n ? pn : parameters[i])
+                show(io, vakind === :fixed && i >= n ? pn : parameters[i], depth)
             end
             if headlen < fulln
                 headlen > 0 && print(io, ", ")
                 print(io, "Vararg{")
-                show(io, pn)
+                show(io, pn, depth)
                 print(io, ", ", fulln - headlen, "}")
             end
             print(io, "}")
@@ -1214,7 +1209,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         syms, types = parameters
         if syms isa Tuple && types isa DataType
             print(io, "@NamedTuple{")
-            show_at_namedtuple(io, syms, types)
+            show_at_namedtuple(io, syms, types, depth)
             print(io, "}")
             return
         end
@@ -1222,16 +1217,16 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
         # simplify the type representation of keyword arguments
         # when printing signature of keyword method in the stack trace
         print(io, "@Kwargs{")
-        show_at_namedtuple(io, kwsnt.parameters[1]::Tuple, kwsnt.parameters[2]::DataType)
+        show_at_namedtuple(io, kwsnt.parameters[1]::Tuple, kwsnt.parameters[2]::DataType, depth)
         print(io, "}")
         return
     end
 
     show_type_name(io, x.name)
-    show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+    show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres, depth + 1)
 end
 
-function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
+function show_at_namedtuple(io::IO, syms::Tuple, types::DataType, depth::Int)
     first = true
     for i in eachindex(syms)
         if !first
@@ -1241,7 +1236,7 @@ function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)
         typ = types.parameters[i]
         if typ !== Any
             print(io, "::")
-            show(io, typ)
+            show(io, typ, depth)
         end
         first = false
     end
@@ -2660,11 +2655,21 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     nothing
 end
 
+should_limit_type_depth(io::IO) =
+    get(io, :stacktrace_types_limited, nothing) isa RefValue{Bool}
+
+max_type_depth(io::IO) =
+    get(io, :max_type_depth_limit, Inf)
+
+function type_depth_limit_n(io::IO)
+    sz = get(io, :displaysize, Base.displaysize_(io))::Tuple{Int, Int}
+    return max(sz[2], 120)
+end
+
 function type_limited_string_from_context(out::IO, str::String)
     typelimitflag = get(out, :stacktrace_types_limited, nothing)
     if typelimitflag isa RefValue{Bool}
-        sz = get(out, :displaysize, Base.displaysize_(out))::Tuple{Int, Int}
-        str_lim = type_depth_limit(str, max(sz[2], 120))
+        str_lim = type_depth_limit(str, type_depth_limit_n(out))
         if sizeof(str_lim) < sizeof(str)
             typelimitflag[] = true
         end
@@ -2766,24 +2771,23 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     return String(take!(output))
 end
 
-function print_type_bicolor(io, type; kwargs...)
-    str = sprint(show, type, context=io)
-    print_type_bicolor(io, str; kwargs...)
-end
-
-function print_type_bicolor(io, str::String; color=:normal, inner_color=:light_black, use_color::Bool=true)
-    i = findfirst('{', str)
-    if !use_color # fix #41928
-        print(io, str)
-    elseif i === nothing
-        printstyled(io, str; color=color)
+function print_type_bicolor(io, @nospecialize(type); color=:normal, inner_color=:light_black, use_color::Bool=true, depth::Int)
+    if depth > max_type_depth(io)
     else
-        printstyled(io, str[1:prevind(str,i)]; color=color)
-        if endswith(str, "...")
-            printstyled(io, str[i:prevind(str,end,3)]; color=inner_color)
-            printstyled(io, "..."; color=color)
+        str = sprint(show, type, context=io)
+        i = findfirst('{', str)
+        if !use_color # fix #41928
+            print(io, str)
+        elseif i === nothing
+            printstyled(io, str; color=color)
         else
-            printstyled(io, str[i:end]; color=inner_color)
+            printstyled(io, str[1:prevind(str,i)]; color=color)
+            if endswith(str, "...")
+                printstyled(io, str[i:prevind(str,end,3)]; color=inner_color)
+                printstyled(io, "..."; color=color)
+            else
+                printstyled(io, str[i:end]; color=inner_color)
+            end
         end
     end
 end
