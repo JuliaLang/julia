@@ -4904,6 +4904,9 @@ let ft = Base.datatype_fieldtypes
     @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
 end
 
+# issue #54969
+@test !isdefined(Memory.body, :instance)
+
 # `where` syntax in constructor definitions
 (A12238{T} where T<:Real)(x) = 0
 @test A12238{<:Real}(0) == 0

@@ -2768,3 +2768,17 @@ end
     Tuple{Type{Complex{T}} where T, Type{Complex{T}} where T, Type{String}},
     Tuple{Type{Complex{T}}, Type{Complex{T}}, Type{String}} where T
 )
+
+#issue 58129
+for k in 1:500
+    @eval struct $(Symbol(:T58129, k)){T} end
+end
+let Tvar = TypeVar(:Tvar)
+    V = UnionAll(Tvar, Union{(@eval($(Symbol(:T58129, k)){$Tvar}) for k in 1:500)...})
+    @test Set{<:V} <: AbstractSet{<:V}
+end
+let Tvar1 = TypeVar(:Tvar1), Tvar2 = TypeVar(:Tvar2)
+    V1 = UnionAll(Tvar1, Union{(@eval($(Symbol(:T58129, k)){$Tvar1}) for k in 1:100)...})
+    V2 = UnionAll(Tvar2, Union{(@eval($(Symbol(:T58129, k)){$Tvar2}) for k in 1:100)...})
+    @test Set{<:V2} <: AbstractSet{<:V1}
+end
