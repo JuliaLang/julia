@@ -2771,7 +2771,7 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     return String(take!(output))
 end
 
-function print_type_bicolor(io, @nospecialize(type); color=:normal, inner_color=:light_black, use_color::Bool=true, depth::Int)
+function print_type_bicolor(io, @nospecialize(type); color=:normal, inner_color=:light_black, use_color::Bool=true, depth::Int = 0)
     if depth > max_type_depth(io)
     else
         str = sprint(show, type, context=io)
@@ -2818,7 +2818,7 @@ function ismodulecall(ex::Expr)
            isa(resolvebinding(ex.args[2]), Module)
 end
 
-function show(io::IO, tv::TypeVar)
+function show(io::IO, tv::TypeVar, depth::Int = 0)
     # If we are in the `unionall_env`, the type-variable is bound
     # and the type constraints are already printed.
     # We don't need to print it again.
@@ -2828,7 +2828,7 @@ function show(io::IO, tv::TypeVar)
     function show_bound(io::IO, @nospecialize(b))
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
-        show(io, b)
+        show(io, b, depth)
         parens && print(io, ")")
     end
     lb, ub = tv.lb, tv.ub
@@ -2852,14 +2852,14 @@ function show(io::IO, tv::TypeVar)
     nothing
 end
 
-function show(io::IO, vm::Core.TypeofVararg)
+function show(io::IO, vm::Core.TypeofVararg, depth::Int = 0)
     print(io, "Vararg")
     if isdefined(vm, :T)
         print(io, "{")
-        show(io, vm.T)
+        show(io, vm.T, depth + 1)
         if isdefined(vm, :N)
             print(io, ", ")
-            show(io, vm.N)
+            show(io, vm.N, depth)
         end
         print(io, "}")
     end
