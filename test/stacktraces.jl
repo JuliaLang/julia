@@ -270,6 +270,21 @@ end
     @show sprint(Base.show, typ, context = (:max_type_depth_limit => 6))
 end
 
+Base.@kwdef struct F55952{A,B}
+    num::Int = 1
+end
+
+@testset "Depth-limited type printing performance for highly nested types" begin
+    nest_val(na, nb, ::Val{1}) = F55952{na, nb}()
+    nest_val(na, nb, ::Val{n}) where {n} = nest_val(F55952{na, nb}, F55952{na, nb}, Val(n-1))
+    nest_val(na, nb, n::Int) = nest_val(na, nb, Val(n))
+    nest_val(n) = nest_val(1, 1, n)
+    typ = typeof(nest_val(23))
+    # be careful with changing to a larger number
+    # ~10 seconds before #55952 is fixed:
+    @test 1 > @elapsed sprint(Base.show, typ, context = (:max_type_depth_limit => 2))
+end
+
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
 end

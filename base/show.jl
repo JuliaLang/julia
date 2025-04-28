@@ -903,7 +903,7 @@ function make_typealiases(@nospecialize(x::Type))
     end
 end
 
-function show_unionaliases(io::IO, x::Union)
+function show_unionaliases(io::IO, x::Union, depth::Integer)
     properx = makeproper(io, x)
     aliases, applied = make_typealiases(properx)
     isempty(aliases) && return false
@@ -985,7 +985,7 @@ function _show_type(io::IO, @nospecialize(x::Type), depth::Int)
         show_datatype(io, x, TypeVar[], depth)
         return
     elseif x isa Union
-        if get(io, :compact, true)::Bool && show_unionaliases(io, x)
+        if get(io, :compact, true)::Bool && show_unionaliases(io, x, depth)
             return
         end
         print(io, "Union")
@@ -1194,7 +1194,12 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[], d
             headlen = (taillen > max_n ? fulln - taillen : fulln)
             for i = 1:headlen
                 i > 1 && print(io, ", ")
-                show(io, vakind === :fixed && i >= n ? pn : parameters[i], depth)
+                param = vakind === :fixed && i >= n ? pn : parameters[i]
+                if param isa Type
+                    show(io, param, depth)
+                else
+                    show(io, param)
+                end
             end
             if headlen < fulln
                 headlen > 0 && print(io, ", ")
@@ -2771,23 +2776,26 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     return String(take!(output))
 end
 
-function print_type_bicolor(io, @nospecialize(type); color=:normal, inner_color=:light_black, use_color::Bool=true, depth::Int)
-    if depth > max_type_depth(io)
+function print_type_bicolor(io, type; depth::Int = 0, kwargs...)
+    depth > max_type_depth(io) && return nothing
+    str = sprint(show, type, context=io)
+    print_type_bicolor(io, str; depth, kwargs...)
+end
+
+function print_type_bicolor(io, str::String; color=:normal, inner_color=:light_black, use_color::Bool=true, depth::Int = 0)
+    depth > max_type_depth(io) && return nothing
+    i = findfirst('{', str)
+    if !use_color # fix #41928
+        print(io, str)
+    elseif i === nothing
+        printstyled(io, str; color=color)
     else
-        str = sprint(show, type, context=io)
-        i = findfirst('{', str)
-        if !use_color # fix #41928
-            print(io, str)
-        elseif i === nothing
-            printstyled(io, str; color=color)
+        printstyled(io, str[1:prevind(str,i)]; color=color)
+        if endswith(str, "...")
+            printstyled(io, str[i:prevind(str,end,3)]; color=inner_color)
+            printstyled(io, "..."; color=color)
         else
-            printstyled(io, str[1:prevind(str,i)]; color=color)
-            if endswith(str, "...")
-                printstyled(io, str[i:prevind(str,end,3)]; color=inner_color)
-                printstyled(io, "..."; color=color)
-            else
-                printstyled(io, str[i:end]; color=inner_color)
-            end
+            printstyled(io, str[i:end]; color=inner_color)
         end
     end
 end
@@ -2818,7 +2826,7 @@ function ismodulecall(ex::Expr)
            isa(resolvebinding(ex.args[2]), Module)
 end
 
-function show(io::IO, tv::TypeVar)
+function show(io::IO, tv::TypeVar, depth::Int = 0)
     # If we are in the `unionall_env`, the type-variable is bound
     # and the type constraints are already printed.
     # We don't need to print it again.
@@ -2828,7 +2836,7 @@ function show(io::IO, tv::TypeVar)
     function show_bound(io::IO, @nospecialize(b))
         parens = isa(b,UnionAll) && !print_without_params(b)
         parens && print(io, "(")
-        show(io, b)
+        show(io, b, depth)
         parens && print(io, ")")
     end
     lb, ub = tv.lb, tv.ub
@@ -2852,14 +2860,14 @@ function show(io::IO, tv::TypeVar)
     nothing
 end
 
-function show(io::IO, vm::Core.TypeofVararg)
+function show(io::IO, vm::Core.TypeofVararg, depth::Int = 0)
     print(io, "Vararg")
     if isdefined(vm, :T)
         print(io, "{")
-        show(io, vm.T)
+        show(io, vm.T, depth + 1)
         if isdefined(vm, :N)
             print(io, ", ")
-            show(io, vm.N)
+            show(io, vm.N, depth)
         end
         print(io, "}")
     end
