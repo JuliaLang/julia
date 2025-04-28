@@ -3561,29 +3561,7 @@ sizehint!(a::AbstractVector, _) = a
 
 ## hashing AbstractArray ##
 
-const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
-function hash(A::AbstractArray, h::UInt)
-    h += hash_abstractarray_seed
-    # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
-    # Instead hash the tuple of firsts and lasts along each dimension
-    h = hash(map(first, axes(A)), h)
-    h = hash(map(last, axes(A)), h)
-
-    # For short arrays, it's not worth doing anything complicated
-    if length(A) < 8192
-        num_streams = min(length(A), 8)
-        partials = fill(h, num_streams)
-        for (i, x) in enumerate(A)
-            stream_idx = mod1(i, num_streams)
-            partials[stream_idx] = hash(x, partials[stream_idx])
-        end
-
-        for p in partials
-            h = hash(p, h)
-        end
-        return h
-    end
-
+function _hash_fib(A::AbstractArray, h::UInt)
     # Goal: Hash approximately log(N) entries with a higher density of hashed elements
     # weighted towards the end and special consideration for repeated values. Colliding
     # hashes will often subsequently be compared by equality -- and equality between arrays
@@ -3610,17 +3588,16 @@ function hash(A::AbstractArray, h::UInt)
     linidx = key_to_linear[keyidx]
     fibskip = prevfibskip = oneunit(linidx)
     first_linear = first(LinearIndices(linear_to_key))
+    @nexprs 8 i -> p_i = h
 
-    num_streams = 8
-    partials = fill(h, num_streams)
     n = 0
     while true
         n += 1
         # Hash the element
         elt = A[keyidx]
 
-        stream_idx = mod1(n, num_streams)
-        partials[stream_idx] = hash(keyidx=>elt, partials[stream_idx])
+        stream_idx = mod1(n, 8)
+        @nexprs 8 i -> stream_idx == i && (p_i = hash(keyidx => elt, p_i))
 
         # Skip backwards a Fibonacci number of indices -- this is a linear index operation
         linidx = key_to_linear[keyidx]
@@ -3643,11 +3620,45 @@ function hash(A::AbstractArray, h::UInt)
         keyidx === nothing && break
     end
 
-    for p in partials
-        h = hash(p, h)
-    end
+    @nexprs 8 i -> h = hash_mix_linear(p_i, h)
+    return hash_finalizer(h)
+end
 
-    return h
+const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
+function hash(A::AbstractArray, h::UInt)
+    h ⊻= hash_abstractarray_seed
+    # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
+    # Instead hash the tuple of firsts and lasts along each dimension
+    h = hash(map(first, axes(A)), h)
+    h = hash(map(last, axes(A)), h)
+
+    len = length(A)
+    
+    if len < 8
+        # for the shortest arrays we chain directly
+        for elt in A
+            h = hash(elt, h)
+        end
+        return h
+    elseif len < 65536
+        # separate accumulator streams, unrolled
+        @nexprs 8 i -> p_i = h
+        n  = 1
+        limit = len - 7
+        while n <= limit
+            @nexprs 8 i -> p_i = hash(A[n + i - 1], p_i)
+            n += 8
+        end
+        while n <= len
+            p_1 = hash(A[n], p_1)
+            n += 1
+        end
+        # fold all streams back together
+        @nexprs 8 i -> h = hash_mix_linear(p_i, h)
+        return hash_finalizer(h)
+    else
+        return _hash_fib(A, h)
+    end
 end
 
 # The semantics of `collect` are weird. Better to write our own
