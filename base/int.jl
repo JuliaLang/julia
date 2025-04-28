@@ -900,3 +900,9 @@ function bitreverse(x::BitInteger)
     z = ((z & mask4) << 4) | ((z >> 4) & mask4)
     return bswap(z) % typeof(x)
 end
+
+# length check when concatenating ranges.
+# Defined here to use BitInteger for dispatch.
+function _maybe_checked_length(ra::OrdinalRange{<:BitInteger,<:BitInteger})
+    checked_length(ra)
+end
