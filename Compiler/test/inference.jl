@@ -2264,12 +2264,18 @@ struct AliasableFields{S,T}
     f1::S
     f2::T
 end
+struct NullableAliasableFields{S,T}
+    f1::S
+    f2::T
+    NullableAliasableFields(f1::S, f2::T) where {S,T} = new{S,T}(f1, f2)
+    NullableAliasableFields(f1::S) where {S} = new{S,Union{}}(f1)
+end
 mutable struct AliasableConstField{S,T}
     const f1::S
     f2::T
 end
 
-import .Compiler:
+using .Compiler:
     InferenceLattice, MustAliasesLattice, InterMustAliasesLattice,
     BaseInferenceLattice, SimpleInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
 
@@ -2282,7 +2288,7 @@ Compiler.optimizer_lattice(::MustAliasInterpreter) = SimpleInferenceLattice.inst
 # lattice
 # -------
 
-import .Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
+using .Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
 let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
     ⊑(@nospecialize(a), @nospecialize(b)) = Compiler.:⊑(𝕃ᵢ, a, b)
     tmerge(@nospecialize(a), @nospecialize(b)) = Compiler.tmerge(𝕃ᵢ, a, b)
@@ -2519,6 +2525,15 @@ jet509_hasitems(list) = length(list) >= 1
     end
     error("list is empty")
 end |> only == Vector{Int}
+
+# don't form nested slot wrappers
+@test Base.infer_return_type((NullableAliasableFields{NullableAliasableFields},); interp=MustAliasInterpreter()) do x
+    y = getfield(x, :f1)
+    if isdefined(y, :f2) && isa(getfield(y, :f2), Int)
+        return getfield(y, :f2)
+    end
+    return 0
+end == Int
 
 # === constraint
 # --------------
