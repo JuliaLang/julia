@@ -259,6 +259,17 @@ struct F49231{a,b,c,d,e,f,g} end
     @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n\e[90m")
 end
 
+@testset "depth-limited types" begin
+
+    typ = typeof(view([1, 2, 3], 1:2))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 1))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 2))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 3))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 4))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 5))
+    @show sprint(Base.show, typ, context = (:max_type_depth_limit => 6))
+end
+
 @testset "Base.StackTraces docstrings" begin
     @test isempty(Docs.undocumented_names(StackTraces))
 end
