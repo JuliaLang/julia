@@ -1159,8 +1159,10 @@ count(f, itr; init=0) = _simple_count(f, itr, init)
 
 _simple_count(pred, itr, init) = sum(_bool(pred), itr; init)
 
-function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
-    n::T = init
+function _simple_count(::typeof(identity), x::Array{Bool}, init=0)
+    v0 = _mapreduce_start(identity, Base.add_sum, x, init, false)
+    T = typeof(v0)
+    n::T = v0
     chunks = length(x) ÷ sizeof(UInt)
     mask = 0x0101010101010101 % UInt
     GC.@preserve x begin
