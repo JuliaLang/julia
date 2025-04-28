@@ -638,12 +638,12 @@ const update_stackframes_callback = Ref{Function}(identity)
 const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
-function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, prefix=nothing)
+function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, prefix::Union{Nothing,String}=nothing)
     num_frames = length(trace)
     ndigits_max = ndigits(num_frames)
 
     println(io)
-    prefix === nothing || print(io, prefix)
+    prefix isa String && print(io, prefix)
     println(io, "Stacktrace:")
 
     for (i, (frame, n)) in enumerate(trace)
@@ -704,7 +704,7 @@ function show_reduced_backtrace(io::IO, t::Vector; prefix=nothing)
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
     println(io)
-    prefix === nothing || print(io, prefix)
+    prefix isa String && print(io, prefix)
     println(io, "Stacktrace:")
 
     ndigits_max = ndigits(length(t))
@@ -713,7 +713,7 @@ function show_reduced_backtrace(io::IO, t::Vector; prefix=nothing)
     frame_counter = 1
     for i in eachindex(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
-        prefix === nothing || print(io, prefix)
+        prefix isa String && print(io, prefix)
         print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
 
         if i < length(displayed_stackframes)
@@ -725,7 +725,7 @@ function show_reduced_backtrace(io::IO, t::Vector; prefix=nothing)
             cycle_length = repeated_cycle[1][2]
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
-            prefix === nothing || print(io, prefix)
+            prefix isa String && print(io, prefix)
             printstyled(io,
                 "--- the above ", cycle_length, " lines are repeated ",
                   repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
@@ -743,7 +743,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler; prefix=nothing)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler; prefix::Union{Nothing,String}=nothing)
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
@@ -766,7 +766,7 @@ end
 parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor; prefix=nothing)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor; prefix::Union{Nothing,String}=nothing)
     file, line = string(frame.file), frame.line
 
     # Used by the REPL to make it possible to open
@@ -781,7 +781,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     digit_align_width = ndigits_max + 2
 
     # frame number
-    prefix === nothing || print(io, prefix)
+    prefix isa String && print(io, prefix)
     print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
@@ -791,7 +791,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     end
     println(io)
 
-    prefix === nothing || print(io, prefix)
+    prefix isa String && print(io, prefix)
     # @ Module path / file : line
     print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
 
@@ -820,7 +820,7 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
 end
 
-function show_backtrace(io::IO, t::Vector; prefix=nothing)
+function show_backtrace(io::IO, t::Vector; prefix::Union{Nothing,String}=nothing)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
