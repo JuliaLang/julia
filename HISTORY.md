@@ -394,7 +394,20 @@ Standard library changes
 
 #### StyledStrings
 
-* A new standard library for handling styling in a more comprehensive and structured way ([#49586]).
+* A new experimental standard library for handling styling in a more comprehensive and structured way ([#49586]).
+* Three new types around the idea of text with "annotations" (`Pair{Symbol, Any}`
+  entries, e.g. `:lang => "en"` or `:face => :magenta`). These annotations
+  are preserved across operations (e.g. string concatenation with `*`) when
+  possible.
+  * `AnnotatedString` is a new `AbstractString` type. It wraps an underlying
+    string and allows for annotations to be attached to regions of the string.
+    This type is used extensively to hold styling information.
+  * `AnnotatedChar` is a new `AbstractChar` type. It wraps another char and
+    holds a list of annotations that apply to it.
+  * `AnnotatedIOBuffer` is a new `IO` type that mimics an `IOBuffer`, but has
+    specialised `read`/`write` methods for annotated content. This can be
+    thought of both as a "string builder" of sorts and also as glue between
+    annotated and unannotated content.
 * The new `Faces` struct serves as a container for text styling information
   (think typeface, as well as color and decoration), and comes with a framework
   to provide a convenient, extensible (via `addface!`), and customisable (with a
