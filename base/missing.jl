@@ -325,7 +325,7 @@ mapreduce_impl(f, op, A::SkipMissing, init, ifirst::Integer, ilast::Integer) =
         end
         ismissing(ai) && return nothing
         a1 = ai::eltype(itr)
-        i == typemax(typeof(i)) && return Some(mapreduce_mapreduce_start(f, op, itr, init, a1))
+        i == typemax(typeof(i)) && return Some(_mapreduce_start(f, op, itr, init, a1))
         i += 1
         ai = missing
         for outer i in i:ilast

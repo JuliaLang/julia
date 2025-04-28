@@ -646,8 +646,8 @@ isbadzero(op, x) = false
 isgoodzero(::typeof(max), x) = isbadzero(min, x)
 isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
-function mapreduce_impl(f, op::Union{typeof(max), typeof(min)}, init,
-                        A::AbstractArrayOrBroadcasted, first::Int, last::Int)
+function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
+                        A::AbstractArrayOrBroadcasted, init, first::Integer, last::Integer)
     last == first && throw(AssertionError("mapreduce_impl must process at least two elements"))
     a1 = @inbounds A[first]
     a2 = @inbounds A[first+1]

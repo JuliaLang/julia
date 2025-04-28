@@ -693,8 +693,8 @@ end
     @test_throws TypeError count!([1], [1])
 end
 
-@test count(false:true, dims=:, init=0x0004) === 0x0005
-@test_broken @inferred(count(false:true, dims=:, init=0x0004)) === 0x0005
+@test count(false:true, dims=:, init=0x0004) === 5
+@test_broken @inferred(count(false:true, dims=:, init=0x0004)) === 5
 @test @inferred(count(isodd, reshape(1:9, 3, 3), dims=:, init=Int128(0))) === Int128(5)
 
 @testset "reduced_index for BigInt (issue #39995)" begin
