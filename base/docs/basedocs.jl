@@ -2762,7 +2762,7 @@ replacing, `x` does not need to have the same type as the original constant.
 When `x` is not given, `name` becomes an undefined constant; it cannot be read
 or written to, but can be redefined.
 
-Note that this function does not update the world age of the current task:
+Unlike the syntax `const`, calling this function does not insert `Core.@latestworld` to update the world age of the current frame:
 ```
 julia> begin
            const x = 1
@@ -2771,10 +2771,13 @@ julia> begin
            println(x)
            Core.setconst!(Main, :x, 3)
            println(x)
+           Core.@latestworld
+           println(x)
        end
 1
 2
 2
+3
 ```
 
 !!! compat "Julia 1.12"
