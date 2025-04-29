@@ -2,7 +2,7 @@
 
 #Period types
 """
-    Dates.value(x::Period) -> Int64
+    Dates.value(x::Period)::Int64
 
 For a given period, return the value associated with that period.  For example,
 `value(Millisecond(10))` returns 10 as an integer.
@@ -28,7 +28,7 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
     for typ_str in typs
         @eval begin
             @doc """
-                $($period_str)(dt::$($typ_str)) -> $($period_str)
+                $($period_str)(dt::$($typ_str))
 
             The $($accessor_str) part of a $($typ_str) as a `$($period_str)`.$($reference)
             """ $period(dt::$(Symbol(typ_str))) = $period($(Symbol(accessor_str))(dt))
@@ -56,7 +56,7 @@ Base.isfinite(::Union{Type{P}, P}) where {P<:Period} = true
 
 # Default values (as used by TimeTypes)
 """
-    default(p::Period) -> Period
+    default(p::Period)::Period
 
 Return a sensible "default" value for the input Period by returning `T(1)` for Year,
 Month, and Day, and `T(0)` for Hour, Minute, Second, and Millisecond.
@@ -165,7 +165,7 @@ struct CompoundPeriod <: AbstractTime
 end
 
 """
-    Dates.periods(::CompoundPeriod) -> Vector{Period}
+    Dates.periods(::CompoundPeriod)::Vector{Period}
 
 Return the `Vector` of `Period`s that comprise the given `CompoundPeriod`.
 
@@ -175,7 +175,7 @@ Return the `Vector` of `Period`s that comprise the given `CompoundPeriod`.
 periods(x::CompoundPeriod) = x.periods
 
 """
-    CompoundPeriod(periods) -> CompoundPeriod
+    CompoundPeriod(periods)
 
 Construct a `CompoundPeriod` from a `Vector` of `Period`s. All `Period`s of the same type
 will be added together.
@@ -204,7 +204,7 @@ CompoundPeriod(p::Period...) = CompoundPeriod(Period[p...])
 
 
 """
-    canonicalize(::CompoundPeriod) -> CompoundPeriod
+    canonicalize(::CompoundPeriod)::CompoundPeriod
 
 Reduces the `CompoundPeriod` into its canonical form by applying the following rules:
 

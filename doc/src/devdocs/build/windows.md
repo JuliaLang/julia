@@ -32,7 +32,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 ## Binary distribution
 
 For the binary distribution installation notes on Windows please see the instructions at
-[https://julialang.org/downloads/platform/#windows](https://julialang.org/downloads/platform/#windows).
+[https://julialang.org/downloads/platform/#windows](https://julialang.org/downloads/platform/#windows). Note, however, that on all platforms [using `juliaup`](https://julialang.org/install/) is recommended over manually installing binaries.
 
 ## Source distribution
 
@@ -129,32 +129,32 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
     2. Open the MSYS2 shell. Update the package database and base packages:
 
-        ```
-        pacman -Syu
-        ```
+       ```
+       pacman -Syu
+       ```
     3. Exit and restart MSYS2. Update the rest of the base packages:
 
-        ```
-        pacman -Syu
-        ```
+       ```
+       pacman -Syu
+       ```
 
     4. Then install tools required to build julia:
 
-        ```
-        pacman -S cmake diffutils git m4 make patch tar p7zip curl python
-        ```
+       ```
+       pacman -S cmake diffutils git m4 make patch tar p7zip curl python
+       ```
 
-        For 64 bit Julia, install the x86_64 version:
+       For 64 bit Julia, install the x86_64 version:
 
-        ```
-        pacman -S mingw-w64-x86_64-gcc
-        ```
+       ```
+       pacman -S mingw-w64-x86_64-gcc
+       ```
 
-        For 32 bit Julia, install the i686 version:
+       For 32 bit Julia, install the i686 version:
 
-        ```
-        pacman -S mingw-w64-i686-gcc
-        ```
+       ```
+       pacman -S mingw-w64-i686-gcc
+       ```
 
     5. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
  2. Build Julia and its dependencies with pre-build dependencies.
@@ -166,16 +166,16 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
     2. Clone the Julia sources:
 
-        ```
-        git clone https://github.com/JuliaLang/julia.git
-        cd julia
-        ```
+       ```sh
+       git clone https://github.com/JuliaLang/julia.git
+       cd julia
+       ```
 
     3. Start the build
 
-        ```
-        make -j$(nproc)
-        ```
+       ```
+       make -j$(nproc)
+       ```
 
 !!! note "Pro tip: build in dir"
     ```sh

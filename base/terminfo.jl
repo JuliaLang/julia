@@ -262,7 +262,7 @@ function find_terminfo_file(term::String)
         append!(terminfo_dirs,
                 replace(split(ENV["TERMINFO_DIRS"], ':'),
                         "" => "/usr/share/terminfo"))
-    push!(terminfo_dirs, normpath(Sys.BINDIR, DATAROOTDIR, "terminfo"))
+    push!(terminfo_dirs, normpath(Sys.BINDIR, DATAROOTDIR, "julia", "terminfo"))
     Sys.isunix() &&
         push!(terminfo_dirs, "/etc/terminfo", "/lib/terminfo", "/usr/share/terminfo")
     for dir in terminfo_dirs

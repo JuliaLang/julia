@@ -26,10 +26,10 @@ for r in uv_req_types
 @eval const $(Symbol("_sizeof_", lowercase(string(r)))) = uv_sizeof_req($r)
 end
 
-uv_handle_data(handle) = ccall(:jl_uv_handle_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
-uv_req_data(handle) = ccall(:jl_uv_req_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
-uv_req_set_data(req, data) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Any), req, data)
-uv_req_set_data(req, data::Ptr{Cvoid}) = ccall(:jl_uv_req_set_data, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), req, data)
+uv_handle_data(handle) = ccall(:uv_handle_get_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
+uv_req_data(handle) = ccall(:uv_req_get_data, Ptr{Cvoid}, (Ptr{Cvoid},), handle)
+uv_req_set_data(req, data) = ccall(:uv_req_set_data, Cvoid, (Ptr{Cvoid}, Any), req, data)
+uv_req_set_data(req, data::Ptr{Cvoid}) = ccall(:uv_handle_set_data, Cvoid, (Ptr{Cvoid}, Ptr{Cvoid}), req, data)
 
 macro handle_as(hand, typ)
     return quote
@@ -103,7 +103,8 @@ struverror(err::Int32) = unsafe_string(ccall(:uv_strerror, Cstring, (Int32,), er
 uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name, Cstring, (Int32,), err))
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix), c)
-uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix, c)) : nothing
+uv_error(prefix::AbstractString, c::Integer) = c < 0 ? _uv_error(prefix, c) : nothing
+_uv_error(prefix::AbstractString, c::Integer) = throw(_UVError(prefix, c))
 
 ## event loop ##
 
@@ -133,7 +134,10 @@ function uv_return_spawn end
 function uv_asynccb end
 function uv_timercb end
 
-function reinit_stdio()
+reinit_stdio() = _reinit_stdio()
+# we need this so it can be called by codegen to print errors, even after
+# reinit_stdio has been redefined by the juliac build script.
+function _reinit_stdio()
     global stdin = init_stdio(ccall(:jl_stdin_stream, Ptr{Cvoid}, ()))::IO
     global stdout = init_stdio(ccall(:jl_stdout_stream, Ptr{Cvoid}, ()))::IO
     global stderr = init_stdio(ccall(:jl_stderr_stream, Ptr{Cvoid}, ()))::IO

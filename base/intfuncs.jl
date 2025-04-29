@@ -8,6 +8,9 @@
 Greatest common (positive) divisor (or zero if all arguments are zero).
 The arguments may be integer and rational numbers.
 
+``a`` is a divisor of ``b`` if there exists an integer ``m`` such
+that ``ma=b``.
+
 !!! compat "Julia 1.4"
     Rational arguments require Julia 1.4 or later.
 
@@ -97,6 +100,9 @@ end
 Least common (positive) multiple (or zero if any argument is zero).
 The arguments may be integer and rational numbers.
 
+``a`` is a multiple of ``b`` if there exists an integer ``m`` such
+that ``a=mb``.
+
 !!! compat "Julia 1.4"
     Rational arguments require Julia 1.4 or later.
 
@@ -150,7 +156,16 @@ gcd(a::T, b::T) where T<:Real = throw(MethodError(gcd, (a,b)))
 lcm(a::T, b::T) where T<:Real = throw(MethodError(lcm, (a,b)))
 
 gcd(abc::AbstractArray{<:Real}) = reduce(gcd, abc; init=zero(eltype(abc)))
-lcm(abc::AbstractArray{<:Real}) = reduce(lcm, abc; init=one(eltype(abc)))
+function lcm(abc::AbstractArray{<:Real})
+    # Using reduce with init=one(eltype(abc)) is buggy for Rationals.
+    l = length(abc)
+    if l == 0
+        eltype(abc) <: Integer && return one(eltype(abc))
+        throw(ArgumentError("lcm has no identity for $(eltype(abc))"))
+    end
+    l == 1 && return abs(only(abc))
+    return reduce(lcm, abc)
+end
 
 function gcd(abc::AbstractArray{<:Integer})
     a = zero(eltype(abc))
@@ -165,16 +180,23 @@ end
 
 # return (gcd(a, b), x, y) such that ax+by == gcd(a, b)
 """
-    gcdx(a, b)
+    gcdx(a, b...)
 
 Computes the greatest common (positive) divisor of `a` and `b` and their Bézout
 coefficients, i.e. the integer coefficients `u` and `v` that satisfy
-``ua+vb = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
+``u*a + v*b = d = gcd(a, b)``. ``gcdx(a, b)`` returns ``(d, u, v)``.
+
+For more arguments than two, i.e., `gcdx(a, b, c, ...)` the Bézout coefficients are computed
+recursively, returning a solution `(d, u, v, w, ...)` to
+``u*a + v*b + w*c + ... = d = gcd(a, b, c, ...)``.
 
 The arguments may be integer and rational numbers.
 
 !!! compat "Julia 1.4"
     Rational arguments require Julia 1.4 or later.
+
+!!! compat "Julia 1.12"
+    More or fewer arguments than two require Julia 1.12 or later.
 
 # Examples
 ```jldoctest
@@ -183,6 +205,9 @@ julia> gcdx(12, 42)
 
 julia> gcdx(240, 46)
 (2, -9, 47)
+
+julia> gcdx(15, 12, 20)
+(1, 7, -7, -1)
 ```
 
 !!! note
@@ -215,6 +240,18 @@ Base.@assume_effects :terminates_locally function gcdx(a::Integer, b::Integer)
 end
 gcdx(a::Real, b::Real) = gcdx(promote(a,b)...)
 gcdx(a::T, b::T) where T<:Real = throw(MethodError(gcdx, (a,b)))
+gcdx(a::Real) = (gcd(a), signbit(a) ? -one(a) : one(a))
+function gcdx(a::Real, b::Real, cs::Real...)
+    # a solution to the 3-arg `gcdx(a,b,c)` problem, `u*a + v*b + w*c = gcd(a,b,c)`, can be
+    # obtained from the 2-arg problem in three steps:
+    #   1. `gcdx(a,b)`: solve `i*a + j*b = d′ = gcd(a,b)` for `(i,j)`
+    #   2. `gcdx(d′,c)`: solve `x*gcd(a,b) + yc = gcd(gcd(a,b),c) = gcd(a,b,c)` for `(x,y)`
+    #   3. return `d = gcd(a,b,c)`, `u = i*x`, `v = j*x`, and `w = y`
+    # the N-arg solution proceeds similarly by recursion
+    d, i, j = gcdx(a, b)
+    d′, x, ys... = gcdx(d, cs...)
+    return d′, i*x, j*x, ys...
+end
 
 # multiplicative inverse of n mod m, error if none
 
@@ -298,7 +335,11 @@ function invmod(n::T) where {T<:BitInteger}
 end
 
 # ^ for any x supporting *
-to_power_type(x) = convert(Base._return_type(*, Tuple{typeof(x), typeof(x)}), x)
+function to_power_type(x::Number)
+    T = promote_type(typeof(x), typeof(x*x))
+    convert(T, x)
+end
+to_power_type(x) = oftype(x*x, x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer x to a negative power ", p, ".",
     "\nConvert input to float.")))
@@ -362,7 +403,7 @@ end
 
 # Restrict inlining to hardware-supported arithmetic types, which
 # are fast enough to benefit from inlining.
-const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float32,Float64}
+const HWReal = Union{Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64,Float16,Float32,Float64}
 const HWNumber = Union{HWReal, Complex{<:HWReal}, Rational{<:HWReal}}
 
 # Inline x^2 and x^3 for Val
@@ -464,7 +505,7 @@ _prevpow2(x::Unsigned) = one(x) << unsigned(top_set_bit(x)-1)
 _prevpow2(x::Integer) = reinterpret(typeof(x),x < 0 ? -_prevpow2(unsigned(-x)) : _prevpow2(unsigned(x)))
 
 """
-    ispow2(n::Number) -> Bool
+    ispow2(n::Number)::Bool
 
 Test whether `n` is an integer power of two.
 
@@ -529,7 +570,8 @@ function nextpow(a::Real, x::Real)
     n = ceil(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
     p = a^(n-1)
-    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    hastypemax(typeof(p)) && x > typemax(p) &&
+        throw(DomainError(x,"argument is beyond the range of type of the base"))
     p >= x && return p
     wp = a^n
     wp > p || throw(OverflowError("result is beyond the range of type of the base"))
@@ -570,9 +612,10 @@ function prevpow(a::T, x::Real) where T <: Real
     n = floor(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
     p = a^n
-    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    hastypemax(typeof(p)) && x > typemax(p) &&
+        throw(DomainError(x,"argument is beyond the range of type of the base"))
     if a isa Integer
-        wp, overflow = mul_with_overflow(a, p)
+        wp, overflow = mul_with_overflow(promote(a, p)...)
         wp <= x && !overflow && return wp
     else
         wp = a^(n+1)
@@ -766,7 +809,7 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    String(a)
+    unsafe_takestring(a)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
@@ -780,7 +823,7 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
         i -= 1
     end
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    String(a)
+    unsafe_takestring(a)
 end
 
 # 2-digit decimal characters ("00":"99")
@@ -804,7 +847,7 @@ function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
     while i >= 2
         d, c = divrem(digits, 0x64)
         digits = oftype(digits, d)
-        @inbounds d100 = _dec_d100[(c % Int) + 1]
+        @inbounds d100 = _dec_d100[(c % Int)::Int + 1]
         @inbounds buf[pos + i - 2] = d100 % UInt8
         @inbounds buf[pos + i - 1] = (d100 >> 0x8) % UInt8
         i -= 2
@@ -850,7 +893,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     a = StringMemory(n)
     append_c_digits_fast(n, x, a, 1)
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    String(a)
+    unsafe_takestring(a)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
@@ -871,7 +914,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
         @inbounds a[i] = d + ifelse(d > 0x9, 0x57, 0x30)
     end
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    String(a)
+    unsafe_takestring(a)
 end
 
 const base36digits = UInt8['0':'9';'a':'z']
@@ -896,7 +939,7 @@ function _base(base::Integer, x::Integer, pad::Int, neg::Bool)
         i -= 1
     end
     neg && (@inbounds a[1] = 0x2d) # UInt8('-')
-    String(a)
+    unsafe_takestring(a)
 end
 
 split_sign(n::Integer) = unsigned(abs(n)), n < 0
@@ -972,7 +1015,7 @@ function bitstring(x::T) where {T}
         x = lshr_int(x, 4)
         i -= 4
     end
-    return String(str)
+    return unsafe_takestring(str)
 end
 
 """
@@ -1021,12 +1064,10 @@ function digits(T::Type{<:Integer}, n::Integer; base::Integer = 10, pad::Integer
 end
 
 """
-    hastypemax(T::Type) -> Bool
+    hastypemax(T::Type)::Bool
 
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
-hastypemax(::Base.BitIntegerType) = true
-hastypemax(::Type{Bool}) = true
 hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
 
 """
@@ -1179,6 +1220,8 @@ julia> binomial(-5, 3)
 # External links
 * [Binomial coefficient](https://en.wikipedia.org/wiki/Binomial_coefficient) on Wikipedia.
 """
+binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
+
 Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:Integer
     n0, k0 = n, k
     k < 0 && return zero(T)
@@ -1207,7 +1250,6 @@ Base.@assume_effects :terminates_locally function binomial(n::T, k::T) where T<:
     end
     copysign(x, sgn)
 end
-binomial(n::Integer, k::Integer) = binomial(promote(n, k)...)
 
 """
     binomial(x::Number, k::Integer)

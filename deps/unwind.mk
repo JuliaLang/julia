@@ -3,8 +3,9 @@ include $(SRCDIR)/unwind.version
 include $(SRCDIR)/llvmunwind.version
 
 ifneq ($(USE_BINARYBUILDER_LIBUNWIND),1)
-LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) -lz $(SANITIZE_OPTS)
-LIBUNWIND_CPPFLAGS :=
+LIBUNWIND_CFLAGS := -U_FORTIFY_SOURCE $(fPIC) $(SANITIZE_OPTS)
+LIBUNWIND_CPPFLAGS := -I$(build_includedir)
+LIBUNWIND_LDFLAGS := -L$(build_shlibdir)
 
 ifeq ($(USE_SYSTEM_ZLIB),0)
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: | $(build_prefix)/manifest/zlib
@@ -48,7 +49,7 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-app
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UNWIND_VER)/source-extracted $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo --disable-conservative-checks --enable-per-thread-cache
+	$(dir $<)/configure $(CONFIGURE_COMMON) CPPFLAGS="$(CPPFLAGS) $(LIBUNWIND_CPPFLAGS)" CFLAGS="$(CFLAGS) $(LIBUNWIND_CFLAGS)" LDFLAGS="$(LDFLAGS) $(LIBUNWIND_LDFLAGS)" --enable-shared --disable-minidebuginfo --disable-tests --enable-zlibdebuginfo --disable-conservative-checks --enable-per-thread-cache
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
@@ -85,7 +86,7 @@ check-unwind: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-checked
 
 ## LLVM libunwind ##
 
-LLVMUNWIND_OPTS := $(CMAKE_COMMON) \
+LLVMUNWIND_OPTS := $(CMAKE_GENERATOR_COMMAND) $(CMAKE_COMMON) \
 	-DCMAKE_BUILD_TYPE=MinSizeRel \
 	-DLIBUNWIND_ENABLE_PEDANTIC=OFF \
 	-DLIBUNWIND_INCLUDE_DOCS=OFF \
@@ -93,6 +94,7 @@ LLVMUNWIND_OPTS := $(CMAKE_COMMON) \
 	-DLIBUNWIND_INSTALL_HEADERS=ON \
 	-DLIBUNWIND_ENABLE_ASSERTIONS=OFF \
 	-DLLVM_CONFIG_PATH=$(build_depsbindir)/llvm-config \
+	-DLLVM_ENABLE_RUNTIMES="libunwind" \
 	-DLLVM_PATH=$(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/llvm
 
 $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz: | $(SRCCACHE)
@@ -122,16 +124,23 @@ checksum-llvmunwind: $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz
 $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/source-extracted $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/libunwind/llvm-libunwind-freebsd-libgcc-api-compat.patch-applied
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<)/libunwind $(LLVMUNWIND_OPTS)
+	$(CMAKE) $(dir $<) -S $(dir $<)/runtimes $(LLVMUNWIND_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled: $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured
-	$(MAKE) -C $(dir $<)
+	cd $(dir $<) && \
+	$(if $(filter $(CMAKE_GENERATOR),make), \
+		  $(MAKE), \
+		  $(CMAKE) --build . --target unwind)
 	echo 1 > $@
+
+LIBUNWIND_INSTALL = \
+	cd $1 && mkdir -p $2$$(build_depsbindir) && \
+	$$(CMAKE) -DCMAKE_INSTALL_PREFIX="$2$$(build_prefix)" -P libunwind/cmake_install.cmake
 
 $(eval $(call staged-install, \
 	llvmunwind,llvmunwind-$(LLVMUNWIND_VER), \
-	MAKE_INSTALL,,, \
+	LIBUNWIND_INSTALL,,, \
 	cp -fR $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER)/libunwind/* $(build_includedir)))
 
 clean-llvmunwind:

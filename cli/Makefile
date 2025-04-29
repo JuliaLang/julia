@@ -25,13 +25,11 @@ else ifeq ($(OS),FreeBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed
 else ifeq ($(OS),OpenBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -lpthread -rdynamic -lc -Wl,--as-needed
-else ifeq ($(OS),Darwin)
-LOADER_LDFLAGS += -lSystem
 endif
 
 # Build list of dependent libraries that must be opened
-SHIPFLAGS  += -DDEP_LIBS="\"$(LOADER_BUILD_DEP_LIBS)\""
-DEBUGFLAGS += -DDEP_LIBS="\"$(LOADER_DEBUG_BUILD_DEP_LIBS)\""
+SHIPFLAGS  += -DDEP_LIBS=$(call shell_escape,$(call c_escape,$(LOADER_BUILD_DEP_LIBS)))
+DEBUGFLAGS += -DDEP_LIBS=$(call shell_escape,$(call c_escape,$(LOADER_DEBUG_BUILD_DEP_LIBS)))
 ifneq (,$(findstring MINGW,$(shell uname)))
 # In MSYS2, do not perform path conversion for `DEP_LIBS`.
 # https://www.msys2.org/wiki/Porting/#filesystem-namespaces

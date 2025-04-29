@@ -131,13 +131,17 @@ function fixup_stdlib_path(path::String)
     # The file defining Base.Sys gets included after this file is included so make sure
     # this function is valid even in this intermediary state
     if isdefined(@__MODULE__, :Sys)
-        BUILD_STDLIB_PATH = Sys.BUILD_STDLIB_PATH::String
-        STDLIB = Sys.STDLIB::String
-        if BUILD_STDLIB_PATH != STDLIB
+        if Sys.BUILD_STDLIB_PATH != Sys.STDLIB
             # BUILD_STDLIB_PATH gets defined in sysinfo.jl
             npath = normpath(path)
-            npath′ = replace(npath, normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
-            return npath == npath′ ? path : npath′
+            npath′ = replace(npath, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
+            path = npath == npath′ ? path : npath′
+        end
+        if isdefined(@__MODULE__, :Core) && isdefined(Core, :Compiler)
+            compiler_folder = dirname(String(Base.moduleloc(Core.Compiler).file))
+            if dirname(path) == compiler_folder
+                return abspath(Sys.STDLIB, "..", "..", "Compiler", "src", basename(path))
+            end
         end
     end
     return path
@@ -378,7 +382,6 @@ function url(m::Method)
     line = m.line
     line <= 0 || occursin(r"In\[[0-9]+\]"a, file) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
-    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release
@@ -386,8 +389,10 @@ function url(m::Method)
         else
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
-    elseif root_module_exists(libgit2_id)
-        LibGit2 = root_module(libgit2_id)
+    end
+    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
+    LibGit2 = maybe_root_module(libgit2_id)
+    if LibGit2 isa Module
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
@@ -404,11 +409,10 @@ function url(m::Method)
                 end
             end
         catch
-            return fileurl(file)
+            # oops, this was a bad idea
         end
-    else
-        return fileurl(file)
     end
+    return fileurl(file)
 end
 
 function show(io::IO, ::MIME"text/html", m::Method)

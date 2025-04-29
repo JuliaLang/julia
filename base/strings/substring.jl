@@ -143,7 +143,7 @@ end
 _isannotated(::SubString{T}) where {T} = _isannotated(T)
 
 """
-    reverse(s::AbstractString) -> AbstractString
+    reverse(s::AbstractString)::AbstractString
 
 Reverses a string. Technically, this function reverses the codepoints in a string and its
 main utility is for reversed-order string processing, especially for reversed
@@ -272,6 +272,7 @@ end
 
 function repeat(s::Union{String, SubString{String}}, r::Integer)
     r < 0 && throw(ArgumentError("can't repeat a string $r times"))
+    r = UInt(r)::UInt
     r == 0 && return ""
     r == 1 && return String(s)
     n = sizeof(s)

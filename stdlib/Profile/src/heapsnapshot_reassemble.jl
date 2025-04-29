@@ -155,7 +155,8 @@ function assemble_snapshot(in_prefix, io::IO)
         _write_decimal_number(io, nodes.edge_count[i], _digits_buf)
         print(io, ",0,0")
     end
-    print(io, "],\"edges\":[")
+    print(io, "],\n")
+    print(io, "\"edges\":[")
     e = 1
     for n in 1:length(nodes)
         count = nodes.edge_count[n]
@@ -176,6 +177,13 @@ function assemble_snapshot(in_prefix, io::IO)
         end
     end
     println(io, "],")
+
+    # not used. Required by microsoft/vscode-v8-heap-tools
+    # This order of these fields is required by chrome dev tools otherwise loading fails
+    println(io, "\"trace_function_infos\":[],")
+    println(io, "\"trace_tree\":[],")
+    println(io, "\"samples\":[],")
+    println(io, "\"locations\":[],")
 
     println(io, "\"strings\":[")
     open(string(in_prefix, ".strings"), "r") do strings_io

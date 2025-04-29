@@ -26,7 +26,7 @@ function showerror(io::IO, ce::CapturedException)
 end
 
 """
-    capture_exception(ex, bt) -> Exception
+    capture_exception(ex, bt)::Exception
 
 Returns an exception, possibly incorporating information from a backtrace `bt`. Defaults to returning [`CapturedException(ex, bt)`](@ref).
 
@@ -143,13 +143,6 @@ macro task(ex)
     :(Task($thunk))
 end
 
-"""
-    current_task()
-
-Get the currently running [`Task`](@ref).
-"""
-current_task() = ccall(:jl_get_current_task, Ref{Task}, ())
-
 # task states
 
 const task_state_runnable = UInt8(0)
@@ -192,7 +185,7 @@ end
 end
 
 """
-    istaskdone(t::Task) -> Bool
+    istaskdone(t::Task)::Bool
 
 Determine whether a task has exited.
 
@@ -216,7 +209,7 @@ true
 istaskdone(t::Task) = (@atomic :acquire t._state) !== task_state_runnable
 
 """
-    istaskstarted(t::Task) -> Bool
+    istaskstarted(t::Task)::Bool
 
 Determine whether a task has started executing.
 
@@ -233,7 +226,7 @@ false
 istaskstarted(t::Task) = ccall(:jl_is_task_started, Cint, (Any,), t) != 0
 
 """
-    istaskfailed(t::Task) -> Bool
+    istaskfailed(t::Task)::Bool
 
 Determine whether a task has exited because an exception was thrown.
 
@@ -856,6 +849,11 @@ function task_done_hook(t::Task)
     end
 end
 
+function init_task_lock(t::Task) # Function only called from jl_adopt_thread so foreign tasks have a lock.
+    if t.donenotify === nothing
+        t.donenotify = ThreadSynchronizer()
+    end
+end
 
 ## scheduler and work queue
 
@@ -979,7 +977,11 @@ function enq_work(t::Task)
     return t
 end
 
-schedule(t::Task) = enq_work(t)
+function schedule(t::Task)
+    # [task] created -scheduled-> wait_time
+    maybe_record_enqueued!(t)
+    enq_work(t)
+end
 
 """
     schedule(t::Task, [val]; error=false)
@@ -1033,6 +1035,8 @@ function schedule(t::Task, @nospecialize(arg); error=false)
         t.queue === nothing || Base.error("schedule: Task not runnable")
         setfield!(t, :result, arg)
     end
+    # [task] created -scheduled-> wait_time
+    maybe_record_enqueued!(t)
     enq_work(t)
     return t
 end
@@ -1066,11 +1070,15 @@ immediately yields to `t` before calling the scheduler.
 Throws a `ConcurrencyViolationError` if `t` is the currently running task.
 """
 function yield(t::Task, @nospecialize(x=nothing))
-    current = current_task()
-    t === current && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
+    ct = current_task()
+    t === ct && throw(ConcurrencyViolationError("Cannot yield to currently running task!"))
     (t._state === task_state_runnable && t.queue === nothing) || throw(ConcurrencyViolationError("yield: Task not runnable"))
+    # [task] user_time -yield-> wait_time
+    record_running_time!(ct)
+    # [task] created -scheduled-> wait_time
+    maybe_record_enqueued!(t)
     t.result = x
-    enq_work(current)
+    enq_work(ct)
     set_next_task(t)
     return try_yieldto(ensure_rescheduled)
 end
@@ -1084,6 +1092,7 @@ call to `yieldto`. This is a low-level call that only switches tasks, not consid
 or scheduling in any way. Its use is discouraged.
 """
 function yieldto(t::Task, @nospecialize(x=nothing))
+    ct = current_task()
     # TODO: these are legacy behaviors; these should perhaps be a scheduler
     # state error instead.
     if t._state === task_state_done
@@ -1091,6 +1100,10 @@ function yieldto(t::Task, @nospecialize(x=nothing))
     elseif t._state === task_state_failed
         throw(t.result)
     end
+    # [task] user_time -yield-> wait_time
+    record_running_time!(ct)
+    # [task] created -scheduled-unfairly-> wait_time
+    maybe_record_enqueued!(t)
     t.result = x
     set_next_task(t)
     return try_yieldto(identity)
@@ -1104,6 +1117,10 @@ function try_yieldto(undo)
         rethrow()
     end
     ct = current_task()
+    # [task] wait_time -(re)started-> user_time
+    if ct.metrics_enabled
+        @atomic :monotonic ct.last_started_running_at = time_ns()
+    end
     if ct._isexception
         exc = ct.result
         ct.result = nothing
@@ -1117,10 +1134,25 @@ end
 
 # yield to a task, throwing an exception in it
 function throwto(t::Task, @nospecialize exc)
+    ct = current_task()
+    # [task] user_time -yield-> wait_time
+    record_running_time!(ct)
+    # [task] created -scheduled-unfairly-> wait_time
+    maybe_record_enqueued!(t)
     t.result = exc
     t._isexception = true
     set_next_task(t)
     return try_yieldto(identity)
+end
+
+@inline function wait_forever()
+    while true
+        wait()
+    end
+end
+
+const get_sched_task = OncePerThread{Task}() do
+    Task(wait_forever)
 end
 
 function ensure_rescheduled(othertask::Task)
@@ -1159,22 +1191,39 @@ end
 
 checktaskempty = Partr.multiq_check_empty
 
-@noinline function poptask(W::StickyWorkqueue)
+function wait()
+    ct = current_task()
+    # [task] user_time -yield-or-done-> wait_time
+    record_running_time!(ct)
+    # let GC run
+    GC.safepoint()
+    # check for libuv events
+    process_events()
+
+    # get the next task to run
+    result = nothing
+    have_result = false
+    W = workqueue_for(Threads.threadid())
     task = trypoptask(W)
     if !(task isa Task)
-        task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
+        # No tasks to run; switch to the scheduler task to run the
+        # thread sleep logic.
+        sched_task = get_sched_task()
+        if ct !== sched_task
+            result = yieldto(sched_task)
+            have_result = true
+        else
+            task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any),
+                         trypoptask, W, checktaskempty)
+        end
     end
-    set_next_task(task)
-    nothing
-end
-
-function wait()
-    GC.safepoint()
-    W = workqueue_for(Threads.threadid())
-    poptask(W)
-    result = try_yieldto(ensure_rescheduled)
-    process_events()
-    # return when we come out of the queue
+    # We may have already switched tasks (via the scheduler task), so
+    # only switch if we haven't.
+    if !have_result
+        @assert task isa Task
+        set_next_task(task)
+        result = try_yieldto(ensure_rescheduled)
+    end
     return result
 end
 
@@ -1182,4 +1231,22 @@ if Sys.iswindows()
     pause() = ccall(:Sleep, stdcall, Cvoid, (UInt32,), 0xffffffff)
 else
     pause() = ccall(:pause, Cvoid, ())
+end
+
+# update the `running_time_ns` field of `t` to include the time since it last started running.
+function record_running_time!(t::Task)
+    if t.metrics_enabled && !istaskdone(t)
+        @atomic :monotonic t.running_time_ns += time_ns() - t.last_started_running_at
+    end
+    return t
+end
+
+# if this is the first time `t` has been added to the run queue
+# (or the first time it has been unfairly yielded to without being added to the run queue)
+# then set the `first_enqueued_at` field to the current time.
+function maybe_record_enqueued!(t::Task)
+    if t.metrics_enabled && t.first_enqueued_at == 0
+        @atomic :monotonic t.first_enqueued_at = time_ns()
+    end
+    return t
 end

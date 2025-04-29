@@ -30,7 +30,6 @@ JL_DLLEXPORT jl_sym_t *jl_module_sym;
 JL_DLLEXPORT jl_sym_t *jl_slot_sym;
 JL_DLLEXPORT jl_sym_t *jl_export_sym;
 JL_DLLEXPORT jl_sym_t *jl_public_sym;
-JL_DLLEXPORT jl_sym_t *jl_import_sym;
 JL_DLLEXPORT jl_sym_t *jl_toplevel_sym;
 JL_DLLEXPORT jl_sym_t *jl_quote_sym;
 JL_DLLEXPORT jl_sym_t *jl_line_sym;
@@ -51,7 +50,6 @@ JL_DLLEXPORT jl_sym_t *jl_pop_exception_sym;
 JL_DLLEXPORT jl_sym_t *jl_exc_sym;
 JL_DLLEXPORT jl_sym_t *jl_error_sym;
 JL_DLLEXPORT jl_sym_t *jl_new_sym;
-JL_DLLEXPORT jl_sym_t *jl_using_sym;
 JL_DLLEXPORT jl_sym_t *jl_splatnew_sym;
 JL_DLLEXPORT jl_sym_t *jl_block_sym;
 JL_DLLEXPORT jl_sym_t *jl_new_opaque_closure_sym;
@@ -119,6 +117,7 @@ JL_DLLEXPORT jl_sym_t *jl_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_acquire_release_sym;
 JL_DLLEXPORT jl_sym_t *jl_sequentially_consistent_sym;
 JL_DLLEXPORT jl_sym_t *jl_uninferred_sym;
+JL_DLLEXPORT jl_sym_t *jl_latestworld_sym;
 
 static const uint8_t flisp_system_image[] = {
 #include <julia_flisp.boot.inc>
@@ -177,43 +176,7 @@ static value_t fl_defined_julia_global(fl_context_t *fl_ctx, value_t *args, uint
     jl_sym_t *var = scmsym_to_julia(fl_ctx, args[0]);
     jl_binding_t *b = jl_get_module_binding(ctx->module, var, 0);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    return (bpart != NULL && decode_restriction_kind(jl_atomic_load_relaxed(&bpart->restriction)) == BINDING_KIND_GLOBAL) ? fl_ctx->T : fl_ctx->F;
-}
-
-static value_t fl_nothrow_julia_global(fl_context_t *fl_ctx, value_t *args, uint32_t nargs)
-{
-    // tells whether a var is defined, in the sense that accessing it is nothrow
-    // can take either a symbol or a module and a symbol
-    jl_ast_context_t *ctx = jl_ast_ctx(fl_ctx);
-    jl_module_t *mod = ctx->module;
-    jl_sym_t *var = NULL;
-    if (nargs == 1) {
-        (void)tosymbol(fl_ctx, args[0], "nothrow-julia-global");
-        var = scmsym_to_julia(fl_ctx, args[0]);
-    }
-    else {
-        argcount(fl_ctx, "nothrow-julia-global", nargs, 2);
-        value_t argmod = args[0];
-        if (iscvalue(argmod) && cv_class((cvalue_t*)ptr(argmod)) == jl_ast_ctx(fl_ctx)->jvtype) {
-            mod = *(jl_module_t**)cv_data((cvalue_t*)ptr(argmod));
-            JL_GC_PROMISE_ROOTED(mod);
-        } else {
-            if (!iscons(argmod) || !issymbol(car_(argmod)) || scmsym_to_julia(fl_ctx, car_(argmod)) != jl_thismodule_sym) {
-                lerrorf(fl_ctx, fl_ctx->ArgError, "nothrow-julia-global: Unknown globalref module kind");
-            }
-        }
-        (void)tosymbol(fl_ctx, args[1], "nothrow-julia-global");
-        var = scmsym_to_julia(fl_ctx, args[1]);
-    }
-    jl_binding_t *b = jl_get_module_binding(mod, var, 0);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    jl_ptr_kind_union_t pku = jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
-    if (!bpart)
-        return fl_ctx->F;
-    if (jl_bkind_is_some_guard(decode_restriction_kind(pku)))
-        return fl_ctx->F;
-    return  (jl_bkind_is_some_constant(decode_restriction_kind(pku)) ?
-        decode_restriction_value(pku) : jl_atomic_load_relaxed(&b->value)) != NULL ? fl_ctx->T : fl_ctx->F;
+    return (bpart != NULL && jl_binding_kind(bpart) == PARTITION_KIND_GLOBAL) ? fl_ctx->T : fl_ctx->F;
 }
 
 // Used to generate a unique suffix for a given symbol (e.g. variable or type name)
@@ -287,7 +250,6 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
 
 static const builtinspec_t julia_flisp_ast_ext[] = {
     { "defined-julia-global", fl_defined_julia_global }, // TODO: can we kill this safepoint
-    { "nothrow-julia-global", fl_nothrow_julia_global },
     { "current-julia-module-counter", fl_module_unique_name },
     { "julia-scalar?", fl_julia_scalar },
     { NULL, NULL }
@@ -385,8 +347,6 @@ void jl_init_common_symbols(void)
     jl_module_sym = jl_symbol("module");
     jl_export_sym = jl_symbol("export");
     jl_public_sym = jl_symbol("public");
-    jl_import_sym = jl_symbol("import");
-    jl_using_sym = jl_symbol("using");
     jl_assign_sym = jl_symbol("=");
     jl_method_sym = jl_symbol("method");
     jl_exc_sym = jl_symbol("the_exception");
@@ -461,6 +421,7 @@ void jl_init_common_symbols(void)
     jl_acquire_release_sym = jl_symbol("acquire_release");
     jl_sequentially_consistent_sym = jl_symbol("sequentially_consistent");
     jl_uninferred_sym = jl_symbol("uninferred");
+    jl_latestworld_sym = jl_symbol("latestworld");
 }
 
 JL_DLLEXPORT void jl_lisp_prompt(void)
@@ -704,6 +665,8 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
     if (iscvalue(e) && cv_class((cvalue_t*)ptr(e)) == jl_ast_ctx(fl_ctx)->jvtype) {
         return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
     }
+    fl_print(fl_ctx, ios_stderr, e);
+    ios_putc('\n', ios_stderr);
     jl_error("malformed tree");
 }
 
@@ -1308,98 +1271,93 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     return expr;
 }
 
-// Lower an expression tree into Julia's intermediate-representation.
-JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule)
-{
-    return jl_expand_with_loc(expr, inmodule, "none", 0);
-}
-
-// Lowering, with starting program location specified
-JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                            const char *file, int line)
-{
-    return jl_expand_in_world(expr, inmodule, file, line, ~(size_t)0);
-}
-
-// Lowering, with starting program location and worldage specified
-JL_DLLEXPORT jl_value_t *jl_expand_in_world(jl_value_t *expr, jl_module_t *inmodule,
-                                            const char *file, int line, size_t world)
-{
-    JL_TIMING(LOWERING, LOWERING);
-    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
-    JL_GC_PUSH1(&expr);
-    expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0, world, 1);
-    expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk", expr, inmodule, file, line);
-    JL_GC_POP();
-    return expr;
-}
-
-// Same as the above, but printing warnings when applicable
-JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *inmodule,
-                                                 const char *file, int line)
+// Main entry point to flisp lowering.  Most arguments are optional; see `jl_lower_expr_mod`.
+// warn: Print any lowering warnings returned; otherwise ignore
+JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
+                                     const char *file, int line, size_t world, bool_t warn)
 {
     JL_TIMING(LOWERING, LOWERING);
     jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
     jl_array_t *kwargs = NULL;
-    JL_GC_PUSH2(&expr, &kwargs);
+    JL_GC_PUSH3(&expr, &kwargs, &inmodule);
     expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0, ~(size_t)0, 1);
+    expr = jl_expand_macros(expr, inmodule, NULL, 0, world, 1);
     jl_ast_context_t *ctx = jl_ast_ctx_enter(inmodule);
     fl_context_t *fl_ctx = &ctx->fl;
     value_t arg = julia_to_scm(fl_ctx, expr);
-    value_t e = fl_applyn(fl_ctx, 4, symbol_value(symbol(fl_ctx, "jl-expand-to-thunk-warn")), arg,
-                          symbol(fl_ctx, file), fixnum(line), fl_ctx->F);
-    expr = scm_to_julia(fl_ctx, e, inmodule);
+    value_t e = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, "jl-lower-to-thunk")), arg,
+                          symbol(fl_ctx, file), fixnum(line));
+    value_t lwr = car_(e);
+    value_t warnings = car_(cdr_(e));
+    expr = scm_to_julia(fl_ctx, lwr, inmodule);
     jl_ast_ctx_leave(ctx);
     jl_sym_t *warn_sym = jl_symbol("warn");
-    if (jl_is_expr(expr) && ((jl_expr_t*)expr)->head == warn_sym) {
-        size_t nargs = jl_expr_nargs(expr);
-        for (int i = 0; i < nargs - 1; i++) {
-            jl_value_t *warning = jl_exprarg(expr, i);
-            size_t nargs = 0;
-            if (jl_is_expr(warning) && ((jl_expr_t*)warning)->head == warn_sym)
-                 nargs = jl_expr_nargs(warning);
-            int kwargs_len = (int)nargs - 6;
-            if (nargs < 6 || kwargs_len % 2 != 0) {
-                jl_error("julia-logmsg: bad argument list - expected "
-                         ":warn level (symbol) group (symbol) id file line msg . kwargs");
-            }
-            jl_value_t *level = jl_exprarg(warning, 0);
-            jl_value_t *group = jl_exprarg(warning, 1);
-            jl_value_t *id = jl_exprarg(warning, 2);
-            jl_value_t *file = jl_exprarg(warning, 3);
-            jl_value_t *line = jl_exprarg(warning, 4);
-            jl_value_t *msg = jl_exprarg(warning, 5);
-            kwargs = jl_alloc_vec_any(kwargs_len);
-            for (int i = 0; i < kwargs_len; ++i) {
-                jl_array_ptr_set(kwargs, i, jl_exprarg(warning, i + 6));
-            }
-            JL_TYPECHK(logmsg, long, level);
-            jl_log(jl_unbox_long(level), NULL, group, id, file, line, (jl_value_t*)kwargs, msg);
+    for (; warn && iscons(warnings); warnings = cdr_(warnings)) {
+        jl_value_t *warning = scm_to_julia(fl_ctx, car_(warnings), inmodule);
+        size_t nargs = 0;
+        if (jl_is_expr(warning) && ((jl_expr_t*)warning)->head == warn_sym)
+            nargs = jl_expr_nargs(warning);
+        int kwargs_len = (int)nargs - 6;
+        if (nargs < 6 || kwargs_len % 2 != 0) {
+            jl_error("julia-logmsg: bad argument list - expected "
+                     ":warn level (symbol) group (symbol) id file line msg . kwargs");
         }
-        expr = jl_exprarg(expr, nargs - 1);
+        jl_value_t *level = jl_exprarg(warning, 0);
+        jl_value_t *group = jl_exprarg(warning, 1);
+        jl_value_t *id = jl_exprarg(warning, 2);
+        jl_value_t *file = jl_exprarg(warning, 3);
+        jl_value_t *line = jl_exprarg(warning, 4);
+        jl_value_t *msg = jl_exprarg(warning, 5);
+        kwargs = jl_alloc_vec_any(kwargs_len);
+        for (int i = 0; i < kwargs_len; ++i) {
+            jl_array_ptr_set(kwargs, i, jl_exprarg(warning, i + 6));
+        }
+        JL_TYPECHK(logmsg, long, level);
+        jl_log(jl_unbox_long(level), NULL, group, id, file, line, (jl_value_t*)kwargs, msg);
     }
     JL_GC_POP();
     return expr;
 }
 
-// expand in a context where the expression value is unused
-JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                                 const char *file, int line)
+// Lower an expression tree into Julia's intermediate-representation.
+JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
+                                  const char *file, int line, size_t world, bool_t warn)
 {
-    JL_TIMING(LOWERING, LOWERING);
-    JL_GC_PUSH1(&expr);
-    expr = jl_copy_ast(expr);
-    expr = jl_expand_macros(expr, inmodule, NULL, 0, ~(size_t)0, 1);
-    expr = jl_call_scm_on_ast_and_loc("jl-expand-to-thunk-stmt", expr, inmodule, file, line);
-    JL_GC_POP();
-    return expr;
+    // TODO: Allow change of lowerer
+    return jl_fl_lower(expr, inmodule, file, line, world, warn);
 }
 
-JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule)
+JL_DLLEXPORT jl_value_t *jl_lower_expr_mod(jl_value_t *expr, jl_module_t *inmodule)
 {
-    return jl_expand_stmt_with_loc(expr, inmodule, "none", 0);
+    return jl_lower(expr, inmodule, "none", 0, ~(size_t)0, 0);
+}
+
+jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)
+{
+    JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
+    jl_expr_t *expr = jl_exprn(jl_empty_sym, 3);
+    JL_GC_PUSH1(&expr);
+    jl_exprargset(expr, 0, thistype);
+    jl_exprargset(expr, 1, jl_box_long(nfields));
+    jl_exprargset(expr, 2, jl_box_long(nsparams));
+    jl_code_info_t *ci = (jl_code_info_t*)jl_call_scm_on_ast_and_loc("jl-default-outer-ctor-body", (jl_value_t*)expr, inmodule, file, line);
+    JL_GC_POP();
+    assert(jl_is_code_info(ci));
+    return ci;
+}
+
+jl_code_info_t *jl_inner_ctor_body(jl_array_t *fieldkinds, jl_module_t *inmodule, const char *file, int line)
+{
+    JL_TIMING(LOWERING, LOWERING);
+    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
+    jl_expr_t *expr = jl_exprn(jl_empty_sym, 0);
+    JL_GC_PUSH1(&expr);
+    expr->args = fieldkinds;
+    jl_code_info_t *ci = (jl_code_info_t*)jl_call_scm_on_ast_and_loc("jl-default-inner-ctor-body", (jl_value_t*)expr, inmodule, file, line);
+    JL_GC_POP();
+    assert(jl_is_code_info(ci));
+    return ci;
 }
 
 

@@ -24,10 +24,21 @@ for T in (Int64, Float64)
     @test complex(Complex{T}) == Complex{T}
 end
 
-#show
-@test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
-@test sprint(show, complex(true, true)) == "Complex(true,true)"
-@test sprint(show, Complex{Int8}(0, typemin(Int8))) == "0 - 128im"
+@testset "show" begin
+    @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
+    @test sprint(show, complex(true, true)) == "Complex(true,true)"
+    @test sprint(show, Complex{Int8}(0, typemin(Int8))) == "0 - 128im"
+    @test sprint(show, complex(typemin(Int16), typemax(Int16))) == "-32768 + 32767im"
+    @test sprint(show, complex(0x26, 0x26), context=:compact => true) == "0x26+0x26*im"
+    @test sprint(show, complex(0o77, 0o77), context=:compact => true) == "0x3f+0x3f*im"
+    @test sprint(show, complex(0b10, 0b11)) == "0x02 + 0x03*im"
+    @test sprint(show, complex(-0x1A, 0x2F), context=:compact => true) == "0xe6+0x2f*im"
+    @test sprint(show, complex(typemax(UInt16), typemin(UInt16))) =="0xffff + 0x0000*im"
+    @test sprint(show, complex(-Inf, Inf)) == "-Inf + Inf*im"
+    @test sprint(show, complex(-Inf, NaN)) == "-Inf + NaN*im"
+    @test sprint(show, complex(0, -Inf)) == "0.0 - Inf*im"
+end
+
 
 @testset "unary operator on complex boolean" begin
     @test +Complex(true, true) === Complex(1, 1)

@@ -148,13 +148,22 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *
         }
         jl_errorf("UndefVarError(%s%s%s)", jl_symbol_name(var), s1, s2);
     }
-    JL_GC_PUSH1(&scope);
-    jl_throw(jl_new_struct(jl_undefvarerror_type, var, scope));
+    jl_value_t *active_age = NULL;
+    JL_GC_PUSH2(&scope, &active_age);
+    active_age = jl_box_long(jl_current_task->world_age);
+    jl_throw(jl_new_struct(jl_undefvarerror_type, var, active_age, scope));
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_datatype_t *t, jl_sym_t *var)
 {
     jl_throw(jl_new_struct(jl_fielderror_type, t, var));
+}
+
+JL_DLLEXPORT void JL_NORETURN jl_argument_error(char *str) // == jl_exceptionf(jl_argumenterror_type, "%s", str)
+{
+    jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
+    JL_GC_PUSH1(&msg);
+    jl_throw(jl_new_struct(jl_argumenterror_type, msg));
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_atomic_error(char *str) // == jl_exceptionf(jl_atomicerror_type, "%s", str)
@@ -244,6 +253,7 @@ JL_DLLEXPORT void jl_enter_handler(jl_task_t *ct, jl_handler_t *eh)
     // Must have no safepoint
     eh->prev = ct->eh;
     eh->gcstack = ct->gcstack;
+    eh->scope = ct->scope;
     eh->gc_state = jl_atomic_load_relaxed(&ct->ptls->gc_state);
     eh->locks_len = ct->ptls->locks.len;
     eh->defer_signal = ct->ptls->defer_signal;
@@ -273,6 +283,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
     sig_atomic_t old_defer_signal = ptls->defer_signal;
     ct->eh = eh->prev;
     ct->gcstack = eh->gcstack;
+    ct->scope = eh->scope;
     small_arraylist_t *locks = &ptls->locks;
     int unlocks = locks->len > eh->locks_len;
     if (unlocks) {
@@ -288,6 +299,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
     if (!old_gc_state || !eh->gc_state) // it was or is unsafe now
         jl_gc_safepoint_(ptls);
     jl_value_t *exception = ptls->sig_exception;
+    JL_GC_PROMISE_ROOTED(exception);
     if (exception) {
         int8_t oldstate = jl_gc_unsafe_enter(ptls);
         /* The temporary ptls->bt_data is rooted by special purpose code in the
@@ -310,6 +322,7 @@ JL_DLLEXPORT void jl_eh_restore_state(jl_task_t *ct, jl_handler_t *eh)
 JL_DLLEXPORT void jl_eh_restore_state_noexcept(jl_task_t *ct, jl_handler_t *eh)
 {
     assert(ct->gcstack == eh->gcstack && "Incorrect GC usage under try catch");
+    ct->scope = eh->scope;
     ct->eh = eh->prev;
     ct->ptls->defer_signal = eh->defer_signal; // optional, but certain try-finally (in stream.jl) may be slightly harder to write without this
 }
@@ -566,7 +579,7 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
     if (jl_base_module == NULL)
         return NULL;
     jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"), 0);
-    return stderr_obj ? jl_get_binding_value(stderr_obj) : NULL;
+    return stderr_obj ? jl_get_binding_value_if_resolved_debug_only(stderr_obj) : NULL;
 }
 
 // toys for debugging ---------------------------------------------------------
@@ -661,9 +674,8 @@ static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     if (globname && dv->name->module) {
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
-        jl_value_t *bv = jl_get_binding_value_if_const(b);
-        // The `||` makes this function work for both function instances and function types.
-        if (bv && (bv == v || jl_typeof(bv) == v))
+        jl_value_t *bv = jl_get_binding_value_if_latest_resolved_and_const_debug_only(b);
+        if (bv && ((jl_value_t*)dv == v ? jl_typeof(bv) == v : bv == v))
             return 1;
     }
     return 0;

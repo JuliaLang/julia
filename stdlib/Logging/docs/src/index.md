@@ -191,10 +191,10 @@ module. Loading julia with `JULIA_DEBUG=loading` will activate
 
 ```
 $ JULIA_DEBUG=loading julia -e 'using OhMyREPL'
-┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji due to it containing an invalid cache header
+┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji due to it containing an incompatible cache header
 └ @ Base loading.jl:1328
 [ Info: Recompiling stale cache file /home/user/.julia/compiled/v0.7/OhMyREPL.ji for module OhMyREPL
-┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/Tokenize.ji due to it containing an invalid cache header
+┌ Debug: Rejecting cache file /home/user/.julia/compiled/v0.7/Tokenize.ji due to it containing an incompatible cache header
 └ @ Base loading.jl:1328
 ...
 ```

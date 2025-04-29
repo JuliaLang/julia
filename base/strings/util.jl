@@ -100,7 +100,6 @@ Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
 
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
-    cub = ncodeunits(b)
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
@@ -233,7 +232,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex}) -> SubString
+    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex})::SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
 
@@ -274,7 +273,7 @@ function chopprefix(s::Union{String, SubString{String}},
 end
 
 """
-    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex}) -> SubString
+    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex})::SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
 
@@ -318,7 +317,7 @@ end
 
 
 """
-    chomp(s::AbstractString) -> SubString
+    chomp(s::AbstractString)::SubString
 
 Remove a single trailing newline from a string.
 
@@ -349,8 +348,8 @@ function chomp(s::String)
 end
 
 """
-    lstrip([pred=isspace,] str::AbstractString) -> SubString
-    lstrip(str::AbstractString, chars) -> SubString
+    lstrip([pred=isspace,] str::AbstractString)::SubString
+    lstrip(str::AbstractString, chars)::SubString
 
 Remove leading characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -384,8 +383,8 @@ lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 lstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
 
 """
-    rstrip([pred=isspace,] str::AbstractString) -> SubString
-    rstrip(str::AbstractString, chars) -> SubString
+    rstrip([pred=isspace,] str::AbstractString)::SubString
+    rstrip(str::AbstractString, chars)::SubString
 
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -419,8 +418,8 @@ rstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments
 
 
 """
-    strip([pred=isspace,] str::AbstractString) -> SubString
-    strip(str::AbstractString, chars) -> SubString
+    strip([pred=isspace,] str::AbstractString)::SubString
+    strip(str::AbstractString, chars)::SubString
 
 Remove leading and trailing characters from `str`, either those specified by `chars` or
 those for which the function `pred` returns `true`.
@@ -450,7 +449,7 @@ strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
 ## string padding functions ##
 
 """
-    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
+    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ')::String
 
 Stringify `s` and pad the resulting string on the left with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
@@ -476,13 +475,18 @@ function lpad(
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
     m ≤ 0 && return stringfn(s)
-    l = textwidth(p)
+    l = Int(textwidth(p))::Int
+    if l == 0
+        throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
+            "; maybe you want pad^max(0, npad - ncodeunits(str)) * str to pad by codeunits" *
+            (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
+    end
     q, r = divrem(m, l)
     r == 0 ? stringfn(p^q, s) : stringfn(p^q, first(p, r), s)
 end
 
 """
-    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
+    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ')::String
 
 Stringify `s` and pad the resulting string on the right with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
@@ -508,7 +512,12 @@ function rpad(
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
     m ≤ 0 && return stringfn(s)
-    l = textwidth(p)
+    l = Int(textwidth(p))::Int
+    if l == 0
+        throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
+            "; maybe you want str * pad^max(0, npad - ncodeunits(str)) to pad by codeunits" *
+            (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
+    end
     q, r = divrem(m, l)
     r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
 end
@@ -613,22 +622,25 @@ function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{Ab
     end
 end
 
+# return whether textwidth(str) <= maxwidth
+function check_textwidth(str::AbstractString, maxwidth::Integer)
+    # check efficiently for early return if str is wider than maxwidth
+    total_width = 0
+    for c in str
+        total_width += textwidth(c)
+        total_width > maxwidth && return false
+    end
+    return true
+end
+
 function string_truncate_boundaries(
             str::AbstractString,
             maxwidth::Integer,
             replacement::Union{AbstractString,AbstractChar},
             ::Val{mode},
             prefer_left::Bool = true) where {mode}
-
     maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
-
-    # check efficiently for early return if str is less wide than maxwidth
-    total_width = 0
-    for c in str
-        total_width += textwidth(c)
-        total_width > maxwidth && break
-    end
-    total_width <= maxwidth && return nothing
+    check_textwidth(str, maxwidth) && return nothing
 
     l0, _ = left, right = firstindex(str), lastindex(str)
     width = textwidth(replacement)
@@ -1179,8 +1191,8 @@ end
 end
 
 """
-    bytes2hex(itr) -> String
-    bytes2hex(io::IO, itr)
+    bytes2hex(itr)::String
+    bytes2hex(io::IO, itr)::Nothing
 
 Convert an iterator `itr` of bytes to its hexadecimal string representation, either
 returning a `String` via `bytes2hex(itr)` or writing the string to an `io` stream
@@ -1214,7 +1226,7 @@ function bytes2hex(itr)
         b[2i - 1] = hex_chars[1 + x >> 4]
         b[2i    ] = hex_chars[1 + x & 0xf]
     end
-    return String(b)
+    return unsafe_takestring(b)
 end
 
 function bytes2hex(io::IO, itr)

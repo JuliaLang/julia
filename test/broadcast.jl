@@ -876,6 +876,31 @@ let
     @test copy(bc) == [v for v in bc] == collect(bc)
     @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+
+    struct MyFill{T,N} <: AbstractArray{T,N}
+        val :: T
+        sz :: NTuple{N,Int}
+    end
+    Base.size(M::MyFill) = M.sz
+    function Base.getindex(M::MyFill{<:Any,N}, i::Vararg{Int, N}) where {N}
+        checkbounds(M, i...)
+        M.val
+    end
+    Base.IndexStyle(::Type{<:Base.Broadcast.Broadcasted{<:Any,<:Any,<:Any,<:Tuple{MyFill}}}) = IndexLinear()
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+, MyFill(2, (3,3))))
+    @test IndexStyle(bc) == IndexLinear()
+    @test eachindex(bc) === Base.OneTo(9)
+    @test bc[2] == bc[CartesianIndex(2,1)]
+
+    for bc in Any[
+                Broadcast.broadcasted(+, collect(reshape(1:9, 3, 3)), 1:3), # IndexCartesian
+                Broadcast.broadcasted(+, [1,2], 2), # IndexLinear
+            ]
+        bci = Broadcast.instantiate(bc)
+        for (Ilin, Icart) in zip(eachindex(IndexLinear(), bc), eachindex(IndexCartesian(), bc))
+            @test bc[Ilin] == bc[Icart]
+        end
+    end
 end
 
 # issue 43847: collect preserves shape of broadcasted
@@ -904,6 +929,8 @@ let
     @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{<:Broadcast.AbstractArrayStyle{Any}}
 
     @test @inferred(Base.IteratorSize(Broadcast.broadcasted(+, (1,2,3), a1, zeros(3,3,3)))) === Base.HasShape{3}()
+
+    @test @inferred(Base.IteratorSize(Base.broadcasted(randn))) === Base.HasShape{0}()
 
     # inference on nested
     bc = Base.broadcasted(+, AD1(randn(3)), AD1(randn(3)))

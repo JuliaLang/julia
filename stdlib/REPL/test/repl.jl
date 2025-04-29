@@ -32,7 +32,7 @@ function kill_timer(delay)
         # **DON'T COPY ME.**
         # The correct way to handle timeouts is to close the handle:
         # e.g. `close(stdout_read); close(stdin_write)`
-        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue, test_task)
+        test_task.queue === nothing || Base.list_deletefirst!(test_task.queue::IntrusiveLinkedList{Task}, test_task)
         schedule(test_task, "hard kill repl test"; error=true)
         print(stderr, "WARNING: attempting hard kill of repl test after exceeding timeout\n")
     end
@@ -244,9 +244,8 @@ fake_repl(options = REPL.Options(confirm_exit=false,hascolor=true)) do stdin_wri
         @test occursin("shell> ", s) # check for the echo of the prompt
         @test occursin("'", s) # check for the echo of the input
         s = readuntil(stdout_read, "\n\n")
-        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n  [1] ") ||
-            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n  [1] "),
-            skip = Sys.iswindows() && Sys.WORD_SIZE == 32)
+        @test(startswith(s, "\e[0mERROR: unterminated single quote\nStacktrace:\n [1] ") ||
+            startswith(s, "\e[0m\e[1m\e[91mERROR: \e[39m\e[22m\e[91munterminated single quote\e[39m\nStacktrace:\n [1] "))
         write(stdin_write, "\b")
         wait(t)
     end
@@ -752,11 +751,11 @@ fake_repl() do stdin_write, stdout_read, repl
 
     # Test removal of prefix in single statement paste
     sendrepl2("\e[200~julia> A = 2\e[201~\n")
-    @test Main.A == 2
+    @test @world(Main.A, ∞) == 2
 
     # Test removal of prefix in single statement paste
     sendrepl2("\e[200~In [12]: A = 2.2\e[201~\n")
-    @test Main.A == 2.2
+    @test @world(Main.A, ∞) == 2.2
 
     # Test removal of prefix in multiple statement paste
     sendrepl2("""\e[200~
@@ -768,10 +767,10 @@ fake_repl() do stdin_write, stdout_read, repl
 
                     julia> A = 3\e[201~
              """)
-    @test Main.A == 3
-    @test Base.invokelatest(Main.foo, 4)
-    @test Base.invokelatest(Main.T17599, 3).a == 3
-    @test !Base.invokelatest(Main.foo, 2)
+    @test @world(Main.A, ∞) == 3
+    @test @invokelatest(Main.foo(4))
+    @test @invokelatest(Main.T17599(3)).a == 3
+    @test !@invokelatest(Main.foo(2))
 
     sendrepl2("""\e[200~
             julia> goo(x) = x + 1
@@ -780,12 +779,12 @@ fake_repl() do stdin_write, stdout_read, repl
             julia> A = 4
             4\e[201~
              """)
-    @test Main.A == 4
-    @test Base.invokelatest(Main.goo, 4) == 5
+    @test @world(Main.A, ∞) == 4
+    @test @invokelatest(Main.goo(4)) == 5
 
     # Test prefix removal only active in bracket paste mode
     sendrepl2("julia = 4\n julia> 3 && (A = 1)\n")
-    @test Main.A == 1
+    @test @world(Main.A, ∞) == 1
 
     # Test that indentation corresponding to the prompt is removed
     s = sendrepl2("""\e[200~julia> begin\n           α=1\n           β=2\n       end\n\e[201~""")
@@ -820,8 +819,8 @@ fake_repl() do stdin_write, stdout_read, repl
             julia> B = 2
             2\e[201~
              """)
-    @test Main.A == 1
-    @test Main.B == 2
+    @test @world(Main.A, ∞) == 1
+    @test @world(Main.B, ∞) == 2
     end # redirect_stdout
 
     # Close repl
@@ -926,7 +925,7 @@ function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
     fake_response = (Base.ExceptionStack([(exception=Error19864(),backtrace=Ptr{Cvoid}[])]),true)
-    REPL.print_response(buf, fake_response, false, false, nothing)
+    REPL.print_response(buf, fake_response, nothing, false, false, nothing)
     return String(take!(buf))
 end
 @test occursin("correct19864", test19864())
@@ -1551,59 +1550,61 @@ end
 
 @testset "Install missing packages via hooks" begin
     @testset "Parse AST for packages" begin
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo"))
+        test_find_packages(e) =
+            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, e))
+        test_find_packages(s::String) =
+            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, Meta.parse(s)))
+
+        mods = test_find_packages("using Foo")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo"))
+        mods = test_find_packages("import Foo")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo, Bar"))
+        mods = test_find_packages("using Foo, Bar")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo, Bar"))
+        mods = test_find_packages("import Foo, Bar")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo.bar, Foo.baz"))
+        mods = test_find_packages("using Foo.bar, Foo.baz")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo end"))
+        mods = test_find_packages("if false using Foo end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false if false using Foo end end"))
+        mods = test_find_packages("if false if false using Foo end end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo, Bar end"))
+        mods = test_find_packages("if false using Foo, Bar end")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo: bar end"))
+        mods = test_find_packages("if false using Foo: bar end")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo.bar as baz"))
+        mods = test_find_packages("import Foo.bar as baz")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using .Foo"))
+        mods = test_find_packages("using .Foo")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base"))
+        mods = test_find_packages("using Base")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base: nope"))
+        mods = test_find_packages("using Base: nope")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Main"))
+        mods = test_find_packages("using Main")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Core"))
-        @test isempty(mods)
-
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line(":(using Foo)"))
-        @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("ex = :(using Foo)"))
+        mods = test_find_packages("using Core")
         @test isempty(mods)
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
+        mods = test_find_packages(":(using Foo)")
+        @test isempty(mods)
+        mods = test_find_packages("ex = :(using Foo)")
         @test isempty(mods)
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("@eval using Foo"))
+        mods = test_find_packages("@eval using Foo")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; @eval using Bar end"))
+        mods = test_find_packages("begin using Foo; @eval using Bar end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Core.eval(Main,\"using Foo\")"))
+        mods = test_find_packages("Core.eval(Main,\"using Foo\")")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; Core.eval(Main,\"using Foo\") end"))
+        mods = test_find_packages("begin using Foo; Core.eval(Main,\"using Foo\") end")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(:(import .Foo: a))
+        mods = test_find_packages(:(import .Foo: a))
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(:(using .Foo: a))
+        mods = test_find_packages(:(using .Foo: a))
         @test isempty(mods)
     end
 end
@@ -1833,56 +1834,6 @@ fake_repl() do stdin_write, stdout_read, repl
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
 end
 
-try # test the functionality of `UndefVarError_hint` against `Base.remove_linenums!`
-    @assert isempty(Base.Experimental._hint_handlers)
-    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
-
-    # check the requirement to trigger the hint via `UndefVarError_hint`
-    @test !isdefined(Main, :remove_linenums!) && Base.ispublic(Base, :remove_linenums!)
-
-    fake_repl() do stdin_write, stdout_read, repl
-        backend = REPL.REPLBackend()
-        repltask = @async REPL.run_repl(repl; backend)
-        write(stdin_write,
-              "remove_linenums!\n\"ZZZZZ\"\n")
-        txt = readuntil(stdout_read, "ZZZZZ")
-        write(stdin_write, '\x04')
-        wait(repltask)
-        @test occursin("Hint: a global variable of this name also exists in Base.", txt)
-    end
-finally
-    empty!(Base.Experimental._hint_handlers)
-end
-
-try # test the functionality of `UndefVarError_hint` against import clashes
-    @assert isempty(Base.Experimental._hint_handlers)
-    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
-
-    @eval module X
-
-    module A
-    export x
-    x = 1
-    end # A
-
-    module B
-    export x
-    x = 2
-    end # B
-
-    using .A, .B
-
-    end # X
-
-    expected_message = string("\nHint: It looks like two or more modules export different ",
-                              "bindings with this name, resulting in ambiguity. Try explicitly ",
-                              "importing it from a particular module, or qualifying the name ",
-                              "with the module it should come from.")
-    @test_throws expected_message X.x
-finally
-    empty!(Base.Experimental._hint_handlers)
-end
-
 # Hints for tab completes
 
 fake_repl() do stdin_write, stdout_read, repl
@@ -1964,11 +1915,64 @@ end
     @test undoc == [:AbstractREPL, :BasicREPL, :LineEditREPL, :StreamREPL]
 end
 
+struct A40735
+    str::String
+end
+
+# https://github.com/JuliaLang/julia/issues/40735
+@testset "Long printing" begin
+    previous = REPL.SHOW_MAXIMUM_BYTES
+    try
+        REPL.SHOW_MAXIMUM_BYTES = 1000
+        str = string(('a':'z')...)^50
+        @test length(str) > 1100
+        # For a raw string, we correctly get the standard abbreviated output
+        output = sprint(REPL.show_limited, MIME"text/plain"(), str; context=:limit => true)
+        hint = """call `show(stdout, MIME"text/plain"(), ans)` to print without truncation"""
+        suffix = "[printing stopped after displaying 1000 bytes; $hint]"
+        @test !endswith(output, suffix)
+        @test contains(output, "bytes ⋯")
+        # For a struct without a custom `show` method, we don't hit the abbreviated
+        # 3-arg show on the inner string, so here we check that the REPL print-limiting
+        # feature is correctly kicking in.
+        a = A40735(str)
+        output = sprint(REPL.show_limited, MIME"text/plain"(), a; context=:limit => true)
+        @test endswith(output, suffix)
+        @test length(output) <= 1200
+        # We also check some extreme cases
+        REPL.SHOW_MAXIMUM_BYTES = 1
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 1)
+        @test output == "1"
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 12)
+        @test output == "1…[printing stopped after displaying 1 byte; $hint]"
+        REPL.SHOW_MAXIMUM_BYTES = 0
+        output = sprint(REPL.show_limited, MIME"text/plain"(), 1)
+        @test output == "…[printing stopped after displaying 0 bytes; $hint]"
+        @test sprint(io -> show(REPL.LimitIO(io, 5), "abc")) == "\"abc\""
+        @test_throws REPL.LimitIOException(1) sprint(io -> show(REPL.LimitIO(io, 1), "abc"))
+    finally
+        REPL.SHOW_MAXIMUM_BYTES = previous
+    end
+end
+
+@testset "`displaysize` return type inference" begin
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{REPL.Terminals.UnixTerminal})
+end
+
 @testset "Dummy Pkg prompt" begin
     # do this in an empty depot to test default for new users
-    withenv("JULIA_DEPOT_PATH" => mktempdir(), "JULIA_LOAD_PATH" => nothing) do
+    withenv("JULIA_DEPOT_PATH" => mktempdir() * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
         prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.Pkg_promptf())"`)
         @test prompt == "(@v$(VERSION.major).$(VERSION.minor)) pkg> "
+    end
+
+    # Issue 55850
+    tmp_55850 = mktempdir()
+    tmp_sym_link = joinpath(tmp_55850, "sym")
+    symlink(tmp_55850, tmp_sym_link; dir_target=true)
+    withenv("JULIA_DEPOT_PATH" => tmp_sym_link * (Sys.iswindows() ? ";" : ":"), "JULIA_LOAD_PATH" => nothing) do
+        prompt = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no -e "using REPL; print(REPL.projname(REPL.find_project_file()))"`)
+        @test prompt == "@v$(VERSION.major).$(VERSION.minor)"
     end
 
     get_prompt(proj::String) = readchomp(`$(Base.julia_cmd()[1]) --startup-file=no $(proj) -e "using REPL; print(REPL.Pkg_promptf())"`)

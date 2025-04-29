@@ -14,7 +14,7 @@ julia> ntuple(i -> 2*i, 4)
 (2, 4, 6, 8)
 ```
 """
-@inline function ntuple(f::F, n::Integer) where F
+@inline function ntuple(f::F, n::Int) where F
     # marked inline since this benefits from constant propagation of `n`
     t = n == 0  ? () :
         n == 1  ? (f(1),) :
@@ -30,8 +30,10 @@ julia> ntuple(i -> 2*i, 4)
         _ntuple(f, n)
     return t
 end
+ntuple(f::F, n::Integer) where F = ntuple(f, convert(Int, n)::Int)
 
-function _ntuple(f::F, n) where F
+# `n` should always be an Int (#55790)
+function _ntuple(f::F, n::Int) where F
     @noinline
     (n >= 0) || throw(ArgumentError(LazyString("tuple length should be ≥ 0, got ", n)))
     ([f(i) for i = 1:n]...,)
