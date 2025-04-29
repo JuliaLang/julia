@@ -2224,10 +2224,9 @@ typedef struct _jl_image_t jl_image_t;
 
 JL_DLLIMPORT const char *jl_get_libdir(void);
 JL_DLLEXPORT void jl_init(void);
-JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
-                                     const char *image_path);
-JL_DLLEXPORT void jl_load_image_and_init(JL_IMAGE_SEARCH rel, const char* julia_bindir, void *handle);
-JL_DLLEXPORT void jl_init_with_handle(void *handle);
+JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
+                                          const char *image_path);
+JL_DLLEXPORT void jl_init_with_image_handle(void *handle);
 JL_DLLEXPORT const char *jl_get_default_sysimg_path(void);
 JL_DLLEXPORT int jl_is_initialized(void);
 JL_DLLEXPORT void jl_atexit_hook(int status);

@@ -461,7 +461,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
                             "       (this should not happen, please file a bug report)\n");
             exit(1);
         }
-        jl_init_with_handle(handle);
+        jl_init_with_image_handle(handle);
         return &jl_get_current_task()->gcstack;
     }
 
