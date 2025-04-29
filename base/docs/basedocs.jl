@@ -2754,7 +2754,7 @@ See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@re
 setglobalonce!
 
 """
-    globaldecl(module::Module, name::Symbol, strong::Bool=false, [ty::Type])
+    declare_global(module::Module, name::Symbol, strong::Bool=false, [ty::Type])
 
 Declare the global `name` in module `module`.  If `ty` is given, declares a
 "strong" global, which cannot be replaced with a constant binding, otherwise
@@ -2764,10 +2764,9 @@ Does not update the current task's world age.
 
 See also [`global`](@ref), [`setglobal!`](@ref), [`get_binding_type`](@ref Core.get_binding_type).
 """
-Core.globaldecl
+Core.declare_global
 
 """
->>>>>>> 157175fc805 (Remove global form, and Core.globaldecl builtin)
     typeof(x)
 
 Get the concrete type of `x`.

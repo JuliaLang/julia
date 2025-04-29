@@ -1504,17 +1504,17 @@ JL_CALLABLE(jl_f_setglobalonce)
     return old == NULL ? jl_true : jl_false;
 }
 
-// globaldecl(module::Module, name::Symbol, [strong::Bool=false, [ty::Type]])
-JL_CALLABLE(jl_f_globaldecl)
+// declare_global(module::Module, name::Symbol, [strong::Bool=false, [ty::Type]])
+JL_CALLABLE(jl_f_declare_global)
 {
-    JL_NARGS(globaldecl, 3, 4);
-    JL_TYPECHK(globaldecl, module, args[0]);
-    JL_TYPECHK(globaldecl, symbol, args[1]);
-    JL_TYPECHK(globaldecl, bool, args[2]);
+    JL_NARGS(declare_global, 3, 4);
+    JL_TYPECHK(declare_global, module, args[0]);
+    JL_TYPECHK(declare_global, symbol, args[1]);
+    JL_TYPECHK(declare_global, bool, args[2]);
     int strong = args[2] == jl_true;
     jl_value_t *set_type = NULL;
     if (nargs >= 4) {
-        JL_TYPECHK(globaldecl, type, args[3]);
+        JL_TYPECHK(declare_global, type, args[3]);
         set_type = args[3];
     }
     jl_declare_global((jl_module_t *)args[0], args[1], set_type, strong);

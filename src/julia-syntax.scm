@@ -3657,10 +3657,10 @@ f(x) = yt(x)
            `(block (= ,rhs1 ,rhs0) ,ex ,rhs1))
       ;; If this assignment is associated with a type declaration, we will have
       ;; inserted it into the `globals` table before reaching this point.  If it
-      ;; isn't there, we must generate a globaldecl call now.
+      ;; isn't there, we must generate a declare_global call now.
       ,.(if (or toplevel-pure (get globals ref #f))
             '()
-            `((call (core globaldecl) ,(cadr ref) (inert ,(caddr ref)) (true))
+            `((call (core declare_global) ,(cadr ref) (inert ,(caddr ref)) (true))
               (latestworld))))))
 
 ;; convert assignment to a closed variable to a setfield! call.
@@ -4080,10 +4080,10 @@ f(x) = yt(x)
           ((global)
            `(toplevel-butfirst
              (unused-only global)
-             ;; Leftover `global` forms become weak globaldecls.
+             ;; Leftover `global` forms become weak globals.
              ,.(if toplevel-pure
                    '()
-                   `((call (core globaldecl) (thismodule) (inert ,(cadr e)) (false))
+                   `((call (core declare_global) (thismodule) (inert ,(cadr e)) (false))
                      (latestworld)))))
           ((const)
            ;; Check we've expanded surface `const` (1 argument form)
@@ -4377,7 +4377,7 @@ f(x) = yt(x)
                            `(block
                              (toplevel-butfirst
                               (toplevel-only decl ,ref)
-                              (call (core globaldecl) ,(cadr ref) (inert ,(caddr ref)) (true) ,(caddr e))
+                              (call (core declare_global) ,(cadr ref) (inert ,(caddr ref)) (true) ,(caddr e))
                               (latestworld))))
                          `(call (core typeassert) ,@(cdr e))))
                    fname lam namemap defined toplevel interp opaq toplevel-pure parsed-method-stack globals locals))))
