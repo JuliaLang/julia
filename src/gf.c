@@ -288,16 +288,8 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *typ
 
 // ----- MethodInstance specialization instantiation ----- //
 
-jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED
+void jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *sname, jl_fptr_args_t fptr) JL_GC_DISABLED
 {
-    jl_sym_t *sname = jl_symbol(name);
-    if (dt == NULL) {
-        // Builtins are specially considered available from world 0
-        jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
-        jl_set_initial_const(jl_core_module, sname, f, 0);
-        dt = (jl_datatype_t*)jl_typeof(f);
-    }
-
     jl_method_t *m = jl_new_method_uninit(jl_core_module);
     m->name = sname;
     m->module = jl_core_module;
@@ -335,7 +327,6 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
 
     mt->frozen = 1;
     JL_GC_POP();
-    return dt;
 }
 
 // only relevant for bootstrapping. otherwise fairly broken.
@@ -2846,30 +2837,10 @@ void jl_read_codeinst_invoke(jl_code_instance_t *ci, uint8_t *specsigflags, jl_c
 
 jl_method_instance_t *jl_normalize_to_compilable_mi(jl_method_instance_t *mi JL_PROPAGATES_ROOT);
 
-JL_DLLEXPORT void jl_add_codeinst_to_cache(jl_code_instance_t *codeinst, jl_code_info_t *src)
-{
-    assert(jl_is_code_info(src));
-    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-    if (jl_generating_output() && jl_is_method(mi->def.method) && jl_atomic_load_relaxed(&codeinst->inferred) == jl_nothing) {
-        jl_value_t *compressed = jl_compress_ir(mi->def.method, src);
-        // These should already be compatible (and should be an assert), but make sure of it anyways
-        if (jl_is_svec(src->edges)) {
-            jl_atomic_store_release(&codeinst->edges, (jl_svec_t*)src->edges);
-            jl_gc_wb(codeinst, src->edges);
-        }
-        jl_atomic_store_release(&codeinst->debuginfo, src->debuginfo);
-        jl_gc_wb(codeinst, src->debuginfo);
-        jl_atomic_store_release(&codeinst->inferred, compressed);
-        jl_gc_wb(codeinst, compressed);
-    }
-}
-
-
 JL_DLLEXPORT void jl_add_codeinst_to_jit(jl_code_instance_t *codeinst, jl_code_info_t *src)
 {
     assert(jl_is_code_info(src));
     jl_emit_codeinst_to_jit(codeinst, src);
-    jl_add_codeinst_to_cache(codeinst, src);
 }
 
 jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t world)
@@ -3130,6 +3101,7 @@ JL_DLLEXPORT const jl_callptr_t jl_fptr_const_return_addr = &jl_fptr_const_retur
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_sparam_addr = &jl_fptr_sparam;
 
+JL_CALLABLE(jl_f_opaque_closure_call);
 JL_DLLEXPORT const jl_callptr_t jl_f_opaque_closure_call_addr = (jl_callptr_t)&jl_f_opaque_closure_call;
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_wait_for_compiled_addr = &jl_fptr_wait_for_compiled;

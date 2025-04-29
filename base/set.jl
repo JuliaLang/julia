@@ -717,7 +717,7 @@ If `count` is specified, then replace at most `count` occurrences in total.
 See also [`replace`](@ref replace(A, old_new::Pair...)).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> replace!([1, 2, 1, 3], 1=>0, 2=>4, count=2)
 4-element Vector{Int64}:
  0

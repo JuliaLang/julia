@@ -2111,11 +2111,9 @@ JL_DLLEXPORT jl_value_t *jl_checked_modify(jl_binding_t *b, jl_module_t *mod, jl
 JL_DLLEXPORT jl_value_t *jl_checked_assignonce(jl_binding_t *b, jl_module_t *mod, jl_sym_t *var, jl_value_t *rhs JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED);
 JL_DLLEXPORT jl_binding_partition_t *jl_declare_constant_val2(jl_binding_t *b JL_ROOTING_ARGUMENT, jl_module_t *mod, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT JL_MAYBE_UNROOTED, enum jl_partition_kind);
+JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *asname, jl_sym_t *s, int explici);
+JL_DLLEXPORT void jl_import_module(jl_task_t *ct, jl_module_t *m, jl_module_t *import, jl_sym_t *asname);
 JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from);
-JL_DLLEXPORT void jl_module_use(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s);
-JL_DLLEXPORT void jl_module_use_as(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
-JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s);
-JL_DLLEXPORT void jl_module_import_as(jl_task_t *ct, jl_module_t *to, jl_module_t *from, jl_sym_t *s, jl_sym_t *asname);
 int jl_module_public_(jl_module_t *from, jl_sym_t *s, int exported, size_t new_world);
 JL_DLLEXPORT int jl_is_imported(jl_module_t *m, jl_sym_t *s);
 JL_DLLEXPORT int jl_module_exports_p(jl_module_t *m, jl_sym_t *var);
@@ -2257,16 +2255,10 @@ JL_DLLEXPORT jl_value_t *jl_parse_all(const char *text, size_t text_len,
 JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
                                          int offset, int greedy);
 // lowering
-JL_DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr, jl_module_t *inmodule);
-JL_DLLEXPORT jl_value_t *jl_expand_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                            const char *file, int line);
-JL_DLLEXPORT jl_value_t *jl_expand_with_loc_warn(jl_value_t *expr, jl_module_t *inmodule,
-                                                 const char *file, int line);
-JL_DLLEXPORT jl_value_t *jl_expand_in_world(jl_value_t *expr, jl_module_t *inmodule,
-                                            const char *file, int line, size_t world);
-JL_DLLEXPORT jl_value_t *jl_expand_stmt(jl_value_t *expr, jl_module_t *inmodule);
-JL_DLLEXPORT jl_value_t *jl_expand_stmt_with_loc(jl_value_t *expr, jl_module_t *inmodule,
-                                                 const char *file, int line);
+JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
+                                  const char *file, int line, size_t world,
+                                  bool_t warn);
+JL_DLLEXPORT jl_value_t *jl_lower_expr_mod(jl_value_t *expr, jl_module_t *inmodule);
 // deprecated; use jl_parse_all
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *text, size_t text_len,
                                              const char *filename, size_t filename_len);
