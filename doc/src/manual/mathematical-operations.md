@@ -61,7 +61,7 @@ Negation changes `true` to `false` and vice versa. The short-circuiting operatio
 
 ## Arithmetic operations with `Bool` values
 
-Note that `Bool` is an integer type, such that `false` is numerically equal to `0` and `true` is numerically equal to `1`. All the usual promotion rules and numeric operators are also defined on it, with a special behavior of arithmetic (non-Boolean) operations when all the arguments are `Bool`: in those cases, the arguments are promoted to `Int` instead of keeping their type. Compare:
+Note that `Bool` is an integer type, such that `false` is numerically equal to `0` and `true` is numerically equal to `1`. All the usual promotion rules and numeric operators are also defined on it, with a special behavior of arithmetic (non-Boolean) operations when all the arguments are `Bool`: in those cases, the arguments are promoted to `Int` instead of keeping their type. Compare e.g. the following equivalent operations with `Bool` and with a different numeric type (`UInt8`):
 
 ```jldoctest
 julia> true - true
