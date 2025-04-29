@@ -14,7 +14,7 @@ $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured: $(SRCCACHE)/$(ZLIB_SRC_DIR)/source
 	echo 1 > $@
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<) $(MAKE_COMMON)
+	$(CMAKE) -B $(dir $<) $(MAKE_COMMON)
 	echo 1 > $@
 
 $(eval $(call staged-install, \
@@ -24,7 +24,7 @@ $(eval $(call staged-install, \
 
 clean-zlib:
 	-rm -f $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(ZLIB_SRC_DIR) clean
+	-$(CMAKE) -B $(BUILDDIR)/$(ZLIB_SRC_DIR) clean
 
 get-zlib: $(ZLIB_SRC_FILE)
 extract-zlib: $(BUILDDIR)/$(ZLIB_SRC_DIR)/source-extracted

@@ -55,12 +55,12 @@ $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extr
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(CMAKE) -B $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) test
+	$(CMAKE) -B $(dir $@) test
 endif
 	echo 1 > $@
 
@@ -81,7 +81,7 @@ $(eval $(call staged-install, \
 clean-libgit2:
 	-rm -f $(build_datarootdir)/julia/cert.pem
 	-rm -f $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
+	-$(CMAKE) -B $(BUILDDIR)/$(LIBGIT2_SRC_DIR) clean
 
 get-libgit2: $(LIBGIT2_SRC_FILE)
 extract-libgit2: $(SRCCACHE)/$(LIBGIT2_SRC_DIR)/source-extracted

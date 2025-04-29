@@ -80,9 +80,7 @@ $(BOLT_BUILDDIR)/build-configured: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted
 
 $(BOLT_BUILDDIR)/build-compiled: $(BOLT_BUILDDIR)/build-configured
 	cd $(BOLT_BUILDDIR) && \
-		$(if $(filter $(CMAKE_GENERATOR),make), \
-		  $(MAKE), \
-		  $(CMAKE) --build . --target bolt)
+		$(CMAKE) --build . --target bolt
 	echo 1 > $@
 
 $(BOLT_BUILDDIR)/build-checked: $(BOLT_BUILDDIR)/build-compiled
@@ -102,7 +100,7 @@ $(eval $(call staged-install, \
 
 clean-bolt:
 	-rm -f $(BOLT_BUILDDIR)/build-configured $(BOLT_BUILDDIR)/build-compiled
-	-$(MAKE) -C $(BOLT_BUILDDIR) clean
+	-$(CMAKE) -B $(BOLT_BUILDDIR) clean
 
 get-bolt: $(BOLT_SRC_FILE)
 extract-bolt: $(SRCCACHE)/$(BOLT_SRC_DIR)/source-extracted

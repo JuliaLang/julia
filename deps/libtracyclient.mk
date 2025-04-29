@@ -55,9 +55,7 @@ $(LIBTRACYCLIENT_BUILDDIR)/build-configured: $(LIBTRACYCLIENT_BUILDDIR)/libTracy
 
 $(LIBTRACYCLIENT_BUILDDIR)/build-compiled: $(LIBTRACYCLIENT_BUILDDIR)/build-configured
 	cd $(LIBTRACYCLIENT_BUILDDIR) && \
-		$(if $(filter $(CMAKE_GENERATOR),make), \
-		  $(MAKE), \
-		  $(CMAKE) --build .)
+		$(CMAKE) --build .
 	echo 1 > $@
 
 $(eval $(call staged-install, \
@@ -67,7 +65,7 @@ $(eval $(call staged-install, \
 
 clean-libtracyclient:
 	rm -rf $(LIBTRACYCLIENT_BUILDDIR)/build-configured $(LIBTRACYCLIENT_BUILDDIR)/build-compiled
-	-$(MAKE) -C $(LIBTRACYCLIENT_BUILDDIR) clean
+	-$(CMAKE) -B $(LIBTRACYCLIENT_BUILDDIR) clean
 
 get-libtracyclient: $(LIBTRACYCLIENT_SRC_FILE)
 extract-libtracyclient: $(LIBTRACYCLIENT_BUILDDIR)/source-extracted

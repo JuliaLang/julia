@@ -41,12 +41,12 @@ $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extr
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(CMAKE) -B $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-checked: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) test
+	$(CMAKE) -B $(dir $@) test
 endif
 	echo 1 > $@
 
@@ -57,7 +57,7 @@ $(eval $(call staged-install, \
 
 clean-libssh2:
 	-rm -f $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean
+	-$(CMAKE) -B $(BUILDDIR)/$(LIBSSH2_SRC_DIR) clean
 
 
 get-libssh2: $(LIBSSH2_SRC_FILE)

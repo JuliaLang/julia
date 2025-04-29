@@ -53,12 +53,12 @@ $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured: $(SRCCACHE)/libunwind-$(UN
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured
-	$(MAKE) -C $(dir $<)
+	$(CMAKE) -B $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-checked: $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
 ifeq ($(OS),$(BUILD_OS))
-	$(MAKE) -C $(dir $@) check
+	$(CMAKE) -B $(dir $@) check
 endif
 	echo 1 > $@
 
@@ -68,7 +68,7 @@ $(eval $(call staged-install, \
 
 clean-unwind:
 	-rm -f $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-configured $(BUILDDIR)/libunwind-$(UNWIND_VER)/build-compiled
-	-$(MAKE) -C $(BUILDDIR)/libunwind-$(UNWIND_VER) clean
+	-$(CMAKE) -B $(BUILDDIR)/libunwind-$(UNWIND_VER) clean
 
 distclean-unwind:
 	rm -rf $(SRCCACHE)/libunwind-$(UNWIND_VER).tar.gz \
@@ -129,9 +129,7 @@ $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured: $(SRCCACHE)/llvm-proj
 
 $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled: $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured
 	cd $(dir $<) && \
-	$(if $(filter $(CMAKE_GENERATOR),make), \
-		  $(MAKE), \
-		  $(CMAKE) --build . --target unwind)
+	$(CMAKE) --build . --target unwind
 	echo 1 > $@
 
 LIBUNWIND_INSTALL = \
@@ -146,7 +144,7 @@ $(eval $(call staged-install, \
 clean-llvmunwind:
 	-rm -f $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-configured $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER)/build-compiled
 	rm -rf $(build_includedir)/mach-o/ $(build_includedir)/unwind.h $(build_includedir)/libunwind.h
-	-$(MAKE) -C $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER) clean
+	-$(CMAKE) -B $(BUILDDIR)/llvmunwind-$(LLVMUNWIND_VER) clean
 
 distclean-llvmunwind:
 	rm -rf $(SRCCACHE)/llvm-project-$(LLVMUNWIND_VER).tar.xz \
