@@ -288,16 +288,8 @@ JL_DLLEXPORT jl_value_t *jl_methtable_lookup(jl_methtable_t *mt, jl_value_t *typ
 
 // ----- MethodInstance specialization instantiation ----- //
 
-jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_args_t fptr) JL_GC_DISABLED
+void jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *sname, jl_fptr_args_t fptr) JL_GC_DISABLED
 {
-    jl_sym_t *sname = jl_symbol(name);
-    if (dt == NULL) {
-        // Builtins are specially considered available from world 0
-        jl_value_t *f = jl_new_generic_function_with_supertype(sname, jl_core_module, jl_builtin_type, 0);
-        jl_set_initial_const(jl_core_module, sname, f, 0);
-        dt = (jl_datatype_t*)jl_typeof(f);
-    }
-
     jl_method_t *m = jl_new_method_uninit(jl_core_module);
     m->name = sname;
     m->module = jl_core_module;
@@ -335,7 +327,6 @@ jl_datatype_t *jl_mk_builtin_func(jl_datatype_t *dt, const char *name, jl_fptr_a
 
     mt->frozen = 1;
     JL_GC_POP();
-    return dt;
 }
 
 // only relevant for bootstrapping. otherwise fairly broken.
@@ -3110,6 +3101,7 @@ JL_DLLEXPORT const jl_callptr_t jl_fptr_const_return_addr = &jl_fptr_const_retur
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_sparam_addr = &jl_fptr_sparam;
 
+JL_CALLABLE(jl_f_opaque_closure_call);
 JL_DLLEXPORT const jl_callptr_t jl_f_opaque_closure_call_addr = (jl_callptr_t)&jl_f_opaque_closure_call;
 
 JL_DLLEXPORT const jl_callptr_t jl_fptr_wait_for_compiled_addr = &jl_fptr_wait_for_compiled;

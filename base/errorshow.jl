@@ -638,14 +638,16 @@ const update_stackframes_callback = Ref{Function}(identity)
 const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
-function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
+function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, prefix=nothing)
     num_frames = length(trace)
     ndigits_max = ndigits(num_frames)
 
-    println(io, "\nStacktrace:")
+    println(io)
+    prefix === nothing || print(io, prefix)
+    println(io, "Stacktrace:")
 
     for (i, (frame, n)) in enumerate(trace)
-        print_stackframe(io, i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+        print_stackframe(io, i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
         if i < num_frames
             println(io)
             print_linebreaks && println(io)
@@ -655,7 +657,7 @@ end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
-function show_reduced_backtrace(io::IO, t::Vector)
+function show_reduced_backtrace(io::IO, t::Vector; prefix=nothing)
     recorded_positions = IdDict{UInt, Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
     such that hash(t[i-1]) == h, ie the list of positions in which the
@@ -701,7 +703,9 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
-    println(io, "\nStacktrace:")
+    println(io)
+    prefix === nothing || print(io, prefix)
+    println(io, "Stacktrace:")
 
     ndigits_max = ndigits(length(t))
 
@@ -709,8 +713,8 @@ function show_reduced_backtrace(io::IO, t::Vector)
     frame_counter = 1
     for i in eachindex(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
-
-        print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+        prefix === nothing || print(io, prefix)
+        print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
 
         if i < length(displayed_stackframes)
             println(io)
@@ -721,6 +725,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
             cycle_length = repeated_cycle[1][2]
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
+            prefix === nothing || print(io, prefix)
             printstyled(io,
                 "--- the above ", cycle_length, " lines are repeated ",
                   repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
@@ -738,7 +743,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler; prefix=nothing)
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
@@ -746,7 +751,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     else
         :default
     end
-    print_stackframe(io, i, frame, n, ndigits_max, modulecolor)
+    print_stackframe(io, i, frame, n, ndigits_max, modulecolor; prefix)
 end
 
 # Gets the topmost parent module that isn't Main
@@ -761,7 +766,7 @@ end
 parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor; prefix=nothing)
     file, line = string(frame.file), frame.line
 
     # Used by the REPL to make it possible to open
@@ -776,6 +781,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     digit_align_width = ndigits_max + 2
 
     # frame number
+    prefix === nothing || print(io, prefix)
     print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
@@ -785,6 +791,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     end
     println(io)
 
+    prefix === nothing || print(io, prefix)
     # @ Module path / file : line
     print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
 
@@ -813,7 +820,7 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
 end
 
-function show_backtrace(io::IO, t::Vector)
+function show_backtrace(io::IO, t::Vector; prefix=nothing)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
@@ -835,12 +842,12 @@ function show_backtrace(io::IO, t::Vector)
     end
 
     if length(filtered) > BIG_STACKTRACE_SIZE
-        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
+        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered; prefix)
         return
     else
         try invokelatest(update_stackframes_callback[], filtered) catch end
         # process_backtrace returns a Vector{Tuple{Frame, Int}}
-        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
+        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks(), prefix)
     end
     nothing
 end

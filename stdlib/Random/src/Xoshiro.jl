@@ -195,9 +195,6 @@ task creation, simulation results are also independent of the number of availabl
 threads / CPUs. The random stream should not depend on hardware specifics, up to
 endianness and possibly word size.
 
-Using or seeding the RNG of any other task than the one returned by `current_task()`
-is undefined behavior: it will work most of the time, and may sometimes fail silently.
-
 When seeding `TaskLocalRNG()` with [`seed!`](@ref), the passed seed, if any,
 may be any integer.
 
