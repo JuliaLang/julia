@@ -6,7 +6,7 @@ Methods for working with Iterators.
 baremodule Iterators
 
 # small dance to make this work from Base or Intrinsics
-import ..@__MODULE__, ..parentmodule
+import Base: @__MODULE__, parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
@@ -17,14 +17,14 @@ using .Base:
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
     afoldl
-using Core
+using .Core
 using Core: @doc
 
-using .Base:
-    cld, fld, resize!, IndexCartesian
-using .Base.Checked: checked_mul
+using Base:
+    cld, fld, resize!, IndexCartesian, Checked
+using .Checked: checked_mul
 
-import .Base:
+import Base:
     first, last,
     isempty, length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype, promote_typejoin,

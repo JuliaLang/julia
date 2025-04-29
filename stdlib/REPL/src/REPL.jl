@@ -41,6 +41,7 @@ end
 using Base.Meta, Sockets, StyledStrings
 using JuliaSyntaxHighlighting
 import InteractiveUtils
+import FileWatching
 
 export
     AbstractREPL,
@@ -298,7 +299,7 @@ const install_packages_hooks = Any[]
 # We need to do this for both the actual eval and macroexpand, since the latter can cause custom macro
 # code to run (and error).
 __repl_entry_lower_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
-    ccall(:jl_expand_with_loc, Any, (Any, Any, Ptr{UInt8}, Cint), ast, mod, toplevel_file[], toplevel_line[])
+    ccall(:jl_lower, Any, (Any, Any, Ptr{UInt8}, Cint, Csize_t, Cint), ast, mod, toplevel_file[], toplevel_line[], typemax(Csize_t), 0)
 __repl_entry_eval_expanded_with_loc(mod::Module, @nospecialize(ast), toplevel_file::Ref{Ptr{UInt8}}, toplevel_line::Ref{Cint}) =
     ccall(:jl_toplevel_eval_flex, Any, (Any, Any, Cint, Cint, Ptr{Ptr{UInt8}}, Ptr{Cint}), mod, ast, 1, 1, toplevel_file, toplevel_line)
 
@@ -359,26 +360,31 @@ function check_for_missing_packages_and_run_hooks(ast)
 end
 
 function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
+    function add!(ctx)
+        if ctx.head == :as
+            ctx = ctx.args[1]
+        end
+        if ctx.args[1] != :. # don't include local import `import .Foo`
+            push!(mods, ctx.args[1])
+        end
+    end
     ast.head === :quote && return mods # don't search if it's not going to be run during this eval
-    if ast.head === :using || ast.head === :import
-        for arg in ast.args
-            arg = arg::Expr
-            arg1 = first(arg.args)
-            if arg1 isa Symbol # i.e. `Foo`
-                if arg1 != :. # don't include local import `import .Foo`
-                    push!(mods, arg1)
-                end
-            else # i.e. `Foo: bar`
-                sym = first((arg1::Expr).args)::Symbol
-                if sym != :. # don't include local import `import .Foo: a`
-                    push!(mods, sym)
-                end
+    if ast.head == :call
+        if length(ast.args) == 5 && ast.args[1] === GlobalRef(Base, :_eval_import)
+            ctx = ast.args[4]
+            if ctx isa QuoteNode # i.e. `Foo: bar`
+                ctx = ctx.value
+            else
+                ctx = ast.args[5].value
             end
+            add!(ctx)
+        elseif length(ast.args) == 3 && ast.args[1] == GlobalRef(Base, :_eval_using)
+            add!(ast.args[3].value)
         end
     end
     if ast.head !== :thunk
         for arg in ast.args
-            if isexpr(arg, (:block, :if, :using, :import))
+            if isexpr(arg, (:block, :if))
                 _modules_to_be_loaded!(arg, mods)
             end
         end
@@ -927,7 +933,6 @@ function add_history(hist::REPLHistoryProvider, s::PromptState)
     # mode: $mode
     $(replace(str, r"^"ms => "\t"))
     """
-    # TODO: write-lock history file
     try
         seekend(hist.history_file)
     catch err
@@ -936,8 +941,15 @@ function add_history(hist::REPLHistoryProvider, s::PromptState)
         # If this doesn't fix it (e.g. when file is deleted), we'll end up rethrowing anyway
         hist_open_file(hist)
     end
-    print(hist.history_file, entry)
-    flush(hist.history_file)
+    if isfile(hist.file_path)
+        FileWatching.mkpidlock(hist.file_path  * ".pid", stale_age=3) do
+            print(hist.history_file, entry)
+            flush(hist.history_file)
+        end
+    else # handle eg devnull
+        print(hist.history_file, entry)
+        flush(hist.history_file)
+    end
     nothing
 end
 

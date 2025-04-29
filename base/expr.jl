@@ -1669,7 +1669,7 @@ end
 
 # Implementation of generated functions
 function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
-    ci = ccall(:jl_expand, Any, (Any, Any), ex, defmod)
+    ci = ccall(:jl_lower_expr_mod, Any, (Any, Any), ex, defmod)
     if !isa(ci, CodeInfo)
         if isa(ci, Expr) && ci.head === :error
             msg = ci.args[1]
