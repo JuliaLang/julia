@@ -808,6 +808,20 @@ end
     end
 end
 
+@testset "partialsort(x; scratch)" begin
+    for n in [1,10,100,1000]
+        v = rand(n)
+        scratch = [0.0]
+        @test partialsort(v) == sort(v; scratch)
+        @test partialsort!(copy(v)) == sort!(copy(v); scratch)
+
+        n > 100 && continue
+        M = rand(n, n)
+        @test partialsort(M; dims=2) == partialsort(M; dims=2, scratch)
+        @test partialsort!(copy(M); dims=1) == partialsort!(copy(M); dims=1, scratch)
+    end
+end
+
 @testset "sorting preserves identity" begin
     a = BigInt.([2, 2, 2, 1, 1, 1]) # issue #39620
     sort!(a)
