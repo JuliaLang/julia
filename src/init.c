@@ -834,7 +834,7 @@ static void julia_init(jl_image_buf_t sysimage)
     // initialize many things, in no particular order
     // but generally running from simple platform things to optional
     // configuration features
-    jl_init_timing();
+
     // Make sure we finalize the tls callback before starting any threads.
     (void)jl_get_pgcstack();
 
@@ -946,6 +946,7 @@ static void julia_init(jl_image_buf_t sysimage)
 // This function is responsible for loading the image and initializing paths in jl_options
 JL_DLLEXPORT void jl_load_image_and_init(JL_IMAGE_SEARCH rel, const char* julia_bindir, void *handle) {
     libsupport_init();
+    jl_init_timing();
 
     jl_resolve_sysimg_location(rel, julia_bindir);
 
