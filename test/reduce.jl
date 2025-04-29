@@ -329,7 +329,7 @@ end
         end
     end
 
-    @test minimum(abs, fill(-0.0, 16)) === mapreduce(abs, (x,y)->min, fill(-0.0, 16)) === 0.0
+    @test minimum(abs, fill(-0.0, 16)) === mapreduce(abs, (x,y)->min(x,y), fill(-0.0, 16)) === 0.0
 end
 
 @testset "maximum works on generic order #30320" begin
