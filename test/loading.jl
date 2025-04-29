@@ -1731,3 +1731,9 @@ end
         rm(depot_path, force=true, recursive=true)
     end
 end
+
+# Test `import Package as M`
+module M57965
+    import Random as R
+end
+@test M57965.R === Base.require(M57965, :Random)

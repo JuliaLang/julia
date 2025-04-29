@@ -4,6 +4,8 @@ Julia v1.13 Release Notes
 New language features
 ---------------------
 
+  - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
+
 Language changes
 ----------------
 
@@ -22,8 +24,14 @@ Build system changes
 New library functions
 ---------------------
 
+* Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
+
 New library features
 --------------------
+
+* `fieldoffset` now also accepts the field name as a symbol as `fieldtype` already did ([#58100]).
+* `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
+* `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 
 Standard library changes
 ------------------------
@@ -38,7 +46,11 @@ Standard library changes
 
 #### Test
 
+* Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
+
 #### InteractiveUtils
+
+* Introspection utilities such as `@code_typed`, `@which` and `@edit` now accept type annotations as substitutes for values, recognizing forms such as `f(1, ::Float64, 3)` or even `sum(::Vector{T}; init = ::T) where {T<:Real}`. Type-annotated variables as in `f(val::Int; kw::Float64)` are not evaluated if the type annotation provides the necessary information, making this syntax compatible with signatures found in stacktraces ([#57909], [#58222]).
 
 External dependencies
 ---------------------

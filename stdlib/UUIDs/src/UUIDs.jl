@@ -15,7 +15,7 @@ export UUID, uuid1, uuid4, uuid5, uuid7, uuid_version
 import Base: UUID
 
 """
-    uuid_version(u::UUID) -> Int
+    uuid_version(u::UUID)::Int
 
 Inspects the given UUID and returns its version
 (see [RFC 4122](https://tools.ietf.org/html/rfc4122)).
@@ -36,7 +36,7 @@ const namespace_oid  = UUID(0x6ba7b8129dad11d180b400c04fd430c8) # 6ba7b812-9dad-
 const namespace_x500 = UUID(0x6ba7b8149dad11d180b400c04fd430c8) # 6ba7b814-9dad-11d1-80b4-00c04fd430c8
 
 """
-    uuid1([rng::AbstractRNG]) -> UUID
+    uuid1([rng::AbstractRNG])::UUID
 
 Generates a version 1 (time-based) universally unique identifier (UUID), as specified
 by [RFC 4122](https://tools.ietf.org/html/rfc4122). Note that the Node ID is randomly generated (does not identify the host)
@@ -89,7 +89,7 @@ function _build_uuid1(rng::AbstractRNG, timestamp::UInt64)
 end
 
 """
-    uuid4([rng::AbstractRNG]) -> UUID
+    uuid4([rng::AbstractRNG])::UUID
 
 Generates a version 4 (random or pseudo-random) universally unique identifier (UUID),
 as specified by [RFC 4122](https://tools.ietf.org/html/rfc4122).
@@ -121,7 +121,7 @@ function uuid4(rng::AbstractRNG=Random.RandomDevice())
 end
 
 """
-    uuid5(ns::UUID, name::String) -> UUID
+    uuid5(ns::UUID, name::String)::UUID
 
 Generates a version 5 (namespace and domain-based) universally unique identifier (UUID),
 as specified by [RFC 4122](https://tools.ietf.org/html/rfc4122).
@@ -162,7 +162,7 @@ function uuid5(ns::UUID, name::String)
 end
 
 """
-    uuid7([rng::AbstractRNG]) -> UUID
+    uuid7([rng::AbstractRNG])::UUID
 
 Generates a version 7 (random or pseudo-random) universally unique identifier (UUID),
 as specified by [RFC 9562](https://tools.ietf.org/html/rfc9562).

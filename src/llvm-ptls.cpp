@@ -179,7 +179,11 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             adoptFunc->copyMetadata(pgcstack_getter, 0);
         }
         adopt->setCalledFunction(adoptFunc);
+#if JL_LLVM_VERSION >= 200000
+        adopt->insertBefore(slowTerm->getIterator());
+#else
         adopt->insertBefore(slowTerm);
+#endif
         phi->addIncoming(adopt, slowTerm->getParent());
         // emit fast branch code
         builder.SetInsertPoint(fastTerm->getParent());
@@ -237,7 +241,11 @@ void LowerPTLS::fix_pgcstack_use(CallInst *pgcstack, Function *pgcstack_getter, 
             builder.SetInsertPoint(pgcstack);
             auto phi = builder.CreatePHI(T_pppjlvalue, 2, "pgcstack");
             pgcstack->replaceAllUsesWith(phi);
+#if JL_LLVM_VERSION >= 200000
+            pgcstack->moveBefore(slowTerm->getIterator());
+#else
             pgcstack->moveBefore(slowTerm);
+#endif
             // refresh the basic block in the builder
             builder.SetInsertPoint(pgcstack);
             auto getter = builder.CreateLoad(T_pgcstack_getter, pgcstack_func_slot);

@@ -15,7 +15,8 @@
 #include <llvm/ExecutionEngine/Orc/DebugObjectManagerPlugin.h>
 #include <llvm/ExecutionEngine/Orc/TargetProcess/JITLoaderGDB.h>
 #if JL_LLVM_VERSION >= 200000
-#include "llvm/ExecutionEngine/Orc/AbsoluteSymbols.h"
+#include <llvm/ExecutionEngine/Orc/AbsoluteSymbols.h>
+#include <llvm/ExecutionEngine/Orc/EHFrameRegistrationPlugin.h>
 #endif
 #if JL_LLVM_VERSION >= 180000
 #include <llvm/ExecutionEngine/Orc/Debugging/DebugInfoSupport.h>
@@ -386,8 +387,8 @@ static int jl_analyze_workqueue(jl_code_instance_t *callee, jl_codegen_params_t 
         }
         if (preal_decl.empty()) {
             // there may be an equivalent method already compiled (or at least registered with the JIT to compile), in which case we should be using that instead
-            jl_code_instance_t *compiled_ci = jl_get_ci_equiv(codeinst, 1);
-            if ((jl_value_t*)compiled_ci != jl_nothing) {
+            jl_code_instance_t *compiled_ci = jl_get_ci_equiv(codeinst, 0);
+            if (compiled_ci != codeinst) {
                 codeinst = compiled_ci;
                 uint8_t specsigflags;
                 void *fptr;
@@ -630,15 +631,18 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
             // If logging of the compilation stream is enabled,
             // then dump the method-instance specialization type to the stream
             jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+            uint64_t end_time = jl_hrtime();
             if (jl_is_method(mi->def.method)) {
                 auto stream = *jl_ExecutionEngine->get_dump_compiles_stream();
                 if (stream) {
-                    uint64_t end_time = jl_hrtime();
                     ios_printf(stream, "%" PRIu64 "\t\"", end_time - start_time);
                     jl_static_show((JL_STREAM*)stream, mi->specTypes);
                     ios_printf(stream, "\"\n");
                 }
             }
+            jl_atomic_store_relaxed(&codeinst->time_compile,
+                julia_double_to_half(julia_half_to_float(jl_atomic_load_relaxed(&codeinst->time_compile))
+                    + (end_time - start_time) * 1e-9));
             lock.native.lock();
         }
         else {

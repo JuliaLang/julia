@@ -5,7 +5,7 @@ module Libdl
 Interface to libdl. Provides dynamic linking support.
 """ Libdl
 
-import Base.DL_LOAD_PATH
+import Base: DL_LOAD_PATH, isdebugbuild
 
 export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY, RTLD_LOCAL,
     RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlopen, dlopen_e, dlsym, dlsym_e,
@@ -333,14 +333,18 @@ struct LazyLibraryPath
     pieces::Tuple{Vararg{Any}}
     LazyLibraryPath(pieces...) = new(pieces)
 end
-Base.string(llp::LazyLibraryPath) = joinpath(String[string(p) for p in llp.pieces])
+@inline Base.string(llp::LazyLibraryPath) = joinpath(String[string(p) for p in llp.pieces])
 Base.cconvert(::Type{Cstring}, llp::LazyLibraryPath) = Base.cconvert(Cstring, string(llp))
 # Define `print` so that we can wrap this in a `LazyString`
 Base.print(io::IO, llp::LazyLibraryPath) = print(io, string(llp))
 
-# Helper to get `Sys.BINDIR` at runtime
-struct SysBindirGetter; end
-Base.string(::SysBindirGetter) = dirname(Sys.BINDIR)
+# Helper to get `$(private_shlibdir)` at runtime
+struct PrivateShlibdirGetter; end
+const private_shlibdir = Base.OncePerProcess{String}() do
+    libname = ifelse(isdebugbuild(), "libjulia-internal-debug", "libjulia-internal")
+    dirname(dlpath(libname))
+end
+Base.string(::PrivateShlibdirGetter) = private_shlibdir()
 
 """
     BundledLazyLibraryPath
@@ -349,10 +353,10 @@ Helper type for lazily constructed library paths that are stored within the
 bundled Julia distribution, primarily for use by Base modules.
 
 ```
-libfoo = LazyLibrary(BundledLazyLibraryPath("lib/libfoo.so.1.2.3"))
+libfoo = LazyLibrary(BundledLazyLibraryPath("libfoo.so.1.2.3"))
 ```
 """
-BundledLazyLibraryPath(subpath) = LazyLibraryPath(SysBindirGetter(), subpath)
+BundledLazyLibraryPath(subpath) = LazyLibraryPath(PrivateShlibdirGetter(), subpath)
 
 
 """
