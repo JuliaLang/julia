@@ -8,6 +8,8 @@ New language features
 
 Language changes
 ----------------
+* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
+is considered a bug fix ([#47102])
 
 Compiler/Runtime improvements
 -----------------------------
