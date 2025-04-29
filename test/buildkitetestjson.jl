@@ -145,6 +145,9 @@ const TEST_TYPE_MAP = Dict(
     :test_throws_nothing => "@test_throws"
 )
 function get_test_call_str(result)
+    if result.test_type === :nontest_error
+        return "Got exception outside of a @test"
+    end
     prefix = get(TEST_TYPE_MAP, result.test_type, nothing)
     prefix === nothing && return error("Unknown test type $(repr(result.test_type))")
     return prefix == "@test_throws" ? "@test_throws $(result.data) $(result.orig_expr)" : "$prefix $(result.orig_expr)"

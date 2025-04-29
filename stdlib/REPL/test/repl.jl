@@ -1550,59 +1550,61 @@ end
 
 @testset "Install missing packages via hooks" begin
     @testset "Parse AST for packages" begin
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo"))
+        test_find_packages(e) =
+            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, e))
+        test_find_packages(s::String) =
+            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, Meta.parse(s)))
+
+        mods = test_find_packages("using Foo")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo"))
+        mods = test_find_packages("import Foo")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo, Bar"))
+        mods = test_find_packages("using Foo, Bar")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo, Bar"))
+        mods = test_find_packages("import Foo, Bar")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo.bar, Foo.baz"))
+        mods = test_find_packages("using Foo.bar, Foo.baz")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo end"))
+        mods = test_find_packages("if false using Foo end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false if false using Foo end end"))
+        mods = test_find_packages("if false if false using Foo end end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo, Bar end"))
+        mods = test_find_packages("if false using Foo, Bar end")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo: bar end"))
+        mods = test_find_packages("if false using Foo: bar end")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo.bar as baz"))
+        mods = test_find_packages("import Foo.bar as baz")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using .Foo"))
+        mods = test_find_packages("using .Foo")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base"))
+        mods = test_find_packages("using Base")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base: nope"))
+        mods = test_find_packages("using Base: nope")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Main"))
+        mods = test_find_packages("using Main")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Core"))
-        @test isempty(mods)
-
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line(":(using Foo)"))
-        @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("ex = :(using Foo)"))
+        mods = test_find_packages("using Core")
         @test isempty(mods)
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
+        mods = test_find_packages(":(using Foo)")
+        @test isempty(mods)
+        mods = test_find_packages("ex = :(using Foo)")
         @test isempty(mods)
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("@eval using Foo"))
+        mods = test_find_packages("@eval using Foo")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; @eval using Bar end"))
+        mods = test_find_packages("begin using Foo; @eval using Bar end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Core.eval(Main,\"using Foo\")"))
+        mods = test_find_packages("Core.eval(Main,\"using Foo\")")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; Core.eval(Main,\"using Foo\") end"))
+        mods = test_find_packages("begin using Foo; Core.eval(Main,\"using Foo\") end")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(:(import .Foo: a))
+        mods = test_find_packages(:(import .Foo: a))
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(:(using .Foo: a))
+        mods = test_find_packages(:(using .Foo: a))
         @test isempty(mods)
     end
 end

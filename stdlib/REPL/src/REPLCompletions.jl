@@ -729,24 +729,12 @@ function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool
 end
 
 MAX_ANY_METHOD_COMPLETIONS::Int = 10
-function recursive_explore_names!(seen::IdSet, callee_module::Module, initial_module::Module, exploredmodules::IdSet{Module}=IdSet{Module}())
-    push!(exploredmodules, callee_module)
-    for name in names(callee_module; all=true, imported=true)
-        if !Base.isdeprecated(callee_module, name) && !startswith(string(name), '#') && isdefined(initial_module, name)
-            func = getfield(callee_module, name)
-            if !isa(func, Module)
-                funct = Core.Typeof(func)
-                push!(seen, funct)
-            elseif isa(func, Module) && func ∉ exploredmodules
-                recursive_explore_names!(seen, func, initial_module, exploredmodules)
-            end
-        end
-    end
-end
-function recursive_explore_names(callee_module::Module, initial_module::Module)
-    seen = IdSet{Any}()
-    recursive_explore_names!(seen, callee_module, initial_module)
-    seen
+
+function accessible(mod::Module, private::Bool)
+    bindings = IdSet{Any}(Core.Typeof(getglobal(mod, s)) for s in names(mod; all=private, imported=private, usings=private)
+                   if !Base.isdeprecated(mod, s) && !startswith(string(s), '#') && !startswith(string(s), '@') && isdefined(mod, s))
+    delete!(bindings, Module)
+    return collect(bindings)
 end
 
 function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool, shift::Bool)
@@ -764,7 +752,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
     # semicolon for the ".?(" syntax
     moreargs && push!(args_ex, Vararg{Any})
 
-    for seen_name in recursive_explore_names(callee_module, callee_module)
+    for seen_name in accessible(callee_module, callee_module === context_module)
         complete_methods!(out, seen_name, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
     end
 
@@ -1273,20 +1261,20 @@ function dict_eval(@nospecialize(e), context_module::Module=Main)
 end
 
 function method_search(partial::AbstractString, context_module::Module, shift::Bool)
-    rexm = match(r"(\w+\.|)\?\((.*)$", partial)
+    rexm = match(r"([\w.]+.)?\?\((.*)$", partial)
     if rexm !== nothing
         # Get the module scope
-        if isempty(rexm.captures[1])
-            callee_module = context_module
-        else
-            modname = Symbol(rexm.captures[1][1:end-1])
-            if isdefined(context_module, modname)
-                callee_module = getfield(context_module, modname)
-                if !isa(callee_module, Module)
-                    callee_module = context_module
+        callee_module = context_module
+        if !isnothing(rexm.captures[1])
+            modnames = map(Symbol, split(something(rexm.captures[1]), '.'))
+            for m in modnames
+                if isdefined(callee_module, m)
+                    callee_module = getfield(callee_module, m)
+                    if !isa(callee_module, Module)
+                        callee_module = context_module
+                        break
+                    end
                 end
-            else
-                callee_module = context_module
             end
         end
         moreargs = !endswith(rexm.captures[2], ')')
@@ -1296,7 +1284,8 @@ function method_search(partial::AbstractString, context_module::Module, shift::B
         end
         ex_org = Meta.parse(callstr, raise=false, depwarn=false)
         if isa(ex_org, Expr)
-            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+            pos_q = isnothing(rexm.captures[1]) ? 1 : sizeof(something(rexm.captures[1]))+1 # position after ?
+            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:pos_q) .+ rexm.offset, false
         end
     end
 end

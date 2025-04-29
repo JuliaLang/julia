@@ -360,26 +360,31 @@ function check_for_missing_packages_and_run_hooks(ast)
 end
 
 function _modules_to_be_loaded!(ast::Expr, mods::Vector{Symbol})
+    function add!(ctx)
+        if ctx.head == :as
+            ctx = ctx.args[1]
+        end
+        if ctx.args[1] != :. # don't include local import `import .Foo`
+            push!(mods, ctx.args[1])
+        end
+    end
     ast.head === :quote && return mods # don't search if it's not going to be run during this eval
-    if ast.head === :using || ast.head === :import
-        for arg in ast.args
-            arg = arg::Expr
-            arg1 = first(arg.args)
-            if arg1 isa Symbol # i.e. `Foo`
-                if arg1 != :. # don't include local import `import .Foo`
-                    push!(mods, arg1)
-                end
-            else # i.e. `Foo: bar`
-                sym = first((arg1::Expr).args)::Symbol
-                if sym != :. # don't include local import `import .Foo: a`
-                    push!(mods, sym)
-                end
+    if ast.head == :call
+        if length(ast.args) == 5 && ast.args[1] === GlobalRef(Base, :_eval_import)
+            ctx = ast.args[4]
+            if ctx isa QuoteNode # i.e. `Foo: bar`
+                ctx = ctx.value
+            else
+                ctx = ast.args[5].value
             end
+            add!(ctx)
+        elseif length(ast.args) == 3 && ast.args[1] == GlobalRef(Base, :_eval_using)
+            add!(ast.args[3].value)
         end
     end
     if ast.head !== :thunk
         for arg in ast.args
-            if isexpr(arg, (:block, :if, :using, :import))
+            if isexpr(arg, (:block, :if))
                 _modules_to_be_loaded!(arg, mods)
             end
         end
