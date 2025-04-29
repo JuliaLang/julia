@@ -311,7 +311,6 @@
     XX(jl_module_parent) \
     XX(jl_module_getloc) \
     XX(jl_module_public_p) \
-    XX(jl_module_use) \
     XX(jl_module_using) \
     XX(jl_module_usings) \
     XX(jl_module_uuid) \

@@ -29,6 +29,12 @@ mul_prod(x::BitSignedSmall, y::BitSignedSmall) = Int(x) * Int(y)
 mul_prod(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) * UInt(y)
 mul_prod(x::Real, y::Real)::Real = x * y
 
+and_all(x, y) = (x && y)::Bool
+or_any(x, y) = (x || y)::Bool
+# As a performance optimization, avoid runtime branches:
+and_all(x::Bool, y::Bool) = (x & y)::Bool
+or_any(x::Bool, y::Bool) = (x | y)::Bool
+
 ## foldl && mapfoldl
 
 function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
@@ -338,6 +344,8 @@ reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
+reduce_empty(::typeof(and_all), ::Type{T}) where {T} = true
+reduce_empty(::typeof(or_any), ::Type{T}) where {T} = false
 
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitSignedSmall}  = zero(Int)
