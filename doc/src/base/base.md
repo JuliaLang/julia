@@ -493,7 +493,7 @@ Core.modifyglobal!
 Core.swapglobal!
 Core.setglobalonce!
 Core.replaceglobal!
-Core.setconst!
+Core.declare_const
 ```
 
 ## Documentation

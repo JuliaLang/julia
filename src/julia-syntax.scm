@@ -4649,11 +4649,11 @@ f(x) = yt(x)
           tests))
     (define (emit-assignment-or-setglobal lhs rhs (op '=))
       ;; (= (globalref _ _) _)     => setglobal!
-      ;; (const (globalref _ _) _) => setconst!
+      ;; (const (globalref _ _) _) => declare_const
       (cond ((and (globalref? lhs) (eq? op '=))
              (emit `(call (core setglobal!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs)))
             ((and (globalref? lhs) (eq? op 'const))
-             (emit `(call (core setconst!) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs)))
+             (emit `(call (core declare_const) ,(cadr lhs) (inert ,(caddr lhs)) ,rhs)))
             (else
              (assert (eq? op '=))
              (emit `(= ,lhs ,rhs)))))
@@ -4742,7 +4742,7 @@ f(x) = yt(x)
                      ((and (eq? (car e) 'const) (null? (cddr e)) (globalref? (cadr e)))
                       ;; No RHS - make undefined constant
                       (let ((lhs (cadr e)))
-                        (emit `(call (core setconst!) ,(cadr lhs) (inert ,(caddr lhs))))))
+                        (emit `(call (core declare_const) ,(cadr lhs) (inert ,(caddr lhs))))))
                      (else
                       (let* ((rhs (compile (caddr e) break-labels #t #f))
                              (lhs (if (and arg-map (symbol? lhs))

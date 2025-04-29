@@ -2754,7 +2754,7 @@ See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@re
 setglobalonce!
 
 """
-    setconst!(module::Module, name::Symbol, [x])
+    declare_const(module::Module, name::Symbol, [x])
 
 Create or replace the constant `name` in `module` with the new value `x`.  When
 replacing, `x` does not need to have the same type as the original constant.
@@ -2769,7 +2769,7 @@ julia> begin
            println(x)
            const x = 2
            println(x)
-           Core.setconst!(Main, :x, 3)
+           Core.declare_const(Main, :x, 3)
            println(x)
            Core.@latestworld
            println(x)
@@ -2786,7 +2786,7 @@ julia> begin
 
 See also [`const`](@ref).
 """
-Core.setconst!
+Core.declare_const
 
 """
     typeof(x)
