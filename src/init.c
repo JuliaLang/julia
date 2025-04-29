@@ -642,10 +642,16 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bi
     jl_options.julia_bin = (char*)malloc_s(path_size + 1);
     memcpy((char*)jl_options.julia_bin, free_path, path_size);
     ((char*)jl_options.julia_bin)[path_size] = '\0';
-    if (!julia_bindir) {
+    if (julia_bindir == NULL) {
         jl_options.julia_bindir = getenv("JULIA_BINDIR");
         if (!jl_options.julia_bindir) {
-            jl_options.julia_bindir = dirname(free_path);
+#ifdef _OS_WINDOWS_
+            jl_options.julia_bindir = strdup(jl_get_libdir());
+#else
+            int written = asprintf((char**)&jl_options.julia_bindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
+            if (written < 0)
+                abort(); // unexpected: memory allocation failed
+#endif
         }
     } else {
         jl_options.julia_bindir = julia_bindir;
