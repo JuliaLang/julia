@@ -1475,7 +1475,7 @@
   (error "unimplemented or unsupported atomic declaration"))
 
 (define (expand-local-or-global-decl e)
-  (if (and (symbol? (cadr e)) (length= e 2))
+  (if (and (or (symbol? (cadr e)) (globalref? (cadr e))) (length= e 2))
       e
       (expand-forms (expand-decls (car e) (cdr e)))))
 
@@ -1510,7 +1510,10 @@
                  (loop (cdr b)
                        (cons `(decl ,@(cdr x)) (cons `(,what ,(decl-var x)) decls))
                        assigns))
-                ((symbol? x)
+                ((or (symbol? x) (globalref? x))
+                  ;; TODO: consider removing support for Expr(:global,
+                  ;; GlobalRef(...))  and other Exprs that cannot be produced by
+                  ;; the parser (tested by test/precompile.jl #50538).
                  (loop (cdr b) (cons `(,what, x) decls) assigns))
                 (else
                  (error (string "invalid syntax in \"" what "\" declaration"))))))))
@@ -4083,7 +4086,9 @@ f(x) = yt(x)
              ;; Leftover `global` forms become weak globals.
              ,.(if toplevel-pure
                    '()
-                   `((call (core declare_global) (thismodule) (inert ,(cadr e)) (false))
+                   `(,(if (globalref? (cadr e))
+                          `(call (core declare_global) ,(cadr (cadr e)) (inert ,(caddr (cadr e))) (false))
+                          `(call (core declare_global) (thismodule) (inert ,(cadr e)) (false)))
                      (latestworld)))))
           ((const)
            ;; Check we've expanded surface `const` (1 argument form)
