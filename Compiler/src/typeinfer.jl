@@ -120,7 +120,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         inferred_result = nothing
         uncompressed = result.src
         const_flag = is_result_constabi_eligible(result)
-        debuginfo = get_debuginfo(result.src)
+        debuginfo = nothing
         discard_src = caller.cache_mode === CACHE_MODE_NULL || const_flag
         if !discard_src
             inferred_result = transform_result_for_cache(interp, result, edges)
@@ -129,6 +129,12 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 debuginfo = get_debuginfo(inferred_result)
                 # Inlining may fast-path the global cache via `VolatileInferenceResult`, so store it back here
                 result.src = inferred_result
+            else
+                if isa(result.src, OptimizationState)
+                    debuginfo = get_debuginfo(ir_to_codeinf!(result.src))
+                elseif isa(result.src, CodeInfo)
+                    debuginfo = get_debuginfo(result.src)
+                end
             end
             # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
             if inferred_result isa CodeInfo
