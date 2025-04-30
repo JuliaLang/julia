@@ -340,24 +340,22 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
     return minworld[], maxworld[], result
 end
 
+const METHOD_ISMINMAX_INVOKE_LATEST = 0x1
+const METHOD_ISMINMAX_CALL_LATEST = 0x2
+
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt)
     @assert invokesig isa Type
     local minworld::UInt, maxworld::UInt
     matched = nothing
-    if invokesig === expected.sig
-        # the invoke match is `expected` for `expected->sig`, unless `expected` is invalid
-        # TODO: this is broken since PR #53415
+    if invokesig === expected.sig && !iszero(expected.dispatch_status & METHOD_ISMINMAX_INVOKE_LATEST)
+        # the invoke match is `expected` for `expected->sig`, unless `expected` is replaced
         minworld = expected.primary_world
-        maxworld = expected.deleted_world
         @assert minworld ≤ world
-        if maxworld < world
-            maxworld = 0
-        end
-    else
-        minworld = 1
         maxworld = typemax(UInt)
+    else
         mt = get_methodtable(expected)
         if mt === nothing
+            minworld = 1
             maxworld = 0
         else
             matched, valid_worlds = Compiler._findsup(invokesig, mt, world)

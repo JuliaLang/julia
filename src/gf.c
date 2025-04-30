@@ -296,7 +296,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *sname, jl_fptr_args_t fptr)
     m->isva = 1;
     m->nargs = 2;
     jl_atomic_store_relaxed(&m->primary_world, 1);
-    jl_atomic_store_relaxed(&m->deleted_world, ~(size_t)0);
+    jl_atomic_store_relaxed(&m->dispatch_status, METHOD_ISMINMAX_INVOKE_LATEST | METHOD_ISMINMAX_CALL_LATEST);
     m->sig = (jl_value_t*)jl_anytuple_type;
     m->slot_syms = jl_an_empty_string;
     m->nospecialize = 0;
@@ -307,7 +307,7 @@ void jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *sname, jl_fptr_args_t fptr)
     JL_GC_PUSH2(&m, &newentry);
 
     newentry = jl_typemap_alloc(jl_anytuple_type, NULL, jl_emptysvec,
-            (jl_value_t*)m, jl_atomic_load_relaxed(&m->primary_world), jl_atomic_load_relaxed(&m->deleted_world));
+            (jl_value_t*)m, 1, ~(size_t)0);
     jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, jl_cachearg_offset(mt));
 
     jl_method_instance_t *mi = jl_get_specialized(m, (jl_value_t*)jl_anytuple_type, jl_emptysvec);
@@ -2242,17 +2242,22 @@ JL_DLLEXPORT void jl_method_table_disable(jl_methtable_t *mt, jl_method_t *metho
     JL_LOCK(&world_counter_lock);
     if (!jl_atomic_load_relaxed(&allow_new_worlds))
         jl_error("Method changes have been disabled via a call to disable_new_worlds.");
-    JL_LOCK(&mt->writelock);
-    // Narrow the world age on the method to make it uncallable
-    size_t world = jl_atomic_load_relaxed(&jl_world_counter);
-    assert(method == methodentry->func.method);
-    assert(jl_atomic_load_relaxed(&method->deleted_world) == ~(size_t)0);
-    jl_atomic_store_relaxed(&method->deleted_world, world);
-    jl_atomic_store_relaxed(&methodentry->max_world, world);
-    jl_method_table_invalidate(mt, method, world);
-    jl_atomic_store_release(&jl_world_counter, world + 1);
-    JL_UNLOCK(&mt->writelock);
+    int enabled = jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0;
+    if (enabled) {
+        JL_LOCK(&mt->writelock);
+        // Narrow the world age on the method to make it uncallable
+        size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+        assert(method == methodentry->func.method);
+        jl_atomic_store_relaxed(&method->dispatch_status, 0);
+        assert(jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0);
+        jl_atomic_store_relaxed(&methodentry->max_world, world);
+        jl_method_table_invalidate(mt, method, world);
+        jl_atomic_store_release(&jl_world_counter, world + 1);
+        JL_UNLOCK(&mt->writelock);
+    }
     JL_UNLOCK(&world_counter_lock);
+    if (!enabled)
+        jl_errorf("Method of %s already disabled", jl_symbol_name(method->name));
 }
 
 static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **isect JL_REQUIRE_ROOTED_SLOT, jl_value_t **isect2 JL_REQUIRE_ROOTED_SLOT)
@@ -2292,9 +2297,8 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
     JL_LOCK(&mt->writelock);
     // add our new entry
     assert(jl_atomic_load_relaxed(&method->primary_world) == ~(size_t)0); // min-world
-    assert(jl_atomic_load_relaxed(&method->deleted_world) == 1); // max-world
-    newentry = jl_typemap_alloc((jl_tupletype_t*)method->sig, simpletype, jl_emptysvec, (jl_value_t*)method,
-            jl_atomic_load_relaxed(&method->primary_world), jl_atomic_load_relaxed(&method->deleted_world));
+    assert(jl_atomic_load_relaxed(&method->dispatch_status) == 0);
+    newentry = jl_typemap_alloc((jl_tupletype_t*)method->sig, simpletype, jl_emptysvec, (jl_value_t*)method, ~(size_t)0, 1);
     jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, jl_cachearg_offset(mt));
     update_max_args(mt, method->sig);
     JL_UNLOCK(&mt->writelock);
@@ -2315,7 +2319,7 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
     JL_LOCK(&mt->writelock);
     size_t world = jl_atomic_load_relaxed(&method->primary_world);
     assert(world == jl_atomic_load_relaxed(&jl_world_counter) + 1); // min-world
-    assert(jl_atomic_load_relaxed(&method->deleted_world) == ~(size_t)0); // max-world
+    assert(jl_atomic_load_relaxed(&method->dispatch_status) == 0);
     assert(jl_atomic_load_relaxed(&newentry->min_world) == ~(size_t)0);
     assert(jl_atomic_load_relaxed(&newentry->max_world) == 1);
     jl_atomic_store_relaxed(&newentry->min_world, world);
@@ -2336,6 +2340,7 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
         method_overwrite(newentry, replaced->func.method);
         // this is an optimized version of below, given we know the type-intersection is exact
         jl_method_table_invalidate(mt, replaced->func.method, max_world);
+        jl_atomic_store_relaxed(&replaced->func.method->dispatch_status, 0);
     }
     else {
         jl_method_t *const *d;
@@ -2479,13 +2484,15 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
                 }
             }
         }
+        // TODO: computed and store updates to METHOD_ISMINMAX_CALL_LATEST here
     }
     if (invalidated && _jl_debug_method_invalidation) {
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)method);
         loctag = jl_cstr_to_string("jl_method_table_insert");
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
     }
-    jl_atomic_store_relaxed(&newentry->max_world, jl_atomic_load_relaxed(&method->deleted_world));
+    jl_atomic_store_relaxed(&newentry->max_world, ~(size_t)0);
+    jl_atomic_store_relaxed(&method->dispatch_status, METHOD_ISMINMAX_INVOKE_LATEST); // TODO: this should be sequenced after the world counter store
     JL_UNLOCK(&mt->writelock);
     JL_GC_POP();
 }
@@ -2499,7 +2506,6 @@ JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method
         jl_error("Method changes have been disabled via a call to disable_new_worlds.");
     size_t world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
     jl_atomic_store_relaxed(&method->primary_world, world);
-    jl_atomic_store_relaxed(&method->deleted_world, ~(size_t)0);
     jl_method_table_activate(mt, newentry);
     jl_atomic_store_release(&jl_world_counter, world);
     JL_UNLOCK(&world_counter_lock);
@@ -3882,6 +3888,8 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
             closure->match.min_valid = max_world + 1;
         return 1;
     }
+    if (closure->match.max_valid > max_world)
+        closure->match.max_valid = max_world;
     jl_method_t *meth = ml->func.method;
     if (closure->lim >= 0 && jl_is_dispatch_tupletype(meth->sig)) {
         int replaced = 0;
@@ -4554,12 +4562,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
         jl_method_t *m = matc->method;
         // method applicability is the same as typemapentry applicability
         size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
-        size_t max_world = jl_atomic_load_relaxed(&m->deleted_world);
         // intersect the env valid range with method lookup's inclusive valid range
         if (env.match.min_valid < min_world)
             env.match.min_valid = min_world;
-        if (env.match.max_valid > max_world)
-            env.match.max_valid = max_world;
     }
     if (mt && cache_result && ((jl_datatype_t*)unw)->isdispatchtuple) { // cache_result parameter keeps this from being recursive
         if (len == 1 && !has_ambiguity) {

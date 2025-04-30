@@ -421,14 +421,14 @@ static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
         if (lookup == jl_nothing || (jl_method_t*)lookup != m) {
             //TODO: should this be a function like unsafe_insert_method?
             size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
-            size_t max_world = jl_atomic_load_relaxed(&m->deleted_world);
+            assert(min_world == jl_atomic_load_relaxed(&m->primary_world));
+            size_t dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
             jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
-            jl_atomic_store_relaxed(&m->deleted_world, 1);
+            jl_atomic_store_relaxed(&m->dispatch_status, 0);
             jl_typemap_entry_t *newentry = jl_method_table_add(mt, m, NULL);
             jl_atomic_store_relaxed(&m->primary_world, min_world);
-            jl_atomic_store_relaxed(&m->deleted_world, max_world);
+            jl_atomic_store_relaxed(&m->dispatch_status, dispatch_status);
             jl_atomic_store_relaxed(&newentry->min_world, min_world);
-            jl_atomic_store_relaxed(&newentry->max_world, max_world);
         }
     }
 
