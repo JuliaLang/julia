@@ -116,14 +116,11 @@ function inline_cost_clamp(x::Int)
     return convert(InlineCostType, x)
 end
 
-const SRC_FLAG_DECLARED_INLINE = 0x1
-const SRC_FLAG_DECLARED_NOINLINE = 0x2
-
 is_declared_inline(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == SRC_FLAG_DECLARED_INLINE
+    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 1
 
 is_declared_noinline(@nospecialize src::MaybeCompressed) =
-    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == SRC_FLAG_DECLARED_NOINLINE
+    ccall(:jl_ir_flag_inlining, UInt8, (Any,), src) == 2
 
 #####################
 # OptimizationState #
@@ -160,7 +157,6 @@ code_cache(state::InliningState) = WorldView(code_cache(state.interp), state.wor
 
 mutable struct OptimizationResult
     ir::IRCode
-    inline_flag::UInt8
     simplified::Bool # indicates whether the IR was processed with `cfg_simplify!`
 end
 
@@ -172,7 +168,7 @@ end
 mutable struct OptimizationState{Interp<:AbstractInterpreter}
     linfo::MethodInstance
     src::CodeInfo
-    optresult::Union{Nothing, OptimizationResult}
+    result::Union{Nothing, OptimizationResult}
     stmt_info::Vector{CallInfo}
     mod::Module
     sptypes::Vector{VarState}
@@ -240,29 +236,13 @@ include("ssair/EscapeAnalysis.jl")
 include("ssair/passes.jl")
 include("ssair/irinterp.jl")
 
-function ir_to_codeinf!(opt::OptimizationState, frame::InferenceState, edges::SimpleVector)
-    ir_to_codeinf!(opt, edges, compute_inlining_cost(frame.interp, frame.result, opt.optresult))
-end
-
-function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector, inlining_cost::InlineCostType)
-    src = ir_to_codeinf!(opt, edges)
-    src.inlining_cost = inlining_cost
-    src
-end
-
-function ir_to_codeinf!(opt::OptimizationState, edges::SimpleVector)
-    src = ir_to_codeinf!(opt)
-    src.edges = edges
-    src
-end
-
 function ir_to_codeinf!(opt::OptimizationState)
-    (; linfo, src, optresult) = opt
-    if optresult === nothing
+    (; linfo, src, result) = opt
+    if result === nothing
         return src
     end
-    src = ir_to_codeinf!(src, optresult.ir)
-    opt.optresult = nothing
+    src = ir_to_codeinf!(src, result.ir)
+    opt.result = nothing
     opt.src = src
     maybe_validate_code(linfo, src, "optimized")
     return src
@@ -505,12 +485,63 @@ end
 abstract_eval_ssavalue(s::SSAValue, src::Union{IRCode,IncrementalCompact}) = types(src)[s]
 
 """
-    finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
+    finish(interp::AbstractInterpreter, opt::OptimizationState,
+           ir::IRCode, caller::InferenceResult)
 
-Called at the end of optimization to store the resulting IR back into the OptimizationState.
+Post-process information derived by Julia-level optimizations for later use.
+In particular, this function determines the inlineability of the optimized code.
 """
-function finishopt!(interp::AbstractInterpreter, opt::OptimizationState, ir::IRCode)
-    opt.optresult = OptimizationResult(ir, ccall(:jl_ir_flag_inlining, UInt8, (Any,), opt.src), false)
+function finish(interp::AbstractInterpreter, opt::OptimizationState,
+                ir::IRCode, caller::InferenceResult)
+    (; src, linfo) = opt
+    (; def, specTypes) = linfo
+
+    force_noinline = is_declared_noinline(src)
+
+    # compute inlining and other related optimizations
+    result = caller.result
+    @assert !(result isa LimitedAccuracy)
+    result = widenslotwrapper(result)
+
+    opt.result = OptimizationResult(ir, false)
+
+    # determine and cache inlineability
+    if !force_noinline
+        sig = unwrap_unionall(specTypes)
+        if !(isa(sig, DataType) && sig.name === Tuple.name)
+            force_noinline = true
+        end
+        if !is_declared_inline(src) && result === Bottom
+            force_noinline = true
+        end
+    end
+    if force_noinline
+        set_inlineable!(src, false)
+    elseif isa(def, Method)
+        if is_declared_inline(src) && isdispatchtuple(specTypes)
+            # obey @inline declaration if a dispatch barrier would not help
+            set_inlineable!(src, true)
+        else
+            # compute the cost (size) of inlining this code
+            params = OptimizationParams(interp)
+            cost_threshold = default = params.inline_cost_threshold
+            if ⊑(optimizer_lattice(interp), result, Tuple) && !isconcretetype(widenconst(result))
+                cost_threshold += params.inline_tupleret_bonus
+            end
+            # if the method is declared as `@inline`, increase the cost threshold 20x
+            if is_declared_inline(src)
+                cost_threshold += 19*default
+            end
+            # a few functions get special treatment
+            if def.module === _topmod(def.module)
+                name = def.name
+                if name === :iterate || name === :unsafe_convert || name === :cconvert
+                    cost_threshold += 4*default
+                end
+            end
+            src.inlining_cost = inline_cost(ir, params, cost_threshold)
+        end
+    end
     return nothing
 end
 
@@ -982,17 +1013,16 @@ end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @timeit "optimizer" ir = run_passes_ipo_safe(opt.src, opt)
+    @zone "CC: OPTIMIZER" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
-    finishopt!(interp, opt, ir)
-    return nothing
+    return finish(interp, opt, ir, caller)
 end
 
 const ALL_PASS_NAMES = String[]
 macro pass(name::String, expr)
     optimize_until = esc(:optimize_until)
     stage = esc(:__stage__)
-    macrocall = :(@timeit $name $(esc(expr)))
+    macrocall = :(@zone $name $(esc(expr)))
     macrocall.args[2] = __source__  # `@timeit` may want to use it
     push!(ALL_PASS_NAMES, name)
     quote
@@ -1017,20 +1047,20 @@ function run_passes_ipo_safe(
 
     __stage__ = 0  # used by @pass
     # NOTE: The pass name MUST be unique for `optimize_until::String` to work
-    @pass "convert"   ir = convert_to_ircode(ci, sv)
-    @pass "slot2reg"  ir = slot2reg(ir, ci, sv)
+    @pass "CC: CONVERT"   ir = convert_to_ircode(ci, sv)
+    @pass "CC: SLOT2REG"  ir = slot2reg(ir, ci, sv)
     # TODO: Domsorting can produce an updated domtree - no need to recompute here
-    @pass "compact 1" ir = compact!(ir)
-    @pass "inlining"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
-    # @timeit "verify 2" verify_ir(ir)
-    @pass "compact 2" ir = compact!(ir)
-    @pass "SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    @pass "CC: COMPACT_1" ir = compact!(ir)
+    @pass "CC: INLINING"  ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
+    # @zone "CC: VERIFY 2" verify_ir(ir)
+    @pass "CC: COMPACT_2" ir = compact!(ir)
+    @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
+    @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
     if made_changes
-        @pass "compact 3" ir = compact!(ir, true)
+        @pass "CC: COMPACT_3" ir = compact!(ir, true)
     end
     if is_asserts()
-        @timeit "verify 3" begin
+        @zone "CC: VERIFY_3" begin
             verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp), sv.linfo)
             verify_linetable(ir.debuginfo, length(ir.stmts))
         end
@@ -1291,10 +1321,10 @@ end
 function slot2reg(ir::IRCode, ci::CodeInfo, sv::OptimizationState)
     # need `ci` for the slot metadata, IR for the code
     svdef = sv.linfo.def
-    @timeit "domtree 1" domtree = construct_domtree(ir)
+    @zone "CC: DOMTREE_1" domtree = construct_domtree(ir)
     defuse_insts = scan_slot_def_use(Int(ci.nargs), ci, ir.stmts.stmt)
     𝕃ₒ = optimizer_lattice(sv.inlining.interp)
-    @timeit "construct_ssa" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
+    @zone "CC: CONSTRUCT_SSA" ir = construct_ssa!(ci, ir, sv, domtree, defuse_insts, 𝕃ₒ) # consumes `ir`
     # NOTE now we have converted `ir` to the SSA form and eliminated slots
     # let's resize `argtypes` now and remove unnecessary types for the eliminated slots
     resize!(ir.argtypes, ci.nargs)
@@ -1436,7 +1466,7 @@ function statement_or_branch_cost(@nospecialize(stmt), line::Int, src::Union{Cod
     return thiscost
 end
 
-function inline_cost_model(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
+function inline_cost(ir::IRCode, params::OptimizationParams, cost_threshold::Int)
     bodycost = 0
     for i = 1:length(ir.stmts)
         stmt = ir[SSAValue(i)][:stmt]

@@ -4662,7 +4662,7 @@ static Value *emit_memoryref_FCA(jl_codectx_t &ctx, const jl_cgval_t &ref, const
 static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cgval_t idx, jl_value_t *inbounds, const jl_datatype_layout_t *layout)
 {
     ++EmittedArrayNdIndex;
-    emit_typecheck(ctx, idx, (jl_value_t*)jl_long_type, "memoryref");
+    emit_typecheck(ctx, idx, (jl_value_t*)jl_long_type, "memoryrefnew");
     idx = update_julia_type(ctx, idx, (jl_value_t*)jl_long_type);
     if (idx.typ == jl_bottom_type)
         return jl_cgval_t();
