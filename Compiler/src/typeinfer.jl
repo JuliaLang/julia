@@ -368,11 +368,17 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState, cycleid::Int)
     return typ
 end
 
-function adjust_effects(ipo_effects::Effects, def::Method)
+function adjust_effects(ipo_effects::Effects, def::Method, world::UInt)
     # override the analyzed effects using manually annotated effect settings
     override = decode_effects_override(def.purity)
+    valid_worlds = WorldRange(0, typemax(UInt))
     if is_effect_overridden(override, :consistent)
-        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+        # See note on `typemax(Int)` instead of `deleted_world` in adjust_effects!
+        override_valid_worlds = WorldRange(def.primary_world, typemax(Int))
+        if world in override_valid_worlds
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+            valid_worlds = override_valid_worlds
+        end
     end
     if is_effect_overridden(override, :effect_free)
         ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
@@ -400,7 +406,7 @@ function adjust_effects(ipo_effects::Effects, def::Method)
     if is_effect_overridden(override, :nortcall)
         ipo_effects = Effects(ipo_effects; nortcall=true)
     end
-    return ipo_effects
+    return (ipo_effects, valid_worlds)
 end
 
 function adjust_effects(sv::InferenceState)
@@ -454,7 +460,8 @@ function adjust_effects(sv::InferenceState)
     # override the analyzed effects using manually annotated effect settings
     def = sv.linfo.def
     if isa(def, Method)
-        ipo_effects = adjust_effects(ipo_effects, def)
+        (ipo_effects, valid_worlds) = adjust_effects(ipo_effects, def, sv.world.this)
+        update_valid_age!(sv, valid_worlds)
     end
 
     return ipo_effects
@@ -492,9 +499,9 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         end
     end
     result = me.result
-    result.valid_worlds = me.world.valid_worlds
     result.result = bestguess
     ipo_effects = result.ipo_effects = me.ipo_effects = adjust_effects(me)
+    result.valid_worlds = me.world.valid_worlds
     result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
     me.src.rettype = widenconst(ignorelimited(bestguess))
     me.src.ssaflags = me.ssaflags
@@ -957,8 +964,13 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 update_valid_age!(caller, frame.world.valid_worlds)
                 local isinferred = is_inferred(frame)
                 local edge = isinferred ? edge_ci : nothing
-                local effects = isinferred ? frame.result.ipo_effects : # effects are adjusted already within `finish` for ipo_effects
-                    adjust_effects(effects_for_cycle(frame.ipo_effects), method)
+                local effects, valid_worlds
+                if isinferred
+                    effects = frame.result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
+                else
+                    (effects, valid_worlds) = adjust_effects(effects_for_cycle(frame.ipo_effects), method, frame.world.this)
+                    update_valid_age!(caller, valid_worlds)
+                end
                 local bestguess = frame.bestguess
                 local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
                 # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
@@ -981,7 +993,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.world.valid_worlds)
-    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
+    (effects, valid_worlds) = adjust_effects(effects_for_cycle(frame.ipo_effects), method, frame.world.this)
+    update_valid_age!(caller, valid_worlds)
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
     return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, edgecycle, edgelimited))
