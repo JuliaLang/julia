@@ -472,19 +472,19 @@ function gc_bytes()
     b[]
 end
 
-function allocated(f, args::Vararg{Any,N}) where {N}
+function allocated(f, args::Vararg{Any,N}; kwargs...) where {N}
     b0 = Ref{Int64}(0)
     b1 = Ref{Int64}(0)
     Base.gc_bytes(b0)
-    f(args...)
+    f(args...; kwargs...)
     Base.gc_bytes(b1)
     return b1[] - b0[]
 end
 only(methods(allocated)).called = 0xff
 
-function allocations(f, args::Vararg{Any,N}) where {N}
+function allocations(f, args::Vararg{Any,N}; kwargs...) where {N}
     stats = Base.gc_num()
-    f(args...)
+    f(args...; kwargs...)
     diff = Base.GC_Diff(Base.gc_num(), stats)
     return Base.gc_alloc_count(diff)
 end
@@ -492,11 +492,19 @@ only(methods(allocations)).called = 0xff
 
 function is_simply_call(@nospecialize ex)
     Meta.isexpr(ex, :call) || return false
-    for a in ex.args
-        a isa QuoteNode && continue
-        a isa Symbol && continue
-        Base.is_self_quoting(a) && continue
+    function is_simple_arg(@nospecialize a)
+        a isa Symbol && return true
+        is_self_quoting(a) && return true
+        is_quoted(a) && return true
+        if a isa Expr
+            a.head === :(kw) && return is_simple_arg(a.args[2])
+            a.head === :(...) && return is_simple_arg(a.args[1])
+            a.head === :parameters && return all(is_simple_arg, a.args)
+        end
         return false
+    end
+    for a in ex.args
+        is_simple_arg(a) || return false
     end
     return true
 end
@@ -518,6 +526,8 @@ julia> @allocated rand(10^6)
 macro allocated(ex)
     if !is_simply_call(ex)
         ex = :((() -> $ex)())
+    else
+        length(ex.args) >= 2 && isexpr(ex.args[2], :parameters) && ((ex.args[1], ex.args[2]) = (ex.args[2], ex.args[1]))
     end
     pushfirst!(ex.args, GlobalRef(Base, :allocated))
     return esc(ex)
@@ -543,6 +553,8 @@ julia> @allocations rand(10^6)
 macro allocations(ex)
     if !is_simply_call(ex)
         ex = :((() -> $ex)())
+    else
+        length(ex.args) >= 2 && isexpr(ex.args[2], :parameters) && ((ex.args[1], ex.args[2]) = (ex.args[2], ex.args[1]))
     end
     pushfirst!(ex.args, GlobalRef(Base, :allocations))
     return esc(ex)
