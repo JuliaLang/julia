@@ -234,7 +234,7 @@ Binding Main.MyStruct
 
 ## World age and `using`/`import`
 
-Bindings prvoided via `using` and `import` also operate via the world age mechanism.
+Bindings provided via `using` and `import` also operate via the world age mechanism.
 Binding resolution is a stateless function of the `import` and `using` definitions
 visible in the current world age. For example:
 

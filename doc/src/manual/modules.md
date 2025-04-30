@@ -324,9 +324,9 @@ Here, Julia cannot decide which `f` you are referring to, so you have to make a 
 
 ### Precedence order of definitions
 
-There are in general four kinds sources of binding definitions:
+There are in general four kinds of binding definitions:
    1. Those provided via implicit import through `using M`
-   2. Those provided via explicit import (e.g. `using M: x`)
+   2. Those provided via explicit import (e.g. `using M: x`, `import M: x`)
    3. Those declared as global scope `global x`
    4. Those declared using definition syntax (`const`, `global x::T`, `struct`, etc.)
 
