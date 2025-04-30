@@ -328,16 +328,16 @@ There are in general four kinds sources of binding definitions:
    1. Those provided via implicit import through `using M`
    2. Those provided via explicit import (e.g. `using M: x`)
    3. Those declared as global scope `global x`
-   4. Those declared using definition syntax (`const`, `global x::T`, `struct`, `etc`)
+   4. Those declared using definition syntax (`const`, `global x::T`, `struct`, etc.)
 
 Syntactically, we divide these into three precedence levels (from weakest to strongest)
    1. Implicit imports
    2. Implicit declarations
    3. Explicit declarations and imports
 
-In general, we permit replacement of weaker bindings by stronger ones
+In general, we permit replacement of weaker bindings by stronger ones:
 
-```
+```julia-repl
 julia> module M1; const x = 1; export x; end
 Main.M1
 
@@ -357,7 +357,7 @@ julia> const x = 2 # Explicit declaration
 ```
 
 However, within the explicit precedence level, replacement is syntactically disallowed:
-```
+```julia-repl
 julia> module M1; const x = 1; export x; end
 Main.M1
 
@@ -372,7 +372,7 @@ Stacktrace:
 
 or ignored:
 
-```
+```julia-repl
 julia> const y = 2
 2
 

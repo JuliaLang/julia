@@ -23,7 +23,7 @@ type definition, `import`/`using` declaration, creation of (typed) globals or de
 
 The current value of the global world age counter can be retrieved using the (internal) function [`Base.get_world_counter`](@ref).
 
-```
+```julia-repl
 julia> Base.get_world_counter()
 0x0000000000009632
 
@@ -39,7 +39,7 @@ the running task will never exceed the global world age counter, but may run arb
 In general the term "current world age" refers to the local world age of the currently running task.
 The current world age may be retrieved using the (internal) function [`Base.tls_world_age`](@ref)
 
-```
+```julia-repl
 julia> function f end
 f (generic function with 0 methods)
 
@@ -95,8 +95,8 @@ raise the current world age:
 Note, however, that the current task's world age may only ever be permanently incremented at
 top level. As a general rule, using any of the above statements in non-top-level scope is a syntax error:
 
-```
-julia> f() = @Core.latestworld
+```julia-repl
+julia> f() = Core.@latestworld
 ERROR: syntax: World age increment not at top level
 Stacktrace:
  [1] top-level scope
@@ -108,7 +108,7 @@ When it isn't (for example for `@eval`), the world age side effect is ignored.
 As a result of these rules, Julia may assume that the world age does not change
 within the execution of an ordinary function.
 
-```
+```julia
 function my_function()
     before = Base.tls_world_age()
     # Any arbitrary code
@@ -124,7 +124,7 @@ these data structures.
 ## Temporarily raising the world age using `invokelatest`
 
 As described above, it is not possible to permanently raise the world age for the remainder of
-a Task's execution unless the task is executing top-level statements. However, it is possible to
+a `Task`'s execution unless the task is executing top-level statements. However, it is possible to
 temporarily change the world age in a scoped manner using `invokelatest`:
 
 ```jldoctest
@@ -138,7 +138,7 @@ julia> begin
 1
 ```
 
-Invokelatest will temporarily raise the current task's world age to the latest global world age (at
+`invokelatest` will temporarily raise the current task's world age to the latest global world age (at
 entry to `invokelatest`) and execute the provided function. Note that the world age will return
 to its prior value upon exit from `invokelatest`.
 
@@ -157,7 +157,7 @@ julia> begin
            @show get_const()
            Core.eval(@__MODULE__, :(const x = 2))
            @show get_const()
-           @Core.latestworld
+           Core.@latestworld
            @show get_const()
        end
 get_const() = 1
@@ -223,7 +223,7 @@ In certain cases, it can be helpful to introspect the system's understanding of 
 a binding means in any particular world age. The default display printing of `Core.Binding`
 provides a helpful summary (e.g. on the `MyStruct` example from above):
 
-```julia
+```julia-repl
 julia> convert(Core.Binding, GlobalRef(@__MODULE__, :MyStruct))
 Binding Main.MyStruct
    38456:∞ - constant binding to MyStruct
@@ -238,7 +238,7 @@ Bindings prvoided via `using` and `import` also operate via the world age mechan
 Binding resolution is a stateless function of the `import` and `using` definitions
 visible in the current world age. For example:
 
-```
+```julia-repl
 julia> module M1; const x = 1; export x; end
 
 julia> module M2; const x = 2; export x; end
@@ -262,12 +262,12 @@ Binding Main.x
 
 ## World age capture
 
-Certain language features capture the current tasks world age. Perhaps the most common of
-this is creation of new tasks. Newly created tasks will inherit the creating task's local
+Certain language features capture the current task's world age. Perhaps the most common of
+these is creation of new tasks. Newly created tasks will inherit the creating task's local
 world age at creation time and will retain said world age (unless explicitly raised) even
 if the originating tasks raises its world age:
 
-```
+```julia-repl
 julia> const x = 1
 
 julia> t = @task (wait(); println("Running now"); x);
