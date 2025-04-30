@@ -1,41 +1,44 @@
 if ccall(:jl_timing_enabled, Cint, ()) != 0
-    have_scoped = isdefined(@__MODULE__, :Base) && isdefined(Base, :ScopedValues)
-    if have_scoped
+    const scoped_values_available = isdefined(@__MODULE__, :Base) && isdefined(Base, :ScopedValues)
+    const use_tls = true # kappa # use tls or scoped values
+    if !scoped_values_available
+        const CURRENT_TIMING_BLOCK = RefValue(C_NULL)
+        @inline _get_current_timing_block_nocheck() = CURRENT_TIMING_BLOCK
+        @inline function set_current_timing_block!(block::Ptr{Cvoid})
+            old_block = CURRENT_TIMING_BLOCK[]
+            CURRENT_TIMING_BLOCK[] = block
+            return old_block
+        end
+        @inline function restore_current_timing_block!(old_block::Ptr{Cvoid})
+            CURRENT_TIMING_BLOCK[] = old_block
+        end
+    elseif use_tls
+        const TIMING_BLOCK_TLS_KEY = :timing_block_tls_key
+        @inline function _get_current_timing_block_nocheck()
+            ref_block = get(task_local_storage(), TIMING_BLOCK_TLS_KEY, nothing)::Union{Nothing, RefValue{Ptr{Cvoid}}}
+            return ref_block === nothing ? C_NULL : ref_block[]
+        end
+        @inline function set_current_timing_block!(block::Ptr{Cvoid})
+            ref_block = get!(()->RefValue(C_NULL), task_local_storage(), TIMING_BLOCK_TLS_KEY)::RefValue{Ptr{Cvoid}}
+            old = ref_block[]
+            ref_block[] = block
+            return (old, ref_block)
+        end
+        @inline function restore_current_timing_block!((old, ref)::Tuple{Ptr{Cvoid}, RefValue{Ptr{Cvoid}}})
+            ref[] = old
+        end
+    else
         using Base.ScopedValues: ScopedValue
-        const TRACY_CONTEXT = ScopedValue{Ptr{Cvoid}}(C_NULL)
+        const CURRENT_TIMING_BLOCK = ScopedValue{Ptr{Cvoid}}(C_NULL)
+        _get_current_timing_block_nocheck() = CURRENT_TIMING_BLOCK[]
+    end
 
-        function _get_current_tracy_block()
-            ctx = TRACY_CONTEXT[]
-            if ctx === C_NULL
-                error("must be called from within a @zone")
-            end
-            return ctx
+    function _get_current_timing_block()
+        block = _get_current_timing_block_nocheck()
+        if block === C_NULL
+            error("must be called from within a @zone")
         end
-
-        function timing_print(str)
-            ccall(
-                :jl_timing_puts,
-                Cvoid,
-                (Ptr{Cvoid}, Cstring),
-                _get_current_tracy_block(),
-                string(str)
-            )
-        end
-
-        #=
-        macro timing_printf(fmt, args...)
-            esc(:(
-                ccall(
-                    :jl_timing_printf,
-                    Cvoid,
-                    (Ptr{Cvoid}, Cstring, Cstring...),
-                    _get_current_tracy_block(),
-                    $fmt,
-                    $(args...)
-                )
-            ))
-        end
-        =#
+        return block
     end
 
     function getzonedexpr(name::Union{Symbol, String}, ex::Expr, func::Symbol, file::Symbol, line::Integer, color::Integer)
@@ -48,9 +51,23 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
         buffer = (0, 0, 0, 0, 0, 0, 0)
         buffer_size = Core.sizeof(buffer)
 
-        scope_expr = have_scoped ?
-            :(Base.ScopedValues.Scope(Core.current_scope(), TRACY_CONTEXT => timing_block_ptr)) :
+        before_expr = if !scoped_values_available || use_tls
+           :(prev_block_ptr = $set_current_timing_block!(timing_block_ptr))
+        else
+           nothing
+        end
+
+        after_expr = if !scoped_values_available || use_tls
+            :($restore_current_timing_block!(prev_block_ptr))
+        else
             nothing
+        end
+
+        scope_expr = if !scoped_values_available || use_tls
+            nothing
+        else
+            :(Base.ScopedValues.Scope(Core.current_scope(), CURRENT_TIMING_BLOCK => timing_block_ptr))
+        end
 
         return quote
             if $event[] === C_NULL
@@ -64,9 +81,13 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
                 ccall(:_jl_timing_block_init, Cvoid, (Ptr{Cvoid}, Csize_t, Ptr{Cvoid}), timing_block_ptr, $buffer_size, $event[])
                 ccall(:_jl_timing_block_start, Cvoid, (Ptr{Cvoid},), timing_block_ptr)
                 $(Expr(:tryfinally,
-                    :($(Expr(:escape, ex))),
+                    quote
+                        $before_expr
+                        $(Expr(:escape, ex))
+                    end,
                     quote
                         ccall(:_jl_timing_block_end, Cvoid, (Ptr{Cvoid},), timing_block_ptr)
+                        $after_expr
                     end,
                     :($scope_expr)
                 ))
@@ -76,14 +97,18 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
     macro zone(name, ex::Expr)
         return getzonedexpr(name, ex, :unknown_julia_function, __source__.file, __source__.line, 0)
     end
+    @inline function timing_print(str)
+        ccall(
+            :jl_timing_puts,
+            Cvoid,
+            (Ptr{Cvoid}, Ptr{UInt8}),
+            _get_current_timing_block(),
+            string(str)
+        )
+    end
 else
     macro zone(name, ex::Expr)
         return esc(ex)
     end
-    timing_print(str) = nothing
-    #=
-    macro timing_printf(fmt, args...)
-        return nothing
-    end
-    =#
+    timing_print(str::String) = nothing
 end
