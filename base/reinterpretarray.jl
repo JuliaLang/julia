@@ -336,6 +336,12 @@ function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, ind::SCartesia
 end
 eachindex(style::IndexSCartesian2, A::AbstractArray) = eachindex(style, parent(A))
 
+_getindex(::IndexSCartesian2, A::AbstractArray, I::Vararg{<:Integer}) =
+    _getindex(IndexCartesian(), A, I...)
+
+_setindex!(::IndexSCartesian2, A::AbstractArray, v, I::Vararg{<:Integer}) =
+    _setindex!(IndexCartesian(), A, v, I...)
+
 ## AbstractArray interface
 
 parent(a::ReinterpretArray) = a.parent
