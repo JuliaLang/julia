@@ -27,7 +27,7 @@ Core.Intrinsics
 
 Construct an uninitialized [`GenericMemory`](@ref) of length `n`.
 
-See also [`Memory`](@ref Base.Memory).
+See also [`Memory`](@ref Core.Memory), [`Memory{T}(undef, n)`](@ref Core.Memory(::UndefInitializer, ::Int)).
 """
 Core.memorynew
 
