@@ -490,7 +490,7 @@ end
 
     # test export on nonzero vector
     x_to_export = BigInt(6)
-    bytes_to_export_to = Vector{UInt8}([1, 2, 3, 4, 5])
+    bytes_to_export_to = UInt8[1, 2, 3, 4, 5]
     Base.GMP.MPZ.export!(bytes_to_export_to, x_to_export, order=0)
     @test bytes_to_export_to == UInt8[6, 0, 0, 0, 0]
 end
