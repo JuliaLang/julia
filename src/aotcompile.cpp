@@ -1781,28 +1781,31 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
         }
         return outputs;
     }
-
-    partition_timer.startTimer();
-    uint64_t counter = 0;
-    // Partitioning requires all globals to have names.
-    // We use a prefix to avoid name conflicts with user code.
-    for (auto &G : M.global_values()) {
-        if (!G.isDeclaration() && !G.hasName()) {
-            G.setName("jl_ext_" + Twine(counter++));
+    SmallVector<Partition,32> partitions;
+    SmallVector<char, 0> serialized;
+    {
+        JL_TIMING(NATIVE_AOT, NATIVE_Partitioning);
+        partition_timer.startTimer();
+        uint64_t counter = 0;
+        // Partitioning requires all globals to have names.
+        // We use a prefix to avoid name conflicts with user code.
+        for (auto &G : M.global_values()) {
+            if (!G.isDeclaration() && !G.hasName()) {
+                G.setName("jl_ext_" + Twine(counter++));
+            }
         }
+        partitions = partitionModule(M, threads);
+        partition_timer.stopTimer();
+
+        serialize_timer.startTimer();
+        serialized = serializeModule(M);
+        serialize_timer.stopTimer();
+
+        // Don't need M anymore, since we'll only read from serialized from now on
+        module_released(M);
+
+        output_timer.startTimer();
     }
-    auto partitions = partitionModule(M, threads);
-    partition_timer.stopTimer();
-
-    serialize_timer.startTimer();
-    auto serialized = serializeModule(M);
-    serialize_timer.stopTimer();
-
-    // Don't need M anymore, since we'll only read from serialized from now on
-    module_released(M);
-
-    output_timer.startTimer();
-
     // Start all of the worker threads
     {
         JL_TIMING(NATIVE_AOT, NATIVE_Opt);

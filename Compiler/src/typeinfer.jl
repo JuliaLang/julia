@@ -1462,7 +1462,8 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     codeinfos = []
     # first compute the ABIs of everything
     latest = true # whether this_world == world_counter()
-    for this_world in reverse(sort!(worlds))
+
+    @zone "SYSIMG_INFERENCE" for this_world in reverse(sort!(worlds))
         interp = NativeInterpreter(
             this_world;
             inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
