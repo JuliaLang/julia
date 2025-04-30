@@ -6428,4 +6428,21 @@ global invalid_setglobal!_exct_modeling::Int
     setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
 end == ErrorException
 
+# Issue #58257 - Hang in inference during BindingPartition resolution
+module A58257
+    module B58257
+        using ..A58257
+        # World age here is N
+    end
+    using .B58257
+    # World age here is N+1
+    @eval f() = $(GlobalRef(B58257, :get!))
+end
+
+## The sequence of events is critical here.
+A58257.get!      # Creates binding partition in A, N+1:∞
+A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
+Base.invoke_in_world(UInt(38678), getglobal, A58257, :get!) # Expands binding partition in A through <N
+@test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
+
 end # module inference
