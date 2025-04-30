@@ -2027,6 +2027,13 @@ void JuliaOJIT::addModule(orc::ThreadSafeModule TSM)
     TSM = (*JITPointers)(std::move(TSM));
     auto Lock = TSM.getContext().getLock();
     Module &M = *TSM.getModuleUnlocked();
+
+    for (auto &f : M) {
+        if (!f.isDeclaration()){
+            jl_timing_puts(JL_TIMING_DEFAULT_BLOCK, f.getName().str().c_str());
+        }
+    }
+
     // Treat this as if one of the passes might contain a safepoint
     // even though that shouldn't be the case and might be unwise
     Expected<std::unique_ptr<MemoryBuffer>> Obj = CompileLayer.getCompiler()(M);
