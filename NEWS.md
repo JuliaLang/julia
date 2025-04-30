@@ -17,6 +17,8 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* The option `--sysimage-native-code=no` has been deprecated.
+
 Multi-threading changes
 -----------------------
 
