@@ -136,15 +136,18 @@ static jl_binding_partition_t *jl_implicit_import_resolved(jl_binding_t *b, stru
     if (jl_is_binding_partition(gap.parent)) {
         // Check if we can merge this into the previous binding partition
         jl_binding_partition_t *prev = (jl_binding_partition_t *)gap.parent;
+        assert(new_max_world != ~(size_t)0); // It is inconsistent to have a gap with `gap.parent` set, but max_world == ~(size_t)0
         size_t expected_prev_min_world = new_max_world + 1;
         if (prev->restriction == resolution.binding_or_const && prev->kind == new_kind) {
+retry:
             if (!jl_atomic_cmpswap(&prev->min_world, &expected_prev_min_world, new_min_world)) {
                 if (expected_prev_min_world <= new_min_world) {
                     return prev;
                 }
                 else if (expected_prev_min_world <= new_max_world) {
-                    // Concurrent modification by another thread - bail.
-                    return NULL;
+                    // Concurrent modification of the partition. However, our lookup is still valid,
+                    // so we should still be able to extend the partition.
+                    goto retry;
                 }
                 // There remains a gap - proceed
             } else {
@@ -154,7 +157,7 @@ static jl_binding_partition_t *jl_implicit_import_resolved(jl_binding_t *b, stru
                     for (;;) {
                         // We've updated the previous partition - check if we've closed a gap
                         size_t next_max_world = jl_atomic_load_relaxed(&next->max_world);
-                        if (next_max_world == expected_prev_min_world-1 && next->kind == new_kind && next->restriction == resolution.binding_or_const) {
+                        if (next_max_world >= expected_prev_min_world-1 && next->kind == new_kind && next->restriction == resolution.binding_or_const) {
                             if (jl_atomic_cmpswap(&prev->min_world, &expected_prev_min_world, next_min_world)) {
                                 jl_binding_partition_t *nextnext = jl_atomic_load_relaxed(&next->next);
                                 if (!jl_atomic_cmpswap(&prev->next, &next, nextnext)) {
@@ -370,7 +373,7 @@ JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t
     bpart->kind = resolution.ultimate_kind;
 }
 
-STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b JL_PROPAGATES_ROOT, jl_value_t *parent, _Atomic(jl_binding_partition_t *)*insert, size_t world, modstack_t *st) JL_GLOBALLY_ROOTED
+STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b JL_PROPAGATES_ROOT, jl_value_t *parent, _Atomic(jl_binding_partition_t *)*insert, size_t world, size_t max_world, modstack_t *st) JL_GLOBALLY_ROOTED
 {
     assert(jl_is_binding(b));
     struct implicit_search_gap gap;
@@ -378,7 +381,7 @@ STATIC_INLINE jl_binding_partition_t *jl_get_binding_partition_(jl_binding_t *b 
     gap.insert = insert;
     gap.inherited_flags = 0;
     gap.min_world = 0;
-    gap.max_world = ~(size_t)0;
+    gap.max_world = max_world;
     while (1) {
         gap.replace = jl_atomic_load_relaxed(gap.insert);
         jl_binding_partition_t *bpart = jl_get_binding_partition__(b, world, &gap);
@@ -395,15 +398,14 @@ jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b, size_t world) 
     if (!b)
         return NULL;
     // Duplicate the code for the entry frame for branch prediction
-    return jl_get_binding_partition_(b, (jl_value_t*)b, &b->partitions, world, NULL);
+    return jl_get_binding_partition_(b, (jl_value_t*)b, &b->partitions, world, ~(size_t)0, NULL);
 }
 
 jl_binding_partition_t *jl_get_binding_partition_with_hint(jl_binding_t *b, jl_binding_partition_t *prev, size_t world) JL_GLOBALLY_ROOTED {
     // Helper for getting a binding partition for an older world after we've already looked up the partition for a newer world
     assert(b);
-    // TODO: Is it possible for a concurrent lookup to have expanded this bpart, making this false?
-    assert(jl_atomic_load_relaxed(&prev->min_world) > world);
-    return jl_get_binding_partition_(b, (jl_value_t*)prev, &prev->next, world, NULL);
+    size_t prev_min_world = jl_atomic_load_relaxed(&prev->min_world);
+    return jl_get_binding_partition_(b, (jl_value_t*)prev, &prev->next, world, prev_min_world-1, NULL);
 }
 
 jl_binding_partition_t *jl_get_binding_partition_all(jl_binding_t *b, size_t min_world, size_t max_world) {
