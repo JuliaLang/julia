@@ -334,9 +334,9 @@ mapreduce_impl(f, op, A::SkipMissing, init, ifirst::Integer, ilast::Integer) =
         end
         ismissing(ai) && return Some(_mapreduce_start(f, op, itr, init, a1))
         a2 = ai::eltype(itr)
-        i == typemax(typeof(i)) && return Some(_mapreduce_start(f, op, itr, init, a1, a2))
+        i == typemax(typeof(i)) && return Some(op(_mapreduce_start(f, op, itr, init, a1), f(a2)))
         i += 1
-        v = _mapreduce_start(f, op, itr, init, a1, a2)
+        v = op(_mapreduce_start(f, op, itr, init, a1), f(a2))
         @simd for i = i:ilast
             @inbounds ai = A[i]
             if !ismissing(ai)

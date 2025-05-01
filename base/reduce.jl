@@ -239,18 +239,16 @@ _empty_eltype(x) = _empty_eltype(x, IteratorEltype(x))
 _empty_eltype(x, ::HasEltype) = eltype(x)
 _empty_eltype(_, _) = _empty_reduce_error()
 """
-    _mapreduce_start(f, op, A, init, [a1], [a2])
+    _mapreduce_start(f, op, A, init, [a1])
 
-Perform the first step in a mapped reduction over `A` with 0, 1, or more elements.
-The two element method may be called multiple times within a single reduction at
+Perform the first step in a mapped reduction over `A` with 0 or one or more elements.
+The one-element method may be called multiple times within a single reduction at
 the start of each new chain of `op` calls.
 """
 _mapreduce_start(f, op, A, ::_InitialValue) = mapreduce_empty(f, op, _empty_eltype(A))
 _mapreduce_start(f, op, A, ::_InitialValue, a1) = mapreduce_first(f, op, a1)
-_mapreduce_start(f, op, A, ::_InitialValue, a1, a2) = op(mapreduce_first(f, op, a1), f(a2))
 _mapreduce_start(f, op, A, init) = init
 _mapreduce_start(f, op, A, init, a1) = op(init, mapreduce_first(f, op, a1))
-_mapreduce_start(f, op, A, init, a1, a2) = op(op(init, mapreduce_first(f, op, a1)), f(a2))
 
 
 # `mapreduce_impl()` is called by `mapreduce()` (via `_mapreduce()`, when `A`
@@ -263,12 +261,12 @@ _mapreduce_start(f, op, A, init, a1, a2) = op(op(init, mapreduce_first(f, op, a1
 @noinline function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, init,
                                   ifirst::Integer, ilast::Integer, blksize::Int)
     if ifirst == ilast
-        throw(AssertionError("mapreduce_impl must process at least two elements"))
+        return _mapreduce_start(f, op, A, init, @inbounds(A[ifirst]))
     elseif ilast - ifirst < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
-        v = _mapreduce_start(f, op, A, init, a1, a2)
+        v = op(_mapreduce_start(f, op, A, init, a1), f(a2))
         @simd for i = ifirst + 2 : ilast
             @inbounds ai = A[i]
             v = op(v, f(ai))
@@ -443,7 +441,7 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted, init)
         @inbounds i = first(inds)
         @inbounds a1 = A[i]
         @inbounds a2 = A[i+=1]
-        s = _mapreduce_start(f, op, A, init, a1, a2)
+        s = op(_mapreduce_start(f, op, A, init, a1), f(a2))
         while i < last(inds)
             @inbounds Ai = A[i+=1]
             s = op(s, f(Ai))
@@ -650,11 +648,11 @@ function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
                         A::AbstractArrayOrBroadcasted, init, first::Integer, last::Integer)
     last == first && throw(AssertionError("mapreduce_impl must process at least two elements"))
     a1 = @inbounds A[first]
-    a2 = @inbounds A[first+1]
-    v1 = _mapreduce_start(f, op, A, init, a1, a2)
+    v1 = _mapreduce_start(f, op, A, init, a1)
+    last == first && return v1
     v2 = v3 = v4 = v1
     chunk_len = 256
-    start = first + 2
+    start = first + 1
     simdstop  = start + chunk_len - 4
     while simdstop <= last - 3
         for i in start:4:simdstop
