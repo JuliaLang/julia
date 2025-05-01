@@ -2659,7 +2659,7 @@ let s = "string(findfi|; base=16)"
 end
 
 # Unknown functions should not cause completions to fail
-let s = "foo(findfi"
+let s = "foo58296(findfi"
     c, r = test_complete(s)
     @test "findfirst" in c
     @test r == 5:10
