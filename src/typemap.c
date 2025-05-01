@@ -543,10 +543,10 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
         closure->ti = jl_type_intersection_env_s(closure->type, (jl_value_t*)ml->sig, penv, &closure->issubty);
         if (closure->ti != (jl_value_t*)jl_bottom_type) {
             // In some corner cases type intersection is conservative and returns something
-            // for intersect(A, B) even though A is a dispatch tuple and !(A <: B).
+            // for intersect(A, B) even though A is an indivisible (dispatch) tuple and !(A <: B).
             // For dispatch purposes in such a case we know there's no match. This check
             // fixes issue #30394.
-            if (closure->issubty || !jl_is_dispatch_tupletype(closure->type))
+            if (closure->issubty || !jl_is_indivisible_type(closure->type))
                 if (!fptr(ml, closure))
                     return 0;
         }
@@ -594,7 +594,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
     jl_value_t *ttypes = jl_unwrap_unionall(closure->type);
     assert(jl_is_datatype(ttypes));
     //TODO: fast-path for leaf-type tuples?
-    //if (ttypes->isdispatchtuple) {
+    //if (ttypes->isindivisibletype) {
     //    register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
     //    struct jl_typemap_assoc search = {(jl_value_t*)closure->type, world, closure->env, 0, ~(size_t)0};
     //    jl_typemap_entry_t *ml = jl_typemap_assoc_by_type(map, search, offs, /*subtype*/1);

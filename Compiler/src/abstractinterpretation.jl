@@ -129,7 +129,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
         local napplicable = length(applicable)
         for i = 1:napplicable
             local sig = applicable[i].match.spec_types
-            if !isdispatchtuple(sig)
+            if !isindivisibletype(sig)
                 # only infer fully concrete call sites in top-level expressions (ignoring even isa_compileable_sig matches)
                 add_remark!(interp, sv, "Refusing to infer non-concrete call site in top-level expression")
                 return Future(CallMeta(Any, Any, Effects(), NoCallInfo()))

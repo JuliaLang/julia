@@ -1394,8 +1394,8 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
             # We will emit an inline MethodError in this case, but that info already came inference, so we must already have the uncovered edge for it
         end
     elseif !isempty(cases)
-        # if we've not seen all candidates, union split is valid only for dispatch tuples
-        filter!(case::InliningCase->isdispatchtuple(case.sig), cases)
+        # if we've not seen all candidates, union split is valid only for indivisible (dispatch) tuples
+        filter!(case::InliningCase->isindivisibletype(case.sig), cases)
     end
     return cases, handled_all_cases, fully_covered, joint_effects
 end

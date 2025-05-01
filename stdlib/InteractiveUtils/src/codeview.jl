@@ -203,8 +203,8 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         world = Base.get_world_counter()
         match = Base._which(signature_type(f, t); world)
         mi = Base.specialize_method(match)
-        # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
-        isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
+        # TODO: use jl_is_cacheable_sig instead of isindivisibletype
+        isindivisibletype(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
     else
         world = UInt64(f.world)
         tt = Base.to_tuple_type(t)
@@ -216,7 +216,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
             Base.hasintersect(typeof(f).parameters[1], tt) || (warning = OC_MISMATCH_WARNING)
         else
             mi = Base.specialize_method(f.source, Tuple{typeof(f.captures), tt.parameters...}, Core.svec())
-            isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
+            isindivisibletype(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
         end
     end
     # get the code for it

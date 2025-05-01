@@ -75,7 +75,7 @@ get_require_world() = unsafe_load(cglobal(:jl_require_world, UInt))
 
 function gen_staged_sig(def::Method, mi::MethodInstance)
     isdefined(def, :generator) || return nothing
-    isdispatchtuple(mi.specTypes) || return nothing
+    isindivisibletype(mi.specTypes) || return nothing
     gen = Core.Typeof(def.generator)
     return Tuple{gen, UInt, Method, Vararg}
     ## more precise method lookup, but more costly and likely not actually better?

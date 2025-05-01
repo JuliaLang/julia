@@ -361,7 +361,7 @@ function inline_cost_model(interp::AbstractInterpreter, result::InferenceResult,
         return MAX_INLINE_COST
     end
 
-    if declared_inline && isdispatchtuple(specTypes)
+    if declared_inline && isindivisibletype(specTypes)
         # obey @inline declaration if a dispatch barrier would not help
         return MIN_INLINE_COST
     else

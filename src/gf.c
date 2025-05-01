@@ -1014,7 +1014,7 @@ static void jl_compilation_sig(
             }
         }
         else if (jl_is_kind(elt)) {
-            // not triggered for isdispatchtuple(tt), this attempts to handle
+            // not triggered for isindivisibletype(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
             // if we get a kind, where we don't expect to accept one, widen it to something more expected (Type{T})
             if (!(jl_subtype(elt, type_i) && !jl_subtype((jl_value_t*)jl_type_type, type_i))) {
@@ -1044,11 +1044,11 @@ static void jl_compilation_sig(
         }
 
         if (jl_types_equal(elt, (jl_value_t*)jl_type_type)) { // elt == Type{T} where T
-            // not triggered for isdispatchtuple(tt), this attempts to handle
+            // not triggered for isindivisibletype(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
         }
         else if (!jl_is_datatype(elt) && jl_subtype(elt, (jl_value_t*)jl_type_type)) { // elt <: Type{T}
-            // not triggered for isdispatchtuple(tt), this attempts to handle
+            // not triggered for isindivisibletype(tt), this attempts to handle
             // some cases of adapting a random signature into a compilation signature
             if (!*newparams) *newparams = jl_svec_copy(tt->parameters);
             jl_svecset(*newparams, i, jl_type_type);
@@ -1197,7 +1197,7 @@ JL_DLLEXPORT int jl_isa_compileable_sig(
     if (definition->generator) {
         // staged functions aren't optimized
         // so assume the caller was intelligent about calling us
-        return (definition->isva ? np >= nargs - 1 : np == nargs) && type->isdispatchtuple;
+        return (definition->isva ? np >= nargs - 1 : np == nargs) && type->isindivisibletype;
     }
 
     // for varargs methods, only specialize up to max_args (>= nargs + 1).
@@ -1636,9 +1636,9 @@ static jl_method_instance_t *jl_mt_assoc_by_type(jl_methtable_t *mt JL_PROPAGATE
     jl_method_match_t *matc = NULL;
     JL_GC_PUSH2(&tt, &matc);
     JL_LOCK(&mt->writelock);
-    assert(tt->isdispatchtuple || tt->hasfreetypevars);
+    assert(tt->isindivisibletype || tt->hasfreetypevars);
     jl_method_instance_t *mi = NULL;
-    if (tt->isdispatchtuple) {
+    if (tt->isindivisibletype) {
         jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
         jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
         if (entry)
@@ -3132,7 +3132,7 @@ JL_DLLEXPORT jl_value_t *jl_normalize_to_compilable_sig(jl_methtable_t *mt, jl_t
     jl_methtable_t *kwmt = mt == jl_kwcall_mt ? jl_kwmethod_table_for(m->sig) : mt;
     intptr_t max_varargs = get_max_varargs(m, kwmt, mt, NULL);
     jl_compilation_sig(ti, env, m, max_varargs, &newparams);
-    int is_compileable = ((jl_datatype_t*)ti)->isdispatchtuple;
+    int is_compileable = ((jl_datatype_t*)ti)->isindivisibletype;
     if (newparams) {
         tt = (jl_datatype_t*)jl_apply_tuple_type(newparams, 1);
         if (!is_compileable) {
@@ -3184,7 +3184,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *matc
         assert(mt != NULL);
         if ((jl_value_t*)mt != jl_nothing) {
             // get the specialization, possibly also caching it
-            if (mt_cache && ((jl_datatype_t*)ti)->isdispatchtuple) {
+            if (mt_cache && ((jl_datatype_t*)ti)->isindivisibletype) {
                 // Since we also use this presence in the cache
                 // to trigger compilation when producing `.ji` files,
                 // inject it there now if we think it will be
@@ -3334,7 +3334,7 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
         // In addition to full compilation of the compilation-signature, if `types` is more specific (e.g. due to nospecialize),
         // also run inference now on the original `types`, since that may help us guide inference to find
         // additional useful methods that should be compiled
-        //ALT: if (jl_is_datatype(types) && ((jl_datatype_t*)types)->isdispatchtuple && !jl_egal(mi->specTypes, types))
+        //ALT: if (jl_is_datatype(types) && ((jl_datatype_t*)types)->isindivisibletype && !jl_egal(mi->specTypes, types))
         //ALT: if (jl_subtype(types, mi->specTypes))
         if (types && !jl_subtype(mi->specTypes, (jl_value_t*)types)) {
             jl_svec_t *tpenv2 = jl_emptysvec;
@@ -3882,7 +3882,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
         return 1;
     }
     jl_method_t *meth = ml->func.method;
-    if (closure->lim >= 0 && jl_is_dispatch_tupletype(meth->sig)) {
+    if (closure->lim >= 0 && jl_is_indivisible_type(meth->sig)) {
         int replaced = 0;
         // check if this is replaced, in which case we need to avoid double-counting it against the limit
         // (although it will figure out later which one to keep and return)
@@ -4233,7 +4233,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
 
     if (mt) {
         // check the leaf cache if this type can be in there
-        if (((jl_datatype_t*)unw)->isdispatchtuple) {
+        if (((jl_datatype_t*)unw)->isindivisibletype) {
             jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
             jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)type, world);
             if (entry) {
@@ -4266,12 +4266,12 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
             }
         }
         // then check the full cache if it seems profitable
-        if (((jl_datatype_t*)unw)->isdispatchtuple) {
+        if (((jl_datatype_t*)unw)->isindivisibletype) {
             jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mt->cache), &search, jl_cachearg_offset(mt), /*subtype*/1);
-            if (entry && (((jl_datatype_t*)unw)->isdispatchtuple || entry->guardsigs == jl_emptysvec)) {
+            if (entry && (((jl_datatype_t*)unw)->isindivisibletype || entry->guardsigs == jl_emptysvec)) {
                 jl_method_instance_t *mi = entry->func.linfo;
                 jl_method_t *meth = mi->def.method;
-                if (!jl_is_unionall(meth->sig) && ((jl_datatype_t*)unw)->isdispatchtuple) {
+                if (!jl_is_unionall(meth->sig) && ((jl_datatype_t*)unw)->isindivisibletype) {
                     env.match.env = jl_emptysvec;
                     env.match.ti = unw;
                 }
@@ -4560,7 +4560,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
         if (env.match.max_valid > max_world)
             env.match.max_valid = max_world;
     }
-    if (mt && cache_result && ((jl_datatype_t*)unw)->isdispatchtuple) { // cache_result parameter keeps this from being recursive
+    if (mt && cache_result && ((jl_datatype_t*)unw)->isindivisibletype) { // cache_result parameter keeps this from being recursive
         if (len == 1 && !has_ambiguity) {
             env.matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, 0);
             jl_method_t *meth = env.matc->method;

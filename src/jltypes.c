@@ -1839,24 +1839,24 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
     dt->hasfreetypevars = 0;
     dt->maybe_subtype_of_cache = 1;
     dt->isconcretetype = !dt->name->abstract;
-    dt->isdispatchtuple = istuple;
+    dt->isindivisibletype = (!dt->name->abstract && !jl_is_kind((jl_value_t*)dt)) || (dt->name == jl_type_typename);
     size_t i, l = jl_nparams(dt);
     for (i = 0; i < l; i++) {
         jl_value_t *p = jl_tparam(dt, i);
-        if (!dt->hasfreetypevars) {
-            dt->hasfreetypevars = jl_has_free_typevars(p);
-            if (dt->hasfreetypevars)
-                dt->isconcretetype = 0;
+        if (!dt->hasfreetypevars && jl_has_free_typevars(p)) {
+            // XXX: this under-approximates type-indivisibility / type-concreteness in some
+            // conspicuous cases like (Tuple{T, Int} where T <: Int). Since these predicates
+            // are defined to be under-approximated, this is not a bug by itself, but this
+            // is something we may like to improve in the future
+            dt->hasfreetypevars = 1;
+            dt->isconcretetype = 0;
+            dt->isindivisibletype = 0;
         }
         if (istuple) {
             if (dt->isconcretetype)
                 dt->isconcretetype = (jl_is_datatype(p) && ((jl_datatype_t*)p)->isconcretetype) || p == jl_bottom_type;
-            if (dt->isdispatchtuple) {
-                dt->isdispatchtuple = jl_is_datatype(p) &&
-                    ((!jl_is_kind(p) && ((jl_datatype_t*)p)->isconcretetype) ||
-                     (p == (jl_value_t*)jl_typeofbottom_type) || // == Type{Union{}}, so needs to be consistent
-                     (((jl_datatype_t*)p)->name == jl_type_typename && !((jl_datatype_t*)p)->hasfreetypevars));
-            }
+            if (dt->isindivisibletype)
+                dt->isindivisibletype = jl_is_datatype(p) && ((jl_datatype_t*)p)->isindivisibletype;
         }
         if (jl_is_vararg(p))
             p = ((jl_vararg_t*)p)->T;
@@ -1871,7 +1871,7 @@ void jl_precompute_memoized_dt(jl_datatype_t *dt, int cacheable)
             dt->maybe_subtype_of_cache = !p || maybe_subtype_of_cache(p, istuple) || !jl_has_free_typevars(p);
         }
     }
-    assert(dt->isconcretetype || dt->isdispatchtuple ? dt->maybe_subtype_of_cache : 1);
+    assert(dt->isconcretetype || dt->isindivisibletype ? dt->maybe_subtype_of_cache : 1);
     if (dt->name == jl_type_typename) {
         jl_value_t *p = jl_tparam(dt, 0);
         if (!jl_is_type(p) && !jl_is_typevar(p)) // Type{v} has no subtypes, if v is not a Type
@@ -2986,7 +2986,7 @@ void jl_init_types(void) JL_GC_DISABLED
             "instance",
             "layout",
             "hash",
-            "flags"); // "hasfreetypevars", "isconcretetype", "isdispatchtuple", "isbitstype", "zeroinit", "has_concrete_subtype", "maybe_subtype_of_cache"
+            "flags"); // "hasfreetypevars", "isconcretetype", "isindivisibletype", "isbitstype", "zeroinit", "has_concrete_subtype", "maybe_subtype_of_cache"
     jl_datatype_type->types = jl_svec(8,
             jl_typename_type,
             jl_datatype_type,
@@ -3092,6 +3092,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_bottom_type = jl_gc_permobj(0, jl_typeofbottom_type, 0);
     jl_set_typetagof(jl_bottom_type, jl_typeofbottom_tag, GC_OLD_MARKED);
     jl_typeofbottom_type->instance = jl_bottom_type;
+    jl_typeofbottom_type->isindivisibletype = 1;
 
     jl_unionall_type = jl_new_datatype(jl_symbol("UnionAll"), core, type_type, jl_emptysvec,
                                        jl_perm_symsvec(2, "var", "body"),
@@ -3133,6 +3134,7 @@ void jl_init_types(void) JL_GC_DISABLED
     // fix some miscomputed values, since we didn't know this was going to be a Tuple in jl_precompute_memoized_dt
     jl_tuple_typename->wrapper = (jl_value_t*)jl_anytuple_type; // remove UnionAll wrappers
     jl_anytuple_type->isconcretetype = 0;
+    jl_anytuple_type->isindivisibletype = 0;
     jl_anytuple_type->maybe_subtype_of_cache = 0;
     jl_anytuple_type->layout = NULL;
 

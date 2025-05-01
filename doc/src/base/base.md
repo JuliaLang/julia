@@ -191,7 +191,7 @@ Base.typeintersect
 Base.promote_type
 Base.promote_rule
 Base.promote_typejoin
-Base.isdispatchtuple
+Base.isindivisibletype
 ```
 
 ### Declared structure

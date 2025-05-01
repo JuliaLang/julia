@@ -816,27 +816,27 @@ let src = code_typed((Union{Tuple{Int,Int,Int}, Vector{Int}},)) do xs
     @test count(isinvoke(:g42840), src.code) == 1
 end
 
-# test single, non-dispatchtuple callsite inlining
+# test single, divisible (non-dispatchtuple) callsite inlining
 
-@constprop :none @inline test_single_nondispatchtuple(@nospecialize(t)) =
+@constprop :none @inline test_single_divisible_type(@nospecialize(t)) =
     isa(t, DataType) && t.name === Type.body.name
 let
     src = code_typed1((Any,)) do x
-        test_single_nondispatchtuple(x)
+        test_single_divisible_type(x)
     end
     @test all(src.code) do @nospecialize x
-        !(isinvoke(:test_single_nondispatchtuple, x) || iscall((src, test_single_nondispatchtuple), x))
+        !(isinvoke(:test_single_divisible_type, x) || iscall((src, test_single_divisible_type), x))
     end
 end
 
-@constprop :aggressive @inline test_single_nondispatchtuple(c, @nospecialize(t)) =
+@constprop :aggressive @inline test_single_divisible_type(c, @nospecialize(t)) =
     c && isa(t, DataType) && t.name === Type.body.name
 let
     src = code_typed1((Any,)) do x
-        test_single_nondispatchtuple(true, x)
+        test_single_divisible_type(true, x)
     end
     @test all(src.code) do @nospecialize(x)
-        !(isinvoke(:test_single_nondispatchtuple, x) || iscall((src, test_single_nondispatchtuple), x))
+        !(isinvoke(:test_single_divisible_type, x) || iscall((src, test_single_divisible_type), x))
     end
 end
 
@@ -856,7 +856,7 @@ let
     @test invoke(Any[10]) === false
 end
 
-# test union-split, non-dispatchtuple callsite inlining
+# test union-split, divisible (non-dispatchtuple) callsite inlining
 
 @constprop :none @noinline abstract_unionsplit(@nospecialize x::Any) = Base.inferencebarrier(:Any)
 @constprop :none @noinline abstract_unionsplit(@nospecialize x::Number) = Base.inferencebarrier(:Number)
