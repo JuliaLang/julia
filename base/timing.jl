@@ -490,10 +490,11 @@ function allocations(f, args::Vararg{Any,N}; kwargs...) where {N}
 end
 only(methods(allocations)).called = 0xff
 
-function is_simply_call(@nospecialize ex)
+function is_simply_call(@nospecialize ex, captures::Vector{Symbol})
     Meta.isexpr(ex, :call) || return false
     function is_simple_arg(@nospecialize a)
         a isa Symbol && return true
+        a isa GlobalRef && return true
         is_self_quoting(a) && return true
         is_quoted(a) && return true
         if a isa Expr
@@ -524,13 +525,23 @@ julia> @allocated rand(10^6)
 ```
 """
 macro allocated(ex)
-    if !is_simply_call(ex)
-        ex = :((() -> $ex)())
-    else
-        length(ex.args) >= 2 && isexpr(ex.args[2], :parameters) && ((ex.args[1], ex.args[2]) = (ex.args[2], ex.args[1]))
+    vars = Symbol[]
+    try_get_captures!(ex, vars) || empty!(vars)
+    body = quote
+        b0 = Ref{Int64}(0)
+        b1 = Ref{Int64}(0)
+        gc_bytes(b0)
+        $(esc(ex))
+        gc_bytes(b1)
+        return b1[] - b0[]
     end
     pushfirst!(ex.args, GlobalRef(Base, :allocated))
-    return esc(ex)
+    ws = map(i -> Symbol("_$i"), 1:length(vars))
+    vars = map(esc, vars)
+    args = map((v, w) -> :($v::$w), vars, ws)
+    sig = :( ($(args...),) where {$(ws...)} )
+    ex = remove_linenums!(:(($sig -> $body)($(vars...))))
+    return ex
 end
 
 """
