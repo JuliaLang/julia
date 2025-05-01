@@ -545,14 +545,13 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 show_repl(io::IO, mime::MIME"text/plain", x) = show(io, mime, x)
 
-# new method for AbstractChar
 function show_repl(io::IO, mime::MIME"text/plain", c::AbstractChar)
     show(io, mime, c) # Call the original Base.show
     # Check for LaTeX/emoji alias and print if found and using symbol_latex which is used in help?> mode
     latex = symbol_latex(string(c))
     if !isempty(latex)
         print(io, ", input as ")
-        printstyled(io, latex, color=:cyan)
+        printstyled(io, latex, "<tab>"; color=:cyan)
     end
 end
 
