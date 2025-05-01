@@ -913,7 +913,7 @@ function _mapreduce(f::F, op::OP, style::IndexSCartesian2{K}, A::AbstractArrayOr
     elseif n == 1
         return _mapreduce_start(f, op, A, init, first(A))
     else
-        return mapreduce_impl(f, op, A, init, first(inds), last(inds))
+        return mapreduce_impl(f, op, A, first(inds), last(inds), init)
     end
 end
 
