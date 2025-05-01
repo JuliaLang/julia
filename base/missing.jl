@@ -273,7 +273,7 @@ end
 mapreduce(f, op, itr::SkipMissing{<:AbstractArray}; init=Base._InitialValue()) =
     _mapreduce(f, op, IndexStyle(itr.x), eltype(itr.x) >: Missing ? itr : itr.x, init)
 
-function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray}, init)
+function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray}, init=_InitialValue())
     A = itr.x
     ai = missing
     inds = LinearIndices(A)
@@ -294,18 +294,16 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray}, ini
     end
     ismissing(ai) && return _mapreduce_start(f, op, itr, init, a1)
     # We know A contains at least two non-missing entries: the result cannot be nothing
-    something(mapreduce_impl(f, op, itr, init, first(inds), last(inds)))
+    something(mapreduce_impl(f, op, itr, first(inds), last(inds), init))
 end
 
-_mapreduce(f, op, ::IndexCartesian, itr::SkipMissing, init) = mapfoldl(f, op, itr; init)
-
-mapreduce_impl(f, op, A::SkipMissing, init, ifirst::Integer, ilast::Integer) =
-    mapreduce_impl(f, op, A, init, ifirst, ilast, pairwise_blocksize(f, op))
+_mapreduce(f, op, ::IndexCartesian, itr::SkipMissing, init=_InitialValue()) = mapfoldl(f, op, itr; init)
 
 # Returns nothing when the input contains only missing values, and Some(x) otherwise
-@noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray}, init,
-                                  ifirst::Integer, ilast::Integer, blksize::Int)
+@noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray},
+                                  ifirst::Integer, ilast::Integer, init=_InitialValue())
     A = itr.x
+    blksize = pairwise_blocksize(f, op)
     if ifirst > ilast
         return nothing
     elseif ifirst == ilast
@@ -347,8 +345,8 @@ mapreduce_impl(f, op, A::SkipMissing, init, ifirst::Integer, ilast::Integer) =
     else
         # pairwise portion
         imid = ifirst + (ilast - ifirst) >> 1
-        v1 = mapreduce_impl(f, op, itr, init, ifirst, imid, blksize)
-        v2 = mapreduce_impl(f, op, itr, init, imid+1, ilast, blksize)
+        v1 = mapreduce_impl(f, op, itr, ifirst, imid, init)
+        v2 = mapreduce_impl(f, op, itr, imid+1, ilast, init)
         if v1 === nothing && v2 === nothing
             return nothing
         elseif v1 === nothing

@@ -258,8 +258,9 @@ _mapreduce_start(f, op, A, init, a1) = op(init, mapreduce_first(f, op, a1))
 
 # This is a generic implementation of `mapreduce_impl()`,
 # certain `op` (e.g. `min` and `max`) may have their own specialized versions.
-@noinline function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, init,
-                                  ifirst::Integer, ilast::Integer, blksize::Int)
+@noinline function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted,
+                                  ifirst::Integer, ilast::Integer, init=_InitialValue())
+    blksize = pairwise_blocksize(f, op)
     if ifirst == ilast
         return _mapreduce_start(f, op, A, init, @inbounds(A[ifirst]))
     elseif ilast - ifirst < blksize
@@ -275,14 +276,11 @@ _mapreduce_start(f, op, A, init, a1) = op(init, mapreduce_first(f, op, a1))
     else
         # pairwise portion
         imid = ifirst + (ilast - ifirst) >> 1
-        v1 = mapreduce_impl(f, op, A, init, ifirst, imid, blksize)
-        v2 = mapreduce_impl(f, op, A, init, imid+1, ilast, blksize)
+        v1 = mapreduce_impl(f, op, A, ifirst, imid, init)
+        v2 = mapreduce_impl(f, op, A, imid+1, ilast, init)
         return op(v1, v2)
     end
 end
-
-mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, init, ifirst::Integer, ilast::Integer) =
-    mapreduce_impl(f, op, A, init, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
     mapreduce(f, op, itrs...; [init])
@@ -427,9 +425,9 @@ The default is `reduce_first(op, f(x))`.
 """
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
-_mapreduce(f, op, A::AbstractArrayOrBroadcasted, init) = _mapreduce(f, op, IndexStyle(A), A, init)
+_mapreduce(f, op, A::AbstractArrayOrBroadcasted, init=_InitialValue()) = _mapreduce(f, op, IndexStyle(A), A, init)
 
-function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted, init)
+function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted, init=_InitialValue())
     inds = LinearIndices(A)
     n = length(inds)
     if n == 0
@@ -448,13 +446,13 @@ function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted, init)
         end
         return s
     else
-        return mapreduce_impl(f, op, A, init, first(inds), last(inds))
+        return mapreduce_impl(f, op, A, first(inds), last(inds), init)
     end
 end
 
 mapreduce(f, op, a::Number; init=Base._InitialValue()) = _mapreduce_start(f, op, a, init, a)
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted, init) = mapfoldl(f, op, A; init)
+_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted, init=_InitialValue()) = mapfoldl(f, op, A; init)
 
 """
     reduce(op, itr; [init])
@@ -645,8 +643,7 @@ isgoodzero(::typeof(max), x) = isbadzero(min, x)
 isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
 function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
-                        A::AbstractArrayOrBroadcasted, init, first::Integer, last::Integer)
-    last == first && throw(AssertionError("mapreduce_impl must process at least two elements"))
+                        A::AbstractArrayOrBroadcasted, first::Integer, last::Integer, init)
     a1 = @inbounds A[first]
     v1 = _mapreduce_start(f, op, A, init, a1)
     last == first && return v1
