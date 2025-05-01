@@ -902,7 +902,7 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
                                     ex::Expr, last_word::String,
                                     context_module::Module; shift::Bool=false)
     kwargs_flag, funct, args_ex, kwargs_ex = _complete_methods(ex, context_module, true)::Tuple{Int, Any, Vector{Any}, Set{Symbol}}
-    kwargs_flag == 2 && false # one of the previous kwargs is invalid
+    kwargs_flag == 2 && return false # one of the previous kwargs is invalid
 
     methods = Completion[]
     complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : MAX_METHOD_COMPLETIONS, kwargs_flag == 1)
