@@ -472,43 +472,33 @@ function gc_bytes()
     b[]
 end
 
-function allocated(f, args::Vararg{Any,N}; kwargs...) where {N}
-    b0 = Ref{Int64}(0)
-    b1 = Ref{Int64}(0)
-    Base.gc_bytes(b0)
-    f(args...; kwargs...)
-    Base.gc_bytes(b1)
-    return b1[] - b0[]
-end
-only(methods(allocated)).called = 0xff
-
-function allocations(f, args::Vararg{Any,N}; kwargs...) where {N}
-    stats = Base.gc_num()
-    f(args...; kwargs...)
-    diff = Base.GC_Diff(Base.gc_num(), stats)
-    return Base.gc_alloc_count(diff)
-end
-only(methods(allocations)).called = 0xff
-
-function is_simply_call(@nospecialize ex, captures::Vector{Symbol})
-    Meta.isexpr(ex, :call) || return false
-    function is_simple_arg(@nospecialize a)
-        a isa Symbol && return true
-        a isa GlobalRef && return true
-        is_self_quoting(a) && return true
-        is_quoted(a) && return true
-        if a isa Expr
-            a.head === :(kw) && return is_simple_arg(a.args[2])
-            a.head === :(...) && return is_simple_arg(a.args[1])
-            a.head === :parameters && return all(is_simple_arg, a.args)
-        end
+# get a list of all possible captures and globals from ex into vars
+# return false if that list would change the expression meaning too much
+function try_get_vars!(@nospecialize(ex), vars::Vector{Symbol})
+    ex isa Symbol && (ex in vars || push!(vars, ex))
+    ex isa Expr || return true
+    is_quoted(ex) && return true
+    if ex.head == :kw
+        return try_get_vars!(ex.args[2], vars)
+    end
+    # An allow-list of all expression types that don't change meaning (much) if
+    # we hoist their possible variable accesses into arguments, given that we
+    # don't allow :(=) in this list. We do allow conditionals, even though that
+    # means we could cause an UndefVar error to appear. We also hoist what may
+    # be global accesses, even though that means we change the order of evaluation.
+    if ex.head ∉ (:call, :kw, :parameters, :(...), :., :var"'", :tuple, :ref,
+        :vect, :hcat, :vcat, :ncat, :row, :nrow, :block, :if, :&&, :||, :?,
+        :let, :try, :catch, :finally, :global, :local)
         return false
     end
     for a in ex.args
-        is_simple_arg(a) || return false
+        try_get_vars!(a, vars) || return false
     end
     return true
 end
+
+const b0 = gensym("b0")
+const b1 = gensym("b1")
 
 """
     @allocated
@@ -526,22 +516,23 @@ julia> @allocated rand(10^6)
 """
 macro allocated(ex)
     vars = Symbol[]
-    try_get_captures!(ex, vars) || empty!(vars)
+    try_get_vars!(ex, vars) || empty!(vars)
+    #ex = esc(ex)
     body = quote
-        b0 = Ref{Int64}(0)
-        b1 = Ref{Int64}(0)
-        gc_bytes(b0)
-        $(esc(ex))
-        gc_bytes(b1)
-        return b1[] - b0[]
+        local $b0 = $Ref{$Int64}(0)
+        local $b1 = $Ref{$Int64}(0)
+        $gc_bytes($b0)
+        $ex
+        $gc_bytes($b1)
+        return $-($getindex($b1), $getindex($b0))
     end
-    pushfirst!(ex.args, GlobalRef(Base, :allocated))
-    ws = map(i -> Symbol("_$i"), 1:length(vars))
-    vars = map(esc, vars)
+    # add "wheres" to disable de-specialization heuristics
+    ws = map(i -> gensym(), 1:length(vars)) # Symbol("_$i")
+    #vars = map(esc, vars)
     args = map((v, w) -> :($v::$w), vars, ws)
     sig = :( ($(args...),) where {$(ws...)} )
     ex = remove_linenums!(:(($sig -> $body)($(vars...))))
-    return ex
+    return esc(ex) # manual hygiene to work around macroexpand bugs
 end
 
 """
@@ -562,13 +553,21 @@ julia> @allocations rand(10^6)
     This macro was added in Julia 1.9.
 """
 macro allocations(ex)
-    if !is_simply_call(ex)
-        ex = :((() -> $ex)())
-    else
-        length(ex.args) >= 2 && isexpr(ex.args[2], :parameters) && ((ex.args[1], ex.args[2]) = (ex.args[2], ex.args[1]))
+    vars = Symbol[]
+    try_get_vars!(ex, vars) || empty!(vars)
+    #ex = esc(ex)
+    body = quote
+        local $b0 = $gc_num()
+        $ex
+        return $gc_alloc_count($GC_Diff($gc_num(), $b0))
     end
-    pushfirst!(ex.args, GlobalRef(Base, :allocations))
-    return esc(ex)
+    # add "wheres" to disable de-specialization heuristics
+    ws = map(i -> gensym(), 1:length(vars)) # Symbol("_$i")
+    #vars = map(esc, vars)
+    args = map((v, w) -> :($v::$w), vars, ws)
+    sig = :( ($(args...),) where {$(ws...)} )
+    ex = remove_linenums!(:(($sig -> $body)($(vars...))))
+    return esc(ex) # manual hygiene to work around macroexpand bugs
 end
 
 
