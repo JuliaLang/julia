@@ -461,9 +461,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
                             "       (this should not happen, please file a bug report)\n");
             exit(1);
         }
-        const char *image_path = jl_pathname_for_handle(handle);
-        jl_enter_threaded_region(); // This should maybe be behind a lock, but it's harmless if done twice
-        jl_init_with_image(NULL, image_path);
+        jl_init_with_image_handle(handle);
         return &jl_get_current_task()->gcstack;
     }
 
