@@ -16,12 +16,14 @@ extern "C" {
     XX(_defaultctors,"_defaultctors") \
     XX(_equiv_typedef,"_equiv_typedef") \
     XX(_expr,"_expr") \
+    XX(_import, "_import") \
     XX(_primitivetype,"_primitivetype") \
     XX(_setsuper,"_setsuper!") \
     XX(_structtype,"_structtype") \
     XX(_svec_ref,"_svec_ref") \
     XX(_typebody,"_typebody!") \
     XX(_typevar,"_typevar") \
+    XX(_using, "_using") \
     XX(applicable,"applicable") \
     XX(apply_type,"apply_type") \
     XX(compilerbarrier,"compilerbarrier") \

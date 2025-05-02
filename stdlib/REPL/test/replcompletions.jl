@@ -17,6 +17,16 @@ let ex =
         module CompletionFoo
             using Random
             import Test
+            # make everything public, so that nothing gets hidden unintentionally from completions
+            public Test_y, Text_x, type_test, unicode_αΒγ, CompletionFoo2, bar,
+            foo, @foobar, @barfoo, @error_expanding,
+            @error_lowering_conditional, @error_throwing, NonStruct, x,
+            CustomDict, NoLengthDict, test, test1, test2, test3, test4, test5,
+            test6, test7, test8, test9, test10, test11, a, test!12, kwtest,
+            kwtest2, kwtest3, kwtest4, kwtest5, named, fmsoebelkv, array,
+            varfloat, tuple, test_y_array, test_dict, test_customdict,
+            @teststr_str, @tϵsτstρ_str, @testcmd_cmd, @tϵsτcmδ_cmd,
+            var"complicated symbol with spaces", WeirdNames, @ignoremacro
 
             mutable struct Test_y
                 yy
