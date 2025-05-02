@@ -2662,5 +2662,5 @@ end
 let s = "foo58296(findfi"
     c, r = test_complete(s)
     @test "findfirst" in c
-    @test r == 5:10
+    @test r == 10:15
 end
