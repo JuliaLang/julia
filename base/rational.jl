@@ -105,7 +105,24 @@ function //(x::Rational, y::Rational)
 end
 
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-//(x::Number, y::Complex) = x*conj(y)//abs2(y)
+function //(x::Number, y::Complex)
+    if isinf(y)
+        return (x*(0//1)-x*(0//1)*im)
+    end
+    if iszero(y)
+        throw(DivideError())
+    end
+    real_y = real(y)
+    imag_y = imag(y)
+    m = max(abs(real_y), abs(imag_y))
+    scaled_a = real_y // m
+    scaled_b = imag_y // m
+    denom = (scaled_a^2 + scaled_b^2)
+    real_part = ((((real_y // denom) // m) // m))
+    imag_part = ((((imag_y // denom) // m) // m))
+    ans = (x * real_part - x * imag_part * im)
+    return ans
+end
 
 
 //(X::AbstractArray, y::Number) = X .// y
