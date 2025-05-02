@@ -15,9 +15,9 @@ using ..Compiler:
      hasintersect, haskey, in, isdispatchelem, isempty, isexpr, iterate, length, map!, max,
      pop!, popfirst!, push!, pushfirst!, reinterpret, reverse!, reverse, setindex!,
      setproperty!, similar, singleton_type, sptypes_from_meth_instance,
-     unsafe_pointer_to_objref, widenconst,
+     unsafe_pointer_to_objref, widenconst, isconcretetype,
      # misc
-     @nospecialize, C_NULL
+     @nospecialize, @assert, C_NULL
 using ..IRShow: LineInfoNode, print, show, println, append_scopes!, IOContext, IO, normalize_method_name
 using ..Base: Base, sourceinfo_slotnames
 using ..Base.StackTraces: StackFrame
@@ -166,7 +166,7 @@ function may_dispatch(@nospecialize ftyp)
     end
 end
 
-function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspected::IdSet{CodeInstance}, caches::IdDict{MethodInstance,CodeInstance}, parents::ParentMap, errors::ErrorList)
+function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance, codeinfo::CodeInfo, inspected::IdSet{CodeInstance}, caches::IdDict{MethodInstance,CodeInstance}, parents::ParentMap, errors::ErrorList)
     mi = get_ci_mi(codeinst)
     sptypes = sptypes_from_meth_instance(mi)
     src = codeinfo.code
@@ -199,9 +199,9 @@ function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspec
                 if !may_dispatch(ftyp)
                     continue
                 end
-                # TODO: Make interp elsewhere
-                interp = NativeInterpreter(Base.get_world_counter())
-                if Core._apply_iterate isa ftyp
+                if !isconcretetype(ftyp)
+                    error = "unresolved call to (unknown) builtin"
+                elseif Core._apply_iterate isa ftyp
                     if length(stmt.args) >= 3
                         # args[1] is _apply_iterate object
                         # args[2] is invoke object
@@ -233,9 +233,23 @@ function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspec
 
                         error = "unresolved finalizer registered"
                     end
-                else
-                    error = "unresolved call to builtin"
-                end
+                elseif Core._apply isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core._apply`"
+                elseif Core._call_in_world_total isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core._call_in_world_total`"
+                elseif Core.invoke isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.invoke`"
+                elseif Core.invoke_in_world isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.invoke_in_world`"
+                elseif Core.invokelatest isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.invokelatest`"
+                elseif Core.modifyfield! isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.modifyfield!`"
+                elseif Core.modifyglobal! isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.modifyglobal!`"
+                elseif Core.memoryrefmodify! isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.memoryrefmodify!`"
+                else @assert false "unexpected builtin" end
             end
             extyp = argextype(SSAValue(i), codeinfo, sptypes)
             if extyp === Union{}
@@ -267,6 +281,7 @@ end
 
 function get_verify_typeinf_trim(codeinfos::Vector{Any})
     this_world = get_world_counter()
+    interp = NativeInterpreter(this_world)
     inspected = IdSet{CodeInstance}()
     caches = IdDict{MethodInstance,CodeInstance}()
     errors = ErrorList()
@@ -287,7 +302,7 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
         item = codeinfos[i]
         if item isa CodeInstance
             src = codeinfos[i + 1]::CodeInfo
-            verify_codeinstance!(item, src, inspected, caches, parents, errors)
+            verify_codeinstance!(interp, item, src, inspected, caches, parents, errors)
         elseif item isa SimpleVector
             rt = item[1]::Type
             sig = item[2]::Type
