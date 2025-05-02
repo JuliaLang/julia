@@ -1026,7 +1026,10 @@ end
 
     cert_loc = NetworkOptions.ca_roots()
     cert_loc !== nothing && set_ssl_cert_locations(cert_loc)
+    return nothing
+end
 
+function __init__()
     atexit() do
         # refcount zero, no objects to be finalized
         if Threads.atomic_sub!(REFCOUNT, 1) == 1
