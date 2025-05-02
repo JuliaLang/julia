@@ -2286,3 +2286,17 @@ end
         @test_throws "no method matching $Int(::$Infinity)" similar(ones(2), OneToInf())
     end
 end
+
+
+macro foo_54417(x,i)
+    quote
+        val = $x
+        @inbounds $x[$i]
+        val
+    end
+end
+
+@testset "inbounds hygien confusion" begin
+    z = [1,2,3]
+    @test (@foo_54417 z 1) == z
+end
