@@ -728,7 +728,7 @@ end
 function reduce(::typeof(merge), items::Vector{<:Dict})
     K = mapreduce(keytype, promote_type, items)
     V = mapreduce(valtype, promote_type, items)
-    return reduce(merge!, items; init=Dict{K,V}())
+    return foldl(merge!, items; init=Dict{K,V}())
 end
 
 function map!(f, iter::ValueIterator{<:Dict})

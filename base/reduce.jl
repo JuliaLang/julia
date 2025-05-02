@@ -1144,8 +1144,8 @@ julia> count(i->(4<=i<=6), [2,3,4,5,6])
 julia> count([true, false, true, true])
 3
 
-julia> count(>(3), 1:7, init=0x03)
-0x07
+julia> count(>(3), 1:7, init=UInt(0))
+0x0000000000000004
 ```
 """
 count(itr; init=0) = count(identity, itr; init)
