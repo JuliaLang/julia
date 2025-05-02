@@ -1389,10 +1389,15 @@ static int concretesig_equal(jl_value_t *tt, jl_value_t *simplesig) JL_NOTSAFEPO
     return 1;
 }
 
+// if available, returns a TypeMapEntry in the "leafcache" that matches `tt` (by type-equality) and is valid during `world`
 static inline jl_typemap_entry_t *lookup_leafcache(jl_genericmemory_t *leafcache JL_PROPAGATES_ROOT, jl_value_t *tt, size_t world) JL_NOTSAFEPOINT
 {
     jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_eqtable_get(leafcache, (jl_value_t*)tt, NULL);
     if (entry) {
+        // search tail of the linked-list (including the returned entry) for an entry intersecting world
+        //
+        // XXX: this is not the usual entry linked-list (TypeMapLevel.linear) - these entries are unique to
+        // the leafcache and the entire chain is type-equal to tt
         do {
             if (jl_atomic_load_relaxed(&entry->min_world) <= world && world <= jl_atomic_load_relaxed(&entry->max_world)) {
                 if (entry->simplesig == (void*)jl_nothing || concretesig_equal(tt, (jl_value_t*)entry->simplesig))
@@ -3863,49 +3868,74 @@ static jl_method_match_t *make_method_match(jl_tupletype_t *spec_types, jl_svec_
     return match;
 }
 
+// callback for typemap_visitor
+//
+// This will exit the search early (by returning 0 / false) if the match limit is proven to be
+// exceeded early. This is only best-effort, since specificity means that many matched methods
+// may be sorted and removed in the output processing for ml_matches and therefore we can only
+// conservatively under-approximate the matches during the search.
 static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure0)
 {
     struct ml_matches_env *closure = container_of(closure0, struct ml_matches_env, match);
     if (closure->intersections == 0 && !closure0->issubty)
         return 1;
+
+    // First, check the world range of the typemap entry to ensure that it intersects
+    // the query world. If it does not, narrow the result world range to guarantee
+    // excluding it from the results is valid for the full span.
     size_t min_world = jl_atomic_load_relaxed(&ml->min_world);
     size_t max_world = jl_atomic_load_relaxed(&ml->max_world);
     if (closure->world < min_world) {
-        // ignore method table entries that are part of a later world
+        // exclude method table entries that are part of a later world
         if (closure->match.max_valid >= min_world)
             closure->match.max_valid = min_world - 1;
         return 1;
     }
     else if (closure->world > max_world) {
-        // ignore method table entries that have been replaced in the current world
+        // exclude method table entries that have been replaced in the current world
         if (closure->match.min_valid <= max_world)
             closure->match.min_valid = max_world + 1;
         return 1;
     }
     jl_method_t *meth = ml->func.method;
+
+    // Best effort limit-checking. For dispatch tuples, we can reason easily about their inclusion in the
+    // output results since they are more specific than anything else in the system and are either type-
+    // equal or entirely non-overlapping (i.e. T == U or T & U = Ø)
+    //
+    // As a consequence, they always count toward the output results unless duplicated (by type-equality)
     if (closure->lim >= 0 && jl_is_dispatch_tupletype(meth->sig)) {
-        int replaced = 0;
-        // check if this is replaced, in which case we need to avoid double-counting it against the limit
-        // (although it will figure out later which one to keep and return)
+        int is_duplicate = 0;
+        // check if this is a duplicate with another dispatch tupletype we've seen, in which case we need to
+        // avoid double-counting it against the limit (ml_matches will figure out later which one to keep
+        // and return)
         size_t len = jl_array_nrows(closure->t);
         for (int i = 0; i < len; i++) {
             if (jl_types_equal(((jl_method_match_t*)jl_array_ptr_ref(closure->t, i))->method->sig, meth->sig)) {
-                replaced = 1;
+                is_duplicate = 1;
                 break;
             }
         }
-        if (!replaced) {
+        if (!is_duplicate) {
             if (closure->lim == 0)
                 return 0;
             closure->lim--;
         }
     }
+
     // don't need to consider other similar methods if this ml will always fully intersect with them and dominates all of them
     if (!closure->include_ambiguous || closure->lim != -1)
         typemap_slurp_search(ml, &closure->match);
-    closure->matc = make_method_match((jl_tupletype_t*)closure->match.ti,
-        closure->match.env, meth,
-        closure->match.issubty ? FULLY_COVERS : NOT_FULLY_COVERS);
+
+    // construct MethodMatch for matching method
+    closure->matc = make_method_match(
+        (jl_tupletype_t*)closure->match.ti,
+        closure->match.env,
+        meth,
+        closure->match.issubty ? FULLY_COVERS : NOT_FULLY_COVERS
+    );
+
+    // push MethodMatch into closure->t
     size_t len = jl_array_nrows(closure->t);
     if (len == 0) {
         closure->t = (jl_value_t*)jl_alloc_vec_any(1);
@@ -3914,6 +3944,7 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     else {
         jl_array_ptr_1d_push((jl_array_t*)closure->t, (jl_value_t*)closure->matc);
     }
+
     return 1;
 }
 
@@ -4223,21 +4254,47 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
         else
             va = NULL;
     }
-    struct ml_matches_env env = {{ml_matches_visitor, (jl_value_t*)type, va, /* .search_slurp = */ 0,
-            /* .min_valid = */ *min_valid, /* .max_valid = */ *max_valid,
-            /* .ti = */ NULL, /* .env = */ jl_emptysvec, /* .issubty = */ 0},
-        intersections, world, lim, include_ambiguous, /* .t = */ jl_an_empty_vec_any,
-        /* .matc = */ NULL};
+    struct ml_matches_env env = {
+        /* match */ {
+            /* inputs */
+            /* fptr / callback */ ml_matches_visitor,
+            /* sig */ (jl_value_t*)type,
+            /* vararg type / tparam0 */ va,
+
+            /* temporaries */
+            /* .search_slurp = */ 0,
+
+            /* outputs */
+            /* .min_valid = */ *min_valid,
+            /* .max_valid = */ *max_valid,
+            /* .ti = */ NULL,
+            /* .env = */ jl_emptysvec,
+            /* .issubty = */ 0
+        },
+        /* inputs */
+        intersections,
+        world,
+        lim,
+        include_ambiguous,
+
+        /* outputs */
+        /* .t = */ jl_an_empty_vec_any,
+
+        /* temporaries */
+        /* .matc = */ NULL
+    };
     struct jl_typemap_assoc search = {(jl_value_t*)type, world, jl_emptysvec};
     jl_value_t *isect2 = NULL;
     JL_GC_PUSH6(&env.t, &env.matc, &env.match.env, &search.env, &env.match.ti, &isect2);
 
     if (mt) {
-        // check the leaf cache if this type can be in there
+        // first check the leaf cache if the type is small enough (may only match 1 method)
         if (((jl_datatype_t*)unw)->isdispatchtuple) {
             jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
             jl_typemap_entry_t *entry = lookup_leafcache(leafcache, (jl_value_t*)type, world);
             if (entry) {
+                // leafcache found a match, construct the MethodMatch by computing the effective
+                // types + sparams and the world bounds
                 jl_method_instance_t *mi = entry->func.linfo;
                 jl_method_t *meth = mi->def.method;
                 if (!jl_is_unionall(meth->sig)) {
@@ -4266,10 +4323,13 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 return env.t;
             }
         }
-        // then check the full cache if it seems profitable
+
+        // then check the full cache if it seems profitable (and the type is small enough)
         if (((jl_datatype_t*)unw)->isdispatchtuple) {
             jl_typemap_entry_t *entry = jl_typemap_assoc_by_type(jl_atomic_load_relaxed(&mt->cache), &search, jl_cachearg_offset(mt), /*subtype*/1);
             if (entry && (((jl_datatype_t*)unw)->isdispatchtuple || entry->guardsigs == jl_emptysvec)) {
+                // full cache found a match, construct the MethodMatch by computing the effective
+                // types + sparams and the world bounds
                 jl_method_instance_t *mi = entry->func.linfo;
                 jl_method_t *meth = mi->def.method;
                 if (!jl_is_unionall(meth->sig) && ((jl_datatype_t*)unw)->isdispatchtuple) {
@@ -4294,16 +4354,24 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 return env.t;
             }
         }
+
+        // if neither cache worked (or was eligible / profitable) visit all matching methods in the MethodTable
+        // via the usual typemap visitor, recording any matches in closure->t.
         if (!ml_mtable_visitor(mt, &env.match)) {
             JL_GC_POP();
-            // if we return early, set only the min/max valid collected from matching
+            // if we return early, lim was proven to be exceeded during the search
+            // set only the min/max valid collected from matching
             *min_valid = env.match.min_valid;
             *max_valid = env.match.max_valid;
             return jl_nothing;
         }
     }
     else {
-        // else: scan everything
+        // if mt is not NULL, then we were unable to narrow down the call to a single
+        // MethodTable (e.g. type is `Tuple{Union{typeof(+), typeof(-)}, Int, Int}`)
+        //
+        // this case is quite rare, so fall back to scanning all method tables
+        // (with the same ml_mtable_visitor as usual)
         if (!jl_foreach_reachable_mtable(ml_mtable_visitor, &env.match)) {
             JL_GC_POP();
             // if we return early, set only the min/max valid collected from matching
@@ -4317,29 +4385,36 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
     *max_valid = env.match.max_valid;
     // done with many of these values now
     env.match.ti = NULL; env.matc = NULL; env.match.env = NULL; search.env = NULL;
+
+    // all intersecting methods have been collected now. the remaining work is to sort
+    // these and apply specificity to determine a list of dispatch-possible call targets
     size_t i, j, len = jl_array_nrows(env.t);
+
+    // the 'minmax' method is a method that (1) fully-covers the queried type, and (2) is
+    // more-specific than any other fully-covering method (but if !all_subtypes, there are
+    // non-fully-covering methods to which it is _likely_ not more specific)
     jl_method_match_t *minmax = NULL;
+
     int minmax_ambig = 0;
-    int all_subtypes = 1;
     if (len > 1) {
-        // first try to pre-process the results to find the most specific
-        // result that fully covers the input, since we can do this in linear
+        // first try to pre-process the results to find the most specific option
+        // among the fully-covering methods, since we can do this in linear
         // time, and the rest is O(n^2)
         //   - first find a candidate for the best of these method results
+        int all_subtypes = 1; // whether all matches are fully-covering
         for (i = 0; i < len; i++) {
             jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
-            if (matc->fully_covers == FULLY_COVERS) {
-                jl_method_t *m = matc->method;
-                if (minmax != NULL) {
-                    jl_method_t *minmaxm = minmax->method;
-                    if (jl_method_morespecific(minmaxm, m))
-                        continue;
-                }
-                minmax = matc;
-            }
-            else {
+            if (matc->fully_covers != FULLY_COVERS) {
                 all_subtypes = 0;
+                continue;
             }
+            jl_method_t *m = matc->method;
+            if (minmax != NULL) {
+                jl_method_t *minmaxm = minmax->method;
+                if (jl_method_morespecific(minmaxm, m))
+                    continue;
+            }
+            minmax = matc;
         }
         //   - then see if it dominated all of the other choices
         if (minmax != NULL) {
@@ -4359,8 +4434,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 }
             }
         }
-        //   - it may even dominate some choices that are not subtypes!
-        //     move those into the subtype group, where we're filter them out shortly after
+        //   - it may even dominate (be more specific than) some choices that are not fully-covering!
+        //     move those into the subtype group, where we'll filter them out shortly after
         //     (potentially avoiding reporting these as an ambiguity, and
         //     potentially allowing us to hit the next fast path)
         //   - we could always check here if *any* FULLY_COVERS method is
@@ -4371,6 +4446,8 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
         if (!all_subtypes && minmax != NULL) {
             jl_method_t *minmaxm = minmax->method;
             all_subtypes = 1;
+            // scan through all the non-fully-matching methods and count them as "fully-covering" (ish)
+            // (i.e. in the 'subtype' group) if `minmax` is more-specific
             for (i = 0; i < len; i++) {
                 jl_method_match_t *matc = (jl_method_match_t*)jl_array_ptr_ref(env.t, i);
                 if (matc->fully_covers != FULLY_COVERS) {
@@ -4386,16 +4463,21 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
         //      we've already processed all of the possible outputs
         if (all_subtypes) {
             if (minmax_ambig) {
+                // all intersecting methods are fully-covering, but there is no unique most-specific method
                 if (!include_ambiguous) {
+                    // there no unambiguous choice of method
                     len = 0;
                     env.t = jl_an_empty_vec_any;
                 }
                 else if (lim == 1) {
+                    // we'd have to return >1 method due to the ambiguity, so bail early
                     JL_GC_POP();
                     return jl_nothing;
                 }
             }
             else {
+                // `minmax` is more-specific than all other matches and is fully-covering
+                // we can return it as our only result
                 assert(minmax != NULL);
                 jl_array_ptr_set(env.t, 0, minmax);
                 jl_array_del_end((jl_array_t*)env.t, len - 1);

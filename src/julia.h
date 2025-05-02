@@ -878,9 +878,17 @@ typedef struct _jl_typemap_level_t {
 typedef struct _jl_methtable_t {
     JL_DATA_TYPE
     jl_sym_t *name; // sometimes used for debug printing
+
+    // full set of entries
     _Atomic(jl_typemap_t*) defs;
+
+    // hash map from dispatchtuple type to a linked-list of TypeMapEntry
+    // entry.sig == type for all entries in the linked-list
     _Atomic(jl_genericmemory_t*) leafcache;
+
+    // cache for querying against dispatchtuple types
     _Atomic(jl_typemap_t*) cache;
+
     _Atomic(intptr_t) max_args;  // max # of non-vararg arguments in a signature
     jl_module_t *module; // sometimes used for debug printing
     jl_array_t *backedges; // (sig, caller::CodeInstance) pairs
