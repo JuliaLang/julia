@@ -3211,6 +3211,7 @@ JL_DLLEXPORT jl_method_instance_t *jl_method_match_to_mi(jl_method_match_t *matc
 }
 
 // compile-time method lookup
+// intersect types with the MT, and return a single compileable specialization that covers the intersection.
 jl_method_instance_t *jl_get_specialization1(jl_tupletype_t *types, size_t world, int mt_cache)
 {
     if (jl_has_free_typevars((jl_value_t*)types))

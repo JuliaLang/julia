@@ -196,6 +196,7 @@ void JL_UV_LOCK(void);
 extern _Atomic(unsigned) _threadedregion;
 extern _Atomic(uint16_t) io_loop_tid;
 
+JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage);
 JL_DLLEXPORT void jl_enter_threaded_region(void);
 JL_DLLEXPORT void jl_exit_threaded_region(void);
 int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;

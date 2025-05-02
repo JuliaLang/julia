@@ -578,73 +578,8 @@ However, future calls to `tryeval` will continue to see the definition of `newfu
 
 You may want to try this for yourself to see how it works.
 
-The implementation of this behavior is a "world age counter".
-This monotonically increasing value tracks each method definition operation.
-This allows describing "the set of method definitions visible to a given runtime environment"
-as a single number, or "world age".
-It also allows comparing the methods available in two worlds just by comparing their ordinal value.
-In the example above, we see that the "current world" (in which the method `newfun` exists),
-is one greater than the task-local "runtime world" that was fixed when the execution of `tryeval` started.
-
-Sometimes it is necessary to get around this (for example, if you are implementing the above REPL).
-Fortunately, there is an easy solution: call the function using [`Base.invokelatest`](@ref) or
-the macro version [`Base.@invokelatest`](@ref):
-
-```jldoctest
-julia> function tryeval2()
-           @eval newfun2() = 2
-           @invokelatest newfun2()
-       end
-tryeval2 (generic function with 1 method)
-
-julia> tryeval2()
-2
-```
-
-Finally, let's take a look at some more complex examples where this rule comes into play.
-Define a function `f(x)`, which initially has one method:
-
-```jldoctest redefinemethod
-julia> f(x) = "original definition"
-f (generic function with 1 method)
-```
-
-Start some other operations that use `f(x)`:
-
-```jldoctest redefinemethod
-julia> g(x) = f(x)
-g (generic function with 1 method)
-
-julia> t = @async f(wait()); yield();
-```
-
-Now we add some new methods to `f(x)`:
-
-```jldoctest redefinemethod
-julia> f(x::Int) = "definition for Int"
-f (generic function with 2 methods)
-
-julia> f(x::Type{Int}) = "definition for Type{Int}"
-f (generic function with 3 methods)
-```
-
-Compare how these results differ:
-
-```jldoctest redefinemethod
-julia> f(1)
-"definition for Int"
-
-julia> g(1)
-"definition for Int"
-
-julia> fetch(schedule(t, 1))
-"original definition"
-
-julia> t = @async f(wait()); yield();
-
-julia> fetch(schedule(t, 1))
-"definition for Int"
-```
+The implementation of this behavior is a "world age counter", which is further described in the [Worldage](@ref man-worldage)
+manual chapter.
 
 ## Design Patterns with Parametric Methods
 
