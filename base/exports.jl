@@ -1056,6 +1056,7 @@ export
     @__DIR__,
     @__LINE__,
     @__MODULE__,
+    @__RELOCDIR__,
     @int128_str,
     @uint128_str,
     @big_str,
