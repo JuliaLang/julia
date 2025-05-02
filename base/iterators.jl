@@ -941,8 +941,8 @@ An iterator that generates every key from the key/value pairs of `pairs(it)`,
 where `f(value)` returns `true`.
 `Iterators.findall` is the lazy equivalent of `findall`.
 
-!!! compat "Julia 1.12"
-    Lazy `findall` requires at least Julia 1.12.
+!!! compat "Julia 1.13"
+    Lazy `findall` requires at least Julia 1.13.
 
 # Examples
 ```jldoctest
