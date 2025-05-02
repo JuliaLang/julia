@@ -265,7 +265,7 @@ support libraries, etc. In these cases it can be useful to prevent unwanted
 method invalidation and recompilation latency, and to prevent the user from
 breaking supporting infrastructure by mistake.
 
-The current world age can be queried using [`Base.get_world_counter()`](@ref)
+The global world age can be queried using [`Base.get_world_counter()`](@ref)
 and stored for later use within the lifetime of the current Julia session, or
 when serializing and reloading the system image.
 

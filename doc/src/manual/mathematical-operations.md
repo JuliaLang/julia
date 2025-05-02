@@ -47,18 +47,6 @@ julia> 3*2/12
 operators. For instance, we would generally write `-x + 2` to reflect that first `x` gets negated,
 and then `2` is added to that result.)
 
-When used in multiplication, `false` acts as a *strong zero*:
-
-```jldoctest
-julia> NaN * false
-0.0
-
-julia> false * Inf
-0.0
-```
-
-This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
-
 ## Boolean Operators
 
 The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on [`Bool`](@ref) types:
@@ -71,7 +59,29 @@ The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#
 
 Negation changes `true` to `false` and vice versa. The short-circuiting operations are explained on the linked page.
 
-Note that `Bool` is an integer type and all the usual promotion rules and numeric operators are also defined on it.
+## Arithmetic operations with `Bool` values
+
+Note that `Bool` is an integer type, such that `false` is numerically equal to `0` and `true` is numerically equal to `1`. All the usual promotion rules and numeric operators are also defined on it, with a special behavior of arithmetic (non-Boolean) operations when all the arguments are `Bool`: in those cases, the arguments are promoted to `Int` instead of keeping their type. Compare e.g. the following equivalent operations with `Bool` and with a different numeric type (`UInt8`):
+
+```jldoctest
+julia> true - true
+0
+
+julia> 0x01 - 0x01
+0x00
+```
+
+Also, when used in multiplication, `false` acts as a *strong zero*:
+
+```jldoctest
+julia> NaN * false
+0.0
+
+julia> false * Inf
+0.0
+```
+
+This is useful for preventing the propagation of `NaN` values in quantities that are known to be zero. See [Knuth (1992)](https://arxiv.org/abs/math/9205211) for motivation.
 
 ## Bitwise Operators
 
