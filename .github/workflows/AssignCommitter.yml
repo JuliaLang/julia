@@ -27,7 +27,7 @@ jobs:
               // Skip PRs authored by committers
               const prAuthor = context.payload.pull_request.user.login;
               if (!member_logins.includes(prAuthor)) {
-              
+
                 // Assign random committer
                 await github.rest.issues.addAssignees({
                   owner: context.repo.owner,
@@ -35,7 +35,7 @@ jobs:
                   issue_number: context.payload.pull_request.number,
                   assignees: member_logins[Math.floor(Math.random()*member_logins.length)],
                 });
-  
+
                 // Add the "pr review" label
                 await github.rest.issues.addLabels({
                   owner: context.repo.owner,
