@@ -154,7 +154,8 @@ end
             x = unorded[i], unorded[i]
             y = unorded[j], unorded[j]
             z = Base._extrema_rf(x, y)
-            @test z === x || z === y
+            @test (z[1] === x[1] || z[1] === y[1]) &&
+                  (z[2] === x[1] || z[2] === y[1])
         end
     end
 end
