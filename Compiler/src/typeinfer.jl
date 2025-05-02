@@ -613,17 +613,16 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
     istoplevel = !(me.linfo.def isa Method)
     istoplevel || compute_edges!(me) # don't add backedges to toplevel method instance
 
-    if limited_ret
-        # a parent may be cached still, but not this intermediate work:
-        # we can throw everything else away now
+    if limited_ret || limited_src
+        # A parent may be cached still, but not this intermediate work:
+        # we can throw everything else away now. Caching anything can confuse later
+        # heuristics to consider it worth trying to pursue compiling this further and
+        # finding infinite work as a result. Avoiding caching helps to ensure there is only
+        # a finite amount of work that can be discovered later (although potentially still a
+        # large multiplier on it).
         result.src = nothing
         result.tombstone = true
         me.cache_mode = CACHE_MODE_NULL
-        set_inlineable!(me.src, false)
-    elseif limited_src
-        # a type result will be cached still, but not this intermediate work:
-        # we can throw everything else away now
-        result.src = nothing
         set_inlineable!(me.src, false)
     else
         # annotate fulltree with type information,
