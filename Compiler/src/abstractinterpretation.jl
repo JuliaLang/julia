@@ -1402,8 +1402,9 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
             if slotid !== nothing
                 # using union-split signature, we may be able to narrow down `Conditional`
                 sigt = widenconst(slotid > nargs ? argtypes[slotid] : cache_argtypes[slotid])
-                thentype = tmeet(cnd.thentype, sigt)
-                elsetype = tmeet(cnd.elsetype, sigt)
+                ⊓ = meet(𝕃)
+                thentype = cnd.thentype ⊓ sigt
+                elsetype = cnd.elsetype ⊓ sigt
                 if thentype === Bottom && elsetype === Bottom
                     # we accidentally proved this method match is impossible
                     # TODO bail out here immediately rather than just propagating Bottom ?
@@ -2119,7 +2120,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 else
                     thentype = form_partially_defined_struct(𝕃ᵢ, argtype2, argtypes[3])
                     if thentype !== nothing
-                        elsetype = argtype2
+                        elsetype = widenslotwrapper(argtype2)
                         if rt === Const(false)
                             thentype = Bottom
                         elseif rt === Const(true)
@@ -3254,7 +3255,7 @@ function abstract_eval_isdefined_expr(interp::AbstractInterpreter, e::Expr, ssta
         elseif !vtyp.undef
             rt = Const(true) # definitely assigned previously
         else # form `Conditional` to refine `vtyp.undef` in the then branch
-            rt = Conditional(sym, vtyp.typ, vtyp.typ; isdefined=true)
+            rt = Conditional(sym, widenslotwrapper(vtyp.typ), widenslotwrapper(vtyp.typ); isdefined=true)
         end
         return RTEffects(rt, Union{}, EFFECTS_TOTAL)
     end
