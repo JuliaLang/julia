@@ -442,11 +442,12 @@ function run_fallback_repl(interactive::Bool)
                 eval_user_input(stderr, ex, true)
             end
         else
-            while !eof(input)
+            while true
                 if interactive
                     print("julia> ")
                     flush(stdout)
                 end
+                eof(input) && break
                 try
                     line = ""
                     ex = nothing
