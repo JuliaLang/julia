@@ -3475,7 +3475,11 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
             jl_insert_methods(extext_methods);
             // No special processing of `new_specializations` is required because recaching handled it
             // Add roots to methods
-            jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            int failed = jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            if (failed != 0) {
+                jl_printf(JL_STDERR, "Error copying roots to methods from Module: %s\n", pkgname);
+                abort();
+            }
             // Handle edges
             size_t world = jl_atomic_load_acquire(&jl_world_counter);
             jl_insert_backedges((jl_array_t*)edges, (jl_array_t*)ext_targets, (jl_array_t*)new_specializations, world); // restore external backedges (needs to be last)

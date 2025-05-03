@@ -847,17 +847,31 @@ static void jl_insert_methods(jl_array_t *list)
     }
 }
 
-static void jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
+static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
 {
     size_t i, l = jl_array_len(method_roots_list);
+    int failed = 0;
     for (i = 0; i < l; i+=2) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(method_roots_list, i);
         jl_array_t *roots = (jl_array_t*)jl_array_ptr_ref(method_roots_list, i+1);
         if (roots) {
             assert(jl_is_array(roots));
+            if (m->root_blocks) {
+                // check for key collision
+                uint64_t *blocks = (uint64_t*)jl_array_data(m->root_blocks);
+                size_t nx2 = jl_array_nrows(m->root_blocks);
+                for (size_t i = 0; i < nx2; i+=2) {
+                    if (blocks[i] == key) {
+                        // found duplicate block
+                        failed = -1;
+                    }
+                }
+            }
+
             jl_append_method_roots(m, key, roots);
         }
     }
+    return failed;
 }
 
 
