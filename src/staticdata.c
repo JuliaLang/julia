@@ -3673,7 +3673,11 @@ static jl_value_t *jl_restore_package_image_from_stream(void* pkgimage_handle, i
 
             // No special processing of `new_ext_cis` is required because recaching handled it
             // Add roots to methods
-            jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            int failed = jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            if (failed != 0) {
+                jl_printf(JL_STDERR, "Error copying roots to methods from Module: %s\n", pkgname);
+                abort();
+            }
             // Insert method extensions and handle edges
             JL_LOCK(&world_counter_lock);
               // allocate a world for the new methods, and insert them there, invalidating content as needed
