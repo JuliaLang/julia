@@ -99,6 +99,11 @@ public
 # Strings
     escape_raw_string,
 
+# Chars
+    ismalformed,
+    isoverlong,
+    show_invalid,
+
 # IO
     # types
     BufferStream,
