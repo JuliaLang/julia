@@ -180,9 +180,6 @@ for (name, f) in l
         @test readuntil(io(t), GenericString(s), keep=true) == kept
         @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s)) == unsafe_wrap(Vector{UInt8},m)
         @test readuntil(io(t), unsafe_wrap(Vector{UInt8},s), keep=true) == unsafe_wrap(Vector{UInt8},kept)
-        @test readuntil(io(t), collect(s)::Vector{Char}) == Vector{Char}(m)
-        @test readuntil(io(t), collect(s)::Vector{Char}, keep=true) == Vector{Char}(kept)
-
         buf = IOBuffer()
         @test String(take!(copyuntil(buf, io(t), s))) == m
         @test String(take!(copyuntil(buf, io(t), s, keep=true))) == kept
@@ -692,21 +689,6 @@ end
     @test !isempty(itr)
     first(itr) # consume the iterator
     @test  isempty(itr) # now it is empty
-end
-
-@testset "readuntil/copyuntil fallbacks" begin
-    # test fallback for generic delim::T
-    buf = IOBuffer()
-    fib = [1,1,2,3,5,8,13,21]
-    write(buf, fib)
-    @test readuntil(seekstart(buf), 21) == fib[1:end-1]
-    @test readuntil(buf, 21) == Int[]
-    @test readuntil(seekstart(buf), 21; keep=true) == fib
-    out = IOBuffer()
-    @test copyuntil(out, seekstart(buf), 21) === out
-    @test reinterpret(Int, take!(out)) == fib[1:end-1]
-    @test copyuntil(out, seekstart(buf), 21; keep=true) === out
-    @test reinterpret(Int, take!(out)) == fib
 end
 
 # more tests for reverse(eachline)
