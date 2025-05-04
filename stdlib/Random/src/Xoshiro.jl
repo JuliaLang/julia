@@ -245,12 +245,7 @@ hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2
 
 function seed!(rng::Union{TaskLocalRNG, Xoshiro}, ::Nothing)
     # as we get good randomness from RandomDevice, we can skip hashing
-    rd = RandomDevice()
-    s0 = rand(rd, UInt64)
-    s1 = rand(rd, UInt64)
-    s2 = rand(rd, UInt64)
-    s3 = rand(rd, UInt64)
-    initstate!(rng, (s0, s1, s2, s3))
+    initstate!(rng, rand(RandomDevice(), NTuple{4, UInt64}))
 end
 
 seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed) =
