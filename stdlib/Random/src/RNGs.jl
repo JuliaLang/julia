@@ -20,7 +20,7 @@ rand(rd::RandomDevice, ::SamplerType{Bool}) = rand(rd, UInt8) % Bool
 # specialization for homogeneous tuple types of builtin integers, to avoid
 # repeated system calls
 rand(rd::RandomDevice, sp::SamplerTag{Ref{Tuple{Vararg{T, N}}}, Tuple{S}}
-     ) where {T, N, S <: Random.SamplerUnion(Base.BitInteger_types...)} =
+     ) where {T, N, S <: SamplerUnion(Base.BitInteger_types...)} =
          Libc.getrandom!(Ref{gentype(sp)}())[]
 
 function rand!(rd::RandomDevice, A::Array{Bool}, ::SamplerType{Bool})
