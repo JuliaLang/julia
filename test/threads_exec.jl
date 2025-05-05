@@ -54,7 +54,7 @@ if threadpoolsize() > 1
 end
 
 if threadpoolsize() > 1
-    let lk = PaddedSpinLock()
+    let lk = Base.Threads.PaddedSpinLock()
         c1 = Base.Event()
         c2 = Base.Event()
         @test trylock(lk)
