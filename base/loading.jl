@@ -2332,7 +2332,7 @@ function require(into::Module, mod::Symbol)
     if world == typemax(UInt)
         world = get_world_counter()
     end
-    return invoke_in_world(world, __require, into, mod)
+    return Compiler.@zone "LOAD_Require" invoke_in_world(world, __require, into, mod)
 end
 
 function check_for_hint(into, mod)
