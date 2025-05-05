@@ -1025,12 +1025,11 @@ void gc_stats_big_obj(void)
             v = v->next;
         }
 
-        mallocmemory_t *ma = ptls2->gc_tls.heap.mallocarrays;
-        while (ma != NULL) {
-            uint8_t bits =jl_astaggedvalue(ma->a)->bits.gc;
+        void **lst = ptls2->gc_tls.heap.mallocarrays.items;
+        for (size_t i = 0, l = ptls2->gc_tls.heap.mallocarrays.len; i < l; i++) {
+            jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[i] & ~(uintptr_t)1);
+            uint8_t bits = jl_astaggedvalue(m)->bits.gc;
             if (gc_marked(bits)) {
-                jl_genericmemory_t *m = (jl_genericmemory_t*)ma->a;
-                m = (jl_genericmemory_t*)((uintptr_t)m & ~(uintptr_t)1);
                 size_t sz = jl_genericmemory_nbytes(m);
                 if (gc_old(bits)) {
                     assert(bits == GC_OLD_MARKED);
@@ -1042,7 +1041,6 @@ void gc_stats_big_obj(void)
                     stat.nbytes_used += sz;
                 }
             }
-            ma = ma->next;
         }
     }
     jl_safe_printf("%lld kB (%lld%% old) in %lld large objects (%lld%% old)\n",

@@ -103,7 +103,8 @@ struverror(err::Int32) = unsafe_string(ccall(:uv_strerror, Cstring, (Int32,), er
 uverrorname(err::Int32) = unsafe_string(ccall(:uv_err_name, Cstring, (Int32,), err))
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix), c)
-uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(_UVError(prefix, c)) : nothing
+uv_error(prefix::AbstractString, c::Integer) = c < 0 ? _uv_error(prefix, c) : nothing
+_uv_error(prefix::AbstractString, c::Integer) = throw(_UVError(prefix, c))
 
 ## event loop ##
 

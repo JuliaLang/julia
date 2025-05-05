@@ -16,6 +16,13 @@ seed!(rng::RandomDevice, ::Nothing) = rng
 
 rand(rd::RandomDevice, sp::SamplerBoolBitInteger) = Libc.getrandom!(Ref{sp[]}())[]
 rand(rd::RandomDevice, ::SamplerType{Bool}) = rand(rd, UInt8) % Bool
+
+# specialization for homogeneous tuple types of builtin integers, to avoid
+# repeated system calls
+rand(rd::RandomDevice, sp::SamplerTag{Ref{Tuple{Vararg{T, N}}}, Tuple{S}}
+     ) where {T, N, S <: SamplerUnion(Base.BitInteger_types...)} =
+         Libc.getrandom!(Ref{gentype(sp)}())[]
+
 function rand!(rd::RandomDevice, A::Array{Bool}, ::SamplerType{Bool})
     Libc.getrandom!(A)
     # we need to mask the result so that only the LSB in each byte can be non-zero
@@ -147,21 +154,26 @@ function show(io::IO, rng::MersenneTwister)
     end
     print(io, MersenneTwister, "(", repr(rng.seed), ", (")
     # state
-    adv = Integer[rng.adv_jump, rng.adv]
+    sep = ", "
+    show(io, rng.adv_jump)
+    print(io, sep)
+    show(io, rng.adv)
     if rng.adv_vals != -1 || rng.adv_ints != -1
-        if rng.adv_vals == -1
-            @assert rng.idxF == MT_CACHE_F
-            push!(adv, 0, 0) # "(0, 0)" is nicer on the eyes than (-1, 1002)
-        else
-            push!(adv, rng.adv_vals, rng.idxF)
-        end
+        # "(0, 0)" is nicer on the eyes than (-1, 1002)
+        s = rng.adv_vals != -1
+        print(io, sep)
+        show(io, s ? rng.adv_vals : zero(rng.adv_vals))
+        print(io, sep)
+        show(io, s ? rng.idxF : zero(rng.idxF))
     end
     if rng.adv_ints != -1
         idxI = (length(rng.ints)*16 - rng.idxI) / 8 # 8 represents one Int64
         idxI = Int(idxI) # idxI should always be an integer when using public APIs
-        push!(adv, rng.adv_ints, idxI)
+        print(io, sep)
+        show(io, rng.adv_ints)
+        print(io, sep)
+        show(io, idxI)
     end
-    join(io, adv, ", ")
     print(io, "))")
 end
 
@@ -273,20 +285,7 @@ end
 
 ### seeding
 
-#### random_seed() & hash_seed()
-
-# random_seed tries to produce a random seed of type UInt128 from system entropy
-function random_seed()
-    try
-        # as MersenneTwister prints its seed when `show`ed, 128 bits is a good compromise for
-        # almost surely always getting distinct seeds, while having them printed reasonably tersely
-        return rand(RandomDevice(), UInt128)
-    catch ex
-        ex isa IOError || rethrow()
-        @warn "Entropy pool not available to seed RNG; using ad-hoc entropy sources."
-        return Libc.rand()
-    end
-end
+#### hash_seed()
 
 function hash_seed(seed::Integer)
     ctx = SHA.SHA2_256_CTX()
@@ -337,7 +336,7 @@ end
 
 
 """
-    hash_seed(seed) -> AbstractVector{UInt8}
+    hash_seed(seed)::AbstractVector{UInt8}
 
 Return a cryptographic hash of `seed` of size 256 bits (32 bytes).
 `seed` can currently be of type
@@ -365,11 +364,13 @@ function initstate!(r::MersenneTwister, data::StridedVector, seed)
     return r
 end
 
-# when a seed is not provided, we generate one via `RandomDevice()` in `random_seed()` rather
+# When a seed is not provided, we generate one via `RandomDevice()` rather
 # than calling directly `initstate!` with `rand(RandomDevice(), UInt32, whatever)` because the
 # seed is printed in `show(::MersenneTwister)`, so we need one; the cost of `hash_seed` is a
-# small overhead compared to `initstate!`, so this simple solution is fine
-seed!(r::MersenneTwister, ::Nothing) = seed!(r, random_seed())
+# small overhead compared to `initstate!`, so this simple solution is fine.
+# A random seed with 128 bits is a good compromise for almost surely always getting distinct
+# seeds, while having them printed reasonably tersely.
+seed!(r::MersenneTwister, ::Nothing) = seed!(r, rand(RandomDevice(), UInt128))
 seed!(r::MersenneTwister, seed) = initstate!(r, hash_seed(seed), seed)
 
 

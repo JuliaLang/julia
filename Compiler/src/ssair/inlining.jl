@@ -73,10 +73,10 @@ add_inlining_edge!(et::InliningEdgeTracker, edge::MethodInstance) = add_inlining
 function ssa_inlining_pass!(ir::IRCode, state::InliningState, propagate_inbounds::Bool)
     # Go through the function, performing simple inlining (e.g. replacing call by constants
     # and analyzing legality of inlining).
-    @timeit "analysis" todo = assemble_inline_todo!(ir, state)
+    @zone "CC: ANALYSIS" todo = assemble_inline_todo!(ir, state)
     isempty(todo) && return ir
     # Do the actual inlining for every call we identified
-    @timeit "execution" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp)
+    @zone "CC: EXECUTION" ir = batch_inline!(ir, todo, propagate_inbounds, state.interp)
     return ir
 end
 
@@ -975,6 +975,14 @@ function retrieve_ir_for_inlining(mi::MethodInstance, ir::IRCode, preserve_local
     ir.debuginfo.def = mi
     return ir, spec_info, DebugInfo(ir.debuginfo, length(ir.stmts))
 end
+function retrieve_ir_for_inlining(mi::MethodInstance, opt::OptimizationState, preserve_local_sources::Bool)
+    result = opt.optresult
+    if result !== nothing
+        !result.simplified && simplify_ir!(result)
+        return retrieve_ir_for_inlining(mi, result.ir, preserve_local_sources)
+    end
+    retrieve_ir_for_inlining(mi, opt.src, preserve_local_sources)
+end
 
 function handle_single_case!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, @nospecialize(case),
@@ -1399,6 +1407,7 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
     cases === nothing && return nothing
     cases, handled_all_cases, fully_covered, joint_effects = cases
     atype = argtypes_to_type(sig.argtypes)
+    atype === Union{} && return nothing # accidentally actually unreachable
     handle_cases!(todo, ir, idx, stmt, atype, cases, handled_all_cases, fully_covered, joint_effects)
 end
 

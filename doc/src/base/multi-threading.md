@@ -67,3 +67,11 @@ Base.Threads.AbstractSpinLock
 Base.Threads.SpinLock
 Base.Threads.PaddedSpinLock
 ```
+
+## Task metrics (Experimental)
+
+```@docs
+Base.Experimental.task_metrics
+Base.Experimental.task_running_time_ns
+Base.Experimental.task_wall_time_ns
+```

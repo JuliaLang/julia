@@ -29,6 +29,12 @@ mul_prod(x::BitSignedSmall, y::BitSignedSmall) = Int(x) * Int(y)
 mul_prod(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) * UInt(y)
 mul_prod(x::Real, y::Real)::Real = x * y
 
+and_all(x, y) = (x && y)::Bool
+or_any(x, y) = (x || y)::Bool
+# As a performance optimization, avoid runtime branches:
+and_all(x::Bool, y::Bool) = (x & y)::Bool
+or_any(x::Bool, y::Bool) = (x | y)::Bool
+
 ## foldl && mapfoldl
 
 function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
@@ -338,6 +344,8 @@ reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
+reduce_empty(::typeof(and_all), ::Type{T}) where {T} = true
+reduce_empty(::typeof(or_any), ::Type{T}) where {T} = false
 
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitSignedSmall}  = zero(Int)
@@ -852,14 +860,6 @@ ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
 @inline (f::ExtremaMap)(x) = (y = f.f(x); (y, y))
 
 @inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
-# optimization for IEEEFloat
-function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
-    (x1, x2), (y1, y2) = x, y
-    anynan = isnan(x1)|isnan(y1)
-    z1 = ifelse(anynan, x1-y1, ifelse(signbit(x1-y1), x1, y1))
-    z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
-    z1, z2
-end
 
 ## findmax, findmin, argmax & argmin
 
@@ -1105,242 +1105,12 @@ julia> argmin([7, 1, 1, NaN])
 """
 argmin(itr) = findmin(itr)[2]
 
-## all & any
-
-"""
-    any(itr) -> Bool
-
-Test whether any elements of a boolean collection are `true`, returning `true` as
-soon as the first `true` value in `itr` is encountered (short-circuiting). To
-short-circuit on `false`, use [`all`](@ref).
-
-If the input contains [`missing`](@ref) values, return `missing` if all non-missing
-values are `false` (or equivalently, if the input contains no `true` value), following
-[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
-
-See also: [`all`](@ref), [`count`](@ref), [`sum`](@ref), [`|`](@ref), [`||`](@ref).
-
-# Examples
-```jldoctest
-julia> a = [true,false,false,true]
-4-element Vector{Bool}:
- 1
- 0
- 0
- 1
-
-julia> any(a)
-true
-
-julia> any((println(i); v) for (i, v) in enumerate(a))
-1
-true
-
-julia> any([missing, true])
-true
-
-julia> any([false, missing])
-missing
-```
-"""
-any(itr) = any(identity, itr)
-
-"""
-    all(itr) -> Bool
-
-Test whether all elements of a boolean collection are `true`, returning `false` as
-soon as the first `false` value in `itr` is encountered (short-circuiting). To
-short-circuit on `true`, use [`any`](@ref).
-
-If the input contains [`missing`](@ref) values, return `missing` if all non-missing
-values are `true` (or equivalently, if the input contains no `false` value), following
-[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
-
-See also: [`all!`](@ref), [`any`](@ref), [`count`](@ref), [`&`](@ref), [`&&`](@ref), [`allunique`](@ref).
-
-# Examples
-```jldoctest
-julia> a = [true,false,false,true]
-4-element Vector{Bool}:
- 1
- 0
- 0
- 1
-
-julia> all(a)
-false
-
-julia> all((println(i); v) for (i, v) in enumerate(a))
-1
-2
-false
-
-julia> all([missing, false])
-false
-
-julia> all([true, missing])
-missing
-```
-"""
-all(itr) = all(identity, itr)
-
-"""
-    any(p, itr) -> Bool
-
-Determine whether predicate `p` returns `true` for any elements of `itr`, returning
-`true` as soon as the first item in `itr` for which `p` returns `true` is encountered
-(short-circuiting). To short-circuit on `false`, use [`all`](@ref).
-
-If the input contains [`missing`](@ref) values, return `missing` if all non-missing
-values are `false` (or equivalently, if the input contains no `true` value), following
-[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
-
-# Examples
-```jldoctest
-julia> any(i->(4<=i<=6), [3,5,7])
-true
-
-julia> any(i -> (println(i); i > 3), 1:10)
-1
-2
-3
-4
-true
-
-julia> any(i -> i > 0, [1, missing])
-true
-
-julia> any(i -> i > 0, [-1, missing])
-missing
-
-julia> any(i -> i > 0, [-1, 0])
-false
-```
-"""
-any(f, itr) = _any(f, itr, :)
-
-for ItrT = (Tuple,Any)
-    # define a generic method and a specialized version for `Tuple`,
-    # whose method bodies are identical, while giving better effects to the later
-    @eval function _any(f, itr::$ItrT, ::Colon)
-        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
-        anymissing = false
-        for x in itr
-            v = f(x)
-            if ismissing(v)
-                anymissing = true
-            else
-                v && return true
-            end
-        end
-        return anymissing ? missing : false
-    end
-end
-
-# Specialized versions of any(f, ::Tuple)
-# We fall back to the for loop implementation all elements have the same type or
-# if the tuple is too large.
-function any(f, itr::Tuple)
-    if itr isa NTuple || length(itr) > 32
-        return _any(f, itr, :)
-    end
-    _any_tuple(f, false, itr...)
-end
-
-@inline function _any_tuple(f, anymissing, x, rest...)
-    v = f(x)
-    if ismissing(v)
-        anymissing = true
-    elseif v
-        return true
-    end
-    return _any_tuple(f, anymissing, rest...)
-end
-@inline _any_tuple(f, anymissing) = anymissing ? missing : false
-
-"""
-    all(p, itr) -> Bool
-
-Determine whether predicate `p` returns `true` for all elements of `itr`, returning
-`false` as soon as the first item in `itr` for which `p` returns `false` is encountered
-(short-circuiting). To short-circuit on `true`, use [`any`](@ref).
-
-If the input contains [`missing`](@ref) values, return `missing` if all non-missing
-values are `true` (or equivalently, if the input contains no `false` value), following
-[three-valued logic](https://en.wikipedia.org/wiki/Three-valued_logic).
-
-# Examples
-```jldoctest
-julia> all(i->(4<=i<=6), [4,5,6])
-true
-
-julia> all(i -> (println(i); i < 3), 1:10)
-1
-2
-3
-false
-
-julia> all(i -> i > 0, [1, missing])
-missing
-
-julia> all(i -> i > 0, [-1, missing])
-false
-
-julia> all(i -> i > 0, [1, 2])
-true
-```
-"""
-all(f, itr) = _all(f, itr, :)
-
-for ItrT = (Tuple,Any)
-    # define a generic method and a specialized version for `Tuple`,
-    # whose method bodies are identical, while giving better effects to the later
-    @eval function _all(f, itr::$ItrT, ::Colon)
-        $(ItrT === Tuple ? :(@_terminates_locally_meta) : :nothing)
-        anymissing = false
-        for x in itr
-            v = f(x)
-            if ismissing(v)
-                anymissing = true
-            else
-                v || return false
-            end
-        end
-        return anymissing ? missing : true
-    end
-end
-
-# Specialized versions of all(f, ::Tuple),
-# This is similar to any(f, ::Tuple) defined above.
-function all(f, itr::Tuple)
-    if itr isa NTuple || length(itr) > 32
-        return _all(f, itr, :)
-    end
-    _all_tuple(f, false, itr...)
-end
-
-@inline function _all_tuple(f, anymissing, x, rest...)
-    v = f(x)
-    if ismissing(v)
-        anymissing = true
-    # this syntax allows throwing a TypeError for non-Bool, for consistency with any
-    elseif v
-        nothing
-    else
-        return false
-    end
-    return _all_tuple(f, anymissing, rest...)
-end
-@inline _all_tuple(f, anymissing) = anymissing ? missing : true
-
-all(::Tuple{Missing}) = missing
-
 ## count
 
 _bool(f) = x->f(x)::Bool
 
 """
-    count([f=identity,] itr; init=0) -> Integer
+    count([f=identity,] itr; init=0)::Integer
 
 Count the number of elements in `itr` for which the function `f` returns `true`.
 If `f` is omitted, count the number of `true` elements in `itr` (which
@@ -1384,4 +1154,11 @@ function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
         n = (n + x[i]) % T
     end
     return n
+end
+
+# A few common reductions for ranges with init specified
+for (fred, f) in ((maximum, max), (minimum, min), (sum, add_sum))
+    @eval function _foldl_impl(op::typeof(BottomRF($f)), init, r::AbstractRange)
+        isempty(r) ? init : op(init, $fred(r))
+    end
 end

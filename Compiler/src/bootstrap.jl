@@ -5,12 +5,21 @@
 # especially try to make sure any recursive and leaf functions have concrete signatures,
 # since we won't be able to specialize & infer them at runtime
 
-activate_codegen!() = ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
+function activate_codegen!()
+    ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
+    Core.eval(Compiler, quote
+        let typeinf_world_age = Base.tls_world_age()
+            @eval Core.OptimizedGenerics.CompilerPlugins.typeinf(::Nothing, mi::MethodInstance, source_mode::UInt8) =
+                Base.invoke_in_world($(Expr(:$, :typeinf_world_age)), typeinf_ext_toplevel, mi, Base.tls_world_age(), source_mode)
+        end
+    end)
+end
 
+global bootstrapping_compiler::Bool = false
 function bootstrap!()
+    global bootstrapping_compiler = true
     let time() = ccall(:jl_clock_now, Float64, ())
         println("Compiling the compiler. This may take several minutes ...")
-        interp = NativeInterpreter()
 
         ssa_inlining_pass!_tt = Tuple{typeof(ssa_inlining_pass!), IRCode, InliningState{NativeInterpreter}, Bool}
         optimize_tt = Tuple{typeof(optimize), NativeInterpreter, OptimizationState{NativeInterpreter}, InferenceResult}
@@ -37,13 +46,15 @@ function bootstrap!()
             end
         end
         starttime = time()
+        methods = Any[]
+        world = get_world_counter()
         for f in fs
             if isa(f, DataType) && f.name === typename(Tuple)
                 tt = f
             else
                 tt = Tuple{typeof(f), Vararg{Any}}
             end
-            matches = _methods_by_ftype(tt, 10, get_world_counter())::Vector
+            matches = _methods_by_ftype(tt, 10, world)::Vector
             if isempty(matches)
                 println(stderr, "WARNING: no matching method found for `", tt, "`")
             else
@@ -54,7 +65,9 @@ function bootstrap!()
                     for i = 1:length(params)
                         params[i] = unwraptv(params[i])
                     end
-                    typeinf_type(interp, m.method, Tuple{params...}, m.sparams)
+                    mi = specialize_method(m.method, Tuple{params...}, m.sparams)
+                    #isa_compileable_sig(mi) || println(stderr, "WARNING: inferring `", mi, "` which isn't expected to be called.")
+                    typeinf_ext_toplevel(mi, world, isa_compileable_sig(mi) ? SOURCE_MODE_ABI : SOURCE_MODE_NOT_REQUIRED)
                 end
             end
         end
@@ -62,6 +75,8 @@ function bootstrap!()
         println("Base.Compiler ──── ", sub_float(endtime,starttime), " seconds")
     end
     activate_codegen!()
+    global bootstrapping_compiler = false
+    nothing
 end
 
 function activate!(; reflection=true, codegen=false)
@@ -69,6 +84,6 @@ function activate!(; reflection=true, codegen=false)
         Base.REFLECTION_COMPILER[] = Compiler
     end
     if codegen
-        activate_codegen!()
+        bootstrap!()
     end
 end

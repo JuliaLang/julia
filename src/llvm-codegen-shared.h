@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include <optional>
 #include <utility>
 #include <llvm/ADT/ArrayRef.h>
 #include <llvm/ADT/SmallVector.h>
@@ -8,29 +9,11 @@
 #include <llvm/IR/DebugLoc.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
-
-#if JL_LLVM_VERSION >= 160000
 #include <llvm/Support/ModRef.h>
-#endif
 
 #include "julia.h"
 
-#define STR(csym)           #csym
-#define XSTR(csym)          STR(csym)
-
-#if JL_LLVM_VERSION >= 160000
-
-#include <optional>
-
-template<typename T>
-using Optional = std::optional<T>;
 static constexpr std::nullopt_t None = std::nullopt;
-
-#else
-
-#include <llvm/ADT/Optional.h>
-
-#endif
 
 enum AddressSpace {
     Generic = 0,
@@ -48,26 +31,26 @@ namespace JuliaType {
     }
 
     static inline llvm::PointerType* get_pjlvalue_ty(llvm::LLVMContext &C, unsigned addressSpace=0) {
-        return llvm::PointerType::get(get_jlvalue_ty(C), addressSpace);
+        return llvm::PointerType::get(C, addressSpace);
     }
 
     static inline llvm::PointerType* get_prjlvalue_ty(llvm::LLVMContext &C) {
-        return llvm::PointerType::get(get_jlvalue_ty(C), AddressSpace::Tracked);
+        return llvm::PointerType::get(C, AddressSpace::Tracked);
     }
 
     static inline llvm::PointerType* get_ppjlvalue_ty(llvm::LLVMContext &C) {
-        return llvm::PointerType::get(get_pjlvalue_ty(C), 0);
+        return llvm::PointerType::get(C, 0);
     }
 
     static inline llvm::PointerType* get_pprjlvalue_ty(llvm::LLVMContext &C) {
-        return llvm::PointerType::get(get_prjlvalue_ty(C), 0);
+        return llvm::PointerType::get(C, 0);
     }
 
     static inline auto get_jlfunc_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T_prjlvalue,  // function
+                T_prjlvalue, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C)}, // nargs
             false);
@@ -75,21 +58,21 @@ namespace JuliaType {
 
     static inline auto get_jlfunc2_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T_prjlvalue,  // function
+                T_prjlvalue, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C), // nargs
-                T_prjlvalue},  // linfo
+                T_prjlvalue}, // linfo
             false);
     }
 
     static inline auto get_jlfunc3_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         auto T = get_pjlvalue_ty(C, Derived);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T,  // function
+                T, // function
                 T_pprjlvalue, // args[]
                 llvm::Type::getInt32Ty(C)}, // nargs
             false);
@@ -97,22 +80,17 @@ namespace JuliaType {
 
     static inline auto get_jlfuncparams_ty(llvm::LLVMContext &C) {
         auto T_prjlvalue = get_prjlvalue_ty(C);
-        auto T_pprjlvalue = llvm::PointerType::get(T_prjlvalue, 0);
+        auto T_pprjlvalue = llvm::PointerType::get(C, 0);
         return llvm::FunctionType::get(T_prjlvalue, {
-                T_prjlvalue,  // function
+                T_prjlvalue, // function
                 T_pprjlvalue, // args[]
-                llvm::Type::getInt32Ty(C),
-                T_pprjlvalue,  // linfo->sparam_vals
-                }, // nargs
+                llvm::Type::getInt32Ty(C), // nargs
+                T_prjlvalue}, // linfo->sparam_vals
             false);
     }
 
     static inline auto get_voidfunc_ty(llvm::LLVMContext &C) {
         return llvm::FunctionType::get(llvm::Type::getVoidTy(C), /*isVarArg*/false);
-    }
-
-    static inline auto get_pvoidfunc_ty(llvm::LLVMContext &C) {
-        return get_voidfunc_ty(C)->getPointerTo();
     }
 }
 
@@ -180,7 +158,7 @@ static inline llvm::Instruction *tbaa_decorate(llvm::MDNode *md, llvm::Instructi
     using namespace llvm;
     inst->setMetadata(llvm::LLVMContext::MD_tbaa, md);
     if (llvm::isa<llvm::LoadInst>(inst) && md && md == get_tbaa_const(md->getContext())) {
-        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), None));
+        inst->setMetadata(llvm::LLVMContext::MD_invariant_load, llvm::MDNode::get(md->getContext(), std::nullopt));
     }
     return inst;
 }
@@ -243,13 +221,9 @@ static inline void emit_gc_safepoint(llvm::IRBuilder<> &builder, llvm::Type *T_s
     else {
         Function *F = M->getFunction("julia.safepoint");
         if (!F) {
-            FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {T_size->getPointerTo()}, false);
+            FunctionType *FT = FunctionType::get(Type::getVoidTy(C), {PointerType::getUnqual(T_size->getContext())}, false);
             F = Function::Create(FT, Function::ExternalLinkage, "julia.safepoint", M);
-#if JL_LLVM_VERSION >= 160000
             F->setMemoryEffects(MemoryEffects::inaccessibleOrArgMemOnly());
-#else
-            F->addFnAttr(Attribute::InaccessibleMemOrArgMemOnly);
-#endif
         }
         builder.CreateCall(F, {signal_page});
     }
@@ -263,21 +237,17 @@ static inline llvm::Value *emit_gc_state_set(llvm::IRBuilder<> &builder, llvm::T
     unsigned offset = offsetof(jl_tls_states_t, gc_state);
     Value *gc_state = builder.CreateConstInBoundsGEP1_32(T_int8, ptls, offset, "gc_state");
     if (old_state == nullptr) {
-        old_state = builder.CreateLoad(T_int8, gc_state);
+        old_state = builder.CreateLoad(T_int8, gc_state, "old_state");
         cast<LoadInst>(old_state)->setOrdering(AtomicOrdering::Monotonic);
     }
     builder.CreateAlignedStore(state, gc_state, Align(sizeof(void*)))->setOrdering(AtomicOrdering::Release);
     if (auto *C = dyn_cast<ConstantInt>(old_state))
-        if (C->isZero())
-            return old_state;
-    if (auto *C = dyn_cast<ConstantInt>(state))
-        if (!C->isZero())
-            return old_state;
+        if (auto *C2 = dyn_cast<ConstantInt>(state))
+            if (C->getZExtValue() == C2->getZExtValue())
+                return old_state;
     BasicBlock *passBB = BasicBlock::Create(builder.getContext(), "safepoint", builder.GetInsertBlock()->getParent());
     BasicBlock *exitBB = BasicBlock::Create(builder.getContext(), "after_safepoint", builder.GetInsertBlock()->getParent());
-    Constant *zero8 = ConstantInt::get(T_int8, 0);
-    builder.CreateCondBr(builder.CreateOr(builder.CreateICmpEQ(old_state, zero8), // if (!old_state || !state)
-                                          builder.CreateICmpEQ(state, zero8)),
+    builder.CreateCondBr(builder.CreateICmpEQ(old_state, state, "is_new_state"), // Safepoint whenever we change the GC state
                          passBB, exitBB);
     builder.SetInsertPoint(passBB);
     MDNode *tbaa = get_tbaa_const(builder.getContext());
