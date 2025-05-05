@@ -646,12 +646,8 @@ function bit_ndigits0z(x::UInt128)
         x = div(x,0x8ac7230489e80000)
         n += 19
     end
-    return n + ndigits0z(UInt64(x))
+    return n + bit_ndigits0z(UInt64(x))
 end
-
-ndigits0z(x::BitSigned) = bit_ndigits0z(unsigned(abs(x)))
-ndigits0z(x::BitUnsigned) = bit_ndigits0z(x)
-ndigits0z(x::Integer) = ndigits0zpb(x, 10)
 
 ## ndigits with specified base ##
 
@@ -711,7 +707,7 @@ ndigits0zpb(x::Bool, b::Integer) = x % Int
 
 # The suffix "0z" means that the output is 0 on input zero (cf. #16841)
 """
-    ndigits0z(n::Integer, b::Integer=10)
+    ndigits0z(n::Integer, b::Integer)
 
 Return 0 if `n == 0`, otherwise compute the number of digits in
 integer `n` written in base `b` (i.e. equal to `ndigits(n, base=b)`
@@ -726,14 +722,8 @@ julia> Base.ndigits0z(0, 16)
 julia> Base.ndigits(0, base=16)
 1
 
-julia> Base.ndigits0z(0)
-0
-
 julia> Base.ndigits0z(10, 2)
 4
-
-julia> Base.ndigits0z(10)
-2
 ```
 
 See also [`ndigits`](@ref).
