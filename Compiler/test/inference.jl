@@ -1210,6 +1210,7 @@ let isdefined_tfunc(@nospecialize xs...) =
     @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
     @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
     @test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool
+    @test isdefined_tfunc(Nothing, Any) === Const(false)
 end
 
 # https://github.com/aviatesk/JET.jl/issues/379
@@ -6459,5 +6460,30 @@ A58257.get!      # Creates binding partition in A, N+1:∞
 A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
 Base.invoke_in_world(UInt(38678), getglobal, A58257, :get!) # Expands binding partition in A through <N
 @test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
+
+function tt57873(a::Vector{String}, pref)
+    ret = String[]
+    for j in a
+        append!(ret, tt57873(a[2:end], (pref..., "")))
+    end
+    return ret
+end
+let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873),Vector{String},Tuple{String}})], [Base.get_world_counter()], Base.Compiler.TRIM_NO)
+    @test !isempty(code)
+    ## If we were to run trim here, we should fail with:
+    #    Verifier error #1: unresolved invoke from statement tt57873(::Vector{String}, ::Tuple{String, String})::Vector{String}
+    #Stacktrace:
+    # [1] tt57873(a::Vector{String}, pref::Tuple{String})
+    #   @ Main REPL[1]:4
+end
+
+function ss57873(a::Vector{String}, pref)
+    ret = String[]
+    for j in a
+        append!(ret, ss57873(a[2:end], (pref..., "")))
+    end
+    return ret
+end
+@test ss57873(["a", "b", "c"], ("",)) == String[]
 
 end # module inference

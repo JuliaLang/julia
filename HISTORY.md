@@ -6,6 +6,7 @@ New language features
 
 * New option `--trim` creates smaller binaries by removing code that was not proven to be reachable from
   entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]).
+* Redefinition of constants is now well defined and follows world age semantics. Additional redefinitions (e.g. of structs) are now allowed. See [the new manual chapter on world age](https://docs.julialang.org/en/v1.13-dev/manual/worldage/).
 * A new keyword argument `usings::Bool` has been added to `names`, returning all names visible
   via `using` ([#54609]).
 * The `@atomic` macro family now supports reference assignment syntax, e.g. `@atomic :monotonic v[3] += 4`,

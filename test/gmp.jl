@@ -481,6 +481,18 @@ end
     bytes_to_export_to = Vector{UInt8}(undef, 2)
     Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
     @test all(bytes_to_export_to .== bytes_to_import_from)
+
+    # test export of 0 is T[0]
+    zero_to_export = BigInt(0)
+    bytes_to_export_to = Vector{UInt8}(undef, 0)
+    Base.GMP.MPZ.export!(bytes_to_export_to, zero_to_export, order=0)
+    @test bytes_to_export_to == UInt8[0]
+
+    # test export on nonzero vector
+    x_to_export = BigInt(6)
+    bytes_to_export_to = UInt8[1, 2, 3, 4, 5]
+    Base.GMP.MPZ.export!(bytes_to_export_to, x_to_export, order=0)
+    @test bytes_to_export_to == UInt8[6, 0, 0, 0, 0]
 end
 
 @test isqrt(big(4)) == 2

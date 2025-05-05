@@ -1141,7 +1141,7 @@ function datatype_fieldcount(t::DataType)
             return length(names)
         end
         if types isa DataType && types <: Tuple
-            return fieldcount(types)
+            return datatype_fieldcount(types)
         end
         return nothing
     elseif isabstracttype(t)
