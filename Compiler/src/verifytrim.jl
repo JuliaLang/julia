@@ -154,6 +154,7 @@ function may_dispatch(@nospecialize ftyp)
         return Core._apply isa ftyp ||
                Core._apply_iterate isa ftyp ||
                Core._call_in_world_total isa ftyp ||
+               Core._predeclare_call isa ftyp ||
                Core.invoke isa ftyp ||
                Core.invoke_in_world isa ftyp ||
                Core.invokelatest isa ftyp ||
@@ -232,6 +233,21 @@ function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspec
                         end
 
                         error = "unresolved finalizer registered"
+                    end
+                elseif Core._predeclare_call isa ftyp
+                    if length(stmt.args) > 1
+                        atype = argtypes_to_type(Any[
+                            argextype(stmt.args[i], codeinfo, sptypes)
+                            for i in 2:length(stmt.args)
+                        ])
+
+                        mi = compileable_specialization_for_call(interp, atype)
+                        if mi !== nothing
+                            ci = get(caches, mi, nothing)
+                            ci isa CodeInstance && continue
+                        end
+
+                        error = "unresolved pre-declared call"
                     end
                 else
                     error = "unresolved call to builtin"
