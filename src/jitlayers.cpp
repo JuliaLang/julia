@@ -1281,7 +1281,7 @@ namespace {
 #endif
 #endif
         uint32_t target_flags = 0;
-        auto target = jl_get_llvm_target(jl_generating_output(), target_flags);
+        auto target = jl_get_llvm_target(jl_options.cpu_target, jl_generating_output(), target_flags);
         auto &TheCPU = target.first;
         SmallVector<std::string, 10> targetFeatures(target.second.begin(), target.second.end());
         std::string errorstr;

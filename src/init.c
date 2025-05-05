@@ -868,21 +868,33 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
 {
     JL_TIMING(JULIA_INIT, JULIA_INIT);
     jl_resolve_sysimg_location(rel);
+
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
+    jl_image_buf_t sysimage = { JL_IMAGE_KIND_NONE };
     if (rel == JL_IMAGE_IN_MEMORY) {
-        jl_set_sysimg_so(jl_exe_handle);
+        sysimage = jl_set_sysimg_so(jl_exe_handle);
         jl_options.image_file = jl_options.julia_bin;
     }
     else if (jl_options.image_file)
-        jl_preload_sysimg_so(jl_options.image_file);
+        sysimage = jl_preload_sysimg(jl_options.image_file);
+
+    if (sysimage.kind == JL_IMAGE_KIND_SO)
+        jl_gc_notify_image_load(sysimage.data, sysimage.size);
+
     if (jl_options.cpu_target == NULL)
         jl_options.cpu_target = "native";
-    jl_init_codegen();
 
+    // Parse image, perform relocations, and init JIT targets, etc.
+    jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
+
+    jl_init_codegen();
     jl_init_common_symbols();
-    if (jl_options.image_file) {
-        jl_restore_system_image(jl_options.image_file);
+
+    if (sysimage.kind != JL_IMAGE_KIND_NONE) {
+        // Load the .ji or .so sysimage
+        jl_restore_system_image(&parsed_image, sysimage);
     } else {
+        // No sysimage provided, init a minimal environment
         jl_init_types();
         jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
         jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
@@ -891,7 +903,7 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
     jl_init_flisp();
     jl_init_serializer();
 
-    if (!jl_options.image_file) {
+    if (sysimage.kind == JL_IMAGE_KIND_NONE) {
         jl_top_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
@@ -919,7 +931,8 @@ static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_
 
     jl_gc_enable(1);
 
-    if (jl_options.image_file && (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
+    if ((sysimage.kind != JL_IMAGE_KIND_NONE) &&
+            (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
         jl_array_t *init_order = jl_module_init_order;
         JL_GC_PUSH1(&init_order);
         jl_module_init_order = NULL;
