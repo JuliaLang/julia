@@ -480,6 +480,8 @@ function Base.showerror(io::IO, e::LimitIOException)
     print(io, "$LimitIOException: aborted printing after attempting to print more than $(Base.format_bytes(e.maxbytes)) within a `LimitIO`.")
 end
 
+Base.displaysize(io::LimitIO) = _displaysize(io.io)
+
 function Base.write(io::LimitIO, v::UInt8)
     io.n > io.maxbytes && throw(LimitIOException(io.maxbytes))
     n_bytes = write(io.io, v)
