@@ -416,11 +416,12 @@ static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
             ptrhash_put(mtables, old_mt, jl_new_method_table(name, m->module));
         jl_methtable_t *mt = (jl_methtable_t*)ptrhash_get(mtables, old_mt);
         size_t world =  jl_atomic_load_acquire(&jl_world_counter);
-        jl_value_t * lookup = jl_methtable_lookup(mt, m->sig, world);
+        jl_value_t *lookup = jl_methtable_lookup(mt, m->sig, world);
         // Check if the method is already in the new table, if not then insert it there
         if (lookup == jl_nothing || (jl_method_t*)lookup != m) {
             //TODO: should this be a function like unsafe_insert_method?
             size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
+            size_t max_world = ~(size_t)0;
             assert(min_world == jl_atomic_load_relaxed(&m->primary_world));
             size_t dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
             jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
@@ -429,7 +430,7 @@ static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
             jl_atomic_store_relaxed(&m->primary_world, min_world);
             jl_atomic_store_relaxed(&m->dispatch_status, dispatch_status);
             jl_atomic_store_relaxed(&newentry->min_world, min_world);
+            jl_atomic_store_relaxed(&newentry->max_world, max_world); // short-circuit jl_method_table_insert
         }
     }
-
 }

@@ -677,8 +677,8 @@ typedef union {
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
 
-#define METHOD_ISMINMAX_INVOKE_LATEST       0b0001
-#define METHOD_ISMINMAX_CALL_LATEST         0b0010
+#define METHOD_SIG_LATEST_WHICH             0b0001
+#define METHOD_SIG_LATEST_ONLY              0b0010
 
 JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
 JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);

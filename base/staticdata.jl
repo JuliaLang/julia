@@ -288,6 +288,30 @@ end
 
 function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt)
     # verify that these edges intersect with the same methods as before
+    if n == 1
+        # first, fast-path a check if the expected method simply dominates its sig anyways
+        # so the result of ml_matches is already simply known
+        let t = expecteds[i], meth, minworld, maxworld, result
+            if t isa Method
+                meth = t
+            else
+                if t isa CodeInstance
+                    t = get_ci_mi(t)
+                else
+                    t = t::MethodInstance
+                end
+                meth = t.def::Method
+            end
+            if !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                minworld = meth.primary_world
+                @assert minworld ≤ world
+                maxworld = typemax(UInt)
+                result = Any[] # result is unused
+                return minworld, maxworld, result
+            end
+        end
+    end
+    # next, compare the current result of ml_matches to the old result
     lim = _jl_debug_method_invalidation[] !== nothing ? Int(typemax(Int32)) : n
     minworld = Ref{UInt}(1)
     maxworld = Ref{UInt}(typemax(UInt))
@@ -340,14 +364,17 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
     return minworld[], maxworld[], result
 end
 
-const METHOD_ISMINMAX_INVOKE_LATEST = 0x1
-const METHOD_ISMINMAX_CALL_LATEST = 0x2
+# fast-path dispatch_status bit definitions (false indicates unknown)
+# true indicates this method would be returned as the result from `which` when invoking `method.sig` in the current latest world
+const METHOD_SIG_LATEST_WHICH = 0x1
+# true indicates this method would be returned as the only result from `methods` when calling `method.sig` in the current latest world
+const METHOD_SIG_LATEST_ONLY = 0x2
 
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt)
     @assert invokesig isa Type
     local minworld::UInt, maxworld::UInt
     matched = nothing
-    if invokesig === expected.sig && !iszero(expected.dispatch_status & METHOD_ISMINMAX_INVOKE_LATEST)
+    if invokesig === expected.sig && !iszero(expected.dispatch_status & METHOD_SIG_LATEST_WHICH)
         # the invoke match is `expected` for `expected->sig`, unless `expected` is replaced
         minworld = expected.primary_world
         @assert minworld ≤ world
