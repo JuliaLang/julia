@@ -6,6 +6,9 @@
 ; RUN: opt -enable-new-pm=0 --opaque-pointers=1 -load libjulia-codegen%shlibext -RemoveJuliaAddrspaces -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 ; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='RemoveJuliaAddrspaces' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
+; COM: check that the addrspace of the global itself is removed
+; OPAQUE: @ejl_enz_runtime_exc = external global {}
+@ejl_enz_runtime_exc = external addrspace(10) global {}
 
 ; COM: check that package image fptrs work
 @pjlsys_BoundsError_32 = internal global {} addrspace(10)* ({}***, {} addrspace(10)*, [1 x i64] addrspace(11)*)* null
@@ -125,6 +128,13 @@ define void @byval_type([1 x {} addrspace(10)*] addrspace(11)* byval([1 x {} add
 ; TYPED: define void @byval_type([1 x {}*]* byval([1 x {}*]) %0)
 ; OPAQUE: define void @byval_type(ptr byval([1 x ptr]) %0)
   ret void
+}
+
+define private fastcc void @diffejulia__mapreduce_97() {
+L6:
+; OPAQUE: store atomic ptr @ejl_enz_runtime_exc, ptr null unordered
+  store atomic {} addrspace(10)* @ejl_enz_runtime_exc, {} addrspace(10)* addrspace(10)* null unordered, align 8
+  unreachable
 }
 
 define private fastcc void @diffejulia__mapreduce_97() {
