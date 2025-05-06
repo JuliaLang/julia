@@ -2215,30 +2215,7 @@ function detect_ambiguities(mods::Module...;
             end
         end
     end
-    work = Base.loaded_modules_array()
-    filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
-    while !isempty(work)
-        mod = pop!(work)
-        for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
-            if !isdefined(mod, n)
-                if is_in_mods(mod, recursive, mods)
-                    if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
-                        println("Skipping ", mod, '.', n)  # typically stale exports
-                    end
-                end
-                continue
-            end
-            f = Base.unwrap_unionall(getfield(mod, n))
-            if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
-                push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
-                examine(f.name.mt)
-            end
-        end
-    end
-    examine(Symbol.name.mt)
-    examine(DataType.name.mt)
+    examine(getglobal(Core, :_))
     return collect(ambs)
 end
 
@@ -2286,30 +2263,7 @@ function detect_unbound_args(mods...;
             push!(ambs, m)
         end
     end
-    work = Base.loaded_modules_array()
-    filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
-    while !isempty(work)
-        mod = pop!(work)
-        for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
-            if !isdefined(mod, n)
-                if is_in_mods(mod, recursive, mods)
-                    if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
-                        println("Skipping ", mod, '.', n)  # typically stale exports
-                    end
-                end
-                continue
-            end
-            f = Base.unwrap_unionall(getfield(mod, n))
-            if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
-                push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
-                examine(f.name.mt)
-            end
-        end
-    end
-    examine(Symbol.name.mt)
-    examine(DataType.name.mt)
+    examine(getglobal(Core, :_))
     return collect(ambs)
 end
 

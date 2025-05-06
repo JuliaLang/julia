@@ -1356,14 +1356,14 @@ hasproperty(x, s::Symbol) = s in propertynames(x)
 Make method `m` uncallable and force recompilation of any methods that use(d) it.
 """
 function delete_method(m::Method)
-    ccall(:jl_method_table_disable, Cvoid, (Any, Any), get_methodtable(m), m)
+    ccall(:jl_method_table_disable, Cvoid, (Any,), m)
 end
 
 
 # type for reflecting and pretty-printing a subset of methods
 mutable struct MethodList <: AbstractArray{Method,1}
     ms::Array{Method,1}
-    mt::Core.MethodTable
+    tn::Core.TypeName # contains module.singletonname globalref for altering some aspects of printing
 end
 
 size(m::MethodList) = size(m.ms)
@@ -1374,10 +1374,10 @@ function MethodList(mt::Core.MethodTable)
     visit(mt) do m
         push!(ms, m)
     end
-    return MethodList(ms, mt)
+    return MethodList(ms, Any.name)
 end
 
-function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodTable, mod)
+function matches_to_methods(ms::Array{Any,1}, tn::Core.TypeName, mod)
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[(ms[i]::Core.MethodMatch).method for i in 1:length(ms)]
     # Remove shadowed methods with identical type signatures
@@ -1392,7 +1392,7 @@ function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodTable, mod)
     mod === nothing || filter!(ms) do m
         return parentmodule(m) ∈ mod
     end
-    return MethodList(ms, mt)
+    return MethodList(ms, tn)
 end
 
 """
@@ -1414,7 +1414,7 @@ function methods(@nospecialize(f), @nospecialize(t),
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     ms = _methods(f, t, -1, world)::Vector{Any}
-    return matches_to_methods(ms, typeof(f).name.mt, mod)
+    return matches_to_methods(ms, typeof(f).name, mod)
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 
@@ -1425,7 +1425,7 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
     ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector{Any}
-    return matches_to_methods(ms, typeof(f).name.mt, nothing)
+    return matches_to_methods(ms, typeof(f).name, nothing)
 end
 
 function methods(@nospecialize(f),
@@ -1614,10 +1614,8 @@ end
 
 function get_nospecializeinfer_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return method.sig
-    mt = ccall(:jl_method_get_table, Any, (Any,), method)
-    mt === nothing && return method.sig
-    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
-        mt, atype, sparams, method, #=int return_if_compileable=#0)
+    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint),
+        atype, sparams, method, #=int return_if_compileable=#0)
 end
 
 is_nospecialized(method::Method) = method.nospecialize ≠ 0

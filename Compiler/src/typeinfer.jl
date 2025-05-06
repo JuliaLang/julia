@@ -715,7 +715,7 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
         else
             callee = edges[i+1]
             if isa(callee, MethodTable) # abstract dispatch (legacy style edges)
-                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
+                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), item, caller)
                 i += 2
                 continue
             elseif isa(callee, Method)

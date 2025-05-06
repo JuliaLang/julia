@@ -197,6 +197,7 @@ typedef struct _jl_datatype_t jl_tupletype_t;
 struct _jl_code_instance_t;
 typedef struct _jl_method_instance_t jl_method_instance_t;
 typedef struct _jl_globalref_t jl_globalref_t;
+typedef struct _jl_typemap_entry_t jl_typemap_entry_t;
 
 
 // TypeMap is an implicitly defined type
@@ -518,6 +519,7 @@ typedef struct {
     JL_DATA_TYPE
     jl_sym_t *name;
     struct _jl_module_t *module;
+    jl_sym_t *singletonname; // sometimes used for debug printing
     jl_svec_t *names;  // field names
     const uint32_t *atomicfields; // if any fields are atomic, we record them here
     const uint32_t *constfields; // if any fields are const, we record them here
@@ -527,15 +529,16 @@ typedef struct {
     _Atomic(jl_value_t*) Typeofwrapper;  // cache for Type{wrapper}
     _Atomic(jl_svec_t*) cache;        // sorted array
     _Atomic(jl_svec_t*) linearcache;  // unsorted array
-    struct _jl_methtable_t *mt;
+    jl_array_t *backedges; // uncovered (sig => caller::CodeInstance) pairs with this type as the function
     jl_array_t *partial;     // incomplete instantiations of this type
     intptr_t hash;
+    _Atomic(int32_t) max_args;  // max # of non-vararg arguments in a signature with this type as the function
     int32_t n_uninitialized;
     // type properties
     uint8_t abstract:1;
     uint8_t mutabl:1;
     uint8_t mayinlinealloc:1;
-    uint8_t _reserved:5;
+    uint8_t _unused:5;
     _Atomic(uint8_t) cache_entry_count; // (approximate counter of TypeMapEntry for heuristics)
     uint8_t max_methods; // override for inference's max_methods setting (0 = no additional limit or relaxation)
     uint8_t constprop_heustic; // override for inference's constprop heuristic
@@ -837,7 +840,7 @@ struct _jl_globalref_t {
 };
 
 // one Type-to-Value entry
-typedef struct _jl_typemap_entry_t {
+struct _jl_typemap_entry_t {
     JL_DATA_TYPE
     _Atomic(struct _jl_typemap_entry_t*) next; // invasive linked list
     jl_tupletype_t *sig; // the type signature for this entry
@@ -854,7 +857,7 @@ typedef struct _jl_typemap_entry_t {
     int8_t isleafsig; // isleaftype(sig) & !any(isType, sig) : unsorted and very fast
     int8_t issimplesig; // all(isleaftype | isAny | isType | isVararg, sig) : sorted and fast
     int8_t va; // isVararg(sig)
-} jl_typemap_entry_t;
+};
 
 // one level in a TypeMap tree (each level splits on a type at a given offset)
 typedef struct _jl_typemap_level_t {
@@ -874,19 +877,20 @@ typedef struct _jl_typemap_level_t {
     _Atomic(jl_typemap_t*) any;
 } jl_typemap_level_t;
 
-// contains the TypeMap for one Type
-typedef struct _jl_methtable_t {
+typedef struct _jl_methcache_t {
     JL_DATA_TYPE
-    jl_sym_t *name; // sometimes used for debug printing
-    _Atomic(jl_typemap_t*) defs;
     _Atomic(jl_genericmemory_t*) leafcache;
     _Atomic(jl_typemap_t*) cache;
-    _Atomic(intptr_t) max_args;  // max # of non-vararg arguments in a signature
-    jl_module_t *module; // sometimes used for debug printing
-    jl_array_t *backedges; // (sig, caller::CodeInstance) pairs
     jl_mutex_t writelock;
-    uint8_t offs;  // 0, or 1 to skip splitting typemap on first (function) argument
-    uint8_t frozen; // whether this accepts adding new methods
+} jl_methcache_t;
+
+// contains global MethodTable
+typedef struct _jl_methtable_t {
+    JL_DATA_TYPE
+    _Atomic(jl_typemap_t*) defs;
+    jl_methcache_t *cache;
+    jl_sym_t *name; // sometimes used for debug printing
+    jl_module_t *module; // sometimes used for debug printing
 } jl_methtable_t;
 
 typedef struct {
@@ -1109,16 +1113,17 @@ extern JL_DLLIMPORT jl_datatype_t *jl_upsilonnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_quotenode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_newvarnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_intrinsic_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_methcache_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_methtable_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_typemap_level_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_typemap_entry_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_kwcall_type JL_GLOBALLY_ROOTED;
 
 extern JL_DLLIMPORT jl_svec_t *jl_emptysvec JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_emptytuple JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_true JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_false JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_value_t *jl_nothing JL_GLOBALLY_ROOTED;
-extern JL_DLLIMPORT jl_value_t *jl_kwcall_func JL_GLOBALLY_ROOTED;
 
 extern JL_DLLIMPORT jl_value_t    *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 
@@ -1461,9 +1466,7 @@ STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint32_t x) JL_NOTSAFE
 #define jl_string_data(s) ((char*)s + sizeof(void*))
 #define jl_string_len(s)  (*(size_t*)s)
 
-#define jl_gf_ft_mtable(ft) (((jl_datatype_t*)ft)->name->mt)
-#define jl_gf_mtable(f) (jl_gf_ft_mtable(jl_typeof(f)))
-#define jl_gf_name(f)   (jl_gf_mtable(f)->name)
+#define jl_gf_name(f) (((jl_datatype_t*)jl_typeof(f))->name->singletonname)
 
 // struct type info
 JL_DLLEXPORT jl_svec_t *jl_compute_fieldtypes(jl_datatype_t *st JL_PROPAGATES_ROOT, void *stack, int cacheable);
@@ -1658,6 +1661,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_method(v)      jl_typetagis(v,jl_method_type)
 #define jl_is_module(v)      jl_typetagis(v,jl_module_tag<<4)
 #define jl_is_mtable(v)      jl_typetagis(v,jl_methtable_type)
+#define jl_is_mcache(v)      jl_typetagis(v,jl_methcache_type)
 #define jl_is_task(v)        jl_typetagis(v,jl_task_tag<<4)
 #define jl_is_string(v)      jl_typetagis(v,jl_string_tag<<4)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))

@@ -3199,15 +3199,12 @@ function _hasmethod_tfunc(interp::AbstractInterpreter, argtypes::Vector{Any}, sv
         isdispatchelem(ft) || return CallMeta(Bool, Any, Effects(), NoCallInfo()) # check that we might not have a subtype of `ft` at runtime, before doing supertype lookup below
         types = rewrap_unionall(Tuple{ft, unwrapped.parameters...}, types)::Type
     end
-    mt = ccall(:jl_method_table_for, Any, (Any,), types)
-    if !isa(mt, MethodTable)
-        return CallMeta(Bool, Any, EFFECTS_THROWS, NoCallInfo())
-    end
     match, valid_worlds = findsup(types, method_table(interp))
     update_valid_age!(sv, valid_worlds)
     if match === nothing
         rt = Const(false)
         vresults = MethodLookupResult(Any[], valid_worlds, true)
+        mt = getglobal(Core, :_)
         vinfo = MethodMatchInfo(vresults, mt, types, false) # XXX: this should actually be an info with invoke-type edge
     else
         rt = Const(true)

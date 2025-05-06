@@ -528,13 +528,13 @@ test_typed_ir_printing(g15714, Tuple{Vector{Float32}},
 #@test used_dup_var_tested15715
 @test used_unique_var_tested15714
 
-let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
+let li = only(methods(fieldtype)).unspecialized,
     lrepr = string(li),
     mrepr = string(li.def),
     lmime = repr("text/plain", li),
     mmime = repr("text/plain", li.def)
 
-    @test lrepr == lmime == "MethodInstance for fieldtype(...)"
+    @test lrepr == lmime == "MethodInstance for fieldtype(::Vararg{Any})"
     @test mrepr == "fieldtype(...) @ Core none:0"       # simple print
     @test mmime == "fieldtype(...)\n     @ Core none:0" # verbose print
 end

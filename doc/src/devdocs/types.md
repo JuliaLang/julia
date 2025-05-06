@@ -199,7 +199,6 @@ TypeName
     name: Symbol Array
     defs: Nothing nothing
     cache: Nothing nothing
-    max_args: Int64 0
     module: Module Core
     : Int64 0
     : Int64 0

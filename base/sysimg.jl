@@ -15,8 +15,8 @@ ccall(:jl_init_restored_module, Cvoid, (Any,), Base)
     include([mapexpr::Function,] path::AbstractString)
 
 Evaluate the contents of the input source file in the global scope of the containing module.
-Every module (except those defined with `baremodule`) has its own
-definition of `include`, which evaluates the file in that module.
+Every `Module` (except those defined with `baremodule`) has a private 1-argument definition
+of `include`, which evaluates the file in that module, for use inside that module.
 Returns the result of the last evaluated expression of the input file. During including,
 a task-local include path is set to the directory containing the file. Nested calls to
 `include` will search relative to that path. This function is typically used to load source
@@ -40,15 +40,18 @@ Use [`Base.include`](@ref) to evaluate a file into another module.
 !!! compat "Julia 1.5"
     Julia 1.5 is required for passing the `mapexpr` argument.
 """
-const include = Base.IncludeInto(Main)
+Base.IncludeInto
 
 """
     eval(expr)
 
 Evaluate an expression in the global scope of the containing module.
-Every `Module` (except those defined with `baremodule`) has its own 1-argument
-definition of `eval`, which evaluates expressions in that module.
+Every `Module` (except those defined with `baremodule`) has a private 1-argument definition
+of `eval`, which evaluates expressions in that module, for use inside that module.
 """
+Core.EvalInto
+
+const include = Base.IncludeInto(Main)
 const eval = Core.EvalInto(Main)
 
 # Ensure this file is also tracked

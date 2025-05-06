@@ -2476,14 +2476,11 @@ void jl_init_intrinsic_functions(void) JL_GC_DISABLED
     jl_module_t *inm = jl_new_module_(jl_symbol("Intrinsics"), jl_core_module, 0, 1);
     jl_set_initial_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm, 0);
     jl_mk_builtin_func(jl_intrinsic_type, jl_symbol("IntrinsicFunction"), jl_f_intrinsic_call);
-    jl_mk_builtin_func(
-        (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type),
-        jl_symbol("OpaqueClosure"), jl_f_opaque_closure_call);
 
+    jl_datatype_t *oc = (jl_datatype_t*)jl_unwrap_unionall((jl_value_t*)jl_opaque_closure_type);
     // Save a reference to the just created OpaqueClosure method, so we can provide special
     // codegen for it later.
-    jl_opaque_closure_method = (jl_method_t*)jl_methtable_lookup(jl_opaque_closure_typename->mt,
-        (jl_value_t*)jl_anytuple_type, 1);
+    jl_opaque_closure_method = jl_mk_builtin_func(oc, jl_symbol("OpaqueClosure"), jl_f_opaque_closure_call); // TODO: awkwardly not actually declared a Builtin, even though it relies on being handled by the special cases for Builtin everywhere else
 
 #define ADD_I(name, nargs) add_intrinsic(inm, #name, name);
 #define ADD_HIDDEN(name, nargs)
@@ -2533,6 +2530,8 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
+    add_builtin("_", (jl_value_t*)jl_method_table);
+    add_builtin("MethodCache", (jl_value_t*)jl_methcache_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
     add_builtin("CodeInstance", (jl_value_t*)jl_code_instance_type);
     add_builtin("TypeMapEntry", (jl_value_t*)jl_typemap_entry_type);
@@ -2597,6 +2596,26 @@ void jl_init_primitives(void) JL_GC_DISABLED
 
     add_builtin("AbstractString", (jl_value_t*)jl_abstractstring_type);
     add_builtin("String", (jl_value_t*)jl_string_type);
+
+    // ensure that primitive types are fully allocated (since jl_init_types is incomplete)
+    assert(jl_atomic_load_relaxed(&jl_world_counter) == 1);
+    jl_module_t *core = jl_core_module;
+    jl_svec_t *bindings = jl_atomic_load_relaxed(&core->bindings);
+    jl_value_t **table = jl_svec_data(bindings);
+    for (size_t i = 0; i < jl_svec_len(bindings); i++) {
+        if (table[i] != jl_nothing) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            jl_value_t *v = jl_get_binding_value_in_world(b, 1);
+            if (v) {
+                if (jl_is_unionall(v))
+                    v = jl_unwrap_unionall(v);
+                if (jl_is_datatype(v)) {
+                    jl_datatype_t *tt = (jl_datatype_t*)v;
+                    tt->name->module = core;
+                }
+            }
+        }
+    }
 }
 
 #ifdef __cplusplus
