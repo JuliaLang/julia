@@ -706,9 +706,7 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
         else if (jl_is_method(obj)) {
             jl_method_t *m = (jl_method_t*)obj;
             assert(jl_atomic_load_relaxed(&m->primary_world) == ~(size_t)0);
-            assert(jl_atomic_load_relaxed(&m->deleted_world) == WORLD_AGE_REVALIDATION_SENTINEL);
             jl_atomic_store_release(&m->primary_world, world);
-            jl_atomic_store_release(&m->deleted_world, ~(size_t)0);
         }
         else if (jl_is_code_instance(obj)) {
             jl_code_instance_t *ci = (jl_code_instance_t*)obj;

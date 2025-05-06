@@ -1833,16 +1833,11 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 jl_method_t *m = (jl_method_t*)v;
                 jl_method_t *newm = (jl_method_t*)&f->buf[reloc_offset];
                 if (s->incremental) {
-                    if (jl_atomic_load_relaxed(&newm->deleted_world) == ~(size_t)0) {
-                        if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
-                            jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
-                            jl_atomic_store_relaxed(&newm->deleted_world, 1); // max_world
-                            arraylist_push(&s->fixup_objs, (void*)reloc_offset);
-                        }
-                    }
-                    else {
-                        jl_atomic_store_relaxed(&newm->primary_world, 1);
-                        jl_atomic_store_relaxed(&newm->deleted_world, 0);
+                    if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
+                        jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
+                        int dispatch_status = jl_atomic_load_relaxed(&newm->dispatch_status);
+                        jl_atomic_store_relaxed(&newm->dispatch_status, dispatch_status & METHOD_SIG_LATEST_ONLY ? 0 : METHOD_SIG_PRECOMPILE_MANY);
+                        arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
                 }
                 else {
