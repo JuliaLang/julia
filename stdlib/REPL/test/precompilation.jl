@@ -33,7 +33,7 @@ if !Sys.iswindows()
         # given this test checks that startup is snappy, it's best to add workloads to
         # contrib/generate_precompile.jl rather than increase this number. But if that's not
         # possible, it'd be helpful to add a comment with the statement and a reason below
-        expected_precompiles = 1
+        expected_precompiles = 0
 
         n_precompiles = count(r"precompile\(", tracecompile_out)
 

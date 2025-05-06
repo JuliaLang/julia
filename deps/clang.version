@@ -3,4 +3,4 @@
 ## jll artifact
 # Clang (paired with LLVM, only here as a JLL download)
 CLANG_JLL_NAME := Clang
-CLANG_JLL_VER  := 18.1.7+3
+CLANG_JLL_VER  := 19.1.7+1

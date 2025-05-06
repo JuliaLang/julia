@@ -10,7 +10,7 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
+             sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
              clamp, unsafe_takestring
 
 import Core: Signed, Float16, Float32, Float64
@@ -257,6 +257,7 @@ function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Inte
     stride(a, 1) == 1 || throw(ArgumentError("a must have stride 1"))
     ndigits = cld(sizeinbase(n, 2), 8*sizeof(T) - nails)
     length(a) < ndigits && resize!(a, ndigits)
+    fill!(a, zero(T))
     count = Ref{Csize_t}()
     ccall((:__gmpz_export, libgmp), Ptr{T}, (Ptr{T}, Ref{Csize_t}, Cint, Csize_t, Cint, Csize_t, mpz_t),
         a, count, order, sizeof(T), endian, nails, n)
@@ -284,8 +285,6 @@ signed(x::BigInt) = x
 
 BigInt(x::BigInt) = x
 Signed(x::BigInt) = x
-
-hastypemax(::Type{BigInt}) = false
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     # don't make a copy in the common case where we are parsing a whole String

@@ -154,7 +154,8 @@ end
             x = unorded[i], unorded[i]
             y = unorded[j], unorded[j]
             z = Base._extrema_rf(x, y)
-            @test z === x || z === y
+            @test (z[1] === x[1] || z[1] === y[1]) &&
+                  (z[2] === x[1] || z[2] === y[1])
         end
     end
 end
@@ -1595,36 +1596,44 @@ end
         end
     end
 
-    for x=0:5, y=1:5
-        @test div(UInt(x),UInt(y)) == div(x,y)
-        @test div(UInt(x),y) == div(x,y)
-        @test div(x,UInt(y)) == div(x,y)
-        @test div(UInt(x),-y) == reinterpret(UInt,div(x,-y))
-        @test div(-x,UInt(y)) == div(-x,y)
+    @test isnan(mod(NaN, Inf))
+    @test isnan(mod(NaN, -Inf))
+    for x=0:5
+        @test mod(x, Inf) == x
+        @test mod(x, -Inf) == x
+        @test mod(-x, Inf) == -x
+        @test mod(-x, -Inf) == -x
+        for y=1:5
+            @test div(UInt(x),UInt(y)) == div(x,y)
+            @test div(UInt(x),y) == div(x,y)
+            @test div(x,UInt(y)) == div(x,y)
+            @test div(UInt(x),-y) == reinterpret(UInt,div(x,-y))
+            @test div(-x,UInt(y)) == div(-x,y)
 
-        @test fld(UInt(x),UInt(y)) == fld(x,y)
-        @test fld(UInt(x),y) == fld(x,y)
-        @test fld(x,UInt(y)) == fld(x,y)
-        @test fld(UInt(x),-y) == reinterpret(UInt,fld(x,-y))
-        @test fld(-x,UInt(y)) == fld(-x,y)
+            @test fld(UInt(x),UInt(y)) == fld(x,y)
+            @test fld(UInt(x),y) == fld(x,y)
+            @test fld(x,UInt(y)) == fld(x,y)
+            @test fld(UInt(x),-y) == reinterpret(UInt,fld(x,-y))
+            @test fld(-x,UInt(y)) == fld(-x,y)
 
-        @test cld(UInt(x),UInt(y)) == cld(x,y)
-        @test cld(UInt(x),y) == cld(x,y)
-        @test cld(x,UInt(y)) == cld(x,y)
-        @test cld(UInt(x),-y) == reinterpret(UInt,cld(x,-y))
-        @test cld(-x,UInt(y)) == cld(-x,y)
+            @test cld(UInt(x),UInt(y)) == cld(x,y)
+            @test cld(UInt(x),y) == cld(x,y)
+            @test cld(x,UInt(y)) == cld(x,y)
+            @test cld(UInt(x),-y) == reinterpret(UInt,cld(x,-y))
+            @test cld(-x,UInt(y)) == cld(-x,y)
 
-        @test rem(UInt(x),UInt(y)) == rem(x,y)
-        @test rem(UInt(x),y) == rem(x,y)
-        @test rem(x,UInt(y)) == rem(x,y)
-        @test rem(UInt(x),-y) == rem(x,-y)
-        @test rem(-x,UInt(y)) == rem(-x,y)
+            @test rem(UInt(x),UInt(y)) == rem(x,y)
+            @test rem(UInt(x),y) == rem(x,y)
+            @test rem(x,UInt(y)) == rem(x,y)
+            @test rem(UInt(x),-y) == rem(x,-y)
+            @test rem(-x,UInt(y)) == rem(-x,y)
 
-        @test mod(UInt(x),UInt(y)) == mod(x,y)
-        @test mod(UInt(x),y) == mod(x,y)
-        @test mod(x,UInt(y)) == mod(x,y)
-        @test mod(UInt(x),-y) == mod(x,-y)
-        @test mod(-x,UInt(y)) == mod(-x,y)
+            @test mod(UInt(x),UInt(y)) == mod(x,y)
+            @test mod(UInt(x),y) == mod(x,y)
+            @test mod(x,UInt(y)) == mod(x,y)
+            @test mod(UInt(x),-y) == mod(x,-y)
+            @test mod(-x,UInt(y)) == mod(-x,y)
+        end
     end
 
     @test div(typemax(UInt64)  , 1) ==  typemax(UInt64)
@@ -2192,11 +2201,36 @@ for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128)
     end
 end
 
-@testset "Irrational/Bool multiplication" begin
+@testset "Bool multiplication" begin
     @test false*pi === 0.0
     @test pi*false === 0.0
     @test true*pi === Float64(pi)
     @test pi*true === Float64(pi)
+
+    @test false*Inf === 0.0
+    @test Inf*false === 0.0
+    @test true*Inf === Inf
+    @test Inf*true === Inf
+
+    @test false*NaN === 0.0
+    @test NaN*false === 0.0
+    @test true*NaN === NaN
+    @test NaN*true === NaN
+
+    @test false*-Inf === -0.0
+    @test -Inf*false === -0.0
+    @test true*-Inf === -Inf
+    @test -Inf*true === -Inf
+
+    @test false*1//0 === 0//1
+    @test 1//0*false === 0//1
+    @test true*1//0 === 1//0
+    @test 1//0*true === 1//0
+
+    @test false*-1//0 === 0//1
+    @test -1//0*false === 0//1
+    @test true*-1//0 === -1//0
+    @test -1//0*true === -1//0
 end
 # issue #5492
 @test -0.0 + false === -0.0

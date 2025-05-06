@@ -103,7 +103,7 @@ Take the expression `x` and return an equivalent expression with all macros remo
 for executing in module `m`.
 The `recursive` keyword controls whether deeper levels of nested macros are also expanded.
 This is demonstrated in the example below:
-```julia-repl
+```jldoctest; filter = r"#= .*:6 =#"
 julia> module M
            macro m1()
                42
@@ -118,7 +118,7 @@ julia> macroexpand(M, :(@m2()), recursive=true)
 42
 
 julia> macroexpand(M, :(@m2()), recursive=false)
-:(#= REPL[16]:6 =# M.@m1)
+:(#= REPL[1]:6 =# @m1)
 ```
 """
 function macroexpand(m::Module, @nospecialize(x); recursive=true)
@@ -254,6 +254,14 @@ Give a hint to the compiler that calls within `block` are worth inlining.
     let
         @inline explicit_noinline(args...) # will be inlined
     end
+    ```
+
+!!! note
+    The callsite annotation applies to all calls in the block, including function arguments
+    that are themselves calls:
+    ```julia
+    # The compiler will not inline `getproperty`, `g` or `f`
+    @noinline f(x.inner, g(y))
     ```
 
 !!! note
@@ -532,16 +540,20 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     contents) are not egal.
 
 !!! note
-    The `:consistent`-cy assertion is made world-age wise. More formally, write
-    ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then this setting requires:
+    The `:consistent`-cy assertion is made with respect to a particular world range `R`.
+    More formally, write ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then this setting requires:
     ```math
-    ∀ i, x, y: x ≡ y → fᵢ(x) ≡ fᵢ(y)
+    ∀ i ∈ R, j ∈ R, x, y: x ≡ y → fᵢ(x) ≡ fⱼ(y)
     ```
-    However, for two world ages ``i``, ``j`` s.t. ``i ≠ j``, we may have ``fᵢ(x) ≢ fⱼ(y)``.
+
+    For `@assume_effects`, the range `R` is `m.primary_world:m.deleted_world` of
+    the annotated or containing method.
+
+    For ordinary code instances, `R` is `ci.min_world:ci.max_world`.
 
     A further implication is that `:consistent` functions may not make their
     return value dependent on the state of the heap or any other global state
-    that is not constant for a given world age.
+    that is not constant over the given world age range.
 
 !!! note
     The `:consistent`-cy includes all legal rewrites performed by the optimizer.
@@ -926,7 +938,7 @@ This can be used to limit the number of compiler-generated specializations durin
 
 # Examples
 
-```julia
+```jldoctest; setup = :(using InteractiveUtils)
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -935,7 +947,7 @@ g (generic function with 1 method)
 
 julia> @code_typed f([1.0])
 CodeInfo(
-1 ─ %1 = invoke Main.g(_2::AbstractArray)::Any
+1 ─ %1 =    invoke g(A::AbstractArray)::Any
 └──      return %1
 ) => Any
 ```
@@ -1344,6 +1356,10 @@ function make_atomic(order, ex)
                 op = :+
             elseif ex.head === :(-=)
                 op = :-
+            elseif ex.head === :(|=)
+                op = :|
+            elseif ex.head === :(&=)
+                op = :&
             elseif @isdefined string
                 shead = string(ex.head)
                 if endswith(shead, '=')
@@ -1657,10 +1673,11 @@ end
 
 # Implementation of generated functions
 function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
-    ci = ccall(:jl_expand, Any, (Any, Any), ex, defmod)
+    ci = ccall(:jl_lower_expr_mod, Any, (Any, Any), ex, defmod)
     if !isa(ci, CodeInfo)
         if isa(ci, Expr) && ci.head === :error
-            error("syntax: $(ci.args[1])")
+            msg = ci.args[1]
+            error(msg isa String ? strcat("syntax: ", msg) : msg)
         end
         error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.")
     end

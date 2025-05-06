@@ -1345,9 +1345,9 @@ module loaded_pkgid4 end
     end
     wait(e)
     reset(e)
-    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 -> pkgid2 -> pkgid1 -> pkgid3 && pkgid4"),
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid3 using pkgid2 using pkgid1 using pkgid3 (while loading pkgid4)"),
         @lock Base.require_lock Base.start_loading(pkid3, build_id, false)).value            # try using pkgid3
-    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 -> pkgid4 && pkgid1"),
+    @test_throws(ConcurrencyViolationError("deadlock detected in loading pkgid4 using pkgid4 (while loading pkgid1)"),
         @lock Base.require_lock Base.start_loading(pkid4, build_id, false)).value            # try using pkgid4
     @lock Base.require_lock Base.end_loading(pkid1, loaded_pkgid1)        # end
     @lock Base.require_lock Base.end_loading(pkid4, loaded_pkgid4)        # end
@@ -1731,3 +1731,21 @@ end
         rm(depot_path, force=true, recursive=true)
     end
 end
+
+# Test `import Package as M`
+module M57965
+    import Random as R
+end
+@test M57965.R === Base.require(M57965, :Random)
+
+# #58272 - _eval_import accidentally reuses evaluated "from" path
+module M58272_1
+    const x = 1
+    module M58272_2
+        const y = 3
+        const x = 2
+    end
+end
+module M58272_to end
+@eval M58272_to import ..M58272_1: M58272_2.y, x
+@test @eval M58272_to x === 1

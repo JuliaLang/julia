@@ -195,9 +195,6 @@ task creation, simulation results are also independent of the number of availabl
 threads / CPUs. The random stream should not depend on hardware specifics, up to
 endianness and possibly word size.
 
-Using or seeding the RNG of any other task than the one returned by `current_task()`
-is undefined behavior: it will work most of the time, and may sometimes fail silently.
-
 When seeding `TaskLocalRNG()` with [`seed!`](@ref), the passed seed, if any,
 may be any integer.
 
@@ -246,18 +243,8 @@ copy!(dst::Union{TaskLocalRNG, Xoshiro}, src::Union{TaskLocalRNG, Xoshiro}) = se
 # use a magic (random) number to scramble `h` so that `hash(x)` is distinct from `hash(getstate(x))`
 hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2dda6fa9be % UInt)
 
-function seed!(rng::Union{TaskLocalRNG, Xoshiro}, ::Nothing)
-    # as we get good randomness from RandomDevice, we can skip hashing
-    rd = RandomDevice()
-    s0 = rand(rd, UInt64)
-    s1 = rand(rd, UInt64)
-    s2 = rand(rd, UInt64)
-    s3 = rand(rd, UInt64)
-    initstate!(rng, (s0, s1, s2, s3))
-end
-
-seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed) =
-    initstate!(rng, reinterpret(UInt64, hash_seed(seed)))
+seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::AbstractRNG) =
+    initstate!(rng, rand(seeder, NTuple{4, UInt64}))
 
 
 @inline function rand(x::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt64})

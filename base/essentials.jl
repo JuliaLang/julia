@@ -93,7 +93,7 @@ f(y) = [x for x in y]
 
 # Examples
 
-```julia-repl
+```jldoctest; setup = :(using InteractiveUtils)
 julia> f(A::AbstractArray) = g(A)
 f (generic function with 1 method)
 
@@ -102,7 +102,7 @@ g (generic function with 1 method)
 
 julia> @code_typed f([1.0])
 CodeInfo(
-1 ─ %1 = invoke Main.g(_2::AbstractArray)::Float64
+1 ─ %1 =    invoke g(A::AbstractArray)::Float64
 └──      return %1
 ) => Float64
 ```
@@ -147,7 +147,7 @@ macro specialize(vars...)
 end
 
 """
-    @isdefined s -> Bool
+    @isdefined(s)::Bool
 
 Tests whether variable `s` is defined in the current scope.
 
@@ -323,7 +323,7 @@ macro _nothrow_meta()
         #=:consistent_overlay=#false,
         #=:nortcall=#false))
 end
-# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
+# can be used in place of `@assume_effects :noub` (supposed to be used for bootstrapping)
 macro _noub_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
@@ -387,7 +387,7 @@ getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
-    nameof(m::Module) -> Symbol
+    nameof(m::Module)::Symbol
 
 Get the name of a `Module` as a [`Symbol`](@ref).
 
@@ -437,7 +437,7 @@ julia> convert(BigFloat, x)
 ```
 
 If `T` is a collection type and `x` a collection, the result of
-`convert(T, x)` may alias all or part of `x`.
+`convert(T, x)` may share memory with all or part of `x`.
 ```jldoctest
 julia> x = Int[1, 2, 3];
 
@@ -593,6 +593,39 @@ function unconstrain_vararg_length(va::Core.TypeofVararg)
     return Vararg{unwrapva(va)}
 end
 
+# Compute the minimum number of initialized fields for a particular datatype
+# (therefore also a lower bound on the number of fields)
+function datatype_min_ninitialized(@nospecialize t0)
+    t = unwrap_unionall(t0)
+    t isa DataType || return 0
+    isabstracttype(t) && return 0
+    if t.name === _NAMEDTUPLE_NAME
+        names, types = t.parameters[1], t.parameters[2]
+        if names isa Tuple
+            return length(names)
+        end
+        t = argument_datatype(types)
+        t isa DataType || return 0
+        t.name === Tuple.name || return 0
+    end
+    if t.name === Tuple.name
+        n = length(t.parameters)
+        n == 0 && return 0
+        va = t.parameters[n]
+        if isvarargtype(va)
+            n -= 1
+            if isdefined(va, :N)
+                va = va.N
+                if va isa Int
+                    n += va
+                end
+            end
+        end
+        return n
+    end
+    return length(t.name.names) - t.name.n_uninitialized
+end
+
 import Core: typename
 
 _tuple_error(T::Type, x) = (@noinline; throw(MethodError(convert, (T, x))))
@@ -690,6 +723,8 @@ cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_conve
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
+unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
+unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
 
 """
     reinterpret(::Type{Out}, x::In)
@@ -962,7 +997,7 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 unsafe_convert(::Type{Ptr{Any}}, sv::SimpleVector) = convert(Ptr{Any},pointer_from_objref(sv)) + sizeof(Ptr)
 
 """
-    isassigned(array, i) -> Bool
+    isassigned(array, i)::Bool
 
 Test whether the given array has a value associated with index `i`. Return `false`
 if the index is out of bounds, or has an undefined reference.
@@ -1038,63 +1073,6 @@ end
 Val(x) = Val{x}()
 
 """
-    invokelatest(f, args...; kwargs...)
-
-Calls `f(args...; kwargs...)`, but guarantees that the most recent method of `f`
-will be executed.   This is useful in specialized circumstances,
-e.g. long-running event loops or callback functions that may
-call obsolete versions of a function `f`.
-(The drawback is that `invokelatest` is somewhat slower than calling
-`f` directly, and the type of the result cannot be inferred by the compiler.)
-
-!!! compat "Julia 1.9"
-    Prior to Julia 1.9, this function was not exported, and was called as `Base.invokelatest`.
-"""
-function invokelatest(@nospecialize(f), @nospecialize args...; kwargs...)
-    @inline
-    kwargs = merge(NamedTuple(), kwargs)
-    if isempty(kwargs)
-        return Core._call_latest(f, args...)
-    end
-    return Core._call_latest(Core.kwcall, kwargs, f, args...)
-end
-
-"""
-    invoke_in_world(world, f, args...; kwargs...)
-
-Call `f(args...; kwargs...)` in a fixed world age, `world`.
-
-This is useful for infrastructure running in the user's Julia session which is
-not part of the user's program. For example, things related to the REPL, editor
-support libraries, etc. In these cases it can be useful to prevent unwanted
-method invalidation and recompilation latency, and to prevent the user from
-breaking supporting infrastructure by mistake.
-
-The current world age can be queried using [`Base.get_world_counter()`](@ref)
-and stored for later use within the lifetime of the current Julia session, or
-when serializing and reloading the system image.
-
-Technically, `invoke_in_world` will prevent any function called by `f` from
-being extended by the user during their Julia session. That is, generic
-function method tables seen by `f` (and any functions it calls) will be frozen
-as they existed at the given `world` age. In a sense, this is like the opposite
-of [`invokelatest`](@ref).
-
-!!! note
-    It is not valid to store world ages obtained in precompilation for later use.
-    This is because precompilation generates a "parallel universe" where the
-    world age refers to system state unrelated to the main Julia session.
-"""
-function invoke_in_world(world::UInt, @nospecialize(f), @nospecialize args...; kwargs...)
-    @inline
-    kwargs = Base.merge(NamedTuple(), kwargs)
-    if isempty(kwargs)
-        return Core._call_in_world(world, f, args...)
-    end
-    return Core._call_in_world(world, Core.kwcall, kwargs, f, args...)
-end
-
-"""
     inferencebarrier(x)
 
 A shorthand for `compilerbarrier(:type, x)` causes the type of this statement to be inferred as `Any`.
@@ -1103,7 +1081,7 @@ See [`Base.compilerbarrier`](@ref) for more info.
 inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """
-    isempty(collection) -> Bool
+    isempty(collection)::Bool
 
 Determine whether a collection is empty (has no elements).
 
@@ -1139,7 +1117,7 @@ This function simply returns its argument by default, since the elements
 of a general iterator are normally considered its "values".
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> d = Dict("a"=>1, "b"=>2);
 
 julia> values(d)
@@ -1222,7 +1200,7 @@ end
 
 # Iteration
 """
-    isdone(itr, [state]) -> Union{Bool, Missing}
+    isdone(itr, [state])::Union{Bool, Missing}
 
 This function provides a fast-path hint for iterator completion.
 This is useful for stateful iterators that want to avoid having elements
@@ -1241,7 +1219,7 @@ See also [`iterate`](@ref), [`isempty`](@ref)
 isdone(itr, state...) = missing
 
 """
-    iterate(iter [, state]) -> Union{Nothing, Tuple{Any, Any}}
+    iterate(iter [, state])::Union{Nothing, Tuple{Any, Any}}
 
 Advance the iterator to obtain the next element. If no elements
 remain, `nothing` should be returned. Otherwise, a 2-tuple of the
@@ -1250,7 +1228,7 @@ next element and the new iteration state should be returned.
 function iterate end
 
 """
-    isiterable(T) -> Bool
+    isiterable(T)::Bool
 
 Test if type `T` is an iterable collection type or not,
 that is whether it has an `iterate` method or not.

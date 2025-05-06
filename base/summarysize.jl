@@ -12,7 +12,7 @@ nth_pointer_isdefined(obj, i::Int) = ccall(:jl_nth_pointer_isdefined, Cint, (Any
 get_nth_pointer(obj, i::Int) = ccall(:jl_get_nth_pointer, Any, (Any, Csize_t), obj, i-1)
 
 """
-    Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...}) -> Int
+    Base.summarysize(obj; exclude=Union{...}, chargeall=Union{...})::Int
 
 Compute the amount of memory, in bytes, used by all unique objects reachable from the argument.
 
@@ -149,13 +149,8 @@ function (ss::SummarySize)(obj::GenericMemory)
     datakey = unsafe_convert(Ptr{Cvoid}, obj)
     if !haskey(ss.seen, datakey)
         ss.seen[datakey] = true
-        dsize = sizeof(obj)
+        size += sizeof(obj)
         T = eltype(obj)
-        if isbitsunion(T)
-            # add 1 union selector byte for each element
-            dsize += length(obj)
-        end
-        size += dsize
         if !isempty(obj) && T !== Symbol && (!Base.allocatedinline(T) || (T isa DataType && !Base.datatype_pointerfree(T)))
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)

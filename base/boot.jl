@@ -475,6 +475,7 @@ struct ABIOverride
 end
 
 struct PrecompilableError <: Exception end
+struct TrimFailure <: Exception end
 
 String(s::String) = s  # no constructor yet
 
@@ -542,7 +543,7 @@ eval(Core, quote
     UpsilonNode(@nospecialize(val)) = $(Expr(:new, :UpsilonNode, :val))
     UpsilonNode() = $(Expr(:new, :UpsilonNode))
     Const(@nospecialize(v)) = $(Expr(:new, :Const, :v))
-    _PartialStruct(@nospecialize(typ), fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :fields))
+    _PartialStruct(@nospecialize(typ), undef, fields::Array{Any, 1}) = $(Expr(:new, :PartialStruct, :typ, :undef, :fields))
     PartialOpaque(@nospecialize(typ), @nospecialize(env), parent::MethodInstance, source) = $(Expr(:new, :PartialOpaque, :typ, :env, :parent, :source))
     InterConditional(slot::Int, @nospecialize(thentype), @nospecialize(elsetype)) = $(Expr(:new, :InterConditional, :slot, :thentype, :elsetype))
     MethodMatch(@nospecialize(spec_types), sparams::SimpleVector, method::Method, fully_covers::Bool) = $(Expr(:new, :MethodMatch, :spec_types, :sparams, :method, :fully_covers))
@@ -693,6 +694,54 @@ function Symbol(a::Array{UInt8, 1})
     return _Symbol(bitcast(Ptr{UInt8}, a.ref.ptr_or_offset), getfield(a.size, 1), a.ref.mem)
 end
 Symbol(s::Symbol) = s
+
+# Minimal implementations of using/import for bootstrapping (supports only
+# `import .M: a, b, c, ...`, little error checking)
+let
+    fail() = throw(ArgumentError("unsupported import/using while bootstrapping"))
+    length(a::Array{T, 1}) where {T} = getfield(getfield(a, :size), 1)
+    function getindex(A::Array, i::Int)
+        Intrinsics.ult_int(Intrinsics.bitcast(UInt, Intrinsics.sub_int(i, 1)), Intrinsics.bitcast(UInt, length(A))) || fail()
+        memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
+    end
+    x == y = Intrinsics.eq_int(x, y)
+    x + y = Intrinsics.add_int(x, y)
+    x <= y = Intrinsics.sle_int(x, y)
+
+    global function _eval_import(explicit::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
+        from isa Expr || fail()
+        if length(from.args) == 2 && getindex(from.args, 1) === :.
+            from = getglobal(to, getindex(from.args, 2))
+        elseif length(from.args) == 1 && getindex(from.args, 1) === :Core
+            from = Core
+        elseif length(from.args) == 1 && getindex(from.args, 1) === :Base
+            from = Main.Base
+        else
+            fail()
+        end
+        from isa Module || fail()
+        i = 1
+        while i <= nfields(paths)
+            a = getfield(paths, i).args
+            length(a) == 1 || fail()
+            s = getindex(a, 1)
+            Core._import(to, from, s, s, explicit)
+            i += 1
+        end
+    end
+
+    global function _eval_using(to::Module, path::Expr)
+        getindex(path.args, 1) === :. || fail()
+        from = getglobal(to, getindex(path.args, 2))
+        i = 3
+        while i <= length(path.args)
+            from = getfield(from, getindex(path.args, i))
+            i += 1
+        end
+        from isa Module || fail()
+        Core._using(to, from)
+    end
+end
 
 # module providing the IR object model
 module IR
@@ -1014,8 +1063,11 @@ _parse = nothing
 
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
 
-# support for deprecated uses of internal _apply function
-_apply(x...) = Core._apply_iterate(Main.Base.iterate, x...)
+# support for deprecated uses of builtin functions
+_apply(x...) = _apply_iterate(Main.Base.iterate, x...)
+const _apply_pure = _apply
+const _call_latest = invokelatest
+const _call_in_world = invoke_in_world
 
 struct Pair{A, B}
     first::A

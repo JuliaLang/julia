@@ -257,6 +257,16 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
+    # --project=@script handling
+    let expanded = abspath(joinpath(@__DIR__, "project", "ScriptProject"))
+        script = joinpath(expanded, "bin", "script.jl")
+        # Check running julia with --project=@script both within and outside the script directory
+        @testset "--@script from $name" for (name, dir) in [("project", expanded), ("outside", pwd())]
+            @test joinpath(expanded, "Project.toml") == readchomp(Cmd(`$exename --project=@script $script`; dir))
+            @test joinpath(expanded, "SubProject", "Project.toml") == readchomp(Cmd(`$exename --project=@script/../SubProject $script`; dir))
+        end
+    end
+
     # handling of `@temp` in --project and JULIA_PROJECT
     @test tempdir() == readchomp(`$exename --project=@temp -e 'println(Base.active_project())'`)[1:lastindex(tempdir())]
     @test tempdir() == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@temp", "HOME" => homedir()))[1:lastindex(tempdir())]
@@ -753,7 +763,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test errors_not_signals(`$exename -E "$code" --depwarn=error`)
 
         @test readchomperrors(`$exename -E "$code" --depwarn=yes`) ==
-            (true, "true", "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
+            (true, "true", "WARNING: Use of Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
 
         @test readchomperrors(`$exename -E "$code" --depwarn=no`) ==
             (true, "true", "")
@@ -1046,7 +1056,7 @@ let exename = `$(Base.julia_cmd().exec[1]) -t 1`
         p = run(pipeline(`$exename --sysimage=$libjulia`, stderr=err), wait=false)
         close(err.in)
         let s = read(err, String)
-            @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
+            @test s == "ERROR: Image file failed consistency check: maybe opened the wrong version?\n"
         end
         @test errors_not_signals(p)
         @test p.exitcode == 1

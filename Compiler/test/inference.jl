@@ -1,7 +1,10 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module inference
+
 using Test
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # tests for Compiler correctness and precision
@@ -1207,6 +1210,7 @@ let isdefined_tfunc(@nospecialize xs...) =
     @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
     @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
     @test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool
+    @test isdefined_tfunc(Nothing, Any) === Const(false)
 end
 
 # https://github.com/aviatesk/JET.jl/issues/379
@@ -2261,12 +2265,18 @@ struct AliasableFields{S,T}
     f1::S
     f2::T
 end
+struct NullableAliasableFields{S,T}
+    f1::S
+    f2::T
+    NullableAliasableFields(f1::S, f2::T) where {S,T} = new{S,T}(f1, f2)
+    NullableAliasableFields(f1::S) where {S} = new{S,Union{}}(f1)
+end
 mutable struct AliasableConstField{S,T}
     const f1::S
     f2::T
 end
 
-import .Compiler:
+using .Compiler:
     InferenceLattice, MustAliasesLattice, InterMustAliasesLattice,
     BaseInferenceLattice, SimpleInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
 
@@ -2279,7 +2289,7 @@ Compiler.optimizer_lattice(::MustAliasInterpreter) = SimpleInferenceLattice.inst
 # lattice
 # -------
 
-import .Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
+using .Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
 let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
     ⊑(@nospecialize(a), @nospecialize(b)) = Compiler.:⊑(𝕃ᵢ, a, b)
     tmerge(@nospecialize(a), @nospecialize(b)) = Compiler.tmerge(𝕃ᵢ, a, b)
@@ -2516,6 +2526,15 @@ jet509_hasitems(list) = length(list) >= 1
     end
     error("list is empty")
 end |> only == Vector{Int}
+
+# don't form nested slot wrappers
+@test Base.infer_return_type((NullableAliasableFields{NullableAliasableFields},); interp=MustAliasInterpreter()) do x
+    y = getfield(x, :f1)
+    if isdefined(y, :f2) && isa(getfield(y, :f2), Int)
+        return getfield(y, :f2)
+    end
+    return 0
+end == Int
 
 # === constraint
 # --------------
@@ -4680,16 +4699,18 @@ end
     ⊔ = Compiler.join(Compiler.fallback_lattice)
     𝕃 = Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
+    alldefined = Union{Nothing,Bool}[false, false, false]
+    defined1 = Union{Nothing,Bool}[false, nothing, nothing]
     let init = Base.ImmutableDict{Any,Any}()
         a = Const(init)
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Any, Any])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), Any, Any])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
     let init = Base.ImmutableDict{Any,Any}(1,2)
         a = Const(init)
-        b = PartialStruct(𝕃, typeof(init), Any[Const(getfield(init,1)), Any, Any])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(getfield(init,1)), Any, Any])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4697,14 +4718,14 @@ end
     end
     let init = Base.ImmutableDict{Number,Number}()
         a = Const(init)
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Number, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === typeof(init)
     end
     let init = Base.ImmutableDict{Number,Number}()
-        a = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), Number, ComplexF64])
+        a = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), Number, ComplexF64])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4712,8 +4733,8 @@ end
         @test c.fields[3] === ComplexF64
     end
     let init = Base.ImmutableDict{Number,Number}()
-        a = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF64, ComplexF64])
-        b = PartialStruct(𝕃, typeof(init), Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
+        a = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), ComplexF64, ComplexF64])
+        b = PartialStruct(𝕃, typeof(init), alldefined, Any[Const(init), ComplexF32, Union{ComplexF32,ComplexF64}])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
@@ -4721,16 +4742,16 @@ end
         @test c.fields[3] === Complex
     end
     let T = Base.ImmutableDict{Number,Number}
-        a = PartialStruct(𝕃, T, Any[T])
-        b = PartialStruct(𝕃, T, Any[T, Number, Number])
+        a = PartialStruct(𝕃, T, defined1, Any[T, Number, Number])
+        b = PartialStruct(𝕃, T, alldefined, Any[T, Number, Number])
         @test b ⊑ a
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c isa PartialStruct
-        @test length(c.fields) == 1
+        @test length(c.fields) == 3 && c.undefs == defined1
     end
     let T = Base.ImmutableDict{Number,Number}
-        a = PartialStruct(𝕃, T, Any[T])
+        a = PartialStruct(𝕃, T, defined1, Any[T, Number, Number])
         b = Const(T())
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
@@ -4738,7 +4759,7 @@ end
     end
     let T = Base.ImmutableDict{Number,Number}
         a = Const(T())
-        b = PartialStruct(𝕃, T, Any[T])
+        b = PartialStruct(𝕃, T, defined1, Any[T, Number, Number])
         c = a ⊔ b
         @test a ⊑ c && b ⊑ c
         @test c === T
@@ -4783,10 +4804,44 @@ end
     @test a == Tuple
 end
 
+module _Partials_inference
+    mutable struct Partial
+        x::String
+        y::Integer
+        z::Any
+        Partial() = new()
+    end
+
+    struct Partial2
+        x::String
+        y::Integer
+        z::Any
+        Partial2(x) = new(x)
+    end
+
+    struct Partial3
+        x::Int
+        y::String
+        z::Float64
+        Partial3(x, y) = new(x, y)
+    end
+
+    struct Partial4
+        x::Int
+        y::String
+        z::Float64
+        Partial4(x) = new(x)
+    end
+end
+
 let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
+    ⋢ = !⊑
     ⊔ = Compiler.join(Compiler.fallback_lattice)
     𝕃 = Compiler.fallback_lattice
     Const, PartialStruct = Core.Const, Core.PartialStruct
+    form_partially_defined_struct = Compiler.form_partially_defined_struct
+    M = _Partials_inference
+    Partial, Partial2, Partial3, Partial4 = M.Partial, M.Partial2, M.Partial3, M.Partial4
 
     @test  (Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int}, Any[Const(1),Int]))
     @test !(Const((1,2)) ⊑ PartialStruct(𝕃, Tuple{Int,Int,Int}, Any[Const(1),Int,Int]))
@@ -4802,11 +4857,160 @@ let ⊑ = Compiler.partialorder(Compiler.fallback_lattice)
     @test !(PartialStruct(𝕃, Tuple{Int,Vararg{Int}}, Any[Const(1),Vararg{Int}]) ⊑ Const((1,2)))
     @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2)))
     @test !(PartialStruct(𝕃, Tuple{Int,Int,Vararg{Int}}, Any[Const(1),Int,Vararg{Int}]) ⊑ Const((1,2,3)))
+    # test comparison between conflicting elements
+    let a = PartialStruct(M.Partial, Union{Nothing,Bool}[false,false,false], Any[Int,Int,Any])
+        b = Const(M.Partial())
+        @test a ⋢ b && b ⋢ a
+    end
+    let a = PartialStruct(M.Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[Int,Int,Any])
+        b = Const(M.Partial())
+        @test a ⋢ b && b ⋢ a
+    end
+    let a = PartialStruct(M.Partial, Union{Nothing,Bool}[nothing,nothing,nothing], Any[Int,Int,Any])
+        b = Const(M.Partial())
+        @test a ⋢ b && b ⊑ a
+    end
 
-    t = Const((false, false)) ⊔ Const((false, true))
-    @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
-    t = t ⊔ Const((false, false, 0))
-    @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
+    let t = Const((false, false)) ⊔ Const((false, true))
+        @test t isa PartialStruct && length(t.fields) == 2 && t.fields[1] === Const(false)
+        t = t ⊔ Const((false, false, 0))
+        @test t ⊑ Union{Tuple{Bool,Bool},Tuple{Bool,Bool,Int}}
+    end
+
+    let t = PartialStruct(𝕃, Tuple{Int, Int}, Any[Const(1),Int])
+        @test Compiler.n_initialized(t) == 2
+        @test t ⊑ t && t ⊔ t === t
+        t = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,false,nothing], Any[String, Const(2), Any])
+        @test Compiler.n_initialized(t) == 2
+        @test t ⊑ t && t ⊔ t === t
+    end
+
+    let t1 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,false,nothing], Any[String, Const(3), Any])
+        t2 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[Const("x"), Integer, Any])
+        @test t1 ⋢ t2 && t2 ⋢ t1
+        t3 = t1 ⊔ t2
+        @test t3.fields == Any[String, Integer, Any]
+    end
+
+    let t1 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[nothing,false,false], Any[String, Int, Const(3)])
+        @test Compiler.n_initialized(t1) == 0
+        @test t1 ⊑ t1 && t1 ⊔ t1 === t1
+        t2 = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,false], Any[Const("x"), Int, Any])
+        @test Compiler.n_initialized(t2) == 1
+        @test t1 ⊔ t2 isa PartialStruct
+    end
+
+    let t1 = PartialStruct(𝕃, Tuple{Int,String,Vararg}, Any[Int, String, Vararg])
+        @test t1 ⊑ t1 && t1 ⊔ t1 == t1
+        t2 = PartialStruct(𝕃, Tuple{Int,String}, Any[Int, String])
+        @test t1 ⋢ t2 && t2 ⋢ t1
+        t3 = t1 ⊔ t2
+        @test_broken t3 isa PartialStruct && Compiler.n_initialized(t3) == 2
+    end
+
+    let t = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[Const("x"),Integer,Any])
+        @test form_partially_defined_struct(𝕃, t, Const(:x)) === nothing
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,false], Any[Const("x"), Integer, Any])
+    end
+    let t = PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,nothing], Any[String,Integer,Const(2)])
+        @test form_partially_defined_struct(𝕃, t, Const(:x)) === nothing
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial, Union{Nothing,Bool}[false,nothing,false], Any[String,Integer,Const(2)])
+    end
+
+    @test form_partially_defined_struct(𝕃, Partial2, Const(:x)) === nothing
+    let t = PartialStruct(𝕃, Partial2, Any[String, Const(2), Any])
+        @test form_partially_defined_struct(𝕃, t, Const(:x)) === nothing
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial2, Union{Nothing,Bool}[false,nothing,false], Any[String, Const(2), Any])
+    end
+
+    @test form_partially_defined_struct(𝕃, Partial3, Const(:x)) === nothing
+    @test form_partially_defined_struct(𝕃, Partial3, Const(:y)) === nothing
+    let t = form_partially_defined_struct(𝕃, Partial3, Const(:z))
+        @test t == PartialStruct(𝕃, Partial3, Union{Nothing,Bool}[false,false,false], Any[Int, String, Float64])
+    end
+    let t = PartialStruct(𝕃, Partial3, Any[Int, String, Float64])
+        t′ = form_partially_defined_struct(𝕃, t, Const(:z))
+        @test t′ == PartialStruct(𝕃, Partial3, Union{Nothing,Bool}[false,false,false], Any[Int, String, Float64])
+    end
+
+    let t1 = PartialStruct(𝕃, Partial4, Union{Nothing,Bool}[false,false,nothing], Any[Int, String, Float64])
+        t2 = PartialStruct(𝕃, Partial4, Union{Nothing,Bool}[false,nothing,false], Any[Const(1), String, Float64])
+        @test t1 ⋢ t2 && t2 ⋢ t1
+        c = Const(Partial4(1))
+        @test c ⋢ t1 && t1 ⋢ c && c ⊑ t2 && t2 ⋢ c
+        t3 = PartialStruct(𝕃, Partial4, Union{Nothing,Bool}[false,false,nothing], Any[Const(1), Const("x"), Float64])
+        @test c ⋢ t3 && t3 ⋢ c
+    end
+
+    let c = Const(Ref{Any}(1))
+        t = PartialStruct(Base.RefValue{Any}, Union{Nothing,Bool}[true], Any[String])
+        @test c ⋢ t && t ⋢ c
+    end
+
+    let a = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[false], Any[Int])
+        b = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[true], Any[Int])
+        @test a ⊔ b == b ⊔ a
+        c = a ⊔ b
+        @test c isa PartialStruct && Compiler.n_initialized(c) == 0
+    end
+    let a = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[false], Any[Int])
+        b = PartialStruct(𝕃, Base.RefValue{Any}, Union{Nothing,Bool}[nothing], Any[Int])
+        @test a ⊔ b == b ⊔ a
+        c = a ⊔ b
+        @test c isa PartialStruct && Compiler.n_initialized(c) == 0
+    end
+    let a = PartialStruct(𝕃, Base.RefValue{Int}, Union{Nothing,Bool}[false], Any[Int])
+        b = Const(Base.RefValue{Int}(42))
+        @test a == a ⊔ b == b ⊔ a
+    end
+    let a = Const(Base.RefValue{Int}(1))
+        b = Const(Base.RefValue{Int}(2))
+        @test a ⊔ b == b ⊔ a
+        c = a ⊔ b
+        @test c isa PartialStruct && Compiler.n_initialized(c) == 1
+    end
+end
+
+# strict undef information of `PartialStruct`
+struct StrictUndefXY1{X,Y}
+    x::X
+    y::Y
+    StrictUndefXY1{Y}(x::X) where {X,Y} = new{X,Y}(x)
+    StrictUndefXY1(x::X,y::Y) where {X,Y} = new{X,Y}(x,y)
+end
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY1{Union{}}(42), :y))
+end == Val{false}
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY1{Int}(42), :y))
+end == Val{true}
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY1(42,nothing), :y))
+end == Val{true}
+
+mutable struct StrictUndefXY2{X,Y}
+    const x::X
+    y::Y
+    StrictUndefXY2{Y}(x::X) where {X,Y} = new{X,Y}(x)
+    StrictUndefXY2(x::X,y::Y) where {X,Y} = new{X,Y}(x,y)
+end
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY2{Union{}}(42), :y))
+end == Val{false}
+@test Base.infer_return_type() do
+    Val(isdefined(StrictUndefXY2{Bool}(42), :y))
+end == Val{true}
+let rt = Base.infer_return_type((Bool,)) do b
+        xy = StrictUndefXY2{Any}(42)
+        if b
+            xy.y = nothing
+        end
+        Val(isdefined(xy, :y))
+    end
+    @test rt >: Val{false} && rt >: Val{true}
 end
 
 # Test that a function-wise `@max_methods` works as expected
@@ -4943,7 +5147,7 @@ let src = code_typed1() do
 end
 
 # Test that Const ⊑ PartialStruct respects vararg
-@test Const((1,2)) ⊑ PartialStruct(Compiler.fallback_lattice, Tuple{Vararg{Int}}, [Const(1), Vararg{Int}])
+@test Const((1,2)) ⊑ PartialStruct(Compiler.fallback_lattice, Tuple{Int,Vararg{Int}}, Union{Nothing,Bool}[false,nothing], [Const(1), Vararg{Int}])
 
 # Test that semi-concrete interpretation doesn't break on functions with while loops in them.
 Base.@assume_effects :consistent :effect_free :terminates_globally function pure_annotated_loop(x::Int, y::Int)
@@ -6160,14 +6364,28 @@ end === Int
     swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
 end === Union{}
 
+@newinterp AssumeBindingsStaticInterp
+Compiler.InferenceParams(::AssumeBindingsStaticInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
+
 eval(Expr(:const, :swapglobal!_must_throw))
-@newinterp SwapGlobalInterp
-Compiler.InferenceParams(::SwapGlobalInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
 function func_swapglobal!_must_throw(x)
     swapglobal!(@__MODULE__, :swapglobal!_must_throw, x)
 end
-@test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
-@test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+@test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=AssumeBindingsStaticInterp()) === Union{}
+@test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=AssumeBindingsStaticInterp()) )
+
+global global_decl_defined
+global_decl_defined = 42
+@test Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
+    global global_decl_defined
+    return global_decl_defined
+end |> Compiler.is_nothrow
+global global_decl_defined2::Int
+global_decl_defined2 = 42
+@test Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
+    global global_decl_defined2
+    return global_decl_defined2
+end |> Compiler.is_nothrow
 
 @eval get_exception() = $(Expr(:the_exception))
 @test Base.infer_return_type() do
@@ -6194,3 +6412,91 @@ f57292(xs::Union{Tuple{String}, Int}...) = getfield(xs...)
 g57292(xs::String...) = getfield(("abc",), 1, :not_atomic, xs...)
 @test Base.infer_return_type(f57292) == String
 @test Base.infer_return_type(g57292) == String
+
+mutable struct Issue57673{C<:Union{Int,Float64}}
+    c::C
+    d
+    Issue57673(c::C, d) where C = new{C}(c, d)
+    Issue57673(c::C) where C = new{C}(c)
+end
+@test Base.infer_return_type((Issue57673,)) do a::Issue57673{<:String}
+    setfield!(a, :d, nothing)
+    a
+end === Union{} # `setfield!` tfunc should be able to figure out this object is runtime invalid
+
+# only refine with `PartialStruct` on `setfield!` when we have full argument type information
+let src = code_typed1((Base.RefValue{String}, String)) do x, val
+        setfield!(x, :x, val)
+        isdefined(x, :x)
+    end
+    retval = src.code[end].val
+    @test retval === true
+    src = code_typed1((Base.RefValue{String}, String)) do x, args...
+        setfield!(x, :x, args...)
+        isdefined(x, :x)
+    end
+    retval = src.code[end].val
+    @test isa(retval, Core.SSAValue)
+end
+
+global invalid_setglobal!_exct_modeling::Int
+@test Base.infer_exception_type((Float64,)) do x
+    setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
+end == ErrorException
+
+# Issue #58257 - Hang in inference during BindingPartition resolution
+module A58257
+    module B58257
+        using ..A58257
+        # World age here is N
+    end
+    using .B58257
+    # World age here is N+1
+    @eval f() = $(GlobalRef(B58257, :get!))
+end
+
+## The sequence of events is critical here.
+A58257.get!      # Creates binding partition in A, N+1:∞
+A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
+Base.invoke_in_world(UInt(38678), getglobal, A58257, :get!) # Expands binding partition in A through <N
+@test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
+
+function tt57873(a::Vector{String}, pref)
+    ret = String[]
+    for j in a
+        append!(ret, tt57873(a[2:end], (pref..., "")))
+    end
+    return ret
+end
+let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873),Vector{String},Tuple{String}})], [Base.get_world_counter()], Base.Compiler.TRIM_NO)
+    @test !isempty(code)
+    ## If we were to run trim here, we should fail with:
+    #    Verifier error #1: unresolved invoke from statement tt57873(::Vector{String}, ::Tuple{String, String})::Vector{String}
+    #Stacktrace:
+    # [1] tt57873(a::Vector{String}, pref::Tuple{String})
+    #   @ Main REPL[1]:4
+end
+
+function ss57873(a::Vector{String}, pref)
+    ret = String[]
+    for j in a
+        append!(ret, ss57873(a[2:end], (pref..., "")))
+    end
+    return ret
+end
+@test ss57873(["a", "b", "c"], ("",)) == String[]
+
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    getglobal(m, n, xs...)
+end <: Any
+@test Base.infer_return_type((Module,Symbol,Any,Vector{Any})) do m, n, v, xs
+    setglobal!(m, n, v, xs...)
+end <: Any
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    isdefinedglobal(m, n, xs...)
+end <: Bool
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    Core.get_binding_type(m, n, xs...)
+end <: Type
+
+end # module inference
