@@ -1858,12 +1858,10 @@ static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_ins
             // If we're invalidating a particular codeinstance, only invalidate
             // this backedge it actually has an edge for our codeinstance.
             jl_svec_t *edges = jl_atomic_load_relaxed(&replaced->edges);
-            if (edges) {
-                for (size_t j = 0; j < jl_svec_len(edges); ++j) {
-                    jl_value_t *edge = jl_svecref(edges, j);
-                    if (edge == (jl_value_t*)replaced_mi || edge == (jl_value_t*)replaced_ci)
-                        goto found;
-                }
+            for (size_t j = 0; j < jl_svec_len(edges); ++j) {
+                jl_value_t *edge = jl_svecref(edges, j);
+                if (edge == (jl_value_t*)replaced_mi || edge == (jl_value_t*)replaced_ci)
+                    goto found;
             }
             ins = set_next_edge(backedges, ins, invokesig, replaced);
             continue;
