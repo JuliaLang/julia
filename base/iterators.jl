@@ -6,6 +6,7 @@ Methods for working with Iterators.
 baremodule Iterators
 
 # small dance to make this work from Base or Intrinsics
+import Base: @__MODULE__, parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
