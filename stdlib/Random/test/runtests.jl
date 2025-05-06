@@ -1302,40 +1302,57 @@ end
 
 @testset "fork" begin
     xx = copy(TaskLocalRNG())
+    x0 = copy(xx)
     x1 = Random.fork(xx)
     x2 = fetch(@async copy(TaskLocalRNG()))
     @test x1 isa Xoshiro && x2 isa Xoshiro
     @test x1 == x2 # currently, equality involves all 5 UInt64 words of the state
     @test xx == TaskLocalRNG()
 
-    x3 = Random.fork(TaskLocalRNG())
-    @test x3 isa Xoshiro
-    copy!(TaskLocalRNG(), xx) # reset its state
-    x4 = Random.fork(xx)
-    @test x4 isa Xoshiro
-    @test x3 == x4
-    copy!(xx, TaskLocalRNG())
+    # fork is deterministic
+    copy!(xx, x0)
+    x3 = Random.fork(xx)
+    @test x3 == x2
+    @test rand(x3, UInt128) == rand(x2, UInt128)
 
-    @test xx == TaskLocalRNG() # check assumptions
-    x5 = Random.fork()
-    @test xx != TaskLocalRNG() # TaskLocalRNG() was forked off
-    copy!(TaskLocalRNG(), xx)
-    @test x5 == x4
+    # seed! uses the same mechanism
+    copy!(xx, x0)
+    x4 = Xoshiro(0, 0, 0, 0, 0)
+    @test x4 === Random.seed!(x4, xx)
+    @test x4 == x1
+    copy!(TaskLocalRNG(), x0)
+    x5 = Xoshiro(0, 0, 0, 0, 0)
+    @test x5 === Random.seed!(x5, TaskLocalRNG())
+    @test x5 == x1
+    @test xx == TaskLocalRNG() # both are in the same state after being forked off
 
-    x6 = Xoshiro(0, 0, 0, 0, 0)
-    @test x6 === Random.fork!(x6, xx)
-    copy!(xx, TaskLocalRNG())
-    @test x6 == x5
-    @test x6 === Random.fork!(x6, TaskLocalRNG())
-    copy!(TaskLocalRNG(), xx)
-    @test x6 == x5
-    @test xx == TaskLocalRNG() # check assumptions
-    @test x6 === Random.fork!(x6)
-    @test xx != TaskLocalRNG()
-    copy!(TaskLocalRNG(), xx)
-    @test x6 == x5
+    @test TaskLocalRNG() == Random.seed!(TaskLocalRNG(), copy!(xx, x0))
+    @test TaskLocalRNG() == x4
+    copy!(TaskLocalRNG(), x0)
+    @test TaskLocalRNG() == Random.seed!(TaskLocalRNG(), TaskLocalRNG())
 
-    @test TaskLocalRNG() === Random.fork!(TaskLocalRNG(), copy(xx))
-    @test x6 === Random.fork!(x6, copy(xx))
-    @test TaskLocalRNG() == x6
+    # self-seeding
+    copy!(xx, x0)
+    copy!(TaskLocalRNG(), x0)
+    @test xx === Random.seed!(xx, xx)
+    @test TaskLocalRNG() === Random.seed!(TaskLocalRNG(), TaskLocalRNG())
+    @test xx == TaskLocalRNG()
+    @test xx == x1
+
+    # arrays
+    y2 = fork(xx, 2)
+    @test y2 isa Vector{Xoshiro} && size(y2) == (2,)
+    y34 = fork(xx, 3, 0x4)
+    @test y34 isa Matrix{Xoshiro} && size(y34) == (3, 4)
+    y123 = fork(xx, (1, 2, 3))
+    @test y123 isa Array{Xoshiro, 3} && size(y123) == (1, 2, 3)
+    y0 = fork(xx, ())
+    @test y0 isa Array{Xoshiro, 0} && size(y0) == ()
+    @test allunique([y2..., y34..., y123..., y0...])
+
+    # fork is currently unsupported for other RNGs
+    for rng = (RandomDevice(), MersenneTwister(0), TaskLocalRNG(), SeedHasher(0))
+        @test_throws MethodError fork(rng)
+        @test_throws MethodError fork(rng, (2, 3))
+    end
 end

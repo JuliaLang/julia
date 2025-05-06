@@ -246,6 +246,9 @@ hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2
 seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::AbstractRNG) =
     initstate!(rng, rand(seeder, NTuple{4, UInt64}))
 
+# when seeder is a Xoshiro, use forking instead of regular seeding, to avoid correlations
+seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::Union{TaskLocalRNG, Xoshiro}) =
+    setstate!(rng, _fork(seeder))
 
 @inline function rand(x::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt64})
     s0, s1, s2, s3 = getstate(x)
@@ -332,33 +335,4 @@ function _fork(src::Union{Xoshiro, TaskLocalRNG})
     (state..., s4)
 end
 
-"""
-    Random.fork!(dst::Union{Xoshiro, TaskLocalRNG}, src::Union{Xoshiro, TaskLocalRNG} = TaskLocalRNG()) -> dst
-
-Equivalent to `copy!(dst, fork(src))`.
-See also [`fork`](@ref).
-
-!!! compat "Julia 1.13"
-    This function was introduced in Julia 1.13.
-"""
-fork!(dst::Union{Xoshiro, TaskLocalRNG}, src::Union{Xoshiro, TaskLocalRNG}=TaskLocalRNG()) =
-    setstate!(dst, _fork(src))
-
-"""
-    Random.fork(src::Union{Xoshiro, TaskLocalRNG} = TaskLocalRNG())::Xoshiro
-
-Create a new `Xoshiro` object from `src`, in the same way that the task local RNG of a new
-task is created from the task local RNG of the parent task.
-This is the recommended way to initialize a fresh RNG from an existing one.
-
-!!! note
-    When `src` is of type `TaskLocalRNG`, this function is guaranteed to return an RNG of
-    type `Xoshiro` only as long as `Xoshiro` and `TaskLocalRNG` are implementing the same
-    underlying generator. It may change in the future.
-
-!!! compat "Julia 1.13"
-    This function was introduced in Julia 1.13.
-
-See also [`Random.fork!`](@ref).
-"""
-fork(src::Union{Xoshiro, TaskLocalRNG}=TaskLocalRNG()) = Xoshiro(_fork(src)...)
+fork(src::Xoshiro) = Xoshiro(_fork(src)...)

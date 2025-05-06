@@ -29,7 +29,7 @@ export rand!, randn!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice, TaskLocalRNG, Xoshiro
 
-public fork, fork!, seed!, default_rng, Sampler, SamplerType, SamplerTrivial, SamplerSimple
+public fork, seed!, default_rng, Sampler, SamplerType, SamplerTrivial, SamplerSimple
 
 ## general definitions
 

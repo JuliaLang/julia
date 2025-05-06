@@ -83,7 +83,6 @@ Random.TaskLocalRNG
 Random.Xoshiro
 Random.MersenneTwister
 Random.RandomDevice
-Random.fork!
 Random.fork
 ```
 
