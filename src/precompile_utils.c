@@ -423,7 +423,7 @@ static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
             size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
             size_t max_world = ~(size_t)0;
             assert(min_world == jl_atomic_load_relaxed(&m->primary_world));
-            size_t dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
+            int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
             jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
             jl_atomic_store_relaxed(&m->dispatch_status, 0);
             jl_typemap_entry_t *newentry = jl_method_table_add(mt, m, NULL);

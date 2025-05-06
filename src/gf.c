@@ -2297,7 +2297,8 @@ jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method,
     JL_LOCK(&mt->writelock);
     // add our new entry
     assert(jl_atomic_load_relaxed(&method->primary_world) == ~(size_t)0); // min-world
-    assert(jl_atomic_load_relaxed(&method->dispatch_status) == 0);
+    assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
+    assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_ONLY) == 0);
     newentry = jl_typemap_alloc((jl_tupletype_t*)method->sig, simpletype, jl_emptysvec, (jl_value_t*)method, ~(size_t)0, 1);
     jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, jl_cachearg_offset(mt));
     update_max_args(mt, method->sig);
@@ -2319,7 +2320,8 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
     JL_LOCK(&mt->writelock);
     size_t world = jl_atomic_load_relaxed(&method->primary_world);
     assert(world == jl_atomic_load_relaxed(&jl_world_counter) + 1); // min-world
-    assert(jl_atomic_load_relaxed(&method->dispatch_status) == 0);
+    assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
+    assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_ONLY) == 0);
     assert(jl_atomic_load_relaxed(&newentry->min_world) == ~(size_t)0);
     assert(jl_atomic_load_relaxed(&newentry->max_world) == 1);
     jl_atomic_store_relaxed(&newentry->min_world, world);
@@ -2334,15 +2336,15 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
     // then check what entries we replaced
     oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, jl_cachearg_offset(mt), max_world);
     int invalidated = 0;
-    int only = 1; // compute if this will be currently the only result that would returned from `ml_matches` given `sig`
+    int only = !(jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_PRECOMPILE_MANY); // will compute if this will be currently the only result that would returned from `ml_matches` given `sig`
     if (replaced) {
         oldvalue = (jl_value_t*)replaced;
         jl_method_t *m = replaced->func.method;
-        int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
         invalidated = 1;
         method_overwrite(newentry, m);
         // this is an optimized version of below, given we know the type-intersection is exact
         jl_method_table_invalidate(mt, m, max_world);
+        int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
         jl_atomic_store_relaxed(&m->dispatch_status, 0);
         only = m_dispatch & METHOD_SIG_LATEST_ONLY;
     }
@@ -2476,7 +2478,7 @@ void jl_method_table_activate(jl_methtable_t *mt, jl_typemap_entry_t *newentry)
                 }
                 if (only) {
                     if (morespec[j] == (char)morespec_is || ambig == morespec_is ||
-                        (morespec[j] == (char)morespec_unknown && ambig == morespec_unknown && !jl_type_morespecific(type, m->sig))) {
+                        (ambig == morespec_unknown && !jl_type_morespecific(type, m->sig))) {
                         only = 0;
                     }
                 }
