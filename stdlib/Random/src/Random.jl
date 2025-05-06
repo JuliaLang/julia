@@ -165,6 +165,11 @@ Sampler(::Type{<:AbstractRNG}, ::Type{T}, ::Repetition) where {T} = SamplerType{
 
 Base.getindex(::SamplerType{T}) where {T} = T
 
+# SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
+SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
+const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
+
+
 struct SamplerTrivial{T,E} <: Sampler{E}
     self::T
 end
@@ -293,19 +298,24 @@ rand(                ::Type{X}, dims::Dims) where {X} = rand(default_rng(), X, d
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
 
-# SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
-SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
-const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
+
+### UnsafeView
+# internal array-like type to circumvent the lack of flexibility with reinterpret
+
+struct UnsafeView{T} <: DenseArray{T,1}
+    ptr::Ptr{T}
+    len::Int
+end
+
+Base.length(a::UnsafeView) = a.len
+Base.getindex(a::UnsafeView, i::Int) = unsafe_load(a.ptr, i)
+Base.setindex!(a::UnsafeView, x, i::Int) = unsafe_store!(a.ptr, x, i)
+Base.pointer(a::UnsafeView) = a.ptr
+Base.size(a::UnsafeView) = (a.len,)
+Base.elsize(::Type{UnsafeView{T}}) where {T} = sizeof(T)
 
 
-include("Xoshiro.jl")
-include("RNGs.jl")
-include("generation.jl")
-include("normal.jl")
-include("misc.jl")
-include("XoshiroSimd.jl")
-
-## rand & rand! & seed! docstrings
+## rand & rand! docstrings
 
 """
     rand([rng=default_rng()], [S], [dims...])
@@ -405,67 +415,13 @@ julia> rand!(Xoshiro(123), zeros(5))
 """
 rand!
 
-"""
-    seed!([rng=default_rng()], seed) -> rng
-    seed!([rng=default_rng()]) -> rng
 
-Reseed the random number generator: `rng` will give a reproducible
-sequence of numbers if and only if a `seed` is provided. Some RNGs
-don't accept a seed, like `RandomDevice`.
-After the call to `seed!`, `rng` is equivalent to a newly created
-object initialized with the same seed.
-
-The types of accepted seeds depend on the type of `rng`, but in general,
-integer seeds should work. Providing `nothing` as the seed should be
-equivalent to not providing one.
-
-If `rng` is not specified, it defaults to seeding the state of the
-shared task-local generator.
-
-# Examples
-```julia-repl
-julia> Random.seed!(1234);
-
-julia> x1 = rand(2)
-2-element Vector{Float64}:
- 0.32597672886359486
- 0.5490511363155669
-
-julia> Random.seed!(1234);
-
-julia> x2 = rand(2)
-2-element Vector{Float64}:
- 0.32597672886359486
- 0.5490511363155669
-
-julia> x1 == x2
-true
-
-julia> rng = Xoshiro(1234); rand(rng, 2) == x1
-true
-
-julia> Xoshiro(1) == Random.seed!(rng, 1)
-true
-
-julia> rand(Random.seed!(rng), Bool) # not reproducible
-true
-
-julia> rand(Random.seed!(rng), Bool) # not reproducible either
-false
-
-julia> rand(Xoshiro(), Bool) # not reproducible either
-true
-```
-"""
-function seed!(rng::AbstractRNG, seed::Any=nothing)
-    if seed === nothing
-        seed!(rng, RandomDevice())
-    elseif seed isa AbstractRNG
-        # avoid getting into an infinite recursive call from the other branches
-        throw(MethodError(seed!, (rng, seed)))
-    else
-        seed!(rng, SeedHasher(seed))
-    end
-end
+include("Xoshiro.jl")
+include("RNGs.jl")
+include("MersenneTwister.jl")
+include("generation.jl")
+include("normal.jl")
+include("misc.jl")
+include("XoshiroSimd.jl")
 
 end # module
