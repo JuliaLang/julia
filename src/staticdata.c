@@ -3593,8 +3593,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
             jl_errorf("System image file \"%s\" not found.", fname);
         ios_bufmode(&f, bm_none);
 
-        JL_SIGATOMIC_BEGIN();
-
         ios_seek_end(&f);
         size_t len = ios_pos(&f);
         char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
@@ -3604,8 +3602,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
             jl_errorf("Error reading system image file.");
 
         ios_close(&f);
-
-        JL_SIGATOMIC_END();
 
         jl_sysimage_buf = (jl_image_buf_t) {
             .kind = JL_IMAGE_KIND_JI,
