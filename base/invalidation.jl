@@ -110,6 +110,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                                 export_affecting_partition_flags(new_bpart)
 
     invalidated_any = false
+    queued_bindings = Tuple{Core.Binding, Core.BindingPartition, Core.BindingPartition}[]    # defer handling these to keep the logging coherent
     if need_to_invalidate_code
         if (b.flags & BINDING_FLAG_ANY_IMPLICIT_EDGES) != 0
             nmethods = ccall(:jl_module_scanned_methods_length, Csize_t, (Any,), gr.mod)
@@ -131,13 +132,12 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                     if is_some_binding_imported(binding_kind(latest_bpart))
                         partition_restriction(latest_bpart) === b || continue
                     end
-                    invalidated_any |= invalidate_code_for_globalref!(edge, latest_bpart, latest_bpart, new_max_world)
+                    push!(queued_bindings, (edge, latest_bpart, latest_bpart))
                 else
                     invalidated_any |= invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
                 end
             end
         end
-        invalidated_any && ccall(:jl_maybe_log_binding_invalidation, Cvoid, (Any,), invalidated_bpart)
     end
 
     if need_to_invalidate_code || need_to_invalidate_export
@@ -156,12 +156,14 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                     ccall(:jl_maybe_reresolve_implicit, Any, (Any, Csize_t), user_binding, new_max_world) :
                     latest_bpart
                 if need_to_invalidate_code || new_bpart !== latest_bpart
-                    invalidated = invalidate_code_for_globalref!(convert(Core.Binding, user_binding), latest_bpart, new_bpart, new_max_world)
-                    invalidated && ccall(:jl_maybe_log_binding_invalidation, Cvoid, (Any,), latest_bpart)
-                    invalidated_any |= invalidated
+                    push!(queued_bindings, (convert(Core.Binding, user_binding), latest_bpart, new_bpart))
                 end
             end
         end
+    end
+    invalidated_any && ccall(:jl_maybe_log_binding_invalidation, Cvoid, (Any,), invalidated_bpart)
+    for (edge, invalidated_bpart, new_bpart) in queued_bindings
+        invalidated_any |= invalidate_code_for_globalref!(edge, invalidated_bpart, new_bpart, new_max_world)
     end
     return invalidated_any
 end
