@@ -4410,7 +4410,11 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             JL_SIGATOMIC_END();
 
             // Add roots to methods
-            jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            int failed = jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            if (failed != 0) {
+                jl_printf(JL_STDERR, "Error copying roots to methods from Module: %s\n", pkgname);
+                abort();
+            }
             // Insert method extensions and handle edges
             int new_methods = jl_array_nrows(extext_methods) > 0;
             if (!new_methods) {

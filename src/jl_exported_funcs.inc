@@ -235,9 +235,11 @@
     XX(jl_hrtime) \
     XX(jl_idtable_rehash) \
     XX(jl_init) \
+    XX(jl_init_) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
-    XX(jl_init_with_image) \
+    XX(jl_init_with_image_file) \
+    XX(jl_init_with_image_handle) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -311,7 +313,6 @@
     XX(jl_module_parent) \
     XX(jl_module_getloc) \
     XX(jl_module_public_p) \
-    XX(jl_module_use) \
     XX(jl_module_using) \
     XX(jl_module_usings) \
     XX(jl_module_uuid) \

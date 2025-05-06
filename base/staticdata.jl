@@ -174,7 +174,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
                 edge = get_ci_mi(edge)
             end
             if edge isa MethodInstance
-                sig = typeintersect((edge.def::Method).sig, edge.specTypes) # TODO??
+                sig = edge.specTypes
                 min_valid2, max_valid2, matches = verify_call(sig, callees, j, 1, world)
                 j += 1
             elseif edge isa Int
@@ -346,6 +346,7 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
     matched = nothing
     if invokesig === expected.sig
         # the invoke match is `expected` for `expected->sig`, unless `expected` is invalid
+        # TODO: this is broken since PR #53415
         minworld = expected.primary_world
         maxworld = expected.deleted_world
         @assert minworld ≤ world

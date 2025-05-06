@@ -3,6 +3,8 @@
 /*
   implementations of built-in functions
 */
+#include "dtypes.h"
+#include "julia_atomics.h"
 #include "platform.h"
 
 #include <stdlib.h>
@@ -1504,7 +1506,44 @@ JL_CALLABLE(jl_f_setglobalonce)
     return old == NULL ? jl_true : jl_false;
 }
 
+// import, using --------------------------------------------------------------
 
+// Import binding `from.sym` as `asname` into `to`:
+//     _import(to::Module, from::Module, asname::Symbol, sym::Symbol, imported::Bool)
+//
+// Create const binding to `mod` in `to` with name `asname`:
+//     _import(to::Module, mod::Module, asname::Symbol)
+JL_CALLABLE(jl_f__import)
+{
+    JL_NARGS(_import, 3, 5);
+    JL_TYPECHK(_import, module, args[0]);
+    JL_TYPECHK(_import, module, args[1]);
+    JL_TYPECHK(_import, symbol, args[2]);
+    if (nargs == 3) {
+        jl_import_module(jl_current_task, (jl_module_t *)args[0], (jl_module_t *)args[1],
+                         (jl_sym_t *)args[2]);
+    }
+    else if (nargs == 4) {
+        jl_too_few_args("_import", 5);
+    }
+    else if (nargs == 5) {
+        JL_TYPECHK(_import, symbol, args[3]);
+        JL_TYPECHK(_import, bool, args[4]);
+        jl_module_import(jl_current_task, (jl_module_t *)args[0], (jl_module_t *)args[1],
+                         (jl_sym_t *)args[2], (jl_sym_t *)args[3], args[4] == jl_true);
+    }
+    return jl_nothing;
+}
+
+// _using(to::Module, from::Module)
+JL_CALLABLE(jl_f__using)
+{
+    JL_NARGS(_using, 2, 2);
+    JL_TYPECHK(_using, module, args[0]);
+    JL_TYPECHK(_using, module, args[1]);
+    jl_module_using((jl_module_t *)args[0], (jl_module_t *)args[1]);
+    return jl_nothing;
+}
 
 // apply_type -----------------------------------------------------------------
 

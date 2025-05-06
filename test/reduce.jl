@@ -681,6 +681,27 @@ end
     end
 end
 
+@testset "issue #45562" begin
+    @test all([true, true, true], dims = 1) == [true]
+    @test any([true, true, true], dims = 1) == [true]
+    @test_throws TypeError all([3, 3, 3], dims = 1)
+    @test_throws TypeError any([3, 3, 3], dims = 1)
+    @test_throws TypeError all(Any[true, 3, 3], dims = 1)
+    @test_throws TypeError any(Any[false, 3, 3], dims = 1)
+    @test_throws TypeError all([1, 1, 1], dims = 1)
+    @test_throws TypeError any([0, 0, 0], dims = 1)
+    @test_throws TypeError all!([false], [3, 3, 3])
+    @test_throws TypeError any!([false], [3, 3, 3])
+    @test_throws TypeError all!([false], Any[true, 3, 3])
+    @test_throws TypeError any!([false], Any[false, 3, 3])
+    @test_throws TypeError all!([false], [1, 1, 1])
+    @test_throws TypeError any!([false], [0, 0, 0])
+    @test reduce(|, Bool[]) == false
+    @test reduce(&, Bool[]) == true
+    @test reduce(|, Bool[], dims=1) == [false]
+    @test reduce(&, Bool[], dims=1) == [true]
+end
+
 # issue #45748
 @testset "foldl's stability for nested Iterators" begin
     a = Iterators.flatten((1:3, 1:3))

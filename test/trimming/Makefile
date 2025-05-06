@@ -35,24 +35,21 @@ release: hello$(EXE) basic_jll$(EXE)
 hello-o.a: $(SRCDIR)/hello.jl $(BUILDSCRIPT)
 	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(BUILDSCRIPT) $< --output-exe true
 
-init.o: $(SRCDIR)/init.c
-	$(CC) -c -o $@ $< $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS)
-
 basic_jll-o.a: $(SRCDIR)/basic_jll.jl $(BUILDSCRIPT)
 	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) -e "using Pkg; Pkg.instantiate()"
 	$(JULIA) -t 1 -J $(BIN)/../lib/julia/sys.$(SHLIB_EXT) --startup-file=no --history-file=no --project=$(SRCDIR) --output-o $@ --output-incremental=no --strip-ir --strip-metadata --experimental --trim $(BUILDSCRIPT) $< --output-exe true
 
-hello$(EXE): hello-o.a init.o
-	$(CC) -o $@ $(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) init.o $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
+hello$(EXE): hello-o.a
+	$(CC) -o $@ $(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
-basic_jll$(EXE): basic_jll-o.a init.o
-	$(CC) -o $@ $(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) init.o $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
+basic_jll$(EXE): basic_jll-o.a
+	$(CC) -o $@ $(WHOLE_ARCHIVE) $< $(NO_WHOLE_ARCHIVE) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
 
 check: hello$(EXE) basic_jll$(EXE)
 	$(JULIA) --depwarn=error $(SRCDIR)/../runtests.jl $(SRCDIR)/trimming
 
 clean:
-	-rm -f hello$(EXE) basic_jll$(EXE) init.o hello-o.a basic_jll-o.a
+	-rm -f hello$(EXE) basic_jll$(EXE) hello-o.a basic_jll-o.a
 
 .PHONY: release clean check
 

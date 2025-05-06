@@ -824,6 +824,20 @@ end
     @inferred rand(Tuple{Int32,Int64,Float64})
     @inferred rand(NTuple{20,Int})
     @test_throws TypeError rand(Tuple{1:2,3:4})
+
+    @testset "rand(::RandomDevice, ::Type{NTuple{N, Int}})" begin
+        # RandomDevice has a specialization for homogeneous tuple types of builtin integers
+        rd = RandomDevice()
+        @test () == rand(rd, Tuple{})
+        xs = rand(rd, Tuple{Int, Int})
+        @test xs isa Tuple{Int, Int} && xs[1] != xs[2]
+        xs = rand(rd, NTuple{2, Int})
+        @test xs isa Tuple{Int, Int} && xs[1] != xs[2]
+        xs = rand(rd, Tuple{Int, UInt}) # not NTuple
+        @test xs isa Tuple{Int, UInt} && xs[1] != xs[2]
+        xs = rand(rd, Tuple{Bool}) # not included in the specialization
+        @test xs isa Tuple{Bool}
+    end
 end
 
 @testset "GLOBAL_RNG" begin

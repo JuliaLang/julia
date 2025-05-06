@@ -207,6 +207,7 @@ Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Base.fieldindex
 Core.fieldtype
 Base.fieldtypes
 Base.fieldcount

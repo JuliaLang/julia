@@ -127,6 +127,12 @@ include("missing.jl")
 # version
 include("version.jl")
 
+#=
+isdebugbuild is defined here as this is imported in libdl.jl (included in libc.jl)
+The method is added in util.jl
+=#
+function isdebugbuild end
+
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
