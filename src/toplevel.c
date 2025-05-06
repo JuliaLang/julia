@@ -518,7 +518,7 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instance_t *mi, jl_code_info_t *src)
 {
-    jl_svec_t *edges = NULL;
+    jl_svec_t *edges = jl_emptysvec;
     if (src->edges && jl_is_svec(src->edges))
         edges = (jl_svec_t*)src->edges;
 
