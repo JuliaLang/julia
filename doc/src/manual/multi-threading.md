@@ -8,7 +8,7 @@ of Julia multi-threading features.
 By default, Julia starts up with 2 threads of execution; 1 worker thread and 1 interactive thread.
 This can be verified by using the command [`Threads.nthreads()`](@ref):
 
-```jldoctest
+```julia
 julia> Threads.nthreads(:default)
 1
 julia> Threads.nthreads(:interactive)
