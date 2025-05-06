@@ -1655,8 +1655,8 @@ function nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
     end
 end
 
-@inline _nth(itr, n) = first(drop(itr, n-1))
-@inline _nth(itr::AbstractArray, n) = itr[begin + n-1]
+_nth(itr, n) = first(drop(itr, n-1))
+_nth(itr::AbstractArray, n) = itr[begin + n-1]
 """
     nth(n::Integer)
 
