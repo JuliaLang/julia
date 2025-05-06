@@ -357,11 +357,11 @@ constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16
 constexpr auto apple_a14 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
 constexpr auto apple_a15 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_a16 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
-constexpr auto apple_a17 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16); // TODO: may need tweaks?
+constexpr auto apple_a17 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_m1 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
 constexpr auto apple_m2 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_m3 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
-constexpr auto apple_m4 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16); // TODO: may need tweaks?
+constexpr auto apple_m4 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 // Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def
 // and sysctl -a hw.optional
 constexpr auto apple_s4 = apple_a12;
@@ -1116,13 +1116,15 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::apple_a17;
         case 0x52: // H16G Donan e-Core used in Apple M4
         case 0x53: // H16H Donan p-Core used in Apple M4
-        //case 0x??: // H16 Brava e-Core used in Apple M4 Max
-        //case 0x??: // H16 Brava p-Core used in Apple M4 Max
+        case 0x54: // H16S Brava S e-Core used in Apple M4 Pro
+        case 0x55: // H16S Brava S p-Core used in Apple M4 Pro
+        case 0x58: // H16C Brava C e-Core used in Apple M4 Max
+        case 0x59: // H16C Brava C p-Core used in Apple M4 Max
             return CPU::apple_m4;
-        //case 0x??: // H16 Tahiti e-Core used in Apple A18 Pro
-        //case 0x??: // H16 Tahiti p-Core used in Apple A18 Pro
-        //case 0x??: // H16 Tupai e-Core used in Apple A18
-        //case 0x??: // H16 Tupai p-Core used in Apple A18
+        //case 0x60: // H17P Tahiti e-Core used in Apple A18 Pro
+        //case 0x61: // H17P Tahiti p-Core used in Apple A18 Pro
+        //case 0x6a: // H17A Tupai e-Core used in Apple A18
+        //case 0x6b: // H17A Tupai p-Core used in Apple A18
             //return CPU::apple_a18;
         default: return CPU::generic;
         }
