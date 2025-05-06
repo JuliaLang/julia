@@ -1050,7 +1050,10 @@ static CPU get_cpu_name(CPUID cpuid)
         default: return CPU::generic;
         }
     case 0x61: // 'a': Apple
-        // https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
+        // Data here is partially based on these sources:
+        // https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/arm/cpuid.h
+        // https://asahilinux.org/docs/hw/soc/soc-codenames/#socs
+        // https://github.com/llvm/llvm-project/blob/main/llvm/lib/Target/AArch64/AArch64Processors.td
         switch (cpuid.part) {
         case 0x0: // Swift
             return CPU::apple_swift;
