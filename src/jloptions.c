@@ -662,7 +662,7 @@ restart_switch:
                         if (nthreadsi == 0)
                             jl_options.nthreadpools = 1;
                     }
-                } else if (nthreads == 1) { // User asked for 1 thread so don't add an interactive one 
+                } else if (nthreads == 1) { // User asked for 1 thread so don't add an interactive one
                     jl_options.nthreadpools = 1;
                     nthreadsi = 0;
                 }
