@@ -2438,6 +2438,7 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
     return true
 end
 
+include("genericio.jl")
 include("logging.jl")
 include("precompile.jl")
 
