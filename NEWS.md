@@ -25,6 +25,7 @@ Build system changes
 
 New library functions
 ---------------------
+* `findextrema(f, itr; [dims])` which computes `findmin(f, itr; [dims]), findmax(f, itr; [dims])` in a single pass. ([#45783])
 
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
 
