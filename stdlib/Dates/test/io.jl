@@ -325,6 +325,23 @@ end
     # From Matt Bauman
     f = "yyyy-mm-ddTHH:MM:SS"
     @test Dates.DateTime("2014-05-28T16:46:04", f) == Dates.DateTime(2014, 5, 28, 16, 46, 04)
+
+    f = "yyyymmdd"
+    @test Dates.DateTime("20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(-2024, 5, 21)
+    @test Dates.DateTime("+20240521", f) == Dates.DateTime(2024, 5, 21)
+    f = "YYYYmmdd"
+    @test Dates.DateTime("20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(-2024, 5, 21)
+    @test Dates.DateTime("+20240521", f) == Dates.DateTime(2024, 5, 21)
+    f = "-yyyymmdd"
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test_throws ArgumentError Dates.DateTime("+20240521", f)
+    @test_throws ArgumentError Dates.DateTime("20240521", f)
+    f = "-YYYYmmdd"
+    @test Dates.DateTime("-20240521", f) == Dates.DateTime(2024, 5, 21)
+    @test_throws ArgumentError Dates.DateTime("+20240521", f)
+    @test_throws ArgumentError Dates.DateTime("20240521", f)
 end
 
 @testset "Error handling" begin
@@ -401,6 +418,17 @@ end
     @test parse(Dates.DateTime, "Sat, 12 Nov 2016 07:45:36", Dates.RFC1123Format) == dt
     @test parse(Dates.DateTime, "Mon, 12 Nov 2016 07:45:36", Dates.RFC1123Format) == dt  # Wrong day of week
     @test_throws ArgumentError parse(Date, "Foo, 12 Nov 2016 07:45:36", Dates.RFC1123Format)
+end
+
+@testset "ISODateTimeFormat" begin
+    dt = Dates.DateTime(2024, 5, 21, 10, 57, 22)
+    neg_dt = Dates.DateTime(-2024, 5, 21, 10, 57, 22)
+    @test parse(Dates.DateTime, "2024-05-21T10:57:22", Dates.ISODateTimeFormat) == dt
+    @test parse(Dates.DateTime, "+2024-05-21T10:57:22", Dates.ISODateTimeFormat) == dt
+    @test parse(Dates.DateTime, "-2024-05-21T10:57:22", Dates.ISODateTimeFormat) == neg_dt
+
+    @test_throws ArgumentError parse(Dates.DateTime, "-", Dates.ISODateTimeFormat)
+    @test_throws ArgumentError parse(Dates.DateTime, "+", Dates.ISODateTimeFormat)
 end
 
 @testset "Issue 15195" begin
@@ -619,6 +647,11 @@ end
         @test tryparse(T, "") === nothing
         @test tryparse(T, "", DateFormat(fmt)) === nothing
     end
+end
+
+@testset "Issue #50328: parsing negative years" begin
+    @test Date("-2013-10-10") == Date(-2013, 10, 10)
+    @test Date("-2013") == Date(-2013, 01, 01)
 end
 
 end

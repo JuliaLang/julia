@@ -119,9 +119,17 @@ parses as `(macrocall (|.| Core '@doc) (line) "some docs" (= (call f x) (block x
 | `import Base: x`    | `(import (: (. Base) (. x)))`                |
 | `import Base: x, y` | `(import (: (. Base) (. x) (. y)))`          |
 | `export a, b`       | `(export a b)`                               |
+| `public a, b`       | `(public a b)`                               |
 
 `using` has the same representation as `import`, but with expression head `:using`
 instead of `:import`.
+
+To programmatically create a `public` statement, you can use `Expr(:public, :a, :b)` or,
+closer to regular code, `Meta.parse("public a, b")`. This approach is necessary due to
+[current limitations on `public`](@ref Export-lists). The `public` keyword is only
+recognized at the syntactic top level within a file (`parse_stmts`) or module. This
+restriction was implemented to prevent breaking existing code that used `public` as an
+identifier when it was introduced in Julia 1.11.
 
 ### Numbers
 
@@ -416,7 +424,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `new`
 
     Allocates a new struct-like object. First argument is the type. The [`new`](@ref) pseudo-function is lowered
-    to this, and the type is always inserted by the compiler.  This is very much an internal-only
+    to this, and the type is always inserted by the compiler. This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 
   * `splatnew`
@@ -436,7 +444,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
   * `enter`
 
     Enters an exception handler (`setjmp`). `args[1]` is the label of the catch block to jump to on
-    error.  Yields a token which is consumed by `pop_exception`.
+    error. Yields a token which is consumed by `pop_exception`.
 
   * `leave`
 
@@ -498,9 +506,9 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The number of required arguments for a varargs function definition.
 
-      * `args[5]::QuoteNode{Symbol}` : calling convention
+      * `args[5]::QuoteNode{<:Union{Symbol,Tuple{Symbol,UInt16}, Tuple{Symbol,UInt16,Bool}}`: calling convention
 
-        The calling convention for the call.
+        The calling convention for the call, optionally with effects, and `gc_safe` (safe to execute concurrently to GC.).
 
       * `args[6:5+length(args[3])]` : arguments
 
@@ -519,17 +527,21 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The function signature of the opaque closure. Opaque closures don't participate in dispatch, but the input types can be restricted.
 
-      * `args[2]` : isva
-
-        Indicates whether the closure accepts varargs.
-
-      * `args[3]` : lb
+      * `args[2]` : lb
 
         Lower bound on the output type. (Defaults to `Union{}`)
 
-      * `args[4]` : ub
+      * `args[3]` : ub
 
         Upper bound on the output type. (Defaults to `Any`)
+
+      * `args[4]` : constprop
+
+        Indicates whether the opaque closure's identity may be used for constant
+        propagation. The `@opaque` macro enables this by default, but this will
+        cause additional inference which may be undesirable and prevents the
+        code from running during precompile.
+        If `args[4]` is a method, the argument is considered skipped.
 
       * `args[5]` : method
 
@@ -657,10 +669,30 @@ for important details on how to modify these fields safely.
     If max_world is the special token value `-1`, the value is not yet known.
     It may continue to be used until we encounter a backedge that requires us to reconsider.
 
+  * Timing fields
+
+    - `time_infer_total`: Total cost of computing `inferred` originally as wall-time from start to finish.
+
+    - `time_infer_cache_saved`: The cost saved from `time_infer_total` by having caching.
+      Adding this to `time_infer_total` should give a stable estimate for comparing the cost
+      of two implementations or one implementation over time. This is generally an
+      over-estimate of the time to infer something, since the cache is frequently effective
+      at handling repeated work.
+
+    - `time_infer_self`: Self cost of julia inference for `inferred` (a portion of
+      `time_infer_total`). This is simply the incremental cost of compiling this one method,
+      if given a fully populated cache of all call targets, even including constant
+      inference results and LimitedAccuracy results, which generally are not in a cache.
+
+    - `time_compile`: Self cost of llvm JIT compilation (e.g. of computing `invoke` from
+      `inferred`). A total cost estimate can be computed by walking all of the `edges`
+      contents and summing those, while accounting for cycles and duplicates. (This field
+      currently does not include any measured AOT compile times.)
+
 
 ### CodeInfo
 
-A (usually temporary) container for holding lowered source code.
+A (usually temporary) container for holding lowered (and possibly inferred) source code.
 
   * `code`
 
@@ -691,25 +723,18 @@ A (usually temporary) container for holding lowered source code.
     Statement-level 32 bits flags for each expression in the function.
     See the definition of `jl_code_info_t` in julia.h for more details.
 
+These are only populated after inference (or by generated functions in some cases):
+
   * `debuginfo`
 
     An object to retrieve source information for each statements, see
     [How to interpret line numbers in a `CodeInfo` object](@ref).
 
-Optional Fields:
-
-  * `slottypes`
-
-    An array of types for the slots.
-
   * `rettype`
 
-    The inferred return type of the lowered form (IR). Default value is `Any`.
-
-  * `method_for_inference_limit_heuristics`
-
-    The `method_for_inference_heuristics` will expand the given method's generator if
-    necessary during inference.
+    The inferred return type of the lowered form (IR). Default value is `Any`. This is
+    mostly present for convenience, as (due to the way OpaqueClosures work) it is not
+    necessarily the rettype used by codegen.
 
   * `parent`
 
@@ -723,16 +748,19 @@ Optional Fields:
 
     The range of world ages for which this code was valid at the time when it had been inferred.
 
+Optional Fields:
+
+  * `slottypes`
+
+    An array of types for the slots.
+
+  * `method_for_inference_limit_heuristics`
+
+    The `method_for_inference_heuristics` will expand the given method's generator if
+    necessary during inference.
+
 
 Boolean properties:
-
-  * `inferred`
-
-    Whether this has been produced by type inference.
-
-  * `inlineable`
-
-    Whether this should be eligible for inlining.
 
   * `propagate_inbounds`
 
@@ -742,7 +770,7 @@ Boolean properties:
 
 `UInt8` settings:
 
-  * `constprop`
+  * `constprop`, `inlineable`
 
     * 0 = use heuristic
     * 1 = aggressive

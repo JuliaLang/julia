@@ -121,7 +121,7 @@ end
     #iterate(c::Char)
     for x in testarrays
         @test iterate(x)[1] == x
-        @test iterate(x, iterate(x)[2]) == nothing
+        @test iterate(x, iterate(x)[2]) === nothing
     end
 
     #isless(x::Char, y::Integer) = isless(UInt32(x), y)
@@ -288,6 +288,10 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test string(ASCIIChar('x')) == "x"
     @test length(ASCIIChar('x')) == 1
     @test !isempty(ASCIIChar('x'))
+    @test ndims(ASCIIChar('x')) == 0
+    @test ndims(ASCIIChar) == 0
+    @test firstindex(ASCIIChar('x')) == 1
+    @test lastindex(ASCIIChar('x')) == 1
     @test eltype(ASCIIChar) == ASCIIChar
     @test_throws MethodError write(IOBuffer(), ASCIIChar('x'))
     @test_throws MethodError read(IOBuffer('x'), ASCIIChar)

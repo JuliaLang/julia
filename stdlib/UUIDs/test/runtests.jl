@@ -1,23 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, UUIDs, Random
-
-u1 = uuid1()
-u4 = uuid4()
-u5 = uuid5(u1, "julia")
-@test uuid_version(u1) == 1
-@test uuid_version(u4) == 4
-@test uuid_version(u5) == 5
-@test u1 == UUID(string(u1)) == UUID(GenericString(string(u1)))
-@test u4 == UUID(string(u4)) == UUID(GenericString(string(u4)))
-@test u5 == UUID(string(u5)) == UUID(GenericString(string(u5)))
-@test u1 == UUID(UInt128(u1))
-@test u4 == UUID(UInt128(u4))
-@test u5 == UUID(UInt128(u5))
-@test uuid4(MersenneTwister(0)) == uuid4(MersenneTwister(0))
-@test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
-@test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
-@test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
+using UUIDs: _build_uuid1, _build_uuid7
 
 # results similar to Python builtin uuid
 # To reproduce the sequence
@@ -37,11 +21,6 @@ const following_uuids = [
     UUID("d8cc6298-75d5-57e0-996c-279259ab365c"),
 ]
 
-for (idx, init_uuid) in enumerate(following_uuids[1:end-1])
-    next_id = uuid5(init_uuid, "julia")
-    @test next_id == following_uuids[idx+1]
-end
-
 # Python-generated UUID following each of the standard namespaces
 const standard_namespace_uuids = [
     (UUIDs.namespace_dns,  UUID("00ca23ad-40ef-500c-a910-157de3950d07")),
@@ -50,30 +29,98 @@ const standard_namespace_uuids = [
     (UUIDs.namespace_x500, UUID("993c6684-82e7-5cdb-bd46-9bff0362e6a9")),
 ]
 
-for (init_uuid, next_uuid) in standard_namespace_uuids
-    result = uuid5(init_uuid, "julia")
-    @test next_uuid == result
-end
-
-# Issue 35860
-Random.seed!(Random.default_rng(), 10)
+@testset "UUIDs" begin
 u1 = uuid1()
 u4 = uuid4()
-Random.seed!(Random.default_rng(), 10)
-@test u1 != uuid1()
-@test u4 != uuid4()
+u5 = uuid5(u1, "julia")
+u7 = uuid7()
 
-@test_throws ArgumentError UUID("22b4a8a1ae548-4eeb-9270-60426d66a48e")
-@test_throws ArgumentError UUID("22b4a8a1-e548a4eeb-9270-60426d66a48e")
-@test_throws ArgumentError UUID("22b4a8a1-e548-4eeba9270-60426d66a48e")
-@test_throws ArgumentError UUID("22b4a8a1-e548-4eeb-9270a60426d66a48e")
-str = "22b4a8a1-e548-4eeb-9270-60426d66a48e"
-@test UUID(uppercase(str)) == UUID(str)
+@testset "Extraction of version numbers" begin
+    @test uuid_version(u1) == 1
+    @test uuid_version(u4) == 4
+    @test uuid_version(u5) == 5
+    @test uuid_version(u7) == 7
+end
 
-for r in rand(UInt128, 10^3)
-    @test UUID(r) == UUID(string(UUID(r)))
+@testset "Parsing from string" begin
+    @test u1 == UUID(string(u1)) == UUID(GenericString(string(u1)))
+    @test u4 == UUID(string(u4)) == UUID(GenericString(string(u4)))
+    @test u5 == UUID(string(u5)) == UUID(GenericString(string(u5)))
+    @test u7 == UUID(string(u7)) == UUID(GenericString(string(u7)))
+end
+
+@testset "UInt128 conversion" begin
+    @test u1 == UUID(UInt128(u1))
+    @test u4 == UUID(UInt128(u4))
+    @test u5 == UUID(UInt128(u5))
+    @test u7 == UUID(UInt128(u7))
+end
+
+@testset "Passing an RNG" begin
+    rng = Xoshiro(0)
+    @test uuid1(rng) isa UUID
+    @test uuid4(rng) isa UUID
+    @test uuid7(rng) isa UUID
+end
+
+@testset "uuid1, uuid4 & uuid7 RNG stability" begin
+    @test uuid4(Xoshiro(0)) == uuid4(Xoshiro(0))
+
+    time_uuid1 = rand(UInt64)
+    time_uuid7 = rand(UInt128)
+
+    # we need to go through the internal function to test RNG stability
+    @test _build_uuid1(Xoshiro(0), time_uuid1) == _build_uuid1(Xoshiro(0), time_uuid1)
+    @test _build_uuid7(Xoshiro(0), time_uuid7) == _build_uuid7(Xoshiro(0), time_uuid7)
+end
+
+@testset "Rejection of invalid UUID strings" begin
+    @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-446655440000")
+    @test_throws ArgumentError UUID("550e8400e29b-41d4-a716-44665544000098")
+    @test_throws ArgumentError UUID("z50e8400-e29b-41d4-a716-446655440000")
+    @test_throws ArgumentError UUID("22b4a8a1ae548-4eeb-9270-60426d66a48e")
+    @test_throws ArgumentError UUID("22b4a8a1-e548a4eeb-9270-60426d66a48e")
+    @test_throws ArgumentError UUID("22b4a8a1-e548-4eeba9270-60426d66a48e")
+    @test_throws ArgumentError UUID("22b4a8a1-e548-4eeb-9270a60426d66a48e")
+end
+
+@testset "UUID sequence" begin
+    for (idx, init_uuid) in enumerate(following_uuids[1:end-1])
+        next_id = uuid5(init_uuid, "julia")
+        @test next_id == following_uuids[idx+1]
+    end
+end
+
+@testset "Standard namespace UUIDs" begin
+    for (init_uuid, next_uuid) in standard_namespace_uuids
+        result = uuid5(init_uuid, "julia")
+        @test next_uuid == result
+    end
+end
+
+@testset "Use of Random.RandomDevice (#35860)" begin
+    Random.seed!(Random.default_rng(), 10)
+    u1 = uuid1()
+    u4 = uuid4()
+    u7 = uuid7()
+    Random.seed!(Random.default_rng(), 10)
+    @test u1 != uuid1()
+    @test u4 != uuid4()
+    @test u7 != uuid7()
+end
+
+@testset "case invariance" begin
+    str = "22b4a8a1-e548-4eeb-9270-60426d66a48e"
+    @test UUID(uppercase(str)) == UUID(str)
+end
+
+@testset "Equality of string parsing & direct UInt128 passing" begin
+    for r in rand(UInt128, 10^3)
+        @test UUID(r) == UUID(string(UUID(r)))
+    end
 end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(UUIDs))
+end
 end

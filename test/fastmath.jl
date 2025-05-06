@@ -1,6 +1,29 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using InteractiveUtils: code_llvm
 # fast math
+
+@testset "check fast present in LLVM" begin
+    for T in (Float16, Float32, Float64, ComplexF32, ComplexF64)
+        f(x) = @fastmath x + x + x
+        llvm = sprint(code_llvm, f, (T,))
+        @test occursin("fast", llvm)
+
+        g(x) = @fastmath x * x * x
+        llvm = sprint(code_llvm, g, (T,))
+        @test occursin("fast", llvm)
+    end
+
+    for T in (Float16, Float32, Float64)
+        f(x, y, z) = @fastmath min(x, y, z)
+        llvm = sprint(code_llvm, f, (T,T,T))
+        @test occursin("fast", llvm)
+
+        g(x, y, z) = @fastmath max(x, y, z)
+        llvm = sprint(code_llvm, g, (T,T,T))
+        @test occursin("fast", llvm)
+    end
+end
 
 @testset "check expansions" begin
     @test macroexpand(Main, :(@fastmath 1+2)) == :(Base.FastMath.add_fast(1,2))
@@ -273,6 +296,12 @@ end
     end
     @test_throws MethodError @fastmath(^(2))
 end
+# issue #53857
+@testset "fast_pow" begin
+    n = Int64(2)^52
+    @test @fastmath (1 + 1 / n) ^ n ≈ ℯ
+    @test @fastmath (1 + 1 / n) ^ 4503599627370496 ≈ ℯ
+end
 
 @testset "sincos fall-backs" begin
     struct FloatWrapper
@@ -313,4 +342,10 @@ end
 @testset "@fastmath-related crash (#49907)" begin
     x = @fastmath maximum(Float16[1,2,3]; init = Float16(0))
     @test x == Float16(3)
+end
+
+@testset "Test promotion of >=3 arg fastmath" begin
+    # Bug caught in https://github.com/JuliaLang/julia/pull/54513#discussion_r1620553369
+    x = @fastmath 1. + 1. + 1f0
+    @test x == 3.0
 end

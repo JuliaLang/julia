@@ -1,6 +1,6 @@
 # More about types
 
-If you've used Julia for a while, you understand the fundamental role that types play.  Here we
+If you've used Julia for a while, you understand the fundamental role that types play. Here we
 try to get under the hood, focusing particularly on [Parametric Types](@ref).
 
 ## Types and sets (and `Any` and `Union{}`/`Bottom`)
@@ -52,7 +52,7 @@ julia> typejoin(Tuple{Integer, Float64}, Tuple{Int, Real})
 Tuple{Integer, Real}
 ```
 
-While these operations may seem abstract, they lie at the heart of Julia.  For example, method
+While these operations may seem abstract, they lie at the heart of Julia. For example, method
 dispatch is implemented by stepping through the items in a method list until reaching one for which
 the type of the argument tuple is a subtype of the method signature.
 For this algorithm to work, it's important that methods be sorted by their specificity, and that the
@@ -225,7 +225,7 @@ Ptr{Cvoid} @0x00007fcc7de64850
 The `wrapper` field of [`Array`](@ref) points to itself, but for `Array{TV,NV}` it points back
 to the original definition of the type.
 
-What about the other fields? `hash` assigns an integer to each type.  To examine the `cache`
+What about the other fields? `hash` assigns an integer to each type. To examine the `cache`
 field, it's helpful to pick a type that is less heavily used than Array. Let's first create our
 own type:
 
@@ -245,8 +245,8 @@ variables are not cached.
 
 ## Tuple types
 
-Tuple types constitute an interesting special case.  For dispatch to work on declarations like
-`x::Tuple`, the type has to be able to accommodate any tuple.  Let's check the parameters:
+Tuple types constitute an interesting special case. For dispatch to work on declarations like
+`x::Tuple`, the type has to be able to accommodate any tuple. Let's check the parameters:
 
 ```jldoctest
 julia> Tuple
@@ -491,7 +491,7 @@ julia> function mysubtype(a,b)
        end
 ```
 
-and then set a breakpoint in `jl_breakpoint`.  Once this breakpoint gets triggered, you can set
+and then set a breakpoint in `jl_breakpoint`. Once this breakpoint gets triggered, you can set
 breakpoints in other functions.
 
 As a warm-up, try the following:

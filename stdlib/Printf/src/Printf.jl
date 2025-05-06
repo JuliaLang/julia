@@ -297,11 +297,11 @@ end
 @inline function rmdynamic(spec::Spec{T}, args, argp) where {T}
     zero, width, precision = spec.zero, spec.width, spec.precision
     if spec.dynamic_width
-        width = args[argp]
+        width = args[argp]::Integer
         argp += 1
     end
     if spec.dynamic_precision
-        precision = args[argp]
+        precision = args[argp]::Integer
         if zero && T <: Ints && precision > 0
             zero = false
         end
@@ -310,12 +310,12 @@ end
     (Spec{T}(spec.leftalign, spec.plus, spec.space, zero, spec.hash, width, precision, false, false), argp)
 end
 
-@inline function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
+Base.@constprop :aggressive function fmt(buf, pos, args, argp, spec::Spec{T}) where {T}
     spec, argp = rmdynamic(spec, args, argp)
     (fmt(buf, pos, args[argp], spec), argp+1)
 end
 
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
+function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Chars}
     leftalign, width = spec.leftalign, spec.width
     c = Char(first(arg))
     w = textwidth(c)
@@ -336,7 +336,7 @@ end
 end
 
 # strings
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
+function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Strings}
     leftalign, hash, width, prec = spec.leftalign, spec.hash, spec.width, spec.precision
     str = string(arg)
     slen = textwidth(str)::Int + (hash ? arg isa AbstractString ? 2 : 1 : 0)
@@ -383,7 +383,7 @@ toint(x::Rational) = Integer(x)
 fmt(buf, pos, arg::AbstractFloat, spec::Spec{T}) where {T <: Ints} =
     fmt(buf, pos, arg, floatfmt(spec))
 
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
+function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     bs = base(T)
@@ -497,7 +497,7 @@ _snprintf(ptr, siz, str, arg) =
 # seems like a dangerous thing to do.
 const __BIG_FLOAT_MAX__ = 8192
 
-@inline function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
+function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Floats}
     leftalign, plus, space, zero, hash, width, prec =
         spec.leftalign, spec.plus, spec.space, spec.zero, spec.hash, spec.width, spec.precision
     x = tofloat(arg)
@@ -931,7 +931,8 @@ for more details on C `printf` support.
 """
 function format end
 
-function format(io::IO, f::Format, args...) # => Nothing
+# Since it will specialize on `f`, which has a Tuple-type often of length(args), we might as well specialize on `args` too.
+function format(io::IO, f::Format, args::Vararg{Any,N}) where N # => Nothing
     f.numarguments == length(args) || argmismatch(f.numarguments, length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)
@@ -939,7 +940,7 @@ function format(io::IO, f::Format, args...) # => Nothing
     return
 end
 
-function format(f::Format, args...) # => String
+function format(f::Format, args::Vararg{Any,N}) where N # => String
     f.numarguments == length(args) || argmismatch(f.numarguments, length(args))
     buf = Base.StringVector(computelen(f.substringranges, f.formats, args))
     pos = format(buf, 1, f, args...)

@@ -257,6 +257,20 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test expanded == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@foo", "HOME" => homedir()))
     end
 
+    # --project=@script handling
+    let expanded = abspath(joinpath(@__DIR__, "project", "ScriptProject"))
+        script = joinpath(expanded, "bin", "script.jl")
+        # Check running julia with --project=@script both within and outside the script directory
+        @testset "--@script from $name" for (name, dir) in [("project", expanded), ("outside", pwd())]
+            @test joinpath(expanded, "Project.toml") == readchomp(Cmd(`$exename --project=@script $script`; dir))
+            @test joinpath(expanded, "SubProject", "Project.toml") == readchomp(Cmd(`$exename --project=@script/../SubProject $script`; dir))
+        end
+    end
+
+    # handling of `@temp` in --project and JULIA_PROJECT
+    @test tempdir() == readchomp(`$exename --project=@temp -e 'println(Base.active_project())'`)[1:lastindex(tempdir())]
+    @test tempdir() == readchomp(addenv(`$exename -e 'println(Base.active_project())'`, "JULIA_PROJECT" => "@temp", "HOME" => homedir()))[1:lastindex(tempdir())]
+
     # --quiet, --banner
     let p = "print((Base.JLOptions().quiet, Base.JLOptions().banner))"
         @test read(`$exename                   -e $p`, String) == "(0, -1)"
@@ -335,43 +349,37 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test errors_not_signals(`$exename -C invalidtarget`)
     @test errors_not_signals(`$exename --cpu-target=invalidtarget`)
 
-    if Sys.iswindows()
-        # -t, --threads
-        code = "print(Threads.threadpoolsize())"
-        cpu_threads = ccall(:jl_effective_threads, Int32, ())
-        @test string(cpu_threads) ==
-            read(`$exename --threads auto -e $code`, String) ==
-            read(`$exename --threads=auto -e $code`, String) ==
-            read(`$exename -tauto -e $code`, String) ==
-            read(`$exename -t auto -e $code`, String)
-        for nt in (nothing, "1")
-            withenv("JULIA_NUM_THREADS" => nt) do
-                @test read(`$exename --threads=2 -e $code`, String) ==
-                    read(`$exename -t 2 -e $code`, String) == "2"
-            end
+    # -t, --threads
+    code = "print(Threads.threadpoolsize())"
+    cpu_threads = ccall(:jl_effective_threads, Int32, ())
+    @test string(cpu_threads) ==
+        read(`$exename --threads auto -e $code`, String) ==
+        read(`$exename --threads=auto -e $code`, String) ==
+        read(`$exename -tauto -e $code`, String) ==
+        read(`$exename -t auto -e $code`, String)
+    for nt in (nothing, "1")
+        withenv("JULIA_NUM_THREADS" => nt) do
+            @test read(`$exename --threads=2 -e $code`, String) ==
+                read(`$exename -t 2 -e $code`, String) == "2"
         end
-        # We want to test oversubscription, but on manycore machines, this can
-        # actually exhaust limited PID spaces
-        cpu_threads = max(2*cpu_threads, min(50, 10*cpu_threads))
-        if Sys.WORD_SIZE == 32
-            cpu_threads = min(cpu_threads, 50)
-        end
-        @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
-        withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
-            @test read(`$exename -e $code`, String) == string(cpu_threads)
-        end
-        @test errors_not_signals(`$exename -t 0`)
-        @test errors_not_signals(`$exename -t -1`)
+    end
+    # We want to test oversubscription, but on manycore machines, this can
+    # actually exhaust limited PID spaces
+    cpu_threads = max(2*cpu_threads, min(50, 10*cpu_threads))
+    if Sys.WORD_SIZE == 32
+        cpu_threads = min(cpu_threads, 50)
+    end
+    @test read(`$exename -t $cpu_threads -e $code`, String) == string(cpu_threads)
+    withenv("JULIA_NUM_THREADS" => string(cpu_threads)) do
+        @test read(`$exename -e $code`, String) == string(cpu_threads)
+    end
+    @test errors_not_signals(`$exename -t 0`)
+    @test errors_not_signals(`$exename -t -1`)
 
-        # Combining --threads and --procs: --threads does propagate
-        withenv("JULIA_NUM_THREADS" => nothing) do
-            code = "print(sum(remotecall_fetch(Threads.threadpoolsize, x) for x in procs()))"
-            @test read(`$exename -p2 -t2 -e $code`, String) == "6"
-        end
-    else
-        @test_skip "Command line tests with -t are flakey on non-Windows OS"
-        # Known issue: https://github.com/JuliaLang/julia/issues/49154
-        # These tests should be fixed and reenabled on all operating systems.
+    # Combining --threads and --procs: --threads does propagate
+    withenv("JULIA_NUM_THREADS" => nothing) do
+        code = "print(sum(remotecall_fetch(Threads.threadpoolsize, x) for x in procs()))"
+        @test read(`$exename -p2 -t2 -e $code`, String) == "6"
     end
 
     # Combining --threads and invalid -C should yield a decent error
@@ -385,29 +393,33 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test p.exitcode == 1 && p.termsignal == 0
     end
 
-    # --gcthreads
-    code = "print(Threads.ngcthreads())"
-    cpu_threads = ccall(:jl_effective_threads, Int32, ())
-    @test string(cpu_threads) ==
-          read(`$exename --threads auto -e $code`, String) ==
-          read(`$exename --threads=auto -e $code`, String) ==
-          read(`$exename -tauto -e $code`, String) ==
-          read(`$exename -t auto -e $code`, String)
-    for nt in (nothing, "1")
-        withenv("JULIA_NUM_GC_THREADS" => nt) do
-            @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+    # FIXME: Issue #57103 --gcthreads does not have the same semantics
+    # for Stock GC and MMTk, so the tests below are specific to the Stock GC
+    @static if Base.USING_STOCK_GC
+        # --gcthreads
+        code = "print(Threads.ngcthreads())"
+        cpu_threads = ccall(:jl_effective_threads, Int32, ())
+        @test string(cpu_threads) ==
+            read(`$exename --threads auto -e $code`, String) ==
+            read(`$exename --threads=auto -e $code`, String) ==
+            read(`$exename -tauto -e $code`, String) ==
+            read(`$exename -t auto -e $code`, String)
+        for nt in (nothing, "1")
+            withenv("JULIA_NUM_GC_THREADS" => nt) do
+                @test read(`$exename --gcthreads=2 -e $code`, String) == "2"
+            end
+            withenv("JULIA_NUM_GC_THREADS" => nt) do
+                @test read(`$exename --gcthreads=2,1 -e $code`, String) == "3"
+            end
         end
-        withenv("JULIA_NUM_GC_THREADS" => nt) do
-            @test read(`$exename --gcthreads=2,1 -e $code`, String) == "3"
+
+        withenv("JULIA_NUM_GC_THREADS" => 2) do
+            @test read(`$exename -e $code`, String) == "2"
         end
-    end
 
-    withenv("JULIA_NUM_GC_THREADS" => 2) do
-        @test read(`$exename -e $code`, String) == "2"
-    end
-
-    withenv("JULIA_NUM_GC_THREADS" => "2,1") do
-        @test read(`$exename -e $code`, String) == "3"
+        withenv("JULIA_NUM_GC_THREADS" => "2,1") do
+            @test read(`$exename -e $code`, String) == "3"
+        end
     end
 
     # --machine-file
@@ -429,9 +441,30 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     @test readchomp(`$exename -E "isinteractive()" -i`) == "true"
 
     # --color
-    @test readchomp(`$exename --color=yes -E "Base.have_color"`) == "true"
-    @test readchomp(`$exename --color=no -E "Base.have_color"`) == "false"
-    @test errors_not_signals(`$exename --color=false`)
+    function color_cmd(; flag, no_color=nothing, force_color=nothing)
+        cmd = `$exename --color=$flag -E "Base.have_color"`
+        return addenv(cmd, "NO_COLOR" => no_color, "FORCE_COLOR" => force_color)
+    end
+
+    @test readchomp(color_cmd(flag="auto")) == "nothing"
+    @test readchomp(color_cmd(flag="no")) == "false"
+    @test readchomp(color_cmd(flag="yes")) == "true"
+    @test errors_not_signals(color_cmd(flag="false"))
+    @test errors_not_signals(color_cmd(flag="true"))
+
+    @test readchomp(color_cmd(flag="auto", no_color="")) == "nothing"
+    @test readchomp(color_cmd(flag="auto", no_color="1")) == "false"
+    @test readchomp(color_cmd(flag="no", no_color="1")) == "false"
+    @test readchomp(color_cmd(flag="yes", no_color="1")) == "true"
+
+    @test readchomp(color_cmd(flag="auto", force_color="")) == "nothing"
+    @test readchomp(color_cmd(flag="auto", force_color="1")) == "true"
+    @test readchomp(color_cmd(flag="no", force_color="1")) == "false"
+    @test readchomp(color_cmd(flag="yes", force_color="1")) == "true"
+
+    @test readchomp(color_cmd(flag="auto", no_color="1", force_color="1")) == "true"
+    @test readchomp(color_cmd(flag="no", no_color="1", force_color="1")) == "false"
+    @test readchomp(color_cmd(flag="yes", no_color="1", force_color="1")) == "true"
 
     # --history-file
     @test readchomp(`$exename -E "Bool(Base.JLOptions().historyfile)"
@@ -730,7 +763,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test errors_not_signals(`$exename -E "$code" --depwarn=error`)
 
         @test readchomperrors(`$exename -E "$code" --depwarn=yes`) ==
-            (true, "true", "WARNING: Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
+            (true, "true", "WARNING: Use of Foo.Deprecated is deprecated, use NotDeprecated instead.\n  likely near none:8")
 
         @test readchomperrors(`$exename -E "$code" --depwarn=no`) ==
             (true, "true", "")
@@ -764,9 +797,74 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
     end
 
+    let JL_OPTIONS_TASK_METRICS_OFF = 0, JL_OPTIONS_TASK_METRICS_ON = 1
+        @test parse(Int,readchomp(`$exename -E
+            "Int(Base.JLOptions().task_metrics)"`)) == JL_OPTIONS_TASK_METRICS_OFF
+        @test parse(Int, readchomp(`$exename --task-metrics=yes -E
+            "Int(Base.JLOptions().task_metrics)"`)) == JL_OPTIONS_TASK_METRICS_ON
+        @test !parse(Bool, readchomp(`$exename  -E "current_task().metrics_enabled"`))
+        @test parse(Bool, readchomp(`$exename --task-metrics=yes -E "current_task().metrics_enabled"`))
+    end
+
     # --worker takes default / custom as argument (default/custom arguments
     # tested in test/parallel.jl)
-    @test errors_not_signals(`$exename --worker=true`)
+    # shorten the worker timeout as this test relies on it timing out
+    withenv("JULIA_WORKER_TIMEOUT" => "10") do
+        @test errors_not_signals(`$exename --worker=true`)
+    end
+
+    # --trace-compile
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            "foo(x) = begin Base.Experimental.@force_compile; x; end; foo(1)",
+            `$exename --trace-compile=stderr -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test occursin("precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
+
+    # --trace-compile-timing
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            "foo(x) = begin Base.Experimental.@force_compile; x; end; foo(1)",
+            `$exename --trace-compile=stderr --trace-compile-timing -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test occursin(" ms =# precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
+
+    # Base.@trace_compile (local version of the 2 above args)
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            """
+            f(x::Int) = 1
+            applyf(container) = f(container[1])
+            Base.@trace_compile @eval applyf([100])
+            Base.@trace_compile @eval applyf(Any[100])
+            f(::Bool) = 2
+            Base.@trace_compile @eval applyf([true])
+            Base.@trace_compile @eval applyf(Any[true])
+            """,
+            `$exename -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test length(findall(r"precompile\(", _stderr)) == 5
+        @test length(findall(r" # recompile", _stderr)) == 1
+    end
+
+    # --trace-dispatch
+    let
+        io = IOBuffer()
+        v = writereadpipeline(
+            "foo(x) = begin Base.Experimental.@force_compile; x; end; foo(1)",
+            `$exename --trace-dispatch=stderr -i`,
+            stderr=io)
+        _stderr = String(take!(io))
+        @test occursin("precompile(Tuple{typeof(Main.foo), Int", _stderr)
+    end
 
     # test passing arguments
     mktempdir() do dir
@@ -958,7 +1056,7 @@ let exename = `$(Base.julia_cmd().exec[1]) -t 1`
         p = run(pipeline(`$exename --sysimage=$libjulia`, stderr=err), wait=false)
         close(err.in)
         let s = read(err, String)
-            @test s == "ERROR: System image file failed consistency check: maybe opened the wrong version?\n"
+            @test s == "ERROR: Image file failed consistency check: maybe opened the wrong version?\n"
         end
         @test errors_not_signals(p)
         @test p.exitcode == 1
@@ -992,13 +1090,18 @@ run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, de
 let exename = `$(Base.julia_cmd()) --startup-file=no`
     @test readchomp(`$exename --sysimage-native-code=yes -E
         "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "true"
-    @test readchomp(`$exename --sysimage-native-code=no -E
+    # TODO: Make this safe in the presence of two single-thread threadpools
+    # see https://github.com/JuliaLang/julia/issues/57198
+    @test readchomp(`$exename --sysimage-native-code=no -t1,0 -E
         "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "false"
 end
 
 # backtrace contains line number info (esp. on windows #17179)
 for precomp in ("yes", "no")
-    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no --sysimage-native-code=$precomp -E 'sqrt(-2)'`)
+    # TODO: Make this safe in the presence of two single-thread threadpools
+    # see https://github.com/JuliaLang/julia/issues/57198
+    threads = precomp == "no" ? `-t1,0` : ``
+    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) $threads --startup-file=no --sysimage-native-code=$precomp -E 'sqrt(-2)'`)
     @test !succ
     @test out == ""
     @test occursin(r"\.jl:(\d+)", bt)
@@ -1101,6 +1204,10 @@ end
     end
 end
 
+# FIXME: Issue #57103: MMTK currently does not use --heap-size-hint since it only
+# supports setting up a hard limit unlike the Stock GC
+# which takes it as a soft limit. For now, we skip the tests below for MMTk
+@static if Base.USING_STOCK_GC
 @testset "heap size hint" begin
     #heap-size-hint, we reserve 250 MB for non GC memory (llvm, etc.)
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=500M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$((500-250)*1024*1024)"
@@ -1119,6 +1226,7 @@ end
     @test abs(Float64(maxmem) - hint)/maxmem < 0.05
 
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=10M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$(1*1024*1024)"
+end
 end
 
 ## `Main.main` entrypoint
@@ -1156,4 +1264,10 @@ end
         ("1e100", typemax(UInt64)), ("1e500g", typemax(UInt64)), ("1e-12t", 1), ("500000000b", 500000000)]
         @test parse(UInt64,read(`$exename --heap-size-hint=$str -E "Base.JLOptions().heap_size_hint"`, String)) == val
     end
+end
+
+@testset "--timeout-for-safepoint-straggler" begin
+    exename = `$(Base.julia_cmd())`
+    timeout = 120
+    @test parse(Int,read(`$exename --timeout-for-safepoint-straggler=$timeout -E "Base.JLOptions().timeout_for_safepoint_straggler_s"`, String)) == timeout
 end

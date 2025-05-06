@@ -355,7 +355,7 @@ julia> Int8[[1 2] [3 4]]
 Comprehensions provide a general and powerful way to construct arrays. Comprehension syntax is
 similar to set construction notation in mathematics:
 
-```
+```julia
 A = [ F(x, y, ...) for x=rx, y=ry, ... ]
 ```
 
@@ -366,11 +366,11 @@ The result is an N-d dense array with dimensions that are the concatenation of t
 of the variable ranges `rx`, `ry`, etc. and each `F(x,y,...)` evaluation returns a scalar.
 
 The following example computes a weighted average of the current element and its left and right
-neighbor along a 1-d grid. :
+neighbor along a 1-d grid:
 
 ```julia-repl
 julia> x = rand(8)
-8-element Array{Float64,1}:
+8-element Vector{Float64}:
  0.843025
  0.869052
  0.365105
@@ -381,7 +381,7 @@ julia> x = rand(8)
  0.809411
 
 julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
-6-element Array{Float64,1}:
+6-element Vector{Float64}:
  0.736559
  0.57468
  0.685417
@@ -430,7 +430,7 @@ julia> map(tuple, (1/(i+j) for i=1:2, j=1:2), [1 3; 2 4])
 
 Generators are implemented via inner functions. Just like
 inner functions used elsewhere in the language, variables from the enclosing scope can be
-"captured" in the inner function.  For example, `sum(p[i] - q[i] for i=1:n)`
+"captured" in the inner function. For example, `sum(p[i] - q[i] for i=1:n)`
 captures the three variables `p`, `q` and `n` from the enclosing scope.
 Captured variables can present performance challenges; see
 [performance tips](@ref man-performance-captured).
@@ -714,7 +714,7 @@ julia> A[:, 3:3]
 ### Cartesian indices
 
 The special `CartesianIndex{N}` object represents a scalar index that behaves
-like an `N`-tuple of integers spanning multiple dimensions.  For example:
+like an `N`-tuple of integers spanning multiple dimensions. For example:
 
 ```jldoctest cartesianindex
 julia> A = reshape(1:32, 4, 4, 2);
@@ -1040,7 +1040,7 @@ be to replicate the vector to the size of the matrix:
 julia> a = rand(2, 1); A = rand(2, 3);
 
 julia> repeat(a, 1, 3) + A
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  1.20813  1.82068  1.25387
  1.56851  1.86401  1.67846
 ```
@@ -1051,16 +1051,16 @@ without using extra memory, and applies the given function elementwise:
 
 ```julia-repl
 julia> broadcast(+, a, A)
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  1.20813  1.82068  1.25387
  1.56851  1.86401  1.67846
 
 julia> b = rand(1,2)
-1×2 Array{Float64,2}:
+1×2 Matrix{Float64}:
  0.867535  0.00457906
 
 julia> broadcast(+, a, b)
-2×2 Array{Float64,2}:
+2×2 Matrix{Float64}:
  1.71056  0.847604
  1.73659  0.873631
 ```
@@ -1074,7 +1074,7 @@ is equivalent to `broadcast(f, args...)`, providing a convenient syntax to broad
 [automatically fuse](@ref man-dot-operators) into a single `broadcast` call.
 
 Additionally, [`broadcast`](@ref) is not limited to arrays (see the function documentation);
-it also handles scalars, tuples and other collections.  By default, only some argument types are
+it also handles scalars, tuples and other collections. By default, only some argument types are
 considered scalars, including (but not limited to) `Number`s, `String`s, `Symbol`s, `Type`s, `Function`s
 and some common singletons like `missing` and `nothing`. All other arguments are
 iterated over or indexed into elementwise.
@@ -1144,7 +1144,7 @@ is created with the [`view`](@ref) function, which is called the same way as
 of [`view`](@ref) looks the same as the result of [`getindex`](@ref), except the
 data is left in place. [`view`](@ref) stores the input index vectors in a
 `SubArray` object, which can later be used to index the original array
-indirectly.  By putting the [`@views`](@ref) macro in front of an expression or
+indirectly. By putting the [`@views`](@ref) macro in front of an expression or
 block of code, any `array[...]` slice in that expression will be converted to
 create a `SubArray` view instead.
 
@@ -1160,7 +1160,7 @@ dimension `d`. For example, the builtin `Array` returned by `rand(5,7,2)` has it
 arranged contiguously in column major order. This means that the stride of the first
 dimension — the spacing between elements in the same column — is `1`:
 
-```julia-repl
+```jldoctest strides
 julia> A = rand(5, 7, 2);
 
 julia> stride(A, 1)
@@ -1172,7 +1172,7 @@ as many elements as there are in a single column (`5`). Similarly, jumping betwe
 "pages" (in the third dimension) requires skipping `5*7 == 35` elements. The [`strides`](@ref)
 of this array is the tuple of these three numbers together:
 
-```julia-repl
+```jldoctest strides
 julia> strides(A)
 (1, 5, 35)
 ```
@@ -1185,7 +1185,7 @@ This view `V` refers to the same memory as `A` but is skipping and re-arranging 
 elements. The stride of the first dimension of `V` is `3` because we're only selecting every
 third row from our original array:
 
-```julia-repl
+```jldoctest strides
 julia> V = @view A[1:3:4, 2:2:6, 2:-1:1];
 
 julia> stride(V, 1)
@@ -1196,7 +1196,7 @@ This view is similarly selecting every other column from our original `A` — an
 needs to skip the equivalent of two five-element columns when moving between indices in the
 second dimension:
 
-```julia-repl
+```jldoctest strides
 julia> stride(V, 2)
 10
 ```
@@ -1205,7 +1205,7 @@ The third dimension is interesting because its order is reversed! Thus to get fr
 "page" to the second one it must go _backwards_ in memory, and so its stride in this
 dimension is negative!
 
-```julia-repl
+```jldoctest strides
 julia> stride(V, 3)
 -35
 ```

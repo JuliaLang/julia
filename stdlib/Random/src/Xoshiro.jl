@@ -185,8 +185,8 @@ end
     TaskLocalRNG
 
 The `TaskLocalRNG` has state that is local to its task, not its thread.
-It is seeded upon task creation, from the state of its parent task.
-Therefore, task creation is an event that changes the parent's RNG state.
+It is seeded upon task creation, from the state of its parent task, but without
+advancing the state of the parent's RNG.
 
 As an upside, the `TaskLocalRNG` is pretty fast, and permits reproducible
 multithreaded simulations (barring race conditions), independent of scheduler
@@ -195,14 +195,14 @@ task creation, simulation results are also independent of the number of availabl
 threads / CPUs. The random stream should not depend on hardware specifics, up to
 endianness and possibly word size.
 
-Using or seeding the RNG of any other task than the one returned by `current_task()`
-is undefined behavior: it will work most of the time, and may sometimes fail silently.
-
 When seeding `TaskLocalRNG()` with [`seed!`](@ref), the passed seed, if any,
 may be any integer.
 
 !!! compat "Julia 1.11"
     Seeding `TaskLocalRNG()` with a negative integer seed requires at least Julia 1.11.
+
+!!! compat "Julia 1.10"
+    Task creation no longer advances the parent task's RNG state as of Julia 1.10.
 """
 struct TaskLocalRNG <: AbstractRNG end
 TaskLocalRNG(::Nothing) = TaskLocalRNG()
@@ -243,18 +243,8 @@ copy!(dst::Union{TaskLocalRNG, Xoshiro}, src::Union{TaskLocalRNG, Xoshiro}) = se
 # use a magic (random) number to scramble `h` so that `hash(x)` is distinct from `hash(getstate(x))`
 hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2dda6fa9be % UInt)
 
-function seed!(rng::Union{TaskLocalRNG, Xoshiro}, ::Nothing)
-    # as we get good randomness from RandomDevice, we can skip hashing
-    rd = RandomDevice()
-    s0 = rand(rd, UInt64)
-    s1 = rand(rd, UInt64)
-    s2 = rand(rd, UInt64)
-    s3 = rand(rd, UInt64)
-    initstate!(rng, (s0, s1, s2, s3))
-end
-
-seed!(rng::Union{TaskLocalRNG, Xoshiro}, seed) =
-    initstate!(rng, reinterpret(UInt64, hash_seed(seed)))
+seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::AbstractRNG) =
+    initstate!(rng, rand(seeder, NTuple{4, UInt64}))
 
 
 @inline function rand(x::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt64})
@@ -293,11 +283,16 @@ rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{UInt52Raw{UInt64}}) = ran
 rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{UInt52{UInt64}})    = rand(r, UInt64) >>> 12
 rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{UInt104{UInt128}})  = rand(r, UInt104Raw())
 
-rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{CloseOpen01{Float16}}) =
-    Float16(Float32(rand(r, UInt16) >>> 5) * Float32(0x1.0p-11))
+for FT in (Float16, Float32, Float64)
+    UT = Base.uinttype(FT)
+    # Helper function: scale an unsigned integer to a floating point number of the same size
+    # in the interval [0, 1).  This is equivalent to, but more easily extensible than
+    #     Float16(i >>>  5) * Float16(0x1.0p-11)
+    #     Float32(i >>>  8) * Float32(0x1.0p-24)
+    #     Float32(i >>> 11) * Float64(0x1.0p-53)
+    @eval @inline _uint2float(i::$(UT), ::Type{$(FT)}) =
+        $(FT)(i >>> $(8 * sizeof(FT) - precision(FT))) * $(FT(2) ^ -precision(FT))
 
-rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{CloseOpen01{Float32}}) =
-    Float32(rand(r, UInt32) >>> 8) * Float32(0x1.0p-24)
-
-rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{CloseOpen01_64}) =
-    Float64(rand(r, UInt64) >>> 11) * 0x1.0p-53
+    @eval rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{CloseOpen01{$(FT)}}) =
+        _uint2float(rand(r, $(UT)), $(FT))
+end

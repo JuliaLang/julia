@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Markdown, StyledStrings
-import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, plain, term, html, rst, Table, Code, LaTeX, Footnote
+import Markdown: MD, Paragraph, Header, Italic, Bold, LineBreak, insert_hlines, plain, term, html, rst, Table, Code, LaTeX, Footnote
 import Base: show
 
 # Basics
@@ -1267,6 +1267,27 @@ end
     @test sprint(show, MIME("text/plain"), s) == "  Misc:\n  - line\n   break"
 end
 
+@testset "pullrequest #57664: en_or_em_dash" begin
+    # Test that two hyphens (--) is parsed as en dash (–)
+    # and three hyphens (---) is parsed as em dash (—)
+    hyphen_text = md"foo - bar"
+    en_dash_text = md"foo -- bar"
+    em_dash_text = md"foo --- bar"
+
+    @test sprint(show, "text/markdown", hyphen_text) == "foo - bar\n"
+    @test sprint(show, "text/markdown", en_dash_text) == "foo – bar\n"
+    @test sprint(show, "text/markdown", em_dash_text) == "foo — bar\n"
+
+    # Test that parsing works for hyphen-minus (-), en dash (–) and em dash (—)
+    hyphen_text = md"foo - bar"
+    en_dash_text = md"foo – bar"
+    em_dash_text = md"foo — bar"
+
+    @test hyphen_text |> Markdown.plain == "foo - bar\n"
+    @test en_dash_text |> Markdown.plain == "foo – bar\n"
+    @test em_dash_text |> Markdown.plain == "foo — bar\n"
+end
+
 @testset "pullrequest #41552: a code block has \\end{verbatim}" begin
     s1 = md"""
          ```tex
@@ -1300,4 +1321,15 @@ end
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Markdown))
+end
+
+@testset "Non-Markdown" begin
+    # https://github.com/JuliaLang/julia/issues/37765
+    @test isa(insert_hlines(Text("foo")), Text)
+    # https://github.com/JuliaLang/julia/issues/37757
+    @test insert_hlines(nothing) === nothing
+end
+
+@testset "Lazy Strings" begin
+    @test Markdown.parse(lazy"foo") == Markdown.parse("foo")
 end

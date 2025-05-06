@@ -17,8 +17,7 @@ LOADER_CFLAGS += -DGLIBCXX_LEAST_VERSION_SYMBOL=\"$(shell echo "$(CSL_NEXT_GLIBC
 endif
 
 ifeq ($(OS),WINNT)
-LOADER_LDFLAGS += -municode -mconsole -nostdlib --disable-auto-import \
-                  --disable-runtime-pseudo-reloc -lntdll -lkernel32 -lpsapi
+LOADER_LDFLAGS += -municode -mconsole -nostdlib -lntdll -lkernel32 -lpsapi
 else ifeq ($(OS),Linux)
 # textoff and notext are aliases to the same option which suppress the TEXTREL warning for i686
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed -Wl,-z,notext
@@ -26,13 +25,11 @@ else ifeq ($(OS),FreeBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -ldl -lpthread -rdynamic -lc -Wl,--as-needed
 else ifeq ($(OS),OpenBSD)
 LOADER_LDFLAGS += -Wl,--no-as-needed -lpthread -rdynamic -lc -Wl,--as-needed
-else ifeq ($(OS),Darwin)
-LOADER_LDFLAGS += -lSystem
 endif
 
 # Build list of dependent libraries that must be opened
-SHIPFLAGS  += -DDEP_LIBS="\"$(LOADER_BUILD_DEP_LIBS)\""
-DEBUGFLAGS += -DDEP_LIBS="\"$(LOADER_DEBUG_BUILD_DEP_LIBS)\""
+SHIPFLAGS  += -DDEP_LIBS=$(call shell_escape,$(call c_escape,$(LOADER_BUILD_DEP_LIBS)))
+DEBUGFLAGS += -DDEP_LIBS=$(call shell_escape,$(call c_escape,$(LOADER_DEBUG_BUILD_DEP_LIBS)))
 ifneq (,$(findstring MINGW,$(shell uname)))
 # In MSYS2, do not perform path conversion for `DEP_LIBS`.
 # https://www.msys2.org/wiki/Porting/#filesystem-namespaces
@@ -153,7 +150,7 @@ $(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 $(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT) | $(build_bindir)
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia-debug)
 
-$(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in
+$(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION
 	sed <'$<' >'$@' -e 's/@JULIA_SHLIB_SYMBOL_VERSION@/JL_LIBJULIA_$(SOMAJOR)/'
 
 clean: | $(CLEAN_TARGETS)

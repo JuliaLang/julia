@@ -47,12 +47,31 @@ macro _lock_ios(s, expr)
 end
 
 """
-    fd(stream)
+    fd(x)::RawFD
 
-Return the file descriptor backing the stream or file. Note that this function only applies
-to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
+Return the file descriptor backing the stream, file, or socket.
+
+`RawFD` objects can be passed directly to other languages via the `ccall` interface.
+
+!!! compat "Julia 1.12"
+    Prior to 1.12, this function returned an `Int` instead of a `RawFD`. You may use
+    `RawFD(fd(x))` to produce a `RawFD` in all Julia versions.
+
+!!! compat "Julia 1.12"
+    Getting the file descriptor of sockets are supported as of Julia 1.12.
+
+!!! warning
+    Duplicate the returned file descriptor with [`Libc.dup()`](@ref) before
+    passing it to another system that will take ownership of it (e.g. a C
+    library). Otherwise both the Julia object `x` and the other system may try
+    to close the file descriptor, which will cause errors.
+
+!!! warning
+    The file descriptors for sockets are asynchronous (i.e. `O_NONBLOCK` on
+    POSIX and `OVERLAPPED` on Windows), they may behave differently than regular
+    file descriptors.
 """
-fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
+fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
 stat(s::IOStream) = stat(fd(s))
 
@@ -224,8 +243,8 @@ end
 function filesize(s::IOStream)
     sz = @_lock_ios s ccall(:ios_filesize, Int64, (Ptr{Cvoid},), s.ios)
     if sz == -1
-        err = Libc.errno()
-        throw(IOError(string("filesize: ", Libc.strerror(err), " for ", s.name), err))
+        # if `s` is not seekable `ios_filesize` can fail, so fall back to slower stat method
+        sz = filesize(stat(s))
     end
     return sz
 end
@@ -238,7 +257,7 @@ eof(s::IOStream) = @_lock_ios s _eof_nolock(s)
 # "own" means the descriptor will be closed with the IOStream
 
 """
-    fdio([name::AbstractString, ]fd::Integer[, own::Bool=false]) -> IOStream
+    fdio([name::AbstractString, ]fd::Integer[, own::Bool=false])::IOStream
 
 Create an [`IOStream`](@ref) object from an integer file descriptor. If `own` is `true`, closing
 this object will close the underlying descriptor. By default, an `IOStream` is closed when
@@ -253,7 +272,7 @@ end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
 """
-    open(filename::AbstractString; lock = true, keywords...) -> IOStream
+    open(filename::AbstractString; lock = true, keywords...)::IOStream
 
 Open a file in a mode specified by five boolean keyword arguments:
 
@@ -307,7 +326,7 @@ end
 open(fname::AbstractString; kwargs...) = open(convert(String, fname)::String; kwargs...)
 
 """
-    open(filename::AbstractString, [mode::AbstractString]; lock = true) -> IOStream
+    open(filename::AbstractString, [mode::AbstractString]; lock = true)::IOStream
 
 Alternate syntax for open, where a string-based mode specifier is used instead of the five
 booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are
@@ -486,9 +505,7 @@ function copyuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
     return out
 end
 
-function readbytes_all!(s::IOStream,
-                        b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                        nb::Integer)
+function readbytes_all!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb::Integer)
     olb = lb = length(b)
     nr = 0
     let l = s._dolock, slock = s.lock
@@ -516,9 +533,7 @@ function readbytes_all!(s::IOStream,
     return nr
 end
 
-function readbytes_some!(s::IOStream,
-                         b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                         nb::Integer)
+function readbytes_some!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb::Integer)
     olb = length(b)
     if nb > olb
         resize!(b, nb)
@@ -547,10 +562,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 `read` call is performed, and the amount of data returned is device-dependent. Note that not
 all stream types support the `all` option.
 """
-function readbytes!(s::IOStream,
-                    b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                    nb=length(b);
-                    all::Bool=true)
+function readbytes!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 

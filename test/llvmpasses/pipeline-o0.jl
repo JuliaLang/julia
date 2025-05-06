@@ -10,7 +10,7 @@ include(joinpath("..", "testhelpers", "llvmpasses.jl"))
 # CHECK-LABEL: @julia_simple
 # CHECK-NOT: julia.get_pgcstack
 # CHECK-NOT: julia.gc_alloc_obj
-# CHECK: ijl_gc_pool_alloc
+# CHECK: ijl_gc_small_alloc
 # COM: we want something vaguely along the lines of asm load from the fs register -> allocate bytes
 function simple()
     Ref(0)

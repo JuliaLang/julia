@@ -76,7 +76,7 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
              wc != 0x233f &&  // notslash
              wc != 0x00a6) || // broken bar
 
-            // math symbol (category Sm) whitelist
+            // math symbol (category Sm) allowlist
             (wc >= 0x2140 && wc <= 0x2a1c &&
              ((wc >= 0x2140 && wc <= 0x2144) || // ⅀, ⅁, ⅂, ⅃, ⅄
               wc == 0x223f || wc == 0x22be || wc == 0x22bf || // ∿, ⊾, ⊿
