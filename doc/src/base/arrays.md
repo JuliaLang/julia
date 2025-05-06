@@ -39,7 +39,9 @@ Base.RowSlices
 Base.ColumnSlices
 Base.getindex(::Type, ::Any...)
 Base.zeros
+Base.zeros!
 Base.ones
+Base.ones!
 Base.BitArray
 Base.BitArray(::UndefInitializer, ::Integer...)
 Base.BitArray(::Any)

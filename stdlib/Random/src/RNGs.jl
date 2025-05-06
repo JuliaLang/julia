@@ -181,8 +181,8 @@ end
 
 function reset_caches!(r::MersenneTwister)
     # zeroing the caches makes comparing two MersenneTwister RNGs easier
-    fill!(r.vals, 0.0)
-    fill!(r.ints, zero(UInt128))
+    zeros!(r.vals)
+    zeros!(r.ints)
     mt_setempty!(r)
     mt_setempty!(r, UInt128)
     r.adv_vals = -1
