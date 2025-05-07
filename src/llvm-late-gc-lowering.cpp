@@ -232,7 +232,7 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 CurrentV = CI->getArgOperand(0);
                 continue;
             }
-            // Unkown Call
+            // Unknown Call
             break;
         }
         else {
