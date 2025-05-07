@@ -10,13 +10,12 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "builtin_proto.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern jl_value_t *jl_builtin_getfield;
-extern jl_value_t *jl_builtin_tuple;
 jl_methtable_t *jl_kwcall_mt;
 jl_method_t *jl_opaque_closure_method;
 
@@ -225,7 +224,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_sym_t *fe_sym = jl_globalref_name(fe);
         // look at some known called functions
         jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
-        if (jl_get_binding_value_if_const(b) == jl_builtin_tuple) {
+        if (jl_get_binding_value_if_const(b) == BUILTIN(tuple)) {
             size_t j;
             for (j = 1; j < nargs; j++) {
                 if (!jl_is_quotenode(jl_exprarg(e, j)))
@@ -728,7 +727,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
         ct->world_age = jl_atomic_load_relaxed(&def->primary_world);
-        if (ct->world_age > jl_atomic_load_acquire(&jl_world_counter) || jl_atomic_load_relaxed(&def->deleted_world) < ct->world_age)
+        if (ct->world_age > jl_atomic_load_acquire(&jl_world_counter))
             jl_error("The generator method cannot run until it is added to a method table.");
 
         // invoke code generator
@@ -1007,7 +1006,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->isva = 0;
     m->nargs = 0;
     jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
-    jl_atomic_store_relaxed(&m->deleted_world, 1);
+    jl_atomic_store_relaxed(&m->dispatch_status, 0);
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;
     jl_atomic_store_relaxed(&m->did_scan_source, 0);
