@@ -450,6 +450,10 @@ end
                     return Const(true)
                 end
             end
+        # datatype_fieldcount is what `fieldcount` uses internally
+        # and returns nothing (!==0) for non-definite field counts.
+        elseif datatype_fieldcount(a1) === 0
+            return Const(false)
         end
     elseif isa(a1, Union)
         # Results can only be `Const` or `Bool`
@@ -573,6 +577,16 @@ end
 add_tfunc(nfields, 1, 1, nfields_tfunc, 1)
 add_tfunc(Core._expr, 1, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->Expr), 100)
 add_tfunc(svec, 0, INT_INF, @nospecs((𝕃::AbstractLattice, args...)->SimpleVector), 20)
+@nospecs function _svec_ref_tfunc(𝕃::AbstractLattice, s, i)
+    if isa(s, Const) && isa(i, Const)
+        s, i = s.val, i.val
+        if isa(s, SimpleVector) && isa(i, Int)
+            return 1 ≤ i ≤ length(s) ? Const(s[i]) : Bottom
+        end
+    end
+    return Any
+end
+add_tfunc(Core._svec_ref, 2, 2, _svec_ref_tfunc, 1)
 @nospecs function typevar_tfunc(𝕃::AbstractLattice, n, lb_arg, ub_arg)
     lb = Union{}
     ub = Any
@@ -2316,6 +2330,9 @@ function _builtin_nothrow(𝕃::AbstractLattice, @nospecialize(f::Builtin), argt
     elseif f === Core.compilerbarrier
         na == 2 || return false
         return compilerbarrier_nothrow(argtypes[1], nothing)
+    elseif f === Core._svec_ref
+        na == 2 || return false
+        return _svec_ref_tfunc(𝕃, argtypes[1], argtypes[2]) isa Const
     end
     return false
 end
@@ -2346,7 +2363,9 @@ const _CONSISTENT_BUILTINS = Any[
     throw,
     Core.throw_methoderror,
     setfield!,
-    donotdelete
+    donotdelete,
+    memoryrefnew,
+    memoryrefoffset,
 ]
 
 # known to be effect-free (but not necessarily nothrow)
@@ -2371,6 +2390,7 @@ const _EFFECT_FREE_BUILTINS = [
     Core.throw_methoderror,
     getglobal,
     compilerbarrier,
+    Core._svec_ref,
 ]
 
 const _INACCESSIBLEMEM_BUILTINS = Any[
@@ -2404,6 +2424,7 @@ const _ARGMEM_BUILTINS = Any[
     replacefield!,
     setfield!,
     swapfield!,
+    Core._svec_ref,
 ]
 
 const _INCONSISTENT_INTRINSICS = Any[
@@ -2423,10 +2444,6 @@ const _INCONSISTENT_INTRINSICS = Any[
     # TODO needs to revive #31193 to mark this as inconsistent to be accurate
     # while preserving the currently optimizations for many math operations
     # Intrinsics.muladd_float,    # this is not interprocedurally consistent
-]
-
-const _SPECIAL_BUILTINS = Any[
-    Core._apply_iterate,
 ]
 
 # Intrinsics that require all arguments to be floats
@@ -2535,8 +2552,73 @@ function getfield_effects(𝕃::AbstractLattice, argtypes::Vector{Any}, @nospeci
     return Effects(EFFECTS_TOTAL; consistent, nothrow, inaccessiblememonly, noub)
 end
 
+# add a new builtin function to this list only after making sure that
+# `builtin_effects` is properly implemented for it
+const _EFFECTS_KNOWN_BUILTINS = Any[
+    <:,
+    ===,
+    # Core._abstracttype,
+    # _apply_iterate,
+    # Core._call_in_world_total,
+    # Core._compute_sparams,
+    # Core._defaultctors,
+    # Core._equiv_typedef,
+    Core._expr,
+    # Core._primitivetype,
+    # Core._setsuper!,
+    # Core._structtype,
+    Core._svec_ref,
+    # Core._typebody!,
+    Core._typevar,
+    apply_type,
+    compilerbarrier,
+    Core.current_scope,
+    donotdelete,
+    Core.finalizer,
+    Core.get_binding_type,
+    Core.ifelse,
+    # Core.invoke_in_world,
+    # invokelatest,
+    Core.memorynew,
+    memoryref_isassigned,
+    memoryrefget,
+    # Core.memoryrefmodify!,
+    memoryrefnew,
+    memoryrefoffset,
+    # Core.memoryrefreplace!,
+    memoryrefset!,
+    # Core.memoryrefsetonce!,
+    # Core.memoryrefswap!,
+    Core.sizeof,
+    svec,
+    Core.throw_methoderror,
+    applicable,
+    fieldtype,
+    getfield,
+    getglobal,
+    # invoke,
+    isa,
+    isdefined,
+    # isdefinedglobal,
+    modifyfield!,
+    # modifyglobal!,
+    nfields,
+    replacefield!,
+    # replaceglobal!,
+    setfield!,
+    # setfieldonce!,
+    # setglobal!,
+    # setglobalonce!,
+    swapfield!,
+    # swapglobal!,
+    throw,
+    tuple,
+    typeassert,
+    typeof
+]
+
 """
-    builtin_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Effects
+    builtin_effects(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt)::Effects
 
 Compute the effects of a builtin function call. `argtypes` should not include `f` itself.
 """
@@ -2545,7 +2627,9 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
         return intrinsic_effects(f, argtypes)
     end
 
-    @assert !contains_is(_SPECIAL_BUILTINS, f)
+    if !(f in _EFFECTS_KNOWN_BUILTINS)
+        return Effects()
+    end
 
     if f === getfield
         return getfield_effects(𝕃, argtypes, rt)
@@ -2587,9 +2671,7 @@ function builtin_effects(𝕃::AbstractLattice, @nospecialize(f::Builtin), argty
     else
         if contains_is(_CONSISTENT_BUILTINS, f)
             consistent = ALWAYS_TRUE
-        elseif f === memoryrefnew || f === memoryrefoffset
-            consistent = ALWAYS_TRUE
-        elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned
+        elseif f === memoryrefget || f === memoryrefset! || f === memoryref_isassigned || f === Core._svec_ref
             consistent = CONSISTENT_IF_INACCESSIBLEMEMONLY
         elseif f === Core._typevar || f === Core.memorynew
             consistent = CONSISTENT_IF_NOTRETURNED
@@ -2679,7 +2761,7 @@ current_scope_tfunc(interp::AbstractInterpreter, sv) = Any
 hasvarargtype(argtypes::Vector{Any}) = !isempty(argtypes) && isvarargtype(argtypes[end])
 
 """
-    builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt) -> Bool
+    builtin_nothrow(𝕃::AbstractLattice, f::Builtin, argtypes::Vector{Any}, rt)::Bool
 
 Compute throw-ness of a builtin function call. `argtypes` should not include `f` itself.
 """
@@ -2775,6 +2857,8 @@ _istypemin(@nospecialize x) = !_iszero(x) && Intrinsics.neg_int(x) === x
 function builtin_exct(𝕃::AbstractLattice, @nospecialize(f::Builtin), argtypes::Vector{Any}, @nospecialize(rt))
     if isa(f, IntrinsicFunction)
         return intrinsic_exct(𝕃, f, argtypes)
+    elseif f === Core._svec_ref
+        return BoundsError
     end
     return Any
 end

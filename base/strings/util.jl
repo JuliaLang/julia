@@ -232,7 +232,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex}) -> SubString
+    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex})::SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
 
@@ -273,7 +273,7 @@ function chopprefix(s::Union{String, SubString{String}},
 end
 
 """
-    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex}) -> SubString
+    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex})::SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
 
@@ -317,9 +317,9 @@ end
 
 
 """
-    chomp(s::AbstractString) -> SubString
+    chomp(s::AbstractString)::SubString
 
-Remove a single trailing newline from a string.
+Remove a single trailing newline (i.e. "\\r\\n" or "\\n") from a string.
 
 See also [`chop`](@ref).
 
@@ -327,6 +327,12 @@ See also [`chop`](@ref).
 ```jldoctest
 julia> chomp("Hello\\n")
 "Hello"
+
+julia> chomp("World\\r\\n")
+"World"
+
+julia> chomp("Julia\\r\\n\\n")
+"Julia\\r\\n"
 ```
 """
 function chomp(s::AbstractString)
@@ -336,20 +342,25 @@ function chomp(s::AbstractString)
     (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
     return SubString(s, 1, prevind(s,j))
 end
-function chomp(s::String)
-    i = lastindex(s)
-    if i < 1 || codeunit(s,i) != 0x0a
-        return @inbounds SubString(s, 1, i)
-    elseif i < 2 || codeunit(s,i-1) != 0x0d
-        return @inbounds SubString(s, 1, prevind(s, i))
-    else
-        return @inbounds SubString(s, 1, prevind(s, i-1))
-    end
-end
 
+@assume_effects :removable :foldable function chomp(s::Union{String, SubString{String}})
+    cu = codeunits(s)
+    ncu = length(cu)
+    len = if iszero(ncu)
+        0
+    else
+        has_lf = @inbounds(cu[ncu]) == 0x0a
+        two_bytes = ncu > 1
+        has_cr = has_lf & two_bytes & (@inbounds(cu[ncu - two_bytes]) == 0x0d)
+        ncu - (has_lf + has_cr)
+    end
+    off = s isa String ? 0 : s.offset
+    par = s isa String ? s : s.string
+    @inbounds @inline SubString{String}(par, off, len, Val{:noshift}())
+end
 """
-    lstrip([pred=isspace,] str::AbstractString) -> SubString
-    lstrip(str::AbstractString, chars) -> SubString
+    lstrip([pred=isspace,] str::AbstractString)::SubString
+    lstrip(str::AbstractString, chars)::SubString
 
 Remove leading characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -383,8 +394,8 @@ lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 lstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
 
 """
-    rstrip([pred=isspace,] str::AbstractString) -> SubString
-    rstrip(str::AbstractString, chars) -> SubString
+    rstrip([pred=isspace,] str::AbstractString)::SubString
+    rstrip(str::AbstractString, chars)::SubString
 
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -418,8 +429,8 @@ rstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments
 
 
 """
-    strip([pred=isspace,] str::AbstractString) -> SubString
-    strip(str::AbstractString, chars) -> SubString
+    strip([pred=isspace,] str::AbstractString)::SubString
+    strip(str::AbstractString, chars)::SubString
 
 Remove leading and trailing characters from `str`, either those specified by `chars` or
 those for which the function `pred` returns `true`.
@@ -449,7 +460,7 @@ strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
 ## string padding functions ##
 
 """
-    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
+    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ')::String
 
 Stringify `s` and pad the resulting string on the left with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
@@ -486,7 +497,7 @@ function lpad(
 end
 
 """
-    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
+    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ')::String
 
 Stringify `s` and pad the resulting string on the right with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
@@ -1191,8 +1202,8 @@ end
 end
 
 """
-    bytes2hex(itr) -> String
-    bytes2hex(io::IO, itr)
+    bytes2hex(itr)::String
+    bytes2hex(io::IO, itr)::Nothing
 
 Convert an iterator `itr` of bytes to its hexadecimal string representation, either
 returning a `String` via `bytes2hex(itr)` or writing the string to an `io` stream

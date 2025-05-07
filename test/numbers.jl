@@ -154,7 +154,8 @@ end
             x = unorded[i], unorded[i]
             y = unorded[j], unorded[j]
             z = Base._extrema_rf(x, y)
-            @test z === x || z === y
+            @test (z[1] === x[1] || z[1] === y[1]) &&
+                  (z[2] === x[1] || z[2] === y[1])
         end
     end
 end
@@ -829,6 +830,28 @@ end
     @test cmp(isless, NaN, 1) == 1
     @test cmp(isless, 1, NaN) == -1
     @test cmp(isless, NaN, NaN) == 0
+end
+@testset "ispositive/isnegative" begin
+    for T in [Base.uniontypes(Base.BitInteger)..., Bool, Rational{Int}, BigInt, Base.uniontypes(Base.IEEEFloat)..., BigFloat, Missing]
+        values = T[zero(T), one(T)]
+        if T <: AbstractFloat
+            push!(values, Inf, NaN) # also check Infs and NaNs
+        elseif T <: Rational
+            push!(values, 1//0) # also check Infs
+        end
+        @testset "$T" begin
+            for value in values
+                # https://github.com/JuliaLang/julia/pull/53677#discussion_r1534044582
+                # Use eval to explicitly show expressions when they fail
+                @eval begin
+                    @test ispositive($value) === ($value > 0)
+                    @test ispositive(-$value) === (-$value > 0)
+                    @test isnegative($value) === ($value < 0)
+                    @test isnegative(-$value) === (-$value < 0)
+                end
+            end
+        end
+    end
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5
@@ -1595,36 +1618,44 @@ end
         end
     end
 
-    for x=0:5, y=1:5
-        @test div(UInt(x),UInt(y)) == div(x,y)
-        @test div(UInt(x),y) == div(x,y)
-        @test div(x,UInt(y)) == div(x,y)
-        @test div(UInt(x),-y) == reinterpret(UInt,div(x,-y))
-        @test div(-x,UInt(y)) == div(-x,y)
+    @test isnan(mod(NaN, Inf))
+    @test isnan(mod(NaN, -Inf))
+    for x=0:5
+        @test mod(x, Inf) == x
+        @test mod(x, -Inf) == x
+        @test mod(-x, Inf) == -x
+        @test mod(-x, -Inf) == -x
+        for y=1:5
+            @test div(UInt(x),UInt(y)) == div(x,y)
+            @test div(UInt(x),y) == div(x,y)
+            @test div(x,UInt(y)) == div(x,y)
+            @test div(UInt(x),-y) == reinterpret(UInt,div(x,-y))
+            @test div(-x,UInt(y)) == div(-x,y)
 
-        @test fld(UInt(x),UInt(y)) == fld(x,y)
-        @test fld(UInt(x),y) == fld(x,y)
-        @test fld(x,UInt(y)) == fld(x,y)
-        @test fld(UInt(x),-y) == reinterpret(UInt,fld(x,-y))
-        @test fld(-x,UInt(y)) == fld(-x,y)
+            @test fld(UInt(x),UInt(y)) == fld(x,y)
+            @test fld(UInt(x),y) == fld(x,y)
+            @test fld(x,UInt(y)) == fld(x,y)
+            @test fld(UInt(x),-y) == reinterpret(UInt,fld(x,-y))
+            @test fld(-x,UInt(y)) == fld(-x,y)
 
-        @test cld(UInt(x),UInt(y)) == cld(x,y)
-        @test cld(UInt(x),y) == cld(x,y)
-        @test cld(x,UInt(y)) == cld(x,y)
-        @test cld(UInt(x),-y) == reinterpret(UInt,cld(x,-y))
-        @test cld(-x,UInt(y)) == cld(-x,y)
+            @test cld(UInt(x),UInt(y)) == cld(x,y)
+            @test cld(UInt(x),y) == cld(x,y)
+            @test cld(x,UInt(y)) == cld(x,y)
+            @test cld(UInt(x),-y) == reinterpret(UInt,cld(x,-y))
+            @test cld(-x,UInt(y)) == cld(-x,y)
 
-        @test rem(UInt(x),UInt(y)) == rem(x,y)
-        @test rem(UInt(x),y) == rem(x,y)
-        @test rem(x,UInt(y)) == rem(x,y)
-        @test rem(UInt(x),-y) == rem(x,-y)
-        @test rem(-x,UInt(y)) == rem(-x,y)
+            @test rem(UInt(x),UInt(y)) == rem(x,y)
+            @test rem(UInt(x),y) == rem(x,y)
+            @test rem(x,UInt(y)) == rem(x,y)
+            @test rem(UInt(x),-y) == rem(x,-y)
+            @test rem(-x,UInt(y)) == rem(-x,y)
 
-        @test mod(UInt(x),UInt(y)) == mod(x,y)
-        @test mod(UInt(x),y) == mod(x,y)
-        @test mod(x,UInt(y)) == mod(x,y)
-        @test mod(UInt(x),-y) == mod(x,-y)
-        @test mod(-x,UInt(y)) == mod(-x,y)
+            @test mod(UInt(x),UInt(y)) == mod(x,y)
+            @test mod(UInt(x),y) == mod(x,y)
+            @test mod(x,UInt(y)) == mod(x,y)
+            @test mod(UInt(x),-y) == mod(x,-y)
+            @test mod(-x,UInt(y)) == mod(-x,y)
+        end
     end
 
     @test div(typemax(UInt64)  , 1) ==  typemax(UInt64)

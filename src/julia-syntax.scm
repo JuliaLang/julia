@@ -439,9 +439,11 @@
                           ,body))))
        (if (or (symbol? name) (globalref? name))
            `(block ,@generator (method ,name) (latestworld-if-toplevel) ,mdef (unnecessary ,name))  ;; return the function
-           (if (not (null? generator))
-               `(block ,@generator ,mdef)
-               mdef))))))
+           (if (overlay? name)
+             (if (not (null? generator))
+                `(block ,@generator ,mdef)
+                mdef)
+            `(block ,@generator ,mdef (null))))))))
 
 ;; wrap expr in nested scopes assigning names to vals
 (define (scopenest names vals expr)
@@ -2519,7 +2521,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref module toplevel ssavalue null true false meta using import export public thismodule toplevel-only)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref module toplevel ssavalue null true false meta export public thismodule toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -2538,6 +2540,20 @@
 
 (define (something e)
   (find (lambda (x) (not (equal? x '(null)))) e))
+
+(define (check-import-paths what e)
+  (define (check-dot-path e)
+    (and (list? e) (eq? (car e) '|.|) (every symbol? (cdr e))))
+  (define (check-path e)
+    (and (pair? e)
+         (or (check-dot-path e)
+             (and (eq? (car e) 'as)
+                  (check-dot-path (cadr e)) (symbol? (caddr e))))))
+  (unless (and (list? e)
+               (or (every check-path e)
+                   (and (list? (car e)) (eq? (caar e) ':)
+                        (every check-path (cdar e)))))
+    (error (string "malformed \"" what "\" statement"))))
 
 ;; table mapping expression head to a function expanding that form
 (define expand-table
@@ -2583,11 +2599,13 @@
             (typ-svec  (caddr sig-svec))
             (tvars     (cddr (cadddr sig-svec)))
             (argtypes  (cdddr typ-svec))
-            (functionloc (cadr (caddddr sig-svec))))
-       (let* ((argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
-                                (expand-forms `(curly (core Tuple) ,@argtypes))
-                                (reverse tvars))))
-         `(_opaque_closure ,(or argt argtype) ,rt_lb ,rt_ub ,isva ,(length argtypes) ,allow-partial ,functionloc ,lam))))
+            (functionloc (cadr (caddddr sig-svec)))
+            (argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
+                              (expand-forms `(curly (core Tuple) ,@argtypes))
+                              (reverse tvars)))
+            (argtype (or argt argtype))
+            (argtype (if (null? stmts) argtype `(block ,@stmts ,argtype))))
+       `(_opaque_closure ,argtype ,rt_lb ,rt_ub ,isva ,(length argtypes) ,allow-partial ,functionloc ,lam)))
 
    'block
    (lambda (e)
@@ -2937,6 +2955,38 @@
     (lambda (e)
       (set! *current-desugar-loc* e)
       e)
+
+    ;; We insert (latestworld) after every call to _eval_import or _eval_using
+    ;; to avoid having to do it in eval_import_path (#57316)
+    'import
+    (lambda (e)
+      (check-import-paths "import" (cdr e))
+      `(block
+        (toplevel-only import)
+        ,.(if (eq? (caadr e) ':)
+              `((call (top _eval_import) (true) (thismodule)
+                      ,.(map (lambda (x) `(inert ,x)) (cdadr e)))
+                (latestworld))
+              (map (lambda (x)
+                     `(block
+                       (call (top _eval_import) (true) (thismodule) (null) (inert ,x))
+                       (latestworld)))
+                   (cdr e)))))
+
+    'using
+    (lambda (e)
+      (check-import-paths "using" (cdr e))
+      `(block
+        (toplevel-only using)
+        ,.(if (eq? (caadr e) ':)
+              `((call (top _eval_import) (false) (thismodule)
+                      ,.(map (lambda (x) `(inert ,x)) (cdadr e)))
+                (latestworld))
+              (map (lambda (x)
+                     `(block
+                       (call (top _eval_using) (thismodule) (inert ,x))
+                       (latestworld)))
+                   (cdr e)))))
     ))
 
 (define (has-return? e)
@@ -3181,7 +3231,7 @@
          (check-valid-name (cadr e))
          ;; remove local decls
          '(null))
-        ((memq (car e) '(using import export public))
+        ((memq (car e) '(export public))
           ;; no scope resolution - identifiers remain raw symbols
           e)
         ((eq? (car e) 'require-existing-local)
@@ -3357,11 +3407,11 @@
 (define (lambda-all-vars e)
   (append (lam:argnames e) (caddr e)))
 
-;; compute set of variables referenced in a lambda but not bound by it
+;; compute set of non-global variables referenced in a lambda but not bound by it
 (define (free-vars- e tab)
   (cond ((or (eq? e UNUSED) (underscore-symbol? e)) tab)
         ((symbol? e) (put! tab e #t))
-        ((and (pair? e) (eq? (car e) 'globalref)) tab)
+        ((and (pair? e) (memq (car e) '(global globalref))) tab)
         ((and (pair? e) (eq? (car e) 'break-block)) (free-vars- (caddr e) tab))
         ((and (pair? e) (eq? (car e) 'with-static-parameters)) (free-vars- (cadr e) tab))
         ((or (atom? e) (quoted? e)) tab)
@@ -3385,9 +3435,15 @@
               vi)
     tab))
 
+;; env:      list of vinfo (includes any closure #self#; should not include globals)
+;; captvars: list of vinfo
+;; sp:       list of symbol
+;; new-sp:   list of symbol (static params declared here)
+;; methsig:  `(call (core svec) ...)
+;; tab:      table of (name . var-info)
 (define (analyze-vars-lambda e env captvars sp new-sp methsig tab)
   (let* ((args (lam:args e))
-         (locl (caddr e))
+         (locl (lam:vinfo e))
          (allv (nconc (map arg-name args) locl))
          (fv   (let* ((fv (diff (free-vars (lam:body e)) allv))
                       ;; add variables referenced in declared types for free vars
@@ -3397,27 +3453,23 @@
                                             fv))))
                  (append (diff dv fv) fv)))
          (sig-fv (if methsig (free-vars methsig) '()))
-         (glo  (find-global-decls (lam:body e)))
          ;; make var-info records for vars introduced by this lambda
          (vi   (nconc
                 (map (lambda (decl) (make-var-info (decl-var decl)))
                      args)
                 (map make-var-info locl)))
-         (capt-sp (filter (lambda (v) (or (and (memq v fv) (not (memq v glo)) (not (memq v new-sp)))
+         (capt-sp (filter (lambda (v) (or (and (memq v fv) (not (memq v new-sp)))
                                           (memq v sig-fv)))
                           sp))
          ;; captured vars: vars from the environment that occur
          ;; in our set of free variables (fv).
          (cv    (append (filter (lambda (v) (and (memq (vinfo:name v) fv)
-                                                 (not (memq (vinfo:name v) new-sp))
-                                                 (not (memq (vinfo:name v) glo))))
+                                                 (not (memq (vinfo:name v) new-sp))))
                                 env)
                         (map make-var-info capt-sp)))
          (new-env (append vi
                           ;; new environment: add our vars
-                          (filter (lambda (v)
-                                    (and (not (memq (vinfo:name v) allv))
-                                         (not (memq (vinfo:name v) glo))))
+                          (filter (lambda (v) (not (memq (vinfo:name v) allv)))
                                   env))))
     (analyze-vars (lam:body e)
                   new-env
@@ -3811,7 +3863,7 @@ f(x) = yt(x)
          thunk with-static-parameters toplevel-only
          global globalref global-if-global assign-const-if-global isglobal thismodule
          const atomic null true false ssavalue isdefined toplevel module lambda
-         error gc_preserve_begin gc_preserve_end import using export public inline noinline purity)))
+         error gc_preserve_begin gc_preserve_end export public inline noinline purity)))
 
 (define (local-in? s lam (tab #f))
   (or (and tab (has? tab s))
@@ -4043,7 +4095,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core globalref thismodule lineinfo line break inert module toplevel null true false meta import using) e)
+          ((quote top core global globalref thismodule lineinfo line break inert module toplevel null true false meta) e)
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)
@@ -4107,6 +4159,7 @@ f(x) = yt(x)
                                            (capt-var-access v fname opaq)
                                            v)))
                                    cvs)))
+               (set-car! (cdddr (lam:vinfo lam2)) '()) ;; must capture static_parameters as values inside opaque_closure
                `(new_opaque_closure
                  ,(cadr e) ,(or (caddr e) '(call (core apply_type) (core Union))) ,(or (cadddr e) '(core Any)) ,allow-partial
                  (opaque_closure_method (null) ,nargs ,isva ,functionloc ,(convert-lambda lam2 (car (lam:args lam2)) #f '() (symbol-to-idx-map cvs) parsed-method-stack))
@@ -4124,6 +4177,7 @@ f(x) = yt(x)
                                 '()
                                 (map-cl-convert (butlast (cdr sig))
                                                 fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)))
+                  (r        (make-ssavalue))
                   (sig      (and sig (if (eq? (car sig) 'block)
                                          (last sig)
                                          sig))))
@@ -4147,7 +4201,7 @@ f(x) = yt(x)
                        ((null? cvs)
                         `(block
                           ,@sp-inits
-                          (method ,(cadr e) ,(cl-convert
+                          (= ,r (method ,(cadr e) ,(cl-convert
                                           ;; anonymous functions with keyword args generate global
                                           ;; functions that refer to the type of a local function
                                           (rename-sig-types sig namemap)
@@ -4159,17 +4213,19 @@ f(x) = yt(x)
                                      `(lambda ,(cadr lam2)
                                         (,(clear-capture-bits (car vis))
                                          ,@(cdr vis))
-                                        ,body)))
-                          (latestworld)))
+                                        ,body))))
+                          (latestworld)
+                          ,r))
                        (else
                         (let* ((exprs     (lift-toplevel (convert-lambda lam2 '|#anon| #t '() #f parsed-method-stack)))
                                (top-stmts (cdr exprs))
                                (newlam    (compact-and-renumber (linearize (car exprs)) 'none 0)))
                           `(toplevel-butfirst
                             (block ,@sp-inits
-                                   (method ,(cadr e) ,(cl-convert sig fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)
-                                           ,(julia-bq-macro newlam))
-                                   (latestworld))
+                                   (= ,r (method ,(cadr e) ,(cl-convert sig fname lam namemap defined toplevel interp opaq parsed-method-stack globals locals)
+                                           ,(julia-bq-macro newlam)))
+                                   (latestworld)
+                                   ,r)
                             ,@top-stmts))))
 
                  ;; local case - lift to a new type at top level
@@ -4659,9 +4715,9 @@ f(x) = yt(x)
           (let ((e1 (if (and arg-map (symbol? e))
                         (get arg-map e e)
                         e)))
-            (if (and value (or (underscore-symbol? e)
-                               (and (pair? e) (eq? (car e) 'globalref)
-                                    (underscore-symbol? (cadr e)))))
+            (if (or (underscore-symbol? e)
+                    (and (pair? e) (eq? (car e) 'globalref)
+                         (underscore-symbol? (cadr e))))
                 (error (string "all-underscore identifiers are write-only and their values cannot be used in expressions" (format-loc current-loc))))
             (cond (tail  (emit-return tail e1))
                   (value e1)
@@ -4996,8 +5052,10 @@ f(x) = yt(x)
                                  (let ((l  (make-ssavalue)))
                                    (emit `(= ,l ,(compile lam break-labels #t #f)))
                                    l))))
-                   (emit `(method ,(or (cadr e) '(false)) ,sig ,lam))
-                   (if value (compile '(null) break-labels value tail)))
+                   (let ((val (make-ssavalue)))
+                    (emit `(= ,val (method ,(or (cadr e) '(false)) ,sig ,lam)))
+                    (if tail (emit-return tail val))
+                    val))
                  (cond (tail  (emit-return tail e))
                        (value e)
                        (else  (emit e)))))
@@ -5035,7 +5093,7 @@ f(x) = yt(x)
              '(null))
 
             ;; other top level expressions
-            ((import using export public latestworld)
+            ((export public latestworld)
              (check-top-level e)
              (if (not (eq? (car e) 'latestworld))
               (emit e))
@@ -5176,6 +5234,14 @@ f(x) = yt(x)
 (define (set-lineno! lineinfo num)
   (set-car! (cddr lineinfo) num))
 
+;; note that the 'list and 'block atoms make all lists 1-indexed.
+;; returns a 5-element vector containing:
+;;   code:           `(block ,@(n expressions))
+;;   locs:           list of line-table index, where code[i] has lineinfo line-table[locs[i]]
+;;   line-table:     list of `(lineinfo file.jl 123 0)'
+;;   ssavalue-table: table of (ssa-num . code-index)
+;;                   where ssavalue references in `code` need this remapping
+;;   label-table:    table of (label . code-index)
 (define (compact-ir body file line)
   (let ((code         '(block))
         (locs         '(list))
@@ -5278,11 +5344,11 @@ f(x) = yt(x)
             ((nospecialize-meta? e)
              ;; convert nospecialize vars to slot numbers
              `(meta ,(cadr e) ,@(map renumber-stuff (cddr e))))
-            ((or (atom? e) (quoted? e) (memq (car e) '(using import export public global toplevel)))
+            ((or (atom? e) (quoted? e) (memq (car e) '(export public global toplevel)))
              e)
             ((ssavalue? e)
              (let ((idx (get ssavalue-table (cadr e) #f)))
-               (if (not idx) (begin (prn e) (prn lam) (error "ssavalue with no def")))
+               (if (not idx) (error "internal bug: ssavalue with no def"))
                `(ssavalue ,idx)))
             ((eq? (car e) 'goto)
              `(goto ,(get label-table (cadr e))))
@@ -5321,7 +5387,7 @@ f(x) = yt(x)
 
 ;; expander entry point
 
-(define (julia-expand1 ex file line)
+(define (julia-lower1 ex file line)
   (compact-and-renumber
    (linearize
     (closure-convert
@@ -5330,7 +5396,7 @@ f(x) = yt(x)
 
 (define *current-desugar-loc* #f)
 
-(define (julia-expand0 ex lno)
+(define (julia-lower0 ex lno)
   (with-bindings ((*current-desugar-loc* lno))
    (trycatch (expand-forms ex)
              (lambda (e)
@@ -5343,7 +5409,7 @@ f(x) = yt(x)
                    (error (string (cadr e) (format-loc *current-desugar-loc*))))
                    (raise e)))))
 
-(define (julia-expand ex (file 'none) (line 0))
-  (julia-expand1
-   (julia-expand0
+(define (julia-lower ex (file 'none) (line 0))
+  (julia-lower1
+   (julia-lower0
     (julia-expand-macroscope ex) `(line ,line ,file)) file line))

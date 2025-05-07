@@ -105,6 +105,11 @@ precompile_test_harness(false) do dir
               process_state_calls = 0
               @assert process_state() === process_state()
               @assert process_state_calls === 0
+
+              const empty_state = Base.OncePerProcess{Nothing}() do
+                  return nothing
+              end
+              @assert empty_state() === nothing
           end
           """)
     write(Foo2_file,
@@ -259,6 +264,7 @@ precompile_test_harness(false) do dir
 
               # check that @ccallable works from precompiled modules
               Base.@ccallable Cint f35014(x::Cint) = x+Cint(1)
+              Base.@ccallable "f35014_other" f35014_2(x::Cint)::Cint = x+Cint(1)
 
               # check that Tasks work from serialized state
               ch1 = Channel(x -> nothing)
@@ -399,6 +405,8 @@ precompile_test_harness(false) do dir
             let foo_ptr = Libdl.dlopen(ocachefile::String, RTLD_NOLOAD)
                 f35014_ptr = Libdl.dlsym(foo_ptr, :f35014)
                 @test ccall(f35014_ptr, Int32, (Int32,), 3) == 4
+                f35014_other_ptr = Libdl.dlsym(foo_ptr, :f35014_other)
+                @test ccall(f35014_other_ptr, Int32, (Int32,), 3) == 4
             end
         else
             ocachefile = nothing
@@ -2405,6 +2413,11 @@ precompile_test_harness("Package top-level load itself") do load_path
     invokelatest() do
         @test UsingSelf.x == 3
     end
+end
+
+# Verify that inference / caching was not performed for any macros in the sysimage
+let m = only(methods(Base.var"@big_str"))
+    @test m.specializations === Core.svec() || !isdefined(m.specializations, :cache)
 end
 
 finish_precompile_test!()

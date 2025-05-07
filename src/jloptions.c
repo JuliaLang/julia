@@ -104,6 +104,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0,    // nprocs
                         NULL, // machine_file
                         NULL, // project
+                        NULL, // program_file
                         0,    // isinteractive
                         0,    // color
                         JL_OPTIONS_HISTORYFILE_ON, // history file
@@ -169,11 +170,12 @@ static const char opts[]  =
     " --help-hidden                                 Print uncommon options not shown by `-h`\n\n"
 
     // startup options
-    " --project[={<dir>|@temp|@.}]                  Set <dir> as the active project/environment.\n"
+    " --project[={<dir>|@temp|@.|@script[<rel>]}]   Set <dir> as the active project/environment.\n"
     "                                               Or, create a temporary environment with `@temp`\n"
     "                                               The default @. option will search through parent\n"
     "                                               directories until a Project.toml or JuliaProject.toml\n"
-    "                                               file is found.\n"
+    "                                               file is found. @script is similar, but searches up from\n"
+    "                                               the programfile or a path relative to programfile.\n"
     " -J, --sysimage <file>                         Start up with the given system image file\n"
     " -H, --home <dir>                              Set location of `julia` executable\n"
     " --startup-file={yes*|no}                      Load `JULIA_DEPOT_PATH/config/startup.jl`; \n"
@@ -587,12 +589,19 @@ restart_switch:
             jl_options.use_experimental_features = JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_YES;
             break;
         case opt_sysimage_native_code:
-            if (!strcmp(optarg,"yes"))
+            if (!strcmp(optarg,"yes")) {
                 jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES;
-            else if (!strcmp(optarg,"no"))
+            }
+            else if (!strcmp(optarg,"no")) {
                 jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO;
-            else
+                if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
+                    jl_errorf("julia: --sysimage-native-code=no is deprecated");
+                else if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ON)
+                    jl_printf(JL_STDERR, "WARNING: --sysimage-native-code=no is deprecated\n");
+            }
+            else {
                 jl_errorf("julia: invalid argument to --sysimage-native-code={yes|no} (%s)", optarg);
+            }
             break;
         case opt_compiled_modules:
             if (!strcmp(optarg,"yes"))
@@ -1012,6 +1021,7 @@ restart_switch:
                       "This is a bug, please report it.", c);
         }
     }
+    jl_options.program_file = optind < argc ? strdup(argv[optind]) : "";
     parsing_args_done:
     if (!jl_options.use_experimental_features) {
         if (jl_options.trim != JL_TRIM_NO)

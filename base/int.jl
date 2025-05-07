@@ -97,7 +97,7 @@ inv(x::Integer) = float(one(x)) / float(x)
 (/)(x::BitInteger, y::BitInteger) = float(x) / float(y)
 
 """
-    isodd(x::Number) -> Bool
+    isodd(x::Number)::Bool
 
 Return `true` if `x` is an odd integer (that is, an integer not divisible by 2), and `false` otherwise.
 
@@ -117,7 +117,7 @@ isodd(n::Number) = isreal(n) && isodd(real(n))
 isodd(n::Real) = isinteger(n) && !iszero(rem(Integer(n), 2))
 
 """
-    iseven(x::Number) -> Bool
+    iseven(x::Number)::Bool
 
 Return `true` if `x` is an even integer (that is, an integer divisible by 2), and `false` otherwise.
 
@@ -138,6 +138,8 @@ iseven(n::Real) = isinteger(n) && iszero(rem(Integer(n), 2))
 
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
+
+isnegative(x::Unsigned) = false
 
 flipsign(x::T, y::T) where {T<:BitSigned} = flipsign_int(x, y)
 flipsign(x::BitSigned, y::BitSigned) = flipsign_int(promote(x, y)...) % typeof(x)
@@ -250,7 +252,7 @@ end
 The reduction of `x` modulo `y`, or equivalently, the remainder of `x` after floored
 division by `y`, i.e. `x - y*fld(x,y)` if computed without intermediate rounding.
 
-The result will have the same sign as `y`, and magnitude less than `abs(y)` (with some
+The result will have the same sign as `y` if `isfinite(y)`, and magnitude less than `abs(y)` (with some
 exceptions, see note below).
 
 !!! note
@@ -405,7 +407,7 @@ bswap(x::Union{Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128}) =
     bswap_int(x)
 
 """
-    count_ones(x::Integer) -> Integer
+    count_ones(x::Integer)::Integer
 
 Number of ones in the binary representation of `x`.
 
@@ -421,7 +423,7 @@ julia> count_ones(Int32(-1))
 count_ones(x::BitInteger) = (ctpop_int(x) % Int)::Int
 
 """
-    leading_zeros(x::Integer) -> Integer
+    leading_zeros(x::Integer)::Integer
 
 Number of zeros leading the binary representation of `x`.
 
@@ -434,7 +436,7 @@ julia> leading_zeros(Int32(1))
 leading_zeros(x::BitInteger) = (ctlz_int(x) % Int)::Int
 
 """
-    trailing_zeros(x::Integer) -> Integer
+    trailing_zeros(x::Integer)::Integer
 
 Number of zeros trailing the binary representation of `x`.
 
@@ -447,7 +449,7 @@ julia> trailing_zeros(2)
 trailing_zeros(x::BitInteger) = (cttz_int(x) % Int)::Int
 
 """
-    count_zeros(x::Integer) -> Integer
+    count_zeros(x::Integer)::Integer
 
 Number of zeros in the binary representation of `x`.
 
@@ -463,7 +465,7 @@ julia> count_zeros(-1)
 count_zeros(x::Integer) = count_ones(~x)
 
 """
-    leading_ones(x::Integer) -> Integer
+    leading_ones(x::Integer)::Integer
 
 Number of ones leading the binary representation of `x`.
 
@@ -476,7 +478,7 @@ julia> leading_ones(UInt32(2 ^ 32 - 2))
 leading_ones(x::Integer) = leading_zeros(~x)
 
 """
-    trailing_ones(x::Integer) -> Integer
+    trailing_ones(x::Integer)::Integer
 
 Number of ones trailing the binary representation of `x`.
 
@@ -489,7 +491,7 @@ julia> trailing_ones(3)
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
 """
-    top_set_bit(x::Integer) -> Integer
+    top_set_bit(x::Integer)::Integer
 
 The number of bits in `x`'s binary representation, excluding leading zeros.
 
@@ -595,9 +597,9 @@ bitrotate(x::T, k::Integer) where {T <: BitInteger} =
 
 for fname in (:mod, :rem)
     @eval @doc """
-        rem(x::Integer, T::Type{<:Integer}) -> T
-        mod(x::Integer, T::Type{<:Integer}) -> T
-        %(x::Integer, T::Type{<:Integer}) -> T
+        rem(x::Integer, T::Type{<:Integer})::T
+        mod(x::Integer, T::Type{<:Integer})::T
+        %(x::Integer, T::Type{<:Integer})::T
 
     Find `y::T` such that `x` ≡ `y` (mod n), where n is the number of integers representable
     in `T`, and `y` is an integer in `[typemin(T),typemax(T)]`.

@@ -182,7 +182,7 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n")
             if t.backtrace !== nothing
                 # Capture error message and indent to match
-                join(io, ("      " * line for line in split(t.backtrace, "\n")), "\n")
+                join(io, ("      " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
             end
         end
     elseif t.test_type === :test_throws_nothing
@@ -199,7 +199,6 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n     Context: ", t.context)
         end
     end
-    println(io) # add some visual space to separate sequential failures
 end
 
 """
@@ -269,7 +268,7 @@ function Base.show(io::IO, t::Error)
         println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        join(io, ("  " * line for line in split(t.backtrace, "\n")), "\n")
+        join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     elseif t.test_type === :test_unbroken
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
@@ -279,7 +278,7 @@ function Base.show(io::IO, t::Error)
         # we had an error outside of a @test
         println(io, "  Got exception outside of a @test")
         # Capture error message and indent to match
-        join(io, ("  " * line for line in split(t.backtrace, "\n")), "\n")
+        join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     end
 end
 
@@ -340,46 +339,57 @@ struct Threw <: ExecutionResult
     source::LineNumberNode
 end
 
-function eval_test(evaluated::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
-    evaled_args = evaluated.args
+function eval_test_comparison(comparison::Expr, quoted::Expr, source::LineNumberNode, negate::Bool=false)
+    comparison.head === :comparison || throw(ArgumentError("$comparison is not a comparison expression"))
+    comparison_args = comparison.args
     quoted_args = quoted.args
-    n = length(evaled_args)
+    n = length(comparison_args)
     kw_suffix = ""
-    if evaluated.head === :comparison
-        args = evaled_args
-        res = true
-        i = 1
-        while i < n
-            a, op, b = args[i], args[i+1], args[i+2]
-            if res
-                res = op(a, b)
-            end
-            quoted_args[i] = a
-            quoted_args[i+2] = b
-            i += 2
+
+    res = true
+    i = 1
+    while i < n
+        a, op, b = comparison_args[i], comparison_args[i+1], comparison_args[i+2]
+        if res
+            res = op(a, b)
         end
+        quoted_args[i] = a
+        quoted_args[i+2] = b
+        i += 2
+    end
 
-    elseif evaluated.head === :call
-        op = evaled_args[1]
-        kwargs = (evaled_args[2]::Expr).args  # Keyword arguments from `Expr(:parameters, ...)`
-        args = evaled_args[3:n]
+    if negate
+        res = !res
+        quoted = Expr(:call, :!, quoted)
+    end
 
-        res = op(args...; kwargs...)
+    Returned(res,
+             # stringify arguments in case of failure, for easy remote printing
+             res === true ? quoted : sprint(print, quoted, context=(:limit => true)) * kw_suffix,
+             source)
+end
 
-        # Create "Evaluated" expression which looks like the original call but has all of
-        # the arguments evaluated
-        func_sym = quoted_args[1]::Union{Symbol,Expr}
-        if isempty(kwargs)
-            quoted = Expr(:call, func_sym, args...)
-        elseif func_sym === :≈ && !res
-            quoted = Expr(:call, func_sym, args...)
-            kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
-        else
-            kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
-            quoted = Expr(:call, func_sym, kwargs_expr, args...)
-        end
+function eval_test_function(func, args, kwargs, quoted_func::Union{Expr,Symbol}, source::LineNumberNode, negate::Bool=false)
+    res = func(args...; kwargs...)
+
+    # Create "Evaluated" expression which looks like the original call but has all of
+    # the arguments evaluated
+    kw_suffix = ""
+    if quoted_func === :≈ && !res
+        kw_suffix = " ($(join(["$k=$v" for (k, v) in kwargs], ", ")))"
+        quoted_args = args
+    elseif isempty(kwargs)
+        quoted_args = args
     else
-        throw(ArgumentError("Unhandled expression type: $(evaluated.head)"))
+        kwargs_expr = Expr(:parameters, [Expr(:kw, k, v) for (k, v) in kwargs]...)
+        quoted_args = [kwargs_expr, args...]
+    end
+
+    # Properly render broadcast function call syntax, e.g. `(==).(1, 2)` or `Base.:(==).(1, 2)`.
+    quoted = if isa(quoted_func, Expr) && quoted_func.head === :. && length(quoted_func.args) == 1
+        Expr(:., quoted_func.args[1], Expr(:tuple, quoted_args...))
+    else
+        Expr(:call, quoted_func, quoted_args...)
     end
 
     if negate
@@ -576,14 +586,90 @@ macro test_skip(ex, kws...)
     return :(record(get_testset(), $testres))
 end
 
-function _can_escape_call(@nospecialize ex)
-    ex.head === :call || return false
+function _should_escape_call(@nospecialize ex)
+    isa(ex, Expr) || return false
 
-    # Broadcasted functions are not currently supported
-    first(string(ex.args[1])) != '.' || return false
+    args = if ex.head === :call
+        ex.args[2:end]
+    elseif ex.head === :. && length(ex.args) == 2 && isa(ex.args[2], Expr) && ex.args[2].head === :tuple
+        # Support for broadcasted function calls (e.g. `(==).(1, 2)`)
+        ex.args[2].args
+    else
+        # Expression is not a function call
+        return false
+    end
 
-    # At least one positional argument or keyword
-    return length(ex.args) > 1
+    # Avoid further processing on calls without any arguments
+    return length(args) > 0
+end
+
+# Escapes all of the positional arguments and keywords of a function such that we can call
+# the function at runtime.
+function _escape_call(@nospecialize ex)
+    if isa(ex, Expr) && ex.head === :call
+        # Update broadcast comparison calls to the function call syntax
+        # (e.g. `1 .== 1` becomes `(==).(1, 1)`)
+        func_str = string(ex.args[1])
+        escaped_func = if first(func_str) == '.'
+            esc(Expr(:., Symbol(func_str[2:end])))
+        else
+            esc(ex.args[1])
+        end
+        quoted_func = QuoteNode(ex.args[1])
+        args = ex.args[2:end]
+    elseif isa(ex, Expr) && ex.head === :. && length(ex.args) == 2 && isa(ex.args[2], Expr) && ex.args[2].head === :tuple
+        # Support for broadcasted function calls (e.g. `(==).(1, 2)`)
+        escaped_func = if isa(ex.args[1], Expr) && ex.args[1].head == :.
+            Expr(:call, Expr(:., :Broadcast, QuoteNode(:BroadcastFunction)), esc(ex.args[1]))
+        else
+            Expr(:., esc(ex.args[1]))
+        end
+        quoted_func = QuoteNode(Expr(:., ex.args[1]))
+        args = ex.args[2].args
+    else
+        throw(ArgumentError("$ex is not a call expression"))
+    end
+
+    escaped_args = []
+    escaped_kwargs = []
+
+    # Positional arguments and keywords that occur before `;`. Note that the keywords are
+    # being revised into a form we can splat.
+    for a in args
+        if isa(a, Expr) && a.head === :parameters
+            continue
+        elseif isa(a, Expr) && a.head === :kw
+            # Keywords that occur before `;`. Note that the keywords are being revised into
+            # a form we can splat.
+            push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
+        elseif isa(a, Expr) && a.head === :...
+            push!(escaped_args, Expr(:..., esc(a.args[1])))
+        else
+            push!(escaped_args, esc(a))
+        end
+    end
+
+    # Keywords that occur after ';'
+    if length(args) > 0 && isa(args[1], Expr) && args[1].head === :parameters
+        for kw in args[1].args
+            if isa(kw, Expr) && kw.head === :kw
+                push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(kw.args[1]), esc(kw.args[2])))
+            elseif isa(kw, Expr) && kw.head === :...
+                push!(escaped_kwargs, Expr(:..., esc(kw.args[1])))
+            elseif isa(kw, Expr) && kw.head === :.
+                push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(kw.args[2].value), esc(Expr(:., kw.args[1], QuoteNode(kw.args[2].value)))))
+            elseif isa(kw, Symbol)
+                push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(kw), esc(kw)))
+            end
+        end
+    end
+
+    return (;
+        func=escaped_func,
+        args=escaped_args,
+        kwargs=escaped_kwargs,
+        quoted_func,
+    )
 end
 
 # An internal function, called by the code generated by the @test
@@ -613,60 +699,22 @@ function get_test_result(ex, source)
         ex = Expr(:comparison, ex.args[1], ex.head, ex.args[2])
     end
     if isa(ex, Expr) && ex.head === :comparison
-        # pass all terms of the comparison to `eval_comparison`, as an Expr
+        # pass all terms of the comparison to `eval_test_comparison`, as a tuple
         escaped_terms = [esc(arg) for arg in ex.args]
         quoted_terms = [QuoteNode(arg) for arg in ex.args]
-        testret = :(eval_test(
+        testret = :(eval_test_comparison(
             Expr(:comparison, $(escaped_terms...)),
             Expr(:comparison, $(quoted_terms...)),
             $(QuoteNode(source)),
             $negate,
         ))
-    elseif isa(ex, Expr) && _can_escape_call(ex)
-        escaped_func = esc(ex.args[1])
-        quoted_func = QuoteNode(ex.args[1])
-
-        escaped_args = []
-        escaped_kwargs = []
-
-        # Keywords that occur before `;`. Note that the keywords are being revised into
-        # a form we can splat.
-        for a in ex.args[2:end]
-            if isa(a, Expr) && a.head === :kw
-                push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
-            end
-        end
-
-        # Keywords that occur after ';'
-        parameters_expr = ex.args[2]
-        if isa(parameters_expr, Expr) && parameters_expr.head === :parameters
-            for a in parameters_expr.args
-                if isa(a, Expr) && a.head === :kw
-                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[1]), esc(a.args[2])))
-                elseif isa(a, Expr) && a.head === :...
-                    push!(escaped_kwargs, Expr(:..., esc(a.args[1])))
-                elseif isa(a, Expr) && a.head === :.
-                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a.args[2].value), esc(Expr(:., a.args[1], QuoteNode(a.args[2].value)))))
-                elseif isa(a, Symbol)
-                    push!(escaped_kwargs, Expr(:call, :(=>), QuoteNode(a), esc(a)))
-                end
-            end
-        end
-
-        # Positional arguments
-        for a in ex.args[2:end]
-            isa(a, Expr) && a.head in (:kw, :parameters) && continue
-
-            if isa(a, Expr) && a.head === :...
-                push!(escaped_args, Expr(:..., esc(a.args[1])))
-            else
-                push!(escaped_args, esc(a))
-            end
-        end
-
-        testret = :(eval_test(
-            Expr(:call, $escaped_func, Expr(:parameters, $(escaped_kwargs...)), $(escaped_args...)),
-            Expr(:call, $quoted_func),
+    elseif _should_escape_call(ex)
+        call = _escape_call(ex)
+        testret = :(eval_test_function(
+            $(call.func),
+            ($(call.args...),),
+            ($(call.kwargs...),),
+            $(call.quoted_func),
             $(QuoteNode(source)),
             $negate,
         ))
@@ -1120,12 +1168,13 @@ end
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TESTSET_PRINT_ENABLE[])
     if print_result
+        println() # add some visual space to separate sequential failures
         print(ts.description, ": ")
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
             if !isa(t, Error) # if not gets printed in the show method
-                Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)))
+                Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)); prefix="  ")
             end
             println()
         end
@@ -1136,7 +1185,7 @@ function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TE
 end
 
 """
-    print_verbose(::AbstractTestSet) -> Bool
+    print_verbose(::AbstractTestSet)::Bool
 
 Whether printing involving this `AbstractTestSet` should be verbose or not.
 
@@ -1319,7 +1368,7 @@ function filter_errors(ts::DefaultTestSet)
 end
 
 """
-    Test.get_rng(ts::AbstractTestSet) -> Union{Nothing,AbstractRNG}
+    Test.get_rng(ts::AbstractTestSet)::Union{Nothing,AbstractRNG}
 
 Return the global random number generator (RNG) associated to the input testset `ts`.
 If no RNG is associated to it, return `nothing`.
@@ -1327,7 +1376,7 @@ If no RNG is associated to it, return `nothing`.
 get_rng(::AbstractTestSet) = nothing
 get_rng(ts::DefaultTestSet) = ts.rng
 """
-    Test.set_rng!(ts::AbstractTestSet, rng::AbstractRNG) -> AbstractRNG
+    Test.set_rng!(ts::AbstractTestSet, rng::AbstractRNG)::AbstractRNG
 
 Set the global random number generator (RNG) associated to the input testset `ts` to `rng`.
 If no RNG is associated to it, do nothing.
@@ -1370,7 +1419,7 @@ struct TestCounts
 end
 
 """"
-    get_test_counts(::AbstractTestSet) -> TestCounts
+    get_test_counts(::AbstractTestSet)::TestCounts
 
 Recursive function that counts the number of test results of each
 type directly in the testset, and totals across the child testsets.
@@ -1601,9 +1650,9 @@ trigonometric identities |    4      4  0.2s
 
 # `@testset for`
 
-When `@testset for` is used, the macro starts a new test for each iteration of
+When `@testset for` is used, the macro starts a new test set for each iteration of
 the provided loop. The semantics of each test set are otherwise identical to that
-of that `begin/end` case (as if used for each loop iteration).
+of the `begin/end` case (as if used for each loop iteration).
 
 # `@testset let`
 
@@ -1638,7 +1687,6 @@ Test Failed at none:3
   Expression: !(iszero(real(logi)))
    Evaluated: !(iszero(0.0))
      Context: logi = 0.0 + 1.5707963267948966im
-
 ERROR: There was an error during testing
 
 julia> @testset let logi = log(im), op = !iszero
@@ -1650,7 +1698,6 @@ Test Failed at none:3
    Evaluated: op(0.0)
      Context: logi = 0.0 + 1.5707963267948966im
               op = !iszero
-
 ERROR: There was an error during testing
 ```
 """

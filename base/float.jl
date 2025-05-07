@@ -406,8 +406,8 @@ See also [`trunc`](@ref).
 julia> unsafe_trunc(Int, -2.2)
 -2
 
-julia> unsafe_trunc(Int, NaN)
--9223372036854775808
+julia> unsafe_trunc(Int, NaN) isa Int
+true
 ```
 """
 function unsafe_trunc end
@@ -603,7 +603,10 @@ function rem(x::T, y::T) where {T<:IEEEFloat}
     end
 end
 
-function mod(x::T, y::T) where {T<:AbstractFloat}
+function mod(x::T, y::T) where T<:AbstractFloat
+    if isinf(y) && isfinite(x)
+        return x
+    end
     r = rem(x,y)
     if r == 0
         copysign(r,y)
@@ -696,7 +699,7 @@ end
 abs(x::IEEEFloat) = abs_float(x)
 
 """
-    isnan(f) -> Bool
+    isnan(f)::Bool
 
 Test whether a number value is a NaN, an indeterminate value which is neither an infinity
 nor a finite number ("not a number").
@@ -711,7 +714,7 @@ isfinite(x::Real) = decompose(x)[3] != 0
 isfinite(x::Integer) = true
 
 """
-    isinf(f) -> Bool
+    isinf(f)::Bool
 
 Test whether a number is infinite.
 
@@ -926,7 +929,7 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
 end
 
 """
-    issubnormal(f) -> Bool
+    issubnormal(f)::Bool
 
 Test whether a floating point number is subnormal.
 

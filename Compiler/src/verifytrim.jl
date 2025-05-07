@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-import ..Compiler: verify_typeinf_trim
+import ..Compiler: verify_typeinf_trim, NativeInterpreter, argtypes_to_type, compileable_specialization_for_call
 
 using ..Compiler:
      # operators
@@ -15,9 +15,9 @@ using ..Compiler:
      hasintersect, haskey, in, isdispatchelem, isempty, isexpr, iterate, length, map!, max,
      pop!, popfirst!, push!, pushfirst!, reinterpret, reverse!, reverse, setindex!,
      setproperty!, similar, singleton_type, sptypes_from_meth_instance,
-     unsafe_pointer_to_objref, widenconst,
+     unsafe_pointer_to_objref, widenconst, isconcretetype,
      # misc
-     @nospecialize, C_NULL
+     @nospecialize, @assert, C_NULL
 using ..IRShow: LineInfoNode, print, show, println, append_scopes!, IOContext, IO, normalize_method_name
 using ..Base: Base, sourceinfo_slotnames
 using ..Base.StackTraces: StackFrame
@@ -110,7 +110,7 @@ end
 function verify_print_error(io::IOContext{IO}, desc::CallMissing, parents::ParentMap)
     (; codeinst, codeinfo, sptypes, stmtidx, desc) = desc
     frames = verify_create_stackframes(codeinst, stmtidx, parents)
-    print(io, desc, " from ")
+    print(io, desc, " from statement ")
     verify_print_stmt(io, codeinfo, sptypes, stmtidx)
     Base.show_backtrace(io, frames)
     print(io, "\n\n")
@@ -166,7 +166,7 @@ function may_dispatch(@nospecialize ftyp)
     end
 end
 
-function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspected::IdSet{CodeInstance}, caches::IdDict{MethodInstance,CodeInstance}, parents::ParentMap, errors::ErrorList)
+function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance, codeinfo::CodeInfo, inspected::IdSet{CodeInstance}, caches::IdDict{MethodInstance,CodeInstance}, parents::ParentMap, errors::ErrorList)
     mi = get_ci_mi(codeinst)
     sptypes = sptypes_from_meth_instance(mi)
     src = codeinfo.code
@@ -181,6 +181,11 @@ function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspec
             if edge isa CodeInstance
                 haskey(parents, edge) || (parents[edge] = (codeinst, i))
                 edge in inspected && continue
+                edge_mi = get_ci_mi(edge)
+                if edge_mi === edge.def
+                    ci = get(caches, edge_mi, nothing)
+                    ci isa CodeInstance && continue # assume that only this_world matters for trim
+                end
             end
             # TODO: check for calls to Base.atexit?
         elseif isexpr(stmt, :call)
@@ -194,7 +199,9 @@ function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspec
                 if !may_dispatch(ftyp)
                     continue
                 end
-                if Core._apply_iterate isa ftyp
+                if !isconcretetype(ftyp)
+                    error = "unresolved call to (unknown) builtin"
+                elseif Core._apply_iterate isa ftyp
                     if length(stmt.args) >= 3
                         # args[1] is _apply_iterate object
                         # args[2] is invoke object
@@ -214,13 +221,35 @@ function verify_codeinstance!(codeinst::CodeInstance, codeinfo::CodeInfo, inspec
                     end
                 elseif Core.finalizer isa ftyp
                     if length(stmt.args) == 3
-                        # TODO: check that calling `args[1](args[2])` is defined before warning
+                        finalizer = argextype(stmt.args[2], codeinfo, sptypes)
+                        obj = argextype(stmt.args[3], codeinfo, sptypes)
+                        atype = argtypes_to_type(Any[finalizer, obj])
+
+                        mi = compileable_specialization_for_call(interp, atype)
+                        if mi !== nothing
+                            ci = get(caches, mi, nothing)
+                            ci isa CodeInstance && continue
+                        end
+
                         error = "unresolved finalizer registered"
-                        warn = true
                     end
-                else
-                    error = "unresolved call to builtin"
-                end
+                elseif Core._apply isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core._apply`"
+                elseif Core._call_in_world_total isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core._call_in_world_total`"
+                elseif Core.invoke isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.invoke`"
+                elseif Core.invoke_in_world isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.invoke_in_world`"
+                elseif Core.invokelatest isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.invokelatest`"
+                elseif Core.modifyfield! isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.modifyfield!`"
+                elseif Core.modifyglobal! isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.modifyglobal!`"
+                elseif Core.memoryrefmodify! isa ftyp
+                    error = "trim verification not yet implemented for builtin `Core.memoryrefmodify!`"
+                else @assert false "unexpected builtin" end
             end
             extyp = argextype(SSAValue(i), codeinfo, sptypes)
             if extyp === Union{}
@@ -252,11 +281,12 @@ end
 
 function get_verify_typeinf_trim(codeinfos::Vector{Any})
     this_world = get_world_counter()
+    interp = NativeInterpreter(this_world)
     inspected = IdSet{CodeInstance}()
     caches = IdDict{MethodInstance,CodeInstance}()
     errors = ErrorList()
     parents = ParentMap()
-    for i = 1:2:length(codeinfos)
+    for i = 1:length(codeinfos)
         item = codeinfos[i]
         if item isa CodeInstance
             push!(inspected, item)
@@ -268,14 +298,14 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
             end
         end
     end
-    for i = 1:2:length(codeinfos)
+    for i = 1:length(codeinfos)
         item = codeinfos[i]
         if item isa CodeInstance
             src = codeinfos[i + 1]::CodeInfo
-            verify_codeinstance!(item, src, inspected, caches, parents, errors)
-        else
-            rt = item::Type
-            sig = codeinfos[i + 1]::Type
+            verify_codeinstance!(interp, item, src, inspected, caches, parents, errors)
+        elseif item isa SimpleVector
+            rt = item[1]::Type
+            sig = item[2]::Type
             ptr = ccall(:jl_get_specialization1,
                         #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
                         sig, this_world, #= mt_cache =# 0)
@@ -287,7 +317,7 @@ function get_verify_typeinf_trim(codeinfos::Vector{Any})
                     # TODO: should we find a way to indicate to the user that this gets called via ccallable?
                     # parent[ci] = something
                     asrt = ci.rettype
-                    ci in inspected
+                    true
                 else
                     false
                 end
@@ -325,6 +355,14 @@ function verify_typeinf_trim(io::IO, codeinfos::Vector{Any}, onlywarn::Bool)
         # TODO: should we coalesce any of these stacktraces to minimize spew?
         verify_print_error(io, desc, parents)
     end
+
+    ## TODO: compute and display the minimum and/or full call graph instead of merely the first parent stacktrace?
+    #for i = 1:length(codeinfos)
+    #    item = codeinfos[i]
+    #    if item isa CodeInstance
+    #        println(item, "::", item.rettype)
+    #    end
+    #end
 
     let severity = 0
         if counts[1] > 0 || counts[2] > 0

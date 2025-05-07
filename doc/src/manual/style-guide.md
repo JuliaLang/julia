@@ -172,16 +172,18 @@ Counter-examples to this rule include [`NamedTuple`](@ref), [`RegexMatch`](@ref 
 ## Use naming conventions consistent with Julia `base/`
 
   * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
-  * functions are lowercase ([`maximum`](@ref), [`convert`](@ref)) and, when readable, with multiple
-    words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
-    as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
-    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers.
+  * constants use all uppercase and underscores ([`LOAD_PATH`](@ref), [`VERSION`](@ref)).
+  * while anything not marked with `public` or `export` is considered internal, a prefix of
+    `_` also indicates that an object is not intended for public use.
   * functions mutating at least one of their arguments end in `!`.
   * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 
 If a function name requires multiple words, consider whether it might represent more than one
 concept and might be better split into pieces.
+
+Function names should be written in snake case ([`minimum`](@ref), [`count_zeros`](@ref), [`escape_string`](@ref)).
+Base often breaks this convention by squashing words together ([`splitpath`](@ref), [`readeach`](@ref)) but this style is not recommended for packages.
 
 ## Write functions with argument ordering similar to Julia Base
 
