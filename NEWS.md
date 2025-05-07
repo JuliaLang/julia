@@ -47,6 +47,10 @@ Standard library changes
 
 #### Profile
 
+#### Random
+
+* New `Random.jump` function to advance the state ("jump ahead") of `Xoshiro` or `MersenneTwister` RNGs ([#58353]).
+
 #### REPL
 
 #### Test
