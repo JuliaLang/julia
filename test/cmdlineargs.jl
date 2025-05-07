@@ -363,9 +363,9 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             @test read(`$exename --threads=2 -e $code`, String) ==
                 read(`$exename -t 2 -e $code`, String) == "2"
             if nt === nothing
-                @test read(`$exename $code2`, String) == "2" #default + interactive
+                @test read(`$exename -e $code2`, String) == "2" #default + interactive
             elseif nt == "1"
-                @test read(`$exename $code2`, String) == "1" #if user asks for 1 give 1
+                @test read(`$exename -e $code2`, String) == "1" #if user asks for 1 give 1
             end
         end
     end
