@@ -2107,8 +2107,33 @@ end
 
 let A = Tuple{typeof(identity), Type{Union{}}},
     B = Tuple{typeof(identity), typeof(Union{})}
-    @test A == B && (Base.isdispatchtuple(A) == Base.isdispatchtuple(B))
+    @test A == B && (Base.isindivisibletype(A) == Base.isindivisibletype(B))
 end
+
+# isindivisibletype
+@test Base.isindivisibletype(Int)
+@test Base.isindivisibletype(Bool)
+@test Base.isindivisibletype(Float64)
+@test Base.isindivisibletype(Tuple{Float64})
+@test Base.isindivisibletype(Vector{Float64})
+@test !Base.isindivisibletype(Tuple{Union{Float64,Int64}})
+@test Base.isindivisibletype(Vector{Union{Float64,Int64}})
+@test !Base.isindivisibletype(Vector{T} where T <: Union{Float64,Int64})
+@test !Base.isindivisibletype(DataType)
+
+@test Base.isindivisibletype(Tuple{Tuple{Float64}})
+@test !Base.isindivisibletype(Tuple{Tuple{Union{Int,Float64}}})
+@test !Base.isindivisibletype(Tuple{Tuple})
+
+@test Base.isindivisibletype(Type{Int})
+@test Base.isindivisibletype(Type{Union{Int,Float64}})
+@test Base.isindivisibletype(Type{Any})
+
+@test Base.isdispatchtuple(Tuple{Tuple{Float64}})
+@test Base.isdispatchtuple(Tuple{Tuple{Type{Union{Int,Float64}}}})
+@test !Base.isdispatchtuple(Tuple{Tuple{Union{Int,Float64}}})
+@test !Base.isdispatchtuple(Tuple{Tuple{DataType}})
+@test !Base.isdispatchtuple(Tuple{Tuple})
 
 # issue #45703
 # requires assertions enabled (to catch discrepancy in obvious_subtype)

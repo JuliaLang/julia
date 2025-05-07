@@ -4411,7 +4411,7 @@ static jl_value_t *intersect_types(jl_value_t *x, jl_value_t *y, int emptiness_o
     jl_stenv_t e;
     if (obviously_disjoint(x, y, 0))
         return jl_bottom_type;
-    if (jl_is_dispatch_tupletype(x) || jl_is_dispatch_tupletype(y)) {
+    if (jl_is_indivisible_type(x) || jl_is_indivisible_type(y)) {
         if (jl_subtype(x, y))
             return x;
         else if (jl_subtype(y, x))

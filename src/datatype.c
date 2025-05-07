@@ -100,7 +100,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(void)
     jl_set_typetagof(t, jl_datatype_tag, 0);
     t->hash = 0;
     t->hasfreetypevars = 0;
-    t->isdispatchtuple = 0;
+    t->isindivisibletype = 0;
     t->isbitstype = 0;
     t->isprimitivetype = 0;
     t->zeroinit = 0;

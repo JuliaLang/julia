@@ -856,7 +856,18 @@ meaning it could appear as a type signature in dispatch
 and has no subtypes (or supertypes) which could appear in a call.
 If `T` is not a type, then return `false`.
 """
-isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
+isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && t.name === Tuple.name && (t.flags & 0x0004) == 0x0004)
+
+"""
+    isindivisibletype(T)
+
+Determine whether type `T` is an indivisible type, meaning that `T′ <: T`
+implies `T′ == T` for any inhabited T′. This is a conservative under-
+approximation, so it may sometimes return `false` even when T is indivisible.
+
+If `T` is not a type, then return `false`.
+"""
+isindivisibletype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
 
 datatype_ismutationfree(dt::DataType) = (@_total_meta; (dt.flags & 0x0100) == 0x0100)
 
@@ -905,7 +916,7 @@ isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
 
 using Core: has_free_typevars
 
-# equivalent to isa(v, Type) && isdispatchtuple(Tuple{v}) || v === Union{}
+# equivalent to isa(v, Type) && isindivisibletype(Tuple{v}) || v === Union{}
 # and is thus perhaps most similar to the old (pre-1.0) `isconcretetype` query
 function isdispatchelem(@nospecialize v)
     return (v === Bottom) || (v === typeof(Bottom)) || isconcretedispatch(v) ||
@@ -1521,7 +1532,7 @@ function may_invoke_generator(mi::MethodInstance)
 end
 function may_invoke_generator(method::Method, @nospecialize(atype), sparams::SimpleVector)
     # If we have complete information, we may always call the generator
-    isdispatchtuple(atype) && return true
+    isindivisibletype(atype) && return true
 
     # We don't have complete information, but it is possible that the generator
     # syntactically doesn't make use of the information we don't have. Check

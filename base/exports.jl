@@ -818,7 +818,7 @@ export
     isprimitivetype,
     isstructtype,
     isconcretetype,
-    isdispatchtuple,
+    isindivisibletype,
     oftype,
     promote,
     promote_rule,

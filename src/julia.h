@@ -606,8 +606,20 @@ typedef struct _jl_datatype_t {
     // memoized properties (set on construction)
     uint32_t hash;
     uint16_t hasfreetypevars:1; // majority part of isconcrete computation
-    uint16_t isconcretetype:1; // whether this type can have instances
-    uint16_t isdispatchtuple:1; // aka isleaftupletype
+
+    // whether there is an object x such that T == typeof(x)
+    //
+    // in many cases this implies indivisibility, with the notable exception of singleton types
+    // (`Type{T}`) which make, e.g., DataType a divisible type despite being concrete
+    uint16_t isconcretetype:1; // conservative under-approximation (false implies nothing)
+
+    // whether T is an indivisible type (aka "leaf" type for tuples), i.e. T is "maximally-specific"
+    // in the sense that for all inhabited T′, (T′ <: T) implies (T′ == T)
+    //
+    // if false, T may or may not be indivisible and may even be type-equal to another type which
+    // has this flag set
+    uint16_t isindivisibletype:1; // conservative under-approximation (false implies nothing)
+
     uint16_t isbitstype:1; // relevant query for C-api and type-parameters
     uint16_t zeroinit:1; // if one or more fields requires zero-initialization
     uint16_t has_concrete_subtype:1; // If clear, no value will have this datatype
@@ -1875,9 +1887,9 @@ JL_DLLEXPORT const char *jl_typeof_str(jl_value_t *v) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_type_morespecific(jl_value_t *a, jl_value_t *b);
 JL_DLLEXPORT int jl_method_morespecific(jl_method_t *ma, jl_method_t *mb);
 
-STATIC_INLINE int jl_is_dispatch_tupletype(jl_value_t *v) JL_NOTSAFEPOINT
+STATIC_INLINE int jl_is_indivisible_type(jl_value_t *v) JL_NOTSAFEPOINT
 {
-    return jl_is_datatype(v) && ((jl_datatype_t*)v)->isdispatchtuple;
+    return jl_is_datatype(v) && ((jl_datatype_t*)v)->isindivisibletype;
 }
 
 STATIC_INLINE int jl_is_concrete_type(jl_value_t *v) JL_NOTSAFEPOINT
