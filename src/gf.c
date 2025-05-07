@@ -1691,7 +1691,6 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
     assert(jl_atomic_load_relaxed(&oldentry->min_world) <= jl_atomic_load_relaxed(&closure->newentry->min_world) && "old method cannot be newer than new method");
     assert(jl_atomic_load_relaxed(&oldentry->max_world) != jl_atomic_load_relaxed(&closure->newentry->min_world) && "method cannot be added at the same time as method deleted");
     // don't need to consider other similar methods if this oldentry will always fully intersect with them and dominates all of them
-    typemap_slurp_search(oldentry, &closure->match);
     jl_method_t *oldmethod = oldentry->func.method;
     if (closure->match.issubty // e.g. jl_subtype(closure->newentry.sig, oldentry->sig)
         && jl_subtype(oldmethod->sig, (jl_value_t*)closure->newentry->sig)) { // e.g. jl_type_equal(closure->newentry->sig, oldentry->sig)
@@ -1700,7 +1699,18 @@ static int get_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_in
     }
     if (closure->shadowed == NULL)
         closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
+    if (closure->match.issubty) { // this should be rarely true (in fact, get_intersect_visitor should be rarely true), but might as well skip the rest of the scan fast anyways since we can
+        int only = jl_atomic_load_relaxed(&oldmethod->dispatch_status) & METHOD_SIG_LATEST_ONLY;
+        if (only) {
+            size_t len = jl_array_nrows(closure->shadowed);
+            if (len > 0)
+                jl_array_del_end((jl_array_t*)closure->shadowed, len);
+            jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldmethod);
+            return 0;
+        }
+    }
     jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldmethod);
+    typemap_slurp_search(oldentry, &closure->match);
     return 1;
 }
 
@@ -3936,30 +3946,26 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     if (closure->match.max_valid > max_world)
         closure->match.max_valid = max_world;
     jl_method_t *meth = ml->func.method;
-    if (closure->lim >= 0 && jl_is_dispatch_tupletype(meth->sig)) {
-        int replaced = 0;
-        // check if this is replaced, in which case we need to avoid double-counting it against the limit
-        // (although it will figure out later which one to keep and return)
-        size_t len = jl_array_nrows(closure->t);
-        for (int i = 0; i < len; i++) {
-            if (jl_types_equal(((jl_method_match_t*)jl_array_ptr_ref(closure->t, i))->method->sig, meth->sig)) {
-                replaced = 1;
-                break;
-            }
+    int only = jl_atomic_load_relaxed(&meth->dispatch_status) & METHOD_SIG_LATEST_ONLY;
+    if (closure->lim >= 0 && only) {
+        if (closure->lim == 0) {
+            closure->t = jl_an_empty_vec_any;
+            return 0;
         }
-        if (!replaced) {
-            if (closure->lim == 0)
-                return 0;
-            closure->lim--;
-        }
+        closure->lim--;
     }
-    // don't need to consider other similar methods if this ml will always fully intersect with them and dominates all of them
-    if (!closure->include_ambiguous || closure->lim != -1)
-        typemap_slurp_search(ml, &closure->match);
     closure->matc = make_method_match((jl_tupletype_t*)closure->match.ti,
         closure->match.env, meth,
         closure->match.issubty ? FULLY_COVERS : NOT_FULLY_COVERS);
     size_t len = jl_array_nrows(closure->t);
+    if (closure->match.issubty && only) {
+        if (len == 0)
+            closure->t = (jl_value_t*)jl_alloc_vec_any(1);
+        else if (len > 1)
+            jl_array_del_end((jl_array_t*)closure->t, len - 1);
+        jl_array_ptr_set(closure->t, 0, (jl_value_t*)closure->matc);
+        return 0;
+    }
     if (len == 0) {
         closure->t = (jl_value_t*)jl_alloc_vec_any(1);
         jl_array_ptr_set(closure->t, 0, (jl_value_t*)closure->matc);
@@ -3967,6 +3973,9 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     else {
         jl_array_ptr_1d_push((jl_array_t*)closure->t, (jl_value_t*)closure->matc);
     }
+    // don't need to consider other similar methods if this ml will always fully intersect with them and dominates all of them
+    if (!closure->include_ambiguous || closure->lim != -1)
+        typemap_slurp_search(ml, &closure->match);
     return 1;
 }
 
@@ -4347,9 +4356,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
                 return env.t;
             }
         }
-        if (!ml_mtable_visitor(mt, &env.match)) {
+        if (!ml_mtable_visitor(mt, &env.match) && env.t == jl_an_empty_vec_any) {
             JL_GC_POP();
-            // if we return early, set only the min/max valid collected from matching
+            // if we return early without returning methods, set only the min/max valid collected from matching
             *min_valid = env.match.min_valid;
             *max_valid = env.match.max_valid;
             return jl_nothing;
@@ -4357,9 +4366,9 @@ static jl_value_t *ml_matches(jl_methtable_t *mt,
     }
     else {
         // else: scan everything
-        if (!jl_foreach_reachable_mtable(ml_mtable_visitor, &env.match)) {
+        if (!jl_foreach_reachable_mtable(ml_mtable_visitor, &env.match) && env.t == jl_an_empty_vec_any) {
             JL_GC_POP();
-            // if we return early, set only the min/max valid collected from matching
+            // if we return early without returning methods, set only the min/max valid collected from matching
             *min_valid = env.match.min_valid;
             *max_valid = env.match.max_valid;
             return jl_nothing;
