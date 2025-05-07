@@ -131,6 +131,7 @@ endif
 ifeq ($(OS),WINNT)
 uninstall-csl: uninstall-gcc-libraries
 uninstall-gcc-libraries:
+	-rm -f $(build_shlibdir)/libstdc++.$(SHLIB_EXT)
 	-rm -f $(build_private_libdir)/libgcc_s.a
 	-rm -f $(build_private_libdir)/libgcc.a
 	-rm -f $(build_private_libdir)/libmsvcrt.a
