@@ -5,6 +5,9 @@
 using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
+# issue #58013
+@test_throws ArgumentError invokelatest()
+
 # test simple method replacement
 begin
     g265a() = f265a(0)
@@ -417,6 +420,27 @@ ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
     "jl_method_table_insert"
 ]
 
+# logging issue #58080
+f58080(::Integer) = 1
+callsf58080rts(x) = f58080(Base.inferencebarrier(x)::Signed)
+invokesf58080s(x) = invoke(f58080, Tuple{Signed}, x)
+# compilation
+invokesf58080s(1)                        # invoked callee
+callsf58080rts(1)                        # runtime-dispatched callee
+# invalidation
+logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1);
+f58080(::Int) = 2
+f58080(::Signed) = 4
+ccall(:jl_debug_method_invalidation, Any, (Cint,), 0);
+@test logmeths[1].def.name === :callsf58080rts
+m58080i = which(f58080, (Int,))
+m58080s = which(f58080, (Signed,))
+idxi = findfirst(==(m58080i), logmeths)
+@test logmeths[idxi+1] == "jl_method_table_insert"
+@test logmeths[idxi+2].def.name === :invokesf58080s
+@test logmeths[end-1] == m58080s
+@test logmeths[end] == "jl_method_table_insert"
+
 # issue #50091 -- missing invoke edge affecting nospecialized dispatch
 module ExceptionUnwrapping
 @nospecialize
@@ -478,6 +502,8 @@ Base.delete_method(fshadow_m2)
 @test Base.morespecific(fshadow_m3, fshadow_m1)
 @test !Base.morespecific(fshadow_m2, fshadow_m3)
 
+@test_throws "Method of fshadow already disabled" Base.delete_method(fshadow_m2)
+
 # Generated functions without edges must have min_world = 1.
 # N.B.: If changing this, move this test to precompile and make sure
 # that the specialization survives revalidation.
@@ -534,3 +560,12 @@ module C57316; import ..X57316.Y57316 as Z, .Z.Y57316 as W; end
 @test !isdefined(B57316, :X57316)
 @test !isdefined(C57316, :X57316)
 @test !isdefined(C57316, :Y57316)
+
+# jl_module_import should always manipulate the latest world
+module M57965
+function f()
+    @eval Random = 1
+    Core._eval_import(true, @__MODULE__, nothing, Expr(:., :Random))
+end
+end
+@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()s

@@ -36,9 +36,7 @@ include("views.jl")
 
 # numeric operations
 include("hashing.jl")
-include("rounding.jl")
 include("div.jl")
-include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
 include("rational.jl")
@@ -129,6 +127,12 @@ include("missing.jl")
 # version
 include("version.jl")
 
+#=
+isdebugbuild is defined here as this is imported in libdl.jl (included in libc.jl)
+The method is added in util.jl
+=#
+function isdebugbuild end
+
 # system & environment
 include("sysinfo.jl")
 include("libc.jl")
@@ -213,9 +217,6 @@ using .PermutedDimsArrays
 include("sort.jl")
 using .Sort
 
-# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
-include("binaryplatforms.jl")
-
 # Fast math
 include("fastmath.jl")
 using .FastMath
@@ -268,6 +269,9 @@ include("toml_parser.jl")
 include("linking.jl")
 include("staticdata.jl")
 include("loading.jl")
+
+# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
+include("binaryplatforms.jl")
 
 # misc useful functions & macros
 include("timing.jl")

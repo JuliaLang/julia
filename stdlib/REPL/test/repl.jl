@@ -925,7 +925,7 @@ function test19864()
     @eval Base.showerror(io::IO, e::Error19864) = print(io, "correct19864")
     buf = IOBuffer()
     fake_response = (Base.ExceptionStack([(exception=Error19864(),backtrace=Ptr{Cvoid}[])]),true)
-    REPL.print_response(buf, fake_response, false, false, nothing)
+    REPL.print_response(buf, fake_response, nothing, false, false, nothing)
     return String(take!(buf))
 end
 @test occursin("correct19864", test19864())
@@ -1550,59 +1550,61 @@ end
 
 @testset "Install missing packages via hooks" begin
     @testset "Parse AST for packages" begin
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo"))
+        test_find_packages(e) =
+            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, e))
+        test_find_packages(s::String) =
+            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, Meta.parse(s)))
+
+        mods = test_find_packages("using Foo")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo"))
+        mods = test_find_packages("import Foo")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo, Bar"))
+        mods = test_find_packages("using Foo, Bar")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo, Bar"))
+        mods = test_find_packages("import Foo, Bar")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo.bar, Foo.baz"))
+        mods = test_find_packages("using Foo.bar, Foo.baz")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo end"))
+        mods = test_find_packages("if false using Foo end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false if false using Foo end end"))
+        mods = test_find_packages("if false if false using Foo end end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo, Bar end"))
+        mods = test_find_packages("if false using Foo, Bar end")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo: bar end"))
+        mods = test_find_packages("if false using Foo: bar end")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo.bar as baz"))
+        mods = test_find_packages("import Foo.bar as baz")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using .Foo"))
+        mods = test_find_packages("using .Foo")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base"))
+        mods = test_find_packages("using Base")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base: nope"))
+        mods = test_find_packages("using Base: nope")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Main"))
+        mods = test_find_packages("using Main")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Core"))
-        @test isempty(mods)
-
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line(":(using Foo)"))
-        @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("ex = :(using Foo)"))
+        mods = test_find_packages("using Core")
         @test isempty(mods)
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
+        mods = test_find_packages(":(using Foo)")
+        @test isempty(mods)
+        mods = test_find_packages("ex = :(using Foo)")
         @test isempty(mods)
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("@eval using Foo"))
+        mods = test_find_packages("@eval using Foo")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; @eval using Bar end"))
+        mods = test_find_packages("begin using Foo; @eval using Bar end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Core.eval(Main,\"using Foo\")"))
+        mods = test_find_packages("Core.eval(Main,\"using Foo\")")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; Core.eval(Main,\"using Foo\") end"))
+        mods = test_find_packages("begin using Foo; Core.eval(Main,\"using Foo\") end")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(:(import .Foo: a))
+        mods = test_find_packages(:(import .Foo: a))
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(:(using .Foo: a))
+        mods = test_find_packages(:(using .Foo: a))
         @test isempty(mods)
     end
 end
@@ -1832,85 +1834,6 @@ fake_repl() do stdin_write, stdout_read, repl
     @test contains(txt, "Some type information was truncated. Use `show(err)` to see complete types.")
 end
 
-try # test the functionality of `UndefVarError_hint`
-    @assert isempty(Base.Experimental._hint_handlers)
-    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
-
-    fake_repl() do stdin_write, stdout_read, repl
-        backend = REPL.REPLBackend()
-        repltask = @async REPL.run_repl(repl; backend)
-        write(stdin_write, """
-        module A53000
-            export f
-            f() = 0.0
-        end
-
-        module C_outer_53000
-            import ..A53000: f
-            public f
-
-            module C_inner_53000
-            import ..C_outer_53000: f
-            export f
-            end
-        end
-
-        module D_53000
-            public f
-            f() = 1.0
-        end
-
-        C_inner_53000 = "I'm a decoy with the same name as C_inner_53000!"
-
-        append!(Base.loaded_modules_order, [A53000, C_outer_53000, C_outer_53000.C_inner_53000, D_53000])
-        f
-        """
-        )
-        write(stdin_write, "\nZZZZZ\n")
-        txt = readuntil(stdout_read, "ZZZZZ")
-        write(stdin_write, '\x04')
-        wait(repltask)
-        @test occursin("Hint: a global variable of this name also exists in Main.A53000.", txt)
-        @test occursin("Hint: a global variable of this name also exists in Main.D_53000.", txt)
-        @test occursin("- Also declared public in Main.C_outer_53000.", txt)
-        @test occursin("- Also exported by Main.C_outer_53000.C_inner_53000 (loaded but not imported in Main).", txt)
-    end
-catch e
-    # fail test if error
-    @test false
-finally
-    empty!(Base.Experimental._hint_handlers)
-end
-
-try # test the functionality of `UndefVarError_hint` against import clashes
-    @assert isempty(Base.Experimental._hint_handlers)
-    Base.Experimental.register_error_hint(REPL.UndefVarError_hint, UndefVarError)
-
-    @eval module X
-
-    module A
-    export x
-    x = 1
-    end # A
-
-    module B
-    export x
-    x = 2
-    end # B
-
-    using .A, .B
-
-    end # X
-
-    expected_message = string("\nHint: It looks like two or more modules export different ",
-                              "bindings with this name, resulting in ambiguity. Try explicitly ",
-                              "importing it from a particular module, or qualifying the name ",
-                              "with the module it should come from.")
-    @test_throws expected_message X.x
-finally
-    empty!(Base.Experimental._hint_handlers)
-end
-
 # Hints for tab completes
 
 fake_repl() do stdin_write, stdout_read, repl
@@ -2027,9 +1950,16 @@ end
         @test output == "…[printing stopped after displaying 0 bytes; $hint]"
         @test sprint(io -> show(REPL.LimitIO(io, 5), "abc")) == "\"abc\""
         @test_throws REPL.LimitIOException(1) sprint(io -> show(REPL.LimitIO(io, 1), "abc"))
+
+        # displaying objects at the REPL sometimes needs access to displaysize, like Dict
+        @test displaysize(IOContext(REPL.LimitIO(stdout, 100), stdout)) == displaysize(stdout)
     finally
         REPL.SHOW_MAXIMUM_BYTES = previous
     end
+end
+
+@testset "`displaysize` return type inference" begin
+    @test Tuple{Int, Int} === Base.infer_return_type(displaysize, Tuple{REPL.Terminals.UnixTerminal})
 end
 
 @testset "Dummy Pkg prompt" begin

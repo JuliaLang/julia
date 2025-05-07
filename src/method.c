@@ -10,13 +10,12 @@
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
+#include "builtin_proto.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-extern jl_value_t *jl_builtin_getfield;
-extern jl_value_t *jl_builtin_tuple;
 jl_methtable_t *jl_kwcall_mt;
 jl_method_t *jl_opaque_closure_method;
 
@@ -84,7 +83,8 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
                                    int binding_effects, int eager_resolve)
 {
     if (jl_is_symbol(expr)) {
-        jl_error("Found raw symbol in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.");
+        jl_errorf("Found raw symbol %s in code returned from lowering. Expected all symbols to have been resolved to GlobalRef or slots.",
+                  jl_symbol_name((jl_sym_t*)expr));
     }
 
     if (!jl_is_expr(expr)) {
@@ -224,7 +224,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_sym_t *fe_sym = jl_globalref_name(fe);
         // look at some known called functions
         jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
-        if (jl_get_binding_value_if_const(b) == jl_builtin_tuple) {
+        if (jl_get_binding_value_if_const(b) == BUILTIN(tuple)) {
             size_t j;
             for (j = 1; j < nargs; j++) {
                 if (!jl_is_quotenode(jl_exprarg(e, j)))
@@ -727,7 +727,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
         ct->world_age = jl_atomic_load_relaxed(&def->primary_world);
-        if (ct->world_age > jl_atomic_load_acquire(&jl_world_counter) || jl_atomic_load_relaxed(&def->deleted_world) < ct->world_age)
+        if (ct->world_age > jl_atomic_load_acquire(&jl_world_counter))
             jl_error("The generator method cannot run until it is added to a method table.");
 
         // invoke code generator
@@ -1006,7 +1006,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->isva = 0;
     m->nargs = 0;
     jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
-    jl_atomic_store_relaxed(&m->deleted_world, 1);
+    jl_atomic_store_relaxed(&m->dispatch_status, 0);
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;
     jl_atomic_store_relaxed(&m->did_scan_source, 0);
@@ -1027,7 +1027,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
 int get_next_edge(jl_array_t *list, int i, jl_value_t** invokesig, jl_code_instance_t **caller) JL_NOTSAFEPOINT
 {
     jl_value_t *item = jl_array_ptr_ref(list, i);
-    if (jl_is_code_instance(item)) {
+    if (!item || jl_is_code_instance(item)) {
         // Not an `invoke` call, it's just the CodeInstance
         if (invokesig != NULL)
             *invokesig = NULL;
@@ -1052,12 +1052,47 @@ int set_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instan
     return i;
 }
 
+int clear_next_edge(jl_array_t *list, int i, jl_value_t *invokesig, jl_code_instance_t *caller)
+{
+    if (invokesig)
+        jl_array_ptr_set(list, i++, NULL);
+    jl_array_ptr_set(list, i++, NULL);
+    return i;
+}
+
 void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_code_instance_t *caller)
 {
     if (invokesig)
         jl_array_ptr_1d_push(list, invokesig);
     jl_array_ptr_1d_push(list, (jl_value_t*)caller);
     return;
+}
+
+void jl_mi_done_backedges(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t old_flags) {
+    uint8_t flags_now = 0;
+    jl_array_t *backedges = jl_mi_get_backedges_mutate(mi, &flags_now);
+    if (backedges && !old_flags) {
+        if (flags_now & MI_FLAG_BACKEDGES_DIRTY) {
+            size_t n = jl_array_nrows(backedges);
+            size_t i = 0;
+            size_t insb = 0;
+            while (i < n) {
+                jl_value_t *invokesig;
+                jl_code_instance_t *caller;
+                i = get_next_edge(backedges, i, &invokesig, &caller);
+                if (!caller)
+                    continue;
+                insb = set_next_edge(backedges, insb, invokesig, caller);
+            }
+            if (insb == n) {
+                // All were deleted
+                mi->backedges = NULL;
+            } else {
+                jl_array_del_end(backedges, n - insb);
+            }
+        }
+        jl_atomic_fetch_and_relaxed(&mi->flags, ~MI_FLAG_BACKEDGES_ALL);
+    }
 }
 
 // method definition ----------------------------------------------------------
@@ -1102,26 +1137,18 @@ JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name)
 {
     JL_LOCK(&world_counter_lock);
     size_t new_world = jl_atomic_load_relaxed(&jl_world_counter) + 1;
-    jl_binding_t *b = jl_get_binding_for_method_def(mod, name, new_world);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, new_world);
-    jl_value_t *gf = NULL;
-    enum jl_partition_kind kind = jl_binding_kind(bpart);
-    if (!jl_bkind_is_some_guard(kind) && kind != PARTITION_KIND_DECLARED && kind != PARTITION_KIND_IMPLICIT) {
-        jl_walk_binding_inplace(&b, &bpart, new_world);
-        if (jl_bkind_is_some_constant(jl_binding_kind(bpart))) {
-            gf = bpart->restriction;
-            JL_GC_PROMISE_ROOTED(gf);
-            jl_check_gf(gf, b->globalref->name);
-            JL_UNLOCK(&world_counter_lock);
-            return gf;
-        }
-        jl_errorf("cannot define function %s; it already has a value", jl_symbol_name(name));
+    jl_binding_t *b = jl_get_module_binding(mod, name, 1);
+    jl_value_t *gf = jl_get_existing_strong_gf(b, new_world);
+    if (gf) {
+        jl_check_gf(gf, name);
+        JL_UNLOCK(&world_counter_lock);
+        return gf;
     }
     gf = (jl_value_t*)jl_new_generic_function(name, mod, new_world);
     // From this point on (if we didn't error), we're committed to raising the world age,
     // because we've used it to declare the type name.
-    jl_atomic_store_release(&jl_world_counter, new_world);
     jl_declare_constant_val3(b, mod, name, gf, PARTITION_KIND_CONST, new_world);
+    jl_atomic_store_release(&jl_world_counter, new_world);
     JL_GC_PROMISE_ROOTED(gf);
     JL_UNLOCK(&world_counter_lock);
     return gf;

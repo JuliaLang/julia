@@ -1118,6 +1118,41 @@ normally), [`close(f)`](@ref) will be executed. If the `try` block exits due to 
 the exception will continue propagating. A `catch` block may be combined with `try` and
 `finally` as well. In this case the `finally` block will run after `catch` has handled
 the error.
+
+When evaluating a `try/catch/else/finally` expression, the value of the entire
+expression is the value of the last block executed, excluding the `finally`
+block. For example:
+
+```jldoctest
+julia> try
+           1
+       finally
+           2
+       end
+1
+
+julia> try
+           error("")
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+1
+
+julia> try
+           0
+       catch
+           1
+       else
+           2
+       finally
+           3
+       end
+2
+```
 """
 kw"finally"
 
@@ -1905,7 +1940,7 @@ recurses infinitely.
 StackOverflowError
 
 """
-    nfields(x) -> Int
+    nfields(x)::Int
 
 Get the number of fields in the given object.
 
@@ -2007,7 +2042,7 @@ to let `InterruptException` be thrown by CTRL+C during the execution.
 InterruptException
 
 """
-    applicable(f, args...) -> Bool
+    applicable(f, args...)::Bool
 
 Determine whether the given generic function has a method applicable to the given arguments.
 
@@ -2105,7 +2140,7 @@ Integer
 invoke
 
 """
-    isa(x, type) -> Bool
+    isa(x, type)::Bool
 
 Determine whether `x` is of the given `type`. Can also be used as an infix operator, e.g.
 `x isa type`.
@@ -2398,7 +2433,7 @@ iteration over characters.
 Symbol
 
 """
-    Symbol(x...) -> Symbol
+    Symbol(x...)::Symbol
 
 Create a [`Symbol`](@ref) by concatenating the string representations of the arguments together.
 
@@ -2435,14 +2470,19 @@ julia> Tuple(Real[1, 2, pi])  # takes a collection
 tuple
 
 """
-    getfield(value, name::Symbol, [order::Symbol])
-    getfield(value, i::Int, [order::Symbol])
+    getfield(value, name::Symbol, [boundscheck::Bool=true], [order::Symbol])
+    getfield(value, i::Int, [boundscheck::Bool=true], [order::Symbol])
 
-Extract a field from a composite `value` by name or position. Optionally, an
-ordering can be defined for the operation. If the field was declared `@atomic`,
-the specification is strongly recommended to be compatible with the stores to
-that location. Otherwise, if not declared as `@atomic`, this parameter must be
-`:not_atomic` if specified.
+Extract a field from a composite `value` by name or position.
+
+Optionally, an ordering can be defined for the operation.  If the field was
+declared `@atomic`, the specification is strongly recommended to be compatible
+with the stores to that location. Otherwise, if not declared as `@atomic`, this
+parameter must be `:not_atomic` if specified.
+
+The bounds check may be disabled, in which case the behavior of this function is
+undefined if `i` is out of bounds.
+
 See also [`getproperty`](@ref Base.getproperty) and [`fieldnames`](@ref).
 
 # Examples
@@ -2511,8 +2551,8 @@ Atomically perform the operations to simultaneously get and set a field:
 swapfield!
 
 """
-    modifyfield!(value, name::Symbol, op, x, [order::Symbol]) -> Pair
-    modifyfield!(value, i::Int, op, x, [order::Symbol]) -> Pair
+    modifyfield!(value, name::Symbol, op, x, [order::Symbol])::Pair
+    modifyfield!(value, i::Int, op, x, [order::Symbol])::Pair
 
 Atomically perform the operations to get and set a field after applying
 the function `op`.
@@ -2678,7 +2718,7 @@ See also [`swapproperty!`](@ref Base.swapproperty!) and [`setglobal!`](@ref).
 swapglobal!
 
 """
-    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic]) -> Pair
+    modifyglobal!(module::Module, name::Symbol, op, x, [order::Symbol=:monotonic])::Pair
 
 Atomically perform the operations to get and set a global after applying
 the function `op`.
@@ -2717,6 +2757,25 @@ a given value, only if it was previously not set.
 See also [`setpropertyonce!`](@ref Base.setpropertyonce!) and [`setglobal!`](@ref).
 """
 setglobalonce!
+
+"""
+   _import(to::Module, from::Module, asname::Symbol, [sym::Symbol, imported::Bool])
+
+With all five arguments, imports `sym` from module `from` into `to` with name
+`asname`.  `imported` is true for bindings created with `import` (set it to
+false for `using A: ...`).
+
+With only the first three arguments, creates a binding for the module `from`
+with name `asname` in `to`.
+"""
+Core._import
+
+"""
+   _using(to::Module, from::Module)
+
+Add `from` to the usings list of `to`.
+"""
+Core._using
 
 """
     typeof(x)

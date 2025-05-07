@@ -695,6 +695,54 @@ function Symbol(a::Array{UInt8, 1})
 end
 Symbol(s::Symbol) = s
 
+# Minimal implementations of using/import for bootstrapping (supports only
+# `import .M: a, b, c, ...`, little error checking)
+let
+    fail() = throw(ArgumentError("unsupported import/using while bootstrapping"))
+    length(a::Array{T, 1}) where {T} = getfield(getfield(a, :size), 1)
+    function getindex(A::Array, i::Int)
+        Intrinsics.ult_int(Intrinsics.bitcast(UInt, Intrinsics.sub_int(i, 1)), Intrinsics.bitcast(UInt, length(A))) || fail()
+        memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
+    end
+    x == y = Intrinsics.eq_int(x, y)
+    x + y = Intrinsics.add_int(x, y)
+    x <= y = Intrinsics.sle_int(x, y)
+
+    global function _eval_import(explicit::Bool, to::Module, from::Union{Expr, Nothing}, paths::Expr...)
+        from isa Expr || fail()
+        if length(from.args) == 2 && getindex(from.args, 1) === :.
+            from = getglobal(to, getindex(from.args, 2))
+        elseif length(from.args) == 1 && getindex(from.args, 1) === :Core
+            from = Core
+        elseif length(from.args) == 1 && getindex(from.args, 1) === :Base
+            from = Main.Base
+        else
+            fail()
+        end
+        from isa Module || fail()
+        i = 1
+        while i <= nfields(paths)
+            a = getfield(paths, i).args
+            length(a) == 1 || fail()
+            s = getindex(a, 1)
+            Core._import(to, from, s, s, explicit)
+            i += 1
+        end
+    end
+
+    global function _eval_using(to::Module, path::Expr)
+        getindex(path.args, 1) === :. || fail()
+        from = getglobal(to, getindex(path.args, 2))
+        i = 3
+        while i <= length(path.args)
+            from = getfield(from, getindex(path.args, i))
+            i += 1
+        end
+        from isa Module || fail()
+        Core._using(to, from)
+    end
+end
+
 # module providing the IR object model
 module IR
 
@@ -998,8 +1046,9 @@ function struct_name_shim(@nospecialize(x), name::Symbol, mod::Module, @nospecia
     return x === mod ? t : getfield(x, name)
 end
 
-# Binding for the julia parser, called as
-#
+# Bindings for the julia frontend.  The internal jl_parse and jl_lower will call
+# Core._parse and Core._lower respectively (if they are not `nothing`.)
+
 #    Core._parse(text, filename, lineno, offset, options)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
@@ -1009,15 +1058,21 @@ end
 #
 # `_parse` must return an `svec` containing an `Expr` and the new offset as an
 # `Int`.
-#
-# The internal jl_parse will call into Core._parse if not `nothing`.
 _parse = nothing
 
+#    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
+#
+# Lower `code` (usually Expr), returning `svec(e::Any xs::Any...)` where `e` is
+# the lowered code, and `xs` is possible additional information from
+# JuliaLowering (TBD).
+_lower = nothing
+
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
+_setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)
-_apply_pure(x...) = invoke_in_world_total(typemax_UInt, x...)
+const _apply_pure = _apply
 const _call_latest = invokelatest
 const _call_in_world = invoke_in_world
 

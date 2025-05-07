@@ -26,7 +26,7 @@ function mirror_callback(remote::Ptr{Ptr{Cvoid}}, repo_ptr::Ptr{Cvoid},
 end
 
 """
-    LibGit2.is_passphrase_required(private_key) -> Bool
+    LibGit2.is_passphrase_required(private_key)::Bool
 
 Return `true` if the `private_key` file requires a passphrase, `false` otherwise.
 """
@@ -242,7 +242,7 @@ end
 
 
 """
-    credential_callback(...) -> Cint
+    credential_callback(...)::Cint
 
 A LibGit2 credential callback function which provides different credential acquisition
 functionality w.r.t. a connection protocol. The `payload_ptr` is required to contain a

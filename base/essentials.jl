@@ -147,7 +147,7 @@ macro specialize(vars...)
 end
 
 """
-    @isdefined s -> Bool
+    @isdefined(s)::Bool
 
 Tests whether variable `s` is defined in the current scope.
 
@@ -323,7 +323,7 @@ macro _nothrow_meta()
         #=:consistent_overlay=#false,
         #=:nortcall=#false))
 end
-# can be used in place of `@assume_effects :nothrow` (supposed to be used for bootstrapping)
+# can be used in place of `@assume_effects :noub` (supposed to be used for bootstrapping)
 macro _noub_meta()
     return _is_internal(__module__) && Expr(:meta, Expr(:purity,
         #=:consistent=#false,
@@ -387,7 +387,7 @@ getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
-    nameof(m::Module) -> Symbol
+    nameof(m::Module)::Symbol
 
 Get the name of a `Module` as a [`Symbol`](@ref).
 
@@ -723,6 +723,8 @@ cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_conve
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
+unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
+unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
 
 """
     reinterpret(::Type{Out}, x::In)
@@ -995,7 +997,7 @@ getindex(v::SimpleVector, I::AbstractArray) = Core.svec(Any[ v[i] for i in I ]..
 unsafe_convert(::Type{Ptr{Any}}, sv::SimpleVector) = convert(Ptr{Any},pointer_from_objref(sv)) + sizeof(Ptr)
 
 """
-    isassigned(array, i) -> Bool
+    isassigned(array, i)::Bool
 
 Test whether the given array has a value associated with index `i`. Return `false`
 if the index is out of bounds, or has an undefined reference.
@@ -1079,7 +1081,7 @@ See [`Base.compilerbarrier`](@ref) for more info.
 inferencebarrier(@nospecialize(x)) = compilerbarrier(:type, x)
 
 """
-    isempty(collection) -> Bool
+    isempty(collection)::Bool
 
 Determine whether a collection is empty (has no elements).
 
@@ -1115,7 +1117,7 @@ This function simply returns its argument by default, since the elements
 of a general iterator are normally considered its "values".
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\$"m
 julia> d = Dict("a"=>1, "b"=>2);
 
 julia> values(d)
@@ -1198,7 +1200,7 @@ end
 
 # Iteration
 """
-    isdone(itr, [state]) -> Union{Bool, Missing}
+    isdone(itr, [state])::Union{Bool, Missing}
 
 This function provides a fast-path hint for iterator completion.
 This is useful for stateful iterators that want to avoid having elements
@@ -1217,7 +1219,7 @@ See also [`iterate`](@ref), [`isempty`](@ref)
 isdone(itr, state...) = missing
 
 """
-    iterate(iter [, state]) -> Union{Nothing, Tuple{Any, Any}}
+    iterate(iter [, state])::Union{Nothing, Tuple{Any, Any}}
 
 Advance the iterator to obtain the next element. If no elements
 remain, `nothing` should be returned. Otherwise, a 2-tuple of the
@@ -1226,7 +1228,7 @@ next element and the new iteration state should be returned.
 function iterate end
 
 """
-    isiterable(T) -> Bool
+    isiterable(T)::Bool
 
 Test if type `T` is an iterable collection type or not,
 that is whether it has an `iterate` method or not.
@@ -1298,5 +1300,3 @@ typename(typeof(function <= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
 typename(typeof(function >= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
 typename(typeof(function < end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function > end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
-typename(typeof(function << end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
-typename(typeof(function >> end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC

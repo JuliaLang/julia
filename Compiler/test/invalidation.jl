@@ -3,6 +3,7 @@
 # setup
 # -----
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 using Test
@@ -142,8 +143,8 @@ begin
     # this redefinition below should invalidate the cache of `pr48932_callee` but not that of `pr48932_caller`
     pr48932_callee(x) = (print(GLOBAL_BUFFER, x); nothing)
 
-    @test length(Base.methods(pr48932_callee)) == 2
-    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === first(Base.methods(pr48932_callee))
+    @test length(Base.methods(pr48932_callee)) == 1
+    @test Base.only(Base.methods(pr48932_callee, Tuple{Any})) === only(Base.methods(pr48932_callee))
     @test isempty(Base.specializations(Base.only(Base.methods(pr48932_callee, Tuple{Any}))))
     let mi = only(Base.specializations(Base.only(Base.methods(pr48932_caller))))
         # Base.method_instance(pr48932_callee, (Any,))
@@ -159,6 +160,43 @@ begin
 
     @test isnothing(pr48932_caller(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
+end
+
+begin
+    deduped_callee(x::Int) = @noinline rand(Int)
+    deduped_caller1(x::Int) = @noinline deduped_callee(x)
+    deduped_caller2(x::Int) = @noinline deduped_callee(x)
+
+    # run inference on both `deduped_callerx` and `deduped_callee`
+    let (src, rt) = code_typed((Int,); interp=InvalidationTester()) do x
+            @inline deduped_caller1(x)
+            @inline deduped_caller2(x)
+        end |> only
+        @test rt === Int
+        @test any(isinvoke(:deduped_callee), src.code)
+    end
+
+    # Verify that adding the backedge again does not actually add a new backedge
+    let mi1 = Base.method_instance(deduped_caller1, (Int,)),
+        mi2 = Base.method_instance(deduped_caller2, (Int,)),
+        ci1 = mi1.cache
+        ci2 = mi2.cache
+
+        callee_mi = Base.method_instance(deduped_callee, (Int,))
+
+        # Inference should have added the callers to the callee's backedges
+        @test ci1 in callee_mi.backedges
+        @test ci2 in callee_mi.backedges
+
+        N = length(callee_mi.backedges)
+        Core.Compiler.store_backedges(ci1, Core.svec(callee_mi))
+        Core.Compiler.store_backedges(ci2, Core.svec(callee_mi))
+        N′ = length(callee_mi.backedges)
+
+        # The number of backedges should not be affected by an additional store,
+        # since de-duplication should have noticed the edge is already tracked
+        @test N == N′
+    end
 end
 
 # we can avoid adding backedge even if the callee's return type is not the top
@@ -283,3 +321,8 @@ begin take!(GLOBAL_BUFFER)
     @test isnothing(pr48932_caller_inlined(42))
     @test "42" == String(take!(GLOBAL_BUFFER))
 end
+
+# Issue #57696
+# This test checks for invalidation of recursive backedges. However, unfortunately, the original failure
+# manifestation was an unreliable segfault or an assertion failure, so we don't have a more compact test.
+@test success(`$(Base.julia_cmd()) -e 'Base.typejoin(x, ::Type) = 0; exit()'`)

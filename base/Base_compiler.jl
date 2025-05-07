@@ -1,9 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-baremodule Base
+module Base
 
-using Core
-using Core.Intrinsics, Core.IR
+Core._import(Base, Core, :_eval_import, :_eval_import, true)
+Core._import(Base, Core, :_eval_using, :_eval_using, true)
+
+using .Core.Intrinsics, .Core.IR
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
@@ -158,11 +160,40 @@ if false
     println(io::IO, x...) = Core.println(io, x...)
 end
 
-"""
-    time_ns() -> UInt64
+## Load essential files and libraries
+include("essentials.jl")
 
-Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
-between two moments in time.
+# Because lowering inserts direct references, it is mandatory for this binding
+# to exist before we start inferring code.
+function string end
+import Core: String
+
+# For OS specific stuff
+# We need to strcat things here, before strings are really defined
+function strcat(x::String, y::String)
+    out = ccall(:jl_alloc_string, Ref{String}, (Int,), Core.sizeof(x) + Core.sizeof(y))
+    gc_x = @_gc_preserve_begin(x)
+    gc_y = @_gc_preserve_begin(y)
+    gc_out = @_gc_preserve_begin(out)
+    out_ptr = unsafe_convert(Ptr{UInt8}, out)
+    unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
+    unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
+    @_gc_preserve_end(gc_x)
+    @_gc_preserve_end(gc_y)
+    @_gc_preserve_end(gc_out)
+    return out
+end
+
+
+"""
+    time_ns()::UInt64
+
+Get the time in nanoseconds relative to some machine-specific arbitrary time in the past.
+The primary use is for measuring elapsed times during program execution. The return value is guaranteed to
+be monotonic (mod 2⁶⁴) while the system is running, and is unaffected by clock drift or changes to local calendar time,
+but it may change arbitrarily across system reboots or suspensions.
+
+(Although the returned time is always in nanoseconds, the timing resolution is platform-dependent.)
 """
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
@@ -172,8 +203,6 @@ const _DOCS_ALIASING_WARNING = """
     Behavior can be unexpected when any mutated argument shares memory with any other argument.
 """
 
-## Load essential files and libraries
-include("essentials.jl")
 include("ctypes.jl")
 include("gcutils.jl")
 include("generator.jl")
@@ -236,7 +265,7 @@ support libraries, etc. In these cases it can be useful to prevent unwanted
 method invalidation and recompilation latency, and to prevent the user from
 breaking supporting infrastructure by mistake.
 
-The current world age can be queried using [`Base.get_world_counter()`](@ref)
+The global world age can be queried using [`Base.get_world_counter()`](@ref)
 and stored for later use within the lifetime of the current Julia session, or
 when serializing and reloading the system image.
 
@@ -278,14 +307,18 @@ include("pointer.jl")
 include("refvalue.jl")
 include("cmem.jl")
 
-include("checked.jl")
-using .Checked
-function cld end
-function fld end
+function nextfloat end
+function prevfloat end
+include("rounding.jl")
+include("float.jl")
 
 # Lazy strings
-import Core: String
 include("strings/lazy.jl")
+
+function cld end
+function fld end
+include("checked.jl")
+using .Checked
 
 # array structures
 include("indices.jl")
@@ -314,23 +347,8 @@ include("ordering.jl")
 using .Order
 
 include("coreir.jl")
+include("module.jl")
 include("invalidation.jl")
-
-# Because lowering inserts direct references, it is mandatory for this binding
-# to exist before we start inferring code.
-function string end
-
-# For OS specific stuff
-# We need to strcat things here, before strings are really defined
-function strcat(x::String, y::String)
-    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), Core.sizeof(x) + Core.sizeof(y))
-    GC.@preserve x y out begin
-        out_ptr = unsafe_convert(Ptr{UInt8}, out)
-        unsafe_copyto!(out_ptr, unsafe_convert(Ptr{UInt8}, x), Core.sizeof(x))
-        unsafe_copyto!(out_ptr + Core.sizeof(x), unsafe_convert(Ptr{UInt8}, y), Core.sizeof(y))
-    end
-    return out
-end
 
 BUILDROOT::String = ""
 DATAROOT::String = ""
@@ -365,9 +383,11 @@ const _return_type = Compiler.return_type
 # Enable compiler
 Compiler.bootstrap!()
 
-include("flparse.jl")
+include("flfrontend.jl")
 Core._setparser!(fl_parse)
+Core._setlowerer!(fl_lower)
 
 # Further definition of Base will happen in Base.jl if loaded.
 
-end # baremodule Base
+end # module Base
+using .Base

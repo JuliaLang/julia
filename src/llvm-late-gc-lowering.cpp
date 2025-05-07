@@ -1128,7 +1128,7 @@ void LateLowerGCFrame::FixUpRefinements(ArrayRef<int> PHINumbers, State &S)
 }
 
 // Look through instructions to find all possible allocas that might become the sret argument
-static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
+static std::optional<SmallSetVector<AllocaInst *, 8>> FindSretAllocas(Value* SRetArg) {
     SmallSetVector<AllocaInst *, 8> allocas;
     if (AllocaInst *OneSRet = dyn_cast<AllocaInst>(SRetArg)) {
         allocas.insert(OneSRet); // Found it directly
@@ -1143,7 +1143,7 @@ static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
                 for (Value *Incoming : Phi->incoming_values()) {
                     worklist.insert(Incoming);
                 }
-            } else if (SelectInst *SI = dyn_cast<SelectInst>(SRetArg)) {
+            } else if (SelectInst *SI = dyn_cast<SelectInst>(V)) {
                 auto TrueBranch = SI->getTrueValue();
                 auto FalseBranch = SI->getFalseValue();
                 if (TrueBranch && FalseBranch) {
@@ -1152,12 +1152,12 @@ static SmallSetVector<AllocaInst *, 8> FindSretAllocas(Value* SRetArg) {
                 } else {
                     llvm_dump(SI);
                     dbgs() << "Malformed Select\n";
-                    abort();
+                    return {};
                 }
             } else {
                 llvm_dump(V);
                 dbgs() << "Unexpected SRet argument\n";
-                abort();
+                return {};
             }
         }
     }
@@ -1221,10 +1221,15 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                     Type *ElT = getAttributeAtIndex(CI->getAttributes(), 1, Attribute::StructRet).getValueAsType();
                     auto tracked = CountTrackedPointers(ElT, true);
                     if (tracked.count) {
-                        SmallSetVector<AllocaInst *, 8>  allocas = FindSretAllocas((CI->arg_begin()[0])->stripInBoundsOffsets());
+                        auto allocas_opt = FindSretAllocas((CI->arg_begin()[0])->stripInBoundsOffsets());
                         // We know that with the right optimizations we can forward a sret directly from an argument
                         // This hasn't been seen without adding IPO effects to julia functions but it's possible we need to handle that too
                         // If they are tracked.all we can just pass through but if they have a roots bundle it's possible we need to emit some copies ¯\_(ツ)_/¯
+                        if (!allocas_opt.has_value()) {
+                            llvm_dump(&F);
+                            abort();
+                        }
+                        auto allocas = allocas_opt.value();
                         for (AllocaInst *SRet : allocas) {
                             if (!(SRet->isStaticAlloca() && isa<PointerType>(ElT) && ElT->getPointerAddressSpace() == AddressSpace::Tracked)) {
                                 assert(!tracked.derived);
@@ -1233,7 +1238,12 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                 }
                                 else {
                                     Value *arg1 = (CI->arg_begin()[1])->stripInBoundsOffsets();
-                                    SmallSetVector<AllocaInst *, 8>  gc_allocas = FindSretAllocas(arg1);
+                                    auto gc_allocas_opt = FindSretAllocas(arg1);
+                                    if (!gc_allocas_opt.has_value()) {
+                                        llvm_dump(&F);
+                                        abort();
+                                    }
+                                    auto gc_allocas = gc_allocas_opt.value();
                                     if (gc_allocas.size() == 0) {
                                         llvm_dump(CI);
                                         errs() << "Expected one Alloca at least\n";
@@ -2362,7 +2372,11 @@ void LateLowerGCFrame::PlaceGCFrameStore(State &S, unsigned R, unsigned MinColor
     // free to rewrite them if convenient. We need to change
     // it back here for the store.
     assert(Val->getType() == T_prjlvalue);
+#if JL_LLVM_VERSION >= 200000
     new StoreInst(Val, slotAddress, InsertBefore->getIterator());
+#else
+    new StoreInst(Val, slotAddress, InsertBefore);
+#endif
 }
 
 void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot,
@@ -2372,10 +2386,18 @@ void LateLowerGCFrame::PlaceGCFrameReset(State &S, unsigned R, unsigned MinColor
     auto slotAddress = CallInst::Create(
         getOrDeclare(jl_intrinsics::getGCFrameSlot),
         {GCFrame, ConstantInt::get(Type::getInt32Ty(InsertBefore->getContext()), Colors[R] + MinColorRoot)},
+#if JL_LLVM_VERSION >= 200000
+        "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore->getIterator());
+#else
         "gc_slot_addr_" + StringRef(std::to_string(Colors[R] + MinColorRoot)), InsertBefore);
+#endif
     // Reset the slot to NULL.
     Value *Val = ConstantPointerNull::get(T_prjlvalue);
+#if JL_LLVM_VERSION >= 200000
+    new StoreInst(Val, slotAddress, InsertBefore->getIterator());
+#else
     new StoreInst(Val, slotAddress, InsertBefore);
+#endif
 }
 
 void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
@@ -2396,7 +2418,7 @@ void LateLowerGCFrame::PlaceGCFrameStores(State &S, unsigned MinColorRoot,
             for (int Idx : *LastLive) {
                 if (Colors[Idx] >= PreAssignedColors && !HasBitSet(NowLive, Idx)) {
                     PlaceGCFrameReset(S, Idx, MinColorRoot, Colors, GCFrame,
-                      S.ReverseSafepointNumbering[*rit]);
+                        S.ReverseSafepointNumbering[*rit]);
                 }
             }
             // store values which are alive in this safepoint but
@@ -2428,7 +2450,7 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
             getOrDeclare(jl_intrinsics::newGCFrame),
             {ConstantInt::get(T_int32, 0)},
             "gcframe");
-        gcframe->insertBefore(&*F->getEntryBlock().begin());
+        gcframe->insertBefore(F->getEntryBlock().begin());
 
         auto pushGcframe = CallInst::Create(
             getOrDeclare(jl_intrinsics::pushGCFrame),
@@ -2526,7 +2548,11 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 assert(Elem->getType() == T_prjlvalue);
                 //auto Idxs = ArrayRef<unsigned>(Tracked[i]);
                 //Value *Elem = ExtractScalar(Base, true, Idxs, SI);
+#if JL_LLVM_VERSION >= 200000
                 Value *shadowStore = new StoreInst(Elem, slotAddress, SI->getIterator());
+#else
+                Value *shadowStore = new StoreInst(Elem, slotAddress, SI);
+#endif
                 (void)shadowStore;
                 // TODO: shadowStore->setMetadata(LLVMContext::MD_tbaa, tbaa_gcframe);
                 AllocaSlot++;
@@ -2544,7 +2570,11 @@ void LateLowerGCFrame::PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAss
                 auto popGcframe = CallInst::Create(
                     getOrDeclare(jl_intrinsics::popGCFrame),
                     {gcframe});
+#if JL_LLVM_VERSION >= 200000
+                popGcframe->insertBefore(BB.getTerminator()->getIterator());
+#else
                 popGcframe->insertBefore(BB.getTerminator());
+#endif
             }
         }
     }

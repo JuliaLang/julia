@@ -226,7 +226,7 @@ end
     end)(s, i, n, l)
 end
 
-## checking UTF-8 & ACSII validity ##
+## checking UTF-8 & ASCII validity ##
 #=
     The UTF-8 Validation is performed by a shift based DFA.
     ┌───────────────────────────────────────────────────────────────────┐
@@ -374,7 +374,7 @@ end
 
 ##
 
-# Classifcations of string
+# Classifications of string
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
@@ -559,7 +559,7 @@ isascii(s::String) = isascii(codeunits(s))
 @assume_effects :foldable repeat(c::Char, r::BitInteger) = @invoke repeat(c::Char, r::Integer)
 
 """
-    repeat(c::AbstractChar, r::Integer) -> String
+    repeat(c::AbstractChar, r::Integer)::String
 
 Repeat a character `r` times. This can equivalently be accomplished by calling
 [`c^r`](@ref :^(::Union{AbstractString, AbstractChar}, ::Integer)).
