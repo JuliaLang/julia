@@ -66,7 +66,7 @@ end
     Base.Sys.CPUinfo("Apple M1 Pro", 2400, 0x00000000017726c0, 0x0000000000000000, 0x00000000009491de, 0x0000000048134f1e, 0x0000000000000000)]
 
     Sys.SC_CLK_TCK, save_SC_CLK_TCK = 100, Sys.SC_CLK_TCK # use platform-independent tick units
-    @test repr(example_cpus[1]) == "Base.Sys.CPUinfo(\"Apple M1 Pro\", 2400, 0x000000000d913b08, 0x0000000000000000, 0x0000000005f4243c, 0x00000000352a550a, 0x0000000000000000)"
+    @test repr(example_cpus[1]) == "Sys.CPUinfo(\"Apple M1 Pro\", 2400, 0x000000000d913b08, 0x0000000000000000, 0x0000000005f4243c, 0x00000000352a550a, 0x0000000000000000)"
     @test repr("text/plain", example_cpus[1]) == "Apple M1 Pro: \n        speed         user         nice          sys         idle          irq\n     2400 MHz    2276216 s          0 s     998861 s    8919667 s          0 s"
     @test sprint(Sys.cpu_summary, example_cpus) == "Apple M1 Pro: \n       speed         user         nice          sys         idle          irq\n#1  2400 MHz    2276216 s          0 s     998861 s    8919667 s          0 s\n#2  2400 MHz    2275576 s          0 s     978101 s    8962204 s          0 s\n#3  2400 MHz     403386 s          0 s     166224 s   11853624 s          0 s\n#4  2400 MHz     245859 s          0 s      97367 s   12092250 s          0 s\n"
     Sys.SC_CLK_TCK = save_SC_CLK_TCK

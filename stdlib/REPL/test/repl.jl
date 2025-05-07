@@ -1127,7 +1127,7 @@ fake_repl() do stdin_write, stdout_read, repl
     t = @async write(stdin_write, "TestShowTypeREPL.TypeA\n")
     s = readuntil(stdout_read, "\n\n")
     s2 = rsplit(s, "\n", limit=2)[end]
-    @test s2 == "\e[0mMain.TestShowTypeREPL.TypeA"
+    @test s2 == "\e[0mTestShowTypeREPL.TypeA"
     wait(t)
     @eval Main using .TestShowTypeREPL
     readuntil(stdout_read, "julia> ", keep=true)
@@ -1279,16 +1279,16 @@ f_html() = nothing
 end # module BriefExtended
 
 buf = IOBuffer()
-md = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f"))
+md = (@__MODULE__).eval(REPL._helpmode(buf, "$curmod_str.BriefExtended.f"))
 @test length(md.content) == 2 && isa(md.content[2], REPL.Message)
 buf = IOBuffer()
-md = Base.eval(REPL._helpmode(buf, "?$(@__MODULE__).BriefExtended.f"))
+md = (@__MODULE__).eval(REPL._helpmode(buf, "?$curmod_str.BriefExtended.f"))
 @test length(md.content) == 1 && length(md.content[1].content[1].content) == 4
 buf = IOBuffer()
-txt = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f_plain"))
+txt = (@__MODULE__).eval(REPL._helpmode(buf, "$curmod_str.BriefExtended.f_plain"))
 @test !isempty(sprint(show, txt))
 buf = IOBuffer()
-html = Base.eval(REPL._helpmode(buf, "$(@__MODULE__).BriefExtended.f_html"))
+html = (@__MODULE__).eval(REPL._helpmode(buf, "$curmod_str.BriefExtended.f_html"))
 @test !isempty(sprint(show, html))
 
 # PR #27562
