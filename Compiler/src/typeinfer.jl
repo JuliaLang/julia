@@ -151,9 +151,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 inferred_result = nothing
             end
         end
-        if is_cached(caller) # CACHE_MODE_GLOBAL
-            cache_result!(interp, mi, ci)
-        end
         if debuginfo === nothing
             debuginfo = DebugInfo(mi)
         end
@@ -165,6 +162,9 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
             ci, inferred_result, const_flag, min_world, max_world, ipo_effects,
             result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
+        if is_cached(caller) # CACHE_MODE_GLOBAL
+            cache_result!(interp, mi, ci)
+        end
         engine_reject(interp, ci)
         codegen = codegen_cache(interp)
         if !discard_src && codegen !== nothing && (isa(uncompressed, CodeInfo) || isa(uncompressed, OptimizationState))
