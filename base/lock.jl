@@ -252,7 +252,7 @@ function wait_no_relock(c::GenericCondition)
     try
         return wait()
     catch
-        ct.queue === nothing || list_deletefirst!(ct.queue, ct)
+        ct.queue === nothing || list_deletefirst!(ct.queue::IntrusiveLinkedList{Task}, ct)
         rethrow()
     end
 end
@@ -562,6 +562,36 @@ function acquire(f, s::Semaphore)
 end
 
 """
+    Base.@acquire s::Semaphore expr
+
+Macro version of `Base.acquire(f, s::Semaphore)` but with `expr` instead of `f` function.
+Expands to:
+```julia
+Base.acquire(s)
+try
+    expr
+finally
+    Base.release(s)
+end
+```
+This is similar to using [`acquire`](@ref) with a `do` block, but avoids creating a closure.
+
+!!! compat "Julia 1.13"
+    `Base.@acquire` was added in Julia 1.13
+"""
+macro acquire(s, expr)
+    quote
+        local temp = $(esc(s))
+        Base.acquire(temp)
+        try
+            $(esc(expr))
+        finally
+            Base.release(temp)
+        end
+    end
+end
+
+"""
     release(s::Semaphore)
 
 Return one permit to the pool,
@@ -693,7 +723,7 @@ julia> procstate === fetch(@async global_state())
 true
 ```
 """
-mutable struct OncePerProcess{T, F}
+mutable struct OncePerProcess{T, F} <: Function
     value::Union{Nothing,T}
     @atomic state::UInt8 # 0=initial, 1=hasrun, 2=error
     @atomic allow_compile_time::Bool
@@ -702,25 +732,27 @@ mutable struct OncePerProcess{T, F}
 
     function OncePerProcess{T,F}(initializer::F) where {T, F}
         once = new{T,F}(nothing, PerStateInitial, true, initializer, ReentrantLock())
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :value, nothing)
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :state, PerStateInitial)
         return once
     end
 end
+OncePerProcess{T}(initializer::Type{U}) where {T, U} = OncePerProcess{T, Type{U}}(initializer)
 OncePerProcess{T}(initializer::F) where {T, F} = OncePerProcess{T, F}(initializer)
+OncePerProcess(initializer::Type{U}) where U = OncePerProcess{Base.promote_op(initializer), Type{U}}(initializer)
 OncePerProcess(initializer) = OncePerProcess{Base.promote_op(initializer), typeof(initializer)}(initializer)
-@inline function (once::OncePerProcess{T})() where T
+@inline function (once::OncePerProcess{T,F})() where {T,F}
     state = (@atomic :acquire once.state)
     if state != PerStateHasrun
-        (@noinline function init_perprocesss(once, state)
+        (@noinline function init_perprocesss(once::OncePerProcess{T,F}, state::UInt8) where {T,F}
             state == PerStateErrored && error("OncePerProcess initializer failed previously")
             once.allow_compile_time || __precompile__(false)
             lock(once.lock)
             try
                 state = @atomic :monotonic once.state
                 if state == PerStateInitial
+                    ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                        once, :value, nothing)
+                    ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                        once, :state, PerStateInitial)
                     once.value = once.initializer()
                 elseif state == PerStateErrored
                     error("OncePerProcess initializer failed previously")
@@ -801,7 +833,7 @@ julia> threadvec === thread_state[Threads.threadid()]
 true
 ```
 """
-mutable struct OncePerThread{T, F}
+mutable struct OncePerThread{T, F} <: Function
     @atomic xs::AtomicMemory{T} # values
     @atomic ss::AtomicMemory{UInt8} # states: 0=initial, 1=hasrun, 2=error, 3==concurrent
     const initializer::F
@@ -809,23 +841,21 @@ mutable struct OncePerThread{T, F}
     function OncePerThread{T,F}(initializer::F) where {T, F}
         xs, ss = AtomicMemory{T}(), AtomicMemory{UInt8}()
         once = new{T,F}(xs, ss, initializer)
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :xs, xs)
-        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
-            once, :ss, ss)
         return once
     end
 end
+OncePerThread{T}(initializer::Type{U}) where {T, U} = OncePerThread{T,Type{U}}(initializer)
 OncePerThread{T}(initializer::F) where {T, F} = OncePerThread{T,F}(initializer)
+OncePerThread(initializer::Type{U}) where U = OncePerThread{Base.promote_op(initializer), Type{U}}(initializer)
 OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(initializer)}(initializer)
-@inline (once::OncePerThread)() = once[Threads.threadid()]
-@inline function getindex(once::OncePerThread, tid::Integer)
+@inline (once::OncePerThread{T,F})() where {T,F} = once[Threads.threadid()]
+@inline function getindex(once::OncePerThread{T,F}, tid::Integer) where {T,F}
     tid = Int(tid)
     ss = @atomic :acquire once.ss
     xs = @atomic :monotonic once.xs
     # n.b. length(xs) >= length(ss)
     if tid <= 0 || tid > length(ss) || (@atomic :acquire ss[tid]) != PerStateHasrun
-        (@noinline function init_perthread(once, tid)
+        (@noinline function init_perthread(once::OncePerThread{T,F}, tid::Int) where {T,F}
             local ss = @atomic :acquire once.ss
             local xs = @atomic :monotonic once.xs
             local len = length(ss)
@@ -849,6 +879,12 @@ OncePerThread(initializer) = OncePerThread{Base.promote_op(initializer), typeof(
                 ss = @atomic :monotonic once.ss
                 xs = @atomic :monotonic once.xs
                 if tid > length(ss)
+                    if length(ss) == 0 # We are the first to initialize
+                        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                            once, :xs, xs)
+                        ccall(:jl_set_precompile_field_replace, Cvoid, (Any, Any, Any),
+                            once, :ss, ss)
+                    end
                     @assert len <= length(ss) <= length(newss) "logical constraint violation"
                     fill_monotonic!(newss, PerStateInitial)
                     xs = copyto_monotonic!(newxs, xs)
@@ -926,11 +962,15 @@ Making lazy task value...done.
 false
 ```
 """
-mutable struct OncePerTask{T, F}
+mutable struct OncePerTask{T, F} <: Function
     const initializer::F
 
+    OncePerTask{T}(initializer::Type{U}) where {T, U} = new{T,Type{U}}(initializer)
     OncePerTask{T}(initializer::F) where {T, F} = new{T,F}(initializer)
     OncePerTask{T,F}(initializer::F) where {T, F} = new{T,F}(initializer)
+    OncePerTask(initializer::Type{U}) where U = new{Base.promote_op(initializer), Type{U}}(initializer)
     OncePerTask(initializer) = new{Base.promote_op(initializer), typeof(initializer)}(initializer)
 end
-@inline (once::OncePerTask)() = get!(once.initializer, task_local_storage(), once)
+@inline function (once::OncePerTask{T,F})() where {T,F}
+    get!(once.initializer, task_local_storage(), once)::T
+end

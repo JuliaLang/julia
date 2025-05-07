@@ -391,16 +391,21 @@ function complete_line(s::MIState)
     end
 end
 
+# Old complete_line return type: Vector{String},          String, Bool
+# New complete_line return type: NamedCompletion{String}, String, Bool
+#                            OR  NamedCompletion{String}, Region, Bool
+#
 # due to close coupling of the Pkg ReplExt `complete_line` can still return a vector of strings,
 # so we convert those in this helper
-function complete_line_named(args...; kwargs...)::Tuple{Vector{NamedCompletion},String,Bool}
-    result = complete_line(args...; kwargs...)::Union{Tuple{Vector{NamedCompletion},String,Bool},Tuple{Vector{String},String,Bool}}
-    if result isa Tuple{Vector{NamedCompletion},String,Bool}
-        return result
-    else
-        completions, partial, should_complete = result
-        return map(NamedCompletion, completions), partial, should_complete
-    end
+function complete_line_named(c, s, args...; kwargs...)::Tuple{Vector{NamedCompletion},Region,Bool}
+    r1, r2, should_complete = complete_line(c, s, args...; kwargs...)::Union{
+        Tuple{Vector{String}, String, Bool},
+        Tuple{Vector{NamedCompletion}, String, Bool},
+        Tuple{Vector{NamedCompletion}, Region, Bool},
+    }
+    completions = (r1 isa Vector{String} ? map(NamedCompletion, r1) : r1)
+    r = (r2 isa String ? (position(s)-sizeof(r2) => position(s)) : r2)
+    completions, r, should_complete
 end
 
 # checks for a hint and shows it if appropriate.
@@ -426,14 +431,14 @@ function check_show_hint(s::MIState)
         return
     end
     t_completion = Threads.@spawn :default begin
-        named_completions, partial, should_complete = nothing, nothing, nothing
+        named_completions, reg, should_complete = nothing, nothing, nothing
 
         # only allow one task to generate hints at a time and check around lock
         # if the user has pressed a key since the hint was requested, to skip old completions
         next_key_pressed() && return
         @lock s.hint_generation_lock begin
             next_key_pressed() && return
-            named_completions, partial, should_complete = try
+            named_completions, reg, should_complete = try
                 complete_line_named(st.p.complete, st, s.active_module; hint = true)
             catch
                 lock_clear_hint()
@@ -448,21 +453,19 @@ function check_show_hint(s::MIState)
             return
         end
         # Don't complete for single chars, given e.g. `x` completes to `xor`
-        if length(partial) > 1 && should_complete
+        if reg.second - reg.first > 1 && should_complete
             singlecompletion = length(completions) == 1
             p = singlecompletion ? completions[1] : common_prefix(completions)
             if singlecompletion || p in completions # i.e. complete `@time` even though `@time_imports` etc. exists
-                # The completion `p` and the input `partial` may not share the same initial
+                # The completion `p` and the region `reg` may not share the same initial
                 # characters, for instance when completing to subscripts or superscripts.
                 # So, in general, make sure that the hint starts at the correct position by
                 # incrementing its starting position by as many characters as the input.
-                startind = 1 # index of p from which to start providing the hint
-                maxind = ncodeunits(p)
-                for _ in partial
-                    startind = nextind(p, startind)
-                    startind > maxind && break
-                end
+                maxind = lastindex(p)
+                startind = sizeof(content(s, reg))
                 if startind ≤ maxind # completion on a complete name returns itself so check that there's something to hint
+                    # index of p from which to start providing the hint
+                    startind = nextind(p, startind)
                     hint = p[startind:end]
                     next_key_pressed() && return
                     @lock s.line_modify_lock begin
@@ -491,7 +494,7 @@ function clear_hint(s::ModeState)
 end
 
 function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=false)
-    completions, partial, should_complete = complete_line_named(s.p.complete, s, mod; hint)
+    completions, reg, should_complete = complete_line_named(s.p.complete, s, mod; hint)
     isempty(completions) && return false
     if !should_complete
         # should_complete is false for cases where we only want to show
@@ -499,17 +502,16 @@ function complete_line(s::PromptState, repeats::Int, mod::Module; hint::Bool=fal
         show_completions(s, completions)
     elseif length(completions) == 1
         # Replace word by completion
-        prev_pos = position(s)
         push_undo(s)
-        edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1].completion)
+        edit_splice!(s, reg, completions[1].completion)
     else
         p = common_prefix(completions)
+        partial = content(s, reg.first => min(bufend(s), reg.first + sizeof(p)))
         if !isempty(p) && p != partial
             # All possible completions share the same prefix, so we might as
-            # well complete that
-            prev_pos = position(s)
+            # well complete that.
             push_undo(s)
-            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, p)
+            edit_splice!(s, reg, p)
         elseif repeats > 0
             show_completions(s, completions)
         end
@@ -595,10 +597,19 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
     line_pos = buf_pos
     regstart, regstop = region(buf)
     written = 0
+    @static if Sys.iswindows()
+        writer = Terminals.pipe_writer(terminal)
+        if writer isa Base.TTY && !Base.ispty(writer)::Bool
+            _reset_console_mode(writer.handle)
+        end
+    end
     # Write out the prompt string
     lindent = write_prompt(termbuf, prompt, hascolor(terminal))::Int
     # Count the '\n' at the end of the line if the terminal emulator does (specific to DOS cmd prompt)
-    miscountnl = @static Sys.iswindows() ? (isa(Terminals.pipe_reader(terminal), Base.TTY) && !(Base.ispty(Terminals.pipe_reader(terminal)))::Bool) : false
+    miscountnl = @static if Sys.iswindows()
+        reader = Terminals.pipe_reader(terminal)
+        reader isa Base.TTY && !Base.ispty(reader)::Bool
+    else false end
 
     # Now go through the buffer line by line
     seek(buf, 0)
@@ -821,12 +832,12 @@ function edit_move_right(m::MIState)
         refresh_line(s)
         return true
     else
-        completions, partial, should_complete = complete_line(s.p.complete, s, m.active_module)
-        if should_complete && eof(buf) && length(completions) == 1 && length(partial) > 1
+        completions, reg, should_complete = complete_line(s.p.complete, s, m.active_module)
+        if should_complete && eof(buf) && length(completions) == 1 && reg.second - reg.first > 1
             # Replace word by completion
             prev_pos = position(s)
             push_undo(s)
-            edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1])
+            edit_splice!(s, (prev_pos - reg.second + reg.first) => prev_pos, completions[1].completion)
             refresh_line(state(s))
             return true
         else
@@ -1676,34 +1687,39 @@ end
 # not leave the console mode in a corrupt state.
 # FIXME: remove when pseudo-tty are implemented for child processes
 if Sys.iswindows()
-function _console_mode()
-    hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), -11 % UInt32) # STD_OUTPUT_HANDLE
-    dwMode = Ref{UInt32}()
-    ccall(:GetConsoleMode, stdcall, Int32, (Ref{Cvoid}, Ref{UInt32}), hOutput, dwMode)
-    return dwMode[]
-end
-const default_console_mode_ref = Ref{UInt32}()
-const default_console_mode_assigned = Ref(false)
-function get_default_console_mode()
-    if default_console_mode_assigned[] == false
-        default_console_mode_assigned[] = true
-        default_console_mode_ref[] = _console_mode()
+
+#= Get/SetConsoleMode flags =#
+const ENABLE_PROCESSED_OUTPUT            = UInt32(0x0001)
+const ENABLE_WRAP_AT_EOL_OUTPUT          = UInt32(0x0002)
+const ENABLE_VIRTUAL_TERMINAL_PROCESSING = UInt32(0x0004)
+const DISABLE_NEWLINE_AUTO_RETURN        = UInt32(0x0008)
+const ENABLE_LVB_GRID_WORLDWIDE          = UInt32(0x0010)
+
+#= libuv flags =#
+const UV_TTY_SUPPORTED = 0
+const UV_TTY_UNSUPPORTED = 1
+
+function _reset_console_mode(handle::Ptr{Cvoid})
+    # Query libuv to see whether it expects the console to support virtual terminal sequences
+    vterm_state = Ref{Cint}()
+    ccall(:uv_tty_get_vterm_state, Cint, (Ref{Cint},), vterm_state)
+
+    mode::UInt32 = ENABLE_PROCESSED_OUTPUT | ENABLE_WRAP_AT_EOL_OUTPUT
+    if vterm_state[] == UV_TTY_SUPPORTED
+        mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING
     end
-    return default_console_mode_ref[]
+
+    # Expected to fail (benignly) with ERROR_INVALID_HANDLE if the provided handle does not
+    # allow setting the console mode
+    ccall(:SetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, UInt32), handle, mode)
+
+    return nothing
 end
-function _reset_console_mode()
-    mode = _console_mode()
-    if mode !== get_default_console_mode()
-        hOutput = ccall(:GetStdHandle, stdcall, Ptr{Cvoid}, (UInt32,), -11 % UInt32) # STD_OUTPUT_HANDLE
-        ccall(:SetConsoleMode, stdcall, Int32, (Ptr{Cvoid}, UInt32), hOutput, default_console_mode_ref[])
-    end
-    nothing
-end
+
 end
 
 # returns the width of the written prompt
 function write_prompt(terminal::Union{IO, AbstractTerminal}, s::Union{AbstractString,Function}, color::Bool)
-    @static Sys.iswindows() && _reset_console_mode()
     promptstr = prompt_string(s)::String
     write(terminal, promptstr)
     return textwidth(promptstr)
@@ -2241,12 +2257,12 @@ setmodifiers!(c) = nothing
 
 # Search Mode completions
 function complete_line(s::SearchState, repeats, mod::Module; hint::Bool=false)
-    completions, partial, should_complete = complete_line(s.histprompt.complete, s, mod; hint)
+    completions, reg, should_complete = complete_line(s.histprompt.complete, s, mod; hint)
     # For now only allow exact completions in search mode
     if length(completions) == 1
         prev_pos = position(s)
         push_undo(s)
-        edit_splice!(s, (prev_pos - sizeof(partial)) => prev_pos, completions[1])
+        edit_splice!(s, (prev_pos - reg.second - reg.first) => prev_pos, completions[1].completion)
         return true
     end
     return false

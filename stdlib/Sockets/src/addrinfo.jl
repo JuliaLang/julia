@@ -129,7 +129,7 @@ Uses the operating system's underlying getaddrinfo implementation, which may do
 a DNS lookup.
 
 # Examples
-```julia-repl
+```jldoctest
 julia> getaddrinfo("localhost", IPv6)
 ip"::1"
 

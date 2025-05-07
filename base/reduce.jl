@@ -29,6 +29,12 @@ mul_prod(x::BitSignedSmall, y::BitSignedSmall) = Int(x) * Int(y)
 mul_prod(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) * UInt(y)
 mul_prod(x::Real, y::Real)::Real = x * y
 
+and_all(x, y) = (x && y)::Bool
+or_any(x, y) = (x || y)::Bool
+# As a performance optimization, avoid runtime branches:
+and_all(x::Bool, y::Bool) = (x & y)::Bool
+or_any(x::Bool, y::Bool) = (x | y)::Bool
+
 ## foldl && mapfoldl
 
 function mapfoldl_impl(f::F, op::OP, nt, itr) where {F,OP}
@@ -338,6 +344,8 @@ reduce_empty(::typeof(*), ::Type{T}) where {T} = one(T)
 reduce_empty(::typeof(*), ::Type{<:AbstractChar}) = ""
 reduce_empty(::typeof(&), ::Type{Bool}) = true
 reduce_empty(::typeof(|), ::Type{Bool}) = false
+reduce_empty(::typeof(and_all), ::Type{T}) where {T} = true
+reduce_empty(::typeof(or_any), ::Type{T}) where {T} = false
 
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T} = reduce_empty(+, T)
 reduce_empty(::typeof(add_sum), ::Type{T}) where {T<:BitSignedSmall}  = zero(Int)
@@ -852,14 +860,6 @@ ExtremaMap(::Type{T}) where {T} = ExtremaMap{Type{T}}(T)
 @inline (f::ExtremaMap)(x) = (y = f.f(x); (y, y))
 
 @inline _extrema_rf((min1, max1), (min2, max2)) = (min(min1, min2), max(max1, max2))
-# optimization for IEEEFloat
-function _extrema_rf(x::NTuple{2,T}, y::NTuple{2,T}) where {T<:IEEEFloat}
-    (x1, x2), (y1, y2) = x, y
-    anynan = isnan(x1)|isnan(y1)
-    z1 = ifelse(anynan, x1-y1, ifelse(signbit(x1-y1), x1, y1))
-    z2 = ifelse(anynan, x1-y1, ifelse(signbit(x2-y2), y2, x2))
-    z1, z2
-end
 
 ## findmax, findmin, argmax & argmin
 
@@ -1110,7 +1110,7 @@ argmin(itr) = findmin(itr)[2]
 _bool(f) = x->f(x)::Bool
 
 """
-    count([f=identity,] itr; init=0) -> Integer
+    count([f=identity,] itr; init=0)::Integer
 
 Count the number of elements in `itr` for which the function `f` returns `true`.
 If `f` is omitted, count the number of `true` elements in `itr` (which

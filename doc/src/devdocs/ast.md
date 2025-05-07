@@ -119,9 +119,17 @@ parses as `(macrocall (|.| Core '@doc) (line) "some docs" (= (call f x) (block x
 | `import Base: x`    | `(import (: (. Base) (. x)))`                |
 | `import Base: x, y` | `(import (: (. Base) (. x) (. y)))`          |
 | `export a, b`       | `(export a b)`                               |
+| `public a, b`       | `(public a b)`                               |
 
 `using` has the same representation as `import`, but with expression head `:using`
 instead of `:import`.
+
+To programmatically create a `public` statement, you can use `Expr(:public, :a, :b)` or,
+closer to regular code, `Meta.parse("public a, b")`. This approach is necessary due to
+[current limitations on `public`](@ref Export-lists). The `public` keyword is only
+recognized at the syntactic top level within a file (`parse_stmts`) or module. This
+restriction was implemented to prevent breaking existing code that used `public` as an
+identifier when it was introduced in Julia 1.11.
 
 ### Numbers
 
@@ -498,9 +506,9 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
         The number of required arguments for a varargs function definition.
 
-      * `args[5]::QuoteNode{<:Union{Symbol,Tuple{Symbol,UInt16}}`: calling convention
+      * `args[5]::QuoteNode{<:Union{Symbol,Tuple{Symbol,UInt16}, Tuple{Symbol,UInt16,Bool}}`: calling convention
 
-        The calling convention for the call, optionally with effects.
+        The calling convention for the call, optionally with effects, and `gc_safe` (safe to execute concurrently to GC.).
 
       * `args[6:5+length(args[3])]` : arguments
 
@@ -660,6 +668,26 @@ for important details on how to modify these fields safely.
     The range of world ages for which this method instance is valid to be called.
     If max_world is the special token value `-1`, the value is not yet known.
     It may continue to be used until we encounter a backedge that requires us to reconsider.
+
+  * Timing fields
+
+    - `time_infer_total`: Total cost of computing `inferred` originally as wall-time from start to finish.
+
+    - `time_infer_cache_saved`: The cost saved from `time_infer_total` by having caching.
+      Adding this to `time_infer_total` should give a stable estimate for comparing the cost
+      of two implementations or one implementation over time. This is generally an
+      over-estimate of the time to infer something, since the cache is frequently effective
+      at handling repeated work.
+
+    - `time_infer_self`: Self cost of julia inference for `inferred` (a portion of
+      `time_infer_total`). This is simply the incremental cost of compiling this one method,
+      if given a fully populated cache of all call targets, even including constant
+      inference results and LimitedAccuracy results, which generally are not in a cache.
+
+    - `time_compile`: Self cost of llvm JIT compilation (e.g. of computing `invoke` from
+      `inferred`). A total cost estimate can be computed by walking all of the `edges`
+      contents and summing those, while accounting for cycles and duplicates. (This field
+      currently does not include any measured AOT compile times.)
 
 
 ### CodeInfo

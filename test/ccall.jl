@@ -1745,6 +1745,7 @@ using Base: ccall_macro_parse, ccall_macro_lower
         :Cvoid,                           # returntype
         Any[:Cstring, :Cstring, :Cint],   # argument types
         Any["%s = %d\n", :name, :value],  # argument symbols
+        false,                            # is gc_safe
         1                                 # number of required arguments (for varargs)
     )
 end
@@ -1757,7 +1758,7 @@ end
     )::Cstring))...)
     @test call == Base.remove_linenums!(
         quote
-        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, :ccall, 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
+        ccall($(Expr(:escape, :((:func, libstring)))), $(Expr(:cconv, (:ccall, UInt16(0), false), 0)), $(Expr(:escape, :Cstring)), ($(Expr(:escape, :Cstring)), $(Expr(:escape, :Cint)), $(Expr(:escape, :Cint))), $(Expr(:escape, :str)), $(Expr(:escape, :num1)), $(Expr(:escape, :num2)))
         end)
 
     local fptr = :x
@@ -1965,4 +1966,16 @@ let llvm = sprint(code_llvm, world_counter, ())
     @test !occursin("call i64", llvm)
     # the world age should be -1 in generated functions (or other pure contexts)
     @test (generated_world_counter() == reinterpret(UInt, -1))
+end
+
+function gc_safe_ccall()
+    # jl_rand is marked as JL_NOTSAFEPOINT
+    @ccall gc_safe=true jl_rand()::UInt64
+end
+
+let llvm = sprint(code_llvm, gc_safe_ccall, ())
+    # check that the call works
+    @test gc_safe_ccall() isa UInt64
+    # check for the gc_safe store
+    @test occursin("store atomic i8 2", llvm)
 end

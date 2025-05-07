@@ -26,11 +26,13 @@ extern "C" {
 #include <fenv.h>
 #endif
 
+static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir);
+
 /**
  * @brief Check if Julia is already initialized.
  *
- * Determine if Julia has been previously initialized
- * via `jl_init` or `jl_init_with_image`.
+ * Determine if Julia has been previously initialized via `jl_init` or
+ * `jl_init_with_image_file` or `jl_init_with_image_handle`.
  *
  * @return Returns 1 if Julia is initialized, 0 otherwise.
  */
@@ -68,6 +70,20 @@ JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
     }
 }
 
+JL_DLLEXPORT void jl_init_with_image_handle(void *handle) {
+    if (jl_is_initialized())
+        return;
+
+    const char *image_path = jl_pathname_for_handle(handle);
+    jl_options.image_file = image_path;
+
+    jl_resolve_sysimg_location(JL_IMAGE_JULIA_HOME, NULL);
+    jl_image_buf_t sysimage = jl_set_sysimg_so(handle);
+
+    jl_init_(sysimage);
+
+    jl_exception_clear();
+}
 /**
  * @brief Initialize Julia with a specified system image file.
  *
@@ -82,18 +98,21 @@ JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
  * @param image_path The path of a system image file (*.so). Interpreted as relative to julia_bindir
  *                   or the default Julia home directory if not an absolute path.
  */
-JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
-                                     const char *image_path)
+JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
+                                          const char *image_path)
 {
     if (jl_is_initialized())
         return;
-    libsupport_init();
-    jl_options.julia_bindir = julia_bindir;
     if (image_path != NULL)
         jl_options.image_file = image_path;
     else
         jl_options.image_file = jl_get_default_sysimg_path();
-    julia_init(JL_IMAGE_JULIA_HOME);
+
+    jl_resolve_sysimg_location(JL_IMAGE_JULIA_HOME, julia_bindir);
+    jl_image_buf_t sysimage = jl_preload_sysimg(jl_options.image_file);
+
+    jl_init_(sysimage);
+
     jl_exception_clear();
 }
 
@@ -105,31 +124,7 @@ JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
  */
 JL_DLLEXPORT void jl_init(void)
 {
-    char *libbindir = NULL;
-#ifdef _OS_WINDOWS_
-    libbindir = strdup(jl_get_libdir());
-#else
-    (void)asprintf(&libbindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
-#endif
-    if (!libbindir) {
-        printf("jl_init unable to find libjulia!\n");
-        abort();
-    }
-    jl_init_with_image(libbindir, jl_get_default_sysimg_path());
-    free(libbindir);
-}
-
-// HACK: remove this for Julia 1.8 (see <https://github.com/JuliaLang/julia/issues/40730>)
-JL_DLLEXPORT void jl_init__threading(void)
-{
-    jl_init();
-}
-
-// HACK: remove this for Julia 1.8 (see <https://github.com/JuliaLang/julia/issues/40730>)
-JL_DLLEXPORT void jl_init_with_image__threading(const char *julia_bindir,
-                                     const char *image_relative_path)
-{
-    jl_init_with_image(julia_bindir, image_relative_path);
+    jl_init_with_image_file(NULL, jl_get_default_sysimg_path());
 }
 
 static void _jl_exception_clear(jl_task_t *ct) JL_NOTSAFEPOINT
@@ -426,6 +421,46 @@ JL_DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a,
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
         v = jl_apply(argv, 4);
+        ct->world_age = last_age;
+        JL_GC_POP();
+        _jl_exception_clear(ct);
+    }
+    JL_CATCH {
+        ct->ptls->previous_exception = jl_current_exception(ct);
+        v = NULL;
+    }
+    return v;
+}
+
+/**
+ * @brief Call a Julia function with three arguments.
+ *
+ * A specialized case of `jl_call` for simpler scenarios.
+ *
+ * @param f A pointer to `jl_function_t` representing the Julia function to call.
+ * @param a A pointer to `jl_value_t` representing the first argument.
+ * @param b A pointer to `jl_value_t` representing the second argument.
+ * @param c A pointer to `jl_value_t` representing the third argument.
+ * @param d A pointer to `jl_value_t` representing the fourth argument.
+ * @return A pointer to `jl_value_t` representing the result of the function call.
+ */
+JL_DLLEXPORT jl_value_t *jl_call4(jl_function_t *f, jl_value_t *a,
+                                  jl_value_t *b, jl_value_t *c,
+                                  jl_value_t *d)
+{
+    jl_value_t *v;
+    jl_task_t *ct = jl_current_task;
+    JL_TRY {
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, 5);
+        argv[0] = f;
+        argv[1] = a;
+        argv[2] = b;
+        argv[3] = c;
+        argv[4] = d;
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
+        v = jl_apply(argv, 5);
         ct->world_age = last_age;
         JL_GC_POP();
         _jl_exception_clear(ct);
@@ -1075,7 +1110,14 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
         jl_error("Failed to self-execute");
     }
 
-    julia_init(jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
+    JL_IMAGE_SEARCH rel = jl_options.image_file_specified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME;
+    jl_resolve_sysimg_location(rel, NULL);
+    jl_image_buf_t sysimage = { JL_IMAGE_KIND_NONE };
+    if (jl_options.image_file)
+        sysimage = jl_preload_sysimg(jl_options.image_file);
+
+    jl_init_(sysimage);
+
     if (lisp_prompt) {
         jl_current_task->world_age = jl_get_world_counter();
         jl_lisp_prompt();
@@ -1084,6 +1126,180 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[])
     int ret = true_main(argc, (char**)new_argv);
     jl_atexit_hook(ret);
     return ret;
+}
+
+// create an absolute-path copy of the input path format string
+// formed as `joinpath(replace(pwd(), "%" => "%%"), in)`
+// unless `in` starts with `%`
+static const char *absformat(const char *in)
+{
+    if (in[0] == '%' || jl_isabspath(in))
+        return in;
+    // get an escaped copy of cwd
+    size_t path_size = JL_PATH_MAX;
+    char path[JL_PATH_MAX];
+    if (uv_cwd(path, &path_size)) {
+        jl_error("fatal error: unexpected error while retrieving current working directory");
+    }
+    size_t sz = strlen(in) + 1;
+    size_t i, fmt_size = 0;
+    for (i = 0; i < path_size; i++)
+        fmt_size += (path[i] == '%' ? 2 : 1);
+    char *out = (char*)malloc_s(fmt_size + 1 + sz);
+    fmt_size = 0;
+    for (i = 0; i < path_size; i++) { // copy-replace pwd portion
+        char c = path[i];
+        out[fmt_size++] = c;
+        if (c == '%')
+            out[fmt_size++] = '%';
+    }
+    out[fmt_size++] = PATHSEPSTRING[0]; // path sep
+    memcpy(out + fmt_size, in, sz); // copy over format, including nul
+    return out;
+}
+
+static char *absrealpath(const char *in, int nprefix)
+{ // compute an absolute realpath location, so that chdir doesn't change the file reference
+  // ignores (copies directly over) nprefix characters at the start of abspath
+#ifndef _OS_WINDOWS_
+    char *out = realpath(in + nprefix, NULL);
+    if (out) {
+        if (nprefix > 0) {
+            size_t sz = strlen(out) + 1;
+            char *cpy = (char*)malloc_s(sz + nprefix);
+            memcpy(cpy, in, nprefix);
+            memcpy(cpy + nprefix, out, sz);
+            free(out);
+            out = cpy;
+        }
+    }
+    else {
+        size_t sz = strlen(in + nprefix) + 1;
+        if (in[nprefix] == PATHSEPSTRING[0]) {
+            out = (char*)malloc_s(sz + nprefix);
+            memcpy(out, in, sz + nprefix);
+        }
+        else {
+            size_t path_size = JL_PATH_MAX;
+            char *path = (char*)malloc_s(JL_PATH_MAX);
+            if (uv_cwd(path, &path_size)) {
+                jl_error("fatal error: unexpected error while retrieving current working directory");
+            }
+            out = (char*)malloc_s(path_size + 1 + sz + nprefix);
+            memcpy(out, in, nprefix);
+            memcpy(out + nprefix, path, path_size);
+            out[nprefix + path_size] = PATHSEPSTRING[0];
+            memcpy(out + nprefix + path_size + 1, in + nprefix, sz);
+            free(path);
+        }
+    }
+#else
+    // GetFullPathName intentionally errors if given an empty string so manually insert `.` to invoke cwd
+    char *in2 = (char*)malloc_s(JL_PATH_MAX);
+    if (strlen(in) - nprefix == 0) {
+        memcpy(in2, in, nprefix);
+        in2[nprefix] = '.';
+        in2[nprefix+1] = '\0';
+        in = in2;
+    }
+    DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
+    if (n <= 0) {
+        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
+    }
+    char *out = (char*)malloc_s(n + nprefix);
+    DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
+    if (n != m + 1) {
+        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
+    }
+    memcpy(out, in, nprefix);
+    free(in2);
+#endif
+    return out;
+}
+
+static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel, const char* julia_bindir)
+{
+    libsupport_init();
+    jl_init_timing();
+
+    // this function resolves the paths in jl_options to absolute file locations as needed
+    // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
+    // it may fail, print an error, and exit(1) if any of these paths are longer than JL_PATH_MAX
+    //
+    // note: if you care about lost memory, you should call the appropriate `free()` function
+    // on the original pointer for each `char*` you've inserted into `jl_options`, after
+    // calling `jl_init_()`
+    char *free_path = (char*)malloc_s(JL_PATH_MAX);
+    size_t path_size = JL_PATH_MAX;
+    if (uv_exepath(free_path, &path_size)) {
+        jl_error("fatal error: unexpected error while retrieving exepath");
+    }
+    if (path_size >= JL_PATH_MAX) {
+        jl_error("fatal error: jl_options.julia_bin path too long");
+    }
+    jl_options.julia_bin = (char*)malloc_s(path_size + 1);
+    memcpy((char*)jl_options.julia_bin, free_path, path_size);
+    ((char*)jl_options.julia_bin)[path_size] = '\0';
+    if (julia_bindir == NULL) {
+        jl_options.julia_bindir = getenv("JULIA_BINDIR");
+        if (!jl_options.julia_bindir) {
+#ifdef _OS_WINDOWS_
+            jl_options.julia_bindir = strdup(jl_get_libdir());
+#else
+            int written = asprintf((char**)&jl_options.julia_bindir, "%s" PATHSEPSTRING ".." PATHSEPSTRING "%s", jl_get_libdir(), "bin");
+            if (written < 0)
+                abort(); // unexpected: memory allocation failed
+#endif
+        }
+    } else {
+        jl_options.julia_bindir = julia_bindir;
+    }
+    if (jl_options.julia_bindir)
+        jl_options.julia_bindir = absrealpath(jl_options.julia_bindir, 0);
+    free(free_path);
+    free_path = NULL;
+    if (jl_options.image_file) {
+        if (rel == JL_IMAGE_JULIA_HOME && !jl_isabspath(jl_options.image_file)) {
+            // build time path, relative to JULIA_BINDIR
+            free_path = (char*)malloc_s(JL_PATH_MAX);
+            int n = snprintf(free_path, JL_PATH_MAX, "%s" PATHSEPSTRING "%s",
+                             jl_options.julia_bindir, jl_options.image_file);
+            if (n >= JL_PATH_MAX || n < 0) {
+                jl_error("fatal error: jl_options.image_file path too long");
+            }
+            jl_options.image_file = free_path;
+        }
+        if (jl_options.image_file)
+            jl_options.image_file = absrealpath(jl_options.image_file, 0);
+        if (free_path) {
+            free(free_path);
+            free_path = NULL;
+        }
+    }
+    if (jl_options.outputo)
+        jl_options.outputo = absrealpath(jl_options.outputo, 0);
+    if (jl_options.outputji)
+        jl_options.outputji = absrealpath(jl_options.outputji, 0);
+    if (jl_options.outputbc)
+        jl_options.outputbc = absrealpath(jl_options.outputbc, 0);
+    if (jl_options.outputasm)
+        jl_options.outputasm = absrealpath(jl_options.outputasm, 0);
+    if (jl_options.machine_file)
+        jl_options.machine_file = absrealpath(jl_options.machine_file, 0);
+    if (jl_options.output_code_coverage)
+        jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
+    if (jl_options.tracked_path)
+        jl_options.tracked_path = absrealpath(jl_options.tracked_path, 0);
+
+    const char **cmdp = jl_options.cmds;
+    if (cmdp) {
+        for (; *cmdp; cmdp++) {
+            const char *cmd = *cmdp;
+            if (cmd[0] == 'L') {
+                *cmdp = absrealpath(cmd, 1);
+            }
+        }
+    }
 }
 
 #ifdef __cplusplus

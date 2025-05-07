@@ -239,6 +239,13 @@ if bc_opt != bc_off
     @test_throws BoundsError BadVector20469([1,2,3])[:]
 end
 
+# Accumulate: do not set inbounds context for user-supplied functions
+if bc_opt != bc_off
+    Base.@propagate_inbounds op58200(a, b) = (1, 2)[a] + (1, 2)[b]
+    @test_throws BoundsError accumulate(op58200, 1:10)
+    @test_throws BoundsError Base.accumulate_pairwise(op58200, 1:10)
+end
+
 # Ensure iteration over arrays is vectorizable
 function g27079(X)
     r = 0
@@ -299,7 +306,7 @@ end |> only === Type{Int}
 
 if bc_opt == bc_default
     # Array/Memory escape analysis
-    function no_allocate(T::Type{<:Union{Memory, Vector}})
+    function no_allocate(T::Type{<:Union{Memory}})
         v = T(undef, 2)
         v[1] = 2
         v[2] = 3
@@ -308,7 +315,7 @@ if bc_opt == bc_default
     function test_alloc(::Type{T}; broken=false) where T
         @test (@allocated no_allocate(T)) == 0 broken=broken
     end
-    for T in [Memory, Vector]
+    for T in [Memory] # This requires changing the pointer_from_objref to something llvm sees through
         for ET in [Int, Float32, Union{Int, Float64}]
             no_allocate(T{ET}) #compile
             # allocations aren't removed for Union eltypes which they theoretically could be eventually
@@ -343,7 +350,7 @@ if bc_opt == bc_default
         m1 === m2
     end
     no_alias_prove(1)
-    @test_broken (@allocated no_alias_prove(5)) == 0
+    @test (@allocated no_alias_prove(5)) == 0
 end
 
 end

@@ -6,6 +6,8 @@ module JuliaConfig
 end
 
 julia_cmd = `$(Base.julia_cmd()) --startup-file=no --history-file=no`
+cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
+julia_cmd_target =  `$(Base.julia_cmd(;cpu_target)) --startup-file=no --history-file=no`
 output_type = nothing  # exe, sharedlib, sysimage
 outname = nothing
 file = nothing
@@ -28,6 +30,7 @@ end
 
 # arguments to forward to julia compilation process
 julia_args = []
+enable_trim::Bool = false
 
 let i = 1
     while i <= length(ARGS)
@@ -44,9 +47,11 @@ let i = 1
             global verbose = true
         elseif arg == "--relative-rpath"
             global relative_rpath = true
-        elseif startswith(arg, "--trim") || arg == "--experimental"
-            # forwarded args
-            push!(julia_args, arg)
+        elseif startswith(arg, "--trim")
+            global enable_trim = arg != "--trim=no"
+            push!(julia_args, arg) # forwarded arg
+        elseif arg == "--experimental"
+            push!(julia_args, arg) # forwarded arg
         else
             if arg[1] == '-' || !isnothing(file)
                 println("Unexpected argument `$arg`")
@@ -83,8 +88,6 @@ allflags = Base.shell_split(allflags)
 rpath = get_rpath(; relative = relative_rpath)
 rpath = Base.shell_split(rpath)
 tmpdir = mktempdir(cleanup=false)
-initsrc_path = joinpath(tmpdir, "init.c")
-init_path = joinpath(tmpdir, "init.a")
 img_path = joinpath(tmpdir, "img.a")
 bc_path = joinpath(tmpdir, "img-bc.a")
 
@@ -100,28 +103,23 @@ function precompile_env()
     end
 end
 
-function compile_products()
+function compile_products(enable_trim::Bool)
+
+    # Only strip IR / metadata if not `--trim=no`
+    strip_args = String[]
+    if enable_trim
+        push!(strip_args, "--strip-ir")
+        push!(strip_args, "--strip-metadata")
+    end
+
     # Compile the Julia code
-    cmd = addenv(`$julia_cmd --project=$(Base.active_project()) --output-o $img_path --output-incremental=no --strip-ir --strip-metadata $julia_args $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
+    cmd = addenv(`$julia_cmd_target --project=$(Base.active_project()) --output-o $img_path --output-incremental=no $strip_args $julia_args $(joinpath(@__DIR__,"juliac-buildscript.jl")) $absfile $output_type $add_ccallables`, "OPENBLAS_NUM_THREADS" => 1, "JULIA_NUM_THREADS" => 1)
     verbose && println("Running: $cmd")
     if !success(pipeline(cmd; stdout, stderr))
         println(stderr, "\nFailed to compile $file")
         exit(1)
     end
 
-    # Compile the initialization code
-    open(initsrc_path, "w") do io
-        print(io, """
-                  #include <julia.h>
-                  __attribute__((constructor)) void static_init(void) {
-                      if (jl_is_initialized())
-                          return;
-                      julia_init(JL_IMAGE_IN_MEMORY);
-                      jl_exception_clear();
-                  }
-                  """)
-    end
-    run(`cc $(cflags) -g -c -o $init_path $initsrc_path`)
 end
 
 function link_products()
@@ -137,11 +135,11 @@ function link_products()
     julia_libs = Base.shell_split(Base.isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : "-ljulia -ljulia-internal")
     try
         if output_type == "--output-lib"
-            cmd2 = `cc $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path  $(julia_libs)`
+            cmd2 = `cc $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)  $(julia_libs)`
         elseif output_type == "--output-sysimage"
             cmd2 = `cc $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             $(julia_libs)`
         else
-            cmd2 = `cc $(allflags) $(rpath) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE) $init_path $(julia_libs)`
+            cmd2 = `cc $(allflags) $(rpath) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)  $(julia_libs)`
         end
         verbose && println("Running: $cmd2")
         run(cmd2)
@@ -152,5 +150,5 @@ function link_products()
 end
 
 precompile_env()
-compile_products()
+compile_products(enable_trim)
 link_products()

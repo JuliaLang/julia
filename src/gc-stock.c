@@ -948,6 +948,7 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
 
 done:
     if (re_use_page) {
+        gc_update_page_fragmentation_data(pg);
         push_lf_back(allocd, pg);
     }
     else {
@@ -956,7 +957,6 @@ done:
         push_lf_back(&global_page_pool_lazily_freed, pg);
     }
     gc_page_profile_write_to_file(s);
-    gc_update_page_fragmentation_data(pg);
     gc_time_count_page(freedall, pg_skpd);
     jl_ptls_t ptls = jl_current_task->ptls;
     // Note that we aggregate the `pool_live_bytes` over all threads before returning this
@@ -2144,6 +2144,12 @@ STATIC_INLINE void gc_mark_module_binding(jl_ptls_t ptls, jl_module_t *mb_parent
     gc_heap_snapshot_record_module_to_binding(mb_parent, bindings, bindingkeyset);
     gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->parent);
     gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->parent, &nptr);
+    gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->usings_backedges);
+    gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->usings_backedges, &nptr);
+    gc_heap_snapshot_record_binding_partition_edge((jl_value_t*)mb_parent, mb_parent->usings_backedges);
+    gc_assert_parent_validity((jl_value_t *)mb_parent, (jl_value_t *)mb_parent->scanned_methods);
+    gc_try_claim_and_push(mq, (jl_value_t *)mb_parent->scanned_methods, &nptr);
+    gc_heap_snapshot_record_binding_partition_edge((jl_value_t*)mb_parent, mb_parent->scanned_methods);
     size_t nusings = module_usings_length(mb_parent);
     if (nusings > 0) {
         // this is only necessary because bindings for "using" modules
@@ -2445,16 +2451,6 @@ FORCE_INLINE void gc_mark_outrefs(jl_ptls_t ptls, jl_gc_markqueue_t *mq, void *_
         if (npointers == 0)
             return;
         uintptr_t nptr = (npointers << 2 | (bits & GC_OLD));
-        if (vt == jl_binding_partition_type) {
-            // BindingPartition has a special union of jl_value_t and flag bits
-            // but is otherwise regular.
-            jl_binding_partition_t *bpart = (jl_binding_partition_t*)jl_valueof(o);
-            jl_value_t *val = decode_restriction_value(
-                jl_atomic_load_relaxed(&bpart->restriction));
-            if (val)
-                gc_heap_snapshot_record_binding_partition_edge((jl_value_t*)bpart, val);
-            gc_try_claim_and_push(mq, val, &nptr);
-        }
         assert((layout->nfields > 0 || layout->flags.fielddesc_type == 3) &&
                "opaque types should have been handled specially");
         if (layout->flags.fielddesc_type == 0) {
@@ -3928,16 +3924,18 @@ void *jl_gc_perm_alloc(size_t sz, int zero, unsigned align, unsigned offset)
     return p;
 }
 
-jl_value_t *jl_gc_permobj(size_t sz, void *ty) JL_NOTSAFEPOINT
+jl_value_t *jl_gc_permobj(size_t sz, void *ty, unsigned align) JL_NOTSAFEPOINT
 {
     const size_t allocsz = sz + sizeof(jl_taggedvalue_t);
-    unsigned align = (sz == 0 ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
+    if (align == 0) {
+        align = ((sz == 0) ? sizeof(void*) : (allocsz <= sizeof(void*) * 2 ?
                                                  sizeof(void*) * 2 : 16));
+    }
     jl_taggedvalue_t *o = (jl_taggedvalue_t*)jl_gc_perm_alloc(allocsz, 0, align,
                                                               sizeof(void*) % align);
-    uintptr_t tag = (uintptr_t)ty;
-    o->header = tag | GC_OLD_MARKED;
-    return jl_valueof(o);
+    jl_value_t* v = jl_valueof(o);
+    jl_set_typeof(v, (void*)(((uintptr_t)(ty) | GC_OLD_MARKED)));
+    return v;
 }
 
 JL_DLLEXPORT int jl_gc_enable_conservative_gc_support(void)

@@ -4,6 +4,7 @@ using Test
 using Base.Meta
 using Core.IR
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # domsort
@@ -920,7 +921,7 @@ let # Test that CFG simplify doesn't try to merge every block in a loop into
 end
 
 # `cfg_simplify!` shouldn't error in a presence of `try/catch` block
-let ir = Base.code_ircode(; optimize_until="slot2ssa") do
+let ir = Base.code_ircode(; optimize_until="CC: SLOT2REG") do
         v = try
         catch
         end
@@ -1179,7 +1180,10 @@ let ci = code_typed(foo_cfg_empty, Tuple{Bool}, optimize=true)[1][1]
 end
 
 @test Compiler.is_effect_free(Base.infer_effects(getfield, (Complex{Int}, Symbol)))
-@test Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
+
+# We consider a potential deprecatio warning an effect, so for completely unknown getglobal,
+# we taint the effect_free bit.
+@test !Compiler.is_effect_free(Base.infer_effects(getglobal, (Module, Symbol)))
 
 # Test that UseRefIterator gets SROA'd inside of new_to_regular (#44557)
 # expression and new_to_regular offset are arbitrary here, we just want to see the UseRefIterator erased
@@ -1455,7 +1459,7 @@ function f_with_early_try_catch_exit()
     result
 end
 
-let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="compact")))
+let ir = first(only(Base.code_ircode(f_with_early_try_catch_exit, (); optimize_until="CC: SLOT2REG")))
     for i = 1:length(ir.stmts)
         expr = ir.stmts[i][:stmt]
         if isa(expr, PhiCNode)
@@ -1646,8 +1650,7 @@ let code = Any[
     try
         argtypes = Any[Bool]
         ssavaluetypes = Any[Bool, Tuple{Int}, Tuple{Float64}, Tuple{Int}, Int, Any]
-        ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
-        Compiler.verify_ir(ir)
+        ir = make_ircode(code; slottypes=argtypes, ssavaluetypes, verify=true)
         Compiler.__set_check_ssa_counts(true)
         ir = Compiler.sroa_pass!(ir)
         Compiler.verify_ir(ir)
@@ -1687,8 +1690,7 @@ let code = Any[
                         Union{Nothing, Tuple{Tuple{Int, Int}, Int}}, Bool, Any, Any,
                         Tuple{Tuple{Int, Int}, Int},
                         Tuple{Int, Int}, Int, Any]
-    ir = make_ircode(code; slottypes=argtypes, ssavaluetypes)
-    Compiler.verify_ir(ir)
+    ir = make_ircode(code; slottypes=argtypes, ssavaluetypes, verify=true)
     ir = Compiler.sroa_pass!(ir)
     Compiler.verify_ir(ir)
     ir = Compiler.compact!(ir)
@@ -1961,9 +1963,8 @@ let code = Any[
         # block 8
         ReturnNode(2),
     ]
-    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Any, Any, Any, Any, Union{}, Union{}])
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Any, Any, Any, Any, Union{}, Union{}], verify=true)
     @test length(ir.cfg.blocks) == 8
-    Compiler.verify_ir(ir)
 
     # Union typed deletion marker in basic block 2
     Compiler.setindex!(ir, nothing, SSAValue(2))
@@ -1981,6 +1982,45 @@ let code = Any[
     @test isdefined(ir[SSAValue(gotoifnot+1)][:inst]::ReturnNode, :val)
 end
 
+# Make sure that PhiNode values containing forward references are eventually updated.
+let code = Any[
+             # block 1
+    #= %1 =# Argument(2),
+    #= %2 =# GotoNode(4),
+             # block 2
+    #= %3 =# GotoNode(4), # will be removed, shifting SSA indices by 1
+             # block 3
+    #= %4 =# PhiNode(Int32[1, 9, 13], Any[SSAValue(1), SSAValue(6), SSAValue(6)]),
+    #= %5 =# GotoNode(6),
+             # block 4
+    #= %6 =# Expr(:call, :add_int, Argument(2), 1),
+    #= %7 =# GotoIfNot(Argument(3), 9),
+             # block 5
+    #= %8 =# ReturnNode(Argument(3)),
+             # block 6
+    #= %9 =# GotoIfNot(Argument(3), 4),
+             # block 7
+    #= %10=# GotoIfNot(Argument(3), 12),
+             # block 8
+    #= %11=# GotoNode(13),
+             # block 9
+    #= %12=# GotoNode(13),
+             # block 10
+    #= %13=# GotoNode(4),
+    ]
+    ssavaluetypes = Any[Int64, Any, Any, Int64, Any, Int64, Any, Int64, Any, Any, Any, Any, Any]
+    slottypes = Any[Any, Int, Bool]
+    ir = make_ircode(code; ssavaluetypes, slottypes, verify=true)
+    @test length(ir.cfg.blocks) == 10
+    ir = Compiler.cfg_simplify!(ir)
+    Compiler.verify_ir(ir)
+    @test length(ir.cfg.blocks) == 6
+    phistmt = ir.cfg.blocks[2].stmts[1]
+    phinode = ir[SSAValue(phistmt)][:stmt]
+    @test isa(phinode, PhiNode)
+    @test phinode.values[2] == phinode.values[3] == SSAValue(5)
+end
+
 # https://github.com/JuliaLang/julia/issues/54596
 # finalized object's uses have no postdominator
 let f = (x)->nothing, mi = Base.method_instance(f, (Base.RefValue{Nothing},)), code = Any[
@@ -1995,9 +2035,8 @@ let f = (x)->nothing, mi = Base.method_instance(f, (Base.RefValue{Nothing},)), c
    Expr(:call, Base.getfield, SSAValue(1), :x)
    ReturnNode(SSAValue(6))
 ]
-   ir = make_ircode(code; ssavaluetypes=Any[Base.RefValue{Nothing}, Nothing, Any, Nothing, Any, Nothing, Any])
+   ir = make_ircode(code; ssavaluetypes=Any[Base.RefValue{Nothing}, Nothing, Any, Nothing, Any, Nothing, Any], verify=true)
    inlining = Compiler.InliningState(Compiler.NativeInterpreter())
-   Compiler.verify_ir(ir)
    ir = Compiler.sroa_pass!(ir, inlining)
    Compiler.verify_ir(ir)
 end
@@ -2020,13 +2059,55 @@ let code = Any[
         # block 8
         ReturnNode(nothing),
     ]
-    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}])
+    ir = make_ircode(code; ssavaluetypes=Any[Any, Any, Union{}, Any, Any, Any, Union{}, Union{}], verify=true)
     @test length(ir.cfg.blocks) == 8
-    Compiler.verify_ir(ir)
 
     # The IR should remain valid after domsorting
     # (esp. including the insertion of new BasicBlocks for any fix-ups)
     domtree = Compiler.construct_domtree(ir)
     ir = Compiler.domsort_ssa!(ir, domtree)
     Compiler.verify_ir(ir)
+end
+
+# https://github.com/JuliaLang/julia/issues/57141
+# don't eliminate `setfield!` when the field is to be used
+let src = code_typed1(()) do
+        ref = Ref{Any}()
+        ref[] = 0
+        @assert isdefined(ref, :x)
+        inner() = ref[] + 1
+        (inner(), ref[])
+    end
+    @test count(iscall((src, setfield!)), src.code) == 1
+end
+
+module _Partials_irpasses
+    mutable struct Partial
+        x::String
+        y::Integer
+        z::Any
+        Partial() = new()
+    end
+end
+
+# once `isdefined(p, name)` holds, this information should be kept
+# as a `PartialStruct` over `p` for subsequent constant propagation.
+let src = code_typed1(()) do
+        p = _Partials_irpasses.Partial()
+        invokelatest(identity, p)
+        isdefined(p, :z) && isdefined(p, :x) || return nothing
+        isdefined(p, :x) & isdefined(p, :z)
+    end
+    @test count(iscall((src, isdefined)), src.code) == 2
+end
+
+# optimize `isdefined` away in the presence of a dominating `setfield!`
+let src = code_typed1(()) do
+        a = Ref{Any}()
+        setfield!(a, :x, 2)
+        invokelatest(identity, a)
+        isdefined(a, :x) && return 1.0
+        a[]
+    end
+    @test count(iscall((src, isdefined)), src.code) == 0
 end

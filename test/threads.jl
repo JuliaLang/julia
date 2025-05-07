@@ -439,13 +439,19 @@ end
 
 let once = OncePerProcess(() -> return [nothing])
     @test typeof(once) <: OncePerProcess{Vector{Nothing}}
-    x = once()
+    x = @inferred once()
     @test x === once()
     @atomic once.state = 0xff
     @test_throws ErrorException("invalid state for OncePerProcess") once()
     @test_throws ErrorException("OncePerProcess initializer failed previously") once()
     @atomic once.state = 0x01
     @test x === once()
+end
+let once1 = OncePerProcess(BigFloat), once2 = OncePerProcess{BigFloat}(BigFloat)
+    # Using a type as a constructor should create a OncePerProcess with
+    # Type{...} as its initializer (rather than DataType)
+    @test typeof(once1) <: OncePerProcess{BigFloat,Type{BigFloat}}
+    @test typeof(once2) <: OncePerProcess{BigFloat,Type{BigFloat}}
 end
 let once = OncePerProcess{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
@@ -456,7 +462,7 @@ let e = Base.Event(true),
     started = Channel{Int16}(Inf),
     finish = Channel{Nothing}(Inf),
     exiting = Channel{Nothing}(Inf),
-    starttest2 = Event(),
+    starttest2 = Base.Event(),
     once = OncePerThread() do
         push!(started, threadid())
         take!(finish)
@@ -468,7 +474,7 @@ let e = Base.Event(true),
     @test typeof(once) <: OncePerThread{Vector{Nothing}}
     push!(finish, nothing)
     @test_throws ArgumentError once[0]
-    x = once()
+    x = @inferred once()
     @test_throws ArgumentError once[0]
     @test x === once() === fetch(@async once()) === once[threadid()]
     @test take!(started) == threadid()
@@ -551,6 +557,12 @@ let e = Base.Event(true),
     @test_throws ArgumentError once[-1]
 
 end
+let once1 = OncePerThread(BigFloat), once2 = OncePerThread{BigFloat}(BigFloat)
+    # Using a type as a constructor should create a OncePerThread with
+    # Type{...} as its initializer (rather than DataType)
+    @test typeof(once1) <: OncePerThread{BigFloat,Type{BigFloat}}
+    @test typeof(once2) <: OncePerThread{BigFloat,Type{BigFloat}}
+end
 let once = OncePerThread{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()
     @test_throws ErrorException("OncePerThread initializer failed previously") once()
@@ -558,10 +570,16 @@ end
 
 let once = OncePerTask(() -> return [nothing])
     @test typeof(once) <: OncePerTask{Vector{Nothing}}
-    x = once()
+    x = @inferred once()
     @test x === once() !== fetch(@async once())
     delete!(task_local_storage(), once)
     @test x !== once() === once()
+end
+let once1 = OncePerTask(BigFloat), once2 = OncePerTask{BigFloat}(BigFloat)
+    # Using a type as a constructor should create a OncePerTask with
+    # Type{...} as its initializer (rather than DataType)
+    @test typeof(once1) <: OncePerTask{BigFloat,Type{BigFloat}}
+    @test typeof(once2) <: OncePerTask{BigFloat,Type{BigFloat}}
 end
 let once = OncePerTask{Int}(() -> error("expected"))
     @test_throws ErrorException("expected") once()

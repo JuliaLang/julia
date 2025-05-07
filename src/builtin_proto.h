@@ -8,82 +8,90 @@ extern "C" {
 #endif
 
 // declarations for julia-callable builtin functions
+#define JL_BUILTIN_FUNCTIONS(XX) \
+    XX(_abstracttype,"_abstracttype") \
+    XX(_apply_iterate,"_apply_iterate") \
+    XX(_call_in_world_total,"_call_in_world_total") \
+    XX(_compute_sparams,"_compute_sparams") \
+    XX(_defaultctors,"_defaultctors") \
+    XX(_equiv_typedef,"_equiv_typedef") \
+    XX(_expr,"_expr") \
+    XX(_import, "_import") \
+    XX(_primitivetype,"_primitivetype") \
+    XX(_setsuper,"_setsuper!") \
+    XX(_structtype,"_structtype") \
+    XX(_svec_ref,"_svec_ref") \
+    XX(_typebody,"_typebody!") \
+    XX(_typevar,"_typevar") \
+    XX(_using, "_using") \
+    XX(applicable,"applicable") \
+    XX(apply_type,"apply_type") \
+    XX(compilerbarrier,"compilerbarrier") \
+    XX(current_scope,"current_scope") \
+    XX(donotdelete,"donotdelete") \
+    XX(fieldtype,"fieldtype") \
+    XX(finalizer,"finalizer") \
+    XX(get_binding_type,"get_binding_type") \
+    XX(getfield,"getfield") \
+    XX(getglobal,"getglobal") \
+    XX(ifelse,"ifelse") \
+    XX(intrinsic_call,"intrinsic_call") \
+    XX(invoke,"invoke") \
+    XX(invoke_in_world,"invoke_in_world") \
+    XX(invokelatest,"invokelatest") \
+    XX(is,"===") \
+    XX(isa,"isa") \
+    XX(isdefined,"isdefined") \
+    XX(isdefinedglobal,"isdefinedglobal") \
+    XX(issubtype,"<:") \
+    XX(memorynew,"memorynew") \
+    XX(memoryrefnew,"memoryrefnew") \
+    XX(memoryref_isassigned,"memoryref_isassigned") \
+    XX(memoryrefget,"memoryrefget") \
+    XX(memoryrefmodify,"memoryrefmodify!") \
+    XX(memoryrefoffset,"memoryrefoffset") \
+    XX(memoryrefreplace,"memoryrefreplace!") \
+    XX(memoryrefset,"memoryrefset!") \
+    XX(memoryrefsetonce,"memoryrefsetonce!") \
+    XX(memoryrefswap,"memoryrefswap!") \
+    XX(modifyfield,"modifyfield!") \
+    XX(modifyglobal,"modifyglobal!") \
+    XX(nfields,"nfields") \
+    XX(opaque_closure_call,"opaque_closure_call") \
+    XX(replacefield,"replacefield!") \
+    XX(replaceglobal,"replaceglobal!") \
+    XX(setfield,"setfield!") \
+    XX(setfieldonce,"setfieldonce!") \
+    XX(setglobal,"setglobal!") \
+    XX(setglobalonce,"setglobalonce!") \
+    XX(sizeof,"sizeof") \
+    XX(svec,"svec") \
+    XX(swapfield,"swapfield!") \
+    XX(swapglobal,"swapglobal!") \
+    XX(throw,"throw") \
+    XX(throw_methoderror,"throw_methoderror") \
+    XX(tuple,"tuple") \
+    XX(typeassert,"typeassert") \
+    XX(typeof,"typeof") \
 
-#ifdef DEFINE_BUILTIN_GLOBALS
-#define DECLARE_BUILTIN(name) \
-    JL_CALLABLE(jl_f_##name); \
-    JL_DLLEXPORT jl_value_t *jl_builtin_##name; \
-    JL_DLLEXPORT jl_fptr_args_t jl_f_##name##_addr = &jl_f_##name
-#else
-#define DECLARE_BUILTIN(name) \
-    JL_CALLABLE(jl_f_##name); \
-    JL_DLLEXPORT extern jl_value_t *jl_builtin_##name; \
-    JL_DLLEXPORT extern jl_fptr_args_t jl_f_##name##_addr
-#endif
+#define DECLARE_BUILTIN(cname,jlname) \
+    JL_CALLABLE(jl_f_##cname);
+JL_BUILTIN_FUNCTIONS(DECLARE_BUILTIN)
+#undef DECLARE_BUILTIN
 
-DECLARE_BUILTIN(_apply_iterate);
-DECLARE_BUILTIN(_apply_pure);
-DECLARE_BUILTIN(_call_in_world);
-DECLARE_BUILTIN(_call_in_world_total);
-DECLARE_BUILTIN(_call_latest);
-DECLARE_BUILTIN(_compute_sparams);
-DECLARE_BUILTIN(_expr);
-DECLARE_BUILTIN(_svec_ref);
-DECLARE_BUILTIN(_typebody);
-DECLARE_BUILTIN(_typevar);
-DECLARE_BUILTIN(applicable);
-DECLARE_BUILTIN(apply_type);
-DECLARE_BUILTIN(compilerbarrier);
-DECLARE_BUILTIN(current_scope);
-DECLARE_BUILTIN(donotdelete);
-DECLARE_BUILTIN(fieldtype);
-DECLARE_BUILTIN(finalizer);
-DECLARE_BUILTIN(getfield);
-DECLARE_BUILTIN(getglobal);
-DECLARE_BUILTIN(ifelse);
-DECLARE_BUILTIN(invoke);
-DECLARE_BUILTIN(is);
-DECLARE_BUILTIN(isa);
-DECLARE_BUILTIN(isdefined);
-DECLARE_BUILTIN(isdefinedglobal);
-DECLARE_BUILTIN(issubtype);
-DECLARE_BUILTIN(memorynew);
-DECLARE_BUILTIN(memoryref);
-DECLARE_BUILTIN(memoryref_isassigned);
-DECLARE_BUILTIN(memoryrefget);
-DECLARE_BUILTIN(memoryrefmodify);
-DECLARE_BUILTIN(memoryrefoffset);
-DECLARE_BUILTIN(memoryrefreplace);
-DECLARE_BUILTIN(memoryrefset);
-DECLARE_BUILTIN(memoryrefsetonce);
-DECLARE_BUILTIN(memoryrefswap);
-DECLARE_BUILTIN(modifyfield);
-DECLARE_BUILTIN(modifyglobal);
-DECLARE_BUILTIN(nfields);
-DECLARE_BUILTIN(replacefield);
-DECLARE_BUILTIN(replaceglobal);
-DECLARE_BUILTIN(setfield);
-DECLARE_BUILTIN(setfieldonce);
-DECLARE_BUILTIN(setglobal);
-DECLARE_BUILTIN(setglobalonce);
-DECLARE_BUILTIN(sizeof);
-DECLARE_BUILTIN(svec);
-DECLARE_BUILTIN(swapfield);
-DECLARE_BUILTIN(swapglobal);
-DECLARE_BUILTIN(throw);
-DECLARE_BUILTIN(throw_methoderror);
-DECLARE_BUILTIN(tuple);
-DECLARE_BUILTIN(typeassert);
-DECLARE_BUILTIN(typeof);
+#define BUILTIN(cname) (jl_builtin_instances[jl_builtin_id_##cname])
 
-JL_CALLABLE(jl_f__structtype);
-JL_CALLABLE(jl_f__abstracttype);
-JL_CALLABLE(jl_f__primitivetype);
-JL_CALLABLE(jl_f__setsuper);
-JL_CALLABLE(jl_f__equiv_typedef);
-JL_CALLABLE(jl_f_get_binding_type);
-JL_CALLABLE(jl_f__compute_sparams);
-JL_CALLABLE(jl_f__svec_ref);
+enum jl_builtin_ids {
+#define BUILTIN_IDS(cname,jlname) jl_builtin_id_##cname,
+JL_BUILTIN_FUNCTIONS(BUILTIN_IDS)
+#undef BUILTIN_IDS
+    jl_n_builtins
+};
+
+JL_DLLEXPORT extern jl_fptr_args_t const jl_builtin_f_addrs[];
+JL_DLLEXPORT extern const char *const jl_builtin_f_names[];
+JL_DLLEXPORT extern jl_value_t *jl_builtin_instances[];
+
 #ifdef __cplusplus
 }
 #endif

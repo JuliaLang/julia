@@ -454,6 +454,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     Constant *c = x.constant ? julia_const_to_llvm(ctx, x.constant) : nullptr;
     if ((x.inline_roots.empty() && !x.ispointer()) || c != nullptr) { // already unboxed, but sometimes need conversion
         Value *unboxed = c ? c : x.V;
+        assert(unboxed); // clang-sa doesn't know that !x.ispointer() implies x.V does have a value
         return emit_unboxed_coercion(ctx, to, unboxed);
     }
 
@@ -461,6 +462,7 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
     Value *p = x.constant ? literal_pointer_val(ctx, x.constant) : x.V;
 
     if (jt == (jl_value_t*)jl_bool_type || to->isIntegerTy(1)) {
+        assert(p && x.inline_roots.empty()); // clang-sa doesn't know that x.ispointer() implied these are true
         jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
         Instruction *unbox_load = ai.decorateInst(ctx.builder.CreateLoad(getInt8Ty(ctx.builder.getContext()), p));
         setName(ctx.emission_context, unbox_load, p->getName() + ".unbox");
@@ -486,13 +488,14 @@ static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, jl_va
         p = combined;
         ai = combined_ai;
     }
+    assert(p); // clang-sa doesn't know that x.ispointer() implied this is true
     Instruction *load = ctx.builder.CreateAlignedLoad(to, p, Align(alignment));
     setName(ctx.emission_context, load, p->getName() + ".unbox");
     return ai.decorateInst(load);
 }
 
 // emit code to store a raw value into a destination
-static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest, MDNode *tbaa_dest, Align alignment, bool isVolatile)
+static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest, MDNode *tbaa_dest, MaybeAlign align_src, Align align_dst, bool isVolatile)
 {
     if (x.isghost) {
         // this can happen when a branch yielding a different type ends
@@ -504,14 +507,14 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
     auto dest_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa_dest);
 
     if (!x.inline_roots.empty()) {
-        recombine_value(ctx, x, dest, dest_ai, alignment, isVolatile);
+        recombine_value(ctx, x, dest, dest_ai, align_dst, isVolatile);
         return;
     }
 
     if (!x.ispointer()) { // already unboxed, but sometimes need conversion (e.g. f32 -> i32)
         assert(x.V);
         Value *unboxed = zext_struct(ctx, x.V);
-        StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, alignment);
+        StoreInst *store = ctx.builder.CreateAlignedStore(unboxed, dest, align_dst);
         store->setVolatile(isVolatile);
         dest_ai.decorateInst(store);
         return;
@@ -519,7 +522,7 @@ static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value *dest
 
     Value *src = data_pointer(ctx, x);
     auto src_ai = jl_aliasinfo_t::fromTBAA(ctx, x.tbaa);
-    emit_memcpy(ctx, dest, dest_ai, src, src_ai, jl_datatype_size(x.typ), Align(alignment), Align(julia_alignment(x.typ)), isVolatile);
+    emit_memcpy(ctx, dest, dest_ai, src, src_ai, jl_datatype_size(x.typ), Align(align_dst), align_src ? *align_src : Align(julia_alignment(x.typ)), isVolatile);
 }
 
 static jl_datatype_t *staticeval_bitstype(const jl_cgval_t &targ)
@@ -672,16 +675,29 @@ static jl_cgval_t generic_cast(
     uint32_t nb = jl_datatype_size(jlto);
     Type *to = bitstype_to_llvm((jl_value_t*)jlto, ctx.builder.getContext(), true);
     Type *vt = bitstype_to_llvm(v.typ, ctx.builder.getContext(), true);
-    if (toint)
-        to = INTT(to, DL);
-    else
-        to = FLOATT(to);
-    if (fromint)
-        vt = INTT(vt, DL);
-    else
-        vt = FLOATT(vt);
+
+    // fptrunc and fpext depend on the specific floating point
+    // format to work correctly, and so do not pun their argument types.
+    if (!(f == fpext || f == fptrunc)) {
+        // uitofp/sitofp require a specific float type argument
+        if (!(f == uitofp || f == sitofp)){
+            if (toint)
+                to = INTT(to, DL);
+            else
+                to = FLOATT(to);
+        }
+        // fptoui/fptosi require a specific float value argument
+        if (!(f == fptoui || f == fptosi)) {
+            if (fromint)
+                vt = INTT(vt, DL);
+            else
+                vt = FLOATT(vt);
+        }
+    }
+
     if (!to || !vt)
         return emit_runtime_call(ctx, f, argv, 2);
+
     Value *from = emit_unbox(ctx, vt, v, v.typ);
     if (!CastInst::castIsValid(Op, from, to))
         return emit_runtime_call(ctx, f, argv, 2);
@@ -780,7 +796,7 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv)
         Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
-            Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            Value *thePtr = emit_unbox(ctx, PointerType::getUnqual(ptrty->getContext()), e, e.typ);
             thePtr = ctx.builder.CreateInBoundsGEP(ptrty, thePtr, im1);
             auto load = typed_load(ctx, thePtr, nullptr, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, AtomicOrdering::NotAtomic, false, align_nb);
             setName(ctx.emission_context, load.V, "pointerref");
@@ -972,7 +988,7 @@ static jl_cgval_t emit_atomic_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t>
         Type *ptrty = julia_type_to_llvm(ctx, ety, &isboxed);
         assert(!isboxed);
         if (!type_is_ghost(ptrty)) {
-            Value *thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            Value *thePtr = emit_unbox(ctx, PointerType::getUnqual(ptrty->getContext()), e, e.typ);
             auto load = typed_load(ctx, thePtr, nullptr, ety, ctx.tbaa().tbaa_data, nullptr, isboxed, llvm_order, false, nb);
             setName(ctx.emission_context, load.V, "atomic_pointerref");
             return load;
@@ -1066,7 +1082,7 @@ static jl_cgval_t emit_atomic_pointerop(jl_codectx_t &ctx, intrinsic f, ArrayRef
         assert(!isboxed);
         Value *thePtr;
         if (!type_is_ghost(ptrty))
-            thePtr = emit_unbox(ctx, ptrty->getPointerTo(), e, e.typ);
+            thePtr = emit_unbox(ctx, PointerType::getUnqual(ptrty->getContext()), e, e.typ);
         else
             thePtr = nullptr; // could use any value here, since typed_store will not use it
         jl_cgval_t ret = typed_store(ctx, thePtr, x, y, ety, ctx.tbaa().tbaa_data, nullptr, nullptr, isboxed,
@@ -1418,10 +1434,13 @@ static jl_cgval_t emit_intrinsic(jl_codectx_t &ctx, intrinsic f, jl_value_t **ar
         if (!jl_is_primitivetype(xinfo.typ))
             return emit_runtime_call(ctx, f, argv, nargs);
         Type *xtyp = bitstype_to_llvm(xinfo.typ, ctx.builder.getContext(), true);
-        if (float_func()[f])
-            xtyp = FLOATT(xtyp);
-        else
+        if (float_func()[f]) {
+            if (!xtyp->isFloatingPointTy())
+                return emit_runtime_call(ctx, f, argv, nargs);
+        }
+        else {
             xtyp = INTT(xtyp, DL);
+        }
         if (!xtyp)
             return emit_runtime_call(ctx, f, argv, nargs);
         ////Bool are required to be in the range [0,1]
@@ -1496,17 +1515,29 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     case div_float: return math_builder(ctx)().CreateFDiv(x, y);
     case min_float: {
         assert(x->getType() == y->getType());
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee minintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::minimum, ArrayRef<Type*>(t));
+#else
         FunctionCallee minintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::minimum, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(minintr, {x, y});
     }
     case max_float: {
         assert(x->getType() == y->getType());
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee maxintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::maximum, ArrayRef<Type*>(t));
+#else
         FunctionCallee maxintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::maximum, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(maxintr, {x, y});
     }
     case min_float_fast: {
         assert(x->getType() == y->getType());
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee minintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::minimum, ArrayRef<Type*>(t));
+#else
         FunctionCallee minintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::minimum, ArrayRef<Type*>(t));
+#endif
         auto call = ctx.builder.CreateCall(minintr, {x, y});
         auto fmf = call->getFastMathFlags();
         fmf.setFast();
@@ -1515,7 +1546,11 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     }
     case max_float_fast: {
         assert(x->getType() == y->getType());
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee maxintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::maximum, ArrayRef<Type*>(t));
+#else
         FunctionCallee maxintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::maximum, ArrayRef<Type*>(t));
+#endif
         auto call = ctx.builder.CreateCall(maxintr, {x, y});
         auto fmf = call->getFastMathFlags();
         fmf.setFast();
@@ -1529,7 +1564,11 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     case fma_float: {
         assert(y->getType() == x->getType());
         assert(z->getType() == y->getType());
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee fmaintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::fma, ArrayRef<Type*>(t));
+#else
         FunctionCallee fmaintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fma, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(fmaintr, {x, y, z});
     }
     case muladd_float: {
@@ -1559,7 +1598,11 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
                 (f == checked_smul_int ?
                  Intrinsic::smul_with_overflow :
                  Intrinsic::umul_with_overflow)))));
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee intr = Intrinsic::getOrInsertDeclaration(jl_Module, intr_id, ArrayRef<Type*>(t));
+#else
         FunctionCallee intr = Intrinsic::getDeclaration(jl_Module, intr_id, ArrayRef<Type*>(t));
+#endif
         Value *tupval = ctx.builder.CreateCall(intr, {x, y});
 
         jl_value_t *params[2];
@@ -1670,30 +1713,54 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
         }
     }
     case bswap_int: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee bswapintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::bswap, ArrayRef<Type*>(t)); //TODO: Move to deduction guides
+#else
         FunctionCallee bswapintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap, ArrayRef<Type*>(t)); //TODO: Move to deduction guides
+#endif
         return ctx.builder.CreateCall(bswapintr, x);                                                           // when we drop LLVM 15
     }
     case ctpop_int: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee ctpopintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::ctpop, ArrayRef<Type*>(t));
+#else
         FunctionCallee ctpopintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(ctpopintr, x);
     }
     case ctlz_int: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee ctlz = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::ctlz, ArrayRef<Type*>(t));
+#else
         FunctionCallee ctlz = Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, ArrayRef<Type*>(t));
+#endif
         y = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
         return ctx.builder.CreateCall(ctlz, {x, y});
     }
     case cttz_int: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee cttz = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(t));
+#else
         FunctionCallee cttz = Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(t));
+#endif
         y = ConstantInt::get(getInt1Ty(ctx.builder.getContext()), 0);
         return ctx.builder.CreateCall(cttz, {x, y});
     }
 
     case abs_float: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee absintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::fabs, ArrayRef<Type*>(t));
+#else
         FunctionCallee absintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(absintr, x);
     }
     case copysign_float: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee copyintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::copysign, ArrayRef<Type*>(t));
+#else
         FunctionCallee copyintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::copysign, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(copyintr, {x, y});
     }
     case flipsign_int: {
@@ -1712,27 +1779,51 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
         return ctx.builder.CreateXor(ctx.builder.CreateAdd(x, tmp), tmp);
     }
     case ceil_llvm: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee ceilintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::ceil, ArrayRef<Type*>(t));
+#else
         FunctionCallee ceilintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(ceilintr, x);
     }
     case floor_llvm: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee floorintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::floor, ArrayRef<Type*>(t));
+#else
         FunctionCallee floorintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::floor, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(floorintr, x);
     }
     case trunc_llvm: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee truncintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::trunc, ArrayRef<Type*>(t));
+#else
         FunctionCallee truncintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(truncintr, x);
     }
     case rint_llvm: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee rintintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::rint, ArrayRef<Type*>(t));
+#else
         FunctionCallee rintintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::rint, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(rintintr, x);
     }
     case sqrt_llvm: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee sqrtintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::sqrt, ArrayRef<Type*>(t));
+#else
         FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, ArrayRef<Type*>(t));
+#endif
         return ctx.builder.CreateCall(sqrtintr, x);
     }
     case sqrt_llvm_fast: {
+#if JL_LLVM_VERSION >= 200000
+        FunctionCallee sqrtintr = Intrinsic::getOrInsertDeclaration(jl_Module, Intrinsic::sqrt, ArrayRef<Type*>(t));
+#else
         FunctionCallee sqrtintr = Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt, ArrayRef<Type*>(t));
+#endif
         return math_builder(ctx, true)().CreateCall(sqrtintr, x);
     }
 

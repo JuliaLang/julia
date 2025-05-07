@@ -271,7 +271,7 @@ function securezero! end
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
-    Base.getpass(message::AbstractString; with_suffix::Bool=true) -> Base.SecretBuffer
+    Base.getpass(message::AbstractString; with_suffix::Bool=true)::Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
 object containing the secret. If `with_suffix` is `true` (the default), the
@@ -383,7 +383,7 @@ end
 getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
-    prompt(message; default="") -> Union{String, Nothing}
+    prompt(message; default="")::Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
@@ -508,7 +508,7 @@ unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_
 _crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
     unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
 
-function _crc32c(a::DenseBytes, crc::UInt32=0x00000000)
+function _crc32c(a::DenseUInt8OrInt8, crc::UInt32=0x00000000)
     unsafe_crc32c(a, length(a) % Csize_t, crc)
 end
 

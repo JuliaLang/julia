@@ -12,6 +12,13 @@ end
 
 show(io::IO, ::MIME"text/plain", r::AbstractRange) = show(io, r) # always use the compact form for printing ranges
 
+function show(io::IO, ::MIME"text/plain", r::UnitRange)
+    show(io, r)
+    if !(get(io, :compact, false)::Bool) && isempty(r)
+        print(io, " (empty range)")
+    end
+end
+
 function show(io::IO, ::MIME"text/plain", r::LinRange)
     isempty(r) && return show(io, r)
     # show for LinRange, e.g.
@@ -435,7 +442,7 @@ get(io::IO, key, default) = default
 keys(io::IOContext) = keys(io.dict)
 keys(io::IO) = keys(ImmutableDict{Symbol,Any}())
 
-displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)
+displaysize(io::IOContext) = haskey(io, :displaysize) ? io[:displaysize]::Tuple{Int,Int} : displaysize(io.io)::Tuple{Int,Int}
 
 show_circular(io::IO, @nospecialize(x)) = false
 function show_circular(io::IOContext, @nospecialize(x))
@@ -618,7 +625,7 @@ function make_typealias(@nospecialize(x::Type))
     Any === x && return nothing
     x <: Tuple && return nothing
     mods = modulesof!(Set{Module}(), x)
-    Core in mods && push!(mods, Base)
+    replace!(mods, Core=>Base)
     aliases = Tuple{GlobalRef,SimpleVector}[]
     xenv = UnionAll[]
     for p in uniontypes(unwrap_unionall(x))
@@ -1021,18 +1028,30 @@ end
 # If an object with this name exists in 'from', we need to check that it's the same binding
 # and that it's not deprecated.
 function isvisible(sym::Symbol, parent::Module, from::Module)
-    owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), parent, sym)
-    from_owner = ccall(:jl_binding_owner, Ptr{Cvoid}, (Any, Any), from, sym)
-    return owner !== C_NULL && from_owner === owner &&
-        !isdeprecated(parent, sym) &&
-        isdefinedglobal(from, sym) # if we're going to return true, force binding resolution
+    isdeprecated(parent, sym) && return false
+    isdefinedglobal(from, sym) || return false
+    isdefinedglobal(parent, sym) || return false
+    parent_binding = convert(Core.Binding, GlobalRef(parent, sym))
+    from_binding = convert(Core.Binding, GlobalRef(from, sym))
+    while true
+        from_binding === parent_binding && return true
+        partition = lookup_binding_partition(tls_world_age(), from_binding)
+        is_some_explicit_imported(binding_kind(partition)) || break
+        from_binding = partition_restriction(partition)::Core.Binding
+    end
+    parent_partition = lookup_binding_partition(tls_world_age(), parent_binding)
+    from_partition = lookup_binding_partition(tls_world_age(), from_binding)
+    if is_defined_const_binding(binding_kind(parent_partition)) && is_defined_const_binding(binding_kind(from_partition))
+        return parent_partition.restriction === from_partition.restriction
+    end
+    return false
 end
 
 function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
     if globname !== nothing
         globname_str = string(globname::Symbol)
         if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
-                isbindingresolved(tn.module, globname) && isdefinedglobal(tn.module, globname) &&
+                isdefinedglobal(tn.module, globname) &&
                 isconcretetype(tn.wrapper) && isa(getglobal(tn.module, globname), tn.wrapper))
             return true
         end
@@ -1045,10 +1064,13 @@ function check_world_bounded(tn::Core.TypeName)
     isdefined(bnd, :partitions) || return nothing
     partition = @atomic bnd.partitions
     while true
-        if is_defined_const_binding(binding_kind(partition)) && partition_restriction(partition) <: tn.wrapper
-            max_world = @atomic partition.max_world
-            max_world == typemax(UInt) && return nothing
-            return Int(partition.min_world):Int(max_world)
+        if is_defined_const_binding(binding_kind(partition))
+            cval = partition_restriction(partition)
+            if isa(cval, Type) && cval <: tn.wrapper
+                max_world = @atomic partition.max_world
+                max_world == typemax(UInt) && return nothing
+                return Int(partition.min_world):Int(max_world)
+            end
         end
         isdefined(partition, :next) || return nothing
         partition = @atomic partition.next
@@ -1665,7 +1687,8 @@ julia> Base.operator_associativity(:⊗), Base.operator_associativity(:sin), Bas
 """
 function operator_associativity(s::Symbol)
     if operator_precedence(s) in (prec_arrow, prec_assignment, prec_control_flow, prec_pair, prec_power) ||
-        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) || s === :<| || s === :||
+        (isunaryoperator(s) && !is_unary_and_binary_operator(s)) ||
+        (s === :<| || s === :|| || s == :?)
         return :right
     elseif operator_precedence(s) in (0, prec_comparison) || s in (:+, :++, :*)
         return :none
@@ -1757,9 +1780,15 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, quote_le
     print(io, cl)
 end
 
+const keyword_syms = Set([
+    :baremodule, :begin, :break, :catch, :const, :continue, :do, :else, :elseif,
+    :end, :export, :var"false", :finally, :for, :function, :global, :if, :import,
+    :let, :local, :macro, :module, :public, :quote, :return, :struct, :var"true",
+    :try, :using, :while ])
+
 function is_valid_identifier(sym)
-    return isidentifier(sym) || (
-        _isoperator(sym) &&
+    return (isidentifier(sym) && !(sym in keyword_syms)) ||
+        (_isoperator(sym) &&
         !(sym in (Symbol("'"), :(::), :?)) &&
         !is_syntactic_operator(sym)
     )
@@ -1803,7 +1832,7 @@ function show_sym(io::IO, sym::Symbol; allow_macroname=false)
         print(io, '@')
         show_sym(io, Symbol(sym_str[2:end]))
     else
-        print(io, "var", repr(string(sym))) # TODO: this is not quite right, since repr uses String escaping rules, and Symbol uses raw string rules
+        print(io, "var\"", escape_raw_string(string(sym)), '"')
     end
 end
 
@@ -2828,7 +2857,6 @@ function show(io::IO, vm::Core.TypeofVararg)
 end
 
 Compiler.load_irshow!()
-const IRShow = Compiler.IRShow # an alias for compatibility
 
 function show(io::IO, src::CodeInfo; debuginfo::Symbol=:source)
     # Fix slot names and types in function body
@@ -3362,33 +3390,55 @@ function print_partition(io::IO, partition::Core.BindingPartition)
     else
         print(io, max_world)
     end
+    if (partition.kind & PARTITION_MASK_FLAG) != 0
+        first = false
+        print(io, " [")
+        if (partition.kind & PARTITION_FLAG_EXPORTED) != 0
+            print(io, "exported")
+        end
+        if (partition.kind & PARTITION_FLAG_DEPRECATED) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "deprecated")
+        end
+        if (partition.kind & PARTITION_FLAG_DEPWARN) != 0
+            first ? (first = false) : print(io, ",")
+            print(io, "depwarn")
+        end
+        print(io, "]")
+    end
     print(io, " - ")
     kind = binding_kind(partition)
-    if kind == BINDING_KIND_BACKDATED_CONST
+    if kind == PARTITION_KIND_BACKDATED_CONST
         print(io, "backdated constant binding to ")
         print(io, partition_restriction(partition))
-    elseif is_defined_const_binding(kind)
+    elseif kind == PARTITION_KIND_CONST
         print(io, "constant binding to ")
         print(io, partition_restriction(partition))
-    elseif kind == BINDING_KIND_UNDEF_CONST
+    elseif kind == PARTITION_KIND_CONST_IMPORT
+        print(io, "constant binding (declared with `import`) to ")
+        print(io, partition_restriction(partition))
+    elseif kind == PARTITION_KIND_UNDEF_CONST
         print(io, "undefined const binding")
-    elseif kind == BINDING_KIND_GUARD
+    elseif kind == PARTITION_KIND_GUARD
         print(io, "undefined binding - guard entry")
-    elseif kind == BINDING_KIND_FAILED
+    elseif kind == PARTITION_KIND_FAILED
         print(io, "ambiguous binding - guard entry")
-    elseif kind == BINDING_KIND_DECLARED
-        print(io, "undefined, but declared using `global` - guard entry")
-    elseif kind == BINDING_KIND_IMPLICIT
-        print(io, "implicit `using` from ")
+    elseif kind == PARTITION_KIND_DECLARED
+        print(io, "weak global binding declared using `global` (implicit type Any)")
+    elseif kind == PARTITION_KIND_IMPLICIT_GLOBAL
+        print(io, "implicit `using` resolved to global ")
+        print(io, partition_restriction(partition).globalref)
+    elseif kind == PARTITION_KIND_IMPLICIT_CONST
+        print(io, "implicit `using` resolved to constant ")
         print(io, partition_restriction(partition))
-    elseif kind == BINDING_KIND_EXPLICIT
+    elseif kind == PARTITION_KIND_EXPLICIT
         print(io, "explicit `using` from ")
-        print(io, partition_restriction(partition))
-    elseif kind == BINDING_KIND_IMPORTED
+        print(io, partition_restriction(partition).globalref)
+    elseif kind == PARTITION_KIND_IMPORTED
         print(io, "explicit `import` from ")
-        print(io, partition_restriction(partition))
+        print(io, partition_restriction(partition).globalref)
     else
-        @assert kind == BINDING_KIND_GLOBAL
+        @assert kind == PARTITION_KIND_GLOBAL
         print(io, "global variable with type ")
         print(io, partition_restriction(partition))
     end
@@ -3403,7 +3453,7 @@ function show(io::IO, ::MIME"text/plain", bnd::Core.Binding)
     print(io, "Binding ")
     print(io, bnd.globalref)
     if !isdefined(bnd, :partitions)
-        print(io, "No partitions")
+        print(io, " - No partitions")
     else
         partition = @atomic bnd.partitions
         while true

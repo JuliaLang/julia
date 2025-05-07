@@ -18,15 +18,32 @@ truncbool(u) = reinterpret(UInt8, reinterpret(Bool, u))
 @testset "runtime intrinsics" begin
     @test Core.Intrinsics.add_int(1, 1) == 2
     @test Core.Intrinsics.sub_int(1, 1) == 0
-    @test_throws ErrorException("fpext: output bitsize must be >= input bitsize")    Core.Intrinsics.fpext(Int32, 0x0000_0000_0000_0000)
+
+    @test_throws ErrorException("fpext: output bitsize must be > input bitsize")    Core.Intrinsics.fpext(Float32, 1.0)
+    @test_throws ErrorException("fpext: output bitsize must be > input bitsize")    Core.Intrinsics.fpext(Float32, 1.0)
+
     @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Int32, 0x0000_0000)
     @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Int64, 0x0000_0000)
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float16, Float16(1.0))
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Core.BFloat16, Float16(1.0))
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float32, Float16(1.0))
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float32, 1.0f0)
+    @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float64, 1.0)
+
+    let bf16_1 = Core.Intrinsics.bitcast(Core.BFloat16, 0x3f80)
+        @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Core.BFloat16, bf16_1)
+        @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float16, bf16_1)
+        @test_throws ErrorException("fptrunc: output bitsize must be < input bitsize")  Core.Intrinsics.fptrunc(Float32, bf16_1)
+    end
+
     @test_throws ErrorException("ZExt: output bitsize must be > input bitsize")     Core.Intrinsics.zext_int(Int8, 0x00)
     @test_throws ErrorException("SExt: output bitsize must be > input bitsize")     Core.Intrinsics.sext_int(Int8, 0x00)
     @test_throws ErrorException("ZExt: output bitsize must be > input bitsize")     Core.Intrinsics.zext_int(Int8, 0x0000)
     @test_throws ErrorException("SExt: output bitsize must be > input bitsize")     Core.Intrinsics.sext_int(Int8, 0x0000)
     @test_throws ErrorException("Trunc: output bitsize must be < input bitsize")    Core.Intrinsics.trunc_int(Int8, 0x00)
     @test_throws ErrorException("Trunc: output bitsize must be < input bitsize")    Core.Intrinsics.trunc_int(Int16, 0x00)
+
+    @test_throws ErrorException("add_float: runtime floating point intrinsics require both arguments to be Float16, BFloat16, Float32, or Float64") Core.Intrinsics.add_float(1, 2)
 end
 
 # issue #4581
@@ -51,7 +68,7 @@ end
 # test functionality of non-power-of-2 primitive type constants
 primitive type Int24 24 end
 Int24(x::Int) = Core.Intrinsics.trunc_int(Int24, x)
-Int(x::Int24) = Core.Intrinsics.zext_int(Int, x)
+Base.Int(x::Int24) = Core.Intrinsics.zext_int(Int, x)
 let x, y, f
     x = Int24(Int(0x12345678)) # create something (via truncation)
     @test Int(0x345678) === Int(x)
@@ -77,7 +94,7 @@ compiled_addi(x, y) = Core.Intrinsics.add_int(x, y)
 @test compiled_addi(true, true) === false
 
 compiled_addf(x, y) = Core.Intrinsics.add_float(x, y)
-@test compiled_addf(C_NULL, C_NULL) === C_NULL
+@test_throws ErrorException compiled_addf(C_NULL, C_NULL)
 @test_throws ErrorException compiled_addf(C_NULL, 1)
 @test compiled_addf(0.5, 5.0e-323) === 0.5
 @test_throws ErrorException compiled_addf(im, im)
@@ -87,15 +104,56 @@ function compiled_conv(::Type{T}, x) where T
     t = Core.Intrinsics.trunc_int(T, x)
     z = Core.Intrinsics.zext_int(typeof(x), t)
     s = Core.Intrinsics.sext_int(typeof(x), t)
-    fpt = Core.Intrinsics.fptrunc(T, x)
-    fpe = Core.Intrinsics.fpext(typeof(x), fpt)
-    return (t, z, s, fpt, fpe)
+    return (t, z, s)
 end
 @test compiled_conv(UInt32, Int64(0x8000_0000)) ==
-    (0x80000000, Int64(0x80000000), -Int64(0x80000000), 0x00000000, 0)
+    (0x80000000, Int64(0x80000000), -Int64(0x80000000))
 @test compiled_conv(UInt32, UInt64(0xC000_BA98_8765_4321)) ==
-    (0x87654321, 0x0000000087654321, 0xffffffff87654321, 0xc005d4c4, 0xc000ba9880000000)
+    (0x87654321, 0x0000000087654321, 0xffffffff87654321)
 @test_throws ErrorException compiled_conv(Bool, im)
+
+function compiled_fptrunc(::Type{T}, x) where T
+    return Core.Intrinsics.fptrunc(T, x)
+
+end
+#           1.234
+#           0 01111111 00111011111001110110110
+#   float32 0 01111111 00111011111001110110110
+#   float16 0    01111 0011101111              (truncated/rtz)
+#   float16 0    01111 0011110000              (round-to-nearest)
+#  bfloat16 0 01111111 0011110                 (round-to-nearest)
+@test compiled_fptrunc(Float16, 1.234) === reinterpret(Float16, 0b0_01111_0011110000)
+# On arm64, LLVM gives an assertion failure when compiling this:
+# LLVM ERROR: Cannot select: 0x106c8e570: bf16 = fp_round 0x106c8df50, TargetConstant:i64<0>, intrinsics.jl:114
+#   0x106c8df50: f64,ch = CopyFromReg 0x104545960, Register:f64 %1
+#     0x106c8dee0: f64 = Register %1
+#   0x106c8e3b0: i64 = TargetConstant<0>
+# In function: julia_compiled_fptrunc_3480
+# @test compiled_fptrunc(Core.BFloat16, 1.234) === reinterpret(Core.BFloat16, 0b0_01111111_0011110)
+@test compiled_fptrunc(Float32, 1.234) === 1.234f0
+@test_throws ErrorException compiled_fptrunc(Float64, 1.234f0)
+@test_throws ErrorException compiled_fptrunc(Int32, 1.234)
+@test_throws ErrorException compiled_fptrunc(Float32, 1234)
+
+function compiled_fpext(::Type{T}, x) where T
+    return Core.Intrinsics.fpext(T, x)
+end
+#           1.234
+#   float16 0    01111 0011110000
+#           0 01111111 00111100000000000000000 = 1.234375
+
+#           1.234
+#   float32 0 01111111    00111011111001110110110
+#   float64 0 01111111111 0011101111100111011011000000000000000000000000000000
+#                         3be76c
+@test compiled_fpext(Float32, reinterpret(Float16, 0b0_01111_0011110000)) === 1.234375f0
+@test compiled_fpext(Float64, reinterpret(Float16, 0b0_01111_0011110000)) === 1.234375
+@test compiled_fpext(Float64, 1.234f0) === 0x1.3be76cp0
+@test_throws ErrorException compiled_fpext(Float16, Float16(1.0))
+@test_throws ErrorException compiled_fpext(Float16, 1.0f0)
+@test_throws ErrorException compiled_fpext(Float32, 1.0f0)
+@test_throws ErrorException compiled_fpext(Float32, 1.0)
+@test_throws ErrorException compiled_fpext(Float64, 1.0)
 
 let f = Core.Intrinsics.ashr_int
     @test f(Int8(-17), 1) == -9
@@ -143,7 +201,19 @@ macro test_intrinsic(intr, args...)
             $intr($(inputs...))
         end
         @test f() === Base.invokelatest($intr, $(inputs...))
-        @test f() == $output
+        @test f() === $output
+    end
+end
+
+macro test_intrinsic_pred(intr, args...)
+    p = args[end]
+    inputs = args[1:end-1]
+    quote
+        function f()
+            $intr($(inputs...))
+        end
+        @test $(p)(Base.invokelatest($intr, $(inputs...)))
+        @test $(p)(f())
     end
 end
 
@@ -151,7 +221,6 @@ end
     # unary
     @test_intrinsic Core.Intrinsics.abs_float Float64(-3.3) Float64(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float64(3.3) Float64(-3.3)
-    @test_intrinsic Core.Intrinsics.fpext Float64 Float64(3.3) Float64(3.3)
 
     # binary
     @test_intrinsic Core.Intrinsics.add_float Float64(3.3) Float64(2) Float64(5.3)
@@ -164,6 +233,8 @@ end
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float64(3.3) Float64(4.4) Float64(5.5) Float64(20.02)
     @test_intrinsic Core.Intrinsics.muladd_float Float64(3.3) Float64(4.4) Float64(5.5) Float64(20.02)
+    @test_intrinsic Core.Intrinsics.fma_float 0x1.0000000000001p0 1.25 0x1p-54 0x1.4000000000002p0
+    @test 0x1.0000000000001p0*1.25+0x1p-54 === 0x1.4000000000001p0 # for comparison
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float64(3.3) Float64(3.3) true
@@ -178,13 +249,16 @@ end
     @test_intrinsic Core.Intrinsics.uitofp Float64 UInt(3) Float64(3.0)
     @test_intrinsic Core.Intrinsics.fptosi Int Float64(3.3) 3
     @test_intrinsic Core.Intrinsics.fptoui UInt Float64(3.3) UInt(3)
+
+    # #57384
+    @test_intrinsic Core.Intrinsics.fptosi Int 1.5 1
+    @test_intrinsic Core.Intrinsics.fptosi Int128 1.5 Int128(1)
 end
 
 @testset "Float32 intrinsics" begin
     # unary
     @test_intrinsic Core.Intrinsics.abs_float Float32(-3.3) Float32(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float32(3.3) Float32(-3.3)
-    @test_intrinsic Core.Intrinsics.fpext Float32 Float32(3.3) Float32(3.3)
     @test_intrinsic Core.Intrinsics.fpext Float64 Float32(3.3) 3.299999952316284
     @test_intrinsic Core.Intrinsics.fptrunc Float32 Float64(3.3) Float32(3.3)
 
@@ -199,6 +273,9 @@ end
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float32(3.3) Float32(4.4) Float32(5.5) Float32(20.02)
     @test_intrinsic Core.Intrinsics.muladd_float Float32(3.3) Float32(4.4) Float32(5.5) Float32(20.02)
+    @test_intrinsic Core.Intrinsics.fma_float Float32(0x1.000002p0) 1.25f0 Float32(0x1p-25) Float32(0x1.400004p0)
+    @test Float32(0x1.000002p0)*1.25f0+Float32(0x1p-25) === Float32(0x1.400002p0) # for comparison
+
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float32(3.3) Float32(3.3) true
@@ -215,17 +292,70 @@ end
     @test_intrinsic Core.Intrinsics.fptoui UInt Float32(3.3) UInt(3)
 end
 
+function f16(sign, exp, sig)
+    x = (sign&1)<<15 | (exp&((1<<5)-1))<<10 | sig&((1<<10)-1)
+    return reinterpret(Float16, UInt16(x))
+end
+function f32(sign, exp, sig)
+    x = (sign&1)<<31 | (exp&((1<<8)-1))<<23 | sig&((1<<23)-1)
+    return reinterpret(Float32, UInt32(x))
+end
+function f64(sign, exp, sig)
+    x = Int64(sign&1)<<31 | Int64(exp&((1<<11)-1))<<52 | sig&((Int64(1)<<52)-1)
+    return reinterpret(Float64, UInt64(x))
+end
+
 @testset "Float16 intrinsics" begin
     # unary
     @test_intrinsic Core.Intrinsics.abs_float Float16(-3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.neg_float Float16(3.3) Float16(-3.3)
     # See <https://github.com/JuliaLang/julia/issues/57130>
-    #broken @test_intrinsic Core.Intrinsics.fpext Float16 Float16(3.3) Float16(3.3)
-    @test_broken Core.Intrinsics.fpext(Float16, Float16(3.3)) === Float16(3.3)
     @test_intrinsic Core.Intrinsics.fpext Float32 Float16(3.3) 3.3007812f0
     @test_intrinsic Core.Intrinsics.fpext Float64 Float16(3.3) 3.30078125
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float32(3.3) Float16(3.3)
     @test_intrinsic Core.Intrinsics.fptrunc Float16 Float64(3.3) Float16(3.3)
+
+    # #57805 - cases where rounding Float64 -> Float32 -> Float16 would fail
+    #     2^-25 * 0b1.0000000000000000000000000000000000000001 binary
+    #   0 01111100110 0000000000000000000000000000000000000001000000000000
+    #     2^-25 * 0b1.0                                        binary
+    #   0    01100110 00000000000000000000000
+    #     2^-14 * 0b0.0000000001 (subnormal)
+    #   0       00000 0000000001 (correct)
+    #   0       00000 0000000000 (incorrect)
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 0x1.0000000001p-25 Float16(6.0e-8)
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 -0x1.0000000001p-25 Float16(-6.0e-8)
+
+    # float_to_half/bfloat_to_float special cases
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 Inf32 Inf16
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 -Inf32 -Inf16
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 Inf64 Inf16
+    @test_intrinsic Core.Intrinsics.fptrunc Float16 -Inf64 -Inf16
+
+    # LLVM gives us three things that may happen to NaNs in an fptrunc on
+    # "normal" platforms (x86, ARM):
+    # - Return a canonical NaN (quiet, all-zero payload)
+    # - Copy high bits of payload to output, and:
+    #   - Set the quiet bit
+    #   - Leave the quiet bit as-is.  This option isn't possible if doing so
+    #     would result in an infinity (all-zero payload and quiet bit clear)
+    #
+    # We'll just test a NaN is returned at all.
+    #
+    # Refer to #49353 and https://llvm.org/docs/LangRef.html#floatnan
+
+    # Canonical NaN
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 NaN32 isnan
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 NaN isnan
+    # Quiet NaN
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f32(0, 0xff, 1<<22 | 1<<13) isnan
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, Int64(1)<<51 | Int64(1)<<42) isnan
+    # Signalling NaN that can be propagated to Float16
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f32(0, 0xff, 1<<13) isnan
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, Int64(1)<<42) isnan
+    # Signalling NaN that cannot be propagated to Float16
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f32(0, 0xff, 1) isnan
+    @test_intrinsic_pred Core.Intrinsics.fptrunc Float16 f64(0, 0x7ff, 1) isnan
 
     # binary
     @test_intrinsic Core.Intrinsics.add_float Float16(3.3) Float16(2) Float16(5.3)
@@ -238,6 +368,8 @@ end
     # ternary
     @test_intrinsic Core.Intrinsics.fma_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
     @test_intrinsic Core.Intrinsics.muladd_float Float16(3.3) Float16(4.4) Float16(5.5) Float16(20.02)
+    @test_intrinsic Core.Intrinsics.fma_float Float16(0x1.004p0) Float16(1.25) Float16(0x1p-12) Float16(0x1.408p0)
+    @test Float16(0x1.004p0)*Float16(1.25)+Float16(0x1p-12) === Float16(0x1.404p0) # for comparison
 
     # boolean
     @test_intrinsic Core.Intrinsics.eq_float Float16(3.3) Float16(3.3) true

@@ -146,7 +146,7 @@ end
 @eval clear_line(t::UnixTerminal) = write(t.out_stream, $"\r$(CSI)0K")
 beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
-Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)
+Base.displaysize(t::UnixTerminal) = displaysize(t.out_stream)::Tuple{Int,Int}
 
 hascolor(t::TTYTerminal) = get(t.out_stream, :color, false)::Bool
 

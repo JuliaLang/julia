@@ -93,8 +93,7 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
         if (!jl_is_symbol(fname)) {
             jl_error("method: invalid declaration");
         }
-        jl_binding_t *b = jl_get_binding_for_method_def(modu, fname);
-        return jl_declare_const_gf(b, modu, fname);
+        return jl_declare_const_gf(modu, fname);
     }
 
     jl_value_t *atypes = NULL, *meth = NULL, *fname = NULL;
@@ -107,9 +106,9 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
     }
     atypes = eval_value(args[1], s);
     meth = eval_value(args[2], s);
-    jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);
+    jl_method_t *ret = jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);
     JL_GC_POP();
-    return jl_nothing;
+    return (jl_value_t *)ret;
 }
 
 // expression evaluator
@@ -627,16 +626,20 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             else if (toplevel) {
                 if (head == jl_method_sym && jl_expr_nargs(stmt) > 1) {
-                    eval_methoddef((jl_expr_t*)stmt, s);
+                    jl_value_t *res = eval_methoddef((jl_expr_t*)stmt, s);
+                    s->locals[jl_source_nslots(s->src) + s->ip] = res;
                 }
                 else if (head == jl_toplevel_sym) {
                     jl_value_t *res = jl_toplevel_eval(s->module, stmt);
                     s->locals[jl_source_nslots(s->src) + s->ip] = res;
                 }
                 else if (head == jl_globaldecl_sym) {
-                    jl_value_t *val = eval_value(jl_exprarg(stmt, 1), s);
-                    s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
-                    jl_declare_global(s->module, jl_exprarg(stmt, 0), val);
+                    jl_value_t *val = NULL;
+                    if (jl_expr_nargs(stmt) >= 2) {
+                        val = eval_value(jl_exprarg(stmt, 1), s);
+                        s->locals[jl_source_nslots(s->src) + s->ip] = val; // temporarily root
+                    }
+                    jl_declare_global(s->module, jl_exprarg(stmt, 0), val, 1);
                     s->locals[jl_source_nslots(s->src) + s->ip] = jl_nothing;
                 }
                 else if (head == jl_const_sym) {

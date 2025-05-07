@@ -223,10 +223,13 @@ function incomplete_tag(ex::Expr)
         return :none
     elseif isempty(ex.args)
         return :other
-    elseif ex.args[1] isa String
-        return fl_incomplete_tag(ex.args[1])
     else
-        return incomplete_tag(ex.args[1])
+        a = ex.args[1]
+        if a isa String
+            return fl_incomplete_tag(a)::Symbol
+        else
+            return incomplete_tag(a)::Symbol
+        end
     end
 end
 incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
@@ -265,11 +268,10 @@ function exec_options(opts)
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
         let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            Core.eval(MainInclude, :(const Distributed = $Distributed))
+            MainInclude.Distributed = Distributed
             Core.eval(Main, :(using Base.MainInclude.Distributed))
+            invokelatest(Distributed.process_opts, opts)
         end
-
-        invokelatest(Main.Distributed.process_opts, opts)
     end
 
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
@@ -401,7 +403,7 @@ function load_InteractiveUtils(mod::Module=Main)
         try
             # TODO: we have to use require_stdlib here because it is a dependency of REPL, but we would sort of prefer not to
             let InteractiveUtils = require_stdlib(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-                Core.eval(MainInclude, :(const InteractiveUtils = $InteractiveUtils))
+                MainInclude.InteractiveUtils = InteractiveUtils
             end
         catch ex
             @warn "Failed to import InteractiveUtils into module $mod" exception=(ex, catch_backtrace())
@@ -440,11 +442,12 @@ function run_fallback_repl(interactive::Bool)
                 eval_user_input(stderr, ex, true)
             end
         else
-            while !eof(input)
+            while true
                 if interactive
                     print("julia> ")
                     flush(stdout)
                 end
+                eof(input) && break
                 try
                     line = ""
                     ex = nothing
@@ -536,6 +539,10 @@ The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
 
+# Used for memoizing require_stdlib of these modules
+global InteractiveUtils::Module
+global Distributed::Module
+
 # weakly exposes ans and err variables to Main
 export ans, err
 end
@@ -606,7 +613,7 @@ The `@main` macro may be used standalone or as part of the function definition, 
 case, parentheses are required. In particular, the following are equivalent:
 
 ```
-function (@main)(args)
+function @main(args)
     println("Hello World")
 end
 ```
@@ -625,7 +632,7 @@ imported into `Main`, it will be treated as an entrypoint in `Main`:
 ```
 module MyApp
     export main
-    (@main)(args) = println("Hello World")
+    @main(args) = println("Hello World")
 end
 using .MyApp
 # `julia` Will execute MyApp.main at the conclusion of script execution
@@ -635,7 +642,7 @@ Note that in particular, the semantics do not attach to the method
 or the name:
 ```
 module MyApp
-    (@main)(args) = println("Hello World")
+    @main(args) = println("Hello World")
 end
 const main = MyApp.main
 # `julia` Will *NOT* execute MyApp.main unless there is a separate `@main` annotation in `Main`
@@ -645,9 +652,6 @@ const main = MyApp.main
     This macro is new in Julia 1.11. At present, the precise semantics of `@main` are still subject to change.
 """
 macro main(args...)
-    if !isempty(args)
-        error("`@main` is expected to be used as `(@main)` without macro arguments.")
-    end
     if isdefined(__module__, :main)
         if Base.binding_module(__module__, :main) !== __module__
             error("Symbol `main` is already a resolved import in module $(__module__). `@main` must be used in the defining module.")
@@ -658,5 +662,9 @@ macro main(args...)
         global main
         global var"#__main_is_entrypoint__#"::Bool = true
     end)
-    esc(:main)
+    if !isempty(args)
+        Expr(:call, esc(:main), map(esc, args)...)
+    else
+        esc(:main)
+    end
 end

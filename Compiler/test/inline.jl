@@ -1,9 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+module inline_tests
+
 using Test
 using Base.Meta
 using Core: ReturnNode
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
@@ -1769,6 +1772,7 @@ let getfield_tfunc(@nospecialize xs...) =
         Compiler.getfield_tfunc(Compiler.fallback_lattice, xs...)
     @test getfield_tfunc(Type, Core.Const(:parameters)) !== Union{}
     @test !isa(getfield_tfunc(Type{Tuple{Union{Int, Float64}, Int}}, Core.Const(:name)), Core.Const)
+    @test !isa(getfield_tfunc(Type{Tuple{Any}}, Core.Const(:name)), Core.Const)
 end
 @test fully_eliminated(Base.ismutable, Tuple{Base.RefValue})
 
@@ -1848,7 +1852,7 @@ multi_inlining1(a::Int, b::Int) = @noinline func_mul_int(a, b)
 let i::Int, continue_::Bool
     interp = Compiler.NativeInterpreter()
     # check if callsite `@noinline` annotation works
-    ir, = only(Base.code_ircode(multi_inlining1, (Int,Int); optimize_until="inlining", interp))
+    ir, = only(Base.code_ircode(multi_inlining1, (Int,Int); optimize_until="CC: INLINING", interp))
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
     # now delete the callsite flag, and see the second inlining pass can inline the call
@@ -1872,7 +1876,7 @@ multi_inlining2(a::Int, b::Int) = call_func_mul_int(a, b)
 let i::Int, continue_::Bool
     interp = Compiler.NativeInterpreter()
     # check if callsite `@noinline` annotation works
-    ir, = only(Base.code_ircode(multi_inlining2, (Int,Int); optimize_until="inlining", interp))
+    ir, = only(Base.code_ircode(multi_inlining2, (Int,Int); optimize_until="CC: INLINING", interp))
     i = findfirst(isinvoke(:func_mul_int), ir.stmts.stmt)
     @test i !== nothing
     # now delete the callsite flag, and see the second inlining pass can inline the call
@@ -2216,7 +2220,7 @@ struct Issue52644
 end
 issue52644(::DataType) = :DataType
 issue52644(::UnionAll) = :UnionAll
-let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
+let ir = Base.code_ircode((Issue52644,); optimize_until="CC: INLINING") do t
         issue52644(t.tuple)
     end |> only |> first
     ir.argtypes[1] = Tuple{}
@@ -2225,7 +2229,7 @@ let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
     @test irfunc(Issue52644(Tuple{<:Integer})) === :UnionAll
 end
 issue52644_single(x::DataType) = :DataType
-let ir = Base.code_ircode((Issue52644,); optimize_until="Inlining") do t
+let ir = Base.code_ircode((Issue52644,); optimize_until="CC: INLINING") do t
         issue52644_single(t.tuple)
     end |> only |> first
     ir.argtypes[1] = Tuple{}
@@ -2309,3 +2313,5 @@ g_noinline_invoke(x) = f_noinline_invoke(x)
 let src = code_typed1(g_noinline_invoke, (Union{Symbol,Nothing},))
     @test !any(@nospecialize(x)->isa(x,GlobalRef), src.code)
 end
+
+end # module inline_tests

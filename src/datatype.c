@@ -80,6 +80,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->partial = NULL;
     tn->atomicfields = NULL;
     tn->constfields = NULL;
+    jl_atomic_store_relaxed(&tn->cache_entry_count, 0);
     tn->max_methods = 0;
     tn->constprop_heustic = 0;
     return tn;
@@ -300,9 +301,10 @@ static jl_datatype_layout_t *jl_get_layout(uint32_t sz,
 }
 
 // Determine if homogeneous tuple with fields of type t will have
-// a special alignment beyond normal Julia rules.
+// a special alignment and vector-ABI beyond normal rules for aggregates.
 // Return special alignment if one exists, 0 if normal alignment rules hold.
 // A non-zero result *must* match the LLVM rules for a vector type <nfields x t>.
+// Matching the compiler's `__attribute__ vector_size` behavior.
 // For sake of Ahead-Of-Time (AOT) compilation, this routine has to work
 // without LLVM being available.
 unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
@@ -317,8 +319,12 @@ unsigned jl_special_vector_alignment(size_t nfields, jl_value_t *t)
         // motivating use case comes up for Julia, we reject pointers.
         return 0;
     size_t elsz = jl_datatype_size(ty);
-    if (elsz != 1 && elsz != 2 && elsz != 4 && elsz != 8)
-        // Only handle power-of-two-sized elements (for now)
+    if (next_power_of_two(elsz) != elsz)
+        // Only handle power-of-two-sized elements (for now), since other
+        // lengths may be packed into very complicated arrangements (llvm pads
+        // extra bits on most platforms when computing alignment but not when
+        // computing type size, but adds no extra bytes for each element, so
+        // their effect on offsets are never what you may naturally expect).
         return 0;
     size_t size = nfields * elsz;
     // Use natural alignment for this vector: this matches LLVM and clang.
@@ -336,7 +342,7 @@ STATIC_INLINE void jl_maybe_allocate_singleton_instance(jl_datatype_t *st) JL_NO
     if (st->instance)
         return;
     if (jl_is_datatype_make_singleton(st)) {
-        st->instance = jl_gc_permobj(0, st);
+        st->instance = jl_gc_permobj(0, st, 0);
     }
 }
 
@@ -495,7 +501,13 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
     jl_value_t *kind = jl_tparam0(st);
     jl_value_t *eltype = jl_tparam1(st);
     jl_value_t *addrspace = jl_tparam2(st);
-    if (!jl_is_typevar(eltype) && !jl_is_type(eltype)) {
+    if (!st->isconcretetype) {
+        // Since parent dt has an opaque layout, we may end up here being asked to copy that layout to subtypes,
+        // but we don't actually want to do that unless this object is constructable (or at least has a layout).
+        // The real layout is stored only on the wrapper.
+        return;
+    }
+    if (!jl_is_type(eltype)) {
         // this is expected to have a layout, but since it is not constructable, we don't care too much what it is
         static const jl_datatype_layout_t opaque_ptr_layout = {0, 0, 1, -1, sizeof(void*), {0}};
         st->layout = &opaque_ptr_layout;
@@ -575,7 +587,7 @@ void jl_get_genericmemory_layout(jl_datatype_t *st)
 
     if (jl_is_addrspacecore(addrspace) && jl_unbox_uint8(addrspace) == 0) {
         if (kind == (jl_value_t*)jl_not_atomic_sym || kind == (jl_value_t*)jl_atomic_sym) {
-            jl_genericmemory_t *zeroinst = (jl_genericmemory_t*)jl_gc_permobj(LLT_ALIGN(sizeof(jl_genericmemory_t), JL_SMALL_BYTE_ALIGNMENT) + (elsz ? elsz : isunion), st);
+            jl_genericmemory_t *zeroinst = (jl_genericmemory_t*)jl_gc_permobj(LLT_ALIGN(sizeof(jl_genericmemory_t), JL_SMALL_BYTE_ALIGNMENT) + (elsz ? elsz : isunion), st, 0);
             zeroinst->length = 0;
             zeroinst->ptr = (char*)zeroinst + JL_SMALL_BYTE_ALIGNMENT;
             memset(zeroinst->ptr, 0, elsz ? elsz : isunion);
@@ -723,9 +735,9 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             }
             else {
                 fsz = sizeof(void*);
-                if (fsz > MAX_ALIGN)
-                    fsz = MAX_ALIGN;
                 al = fsz;
+                if (al > MAX_ALIGN)
+                    al = MAX_ALIGN;
                 desc[i].isptr = 1;
                 zeroinit = 1;
                 npointers++;
@@ -769,8 +781,6 @@ void jl_compute_field_offsets(jl_datatype_t *st)
             if (al > alignm)
                 alignm = al;
         }
-        if (alignm > MAX_ALIGN)
-            alignm = MAX_ALIGN; // We cannot guarantee alignments over 16 bytes because that's what our heap is aligned as
         if (LLT_ALIGN(sz, alignm) > sz) {
             haspadding = 1;
             sz = LLT_ALIGN(sz, alignm);
@@ -939,6 +949,14 @@ JL_DLLEXPORT jl_datatype_t *jl_new_primitivetype(jl_value_t *name, jl_module_t *
     uint32_t nbytes = (nbits + 7) / 8;
     uint32_t alignm = next_power_of_two(nbytes);
 # if defined(_CPU_X86_) && !defined(_OS_WINDOWS_)
+    // datalayout strings are often weird: on 64-bit they usually follow fairly simple rules,
+    // but on x86 32 bit platforms, sometimes 5 to 8 byte types are
+    // 32-bit aligned even though the MAX_ALIGN (for types 9+ bytes) is 16
+    // (except for f80 which is align 4 on Mingw, Linux, and BSDs--but align 16 on MSVC and Darwin)
+    // https://llvm.org/doxygen/ARMTargetMachine_8cpp.html#adb29b487708f0dc2a940345b68649270
+    // https://llvm.org/doxygen/AArch64TargetMachine_8cpp.html#a003a58caf135efbf7273c5ed84e700d7
+    // https://llvm.org/doxygen/X86TargetMachine_8cpp.html#aefdbcd6131ef195da070cef7fdaf0532
+    // 32-bit alignment is weird
     if (alignm == 8)
         alignm = 4;
 # endif
@@ -1385,13 +1403,13 @@ JL_DLLEXPORT int jl_atomic_storeonce_bits(jl_datatype_t *dt, char *dst, const jl
     return success;
 }
 
-#define PERMBOXN_FUNC(nb)                                               \
+#define PERMBOXN_FUNC(nb)                                                  \
     jl_value_t *jl_permbox##nb(jl_datatype_t *t, uintptr_t tag, uint##nb##_t x) \
-    {   /* n.b. t must be a concrete isbits datatype of the right size */ \
-        jl_value_t *v = jl_gc_permobj(LLT_ALIGN(nb, sizeof(void*)), t); \
-        if (tag) jl_set_typetagof(v, tag, GC_OLD_MARKED);               \
-        *(uint##nb##_t*)jl_data_ptr(v) = x;                             \
-        return v;                                                       \
+    {   /* n.b. t must be a concrete isbits datatype of the right size */  \
+        jl_value_t *v = jl_gc_permobj(LLT_ALIGN(nb, sizeof(void*)), t, 0); \
+        if (tag) jl_set_typetagof(v, tag, GC_OLD_MARKED);                  \
+        *(uint##nb##_t*)jl_data_ptr(v) = x;                                \
+        return v;                                                          \
     }
 PERMBOXN_FUNC(8)
 PERMBOXN_FUNC(16)

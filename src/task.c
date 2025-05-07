@@ -993,7 +993,7 @@ the xoshiro256 state. There are two problems with that fix, however:
    need four variations of the internal RNG stream for the four xoshiro256
    registers. That means we'd have to apply the PCG finalizer, add it to
    our dot product accumulator field in the child task, then apply the
-   MurmurHash3 finalizer to that dot product and use the result to purturb
+   MurmurHash3 finalizer to that dot product and use the result to perturb
    the main RNG state.
 
 We avoid both problems by recognizing that the mixing function can be much less
@@ -1535,7 +1535,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     jl_set_pgcstack(&bootstrap_task.value.gcstack);
     bootstrap_task.value.ptls = ptls;
     if (jl_nothing == NULL) // make a placeholder
-        jl_nothing = jl_gc_permobj(0, jl_nothing_type);
+        jl_nothing = jl_gc_permobj(0, jl_nothing_type, 0);
     jl_task_t *ct = (jl_task_t*)jl_gc_alloc(ptls, sizeof(jl_task_t), jl_task_type);
     jl_set_typetagof(ct, jl_task_tag, 0);
     memset(ct, 0, sizeof(jl_task_t));

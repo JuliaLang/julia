@@ -310,14 +310,34 @@ int exc_reg_is_write_fault(uintptr_t esr) {
 #include <sys/eventfd.h>
 #include <link.h>
 
+#ifndef _OS_FREEBSD_
+typedef struct {
+    void (*f)(void*) JL_NOTSAFEPOINT;
+    void *ctx;
+} callback_t;
+static int with_dl_iterate_phdr_lock(struct dl_phdr_info *info, size_t size, void *data)
+{
+    jl_lock_profile();
+    callback_t *callback = (callback_t*)data;
+    callback->f(callback->ctx);
+    jl_unlock_profile();
+    return 1; // only call this once
+}
+#endif
+
 void jl_with_stackwalk_lock(void (*f)(void*), void *ctx)
 {
-    sigset_t sset, oset;
-    sigemptyset(&sset);
-    sigaddset(&sset, SIGUSR2);
-    pthread_sigmask(SIG_BLOCK, &sset, &oset);
+#ifndef _OS_FREEBSD_
+    callback_t callback = {f, ctx};
+    dl_iterate_phdr(with_dl_iterate_phdr_lock, &callback);
+#else
+    // FreeBSD makes the questionable decisions to use a terrible implementation of a spin
+    // lock and to block all signals while a lock is held. However, that also means it is
+    // not currently vulnerable to this libunwind bug that other platforms can encounter.
+    jl_lock_profile();
     f(ctx);
-    pthread_sigmask(SIG_SETMASK, &oset, NULL);
+    jl_unlock_profile();
+#endif
 }
 
 #if defined(_OS_LINUX_) && (defined(_CPU_X86_64_) || defined(_CPU_X86_))
@@ -539,6 +559,7 @@ static int thread0_exit_signo = 0;
 static void JL_NORETURN jl_exit_thread0_cb(void)
 {
 CFI_NORETURN
+    jl_atomic_fetch_add(&jl_gc_disable_counter, -1);
     jl_critical_error(thread0_exit_signo, 0, NULL, jl_current_task);
     jl_atexit_hook(128);
     jl_raise(thread0_exit_signo);
@@ -1069,6 +1090,10 @@ static void *signal_listener(void *arg)
 //#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 199309L && !HAVE_KEVENT
 //            si_code = info.si_code;
 //#endif
+            // Let's forbid threads from running GC while we're trying to exit,
+            // also let's make sure we're not in the middle of GC.
+            jl_atomic_fetch_add(&jl_gc_disable_counter, 1);
+            jl_safepoint_wait_gc(NULL);
             jl_exit_thread0(sig, signal_bt_data, signal_bt_size);
         }
         else if (critical) {

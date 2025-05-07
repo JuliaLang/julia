@@ -21,7 +21,6 @@ include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_g
 
 # Initialize DL_LOAD_PATH as early as possible.  We are defining things here in
 # a slightly more verbose fashion than usual, because we're running so early.
-const DL_LOAD_PATH = String[]
 let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
         if Base.DARWIN_FRAMEWORK
@@ -37,9 +36,7 @@ include("views.jl")
 
 # numeric operations
 include("hashing.jl")
-include("rounding.jl")
 include("div.jl")
-include("float.jl")
 include("twiceprecision.jl")
 include("complex.jl")
 include("rational.jl")
@@ -107,6 +104,9 @@ include("strings/strings.jl")
 include("regex.jl")
 include("parse.jl")
 include("shell.jl")
+const IRShow = Compiler.IRShow # an alias for compatibility
+include("stacktraces.jl")
+using .StackTraces
 include("show.jl")
 include("arrayshow.jl")
 include("methodshow.jl")
@@ -126,6 +126,12 @@ include("missing.jl")
 
 # version
 include("version.jl")
+
+#=
+isdebugbuild is defined here as this is imported in libdl.jl (included in libc.jl)
+The method is added in util.jl
+=#
+function isdebugbuild end
 
 # system & environment
 include("sysinfo.jl")
@@ -211,9 +217,6 @@ using .PermutedDimsArrays
 include("sort.jl")
 using .Sort
 
-# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
-include("binaryplatforms.jl")
-
 # Fast math
 include("fastmath.jl")
 using .FastMath
@@ -243,10 +246,6 @@ include("irrationals.jl")
 include("mathconstants.jl")
 using .MathConstants: ℯ, π, pi
 
-# Stack frames and traces
-include("stacktraces.jl")
-using .StackTraces
-
 # experimental API's
 include("experimental.jl")
 
@@ -270,6 +269,9 @@ include("toml_parser.jl")
 include("linking.jl")
 include("staticdata.jl")
 include("loading.jl")
+
+# BinaryPlatforms, used by Artifacts.  Needs `Sort`.
+include("binaryplatforms.jl")
 
 # misc useful functions & macros
 include("timing.jl")
