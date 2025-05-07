@@ -9874,56 +9874,57 @@ void linkFunctionBody(Function &Dst, Function &Src)
 
 void emit_always_inline(orc::ThreadSafeModule &result_m, jl_codegen_params_t &params) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
-    jl_workqueue_t &edges = params.workqueue;
-    bool always_inline = false;
-    for (auto &it : edges) {
-        if (it.second.private_linkage)
-            always_inline = true;
-    }
-    if (!always_inline)
-        return;
-    jl_task_t *ct = jl_current_task;
-    int8_t gc_state = jl_gc_unsafe_enter(ct->ptls); // codegen may contain safepoints (such as jl_subtype calls)
-    jl_code_info_t *src = nullptr;
-    params.safepoint_on_entry = false;
-    params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
-    JL_GC_PUSH2(&params.temporary_roots, &src);
-    for (auto &it : edges) {
-        jl_code_instance_t *codeinst = it.first;
-        auto &proto = it.second;
-        if (!proto.private_linkage)
-            continue;
-        if (proto.decl->isDeclaration()) {
-            src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
-            jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-            jl_method_t *def = mi->def.method;
-            if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
-                src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
-            if (src && jl_is_code_info(src) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX) {
-                jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params); // contains safepoints
-                if (!result_m)
-                    break;
-                // TODO: jl_optimize_roots(params, mi, *result_m.getModuleUnlocked()); // contains safepoints
-                Module &M = *result_m.getModuleUnlocked();
-                if (decls.functionObject != "jl_fptr_args" &&
-                    decls.functionObject != "jl_fptr_sparam" &&
-                    decls.functionObject != "jl_f_opaque_closure_call") {
-                    Function *F = M.getFunction(decls.functionObject);
-                    F->eraseFromParent();
-                }
-                if (!decls.specFunctionObject.empty()) {
-                    Function *specF = M.getFunction(decls.specFunctionObject);
-                    linkFunctionBody(*proto.decl, *specF);
-                    proto.decl->addFnAttr(Attribute::InlineHint);
-                    proto.decl->setLinkage(proto.external_linkage ? GlobalValue::AvailableExternallyLinkage : GlobalValue::PrivateLinkage);
-                    specF->eraseFromParent();
+    while (true) {
+        SmallVector<jl_workqueue_t::value_type> always_inline;
+        for (auto &it : params.workqueue) {
+            if (it.second.private_linkage && it.second.decl->isDeclaration())
+                always_inline.push_back(it);
+            it.second.private_linkage = false;
+        }
+        if (always_inline.empty())
+            return;
+        jl_task_t *ct = jl_current_task;
+        int8_t gc_state = jl_gc_unsafe_enter(ct->ptls); // codegen may contain safepoints (such as jl_subtype calls)
+        jl_code_info_t *src = nullptr;
+        params.safepoint_on_entry = false;
+        params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+        JL_GC_PUSH2(&params.temporary_roots, &src);
+        for (auto &it : always_inline) {
+            jl_code_instance_t *codeinst = it.first;
+            auto &proto = it.second;
+            Function *decl = proto.decl;
+            if (decl->isDeclaration()) {
+                src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
+                jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+                jl_method_t *def = mi->def.method;
+                if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
+                    src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
+                if (src && jl_is_code_info(src) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX) {
+                    jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params); // contains safepoints
+                    if (!result_m)
+                        break;
+                    // TODO: jl_optimize_roots(params, mi, *result_m.getModuleUnlocked()); // contains safepoints
+                    Module &M = *result_m.getModuleUnlocked();
+                    if (decls.functionObject != "jl_fptr_args" &&
+                        decls.functionObject != "jl_fptr_sparam" &&
+                        decls.functionObject != "jl_f_opaque_closure_call") {
+                        Function *F = M.getFunction(decls.functionObject);
+                        F->eraseFromParent();
+                    }
+                    if (!decls.specFunctionObject.empty()) {
+                        Function *specF = M.getFunction(decls.specFunctionObject);
+                        linkFunctionBody(*decl, *specF);
+                        decl->addFnAttr(Attribute::InlineHint);
+                        decl->setLinkage(proto.external_linkage ? GlobalValue::AvailableExternallyLinkage : GlobalValue::PrivateLinkage);
+                        specF->eraseFromParent();
+                    }
                 }
             }
         }
+        params.temporary_roots = nullptr;
+        JL_GC_POP();
+        jl_gc_unsafe_leave(ct->ptls, gc_state);
     }
-    params.temporary_roots = nullptr;
-    JL_GC_POP();
-    jl_gc_unsafe_leave(ct->ptls, gc_state);
 }
 
 // --- initialization ---
