@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/TOML/docs/src/index.md"
+```
+
 # TOML
 
 TOML.jl is a Julia standard library for parsing and writing [TOML
@@ -62,7 +66,7 @@ julia> err.column
 The [`TOML.print`](@ref) function is used to print (or serialize) data into TOML
 format.
 
-```jldoctest
+```jldoctest; filter = r"^\s*\S+\s*=.*"m
 julia> using TOML
 
 julia> data = Dict(

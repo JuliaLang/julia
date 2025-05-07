@@ -209,10 +209,12 @@ end
 
     @test eachindex((2,5,"foo")) === Base.OneTo(3)
     @test eachindex((2,5,"foo"), (1,2,5,7)) === Base.OneTo(4)
+
+    @test Core.Compiler.is_nothrow(Base.infer_effects(iterate, (Tuple{Int,Int,Int}, Int)))
 end
 
 
-@testset "element type" begin
+@testset "elelement/value/key types" begin
     @test eltype((1,2,3)) === Int
     @test eltype((1.0,2.0,3.0)) <: AbstractFloat
     @test eltype((true, false)) === Bool
@@ -227,6 +229,11 @@ end
         typejoin(Int, Float64, Bool)
     @test eltype(Tuple{Int, Missing}) === Union{Missing, Int}
     @test eltype(Tuple{Int, Nothing}) === Union{Nothing, Int}
+
+    @test valtype((1,2,3)) === eltype((1,2,3))
+    @test valtype(Tuple{Int, Missing}) === eltype(Tuple{Int, Missing})
+    @test keytype((1,2,3)) === Int
+    @test keytype(Tuple{Int, Missing}) === Int
 end
 
 @testset "map with Nothing and Missing" begin
@@ -525,6 +532,13 @@ end
     for n = 0:15
         @test ntuple(identity, Val(n)) == ntuple(identity, n)
     end
+
+    @test Base.infer_return_type(ntuple, Tuple{typeof(identity), Val}) == Tuple{Vararg{Int}}
+
+    # issue #55790
+    for n in 1:32
+        @test typeof(ntuple(identity, UInt64(n))) == NTuple{n, Int}
+    end
 end
 
 struct A_15703{N}
@@ -647,6 +661,8 @@ end
 
     f() = Base.setindex((1:1, 2:2, 3:3), 9, 1)
     @test @inferred(f()) == (9, 2:2, 3:3)
+
+    @test Base.return_types(Base.setindex, Tuple{Tuple,Nothing,Int}) == [Tuple]
 end
 
 @testset "inferable range indexing with constant values" begin
@@ -807,3 +823,30 @@ namedtup = (;a=1, b=2, c=3)
 @test Val{Tuple{Vararg{T,4}} where T} === Val{Tuple{T,T,T,T} where T}
 @test Val{Tuple{Int64, Vararg{Int32,N}} where N} === Val{Tuple{Int64, Vararg{Int32}}}
 @test Val{Tuple{Int32, Vararg{Int64}}} === Val{Tuple{Int32, Vararg{Int64,N}} where N}
+
+@testset "from Pair, issue #52636" begin
+    pair = (1 => "2")
+    @test (1, "2") == @inferred Tuple(pair)
+    @test (1, "2") == @inferred Tuple{Int,String}(pair)
+end
+
+@testset "circshift" begin
+    t1 = (1, 2, 3, 4, 5)
+    t2 = (1, 'a', -7.0, 3)
+    t3 = ('a', 'b', 'c', 'd')
+    @test @inferred(Base.circshift(t1, 2)) == (4, 5, 1, 2, 3)
+    # The return type of mixed tuples with runtime shift cannot be inferred.
+    @test Base.circshift(t2, 3) == ('a', -7.0, 3, 1)
+    @test @inferred(Base.circshift(t3, 7)) == ('b', 'c', 'd', 'a')
+    @test @inferred(Base.circshift(t3, -1)) == ('b', 'c', 'd', 'a')
+    @test_throws MethodError circshift(t1, 'a')
+    @test Base.infer_return_type(circshift, Tuple{Tuple,Integer}) <: Tuple
+    @test Base.infer_return_type(circshift, Tuple{Tuple{Vararg{Any,10}},Integer}) <: Tuple{Vararg{Any,10}}
+    for len ∈ 0:5
+        v = 1:len
+        t = Tuple(v)
+        for shift ∈ -6:6
+            @test circshift(v, shift) == collect(circshift(t, shift))
+        end
+    end
+end

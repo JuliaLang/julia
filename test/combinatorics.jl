@@ -2,6 +2,9 @@
 
 using Random: randcycle
 
+isdefined(Main, :ImmutableArrays) || @eval Main include("testhelpers/ImmutableArrays.jl")
+using .Main.ImmutableArrays
+
 @testset "binomial" begin
     @test binomial(5,-1) == 0
     @test binomial(5,10) == 0
@@ -67,20 +70,19 @@ end
         @test isperm(T) == true
         @test isperm(K) == false
     end
+
+    # issue #47847
+    p = ImmutableArrays.ImmutableArray([2,3,1])
+    @test invperm(p) == invperm([2,3,1])
 end
 
 @testset "factorial" begin
-    @test factorial(7) == 5040
-    @test factorial(Int8(7)) == 5040
-    @test factorial(UInt8(7)) == 5040
-    @test factorial(Int16(7)) == 5040
-    @test factorial(UInt16(7)) == 5040
-    @test factorial(Int32(7)) == 5040
-    @test factorial(UInt32(7)) == 5040
-    @test factorial(Int64(7)) == 5040
-    @test factorial(UInt64(7)) == 5040
-    @test factorial(Int128(7)) == 5040
-    @test factorial(UInt128(7)) == 5040
+    for T = Base.uniontypes(Union{Base.Checked.SignedInt,Base.Checked.UnsignedInt})
+        @testset let T = T
+            @test factorial(T(7)) == 5040
+            @test Core.Compiler.is_foldable(Base.infer_effects(factorial, (T,)))
+        end
+    end
     @test factorial(0) == 1
     @test_throws DomainError factorial(-1)
     @test factorial(Int64(20)) == 2432902008176640000
@@ -121,4 +123,25 @@ end
             @test factorial(oftype(factn, n)) === factn
         end
     end
+end
+
+@testset "permute!" begin
+    #simple array
+    @test permute!([1,2,3,4,5],[3,2,1,5,4]) == [3,2,1,5,4]
+    #empty array
+    @test permute!([],[]) == []
+    #single-element array
+    @test permute!([5],[1]) == [5]
+    #repeated elements in array
+    @test permute!([1,2,2,3,3,3],[2,1,3,5,4,6]) == [2,1,2,3,3,3]
+    #permutation vector contains zero
+    @test_throws BoundsError permute!([1,2,3],[0,1,2])
+    #permutation vector contains negative indices
+    @test_throws BoundsError permute!([1,2,3],[2,-1,1])
+    #permutation vector contains indices larger than array size
+    @test_throws BoundsError permute!([1,2,3],[2,4,1])
+    #permutation vector is empty
+    @test_throws DimensionMismatch permute!([1,2,3],[])
+    #array is empty
+    @test_throws BoundsError permute!([],[2,1])
 end

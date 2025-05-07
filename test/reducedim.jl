@@ -124,6 +124,18 @@ fill!(r, -6.3)
 fill!(r, -1.1)
 @test sum!(abs2, r, Breduc, init=false) ≈ safe_sumabs2(Breduc, 1) .- 1.1
 
+# issue #35199
+function issue35199_test(sizes, dims)
+    M = rand(Float64, sizes)
+    ax = axes(M)
+    n1 = @allocations Base.reduced_indices(ax, dims)
+    return @test n1 == 0
+end
+for dims in (1, 2, (1,), (2,), (1,2))
+    sizes = (64, 3)
+    issue35199_test(sizes, dims)
+end
+
 # Small arrays with init=false
 let A = reshape(1:15, 3, 5)
     R = fill(1, 3)
@@ -564,8 +576,8 @@ end
 @testset "type of sum(::Array{$T}" for T in [UInt8, Int8, Int32, Int64, BigInt]
     result = sum(T[1 2 3; 4 5 6; 7 8 9], dims=2)
     @test result == hcat([6, 15, 24])
-    @test eltype(result) === (T <: Base.SmallSigned ? Int :
-                              T <: Base.SmallUnsigned ? UInt :
+    @test eltype(result) === (T <: Base.BitSignedSmall ? Int :
+                              T <: Base.BitUnsignedSmall ? UInt :
                               T)
 end
 
@@ -573,6 +585,30 @@ end
     B = reshape(3^3:-1:1, (3, 3, 3))
     @test B[argmax(B, dims=[2, 3])] == @inferred(maximum(B, dims=[2, 3]))
     @test B[argmin(B, dims=[2, 3])] == @inferred(minimum(B, dims=[2, 3]))
+end
+
+@testset "careful with @inbounds" begin
+    Base.@propagate_inbounds f(x) = x == 2 ? x[-10000] : x
+    Base.@propagate_inbounds op(x,y) = x[-10000] + y[-10000]
+    for (arr, dims) in (([1,1,2], 1), ([1 1 2], 2), ([ones(Int,256);2], 1))
+        @test_throws BoundsError mapreduce(f, +, arr)
+        @test_throws BoundsError mapreduce(f, +, arr; dims)
+        @test_throws BoundsError mapreduce(f, +, arr; dims, init=0)
+        @test_throws BoundsError mapreduce(identity, op, arr)
+        try
+            #=@test_throws BoundsError=# mapreduce(identity, op, arr; dims)
+        catch ex
+            @test_broken ex isa BoundsError
+        end
+        @test_throws BoundsError mapreduce(identity, op, arr; dims, init=0)
+
+        @test_throws BoundsError findmin(f, arr)
+        @test_throws BoundsError findmin(f, arr; dims)
+
+        @test_throws BoundsError mapreduce(f, max, arr)
+        @test_throws BoundsError mapreduce(f, max, arr; dims)
+        @test_throws BoundsError mapreduce(f, max, arr; dims, init=0)
+    end
 end
 
 @testset "in-place reductions with mismatched dimensionalities" begin
@@ -608,7 +644,7 @@ end
 end
 @testset "NaN/missing test for extrema with dims #43599" begin
     for sz = (3, 10, 100)
-        for T in (Int, Float64, BigFloat)
+        for T in (Int, Float64, BigFloat, BigInt)
             Aₘ = Matrix{Union{T, Missing}}(rand(-sz:sz, sz, sz))
             Aₘ[rand(1:sz*sz, sz)] .= missing
             unordered_test_for_extrema(Aₘ)
@@ -622,9 +658,16 @@ end
         end
     end
 end
-@test_broken minimum([missing;BigInt(1)], dims = 1)
-@test_broken maximum([missing;BigInt(1)], dims = 1)
-@test_broken extrema([missing;BigInt(1)], dims = 1)
+
+@testset "minimum/maximum over dims with missing (#35308)" begin
+    for T in (Int, Float64, BigInt, BigFloat)
+        x = Union{T, Missing}[1 missing; 2 missing]
+        @test isequal(minimum(x, dims=1), reshape([1, missing], 1, :))
+        @test isequal(maximum(x, dims=1), reshape([2, missing], 1, :))
+        @test isequal(minimum(x, dims=2), reshape([missing, missing], :, 1))
+        @test isequal(maximum(x, dims=2), reshape([missing, missing], :, 1))
+    end
+end
 
 # issue #26709
 @testset "dimensional reduce with custom non-bitstype types" begin

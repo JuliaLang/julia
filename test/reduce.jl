@@ -53,8 +53,8 @@ end
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1:5; init=1000) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+, 1) == 1
-@test_throws "reducing with * over an empty collection of element type Union{} is not allowed" reduce(*, ())
-@test_throws "reducing with * over an empty collection of element type Union{} is not allowed" reduce(*, Union{}[])
+@test_throws "reducing over an empty collection is not allowed" reduce(*, ())
+@test_throws "reducing over an empty collection is not allowed" reduce(*, Union{}[])
 
 # mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
@@ -91,8 +91,7 @@ end
 @test mapreduce(abs2, *, Float64[]) === 1.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
-@test_throws ["reducing over an empty collection is not allowed",
-              "consider supplying `init`"] mapreduce(abs2, &, Float64[])
+@test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, &, Float64[])
 @test_throws str -> !occursin("Closest candidates are", str) mapreduce(abs2, &, Float64[])
 @test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, |, Float64[])
 
@@ -144,9 +143,8 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
-@test_throws "reducing with add_sum over an empty collection of element type Union{} is not allowed" sum(Union{}[])
-@test_throws ["reducing over an empty collection is not allowed",
-              "consider supplying `init`"] sum(sin, Int[])
+@test_throws "reducing over an empty collection is not allowed" sum(Union{}[])
+@test_throws "reducing over an empty collection is not allowed" sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
 a = sum(sin, z)
@@ -681,6 +679,27 @@ end
         @test sum(oa) == reduce(+, oa) == len
         @test mapreduce(+, +, oa, oa) == 2len
     end
+end
+
+@testset "issue #45562" begin
+    @test all([true, true, true], dims = 1) == [true]
+    @test any([true, true, true], dims = 1) == [true]
+    @test_throws TypeError all([3, 3, 3], dims = 1)
+    @test_throws TypeError any([3, 3, 3], dims = 1)
+    @test_throws TypeError all(Any[true, 3, 3], dims = 1)
+    @test_throws TypeError any(Any[false, 3, 3], dims = 1)
+    @test_throws TypeError all([1, 1, 1], dims = 1)
+    @test_throws TypeError any([0, 0, 0], dims = 1)
+    @test_throws TypeError all!([false], [3, 3, 3])
+    @test_throws TypeError any!([false], [3, 3, 3])
+    @test_throws TypeError all!([false], Any[true, 3, 3])
+    @test_throws TypeError any!([false], Any[false, 3, 3])
+    @test_throws TypeError all!([false], [1, 1, 1])
+    @test_throws TypeError any!([false], [0, 0, 0])
+    @test reduce(|, Bool[]) == false
+    @test reduce(&, Bool[]) == true
+    @test reduce(|, Bool[], dims=1) == [false]
+    @test reduce(&, Bool[], dims=1) == [true]
 end
 
 # issue #45748

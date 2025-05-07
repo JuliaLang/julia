@@ -55,7 +55,10 @@ function copy!(dest::BitSet, src::BitSet)
     dest
 end
 
-sizehint!(s::BitSet, n::Integer) = (sizehint!(s.bits, (n+63) >> 6); s)
+function sizehint!(s::BitSet, n::Integer; first::Bool=false, shrink::Bool=true)
+    sizehint!(s.bits, (n+63) >> 6; first, shrink)
+    s
+end
 
 function _bits_getindex(b::Bits, n::Int, offset::Int)
     ci = _div64(n) - offset + 1

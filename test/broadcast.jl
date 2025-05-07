@@ -49,9 +49,9 @@ ci(x) = CartesianIndex(x)
 @test @inferred(newindex(ci((2,2)), (true, false), (-1,-1)))  == ci((2,-1))
 @test @inferred(newindex(ci((2,2)), (false, true), (-1,-1)))  == ci((-1,2))
 @test @inferred(newindex(ci((2,2)), (false, false), (-1,-1))) == ci((-1,-1))
-@test @inferred(newindex(ci((2,2)), (true,), (-1,-1)))   == ci((2,))
-@test @inferred(newindex(ci((2,2)), (true,), (-1,)))   == ci((2,))
-@test @inferred(newindex(ci((2,2)), (false,), (-1,))) == ci((-1,))
+@test @inferred(newindex(ci((2,2)), (true,), (-1,-1))) == 2
+@test @inferred(newindex(ci((2,2)), (true,), (-1,)))   == 2
+@test @inferred(newindex(ci((2,2)), (false,), (-1,)))  == -1
 @test @inferred(newindex(ci((2,2)), (), ())) == ci(())
 
 end
@@ -592,6 +592,16 @@ end
     end
 end
 
+@testset "convert behavior of logical broadcast" begin
+    a = mod.(1:4, 2)
+    @test !isa(a, BitArray)
+    for T in (Array{Bool}, BitArray)
+        la = T(a)
+        la .= mod.(0:3, 2)
+        @test la == [false; true; false; true]
+    end
+end
+
 # Test that broadcast treats type arguments as scalars, i.e. containertype yields Any,
 # even for subtypes of abstract array. (https://github.com/JuliaStats/DataArrays.jl/issues/229)
 @testset "treat type arguments as scalars, DataArrays issue 229" begin
@@ -798,8 +808,8 @@ let
 end
 
 let
-  bc = Broadcasted(+, (Broadcasted(*, ([1, 2, 3], 4)), 5))
-  @test isbits(Broadcast.flatten(bc).f)
+    bc = Broadcasted(+, (Broadcasted(*, ([1, 2, 3], 4)), 5))
+    @test isbits(Broadcast.flatten(bc).f)
 end
 
 # Issue #26127: multiple splats in a fused dot-expression
@@ -866,6 +876,31 @@ let
     @test copy(bc) == [v for v in bc] == collect(bc)
     @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
     @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+
+    struct MyFill{T,N} <: AbstractArray{T,N}
+        val :: T
+        sz :: NTuple{N,Int}
+    end
+    Base.size(M::MyFill) = M.sz
+    function Base.getindex(M::MyFill{<:Any,N}, i::Vararg{Int, N}) where {N}
+        checkbounds(M, i...)
+        M.val
+    end
+    Base.IndexStyle(::Type{<:Base.Broadcast.Broadcasted{<:Any,<:Any,<:Any,<:Tuple{MyFill}}}) = IndexLinear()
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+, MyFill(2, (3,3))))
+    @test IndexStyle(bc) == IndexLinear()
+    @test eachindex(bc) === Base.OneTo(9)
+    @test bc[2] == bc[CartesianIndex(2,1)]
+
+    for bc in Any[
+                Broadcast.broadcasted(+, collect(reshape(1:9, 3, 3)), 1:3), # IndexCartesian
+                Broadcast.broadcasted(+, [1,2], 2), # IndexLinear
+            ]
+        bci = Broadcast.instantiate(bc)
+        for (Ilin, Icart) in zip(eachindex(IndexLinear(), bc), eachindex(IndexCartesian(), bc))
+            @test bc[Ilin] == bc[Icart]
+        end
+    end
 end
 
 # issue 43847: collect preserves shape of broadcasted
@@ -894,6 +929,8 @@ let
     @test Broadcast.broadcasted(+, AD1(rand(3)), AD2(rand(3))) isa Broadcast.Broadcasted{<:Broadcast.AbstractArrayStyle{Any}}
 
     @test @inferred(Base.IteratorSize(Broadcast.broadcasted(+, (1,2,3), a1, zeros(3,3,3)))) === Base.HasShape{3}()
+
+    @test @inferred(Base.IteratorSize(Base.broadcasted(randn))) === Base.HasShape{0}()
 
     # inference on nested
     bc = Base.broadcasted(+, AD1(randn(3)), AD1(randn(3)))
@@ -969,6 +1006,10 @@ end
     @test sum(bc, dims=1, init=0) == [5]
     bc = Broadcast.instantiate(Broadcast.broadcasted(*, ['a','b'], 'c'))
     @test prod(bc, dims=1, init="") == ["acbc"]
+
+    a = rand(-10:10,32,4); b = rand(-10:10,32,4)
+    bc = Broadcast.instantiate(Broadcast.broadcasted(+,a,b))
+    @test sum(bc; dims = 1, init = 0.0) == sum(collect(bc); dims = 1, init = 0.0)
 end
 
 # treat Pair as scalar:
@@ -1165,3 +1206,22 @@ import Base.Broadcast: BroadcastStyle, DefaultArrayStyle
 
 f51129(v, x) = (1 .- (v ./ x) .^ 2)
 @test @inferred(f51129([13.0], 6.5)) == [-3.0]
+
+@testset "Docstrings" begin
+    undoc = Docs.undocumented_names(Broadcast)
+    @test_broken isempty(undoc)
+    @test undoc == [:dotview]
+end
+
+@testset "broadcast for `AbstractArray` without `CartesianIndex` support" begin
+    struct BVec52775 <: AbstractVector{Int}
+        a::Vector{Int}
+    end
+    Base.size(a::BVec52775) = size(a.a)
+    Base.getindex(a::BVec52775, i::Real) = a.a[i]
+    Base.getindex(a::BVec52775, i) = error("unsupported index!")
+    a = BVec52775([1,2,3])
+    bc = Base.broadcasted(identity, a)
+    @test bc[1] == bc[CartesianIndex(1)] == bc[1, CartesianIndex()]
+    @test a .+ [1 2] == a.a .+ [1 2]
+end

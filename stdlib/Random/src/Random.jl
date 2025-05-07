@@ -4,7 +4,7 @@
     Random
 
 Support for generating random numbers. Provides [`rand`](@ref), [`randn`](@ref),
-[`AbstractRNG`](@ref), [`MersenneTwister`](@ref), and [`RandomDevice`](@ref).
+[`AbstractRNG`](@ref), [`Xoshiro`](@ref), [`MersenneTwister`](@ref), and [`RandomDevice`](@ref).
 """
 module Random
 
@@ -13,7 +13,7 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
-import SHA
+using SHA: SHA, SHA2_256_CTX, SHA2_512_CTX, SHA_CTX
 
 using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
 import Base: copymutable, copy, copy!, ==, hash, convert,
@@ -28,6 +28,8 @@ export rand!, randn!,
        randperm, randperm!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice, TaskLocalRNG, Xoshiro
+
+public seed!, default_rng, Sampler, SamplerType, SamplerTrivial, SamplerSimple
 
 ## general definitions
 
@@ -353,7 +355,7 @@ See also [`randn`](@ref) for normally distributed numbers, and [`rand!`](@ref) a
 # Examples
 ```julia-repl
 julia> rand(Int, 2)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1339893410598768192
  1575814717733606317
 
@@ -366,7 +368,7 @@ julia> rand((2, 3))
 3
 
 julia> rand(Float64, (2, 3))
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  0.999717  0.0143835  0.540787
  0.696556  0.783855   0.938235
 ```
@@ -412,8 +414,10 @@ sequence of numbers if and only if a `seed` is provided. Some RNGs
 don't accept a seed, like `RandomDevice`.
 After the call to `seed!`, `rng` is equivalent to a newly created
 object initialized with the same seed.
+
 The types of accepted seeds depend on the type of `rng`, but in general,
-integer seeds should work.
+integer seeds should work. Providing `nothing` as the seed should be
+equivalent to not providing one.
 
 If `rng` is not specified, it defaults to seeding the state of the
 shared task-local generator.
@@ -453,11 +457,15 @@ julia> rand(Xoshiro(), Bool) # not reproducible either
 true
 ```
 """
-seed!(rng::AbstractRNG) = seed!(rng, nothing)
-#=
-We have this generic definition instead of the alternative option
-`seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)`
-because it would lead too easily to ambiguities, e.g. when we define `seed!(::Xoshiro, seed)`.
-=#
+function seed!(rng::AbstractRNG, seed::Any=nothing)
+    if seed === nothing
+        seed!(rng, RandomDevice())
+    elseif seed isa AbstractRNG
+        # avoid getting into an infinite recursive call from the other branches
+        throw(MethodError(seed!, (rng, seed)))
+    else
+        seed!(rng, SeedHasher(seed))
+    end
+end
 
 end # module
