@@ -331,8 +331,8 @@ typedef struct _jl_method_t {
     struct _jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
+    _Atomic(int32_t) dispatch_status; // bits defined in staticdata.jl
     _Atomic(size_t) primary_world;
-    _Atomic(size_t) deleted_world;
 
     // method's type signature. redundant with TypeMapEntry->specTypes
     jl_value_t *sig;

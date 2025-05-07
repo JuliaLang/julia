@@ -1540,7 +1540,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             # if this method is generally visible to the current compilation world,
             # and this is either the primary world, or not applicable in the primary world
             # then we want to compile and emit this
-            if item.def.primary_world <= world <= item.def.deleted_world
+            if item.def.primary_world <= world
                 ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
                 ci isa CodeInstance && push!(workqueue, ci)
             end
@@ -1611,11 +1611,14 @@ const TRIM_UNSAFE = 2
 const TRIM_UNSAFE_WARN = 3
 function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+
+    # Create an "invokelatest" queue to enable eager compilation of speculative
+    # invokelatest calls such as from `Core.finalizer` and `ccallable`
     invokelatest_queue = CompilationQueue(;
         interp = NativeInterpreter(get_world_counter(); inf_params)
     )
+
     codeinfos = []
-    is_latest_world = true # whether this_world == world_counter()
     workqueue = CompilationQueue(; interp = nothing)
     for this_world in reverse!(sort!(worlds))
         workqueue = CompilationQueue(workqueue;
@@ -1623,17 +1626,13 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         )
 
         append!(workqueue, methods)
-        if is_latest_world
-            # Provide the `invokelatest` queue so that we trigger "best-effort" code generation
-            # for, e.g., finalizers and cfunction.
-            #
-            # The queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
-            # (it will enqueue into itself and immediately drain)
-            compile!(codeinfos, workqueue; invokelatest_queue = workqueue)
-        else
-            compile!(codeinfos, workqueue)
-        end
-        is_latest_world = false
+        compile!(codeinfos, workqueue; invokelatest_queue)
+    end
+
+    if invokelatest_queue !== nothing
+        # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
+        # (it will enqueue into itself and immediately drain)
+        compile!(codeinfos, invokelatest_queue; invokelatest_queue)
     end
 
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE

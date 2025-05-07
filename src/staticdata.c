@@ -1805,16 +1805,11 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 jl_method_t *m = (jl_method_t*)v;
                 jl_method_t *newm = (jl_method_t*)&f->buf[reloc_offset];
                 if (s->incremental) {
-                    if (jl_atomic_load_relaxed(&newm->deleted_world) == ~(size_t)0) {
-                        if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
-                            jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
-                            jl_atomic_store_relaxed(&newm->deleted_world, 1); // max_world
-                            arraylist_push(&s->fixup_objs, (void*)reloc_offset);
-                        }
-                    }
-                    else {
-                        jl_atomic_store_relaxed(&newm->primary_world, 1);
-                        jl_atomic_store_relaxed(&newm->deleted_world, 0);
+                    if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
+                        jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
+                        int dispatch_status = jl_atomic_load_relaxed(&newm->dispatch_status);
+                        jl_atomic_store_relaxed(&newm->dispatch_status, dispatch_status & METHOD_SIG_LATEST_ONLY ? 0 : METHOD_SIG_PRECOMPILE_MANY);
+                        arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
                 }
                 else {
@@ -3593,8 +3588,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
             jl_errorf("System image file \"%s\" not found.", fname);
         ios_bufmode(&f, bm_none);
 
-        JL_SIGATOMIC_BEGIN();
-
         ios_seek_end(&f);
         size_t len = ios_pos(&f);
         char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
@@ -3604,8 +3597,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
             jl_errorf("Error reading system image file.");
 
         ios_close(&f);
-
-        JL_SIGATOMIC_END();
 
         jl_sysimage_buf = (jl_image_buf_t) {
             .kind = JL_IMAGE_KIND_JI,

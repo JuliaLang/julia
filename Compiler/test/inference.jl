@@ -6486,4 +6486,17 @@ function ss57873(a::Vector{String}, pref)
 end
 @test ss57873(["a", "b", "c"], ("",)) == String[]
 
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    getglobal(m, n, xs...)
+end <: Any
+@test Base.infer_return_type((Module,Symbol,Any,Vector{Any})) do m, n, v, xs
+    setglobal!(m, n, v, xs...)
+end <: Any
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    isdefinedglobal(m, n, xs...)
+end <: Bool
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    Core.get_binding_type(m, n, xs...)
+end <: Type
+
 end # module inference

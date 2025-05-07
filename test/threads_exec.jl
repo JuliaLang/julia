@@ -1593,7 +1593,7 @@ end
         @sync begin
             for i in 1:n_tasks
                 start_time_i = time_ns()
-                task_i = Threads.@spawn peakflops()
+                task_i = Threads.@spawn peakflops(1024)
                 Threads.@spawn begin
                     wait(task_i)
                     end_time_i = time_ns()
