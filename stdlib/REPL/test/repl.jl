@@ -1991,40 +1991,28 @@ end
 # Issue #58158 add alias for Char display in REPL
 @testset "REPL show_repl Char alias" begin
     # Test character with a known emoji alias
-    buf = IOBuffer()
-    io = IOContext(buf, :color => true)
-    REPL.show_repl(io, MIME("text/plain"), '😼')
-    output = String(take!(buf))
+    output = sprint(REPL.show_repl, MIME("text/plain"), '😼'; context=(:color => true))
     # Check for base info and the specific alias
     @test occursin("'😼': Unicode U+1F63C (category So: Symbol, other)", output)
     @test occursin(", input as ", output) # Check for the prefix text
     @test occursin("\\:smirk_cat:<tab>", output) # Check for the alias text (may be colored)
 
     # Test character with a known LaTeX alias
-    buf = IOBuffer()
-    io = IOContext(buf, :color => true)
-    REPL.show_repl(io, MIME("text/plain"), 'α')
-    output = String(take!(buf))
+    output = sprint(REPL.show_repl, MIME("text/plain"), 'α'; context=(:color => true))
     # Check for base info and the specific alias
     @test occursin("'α': Unicode U+03B1 (category Ll: Letter, lowercase)", output)
     @test occursin(", input as ", output) # Check for the prefix text
     @test occursin("\\alpha<tab>", output) # Check for the alias text (may be colored)
 
     # Test character without an alias
-    buf = IOBuffer()
-    io = IOContext(buf, :color => true)
-    REPL.show_repl(io, MIME("text/plain"), 'X')
-    output = String(take!(buf))
+    output = sprint(REPL.show_repl, MIME("text/plain"), 'X'; context=(:color => true))
     # Check for base info only
     @test occursin("'X': ASCII/Unicode U+0058 (category Lu: Letter, uppercase)", output)
     # Ensure alias part is *not* printed
     @test !occursin(", input as ", output)
 
     # Test another character without an alias (symbol)
-    buf = IOBuffer()
-    io = IOContext(buf, :color => true)
-    REPL.show_repl(io, MIME("text/plain"), '+')
-    output = String(take!(buf))
+    output = sprint(REPL.show_repl, MIME("text/plain"), '+'; context=(:color => true))
     @test occursin("'+': ASCII/Unicode U+002B (category Sm: Symbol, math)", output)
     @test !occursin(", input as ", output)
 end
