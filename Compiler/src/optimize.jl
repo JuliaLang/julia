@@ -164,9 +164,8 @@ struct OptimizerCache{CodeCache}
     opt_cache::IdDict{MethodInstance,CodeInstance}
     function OptimizerCache(
         wvc::WorldView{CodeCache},
-        owner,
+        @nospecialize(owner),
         opt_cache::IdDict{MethodInstance,CodeInstance}) where CodeCache
-        @nospecialize owner
         new{CodeCache}(wvc, owner, opt_cache)
     end
 end
@@ -1016,7 +1015,7 @@ end
 
 # run the optimization work
 function optimize(interp::AbstractInterpreter, opt::OptimizationState, caller::InferenceResult)
-    @zone "CC: OPTIMIZER" ir = run_passes_ipo_safe(interp, opt, caller)
+    @zone "CC: OPTIMIZER" ir = run_passes_ipo_safe(opt.src, opt)
     ipo_dataflow_analysis!(interp, opt, ir, caller)
     finishopt!(interp, opt, ir)
     return nothing
@@ -1039,10 +1038,10 @@ matchpass(optimize_until::Int, stage, _) = optimize_until == stage
 matchpass(optimize_until::String, _, name) = optimize_until == name
 matchpass(::Nothing, _, _) = false
 
-function run_passes_ipo_safe(interp::AbstractInterpreter, sv::OptimizationState, result::InferenceResult;
-                             optimize_until::Union{Nothing, Int, String} = nothing)  # run all passes by default
-    ci = sv.src
-
+function run_passes_ipo_safe(
+    ci::CodeInfo,
+    sv::OptimizationState,
+    optimize_until::Union{Nothing, Int, String} = nothing)  # run all passes by default
     if optimize_until isa String && !contains_is(ALL_PASS_NAMES, optimize_until)
         error("invalid `optimize_until` argument, no such optimization pass")
     elseif optimize_until isa Int && (optimize_until < 1 || optimize_until > length(ALL_PASS_NAMES))
@@ -1059,60 +1058,17 @@ function run_passes_ipo_safe(interp::AbstractInterpreter, sv::OptimizationState,
     # @zone "CC: VERIFY 2" verify_ir(ir)
     @pass "CC: COMPACT_2" ir = compact!(ir)
     @pass "CC: SROA"      ir = sroa_pass!(ir, sv.inlining)
-    @pass "CC: ADCE"      ir, changed = adce_pass!(ir, sv.inlining)
-    @pass "CC: COMPACT_3" changed && (
-                      ir = compact!(ir, true))
-    @pass "CC; OPTINF"    optinf_worthwhile(ir) && (
-                      ir = optinf!(ir, interp, sv, result))
+    @pass "CC: ADCE"      (ir, made_changes) = adce_pass!(ir, sv.inlining)
+    if made_changes
+        @pass "CC: COMPACT_3" ir = compact!(ir, true)
+    end
     if is_asserts()
-        @zone "CC: VERIFY" begin
+        @zone "CC: VERIFY_3" begin
             verify_ir(ir, true, false, optimizer_lattice(sv.inlining.interp), sv.linfo)
             verify_linetable(ir.debuginfo, length(ir.stmts))
         end
     end
     @label __done__  # used by @pass
-    return ir
-end
-
-# If the optimizer derives new type information (as implied by `IR_FLAG_REFINED`),
-# and this new type information is available for the arguments of a call expression,
-# further optimizations may be possible by performing irinterp on the optimized IR.
-function optinf_worthwhile(ir::IRCode)
-    @assert isempty(ir.new_nodes) "expected compacted IRCode"
-    for i = 1:length(ir.stmts)
-        inst = ir[SSAValue(i)]
-        if has_flag(inst, IR_FLAG_REFINED)
-            if isexpr(inst[:stmt], :call)
-                return true
-            end
-        end
-    end
-    return false
-end
-
-function optinf!(ir::IRCode, interp::AbstractInterpreter, sv::OptimizationState, result::InferenceResult)
-    ci = sv.src
-    spec_info = SpecInfo(ci)
-    world = get_inference_world(interp)
-    min_world, max_world = first(result.valid_worlds), last(result.valid_worlds)
-    irsv = IRInterpretationState(interp, spec_info, ir, result.linfo, ir.argtypes,
-                                 world, min_world, max_world)
-    rt, (nothrow, noub) = ir_abstract_constant_propagation(interp, irsv)
-    if irsv.new_call_inferred
-        ir = ssa_inlining_pass!(ir, sv.inlining, ci.propagate_inbounds)
-        ir = compact!(ir)
-        effects = result.effects
-        if nothrow
-            effects = Effects(effects; nothrow=true)
-        end
-        if noub
-            effects = Effects(effects; noub=ALWAYS_TRUE)
-        end
-        result.effects = effects
-        result.exc_result = refine_exception_type(result.exc_result, effects)
-        ⋤ = strictneqpartialorder(ipo_lattice(interp))
-        result.result = rt ⋤ result.result ? rt : result.result
-    end
     return ir
 end
 

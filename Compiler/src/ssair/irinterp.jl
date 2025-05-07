@@ -58,7 +58,6 @@ function abstract_call(interp::AbstractInterpreter, arginfo::ArgInfo, sstate::St
     call = abstract_call(interp, arginfo, si, irsv)::Future
     Future{Any}(call, interp, irsv) do call, interp, irsv
         irsv.ir.stmts[irsv.curridx][:info] = call.info
-        irsv.new_call_inferred |= true
         nothing
     end
     return call
@@ -205,8 +204,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
         # Handled at the very end
         return false
     elseif isa(stmt, PiNode)
-        ⊓ = join(typeinf_lattice(interp))
-        rt = argextype(stmt.val, ir) ⊓ widenconst(stmt.typ)
+        rt = tmeet(typeinf_lattice(interp), argextype(stmt.val, ir), widenconst(stmt.typ))
     elseif stmt === nothing
         return false
     elseif isa(stmt, GlobalRef)
@@ -229,9 +227,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
                 inst[:stmt] = quoted(rt.val)
             end
             return true
-        end
-        ⋤ = strictneqpartialorder(typeinf_lattice(interp))
-        if rt ⋤ inst[:type]
+        elseif !⊑(typeinf_lattice(interp), inst[:type], rt)
             inst[:type] = rt
             return true
         end

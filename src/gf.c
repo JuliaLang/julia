@@ -647,9 +647,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
 
 JL_DLLEXPORT void jl_update_codeinst(
         jl_code_instance_t *codeinst, jl_value_t *inferred,
-        jl_value_t *rettype, jl_value_t *exctype,
-        jl_value_t *rettype_const, int32_t const_flags,
-        size_t min_world, size_t max_world,
+        int32_t const_flags, size_t min_world, size_t max_world,
         uint32_t effects, jl_value_t *analysis_results,
         double time_infer_total, double time_infer_cache_saved, double time_infer_self,
         jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/)
@@ -666,14 +664,6 @@ JL_DLLEXPORT void jl_update_codeinst(
     jl_gc_wb(codeinst, di);
     jl_atomic_store_relaxed(&codeinst->edges, edges);
     jl_gc_wb(codeinst, edges);
-    codeinst->rettype = rettype;
-    jl_gc_wb(codeinst, rettype);
-    codeinst->exctype = exctype;
-    jl_gc_wb(codeinst, exctype);
-    if ((const_flags & 2) != 0) {
-        codeinst->rettype_const = rettype_const;
-        jl_gc_wb(codeinst, rettype_const);
-    }
     if ((const_flags & 1) != 0) {
         assert(codeinst->rettype_const);
         jl_atomic_store_release(&codeinst->invoke, jl_fptr_const_return);
@@ -687,8 +677,8 @@ JL_DLLEXPORT void jl_update_codeinst(
 JL_DLLEXPORT void jl_fill_codeinst(
         jl_code_instance_t *codeinst,
         jl_value_t *rettype, jl_value_t *exctype,
-        jl_value_t *rettype_const, int32_t const_flags,
-        size_t min_world, size_t max_world,
+        jl_value_t *inferred_const,
+        int32_t const_flags, size_t min_world, size_t max_world,
         uint32_t effects, jl_value_t *analysis_results,
         jl_debuginfo_t *di, jl_svec_t *edges /* , int absolute_max*/)
 {
@@ -699,8 +689,8 @@ JL_DLLEXPORT void jl_fill_codeinst(
     codeinst->exctype = exctype;
     jl_gc_wb(codeinst, exctype);
     if ((const_flags & 2) != 0) {
-        codeinst->rettype_const = rettype_const;
-        jl_gc_wb(codeinst, rettype_const);
+        codeinst->rettype_const = inferred_const;
+        jl_gc_wb(codeinst, inferred_const);
     }
     jl_atomic_store_relaxed(&codeinst->edges, edges);
     jl_gc_wb(codeinst, edges);

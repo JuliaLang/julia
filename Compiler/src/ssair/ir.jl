@@ -1718,8 +1718,7 @@ function reprocess_phi_node!(𝕃ₒ::AbstractLattice, compact::IncrementalCompa
 
     # There's only one predecessor left - just replace it
     v = phi.values[1]
-    ⋤ = strictneqpartialorder(𝕃ₒ)
-    if argextype(v, compact) ⋤ compact[compact.ssa_rename[old_idx]][:type]
+    if !⊑(𝕃ₒ, compact[compact.ssa_rename[old_idx]][:type], argextype(v, compact))
         v = Refined(v)
     end
     compact.ssa_rename[old_idx] = v
