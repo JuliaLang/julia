@@ -905,18 +905,21 @@ end
 
 # Reductions with IndexSCartesian2
 
-function _mapreduce(f::F, op::OP, style::IndexSCartesian2{K}, A::AbstractArrayOrBroadcasted) where {F,OP,K}
+function _mapreduce(f::F, op::OP, style::IndexSCartesian2{K}, A::AbstractArrayOrBroadcasted, init=_InitialValue()) where {F,OP,K}
     inds = eachindex(style, A)
     n = size(inds)[2]
     if n == 0
-        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
+        return _mapreduce_start(f, op, A, init)
+    elseif n == 1
+        return _mapreduce_start(f, op, A, init, first(A))
     else
-        return mapreduce_impl(f, op, A, first(inds), last(inds))
+        return mapreduce_impl(f, op, A, first(inds), last(inds), init)
     end
 end
 
 @noinline function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted,
-                                  ifirst::SCI, ilast::SCI, blksize::Int) where {F,OP,SCI<:SCartesianIndex2{K}} where K
+                                  ifirst::SCI, ilast::SCI, init=_InitialValue()) where {F,OP,SCI<:SCartesianIndex2{K}} where K
+    blksize = pairwise_blocksize(f, op)
     if ilast.j - ifirst.j < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
@@ -937,11 +940,8 @@ end
     else
         # pairwise portion
         jmid = ifirst.j + (ilast.j - ifirst.j) >> 1
-        v1 = mapreduce_impl(f, op, A, ifirst, SCI(K,jmid), blksize)
-        v2 = mapreduce_impl(f, op, A, SCI(1,jmid+1), ilast, blksize)
+        v1 = mapreduce_impl(f, op, A, ifirst, SCI(K,jmid), init)
+        v2 = mapreduce_impl(f, op, A, SCI(1,jmid+1), ilast, init)
         return op(v1, v2)
     end
 end
-
-mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP} =
-    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))

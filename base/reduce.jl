@@ -241,6 +241,22 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 
 ## reduce & mapreduce
 
+_empty_eltype(x) = _empty_eltype(x, IteratorEltype(x))
+_empty_eltype(x, ::HasEltype) = eltype(x)
+_empty_eltype(_, _) = _empty_reduce_error()
+"""
+    _mapreduce_start(f, op, A, init, [a1])
+
+Perform the first step in a mapped reduction over `A` with 0 or one or more elements.
+The one-element method may be called multiple times within a single reduction at
+the start of each new chain of `op` calls.
+"""
+_mapreduce_start(f, op, A, ::_InitialValue) = mapreduce_empty(f, op, _empty_eltype(A))
+_mapreduce_start(f, op, A, ::_InitialValue, a1) = mapreduce_first(f, op, a1)
+_mapreduce_start(f, op, A, init) = init
+_mapreduce_start(f, op, A, init, a1) = op(init, mapreduce_first(f, op, a1))
+
+
 # `mapreduce_impl()` is called by `mapreduce()` (via `_mapreduce()`, when `A`
 # supports linear indexing) and does actual calculations (for `A[ifirst:ilast]` subset).
 # For efficiency, no parameter validity checks are done, it's the caller's responsibility.
@@ -249,15 +265,15 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 # This is a generic implementation of `mapreduce_impl()`,
 # certain `op` (e.g. `min` and `max`) may have their own specialized versions.
 @noinline function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted,
-                                  ifirst::Integer, ilast::Integer, blksize::Int)
+                                  ifirst::Integer, ilast::Integer, init=_InitialValue())
+    blksize = pairwise_blocksize(f, op)
     if ifirst == ilast
-        @inbounds a1 = A[ifirst]
-        return mapreduce_first(f, op, a1)
+        return _mapreduce_start(f, op, A, init, @inbounds(A[ifirst]))
     elseif ilast - ifirst < blksize
         # sequential portion
         @inbounds a1 = A[ifirst]
         @inbounds a2 = A[ifirst+1]
-        v = op(f(a1), f(a2))
+        v = op(_mapreduce_start(f, op, A, init, a1), f(a2))
         @simd for i = ifirst + 2 : ilast
             @inbounds ai = A[i]
             v = op(v, f(ai))
@@ -266,14 +282,11 @@ foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
     else
         # pairwise portion
         imid = ifirst + (ilast - ifirst) >> 1
-        v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
-        v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
+        v1 = mapreduce_impl(f, op, A, ifirst, imid, init)
+        v2 = mapreduce_impl(f, op, A, imid+1, ilast, init)
         return op(v1, v2)
     end
 end
-
-mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
-    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
 
 """
     mapreduce(f, op, itrs...; [init])
@@ -420,34 +433,34 @@ The default is `reduce_first(op, f(x))`.
 """
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
-_mapreduce(f, op, A::AbstractArrayOrBroadcasted) = _mapreduce(f, op, IndexStyle(A), A)
+_mapreduce(f, op, A::AbstractArrayOrBroadcasted, init=_InitialValue()) = _mapreduce(f, op, IndexStyle(A), A, init)
 
-function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
+function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted, init=_InitialValue())
     inds = LinearIndices(A)
     n = length(inds)
     if n == 0
-        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
+        return _mapreduce_start(f, op, A, init)
     elseif n == 1
         @inbounds a1 = A[first(inds)]
-        return mapreduce_first(f, op, a1)
+        return _mapreduce_start(f, op, A, init, a1)
     elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
         @inbounds i = first(inds)
         @inbounds a1 = A[i]
         @inbounds a2 = A[i+=1]
-        s = op(f(a1), f(a2))
+        s = op(_mapreduce_start(f, op, A, init, a1), f(a2))
         while i < last(inds)
             @inbounds Ai = A[i+=1]
             s = op(s, f(Ai))
         end
         return s
     else
-        return mapreduce_impl(f, op, A, first(inds), last(inds))
+        return mapreduce_impl(f, op, A, first(inds), last(inds), init)
     end
 end
 
-mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
+mapreduce(f, op, a::Number; init=Base._InitialValue()) = _mapreduce_start(f, op, a, init, a)
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f, op, A)
+_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted, init=_InitialValue()) = mapfoldl(f, op, A; init)
 
 """
     reduce(op, itr; [init])
@@ -638,9 +651,10 @@ isgoodzero(::typeof(max), x) = isbadzero(min, x)
 isgoodzero(::typeof(min), x) = isbadzero(max, x)
 
 function mapreduce_impl(f, op::Union{typeof(max), typeof(min)},
-                        A::AbstractArrayOrBroadcasted, first::Int, last::Int)
+                        A::AbstractArrayOrBroadcasted, first::Integer, last::Integer, init)
     a1 = @inbounds A[first]
-    v1 = mapreduce_first(f, op, a1)
+    v1 = _mapreduce_start(f, op, A, init, a1)
+    last == first && return v1
     v2 = v3 = v4 = v1
     chunk_len = 256
     start = first + 1
@@ -1130,8 +1144,8 @@ julia> count(i->(4<=i<=6), [2,3,4,5,6])
 julia> count([true, false, true, true])
 3
 
-julia> count(>(3), 1:7, init=0x03)
-0x07
+julia> count(>(3), 1:7, init=UInt(0))
+0x0000000000000004
 ```
 """
 count(itr; init=0) = count(identity, itr; init)
@@ -1140,8 +1154,10 @@ count(f, itr; init=0) = _simple_count(f, itr, init)
 
 _simple_count(pred, itr, init) = sum(_bool(pred), itr; init)
 
-function _simple_count(::typeof(identity), x::Array{Bool}, init::T=0) where {T}
-    n::T = init
+function _simple_count(::typeof(identity), x::Array{Bool}, init=0)
+    v0 = _mapreduce_start(identity, Base.add_sum, x, init, false)
+    T = typeof(v0)
+    n::T = v0
     chunks = length(x) ÷ sizeof(UInt)
     mask = 0x0101010101010101 % UInt
     GC.@preserve x begin

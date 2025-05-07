@@ -272,10 +272,10 @@ end
 # Optimized mapreduce implementation
 # The generic method is faster when !(eltype(A) >: Missing) since it does not need
 # additional loops to identify the two first non-missing values of each block
-mapreduce(f, op, itr::SkipMissing{<:AbstractArray}) =
-    _mapreduce(f, op, IndexStyle(itr.x), eltype(itr.x) >: Missing ? itr : itr.x)
+mapreduce(f, op, itr::SkipMissing{<:AbstractArray}; init=Base._InitialValue()) =
+    _mapreduce(f, op, IndexStyle(itr.x), eltype(itr.x) >: Missing ? itr : itr.x, init)
 
-function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
+function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray}, init=_InitialValue())
     A = itr.x
     ai = missing
     inds = LinearIndices(A)
@@ -285,29 +285,27 @@ function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
         @inbounds ai = A[i]
         !ismissing(ai) && break
     end
-    ismissing(ai) && return mapreduce_empty(f, op, eltype(itr))
+    ismissing(ai) && return _mapreduce_start(f, op, itr, init)
     a1::eltype(itr) = ai
-    i == typemax(typeof(i)) && return mapreduce_first(f, op, a1)
+    i == typemax(typeof(i)) && return _mapreduce_start(f, op, itr, init, a1)
     i += 1
     ai = missing
     for outer i in i:ilast
         @inbounds ai = A[i]
         !ismissing(ai) && break
     end
-    ismissing(ai) && return mapreduce_first(f, op, a1)
+    ismissing(ai) && return _mapreduce_start(f, op, itr, init, a1)
     # We know A contains at least two non-missing entries: the result cannot be nothing
-    something(mapreduce_impl(f, op, itr, first(inds), last(inds)))
+    something(mapreduce_impl(f, op, itr, first(inds), last(inds), init))
 end
 
-_mapreduce(f, op, ::IndexCartesian, itr::SkipMissing) = mapfoldl(f, op, itr)
-
-mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
-    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
+_mapreduce(f, op, ::IndexCartesian, itr::SkipMissing, init=_InitialValue()) = mapfoldl(f, op, itr; init)
 
 # Returns nothing when the input contains only missing values, and Some(x) otherwise
 @noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray},
-                                  ifirst::Integer, ilast::Integer, blksize::Int)
+                                  ifirst::Integer, ilast::Integer, init=_InitialValue())
     A = itr.x
+    blksize = pairwise_blocksize(f, op)
     if ifirst > ilast
         return nothing
     elseif ifirst == ilast
@@ -315,7 +313,7 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
         if ismissing(a1)
             return nothing
         else
-            return Some(mapreduce_first(f, op, a1))
+            return Some(_mapreduce_start(f, op, itr, init, a1))
         end
     elseif ilast - ifirst < blksize
         # sequential portion
@@ -327,18 +325,18 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
         end
         ismissing(ai) && return nothing
         a1 = ai::eltype(itr)
-        i == typemax(typeof(i)) && return Some(mapreduce_first(f, op, a1))
+        i == typemax(typeof(i)) && return Some(_mapreduce_start(f, op, itr, init, a1))
         i += 1
         ai = missing
         for outer i in i:ilast
             @inbounds ai = A[i]
             !ismissing(ai) && break
         end
-        ismissing(ai) && return Some(mapreduce_first(f, op, a1))
+        ismissing(ai) && return Some(_mapreduce_start(f, op, itr, init, a1))
         a2 = ai::eltype(itr)
-        i == typemax(typeof(i)) && return Some(op(f(a1), f(a2)))
+        i == typemax(typeof(i)) && return Some(op(_mapreduce_start(f, op, itr, init, a1), f(a2)))
         i += 1
-        v = op(f(a1), f(a2))
+        v = op(_mapreduce_start(f, op, itr, init, a1), f(a2))
         @simd for i = i:ilast
             @inbounds ai = A[i]
             if !ismissing(ai)
@@ -349,8 +347,8 @@ mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
     else
         # pairwise portion
         imid = ifirst + (ilast - ifirst) >> 1
-        v1 = mapreduce_impl(f, op, itr, ifirst, imid, blksize)
-        v2 = mapreduce_impl(f, op, itr, imid+1, ilast, blksize)
+        v1 = mapreduce_impl(f, op, itr, ifirst, imid, init)
+        v2 = mapreduce_impl(f, op, itr, imid+1, ilast, init)
         if v1 === nothing && v2 === nothing
             return nothing
         elseif v1 === nothing
