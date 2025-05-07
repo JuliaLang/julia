@@ -172,12 +172,11 @@ end
 function get((; wvc, owner, opt_cache)::OptimizerCache, mi::MethodInstance, default)
     if haskey(opt_cache, mi)
         codeinst = opt_cache[mi]
-        if (codeinst.min_world ≤ wvc.worlds.min_world &&
-            wvc.worlds.max_world ≤ codeinst.max_world &&
-            codeinst.owner === owner)
-            @assert isdefined(codeinst, :inferred) && codeinst.inferred === nothing
-            return codeinst
-        end
+        @assert codeinst.min_world ≤ wvc.worlds.min_world &&
+                wvc.worlds.max_world ≤ codeinst.max_world &&
+                codeinst.owner === owner
+        @assert isdefined(codeinst, :inferred) && codeinst.inferred === nothing
+        return codeinst
     end
     return get(wvc, mi, default)
 end
