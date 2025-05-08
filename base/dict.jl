@@ -797,12 +797,12 @@ of the list. To add to the dictionary use
 Pairs cannot be removed from the dictionary, but they can be shadowed
 by adding an additional pair with a duplicate key; indexing operations
 will find the the last key added.
- 
+
 The types of elements may be specified; this is useful when keys or
 values of  `Union` or `Any` types are desired.
 
     imdict = Base.ImmutableDict{Symbol,Any}(key=>value, key=>value, ...)
-	
+
 An empty `ImmutableDict` can be created by specifying the type and
 giving no pairs; the type must be specified.
 
