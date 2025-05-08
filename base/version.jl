@@ -9,12 +9,19 @@ const VInt = UInt32
     VersionNumber
 
 Version number type which follows the specifications of
-[semantic versioning (semver)](https://semver.org/), composed of major, minor
+[semantic versioning (semver)](https://semver.org/spec/v2.0.0-rc.2.html), composed of major, minor
 and patch numeric values, followed by pre-release and build
-alpha-numeric annotations.
+alphanumeric annotations.
 
 `VersionNumber` objects can be compared with all of the standard comparison
-operators (`==`, `<`, `<=`, etc.), with the result following semver rules.
+operators (`==`, `<`, `<=`, etc.), with the result following semver v2.0.0-rc.2 rules.
+
+`VersionNumber` has the following public fields:
+- `v.major::Integer`
+- `v.minor::Integer`
+- `v.patch::Integer`
+- `v.prerelease::Tuple{Vararg{Union{Integer, AbstractString}}}`
+- `v.build::Tuple{Vararg{Union{Integer, AbstractString}}}`
 
 See also [`@v_str`](@ref) to efficiently construct `VersionNumber` objects
 from semver-format literal strings, [`VERSION`](@ref) for the `VersionNumber`
@@ -44,8 +51,7 @@ struct VersionNumber
     build::VerTuple
 
     function VersionNumber(major::VInt, minor::VInt, patch::VInt,
-            pre::VerTuple,
-            bld::VerTuple)
+                           @nospecialize(pre::VerTuple), @nospecialize(bld::VerTuple))
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -172,7 +178,7 @@ ident_cmp(a::Integer, b::String ) = isempty(b) ? +1 : -1
 ident_cmp(a::String,  b::Integer) = isempty(a) ? -1 : +1
 ident_cmp(a::String,  b::String ) = cmp(a, b)
 
-function ident_cmp(A::VerTuple, B::VerTuple)
+function ident_cmp(@nospecialize(A::VerTuple), @nospecialize(B::VerTuple))
     for (a, b) in Iterators.Zip{Tuple{VerTuple,VerTuple}}((A, B))
         c = ident_cmp(a, b)
         (c != 0) && return c
@@ -266,59 +272,3 @@ else
 end
 
 libllvm_path() = ccall(:jl_get_libllvm, Any, ())
-
-function banner(io::IO = stdout)
-    if GIT_VERSION_INFO.tagged_commit
-        commit_string = TAGGED_RELEASE_BANNER
-    elseif isempty(GIT_VERSION_INFO.commit)
-        commit_string = ""
-    else
-        days = Int(floor((ccall(:jl_clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
-        days = max(0, days)
-        unit = days == 1 ? "day" : "days"
-        distance = GIT_VERSION_INFO.fork_master_distance
-        commit = GIT_VERSION_INFO.commit_short
-
-        if distance == 0
-            commit_string = "Commit $(commit) ($(days) $(unit) old master)"
-        else
-            branch = GIT_VERSION_INFO.branch
-            commit_string = "$(branch)/$(commit) (fork: $(distance) commits, $(days) $(unit))"
-        end
-    end
-
-    commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
-
-    if get(io, :color, false)::Bool
-        c = text_colors
-        tx = c[:normal] # text
-        jl = c[:normal] # julia
-        d1 = c[:bold] * c[:blue]    # first dot
-        d2 = c[:bold] * c[:red]     # second dot
-        d3 = c[:bold] * c[:green]   # third dot
-        d4 = c[:bold] * c[:magenta] # fourth dot
-
-        print(io,"""               $(d3)_$(tx)
-           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  Documentation: https://docs.julialang.org
-          $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
-           $(jl)_ _   _| |_  __ _$(tx)   |  Type \"?\" for help, \"]?\" for Pkg help.
-          $(jl)| | | | | | |/ _` |$(tx)  |
-          $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
-         $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-        $(jl)|__/$(tx)                   |
-
-        """)
-    else
-        print(io,"""
-                       _
-           _       _ _(_)_     |  Documentation: https://docs.julialang.org
-          (_)     | (_) (_)    |
-           _ _   _| |_  __ _   |  Type \"?\" for help, \"]?\" for Pkg help.
-          | | | | | | |/ _` |  |
-          | | |_| | | | (_| |  |  Version $(VERSION)$(commit_date)
-         _/ |\\__'_|_|_|\\__'_|  |  $(commit_string)
-        |__/                   |
-
-        """)
-    end
-end

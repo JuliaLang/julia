@@ -14,8 +14,6 @@ extern "C" {
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
 // never moves out.
-
-//make it compatible with UV Handles
 typedef enum { bm_none=1000, bm_line, bm_block, bm_mem } bufmode_t;
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
@@ -108,7 +106,7 @@ JL_DLLEXPORT int ios_get_writable(ios_t *s);
 JL_DLLEXPORT void ios_set_readonly(ios_t *s);
 JL_DLLEXPORT size_t ios_copy(ios_t *to, ios_t *from, size_t nbytes);
 JL_DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
-JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, int keep) JL_NOTSAFEPOINT;
 JL_DLLEXPORT size_t ios_nchomp(ios_t *from, size_t ntowrite);
 // ensure at least n bytes are buffered if possible. returns # available.
 JL_DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);

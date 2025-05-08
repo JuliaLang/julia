@@ -917,16 +917,26 @@ end
     @test get_last_word("a[]") == "a[]"
 end
 
-@testset "issue #45836" begin
+@testset "show_completions" begin
     term = FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
-    promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
+
+    function getcompletion(completions)
+        promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
+        REPL.LineEdit.show_completions(promptstate, completions)
+        return String(take!(term.out_stream))
+    end
+
+    # When the number of completions is less than
+    # LineEdit.MULTICOLUMN_THRESHOLD, they should be in a single column.
     strings = ["abcdef", "123456", "ijklmn"]
-    REPL.LineEdit.show_completions(promptstate, strings)
-    completion = String(take!(term.out_stream))
-    @test completion == "\033[0B\n\rabcdef\r\033[8C123456\r\033[16Cijklmn\n"
-    strings2 = ["abcdef", "123456\nijklmn"]
-    promptstate = REPL.LineEdit.init_state(term, REPL.LineEdit.mode(new_state()))
-    REPL.LineEdit.show_completions(promptstate, strings2)
-    completion2 = String(take!(term.out_stream))
-    @test completion2 == "\033[0B\nabcdef\n123456\nijklmn\n"
+    @assert length(strings) < LineEdit.MULTICOLUMN_THRESHOLD
+    @test getcompletion(strings) == "\033[0B\n\rabcdef\n\r123456\n\rijklmn\n"
+
+    # But with more than the threshold there should be multiple columns
+    strings2 = repeat(["foo"], LineEdit.MULTICOLUMN_THRESHOLD + 1)
+    @test getcompletion(strings2) == "\033[0B\n\rfoo\r\e[5Cfoo\n\rfoo\r\e[5Cfoo\n\rfoo\r\e[5Cfoo\n"
+
+    # Check that newlines in completions are handled correctly (issue #45836)
+    strings3 = ["abcdef", "123456\nijklmn"]
+    @test getcompletion(strings3) == "\033[0B\nabcdef\n123456\nijklmn\n"
 end

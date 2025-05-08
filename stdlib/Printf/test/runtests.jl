@@ -116,12 +116,15 @@ end
     @test (Printf.@sprintf "%+f" Inf) == "+Inf"
     @test (Printf.@sprintf "% f" Inf) == " Inf"
     @test (Printf.@sprintf "% #f" Inf) == " Inf"
+    @test (Printf.@sprintf "%07f" Inf) == "    Inf"
     @test (Printf.@sprintf "%f" -Inf) == "-Inf"
     @test (Printf.@sprintf "%+f" -Inf) == "-Inf"
+    @test (Printf.@sprintf "%07f" -Inf) == "   -Inf"
     @test (Printf.@sprintf "%f" NaN) == "NaN"
     @test (Printf.@sprintf "%+f" NaN) == "+NaN"
     @test (Printf.@sprintf "% f" NaN) == " NaN"
     @test (Printf.@sprintf "% #f" NaN) == " NaN"
+    @test (Printf.@sprintf "%07f" NaN) == "    NaN"
     @test (Printf.@sprintf "%e" big"Inf") == "Inf"
     @test (Printf.@sprintf "%e" big"NaN") == "NaN"
 
@@ -169,12 +172,15 @@ end
     @test (Printf.@sprintf "%+e" Inf) == "+Inf"
     @test (Printf.@sprintf "% e" Inf) == " Inf"
     @test (Printf.@sprintf "% #e" Inf) == " Inf"
+    @test (Printf.@sprintf "%07e" Inf) == "    Inf"
     @test (Printf.@sprintf "%e" -Inf) == "-Inf"
     @test (Printf.@sprintf "%+e" -Inf) == "-Inf"
+    @test (Printf.@sprintf "%07e" -Inf) == "   -Inf"
     @test (Printf.@sprintf "%e" NaN) == "NaN"
     @test (Printf.@sprintf "%+e" NaN) == "+NaN"
     @test (Printf.@sprintf "% e" NaN) == " NaN"
     @test (Printf.@sprintf "% #e" NaN) == " NaN"
+    @test (Printf.@sprintf "%07e" NaN) == "    NaN"
     @test (Printf.@sprintf "%e" big"Inf") == "Inf"
     @test (Printf.@sprintf "%e" big"NaN") == "NaN"
 
@@ -339,7 +345,6 @@ end
     @test Printf.@sprintf("1%%2%%3") == "1%2%3"
     @test Printf.@sprintf("GAP[%%]") == "GAP[%]"
     @test Printf.@sprintf("hey there") == "hey there"
-    @test_throws Printf.InvalidFormatStringError Printf.Format("")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%+")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%.")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%.0")
@@ -488,6 +493,10 @@ end
     @test @sprintf("%d", 3//1) == "3"
     @test @sprintf("%d", Inf) == "Inf"
     @test @sprintf(" %d", NaN) == " NaN"
+
+    # 50011
+    @test Printf.@sprintf("") == ""
+    @test Printf.format(Printf.Format("")) == ""
 end
 
 @testset "integers" begin
@@ -1141,5 +1150,12 @@ end
     @test_throws Printf.InvalidFormatStringError Printf.Format("%hh")
     @test_throws Printf.InvalidFormatStringError Printf.Format("%z")
 end
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Printf))
+end
+
+# issue #52749
+@test @sprintf("%.160g", 1.38e-23) == "1.380000000000000060010582465734078799297660966782642624395399644741944111814291318296454846858978271484375e-23"
 
 end # @testset "Printf"

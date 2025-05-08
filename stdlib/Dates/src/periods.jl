@@ -2,7 +2,7 @@
 
 #Period types
 """
-    Dates.value(x::Period) -> Int64
+    Dates.value(x::Period)::Int64
 
 For a given period, return the value associated with that period.  For example,
 `value(Millisecond(10))` returns 10 as an integer.
@@ -28,7 +28,7 @@ for period in (:Year, :Quarter, :Month, :Week, :Day, :Hour, :Minute, :Second, :M
     for typ_str in typs
         @eval begin
             @doc """
-                $($period_str)(dt::$($typ_str)) -> $($period_str)
+                $($period_str)(dt::$($typ_str))
 
             The $($accessor_str) part of a $($typ_str) as a `$($period_str)`.$($reference)
             """ $period(dt::$(Symbol(typ_str))) = $period($(Symbol(accessor_str))(dt))
@@ -56,7 +56,7 @@ Base.isfinite(::Union{Type{P}, P}) where {P<:Period} = true
 
 # Default values (as used by TimeTypes)
 """
-    default(p::Period) -> Period
+    default(p::Period)::Period
 
 Return a sensible "default" value for the input Period by returning `T(1)` for Year,
 Month, and Day, and `T(0)` for Hour, Minute, Second, and Millisecond.
@@ -102,6 +102,7 @@ div(x::Period, y::Period, r::RoundingMode) = div(promote(x, y)..., r)
 Base.gcdx(a::T, b::T) where {T<:Period} = ((g, x, y) = gcdx(value(a), value(b)); return T(g), x, y)
 Base.abs(a::T) where {T<:Period} = T(abs(value(a)))
 Base.sign(x::Period) = sign(value(x))
+Base.signbit(x::Period) = signbit(value(x))
 
 # return (next coarser period, conversion factor):
 coarserperiod(::Type{P}) where {P<:Period} = (P, 1)
@@ -164,7 +165,7 @@ struct CompoundPeriod <: AbstractTime
 end
 
 """
-    Dates.periods(::CompoundPeriod) -> Vector{Period}
+    Dates.periods(::CompoundPeriod)::Vector{Period}
 
 Return the `Vector` of `Period`s that comprise the given `CompoundPeriod`.
 
@@ -174,7 +175,7 @@ Return the `Vector` of `Period`s that comprise the given `CompoundPeriod`.
 periods(x::CompoundPeriod) = x.periods
 
 """
-    CompoundPeriod(periods) -> CompoundPeriod
+    CompoundPeriod(periods)
 
 Construct a `CompoundPeriod` from a `Vector` of `Period`s. All `Period`s of the same type
 will be added together.
@@ -203,7 +204,7 @@ CompoundPeriod(p::Period...) = CompoundPeriod(Period[p...])
 
 
 """
-    canonicalize(::CompoundPeriod) -> CompoundPeriod
+    canonicalize(::CompoundPeriod)::CompoundPeriod
 
 Reduces the `CompoundPeriod` into its canonical form by applying the following rules:
 
@@ -325,7 +326,7 @@ end
 Base.show(io::IO,x::CompoundPeriod) = print(io, string(x))
 
 Base.convert(::Type{T}, x::CompoundPeriod) where T<:Period =
-    isconcretetype(T) ? sum(T, x.periods) : throw(MethodError(convert,(T,x)))
+    isconcretetype(T) ? sum(T, x.periods; init = zero(T)) : throw(MethodError(convert,(T,x)))
 
 # E.g. Year(1) + Day(1)
 (+)(x::Period,y::Period) = CompoundPeriod(Period[x, y])
@@ -443,18 +444,18 @@ Base.isless(x::CompoundPeriod, y::Period) = x < CompoundPeriod(y)
 Base.isless(x::CompoundPeriod, y::CompoundPeriod) = tons(x) < tons(y)
 # truncating conversions to milliseconds, nanoseconds and days:
 # overflow can happen for periods longer than ~300,000 years
-toms(c::Nanosecond)  = div(value(c), 1000000)
-toms(c::Microsecond) = div(value(c), 1000)
+toms(c::Nanosecond)  = div(value(c), 1000000, RoundNearest)
+toms(c::Microsecond) = div(value(c), 1000, RoundNearest)
 toms(c::Millisecond) = value(c)
 toms(c::Second)      = 1000 * value(c)
 toms(c::Minute)      = 60000 * value(c)
 toms(c::Hour)        = 3600000 * value(c)
 toms(c::Period)      = 86400000 * days(c)
-toms(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(toms, c.periods))
+toms(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : sum(p -> convert(Float64, toms(p))::Float64, c.periods)
 tons(x)              = toms(x) * 1000000
 tons(x::Microsecond) = value(x) * 1000
 tons(x::Nanosecond)  = value(x)
-tons(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(tons, c.periods))
+tons(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : sum(p -> convert(Float64, tons(p))::Float64, c.periods)
 days(c::Millisecond) = div(value(c), 86400000)
 days(c::Second)      = div(value(c), 86400)
 days(c::Minute)      = div(value(c), 1440)
@@ -464,4 +465,8 @@ days(c::Week)        = 7 * value(c)
 days(c::Year)        = 365.2425 * value(c)
 days(c::Quarter)     = 91.310625 * value(c)
 days(c::Month)       = 30.436875 * value(c)
-days(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : Float64(sum(days, c.periods))
+days(c::CompoundPeriod) = isempty(c.periods) ? 0.0 : sum(p -> convert(Float64, days(p))::Float64, c.periods)
+seconds(x::Nanosecond) = value(x) / 1000000000
+seconds(x::Microsecond) = value(x) / 1000000
+seconds(x::Millisecond) = value(x) / 1000
+seconds(x::Period) = value(Second(x))

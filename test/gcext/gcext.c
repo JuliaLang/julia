@@ -32,7 +32,7 @@ static inline int lt_ptr(void *a, void *b)
     return (uintptr_t)a < (uintptr_t)b;
 }
 
-/* align pointer to full word if mis-aligned */
+/* align pointer to full word if misaligned */
 static inline void *align_ptr(void *p)
 {
     uintptr_t u = (uintptr_t)p;
@@ -599,6 +599,13 @@ int main()
 
     jl_gc_set_cb_notify_external_alloc(alloc_bigval, 1);
     jl_gc_set_cb_notify_external_free(free_bigval, 1);
+
+    // single threaded mode
+    // Note: with -t1,1 a signal 10 occurs in task_scanner
+    jl_options.nthreadpools = 1;
+    jl_options.nthreads = 1;
+    int16_t ntpp[] = {jl_options.nthreads};
+    jl_options.nthreads_per_pool = ntpp;
 
     jl_init();
     if (jl_gc_enable_conservative_gc_support() < 0)

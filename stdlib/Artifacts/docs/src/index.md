@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Artifacts/docs/src/index.md"
+```
+
 # Artifacts
 
 ```@meta
@@ -18,4 +22,7 @@ Artifacts.artifact_meta
 Artifacts.artifact_hash
 Artifacts.find_artifacts_toml
 Artifacts.@artifact_str
+Artifacts.artifact_exists
+Artifacts.artifact_path
+Artifacts.select_downloadable_artifacts
 ```

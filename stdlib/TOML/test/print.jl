@@ -94,6 +94,14 @@ loaders = ["gzip", { driver = "csv", args = {delim = "\t"}}]
     a = 222
     d = 333
     """
+
+    # https://github.com/JuliaLang/julia/pull/57584
+    d = Dict("b" => [MyStruct(1), MyStruct(2)])
+    @test toml_str(d) do x
+        x isa MyStruct && return Dict("a" => x.a)
+    end == """
+    b = [{a = 1}, {a = 2}]
+    """
 end
 
 @testset "unsigned integers" for (x, s) in [
@@ -140,3 +148,76 @@ d = "hello"
 a = 2
 b = 9.9
 """
+
+
+inline_dict = Dict("a" => [1,2], "b" => Dict("a" => "b"), "c" => "foo")
+d = Dict(
+    "x" => "y",
+    "y" => inline_dict,
+    "z" => [1,2,3],
+)
+inline_tables = IdSet{Dict}()
+push!(inline_tables, inline_dict)
+@test toml_str(d; sorted=true, inline_tables) ==
+"""
+x = "y"
+y = {a = [1, 2], b = {a = "b"}, c = "foo"}
+z = [1, 2, 3]
+"""
+
+
+d = Dict("deps" => Dict(
+        "LocalPkg" => "fcf55292-0d03-4e8a-9e0b-701580031fc3",
+        "Example" => "7876af07-990d-54b4-ab0e-23690620f79a"),
+   "sources" => Dict(
+        "LocalPkg" => Dict("path" => "LocalPkg"),
+        "Example" => Dict("url" => "https://github.com/JuliaLang/Example.jl")))
+
+inline_tables = IdSet{Dict}()
+push!(inline_tables, d["sources"]["LocalPkg"])
+push!(inline_tables, d["sources"]["Example"])
+
+@test toml_str(d; sorted=true, inline_tables) ==
+"""
+[deps]
+Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+LocalPkg = "fcf55292-0d03-4e8a-9e0b-701580031fc3"
+
+[sources]
+Example = {url = "https://github.com/JuliaLang/Example.jl"}
+LocalPkg = {path = "LocalPkg"}
+"""
+
+inline_tables = IdSet{Dict}()
+push!(inline_tables, d["sources"]["LocalPkg"])
+s = """
+[deps]
+Example = "7876af07-990d-54b4-ab0e-23690620f79a"
+LocalPkg = "fcf55292-0d03-4e8a-9e0b-701580031fc3"
+
+[sources]
+LocalPkg = {path = "LocalPkg"}
+
+    [sources.Example]
+    url = "https://github.com/JuliaLang/Example.jl"
+"""
+@test toml_str(d; sorted=true, inline_tables) == s
+@test roundtrip(s)
+
+
+# https://github.com/JuliaLang/julia/pull/57584
+d = Dict("a" => 1, "b" => 2)
+inline_tables = IdSet{Dict}([d])
+s = "{a = 1, b = 2}"
+@test toml_str(d; sorted=true, inline_tables) == s
+
+
+# multiline strings (#55083)
+s = """
+a = \"\"\"lorem ipsum
+
+
+
+alpha\"\"\"
+"""
+@test roundtrip(s)

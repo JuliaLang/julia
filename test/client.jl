@@ -12,14 +12,14 @@ nested_error_pattern = r"""
     ERROR: DivideError: integer division error
     Stacktrace:.*
 
-    caused by: UndefVarError: `__not_a_binding__` not defined
+    caused by: UndefVarError: `__not_a_binding__` not defined in `Main`
     Stacktrace:.*
     """s
 
 @testset "display_error" begin
     # Display of errors which cause more than one entry on the exception stack
     excs = try
-        eval(nested_error_expr)
+        Core.eval(Main, nested_error_expr)
     catch
         Base.current_exceptions()
     end
@@ -31,7 +31,7 @@ nested_error_pattern = r"""
         DivideError: integer division error
         Stacktrace:.*
 
-        caused by: UndefVarError: `__not_a_binding__` not defined
+        caused by: UndefVarError: `__not_a_binding__` not defined in `Main`
         Stacktrace:.*
         """s, sprint(show, excs))
 end
@@ -51,4 +51,9 @@ end
     @test occursin(r"""
         ERROR: ErrorException
         """s, err_str)
+end
+
+@testset "defining `ans` and `err`" begin
+    @test eval(:(ans = 1)) == 1
+    @test eval(:(err = 1)) == 1
 end

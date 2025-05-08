@@ -24,10 +24,21 @@ for T in (Int64, Float64)
     @test complex(Complex{T}) == Complex{T}
 end
 
-#show
-@test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
-@test sprint(show, complex(true, true)) == "Complex(true,true)"
-@test sprint(show, Complex{Int8}(0, typemin(Int8))) == "0 - 128im"
+@testset "show" begin
+    @test sprint(show, complex(1, 0), context=:compact => true) == "1+0im"
+    @test sprint(show, complex(true, true)) == "Complex(true,true)"
+    @test sprint(show, Complex{Int8}(0, typemin(Int8))) == "0 - 128im"
+    @test sprint(show, complex(typemin(Int16), typemax(Int16))) == "-32768 + 32767im"
+    @test sprint(show, complex(0x26, 0x26), context=:compact => true) == "0x26+0x26*im"
+    @test sprint(show, complex(0o77, 0o77), context=:compact => true) == "0x3f+0x3f*im"
+    @test sprint(show, complex(0b10, 0b11)) == "0x02 + 0x03*im"
+    @test sprint(show, complex(-0x1A, 0x2F), context=:compact => true) == "0xe6+0x2f*im"
+    @test sprint(show, complex(typemax(UInt16), typemin(UInt16))) =="0xffff + 0x0000*im"
+    @test sprint(show, complex(-Inf, Inf)) == "-Inf + Inf*im"
+    @test sprint(show, complex(-Inf, NaN)) == "-Inf + NaN*im"
+    @test sprint(show, complex(0, -Inf)) == "0.0 - Inf*im"
+end
+
 
 @testset "unary operator on complex boolean" begin
     @test +Complex(true, true) === Complex(1, 1)
@@ -383,6 +394,7 @@ import Base.Math.@horner
     @test isequal(log1p(complex(-2, 1e-10)), log(1 + complex(-2, 1e-10)))
     @test isequal(log1p(complex(1, Inf)), complex(Inf, pi/2))
     @test isequal(log1p(complex(1, -Inf)), complex(Inf, -pi/2))
+    @test isequal(log1p(complex(1e-200, 5e-175)), complex(1e-200, 5e-175))
 
     for z in (1e-10+1e-9im, 1e-10-1e-9im, -1e-10+1e-9im, -1e-10-1e-9im)
         @test log1p(z) ≈ @horner(z, 0, 1, -0.5, 1/3, -0.25, 0.2)
@@ -1213,4 +1225,10 @@ end
     @test iseven(6+0im) && !isodd(6+0im)
     @test !iseven(7+0im) && isodd(7+0im)
     @test !iseven(6+1im) && !isodd(7+1im)
+end
+
+@testset "issue #55266" begin
+    for T in (Float16, Float32, Float64)
+        @test isapprox(atanh(1+im*floatmin(T)), Complex{T}(atanh(1+im*big(floatmin(T)))))
+    end
 end

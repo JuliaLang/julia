@@ -1,4 +1,4 @@
 LIBCURL_BRANCH = master
-LIBCURL_SHA1 = fd8af649b38ae20c3ff7f5dca53753512ca00376
+LIBCURL_SHA1 = a65b64f6eabc932f63c2c0a4a5fb5d75f3e688d0
 LIBCURL_GIT_URL := https://github.com/JuliaWeb/LibCURL.jl.git
 LIBCURL_TAR_URL = https://api.github.com/repos/JuliaWeb/LibCURL.jl/tarball/$1

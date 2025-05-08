@@ -44,7 +44,7 @@ indexed_iterate(p::Pair, i::Int, state=1) = (getfield(p, i), i + 1)
 hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, h))
 
 ==(p::Pair, q::Pair) = (p.first==q.first) & (p.second==q.second)
-isequal(p::Pair, q::Pair) = isequal(p.first,q.first) & isequal(p.second,q.second)
+isequal(p::Pair, q::Pair) = isequal(p.first,q.first)::Bool & isequal(p.second,q.second)::Bool
 
 isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.first),
                                                              isless(p.second,q.second))
