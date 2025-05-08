@@ -792,7 +792,7 @@ This will put the first elements in the dictionary and also define the
 type of the dictionary elements; the returned value will be the head
 of the list. To add to the dictionary use
 
-	imdict = Base.ImmutableDict(imdict, key=>value, key=>value, ...)
+    imdict = Base.ImmutableDict(imdict, key=>value, key=>value, ...)
 
 Pairs cannot be removed from the dictionary, but they can be shadowed
 by adding an additional pair with a duplicate key; indexing operations
