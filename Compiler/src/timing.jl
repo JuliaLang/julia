@@ -1,7 +1,9 @@
 if ccall(:jl_timing_enabled, Cint, ()) != 0
-    const scoped_values_available = isdefined(@__MODULE__, :Base) && isdefined(Base, :ScopedValues)
-    const use_tls = true # kappa # use tls or scoped values
-    if !scoped_values_available
+    const timing_scoped_values_available = isdefined(@__MODULE__, :Base) && isdefined(Base, :ScopedValues)
+    const timing_use_tls = true # use tls or scoped values to keep track of the current timing block, right now TLS is faster so we use that
+    if !timing_scoped_values_available
+        # During bootstrapping we assume that things run non-concurrently and it is therefore
+        # safe to use a global variable to store the current timing block.
         const CURRENT_TIMING_BLOCK = RefValue(C_NULL)
         @inline _get_current_timing_block_nocheck() = CURRENT_TIMING_BLOCK
         @inline function set_current_timing_block!(block::Ptr{Cvoid})
@@ -12,7 +14,8 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
         @inline function restore_current_timing_block!(old_block::Ptr{Cvoid})
             CURRENT_TIMING_BLOCK[] = old_block
         end
-    elseif use_tls
+    elseif timing_use_tls
+        @assert isdefined(@__MODULE__, :task_local_storage) "task_local_storage not defined"
         const TIMING_BLOCK_TLS_KEY = :timing_block_tls_key
         @inline function _get_current_timing_block_nocheck()
             ref_block = get(task_local_storage(), TIMING_BLOCK_TLS_KEY, nothing)::Union{Nothing, RefValue{Ptr{Cvoid}}}
@@ -30,6 +33,8 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
     else
         using Base.ScopedValues: ScopedValue
         const CURRENT_TIMING_BLOCK = ScopedValue{Ptr{Cvoid}}(C_NULL)
+        set_current_timing_block!(block::Ptr{Cvoid}) = nothing
+        restore_current_timing_block!(old_block::Ptr{Cvoid}) = nothing
         _get_current_timing_block_nocheck() = CURRENT_TIMING_BLOCK[]
     end
 
@@ -51,22 +56,10 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
         buffer = (0, 0, 0, 0, 0, 0, 0)
         buffer_size = Core.sizeof(buffer)
 
-        before_expr = if !scoped_values_available || use_tls
-           :(prev_block_ptr = $set_current_timing_block!(timing_block_ptr))
-        else
-           nothing
-        end
-
-        after_expr = if !scoped_values_available || use_tls
-            :($restore_current_timing_block!(prev_block_ptr))
-        else
-            nothing
-        end
-
-        scope_expr = if !scoped_values_available || use_tls
-            nothing
-        else
+        scope_expr = if timing_scoped_values_available && !timing_use_tls
             :(Base.ScopedValues.Scope(Core.current_scope(), CURRENT_TIMING_BLOCK => timing_block_ptr))
+        else
+            nothing
         end
 
         return quote
@@ -82,12 +75,12 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
                 ccall(:_jl_timing_block_start, Cvoid, (Ptr{Cvoid},), timing_block_ptr)
                 $(Expr(:tryfinally,
                     quote
-                        $before_expr
+                        timing_block_data = $set_current_timing_block!(timing_block_ptr)
                         $(Expr(:escape, ex))
                     end,
                     quote
                         ccall(:_jl_timing_block_end, Cvoid, (Ptr{Cvoid},), timing_block_ptr)
-                        $after_expr
+                        $restore_current_timing_block!(timing_block_data)
                     end,
                     :($scope_expr)
                 ))
