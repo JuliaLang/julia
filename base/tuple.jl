@@ -576,14 +576,28 @@ function _eq(t1::Any32, t2::Any32)
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash(::Tuple{}, h::UInt) = h + tuplehash_seed
-hash(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
-function hash(t::Any32, h::UInt)
-    out = h + tuplehash_seed
-    for i = length(t):-1:1
-        out = hash(t[i], out)
+const tuplehash_seed_final = UInt === UInt64 ? 0xf1bcd1f144b8c946 : 0x3c87fd81
+function tuplehash_fold_nonrecursive(tup::Tuple, h::UInt)
+    @_terminates_locally_meta
+    for e ∈ tup
+        h = hash(e, h)::UInt
     end
-    return out
+    h
+end
+tuplehash_fold(tup::Any32, h::UInt) = tuplehash_fold_nonrecursive(tup, h)  # don't give inference excessive work to do, `tup` is huge
+tuplehash_fold(tup::(Tuple{X, Vararg{X}} where {X}), h::UInt) = tuplehash_fold_nonrecursive(tup, h) # no need for recursion, `tup` is homogeneous
+tuplehash_fold(tup::All32, h::UInt) = tuplehash_fold_nonrecursive(tup, h)  # disambiguate
+tuplehash_fold(::Tuple{}, h::UInt) = h
+function tuplehash_fold(tup::Tuple{Any, Vararg}, h::UInt)
+    f = first(tup)
+    t = tail(tup)
+    g = hash(f, h)::UInt
+    tuplehash_fold(t, g)::UInt
+end
+function hash(tup::Tuple, h::UInt)
+    init = xor(h, tuplehash_seed)
+    a = tuplehash_fold(tup, init)
+    xor(a, tuplehash_seed_final)::UInt
 end
 
 <(::Tuple{}, ::Tuple{}) = false
