@@ -261,7 +261,9 @@ end
     for T in (Int8, Int16, Int32, Int64, Int128)
         @test invmod(T(3), unsigned(T)(124)) == 83
     end
-@test invmod(UInt8(3), UInt16(50000)) === 0x411b
+
+   # For issue 58010
+   @test invmod(UInt8(3), UInt16(50000)) === 0x411b
 
     for T in (Int8, UInt8)
         for x in typemin(T):typemax(T)
