@@ -3,7 +3,7 @@
 # weak key dictionaries
 
 mutable struct WeakKeyDictFinalizer{T}
-    d::T
+    const d::T
 end
 (d::WeakKeyDictFinalizer)(k) = d.d.dirty = true
 
