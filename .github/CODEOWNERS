@@ -14,3 +14,6 @@ CODEOWNERS @JuliaLang/github-actions
 
 /.github/workflows/rerun_failed.yml @DilumAluthge
 /.github/workflows/statuses.yml @DilumAluthge
+/base/special/ @oscardssmith
+/base/sort.jl @LilithHafner
+/test/sorting.jl @LilithHafner
