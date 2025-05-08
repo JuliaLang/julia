@@ -17,3 +17,5 @@ CODEOWNERS @JuliaLang/github-actions
 /base/special/ @oscardssmith
 /base/sort.jl @LilithHafner
 /test/sorting.jl @LilithHafner
+stdlib/*_jll @giordano
+base/binaryplatforms.jl @giordano
