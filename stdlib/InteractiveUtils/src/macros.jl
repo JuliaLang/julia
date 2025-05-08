@@ -187,13 +187,13 @@ function merge_namedtuple_types(nt::Type{<:NamedTuple}, nts::Type{<:NamedTuple}.
     NamedTuple{Tuple(names), Tuple{types...}}
 end
 
-function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
+function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[], is_code_macro = startswith(string(fcn), "code_"))
     if isexpr(ex0, :ref)
         ex0 = replace_ref_begin_end!(ex0)
     end
     # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
     if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
-        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2])
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], Expr[], is_code_macro)
     end
     where_params = nothing
     if isa(ex0, Expr)
@@ -209,7 +209,6 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
-        is_code_macro = startswith(string(fcn), "code_")
         if is_broadcasting_expr(ex0) && is_code_macro
             # Manually wrap a dot call in a function
             args = Any[]
@@ -219,7 +218,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             dotfuncdef = :(local $dotfuncname($(xargs...)) = $ex)
             return quote
                 $(esc(dotfuncdef))
-                $(gen_call_with_extracted_types(__module__, fcn, :($dotfuncname($(args...))), kws))
+                $(gen_call_with_extracted_types(__module__, fcn, :($dotfuncname($(args...))), kws, is_code_macro))
             end
         elseif isexpr(ex0, :.) && !is_code_macro
             fully_qualified_symbol = true # of the form A.B.C.D
@@ -346,7 +345,7 @@ Same behaviour as `gen_call_with_extracted_types` except that keyword arguments
 of the form "foo=bar" are passed on to the called function as well.
 The keyword arguments must be given before the mandatory argument.
 """
-function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
+function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0, is_code_macro = startswith(string(fcn), "code_"))
     kws = Expr[]
     arg = ex0[end] # Mandatory argument
     for i in 1:length(ex0)-1
@@ -360,13 +359,13 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0)
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
     end
-    return gen_call_with_extracted_types(__module__, fcn, arg, kws)
+    return gen_call_with_extracted_types(__module__, fcn, arg, kws, is_code_macro)
 end
 
 for fname in [:which, :less, :edit, :functionloc]
     @eval begin
         macro ($fname)(ex0)
-            gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0)
+            gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0, Expr[], false)
         end
     end
 end
@@ -379,13 +378,13 @@ end
 for fname in [:code_warntype, :code_llvm, :code_native,
               :infer_return_type, :infer_effects, :infer_exception_type]
     @eval macro ($fname)(ex0...)
-        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0)
+        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0, true)
     end
 end
 
 for fname in [:code_typed, :code_lowered, :code_ircode]
     @eval macro ($fname)(ex0...)
-        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0)
+        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0, true)
         quote
             local results = $thecall
             length(results) == 1 ? results[1] : results
