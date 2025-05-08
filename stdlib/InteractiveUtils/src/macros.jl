@@ -60,8 +60,8 @@ variable "xj" (with j an integer from 1 to the returned i).
 The list `args` contains the original arguments that have been replaced.
 """
 function recursive_dotcalls!(ex, args, i=1)
-    if is_broadcasting_call(ex)
-        (start, branches) = isexpr(ex, :.) ? (1, ex.args[2].args) : (2, ex.args)
+    if is_broadcasting_expr(ex)
+        (start, branches) = is_broadcasting_assignment(ex) ? (1, ex.args) : isexpr(ex, :.) ? (1, ex.args[2].args) : (2, ex.args)
         for j in start:length(branches)::Int
             branch, i = recursive_dotcalls!(branches[j], args, i)
             branches[j] = branch
@@ -210,7 +210,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             ex0 = Expr(:call, args...)
         end
         is_code_macro = startswith(string(fcn), "code_")
-        if is_broadcasting_call(ex0) && is_code_macro
+        if is_broadcasting_expr(ex0) && is_code_macro
             # Manually wrap a dot call in a function
             args = Any[]
             ex, i = recursive_dotcalls!(copy(ex0), args)
