@@ -69,6 +69,8 @@ function result_dict(testset::Test.DefaultTestSet, prefix::String="")
             "arch" => string(Sys.ARCH),
             "julia_version" => string(VERSION),
             "testset" => testset.description,
+            "job_group" => get(ENV, "BUILDKITE_GROUP_LABEL", "unknown"),
+            "job_label" => get(ENV, "BUILDKITE_LABEL", "unknown"),
         ),
         # note we drop some of this from common_data before merging into individual results
         "history" => if !isnothing(testset.time_end)
@@ -143,6 +145,9 @@ const TEST_TYPE_MAP = Dict(
     :test_throws_nothing => "@test_throws"
 )
 function get_test_call_str(result)
+    if result.test_type === :nontest_error
+        return "Got exception outside of a @test"
+    end
     prefix = get(TEST_TYPE_MAP, result.test_type, nothing)
     prefix === nothing && return error("Unknown test type $(repr(result.test_type))")
     return prefix == "@test_throws" ? "@test_throws $(result.data) $(result.orig_expr)" : "$prefix $(result.orig_expr)"
@@ -258,9 +263,16 @@ function serialize_testset_result_file(dir::String, testset::Test.DefaultTestSet
 end
 
 # deserilalizes the results files and writes them to collated JSON files of 5000 max results
-function write_testset_json_files(dir::String)
+function write_testset_json_files(dir::String, testset::Test.DefaultTestSet)
     data = Dict{String,Any}[]
     read_files = String[]
+    # Set one result to represent the overall duration, given results have no duration
+    overall_ts = result_dict(testset)
+    # don't set location or file name for this result. They aren't required by BK
+    overall_ts["result"] = "unknown"
+    overall_ts["name"] = replace(get(ENV, "BUILDKITE_LABEL", "job label not found"), r":\w+:\s*" => "")
+    push!(data, overall_ts)
+    # Load all the serialized results files
     for res_dat in filter!(x -> occursin(r"^results.*\.dat$", x), readdir(dir))
         res_file = joinpath(dir, res_dat)
         append!(data, Serialization.deserialize(res_file))

@@ -136,7 +136,7 @@ version = "1.11.0"
 [[deps.MPFR_jll]]
 deps = ["Artifacts", "GMP_jll", "Libdl"]
 uuid = "3a97d323-0669-5f0c-9066-3539efd106a3"
-version = "4.2.1+1"
+version = "4.2.2+0"
 
 [[deps.Markdown]]
 deps = ["Base64", "JuliaSyntaxHighlighting", "StyledStrings"]
@@ -168,7 +168,7 @@ version = "0.8.5+0"
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "3.0.15+1"
+version = "3.5.0+0"
 
 [[deps.PCRE2_jll]]
 deps = ["Artifacts", "Libdl"]

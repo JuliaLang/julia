@@ -4,7 +4,7 @@ let exe_suffix = splitext(Base.julia_exename())[2]
 
     hello_exe = joinpath(@__DIR__, "hello" * exe_suffix)
     @test readchomp(`$hello_exe`) == "Hello, world!"
-    @test filesize(hello_exe) < 2000000
+    @test filesize(hello_exe) < 2_000_000
 
     basic_jll_exe = joinpath(@__DIR__, "basic_jll" * exe_suffix)
     lines = split(readchomp(`$basic_jll_exe`), "\n")

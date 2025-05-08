@@ -4,6 +4,7 @@ module inference
 
 using Test
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 # tests for Compiler correctness and precision
@@ -1209,6 +1210,7 @@ let isdefined_tfunc(@nospecialize xs...) =
     @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:x)) === Const(true)
     @test isdefined_tfunc(Union{UnionIsdefinedA,UnionIsdefinedB}, Const(:y)) === Const(false)
     @test isdefined_tfunc(Union{UnionIsdefinedA,Nothing}, Const(:x)) === Bool
+    @test isdefined_tfunc(Nothing, Any) === Const(false)
 end
 
 # https://github.com/aviatesk/JET.jl/issues/379
@@ -2263,12 +2265,18 @@ struct AliasableFields{S,T}
     f1::S
     f2::T
 end
+struct NullableAliasableFields{S,T}
+    f1::S
+    f2::T
+    NullableAliasableFields(f1::S, f2::T) where {S,T} = new{S,T}(f1, f2)
+    NullableAliasableFields(f1::S) where {S} = new{S,Union{}}(f1)
+end
 mutable struct AliasableConstField{S,T}
     const f1::S
     f2::T
 end
 
-import .Compiler:
+using .Compiler:
     InferenceLattice, MustAliasesLattice, InterMustAliasesLattice,
     BaseInferenceLattice, SimpleInferenceLattice, IPOResultLattice, typeinf_lattice, ipo_lattice, optimizer_lattice
 
@@ -2281,7 +2289,7 @@ Compiler.optimizer_lattice(::MustAliasInterpreter) = SimpleInferenceLattice.inst
 # lattice
 # -------
 
-import .Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
+using .Compiler: MustAlias, Const, PartialStruct, ⊑, tmerge
 let 𝕃ᵢ = InferenceLattice(MustAliasesLattice(BaseInferenceLattice.instance))
     ⊑(@nospecialize(a), @nospecialize(b)) = Compiler.:⊑(𝕃ᵢ, a, b)
     tmerge(@nospecialize(a), @nospecialize(b)) = Compiler.tmerge(𝕃ᵢ, a, b)
@@ -2518,6 +2526,15 @@ jet509_hasitems(list) = length(list) >= 1
     end
     error("list is empty")
 end |> only == Vector{Int}
+
+# don't form nested slot wrappers
+@test Base.infer_return_type((NullableAliasableFields{NullableAliasableFields},); interp=MustAliasInterpreter()) do x
+    y = getfield(x, :f1)
+    if isdefined(y, :f2) && isa(getfield(y, :f2), Int)
+        return getfield(y, :f2)
+    end
+    return 0
+end == Int
 
 # === constraint
 # --------------
@@ -6347,14 +6364,28 @@ end === Int
     swapglobal!(@__MODULE__, :swapglobal!_xxx, x)
 end === Union{}
 
+@newinterp AssumeBindingsStaticInterp
+Compiler.InferenceParams(::AssumeBindingsStaticInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
+
 eval(Expr(:const, :swapglobal!_must_throw))
-@newinterp SwapGlobalInterp
-Compiler.InferenceParams(::SwapGlobalInterp) = Compiler.InferenceParams(; assume_bindings_static=true)
 function func_swapglobal!_must_throw(x)
     swapglobal!(@__MODULE__, :swapglobal!_must_throw, x)
 end
-@test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) === Union{}
-@test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=SwapGlobalInterp()) )
+@test Base.infer_return_type(func_swapglobal!_must_throw, (Int,); interp=AssumeBindingsStaticInterp()) === Union{}
+@test !Compiler.is_effect_free(Base.infer_effects(func_swapglobal!_must_throw, (Int,); interp=AssumeBindingsStaticInterp()) )
+
+global global_decl_defined
+global_decl_defined = 42
+@test Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
+    global global_decl_defined
+    return global_decl_defined
+end |> Compiler.is_nothrow
+global global_decl_defined2::Int
+global_decl_defined2 = 42
+@test Base.infer_effects(; interp=AssumeBindingsStaticInterp()) do
+    global global_decl_defined2
+    return global_decl_defined2
+end |> Compiler.is_nothrow
 
 @eval get_exception() = $(Expr(:the_exception))
 @test Base.infer_return_type() do
@@ -6412,5 +6443,60 @@ global invalid_setglobal!_exct_modeling::Int
 @test Base.infer_exception_type((Float64,)) do x
     setglobal!(@__MODULE__, :invalid_setglobal!_exct_modeling, x)
 end == ErrorException
+
+# Issue #58257 - Hang in inference during BindingPartition resolution
+module A58257
+    module B58257
+        using ..A58257
+        # World age here is N
+    end
+    using .B58257
+    # World age here is N+1
+    @eval f() = $(GlobalRef(B58257, :get!))
+end
+
+## The sequence of events is critical here.
+A58257.get!      # Creates binding partition in A, N+1:∞
+A58257.B58257.get!    # Creates binding partition in A.B, N+1:∞
+Base.invoke_in_world(UInt(38678), getglobal, A58257, :get!) # Expands binding partition in A through <N
+@test Base.infer_return_type(A58257.f) == typeof(Base.get!) # Attempt to lookup A.B in world age N hangs
+
+function tt57873(a::Vector{String}, pref)
+    ret = String[]
+    for j in a
+        append!(ret, tt57873(a[2:end], (pref..., "")))
+    end
+    return ret
+end
+let code = Compiler.typeinf_ext_toplevel(Any[Core.svec(Any,Tuple{typeof(tt57873),Vector{String},Tuple{String}})], [Base.get_world_counter()], Base.Compiler.TRIM_NO)
+    @test !isempty(code)
+    ## If we were to run trim here, we should fail with:
+    #    Verifier error #1: unresolved invoke from statement tt57873(::Vector{String}, ::Tuple{String, String})::Vector{String}
+    #Stacktrace:
+    # [1] tt57873(a::Vector{String}, pref::Tuple{String})
+    #   @ Main REPL[1]:4
+end
+
+function ss57873(a::Vector{String}, pref)
+    ret = String[]
+    for j in a
+        append!(ret, ss57873(a[2:end], (pref..., "")))
+    end
+    return ret
+end
+@test ss57873(["a", "b", "c"], ("",)) == String[]
+
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    getglobal(m, n, xs...)
+end <: Any
+@test Base.infer_return_type((Module,Symbol,Any,Vector{Any})) do m, n, v, xs
+    setglobal!(m, n, v, xs...)
+end <: Any
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    isdefinedglobal(m, n, xs...)
+end <: Bool
+@test Base.infer_return_type((Module,Symbol,Vector{Any})) do m, n, xs
+    Core.get_binding_type(m, n, xs...)
+end <: Type
 
 end # module inference

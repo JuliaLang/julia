@@ -540,16 +540,20 @@ The `:consistent` setting asserts that for egal (`===`) inputs:
     contents) are not egal.
 
 !!! note
-    The `:consistent`-cy assertion is made world-age wise. More formally, write
-    ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then this setting requires:
+    The `:consistent`-cy assertion is made with respect to a particular world range `R`.
+    More formally, write ``fᵢ`` for the evaluation of ``f`` in world-age ``i``, then this setting requires:
     ```math
-    ∀ i, x, y: x ≡ y → fᵢ(x) ≡ fᵢ(y)
+    ∀ i ∈ R, j ∈ R, x, y: x ≡ y → fᵢ(x) ≡ fⱼ(y)
     ```
-    However, for two world ages ``i``, ``j`` s.t. ``i ≠ j``, we may have ``fᵢ(x) ≢ fⱼ(y)``.
+
+    For `@assume_effects`, the range `R` is `m.primary_world:m.deleted_world` of
+    the annotated or containing method.
+
+    For ordinary code instances, `R` is `ci.min_world:ci.max_world`.
 
     A further implication is that `:consistent` functions may not make their
     return value dependent on the state of the heap or any other global state
-    that is not constant for a given world age.
+    that is not constant over the given world age range.
 
 !!! note
     The `:consistent`-cy includes all legal rewrites performed by the optimizer.
@@ -1669,10 +1673,12 @@ end
 
 # Implementation of generated functions
 function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
-    ci = ccall(:jl_expand, Any, (Any, Any), ex, defmod)
+    ci = ccall(:jl_fl_lower, Any, (Any, Any, Ptr{UInt8}, Csize_t, Csize_t, Cint),
+               ex, defmod, "none", 0, typemax(Csize_t), 0)[1]
     if !isa(ci, CodeInfo)
         if isa(ci, Expr) && ci.head === :error
-            error("syntax: $(ci.args[1])")
+            msg = ci.args[1]
+            error(msg isa String ? strcat("syntax: ", msg) : msg)
         end
         error("The function body AST defined by this @generated function is not pure. This likely means it contains a closure, a comprehension or a generator.")
     end
