@@ -163,7 +163,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             ci, inferred_result, const_flag, min_world, max_world, ipo_effects,
             result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
         if is_cached(caller) # CACHE_MODE_GLOBAL
-            cache_result!(interp, mi, ci)
+            cache_result!(interp, result, ci)
         end
         engine_reject(interp, ci)
         codegen = codegen_cache(interp)
@@ -186,7 +186,8 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
     return nothing
 end
 
-function cache_result!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstance)
+function cache_result!(interp::AbstractInterpreter, result::InferenceResult, ci::CodeInstance)
+    mi = result.linfo
     code_cache(interp)[mi] = ci
 end
 
