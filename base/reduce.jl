@@ -33,11 +33,11 @@ integers are promoted to `Int`/`UInt`.
 mul_prod(x, y) = x * y
 mul_prod(x::BitSigned, y::BitSigned) = is_small_int_type(x) && is_small_int_type(y) ?
     Int(x) * Int(y) :
-    x * y
+    (x * y)::Real
 
 mul_prod(x::BitUnsigned, y::BitUnsigned) = is_small_int_type(x) && is_small_int_type(y) ?
     UInt(x) * UInt(y) :
-    x * y
+    (x * y)::Real
 
 mul_prod(x::Real, y::Real)::Real = x * y
 

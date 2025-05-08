@@ -2261,7 +2261,8 @@ Internal abstract supertype for all builtin signed integers (`Int8`, `Int128`, .
 They are defined via `primitive type`, and most of the basic arithmetic operations
 defined on them are handled directly by LLVM.
 Subtypes of `Core.BitSigned` must behave like builtin signed integers in all respects,
-but their `sizeof` can be arbitrarily large, and can't be assumed to be a power of two.
+but their `sizeof` can be any arbitrarily large positive integer, and in particular
+can't be assumed to be a power of two, nor even.
 """
 Core.BitSigned
 
@@ -2272,7 +2273,8 @@ Internal abstract supertype for all builtin unsigned integers (`UInt8`, `UInt128
 They are defined via `primitive type`, and most of the basic arithmetic operations
 defined on them are handled directly by LLVM.
 Subtypes of `Core.BitUnsigned` must behave like builtin unsigned integers in all respects,
-but their `sizeof` can be arbitrarily large, and can't be assumed to be a power of two.
+but their `sizeof` can be any arbitrarily large positive integer, and in particular
+can't be assumed to be a power of two, nor even.
 """
 Core.BitUnsigned
 

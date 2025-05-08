@@ -2096,7 +2096,6 @@ function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
-
 const BitIntegerArray{N} = Array{<:BitInteger, N} where N
 
 # use memcmp for == on bit integer types
