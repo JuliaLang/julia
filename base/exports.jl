@@ -1121,6 +1121,7 @@ public
     DL_LOAD_PATH,
     load_path,
     active_project,
+    get_extension,
 
 # Reflection and introspection
     isambiguous,
