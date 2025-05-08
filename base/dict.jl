@@ -778,14 +778,35 @@ end
 """
     ImmutableDict
 
-`ImmutableDict` is a dictionary implemented as an immutable linked list,
-which is optimal for small dictionaries that are constructed over many individual insertions.
-Note that it is not possible to remove a value, although it can be partially overridden and hidden
-by inserting a new value with the same key.
+`ImmutableDict` is a dictionary implemented as an immutable linked
+list. It's for small heavily-used mappings with a few entries, where
+the overhead of accessing a hash table is higher than that of a linear
+search of a linked list.  `ImmutableDict` is `public` rather than
+`export`; to access it one must write `Base.ImmutableDict`
 
-    ImmutableDict(KV::Pair)
+To create an `ImmutableDict` use
 
-Create a new entry in the `ImmutableDict` for a `key => value` pair
+    imdict = Base.ImmutableDict(key=>value, key=>value, ...)
+
+This will put the first elements in the dictionary and also define the
+type of the dictionary elements; the returned value will be the head
+of the list. To add to the dictionary use
+
+	imdict = Base.ImmutableDict(imdict, key=>value, key=>value, ...)
+
+Pairs cannot be removed from the dictionary, but they can be shadowed
+by adding an additional pair with a duplicate key; indexing operations
+will find the the last key added.
+ 
+The types of elements may be specified; this is useful when keys or
+values of  `Union` or `Any` types are desired.
+
+    imdict = Base.ImmutableDict{Symbol,Any}(key=>value, key=>value, ...)
+	
+An empty `ImmutableDict` can be created by specifying the type and
+giving no pairs; the type must be specified.
+
+    imdict = Base.ImmutableDict{Symbol,Any}()
 
  - use `(key => value) in dict` to see if this particular combination is in the properties set
  - use `get(dict, key, default)` to retrieve the most recent value for a particular key
