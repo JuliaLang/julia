@@ -17,6 +17,7 @@
 #include <llvm/IR/InstIterator.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IntrinsicInst.h>
+#include "llvm/IR/MemoryModelRelaxationAnnotations.h"
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Operator.h>
 #include <llvm/IR/PassManager.h>
@@ -141,12 +142,28 @@ std::pair<Value *, Value *> insertRMWCmpXchgLoop(
 }
 
 // from AtomicExpandImpl
-struct ReplacementIRBuilder : IRBuilder<InstSimplifyFolder> {
+// IRBuilder to be used for replacement atomic instructions.
+struct ReplacementIRBuilder
+    : IRBuilder<InstSimplifyFolder, IRBuilderCallbackInserter> {
+  MDNode *MMRAMD = nullptr;
+
   // Preserves the DebugLoc from I, and preserves still valid metadata.
+  // Enable StrictFP builder mode when appropriate.
   explicit ReplacementIRBuilder(Instruction *I, const DataLayout &DL)
-      : IRBuilder(I->getContext(), DL) {
+      : IRBuilder(I->getContext(), InstSimplifyFolder(DL),
+                  IRBuilderCallbackInserter(
+                      [this](Instruction *I) { addMMRAMD(I); })) {
     SetInsertPoint(I);
     this->CollectMetadataToCopy(I, {LLVMContext::MD_pcsections});
+    if (BB->getParent()->getAttributes().hasFnAttr(Attribute::StrictFP))
+      this->setIsFPConstrained(true);
+
+    MMRAMD = I->getMetadata(LLVMContext::MD_mmra);
+  }
+
+  void addMMRAMD(Instruction *I) {
+    if (canInstructionHaveMMRAs(*I))
+      I->setMetadata(LLVMContext::MD_mmra, MMRAMD);
   }
 };
 
@@ -321,7 +338,6 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
   Type *Ty = Modify.getFunctionType()->getReturnType()->getStructElementType(0);
 
   ReplacementIRBuilder Builder(&Modify, Modify.getModule()->getDataLayout());
-  Builder.setIsFPConstrained(Modify.hasFnAttr(Attribute::StrictFP));
 
   CallInst *ModifyOp;
   {
@@ -366,7 +382,7 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
         ModifyOp = cast<CallInst>(ValOp->getUser());
         LoadedOp = ValOp;
         assert(LoadedOp->get() == RMW);
-        RMW->moveBefore(ModifyOp); // NewValInst is a user of RMW, and RMW has no other dependants (per patternMatchAtomicRMWOp)
+        RMW->moveBeforePreserving(ModifyOp->getIterator()); // NewValInst is a user of RMW, and RMW has no other dependants (per patternMatchAtomicRMWOp)
         BinOp = false;
         if (++attempts > 3)
           break;
@@ -383,7 +399,7 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
         assert(isa<UndefValue>(RMW->getOperand(1))); // RMW was previously being used as the placeholder for Val
         Value *Val;
         if (ValOp != nullptr) {
-          RMW->moveBefore(cast<Instruction>(ValOp->getUser())); // ValOp is a user of RMW, and RMW has no other dependants (per patternMatchAtomicRMWOp)
+          RMW->moveBeforePreserving(cast<Instruction>(ValOp->getUser())->getIterator()); // ValOp is a user of RMW, and RMW has no other dependants (per patternMatchAtomicRMWOp)
           Val = ValOp->get();
         } else if (RMWOp == AtomicRMWInst::Xchg) {
           Val = NewVal;
@@ -411,7 +427,7 @@ void expandAtomicModifyToCmpXchg(CallInst &Modify,
       Builder, Ty,  Ptr, *Alignment, Ordering, SSID, Modify,
       [&](IRBuilderBase &Builder, Value *Loaded) JL_NOTSAFEPOINT {
         LoadedOp->set(Loaded);
-        ModifyOp->moveBefore(*Builder.GetInsertBlock(), Builder.GetInsertPoint());
+        ModifyOp->moveBeforePreserving(*Builder.GetInsertBlock(), Builder.GetInsertPoint());
         return ModifyOp;
       },
       CreateWeakCmpXchg);
