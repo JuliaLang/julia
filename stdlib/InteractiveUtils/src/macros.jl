@@ -32,30 +32,59 @@ function get_typeof(@nospecialize ex)
     return :(Core.Typeof($(esc(ex))))
 end
 
+function is_broadcasting_call(ex)
+    isa(ex, Expr) || return false
+    # Standard broadcasting: f.(x)
+    isexpr(ex, :.) && length(ex.args) ≥ 2 && isexpr(ex.args[2], :tuple) && return true
+    # Infix broadcasting: x .+ y, x .<< y, etc.
+    if isexpr(ex, :call)
+        f = ex.args[1]
+        f == :.. && return false
+        string(f)[1] == '.' && return true
+    end
+    return false
+end
+is_broadcasting_expr(ex) = is_broadcasting_call(ex) || is_broadcasting_assignment(ex)
+function is_broadcasting_assignment(ex)
+    isa(ex, Expr) || return false
+    isexpr(ex, :.) && return false
+    head = string(ex.head)
+    # x .= y, x .+= y, x .<<= y, etc.
+    head[begin] == '.' && head[end] == '=' && return true
+    return false
+end
+
 """
 Transform a dot expression into one where each argument has been replaced by a
 variable "xj" (with j an integer from 1 to the returned i).
 The list `args` contains the original arguments that have been replaced.
 """
 function recursive_dotcalls!(ex, args, i=1)
-    if !(ex isa Expr) || ((ex.head !== :. || !(ex.args[2] isa Expr)) &&
-                          (ex.head !== :call || string(ex.args[1])[1] != '.'))
-        newarg = Symbol('x', i)
-        if isexpr(ex, :...)
-            push!(args, only(ex.args))
-            return Expr(:..., newarg), i+1
-        else
-            push!(args, ex)
-            return newarg, i+1
+    if is_broadcasting_call(ex)
+        (start, branches) = isexpr(ex, :.) ? (1, ex.args[2].args) : (2, ex.args)
+        for j in start:length(branches)::Int
+            branch, i = recursive_dotcalls!(branches[j], args, i)
+            branches[j] = branch
         end
+        return ex, i
+    elseif isexpr(ex, :parameters)
+        for j in eachindex(ex.args)
+            param, i = recursive_dotcalls!(ex.args[j], args, i)
+            ex.args[j] = param
+        end
+        return ex, i
     end
-    (start, branches) = ex.head === :. ? (1, ex.args[2].args) : (2, ex.args)
-    length_branches = length(branches)::Int
-    for j in start:length_branches
-        branch, i = recursive_dotcalls!(branches[j], args, i)
-        branches[j] = branch
+    newarg = Symbol('x', i)
+    if isexpr(ex, :...)
+        newarg = Expr(:..., newarg)
+        push!(args, only(ex.args))
+    elseif isexpr(ex, :kw)
+        newarg = Expr(:kw, ex.args[1], newarg)
+        push!(args, ex.args[end])
+    else
+        push!(args, ex)
     end
-    return ex, i
+    return newarg, i+1
 end
 
 function extract_farg(@nospecialize arg)
@@ -180,52 +209,51 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[])
             insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
-        if ex0.head === :. || (ex0.head === :call && ex0.args[1] !== :.. && string(ex0.args[1])[1] == '.')
-            codemacro = startswith(string(fcn), "code_")
-            if codemacro && (ex0.head === :call || ex0.args[2] isa Expr)
-                # Manually wrap a dot call in a function
-                args = Any[]
-                ex, i = recursive_dotcalls!(copy(ex0), args)
-                xargs = [Symbol('x', j) for j in 1:i-1]
-                dotfuncname = gensym("dotfunction")
-                dotfuncdef = Expr(:local, Expr(:(=), Expr(:call, dotfuncname, xargs...), ex))
+        is_code_macro = startswith(string(fcn), "code_")
+        if is_broadcasting_call(ex0) && is_code_macro
+            # Manually wrap a dot call in a function
+            args = Any[]
+            ex, i = recursive_dotcalls!(copy(ex0), args)
+            xargs = [Symbol('x', j) for j in 1:i-1]
+            dotfuncname = gensym("dotfunction")
+            dotfuncdef = :(local $dotfuncname($(xargs...)) = $ex)
+            return quote
+                $(esc(dotfuncdef))
+                $(gen_call_with_extracted_types(__module__, fcn, :($dotfuncname($(args...))), kws))
+            end
+        elseif isexpr(ex0, :.) && !is_code_macro
+            fully_qualified_symbol = true # of the form A.B.C.D
+            ex1 = ex0
+            while ex1 isa Expr && ex1.head === :.
+                fully_qualified_symbol = (length(ex1.args) == 2 &&
+                                            ex1.args[2] isa QuoteNode &&
+                                            ex1.args[2].value isa Symbol)
+                fully_qualified_symbol || break
+                ex1 = ex1.args[1]
+            end
+            fully_qualified_symbol &= ex1 isa Symbol
+            if fully_qualified_symbol || isexpr(ex1, :(::), 1)
+                getproperty_ex = :($(fcn)(Base.getproperty, $(typesof_expr(ex0.args, where_params))))
+                isexpr(ex0.args[1], :(::), 1) && return getproperty_ex
                 return quote
-                    $(esc(dotfuncdef))
-                    $(fcn)($(esc(dotfuncname)), $(typesof_expr(args, where_params)); $(kws...))
-                end
-            elseif !codemacro
-                fully_qualified_symbol = true # of the form A.B.C.D
-                ex1 = ex0
-                while ex1 isa Expr && ex1.head === :.
-                    fully_qualified_symbol = (length(ex1.args) == 2 &&
-                                              ex1.args[2] isa QuoteNode &&
-                                              ex1.args[2].value isa Symbol)
-                    fully_qualified_symbol || break
-                    ex1 = ex1.args[1]
-                end
-                fully_qualified_symbol &= ex1 isa Symbol
-                if fully_qualified_symbol || isexpr(ex1, :(::), 1)
-                    getproperty_ex = :($(fcn)(Base.getproperty, $(typesof_expr(ex0.args, where_params))))
-                    isexpr(ex0.args[1], :(::), 1) && return getproperty_ex
-                    return quote
-                        local arg1 = $(esc(ex0.args[1]))
-                        if isa(arg1, Module)
-                            $(if string(fcn) == "which"
-                                  :(which(arg1, $(ex0.args[2])))
-                              else
-                                  :(error("expression is not a function call"))
-                              end)
-                        else
-                            $getproperty_ex
-                        end
+                    local arg1 = $(esc(ex0.args[1]))
+                    if isa(arg1, Module)
+                        $(if string(fcn) == "which"
+                                :(which(arg1, $(ex0.args[2])))
+                            else
+                                :(error("expression is not a function call"))
+                            end)
+                    else
+                        $getproperty_ex
                     end
-                else
-                    return Expr(:call, :error, "dot expressions are not lowered to "
-                                * "a single function call, so @$fcn cannot analyze "
-                                * "them. You may want to use Meta.@lower to identify "
-                                * "which function call to target.")
                 end
             end
+        end
+        if is_broadcasting_expr(ex0)
+            return Expr(:call, :error, "dot expressions are not lowered to "
+                * "a single function call, so @$fcn cannot analyze "
+                * "them. You may want to use Meta.@lower to identify "
+                * "which function call to target.")
         end
         if any(@nospecialize(a)->(isexpr(a, :kw) || isexpr(a, :parameters)), ex0.args)
             args, kwargs = separate_kwargs(ex0.args)
