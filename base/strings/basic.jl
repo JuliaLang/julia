@@ -678,7 +678,7 @@ function filter(f, s::AbstractString)
     for c in s
         f(c) && write(out, c)
     end
-    String(_unsafe_take!(out))
+    takestring!(out)
 end
 
 ## string first and last ##

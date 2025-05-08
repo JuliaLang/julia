@@ -1051,7 +1051,7 @@ function _replace_(str, pat_repl::NTuple{N, Pair}, count::Int) where N
         return String(str)
     end
     out = IOBuffer(sizehint=floor(Int, 1.2sizeof(str)))
-    return String(take!(_replace_finish(out, str, count, e1, patterns, replaces, rs)))
+    return takestring!(_replace_finish(out, str, count, e1, patterns, replaces, rs))
 end
 
 """
@@ -1286,5 +1286,5 @@ function Base.rest(s::AbstractString, st...)
     for c in Iterators.rest(s, st...)
         print(io, c)
     end
-    return String(take!(io))
+    return takestring!(io)
 end

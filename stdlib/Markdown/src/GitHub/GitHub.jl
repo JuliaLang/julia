@@ -21,9 +21,9 @@ function fencedcode(stream::IO, block::MD)
             if startswith(stream, string(ch) ^ n)
                 if !startswith(stream, string(ch))
                     if flavor == "math"
-                        push!(block, LaTeX(String(take!(buffer)) |> chomp))
+                        push!(block, LaTeX(takestring!(buffer) |> chomp))
                     else
-                        push!(block, Code(flavor, String(take!(buffer)) |> chomp))
+                        push!(block, Code(flavor, takestring!(buffer) |> chomp))
                     end
                     return true
                 else
