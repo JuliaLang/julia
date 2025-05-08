@@ -1300,5 +1300,3 @@ typename(typeof(function <= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
 typename(typeof(function >= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
 typename(typeof(function < end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function > end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
-typename(typeof(function << end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
-typename(typeof(function >> end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC

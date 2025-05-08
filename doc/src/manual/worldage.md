@@ -82,15 +82,15 @@ will raise the current task's world age to the latest global world age, thus mak
 (both from the current task and any concurrently executing other tasks) visible. The following statements
 raise the current world age:
 
-    1. An explicit invocation of `Core.@latestworld`
-    2. The start of every top-level statement
-    3. The start of every REPL prompt
-    4. Any type or struct definition
-    5. Any method definition
-    6. Any constant declaration
-    7. Any global variable declaration (but not a global variable assignment)
-    8. Any `using`, `import`, `export` or `public` statement
-    9. Certain other macros like [`@eval`](@ref) (depends on the macro implementation)
+1. An explicit invocation of `Core.@latestworld`
+2. The start of every top-level statement
+3. The start of every REPL prompt
+4. Any type or struct definition
+5. Any method definition
+6. Any constant declaration
+7. Any global variable declaration (but not a global variable assignment)
+8. Any `using`, `import`, `export` or `public` statement
+9. Certain other macros like [`@eval`](@ref) (depends on the macro implementation)
 
 Note, however, that the current task's world age may only ever be permanently incremented at
 top level. As a general rule, using any of the above statements in non-top-level scope is a syntax error:

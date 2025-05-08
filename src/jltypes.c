@@ -3545,8 +3545,8 @@ void jl_init_types(void) JL_GC_DISABLED
                             "module",
                             "file",
                             "line",
+                            "dispatch_status", // atomic
                             "primary_world", // atomic
-                            "deleted_world", // atomic
                             "sig",
                             "specializations", // !const
                             "speckeyset", // !const
@@ -3578,7 +3578,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_module_type,
                             jl_symbol_type,
                             jl_int32_type,
-                            jl_ulong_type,
+                            jl_int32_type,
                             jl_ulong_type,
                             jl_type_type,
                             jl_any_type, // union(jl_simplevector_type, jl_method_instance_type),

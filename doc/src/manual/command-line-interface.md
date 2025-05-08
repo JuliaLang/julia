@@ -195,7 +195,7 @@ The following is a complete list of command-line switches available when launchi
 |`-O`, `--optimize={0\|1\|2*\|3}`       |Set the optimization level (level is 3 if `-O` is used without a level) ($)|
 |`--min-optlevel={0*\|1\|2\|3}`         |Set the lower bound on per-module optimization|
 |`-g`, `--debug-info={0\|1*\|2}`        |Set the level of debug info generation (level is 2 if `-g` is used without a level) ($)|
-|`--inline={yes\|no}`                   |Control whether inlining is permitted, including overriding `@inline` declarations|
+|`--inline={yes*\|no}`                  |Control whether inlining is permitted, including overriding `@inline` declarations|
 |`--check-bounds={yes\|no\|auto*}`      |Emit bounds checks always, never, or respect `@inbounds` declarations ($)|
 |`--math-mode={ieee\|user*}`            |Always follow `ieee` floating point semantics or respect `@fastmath` declarations|
 |`--polly={yes*\|no}`                   |Enable or disable the polyhedral optimizer Polly (overrides @polly declaration)|

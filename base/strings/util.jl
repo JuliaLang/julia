@@ -319,7 +319,7 @@ end
 """
     chomp(s::AbstractString)::SubString
 
-Remove a single trailing newline from a string.
+Remove a single trailing newline (i.e. "\\r\\n" or "\\n") from a string.
 
 See also [`chop`](@ref).
 
@@ -327,6 +327,12 @@ See also [`chop`](@ref).
 ```jldoctest
 julia> chomp("Hello\\n")
 "Hello"
+
+julia> chomp("World\\r\\n")
+"World"
+
+julia> chomp("Julia\\r\\n\\n")
+"Julia\\r\\n"
 ```
 """
 function chomp(s::AbstractString)
@@ -336,17 +342,22 @@ function chomp(s::AbstractString)
     (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
     return SubString(s, 1, prevind(s,j))
 end
-function chomp(s::String)
-    i = lastindex(s)
-    if i < 1 || codeunit(s,i) != 0x0a
-        return @inbounds SubString(s, 1, i)
-    elseif i < 2 || codeunit(s,i-1) != 0x0d
-        return @inbounds SubString(s, 1, prevind(s, i))
-    else
-        return @inbounds SubString(s, 1, prevind(s, i-1))
-    end
-end
 
+@assume_effects :removable :foldable function chomp(s::Union{String, SubString{String}})
+    cu = codeunits(s)
+    ncu = length(cu)
+    len = if iszero(ncu)
+        0
+    else
+        has_lf = @inbounds(cu[ncu]) == 0x0a
+        two_bytes = ncu > 1
+        has_cr = has_lf & two_bytes & (@inbounds(cu[ncu - two_bytes]) == 0x0d)
+        ncu - (has_lf + has_cr)
+    end
+    off = s isa String ? 0 : s.offset
+    par = s isa String ? s : s.string
+    @inbounds @inline SubString{String}(par, off, len, Val{:noshift}())
+end
 """
     lstrip([pred=isspace,] str::AbstractString)::SubString
     lstrip(str::AbstractString, chars)::SubString

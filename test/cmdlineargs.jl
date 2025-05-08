@@ -130,9 +130,6 @@ end
                             ("--startup-file=no",   false),
                             ("--startup-file=yes",  true),
 
-                            # ("--sysimage-native-code=no",   false), # takes a lot longer (30s)
-                            ("--sysimage-native-code=yes",  true),
-
                             ("--pkgimages=yes", true),
                             ("--pkgimages=no",  false),
                         )
@@ -1086,22 +1083,12 @@ run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, de
 @test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==
     (false, "", "ERROR: --lisp must be specified as the first argument")
 
-# --sysimage-native-code={yes|no}
-let exename = `$(Base.julia_cmd()) --startup-file=no`
-    @test readchomp(`$exename --sysimage-native-code=yes -E
-        "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "true"
-    # TODO: Make this safe in the presence of two single-thread threadpools
-    # see https://github.com/JuliaLang/julia/issues/57198
-    @test readchomp(`$exename --sysimage-native-code=no -t1,0 -E
-        "Bool(Base.JLOptions().use_sysimage_native_code)"`) == "false"
-end
-
 # backtrace contains line number info (esp. on windows #17179)
-for precomp in ("yes", "no")
-    # TODO: Make this safe in the presence of two single-thread threadpools
+let
+    # TODO: Make this safe in the presence of two single-thread threadpools with
+    # --sysimage-native-code=no, though that option is deprecated.
     # see https://github.com/JuliaLang/julia/issues/57198
-    threads = precomp == "no" ? `-t1,0` : ``
-    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) $threads --startup-file=no --sysimage-native-code=$precomp -E 'sqrt(-2)'`)
+    succ, out, bt = readchomperrors(`$(Base.julia_cmd()) --startup-file=no -E 'sqrt(-2)'`)
     @test !succ
     @test out == ""
     @test occursin(r"\.jl:(\d+)", bt)

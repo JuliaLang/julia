@@ -2599,11 +2599,13 @@
             (typ-svec  (caddr sig-svec))
             (tvars     (cddr (cadddr sig-svec)))
             (argtypes  (cdddr typ-svec))
-            (functionloc (cadr (caddddr sig-svec))))
-       (let* ((argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
-                                (expand-forms `(curly (core Tuple) ,@argtypes))
-                                (reverse tvars))))
-         `(_opaque_closure ,(or argt argtype) ,rt_lb ,rt_ub ,isva ,(length argtypes) ,allow-partial ,functionloc ,lam))))
+            (functionloc (cadr (caddddr sig-svec)))
+            (argtype   (foldl (lambda (var ex) `(call (core UnionAll) ,var ,ex))
+                              (expand-forms `(curly (core Tuple) ,@argtypes))
+                              (reverse tvars)))
+            (argtype (or argt argtype))
+            (argtype (if (null? stmts) argtype `(block ,@stmts ,argtype))))
+       `(_opaque_closure ,argtype ,rt_lb ,rt_ub ,isva ,(length argtypes) ,allow-partial ,functionloc ,lam)))
 
    'block
    (lambda (e)
@@ -5232,6 +5234,14 @@ f(x) = yt(x)
 (define (set-lineno! lineinfo num)
   (set-car! (cddr lineinfo) num))
 
+;; note that the 'list and 'block atoms make all lists 1-indexed.
+;; returns a 5-element vector containing:
+;;   code:           `(block ,@(n expressions))
+;;   locs:           list of line-table index, where code[i] has lineinfo line-table[locs[i]]
+;;   line-table:     list of `(lineinfo file.jl 123 0)'
+;;   ssavalue-table: table of (ssa-num . code-index)
+;;                   where ssavalue references in `code` need this remapping
+;;   label-table:    table of (label . code-index)
 (define (compact-ir body file line)
   (let ((code         '(block))
         (locs         '(list))
@@ -5338,7 +5348,7 @@ f(x) = yt(x)
              e)
             ((ssavalue? e)
              (let ((idx (get ssavalue-table (cadr e) #f)))
-               (if (not idx) (begin (prn e) (prn lam) (error "ssavalue with no def")))
+               (if (not idx) (error "internal bug: ssavalue with no def"))
                `(ssavalue ,idx)))
             ((eq? (car e) 'goto)
              `(goto ,(get label-table (cadr e))))

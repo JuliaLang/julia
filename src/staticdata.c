@@ -1805,16 +1805,11 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 jl_method_t *m = (jl_method_t*)v;
                 jl_method_t *newm = (jl_method_t*)&f->buf[reloc_offset];
                 if (s->incremental) {
-                    if (jl_atomic_load_relaxed(&newm->deleted_world) == ~(size_t)0) {
-                        if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
-                            jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
-                            jl_atomic_store_relaxed(&newm->deleted_world, 1); // max_world
-                            arraylist_push(&s->fixup_objs, (void*)reloc_offset);
-                        }
-                    }
-                    else {
-                        jl_atomic_store_relaxed(&newm->primary_world, 1);
-                        jl_atomic_store_relaxed(&newm->deleted_world, 0);
+                    if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
+                        jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
+                        int dispatch_status = jl_atomic_load_relaxed(&newm->dispatch_status);
+                        jl_atomic_store_relaxed(&newm->dispatch_status, dispatch_status & METHOD_SIG_LATEST_ONLY ? 0 : METHOD_SIG_PRECOMPILE_MANY);
+                        arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
                 }
                 else {
@@ -3593,8 +3588,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
             jl_errorf("System image file \"%s\" not found.", fname);
         ios_bufmode(&f, bm_none);
 
-        JL_SIGATOMIC_BEGIN();
-
         ios_seek_end(&f);
         size_t len = ios_pos(&f);
         char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
@@ -3604,8 +3597,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
             jl_errorf("Error reading system image file.");
 
         ios_close(&f);
-
-        JL_SIGATOMIC_END();
 
         jl_sysimage_buf = (jl_image_buf_t) {
             .kind = JL_IMAGE_KIND_JI,
@@ -4410,7 +4401,11 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             JL_SIGATOMIC_END();
 
             // Add roots to methods
-            jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            int failed = jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            if (failed != 0) {
+                jl_printf(JL_STDERR, "Error copying roots to methods from Module: %s\n", pkgname);
+                abort();
+            }
             // Insert method extensions and handle edges
             int new_methods = jl_array_nrows(extext_methods) > 0;
             if (!new_methods) {

@@ -159,7 +159,6 @@ JL_DLLEXPORT jl_opaque_closure_t *jl_new_opaque_closure_from_code_info(jl_tuplet
     size_t world = jl_current_task->world_age;
     // these are only legal in the current world since they are not in any tables
     jl_atomic_store_release(&meth->primary_world, world);
-    jl_atomic_store_release(&meth->deleted_world, world);
 
     if (isinferred) {
         jl_value_t *argslotty = jl_array_ptr_ref(ci->slottypes, 0);

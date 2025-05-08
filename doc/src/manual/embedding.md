@@ -54,7 +54,7 @@ linking against `libjulia`.
 The first thing that must be done before calling any other Julia C function is to
 initialize Julia. This is done by calling `jl_init`, which tries to automatically determine
 Julia's install location. If you need to specify a custom location, or specify which system
-image to load, use `jl_init_with_image` instead.
+image to load, use `jl_init_with_image_file` or `jl_init_with_image_handle` instead.
 
 The second statement in the test program evaluates a Julia statement using a call to `jl_eval_string`.
 
