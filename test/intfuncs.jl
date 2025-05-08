@@ -262,8 +262,8 @@ end
         @test invmod(T(3), unsigned(T)(124)) == 83
     end
 
-   # For issue 58010
-   @test invmod(UInt8(3), UInt16(50000)) === 0x411b
+    # Verify issue described in PR 58010 is fixed
+    @test invmod(UInt8(3), UInt16(50000)) === 0x411b
 
     for T in (Int8, UInt8)
         for x in typemin(T):typemax(T)
