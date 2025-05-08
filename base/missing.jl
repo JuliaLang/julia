@@ -458,4 +458,5 @@ macro coalesce(args...)
     return :(let val; $expr; end)
 end
 
+eltype(::Missing) = Any  # imprecise but correct approximation for the element type of an unknown iterator
 eltype(::Type{<:Union{Nothing, Missing}}) = throw(ArgumentError("not an iterator, doesn't have an element type"))
