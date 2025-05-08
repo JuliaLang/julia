@@ -8363,8 +8363,10 @@ static jl_llvm_functions_t
         raw_string_ostream(wrapName) << "jfptr_" << ctx.name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
         declarations.functionObject = wrapName;
         size_t nparams = jl_nparams(abi);
-            // set the debug info for the wrapper function
-        DISubprogram *SP2 = dbuilder.createFunction(nullptr
+        DILocation *wrapperloc = NULL;
+        // set the debug info for the wrapper function
+        if (debug_enabled) {
+            DISubprogram *SP2 = dbuilder.createFunction(nullptr
                                                     , wrapName // Name
                                                     , dbgFuncName // LinkageName
                                                     ,topfile          // File
@@ -8377,7 +8379,8 @@ static jl_llvm_functions_t
                                                     ,nullptr          // Template Declaration
                                                     ,nullptr          // ThrownTypes
                                                     );
-        auto wrapperloc = DILocation::get(ctx.builder.getContext(), toplineno, 0, SP2, NULL);
+            wrapperloc = DILocation::get(ctx.builder.getContext(), toplineno, 0, SP2, NULL);
+        }
         gen_invoke_wrapper(lam, abi, jlrettype, jlrettype, returninfo, nparams, retarg, ctx.is_opaque_closure, declarations.functionObject, M, ctx.emission_context, wrapperloc);
         // TODO: add attributes: maybe_mark_argument_dereferenceable(Arg, argType)
         // TODO: add attributes: dereferenceable<sizeof(void*) * nreq>
