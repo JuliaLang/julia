@@ -6734,7 +6734,7 @@ static std::string get_function_name(bool specsig, bool needsparams, const char 
 }
 
 static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_value_t *jlretty, jl_value_t *declrt, jl_returninfo_t &f, unsigned nargs, int retarg, bool is_opaque_closure, StringRef funcName,
-        Module *M, jl_codegen_params_t &params);
+        Module *M, jl_codegen_params_t &params, DILocation* DbgLoc = NULL);
 
 Function *get_or_emit_fptr1(StringRef preal_decl, Module *M)
 {
@@ -7781,7 +7781,7 @@ const char *jl_generate_ccallable(Module *llvmmod, jl_value_t *nameval, jl_value
 // generate a julia-callable function that calls f (AKA lam)
 // if is_opaque_closure, then generate the OC invoke, rather than a real invoke
 static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_value_t *jlretty, jl_value_t *declrt, jl_returninfo_t &f, unsigned nargs, int retarg, bool is_opaque_closure, StringRef funcName,
-        Module *M, jl_codegen_params_t &params)
+        Module *M, jl_codegen_params_t &params, DILocation *DbgLoc)
 {
     ++GeneratedInvokeWrappers;
     Function *w = Function::Create(get_func_sig(M->getContext()), GlobalVariable::ExternalLinkage, funcName, M);
@@ -7805,7 +7805,15 @@ static void gen_invoke_wrapper(jl_method_instance_t *lam, jl_value_t *abi, jl_va
     BasicBlock *b0 = BasicBlock::Create(ctx.builder.getContext(), "top", w);
     ctx.builder.SetInsertPoint(b0);
     DebugLoc noDbg;
-    ctx.builder.SetCurrentDebugLocation(noDbg);
+    if (DbgLoc) {
+        if (auto scope = DbgLoc->getScope())
+            if (auto SP = scope->getSubprogram())
+                w->setSubprogram(SP);
+        ctx.builder.SetCurrentDebugLocation(DbgLoc);
+    }
+    else {
+        ctx.builder.SetCurrentDebugLocation(noDbg);
+    }
     allocate_gc_frame(ctx, b0);
 
     SmallVector<jl_cgval_t, 0> argv(nargs);
@@ -8289,6 +8297,19 @@ static jl_llvm_functions_t
     Module *M = TSM.getModuleUnlocked();
     jl_debugcache_t debugcache;
     debugcache.initialize(M);
+    DICompileUnit::DebugEmissionKind emissionKind = (DICompileUnit::DebugEmissionKind) ctx.params->debug_info_kind;
+    DICompileUnit::DebugNameTableKind tableKind;
+    if (JL_FEAT_TEST(ctx, gnu_pubnames))
+        tableKind = DICompileUnit::DebugNameTableKind::GNU;
+    else
+        tableKind = DICompileUnit::DebugNameTableKind::None;
+    DIBuilder dbuilder(*M, true, debug_enabled ? getOrCreateJuliaCU(*M, emissionKind, tableKind) : NULL);
+    DIFile *topfile = NULL;
+    DISubprogram *SP = NULL;
+    DebugLoc noDbg, topdebugloc;
+    if (debug_enabled) {
+        topfile = dbuilder.createFile(ctx.file, ".");
+    }
     jl_returninfo_t returninfo = {};
     Function *f = NULL;
     bool has_sret = false;
@@ -8342,7 +8363,22 @@ static jl_llvm_functions_t
         raw_string_ostream(wrapName) << "jfptr_" << ctx.name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
         declarations.functionObject = wrapName;
         size_t nparams = jl_nparams(abi);
-        gen_invoke_wrapper(lam, abi, jlrettype, jlrettype, returninfo, nparams, retarg, ctx.is_opaque_closure, declarations.functionObject, M, ctx.emission_context);
+            // set the debug info for the wrapper function
+        DISubprogram *SP2 = dbuilder.createFunction(nullptr
+                                                    , wrapName // Name
+                                                    , dbgFuncName // LinkageName
+                                                    ,topfile          // File
+                                                    ,toplineno        // LineNo
+                                                    ,debugcache.jl_di_func_null_sig           // Ty
+                                                    ,toplineno        // ScopeLine
+                                                    ,DINode::FlagZero // Flags
+                                                    ,DISubprogram::SPFlagDefinition | DISubprogram::SPFlagOptimized // SPFlags
+                                                    ,nullptr          // Template Parameters
+                                                    ,nullptr          // Template Declaration
+                                                    ,nullptr          // ThrownTypes
+                                                    );
+        auto wrapperloc = DILocation::get(ctx.builder.getContext(), toplineno, 0, SP2, NULL);
+        gen_invoke_wrapper(lam, abi, jlrettype, jlrettype, returninfo, nparams, retarg, ctx.is_opaque_closure, declarations.functionObject, M, ctx.emission_context, wrapperloc);
         // TODO: add attributes: maybe_mark_argument_dereferenceable(Arg, argType)
         // TODO: add attributes: dereferenceable<sizeof(void*) * nreq>
         // TODO: (if needsparams) add attributes: dereferenceable<sizeof(void*) * length(sp)>, readonly, nocapture
@@ -8403,18 +8439,8 @@ static jl_llvm_functions_t
     ctx.f = f;
 
     // Step 4b. determine debug info signature and other type info for locals
-    DICompileUnit::DebugEmissionKind emissionKind = (DICompileUnit::DebugEmissionKind) ctx.params->debug_info_kind;
-    DICompileUnit::DebugNameTableKind tableKind;
-    if (JL_FEAT_TEST(ctx, gnu_pubnames))
-        tableKind = DICompileUnit::DebugNameTableKind::GNU;
-    else
-        tableKind = DICompileUnit::DebugNameTableKind::None;
-    DIBuilder dbuilder(*M, true, debug_enabled ? getOrCreateJuliaCU(*M, emissionKind, tableKind) : NULL);
-    DIFile *topfile = NULL;
-    DISubprogram *SP = NULL;
-    DebugLoc noDbg, topdebugloc;
+
     if (debug_enabled) {
-        topfile = dbuilder.createFile(ctx.file, ".");
         DISubroutineType *subrty;
         if (ctx.emission_context.params->debug_info_level <= 1)
             subrty = debugcache.jl_di_func_null_sig;

@@ -5,6 +5,8 @@
 #include "llvm-version.h"
 #include <llvm/DebugInfo/DIContext.h>
 #include <llvm/DebugInfo/DWARF/DWARFContext.h>
+#include <llvm/DebugInfo/DWARF/DWARFUnit.h>
+#include <llvm/DebugInfo/DWARF/DWARFCompileUnit.h>
 #include <llvm/Object/SymbolSize.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/MemoryBufferRef.h>
@@ -497,7 +499,10 @@ static int lookup_pointer(
 
         jl_frame_t *frame = &(*frames)[i];
         std::string func_name(info.FunctionName);
-
+        if (func_name.find("jfptr_") != std::string::npos) {
+            // This is a jlcall wrapper, so we don't want to show it in the backtrace
+            frame->fromC = 1;
+        }
         if (inlined_frame) {
             frame->inlined = 1;
             frame->fromC = fromC;
@@ -1131,6 +1136,30 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     *context = entry.ctx;
     if (entry.obj)
         *Section = getModuleSectionForAddress(entry.obj, pointer + entry.slide);
+    if (!*saddr || !*name) {
+        if (auto DWctx = dyn_cast_or_null<llvm::DWARFContext>(*context)){
+            uintptr_t saddrdwarf = 0;
+            char *snamedwarf = nullptr;
+            auto CU = DWctx->getCompileUnitForCodeAddress(pointer + entry.slide); // XXX: Merge this with the dwarf lookup in lookup_pointer
+            if (CU) {
+                auto DIE = CU->getSubroutineForAddress(pointer +entry.slide);
+                while (DIE && !DIE.isSubprogramDIE()) {
+                    DIE = DIE.getParent();
+                }
+                if (DIE) {
+                    snamedwarf = (char*)DIE.getSubroutineName(DILineInfoSpecifier::FunctionNameKind::LinkageName);
+                    auto Ranges = DIE.getAddressRanges();
+                    if (Ranges) {
+                        saddrdwarf = (*Ranges->begin()).LowPC;
+                        saddrdwarf -= entry.slide;
+                        *saddr = (void*)saddrdwarf;
+                    }
+                    *name = strdup(snamedwarf);
+                    untrusted_dladdr = false;
+                }
+            }
+        }
+    }
     // Assume we only need base address for sysimg for now
     if (!inimage || 0 == image_info.fptrs.nptrs)
         saddr = nullptr;
