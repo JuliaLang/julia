@@ -43,7 +43,7 @@ struct Base64DecodePipe{T <: IO} <: IO
     end
 end
 
-Base64DecodePipe(io::IO) = Base64DecodePipe{typeof(io)}(io)
+Base64DecodePipe(io::IO) = Base64DecodePipe{IO}(io)
 
 Base.isreadable(pipe::Base64DecodePipe) = !isempty(pipe.rest) || isreadable(pipe.io)
 Base.iswritable(::Base64DecodePipe) = false
