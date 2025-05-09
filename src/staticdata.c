@@ -785,6 +785,12 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         }
         goto done_fields; // for now
     }
+    if (s->incremental && jl_is_mtable(v)) {
+        jl_methtable_t *mt = (jl_methtable_t *)v;
+        // Any back-edges will be re-validated and added by staticdata.jl, so
+        // drop them from the image here
+        record_field_change((jl_value_t**)&mt->backedges, NULL);
+    }
     if (jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
         if (s->incremental) {
@@ -800,12 +806,14 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 // we only need 3 specific fields of this (the rest are restored afterward, if valid)
                 // in particular, cache is repopulated by jl_mi_cache_insert for all foreign function,
                 // so must not be present here
-                record_field_change((jl_value_t**)&mi->backedges, NULL);
                 record_field_change((jl_value_t**)&mi->cache, NULL);
             }
             else {
                 assert(!needs_recaching(v, s->query_cache));
             }
+            // Any back-edges will be re-validated and added by staticdata.jl, so
+            // drop them from the image here
+            record_field_change((jl_value_t**)&mi->backedges, NULL);
             // n.b. opaque closures cannot be inspected and relied upon like a
             // normal method since they can get improperly introduced by generated
             // functions, so if they appeared at all, we will probably serialize
