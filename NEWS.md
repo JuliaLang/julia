@@ -47,6 +47,10 @@ Standard library changes
 
 #### Profile
 
+#### Random
+
+* `shuffle` now may take an argument of `NTuple` value ([#56906]).
+
 #### REPL
 
 #### Test
