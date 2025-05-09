@@ -30,7 +30,6 @@
     _Z22jl_coverage_alloc_lineN4llvm9StringRefEi*;
     _Z22jl_malloc_data_pointerN4llvm9StringRefEi*;
     _jl_timing_*;
-    LLVMExtra*;
     JLJIT*;
     llvmGetPassPluginInfo*;
 

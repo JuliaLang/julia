@@ -1761,6 +1761,12 @@ end
     end
 end
 
+@testset "reverse zero dims" begin
+    a = fill(3)
+    @test a == reverse(a)
+    @test a === reverse!(a)
+end
+
 @testset "isdiag, istril, istriu" begin
     # Scalar
     @test isdiag(3)
@@ -2948,7 +2954,7 @@ end
 
 Base.ArithmeticStyle(::Type{F21666{T}}) where {T} = T()
 Base.:+(x::F, y::F) where {F <: F21666} = F(x.x + y.x)
-Float64(x::F21666) = Float64(x.x)
+Base.Float64(x::F21666) = Float64(x.x)
 @testset "Exactness of cumsum # 21666" begin
     # test that cumsum uses more stable algorithm
     # for types with unknown/rounding arithmetic

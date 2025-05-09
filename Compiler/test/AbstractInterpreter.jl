@@ -2,6 +2,7 @@
 
 using Test
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 include("newinterp.jl")
 
@@ -14,7 +15,7 @@ Compiler.may_optimize(::AbsIntOnlyInterp1) = false
 # it should work even if the interpreter discards inferred source entirely
 @newinterp AbsIntOnlyInterp2
 Compiler.may_optimize(::AbsIntOnlyInterp2) = false
-Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult) = nothing
+Compiler.transform_result_for_cache(::AbsIntOnlyInterp2, ::Compiler.InferenceResult, edges::Core.SimpleVector) = nothing
 @test Base.infer_return_type(Base.init_stdio, (Ptr{Cvoid},); interp=AbsIntOnlyInterp2()) >: IO
 
 # OverlayMethodTable
@@ -493,9 +494,9 @@ struct CustomData
     inferred
     CustomData(@nospecialize inferred) = new(inferred)
 end
-function Compiler.transform_result_for_cache(interp::CustomDataInterp, result::Compiler.InferenceResult)
+function Compiler.transform_result_for_cache(interp::CustomDataInterp, result::Compiler.InferenceResult, edges::Core.SimpleVector)
     inferred_result = @invoke Compiler.transform_result_for_cache(
-        interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult)
+        interp::Compiler.AbstractInterpreter, result::Compiler.InferenceResult, edges::Core.SimpleVector)
     return CustomData(inferred_result)
 end
 function Compiler.src_inlining_policy(interp::CustomDataInterp, @nospecialize(src),
@@ -533,4 +534,18 @@ let interp = DebugInterp()
         end
     end
     @test found
+end
+
+@newinterp InvokeInterp
+struct InvokeOwner end
+codegen = IdDict{CodeInstance, CodeInfo}()
+Compiler.cache_owner(::InvokeInterp) = InvokeOwner()
+Compiler.codegen_cache(::InvokeInterp) = codegen
+let interp = InvokeInterp()
+    source_mode = Compiler.SOURCE_MODE_ABI
+    f = (+)
+    args = (1, 1)
+    mi = @ccall jl_method_lookup(Any[f, args...]::Ptr{Any}, (1+length(args))::Csize_t, Base.tls_world_age()::Csize_t)::Ref{Core.MethodInstance}
+    ci = Compiler.typeinf_ext_toplevel(interp, mi, source_mode)
+    @test invoke(f, ci, args...) == 2
 end

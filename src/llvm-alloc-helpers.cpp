@@ -214,6 +214,7 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
         }
         if (auto call = dyn_cast<CallInst>(inst)) {
             // TODO handle `memcmp`
+            // TODO handle `memcpy` which is used a lot more often since opaque pointers
             // None of the intrinsics should care if the memory is stack or heap allocated.
             auto callee = call->getCalledOperand();
             if (auto II = dyn_cast<IntrinsicInst>(call)) {
@@ -250,8 +251,8 @@ void jl_alloc::runEscapeAnalysis(llvm::CallInst *I, EscapeAnalysisRequiredArgs r
                 return true;
             }
             if (required.pass.gc_loaded_func == callee) {
-                required.use_info.haspreserve = true;
-                required.use_info.hasload = true;
+                // TODO add manual load->store forwarding
+                push_inst(inst);
                 return true;
             }
             if (required.pass.typeof_func == callee) {

@@ -64,8 +64,8 @@ end
 
 
 """
-    reshape(A, dims...) -> AbstractArray
-    reshape(A, dims) -> AbstractArray
+    reshape(A, dims...)::AbstractArray
+    reshape(A, dims)::AbstractArray
 
 Return an array with the same data as `A`, but with different
 dimension sizes or number of dimensions. The two arrays share the same
@@ -120,6 +120,9 @@ julia> reshape(1:6, 2, 3)
 reshape
 
 reshape(parent::AbstractArray, dims::IntOrInd...) = reshape(parent, dims)
+reshape(parent::AbstractArray, shp::Tuple{Union{Integer,AbstractOneTo}, Vararg{Union{Integer,AbstractOneTo}}}) = reshape(parent, to_shape(shp))
+# legacy method for packages that specialize reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo,CustomAxis}, Vararg{Union{Integer,OneTo,CustomAxis}}})
+# leaving this method in ensures that Base owns the more specific method
 reshape(parent::AbstractArray, shp::Tuple{Union{Integer,OneTo}, Vararg{Union{Integer,OneTo}}}) = reshape(parent, to_shape(shp))
 reshape(parent::AbstractArray, dims::Tuple{Integer, Vararg{Integer}}) = reshape(parent, map(Int, dims))
 reshape(parent::AbstractArray, dims::Dims)        = _reshape(parent, dims)
@@ -222,7 +225,7 @@ function _reshape(parent::AbstractArray, dims::Dims)
 end
 
 @noinline function _throw_dmrs(n, str, dims)
-    throw(DimensionMismatch("parent has $n elements, which is incompatible with $str $dims"))
+    throw(DimensionMismatch("parent has $n elements, which is incompatible with $str $dims ($(prod(dims)) elements)"))
 end
 
 # Reshaping a ReshapedArray

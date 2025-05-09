@@ -137,10 +137,6 @@ function fixemup!(@specialize(slot_filter), @specialize(rename_slot), ir::IRCode
                 return nothing
             end
             op[] = x
-        elseif isa(val, GlobalRef) && !(isdefined(val.mod, val.name) && isconst(val.mod, val.name))
-            typ = typ_for_val(val, ci, ir, idx, Any[])
-            new_inst = NewInstruction(val, typ)
-            op[] = NewSSAValue(insert_node!(ir, idx, new_inst).id - length(ir.stmts))
         elseif isexpr(val, :static_parameter)
             ty = typ_for_val(val, ci, ir, idx, Any[])
             if isa(ty, Const)
@@ -578,7 +574,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     for (; leave_block) in catch_entry_blocks
         new_phic_nodes[leave_block] = NewPhiCNode2[]
     end
-    @timeit "idf" for (idx, slot) in Iterators.enumerate(defuses)
+    @zone "CC: IDF" for (idx, slot) in Iterators.enumerate(defuses)
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
         # TODO: Restore this optimization
@@ -604,7 +600,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             continue
         end
 
-        @timeit "liveness" (live = compute_live_ins(cfg, slot))
+        @zone "CC: LIVENESS" (live = compute_live_ins(cfg, slot))
         for li in live.live_in_bbs
             push!(live_slots[li], idx)
             cidx = findfirst(x::TryCatchRegion->x.leave_block==li, catch_entry_blocks)
@@ -675,7 +671,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     worklist = Tuple{Int, Int, Vector{Pair{Any, Any}}}[(1, 0, initial_incoming_vals)]
     visited = BitSet()
     new_nodes = ir.new_nodes
-    @timeit "SSA Rename" while !isempty(worklist)
+    @zone "CC: SSA_RENAME" while !isempty(worklist)
         (item, pred, incoming_vals) = pop!(worklist)
         if sv.bb_vartables[item] === nothing
             continue
@@ -895,6 +891,6 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         local node = new_nodes.stmts[i]
         node[:stmt] = new_to_regular(renumber_ssa!(node[:stmt], ssavalmap), nstmts)
     end
-    @timeit "domsort" ir = domsort_ssa!(ir, domtree)
+    @zone "CC: DOMSORT" ir = domsort_ssa!(ir, domtree)
     return ir
 end

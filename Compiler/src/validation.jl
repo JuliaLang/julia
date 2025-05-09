@@ -22,8 +22,8 @@ const VALID_EXPR_HEADS = IdDict{Symbol,UnitRange{Int}}(
     :copyast => 1:1,
     :meta => 0:typemax(Int),
     :global => 1:1,
-    :globaldecl => 2:2,
-    :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, (cconv, effects), args..., roots...
+    :globaldecl => 1:2,
+    :foreigncall => 5:typemax(Int), # name, RT, AT, nreq, (cconv, effects, gc_safe), args..., roots...
     :cfunction => 5:5,
     :isdefined => 1:2,
     :code_coverage_effect => 0:0,
@@ -225,7 +225,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, mi::Core.MethodInstanc
         mnargs = 0
     else
         m = mi.def::Method
-        mnargs = m.nargs
+        mnargs = Int(m.nargs)
         n_sig_params = length((unwrap_unionall(m.sig)::DataType).parameters)
         if m.is_for_opaque_closure
             m.sig === Tuple || push!(errors, InvalidCodeError(INVALID_SIGNATURE_OPAQUE_CLOSURE, (m.sig, m.isva)))
@@ -234,6 +234,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, mi::Core.MethodInstanc
         end
     end
     if isa(c, CodeInfo)
+        mnargs = Int(c.nargs)
         mnargs > length(c.slotnames) && push!(errors, InvalidCodeError(SLOTNAMES_NARGS_MISMATCH))
         validate_code!(errors, c, is_top_level)
     end

@@ -368,7 +368,7 @@ const DATEFORMAT_REGEX_HASH = Ref(hash(keys(CONVERSION_SPECIFIERS)))
 const DATEFORMAT_REGEX_CACHE = Ref(compute_dateformat_regex(CONVERSION_SPECIFIERS))
 
 """
-    DateFormat(format::AbstractString, locale="english") -> DateFormat
+    DateFormat(format::AbstractString, locale="english")
 
 Construct a date formatting object that can be used for parsing date strings or
 formatting a date object as a string. The following character codes can be used to construct the `format`
@@ -478,7 +478,7 @@ but creates the DateFormat object once during macro expansion.
 
 See [`DateFormat`](@ref) for details about format specifiers.
 """
-macro dateformat_str(str)
+macro dateformat_str(str::String)
     DateFormat(str)
 end
 
@@ -546,7 +546,7 @@ const RFC1123Format = DateFormat("e, dd u yyyy HH:MM:SS")
 const Locale = Union{DateLocale, String}
 
 """
-    DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
+    DateTime(dt::AbstractString, format::AbstractString; locale="english")
 
 Construct a `DateTime` by parsing the `dt` date time string following the
 pattern given in the `format` string (see [`DateFormat`](@ref)  for syntax).
@@ -574,7 +574,7 @@ function DateTime(dt::AbstractString, format::AbstractString; locale::Locale=ENG
 end
 
 """
-    DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) -> DateTime
+    DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat)
 
 Construct a `DateTime` by parsing the `dt` date time string following the
 pattern given in the [`DateFormat`](@ref) object, or $ISODateTimeFormat if omitted.
@@ -586,7 +586,7 @@ repeatedly parsing similarly formatted date time strings with a pre-created
 DateTime(dt::AbstractString, df::DateFormat=ISODateTimeFormat) = parse(DateTime, dt, df)
 
 """
-    Date(d::AbstractString, format::AbstractString; locale="english") -> Date
+    Date(d::AbstractString, format::AbstractString; locale="english")
 
 Construct a `Date` by parsing the `d` date string following the pattern given
 in the `format` string (see [`DateFormat`](@ref) for syntax).
@@ -614,7 +614,7 @@ function Date(d::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
 end
 
 """
-    Date(d::AbstractString, df::DateFormat=ISODateFormat) -> Date
+    Date(d::AbstractString, df::DateFormat=ISODateFormat)
 
 Construct a `Date` by parsing the `d` date string following the
 pattern given in the [`DateFormat`](@ref) object, or $ISODateFormat if omitted.
@@ -626,7 +626,7 @@ repeatedly parsing similarly formatted date strings with a pre-created
 Date(d::AbstractString, df::DateFormat=ISODateFormat) = parse(Date, d, df)
 
 """
-    Time(t::AbstractString, format::AbstractString; locale="english") -> Time
+    Time(t::AbstractString, format::AbstractString; locale="english")
 
 Construct a `Time` by parsing the `t` time string following the pattern given
 in the `format` string (see [`DateFormat`](@ref) for syntax).
@@ -654,7 +654,7 @@ function Time(t::AbstractString, format::AbstractString; locale::Locale=ENGLISH)
 end
 
 """
-    Time(t::AbstractString, df::DateFormat=ISOTimeFormat) -> Time
+    Time(t::AbstractString, df::DateFormat=ISOTimeFormat)
 
 Construct a `Time` by parsing the `t` date time string following the
 pattern given in the [`DateFormat`](@ref) object, or $ISOTimeFormat if omitted.
@@ -683,7 +683,7 @@ end
 
 
 """
-    format(dt::TimeType, format::AbstractString; locale="english") -> AbstractString
+    format(dt::TimeType, format::AbstractString; locale="english")::AbstractString
 
 Construct a string by using a `TimeType` object and applying the provided `format`. The
 following character codes can be used to construct the `format` string:

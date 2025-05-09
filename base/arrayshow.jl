@@ -100,7 +100,7 @@ function print_matrix_row(io::IO,
         #= `axes(X)` may not infer, set this in caller =# idxlast::Integer=last(axes(X, 2)))
     for (k, j) = enumerate(cols)
         k > length(A) && break
-        if isassigned(X,Int(i),Int(j)) # isassigned accepts only `Int` indices
+        if isassigned(X,i,j)
             x = X[i,j]
             a = alignment(io, x)::Tuple{Int,Int}
 
@@ -361,7 +361,7 @@ print_array(io::IO, X::AbstractArray) = show_nd(io, X, print_matrix, true)
 # typeinfo aware
 # implements: show(io::IO, ::MIME"text/plain", X::AbstractArray)
 function show(io::IO, ::MIME"text/plain", X::AbstractArray)
-    if isempty(X) && (get(io, :compact, false)::Bool || X isa Vector)
+    if isempty(X) && (get(io, :compact, false)::Bool || X isa AbstractVector)
         return show(io, X)
     end
     # 1) show summary before setting :compact

@@ -291,7 +291,9 @@ function showerror(io::IO, ex::MethodError)
     elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
-        print(io, "objects of type ", ft, " are not callable")
+        println(io, "objects of type ", ft, " are not callable.")
+        print(io, "In case you did not try calling it explicitly, check if a ", ft,
+            " has been passed as an argument to a method that expects a callable instead.")
     else
         if ft <: Function && isempty(ft.parameters) && _isself(ft)
             f_is_function = true
@@ -323,7 +325,7 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     if ft <: AbstractArray
-        print(io, "\nUse square brackets [] for indexing an Array.")
+        print(io, "\nIn case you're trying to index into the array, use square brackets [] instead of parentheses ().")
     end
     # Check for local functions that shadow methods in Base
     let name = ft.name.mt.name
@@ -346,7 +348,9 @@ function showerror(io::IO, ex::MethodError)
         curworld = get_world_counter()
         print(io, "\nThe applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     elseif f isa Function
-        print(io, "\nThe function `$f` exists, but no method is defined for this combination of argument types.")
+        print(io, "\nThe ")
+        isgensym(nameof(f)) && print(io, "anonymous ")
+        print(io, "function `$f` exists, but no method is defined for this combination of argument types.")
     elseif f isa Type
         print(io, "\nThe type `$f` exists, but no method is defined for this combination of argument types when trying to construct it.")
     else
@@ -588,8 +592,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             end
             if ex.world < reinterpret(UInt, method.primary_world)
                 print(iob, " (method too new to be called from this world context.)")
-            elseif ex.world > reinterpret(UInt, method.deleted_world)
-                print(iob, " (method deleted before this world age.)")
             end
             println(iob)
 
@@ -634,14 +636,16 @@ const update_stackframes_callback = Ref{Function}(identity)
 const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
-function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
+function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, prefix=nothing)
     num_frames = length(trace)
     ndigits_max = ndigits(num_frames)
 
-    println(io, "\nStacktrace:")
+    println(io)
+    prefix === nothing || print(io, prefix)
+    println(io, "Stacktrace:")
 
     for (i, (frame, n)) in enumerate(trace)
-        print_stackframe(io, i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+        print_stackframe(io, i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
         if i < num_frames
             println(io)
             print_linebreaks && println(io)
@@ -651,7 +655,7 @@ end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
-function show_reduced_backtrace(io::IO, t::Vector)
+function show_reduced_backtrace(io::IO, t::Vector; prefix=nothing)
     recorded_positions = IdDict{UInt, Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
     such that hash(t[i-1]) == h, ie the list of positions in which the
@@ -697,7 +701,9 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
-    println(io, "\nStacktrace:")
+    println(io)
+    prefix === nothing || print(io, prefix)
+    println(io, "Stacktrace:")
 
     ndigits_max = ndigits(length(t))
 
@@ -705,8 +711,8 @@ function show_reduced_backtrace(io::IO, t::Vector)
     frame_counter = 1
     for i in eachindex(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
-
-        print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+        prefix === nothing || print(io, prefix)
+        print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
 
         if i < length(displayed_stackframes)
             println(io)
@@ -717,6 +723,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
             cycle_length = repeated_cycle[1][2]
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
+            prefix === nothing || print(io, prefix)
             printstyled(io,
                 "--- the above ", cycle_length, " lines are repeated ",
                   repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
@@ -734,7 +741,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler; prefix=nothing)
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
@@ -742,7 +749,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     else
         :default
     end
-    print_stackframe(io, i, frame, n, ndigits_max, modulecolor)
+    print_stackframe(io, i, frame, n, ndigits_max, modulecolor; prefix)
 end
 
 # Gets the topmost parent module that isn't Main
@@ -757,7 +764,7 @@ end
 parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor; prefix=nothing)
     file, line = string(frame.file), frame.line
 
     # Used by the REPL to make it possible to open
@@ -772,6 +779,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     digit_align_width = ndigits_max + 2
 
     # frame number
+    prefix === nothing || print(io, prefix)
     print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
@@ -781,6 +789,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     end
     println(io)
 
+    prefix === nothing || print(io, prefix)
     # @ Module path / file : line
     print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
 
@@ -809,7 +818,7 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
 end
 
-function show_backtrace(io::IO, t::Vector)
+function show_backtrace(io::IO, t::Vector; prefix=nothing)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
@@ -831,12 +840,12 @@ function show_backtrace(io::IO, t::Vector)
     end
 
     if length(filtered) > BIG_STACKTRACE_SIZE
-        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
+        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered; prefix)
         return
     else
         try invokelatest(update_stackframes_callback[], filtered) catch end
         # process_backtrace returns a Vector{Tuple{Frame, Int}}
-        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
+        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks(), prefix)
     end
     nothing
 end
@@ -915,10 +924,10 @@ function _collapse_repeated_frames(trace)
             [3] g(x::Int64) <-- useless
             @ Main ./REPL[1]:1
             =#
-            if frame.linfo isa MethodInstance && last_frame.linfo isa MethodInstance &&
-                frame.linfo.def isa Method && last_frame.linfo.def isa Method
-                m, last_m = frame.linfo.def::Method, last_frame.linfo.def::Method
-                params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
+            m, last_m = StackTraces.frame_method_or_module(frame),
+                        StackTraces.frame_method_or_module(last_frame)
+            if m isa Method && last_m isa Method
+                params, last_params = Base.unwrap_unionall(m.sig).parameters::SimpleVector, Base.unwrap_unionall(last_m.sig).parameters::SimpleVector
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
                     issame = true
@@ -944,7 +953,6 @@ function _collapse_repeated_frames(trace)
     return trace[kept_frames]
 end
 
-
 function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
     n = 0
     last_frame = StackTraces.UNKNOWN
@@ -965,9 +973,8 @@ function process_backtrace(t::Vector, limit::Int=typemax(Int); skipC = true)
             if (lkup.from_c && skipC)
                 continue
             end
-            code = lkup.linfo
-            if code isa MethodInstance
-                def = code.def
+            if lkup.linfo isa Union{MethodInstance, CodeInstance}
+                def = StackTraces.frame_method_or_module(lkup)
                 if def isa Method && def.name !== :kwcall && def.sig <: Tuple{typeof(Core.kwcall),NamedTuple,Any,Vararg}
                     # hide kwcall() methods, which are probably internal keyword sorter methods
                     # (we print the internal method instead, after demangling
@@ -1068,9 +1075,8 @@ Experimental.register_error_hint(nonsetable_type_hint_handler, MethodError)
 
 # Display a hint in case the user tries to use the + operator on strings
 # (probably attempting concatenation)
-function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
-    @nospecialize
-    if (ex.f === +) && !isempty(arg_types) && all(i -> i <: AbstractString, arg_types)
+function string_concatenation_hint_handler(@nospecialize(io::IO), ex::MethodError, arg_types::Vector{Any}, kwargs::Vector{Any})
+    if (ex.f === +) && !isempty(arg_types) && all(@nospecialize(a) -> unwrapva(a) <: AbstractString, arg_types)
         print(io, "\nString concatenation is performed with ")
         printstyled(io, "*", color=:cyan)
         print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")
@@ -1142,6 +1148,98 @@ function _propertynames_bytype(T::Type)
 end
 
 Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
+
+function UndefVarError_hint(io::IO, ex::UndefVarError)
+    var = ex.var
+    if isdefined(ex, :scope)
+        scope = ex.scope
+        if scope isa Module
+            bpart = Base.lookup_binding_partition(ex.world, GlobalRef(scope, var))
+            kind = Base.binding_kind(bpart)
+            if kind === Base.PARTITION_KIND_GLOBAL || kind === Base.PARTITION_KIND_UNDEF_CONST || kind == Base.PARTITION_KIND_DECLARED
+                print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
+            elseif kind === Base.PARTITION_KIND_FAILED
+                print(io, "\nHint: It looks like two or more modules export different ",
+                "bindings with this name, resulting in ambiguity. Try explicitly ",
+                "importing it from a particular module, or qualifying the name ",
+                "with the module it should come from.")
+            elseif kind === Base.PARTITION_KIND_GUARD
+                print(io, "\nSuggestion: check for spelling errors or missing imports.")
+            elseif Base.is_some_explicit_imported(kind)
+                print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
+            elseif kind === Base.PARTITION_KIND_BACKDATED_CONST
+                print(io, "\nSuggestion: define the const at top-level before running function that uses it (stricter Julia v1.12+ rule).")
+            end
+        elseif scope === :static_parameter
+            print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
+        elseif scope === :local
+            print(io, "\nSuggestion: check for an assignment to a local variable that shadows a global of the same name.")
+        end
+    else
+        scope = undef
+    end
+    if scope !== Base
+        warned = _UndefVarError_warnfor(io, [Base], var)
+
+        if !warned
+            modules_to_check = (m for m in Base.loaded_modules_order
+                                if m !== Core && m !== Base && m !== Main && m !== scope)
+            warned |= _UndefVarError_warnfor(io, modules_to_check, var)
+        end
+
+        warned || _UndefVarError_warnfor(io, [Core, Main], var)
+    end
+    return nothing
+end
+
+function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
+    active_mod = Base.active_module()
+
+    warned = false
+    # collect modules which export or make public the variable by
+    # the module in which the variable is defined
+    to_warn_about = Dict{Module, Vector{Module}}()
+    for m in modules
+        # only include in info if binding has a value and is exported or public
+        if !Base.isdefined(m, var) || (!Base.isexported(m, var) && !Base.ispublic(m, var))
+            continue
+        end
+        warned = true
+
+        # handle case where the undefined variable is the name of a loaded module
+        if Symbol(m) == var && !isdefined(active_mod, var)
+            print(io, "\nHint: $m is loaded but not imported in the active module $active_mod.")
+            continue
+        end
+
+        binding_m = Base.binding_module(m, var)
+        if !haskey(to_warn_about, binding_m)
+            to_warn_about[binding_m] = [m]
+        else
+            push!(to_warn_about[binding_m], m)
+        end
+    end
+
+    for (binding_m, modules) in pairs(to_warn_about)
+        print(io, "\nHint: a global variable of this name also exists in ", binding_m, ".")
+        for m in modules
+            m == binding_m && continue
+            how_available = if Base.isexported(m, var)
+                "exported by"
+            elseif Base.ispublic(m, var)
+                "declared public in"
+            end
+            print(io, "\n    - Also $how_available $m")
+            if !isdefined(active_mod, nameof(m)) || (getproperty(active_mod, nameof(m)) !== m)
+                print(io, " (loaded but not imported in $active_mod)")
+            end
+            print(io, ".")
+        end
+    end
+    return warned
+end
+
+Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

@@ -921,13 +921,13 @@ julia> A = [true false; true false]
  1  0
  1  0
 
-julia> all!([1; 1], A)
-2-element Vector{Int64}:
+julia> all!(Bool[1; 1], A)
+2-element Vector{Bool}:
  0
  0
 
-julia> all!([1 1], A)
-1×2 Matrix{Int64}:
+julia> all!(Bool[1 1], A)
+1×2 Matrix{Bool}:
  1  0
 ```
 """
@@ -996,13 +996,13 @@ julia> A = [true false; true false]
  1  0
  1  0
 
-julia> any!([1; 1], A)
-2-element Vector{Int64}:
+julia> any!(Bool[1; 1], A)
+2-element Vector{Bool}:
  1
  1
 
-julia> any!([1 1], A)
-1×2 Matrix{Int64}:
+julia> any!(Bool[1 1], A)
+1×2 Matrix{Bool}:
  1  0
 ```
 """
@@ -1033,7 +1033,7 @@ _all(a, ::Colon)                           = _all(identity, a, :)
 
 for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
                     (:maximum, :max), (:minimum, :min),
-                    (:all, :&),       (:any, :|),
+                    (:all, :and_all), (:any, :or_any),
                     (:count, :add_sum), (:extrema, :_extrema_rf)]
     fname! = Symbol(fname, '!')
     _fname = Symbol('_', fname)

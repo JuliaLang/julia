@@ -148,8 +148,10 @@ JL_DLLEXPORT void JL_NORETURN jl_undefined_var_error(jl_sym_t *var, jl_value_t *
         }
         jl_errorf("UndefVarError(%s%s%s)", jl_symbol_name(var), s1, s2);
     }
-    JL_GC_PUSH1(&scope);
-    jl_throw(jl_new_struct(jl_undefvarerror_type, var, scope));
+    jl_value_t *active_age = NULL;
+    JL_GC_PUSH2(&scope, &active_age);
+    active_age = jl_box_long(jl_current_task->world_age);
+    jl_throw(jl_new_struct(jl_undefvarerror_type, var, active_age, scope));
 }
 
 JL_DLLEXPORT void JL_NORETURN jl_has_no_field_error(jl_datatype_t *t, jl_sym_t *var)
@@ -577,7 +579,7 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
     if (jl_base_module == NULL)
         return NULL;
     jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"), 0);
-    return stderr_obj ? jl_get_binding_value_if_resolved(stderr_obj) : NULL;
+    return stderr_obj ? jl_get_binding_value_if_resolved_debug_only(stderr_obj) : NULL;
 }
 
 // toys for debugging ---------------------------------------------------------
@@ -672,9 +674,8 @@ static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     if (globname && dv->name->module) {
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
-        jl_value_t *bv = jl_get_binding_value_if_resolved_and_const(b);
-        // The `||` makes this function work for both function instances and function types.
-        if (bv && (bv == v || jl_typeof(bv) == v))
+        jl_value_t *bv = jl_get_binding_value_if_latest_resolved_and_const_debug_only(b);
+        if (bv && ((jl_value_t*)dv == v ? jl_typeof(bv) == v : bv == v))
             return 1;
     }
     return 0;
