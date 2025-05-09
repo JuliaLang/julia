@@ -334,7 +334,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         GV->setInitializer(nullptr);
     }
-    // Same workauraound as in CloneCtx::prepare_vmap to avoid LLVM bug when cloning
+    // Same workaround as in CloneCtx::prepare_vmap to avoid LLVM bug when cloning
     auto &MD = VMap.MD();
     for (auto cu: M.debug_compile_units()) {
         MD[cu].reset(cu);
