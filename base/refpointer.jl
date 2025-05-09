@@ -77,6 +77,10 @@ julia> Ref{Int64}()[]; # A reference to a bitstype refers to an undetermined val
 julia> isassigned(Ref{Int64}()) # A reference to a bitstype is always assigned
 true
 ```
+
+Note that `Ref` is an abstract base type, with the resulting performance considerations.
+See also [`Base.RefValue`](@ref).
+
 """
 Ref
 
