@@ -14,6 +14,7 @@ function eval_import_path(at::Module, from::Union{Module, Nothing}, path::Expr, 
 
     i::Int = 1
     function next!()
+        local v
         i <= length(path.args) || error("invalid module path")
         v = path.args[i]
         i += 1
