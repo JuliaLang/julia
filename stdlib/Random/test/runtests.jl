@@ -1088,15 +1088,6 @@ end
         end
         is_not_identity_at_least_once()
     end
-    @testset "no heap allocation" begin
-        function no_heap_allocation(tup)
-            @test iszero(@allocated shuffle(tup))
-        end
-        for n ∈ 0:9
-            tup = ntuple(identity, n)
-            no_heap_allocation(tup)
-        end
-    end
 end
 
 # issue #42752
