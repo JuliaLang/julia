@@ -188,7 +188,7 @@ function shuffle(rng::AbstractRNG, tup::(Tuple{Vararg{T, N}} where {T})) where {
         @inline let  # `@inline` and `@inbounds` are here to help escape analysis
             clo = @inbounds let mem = Memory{UInt16}(undef, N)  # use `UInt16` to save stack space/prevent heap allocation
                 copyto!(mem, Base.OneTo(N))
-                shuffle!(mem)
+                shuffle!(rng, mem)
                 let mem = mem, tup = tup
                     function closure(i::Int)
                         @inbounds tup[mem[i]]
