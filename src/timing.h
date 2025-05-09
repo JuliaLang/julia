@@ -51,6 +51,7 @@ void jl_timing_apply_env(void);
 // when adding potentially many items of metadata to a single timing zone.
 extern JL_DLLEXPORT uint32_t jl_timing_print_limit;
 
+JL_DLLEXPORT jl_timing_block_t *_jl_timing_block_get_current(void);
 JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, const char *name, const char *function, const char *file, int line, int color);
 JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event);
 JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *cur_block);

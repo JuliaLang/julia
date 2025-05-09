@@ -368,6 +368,10 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     return event;
 }
 
+JL_DLLEXPORT jl_timing_block_t *_jl_timing_block_get_current(void) {
+    return jl_current_task->ptls->timing_stack;
+}
+
 JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event) {
     if (size < sizeof(jl_timing_block_t)) {
         jl_errorf("jl_timing_block_t buffer must be at least %d bytes", sizeof(jl_timing_block_t));
@@ -390,7 +394,8 @@ JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *block) {
     _NVTX_START(block);
     _TRACY_START(block);
 
-    jl_timing_block_t **prevp = &jl_current_task->ptls->timing_stack;
+    jl_timing_block_t *pblock = _jl_timing_block_get_current();
+    jl_timing_block_t **prevp = &pblock;
     block->prev = *prevp;
     block->is_running = 1;
     if (block->prev) {
@@ -407,8 +412,8 @@ JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *block) {
         _TRACY_STOP(block->tracy_ctx);
         _COUNTS_STOP(block, t);
 
-        jl_task_t *ct = jl_current_task;
-        jl_timing_block_t **pcur = &ct->ptls->timing_stack;
+        jl_timing_block_t *cblock = _jl_timing_block_get_current();
+        jl_timing_block_t **pcur = &cblock;
         assert(*pcur == block);
         *pcur = block->prev;
         if (block->prev) {
@@ -710,6 +715,7 @@ void jl_destroy_timing(void) { }
 
 JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, const char *name, const char *function, const char *file, int line, int color) { return NULL; }
 
+JL_DLLEXPORT jl_timing_block_t *_jl_timing_block_get_current(void) { }
 JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event) { }
 JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *block) { }
 JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *block) { }
