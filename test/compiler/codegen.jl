@@ -879,3 +879,7 @@ struct Vec56937 x::NTuple{8, VecElement{Int}} end
 
 x56937 = Ref(Vec56937(ntuple(_->VecElement(1),8)))
 @test x56937[].x[1] == VecElement{Int}(1) # shouldn't crash
+
+@noinline f_mutateany(@nospecialize x) = x[] = 1
+g_mutateany() = (y = Ref(0); f_mutateany(y); y[])
+@test g_mutateany() === 1

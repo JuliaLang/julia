@@ -1264,6 +1264,7 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
         return dyn_size;
     }
 }
+*/
 
 static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
 {
@@ -1278,7 +1279,6 @@ static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
     mutabl = ctx.builder.CreateLShr(mutabl, 1);
     return ctx.builder.CreateTrunc(mutabl, getInt1Ty(ctx.builder.getContext()));
 }
-*/
 
 static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *typ)
 {
