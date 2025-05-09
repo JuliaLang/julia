@@ -290,7 +290,7 @@ julia> shuffle(Xoshiro(123), Vector(1:10))
 function shuffle end
 
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
-shuffle(a::AbstractArray) = shuffle(default_rng(), a)
+shuffle(a::Union{Tuple, AbstractArray}) = shuffle(default_rng(), a)
 
 shuffle(r::AbstractRNG, a::Base.OneTo) = randperm(r, last(a))
 
