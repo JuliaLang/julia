@@ -183,7 +183,7 @@ ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(
 
 ## shuffle & shuffle!
 
-function shuffle(rng::AbstractRNG, tup::(Tuple{Vararg{T, N}} where {T})) where {N}
+function shuffle(rng::AbstractRNG, tup::NTuple{N}) where {N}
     @inline let  # `@inline` and `@inbounds` are here to help escape analysis
         # use a narrow integer type to save stack space and prevent heap allocation
         Ind = if N ≤ typemax(UInt8)
