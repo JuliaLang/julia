@@ -9,3 +9,5 @@ CODEOWNERS @JuliaLang/github-actions
 /test/sorting.jl @LilithHafner
 /stdlib/*_jll @giordano
 /base/binaryplatforms.jl @giordano
+/src/julia_gcext.h @fingolfin
+/test/gcext/gcext.c @fingolfin
