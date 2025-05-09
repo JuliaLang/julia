@@ -194,7 +194,7 @@ function shuffle(rng::AbstractRNG, tup::(Tuple{Vararg{T, N}} where {T})) where {
             UInt
         end
         clo = @inbounds let mem = Memory{Ind}(undef, N)
-            randperm!(rng, mem)
+            shuffle!(rng, copyto!(mem, Base.OneTo(N)))  # just use `randperm!` once it supports `Memory`
             let mem = mem, tup = tup
                 function closure(i::Int)
                     @inbounds tup[mem[i]]
