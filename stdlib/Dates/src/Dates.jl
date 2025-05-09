@@ -81,4 +81,6 @@ export Period, DatePeriod, TimePeriod,
        # io.jl
        ISODateTimeFormat, ISODateFormat, ISOTimeFormat, DateFormat, RFC1123Format, @dateformat_str
 
+public format
+
 end # module

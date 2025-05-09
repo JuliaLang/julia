@@ -728,7 +728,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *mi, size_t
     JL_TRY {
         ct->ptls->in_pure_callback = 1;
         ct->world_age = jl_atomic_load_relaxed(&def->primary_world);
-        if (ct->world_age > jl_atomic_load_acquire(&jl_world_counter) || jl_atomic_load_relaxed(&def->deleted_world) < ct->world_age)
+        if (ct->world_age > jl_atomic_load_acquire(&jl_world_counter))
             jl_error("The generator method cannot run until it is added to a method table.");
 
         // invoke code generator
@@ -1007,7 +1007,7 @@ JL_DLLEXPORT jl_method_t *jl_new_method_uninit(jl_module_t *module)
     m->isva = 0;
     m->nargs = 0;
     jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
-    jl_atomic_store_relaxed(&m->deleted_world, 1);
+    jl_atomic_store_relaxed(&m->dispatch_status, 0);
     m->is_for_opaque_closure = 0;
     m->nospecializeinfer = 0;
     jl_atomic_store_relaxed(&m->did_scan_source, 0);
