@@ -1137,7 +1137,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     if (entry.obj)
         *Section = getModuleSectionForAddress(entry.obj, pointer + entry.slide);
     if ((saddr && !*saddr) || (name && !*name)) {
-        if (auto DWctx = dyn_cast_or_null<llvm::DWARFContext>(*context)){
+        if (auto DWctx = dyn_cast_or_null<llvm::DWARFContext>(*context)) {
             uintptr_t saddrdwarf = 0;
             char *snamedwarf = nullptr;
             auto CU = DWctx->getCompileUnitForCodeAddress(pointer + entry.slide); // XXX: Merge this with the dwarf lookup in lookup_pointer
