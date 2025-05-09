@@ -183,26 +183,19 @@ ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(
 
 ## shuffle & shuffle!
 
-function _tuple_without_element_at_index(tup::(Tuple{T, Vararg{T, N}} where {T}), i::Int) where {N}
-    clo = let tup = tup, i = i
-        function closure(j::Int)
-            k = if j < i
-                j
-            else
-                j + 1
-            end
-            tup[k]
-        end
-    end
-    ntuple(clo, Val{N}())
-end
-
 function shuffle(rng::AbstractRNG, tup::(Tuple{Vararg{T, N}} where {T})) where {N}
     if tup isa Tuple{Any, Vararg}
-        let i = rand(rng, Base.OneTo(N))  # Fisher–Yates shuffle
-            s = _tuple_without_element_at_index(tup, i)
-            t = shuffle(rng, s)
-            (tup[i], t...)
+        @inline let  # `@inline` and `@inbounds` are here to help escape analysis
+            clo = @inbounds let mem = Memory{UInt16}(undef, N)  # use `UInt16` to save stack space/prevent heap allocation
+                copyto!(mem, Base.OneTo(N))
+                shuffle!(mem)
+                let mem = mem, tup = tup
+                    function closure(i::Int)
+                        @inbounds tup[mem[i]]
+                    end
+                end
+            end
+            ntuple(clo, Val{N}())
         end
     else
         tup
