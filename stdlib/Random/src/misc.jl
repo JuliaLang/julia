@@ -205,7 +205,6 @@ function shuffle(rng::AbstractRNG, tup::NTuple{N}) where {N}
     end
 end
 
-
 """
     shuffle!([rng=default_rng(),] v::AbstractArray)
 
