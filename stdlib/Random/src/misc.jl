@@ -256,7 +256,7 @@ end
 shuffle!(a::AbstractArray) = shuffle!(default_rng(), a)
 
 """
-    shuffle([rng=default_rng(),] v::AbstractArray)
+    shuffle([rng=default_rng(),] v::Union{Tuple,AbstractArray})
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](@ref)).
@@ -279,6 +279,8 @@ julia> shuffle(Xoshiro(123), Vector(1:10))
   7
 ```
 """
+function shuffle end
+
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
 shuffle(a::AbstractArray) = shuffle(default_rng(), a)
 
