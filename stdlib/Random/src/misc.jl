@@ -184,7 +184,6 @@ ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(
 ## shuffle & shuffle!
 
 function shuffle(rng::AbstractRNG, tup::(Tuple{Vararg{T, N}} where {T})) where {N}
-    if tup isa Tuple{Any, Vararg}
         @inline let  # `@inline` and `@inbounds` are here to help escape analysis
             clo = @inbounds let mem = Memory{UInt16}(undef, N)  # use `UInt16` to save stack space/prevent heap allocation
                 randperm!(rng, mem)
@@ -194,11 +193,8 @@ function shuffle(rng::AbstractRNG, tup::(Tuple{Vararg{T, N}} where {T})) where {
                     end
                 end
             end
-            ntuple(clo, Val{N}())
+            ntuple(clo, Val{N}())::typeof(tup)
         end
-    else
-        tup
-    end::typeof(tup)
 end
 
 function shuffle(tup::NTuple)
