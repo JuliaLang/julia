@@ -589,12 +589,19 @@ restart_switch:
             jl_options.use_experimental_features = JL_OPTIONS_USE_EXPERIMENTAL_FEATURES_YES;
             break;
         case opt_sysimage_native_code:
-            if (!strcmp(optarg,"yes"))
+            if (!strcmp(optarg,"yes")) {
                 jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_YES;
-            else if (!strcmp(optarg,"no"))
+            }
+            else if (!strcmp(optarg,"no")) {
                 jl_options.use_sysimage_native_code = JL_OPTIONS_USE_SYSIMAGE_NATIVE_CODE_NO;
-            else
+                if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
+                    jl_errorf("julia: --sysimage-native-code=no is deprecated");
+                else if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ON)
+                    jl_printf(JL_STDERR, "WARNING: --sysimage-native-code=no is deprecated\n");
+            }
+            else {
                 jl_errorf("julia: invalid argument to --sysimage-native-code={yes|no} (%s)", optarg);
+            }
             break;
         case opt_compiled_modules:
             if (!strcmp(optarg,"yes"))

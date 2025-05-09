@@ -703,12 +703,17 @@ function is_already_cached(interp::AbstractInterpreter, result::InferenceResult,
     return false
 end
 
-# record the backedges
-function store_backedges(caller::CodeInstance, edges::SimpleVector)
-    isa(caller.def.def, Method) || return # don't add backedges to toplevel method instance
-    i = 1
-    while true
-        i > length(edges) && return nothing
+# Iterate a series of back-edges that need registering, based on the provided forward edge list.
+# Back-edges are returned as (invokesig, item), where the item is a Binding, MethodInstance, or
+# MethodTable.
+struct ForwardToBackedgeIterator
+    forward_edges::SimpleVector
+end
+
+function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
+    edges = it.forward_edges
+    i > length(edges) && return nothing
+    while i ≤ length(edges)
         item = edges[i]
         if item isa Int
             i += 2
@@ -718,34 +723,55 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
             i += 1
             continue
         elseif isa(item, Core.Binding)
-            i += 1
-            maybe_add_binding_backedge!(item, caller)
-            continue
+            return ((nothing, item), i + 1)
         end
         if isa(item, CodeInstance)
-            item = item.def
-        end
-        if isa(item, MethodInstance) # regular dispatch
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, nothing, caller)
-            i += 1
+            item = get_ci_mi(item)
+            return ((nothing, item), i + 1)
+        elseif isa(item, MethodInstance) # regular dispatch
+            return ((nothing, item), i + 1)
         else
+            invokesig = item
             callee = edges[i+1]
-            if isa(callee, MethodTable) # abstract dispatch (legacy style edges)
-                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
-                i += 2
-                continue
-            elseif isa(callee, Method)
-                # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
-                i += 2
-                continue
-            # `invoke` edge
-            elseif isa(callee, CodeInstance)
-                callee = get_ci_mi(callee)
+            isa(callee, Method) && (i += 2; continue) # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
+            if isa(callee, MethodTable)
+                # abstract dispatch (legacy style edges)
+                return ((invokesig, callee), i + 2)
             else
-                callee = callee::MethodInstance
+                # `invoke` edge
+                callee = isa(callee, CodeInstance) ? get_ci_mi(callee) : callee::MethodInstance
+                return ((invokesig, callee), i + 2)
             end
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
-            i += 2
+        end
+    end
+    return nothing
+end
+
+# record the backedges
+function store_backedges(caller::CodeInstance, edges::SimpleVector)
+    isa(caller.def.def, Method) || return # don't add backedges to toplevel method instance
+
+    backedges = ForwardToBackedgeIterator(edges)
+    for (i, (invokesig, item)) in enumerate(backedges)
+        # check for any duplicate edges we've already registered
+        duplicate_found = false
+        for (i′, (invokesig′, item′)) in enumerate(backedges)
+            i == i′ && break
+            if item′ === item && invokesig′ == invokesig
+                duplicate_found = true
+                break
+            end
+        end
+
+        if !duplicate_found
+            if item isa Core.Binding
+                maybe_add_binding_backedge!(item, caller)
+            elseif item isa MethodTable
+                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
+            else
+                item::MethodInstance
+                ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
+            end
         end
     end
     nothing
