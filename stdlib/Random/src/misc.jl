@@ -185,7 +185,7 @@ ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(
 
 function shuffle(rng::AbstractRNG, tup::(Tuple{Vararg{T, N}} where {T})) where {N}
     @inline let  # `@inline` and `@inbounds` are here to help escape analysis
-        Ind = (N <= 0xff) ? UInt8 : UInt16  # use a narrow integer type to save stack space and prevent heap allocation
+        Ind = (N <= typemax(UInt8)) ? UInt8 : UInt16  # use a narrow integer type to save stack space and prevent heap allocation
         clo = @inbounds let mem = Memory{Ind}(undef, N)
             randperm!(rng, mem)
             let mem = mem, tup = tup
