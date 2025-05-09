@@ -51,7 +51,7 @@ LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
+	$(CMAKE) -G"Unix Makefiles" $(dir $<) $(LIBGIT2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured
