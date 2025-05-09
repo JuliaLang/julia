@@ -1738,7 +1738,9 @@ function banner(io::IO = stdout; short = false)
     if isempty(loaded_user_modules)
         loaded_modules_string = ""
     else
-        loaded_modules_string = "Loaded packages: $(join(loaded_user_models, ", "))"
+        # account for what has been printed before on this line
+        allowed_width = displaysize(io)[2] - 26
+        loaded_modules_string = rtruncate("Loaded packages: $(join(loaded_user_modules, ", "))", allowed_width)
     end
 
     commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
