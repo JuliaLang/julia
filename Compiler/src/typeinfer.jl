@@ -356,11 +356,17 @@ function cycle_fix_limited(@nospecialize(typ), sv::InferenceState, cycleid::Int)
     return typ
 end
 
-function adjust_effects(ipo_effects::Effects, def::Method)
+function adjust_effects(ipo_effects::Effects, def::Method, world::UInt)
     # override the analyzed effects using manually annotated effect settings
     override = decode_effects_override(def.purity)
+    valid_worlds = WorldRange(0, typemax(UInt))
     if is_effect_overridden(override, :consistent)
-        ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+        # See note on `typemax(Int)` instead of `deleted_world` in adjust_effects!
+        override_valid_worlds = WorldRange(def.primary_world, typemax(Int))
+        if world in override_valid_worlds
+            ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
+            valid_worlds = override_valid_worlds
+        end
     end
     if is_effect_overridden(override, :effect_free)
         ipo_effects = Effects(ipo_effects; effect_free=ALWAYS_TRUE)
@@ -388,7 +394,7 @@ function adjust_effects(ipo_effects::Effects, def::Method)
     if is_effect_overridden(override, :nortcall)
         ipo_effects = Effects(ipo_effects; nortcall=true)
     end
-    return ipo_effects
+    return (ipo_effects, valid_worlds)
 end
 
 function adjust_effects(sv::InferenceState)
@@ -442,7 +448,8 @@ function adjust_effects(sv::InferenceState)
     # override the analyzed effects using manually annotated effect settings
     def = sv.linfo.def
     if isa(def, Method)
-        ipo_effects = adjust_effects(ipo_effects, def)
+        (ipo_effects, valid_worlds) = adjust_effects(ipo_effects, def, sv.world.this)
+        update_valid_age!(sv, valid_worlds)
     end
 
     return ipo_effects
@@ -480,9 +487,9 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         end
     end
     result = me.result
-    result.valid_worlds = me.world.valid_worlds
     result.result = bestguess
     ipo_effects = result.ipo_effects = me.ipo_effects = adjust_effects(me)
+    result.valid_worlds = me.world.valid_worlds
     result.exc_result = me.exc_bestguess = refine_exception_type(me.exc_bestguess, ipo_effects)
     me.src.rettype = widenconst(ignorelimited(bestguess))
     me.src.ssaflags = me.ssaflags
@@ -491,17 +498,16 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
     istoplevel = !(me.linfo.def isa Method)
     istoplevel || compute_edges!(me) # don't add backedges to toplevel method instance
 
-    if limited_ret
-        # a parent may be cached still, but not this intermediate work:
-        # we can throw everything else away now
+    if limited_ret || limited_src
+        # A parent may be cached still, but not this intermediate work:
+        # we can throw everything else away now. Caching anything can confuse later
+        # heuristics to consider it worth trying to pursue compiling this further and
+        # finding infinite work as a result. Avoiding caching helps to ensure there is only
+        # a finite amount of work that can be discovered later (although potentially still a
+        # large multiplier on it).
         result.src = nothing
         result.tombstone = true
         me.cache_mode = CACHE_MODE_NULL
-        set_inlineable!(me.src, false)
-    elseif limited_src
-        # a type result will be cached still, but not this intermediate work:
-        # we can throw everything else away now
-        result.src = nothing
         set_inlineable!(me.src, false)
     else
         # annotate fulltree with type information,
@@ -943,8 +949,13 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
                 update_valid_age!(caller, frame.world.valid_worlds)
                 local isinferred = is_inferred(frame)
                 local edge = isinferred ? edge_ci : nothing
-                local effects = isinferred ? frame.result.ipo_effects : # effects are adjusted already within `finish` for ipo_effects
-                    adjust_effects(effects_for_cycle(frame.ipo_effects), method)
+                local effects, valid_worlds
+                if isinferred
+                    effects = frame.result.ipo_effects # effects are adjusted already within `finish` for ipo_effects
+                else
+                    (effects, valid_worlds) = adjust_effects(effects_for_cycle(frame.ipo_effects), method, frame.world.this)
+                    update_valid_age!(caller, valid_worlds)
+                end
                 local bestguess = frame.bestguess
                 local exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
                 # propagate newly inferred source to the inliner, allowing efficient inlining w/o deserialization:
@@ -967,7 +978,8 @@ function typeinf_edge(interp::AbstractInterpreter, method::Method, @nospecialize
     # return the current knowledge about this cycle
     frame = frame::InferenceState
     update_valid_age!(caller, frame.world.valid_worlds)
-    effects = adjust_effects(effects_for_cycle(frame.ipo_effects), method)
+    (effects, valid_worlds) = adjust_effects(effects_for_cycle(frame.ipo_effects), method, frame.world.this)
+    update_valid_age!(caller, valid_worlds)
     bestguess = frame.bestguess
     exc_bestguess = refine_exception_type(frame.exc_bestguess, effects)
     return Future(MethodCallResult(interp, caller, method, bestguess, exc_bestguess, effects, nothing, edgecycle, edgelimited))
@@ -1243,15 +1255,92 @@ function typeinf_type(interp::AbstractInterpreter, mi::MethodInstance)
     return ci.rettype
 end
 
+# Resolve a call, as described by `argtype` to a single matching
+# Method and return a compilable MethodInstance for the call, if
+# it will be runtime-dispatched to exactly that MethodInstance
+function compileable_specialization_for_call(interp::AbstractInterpreter, @nospecialize(argtype))
+    mt = ccall(:jl_method_table_for, Any, (Any,), argtype)
+    if mt === nothing
+        # this would require scanning all method tables, so give up instead
+        return nothing
+    end
+
+    matches = findall(argtype, method_table(interp); limit = 1)
+    matches === nothing && return nothing
+    length(matches.matches) == 0 && return nothing
+    match = only(matches.matches)
+
+    compileable_atype = get_compileable_sig(match.method, match.spec_types, match.sparams)
+    compileable_atype === nothing && return nothing
+    if match.spec_types !== compileable_atype
+        sp_ = ccall(:jl_type_intersection_with_env, Any, (Any, Any), compileable_atype, match.method.sig)::SimpleVector
+        sparams = sp_[2]::SimpleVector
+        mi = specialize_method(match.method, compileable_atype, sparams)
+    else
+        mi = specialize_method(match.method, compileable_atype, match.sparams)
+    end
+
+    return mi
+end
+
+const QueueItems = Union{CodeInstance,MethodInstance,SimpleVector}
+
+struct CompilationQueue
+    tocompile::Vector{QueueItems}
+    inspected::IdSet{QueueItems}
+    interp::Union{AbstractInterpreter,Nothing}
+
+    CompilationQueue(;
+        interp::Union{AbstractInterpreter,Nothing}
+    ) = new(QueueItems[], IdSet{QueueItems}(), interp)
+
+    CompilationQueue(queue::CompilationQueue;
+        interp::Union{AbstractInterpreter,Nothing}
+    ) = new(empty!(queue.tocompile), empty!(queue.inspected), interp)
+end
+
+Base.push!(queue::CompilationQueue, item) = push!(queue.tocompile, item)
+Base.append!(queue::CompilationQueue, items) = append!(queue.tocompile, items)
+Base.pop!(queue::CompilationQueue) = pop!(queue.tocompile)
+Base.empty!(queue::CompilationQueue) = (empty!(queue.tocompile); empty!(queue.inspected))
+markinspected!(queue::CompilationQueue, item) = push!(queue.inspected, item)
+isinspected(queue::CompilationQueue, item) = item in queue.inspected
+Base.isempty(queue::CompilationQueue) = isempty(queue.tocompile)
+
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
-function collectinvokes!(wq::Vector{CodeInstance}, ci::CodeInfo)
+function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
+                         invokelatest_queue::Union{CompilationQueue,Nothing} = nothing)
     src = ci.code
     for i = 1:length(src)
         stmt = src[i]
         isexpr(stmt, :(=)) && (stmt = stmt.args[2])
         if isexpr(stmt, :invoke) || isexpr(stmt, :invoke_modify)
             edge = stmt.args[1]
-            edge isa CodeInstance && isdefined(edge, :inferred) && push!(wq, edge)
+            edge isa CodeInstance && isdefined(edge, :inferred) && push!(workqueue, edge)
+        end
+
+        invokelatest_queue === nothing && continue
+        if isexpr(stmt, :call)
+            farg = stmt.args[1]
+            !applicable(argextype, farg, ci, sptypes) && continue # TODO: Why is this failing during bootstrap
+            ftyp = widenconst(argextype(farg, ci, sptypes))
+
+            if ftyp === typeof(Core.finalizer) && length(stmt.args) == 3
+                finalizer = argextype(stmt.args[2], ci, sptypes)
+                obj = argextype(stmt.args[3], ci, sptypes)
+                atype = argtypes_to_type(Any[finalizer, obj])
+            else
+                # No dynamic dispatch to resolve / enqueue
+                continue
+            end
+
+            let workqueue = invokelatest_queue
+                # make a best-effort attempt to enqueue the relevant code for the finalizer
+                mi = compileable_specialization_for_call(workqueue.interp, atype)
+                mi === nothing && continue
+
+                push!(workqueue, mi)
+            end
         end
         # TODO: handle other StmtInfo like @cfunction and OpaqueClosure?
     end
@@ -1262,14 +1351,13 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
     ci isa CodeInstance && !ci_has_invoke(ci) || return ci
     codegen = codegen_cache(interp)
     codegen === nothing && return ci
-    inspected = IdSet{CodeInstance}()
-    tocompile = Vector{CodeInstance}()
-    push!(tocompile, ci)
-    while !isempty(tocompile)
+    workqueue = CompilationQueue(; interp)
+    push!(workqueue, ci)
+    while !isempty(workqueue)
         # ci_has_real_invoke(ci) && return ci # optimization: cease looping if ci happens to get compiled (not just jl_fptr_wait_for_compiled, but fully jl_is_compiled_codeinst)
-        callee = pop!(tocompile)
+        callee = pop!(workqueue)
         ci_has_invoke(callee) && continue
-        callee in inspected && continue
+        isinspected(workqueue, callee) && continue
         src = get(codegen, callee, nothing)
         if !isa(src, CodeInfo)
             src = @atomic :monotonic callee.inferred
@@ -1277,25 +1365,26 @@ function add_codeinsts_to_jit!(interp::AbstractInterpreter, ci, source_mode::UIn
                 src = _uncompressed_ir(callee, src)
             end
             if !isa(src, CodeInfo)
-                newcallee = typeinf_ext(interp, callee.def, source_mode) # always SOURCE_MODE_ABI
+                newcallee = typeinf_ext(workqueue.interp, callee.def, source_mode) # always SOURCE_MODE_ABI
                 if newcallee isa CodeInstance
                     callee === ci && (ci = newcallee) # ci stopped meeting the requirements after typeinf_ext last checked, try again with newcallee
-                    push!(tocompile, newcallee)
+                    push!(workqueue, newcallee)
                 end
                 if newcallee !== callee
-                    push!(inspected, callee)
+                    markinspected!(workqueue, callee)
                 end
                 continue
             end
         end
-        push!(inspected, callee)
-        collectinvokes!(tocompile, src)
+        markinspected!(workqueue, callee)
         mi = get_ci_mi(callee)
+        sptypes = sptypes_from_meth_instance(mi)
+        collectinvokes!(workqueue, src, sptypes)
         if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-            cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(interp))::CodeInstance
+            cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, get_inference_world(workqueue.interp))::CodeInstance
             if cached === callee
                 # make sure callee is gc-rooted and cached, as required by jl_add_codeinst_to_jit
-                code_cache(interp)[mi] = callee
+                code_cache(workqueue.interp)[mi] = callee
             else
                 # use an existing CI from the cache, if there is available one that is compatible
                 callee === ci && (ci = cached)
@@ -1319,58 +1408,45 @@ function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt
     return typeinf_ext_toplevel(interp, mi, source_mode)
 end
 
-# This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
-# The trim_mode can be any of:
-const TRIM_NO = 0
-const TRIM_SAFE = 1
-const TRIM_UNSAFE = 2
-const TRIM_UNSAFE_WARN = 3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
-    inspected = IdSet{CodeInstance}()
-    tocompile = Vector{CodeInstance}()
-    codeinfos = []
-    # first compute the ABIs of everything
-    latest = true # whether this_world == world_counter()
-    for this_world in reverse(sort!(worlds))
-        interp = NativeInterpreter(
-            this_world;
-            inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
-        )
-        for i = 1:length(methods)
-            # each item in this list is either a MethodInstance indicating something
-            # to compile, or an svec(rettype, sig) describing a C-callable alias to create.
-            item = methods[i]
-            if item isa MethodInstance
-                # if this method is generally visible to the current compilation world,
-                # and this is either the primary world, or not applicable in the primary world
-                # then we want to compile and emit this
-                if item.def.primary_world <= this_world <= item.def.deleted_world
-                    ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
-                    ci isa CodeInstance && push!(tocompile, ci)
-                end
-            elseif item isa SimpleVector && latest
-                (rt::Type, sig::Type) = item
-                # make a best-effort attempt to enqueue the relevant code for the ccallable
-                ptr = ccall(:jl_get_specialization1,
-                            #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
-                            sig, this_world, #= mt_cache =# 0)
-                if ptr !== C_NULL
-                    mi = unsafe_pointer_to_objref(ptr)::MethodInstance
-                    ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
-                    ci isa CodeInstance && push!(tocompile, ci)
-                end
-                # additionally enqueue the ccallable entrypoint / adapter, which implicitly
-                # invokes the above ci
-                push!(codeinfos, rt)
-                push!(codeinfos, sig)
+function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
+    invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
+)
+    interp = workqueue.interp
+    world = get_inference_world(interp)
+    while !isempty(workqueue)
+        item = pop!(workqueue)
+        # each item in this list is either a MethodInstance indicating something
+        # to compile, or an svec(rettype, sig) describing a C-callable alias to create.
+        if item isa MethodInstance
+            isinspected(workqueue, item) && continue
+            # if this method is generally visible to the current compilation world,
+            # and this is either the primary world, or not applicable in the primary world
+            # then we want to compile and emit this
+            if item.def.primary_world <= world <= item.def.deleted_world
+                ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
+                ci isa CodeInstance && push!(workqueue, ci)
             end
-        end
-        while !isempty(tocompile)
-            callee = pop!(tocompile)
-            callee in inspected && continue
-            # now make sure everything has source code, if desired
+            markinspected!(workqueue, item)
+        elseif item isa SimpleVector
+            invokelatest_queue === nothing && continue
+            (rt::Type, sig::Type) = item
+            # make a best-effort attempt to enqueue the relevant code for the ccallable
+            ptr = ccall(:jl_get_specialization1,
+                        #= MethodInstance =# Ptr{Cvoid}, (Any, Csize_t, Cint),
+                        sig, world, #= mt_cache =# 0)
+            if ptr !== C_NULL
+                mi = unsafe_pointer_to_objref(ptr)::MethodInstance
+                ci = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
+                ci isa CodeInstance && push!(invokelatest_queue, ci)
+            end
+            # additionally enqueue the ccallable entrypoint / adapter, which implicitly
+            # invokes the above ci
+            push!(codeinfos, item)
+        elseif item isa CodeInstance
+            callee = item
+            isinspected(workqueue, callee) && continue
             mi = get_ci_mi(callee)
-            def = mi.def
+            # now make sure everything has source code, if desired
             if use_const_api(callee)
                 src = codeinfo_for_const(interp, mi, callee.rettype_const)
             else
@@ -1379,20 +1455,21 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                     newcallee = typeinf_ext(interp, mi, SOURCE_MODE_GET_SOURCE)
                     if newcallee isa CodeInstance
                         @assert use_const_api(newcallee) || haskey(interp.codegen, newcallee)
-                        push!(tocompile, newcallee)
+                        push!(workqueue, newcallee)
                     end
                     if newcallee !== callee
-                        push!(inspected, callee)
+                        markinspected!(workqueue, callee)
                     end
                     continue
                 end
             end
-            push!(inspected, callee)
+            markinspected!(workqueue, callee)
             if src isa CodeInfo
-                collectinvokes!(tocompile, src)
+                sptypes = sptypes_from_meth_instance(mi)
+                collectinvokes!(workqueue, src, sptypes; invokelatest_queue)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
-                    cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, this_world)::CodeInstance
+                    cached = ccall(:jl_get_ci_equiv, Any, (Any, UInt), callee, world)::CodeInstance
                     if cached === callee
                         code_cache(interp)[mi] = callee
                     else
@@ -1403,9 +1480,43 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
                 push!(codeinfos, callee)
                 push!(codeinfos, src)
             end
-        end
-        latest = false
+        else @assert false "unexpected item in queue" end
     end
+    return codeinfos
+end
+
+# This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
+# The trim_mode can be any of:
+const TRIM_NO = 0
+const TRIM_SAFE = 1
+const TRIM_UNSAFE = 2
+const TRIM_UNSAFE_WARN = 3
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+
+    # Create an "invokelatest" queue to enable eager compilation of speculative
+    # invokelatest calls such as from `Core.finalizer` and `ccallable`
+    invokelatest_queue = CompilationQueue(;
+        interp = NativeInterpreter(get_world_counter(); inf_params)
+    )
+
+    codeinfos = []
+    workqueue = CompilationQueue(; interp = nothing)
+    for this_world in reverse!(sort!(worlds))
+        workqueue = CompilationQueue(workqueue;
+            interp = NativeInterpreter(this_world; inf_params)
+        )
+
+        append!(workqueue, methods)
+        compile!(codeinfos, workqueue; invokelatest_queue)
+    end
+
+    if invokelatest_queue !== nothing
+        # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
+        # (it will enqueue into itself and immediately drain)
+        compile!(codeinfos, invokelatest_queue; invokelatest_queue)
+    end
+
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
         verify_typeinf_trim(codeinfos, trim_mode == TRIM_UNSAFE_WARN)
     end

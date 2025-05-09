@@ -70,7 +70,7 @@ JL_DLLEXPORT uint32_t jl_get_LLVM_VERSION_fallback(void)
     return 0;
 }
 
-JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMOrcThreadSafeModuleRef llvmmod, void *params, void *sysimg, jl_value_t *declrt, jl_value_t *sigt)
+JL_DLLEXPORT int jl_compile_extern_c_fallback(LLVMOrcThreadSafeModuleRef llvmmod, void *params, void *sysimg, jl_value_t *name, jl_value_t *declrt, jl_value_t *sigt)
 {
     // Assume we were able to register the ccallable with the JIT. The
     // fact that we didn't is not observable since we cannot compile

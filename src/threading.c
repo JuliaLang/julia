@@ -1,11 +1,9 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
-
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
@@ -228,10 +226,6 @@ void jl_set_pgcstack(jl_gcframe_t **pgcstack) JL_NOTSAFEPOINT
 {
     *jl_pgcstack_key() = pgcstack;
 }
-#  if JL_USE_IFUNC
-JL_DLLEXPORT __attribute__((weak))
-void jl_register_pgcstack_getter(void);
-#  endif
 static jl_gcframe_t **jl_get_pgcstack_init(void);
 static jl_get_pgcstack_func *jl_get_pgcstack_cb = jl_get_pgcstack_init;
 static jl_gcframe_t **jl_get_pgcstack_init(void)
@@ -244,15 +238,8 @@ static jl_gcframe_t **jl_get_pgcstack_init(void)
     // This is clearly not thread-safe but should be fine since we
     // make sure the tls states callback is finalized before adding
     // multiple threads
-#  if JL_USE_IFUNC
-    if (jl_register_pgcstack_getter)
-        jl_register_pgcstack_getter();
-    else
-#  endif
-    {
-        jl_get_pgcstack_cb = jl_get_pgcstack_fallback;
-        jl_pgcstack_key = &jl_pgcstack_addr_fallback;
-    }
+    jl_get_pgcstack_cb = jl_get_pgcstack_fallback;
+    jl_pgcstack_key = &jl_pgcstack_addr_fallback;
     return jl_get_pgcstack_cb();
 }
 
@@ -434,7 +421,6 @@ static void jl_init_task_lock(jl_task_t *ct)
     }
 }
 
-
 JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
 {
     // `jl_init_threadtls` puts us in a GC unsafe region, so ensure GC isn't running.
@@ -460,6 +446,22 @@ JL_DLLEXPORT jl_gcframe_t **jl_adopt_thread(void)
     return &ct->gcstack;
 }
 
+JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
+{
+    if (!jl_is_initialized()) {
+        void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
+        void *handle = jl_find_dynamic_library_by_addr(retaddr, 0);
+        if (handle == NULL) {
+            fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
+                            "       (this should not happen, please file a bug report)\n");
+            exit(1);
+        }
+        jl_init_with_image_handle(handle);
+        return &jl_get_current_task()->gcstack;
+    }
+
+    return jl_adopt_thread();
+}
 
 void jl_safepoint_suspend_all_threads(jl_task_t *ct)
 {

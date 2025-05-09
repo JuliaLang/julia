@@ -3,6 +3,7 @@
 #ifndef JL_INTERNAL_H
 #define JL_INTERNAL_H
 
+#include "dtypes.h"
 #include "options.h"
 #include "julia_assert.h"
 #include "julia_locks.h"
@@ -192,6 +193,9 @@ void JL_UV_LOCK(void);
 extern _Atomic(unsigned) _threadedregion;
 extern _Atomic(uint16_t) io_loop_tid;
 
+JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage);
+JL_DLLEXPORT void jl_enter_threaded_region(void);
+JL_DLLEXPORT void jl_exit_threaded_region(void);
 int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
 
 //--------------------------------------------------
@@ -1605,7 +1609,7 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 #endif
 
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err);
-void *jl_find_dynamic_library_by_addr(void *symbol);
+void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err);
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd);
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, const char *f_name);
@@ -2006,17 +2010,6 @@ jl_sym_t *_jl_symbol(const char *str, size_t len) JL_NOTSAFEPOINT;
   void JL_GC_ASSERT_LIVE(jl_value_t *v) JL_NOTSAFEPOINT;
 #else
   #define JL_GC_ASSERT_LIVE(x) (void)(x)
-#endif
-
-#ifdef _OS_WINDOWS_
-// On Windows, weak symbols do not default to 0 due to a GCC bug
-// (https://gcc.gnu.org/bugzilla/show_bug.cgi?id=90826), use symbol
-// aliases with a known value instead.
-#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak,alias(#sym)))
-#define JL_WEAK_SYMBOL_DEFAULT(sym) &sym
-#else
-#define JL_WEAK_SYMBOL_OR_ALIAS_DEFAULT(sym) __attribute__((weak))
-#define JL_WEAK_SYMBOL_DEFAULT(sym) NULL
 #endif
 
 JL_DLLEXPORT uint32_t jl_crc32c(uint32_t crc, const char *buf, size_t len);
