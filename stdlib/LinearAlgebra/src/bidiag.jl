@@ -65,16 +65,13 @@ julia> Bl = Bidiagonal(dv, ev, :L) # ev is on the first subdiagonal
  ⋅  ⋅  9  4
 ```
 """
-function Bidiagonal(dv::V, ev::V, uplo::Symbol) where {T,V<:AbstractVector{T}}
-    Bidiagonal{T,V}(dv, ev, uplo)
-end
-function Bidiagonal(dv::V, ev::V, uplo::AbstractChar) where {T,V<:AbstractVector{T}}
+function Bidiagonal(dv::V, ev::V, uplo::Union{Symbol, AbstractChar}) where {T,V<:AbstractVector{T}}
     Bidiagonal{T,V}(dv, ev, uplo)
 end
 
 #To allow Bidiagonal's where the "dv" is Vector{T} and "ev" Vector{S},
 #where T and S can be promoted
-function Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Symbol) where {T,S}
+function Bidiagonal(dv::Vector{T}, ev::Vector{S}, uplo::Union{Symbol, AbstractChar}) where {T,S}
     TS = promote_type(T,S)
     return Bidiagonal{TS,Vector{TS}}(dv, ev, uplo)
 end
