@@ -854,7 +854,7 @@ end
     @test trunc(UInt8, parse(BigFloat,"255.1")) == UInt8(255)
     @test_throws InexactError trunc(UInt8, parse(BigFloat,"256.1"))
 
-    @testset "inexact limits ($T)" for T in Base.BitInteger_types
+    @testset "inexact limits ($T)" for T in Base.BitInteger128_types
         typemin_and_half = BigFloat(typemin(T)) - 0.5
         typemax_and_half = BigFloat(typemax(T)) + 0.5
         typemin_and_one = BigFloat(typemin(T)) - 1

@@ -514,7 +514,7 @@ end
 @test collect(flatten(Any[2:1])) == Any[]
 @test (@inferred eltype(flatten(UnitRange{Int8}[1:2, 3:4]))) == Int8
 @test (@inferred eltype(flatten(([1, 2], [3.0, 4.0])))) == Real
-@test (@inferred eltype(flatten((a = [1, 2], b = Int8[3, 4])))) == Signed
+@test (@inferred eltype(flatten((a = [1, 2], b = Int8[3, 4])))) == Core.BitSigned
 @test (@inferred eltype(flatten((Int[], Nothing[], Int[])))) == Union{Int, Nothing}
 @test (@inferred eltype(flatten((String[],)))) == String
 @test (@inferred eltype(flatten((Int[], UInt[], Int8[],)))) == Integer

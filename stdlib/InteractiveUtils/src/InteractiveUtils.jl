@@ -314,7 +314,7 @@ See also [`subtypes`](@ref).
 # Examples
 ```jldoctest
 julia> supertypes(Int)
-(Int64, Signed, Integer, Real, Number, Any)
+(Int64, Core.BitSigned, Signed, Integer, Real, Number, Any)
 ```
 """
 function supertypes(T::Type)

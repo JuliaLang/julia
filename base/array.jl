@@ -2096,9 +2096,11 @@ function cmp(a::Array{UInt8,1}, b::Array{UInt8,1})
     return c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
-const BitIntegerArray{N} = Union{map(T->Array{T,N}, BitInteger_types)...} where N
+const BitIntegerArray{N} = Array{<:BitInteger, N} where N
+
 # use memcmp for == on bit integer types
 function ==(a::Arr, b::Arr) where {Arr <: BitIntegerArray}
+    isconcretetype(eltype(Arr)) || return invoke((==), Tuple{AbstractArray, AbstractArray}, a, b)
     if size(a) == size(b)
         aref = a.ref
         bref = b.ref
@@ -2116,6 +2118,7 @@ function ==(a::Arr, b::Arr) where {Arr <: BitIntegerArray}
 end
 
 function ==(a::Arr, b::Arr) where Arr <: BitIntegerArray{1}
+    isconcretetype(eltype(Arr)) || return invoke((==), Tuple{AbstractArray, AbstractArray}, a, b)
     len = length(a)
     if len == length(b)
         aref = a.ref

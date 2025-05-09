@@ -303,7 +303,7 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro(0)], [SeedHashe
     ftypes = [Float16, Float32, Float64, FakeFloat64, BigFloat]
     cftypes = [ComplexF16, ComplexF32, ComplexF64, ftypes...]
     types = [Bool, Char, BigFloat, Tuple{Bool, Tuple{Int, Char}}, Pair{Int8, UInt32},
-             Base.BitInteger_types..., cftypes...]
+             Base.BitInteger128_types..., cftypes...]
     randset = Set(rand(Int, 20))
     randdict = Dict(zip(rand(Int,10), rand(Int, 10)))
 
@@ -901,7 +901,7 @@ end
         B = fill!(B, 1.0)
         @test rand!(GLOBAL_RNG, A, I1) === A == rand!(xo, B, I1) === B
     end
-    for T in Base.BitInteger_types
+    for T in Base.BitInteger128_types
         x = Random.SamplerType{T}()
         B = fill!(B, 1.0)
         @test rand!(GLOBAL_RNG, A, x) === A == rand!(xo, B, x) === B
@@ -1233,7 +1233,7 @@ end
     # 2) if n != m, then hash_seed(n) != hash_seed(m)
     rngs = (Xoshiro(0), TaskLocalRNG(), MersenneTwister(0))
     seeds = Any[]
-    for T = Base.BitInteger_types
+    for T = Base.BitInteger128_types
         append!(seeds, rand(T, 8))
         push!(seeds, typemin(T), typemin(T) + T(1), typemin(T) + T(2),
               typemax(T), typemax(T) - T(1), typemax(T) - T(2))

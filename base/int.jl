@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: BitSigned, BitUnsigned
+
 ## integer arithmetic ##
 
 # The tuples and types that do not include 128 bit sizes are necessary to handle
@@ -15,34 +17,31 @@ const BitSigned64_types      = (BitSigned32_types..., Int64)
 const BitUnsigned64_types    = (BitUnsigned32_types..., UInt64)
 const BitInteger64_types     = (BitSigned64_types..., BitUnsigned64_types...)
 
-const BitSigned_types        = (BitSigned64_types..., Int128)
-const BitUnsigned_types      = (BitUnsigned64_types..., UInt128)
-const BitInteger_types       = (BitSigned_types..., BitUnsigned_types...)
+const BitSigned128_types     = (BitSigned64_types..., Int128)
+const BitUnsigned128_types   = (BitUnsigned64_types..., UInt128)
+const BitInteger128_types    = (BitSigned128_types..., BitUnsigned128_types...)
 
-const BitSignedSmall_types   = Int === Int64 ? ( Int8,  Int16,  Int32) : ( Int8,  Int16)
-const BitUnsignedSmall_types = Int === Int64 ? (UInt8, UInt16, UInt32) : (UInt8, UInt16)
-const BitIntegerSmall_types  = (BitSignedSmall_types..., BitUnsignedSmall_types...)
+const BitSigned32       = Union{BitSigned32_types...}
+const BitUnsigned32     = Union{BitUnsigned32_types...}
+const BitInteger32      = Union{BitInteger32_types...}
 
-const BitSigned32      = Union{BitSigned32_types...}
-const BitUnsigned32    = Union{BitUnsigned32_types...}
-const BitInteger32     = Union{BitInteger32_types...}
+const BitSigned64       = Union{BitSigned64_types...}
+const BitUnsigned64     = Union{BitUnsigned64_types...}
+const BitInteger64      = Union{BitInteger64_types...}
 
-const BitSigned64      = Union{BitSigned64_types...}
-const BitUnsigned64    = Union{BitUnsigned64_types...}
-const BitInteger64     = Union{BitInteger64_types...}
+const BitSigned128      = Union{BitSigned128_types...}
+const BitUnsigned128    = Union{BitUnsigned128_types...}
+const BitInteger128     = Union{BitInteger128_types...}
 
-const BitSigned        = Union{BitSigned_types...}
-const BitUnsigned      = Union{BitUnsigned_types...}
-const BitInteger       = Union{BitInteger_types...}
+const BitSigned64T      = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
+const BitUnsigned64T    = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
+const BitInteger128Type = Union{map(T->Type{T}, BitInteger128_types)...}
 
-const BitSignedSmall   = Union{BitSignedSmall_types...}
-const BitUnsignedSmall = Union{BitUnsignedSmall_types...}
-const BitIntegerSmall  = Union{BitIntegerSmall_types...}
+const BitInteger        = Union{BitSigned, BitUnsigned}
 
-const BitSigned64T     = Union{Type{Int8}, Type{Int16}, Type{Int32}, Type{Int64}}
-const BitUnsigned64T   = Union{Type{UInt8}, Type{UInt16}, Type{UInt32}, Type{UInt64}}
+is_small_int_type(::Type{T}) where {T} = T <: BitInteger && T !== Bottom && sizeof(T) < sizeof(Int)
+is_small_int_type(x) = is_small_int_type(typeof(x))
 
-const BitIntegerType = Union{map(T->Type{T}, BitInteger_types)...}
 
 # >> this use of `unsigned` is defined somewhere else << the docstring should migrate there
 """
@@ -93,7 +92,7 @@ negate(x::Unsigned) = -convert(Signed, x)
 
 inv(x::Integer) = float(one(x)) / float(x)
 (/)(x::T, y::T) where {T<:Integer} = float(x) / float(y)
-# skip promotion for system integer types
+# skip promotion for bit integer types
 (/)(x::BitInteger, y::BitInteger) = float(x) / float(y)
 
 """
@@ -546,7 +545,8 @@ top_set_bit(x::BitInteger) = 8sizeof(x) - leading_zeros(x)
 >>>(x::BitInteger, y::Int) =
     ifelse(0 <= y, x >>> unsigned(y), x << unsigned(-y))
 
-for to in BitInteger_types, from in (BitInteger_types..., Bool)
+# TODO: make a generated function with BitInteger
+for to in BitInteger128_types, from in (BitInteger128_types..., Bool)
     if !(to === from)
         if Core.sizeof(to) < Core.sizeof(from)
             @eval rem(x::($from), ::Type{$to}) = trunc_int($to, x)
@@ -567,7 +567,7 @@ end
 ## integer bitwise rotations ##
 
 """
-    bitrotate(x::Base.BitInteger, k::Integer)
+    bitrotate(x::Base.BitInteger128, k::Integer)
 
 `bitrotate(x, k)` implements bitwise rotation.
 It returns the value of `x` with its bits rotated left `k` times.
@@ -592,7 +592,8 @@ julia> bitstring(bitrotate(0b01110010, 8))
 "01110010"
 ```
 """
-bitrotate(x::T, k::Integer) where {T <: BitInteger} =
+bitrotate(x::T, k::Integer) where {T <: BitInteger128} =
+    # NOTE: this implementation is not valid for non-power-of-2 number of bits
     (x << ((sizeof(T) << 3 - 1) & k)) | (x >>> ((sizeof(T) << 3 - 1) & -k))
 
 for fname in (:mod, :rem)
@@ -891,7 +892,7 @@ julia> reverse(bitstring(0xa06e)) == bitstring(bitreverse(0xa06e))
 true
 ```
 """
-function bitreverse(x::BitInteger)
+function bitreverse(x::BitInteger128)
     # TODO: consider using llvm.bitreverse intrinsic
     z = unsigned(x)
     mask1 = _mask1_uint128 % typeof(z)

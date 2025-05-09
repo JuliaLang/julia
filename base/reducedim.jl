@@ -183,7 +183,7 @@ reducedim_init(f, op::typeof(|), A::AbstractArrayOrBroadcasted, region) = reduce
 # specialize to make initialization more efficient for common cases
 
 let
-    BitIntFloat = Union{BitInteger, IEEEFloat}
+    BitIntFloat = Union{BitInteger128, IEEEFloat}
     T = Union{
         Any[AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
         Any[AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}

@@ -249,18 +249,18 @@ Type{AbstractSet}  # cache this
 @test f20511(Union{AbstractSet,Set{T}} where T) == 1
 
 # join
-@test typejoin(Int8,Int16) === Signed
+@test typejoin(Int8,Int16) === Core.BitSigned
 @test typejoin(Int,AbstractString) === Any
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
-@test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Signed,Real}
+@test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Core.BitSigned,Real}
 @test typejoin(Tuple{String,String}, Tuple{GenericString,String},
                Tuple{String,GenericString}, Tuple{Int,String,Int}) ==
     Tuple{Any,AbstractString,Vararg{Int}}
 @test typejoin(Tuple{Int8,Vararg{Int}}, Tuple{Int8,Int8}) ==
-    Tuple{Int8,Vararg{Signed}}
+    Tuple{Int8,Vararg{Core.BitSigned}}
 @test typejoin(Tuple{Int8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
-    Tuple{Int8,Vararg{Signed}}
+    Tuple{Int8,Vararg{Core.BitSigned}}
 @test typejoin(Tuple{Int8,UInt8,Vararg{Int}}, Tuple{Int8,Vararg{Int8}}) ==
     Tuple{Int8,Vararg{Integer}}
 @test typejoin(Union{Int,AbstractString}, Int) == Union{Int,AbstractString}

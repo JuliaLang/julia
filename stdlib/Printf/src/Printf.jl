@@ -390,7 +390,7 @@ function fmt(buf, pos, arg, spec::Spec{T}) where {T <: Ints}
     arg2 = toint(arg)
     n = i = ndigits(arg2, base=bs, pad=1)
     neg = arg2 < 0
-    x = arg2 isa Base.BitSigned ? unsigned(abs(arg2)) : abs(arg2)
+    x = arg2 isa Base.BitSigned128 ? unsigned(abs(arg2)) : abs(arg2)
     arglen = n + (neg || (plus | space)) +
         (T == Val{'o'} && hash ? 1 : 0) +
         (T == Val{'x'} && hash ? 2 : 0) + (T == Val{'X'} && hash ? 2 : 0)

@@ -79,7 +79,7 @@ rand(rd::RandomDevice, ::SamplerType{Bool}) = rand(rd, UInt8) % Bool
 # specialization for homogeneous tuple types of builtin integers, to avoid
 # repeated system calls
 rand(rd::RandomDevice, sp::SamplerTag{Ref{Tuple{Vararg{T, N}}}, Tuple{S}}
-     ) where {T, N, S <: SamplerUnion(Base.BitInteger_types...)} =
+     ) where {T, N, S <: SamplerUnion(Base.BitInteger128_types...)} =
          Libc.getrandom!(Ref{gentype(sp)}())[]
 
 function rand!(rd::RandomDevice, A::Array{Bool}, ::SamplerType{Bool})
@@ -94,7 +94,7 @@ function rand!(rd::RandomDevice, A::Array{Bool}, ::SamplerType{Bool})
     end
     return A
 end
-for T in BitInteger_types
+for T in BitInteger128_types
     @eval rand!(rd::RandomDevice, A::Array{$T}, ::SamplerType{$T}) = Libc.getrandom!(A)
 end
 
@@ -160,7 +160,7 @@ function rand(rng::SeedHasher, ::SamplerType{UInt8})
     rng.bytes[rng.idx += 1]
 end
 
-for TT = Base.BitInteger_types
+for TT = Base.BitInteger128_types
     TT === UInt8 && continue
     @eval function rand(rng::SeedHasher, ::SamplerType{$TT})
         xx = zero($TT)

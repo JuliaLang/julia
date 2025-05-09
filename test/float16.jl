@@ -22,7 +22,7 @@ g = Float16(1.)
     @test !isequal(Float16(-0.0), Float16(0.0))
     @test !isequal(Float16(0.0), Float16(-0.0))
 
-    for T = Base.BitInteger_types
+    for T = Base.BitInteger128_types
         @test -Inf16 < typemin(T)
         @test -Inf16 <= typemin(T)
         @test typemin(T) > -Inf16

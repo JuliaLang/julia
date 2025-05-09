@@ -11,6 +11,10 @@ Language changes
 * `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
 is considered a bug fix ([#47102])
 
+* Internal types `BitSigned` and `BitUnsigned` from `Base` now refer to abstract types instead of unions, and
+  `BitInteger` is defined equal to `Union{BitSigned, BitUnsigned}`; builtin integer types inherit either from
+  `BitSigned` or `BitUnsigned` ([#58104]).
+
 Compiler/Runtime improvements
 -----------------------------
 

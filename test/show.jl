@@ -703,7 +703,7 @@ let oldout = stdout, olderr = stderr
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test fetch(out) == "primitive type Int64 <: Core.BitSigned\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
         @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
@@ -1337,7 +1337,7 @@ end
         @test repr == "Tuple <: Any\n"
     end
     let repr = sprint(dump, Int64)
-        @test repr == "primitive type Int64 <: Signed\n"
+        @test repr == "primitive type Int64 <: Core.BitSigned\n"
     end
     let repr = sprint(dump, Any)
         @test repr == "abstract type Any\n"
@@ -1506,7 +1506,7 @@ end
 
 @test sprint(show, Main) == "Main"
 
-@test sprint(Base.show_supertypes, Int64) == "Int64 <: Signed <: Integer <: Real <: Number <: Any"
+@test sprint(Base.show_supertypes, Int64) == "Int64 <: Core.BitSigned <: Signed <: Integer <: Real <: Number <: Any"
 @test sprint(Base.show_supertypes, Vector{String}) == "Vector{String} <: DenseVector{String} <: AbstractVector{String} <: Any"
 
 # static_show

@@ -649,8 +649,8 @@ function bit_ndigits0z(x::UInt128)
     return n + ndigits0z(UInt64(x))
 end
 
-ndigits0z(x::BitSigned) = bit_ndigits0z(unsigned(abs(x)))
-ndigits0z(x::BitUnsigned) = bit_ndigits0z(x)
+ndigits0z(x::BitSigned128) = bit_ndigits0z(unsigned(abs(x)))
+ndigits0z(x::BitUnsigned128) = bit_ndigits0z(x)
 ndigits0z(x::Integer) = ndigits0zpb(x, 10)
 
 ## ndigits with specified base ##

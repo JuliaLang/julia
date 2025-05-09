@@ -3933,16 +3933,17 @@ void post_boot_hooks(void)
     jl_floatingpoint_type = (jl_datatype_t*)core("AbstractFloat");
     jl_number_type  = (jl_datatype_t*)core("Number");
     jl_signed_type  = (jl_datatype_t*)core("Signed");
-    jl_datatype_t *jl_unsigned_type = (jl_datatype_t*)core("Unsigned");
     jl_datatype_t *jl_integer_type = (jl_datatype_t*)core("Integer");
+    jl_datatype_t *jl_bit_unsigned_type = (jl_datatype_t*)core("BitUnsigned");
+    jl_datatype_t *jl_bit_signed_type = (jl_datatype_t*)core("BitSigned");
 
     jl_bool_type->super = jl_integer_type;
-    jl_uint8_type->super = jl_unsigned_type;
-    jl_uint16_type->super = jl_unsigned_type;
-    jl_uint32_type->super = jl_unsigned_type;
-    jl_uint64_type->super = jl_unsigned_type;
-    jl_int32_type->super = jl_signed_type;
-    jl_int64_type->super = jl_signed_type;
+    jl_uint8_type->super = jl_bit_unsigned_type;
+    jl_uint16_type->super = jl_bit_unsigned_type;
+    jl_uint32_type->super = jl_bit_unsigned_type;
+    jl_uint64_type->super = jl_bit_unsigned_type;
+    jl_int32_type->super = jl_bit_signed_type;
+    jl_int64_type->super = jl_bit_signed_type;
 
     jl_stackovf_exception       = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
     jl_diverror_exception       = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));

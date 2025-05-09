@@ -258,7 +258,7 @@ end
 end
 
 @testset "isapprox and unsigned integers" begin
-    for T in Base.BitUnsigned_types
+    for T in Base.BitUnsigned128_types
         # Test also combinations of different integer types
         W = widen(T)
         # The order of the operands for difference between unsigned integers is
@@ -294,7 +294,7 @@ end
 end
 
 @testset "Conversion from floating point to integer near extremes (exhaustive)" begin
-    for Ti in Base.BitInteger_types, Tf in (Float16, Float32, Float64), x in (typemin(Ti), typemax(Ti))
+    for Ti in Base.BitInteger128_types, Tf in (Float16, Float32, Float64), x in (typemin(Ti), typemax(Ti))
         y = Tf(x)
         for i in -3:3
             z = nextfloat(y, i)
