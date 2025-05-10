@@ -824,6 +824,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     generate_cfunc_thunks(params, compiled_functions);
     aot_optimize_roots(params, method_roots, compiled_functions);
     params.temporary_roots = nullptr;
+    params.temporary_roots_set.clear();
     JL_GC_POP();
 
     // process the globals array, before jl_merge_module destroys them
