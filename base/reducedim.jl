@@ -2,7 +2,7 @@
 
 ## Functions to compute the reduced shape
 
-# for reductions that expand 0 dims to 1
+# for reductions that don't reduce over a zero-length dimension
 reduced_index(i::OneTo{T}) where {T} = OneTo(one(T))
 reduced_index(i::Union{Slice, IdentityUnitRange}) = oftype(i, first(i):first(i))
 reduced_index(i::AbstractUnitRange) =
@@ -13,9 +13,19 @@ reduced_index for this index type or report this as an issue.
 """
     ))
 reduced_indices(a::AbstractArrayOrBroadcasted, region) = reduced_indices(axes(a), region)
+reduced_indices_array(a::AbstractArrayOrBroadcasted, r::AbstractArray) = reduced_indices_axes(axes(a), axes(r), a, r)
 
-# for reductions that keep 0 dims as 0
+# for reductions that keep 0-length reduced dims as 0-length
 reduced_indices0(a::AbstractArray, region) = reduced_indices0(axes(a), region)
+reduced_indices0(a::AbstractArray, r::AbstractArray) = reduced_indices(a, r)
+
+function reduced_indices_axes(axs::Tuple, raxs::Tuple, a, r)
+    length(raxs[1]) in (1,length(axs[1])) || throw(DimensionMismatch("cannot reduce $(size(a)) array into an array of $(size(r))"))
+    (raxs[1], reduced_indices_axes(tail(axs), tail(raxs), a, r)...)
+end
+reduced_indices_axes(axs::Tuple{}, raxs::Tuple{}, a, r) = ()
+reduced_indices_axes(axs::Tuple{}, raxs::Tuple, a, r) = throw(DimensionMismatch("cannot reduce $(size(a)) array into an array of $(size(r))"))
+reduced_indices_axes(axs::Tuple, raxs::Tuple{}, a, r) = (reduced_index(axs[1]), reduced_indices_axes(tail(axs), (), a, r)...)
 
 function reduced_indices(axs::Indices{N}, region) where N
     _check_valid_region(region)
@@ -27,6 +37,20 @@ function reduced_indices0(axs::Indices{N}, region) where N
     ntuple(d -> d in region && !isempty(axs[d]) ? reduced_index(axs[d]) : axs[d], Val(N))
 end
 
+# The inverse of reduced_indices
+inner_indices(a::AbstractArrayOrBroadcasted, region) = inner_indices(axes(a), region)
+function inner_indices(axs::Indices{N}, region) where N
+    ntuple(d -> d in region ? axs[d] : reduced_index(axs[d]), Val(N))
+end
+
+# Given an outer and an inner cartesian index, merge them depending on the dims
+sliceall(x) = @inbounds x[begin:end]
+sliceat(x, y) = @inbounds x[y:y]
+
+mergeindices(b, x::CartesianIndices, y::CartesianIndices) = CartesianIndices(map((b,x,y)->sliceall(ifelse(b, x, y)), b, x.indices, y.indices))
+mergeindices(b, x::CartesianIndex, y::CartesianIndices) = mergeindices(b, CartesianIndices(map(sliceat, y.indices, x.I)), CartesianIndices(map(sliceall, y.indices)))
+mergeindices(b, x::CartesianIndex, y::CartesianIndex) = CartesianIndex(map((b,x,y)->ifelse(b, x, y), b, x.I, y.I))
+
 function _check_valid_region(region)
     for d in region
         isa(d, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
@@ -34,233 +58,44 @@ function _check_valid_region(region)
     end
 end
 
-###### Generic reduction functions #####
-
-## initialization
-# initarray! is only called by sum!, prod!, etc.
-for (Op, initfun) in ((:(typeof(add_sum)), :zero), (:(typeof(mul_prod)), :one))
-    @eval initarray!(a::AbstractArray{T}, ::Any, ::$(Op), init::Bool, src::AbstractArray) where {T} = (init && fill!(a, $(initfun)(T)); a)
-end
-
-initarray!(a::AbstractArray{T}, f, ::Union{typeof(min),typeof(max),typeof(_extrema_rf)},
-    init::Bool, src::AbstractArray) where {T} = (init && mapfirst!(f, a, src); a)
-
-for (Op, initval) in ((:(typeof(and_all)), true), (:(typeof(or_any)), false))
-    @eval initarray!(a::AbstractArray, ::Any, ::$(Op), init::Bool, src::AbstractArray) = (init && fill!(a, $initval); a)
-end
-
-# reducedim_initarray is called by
-reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init, ::Type{R}) where {R} = fill!(similar(A,R,reduced_indices(A,region)), init)
-reducedim_initarray(A::AbstractArrayOrBroadcasted, region, init::T) where {T} = reducedim_initarray(A, region, init, T)
-
-# TODO: better way to handle reducedim initialization
-#
-# The current scheme is basically following Steven G. Johnson's original implementation
-#
-promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
-promote_union(T) = T
-
-_realtype(::Type{<:Complex}) = Real
-_realtype(::Type{Complex{T}}) where T<:Real = T
-_realtype(T::Type) = T
-_realtype(::Union{typeof(abs),typeof(abs2)}, T) = _realtype(T)
-_realtype(::Any, T) = T
-
-function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArray, region)
-    _reducedim_init(f, op, zero, sum, A, region)
-end
-function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::AbstractArray, region)
-    _reducedim_init(f, op, one, prod, A, region)
-end
-function _reducedim_init(f, op, fv, fop, A, region)
-    T = _realtype(f, promote_union(eltype(A)))
-    if T !== Any && applicable(zero, T)
-        x = f(zero(T))
-        z = op(fv(x), fv(x))
-        Tr = z isa T ? T : typeof(z)
-    else
-        z = fv(fop(f, A))
-        Tr = typeof(z)
-    end
-    return reducedim_initarray(A, region, z, Tr)
-end
-
-# initialization when computing minima and maxima requires a little care
-for (f1, f2, initval, typeextreme) in ((:min, :max, :Inf, :typemax), (:max, :min, :(-Inf), :typemin))
-    @eval function reducedim_init(f, op::typeof($f1), A::AbstractArray, region)
-        # First compute the reduce indices. This will throw an ArgumentError
-        # if any region is invalid
-        ri = reduced_indices(A, region)
-
-        # Next, throw if reduction is over a region with length zero
-        any(i -> isempty(axes(A, i)), region) && _empty_reduce_error()
-
-        # Make a view of the first slice of the region
-        A1 = view(A, ri...)
-
-        if isempty(A1)
-            # If the slice is empty just return non-view version as the initial array
-            return map(f, A1)
-        else
-            # otherwise use the min/max of the first slice as initial value
-            v0 = mapreduce(f, $f2, A1)
-
-            T = _realtype(f, promote_union(eltype(A)))
-            Tr = v0 isa T ? T : typeof(v0)
-
-            # but NaNs, missing and unordered values need to be avoided as initial values
-            if v0 isa Number && isnan(v0)
-                # v0 is NaN
-                v0 = oftype(v0, $initval)
-            elseif isunordered(v0)
-                # v0 is missing or a third-party unordered value
-                Tnm = nonmissingtype(Tr)
-                if Tnm <: Union{BitInteger, IEEEFloat, BigFloat}
-                    v0 = $typeextreme(Tnm)
-                elseif !all(isunordered, A1)
-                    v0 = mapreduce(f, $f2, Iterators.filter(!isunordered, A1))
-                end
-            end
-            # v0 may have changed type.
-            Tr = v0 isa T ? T : typeof(v0)
-
-            return reducedim_initarray(A, region, v0, Tr)
-        end
-    end
-end
-
-function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray, region)
-    # First compute the reduce indices. This will throw an ArgumentError
-    # if any region is invalid
-    ri = reduced_indices(A, region)
-
-    # Next, throw if reduction is over a region with length zero
-    any(i -> isempty(axes(A, i)), region) && _empty_reduce_error()
-
-    # Make a view of the first slice of the region
-    A1 = view(A, ri...)
-
-    isempty(A1) && return map(f, A1)
-    # use the max/min of the first slice as initial value for non-empty cases
-    v0 = reverse(mapreduce(f, op, A1)) # turn minmax to maxmin
-
-    T = _realtype(f.f, promote_union(eltype(A)))
-    Tmin = v0[1] isa T ? T : typeof(v0[1])
-    Tmax = v0[2] isa T ? T : typeof(v0[2])
-
-    # but NaNs and missing need to be avoided as initial values
-    if v0[1] isa Number && isnan(v0[1])
-        # v0 is NaN
-        v0 = oftype(v0[1], Inf), oftype(v0[2], -Inf)
-    elseif isunordered(v0[1])
-        # v0 is missing or a third-party unordered value
-        Tminnm = nonmissingtype(Tmin)
-        Tmaxnm = nonmissingtype(Tmax)
-        if Tminnm <: Union{BitInteger, IEEEFloat, BigFloat} &&
-            Tmaxnm <: Union{BitInteger, IEEEFloat, BigFloat}
-            v0 = (typemax(Tminnm), typemin(Tmaxnm))
-        elseif !all(isunordered, A1)
-            v0 = reverse(mapreduce(f, op, Iterators.filter(!isunordered, A1)))
-        end
-    end
-    # v0 may have changed type.
-    Tmin = v0[1] isa T ? T : typeof(v0[1])
-    Tmax = v0[2] isa T ? T : typeof(v0[2])
-
-    return reducedim_initarray(A, region, v0, Tuple{Tmin,Tmax})
-end
-
-reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
-    reducedim_initarray(A, region, zero(f(zero(T))), _realtype(f, T))
-
-reducedim_init(f, op::typeof(and_all), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, true)
-reducedim_init(f, op::typeof(or_any), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, false)
-
-# These definitions are wrong in general; Cf. JuliaLang/julia#45562
-reducedim_init(f, op::typeof(&), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, true)
-reducedim_init(f, op::typeof(|), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, false)
-
-# specialize to make initialization more efficient for common cases
-
-let
-    BitIntFloat = Union{BitInteger, IEEEFloat}
-    T = Union{
-        Any[AbstractArray{t} for t in uniontypes(BitIntFloat)]...,
-        Any[AbstractArray{Complex{t}} for t in uniontypes(BitIntFloat)]...}
-
-    global function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::T, region)
-        z = zero(f(zero(eltype(A))))
-        reducedim_initarray(A, region, op(z, z))
-    end
-    global function reducedim_init(f, op::Union{typeof(*),typeof(mul_prod)}, A::T, region)
-        u = one(f(one(eltype(A))))
-        reducedim_initarray(A, region, op(u, u))
-    end
-end
+reducedim1(R, A) = length(axes1(R)) == 1
 
 ## generic (map)reduction
 
 has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = IndexStyle(a) === IndexLinear()
 has_fast_linear_indexing(a::AbstractVector) = true
 
-function check_reducedims(R, A)
-    # Check whether R has compatible dimensions w.r.t. A for reduction
-    #
+_linear_reduction_length(A, Rax) = _linear_reduction_length(IndexStyle(A), A, Rax)
+_linear_reduction_length(_, _, _) = 0
+function _linear_reduction_length(::IndexLinear, A, Rax)
     # It returns an integer value (useful for choosing implementation)
     # - If it reduces only along leading dimensions, e.g. sum(A, dims=1) or sum(A, dims=(1,2)),
     #   it returns the length of the leading slice. For the two examples above,
     #   it will be size(A, 1) or size(A, 1) * size(A, 2).
     # - Otherwise, e.g. sum(A, dims=2) or sum(A, dims=(1,3)), it returns 0.
     #
-    ndims(R) <= ndims(A) || throw(DimensionMismatch("cannot reduce $(ndims(A))-dimensional array to $(ndims(R)) dimensions"))
+    Aax = axes(A)
     lsiz = 1
-    had_nonreduc = false
-    for i = 1:ndims(A)
-        Ri, Ai = axes(R, i), axes(A, i)
+    for i = 1:length(Aax)
+        Ri, Ai = get(Rax, i, OneTo(1)), Aax[i]
         sRi, sAi = length(Ri), length(Ai)
         if sRi == 1
-            if sAi > 1
-                if had_nonreduc
-                    lsiz = 0  # to reduce along i, but some previous dimensions were non-reducing
-                else
-                    lsiz *= sAi  # if lsiz was set to zero, it will stay to be zero
-                end
-            end
+            lsiz *= sAi
         else
-            Ri == Ai || throw(DimensionMismatch("reduction on array with indices $(axes(A)) with output with indices $(axes(R))"))
-            had_nonreduc = true
+            return 0
         end
     end
     return lsiz
 end
 
-"""
-Extract first entry of slices of array A into existing array R.
-"""
-copyfirst!(R::AbstractArray, A::AbstractArray) = mapfirst!(identity, R, A)
-
-function mapfirst!(f::F, R::AbstractArray, A::AbstractArray{<:Any,N}) where {N, F}
-    lsiz = check_reducedims(R, A)
-    t = _firstreducedslice(axes(R), axes(A))
-    map!(f, R, view(A, t...))
-end
-# We know that the axes of R and A are compatible, but R might have a different number of
-# dimensions than A, which is trickier than it seems due to offset arrays and type stability
-_firstreducedslice(::Tuple{}, a::Tuple{}) = ()
-_firstreducedslice(::Tuple, ::Tuple{}) = ()
-@inline _firstreducedslice(::Tuple{}, a::Tuple) = (_firstslice(a[1]), _firstreducedslice((), tail(a))...)
-@inline _firstreducedslice(r::Tuple, a::Tuple) = (length(r[1])==1 ? _firstslice(a[1]) : r[1], _firstreducedslice(tail(r), tail(a))...)
-_firstslice(i::OneTo) = OneTo(1)
-_firstslice(i::Slice) = Slice(_firstslice(i.indices))
-_firstslice(i) = i[firstindex(i):firstindex(i)]
-
-function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
-    lsiz = check_reducedims(R,A)
+# !!! this internal function assumes that R is valid for use as an operand to `op`, and only
+#     visits values in A within the shape passed in `Aax`.
+function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted, Aax=axes(A))
     isempty(A) && return R
+    lsiz = _linear_reduction_length(A, axes(R))
 
-    if has_fast_linear_indexing(A) && lsiz > 16
+    if has_fast_linear_indexing(A) && lsiz > 16 && axes(A) === Aax
         # use mapreduce_impl, which is probably better tuned to achieve higher performance
-        nslices = div(length(A), lsiz)
         ibase = first(LinearIndices(A))-1
         for i in eachindex(R)
             r = op(@inbounds(R[i]), mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
@@ -269,7 +104,7 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
         end
         return R
     end
-    indsAt, indsRt = safe_tail(axes(A)), safe_tail(axes(R)) # handle d=1 manually
+    indsAt, indsRt = safe_tail(Aax), safe_tail(axes(R)) # handle d=1 manually
     keep, Idefault = Broadcast.shapeindexer(indsRt)
     if reducedim1(R, A)
         # keep the accumulator as a local variable when reducing along the first dimension
@@ -294,10 +129,216 @@ function _mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted)
     return R
 end
 
-mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
-    (_mapreducedim!(f, op, R, A); R)
 
-reducedim!(op, R::AbstractArray{RT}, A::AbstractArrayOrBroadcasted) where {RT} =
+_mapreduce_might_widen(_, _, _, _) = false
+function _mapreduce_might_widen(f::F, op::G, A::T, ::Nothing) where {F,G,T}
+    return !isconcretetype(Base._return_type(x->op(f(first(x)), f(first(x))), Tuple{T}))
+end
+
+
+mapreduce_similar(A, ::Type{T}, dims) where {T} = similar(A, T, dims)
+function _mapreduce_similar_curried(A)
+    return function(::Type{T}, dims) where {T}
+        mapreduce_similar(A, T, dims)
+    end
+end
+
+#### Dimensional reduction implementation ####
+#
+# There are four (!!) orthogonal switches that affect the possible code paths here:
+#   * There's the number of elements in the reduction (n == 0, 1, or 2+)
+#   * There's the possibility of a passed initial value (specified or not)
+#   * There's in-place or not
+#
+# The relatively simpler scalar mapreduce has 2*3 branches:
+#   * 0 values:
+#       * Have init? Return it. Otherwise:
+#       * Return mapreduce_empty (usually an error, sometimes an unambiguous value like 0.0)
+#   * 1 value (a):
+#       * Have init? Return op(init, f(a)). Otherwise:
+#       * Return mapreduce_first (typically f(a))
+#   * 2+ values (a1, a2):
+#       * Have init? Start every chain with op(op(init, f(a1)), f(a2)) and continue. Otherwise:
+#       * Start every chain with op(f(a1), f(a2)) and continue
+#
+# In the context of dimensional reduce we _additionally_ need to divine out an element type
+# for the returned array. So all of the above branches need to accomodate incremental widening,
+# both as more elements are added to each reduction and across the multiple reductions.
+#
+# There's one additional consideration for the 0 values case — the returned array might or
+# might not be empty. In both cases, however, the ability to return an array (and its element
+# type) is determined by `mapreduce_empty`. We also don't want to include this consideration
+# _inside_ the incremental widening portion as it adds an additional `Union{}` element type
+# for the error path.
+#
+# Finally, actually doing the work wouldn't normally be so tricky — it's just two nested `for`
+# loops.  The trouble is that the naive double for loop is leaving 100x+ performance on the
+# table when it doesn't iterate in a cache-friendly manner.  So you might indeed want to update
+# a single value in `R` multiple times — and possibly widen as you do so.
+#
+# It's **_so very tempting_** to do the standard Julian idiom of:
+#     mapreduce(f, op, A, dims) = mapreduce!(f, op, init(f, op, A, dims), A)
+# But that simply doesn't work because there's not _a single way_ to initialize the beginning 
+# of a reduction.  There are SIX.  But then we add support for pre-allocated result vectors and
+# you even _moreso_ want to be able to just write, e.g.,
+#     sum!(r, A) = mapreduce!(identity, +, first_step!(identity, +, r, A), A)
+# But at that point you've _already done the first step_, so you need to be able to _continue_
+# the reduction from an arbitrary point in the iteration.
+_mapreducedim_impl(f::Type{F}, op, init, A::AbstractArrayOrBroadcasted, raxs, out) where {F} =
+    _mapreducedim_impl(x->F(x), op, init, A::AbstractArrayOrBroadcasted, raxs, out)
+function _mapreducedim_impl(f, op, init, A::AbstractArrayOrBroadcasted, raxs, out)
+    outer_inds = CartesianIndices(raxs)
+    a_inds = CartesianIndices(axes(A))
+    Aaxs = axes(A)
+    @assert length(Aaxs) == length(raxs)
+    # The "outer dimension" of the reduction are the preserved dimensions
+    is_outer_dim = map((>(1))∘length, raxs)
+    n = prod(map((b, ax)->ifelse(b, 1, length(ax)), is_outer_dim, Aaxs))
+
+    # We have special support for returning empty arrays
+    (n == 0 || isempty(A)) && return _mapreduce_empty_array(f, op, init, A, raxs, out)
+    n == 1 && return _mapreduce_one_array(f, op, init, A, raxs, out)
+
+    _mapreduce_might_widen(f, op, A, out) && return collect_allocator(_mapreduce_similar_curried(A),
+        (_mapreduce_naive_inner_loop(f, op, init, A, is_outer_dim, outer_ind, a_inds) for outer_ind in outer_inds))
+
+    # Create the result vector with the first step of the reduction, using the passed output if given
+    # note that this is using a (potentially) bad cache ordering, so we don't want to continue like this
+    o1 = first(outer_inds)
+    inner1 = mergeindices(is_outer_dim, o1, a_inds)
+    i1, i2 = inner1
+    @inbounds a1, a2 = A[i1], A[i2]
+    v = _mapreduce_start(f, op, init, a1, a2)
+    R = isnothing(out) ? mapreduce_similar(A, typeof(v), raxs) : out
+    @inbounds R[o1] = v
+    for i in Iterators.drop(outer_inds, 1)
+        innerj = mergeindices(is_outer_dim, i, a_inds)
+        j1, j2 = innerj
+        @inbounds c1, c2 = A[j1], A[j2]
+        @inbounds R[i] = _mapreduce_start(f, op, init, c1, c2)
+    end
+    # If we only had two elements we can quickly return
+    # n == 2 && return R
+
+    lsiz = _linear_reduction_length(A, raxs)
+    if has_fast_linear_indexing(A) && lsiz > 0
+        ibase = first(LinearIndices(A))-1
+        if lsiz > 16
+            # use mapreduce_impl, which is better tuned to achieve higher performance and works pairwise
+            for i in eachindex(R)
+                @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+3, ibase+lsiz))
+                ibase += lsiz
+            end
+        else
+            for i in eachindex(R)
+                @inbounds r = R[i]
+                @simd for Ai in ibase+3:ibase+lsiz
+                    r = op(r, f(@inbounds(A[Ai])))
+                end
+                @inbounds R[i] = r
+                ibase += lsiz
+            end
+        end
+    else
+        # Fall back to a straightforward loop for the remaining elements
+        # We already handled the first two items in each slice above.
+        # So we skip them and keep accumulating in R[iR].
+        # Critically, we do *not* call _split2 after dropping 2 items,
+        # because that leftover set isn’t rectangular for ND.
+        for o in outer_inds
+            # The partial result for the first 2 items is in R[o]
+            @inbounds r = R[o]
+            # Now process the rest of that slice, skipping the first 2
+            fullslice = mergeindices(is_outer_dim, o, a_inds)
+            for iA in Iterators.drop(fullslice, 2)
+                r = op(r, f(@inbounds(A[iA])))
+            end
+            @inbounds R[o] = r
+        end
+    end
+    return R
+end 
+
+function _mapreduce_naive_inner_loop(f, op, init, A, is_outer_dim, outer_ind, a_inds)
+    inner_inds = mergeindices(is_outer_dim, outer_ind, a_inds)
+    i1, i2 = inner_inds
+    @inbounds a1, a2 = A[i1], A[i2]
+    r = _mapreduce_start(f, op, init, a1, a2)
+    for i in Iterators.drop(inner_inds, 2)
+        r = op(r, f(@inbounds A[i]))
+    end
+    return r
+end
+
+# Split a CartesianIndices into two parts such that we can Iterators.drop 2 elements from the smallest
+# rectangular subsection and then iterate more quickly over the larger remainder.
+#
+# We have a choice in how we do this split: we can take the away the first column, the first *two* rows, or the first page or...
+# We want to pick the _smallest_ split. For example, given four non-singleton dimensions, we have a choice of:
+# first: (:, :, :, 1:1)   or (:, :, 1:1,   :) or (:, 1:1, :, :)   or (1:2,   :, :, :)
+# rest:  (:, :, :, 2:end) or (:, :, 2:end, :) or (:, 2:end, :, :) or (3:end, :, :, :)
+# With dimension lengths of (a, b, c, d), that's minimizing: (a*b*c) vs (a*b*d) vs (a*c*d) vs (2*b*c*d)
+# The smallest subsection will always be the one that slices on the _longest_ dimension.
+function _split2(ci::CartesianIndices{N}) where {N}
+    inds = ci.indices
+    first_non_singleton = something(findfirst((>)(1), size(ci)))
+    # The first non-singleton dimension "costs half" because we take two elements
+    lengths = map(length, inds)
+    weights = setindex(lengths, lengths[first_non_singleton]÷2, first_non_singleton)
+    sliced_dim = argmax(weights)
+
+    nskip = Int(sliced_dim == first_non_singleton)
+    return (CartesianIndices(ntuple(d->d==sliced_dim ? inds[d][begin:begin+nskip] : inds[d][begin:end], Val(N))),
+            CartesianIndices(ntuple(d->d==sliced_dim ? inds[d][begin+nskip+1:end] : inds[d][begin:end], Val(N))))
+end
+
+_mapreduce_empty_array(_, _, init, A, axes, ::Nothing) = fill!(mapreduce_similar(A, typeof(init), axes), init)
+_mapreduce_empty_array(_, _, init, A, axes, out) = fill!(out, init)
+function _mapreduce_empty_array(f, op, ::_InitialValue, A, axes, ::Nothing)
+    init = mapreduce_empty(f, op, eltype(A))
+    return fill!(mapreduce_similar(A, typeof(init), axes), init)
+end
+function _mapreduce_empty_array(f, op, ::_InitialValue, A, axes, out)
+    init = mapreduce_empty(f, op, eltype(A))
+    return fill!(out, init)
+end
+
+_mapreduce_one_array(f, op, init, A, axes, ::Nothing) = collect_allocator(_mapreduce_similar_curried(A), (op(init, f(@inbounds(A[i]))) for i in CartesianIndices(axes)))
+_mapreduce_one_array(f, op, init, A, axes, out) = (for i in CartesianIndices(axes); out[i] = op(init, f(@inbounds(A[i]))); end; out)
+_mapreduce_one_array(f, op, ::_InitialValue, A, axes, ::Nothing) = collect_allocator(_mapreduce_similar_curried(A), (mapreduce_first(f, op, @inbounds(A[i])) for i in CartesianIndices(axes)))
+_mapreduce_one_array(f, op, ::_InitialValue, A, axes, out) = (for i in CartesianIndices(axes); out[i] = mapreduce_first(f, op, @inbounds(A[i])); end; out)
+
+# Given two initial values in a reduction, compute the beginning of a op chain
+_mapreduce_start(f, op, init, a1, a2) = op(op(init, f(a1)), f(a2))
+_mapreduce_start(f, op, ::_InitialValue, a1, a2) = op(f(a1), f(a2))
+
+"""
+    mapreduce!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted; [init])
+
+Compute `mapreduce(f, op, A; init, dims)` where `dims` are the singleton dimensions of `R`, storing the result into `R`.
+
+!!! note
+    The previous values in `R` are _not_ used as initial values; they are completely ignored
+"""
+function mapreduce!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted; init=_InitialValue())
+    raxs = reduced_indices_array(A,R)
+    _mapreducedim_impl(f, op, init, A, raxs, R)
+end
+"""
+    reduce!(op, R::AbstractArray, A::AbstractArrayOrBroadcasted; [init])
+
+Compute `reduce(op, A; init, dims)` where `dims` are the singleton dimensions of `R`, storing the result into `R`.
+
+!!! note
+    The previous values in `R` are _not_ used as initial values; they are completely ignored
+"""
+reduce!(op, R::AbstractArray, A::AbstractArrayOrBroadcasted; init=_InitialValue()) = mapreduce!(identity, op, R, A; init)
+
+# !!! this assumes that R holds the initial values
+mapreducedim!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
+    (reduced_indices_array(A, R); _mapreducedim!(f, op, R, A); R)
+
+reducedim!(op, R::AbstractArray, A::AbstractArrayOrBroadcasted) =
     mapreducedim!(identity, op, R, A)
 
 """
@@ -335,14 +376,13 @@ mapreduce(f, op, A::AbstractArrayOrBroadcasted, B::AbstractArrayOrBroadcasted...
 _mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, ::Colon) =
     mapfoldl_impl(f, op, nt, A)
 
+function _mapreduce_dim(f, op, init, A::AbstractArrayOrBroadcasted, dims)
+    raxs = reduced_indices(A, dims)
+    _mapreducedim_impl(f, op, init, A, raxs, nothing)
+end
+
 _mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) =
     _mapreduce(f, op, IndexStyle(A), A)
-
-_mapreduce_dim(f, op, nt, A::AbstractArrayOrBroadcasted, dims) =
-    mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
-
-_mapreduce_dim(f, op, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) =
-    mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
 """
     reduce(f, A::AbstractArray; dims=:, [init])
@@ -409,11 +449,7 @@ julia> count(<=(2), A, dims=2)
  0
 ```
 """
-count(A::AbstractArrayOrBroadcasted; dims=:, init=0) = count(identity, A; dims, init)
-count(f, A::AbstractArrayOrBroadcasted; dims=:, init=0) = _count(f, A, dims, init)
-
-_count(f, A::AbstractArrayOrBroadcasted, dims::Colon, init) = _simple_count(f, A, init)
-_count(f, A::AbstractArrayOrBroadcasted, dims, init) = mapreduce(_bool(f), add_sum, A; dims, init)
+count(f, A::AbstractArray; dims=:)
 
 """
     count!([f=identity,] r, A)
@@ -443,9 +479,7 @@ julia> count!(<=(2), [1; 1], A)
  0
 ```
 """
-count!(r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) = count!(identity, r, A; init=init)
-count!(f, r::AbstractArray, A::AbstractArrayOrBroadcasted; init::Bool=true) =
-    mapreducedim!(_bool(f), add_sum, initarray!(r, f, add_sum, init, A), A)
+count!(f, r::AbstractArray, A::AbstractArray)
 
 """
     sum(A::AbstractArray; dims)
@@ -976,8 +1010,9 @@ any!(r, A)
 
 for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod,    :mul_prod),
                             (:maximum, :_maximum, :max),     (:minimum, :_minimum, :min),
-                            (:extrema, :_extrema, :_extrema_rf)]
-    mapf = fname === :extrema ? :(ExtremaMap(f)) : :f
+                            (:count,   :_count,   :add_sum), (:extrema, :_extrema, :_extrema_rf)]
+    mapf = fname === :extrema ? :(ExtremaMap(f)) :
+           fname === :count ? :(_bool(f)) : :f
     @eval begin
         # User-facing methods with keyword arguments
         @inline ($fname)(a::AbstractArray; dims=:, kw...) = ($_fname)(a, dims; kw...)
@@ -988,7 +1023,7 @@ for (fname, _fname, op) in [(:sum,     :_sum,     :add_sum), (:prod,    :_prod, 
         ($_fname)(f, a, ::Colon; kw...) = mapreduce($mapf, $op, a; kw...)
     end
 end
-
+# TODO: why are any/all different?
 any(a::AbstractArray; dims=:)              = _any(a, dims)
 any(f::Function, a::AbstractArray; dims=:) = _any(f, a, dims)
 _any(a, ::Colon)                           = _any(identity, a, :)
@@ -999,13 +1034,14 @@ _all(a, ::Colon)                           = _all(identity, a, :)
 for (fname, op) in [(:sum, :add_sum), (:prod, :mul_prod),
                     (:maximum, :max), (:minimum, :min),
                     (:all, :and_all), (:any, :or_any),
-                    (:extrema, :_extrema_rf)]
+                    (:count, :add_sum), (:extrema, :_extrema_rf)]
     fname! = Symbol(fname, '!')
     _fname = Symbol('_', fname)
-    mapf = fname === :extrema ? :(ExtremaMap(f)) : :f
+    mapf = fname === :extrema ? :(ExtremaMap(f)) :
+           fname === :count ? :(_bool(f)) : :f
     @eval begin
-        $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
-            mapreducedim!($mapf, $(op), initarray!(r, $mapf, $(op), init, A), A)
+        $(fname!)(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) = init ?
+            mapreduce!($mapf, $op, r, A) : mapreducedim!($mapf, $op, r, A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(identity, r, A; init=init)
 
         $(_fname)(A, dims; kw...)    = $(_fname)(identity, A, dims; kw...)
@@ -1066,6 +1102,62 @@ function findminmax!(f, op, Rval, Rind, A::AbstractArray{T,N}) where {T,N}
     Rval, Rind
 end
 
+struct PairsArray{T,N,A} <: AbstractArray{T,N}
+    array::A
+end
+PairsArray(array::AbstractArray{T,N}) where {T, N} = PairsArray{Tuple{keytype(array),T}, N, typeof(array)}(array)
+const PairsVector{T,A} = PairsArray{T, 1, A}
+IndexStyle(::PairsVector) = IndexLinear()
+IndexStyle(::PairsArray) = IndexCartesian()
+size(P::PairsArray) = size(P.array)
+axes(P::PairsArray) = axes(P.array)
+@inline function getindex(P::PairsVector, i::Int)
+    @boundscheck checkbounds(P, i)
+    @inbounds (i, P.array[i])
+end
+@inline function getindex(P::PairsArray{<:Any,N}, I::CartesianIndex{N}) where {N}
+    @boundscheck checkbounds(P, I)
+    @inbounds (I, P.array[I])
+end
+@propagate_inbounds getindex(P::PairsVector, i::CartesianIndex{1}) = P[i.I[1]]
+@propagate_inbounds getindex(P::PairsArray{<:Any,N}, I::Vararg{Int, N}) where {N} = P[CartesianIndex(I)]
+# Defer a few functions to the parent array
+similar(P::PairsArray, ::Type{T}, dims::Tuple{Union{Int, AbstractUnitRange}, Vararg{Union{Int, AbstractUnitRange}}}) where {T} = similar(P.array, T, dims)
+similar(P::PairsArray, ::Type{T}, dims::Tuple{Union{Int, Base.OneTo}, Vararg{Union{Int, Base.OneTo}}}) where {T} = similar(P.array, T, dims)
+similar(P::PairsArray, ::Type{T}, dims::Tuple{Int, Vararg{Int}}) where {T} = similar(P.array, T, dims)
+similar(P::PairsArray, ::Type{T}, dims::Tuple{}) where {T} = similar(P.array, T, dims)
+mapreduce_similar(P::PairsArray, ::Type{T}, dims) where {T} = mapreduce_similar(P.array, T, dims)
+
+# Use an ad-hoc specialized StructArray to allow in-place AoS->SoA transform
+struct ZippedArray{T,N,Style,A,B} <: AbstractArray{T,N}
+    first::A
+    second::B
+end
+function ZippedArray(A::AbstractArray{T,N},B::AbstractArray{S,N}) where {T,S,N}
+    axes(A) == axes(B) || throw(DimensionMismatch("both arrays must have the same shape"))
+    # TODO: It'd be better if we could transform a Tuple{Int, Union{Int, Missing}} to Union{Tuple{Int,Int}, Tuple{Int, Missing}}
+    ZippedArray{Tuple{T,S},N,IndexStyle(A,B),typeof(A),typeof(B)}(A,B)
+end
+size(Z::ZippedArray) = size(Z.first)
+axes(Z::ZippedArray) = axes(Z.first)
+IndexStyle(::ZippedArray{<:Any,<:Any,Style}) where {Style} = Style
+@inline function getindex(Z::ZippedArray, I::Int...)
+    @boundscheck checkbounds(Z, I...)
+    @inbounds (Z.first[I...], Z.second[I...])
+end
+@propagate_inbounds setindex!(Z::ZippedArray{T}, v, I::Int...) where {T} = setindex!(Z, convert(T, v), I...)
+@inline function setindex!(Z::ZippedArray{T}, v::T, I::Int...) where {T}
+    @boundscheck checkbounds(Z, I...)
+    @inbounds Z.first[I...] = v[1]
+    @inbounds Z.second[I...] = v[2]
+    return Z
+end
+_unzip(Z::ZippedArray) = (Z.first, Z.second)
+_unzip(A::AbstractArray) = ([a[1] for a in A], [a[2] for a in A])
+
+_transform_pair(f) = x-> (x[1], f(x[2]))
+_transform_pair(f::typeof(identity)) = f
+
 """
     findmin!(rval, rind, A) -> (minval, index)
 
@@ -1075,9 +1167,15 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 
 $(_DOCS_ALIASING_WARNING)
 """
-function findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
+findmin!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray; init::Bool=true) = findmin!(identity, rval, rind, A; init)
+function findmin!(f, rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(identity, isgreater, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    if init
+        mapreduce!(_transform_pair(f), (x,y)->ifelse(isgreater(x[2], y[2]), y, x), ZippedArray(rind, rval), PairsArray(A))
+    else
+        mapreducedim!(_transform_pair(f), (x,y)->ifelse(isgreater(x[2], y[2]), y, x), ZippedArray(rind, rval), PairsArray(A))
+    end
+    return (rval, rind)
 end
 
 """
@@ -1126,19 +1224,16 @@ julia> findmin(abs2, A, dims=2)
 findmin(f, A::AbstractArray; dims=:) = _findmin(f, A, dims)
 
 function _findmin(f, A, region)
-    ri = reduced_indices0(A, region)
-    if isempty(A)
-        if prod(map(length, reduced_indices(A, region))) != 0
-            throw(ArgumentError("collection slices must be non-empty"))
-        end
-        similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
+    if f === identity
+        # Fast path with pre-allocated arrays
+        axs = reduced_indices(A, region)
+        return findmin!(identity, mapreduce_similar(A, eltype(A), axs), mapreduce_similar(A, keytype(A), axs), A)
     else
-        fA = f(first(A))
-        findminmax!(f, isgreater, fill!(similar(A, _findminmax_inittype(f, A), ri), fA),
-                    zeros(eltype(keys(A)), ri), A)
+        P = _mapreduce_dim(_transform_pair(f), (x,y)->ifelse(isgreater(x[2], y[2]), y, x), _InitialValue(), PairsArray(A), region)
+        (inds, vals) = _unzip(P)
+        return (vals, inds)
     end
 end
-
 """
     findmax!(rval, rind, A) -> (maxval, index)
 
@@ -1148,9 +1243,15 @@ dimensions of `rval` and `rind`, and store the results in `rval` and `rind`.
 
 $(_DOCS_ALIASING_WARNING)
 """
-function findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
+findmax!(rval::AbstractArray, rind::AbstractArray, A::AbstractArray; init::Bool=true) = findmax!(identity, rval, rind, A; init)
+function findmax!(f, rval::AbstractArray, rind::AbstractArray, A::AbstractArray;
                   init::Bool=true)
-    findminmax!(identity, isless, init && !isempty(A) ? fill!(rval, first(A)) : rval, fill!(rind,zero(eltype(keys(A)))), A)
+    if init
+        mapreduce!(_transform_pair(f), (x,y)->ifelse(isless(x[2], y[2]), y, x), ZippedArray(rind, rval), PairsArray(A))
+    else
+        mapreducedim!(_transform_pair(f), (x,y)->ifelse(isless(x[2], y[2]), y, x), ZippedArray(rind, rval), PairsArray(A))
+    end
+    return (rval, rind)
 end
 
 """
@@ -1197,32 +1298,16 @@ julia> findmax(abs2, A, dims=2)
 ```
 """
 findmax(f, A::AbstractArray; dims=:) = _findmax(f, A, dims)
-
 function _findmax(f, A, region)
-    ri = reduced_indices0(A, region)
-    if isempty(A)
-        if prod(map(length, reduced_indices(A, region))) != 0
-            throw(ArgumentError("collection slices must be non-empty"))
-        end
-        similar(A, promote_op(f, eltype(A)), ri), zeros(eltype(keys(A)), ri)
+    if f === identity
+        axs = reduced_indices(A, region)
+        return findmax!(identity, mapreduce_similar(A, eltype(A), axs), mapreduce_similar(A, keytype(A), axs), A)
     else
-        fA = f(first(A))
-        findminmax!(f, isless, fill!(similar(A, _findminmax_inittype(f, A), ri), fA),
-                    zeros(eltype(keys(A)), ri), A)
+        P = _mapreduce_dim(_transform_pair(f), (x,y)->ifelse(isless(x[2], y[2]), y, x), _InitialValue(), PairsArray(A), region)
+        (inds, vals) = _unzip(P)
+        return (vals, inds)
     end
 end
-
-function _findminmax_inittype(f, A::AbstractArray)
-    T = _realtype(f, promote_union(eltype(A)))
-    v0 = f(first(A))
-    # First conditional: T is >: typeof(v0), so return it
-    # Second conditional: handle missing specifically, as most often, f(missing) = missing;
-    # certainly, some predicate functions return Bool, but not all.
-    # Else, return the type of the transformation.
-    Tr = v0 isa T ? T : Missing <: eltype(A) ? Union{Missing, typeof(v0)} : typeof(v0)
-end
-
-reducedim1(R, A) = length(axes1(R)) == 1
 
 """
     argmin(A; dims) -> indices

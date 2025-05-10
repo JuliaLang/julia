@@ -651,7 +651,7 @@ function _collect(::Type{T}, itr, isz::SizeUnknown) where T
 end
 
 # make a collection similar to `c` and appropriate for collecting `itr`
-_similar_for(c, ::Type{T}, itr, isz, shp) where {T} = similar(c, T)
+_similar_for(c, ::Type{T}, itr, isz, shp) where {T} = similar(c, T, shp)
 
 _similar_shape(itr, ::SizeUnknown) = nothing
 _similar_shape(itr, ::HasLength) = length(itr)::Integer
@@ -730,6 +730,12 @@ collect(itr) = _collect(1:1 #= Array =#, itr, IteratorEltype(itr), IteratorSize(
 collect(A::AbstractArray) = _collect_indices(axes(A), A)
 
 collect_similar(cont, itr) = _collect(cont, itr, IteratorEltype(itr), IteratorSize(itr))
+
+struct _Allocator{T}
+    f::T
+end
+similar(f::_Allocator, ::Type{T}, dims) where {T} = f.f(T, dims)
+collect_allocator(f::F, itr) where {F} = _collect(_Allocator(f), itr, IteratorEltype(itr), IteratorSize(itr))
 
 _collect(cont, itr, ::HasEltype, isz::Union{HasLength,HasShape}) =
     copyto!(_similar_for(cont, eltype(itr), itr, isz, _similar_shape(itr, isz)), itr)

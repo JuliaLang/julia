@@ -532,6 +532,10 @@ end
 
 # BEGIN 1.12 deprecations
 
+function reducedim_initarray end
+const _dep_message_reducedim_initarray = ", these internals have been removed. To customize the array returned by dimensional reductions, implement mapreduce_similar instead"
+deprecate(Base, :reducedim_initarray)
+
 @deprecate isbindingresolved(m::Module, var::Symbol) true false
 
 """

@@ -684,10 +684,12 @@ x = [j+7 for j in i]
 end
 
 # make sure we specialize on mapfoldl(::Type, ...)
-@test @inferred(mapfoldl(Int, +, [1, 2, 3]; init=0)) === 6
+@testset "inference" begin
+    @test @inferred(mapfoldl(Int, +, [1, 2, 3]; init=0)) === 6
 
-# issue #39281
-@test @inferred(extrema(rand(2), dims=1)) isa Vector{Tuple{Float64,Float64}}
+    # issue #39281
+    @test @inferred(extrema(rand(2), dims=1)) isa Vector{Tuple{Float64,Float64}}
+end
 
 # issue #38627
 @testset "overflow in mapreduce" begin
@@ -770,4 +772,12 @@ end
     @test Base.return_types() do
         Val(any(in((:one,:two,:three)),(:four,:three)))
     end |> only == Val{true}
+end
+
+@testset "type stability of internals for mean (etc); Statistics#160" begin
+    @test (@inferred Missing mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, view([1.0,2.0,missing],1:2), dims=:)) == 3.0
+    @test (@inferred Union{Missing,Int} mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, view([1,2,missing],1:2), dims=:)) == 3.0
+
+    @test (@inferred Missing reduce((x,y)->Base.add_sum(x, y)/1, view([1.0,2.0,missing],1:2), dims=:)) == 3.0
+    @test (@inferred Union{Missing,Int} reduce((x,y)->Base.add_sum(x, y)/1, view([1,2,missing],1:2), dims=:)) == 3.0
 end
