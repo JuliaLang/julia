@@ -988,6 +988,12 @@ end
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
 
+@testset "issue #58109" begin
+    i = Iterators.map(identity, 3)
+    j = Iterators.map(sqrt, 7)
+    @test (@inferred Base.IteratorSize(i)) === @inferred Base.IteratorSize(eltype([i, j]))
+end
+
 @testset "IteratorSize trait for zip" begin
     @test (@inferred Base.IteratorSize(zip())) == Base.IsInfinite()                     # for zip of empty tuple
     @test (@inferred Base.IteratorSize(zip((1,2,3), repeated(0)))) == Base.HasLength()  # for zip of ::HasLength and ::IsInfinite
