@@ -1073,8 +1073,11 @@ is supplied, the transformed string is instead written to `io` (returning `io`).
 (For example, this can be used in conjunction with an [`IOBuffer`](@ref) to re-use
 a pre-allocated buffer array in-place.)
 
-Multiple patterns can be specified, and they will be applied left-to-right
-simultaneously, so only one pattern will be applied to any character, and the
+Multiple patterns can be specified: The input string will be scanned only once
+from start (left) to end (right), and the first matching replacement
+will be applied to each substring. Replacements are applied in the order of
+the arguments provided if they match substrings starting at the same
+input string position. Thus, only one pattern will be applied to any character, and the
 patterns will only be applied to the input text, not the replacements.
 
 !!! compat "Julia 1.7"

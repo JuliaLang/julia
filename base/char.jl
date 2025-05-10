@@ -222,7 +222,7 @@ in(x::AbstractChar, y::AbstractChar) = x == y
 ==(x::Char, y::Char) = bitcast(UInt32, x) == bitcast(UInt32, y)
 isless(x::Char, y::Char) = bitcast(UInt32, x) < bitcast(UInt32, y)
 hash(x::Char, h::UInt) =
-    hash_uint64(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
+    hash_finalizer(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h)) % UInt
 
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))

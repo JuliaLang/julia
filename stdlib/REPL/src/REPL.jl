@@ -42,6 +42,7 @@ using Base.Meta, Sockets, StyledStrings
 using JuliaSyntaxHighlighting
 import InteractiveUtils
 import FileWatching
+import Base.JuliaSyntax: kind, @K_str, @KSet_str, Tokenize.tokenize
 
 export
     AbstractREPL,
@@ -1700,49 +1701,16 @@ answer_color(r::StreamREPL) = r.answer_color
 input_color(r::LineEditREPL) = r.envcolors ? Base.input_color() : r.input_color
 input_color(r::StreamREPL) = r.input_color
 
-let matchend = Dict("\"" => r"\"", "\"\"\"" => r"\"\"\"", "'" => r"'",
-    "`" => r"`", "```" => r"```", "#" => r"$"m, "#=" => r"=#|#=")
-    global _rm_strings_and_comments
-    function _rm_strings_and_comments(code::Union{String,SubString{String}})
-        buf = IOBuffer(sizehint = sizeof(code))
-        pos = 1
-        while true
-            i = findnext(r"\"(?!\"\")|\"\"\"|'|`(?!``)|```|#(?!=)|#=", code, pos)
-            isnothing(i) && break
-            match = SubString(code, i)
-            j = findnext(matchend[match]::Regex, code, nextind(code, last(i)))
-            if match == "#=" # possibly nested
-                nested = 1
-                while j !== nothing
-                    nested += SubString(code, j) == "#=" ? +1 : -1
-                    iszero(nested) && break
-                    j = findnext(r"=#|#=", code, nextind(code, last(j)))
-                end
-            elseif match[1] != '#' # quote match: check non-escaped
-                while j !== nothing
-                    notbackslash = findprev(!=('\\'), code, prevind(code, first(j)))::Int
-                    isodd(first(j) - notbackslash) && break # not escaped
-                    j = findnext(matchend[match]::Regex, code, nextind(code, first(j)))
-                end
-            end
-            isnothing(j) && break
-            if match[1] == '#'
-                print(buf, SubString(code, pos, prevind(code, first(i))))
-            else
-                print(buf, SubString(code, pos, last(i)), ' ', SubString(code, j))
-            end
-            pos = nextind(code, last(j))
-        end
-        print(buf, SubString(code, pos, lastindex(code)))
-        return String(take!(buf))
-    end
-end
-
 # heuristic function to decide if the presence of a semicolon
 # at the end of the expression was intended for suppressing output
-ends_with_semicolon(code::AbstractString) = ends_with_semicolon(String(code))
-ends_with_semicolon(code::Union{String,SubString{String}}) =
-    contains(_rm_strings_and_comments(code), r";\s*$")
+function ends_with_semicolon(code)
+    semi = false
+    for tok in tokenize(code)
+        kind(tok) in KSet"Whitespace NewlineWs Comment EndMarker" && continue
+        semi = kind(tok) == K";"
+    end
+    return semi
+end
 
 function banner(io::IO = stdout; short = false)
     if Base.GIT_VERSION_INFO.tagged_commit

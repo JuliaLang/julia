@@ -1600,7 +1600,7 @@ static MDNode *best_tbaa(jl_tbaacache_t &tbaa_cache, jl_value_t *jt) {
 // note that this includes jl_isbits, although codegen should work regardless
 static bool jl_is_concrete_immutable(jl_value_t* t)
 {
-    return jl_is_immutable_datatype(t) && ((jl_datatype_t*)t)->isconcretetype;
+    return jl_may_be_immutable_datatype(t) && ((jl_datatype_t*)t)->isconcretetype;
 }
 
 static bool jl_is_pointerfree(jl_value_t* t)
@@ -7385,8 +7385,8 @@ static Function *gen_cfun_wrapper(
                     inputarg = mark_julia_type(ctx, val, false, jargty);
                 }
             }
-            else if (static_at || (!jl_is_typevar(jargty) && !jl_is_immutable_datatype(jargty))) {
-                // must be a jl_value_t* (because it's mutable or contains gc roots)
+            else if (static_at || (!jl_is_typevar(jargty) && (!jl_is_datatype(jargty) || jl_is_abstracttype(jargty) || jl_is_mutable_datatype(jargty)))) {
+                // must be a jl_value_t* (because it is mutable or abstract)
                 inputarg = mark_julia_type(ctx, maybe_decay_untracked(ctx, val), true, jargty_proper);
             }
             else {
@@ -7400,31 +7400,36 @@ static Function *gen_cfun_wrapper(
                         emit_ptrgep(ctx, nestPtr, jl_array_nrows(*closure_types) * ctx.types().sizeof_ptr),
                         Align(sizeof(void*)));
                 BasicBlock *boxedBB = BasicBlock::Create(ctx.builder.getContext(), "isboxed", cw);
-                BasicBlock *loadBB = BasicBlock::Create(ctx.builder.getContext(), "need-load", cw);
+                BasicBlock *notanyBB = BasicBlock::Create(ctx.builder.getContext(), "not-any", cw);
                 BasicBlock *unboxedBB = BasicBlock::Create(ctx.builder.getContext(), "maybe-unboxed", cw);
                 BasicBlock *isanyBB = BasicBlock::Create(ctx.builder.getContext(), "any", cw);
                 BasicBlock *afterBB = BasicBlock::Create(ctx.builder.getContext(), "after", cw);
-                Value *isrtboxed = ctx.builder.CreateIsNull(val); // XXX: this is the wrong condition and should be inspecting runtime_dt instead
-                ctx.builder.CreateCondBr(isrtboxed, boxedBB, loadBB);
-                ctx.builder.SetInsertPoint(boxedBB);
-                Value *p1 = val;
-                p1 = track_pjlvalue(ctx, p1);
-                ctx.builder.CreateBr(afterBB);
-                ctx.builder.SetInsertPoint(loadBB);
                 Value *isrtany = ctx.builder.CreateICmpEQ(
-                        literal_pointer_val(ctx, (jl_value_t*)jl_any_type), val);
-                ctx.builder.CreateCondBr(isrtany, isanyBB, unboxedBB);
+                        track_pjlvalue(ctx,literal_pointer_val(ctx, (jl_value_t*)jl_any_type)), runtime_dt);
+                ctx.builder.CreateCondBr(isrtany, isanyBB, notanyBB);
                 ctx.builder.SetInsertPoint(isanyBB);
-                Value *p2 = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, val, Align(sizeof(void*)));
+                Value *p1 = ctx.builder.CreateAlignedLoad(ctx.types().T_prjlvalue, val, Align(sizeof(void*)));
                 ctx.builder.CreateBr(afterBB);
+                isanyBB = ctx.builder.GetInsertBlock(); // could have changed
+                ctx.builder.SetInsertPoint(notanyBB);
+                jl_cgval_t runtime_dt_val = mark_julia_type(ctx, runtime_dt, true, jl_any_type);
+                Value *isrtboxed = // (!jl_is_datatype(runtime_dt) || !jl_is_concrete_datatype(runtime_dt) || jl_is_mutable_datatype(runtime_dt))
+                    emit_guarded_test(ctx, emit_exactly_isa(ctx, runtime_dt_val, jl_datatype_type), true, [&] {
+                            return ctx.builder.CreateOr(ctx.builder.CreateNot(emit_isconcrete(ctx, runtime_dt)), emit_datatype_mutabl(ctx, runtime_dt));
+                    });
+                ctx.builder.CreateCondBr(isrtboxed, boxedBB, unboxedBB);
+                ctx.builder.SetInsertPoint(boxedBB);
+                Value *p2 = track_pjlvalue(ctx, val);
+                ctx.builder.CreateBr(afterBB);
+                boxedBB = ctx.builder.GetInsertBlock(); // could have changed
                 ctx.builder.SetInsertPoint(unboxedBB);
                 Value *p3 = emit_new_bits(ctx, runtime_dt, val);
                 unboxedBB = ctx.builder.GetInsertBlock(); // could have changed
                 ctx.builder.CreateBr(afterBB);
                 ctx.builder.SetInsertPoint(afterBB);
                 PHINode *p = ctx.builder.CreatePHI(ctx.types().T_prjlvalue, 3);
-                p->addIncoming(p1, boxedBB);
-                p->addIncoming(p2, isanyBB);
+                p->addIncoming(p1, isanyBB);
+                p->addIncoming(p2, boxedBB);
                 p->addIncoming(p3, unboxedBB);
                 inputarg = mark_julia_type(ctx, p, true, jargty_proper);
             }
@@ -7980,7 +7985,7 @@ static jl_returninfo_t get_specsig_function(jl_codegen_params_t &params, Module 
             param.addAttribute(Attribute::ReadOnly);
             ty = PointerType::get(M->getContext(), AddressSpace::Derived);
         }
-        else if (isboxed && jl_is_immutable_datatype(jt)) {
+        else if (isboxed && jl_may_be_immutable_datatype(jt) && !jl_is_abstracttype(jt)) {
             param.addAttribute(Attribute::ReadOnly);
         }
         else if (jl_is_primitivetype(jt) && ty->isIntegerTy()) {
@@ -9874,56 +9879,57 @@ void linkFunctionBody(Function &Dst, Function &Src)
 
 void emit_always_inline(orc::ThreadSafeModule &result_m, jl_codegen_params_t &params) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER
 {
-    jl_workqueue_t &edges = params.workqueue;
-    bool always_inline = false;
-    for (auto &it : edges) {
-        if (it.second.private_linkage)
-            always_inline = true;
-    }
-    if (!always_inline)
-        return;
-    jl_task_t *ct = jl_current_task;
-    int8_t gc_state = jl_gc_unsafe_enter(ct->ptls); // codegen may contain safepoints (such as jl_subtype calls)
-    jl_code_info_t *src = nullptr;
-    params.safepoint_on_entry = false;
-    params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
-    JL_GC_PUSH2(&params.temporary_roots, &src);
-    for (auto &it : edges) {
-        jl_code_instance_t *codeinst = it.first;
-        auto &proto = it.second;
-        if (!proto.private_linkage)
-            continue;
-        if (proto.decl->isDeclaration()) {
-            src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
-            jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
-            jl_method_t *def = mi->def.method;
-            if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
-                src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
-            if (src && jl_is_code_info(src) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX) {
-                jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params); // contains safepoints
-                if (!result_m)
-                    break;
-                // TODO: jl_optimize_roots(params, mi, *result_m.getModuleUnlocked()); // contains safepoints
-                Module &M = *result_m.getModuleUnlocked();
-                if (decls.functionObject != "jl_fptr_args" &&
-                    decls.functionObject != "jl_fptr_sparam" &&
-                    decls.functionObject != "jl_f_opaque_closure_call") {
-                    Function *F = M.getFunction(decls.functionObject);
-                    F->eraseFromParent();
-                }
-                if (!decls.specFunctionObject.empty()) {
-                    Function *specF = M.getFunction(decls.specFunctionObject);
-                    linkFunctionBody(*proto.decl, *specF);
-                    proto.decl->addFnAttr(Attribute::InlineHint);
-                    proto.decl->setLinkage(proto.external_linkage ? GlobalValue::AvailableExternallyLinkage : GlobalValue::PrivateLinkage);
-                    specF->eraseFromParent();
+    while (true) {
+        SmallVector<jl_workqueue_t::value_type> always_inline;
+        for (auto &it : params.workqueue) {
+            if (it.second.private_linkage && it.second.decl->isDeclaration())
+                always_inline.push_back(it);
+            it.second.private_linkage = false;
+        }
+        if (always_inline.empty())
+            return;
+        jl_task_t *ct = jl_current_task;
+        int8_t gc_state = jl_gc_unsafe_enter(ct->ptls); // codegen may contain safepoints (such as jl_subtype calls)
+        jl_code_info_t *src = nullptr;
+        params.safepoint_on_entry = false;
+        params.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
+        JL_GC_PUSH2(&params.temporary_roots, &src);
+        for (auto &it : always_inline) {
+            jl_code_instance_t *codeinst = it.first;
+            auto &proto = it.second;
+            Function *decl = proto.decl;
+            if (decl->isDeclaration()) {
+                src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
+                jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+                jl_method_t *def = mi->def.method;
+                if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
+                    src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
+                if (src && jl_is_code_info(src) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX) {
+                    jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params); // contains safepoints
+                    if (!result_m)
+                        break;
+                    // TODO: jl_optimize_roots(params, mi, *result_m.getModuleUnlocked()); // contains safepoints
+                    Module &M = *result_m.getModuleUnlocked();
+                    if (decls.functionObject != "jl_fptr_args" &&
+                        decls.functionObject != "jl_fptr_sparam" &&
+                        decls.functionObject != "jl_f_opaque_closure_call") {
+                        Function *F = M.getFunction(decls.functionObject);
+                        F->eraseFromParent();
+                    }
+                    if (!decls.specFunctionObject.empty()) {
+                        Function *specF = M.getFunction(decls.specFunctionObject);
+                        linkFunctionBody(*decl, *specF);
+                        decl->addFnAttr(Attribute::InlineHint);
+                        decl->setLinkage(proto.external_linkage ? GlobalValue::AvailableExternallyLinkage : GlobalValue::PrivateLinkage);
+                        specF->eraseFromParent();
+                    }
                 }
             }
         }
+        params.temporary_roots = nullptr;
+        JL_GC_POP();
+        jl_gc_unsafe_leave(ct->ptls, gc_state);
     }
-    params.temporary_roots = nullptr;
-    JL_GC_POP();
-    jl_gc_unsafe_leave(ct->ptls, gc_state);
 }
 
 // --- initialization ---
