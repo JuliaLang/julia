@@ -1997,7 +1997,6 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
     assert(invokesig == NULL || jl_is_type(invokesig));
     JL_LOCK(&callee->def.method->writelock);
     if (jl_atomic_load_relaxed(&allow_new_worlds)) {
-        int found = 0;
         jl_array_t *backedges = jl_mi_get_backedges(callee);
         // TODO: use jl_cache_type_(invokesig) like cache_method does to save memory
         if (!backedges) {
@@ -2006,25 +2005,7 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
             callee->backedges = backedges;
             jl_gc_wb(callee, backedges);
         }
-        else {
-            size_t i = 0, l = jl_array_nrows(backedges);
-            for (i = 0; i < l; i++) {
-                // optimized version of while (i < l) i = get_next_edge(callee->backedges, i, &invokeTypes, &mi);
-                jl_value_t *ciedge = jl_array_ptr_ref(backedges, i);
-                if (ciedge != (jl_value_t*)caller)
-                    continue;
-                jl_value_t *invokeTypes = i > 0 ? jl_array_ptr_ref(backedges, i - 1) : NULL;
-                if (invokeTypes && jl_is_code_instance(invokeTypes))
-                    invokeTypes = NULL;
-                if ((invokesig == NULL && invokeTypes == NULL) ||
-                    (invokesig && invokeTypes && jl_types_equal(invokesig, invokeTypes))) {
-                    found = 1;
-                    break;
-                }
-            }
-        }
-        if (!found)
-            push_edge(backedges, invokesig, caller);
+        push_edge(backedges, invokesig, caller);
     }
     JL_UNLOCK(&callee->def.method->writelock);
 }
@@ -2047,14 +2028,6 @@ JL_DLLEXPORT void jl_method_table_add_backedge(jl_methtable_t *mt, jl_value_t *t
         else {
             // check if the edge is already present and avoid adding a duplicate
             size_t i, l = jl_array_nrows(mt->backedges);
-            for (i = 1; i < l; i += 2) {
-                if (jl_array_ptr_ref(mt->backedges, i) == (jl_value_t*)caller) {
-                    if (jl_types_equal(jl_array_ptr_ref(mt->backedges, i - 1), typ)) {
-                        JL_UNLOCK(&mt->writelock);
-                        return;
-                    }
-                }
-            }
             // reuse an already cached instance of this type, if possible
             // TODO: use jl_cache_type_(tt) like cache_method does, instead of this linear scan?
             for (i = 1; i < l; i += 2) {
