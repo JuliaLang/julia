@@ -3513,6 +3513,11 @@
          (let ((vi (get tab (cadr e) #f)))
            (if vi
                (vinfo:set-called! vi #t))
+           ;; calls f(x...) go through `_apply_iterate`
+           (if (and (length> e 3) (equal? (cadr e) '(core _apply_iterate)))
+               (let ((vi2 (get tab (cadddr e) #f)))
+                 (if vi2
+                     (vinfo:set-called! vi2 #t))))
            ;; calls to functions with keyword args have head of `kwcall` first
            (if (and (length> e 3) (equal? (cadr e) '(core kwcall)))
                (let ((vi2 (get tab (cadddr e) #f)))
