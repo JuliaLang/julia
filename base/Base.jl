@@ -157,6 +157,8 @@ include("weakkeydict.jl")
 # ScopedValues
 include("scopedvalues.jl")
 
+include("../Compiler/src/timing.jl")
+
 # metaprogramming
 include("meta.jl")
 
