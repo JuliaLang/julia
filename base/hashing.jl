@@ -117,7 +117,7 @@ function hash(x::Float16, h::UInt)
 end
 
 ## generic hashing for rational values ##
-function hash(x::Real, h::UInt)
+function hash(x::T, h::UInt) where T<:Union{AbstractFloat, Rational, Integer}
     # decompose x as num*2^pow/den
     num, pow, den = decompose(x)
 
