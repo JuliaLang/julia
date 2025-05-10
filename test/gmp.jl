@@ -808,3 +808,11 @@ t = Rational{BigInt}(0, 1)
         @test Base.GMP.MPQ.div!(-oo, zo) == -oz
     end
 end
+
+@testset "hashing" begin
+    for i in 1:10:100
+        bint = big(11)^i
+        bfloat = big(11.0)^i
+        @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+    end
+end
