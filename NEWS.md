@@ -47,6 +47,11 @@ Standard library changes
 
 #### Profile
 
+#### Random
+
+* It's now possible to efficiently create a new `Xoshiro` instance from an existing one via `Random.fork`, which
+  can be useful in parallel computations ([#58193]).
+
 #### REPL
 
 #### Test
