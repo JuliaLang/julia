@@ -305,10 +305,10 @@ function showerror(io::IO, ex::MethodError)
         end
         buf = IOBuffer()
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
-        show_signature_function(iob, Core.Typeof(f))
+        show_signature_function(iob, type_limited_string_from_context(iob, Core.Typeof(f)))
         show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
         str = String(take!(buf))
-        str = type_limited_string_from_context(io, str)
+        # str = type_limited_string_from_context(io, str)
         print(io, str)
     end
     # catch the two common cases of element-wise addition and subtraction
