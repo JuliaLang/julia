@@ -137,6 +137,50 @@ true
 signbit(x::Real) = x < 0
 
 """
+    ispositive(x)
+
+Test whether `x > 0`. See also [`isnegative`](@ref).
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+# Examples
+```jldoctest
+julia> ispositive(-4.0)
+false
+
+julia> ispositive(99)
+true
+
+julia> ispositive(0.0)
+false
+```
+"""
+ispositive(x::Real) = x > 0
+
+"""
+    isnegative(x)
+
+Test whether `x < 0`. See also [`ispositive`](@ref).
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+# Examples
+```jldoctest
+julia> isnegative(-4.0)
+true
+
+julia> isnegative(99)
+false
+
+julia> isnegative(-0.0)
+false
+```
+"""
+isnegative(x::Real) = x < 0
+
+"""
     sign(x)
 
 Return zero if `x==0` and ``x/|x|`` otherwise (i.e., ±1 for real `x`).

@@ -110,6 +110,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
     elseif isdefined(result, :ci)
         edges = result_edges(interp, caller)
         ci = result.ci
+        mi = result.linfo
         # if we aren't cached, we don't need this edge
         # but our caller might, so let's just make it anyways
         if last(result.valid_worlds) >= validation_world
@@ -143,7 +144,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                     resize!(inferred_result.slottypes::Vector{Any}, nslots)
                     resize!(inferred_result.slotnames, nslots)
                 end
-                inferred_result = maybe_compress_codeinfo(interp, result.linfo, inferred_result)
+                inferred_result = maybe_compress_codeinfo(interp, mi, inferred_result)
                 result.is_src_volatile = false
             elseif ci.owner === nothing
                 # The global cache can only handle objects that codegen understands
@@ -151,14 +152,19 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
             end
         end
         if debuginfo === nothing
-            debuginfo = DebugInfo(result.linfo)
+            debuginfo = DebugInfo(mi)
         end
+        min_world, max_world = first(result.valid_worlds), last(result.valid_worlds)
+        ipo_effects = encode_effects(result.ipo_effects)
         time_now = _time_ns()
         time_self_ns = caller.time_self_ns + (time_now - time_before)
         time_total = (time_now - caller.time_start - caller.time_paused) * 1e-9
         ccall(:jl_update_codeinst, Cvoid, (Any, Any, Int32, UInt, UInt, UInt32, Any, Float64, Float64, Float64, Any, Any),
-            ci, inferred_result, const_flag, first(result.valid_worlds), last(result.valid_worlds), encode_effects(result.ipo_effects),
+            ci, inferred_result, const_flag, min_world, max_world, ipo_effects,
             result.analysis_results, time_total, caller.time_caches, time_self_ns * 1e-9, debuginfo, edges)
+        if is_cached(caller) # CACHE_MODE_GLOBAL
+            cache_result!(interp, result, ci)
+        end
         engine_reject(interp, ci)
         codegen = codegen_cache(interp)
         if !discard_src && codegen !== nothing && (isa(uncompressed, CodeInfo) || isa(uncompressed, OptimizationState))
@@ -171,7 +177,6 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                 # This is necessary to get decent bootstrapping performance
                 # when compiling the compiler to inject everything eagerly
                 # where codegen can start finding and using it right away
-                mi = result.linfo
                 if mi.def isa Method && isa_compileable_sig(mi) && is_cached(caller)
                     ccall(:jl_add_codeinst_to_jit, Cvoid, (Any, Any), ci, uncompressed)
                 end
@@ -179,6 +184,11 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
         end
     end
     return nothing
+end
+
+function cache_result!(interp::AbstractInterpreter, result::InferenceResult, ci::CodeInstance)
+    mi = result.linfo
+    code_cache(interp)[mi] = ci
 end
 
 function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstance, src::CodeInfo)
@@ -215,11 +225,13 @@ function finish!(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInstan
 end
 
 function finish_nocycle(::AbstractInterpreter, frame::InferenceState, time_before::UInt64)
-    finishinfer!(frame, frame.interp, frame.cycleid)
+    opt_cache = IdDict{MethodInstance,CodeInstance}()
+    finishinfer!(frame, frame.interp, frame.cycleid, opt_cache)
     opt = frame.result.src
     if opt isa OptimizationState # implies `may_optimize(caller.interp) === true`
         optimize(frame.interp, opt, frame.result)
     end
+    empty!(opt_cache)
     validation_world = get_world_counter()
     finish!(frame.interp, frame, validation_world, time_before)
     if isdefined(frame.result, :ci)
@@ -249,10 +261,11 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
         cycle_valid_worlds = intersect(cycle_valid_worlds, caller.world.valid_worlds)
         cycle_valid_effects = merge_effects(cycle_valid_effects, caller.ipo_effects)
     end
+    opt_cache = IdDict{MethodInstance,CodeInstance}()
     for frameid = cycleid:length(frames)
         caller = frames[frameid]::InferenceState
         adjust_cycle_frame!(caller, cycle_valid_worlds, cycle_valid_effects)
-        finishinfer!(caller, caller.interp, cycleid)
+        finishinfer!(caller, caller.interp, cycleid, opt_cache)
         time_now = _time_ns()
         caller.time_self_ns += (time_now - time_before)
         time_before = time_now
@@ -273,6 +286,7 @@ function finish_cycle(::AbstractInterpreter, frames::Vector{AbsIntState}, cyclei
         caller.time_paused = UInt64(0)
         caller.time_caches = 0.0
     end
+    empty!(opt_cache)
     cycletop = frames[cycleid]::InferenceState
     time_start = cycletop.time_start
     validation_world = get_world_counter()
@@ -434,22 +448,6 @@ function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance
     return ci
 end
 
-function cache_result!(interp::AbstractInterpreter, result::InferenceResult, ci::CodeInstance)
-    @assert isdefined(ci, :inferred)
-    # check if the existing linfo metadata is also sufficient to describe the current inference result
-    # to decide if it is worth caching this right now
-    mi = result.linfo
-    cache = WorldView(code_cache(interp), result.valid_worlds)
-    if haskey(cache, mi)
-        ci = cache[mi]
-        # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
-        @assert isdefined(ci, :inferred)
-        return false
-    end
-    code_cache(interp)[mi] = ci
-    return true
-end
-
 function cycle_fix_limited(@nospecialize(typ), sv::InferenceState, cycleid::Int)
     if typ isa LimitedAccuracy
         frames = sv.callstack::Vector{AbsIntState}
@@ -579,7 +577,8 @@ const empty_edges = Core.svec()
 
 # inference completed on `me`
 # update the MethodInstance
-function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::Int)
+function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::Int,
+                      opt_cache::IdDict{MethodInstance, CodeInstance})
     # prepare to run optimization passes on fulltree
     @assert isempty(me.ip)
     # inspect whether our inference had a limited result accuracy,
@@ -635,7 +634,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
                 # disable optimization if we've already obtained very accurate result
                 !result_is_constabi(interp, result)
         if doopt
-            result.src = OptimizationState(me, interp)
+            result.src = OptimizationState(me, interp, opt_cache)
         else
             result.src = me.src # for reflection etc.
         end
@@ -670,29 +669,51 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
             rettype_const = nothing
             const_flags = 0x0
         end
+
         di = nothing
         edges = empty_edges # `edges` will be updated within `finish!`
         ci = result.ci
+        min_world, max_world = first(result.valid_worlds), last(result.valid_worlds)
         ccall(:jl_fill_codeinst, Cvoid, (Any, Any, Any, Any, Int32, UInt, UInt, UInt32, Any, Any, Any),
             ci, widenconst(result_type), widenconst(result.exc_result), rettype_const, const_flags,
-            first(result.valid_worlds), last(result.valid_worlds),
+            min_world, max_world,
             encode_effects(result.ipo_effects), result.analysis_results, di, edges)
         if is_cached(me) # CACHE_MODE_GLOBAL
-            cached_result = cache_result!(me.interp, result, ci)
-            if !cached_result
+            already_cached = is_already_cached(me.interp, result, ci)
+            if already_cached
                 me.cache_mode = CACHE_MODE_VOLATILE
+            else
+                opt_cache[result.linfo] = ci
             end
         end
     end
     nothing
 end
 
-# record the backedges
-function store_backedges(caller::CodeInstance, edges::SimpleVector)
-    isa(caller.def.def, Method) || return # don't add backedges to toplevel method instance
-    i = 1
-    while true
-        i > length(edges) && return nothing
+function is_already_cached(interp::AbstractInterpreter, result::InferenceResult, ci::CodeInstance)
+    # check if the existing linfo metadata is also sufficient to describe the current inference result
+    # to decide if it is worth caching this right now
+    mi = result.linfo
+    cache = WorldView(code_cache(interp), result.valid_worlds)
+    if haskey(cache, mi)
+        # n.b.: accurate edge representation might cause the CodeInstance for this to be constructed later
+        @assert isdefined(cache[mi], :inferred)
+        return true
+    end
+    return false
+end
+
+# Iterate a series of back-edges that need registering, based on the provided forward edge list.
+# Back-edges are returned as (invokesig, item), where the item is a Binding, MethodInstance, or
+# MethodTable.
+struct ForwardToBackedgeIterator
+    forward_edges::SimpleVector
+end
+
+function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
+    edges = it.forward_edges
+    i > length(edges) && return nothing
+    while i ≤ length(edges)
         item = edges[i]
         if item isa Int
             i += 2
@@ -702,34 +723,55 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
             i += 1
             continue
         elseif isa(item, Core.Binding)
-            i += 1
-            maybe_add_binding_backedge!(item, caller)
-            continue
+            return ((nothing, item), i + 1)
         end
         if isa(item, CodeInstance)
-            item = item.def
-        end
-        if isa(item, MethodInstance) # regular dispatch
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, nothing, caller)
-            i += 1
+            item = get_ci_mi(item)
+            return ((nothing, item), i + 1)
+        elseif isa(item, MethodInstance) # regular dispatch
+            return ((nothing, item), i + 1)
         else
+            invokesig = item
             callee = edges[i+1]
-            if isa(callee, MethodTable) # abstract dispatch (legacy style edges)
-                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
-                i += 2
-                continue
-            elseif isa(callee, Method)
-                # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
-                i += 2
-                continue
-            # `invoke` edge
-            elseif isa(callee, CodeInstance)
-                callee = get_ci_mi(callee)
+            isa(callee, Method) && (i += 2; continue) # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
+            if isa(callee, MethodTable)
+                # abstract dispatch (legacy style edges)
+                return ((invokesig, callee), i + 2)
             else
-                callee = callee::MethodInstance
+                # `invoke` edge
+                callee = isa(callee, CodeInstance) ? get_ci_mi(callee) : callee::MethodInstance
+                return ((invokesig, callee), i + 2)
             end
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
-            i += 2
+        end
+    end
+    return nothing
+end
+
+# record the backedges
+function store_backedges(caller::CodeInstance, edges::SimpleVector)
+    isa(caller.def.def, Method) || return # don't add backedges to toplevel method instance
+
+    backedges = ForwardToBackedgeIterator(edges)
+    for (i, (invokesig, item)) in enumerate(backedges)
+        # check for any duplicate edges we've already registered
+        duplicate_found = false
+        for (i′, (invokesig′, item′)) in enumerate(backedges)
+            i == i′ && break
+            if item′ === item && invokesig′ == invokesig
+                duplicate_found = true
+                break
+            end
+        end
+
+        if !duplicate_found
+            if item isa Core.Binding
+                maybe_add_binding_backedge!(item, caller)
+            elseif item isa MethodTable
+                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
+            else
+                item::MethodInstance
+                ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
+            end
         end
     end
     nothing
