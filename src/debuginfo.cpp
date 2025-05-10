@@ -704,7 +704,7 @@ static inline void ignoreError(T &err) JL_NOTSAFEPOINT
 #endif
 }
 
-static void get_function_name_and_base(llvm::object::SectionRef Section, size_t pointer, int64_t slide, bool inimage,
+static void get_function_name_and_base(size_t pointer, int64_t slide, bool inimage,
                                        void **saddr, char **name, bool untrusted_dladdr) JL_NOTSAFEPOINT
 {
     bool needs_saddr = saddr && (!*saddr || untrusted_dladdr);
@@ -729,62 +729,6 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
         }
 #endif
     }
-    if (Section.getObject() && (needs_saddr || needs_name)) {
-        size_t distance = (size_t)-1;
-        object::SymbolRef sym_found;
-        for (auto sym : Section.getObject()->symbols()) {
-            if (!Section.containsSymbol(sym))
-                continue;
-            auto addr = sym.getAddress();
-            if (!addr)
-                continue;
-            size_t symptr = addr.get();
-            if (symptr > pointer + slide)
-                continue;
-            size_t new_dist = pointer + slide - symptr;
-            if (new_dist > distance)
-                continue;
-            distance = new_dist;
-            sym_found = sym;
-        }
-        if (distance != (size_t)-1) {
-            if (needs_saddr) {
-                uintptr_t addr = cantFail(sym_found.getAddress());
-                *saddr = (void*)(addr - slide);
-                needs_saddr = false;
-            }
-            if (needs_name) {
-                if (auto name_or_err = sym_found.getName()) {
-                    auto nameref = name_or_err.get();
-                    const char globalPrefix = // == DataLayout::getGlobalPrefix
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-                        '_';
-#elif defined(_OS_DARWIN_)
-                        '_';
-#else
-                        '\0';
-#endif
-                    if (globalPrefix) {
-                        if (nameref[0] == globalPrefix)
-                          nameref = nameref.drop_front();
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-                        else if (nameref[0] == '@') // X86_VectorCall
-                          nameref = nameref.drop_front();
-#endif
-                        // else VectorCall, Assembly, Internal, etc.
-                    }
-#if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-                    nameref = nameref.split('@').first;
-#endif
-                    size_t len = nameref.size();
-                    *name = (char*)realloc_s(*name, len + 1);
-                    memcpy(*name, nameref.data(), len);
-                    (*name)[len] = 0;
-                    needs_name = false;
-                }
-            }
-        }
-    }
 #ifdef _OS_WINDOWS_
     // For ntdll and msvcrt since we are currently only parsing DWARF debug info through LLVM
     if (!inimage && needs_name) {
@@ -803,6 +747,8 @@ static void get_function_name_and_base(llvm::object::SectionRef Section, size_t 
         }
         uv_mutex_unlock(&jl_in_stackwalk);
     }
+#else
+    (void)needs_name;
 #endif
 }
 
@@ -1134,7 +1080,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, int64_t *
     // Assume we only need base address for sysimg for now
     if (!inimage || 0 == image_info.fptrs.nptrs)
         saddr = nullptr;
-    get_function_name_and_base(*Section, pointer, entry.slide, inimage, saddr, name, untrusted_dladdr);
+    get_function_name_and_base(pointer, entry.slide, inimage, saddr, name, untrusted_dladdr);
     return true;
 }
 
