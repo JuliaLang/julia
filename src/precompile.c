@@ -132,7 +132,7 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
                 jl_value_t *tt = jl_is_type(f) ? (jl_value_t*)jl_wrap_Type(f) : jl_typeof(f);
                 JL_GC_PUSH1(&tt);
                 tt = jl_apply_tuple_type_v(&tt, 1);
-                jl_compile_hint((jl_tupletype_t*)tt);
+                jl_compile_hint((jl_tupletype_t*)tt, 0);
                 if (jl_options.trim)
                     jl_add_entrypoint((jl_tupletype_t*)tt);
                 JL_GC_POP();
