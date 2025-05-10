@@ -299,19 +299,37 @@ end
             arr = zeros(N)
             @test minimum(arr) === 0.0
             @test maximum(arr) === 0.0
+            @test minimum(abs, arr) === 0.0
+            @test maximum(abs, arr) === 0.0
+            @test minimum(-, arr) === -0.0
+            @test maximum(-, arr) === -0.0
 
             arr[i] = -0.0
             @test minimum(arr) === -0.0
             @test maximum(arr) ===  0.0
+            @test minimum(abs, arr) === 0.0
+            @test maximum(abs, arr) === 0.0
+            @test minimum(-, arr) === -0.0
+            @test maximum(-, arr) ===  0.0
 
             arr = -zeros(N)
             @test minimum(arr) === -0.0
             @test maximum(arr) === -0.0
+            @test minimum(abs, arr) === 0.0
+            @test maximum(abs, arr) === 0.0
+            @test minimum(-, arr) === 0.0
+            @test maximum(-, arr) === 0.0
             arr[i] = 0.0
             @test minimum(arr) === -0.0
-            @test maximum(arr) === 0.0
+            @test maximum(arr) ===  0.0
+            @test minimum(abs, arr) === 0.0
+            @test maximum(abs, arr) === 0.0
+            @test minimum(-, arr) === -0.0
+            @test maximum(-, arr) ===  0.0
         end
     end
+
+    @test minimum(abs, fill(-0.0, 16)) === mapreduce(abs, (x,y)->min(x,y), fill(-0.0, 16)) === 0.0
 end
 
 @testset "maximum works on generic order #30320" begin
@@ -679,6 +697,27 @@ end
         @test sum(oa) == reduce(+, oa) == len
         @test mapreduce(+, +, oa, oa) == 2len
     end
+end
+
+@testset "issue #45562" begin
+    @test all([true, true, true], dims = 1) == [true]
+    @test any([true, true, true], dims = 1) == [true]
+    @test_throws TypeError all([3, 3, 3], dims = 1)
+    @test_throws TypeError any([3, 3, 3], dims = 1)
+    @test_throws TypeError all(Any[true, 3, 3], dims = 1)
+    @test_throws TypeError any(Any[false, 3, 3], dims = 1)
+    @test_throws TypeError all([1, 1, 1], dims = 1)
+    @test_throws TypeError any([0, 0, 0], dims = 1)
+    @test_throws TypeError all!([false], [3, 3, 3])
+    @test_throws TypeError any!([false], [3, 3, 3])
+    @test_throws TypeError all!([false], Any[true, 3, 3])
+    @test_throws TypeError any!([false], Any[false, 3, 3])
+    @test_throws TypeError all!([false], [1, 1, 1])
+    @test_throws TypeError any!([false], [0, 0, 0])
+    @test reduce(|, Bool[]) == false
+    @test reduce(&, Bool[]) == true
+    @test reduce(|, Bool[], dims=1) == [false]
+    @test reduce(&, Bool[], dims=1) == [true]
 end
 
 # issue #45748

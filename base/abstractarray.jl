@@ -3567,7 +3567,6 @@ function rest(a::AbstractArray{T}, state...) where {T}
     return foldl(push!, Iterators.rest(a, state...), init=v)
 end
 
-
 ## keepat! ##
 
 # NOTE: since these use `@inbounds`, they are actually only intended for Vector and BitVector

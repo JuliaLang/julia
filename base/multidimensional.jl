@@ -148,7 +148,7 @@ module IteratorsMD
     # hashing
     const cartindexhash_seed = UInt == UInt64 ? 0xd60ca92f8284b8b0 : 0xf2ea7c2e
     function Base.hash(ci::CartesianIndex, h::UInt)
-        h += cartindexhash_seed
+        h ⊻= cartindexhash_seed
         for i in ci.I
             h = hash(i, h)
         end
