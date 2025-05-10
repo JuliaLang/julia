@@ -695,8 +695,12 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
     return true
 end
 
-function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector)
+function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector, limit::Int = length(env))
     n = length(env)
+    typelimitflag = get(io, :stacktrace_types_limited, nothing)
+    if typelimitflag isa RefValue{Bool}
+        n = min(n, limit)
+    end
     elide = length(wheres)
     function egal_var(p::TypeVar, @nospecialize o)
         return o isa TypeVar &&
@@ -735,7 +739,16 @@ function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::
             end
             i < n && print(io, ", ")
         end
+        if n < length(env)
+            print(io, ", …")
+            if typelimitflag isa RefValue{Bool}
+                typelimitflag[] = true
+            end
+        end
         print(io, "}")
+    elseif typelimitflag isa RefValue{Bool} && n < length(env)
+        print(io, "{…}")
+        typelimitflag[] = true
     end
     resize!(wheres, elide)
     nothing
@@ -1223,7 +1236,7 @@ function show_datatype(io::IO, x::DataType, wheres::Vector{TypeVar}=TypeVar[])
     end
 
     show_type_name(io, x.name)
-    show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres)
+    show_typeparams(io, parameters, (unwrap_unionall(x.name.wrapper)::DataType).parameters, wheres, Int(x.name.relevant_params))
 end
 
 function show_at_namedtuple(io::IO, syms::Tuple, types::DataType)

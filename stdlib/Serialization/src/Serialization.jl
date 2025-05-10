@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 31 # do not make changes without bumping the version #!
+const ser_version = 32 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -554,6 +554,7 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
 
     ver > 30 && serialize(s, t.cache_entry_count)
     ver > 30 && serialize(s, t.constprop_heuristic)
+    ver > 31 && serialize(s, t.relevant_params)
     nothing
 end
 
@@ -1508,6 +1509,7 @@ function deserialize_typename(s::AbstractSerializer, number)
 
     ver > 30 && (tn.cache_entry_count = deserialize(s)::UInt8)
     ver > 30 && (tn.constprop_heuristic = deserialize(s)::UInt8)
+    ver > 31 && (tn.relevant_params = deserialize(s)::UInt8)
     return tn
 end
 

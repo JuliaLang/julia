@@ -83,6 +83,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     jl_atomic_store_relaxed(&tn->cache_entry_count, 0);
     tn->max_methods = 0;
     tn->constprop_heuristic = 0;
+    tn->relevant_params = 0;
     return tn;
 }
 
@@ -867,6 +868,7 @@ JL_DLLEXPORT jl_datatype_t *jl_new_datatype(
             // Everything else, gets to use the unified table
             tn->mt = jl_nonfunction_mt;
         }
+        tn->relevant_params = jl_svec_len(t->parameters);
     }
     t->name = tn;
     jl_gc_wb(t, t->name);
