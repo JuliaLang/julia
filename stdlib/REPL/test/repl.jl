@@ -983,6 +983,13 @@ let ends_with_semicolon = REPL.ends_with_semicolon
     @test ends_with_semicolon("f()= 1;")
     # the next result does not matter because this is not legal syntax
     @test_nowarn ends_with_semicolon("1; #=# 2")
+
+    # #46189 - adjoint operator with comment
+    @test ends_with_semicolon("W';") == true
+    @test ends_with_semicolon("W'; # comment")
+    @test !ends_with_semicolon("W'")
+    @test !ends_with_semicolon("x'")
+    @test !ends_with_semicolon("'a'")
 end
 
 # PR #20794, TTYTerminal with other kinds of streams

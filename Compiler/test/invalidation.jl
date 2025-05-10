@@ -177,25 +177,24 @@ begin
     end
 
     # Verify that adding the backedge again does not actually add a new backedge
-    let mi1 = Base.method_instance(deduped_caller1, (Int,)),
-        mi2 = Base.method_instance(deduped_caller2, (Int,)),
-        ci1 = mi1.cache
-        ci2 = mi2.cache
+    let mi = Base.method_instance(deduped_caller1, (Int,)),
+        ci = mi.cache
 
         callee_mi = Base.method_instance(deduped_callee, (Int,))
 
         # Inference should have added the callers to the callee's backedges
-        @test ci1 in callee_mi.backedges
-        @test ci2 in callee_mi.backedges
+        @test ci in callee_mi.backedges
 
+        # In practice, inference will never end up calling `store_backedges`
+        # twice on the same CodeInstance like this - we only need to check
+        # that de-duplication works for a single invocation
         N = length(callee_mi.backedges)
-        Core.Compiler.store_backedges(ci1, Core.svec(callee_mi))
-        Core.Compiler.store_backedges(ci2, Core.svec(callee_mi))
+        Core.Compiler.store_backedges(ci, Core.svec(callee_mi, callee_mi))
         N′ = length(callee_mi.backedges)
 
-        # The number of backedges should not be affected by an additional store,
-        # since de-duplication should have noticed the edge is already tracked
-        @test N == N′
+        # A single `store_backedges` invocation should de-duplicate any of the
+        # edges it is adding.
+        @test N′ - N == 1
     end
 end
 

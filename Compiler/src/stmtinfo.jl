@@ -278,6 +278,7 @@ struct InvokeCICallInfo <: CallInfo
 end
 add_edges_impl(edges::Vector{Any}, info::InvokeCICallInfo) =
     add_inlining_edge!(edges, info.edge)
+nsplit_impl(info::InvokeCICallInfo) = 0
 
 """
     info::InvokeCallInfo
@@ -389,6 +390,11 @@ function add_inlining_edge!(edges::Vector{Any}, edge::CodeInstance)
     push!(edges, edge)
     nothing
 end
+
+nsplit_impl(info::InvokeCallInfo) = 1
+getsplit_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; MethodLookupResult(Core.MethodMatch[info.match],
+    WorldRange(typemin(UInt), typemax(UInt)), false))
+getresult_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; info.result)
 
 
 """

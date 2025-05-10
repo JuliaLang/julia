@@ -956,6 +956,17 @@ precompile_test_harness("code caching") do dir
         use_stale(c) = stale(c[1]) + not_stale("hello")
         build_stale(x) = use_stale(Any[x])
 
+        # bindings
+        struct InvalidatedBinding
+            x::Int
+        end
+        struct Wrapper
+            ib::InvalidatedBinding
+        end
+        makewib(x) = Wrapper(InvalidatedBinding(x))
+        const gib = makewib(1)
+        fib() = gib.ib.x
+
         # force precompilation
         build_stale(37)
         stale('c')
@@ -985,6 +996,7 @@ precompile_test_harness("code caching") do dir
             Base.Experimental.@force_compile
             useA2()
         end
+        precompile($StaleA.fib, ())
 
         ## Reporting tests
         call_nbits(x::Integer) = $StaleA.nbits(x)
@@ -1014,6 +1026,15 @@ precompile_test_harness("code caching") do dir
     @eval using $StaleA
     MA = invokelatest(getfield, @__MODULE__, StaleA)
     Base.eval(MA, :(nbits(::UInt8) = 8))
+    Base.eval(MA, quote
+        struct InvalidatedBinding
+            x::Float64
+        end
+        struct Wrapper
+            ib::InvalidatedBinding
+        end
+        const gib = makewib(2.0)
+    end)
     @eval using $StaleC
     invalidations = Base.StaticData.debug_method_invalidation(true)
     @eval using $StaleB
@@ -1044,6 +1065,11 @@ precompile_test_harness("code caching") do dir
         m = only(methods(MC.call_buildstale))
         mi = m.specializations::Core.MethodInstance
         @test hasvalid(mi, world)       # was compiled with the new method
+        m = only(methods(MA.fib))
+        mi = m.specializations::Core.MethodInstance
+        @test isdefined(mi, :cache)     # it was precompiled by StaleB
+        @test_broken !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        @test_broken MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
         @test all(i -> isassigned(invalidations, i), eachindex(invalidations))

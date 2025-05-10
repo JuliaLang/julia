@@ -11,6 +11,8 @@ Language changes
 * `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
 is considered a bug fix ([#47102])
 
+  - The `hash` algorithm and its values have changed. Most `hash` specializations will remain correct and require no action. Types that reimplement the core hashing logic independently, such as some third-party string packages do, may require a migration to the new algorithm. ([#57509])
+
 Compiler/Runtime improvements
 -----------------------------
 
