@@ -306,3 +306,92 @@ function hash_seed(str::AbstractString, ctx::SHA_CTX)
     end
     SHA.update!(ctx, (0x05,))
 end
+
+
+## jump
+
+"""
+    Random.jump(rng::AbstractRNG, [dims...]; [by::Real])
+
+Create a new generator of the same type as `rng`, whose state is advanced forward
+("jump ahead") by `by` "steps".
+This is equivalent to `Random.jump!(copy(rng); by)`.
+
+When `dims` is specified (as integers or as a tuple), create an array of such
+generators `x_1, x_2, ..., x_n`, where `x_1 = jump(rng; by)`, and
+`x_i = jump(x_{i-1}; by)`.
+
+This can be used to generate non-overlapping subsequences for parallel computations.
+The maximum number of such subsequences is roughly equal to the period
+of `rng` divided by `by`.
+
+The default value of `by` should generally be large enough such that the generated
+subsequences can accomodate any computation;
+it's currently `2.0^128` for `MersenneTwister` and `Xoshiro`, but can change in the
+future.
+
+!!! compat "Julia 1.13"
+    This function was introduced in Julia 1.13.
+
+# Examples
+```julia-repl
+julia> Random.jump(Xoshiro(0))
+Xoshiro(0xe223c163bccd575d, 0xef13c6b1ba8b980b, 0xeb86b37bd43e78ab, 0x2b93c9c43b0815fb, 0x22a21880af5dc689)
+
+julia> m = MersenneTwister(123)
+MersenneTwister(123)
+
+julia> Random.jump(m, 3; by=1000)
+3-element Vector{MersenneTwister}:
+ MersenneTwister(123, (1000, 0))
+ MersenneTwister(123, (2000, 0))
+ MersenneTwister(123, (3000, 0))
+```
+
+See also [`Random.jump!`](@ref).
+"""
+function jump end
+
+"""
+    Random.jump!(rng::AbstractRNG; [by::Real]) -> rng
+
+Advance the state of `rng` forward ("jump ahead") by `by` "steps".
+What a step represents is specific to each specific type.
+For example with `Xoshiro`, advancing by one step means consuming 8 bytes from `rng`.
+
+Note that some approximation in the number of steps is permitted in the implementation.
+For example, if the RNG caches some random numbers, it's allowed to discard the cache
+and jump ahead by `by` steps without accounting for the specific number of discarded
+values. In general, `by` should be specified large enough, with a huge margin, such
+that such details do not matter.
+
+`by` should be an integer, but can be expressed via non-`Integer` types for
+convenience, e.g. `by = 2.0^128`. While some RNGs like `MersenneTwister` support any
+positive integer, others like `Xoshiro` support only specific values.
+
+!!! compat "Julia 1.13"
+    This function was introduced in Julia 1.13.
+
+# Examples
+```julia-repl
+julia> m = MersenneTwister(123)
+MersenneTwister(123)
+
+julia> Random.jump!(m; by=1000)
+MersenneTwister(123, (1000, 0))
+```
+See also [`Random.jump`](@ref).
+"""
+function jump! end
+
+jump(rng::AbstractRNG; by::Real=NaN) = jump!(copy(rng); by)
+jump(rng::AbstractRNG, d1::Integer, dims::Integer...; by::Real=NaN) =
+    jump(rng, Dims((d1, dims...)); by)
+
+function jump(rng::AbstractRNG, dims::Dims; by::Real=NaN)
+    js = Array{typeof(rng)}(undef, dims)
+    for ii in eachindex(js)
+        rng = js[ii] = jump(rng; by)
+    end
+    js
+end
