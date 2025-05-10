@@ -286,7 +286,7 @@ function invmod(n::Integer, m::Integer)
     g, x, y = gcdx(n, m)
     g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
     # Note that m might be negative here.
-    if n isa Unsigned && hastypemax(typeof(n)) && x > typemax(n)>>1
+    if x isa Unsigned && hastypemax(typeof(x)) && x > typemax(x)>>1
         # x might have wrapped if it would have been negative
         # adding back m forces a correction
         x += m
