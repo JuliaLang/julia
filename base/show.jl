@@ -2542,6 +2542,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int, quote_level::In
         # we want to show bad ASTs reasonably to make errors understandable.
         lambda_io = IOContext(io, :SOURCE_SLOTNAMES => false)
         show_unquoted_expr_fallback(lambda_io, ex, indent, quote_level)
+    elseif get(io, beginsym, false) && head in (:begin, :end)
+        print(io, head)
     else
         unhandled = true
     end
