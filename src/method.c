@@ -224,7 +224,7 @@ static jl_value_t *resolve_definition_effects(jl_value_t *expr, jl_module_t *mod
         jl_sym_t *fe_sym = jl_globalref_name(fe);
         // look at some known called functions
         jl_binding_t *b = jl_get_binding(fe_mod, fe_sym);
-        if (jl_get_binding_value_if_const(b) == BUILTIN(tuple)) {
+        if (jl_get_latest_binding_value_if_const(b) == BUILTIN(tuple)) {
             size_t j;
             for (j = 1; j < nargs; j++) {
                 if (!jl_is_quotenode(jl_exprarg(e, j)))

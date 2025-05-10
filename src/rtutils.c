@@ -579,7 +579,7 @@ JL_DLLEXPORT jl_value_t *jl_stderr_obj(void) JL_NOTSAFEPOINT
     if (jl_base_module == NULL)
         return NULL;
     jl_binding_t *stderr_obj = jl_get_module_binding(jl_base_module, jl_symbol("stderr"), 0);
-    return stderr_obj ? jl_get_binding_value_if_resolved_debug_only(stderr_obj) : NULL;
+    return stderr_obj ? jl_get_latest_binding_value_if_resolved_debug_only(stderr_obj) : NULL;
 }
 
 // toys for debugging ---------------------------------------------------------
@@ -674,7 +674,7 @@ static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
     jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
     if (globname && dv->name->module) {
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
-        jl_value_t *bv = jl_get_binding_value_if_latest_resolved_and_const_debug_only(b);
+        jl_value_t *bv = jl_get_latest_binding_value_if_resolved_and_const_debug_only(b);
         if (bv && ((jl_value_t*)dv == v ? jl_typeof(bv) == v : bv == v))
             return 1;
     }

@@ -3198,7 +3198,7 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
     if (!jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
         return emit_globalref_runtime(ctx, bnd, mod, name);
     }
-    if (jl_bkind_is_some_constant(rkp.kind) && rkp.kind != PARTITION_KIND_BACKDATED_CONST) {
+    if (jl_bkind_is_real_constant(rkp.kind) || rkp.kind == PARTITION_KIND_UNDEF_CONST) {
         if (rkp.maybe_depwarn) {
             Value *bp = julia_binding_gv(ctx, bnd);
             ctx.builder.CreateCall(prepare_call(jldepcheck_func), { bp });
@@ -3788,7 +3788,7 @@ static jl_cgval_t emit_isdefinedglobal(jl_codectx_t &ctx, jl_module_t *modu, jl_
     jl_binding_t *bnd = allow_import ? jl_get_binding(modu, name) : jl_get_module_binding(modu, name, 0);
     struct restriction_kind_pair rkp = { NULL, NULL, PARTITION_KIND_GUARD, 0 };
     if (allow_import && jl_get_binding_leaf_partitions_restriction_kind(bnd, &rkp, ctx.min_world, ctx.max_world)) {
-        if (jl_bkind_is_some_constant(rkp.kind) && rkp.restriction)
+        if (jl_bkind_is_real_constant(rkp.kind))
             return mark_julia_const(ctx, jl_true);
         if (rkp.kind == PARTITION_KIND_GLOBAL) {
             Value *bp = julia_binding_gv(ctx, rkp.binding_if_global);

@@ -771,7 +771,7 @@ int foreach_mtable_in_module(
         if ((void*)b == jl_nothing)
             break;
         jl_sym_t *name = b->globalref->name;
-        jl_value_t *v = jl_get_binding_value_if_const(b);
+        jl_value_t *v = jl_get_latest_binding_value_if_const(b);
         if (v) {
             jl_value_t *uw = jl_unwrap_unionall(v);
             if (jl_is_datatype(uw)) {
