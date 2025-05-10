@@ -3,10 +3,14 @@ uuid = "8f36deef-c2a5-5394-99ed-8e07531fb29a"
 version = "19.1.7+1"
 
 [deps]
-Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 Artifacts = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
+Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
+Zlib_jll = "83775a58-1f1d-513f-b197-d71354ab007a"
+Zstd_jll = "3161d3a3-bdf6-5164-811a-617609db77b4"
 
 [compat]
+Zlib_jll = "1"
+Zstd_jll = "1.5"
 julia = "1.13"
 
 [extras]

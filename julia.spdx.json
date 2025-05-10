@@ -240,7 +240,7 @@
             "licenseConcluded": "Apache-2.0",
             "licenseDeclared": "Apache-2.0",
             "copyrightText": "Copyright (c) 1998-2024 The OpenSSL Project Authors. Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson.",
-            "summary": "OpenSSL is a robust, commercial-grade, full-featured Open Source Toolkit for the TLS (formerly SSL), DTLS and QUIC (currently client side only) protocols.",
+            "summary": "OpenSSL is a robust, commercial-grade, full-featured Open Source Toolkit for the TLS (formerly SSL), DTLS and QUIC (currently client side only) protocols."
         },
         {
             "name": "mpfr",
@@ -431,6 +431,18 @@
             "licenseDeclared": "Zlib",
             "copyrightText": "Copyright (C) 1995-2017 Jean-loup Gailly and Mark Adler",
             "summary": "A massively spiffy yet delicately unobtrusive compression library."
+        },
+        {
+            "name": "zstd",
+            "SPDXID": "SPDXRef-zstd",
+            "downloadLocation": "git+https://github.com/facebook/zstd.git",
+            "filesAnalyzed": false,
+            "homepage": "https://www.zstd.net",
+            "sourceInfo": "The git hash of the version in use can be found in the file deps/zstd.version",
+            "licenseConcluded": "BSD-3-Clause",
+            "licenseDeclared": "GPL-2.0+ OR BSD-3-Clause",
+            "copyrightText": "Copyright (c) Meta Platforms, Inc. and affiliates. All rights reserved.",
+            "summary": "Zstandard, or zstd as short version, is a fast lossless compression algorithm."
         },
         {
             "name": "patchelf",

@@ -274,15 +274,20 @@ deps = ["Libdl"]
 uuid = "83775a58-1f1d-513f-b197-d71354ab007a"
 version = "1.3.1+2"
 
+[[deps.Zstd_jll]]
+deps = ["Libdl"]
+uuid = "3161d3a3-bdf6-5164-811a-617609db77b4"
+version = "1.5.7+1"
+
 [[deps.dSFMT_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "05ff407c-b0c1-5878-9df8-858cc2e60c36"
 version = "2.2.5+2"
 
 [[deps.libLLVM_jll]]
-deps = ["Artifacts", "Libdl"]
+deps = ["Artifacts", "Libdl", "Zlib_jll", "Zstd_jll"]
 uuid = "8f36deef-c2a5-5394-99ed-8e07531fb29a"
-version = "18.1.7+3"
+version = "19.1.7+1"
 
 [[deps.libblastrampoline_jll]]
 deps = ["Artifacts", "Libdl"]
