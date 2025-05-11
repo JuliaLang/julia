@@ -14,9 +14,11 @@ The reduction operator used in `sum`. The main difference from [`+`](@ref) is th
 integers are promoted to `Int`/`UInt`.
 """
 add_sum(x, y) = x + y
-add_sum(x::Bool, y::Bool) = Int(x) + Int(y)
-add_sum(x::Union{Bool,BitSignedSmall}, y::Union{Bool,BitSignedSmall}) = Int(x) + Int(y)
-add_sum(x::Union{Bool,BitUnsignedSmall}, y::Union{Bool,BitUnsignedSmall}) = UInt(x) + UInt(y)
+add_sum(x::Integer, y::Integer)::Integer = add_sum_integer(x, y)
+add_sum_integer(x::Bool, y::Bool) = Int(x) + Int(y)
+add_sum_integer(x::Union{Bool,BitSignedSmall}, y::Union{Bool,BitSignedSmall}) = Int(x) + Int(y)
+add_sum_integer(x::Union{Bool,BitUnsignedSmall}, y::Union{Bool,BitUnsignedSmall}) = UInt(x) + UInt(y)
+add_sum_integer(x, y) = x+y
 add_sum(x::Real, y::Real)::Real = x + y
 
 """
@@ -403,8 +405,7 @@ reduce_first(::typeof(+), x::Bool) = Int(x)
 reduce_first(::typeof(*), x::AbstractChar) = string(x)
 
 reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
-reduce_first(::typeof(add_sum), x::Bool)   = Int(x)
-reduce_first(::typeof(add_sum), x::BitSignedSmall)   = Int(x)
+reduce_first(::typeof(add_sum), x::Union{Bool,BitSignedSmall})   = Int(x)
 reduce_first(::typeof(add_sum), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
 reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
