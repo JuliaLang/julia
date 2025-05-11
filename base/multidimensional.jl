@@ -2062,7 +2062,7 @@ function _hash_fib(A::AbstractArray, h::UInt)
     end
 
     @nexprs 8 i -> h = hash_mix_linear(p_i, h)
-    return hash_finalizer(h)
+    return hash_uint(h)
 end
 
 const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
@@ -2096,7 +2096,7 @@ function hash(A::AbstractArray, h::UInt)
         end
         # fold all streams back together
         @nexprs 8 i -> h = hash_mix_linear(p_i, h)
-        return hash_finalizer(h)
+        return hash_uint(h)
     else
         return _hash_fib(A, h)
     end
