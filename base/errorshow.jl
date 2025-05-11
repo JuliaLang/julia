@@ -1056,7 +1056,7 @@ Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 #    eg: d = Dict; d["key"] = 2
 function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
     @nospecialize
-    if ex.f == setindex!
+    if ex.f === setindex!
         T = arg_types[1]
         if T <: Number
             print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
