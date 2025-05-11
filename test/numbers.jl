@@ -154,7 +154,8 @@ end
             x = unorded[i], unorded[i]
             y = unorded[j], unorded[j]
             z = Base._extrema_rf(x, y)
-            @test z === x || z === y
+            @test (z[1] === x[1] || z[1] === y[1]) &&
+                  (z[2] === x[1] || z[2] === y[1])
         end
     end
 end
@@ -829,6 +830,28 @@ end
     @test cmp(isless, NaN, 1) == 1
     @test cmp(isless, 1, NaN) == -1
     @test cmp(isless, NaN, NaN) == 0
+end
+@testset "ispositive/isnegative" begin
+    for T in [Base.uniontypes(Base.BitInteger)..., Bool, Rational{Int}, BigInt, Base.uniontypes(Base.IEEEFloat)..., BigFloat, Missing]
+        values = T[zero(T), one(T)]
+        if T <: AbstractFloat
+            push!(values, Inf, NaN) # also check Infs and NaNs
+        elseif T <: Rational
+            push!(values, 1//0) # also check Infs
+        end
+        @testset "$T" begin
+            for value in values
+                # https://github.com/JuliaLang/julia/pull/53677#discussion_r1534044582
+                # Use eval to explicitly show expressions when they fail
+                @eval begin
+                    @test ispositive($value) === ($value > 0)
+                    @test ispositive(-$value) === (-$value > 0)
+                    @test isnegative($value) === ($value < 0)
+                    @test isnegative(-$value) === (-$value < 0)
+                end
+            end
+        end
+    end
 end
 @testset "Float vs Integer comparison" begin
     for x=-5:5, y=-5:5

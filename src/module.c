@@ -483,7 +483,8 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     m->istopmod = 0;
     m->uuid = uuid_zero;
     static unsigned int mcounter; // simple counter backup, in case hrtime is not incrementing
-    m->build_id.lo = jl_hrtime() + (++mcounter);
+    // TODO: this is used for ir decompression and is liable to hash collisions so use more of the bits
+    m->build_id.lo = bitmix(jl_hrtime() + (++mcounter), jl_rand());
     if (!m->build_id.lo)
         m->build_id.lo++; // build id 0 is invalid
     m->build_id.hi = ~(uint64_t)0;
@@ -844,12 +845,15 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 
 static NOINLINE void print_backdate_admonition(jl_binding_t *b) JL_NOTSAFEPOINT
 {
+    if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
+        jl_undefined_var_error(b->globalref->name, (jl_value_t*)b->globalref->mod);
     jl_safe_printf(
         "WARNING: Detected access to binding `%s.%s` in a world prior to its definition world.\n"
         "  Julia 1.12 has introduced more strict world age semantics for global bindings.\n"
         "  !!! This code may malfunction under Revise.\n"
         "  !!! This code will error in future versions of Julia.\n"
-        "Hint: Add an appropriate `invokelatest` around the access to this binding.\n",
+        "Hint: Add an appropriate `invokelatest` around the access to this binding.\n"
+        "To make this warning an error, and hence obtain a stack trace, use `julia --depwarn=error`.\n",
         jl_symbol_name(b->globalref->mod->name), jl_symbol_name(b->globalref->name));
 }
 

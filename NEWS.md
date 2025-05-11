@@ -11,11 +11,15 @@ Language changes
 * `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
 is considered a bug fix ([#47102])
 
+  - The `hash` algorithm and its values have changed. Most `hash` specializations will remain correct and require no action. Types that reimplement the core hashing logic independently, such as some third-party string packages do, may require a migration to the new algorithm. ([#57509])
+
 Compiler/Runtime improvements
 -----------------------------
 
 Command-line option changes
 ---------------------------
+
+* The option `--sysimage-native-code=no` has been deprecated.
 
 Multi-threading changes
 -----------------------
@@ -26,6 +30,7 @@ Build system changes
 New library functions
 ---------------------
 
+* `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
 
 New library features
