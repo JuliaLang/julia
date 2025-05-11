@@ -502,6 +502,8 @@ Base.delete_method(fshadow_m2)
 @test Base.morespecific(fshadow_m3, fshadow_m1)
 @test !Base.morespecific(fshadow_m2, fshadow_m3)
 
+@test_throws "Method of fshadow already disabled" Base.delete_method(fshadow_m2)
+
 # Generated functions without edges must have min_world = 1.
 # N.B.: If changing this, move this test to precompile and make sure
 # that the specialization survives revalidation.
@@ -558,3 +560,12 @@ module C57316; import ..X57316.Y57316 as Z, .Z.Y57316 as W; end
 @test !isdefined(B57316, :X57316)
 @test !isdefined(C57316, :X57316)
 @test !isdefined(C57316, :Y57316)
+
+# jl_module_import should always manipulate the latest world
+module M57965
+function f()
+    @eval Random = 1
+    Core._eval_import(true, @__MODULE__, nothing, Expr(:., :Random))
+end
+end
+@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()s

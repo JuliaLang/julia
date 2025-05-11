@@ -719,9 +719,12 @@ function _complete_methods(ex_org::Expr, context_module::Module, shift::Bool)
     return kwargs_flag, funct, args_ex, kwargs_ex
 end
 
-function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool=false)
+# cursor_pos: either :positional (complete either kwargs or positional) or :kwargs (beyond semicolon)
+function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool=false, cursor_pos::Symbol=:positional)
     kwargs_flag, funct, args_ex, kwargs_ex = _complete_methods(ex_org, context_module, shift)::Tuple{Int, Any, Vector{Any}, Set{Symbol}}
     out = Completion[]
+    # Allow more arguments when cursor before semicolon, even if kwargs are present
+    cursor_pos == :positional && kwargs_flag == 1 && (kwargs_flag = 0)
     kwargs_flag == 2 && return out # one of the kwargs is invalid
     kwargs_flag == 0 && push!(args_ex, Vararg{Any}) # allow more arguments if there is no semicolon
     complete_methods!(out, funct, args_ex, kwargs_ex, shift ? -2 : MAX_METHOD_COMPLETIONS, kwargs_flag == 1)
@@ -729,24 +732,12 @@ function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool
 end
 
 MAX_ANY_METHOD_COMPLETIONS::Int = 10
-function recursive_explore_names!(seen::IdSet, callee_module::Module, initial_module::Module, exploredmodules::IdSet{Module}=IdSet{Module}())
-    push!(exploredmodules, callee_module)
-    for name in names(callee_module; all=true, imported=true)
-        if !Base.isdeprecated(callee_module, name) && !startswith(string(name), '#') && isdefined(initial_module, name)
-            func = getfield(callee_module, name)
-            if !isa(func, Module)
-                funct = Core.Typeof(func)
-                push!(seen, funct)
-            elseif isa(func, Module) && func ∉ exploredmodules
-                recursive_explore_names!(seen, func, initial_module, exploredmodules)
-            end
-        end
-    end
-end
-function recursive_explore_names(callee_module::Module, initial_module::Module)
-    seen = IdSet{Any}()
-    recursive_explore_names!(seen, callee_module, initial_module)
-    seen
+
+function accessible(mod::Module, private::Bool)
+    bindings = IdSet{Any}(Core.Typeof(getglobal(mod, s)) for s in names(mod; all=private, imported=private, usings=private)
+                   if !Base.isdeprecated(mod, s) && !startswith(string(s), '#') && !startswith(string(s), '@') && isdefined(mod, s))
+    delete!(bindings, Module)
+    return collect(bindings)
 end
 
 function complete_any_methods(ex_org::Expr, callee_module::Module, context_module::Module, moreargs::Bool, shift::Bool)
@@ -764,7 +755,7 @@ function complete_any_methods(ex_org::Expr, callee_module::Module, context_modul
     # semicolon for the ".?(" syntax
     moreargs && push!(args_ex, Vararg{Any})
 
-    for seen_name in recursive_explore_names(callee_module, callee_module)
+    for seen_name in accessible(callee_module, callee_module === context_module)
         complete_methods!(out, seen_name, args_ex, kwargs_ex, MAX_ANY_METHOD_COMPLETIONS, false)
     end
 
@@ -910,14 +901,16 @@ end
 end
 
 # Provide completion for keyword arguments in function calls
+# Returns true if the current argument must be a keyword because the cursor is beyond the semicolon
 function complete_keyword_argument!(suggestions::Vector{Completion},
                                     ex::Expr, last_word::String,
-                                    context_module::Module; shift::Bool=false)
+                                    context_module::Module,
+                                    arg_pos::Symbol; shift::Bool=false)
     kwargs_flag, funct, args_ex, kwargs_ex = _complete_methods(ex, context_module, true)::Tuple{Int, Any, Vector{Any}, Set{Symbol}}
-    kwargs_flag == 2 && false # one of the previous kwargs is invalid
+    kwargs_flag == 2 && return false # one of the previous kwargs is invalid
 
     methods = Completion[]
-    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : MAX_METHOD_COMPLETIONS, kwargs_flag == 1)
+    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : MAX_METHOD_COMPLETIONS, arg_pos == :kwargs)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
 
@@ -947,7 +940,7 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     for kwarg in kwargs
         push!(suggestions, KeywordArgumentCompletion(kwarg))
     end
-    return kwargs_flag != 0
+    return kwargs_flag != 0 && arg_pos == :kwargs
 end
 
 function get_loading_candidates(pkgstarts::String, project_file::String)
@@ -1083,7 +1076,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     (kind(cur) in KSet"String Comment ErrorEofMultiComment" || inside_cmdstr) &&
          return Completion[], 1:0, false
 
-    if (n = find_prefix_call(cur_not_ws)) !== nothing
+    n, arg_pos = find_prefix_call(cur_not_ws)
+    if n !== nothing
         func = first(children_nt(n))
         e = Expr(n)
         # Remove arguments past the first parse error (allows unclosed parens)
@@ -1100,7 +1094,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         #   foo(x, TAB   => list of methods signatures for foo with x as first argument
         if kind(cur_not_ws) in KSet"( , ;"
             # Don't provide method completions unless the cursor is after: '(' ',' ';'
-            return complete_methods(e, context_module, shift), char_range(func), false
+            return complete_methods(e, context_module, shift, arg_pos), char_range(func), false
 
         # Keyword argument completion:
         #   foo(ar TAB   => keyword arguments like `arg1=`
@@ -1108,7 +1102,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
             r = char_range(cur)
             s = string[intersect(r, 1:pos)]
             # Return without adding more suggestions if kwargs only
-            complete_keyword_argument!(suggestions, e, s, context_module; shift) &&
+            complete_keyword_argument!(suggestions, e, s, context_module, arg_pos; shift) &&
                 return sort_suggestions(), r, true
         end
     end
@@ -1196,18 +1190,20 @@ function find_str(cur::CursorNode)
 end
 
 # Is the cursor directly inside of the arguments of a prefix call (no nested
-# expressions)?
+# expressions)?  If so, return:
+#   - The call node
+#   - Either :positional or :kwargs, if the cursor is before or after the `;`
 function find_prefix_call(cur::CursorNode)
     n = cur.parent
-    n !== nothing || return nothing
+    n !== nothing || return nothing, nothing
     is_call(n) = kind(n) in KSet"call dotcall" && is_prefix_call(n)
     if kind(n) == K"parameters"
-        is_call(n.parent) || return nothing
-        n.parent
+        is_call(n.parent) || return nothing, nothing
+        n.parent, :kwargs
     else
         # Check that we are beyond the function name.
-        is_call(n) && cur.index > children_nt(n)[1].index || return nothing
-        n
+        is_call(n) && cur.index > children_nt(n)[1].index || return nothing, nothing
+        n, :positional
     end
 end
 
@@ -1273,20 +1269,20 @@ function dict_eval(@nospecialize(e), context_module::Module=Main)
 end
 
 function method_search(partial::AbstractString, context_module::Module, shift::Bool)
-    rexm = match(r"(\w+\.|)\?\((.*)$", partial)
+    rexm = match(r"([\w.]+.)?\?\((.*)$", partial)
     if rexm !== nothing
         # Get the module scope
-        if isempty(rexm.captures[1])
-            callee_module = context_module
-        else
-            modname = Symbol(rexm.captures[1][1:end-1])
-            if isdefined(context_module, modname)
-                callee_module = getfield(context_module, modname)
-                if !isa(callee_module, Module)
-                    callee_module = context_module
+        callee_module = context_module
+        if !isnothing(rexm.captures[1])
+            modnames = map(Symbol, split(something(rexm.captures[1]), '.'))
+            for m in modnames
+                if isdefined(callee_module, m)
+                    callee_module = getfield(callee_module, m)
+                    if !isa(callee_module, Module)
+                        callee_module = context_module
+                        break
+                    end
                 end
-            else
-                callee_module = context_module
             end
         end
         moreargs = !endswith(rexm.captures[2], ')')
@@ -1296,7 +1292,8 @@ function method_search(partial::AbstractString, context_module::Module, shift::B
         end
         ex_org = Meta.parse(callstr, raise=false, depwarn=false)
         if isa(ex_org, Expr)
-            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:length(rexm.captures[1])+1) .+ rexm.offset, false
+            pos_q = isnothing(rexm.captures[1]) ? 1 : sizeof(something(rexm.captures[1]))+1 # position after ?
+            return complete_any_methods(ex_org, callee_module::Module, context_module, moreargs, shift), (0:pos_q) .+ rexm.offset, false
         end
     end
 end

@@ -533,169 +533,6 @@ int jl_isabspath(const char *in) JL_NOTSAFEPOINT
     return 0; // relative path
 }
 
-static char *absrealpath(const char *in, int nprefix)
-{ // compute an absolute realpath location, so that chdir doesn't change the file reference
-  // ignores (copies directly over) nprefix characters at the start of abspath
-#ifndef _OS_WINDOWS_
-    char *out = realpath(in + nprefix, NULL);
-    if (out) {
-        if (nprefix > 0) {
-            size_t sz = strlen(out) + 1;
-            char *cpy = (char*)malloc_s(sz + nprefix);
-            memcpy(cpy, in, nprefix);
-            memcpy(cpy + nprefix, out, sz);
-            free(out);
-            out = cpy;
-        }
-    }
-    else {
-        size_t sz = strlen(in + nprefix) + 1;
-        if (in[nprefix] == PATHSEPSTRING[0]) {
-            out = (char*)malloc_s(sz + nprefix);
-            memcpy(out, in, sz + nprefix);
-        }
-        else {
-            size_t path_size = JL_PATH_MAX;
-            char *path = (char*)malloc_s(JL_PATH_MAX);
-            if (uv_cwd(path, &path_size)) {
-                jl_error("fatal error: unexpected error while retrieving current working directory");
-            }
-            out = (char*)malloc_s(path_size + 1 + sz + nprefix);
-            memcpy(out, in, nprefix);
-            memcpy(out + nprefix, path, path_size);
-            out[nprefix + path_size] = PATHSEPSTRING[0];
-            memcpy(out + nprefix + path_size + 1, in + nprefix, sz);
-            free(path);
-        }
-    }
-#else
-    // GetFullPathName intentionally errors if given an empty string so manually insert `.` to invoke cwd
-    char *in2 = (char*)malloc_s(JL_PATH_MAX);
-    if (strlen(in) - nprefix == 0) {
-        memcpy(in2, in, nprefix);
-        in2[nprefix] = '.';
-        in2[nprefix+1] = '\0';
-        in = in2;
-    }
-    DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
-    if (n <= 0) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
-    }
-    char *out = (char*)malloc_s(n + nprefix);
-    DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
-    if (n != m + 1) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
-    }
-    memcpy(out, in, nprefix);
-    free(in2);
-#endif
-    return out;
-}
-
-// create an absolute-path copy of the input path format string
-// formed as `joinpath(replace(pwd(), "%" => "%%"), in)`
-// unless `in` starts with `%`
-static const char *absformat(const char *in)
-{
-    if (in[0] == '%' || jl_isabspath(in))
-        return in;
-    // get an escaped copy of cwd
-    size_t path_size = JL_PATH_MAX;
-    char path[JL_PATH_MAX];
-    if (uv_cwd(path, &path_size)) {
-        jl_error("fatal error: unexpected error while retrieving current working directory");
-    }
-    size_t sz = strlen(in) + 1;
-    size_t i, fmt_size = 0;
-    for (i = 0; i < path_size; i++)
-        fmt_size += (path[i] == '%' ? 2 : 1);
-    char *out = (char*)malloc_s(fmt_size + 1 + sz);
-    fmt_size = 0;
-    for (i = 0; i < path_size; i++) { // copy-replace pwd portion
-        char c = path[i];
-        out[fmt_size++] = c;
-        if (c == '%')
-            out[fmt_size++] = '%';
-    }
-    out[fmt_size++] = PATHSEPSTRING[0]; // path sep
-    memcpy(out + fmt_size, in, sz); // copy over format, including nul
-    return out;
-}
-
-static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
-{
-    // this function resolves the paths in jl_options to absolute file locations as needed
-    // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
-    // it may fail, print an error, and exit(1) if any of these paths are longer than JL_PATH_MAX
-    //
-    // note: if you care about lost memory, you should call the appropriate `free()` function
-    // on the original pointer for each `char*` you've inserted into `jl_options`, after
-    // calling `julia_init()`
-    char *free_path = (char*)malloc_s(JL_PATH_MAX);
-    size_t path_size = JL_PATH_MAX;
-    if (uv_exepath(free_path, &path_size)) {
-        jl_error("fatal error: unexpected error while retrieving exepath");
-    }
-    if (path_size >= JL_PATH_MAX) {
-        jl_error("fatal error: jl_options.julia_bin path too long");
-    }
-    jl_options.julia_bin = (char*)malloc_s(path_size + 1);
-    memcpy((char*)jl_options.julia_bin, free_path, path_size);
-    ((char*)jl_options.julia_bin)[path_size] = '\0';
-    if (!jl_options.julia_bindir) {
-        jl_options.julia_bindir = getenv("JULIA_BINDIR");
-        if (!jl_options.julia_bindir) {
-            jl_options.julia_bindir = dirname(free_path);
-        }
-    }
-    if (jl_options.julia_bindir)
-        jl_options.julia_bindir = absrealpath(jl_options.julia_bindir, 0);
-    free(free_path);
-    free_path = NULL;
-    if (jl_options.image_file) {
-        if (rel == JL_IMAGE_JULIA_HOME && !jl_isabspath(jl_options.image_file)) {
-            // build time path, relative to JULIA_BINDIR
-            free_path = (char*)malloc_s(JL_PATH_MAX);
-            int n = snprintf(free_path, JL_PATH_MAX, "%s" PATHSEPSTRING "%s",
-                             jl_options.julia_bindir, jl_options.image_file);
-            if (n >= JL_PATH_MAX || n < 0) {
-                jl_error("fatal error: jl_options.image_file path too long");
-            }
-            jl_options.image_file = free_path;
-        }
-        if (jl_options.image_file)
-            jl_options.image_file = absrealpath(jl_options.image_file, 0);
-        if (free_path) {
-            free(free_path);
-            free_path = NULL;
-        }
-    }
-    if (jl_options.outputo)
-        jl_options.outputo = absrealpath(jl_options.outputo, 0);
-    if (jl_options.outputji)
-        jl_options.outputji = absrealpath(jl_options.outputji, 0);
-    if (jl_options.outputbc)
-        jl_options.outputbc = absrealpath(jl_options.outputbc, 0);
-    if (jl_options.outputasm)
-        jl_options.outputasm = absrealpath(jl_options.outputasm, 0);
-    if (jl_options.machine_file)
-        jl_options.machine_file = absrealpath(jl_options.machine_file, 0);
-    if (jl_options.output_code_coverage)
-        jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
-    if (jl_options.tracked_path)
-        jl_options.tracked_path = absrealpath(jl_options.tracked_path, 0);
-
-    const char **cmdp = jl_options.cmds;
-    if (cmdp) {
-        for (; *cmdp; cmdp++) {
-            const char *cmd = *cmdp;
-            if (cmd[0] == 'L') {
-                *cmdp = absrealpath(cmd, 1);
-            }
-        }
-    }
-}
-
 JL_DLLEXPORT int jl_is_file_tracked(jl_sym_t *path)
 {
     const char* path_ = jl_symbol_name(path);
@@ -721,8 +558,85 @@ static void restore_fp_env(void)
         jl_error("Failed to configure floating point environment");
     }
 }
+static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, jl_task_t *ct)
+{
+    JL_TIMING(JULIA_INIT, JULIA_INIT);
 
-static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct);
+    if (sysimage.kind == JL_IMAGE_KIND_SO)
+        jl_gc_notify_image_load(sysimage.data, sysimage.size);
+
+    if (jl_options.cpu_target == NULL)
+        jl_options.cpu_target = "native";
+
+    // Parse image, perform relocations, and init JIT targets, etc.
+    jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
+
+    jl_init_codegen();
+    jl_init_common_symbols();
+
+    if (sysimage.kind != JL_IMAGE_KIND_NONE) {
+        // Load the .ji or .so sysimage
+        jl_restore_system_image(&parsed_image, sysimage);
+    } else {
+        // No sysimage provided, init a minimal environment
+        jl_init_types();
+        jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
+        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    }
+
+    jl_init_flisp();
+    jl_init_serializer();
+
+    if (sysimage.kind == JL_IMAGE_KIND_NONE) {
+        jl_top_module = jl_core_module;
+        jl_init_intrinsic_functions();
+        jl_init_primitives();
+        jl_init_main_module();
+        jl_load(jl_core_module, "boot.jl");
+        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        post_boot_hooks();
+    }
+
+    if (jl_base_module == NULL) {
+        // nthreads > 1 requires code in Base
+        jl_atomic_store_relaxed(&jl_n_threads, 1);
+        jl_n_markthreads = 0;
+        jl_n_sweepthreads = 0;
+        jl_n_gcthreads = 0;
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
+    } else {
+        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
+        post_image_load_hooks();
+    }
+    jl_start_threads();
+    jl_start_gc_threads();
+    uv_barrier_wait(&thread_init_done);
+
+    jl_gc_enable(1);
+
+    if ((sysimage.kind != JL_IMAGE_KIND_NONE) &&
+            (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
+        jl_array_t *init_order = jl_module_init_order;
+        JL_GC_PUSH1(&init_order);
+        jl_module_init_order = NULL;
+        int i, l = jl_array_nrows(init_order);
+        for (i = 0; i < l; i++) {
+            jl_value_t *mod = jl_array_ptr_ref(init_order, i);
+            jl_module_run_initializer((jl_module_t*)mod);
+        }
+        JL_GC_POP();
+    }
+
+    if (jl_options.trim) {
+        jl_entrypoint_mis = (arraylist_t *)malloc_s(sizeof(arraylist_t));
+        arraylist_new(jl_entrypoint_mis, 0);
+    }
+
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_sigint_handler();
+}
+
 
 JL_DLLEXPORT int jl_default_debug_info_kind;
 JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
@@ -750,12 +664,12 @@ static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
 }
 
-JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
+JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
 {
     // initialize many things, in no particular order
     // but generally running from simple platform things to optional
     // configuration features
-    jl_init_timing();
+
     // Make sure we finalize the tls callback before starting any threads.
     (void)jl_get_pgcstack();
 
@@ -860,96 +774,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
 #pragma GCC diagnostic pop
     JL_GC_PROMISE_ROOTED(ct);
-    _finish_julia_init(rel, ptls, ct);
-}
-
-static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
-{
-    JL_TIMING(JULIA_INIT, JULIA_INIT);
-    jl_resolve_sysimg_location(rel);
-
-    // loads sysimg if available, and conditionally sets jl_options.cpu_target
-    jl_image_buf_t sysimage = { JL_IMAGE_KIND_NONE };
-    if (rel == JL_IMAGE_IN_MEMORY) {
-        sysimage = jl_set_sysimg_so(jl_exe_handle);
-        jl_options.image_file = jl_options.julia_bin;
-    }
-    else if (jl_options.image_file)
-        sysimage = jl_preload_sysimg(jl_options.image_file);
-
-    if (sysimage.kind == JL_IMAGE_KIND_SO)
-        jl_gc_notify_image_load(sysimage.data, sysimage.size);
-
-    if (jl_options.cpu_target == NULL)
-        jl_options.cpu_target = "native";
-
-    // Parse image, perform relocations, and init JIT targets, etc.
-    jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
-
-    jl_init_codegen();
-    jl_init_common_symbols();
-
-    if (sysimage.kind != JL_IMAGE_KIND_NONE) {
-        // Load the .ji or .so sysimage
-        jl_restore_system_image(&parsed_image, sysimage);
-    } else {
-        // No sysimage provided, init a minimal environment
-        jl_init_types();
-        jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
-        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
-    }
-
-    jl_init_flisp();
-    jl_init_serializer();
-
-    if (sysimage.kind == JL_IMAGE_KIND_NONE) {
-        jl_top_module = jl_core_module;
-        jl_init_intrinsic_functions();
-        jl_init_primitives();
-        jl_init_main_module();
-        jl_load(jl_core_module, "boot.jl");
-        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        post_boot_hooks();
-    }
-
-    if (jl_base_module == NULL) {
-        // nthreads > 1 requires code in Base
-        jl_atomic_store_relaxed(&jl_n_threads, 1);
-        jl_n_markthreads = 0;
-        jl_n_sweepthreads = 0;
-        jl_n_gcthreads = 0;
-        jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
-        jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
-    } else {
-        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        post_image_load_hooks();
-    }
-    jl_start_threads();
-    jl_start_gc_threads();
-    uv_barrier_wait(&thread_init_done);
-
-    jl_gc_enable(1);
-
-    if ((sysimage.kind != JL_IMAGE_KIND_NONE) &&
-            (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
-        jl_array_t *init_order = jl_module_init_order;
-        JL_GC_PUSH1(&init_order);
-        jl_module_init_order = NULL;
-        int i, l = jl_array_nrows(init_order);
-        for (i = 0; i < l; i++) {
-            jl_value_t *mod = jl_array_ptr_ref(init_order, i);
-            jl_module_run_initializer((jl_module_t*)mod);
-        }
-        JL_GC_POP();
-    }
-
-    if (jl_options.trim) {
-        jl_entrypoint_mis = (arraylist_t *)malloc_s(sizeof(arraylist_t));
-        arraylist_new(jl_entrypoint_mis, 0);
-    }
-
-    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
-        jl_install_sigint_handler();
+    _finish_jl_init_(sysimage, ptls, ct);
 }
 
 #ifdef __cplusplus

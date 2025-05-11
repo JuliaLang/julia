@@ -196,6 +196,7 @@ void JL_UV_LOCK(void);
 extern _Atomic(unsigned) _threadedregion;
 extern _Atomic(uint16_t) io_loop_tid;
 
+JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage);
 JL_DLLEXPORT void jl_enter_threaded_region(void);
 JL_DLLEXPORT void jl_exit_threaded_region(void);
 int jl_running_under_rr(int recheck) JL_NOTSAFEPOINT;
@@ -675,6 +676,10 @@ typedef union {
 // Also defined in typeinfer.jl - See documentation there.
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
+
+#define METHOD_SIG_LATEST_WHICH             0b0001
+#define METHOD_SIG_LATEST_ONLY              0b0010
+#define METHOD_SIG_PRECOMPILE_MANY          0b0100
 
 JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
 JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
@@ -1869,7 +1874,6 @@ extern JL_DLLEXPORT jl_sym_t *jl_module_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_slot_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_export_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_public_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_import_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_toplevel_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_quote_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_line_sym;
@@ -1891,7 +1895,6 @@ extern JL_DLLEXPORT jl_sym_t *jl_pop_exception_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_exc_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_error_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_new_sym;
-extern JL_DLLEXPORT jl_sym_t *jl_using_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_splatnew_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_block_sym;
 extern JL_DLLEXPORT jl_sym_t *jl_new_opaque_closure_sym;

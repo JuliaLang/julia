@@ -3573,6 +3573,8 @@ end
 # issue #45162
 f45162(f) = f(x=1)
 @test first(methods(f45162)).called != 0
+f45162_2(f) = f([]...)
+@test first(methods(f45162_2)).called != 0
 
 # issue #45024
 @test_parseerror "const x" "expected assignment after \"const\""

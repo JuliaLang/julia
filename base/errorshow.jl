@@ -592,8 +592,6 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             end
             if ex.world < reinterpret(UInt, method.primary_world)
                 print(iob, " (method too new to be called from this world context.)")
-            elseif ex.world > reinterpret(UInt, method.deleted_world)
-                print(iob, " (method deleted before this world age.)")
             end
             println(iob)
 
@@ -1169,6 +1167,8 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
                 print(io, "\nSuggestion: check for spelling errors or missing imports.")
             elseif Base.is_some_explicit_imported(kind)
                 print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
+            elseif kind === Base.PARTITION_KIND_BACKDATED_CONST
+                print(io, "\nSuggestion: define the const at top-level before running function that uses it (stricter Julia v1.12+ rule).")
             end
         elseif scope === :static_parameter
             print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")

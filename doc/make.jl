@@ -173,6 +173,7 @@ Manual = [
     "manual/noteworthy-differences.md",
     "manual/unicode-input.md",
     "manual/command-line-interface.md",
+    "manual/worldage.md",
 ]
 
 BaseDocs = [

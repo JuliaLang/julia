@@ -4,6 +4,7 @@
 
 using Random
 using InteractiveUtils
+using InteractiveUtils: code_llvm, code_native
 using Libdl
 using Test
 
@@ -1032,3 +1033,7 @@ end
 const x57872 = "Hello"
 f57872() = (Core.isdefinedglobal(@__MODULE__, Base.compilerbarrier(:const, :x57872)), x57872) # Extra globalref here to force world age bounds
 @test f57872() == (true, "Hello")
+
+@noinline f_mutateany(@nospecialize x) = x[] = 1
+g_mutateany() = (y = Ref(0); f_mutateany(y); y[])
+@test g_mutateany() === 1
