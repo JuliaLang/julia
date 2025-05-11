@@ -362,6 +362,7 @@ private:
     void PlaceGCFrameReset(State &S, unsigned R, unsigned MinColorRoot, ArrayRef<int> Colors, Value *GCFrame, Instruction *InsertBefore);
     void PlaceRootsAndUpdateCalls(ArrayRef<int> Colors, int PreAssignedColors, State &S, std::map<Value *, std::pair<int, int>>);
     void CleanupWriteBarriers(Function &F, State *S, const SmallVector<CallInst*, 0> &WriteBarriers, bool *CFGModified);
+    void CleanupGCPreserve(Function &F, CallInst *CI, Value *callee, Type *T_size);
     bool CleanupIR(Function &F, State *S, bool *CFGModified);
     void NoteUseChain(State &S, BBState &BBS, User *TheUser);
     SmallVector<int, 1> GetPHIRefinements(PHINode *phi, State &S);
@@ -416,5 +417,13 @@ private:
     // Check if the pass should be run
     bool shouldRunFinalGC();
 };
+
+inline bool isSpecialPtr(Type *Ty) {
+    PointerType *PTy = dyn_cast<PointerType>(Ty);
+    if (!PTy)
+        return false;
+    unsigned AS = PTy->getAddressSpace();
+    return AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial;
+}
 
 #endif // LLVM_GC_PASSES_H

@@ -15,14 +15,6 @@ static bool isTrackedValue(Value *V) {
     return PT && PT->getAddressSpace() == AddressSpace::Tracked;
 }
 
-static bool isSpecialPtr(Type *Ty) {
-    PointerType *PTy = dyn_cast<PointerType>(Ty);
-    if (!PTy)
-        return false;
-    unsigned AS = PTy->getAddressSpace();
-    return AddressSpace::FirstSpecial <= AS && AS <= AddressSpace::LastSpecial;
-}
-
 // return how many Special pointers are in T (count > 0),
 // and if there is anything else in T (all == false)
 CountTrackedPointers::CountTrackedPointers(Type *T, bool ignore_loaded) {
@@ -2109,9 +2101,11 @@ bool LateLowerGCFrame::CleanupIR(Function &F, State *S, bool *CFGModified) {
                 continue;
             }
             Value *callee = CI->getCalledOperand();
-            if (callee && (callee == gc_flush_func || callee == gc_preserve_begin_func
-                        || callee == gc_preserve_end_func)) {
+            if (callee && callee == gc_flush_func) {
                 /* No replacement */
+            } else if (callee && (callee == gc_preserve_begin_func
+                        || callee == gc_preserve_end_func)) {
+                CleanupGCPreserve(F, CI, callee, T_size);
             } else if (pointer_from_objref_func != nullptr && callee == pointer_from_objref_func) {
                 auto *obj = CI->getOperand(0);
 #if JL_LLVM_VERSION >= 200000
