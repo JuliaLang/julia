@@ -3170,11 +3170,10 @@ static void jl_temporary_root(jl_codegen_params_t &ctx, jl_value_t *val)
 {
     if (!jl_is_globally_rooted(val)) {
         jl_array_t *roots = ctx.temporary_roots;
-        for (size_t i = 0; i < jl_array_dim0(roots); i++) {
-            if (jl_array_ptr_ref(roots, i) == val)
-                return;
-        }
+        if (ctx.temporary_roots_set.find(val) != ctx.temporary_roots_set.end())
+            return;
         jl_array_ptr_1d_push(roots, val);
+        ctx.temporary_roots_set.insert(val);
     }
 }
 static void jl_temporary_root(jl_codectx_t &ctx, jl_value_t *val)
