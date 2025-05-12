@@ -991,6 +991,7 @@ end
 reverse(it::Cycle) = Cycle(reverse(it.xs))
 last(it::Cycle) = last(it.xs)
 
+
 # Repeated - repeat an object infinitely many times
 
 struct Repeated{O}
@@ -1627,30 +1628,28 @@ julia> first(stateful)
 """
 nth(itr, n::Integer) = _nth(itr, n)
 
-# Count
-nth(itr::Count, n::Integer) = n > 0 ? itr.start + itr.step * (n - 1) : throw(ArgumentError("n must be positive."))
-# Repeated
-nth(itr::Repeated, ::Integer) = itr.x
-# Take(Repeated)
-nth(itr::Take{<:Repeated}, n::Integer) =
-    n > itr.n ? throw(BoundsError(itr, n)) : nth(itr.xs, n)
-
 # infinite cycle
 function nth(itr::Cycle{I}, n::Integer) where {I}
+    n < 0 && throw(ArgumentError("Drop length must be non-negative"))
+
     if IteratorSize(I) isa Union{HasShape, HasLength}
-        _nth(itr.xs, mod1(n, length(itr.xs)))
+        N = length(itr.xs)
+        N > 0 ? _nth(itr.xs, mod1(n, N)) : throw(ArgumentError("collection must be non-empty"))
     else
         _nth(itr, n)
     end
 end
 
-# finite cycle: in reality a Flatten{Take{Repeated{O}}} iterator
+# Flatten{Take{Repeated{O}}} is the actual type of an Iterators.cycle(iterable::O, m) iterator
 function nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
+    n < 0 && throw(ArgumentError("Drop length must be non-negative"))
+
     if IteratorSize(O) isa Union{HasShape, HasLength}
         cycles = itr.it.n
         repeated = itr.it.xs.x
         k = length(repeated)
-        n > k*cycles ? throw(BoundsError(itr, n)) : _nth(repeated, mod1(n, k))
+        n > k*cycles ?
+            throw(ArgumentError("collection must be non-empty")) : _nth(repeated, mod1(n, k))
     else
         _nth(itr, n)
     end
