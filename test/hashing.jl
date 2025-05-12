@@ -69,8 +69,13 @@ end
 @test hash(1//6) == hash(0x01//0x06)
 
 # issue #58386
-@testset "hash_integer on small values" begin
-    vals = Integer[typemin(Int), typemax(Int), typemin(UInt), typemax(UInt), zero(Int), zero(UInt), one(Int), one(UInt)]
+@testset "hash_integer on corner cases and small values" begin
+    vals = vcat(
+        Any[], 
+        [f(Int) for f in [typemin, typemax, zero, one, (-)∘one]],
+        [f(UInt) for f in [typemin, typemax, zero, one, (-)∘one]],
+        [zero(BigInt), one(BigInt), -one(BigInt)]
+    )
     for a in vals
         @test (Base.hash_integer(a, Base.HASH_SEED) == hash(a))
     end
