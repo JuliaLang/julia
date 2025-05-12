@@ -71,7 +71,7 @@ end
 # issue #58386
 @testset "hash_integer on corner cases and small values" begin
     vals = vcat(
-        Any[], 
+        Any[],
         [f(Int) for f in [typemin, typemax, zero, one, (-)∘one]],
         [f(UInt) for f in [typemin, typemax, zero, one, (-)∘one]],
         [zero(BigInt), one(BigInt), -one(BigInt)]
