@@ -848,7 +848,7 @@ if Limb === UInt64 === UInt
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
 
-    using .Base: hash_uint
+    using .Base: hash_finalizer
 
     function hash_integer(n::BigInt, h::UInt)
         GC.@preserve n begin
@@ -856,9 +856,9 @@ if Limb === UInt64 === UInt
             s == 0 && return hash_integer(0, h)
             p = convert(Ptr{UInt64}, n.d)
             b = unsafe_load(p)
-            h ⊻= hash_uint(ifelse(s < 0, -b, b) ⊻ h)
+            h ⊻= hash_finalizer(ifelse(s < 0, -b, b) ⊻ h)
             for k = 2:abs(s)
-                h ⊻= hash_uint(unsafe_load(p, k) ⊻ h)
+                h ⊻= hash_finalizer(unsafe_load(p, k) ⊻ h)
             end
             return h
         end
@@ -892,7 +892,7 @@ if Limb === UInt64 === UInt
                 return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
             end
             h = hash_integer(pow, h)
-            h ⊻= hash_uint(flipsign(limb, sz) ⊻ h)
+            h ⊻= hash_finalizer(flipsign(limb, sz) ⊻ h)
             for idx = idx+1:asz
                 if shift == 0
                     limb = unsafe_load(ptr, idx)
@@ -906,7 +906,7 @@ if Limb === UInt64 === UInt
                         limb = limb2 << upshift | limb1 >> shift
                     end
                 end
-                h ⊻= hash_uint(limb ⊻ h)
+                h ⊻= hash_finalizer(limb ⊻ h)
             end
             return h
         end
