@@ -8,7 +8,7 @@ using Random
     @test isequal(p,10=>20)
     @test iterate(p)[1] == 10
     @test iterate(p, iterate(p)[2])[1] == 20
-    @test iterate(p, iterate(p, iterate(p)[2])[2]) == nothing
+    @test iterate(p, iterate(p, iterate(p)[2])[2]) === nothing
     @test firstindex(p) == 1
     @test lastindex(p) == length(p) == 2
     @test Base.indexed_iterate(p, 1, nothing) == (10,2)
@@ -683,9 +683,9 @@ end
     @inferred setindex!(d, -1, 10)
     @test d[10] == -1
     @test 1 == @inferred d[1]
-    @test get(d, -111, nothing) == nothing
+    @test get(d, -111, nothing) === nothing
     @test 1 == @inferred get(d, 1, 1)
-    @test pop!(d, -111, nothing) == nothing
+    @test pop!(d, -111, nothing) === nothing
     @test 1 == @inferred pop!(d, 1)
 
     # get! and delete!
@@ -785,6 +785,13 @@ end
     d = Dict('a'=>1, 'b'=>1, 'c'=> 3)
     @test [d[k] for k in keys(d)] == [d[k] for k in eachindex(d)] ==
           [v for (k, v) in d] == [d[x[1]] for (i, x) in enumerate(d)]
+end
+
+@testset "consistency of dict iteration order (issue #56841)" begin
+    dict = Dict(randn() => randn() for _ = 1:100)
+    @test all(zip(dict, keys(dict), values(dict), pairs(dict))) do (d, k, v, p)
+        d == p && first(d) == first(p) == k && last(d) == last(p) == v
+    end
 end
 
 @testset "generators, similar" begin
@@ -1049,7 +1056,7 @@ Dict(1 => rand(2,3), 'c' => "asdf") # just make sure this does not trigger a dep
 
     # issue #26939
     d26939 = WeakKeyDict()
-    (@noinline d -> d[big"1.0" + 1.1] = 1)(d26939)
+    (@noinline d -> d[big"1" + 1] = 1)(d26939)
     GC.gc() # primarily to make sure this doesn't segfault
     @test count(d26939) == 0
     @test length(d26939.ht) == 1
@@ -1510,9 +1517,9 @@ end
 for T in (Int, Float64, String, Symbol)
     @testset let T=T
         @test !Core.Compiler.is_consistent(Base.infer_effects(getindex, (Dict{T,Any}, T)))
-        @test_broken Core.Compiler.is_effect_free(Base.infer_effects(getindex, (Dict{T,Any}, T)))
+        @test Core.Compiler.is_effect_free(Base.infer_effects(getindex, (Dict{T,Any}, T)))
         @test !Core.Compiler.is_nothrow(Base.infer_effects(getindex, (Dict{T,Any}, T)))
-        @test_broken Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T,Any}, T)))
+        @test Core.Compiler.is_terminates(Base.infer_effects(getindex, (Dict{T,Any}, T)))
     end
 end
 

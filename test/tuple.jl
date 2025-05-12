@@ -369,9 +369,9 @@ end
     @test !isless((1,2), (1,2))
     @test !isless((2,1), (1,2))
 
-    @test hash(()) === Base.tuplehash_seed
-    @test hash((1,)) === hash(1, Base.tuplehash_seed)
-    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed))
+    @test hash(()) === Base.tuplehash_seed ⊻ Base.HASH_SEED
+    @test hash((1,)) === hash(1, Base.tuplehash_seed ⊻ Base.HASH_SEED)
+    @test hash((1,2)) === hash(1, hash(2, Base.tuplehash_seed ⊻ Base.HASH_SEED))
 
     # Test Any32 methods
     t = ntuple(identity, 32)
@@ -393,7 +393,7 @@ end
     @test !isless((t...,1,2), (t...,1,2))
     @test !isless((t...,2,1), (t...,1,2))
 
-    @test hash(t) === foldr(hash, [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,(),UInt(0)])
+    @test hash(t) === foldr(hash, vcat(1:32, (), Base.HASH_SEED))
 end
 
 @testset "functions" begin
@@ -533,7 +533,12 @@ end
         @test ntuple(identity, Val(n)) == ntuple(identity, n)
     end
 
-    @test Core.Compiler.return_type(ntuple, Tuple{typeof(identity), Val}) == Tuple{Vararg{Int}}
+    @test Base.infer_return_type(ntuple, Tuple{typeof(identity), Val}) == Tuple{Vararg{Int}}
+
+    # issue #55790
+    for n in 1:32
+        @test typeof(ntuple(identity, UInt64(n))) == NTuple{n, Int}
+    end
 end
 
 struct A_15703{N}
@@ -835,8 +840,8 @@ end
     @test @inferred(Base.circshift(t3, 7)) == ('b', 'c', 'd', 'a')
     @test @inferred(Base.circshift(t3, -1)) == ('b', 'c', 'd', 'a')
     @test_throws MethodError circshift(t1, 'a')
-    @test Core.Compiler.return_type(circshift, Tuple{Tuple,Integer}) <: Tuple
-    @test Core.Compiler.return_type(circshift, Tuple{Tuple{Vararg{Any,10}},Integer}) <: Tuple{Vararg{Any,10}}
+    @test Base.infer_return_type(circshift, Tuple{Tuple,Integer}) <: Tuple
+    @test Base.infer_return_type(circshift, Tuple{Tuple{Vararg{Any,10}},Integer}) <: Tuple{Vararg{Any,10}}
     for len ∈ 0:5
         v = 1:len
         t = Tuple(v)

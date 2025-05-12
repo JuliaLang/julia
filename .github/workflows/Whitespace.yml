@@ -18,6 +18,9 @@ jobs:
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           persist-credentials: false
+      - uses: julia-actions/setup-julia@9b79636afcfb07ab02c256cede01fe2db6ba808c # v2.6.0
+        with:
+          version: '1'
       - name: Check whitespace
         run: |
           contrib/check-whitespace.jl

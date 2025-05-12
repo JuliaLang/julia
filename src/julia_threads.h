@@ -4,7 +4,17 @@
 #ifndef JL_THREADS_H
 #define JL_THREADS_H
 
-#include "gc-tls.h"
+#ifndef WITH_THIRD_PARTY_HEAP
+#include "gc-tls-stock.h"
+#else
+// Pick the appropriate third-party implementation
+#ifdef WITH_THIRD_PARTY_HEAP
+#if WITH_THIRD_PARTY_HEAP == 1 // MMTk
+#include "gc-tls-mmtk.h"
+#endif
+#endif
+#endif
+#include "gc-tls-common.h"
 #include "julia_atomics.h"
 #ifndef _OS_WINDOWS_
 #include "pthread.h"
@@ -18,6 +28,8 @@ extern "C" {
 
 JL_DLLEXPORT int16_t jl_threadid(void);
 JL_DLLEXPORT int8_t jl_threadpoolid(int16_t tid) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint64_t jl_get_ptls_rng(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_set_ptls_rng(uint64_t new_seed) JL_NOTSAFEPOINT;
 
 // JULIA_ENABLE_THREADING may be controlled by altering JULIA_THREADS in Make.user
 
@@ -54,7 +66,7 @@ typedef struct {
     !defined(JL_HAVE_ASM) && \
     !defined(JL_HAVE_UNW_CONTEXT)
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_) || defined(_CPU_AARCH64_) ||  \
-     defined(_CPU_ARM_) || defined(_CPU_PPC64_))
+     defined(_CPU_ARM_) || defined(_CPU_PPC64_) || defined(_CPU_RISCV64_))
 #define JL_HAVE_ASM
 #endif
 #if 0
@@ -86,9 +98,13 @@ typedef ucontext_t _jl_ucontext_t;
 
 typedef struct {
     union {
-        _jl_ucontext_t ctx;
-        jl_stack_context_t copy_ctx;
+        _jl_ucontext_t *ctx;
+        jl_stack_context_t *copy_ctx;
     };
+    void *stkbuf; // malloc'd memory (either copybuf or stack)
+    size_t bufsz; // actual sizeof stkbuf
+    unsigned int copy_stack:31; // sizeof stack for copybuf
+    unsigned int started:1;
 #if defined(_COMPILER_TSAN_ENABLED_)
     void *tsan_state;
 #endif
@@ -149,19 +165,17 @@ typedef struct _jl_tls_states_t {
     // Counter to disable finalizer **on the current thread**
     int finalizers_inhibited;
     jl_gc_tls_states_t gc_tls; // this is very large, and the offset of the first member is baked into codegen
+    jl_gc_tls_states_common_t gc_tls_common; // common tls for both GCs
+    small_arraylist_t lazily_freed_mtarraylist_buffers;
     volatile sig_atomic_t defer_signal;
     _Atomic(struct _jl_task_t*) current_task;
     struct _jl_task_t *next_task;
     struct _jl_task_t *previous_task;
     struct _jl_task_t *root_task;
     struct _jl_timing_block_t *timing_stack;
+    // This is the location of our copy_stack
     void *stackbase;
     size_t stacksize;
-    union {
-        _jl_ucontext_t base_ctx; // base context of stack
-        // This hack is needed to support always_copy_stacks:
-        jl_stack_context_t copy_stack_ctx;
-    };
     // Temp storage for exception thrown in signal handler. Not rooted.
     struct _jl_value_t *sig_exception;
     // Temporary backtrace buffer. Scanned for gc roots when bt_size > 0.
@@ -187,6 +201,9 @@ typedef struct _jl_tls_states_t {
     // Saved exception for previous *external* API call or NULL if cleared.
     // Access via jl_exception_occurred().
     struct _jl_value_t *previous_exception;
+#ifdef _OS_DARWIN_
+    jl_jmp_buf *volatile safe_restore;
+#endif
 
     // currently-held locks, to be released when an exception is thrown
     small_arraylist_t locks;
@@ -206,10 +223,77 @@ typedef struct _jl_tls_states_t {
 #endif
 } jl_tls_states_t;
 
-#ifndef JL_LIBRARY_EXPORTS
-// deprecated (only for external consumers)
-JL_DLLEXPORT void *jl_get_ptls_states(void);
+#define JL_RNG_SIZE 5 // xoshiro 4 + splitmix 1
+
+// all values are callable as Functions
+typedef jl_value_t jl_function_t;
+
+typedef struct _jl_timing_block_t jl_timing_block_t;
+typedef struct _jl_timing_event_t jl_timing_event_t;
+typedef struct _jl_excstack_t jl_excstack_t;
+
+typedef struct _jl_handler_t jl_handler_t;
+
+typedef struct _jl_task_t {
+    JL_DATA_TYPE
+    jl_value_t *next; // invasive linked list for scheduler
+    jl_value_t *queue; // invasive linked list for scheduler
+    jl_value_t *tls;
+    jl_value_t *donenotify;
+    jl_value_t *result;
+    jl_value_t *scope;
+    jl_function_t *start;
+    _Atomic(uint8_t) _state;
+    uint8_t sticky; // record whether this Task can be migrated to a new thread
+    uint16_t priority;
+    _Atomic(uint8_t) _isexception; // set if `result` is an exception to throw or that we exited with
+    uint8_t pad0[3];
+    // === 64 bytes (cache line)
+    uint64_t rngState[JL_RNG_SIZE];
+    // flag indicating whether or not to record timing metrics for this task
+    uint8_t metrics_enabled;
+    uint8_t pad1[3];
+    // timestamp this task first entered the run queue
+    _Atomic(uint64_t) first_enqueued_at;
+    // timestamp this task was most recently scheduled to run
+    _Atomic(uint64_t) last_started_running_at;
+    // time this task has spent running; updated when it yields or finishes.
+    _Atomic(uint64_t) running_time_ns;
+    // === 64 bytes (cache line)
+    // timestamp this task finished (i.e. entered state DONE or FAILED).
+    _Atomic(uint64_t) finished_at;
+
+// hidden state:
+
+    // id of owning thread - does not need to be defined until the task runs
+    _Atomic(int16_t) tid;
+    // threadpool id
+    int8_t threadpoolid;
+    // Reentrancy bits
+    // Bit 0: 1 if we are currently running inference/codegen
+    // Bit 1-2: 0-3 counter of how many times we've reentered inference
+    // Bit 3: 1 if we are writing the image and inference is illegal
+    uint8_t reentrant_timing;
+    // 2 bytes of padding on 32-bit, 6 bytes on 64-bit
+    // uint16_t padding2_32;
+    // uint48_t padding2_64;
+    // saved gc stack top for context switches
+    jl_gcframe_t *gcstack;
+    size_t world_age;
+    // quick lookup for current ptls
+    jl_ptls_t ptls; // == jl_all_tls_states[tid]
+#ifdef USE_TRACY
+    const char *name;
 #endif
+    // saved exception stack
+    jl_excstack_t *excstack;
+    // current exception handler
+    jl_handler_t *eh;
+    // saved thread state
+    jl_ucontext_t ctx; // pointer into stkbuf, if suspended
+} jl_task_t;
+
+JL_DLLEXPORT void *jl_get_ptls_states(void);
 
 // Update codegen version in `ccall.cpp` after changing either `pause` or `wake`
 #ifdef __MIC__

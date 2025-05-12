@@ -10,11 +10,11 @@ ITTAPI_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DITT_API_IPT_SUPPORT=
 $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-configured: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(ITTAPI_OPTS)
+	$(CMAKE) -G"Unix Makefiles" $(dir $<) $(ITTAPI_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ITTAPI_SRC_DIR)/build-configured
-	$(CMAKE) --build $(dir $<)
+	$(MAKE) -C $(dir $<)
 	echo 1 > $@
 
 define ITTAPI_INSTALL

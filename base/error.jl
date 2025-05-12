@@ -42,6 +42,7 @@ typeof(error).name.max_methods = UInt8(2)
 Raise an `ErrorException` with the given message.
 """
 error(s::AbstractString) = throw(ErrorException(s))
+error() = throw(ErrorException(""))
 
 """
     error(msg...)
@@ -232,7 +233,9 @@ macro assert(ex, msgs...)
         msg = msg # pass-through
     elseif !isempty(msgs) && (isa(msg, Expr) || isa(msg, Symbol))
         # message is an expression needing evaluating
-        msg = :(Main.Base.string($(esc(msg))))
+        # N.B. To reduce the risk of invalidation caused by the complex callstack involved
+        # with `string`, use `inferencebarrier` here to hide this `string` from the compiler.
+        msg = :(Main.Base.inferencebarrier(Main.Base.string)($(esc(msg))))
     elseif isdefined(Main, :Base) && isdefined(Main.Base, :string) && applicable(Main.Base.string, msg)
         msg = Main.Base.string(msg)
     else
@@ -243,7 +246,8 @@ macro assert(ex, msgs...)
 end
 
 # this may be overridden in contexts where `string(::Expr)` doesn't work
-_assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
+_assert_tostring(@nospecialize(msg)) = Core.compilerbarrier(:type, __assert_tostring)(msg)
+__assert_tostring(msg) = isdefined(Main, :Base) ? Main.Base.string(msg) :
     (Core.println(msg); "Error during bootstrap. See stdout.")
 
 struct ExponentialBackOff

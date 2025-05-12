@@ -2,6 +2,8 @@
 
 using Random, LinearAlgebra
 
+include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
+
 isdefined(Main, :InfiniteArrays) || @eval Main include("testhelpers/InfiniteArrays.jl")
 using .Main.InfiniteArrays
 
@@ -332,6 +334,15 @@ end
         end
         R = LinearIndices((Base.IdentityUnitRange(0:1), 0:1))
         @test axes(R) == (Base.IdentityUnitRange(0:1), Base.OneTo(2))
+    end
+
+    @testset "show" begin
+        A = zeros(2,3)
+        for B in (A, view(A, Base.IdentityUnitRange(2:4)))
+            l = LinearIndices(B)
+            s = sprint(show, l)
+            @test s == "LinearIndices($(axes(B)))"
+        end
     end
 end
 
@@ -897,7 +908,27 @@ test_ind2sub(TestAbstractArray)
 
 include("generic_map_tests.jl")
 generic_map_tests(map, map!)
-@test_throws ArgumentError map!(-, [1])
+@test map!(-, [1]) == [-1]
+
+@testset "#30624" begin
+    ### unstructured
+    @test map!(+, ones(3), ones(3), ones(3), [1]) == [3, 1, 1]
+    @test map!(+, ones(3), [1], ones(3), ones(3)) == [3, 1, 1]
+    @test map!(+, [1], [1], [], []) == [1]
+    @test map!(+, [[1]], [1], [], []) == [[1]]
+
+    # TODO: decide if input axes & lengths should be validated
+    # @test_throws BoundsError map!(+, ones(1), ones(2))
+    # @test_throws BoundsError map!(+, ones(1), ones(2, 2))
+
+    @test map!(+, ones(3), view(ones(2, 3), 1:2, 2:3), ones(3)) == [2, 2, 2]
+    @test map!(+, ones(3), ones(2, 2), ones(3)) == [2, 2, 2]
+
+    ### structured (all mapped arguments are <:AbstractArray equal ndims > 1)
+    @test map!(+, ones(4), ones(2, 2), ones(2, 2)) == [2, 2, 2, 2]
+    @test map!(+, ones(4), ones(2, 2), ones(1, 2)) == [2, 2, 1, 1]
+    # @test_throws BoundsError map!(+, ones(3), ones(2, 2), ones(2, 2))
+end
 
 test_UInt_indexing(TestAbstractArray)
 test_13315(TestAbstractArray)
@@ -1403,6 +1434,8 @@ end
 Base.push!(tpa::TestPushArray{T}, a::T) where T = push!(tpa.data, a)
 Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
 
+push_slightly_abstract_namedtuple(v::Vector{@NamedTuple{x::Int,y::Any}}, x::Int, @nospecialize(y)) = push!(v, (; x, y))
+
 @testset "push! and pushfirst!" begin
     a_orig = [1]
     tpa = TestPushArray{Int, 2}(a_orig)
@@ -1412,6 +1445,11 @@ Base.pushfirst!(tpa::TestPushArray{T}, a::T) where T = pushfirst!(tpa.data, a)
     tpa = TestPushArray{Int, 2}(a_orig)
     pushfirst!(tpa, 6, 5, 4, 3, 2)
     @test tpa.data == reverse(collect(1:6))
+
+    let src = code_typed1(push_slightly_abstract_namedtuple, (Vector{@NamedTuple{x::Int,y::Any}},Int,Any))
+        # After optimization, all `push!` and `convert` calls should have been inlined
+        @test all((x)->!iscall((src, push!))(x) && !iscall((src, convert))(x), src.code)
+    end
 end
 
 mutable struct SimpleArray{T} <: AbstractVector{T}
@@ -1434,6 +1472,31 @@ using .Main.OffsetArrays
         @test_throws Exception f(a, args...)
         @test a == orig
     end
+end
+
+@testset "Check push!($a, $args...)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        push!(a, args...)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check append!($a, $args)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1)),
+    args in (("eenie",), ("eenie", "minie"), ("eenie", "minie", "mo"))
+        orig = copy(a)
+        append!(a, args)
+        @test length(a) == length(orig) + length(args)
+        @test a[axes(orig,1)] == orig
+        @test all(a[end-length(args)+1:end] .== args)
+end
+
+@testset "Check sizehint!($a)" for
+    a in (["foo", "Bar"], SimpleArray(["foo", "Bar"]), SimpleArray{Any}(["foo", "Bar"]), OffsetVector(["foo", "Bar"], 0:1))
+        @test sizehint!(a, 10) === a
 end
 
 @testset "splatting into hvcat" begin
@@ -1842,7 +1905,7 @@ end
 end
 
 module IRUtils
-    include("compiler/irutils.jl")
+    include(joinpath(@__DIR__,"../Compiler/test/irutils.jl"))
 end
 
 function check_pointer_strides(A::AbstractArray)
@@ -2128,4 +2191,98 @@ end
 
     @test one(Mat([1 2; 3 4])) == Mat([1 0; 0 1])
     @test one(Mat([1 2; 3 4])) isa Mat
+
+    @testset "SizedArray" begin
+        S = [1 2; 3 4]
+        A = SizedArrays.SizedArray{(2,2)}(S)
+        @test one(A) == one(typeof(A))
+        @test oneunit(A) == oneunit(typeof(A))
+        M = fill(A, 2, 2)
+        O = one(M)
+        for I in CartesianIndices(M)
+            if I[1] == I[2]
+                @test O[I] == one(S)
+            else
+                @test O[I] == zero(S)
+            end
+        end
+    end
+end
+
+@testset "copyto! with non-AbstractArray src" begin
+    A = zeros(4)
+    x = (i for i in axes(A,1))
+    copyto!(A, 1, x, 1, length(A))
+    @test A == axes(A,1)
+    A .= 0
+    copyto!(A, 1, x, 1, 2)
+    @test A[1:2] == first(x,2)
+    @test iszero(A[3:end])
+    A .= 0
+    copyto!(A, 1, x, 1)
+    @test A == axes(A,1)
+end
+
+@testset "reshape with Integer sizes" begin
+    @test reshape(1:4, big(2), big(2)) == reshape(1:4, 2, 2)
+    a = [1 2 3; 4 5 6]
+    reshaped_arrays = (
+        reshape(a, 3, 2),
+        reshape(a, (3, 2)),
+        reshape(a, big(3), big(2)),
+        reshape(a, (big(3), big(2))),
+        reshape(a, :, big(2)),
+        reshape(a, (:, big(2))),
+        reshape(a, big(3), :),
+        reshape(a, (big(3), :)),
+    )
+    @test allequal(reshaped_arrays)
+    for b ∈ reshaped_arrays
+        @test b isa Matrix{Int}
+        @test b.ref === a.ref
+    end
+end
+@testset "AbstractArrayMath" begin
+    @testset "IsReal" begin
+        A = [1, 2, 3, 4]
+        @test isreal(A) == true
+        B = [1.1, 2.2, 3.3, 4.4]
+        @test isreal(B) == true
+        C = [1, 2.2, 3]
+        @test isreal(C) == true
+        D = Real[]
+        @test isreal(D) == true
+        E = [1 + 1im, 2 - 2im]
+        @test isreal(E) == false
+        struct MyReal <: Real
+            value::Float64
+        end
+        F = [MyReal(1.0), MyReal(2.0)]
+        @test isreal(F) == true
+        G = ["a", "b", "c"]
+        @test_throws MethodError isreal(G)
+    end
+end
+
+@testset "similar/reshape for AbstractOneTo" begin
+    A = [1,2]
+    @testset "reshape" begin
+        @test reshape(A, 2, SizedArrays.SOneTo(1)) == reshape(A, 2, 1)
+        @test reshape(A, Base.OneTo(2), SizedArrays.SOneTo(1)) == reshape(A, 2, 1)
+        @test reshape(A, SizedArrays.SOneTo(1), 2) == reshape(A, 1, 2)
+        @test reshape(A, SizedArrays.SOneTo(1), Base.OneTo(2)) == reshape(A, 1, 2)
+    end
+    @testset "similar" begin
+        b = similar(A, SizedArrays.SOneTo(1), big(2))
+        @test b isa Array{Int, 2}
+        @test size(b) == (1, 2)
+        b = similar(A, SizedArrays.SOneTo(1), Base.OneTo(2))
+        @test b isa Array{Int, 2}
+        @test size(b) == (1, 2)
+        b = similar(A, SizedArrays.SOneTo(1), 2, Base.OneTo(2))
+        @test b isa Array{Int, 3}
+        @test size(b) == (1, 2, 2)
+
+        @test_throws "no method matching $Int(::$Infinity)" similar(ones(2), OneToInf())
+    end
 end

@@ -3,7 +3,7 @@
 #ifndef GC_PAGE_PROFILER_H
 #define GC_PAGE_PROFILER_H
 
-#include "gc.h"
+#include "gc-stock.h"
 
 #ifdef __cplusplus
 extern "C" {

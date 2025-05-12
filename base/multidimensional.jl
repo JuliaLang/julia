@@ -4,10 +4,12 @@
 module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
-                  convert, show, iterate, promote_rule, to_indices, copy
+                  convert, show, iterate, promote_rule, to_indices, copy,
+                  isassigned, lastindex, firstindex
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
+    import Core: Tuple
     using .Base: to_index, fill_to_length, tail, safe_tail
     using .Base: IndexLinear, IndexCartesian, AbstractCartesianIndex,
         ReshapedArray, ReshapedArrayLF, OneTo, Fix1
@@ -89,7 +91,11 @@ module IteratorsMD
     flatten(I::Tuple{Any}) = Tuple(I[1])
     @inline flatten(I::Tuple) = (Tuple(I[1])..., flatten(tail(I))...)
     CartesianIndex(index::Tuple{Vararg{Union{Integer, CartesianIndex}}}) = CartesianIndex(index...)
-    show(io::IO, i::CartesianIndex) = (print(io, "CartesianIndex"); show(io, i.I))
+    function show(io::IO, i::CartesianIndex)
+        print(io, "CartesianIndex(")
+        join(io, i.I, ", ")
+        print(io, ")")
+    end
 
     # length
     length(::CartesianIndex{N}) where {N} = N
@@ -97,6 +103,8 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
+    firstindex(index::CartesianIndex) = firstindex(index.I)
+    lastindex(index::CartesianIndex) = lastindex(index.I)
     Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
@@ -140,7 +148,7 @@ module IteratorsMD
     # hashing
     const cartindexhash_seed = UInt == UInt64 ? 0xd60ca92f8284b8b0 : 0xf2ea7c2e
     function Base.hash(ci::CartesianIndex, h::UInt)
-        h += cartindexhash_seed
+        h ⊻= cartindexhash_seed
         for i in ci.I
             h = hash(i, h)
         end
@@ -408,7 +416,9 @@ module IteratorsMD
 
     @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
         axsA = axes(A)
-        Base._all_match_first(axes, axsA, B...) || Base.throw_eachindex_mismatch_indices(IndexCartesian(), axes(A), axes.(B)...)
+        axsBs = map(axes, B)
+        all(==(axsA), axsBs) ||
+            Base.throw_eachindex_mismatch_indices("axes", axsA, axsBs...)
         CartesianIndices(axsA)
     end
 
@@ -615,6 +625,8 @@ module IteratorsMD
     # array operations
     Base.intersect(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
         CartesianIndices(intersect.(a.indices, b.indices))
+    Base.issubset(a::CartesianIndices{N}, b::CartesianIndices{N}) where N =
+        isempty(a) || all(map(issubset, a.indices, b.indices))
 
     # Views of reshaped CartesianIndices are used for partitions — ensure these are fast
     const CartesianPartition{T<:CartesianIndex, P<:CartesianIndices, R<:ReshapedArray{T,1,P}} = SubArray{T,1,R,<:Tuple{AbstractUnitRange{Int}},false}
@@ -730,6 +742,8 @@ end
 end
 @inline checkindex(::Type{Bool}, inds::Tuple, I::CartesianIndex) =
     checkbounds_indices(Bool, inds, I.I)
+@inline checkindex(::Type{Bool}, inds::Tuple, i::AbstractRange{<:CartesianIndex}) =
+    isempty(i) | (checkindex(Bool, inds, first(i)) & checkindex(Bool, inds, last(i)))
 
 # Indexing into Array with mixtures of Integers and CartesianIndices is
 # extremely performance-sensitive. While the abstract fallbacks support this,
@@ -1309,16 +1323,16 @@ See also: [`circshift`](@ref).
 # Examples
 ```julia-repl
 julia> src = reshape(Vector(1:16), (4,4))
-4×4 Array{Int64,2}:
+4×4 Matrix{Int64}:
  1  5   9  13
  2  6  10  14
  3  7  11  15
  4  8  12  16
 
-julia> dest = OffsetArray{Int}(undef, (0:3,2:5))
+julia> dest = OffsetArray{Int}(undef, (0:3,2:5));
 
 julia> circcopy!(dest, src)
-OffsetArrays.OffsetArray{Int64,2,Array{Int64,2}} with indices 0:3×2:5:
+4×4 OffsetArray(::Matrix{Int64}, 0:3, 2:5) with eltype Int64 with indices 0:3×2:5:
  8  12  16  4
  5   9  13  1
  6  10  14  2
@@ -1669,11 +1683,10 @@ function permutedims(B::StridedArray, perm)
     permutedims!(P, B, perm)
 end
 
-function checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) where {TP,TB,N}
-    indsB = axes(B)
-    length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
+checkdims_perm(P::AbstractArray{TP,N}, B::AbstractArray{TB,N}, perm) where {TP,TB,N} = checkdims_perm(axes(P), axes(B), perm)
+function checkdims_perm(indsP::NTuple{N, AbstractUnitRange}, indsB::NTuple{N, AbstractUnitRange}, perm) where {N}
+    length(perm) == N || throw(ArgumentError(LazyString("expected permutation of size ", N, ", but length(perm)=", length(perm))))
     isperm(perm) || throw(ArgumentError("input is not a permutation"))
-    indsP = axes(P)
     for i in eachindex(perm)
         indsP[i] == indsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
     end
@@ -1683,7 +1696,7 @@ end
 for (V, PT, BT) in Any[((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval @generated function permutedims!(P::$PT{$(V...)}, B::$BT{$(V...)}, perm) where $(V...)
         quote
-            checkdims_perm(P, B, perm)
+            checkdims_perm(axes(P), axes(B), perm)
 
             #calculates all the strides
             native_strides = size_to_strides(1, size(B)...)

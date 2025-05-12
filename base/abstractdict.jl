@@ -88,11 +88,11 @@ Return an iterator over all keys in a dictionary.
 When the keys are stored internally in a hash table,
 as is the case for `Dict`,
 the order in which they are returned may vary.
-But `keys(a)` and `values(a)` both iterate `a` and
-return the elements in the same order.
+But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
+and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+'\\S'.*\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -114,11 +114,11 @@ Return an iterator over all values in a collection.
 When the values are stored internally in a hash table,
 as is the case for `Dict`,
 the order in which they are returned may vary.
-But `keys(a)` and `values(a)` both iterate `a` and
-return the elements in the same order.
+But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
+and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+(\\s+=>\\s+\\d)?\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -138,9 +138,13 @@ values(a::AbstractDict) = ValueIterator(a)
 Return an iterator over `key => value` pairs for any
 collection that maps a set of keys to a set of values.
 This includes arrays, where the keys are the array indices.
+When the entries are stored internally in a hash table,
+as is the case for `Dict`, the order in which they are returned may vary.
+But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
+and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> a = Dict(zip(["a", "b", "c"], [1, 2, 3]))
 Dict{String, Int64} with 3 entries:
   "c" => 3
@@ -203,7 +207,7 @@ Update collection with pairs from the other collections.
 See also [`merge`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> d1 = Dict(1 => 2, 3 => 4);
 
 julia> d2 = Dict(1 => 4, 4 => 5);
@@ -247,7 +251,7 @@ compatibility.
     `mergewith!` requires Julia 1.5 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> d1 = Dict(1 => 2, 3 => 4);
 
 julia> d2 = Dict(1 => 4, 4 => 5);
@@ -328,7 +332,7 @@ value for that key will be the value it has in the last collection listed.
 See also [`mergewith`](@ref) for custom handling of values with the same key.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String, Float64} with 2 entries:
   "bar" => 42.0
@@ -373,7 +377,7 @@ Method `merge(combine::Union{Function,Type}, args...)` as an alias of
     `mergewith` requires Julia 1.5 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String, Float64} with 2 entries:
   "bar" => 42.0
@@ -392,6 +396,10 @@ Dict{String, Float64} with 3 entries:
 
 julia> ans == mergewith(+)(a, b)
 true
+
+julia> mergewith(-, Dict(), Dict(:a=>1))  # Combining function only used if key is present in both
+Dict{Any, Any} with 1 entry:
+  :a => 1
 ```
 """
 mergewith(combine, d::AbstractDict, others::AbstractDict...) =
@@ -417,7 +425,7 @@ Update `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\\s+=>\\s+\\S+\$"m
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
 Dict{Int64, String} with 3 entries:
   2 => "b"
@@ -459,7 +467,7 @@ Return a copy of `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\\s+=>\\s+\\S+\$"m
 julia> d = Dict(1=>"a", 2=>"b")
 Dict{Int64, String} with 2 entries:
   2 => "b"
@@ -652,7 +660,7 @@ of `dict` then it will be converted to the value type if possible and otherwise 
     `map!(f, values(dict::AbstractDict))` requires Julia 1.2 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+(\\s+=>\\s+\\d)?\$"m
 julia> d = Dict(:a => 1, :b => 2)
 Dict{Symbol, Int64} with 2 entries:
   :a => 1

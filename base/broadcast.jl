@@ -250,9 +250,11 @@ BroadcastStyle(::Type{<:Broadcasted{S}}) where {S<:Union{Nothing,Unknown}} =
 argtype(::Type{BC}) where {BC<:Broadcasted} = fieldtype(BC, :args)
 argtype(bc::Broadcasted) = argtype(typeof(bc))
 
-@inline Base.eachindex(bc::Broadcasted) = _eachindex(axes(bc))
-_eachindex(t::Tuple{Any}) = t[1]
-_eachindex(t::Tuple) = CartesianIndices(t)
+@inline Base.eachindex(bc::Broadcasted) = eachindex(IndexStyle(bc), bc)
+@inline Base.eachindex(s::IndexStyle, bc::Broadcasted) = _eachindex(s, axes(bc))
+_eachindex(::IndexCartesian, t::Tuple) = CartesianIndices(t)
+_eachindex(s::IndexLinear, t::Tuple) = eachindex(s, LinearIndices(t))
+_eachindex(::IndexLinear, t::Tuple{Any}) = t[1]
 
 Base.IndexStyle(bc::Broadcasted) = IndexStyle(typeof(bc))
 Base.IndexStyle(::Type{<:Broadcasted{<:Any,<:Tuple{Any}}}) = IndexLinear()
@@ -278,9 +280,14 @@ Base.@propagate_inbounds function Base.iterate(bc::Broadcasted, s)
 end
 
 Base.IteratorSize(::Type{T}) where {T<:Broadcasted} = Base.HasShape{ndims(T)}()
-Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims(fieldtype(BC, :args))
-Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N<:Integer} = N
+Base.ndims(BC::Type{<:Broadcasted{<:Any,Nothing}}) = _maxndims_broadcasted(BC)
+# the `AbstractArrayStyle` type parameter is required to be either equal to `Any` or be an `Int` value
+Base.ndims(BC::Type{<:Broadcasted{<:AbstractArrayStyle{Any},Nothing}}) = _maxndims_broadcasted(BC)
+Base.ndims(::Type{<:Broadcasted{<:AbstractArrayStyle{N},Nothing}}) where {N} = N::Int
 
+function _maxndims_broadcasted(BC::Type{<:Broadcasted})
+    _maxndims(fieldtype(BC, :args))
+end
 _maxndims(::Type{T}) where {T<:Tuple} = reduce(max, ntuple(n -> (F = fieldtype(T, n); F <: Tuple ? 1 : ndims(F)), Base._counttuple(T)))
 _maxndims(::Type{<:Tuple{T}}) where {T} = T <: Tuple ? 1 : ndims(T)
 function _maxndims(::Type{<:Tuple{T, S}}) where {T, S}
@@ -367,7 +374,7 @@ cat_nested_args(t::Tuple) = (cat_nested(t[1])..., cat_nested_args(tail(t))...)
 cat_nested(a) = (a,)
 
 """
-    make_makeargs(t::Tuple) -> Tuple{Vararg{Function}}
+    make_makeargs(t::Tuple)::Tuple{Vararg{Function}}
 
 Each element of `t` is one (consecutive) node in a broadcast tree.
 The returned `Tuple` are functions which take in the (whole) flattened
@@ -407,7 +414,7 @@ prepare_args(::Tuple{}, ::Tuple) = ()
 ## logic for deciding the BroadcastStyle
 
 """
-    combine_styles(cs...) -> BroadcastStyle
+    combine_styles(cs...)::BroadcastStyle
 
 Decides which `BroadcastStyle` to use for any number of value arguments.
 Uses [`BroadcastStyle`](@ref) to get the style for each argument, and uses
@@ -432,7 +439,7 @@ combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
 """
-    result_style(s1::BroadcastStyle[, s2::BroadcastStyle]) -> BroadcastStyle
+    result_style(s1::BroadcastStyle[, s2::BroadcastStyle])::BroadcastStyle
 
 Takes one or two `BroadcastStyle`s and combines them using [`BroadcastStyle`](@ref) to
 determine a common `BroadcastStyle`.
@@ -481,7 +488,7 @@ end
 # Indices utilities
 
 """
-    combine_axes(As...) -> Tuple
+    combine_axes(As...)::Tuple
 
 Determine the result axes for broadcasting across all values in `As`.
 
@@ -498,7 +505,7 @@ julia> Broadcast.combine_axes(1, 1, 1)
 combine_axes(A) = axes(A)
 
 """
-    broadcast_shape(As...) -> Tuple
+    broadcast_shape(As...)::Tuple
 
 Determine the result axes for broadcasting across all axes (size Tuples) in `As`.
 
@@ -606,17 +613,31 @@ Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
     (Base.length(ind1)::Integer != 1, keep...), (first(ind1), Idefault...)
 end
 
-@inline function Base.getindex(bc::Broadcasted, Is::Vararg{Union{Integer,CartesianIndex},N}) where {N}
+Base.@propagate_inbounds function Base.getindex(bc::Broadcasted, Is::Vararg{Union{Integer,CartesianIndex},N}) where {N}
     I = to_index(Base.IteratorsMD.flatten(Is))
+    _getindex(IndexStyle(bc), bc, I)
+end
+@inline function _getindex(::IndexStyle, bc, I)
     @boundscheck checkbounds(bc, I)
     @inbounds _broadcast_getindex(bc, I)
+end
+Base.@propagate_inbounds function _getindex(s::IndexCartesian, bc, I::Integer)
+    C = CartesianIndices(axes(bc))
+    _getindex(s, bc, C[I])
+end
+Base.@propagate_inbounds function _getindex(s::IndexLinear, bc, I::CartesianIndex)
+    L = LinearIndices(axes(bc))
+    _getindex(s, bc, L[I])
 end
 to_index(::Tuple{}) = CartesianIndex()
 to_index(Is::Tuple{Any}) = Is[1]
 to_index(Is::Tuple) = CartesianIndex(Is)
 
-@inline Base.checkbounds(bc::Broadcasted, I::Union{Integer,CartesianIndex}) =
+@inline Base.checkbounds(bc::Broadcasted, I::CartesianIndex) =
     Base.checkbounds_indices(Bool, axes(bc), (I,)) || Base.throw_boundserror(bc, (I,))
+
+@inline Base.checkbounds(bc::Broadcasted, I::Integer) =
+    Base.checkindex(Bool, eachindex(IndexLinear(), bc), I) || Base.throw_boundserror(bc, (I,))
 
 
 """
@@ -753,6 +774,7 @@ The resulting container type is established by the following rules:
  - All other combinations of arguments default to returning an `Array`, but
    custom container types can define their own implementation and promotion-like
    rules to customize the result when they appear as arguments.
+ - The element type is determined in the same manner as in [`collect`](@ref).
 
 A special syntax exists for broadcasting: `f.(args...)` is equivalent to
 `broadcast(f, args...)`, and nested `f.(g.(args...))` calls are fused into a

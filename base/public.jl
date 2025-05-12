@@ -10,29 +10,30 @@ public
 
 # Types
     AbstractLock,
+    AbstractOneTo,
     AbstractPipe,
     AsyncCondition,
     CodeUnits,
     Event,
+    Fix,
     Fix1,
     Fix2,
     Generator,
     ImmutableDict,
     OneTo,
+    Pairs,
     LogRange,
-    AnnotatedString,
-    AnnotatedChar,
     UUID,
-
-# Annotated strings
-    annotatedstring,
-    annotate!,
-    annotations,
 
 # Semaphores
     Semaphore,
     acquire,
+    @acquire,
     release,
+
+# arrays
+    has_offset_axes,
+    require_one_based_indexing,
 
 # collections
     IteratorEltype,
@@ -53,6 +54,7 @@ public
     active_project,
 
 # Reflection and introspection
+    get_extension,
     isambiguous,
     isexpr,
     isidentifier,
@@ -108,6 +110,10 @@ public
     # functions
     reseteof,
     link_pipe!,
+    dup,
+
+# filesystem operations
+    rename,
 
 # misc
     notnothing,

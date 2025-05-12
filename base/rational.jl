@@ -49,6 +49,13 @@ Rational(n::T, d::T) where {T<:Integer} = Rational{T}(n, d)
 Rational(n::Integer, d::Integer) = Rational(promote(n, d)...)
 Rational(n::Integer) = unsafe_rational(n, one(n))
 
+"""
+    divgcd(x::Integer, y::Integer)
+
+Returns `(x÷gcd(x,y), y÷gcd(x,y))`.
+
+See also [`div`](@ref), [`gcd`](@ref).
+"""
 function divgcd(x::TX, y::TY)::Tuple{TX, TY} where {TX<:Integer, TY<:Integer}
     g = gcd(uabs(x), uabs(y))
     div(x,g), div(y,g)
@@ -293,8 +300,14 @@ julia> numerator(4)
 4
 ```
 """
-numerator(x::Integer) = x
+numerator(x::Union{Integer,Complex{<:Integer}}) = x
 numerator(x::Rational) = x.num
+function numerator(z::Complex{<:Rational})
+    den = denominator(z)
+    reim = (real(z), imag(z))
+    result = checked_mul.(numerator.(reim), div.(den, denominator.(reim)))
+    complex(result...)
+end
 
 """
     denominator(x)
@@ -310,8 +323,9 @@ julia> denominator(4)
 1
 ```
 """
-denominator(x::Integer) = one(x)
+denominator(x::Union{Integer,Complex{<:Integer}}) = one(x)
 denominator(x::Rational) = x.den
+denominator(z::Complex{<:Rational}) = lcm(denominator(real(z)), denominator(imag(z)))
 
 sign(x::Rational) = oftype(x, sign(x.num))
 signbit(x::Rational) = signbit(x.num)
@@ -401,6 +415,12 @@ function *(y::Integer, x::Rational)
     yn, xd = divgcd(promote(y, x.den)...)
     unsafe_rational(checked_mul(yn, x.num), xd)
 end
+# make `false` a "strong zero": false*1//0 == 0//1 #57409
+# This is here instead of in bool.jl with the AbstractFloat method for bootstrapping
+function *(x::Bool, y::T)::promote_type(Bool,T) where T<:Rational
+    return ifelse(x, y, copysign(zero(y), y))
+end
+*(y::Rational, x::Bool) = x * y
 /(x::Rational, y::Union{Rational, Integer, Complex{<:Union{Integer,Rational}}}) = x//y
 /(x::Union{Integer, Complex{<:Union{Integer,Rational}}}, y::Rational) = x//y
 inv(x::Rational{T}) where {T} = checked_den(x.den, x.num)
@@ -550,8 +570,18 @@ end
 
 float(::Type{Rational{T}}) where {T<:Integer} = float(T)
 
-gcd(x::Rational, y::Rational) = unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
-lcm(x::Rational, y::Rational) = unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.den))
+function gcd(x::Rational, y::Rational)
+    if isinf(x) != isinf(y)
+        throw(ArgumentError("lcm is not defined between infinite and finite numbers"))
+    end
+    unsafe_rational(gcd(x.num, y.num), lcm(x.den, y.den))
+end
+function lcm(x::Rational, y::Rational)
+    if isinf(x) != isinf(y)
+        throw(ArgumentError("lcm is not defined"))
+    end
+    return unsafe_rational(lcm(x.num, y.num), gcd(x.den, y.den))
+end
 function gcdx(x::Rational, y::Rational)
     c = gcd(x, y)
     if iszero(c.num)

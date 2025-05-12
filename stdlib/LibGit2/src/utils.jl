@@ -29,7 +29,7 @@ $
 """x
 
 """
-    version() -> VersionNumber
+    version()::VersionNumber
 
 Return the version of libgit2 in use, as a [`VersionNumber`](@ref man-version-number-literals).
 """
@@ -93,7 +93,7 @@ elseif Sys.isunix()
 end
 
 """
-    LibGit2.git_url(; kwargs...) -> String
+    LibGit2.git_url(; kwargs...)::String
 
 Create a string based upon the URL components provided. When the `scheme` keyword is not
 provided the URL produced will use the alternative [scp-like syntax](https://git-scm.com/docs/git-clone#_git_urls_a_id_urls_a).

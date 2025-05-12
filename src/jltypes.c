@@ -910,7 +910,7 @@ JL_DLLEXPORT jl_value_t *jl_type_unionall(jl_tvar_t *v, jl_value_t *body)
         if (jl_options.depwarn) {
             if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
                 jl_error("Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.");
-            jl_printf(JL_STDERR, "WARNING: Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.\n");
+            jl_printf(JL_STDERR, "WARNING: Wrapping `Vararg` directly in UnionAll is deprecated (wrap the tuple instead).\nYou may need to write `f(x::Vararg{T})` rather than `f(x::Vararg{<:T})` or `f(x::Vararg{T}) where T` instead of `f(x::Vararg{T} where T)`.\nTo make this warning an error, and hence obtain a stack trace, use `julia --depwarn=error`.\n");
         }
         jl_vararg_t *vm = (jl_vararg_t*)body;
         int T_has_tv = vm->T && jl_has_typevar(vm->T, v);
@@ -1607,6 +1607,118 @@ jl_value_t *jl_rewrap_unionall_(jl_value_t *t, jl_value_t *u)
     return t;
 }
 
+// Create a copy of type expression t where any occurrence of data type x is replaced by y.
+// If x does not occur in t, return t without any copy.
+// For example, jl_substitute_datatype(Foo{Bar}, Foo{T}, Qux{S}) is Qux{Bar}, with T and S
+// free type variables.
+// To substitute type variables, use jl_substitute_var instead.
+jl_value_t *jl_substitute_datatype(jl_value_t *t, jl_datatype_t * x, jl_datatype_t * y)
+{
+    if jl_is_datatype(t) {
+        jl_datatype_t *typ = (jl_datatype_t*)t;
+        // For datatypes call itself recursively on the parameters to form new parameters.
+        // Then, if typename(t) == typename(x), rewrap the wrapper of y around the new
+        // parameters. Otherwise, do the same around the wrapper of t.
+        // This ensures that the types and supertype are properly set.
+        // Start by check whether there is a parameter that needs replacing.
+        long i_firstnewparam = -1;
+        size_t nparams = jl_svec_len(typ->parameters);
+        jl_value_t *firstnewparam = NULL;
+        JL_GC_PUSH1(&firstnewparam);
+        for (size_t i = 0; i < nparams; i++) {
+            jl_value_t *param = NULL;
+            JL_GC_PUSH1(&param);
+            param = jl_svecref(typ->parameters, i);
+            firstnewparam = jl_substitute_datatype(param, x, y);
+            if (param != firstnewparam) {
+                i_firstnewparam = i;
+                JL_GC_POP();
+                break;
+            }
+            JL_GC_POP();
+        }
+        // If one of the parameters needs to be updated, or if the type name is that to
+        // substitute, create a new datataype
+        if (i_firstnewparam != -1 || typ->name == x->name) {
+            jl_datatype_t *uw = typ->name == x->name ? y : typ; // substitution occurs here
+            jl_value_t *wrapper = uw->name->wrapper;
+            jl_datatype_t *w = (jl_datatype_t*)jl_unwrap_unionall(wrapper);
+            jl_svec_t *sv = jl_alloc_svec_uninit(jl_svec_len(uw->parameters));
+            JL_GC_PUSH1(&sv);
+            jl_value_t **vals = jl_svec_data(sv);
+            // no JL_GC_PUSHARGS(vals, ...) since GC is already aware of sv
+            for (long i = 0; i < i_firstnewparam; i++) { // copy the identical parameters
+                vals[i] = jl_svecref(typ->parameters, i); // value
+            }
+            if (i_firstnewparam != -1) { // insert the first non-identical parameter
+                vals[i_firstnewparam] = firstnewparam;
+            }
+            for (size_t i = i_firstnewparam+1; i < nparams; i++) { // insert the remaining parameters
+                vals[i] = jl_substitute_datatype(jl_svecref(typ->parameters, i), x, y);
+            }
+            if (jl_is_tuple_type(wrapper)) {
+                // special case for tuples, since the wrapper (Tuple) does not have as
+                // many parameters as t (it only has a Vararg instead).
+                t = jl_apply_tuple_type(sv, 0);
+            } else {
+                t = jl_instantiate_type_in_env((jl_value_t*)w, (jl_unionall_t*)wrapper, vals);
+            }
+            JL_GC_POP();
+        }
+        JL_GC_POP();
+    }
+    else if jl_is_unionall(t) { // recursively call itself on body and var bounds
+        jl_unionall_t* ut = (jl_unionall_t*)t;
+        jl_value_t *lb = NULL;
+        jl_value_t *ub = NULL;
+        jl_value_t *body = NULL;
+        JL_GC_PUSH3(&lb, &ub, &body);
+        lb = jl_substitute_datatype(ut->var->lb, x, y);
+        ub = jl_substitute_datatype(ut->var->ub, x, y);
+        body = jl_substitute_datatype(ut->body, x, y);
+        if (lb != ut->var->lb || ub != ut->var->ub) {
+            jl_tvar_t *newtvar = jl_new_typevar(ut->var->name, lb, ub);
+            JL_GC_PUSH1(&newtvar);
+            body = jl_substitute_var(body, ut->var, (jl_value_t*)newtvar);
+            t = jl_new_struct(jl_unionall_type, newtvar, body);
+            JL_GC_POP();
+        }
+        else if (body != ut->body) {
+            t = jl_new_struct(jl_unionall_type, ut->var, body);
+        }
+        JL_GC_POP();
+    }
+    else if jl_is_uniontype(t) { // recursively call itself on a and b
+        jl_uniontype_t *u = (jl_uniontype_t*)t;
+        jl_value_t *a = NULL;
+        jl_value_t *b = NULL;
+        JL_GC_PUSH2(&a, &b);
+        a = jl_substitute_datatype(u->a, x, y);
+        b = jl_substitute_datatype(u->b, x, y);
+        if (a != u->a || b != u->b) {
+            t = jl_new_struct(jl_uniontype_type, a, b);
+        }
+        JL_GC_POP();
+    }
+    else if jl_is_vararg(t) { // recursively call itself on T
+        jl_vararg_t *vt = (jl_vararg_t*)t;
+        if (vt->T) { // vt->T could be NULL
+            jl_value_t *rT = NULL;
+            JL_GC_PUSH1(&rT);
+            rT = jl_substitute_datatype(vt->T, x, y);
+            if (rT != vt->T) {
+                jl_task_t *ct = jl_current_task;
+                t = jl_gc_alloc(ct->ptls, sizeof(jl_vararg_t), jl_vararg_type);
+                jl_set_typetagof((jl_vararg_t *)t, jl_vararg_tag, 0);
+                ((jl_vararg_t *)t)->T = rT;
+                ((jl_vararg_t *)t)->N = vt->N;
+            }
+            JL_GC_POP();
+        }
+    }
+    return t;
+}
+
 static jl_value_t *lookup_type_stack(jl_typestack_t *stack, jl_datatype_t *tt, size_t ntp,
                                      jl_value_t **iparams)
 {
@@ -1961,7 +2073,7 @@ static jl_value_t *jl_tupletype_fill(size_t n, jl_value_t *t, int check, int not
         t = normalize_unionalls(t);
         p = t;
         jl_value_t *tw = extract_wrapper(t);
-        if (tw && t != tw && jl_types_equal(t, tw))
+        if (tw && t != tw && !jl_has_free_typevars(t) && jl_types_equal(t, tw))
             t = tw;
         p = t;
         check = 0; // remember that checks are already done now
@@ -2045,7 +2157,7 @@ static jl_value_t *inst_datatype_inner(jl_datatype_t *dt, jl_svec_t *p, jl_value
             // normalize types equal to wrappers (prepare for Typeofwrapper)
             jl_value_t *tw = extract_wrapper(pi);
             if (tw && tw != pi && (tn != jl_type_typename || jl_typeof(pi) == jl_typeof(tw)) &&
-                    jl_types_equal(pi, tw)) {
+                    !jl_has_free_typevars(pi) && jl_types_equal(pi, tw)) {
                 iparams[i] = tw;
                 if (p) jl_gc_wb(p, tw);
             }
@@ -2717,7 +2829,7 @@ jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n, int check, int nothrow
             if (valid) {
                 t = normalize_unionalls(t);
                 jl_value_t *tw = extract_wrapper(t);
-                if (tw && t != tw && jl_types_equal(t, tw))
+                if (tw && t != tw && !jl_has_free_typevars(t) && jl_types_equal(t, tw))
                     t = tw;
             }
         }
@@ -2844,7 +2956,7 @@ void jl_init_types(void) JL_GC_DISABLED
     XX(simplevector);
     jl_methtable_type = jl_new_uninitialized_datatype();
 
-    jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type);
+    jl_emptysvec = (jl_svec_t*)jl_gc_permobj(sizeof(void*), jl_simplevector_type, 0);
     jl_set_typetagof(jl_emptysvec, jl_simplevector_tag, GC_OLD_MARKED);
     jl_svec_set_len_unsafe(jl_emptysvec, 0);
 
@@ -2895,24 +3007,26 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typename_type->name->mt = jl_nonfunction_mt;
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_emptysvec;
-    jl_typename_type->name->n_uninitialized = 15 - 2;
-    jl_typename_type->name->names = jl_perm_symsvec(15, "name", "module",
+    jl_typename_type->name->n_uninitialized = 17 - 2;
+    jl_typename_type->name->names = jl_perm_symsvec(17, "name", "module",
                                                     "names", "atomicfields", "constfields",
                                                     "wrapper", "Typeofwrapper", "cache", "linearcache",
                                                     "mt", "partial",
                                                     "hash", "n_uninitialized",
                                                     "flags", // "abstract", "mutable", "mayinlinealloc",
-                                                    "max_methods");
-    const static uint32_t typename_constfields[1] = { 0x00003a27 }; // (1<<0)|(1<<1)|(1<<2)|(1<<5)|(1<<9)|(1<<11)|(1<<12)|(1<<13) ; TODO: put back (1<<3)|(1<<4) in this list
-    const static uint32_t typename_atomicfields[1] = { 0x00000180 }; // (1<<7)|(1<<8)
+                                                    "cache_entry_count", "max_methods", "constprop_heuristic");
+    const static uint32_t typename_constfields[1]  = { 0b00011101000100111 }; // TODO: put back atomicfields and constfields in this list
+    const static uint32_t typename_atomicfields[1] = { 0b00100000110000000 };
     jl_typename_type->name->constfields = typename_constfields;
     jl_typename_type->name->atomicfields = typename_atomicfields;
     jl_precompute_memoized_dt(jl_typename_type, 1);
-    jl_typename_type->types = jl_svec(15, jl_symbol_type, jl_any_type /*jl_module_type*/,
+    jl_typename_type->types = jl_svec(17, jl_symbol_type, jl_any_type /*jl_module_type*/,
                                       jl_simplevector_type, jl_any_type/*jl_voidpointer_type*/, jl_any_type/*jl_voidpointer_type*/,
                                       jl_type_type, jl_type_type, jl_simplevector_type, jl_simplevector_type,
                                       jl_methtable_type, jl_any_type,
                                       jl_any_type /*jl_long_type*/, jl_any_type /*jl_int32_type*/,
+                                      jl_any_type /*jl_uint8_type*/,
+                                      jl_any_type /*jl_uint8_type*/,
                                       jl_any_type /*jl_uint8_type*/,
                                       jl_any_type /*jl_uint8_type*/);
 
@@ -2975,7 +3089,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_typeofbottom_type = jl_new_datatype(jl_symbol("TypeofBottom"), core, type_type, jl_emptysvec,
                                            jl_emptysvec, jl_emptysvec, jl_emptysvec, 0, 0, 0);
     XX(typeofbottom);
-    jl_bottom_type = jl_gc_permobj(0, jl_typeofbottom_type);
+    jl_bottom_type = jl_gc_permobj(0, jl_typeofbottom_type, 0);
     jl_set_typetagof(jl_bottom_type, jl_typeofbottom_tag, GC_OLD_MARKED);
     jl_typeofbottom_type->instance = jl_bottom_type;
 
@@ -3023,8 +3137,9 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_anytuple_type->layout = NULL;
 
     jl_typeofbottom_type->super = jl_wrap_Type(jl_bottom_type);
+    jl_typeofbottom_type->super->layout = jl_typeofbottom_type->layout; // the only abstract type with a layout
     jl_emptytuple_type = (jl_datatype_t*)jl_apply_tuple_type(jl_emptysvec, 0);
-    jl_emptytuple = jl_gc_permobj(0, jl_emptytuple_type);
+    jl_emptytuple = jl_gc_permobj(0, jl_emptytuple_type, 0);
     jl_emptytuple_type->instance = jl_emptytuple;
 
     // non-primitive definitions follow
@@ -3146,14 +3261,26 @@ void jl_init_types(void) JL_GC_DISABLED
     assert(jl_module_type->instance == NULL);
     jl_compute_field_offsets(jl_module_type);
 
+    jl_binding_partition_type =
+        jl_new_datatype(jl_symbol("BindingPartition"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(5, "restriction", "min_world", "max_world", "next", "kind"),
+                        jl_svec(5, jl_any_type,
+                        jl_ulong_type, jl_ulong_type, jl_any_type/*jl_binding_partition_type*/, jl_ulong_type),
+                        jl_emptysvec, 0, 1, 0);
+    const static uint32_t binding_partition_atomicfields[] = { 0b01110 }; // Set fields 2, 3, 4 as atomic
+    jl_binding_partition_type->name->atomicfields = binding_partition_atomicfields;
+    const static uint32_t binding_partition_constfields[]  = { 0b10001 }; // Set fields 1, 5 as constant
+    jl_binding_partition_type->name->constfields = binding_partition_constfields;
+
     jl_binding_type =
         jl_new_datatype(jl_symbol("Binding"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(5, "value", "globalref", "owner", "ty", "flags"),
-                        jl_svec(5, jl_any_type, jl_any_type/*jl_globalref_type*/, jl_any_type/*jl_binding_type*/, jl_type_type, jl_uint8_type),
+                        jl_perm_symsvec(5, "globalref", "value", "partitions", "backedges", "flags"),
+                        jl_svec(5, jl_any_type/*jl_globalref_type*/, jl_any_type, jl_binding_partition_type,
+                                   jl_any_type, jl_uint8_type),
                         jl_emptysvec, 0, 1, 0);
-    const static uint32_t binding_atomicfields[] = { 0x0015 }; // Set fields 1, 3, 4 as atomic
+    const static uint32_t binding_atomicfields[] = { 0x0016 }; // Set fields 2, 3, 5 as atomic
     jl_binding_type->name->atomicfields = binding_atomicfields;
-    const static uint32_t binding_constfields[] = { 0x0002 }; // Set fields 2 as constant
+    const static uint32_t binding_constfields[] = { 0x0001 }; // Set fields 1 as constant
     jl_binding_type->name->constfields = binding_constfields;
 
     jl_globalref_type =
@@ -3163,10 +3290,9 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_emptysvec, 0, 0, 3);
 
     core = jl_new_module(jl_symbol("Core"), NULL);
-    core->parent = core;
     jl_type_typename->mt->module = core;
     jl_core_module = core;
-    core = NULL; // not ready yet to use
+    core = NULL; // not actually ready yet to use
 
     tv = jl_svec1(tvar("Backend"));
     jl_addrspace_typename =
@@ -3257,9 +3383,8 @@ void jl_init_types(void) JL_GC_DISABLED
     core = jl_core_module;
     jl_atomic_store_relaxed(&core->bindingkeyset, (jl_genericmemory_t*)jl_an_empty_memory_any);
     // export own name, so "using Foo" makes "Foo" itself visible
-    jl_set_const(core, core->name, (jl_value_t*)core);
-    jl_module_public(core, core->name, 1);
-    jl_set_const(core, jl_symbol("CPU"), (jl_value_t*)cpumem);
+    jl_set_initial_const(core, core->name, (jl_value_t*)core, 1);
+    jl_set_initial_const(core, jl_symbol("CPU"), (jl_value_t*)cpumem, 0);
     core = NULL;
 
     jl_expr_type =
@@ -3361,7 +3486,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_info_type =
         jl_new_datatype(jl_symbol("CodeInfo"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(22,
+                        jl_perm_symsvec(23,
                             "code",
                             "debuginfo",
                             "ssavaluetypes",
@@ -3378,13 +3503,14 @@ void jl_init_types(void) JL_GC_DISABLED
                             "nargs",
                             "propagate_inbounds",
                             "has_fcall",
+                            "has_image_globalref",
                             "nospecializeinfer",
                             "isva",
                             "inlining",
                             "constprop",
                             "purity",
                             "inlining_cost"),
-                        jl_svec(22,
+                        jl_svec(23,
                             jl_array_any_type,
                             jl_debuginfo_type,
                             jl_any_type,
@@ -3403,6 +3529,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_bool_type,
                             jl_bool_type,
+                            jl_bool_type,
                             jl_uint8_type,
                             jl_uint8_type,
                             jl_uint16_type,
@@ -3413,13 +3540,13 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_type =
         jl_new_datatype(jl_symbol("Method"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(31,
+                        jl_perm_symsvec(32,
                             "name",
                             "module",
                             "file",
                             "line",
+                            "dispatch_status", // atomic
                             "primary_world", // atomic
-                            "deleted_world", // atomic
                             "sig",
                             "specializations", // !const
                             "speckeyset", // !const
@@ -3442,15 +3569,16 @@ void jl_init_types(void) JL_GC_DISABLED
                             "isva",
                             "is_for_opaque_closure",
                             "nospecializeinfer",
+                            "did_scan_source",
                             "constprop",
                             "max_varargs",
                             "purity"),
-                        jl_svec(31,
+                        jl_svec(32,
                             jl_symbol_type,
                             jl_module_type,
                             jl_symbol_type,
                             jl_int32_type,
-                            jl_ulong_type,
+                            jl_int32_type,
                             jl_ulong_type,
                             jl_type_type,
                             jl_any_type, // union(jl_simplevector_type, jl_method_instance_type),
@@ -3476,6 +3604,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_bool_type,
                             jl_uint8_type,
                             jl_uint8_type,
+                            jl_uint8_type,
                             jl_uint16_type),
                         jl_emptysvec,
                         0, 1, 10);
@@ -3494,7 +3623,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             "backedges",
                             "cache",
                             "cache_with_orig",
-                            "precompiled"),
+                            "flags"),
                         jl_svec(7,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,
@@ -3515,7 +3644,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_code_instance_type =
         jl_new_datatype(jl_symbol("CodeInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(17,
+                        jl_perm_symsvec(21,
                             "def",
                             "owner",
                             "next",
@@ -3525,14 +3654,19 @@ void jl_init_types(void) JL_GC_DISABLED
                             "exctype",
                             "rettype_const",
                             "inferred",
-                            "debuginfo", // TODO: rename to edges?
-                            //"absolute_max",
-                            "ipo_purity_bits",
+                            "debuginfo",
+                            "edges",
                             "analysis_results",
-                            "specsigflags", "precompile", "relocatability",
+                            "ipo_purity_bits",
+                            "time_infer_total",
+                            "time_infer_cache_saved",
+                            "time_infer_self",
+                            "time_compile",
+                            //"absolute_max",
+                            "specsigflags", "precompile",
                             "invoke", "specptr"), // function object decls
-                        jl_svec(17,
-                            jl_method_instance_type,
+                        jl_svec(21,
+                            jl_any_type,
                             jl_any_type,
                             jl_any_type,
                             jl_ulong_type,
@@ -3542,18 +3676,22 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_any_type,
                             jl_any_type,
                             jl_debuginfo_type,
-                            //jl_bool_type,
-                            jl_uint32_type,
+                            jl_simplevector_type,
                             jl_any_type,
-                            jl_bool_type,
-                            jl_bool_type,
+                            jl_uint32_type,
+                            jl_uint16_type,
+                            jl_uint16_type,
+                            jl_uint16_type,
+                            jl_uint16_type,
+                            //jl_bool_type,
                             jl_uint8_type,
+                            jl_bool_type,
                             jl_any_type, jl_any_type), // fptrs
                         jl_emptysvec,
                         0, 1, 1);
     jl_svecset(jl_code_instance_type->types, 2, jl_code_instance_type);
-    const static uint32_t code_instance_constfields[1]  = { 0b00000100011100011 }; // Set fields 1, 2, 6-8, 12 as const
-    const static uint32_t code_instance_atomicfields[1] = { 0b11011011100011100 }; // Set fields 3-5, 9, 10, 11, 13-14, 16-17 as atomic
+    const static uint32_t code_instance_constfields[1]  = { 0b000001110100011100011 }; // Set fields 1, 2, 6-8, 12, 14-16 as const
+    const static uint32_t code_instance_atomicfields[1] = { 0b111110001011100011100 }; // Set fields 3-5, 9-12, 13, 17-21 as atomic
     // Fields 4-5 are only operated on by construction and deserialization, so are effectively const at runtime
     // Fields ipo_purity_bits and analysis_results are not currently threadsafe or reliable, as they get mutated after optimization, but are not declared atomic
     // and there is no way to tell (during inference) if their value is finalized yet (to wait for them to be narrowed if applicable)
@@ -3566,9 +3704,9 @@ void jl_init_types(void) JL_GC_DISABLED
                                        jl_emptysvec, 0, 0, 1);
 
     jl_partial_struct_type = jl_new_datatype(jl_symbol("PartialStruct"), core, jl_any_type, jl_emptysvec,
-                                       jl_perm_symsvec(2, "typ", "fields"),
-                                       jl_svec2(jl_any_type, jl_array_any_type),
-                                       jl_emptysvec, 0, 0, 2);
+                                       jl_perm_symsvec(3, "typ", "undefs", "fields"),
+                                       jl_svec(3, jl_any_type, jl_any_type, jl_array_any_type),
+                                       jl_emptysvec, 0, 0, 3);
 
     jl_interconditional_type = jl_new_datatype(jl_symbol("InterConditional"), core, jl_any_type, jl_emptysvec,
                                           jl_perm_symsvec(3, "slot", "thentype", "elsetype"),
@@ -3621,7 +3759,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         NULL,
                         jl_any_type,
                         jl_emptysvec,
-                        jl_perm_symsvec(16,
+                        jl_perm_symsvec(27,
                                         "next",
                                         "queue",
                                         "storage",
@@ -3629,16 +3767,27 @@ void jl_init_types(void) JL_GC_DISABLED
                                         "result",
                                         "scope",
                                         "code",
+                                        "_state",
+                                        "sticky",
+                                        "priority",
+                                        "_isexception",
+                                        "pad00",
+                                        "pad01",
+                                        "pad02",
                                         "rngState0",
                                         "rngState1",
                                         "rngState2",
                                         "rngState3",
                                         "rngState4",
-                                        "_state",
-                                        "sticky",
-                                        "_isexception",
-                                        "priority"),
-                        jl_svec(16,
+                                        "metrics_enabled",
+                                        "pad10",
+                                        "pad11",
+                                        "pad12",
+                                        "first_enqueued_at",
+                                        "last_started_running_at",
+                                        "running_time_ns",
+                                        "finished_at"),
+                        jl_svec(27,
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
@@ -3646,20 +3795,37 @@ void jl_init_types(void) JL_GC_DISABLED
                                 jl_any_type,
                                 jl_any_type,
                                 jl_any_type,
-                                jl_uint64_type,
-                                jl_uint64_type,
-                                jl_uint64_type,
-                                jl_uint64_type,
-                                jl_uint64_type,
                                 jl_uint8_type,
                                 jl_bool_type,
+                                jl_uint16_type,
                                 jl_bool_type,
-                                jl_uint16_type),
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_bool_type,
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint8_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type,
+                                jl_uint64_type),
                         jl_emptysvec,
                         0, 1, 6);
     XX(task);
     jl_value_t *listt = jl_new_struct(jl_uniontype_type, jl_task_type, jl_nothing_type);
     jl_svecset(jl_task_type->types, 0, listt);
+    // Set field 20 (metrics_enabled) as const
+    // Set fields 8 (_state) and 24-27 (metric counters) as atomic
+    const static uint32_t task_constfields[1]  = { 0b00000000000010000000000000000000 };
+    const static uint32_t task_atomicfields[1] = { 0b00000111100000000000000010000000 };
+    jl_task_type->name->constfields = task_constfields;
+    jl_task_type->name->atomicfields = task_atomicfields;
 
     tv = jl_svec2(tvar("A"), tvar("R"));
     jl_opaque_closure_type = (jl_unionall_t*)jl_new_datatype(jl_symbol("OpaqueClosure"), core, jl_function_type, tv,
@@ -3690,6 +3856,8 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_typename_type->types, 12, jl_int32_type);
     jl_svecset(jl_typename_type->types, 13, jl_uint8_type);
     jl_svecset(jl_typename_type->types, 14, jl_uint8_type);
+    jl_svecset(jl_typename_type->types, 15, jl_uint8_type);
+    jl_svecset(jl_typename_type->types, 16, jl_uint8_type);
     jl_svecset(jl_methtable_type->types, 4, jl_long_type);
     jl_svecset(jl_methtable_type->types, 5, jl_module_type);
     jl_svecset(jl_methtable_type->types, 6, jl_array_any_type);
@@ -3700,10 +3868,11 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_svecset(jl_method_type->types, 13, jl_method_instance_type);
     //jl_svecset(jl_debuginfo_type->types, 0, jl_method_instance_type); // union(jl_method_instance_type, jl_method_type, jl_symbol_type)
     jl_svecset(jl_method_instance_type->types, 4, jl_code_instance_type);
-    jl_svecset(jl_code_instance_type->types, 15, jl_voidpointer_type);
-    jl_svecset(jl_code_instance_type->types, 16, jl_voidpointer_type);
-    jl_svecset(jl_binding_type->types, 1, jl_globalref_type);
-    jl_svecset(jl_binding_type->types, 2, jl_binding_type);
+    jl_svecset(jl_code_instance_type->types, 19, jl_voidpointer_type);
+    jl_svecset(jl_code_instance_type->types, 20, jl_voidpointer_type);
+    jl_svecset(jl_binding_type->types, 0, jl_globalref_type);
+    jl_svecset(jl_binding_type->types, 3, jl_array_any_type);
+    jl_svecset(jl_binding_partition_type->types, 3, jl_binding_partition_type);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
@@ -3715,12 +3884,16 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_compute_field_offsets(jl_unionall_type);
     jl_compute_field_offsets(jl_simplevector_type);
     jl_compute_field_offsets(jl_symbol_type);
+    jl_compute_field_offsets(jl_binding_partition_type);
 
     // override ismutationfree for builtin types that are mutable for identity
     jl_string_type->ismutationfree = jl_string_type->isidentityfree = 1;
     jl_symbol_type->ismutationfree = jl_symbol_type->isidentityfree = 1;
-    jl_simplevector_type->ismutationfree = jl_simplevector_type->isidentityfree = 1;
+    jl_simplevector_type->isidentityfree = 1;
+    jl_typename_type->ismutationfree = 1;
     jl_datatype_type->ismutationfree = 1;
+    jl_uniontype_type->ismutationfree = 1;
+    jl_unionall_type->ismutationfree = 1;
     assert(((jl_datatype_t*)jl_array_any_type)->ismutationfree == 0);
     assert(((jl_datatype_t*)jl_array_uint8_type)->ismutationfree == 0);
 
@@ -3771,32 +3944,36 @@ void post_boot_hooks(void)
     jl_int32_type->super = jl_signed_type;
     jl_int64_type->super = jl_signed_type;
 
-    jl_errorexception_type = (jl_datatype_t*)core("ErrorException");
-    jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
-    jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
-    jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
-    jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
-    jl_fielderror_type     = (jl_datatype_t*)core("FieldError");
-    jl_atomicerror_type    = (jl_datatype_t*)core("ConcurrencyViolationError");
-    jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
-    jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
-    jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
+    jl_stackovf_exception       = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
+    jl_diverror_exception       = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
+    jl_undefref_exception       = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
+    jl_interrupt_exception      = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
+    jl_memory_exception         = jl_new_struct_uninit((jl_datatype_t*)core("OutOfMemoryError"));
     jl_readonlymemory_exception = jl_new_struct_uninit((jl_datatype_t*)core("ReadOnlyMemoryError"));
-    jl_typeerror_type      = (jl_datatype_t*)core("TypeError");
-    jl_argumenterror_type  = (jl_datatype_t*)core("ArgumentError");
-    jl_methoderror_type    = (jl_datatype_t*)core("MethodError");
-    jl_loaderror_type      = (jl_datatype_t*)core("LoadError");
-    jl_initerror_type      = (jl_datatype_t*)core("InitError");
+    jl_precompilable_error      = jl_new_struct_uninit((jl_datatype_t*)core("PrecompilableError"));
+
+    jl_errorexception_type   = (jl_datatype_t*)core("ErrorException");
+    jl_undefvarerror_type    = (jl_datatype_t*)core("UndefVarError");
+    jl_fielderror_type       = (jl_datatype_t*)core("FieldError");
+    jl_atomicerror_type      = (jl_datatype_t*)core("ConcurrencyViolationError");
+    jl_boundserror_type      = (jl_datatype_t*)core("BoundsError");
+    jl_typeerror_type        = (jl_datatype_t*)core("TypeError");
+    jl_argumenterror_type    = (jl_datatype_t*)core("ArgumentError");
+    jl_methoderror_type      = (jl_datatype_t*)core("MethodError");
+    jl_loaderror_type        = (jl_datatype_t*)core("LoadError");
+    jl_initerror_type        = (jl_datatype_t*)core("InitError");
     jl_missingcodeerror_type = (jl_datatype_t*)core("MissingCodeError");
-    jl_precompilable_error = jl_new_struct_uninit((jl_datatype_t*)core("PrecompilableError"));
-    jl_pair_type           = core("Pair");
-    jl_kwcall_func         = core("kwcall");
-    jl_kwcall_mt           = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
+    jl_trimfailure_type      = (jl_datatype_t*)core("TrimFailure");
+
+    jl_pair_type             = core("Pair");
+    jl_kwcall_func           = core("kwcall");
+    jl_kwcall_mt             = ((jl_datatype_t*)jl_typeof(jl_kwcall_func))->name->mt;
     jl_atomic_store_relaxed(&jl_kwcall_mt->max_args, 0);
 
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
     jl_vecelement_typename = ((jl_datatype_t*)jl_unwrap_unionall(core("VecElement")))->name;
     jl_nulldebuginfo = (jl_debuginfo_t*)core("NullDebugInfo");
+    jl_abioverride_type = (jl_datatype_t*)core("ABIOverride");
 
     jl_init_box_caches();
 
@@ -3806,7 +3983,7 @@ void post_boot_hooks(void)
     for (size_t i = 0; i < jl_svec_len(bindings); i++) {
         if (table[i] != jl_nothing) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            jl_value_t *v = jl_atomic_load_relaxed(&b->value);
+            jl_value_t *v = jl_get_binding_value(b);
             if (v) {
                 if (jl_is_unionall(v))
                     v = jl_unwrap_unionall(v);
@@ -3827,14 +4004,16 @@ void post_image_load_hooks(void) {
     // Ensure that `Base` has been loaded.
     assert(jl_base_module != NULL);
 
-    jl_libdl_module = (jl_module_t *)jl_get_global(
-        ((jl_module_t *)jl_get_global(jl_base_module, jl_symbol("Libc"))),
-        jl_symbol("Libdl")
-    );
-    jl_libdl_dlopen_func = jl_get_global(
-        jl_libdl_module,
-        jl_symbol("dlopen")
-    );
+    jl_module_t *libc_module = (jl_module_t *)jl_get_global(jl_base_module, jl_symbol("Libc"));
+    if (libc_module) {
+        jl_libdl_module = (jl_module_t *)jl_get_global(libc_module, jl_symbol("Libdl"));
+    }
+    if (jl_libdl_module) {
+        jl_libdl_dlopen_func = jl_get_global(
+            jl_libdl_module,
+            jl_symbol("dlopen")
+        );
+    }
 }
 #undef XX
 

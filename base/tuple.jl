@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Tuple
+
 # Document NTuple here where we have everything needed for the doc system
 """
     NTuple{N, T}
@@ -60,7 +62,7 @@ end
 
 function _setindex(v, i::Integer, args::Vararg{Any,N}) where {N}
     @inline
-    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())
+    return ntuple(j -> ifelse(j == i, v, args[j]), Val{N}())::NTuple{N, Any}
 end
 
 
@@ -427,10 +429,6 @@ fill_to_length(t::Tuple{}, val, ::Val{2}) = (val, val)
 
 # constructing from an iterator
 
-# only define these in Base, to avoid overwriting the constructors
-# NOTE: this means this constructor must be avoided in Core.Compiler!
-if nameof(@__MODULE__) === :Base
-
 function tuple_type_tail(T::Type)
     @_foldable_meta # TODO: this method is wrong (and not :foldable)
     if isa(T, UnionAll)
@@ -495,8 +493,6 @@ _totuple(::Type{Tuple}, itr::SimpleVector) = (itr...,)
 _totuple(::Type{Tuple}, itr::NamedTuple) = (itr...,)
 _totuple(::Type{Tuple}, p::Pair) = (p.first, p.second)
 _totuple(::Type{Tuple}, x::Number) = (x,) # to make Tuple(x) inferable
-
-end
 
 ## find ##
 
@@ -580,10 +576,10 @@ function _eq(t1::Any32, t2::Any32)
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash(::Tuple{}, h::UInt) = h + tuplehash_seed
+hash(::Tuple{}, h::UInt) = h ⊻ tuplehash_seed
 hash(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
 function hash(t::Any32, h::UInt)
-    out = h + tuplehash_seed
+    out = h ⊻ tuplehash_seed
     for i = length(t):-1:1
         out = hash(t[i], out)
     end
@@ -659,17 +655,6 @@ prod(x::Tuple{}) = 1
 # It is defined here separately in order to support bootstrap, because it's needed earlier
 # than the general prod definition is available.
 prod(x::Tuple{Int, Vararg{Int}}) = *(x...)
-
-all(x::Tuple{}) = true
-all(x::Tuple{Bool}) = x[1]
-all(x::Tuple{Bool, Bool}) = x[1]&x[2]
-all(x::Tuple{Bool, Bool, Bool}) = x[1]&x[2]&x[3]
-# use generic reductions for the rest
-
-any(x::Tuple{}) = false
-any(x::Tuple{Bool}) = x[1]
-any(x::Tuple{Bool, Bool}) = x[1]|x[2]
-any(x::Tuple{Bool, Bool, Bool}) = x[1]|x[2]|x[3]
 
 # a version of `in` esp. for NamedTuple, to make it pure, and not compiled for each tuple length
 function sym_in(x::Symbol, itr::Tuple{Vararg{Symbol}})

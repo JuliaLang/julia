@@ -6,7 +6,6 @@ for exceptions.
 - [crc32c.c](https://stackoverflow.com/questions/17645167/implementing-sse-4-2s-crc32c-in-software) (CRC-32c checksum code by Mark Adler) [[ZLib](https://opensource.org/licenses/Zlib)].
 - [LDC](https://github.com/ldc-developers/ldc/blob/master/LICENSE) (for ccall/cfunction ABI definitions) [BSD-3]. The portion of code that Julia uses from LDC is [BSD-3] licensed.
 - [LLVM](https://releases.llvm.org/3.9.0/LICENSE.TXT) (for parts of src/disasm.cpp) [UIUC]
-- [MINGW](https://sourceforge.net/p/mingw/mingw-org-wsl/ci/legacy/tree/mingwrt/mingwex/dirname.c) (for dirname implementation on Windows) [MIT]
 - [NetBSD](https://www.netbsd.org/about/redistribution.html) (for setjmp, longjmp, and strptime implementations on Windows) [BSD-3]
 - [Python](https://docs.python.org/3/license.html) (for strtod implementation on Windows) [PSF]
 - [FEMTOLISP](https://github.com/JeffBezanson/femtolisp) [BSD-3]
@@ -37,7 +36,7 @@ Julia's `stdlib` uses the following external libraries, which have their own lic
 - [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING) [GPL2+ with unlimited linking exception]
 - [CURL](https://curl.haxx.se/docs/copyright.html) [MIT/X derivative]
 - [LIBSSH2](https://github.com/libssh2/libssh2/blob/master/COPYING) [BSD-3]
-- [MBEDTLS](https://github.com/ARMmbed/mbedtls/blob/development/LICENSE) [Apache 2.0]
+- [OPENSSL](https://www.openssl.org/source/license.html) [Apache 2.0]
 - [MPFR](https://www.mpfr.org/mpfr-current/mpfr.html#Copying) [LGPL3+]
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE) [BSD-3]
 - [LAPACK](https://netlib.org/lapack/LICENSE.txt) [BSD-3]

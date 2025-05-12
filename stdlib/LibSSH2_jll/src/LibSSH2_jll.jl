@@ -3,7 +3,11 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibSSH2_jll.jl
 
 baremodule LibSSH2_jll
-using Base, Libdl, MbedTLS_jll
+using Base, Libdl
+if !Sys.iswindows()
+    # On Windows we use system SSL/crypto libraries
+    using OpenSSL_jll
+end
 
 const PATH_list = String[]
 const LIBPATH_list = String[]

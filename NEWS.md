@@ -1,64 +1,36 @@
-Julia v1.12 Release Notes
+Julia v1.13 Release Notes
 ========================
 
 New language features
 ---------------------
 
-- A new keyword argument `usings::Bool` has been added to `names`. By using this, we can now
-  find all the names available in module `A` by `names(A; all=true, imported=true, usings=true)`. ([#54609])
-- the `@atomic(...)` macro family supports now the reference assignment syntax, e.g.
-  `@atomic :monotonic v[3] += 4` modifies `v[3]` atomically with monotonic ordering semantics. ([#54707])
-  The supported syntax allows
-  - atomic fetch (`x = @atomic v[3]`),
-  - atomic set (`@atomic v[3] = 4`),
-  - atomic modify (`@atomic v[3] += 2`),
-  - atomic set once (`@atomiconce v[3] = 2`),
-  - atomic swap (`x = @atomicswap v[3] = 2`), and
-  - atomic replace (`x = @atomicreplace v[3] 2=>5`).
+  - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
 
 Language changes
 ----------------
+* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
+is considered a bug fix ([#47102])
 
- - When methods are replaced with exactly equivalent ones, the old method is no
-   longer deleted implicitly simultaneously, although the new method does take
-   priority and become more specific than the old method. Thus if the new
-   method is deleted later, the old method will resume operating. This can be
-   useful to mocking frameworks (such as in SparseArrays, Pluto, and Mocking,
-   among others), as they do not need to explicitly restore the old method.
-   While inference and compilation still must be repeated with this, it also
-   may pave the way for inference to be able to intelligently re-use the old
-   results, once the new method is deleted. ([#53415])
-
- - Macro expansion will no longer eagerly recurse into into `Expr(:toplevel)`
-   expressions returned from macros. Instead, macro expansion of `:toplevel`
-   expressions will be delayed until evaluation time. This allows a later
-   expression within a given `:toplevel` expression to make use of macros
-   defined earlier in the same `:toplevel` expression. ([#53515])
+  - The `hash` algorithm and its values have changed. Most `hash` specializations will remain correct and require no action. Types that reimplement the core hashing logic independently, such as some third-party string packages do, may require a migration to the new algorithm. ([#57509])
 
 Compiler/Runtime improvements
 -----------------------------
 
-- Generated LLVM IR now uses actual pointer types instead of passing pointers as integers.
-  This affects `llvmcall`: Inline LLVM IR should be updated to use `i8*` or `ptr` instead of
-  `i32` or `i64`, and remove unneeded `ptrtoint`/`inttoptr` conversions. For compatibility,
-  IR with integer pointers is still supported, but generates a deprecation warning. ([#53687])
-
-- A new exception `FieldError` is now introduced to raise/handle `getfield` exceptions. Previously `getfield` exception was captured by fallback generic exception `ErrorException`. Now that `FieldError` is more specific `getfield` related exceptions that can occur should use `FieldError` exception instead. ([#54504])
-
 Command-line option changes
 ---------------------------
 
-* The `-m/--module` flag can be passed to run the `main` function inside a package with a set of arguments.
-  This `main` function should be declared using `@main` to indicate that it is an entry point.
-* Enabling or disabling color text in Julia can now be controlled with the
-[`NO_COLOR`](https://no-color.org/) or [`FORCE_COLOR`](https://force-color.org/) environment
-variables. ([#53742]).
-* `--project=@temp` starts Julia with a temporary environment.
-* New `--trace-compile-timing` option to report how long each method reported by `--trace-compile` took
-  to compile, in ms. ([#54662])
+* The option `--sysimage-native-code=no` has been deprecated.
 
 Multi-threading changes
 -----------------------
+
+* A new `AbstractSpinLock` is defined with `SpinLock <: AbstractSpinLock` ([#55944]).
+* A new `PaddedSpinLock <: AbstractSpinLock` is defined.  It has extra padding to avoid false sharing ([#55944]).
+* New types are defined to handle the pattern of code that must run once per process, called
+  a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
+  the first time it is called, and then always return the same result value of type `T`
+  every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
+  similar usage with threads or tasks. ([#TBD])
 
 Build system changes
 --------------------
@@ -66,99 +38,34 @@ Build system changes
 New library functions
 ---------------------
 
-* `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
-* The new `isfull(c::Channel)` function can be used to check if `put!(c, some_value)` will block. ([#53159])
-* `waitany(tasks; throw=false)` and `waitall(tasks; failfast=false, throw=false)` which wait multiple tasks at once ([#53341]).
-* `uuid7()` creates an RFC 9652 compliant UUID with version 7 ([#54834]).
+* `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
+* Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
 
 New library features
 --------------------
 
-* `invmod(n, T)` where `T` is a native integer type now computes the modular inverse of `n` in the modular integer ring that `T` defines ([#52180]).
-* `invmod(n)` is an abbreviation for `invmod(n, typeof(n))` for native integer types ([#52180]).
-* `replace(string, pattern...)` now supports an optional `IO` argument to
-  write the output to a stream rather than returning a string ([#48625]).
-* `sizehint!(s, n)` now supports an optional `shrink` argument to disable shrinking ([#51929]).
-* New function `Docs.hasdoc(module, symbol)` tells whether a name has a docstring ([#52139]).
-* New function `Docs.undocumented_names(module)` returns a module's undocumented public names ([#52413]).
-* Passing an `IOBuffer` as a stdout argument for `Process` spawn now works as
-  expected, synchronized with `wait` or `success`, so a `Base.BufferStream` is
-  no longer required there for correctness to avoid data races ([#52461]).
-* After a process exits, `closewrite` will no longer be automatically called on
-  the stream passed to it. Call `wait` on the process instead to ensure the
-  content is fully written, then call `closewrite` manually to avoid
-  data-races. Or use the callback form of `open` to have all that handled
-  automatically.
-* `@timed` now additionally returns the elapsed compilation and recompilation time ([#52889])
-* `filter` can now act on a `NamedTuple` ([#50795]).
-* `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
-  the uniquing checking ([#53474])
-* `RegexMatch` objects can now be used to construct `NamedTuple`s and `Dict`s ([#50988])
-* `Lockable` is now exported ([#54595])
+* `fieldoffset` now also accepts the field name as a symbol as `fieldtype` already did ([#58100]).
+* `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
+* `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 
 Standard library changes
 ------------------------
 
-* `gcdx(0, 0)` now returns `(0, 0, 0)` instead of `(0, 1, 0)` ([#40989]).
-* `fd` returns a `RawFD` instead of an `Int` ([#55080]).
-
-#### StyledStrings
-
 #### JuliaSyntaxHighlighting
-
-* A new standard library for applying syntax highlighting to Julia code, this
-  uses `JuliaSyntax` and `StyledStrings` to implement a `highlight` function
-  that creates an `AnnotatedString` with syntax highlighting applied.
-
-#### Package Manager
 
 #### LinearAlgebra
 
-* `rank` can now take a `QRPivoted` matrix to allow rank estimation via QR factorization ([#54283]).
-* Added keyword argument `alg` to `eigen`, `eigen!`, `eigvals` and `eigvals!` for self-adjoint
-  matrix types (i.e., the type union `RealHermSymComplexHerm`) that allows one to switch
-  between different eigendecomposition algorithms ([#49355]).
-* Added a generic version of the (unblocked) pivoted Cholesky decomposition
-  (callable via `cholesky[!](A, RowMaximum())`) ([#54619]).
-
-#### Logging
-
-#### Printf
-
 #### Profile
-
-#### Random
 
 #### REPL
 
-- Using the new `usings=true` feature of the `names()` function, REPL completions can now
-  complete names that have been explicitly `using`-ed. ([#54610])
-- REPL completions can now complete input lines like `[import|using] Mod: xxx|` e.g.
-  complete `using Base.Experimental: @op` to `using Base.Experimental: @opaque`. ([#54719])
-- the REPL will now warn if it detects a name is being accessed from a module which does not define it (nor has a submodule which defines it),
-  and for which the name is not public in that module. For example, `map` is defined in Base, and executing `LinearAlgebra.map`
-  in the REPL will now issue a warning the first time occurs. ([#54872])
-
-#### SuiteSparse
-
-#### SparseArrays
-
 #### Test
 
-#### Dates
-
-#### Statistics
-
-#### Distributed
-
-#### Unicode
-
-#### DelimitedFiles
+* Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
 
 #### InteractiveUtils
 
-Deprecated or removed
----------------------
+* Introspection utilities such as `@code_typed`, `@which` and `@edit` now accept type annotations as substitutes for values, recognizing forms such as `f(1, ::Float64, 3)` or even `sum(::Vector{T}; init = ::T) where {T<:Real}`. Type-annotated variables as in `f(val::Int; kw::Float64)` are not evaluated if the type annotation provides the necessary information, making this syntax compatible with signatures found in stacktraces ([#57909], [#58222]).
 
 External dependencies
 ---------------------

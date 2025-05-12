@@ -15,8 +15,11 @@ if !Sys.iswindows()
     @testset "No interactive startup compilation" begin
         f, _ = mktemp()
 
-        # start an interactive session
-        cmd = `$(Base.julia_cmd()[1]) --trace-compile=$f -q --startup-file=no -i`
+        # start an interactive session, ensuring `TERM` is unset since it can trigger
+        # different amounts of precompilation stemming from `base/terminfo.jl` depending
+        # on the value, making the test here unreliable
+        cmd = addenv(`$(Base.julia_cmd()[1]) --trace-compile=$f -q --startup-file=no -i`,
+                     Dict("TERM" => ""))
         pts, ptm = open_fake_pty()
         p = run(cmd, pts, pts, pts; wait=false)
         Base.close_stdio(pts)
