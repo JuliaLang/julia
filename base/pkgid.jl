@@ -17,7 +17,7 @@ end
 ==(a::PkgId, b::PkgId) = a.uuid == b.uuid && a.name == b.name
 
 function hash(pkg::PkgId, h::UInt)
-    h += 0xc9f248583a0ca36c % UInt
+    h ⊻= 0xc9f248583a0ca36c % UInt
     h = hash(pkg.uuid, h)
     h = hash(pkg.name, h)
     return h
@@ -37,7 +37,8 @@ end
 
 function binunpack(s::String)
     io = IOBuffer(s)
-    @assert read(io, UInt8) === 0x00
+    z = read(io, UInt8)
+    @assert z === 0x00
     uuid = read(io, UInt128)
     name = read(io, String)
     return PkgId(UUID(uuid), name)

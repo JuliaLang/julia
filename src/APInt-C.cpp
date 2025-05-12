@@ -321,7 +321,7 @@ void LLVMFPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty, integerPart *p
         Val = julia_bfloat_to_float(*(uint16_t*)pa);
     else if (ty == jl_float32_type)
         Val = *(float*)pa;
-    else if (jl_float64_type)
+    else if (ty == jl_float64_type)
         Val = *(double*)pa;
     else
         jl_error("FPtoSI: runtime floating point intrinsics are not implemented for bit sizes other than 16, 32 and 64");
@@ -352,7 +352,7 @@ void LLVMFPtoInt(jl_datatype_t *ty, void *pa, jl_datatype_t *oty, integerPart *p
     else {
         APFloat a(Val);
         bool isVeryExact;
-        APFloat::roundingMode rounding_mode = APFloat::rmNearestTiesToEven;
+        APFloat::roundingMode rounding_mode = RoundingMode::TowardZero;
         unsigned nbytes = alignTo(onumbits, integerPartWidth) / host_char_bit;
         integerPart *parts = (integerPart*)alloca(nbytes);
         APFloat::opStatus status = a.convertToInteger(MutableArrayRef<integerPart>(parts, nbytes), onumbits, isSigned, rounding_mode, &isVeryExact);
@@ -476,23 +476,23 @@ void LLVMTrunc(jl_datatype_t *ty, integerPart *pa, jl_datatype_t *otys, integerP
 }
 
 extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_8(uint8_t Val) {
-    return countTrailingZeros(Val);
+unsigned countr_zero_8(uint8_t Val) {
+    return countr_zero(Val);
 }
 
 extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_16(uint16_t Val) {
-    return countTrailingZeros(Val);
+unsigned countr_zero_16(uint16_t Val) {
+    return countr_zero(Val);
 }
 
 extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_32(uint32_t Val) {
-    return countTrailingZeros(Val);
+unsigned countr_zero_32(uint32_t Val) {
+    return countr_zero(Val);
 }
 
 extern "C" JL_DLLEXPORT
-unsigned countTrailingZeros_64(uint64_t Val) {
-    return countTrailingZeros(Val);
+unsigned countr_zero_64(uint64_t Val) {
+    return countr_zero(Val);
 }
 
 extern "C" JL_DLLEXPORT
@@ -524,31 +524,31 @@ void jl_LLVMFlipSign(unsigned numbits, integerPart *pa, integerPart *pb, integer
 }
 
 extern "C" JL_DLLEXPORT
-unsigned LLVMCountPopulation(unsigned numbits, integerPart *pa) {
+unsigned LLVMPopcount(unsigned numbits, integerPart *pa) {
     CREATE(a)
-    return a.countPopulation();
+    return a.popcount();
 }
 
 extern "C" JL_DLLEXPORT
-unsigned LLVMCountTrailingOnes(unsigned numbits, integerPart *pa) {
+unsigned LLVMCountr_one(unsigned numbits, integerPart *pa) {
     CREATE(a)
-    return a.countTrailingOnes();
+    return a.countr_one();
 }
 
 extern "C" JL_DLLEXPORT
-unsigned LLVMCountTrailingZeros(unsigned numbits, integerPart *pa) {
+unsigned LLVMCountr_zero(unsigned numbits, integerPart *pa) {
     CREATE(a)
-    return a.countTrailingZeros();
+    return a.countr_zero();
 }
 
 extern "C" JL_DLLEXPORT
-unsigned LLVMCountLeadingOnes(unsigned numbits, integerPart *pa) {
+unsigned LLVMCountl_one(unsigned numbits, integerPart *pa) {
     CREATE(a)
-    return a.countLeadingOnes();
+    return a.countl_one();
 }
 
 extern "C" JL_DLLEXPORT
-unsigned LLVMCountLeadingZeros(unsigned numbits, integerPart *pa) {
+unsigned LLVMCountl_zero(unsigned numbits, integerPart *pa) {
     CREATE(a)
-    return a.countLeadingZeros();
+    return a.countl_zero();
 }

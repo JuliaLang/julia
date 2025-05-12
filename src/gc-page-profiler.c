@@ -1,6 +1,7 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "gc-page-profiler.h"
+#include "julia.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,6 +21,8 @@ gc_page_profiler_serializer_t gc_page_serializer_create(void) JL_NOTSAFEPOINT
     gc_page_profiler_serializer_t serializer;
     if (__unlikely(page_profile_enabled)) {
         arraylist_new(&serializer.typestrs, GC_PAGE_SZ);
+        serializer.buffers = (char *)malloc_s(GC_PAGE_PROFILER_SERIALIZER_INIT_CAPACITY);
+        serializer.cursor = 0;
     }
     else {
         serializer.typestrs.len = 0;
@@ -34,6 +37,8 @@ void gc_page_serializer_init(gc_page_profiler_serializer_t *serializer,
         serializer->typestrs.len = 0;
         serializer->data = (char *)pg->data;
         serializer->osize = pg->osize;
+        serializer->cursor = 0;
+        serializer->capacity = GC_PAGE_PROFILER_SERIALIZER_INIT_CAPACITY;
     }
 }
 
@@ -41,6 +46,7 @@ void gc_page_serializer_destroy(gc_page_profiler_serializer_t *serializer) JL_NO
 {
     if (__unlikely(page_profile_enabled)) {
         arraylist_free(&serializer->typestrs);
+        free(serializer->buffers);
     }
 }
 
@@ -71,8 +77,9 @@ void gc_page_profile_write_preamble(gc_page_profiler_serializer_t *serializer)
     JL_NOTSAFEPOINT
 {
     if (__unlikely(page_profile_enabled)) {
-        char str[GC_TYPE_STR_MAXLEN];
-        snprintf(str, GC_TYPE_STR_MAXLEN,
+        const size_t large_enough_str_size = 4096;
+        char str[large_enough_str_size];
+        snprintf(str, large_enough_str_size,
                  "{\"address\": \"%p\",\"object_size\": %d,\"objects\": [",
                  serializer->data, serializer->osize);
         ios_write(page_profile_stream, str, strlen(str));
@@ -102,22 +109,27 @@ void gc_page_profile_write_comma(gc_page_profiler_serializer_t *serializer) JL_N
 void gc_page_profile_write_to_file(gc_page_profiler_serializer_t *serializer)
     JL_NOTSAFEPOINT
 {
+    size_t large_enough_str_size = 4096;
     if (__unlikely(page_profile_enabled)) {
         // write to file
         uv_mutex_lock(&page_profile_lock);
         gc_page_profile_write_comma(serializer);
         gc_page_profile_write_preamble(serializer);
-        char str[GC_TYPE_STR_MAXLEN];
+        char *str = (char *)malloc_s(large_enough_str_size);
         for (size_t i = 0; i < serializer->typestrs.len; i++) {
             const char *name = (const char *)serializer->typestrs.items[i];
             if (name == GC_SERIALIZER_EMPTY) {
-                snprintf(str, GC_TYPE_STR_MAXLEN, "\"empty\",");
+                snprintf(str, large_enough_str_size, "\"empty\",");
             }
             else if (name == GC_SERIALIZER_GARBAGE) {
-                snprintf(str, GC_TYPE_STR_MAXLEN, "\"garbage\",");
+                snprintf(str, large_enough_str_size, "\"garbage\",");
             }
             else {
-                snprintf(str, GC_TYPE_STR_MAXLEN, "\"%s\",", name);
+                while ((strlen(name) + 1) > large_enough_str_size) {
+                    large_enough_str_size *= 2;
+                    str = (char *)realloc_s(str, large_enough_str_size);
+                }
+                snprintf(str, large_enough_str_size, "\"%s\",", name);
             }
             // remove trailing comma for last element
             if (i == serializer->typestrs.len - 1) {
@@ -125,6 +137,7 @@ void gc_page_profile_write_to_file(gc_page_profiler_serializer_t *serializer)
             }
             ios_write(page_profile_stream, str, strlen(str));
         }
+        free(str);
         gc_page_profile_write_epilogue(serializer);
         page_profile_pages_written++;
         uv_mutex_unlock(&page_profile_lock);

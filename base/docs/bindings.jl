@@ -16,8 +16,8 @@ end
 
 bindingexpr(x) = Expr(:call, Binding, splitexpr(x)...)
 
-defined(b::Binding) = isdefined(b.mod, b.var)
-resolve(b::Binding) = getfield(b.mod, b.var)
+defined(b::Binding) = invokelatest(isdefined, b.mod, b.var)
+resolve(b::Binding) = invokelatest(getfield, b.mod, b.var)
 
 function splitexpr(x::Expr)
     isexpr(x, :macrocall) ? splitexpr(x.args[1]) :

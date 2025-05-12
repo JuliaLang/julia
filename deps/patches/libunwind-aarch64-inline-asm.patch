@@ -1,0 +1,157 @@
+From 6ae71b3ea71bff0f38c7a6a05beda30b7dce1ef6 Mon Sep 17 00:00:00 2001
+From: Stephen Webb <swebb@blackberry.com>
+Date: Mon, 22 Apr 2024 15:56:54 -0400
+Subject: [PATCH] Rework inline aarch64 as for setcontext
+
+Modern GC and clang were barfing on the inline asm constraints for the
+aarch64-linux setcontext() replacement. Reformulated the asm code to
+reduce the required constraints.
+---
+ src/aarch64/Gos-linux.c | 115 +++++++++++++++++++++-------------------
+ 1 file changed, 61 insertions(+), 54 deletions(-)
+
+diff --git a/src/aarch64/Gos-linux.c b/src/aarch64/Gos-linux.c
+index 7cd8c879f..1e4949623 100644
+--- a/src/aarch64/Gos-linux.c
++++ b/src/aarch64/Gos-linux.c
+@@ -2,6 +2,7 @@
+    Copyright (C) 2008 CodeSourcery
+    Copyright (C) 2011-2013 Linaro Limited
+    Copyright (C) 2012 Tommi Rantala <tt.rantala@gmail.com>
++   Copyright 2024 Stephen M. Webb  <swebb@blackberry.com>
+ 
+ This file is part of libunwind.
+ 
+@@ -28,6 +29,28 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.  */
+ 
+ #ifndef UNW_REMOTE_ONLY
+ 
++/* Magic constants generated from gen-offsets.c */
++#define SC_R0_OFF   "8"
++#define SC_R2_OFF   "24"
++#define SC_R18_OFF  "152"
++#define SC_R20_OFF  "168"
++#define SC_R22_OFF  "184"
++#define SC_R24_OFF  "200"
++#define SC_R26_OFF  "216"
++#define SC_R28_OFF  "232"
++#define SC_R30_OFF  "248"
++
++#define FP_R08_OFF "80"
++#define FP_R09_OFF "88"
++#define FP_R10_OFF "96"
++#define FP_R11_OFF "104"
++#define FP_R12_OFF "112"
++#define FP_R13_OFF "120"
++#define FP_R14_OFF "128"
++#define FP_R15_OFF "136"
++
++#define SC_SP_OFF   "0x100"
++
+ HIDDEN int
+ aarch64_local_resume (unw_addr_space_t as, unw_cursor_t *cursor, void *arg)
+ {
+@@ -36,65 +59,49 @@ aarch64_local_resume (unw_addr_space_t as, unw_cursor_t *cursor, void *arg)
+ 
+   if (c->sigcontext_format == AARCH64_SCF_NONE)
+     {
++
++      /*
++       * This is effectively the old POSIX setcontext().
++       *
++       * This inline asm is broken up to use local scratch registers for the
++       * uc_mcontext.regs and FPCTX base addresses because newer versions of GCC
++       * and clang barf on too many constraints (gh-702) when the C array
++       * elements are used directly.
++       *
++       * Clobbers aren't required for the inline asm because they just convince
++       * the compiler to save those registers and they never get restored
++       * becauise the asm ends with a plain ol' ret.
++       */
++      register void* uc_mcontext __asm__ ("x5") = (void*) &uc->uc_mcontext;
++      register void* fpctx __asm__ ("x4") = (void*) GET_FPCTX(uc);
++
+       /* Since there are no signals involved here we restore EH and non scratch
+          registers only.  */
+       __asm__ __volatile__ (
+-        "ldr x0,  %[x0]\n\t"
+-        "ldr x1,  %[x1]\n\t"
+-        "ldr x2,  %[x2]\n\t"
+-        "ldr x3,  %[x3]\n\t"
+-        "ldr x19, %[x19]\n\t"
+-        "ldr x20, %[x20]\n\t"
+-        "ldr x21, %[x21]\n\t"
+-        "ldr x22, %[x22]\n\t"
+-        "ldr x23, %[x23]\n\t"
+-        "ldr x24, %[x24]\n\t"
+-        "ldr x25, %[x25]\n\t"
+-        "ldr x26, %[x26]\n\t"
+-        "ldr x27, %[x27]\n\t"
+-        "ldr x28, %[x28]\n\t"
+-        "ldr x29, %[x29]\n\t"
+-        "ldr x30, %[x30]\n\t"
+-        "ldr d8,  %[d8]\n\t"
+-        "ldr d9,  %[d9]\n\t"
+-        "ldr d10, %[d10]\n\t"
+-        "ldr d11, %[d11]\n\t"
+-        "ldr d12, %[d12]\n\t"
+-        "ldr d13, %[d13]\n\t"
+-        "ldr d14, %[d14]\n\t"
+-        "ldr d15, %[d15]\n\t"
+-        "ldr x5,  %[sp]\n\t"
++        "ldp x0,  x1,  [x5, " SC_R0_OFF  "]\n\t"
++        "ldp x2,  x3,  [x5, " SC_R2_OFF  "]\n\t"
++        "ldp x18, x19, [x5, " SC_R18_OFF "]\n\t"
++        "ldp x20, x21, [x5, " SC_R20_OFF "]\n\t"
++        "ldp x22, x23, [x5, " SC_R22_OFF "]\n\t"
++        "ldp x24, x25, [x5, " SC_R24_OFF "]\n\t"
++        "ldp x26, x27, [x5, " SC_R26_OFF "]\n\t"
++        "ldp x28, x29, [x5, " SC_R28_OFF "]\n\t"
++        "ldr x30, [x5, " SC_R30_OFF "]\n\t"
++        "ldr d8,  [x4, " FP_R08_OFF "]\n\t"
++        "ldr d9,  [x4, " FP_R09_OFF "]\n\t"
++        "ldr d10, [x4, " FP_R10_OFF "]\n\t"
++        "ldr d11, [x4, " FP_R11_OFF "]\n\t"
++        "ldr d12, [x4, " FP_R12_OFF "]\n\t"
++        "ldr d13, [x4, " FP_R13_OFF "]\n\t"
++        "ldr d14, [x4, " FP_R14_OFF "]\n\t"
++        "ldr d15, [x4, " FP_R15_OFF "]\n\t"
++        "ldr x5,  [x5, " SC_SP_OFF "]\n\t"
+         "mov sp, x5\n\t"
+         "ret\n"
+-        :
+-        : [x0]  "m"(uc->uc_mcontext.regs[0]),
+-		  [x1]  "m"(uc->uc_mcontext.regs[1]),
+-		  [x2]  "m"(uc->uc_mcontext.regs[2]),
+-		  [x3]  "m"(uc->uc_mcontext.regs[3]),
+-		  [x19] "m"(uc->uc_mcontext.regs[19]),
+-		  [x20] "m"(uc->uc_mcontext.regs[20]),
+-		  [x21] "m"(uc->uc_mcontext.regs[21]),
+-		  [x22] "m"(uc->uc_mcontext.regs[22]),
+-		  [x23] "m"(uc->uc_mcontext.regs[23]),
+-		  [x24] "m"(uc->uc_mcontext.regs[24]),
+-		  [x25] "m"(uc->uc_mcontext.regs[25]),
+-		  [x26] "m"(uc->uc_mcontext.regs[26]),
+-		  [x27] "m"(uc->uc_mcontext.regs[27]),
+-		  [x28] "m"(uc->uc_mcontext.regs[28]),
+-		  [x29] "m"(uc->uc_mcontext.regs[29]), /* FP */
+-		  [x30] "m"(uc->uc_mcontext.regs[30]), /* LR */
+-		  [d8]  "m"(GET_FPCTX(uc)->vregs[8]),
+-		  [d9]  "m"(GET_FPCTX(uc)->vregs[9]),
+-		  [d10] "m"(GET_FPCTX(uc)->vregs[10]),
+-		  [d11] "m"(GET_FPCTX(uc)->vregs[11]),
+-		  [d12] "m"(GET_FPCTX(uc)->vregs[12]),
+-		  [d13] "m"(GET_FPCTX(uc)->vregs[13]),
+-		  [d14] "m"(GET_FPCTX(uc)->vregs[14]),
+-		  [d15] "m"(GET_FPCTX(uc)->vregs[15]),
+-          [sp]  "m"(uc->uc_mcontext.sp)
+-		: "x0",   "x1",  "x2",  "x3", "x19", "x20", "x21", "x22", "x23", "x24",
+-		  "x25", "x26", "x27", "x28", "x29", "x30"
+-	  );
++        : 
++        : [uc_mcontext] "r"(uc_mcontext),
++          [fpctx] "r"(fpctx)
++      );
+     }
+   else
+     {

@@ -11,6 +11,8 @@
 /julia-*
 /source-dist.tmp
 /source-dist.tmp1
+/test/results_*.json
+/test/results_*.dat
 
 *.expmap
 *.exe
@@ -34,6 +36,7 @@
 .DS_Store
 .idea/*
 .vscode/*
+.zed/*
 *.heapsnapshot
 .cache
 # Buildkite: Ignore the entire .buildkite directory

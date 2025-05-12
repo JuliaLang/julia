@@ -15,8 +15,11 @@ if !Sys.iswindows()
     @testset "No interactive startup compilation" begin
         f, _ = mktemp()
 
-        # start an interactive session
-        cmd = `$(Base.julia_cmd()[1]) --trace-compile=$f -q --startup-file=no -i`
+        # start an interactive session, ensuring `TERM` is unset since it can trigger
+        # different amounts of precompilation stemming from `base/terminfo.jl` depending
+        # on the value, making the test here unreliable
+        cmd = addenv(`$(Base.julia_cmd()[1]) --trace-compile=$f -q --startup-file=no -i`,
+                     Dict("TERM" => ""))
         pts, ptm = open_fake_pty()
         p = run(cmd, pts, pts, pts; wait=false)
         Base.close_stdio(pts)
@@ -27,7 +30,10 @@ if !Sys.iswindows()
         tracecompile_out = read(f, String)
         close(ptm) # close after reading so we don't get precompiles from error shutdown
 
-        expected_precompiles = 1
+        # given this test checks that startup is snappy, it's best to add workloads to
+        # contrib/generate_precompile.jl rather than increase this number. But if that's not
+        # possible, it'd be helpful to add a comment with the statement and a reason below
+        expected_precompiles = 0
 
         n_precompiles = count(r"precompile\(", tracecompile_out)
 

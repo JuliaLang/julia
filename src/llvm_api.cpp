@@ -10,7 +10,6 @@
 #endif
 
 #include "jitlayers.h"
-#include "passes.h"
 
 #include <llvm-c/Core.h>
 #include <llvm-c/Error.h>
@@ -21,6 +20,7 @@
 #include <llvm/Support/CBindingWrapping.h>
 #include <llvm/Support/MemoryBuffer.h>
 
+#if JL_LLVM_VERSION < 180000
 namespace llvm {
 namespace orc {
 class OrcV2CAPIHelper {
@@ -38,7 +38,7 @@ public:
 };
 } // namespace orc
 } // namespace llvm
-
+#endif
 
 typedef struct JLOpaqueJuliaOJIT *JuliaOJITRef;
 typedef struct LLVMOrcOpaqueIRCompileLayer *LLVMOrcIRCompileLayerRef;
@@ -46,19 +46,16 @@ typedef struct LLVMOrcOpaqueIRCompileLayer *LLVMOrcIRCompileLayerRef;
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(JuliaOJIT, JuliaOJITRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::JITDylib, LLVMOrcJITDylibRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ExecutionSession, LLVMOrcExecutionSessionRef)
+#if JL_LLVM_VERSION >= 180000
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::SymbolStringPoolEntryUnsafe::PoolEntry,
+                                   LLVMOrcSymbolStringPoolEntryRef)
+#else
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::OrcV2CAPIHelper::PoolEntry,
                                    LLVMOrcSymbolStringPoolEntryRef)
+#endif
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::IRCompileLayer, LLVMOrcIRCompileLayerRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::MaterializationResponsibility,
                                    LLVMOrcMaterializationResponsibilityRef)
-
-typedef struct LLVMOpaqueModulePassManager *LLVMModulePassManagerRef;
-typedef struct LLVMOpaqueFunctionPassManager *LLVMFunctionPassManagerRef;
-typedef struct LLVMOpaqueLoopPassManager *LLVMLoopPassManagerRef;
-
-DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm::ModulePassManager, LLVMModulePassManagerRef)
-DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm::FunctionPassManager, LLVMFunctionPassManagerRef)
-DEFINE_SIMPLE_CONVERSION_FUNCTIONS(llvm::LoopPassManager, LLVMLoopPassManagerRef)
 
 extern "C" {
 
@@ -113,7 +110,11 @@ JL_DLLEXPORT_CODEGEN LLVMOrcSymbolStringPoolEntryRef
 JLJITMangleAndIntern_impl(JuliaOJITRef JIT,
                                             const char *Name)
 {
+#if JL_LLVM_VERSION >= 180000
+    return wrap(orc::SymbolStringPoolEntryUnsafe::take(unwrap(JIT)->mangle(Name)).rawPtr());
+#else
     return wrap(orc::OrcV2CAPIHelper::moveFromSymbolStringPtr(unwrap(JIT)->mangle(Name)));
+#endif
 }
 
 JL_DLLEXPORT_CODEGEN const char *
@@ -139,28 +140,5 @@ JLJITGetIRCompileLayer_impl(JuliaOJITRef JIT)
 {
     return wrap(&unwrap(JIT)->getIRCompileLayer());
 }
-
-#define MODULE_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT_CODEGEN void LLVMExtraMPMAdd##CLASS##_impl(LLVMModulePassManagerRef PM) \
-    { \
-        unwrap(PM)->addPass(CREATE_PASS); \
-    }
-#define FUNCTION_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT_CODEGEN void LLVMExtraFPMAdd##CLASS##_impl(LLVMFunctionPassManagerRef PM) \
-    { \
-        unwrap(PM)->addPass(CREATE_PASS); \
-    }
-#define LOOP_PASS(NAME, CLASS, CREATE_PASS) \
-    JL_DLLEXPORT_CODEGEN void LLVMExtraLPMAdd##CLASS##_impl(LLVMLoopPassManagerRef PM) \
-    { \
-        unwrap(PM)->addPass(CREATE_PASS); \
-    }
-
-#include "llvm-julia-passes.inc"
-
-#undef MODULE_PASS
-#undef CGSCC_PASS
-#undef FUNCTION_PASS
-#undef LOOP_PASS
 
 } // extern "C"

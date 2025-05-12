@@ -100,7 +100,6 @@ Base.startswith(io::IO, prefix::AbstractString) = startswith(io, String(prefix))
 
 function endswith(a::Union{String, SubString{String}},
                   b::Union{String, SubString{String}})
-    cub = ncodeunits(b)
     astart = ncodeunits(a) - ncodeunits(b) + 1
     if astart < 1
         false
@@ -233,7 +232,7 @@ end
 # chop(s::AbstractString) = SubString(s, firstindex(s), prevind(s, lastindex(s)))
 
 """
-    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex}) -> SubString
+    chopprefix(s::AbstractString, prefix::Union{AbstractString,Regex})::SubString
 
 Remove the prefix `prefix` from `s`. If `s` does not start with `prefix`, a string equal to `s` is returned.
 
@@ -274,7 +273,7 @@ function chopprefix(s::Union{String, SubString{String}},
 end
 
 """
-    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex}) -> SubString
+    chopsuffix(s::AbstractString, suffix::Union{AbstractString,Regex})::SubString
 
 Remove the suffix `suffix` from `s`. If `s` does not end with `suffix`, a string equal to `s` is returned.
 
@@ -318,9 +317,9 @@ end
 
 
 """
-    chomp(s::AbstractString) -> SubString
+    chomp(s::AbstractString)::SubString
 
-Remove a single trailing newline from a string.
+Remove a single trailing newline (i.e. "\\r\\n" or "\\n") from a string.
 
 See also [`chop`](@ref).
 
@@ -328,6 +327,12 @@ See also [`chop`](@ref).
 ```jldoctest
 julia> chomp("Hello\\n")
 "Hello"
+
+julia> chomp("World\\r\\n")
+"World"
+
+julia> chomp("Julia\\r\\n\\n")
+"Julia\\r\\n"
 ```
 """
 function chomp(s::AbstractString)
@@ -337,20 +342,25 @@ function chomp(s::AbstractString)
     (j < 1 || s[j] != '\r') && (return SubString(s, 1, j))
     return SubString(s, 1, prevind(s,j))
 end
-function chomp(s::String)
-    i = lastindex(s)
-    if i < 1 || codeunit(s,i) != 0x0a
-        return @inbounds SubString(s, 1, i)
-    elseif i < 2 || codeunit(s,i-1) != 0x0d
-        return @inbounds SubString(s, 1, prevind(s, i))
-    else
-        return @inbounds SubString(s, 1, prevind(s, i-1))
-    end
-end
 
+@assume_effects :removable :foldable function chomp(s::Union{String, SubString{String}})
+    cu = codeunits(s)
+    ncu = length(cu)
+    len = if iszero(ncu)
+        0
+    else
+        has_lf = @inbounds(cu[ncu]) == 0x0a
+        two_bytes = ncu > 1
+        has_cr = has_lf & two_bytes & (@inbounds(cu[ncu - two_bytes]) == 0x0d)
+        ncu - (has_lf + has_cr)
+    end
+    off = s isa String ? 0 : s.offset
+    par = s isa String ? s : s.string
+    @inbounds @inline SubString{String}(par, off, len, Val{:noshift}())
+end
 """
-    lstrip([pred=isspace,] str::AbstractString) -> SubString
-    lstrip(str::AbstractString, chars) -> SubString
+    lstrip([pred=isspace,] str::AbstractString)::SubString
+    lstrip(str::AbstractString, chars)::SubString
 
 Remove leading characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -384,8 +394,8 @@ lstrip(s::AbstractString, chars::Chars) = lstrip(in(chars), s)
 lstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments are strings. The second argument should be a `Char` or collection of `Char`s"))
 
 """
-    rstrip([pred=isspace,] str::AbstractString) -> SubString
-    rstrip(str::AbstractString, chars) -> SubString
+    rstrip([pred=isspace,] str::AbstractString)::SubString
+    rstrip(str::AbstractString, chars)::SubString
 
 Remove trailing characters from `str`, either those specified by `chars` or those for
 which the function `pred` returns `true`.
@@ -419,8 +429,8 @@ rstrip(::AbstractString, ::AbstractString) = throw(ArgumentError("Both arguments
 
 
 """
-    strip([pred=isspace,] str::AbstractString) -> SubString
-    strip(str::AbstractString, chars) -> SubString
+    strip([pred=isspace,] str::AbstractString)::SubString
+    strip(str::AbstractString, chars)::SubString
 
 Remove leading and trailing characters from `str`, either those specified by `chars` or
 those for which the function `pred` returns `true`.
@@ -450,7 +460,7 @@ strip(f, s::AbstractString) = lstrip(f, rstrip(f, s))
 ## string padding functions ##
 
 """
-    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
+    lpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ')::String
 
 Stringify `s` and pad the resulting string on the left with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
@@ -476,13 +486,18 @@ function lpad(
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
     m ≤ 0 && return stringfn(s)
-    l = textwidth(p)
+    l = Int(textwidth(p))::Int
+    if l == 0
+        throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
+            "; maybe you want pad^max(0, npad - ncodeunits(str)) * str to pad by codeunits" *
+            (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
+    end
     q, r = divrem(m, l)
     r == 0 ? stringfn(p^q, s) : stringfn(p^q, first(p, r), s)
 end
 
 """
-    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ') -> String
+    rpad(s, n::Integer, p::Union{AbstractChar,AbstractString}=' ')::String
 
 Stringify `s` and pad the resulting string on the right with `p` to make it `n`
 characters (in [`textwidth`](@ref)) long. If `s` is already `n` characters long, an equal
@@ -508,9 +523,165 @@ function rpad(
     n = Int(n)::Int
     m = signed(n) - Int(textwidth(s))::Int
     m ≤ 0 && return stringfn(s)
-    l = textwidth(p)
+    l = Int(textwidth(p))::Int
+    if l == 0
+        throw(ArgumentError("$(repr(p)) has zero textwidth" * (ncodeunits(p) != 1 ? "" :
+            "; maybe you want str * pad^max(0, npad - ncodeunits(str)) to pad by codeunits" *
+            (s isa AbstractString && codeunit(s) != UInt8 ? "?" : " (bytes)?"))))
+    end
     q, r = divrem(m, l)
     r == 0 ? stringfn(s, p^q) : stringfn(s, p^q, first(p, r))
+end
+
+"""
+    rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the last characters
+with `replacement` if necessary. The default replacement string is "…".
+
+# Examples
+```jldoctest
+julia> s = rtruncate("🍕🍕 I love 🍕", 10)
+"🍕🍕 I lo…"
+
+julia> textwidth(s)
+10
+
+julia> rtruncate("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltruncate`](@ref) and [`ctruncate`](@ref).
+"""
+function rtruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:right))
+    if isnothing(ret)
+        return string(str)
+    else
+        left, _ = ret::Tuple{Int,Int}
+        @views return str[begin:left] * replacement
+    end
+end
+
+"""
+    ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the first characters
+with `replacement` if necessary. The default replacement string is "…".
+
+# Examples
+```jldoctest
+julia> s = ltruncate("🍕🍕 I love 🍕", 10)
+"…I love 🍕"
+
+julia> textwidth(s)
+10
+
+julia> ltruncate("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`rtruncate`](@ref) and [`ctruncate`](@ref).
+"""
+function ltruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…')
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:left))
+    if isnothing(ret)
+        return string(str)
+    else
+        _, right = ret::Tuple{Int,Int}
+        @views return replacement * str[right:end]
+    end
+end
+
+"""
+    ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
+
+Truncate `str` to at most `maxwidth` columns (as estimated by [`textwidth`](@ref)), replacing the middle characters
+with `replacement` if necessary. The default replacement string is "…". By default, the truncation
+prefers keeping chars on the left, but this can be changed by setting `prefer_left` to `false`.
+
+# Examples
+```jldoctest
+julia> s = ctruncate("🍕🍕 I love 🍕", 10)
+"🍕🍕 …e 🍕"
+
+julia> textwidth(s)
+10
+
+julia> ctruncate("foo", 3)
+"foo"
+```
+
+!!! compat "Julia 1.12"
+    This function was added in Julia 1.12.
+
+See also [`ltruncate`](@ref) and [`rtruncate`](@ref).
+"""
+function ctruncate(str::AbstractString, maxwidth::Integer, replacement::Union{AbstractString,AbstractChar} = '…'; prefer_left::Bool = true)
+    ret = string_truncate_boundaries(str, Int(maxwidth), replacement, Val(:center), prefer_left)
+    if isnothing(ret)
+        return string(str)
+    else
+        left, right = ret::Tuple{Int,Int}
+        @views return str[begin:left] * replacement * str[right:end]
+    end
+end
+
+# return whether textwidth(str) <= maxwidth
+function check_textwidth(str::AbstractString, maxwidth::Integer)
+    # check efficiently for early return if str is wider than maxwidth
+    total_width = 0
+    for c in str
+        total_width += textwidth(c)
+        total_width > maxwidth && return false
+    end
+    return true
+end
+
+function string_truncate_boundaries(
+            str::AbstractString,
+            maxwidth::Integer,
+            replacement::Union{AbstractString,AbstractChar},
+            ::Val{mode},
+            prefer_left::Bool = true) where {mode}
+    maxwidth >= 0 || throw(ArgumentError("maxwidth $maxwidth should be non-negative"))
+    check_textwidth(str, maxwidth) && return nothing
+
+    l0, _ = left, right = firstindex(str), lastindex(str)
+    width = textwidth(replacement)
+    # used to balance the truncated width on either side
+    rm_width_left, rm_width_right, force_other = 0, 0, false
+    @inbounds while true
+        if mode === :left || (mode === :center && (!prefer_left || left > l0))
+            rm_width = textwidth(str[right])
+            if mode === :left || (rm_width_right <= rm_width_left || force_other)
+                force_other = false
+                (width += rm_width) <= maxwidth || break
+                rm_width_right += rm_width
+                right = prevind(str, right)
+            else
+                force_other = true
+            end
+        end
+        if mode ∈ (:right, :center)
+            rm_width = textwidth(str[left])
+            if mode === :left || (rm_width_left <= rm_width_right || force_other)
+                force_other = false
+                (width += textwidth(str[left])) <= maxwidth || break
+                rm_width_left += rm_width
+                left = nextind(str, left)
+            else
+                force_other = true
+            end
+        end
+    end
+    return prevind(str, left), nextind(str, right)
 end
 
 """
@@ -902,8 +1073,11 @@ is supplied, the transformed string is instead written to `io` (returning `io`).
 (For example, this can be used in conjunction with an [`IOBuffer`](@ref) to re-use
 a pre-allocated buffer array in-place.)
 
-Multiple patterns can be specified, and they will be applied left-to-right
-simultaneously, so only one pattern will be applied to any character, and the
+Multiple patterns can be specified: The input string will be scanned only once
+from start (left) to end (right), and the first matching replacement
+will be applied to each substring. Replacements are applied in the order of
+the arguments provided if they match substrings starting at the same
+input string position. Thus, only one pattern will be applied to any character, and the
 patterns will only be applied to the input text, not the replacements.
 
 !!! compat "Julia 1.7"
@@ -1031,8 +1205,8 @@ end
 end
 
 """
-    bytes2hex(itr) -> String
-    bytes2hex(io::IO, itr)
+    bytes2hex(itr)::String
+    bytes2hex(io::IO, itr)::Nothing
 
 Convert an iterator `itr` of bytes to its hexadecimal string representation, either
 returning a `String` via `bytes2hex(itr)` or writing the string to an `io` stream
@@ -1061,12 +1235,12 @@ function bytes2hex end
 
 function bytes2hex(itr)
     eltype(itr) === UInt8 || throw(ArgumentError("eltype of iterator not UInt8"))
-    b = Base.StringVector(2*length(itr))
+    b = Base.StringMemory(2*length(itr))
     @inbounds for (i, x) in enumerate(itr)
         b[2i - 1] = hex_chars[1 + x >> 4]
         b[2i    ] = hex_chars[1 + x & 0xf]
     end
-    return String(b)
+    return unsafe_takestring(b)
 end
 
 function bytes2hex(io::IO, itr)

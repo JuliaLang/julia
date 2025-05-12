@@ -1,21 +1,17 @@
-Julia v1.12 Release Notes
+Julia v1.13 Release Notes
 ========================
 
 New language features
 ---------------------
 
+  - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
+
 Language changes
 ----------------
+* `mod(x::AbstractFloat, -Inf)` now returns `x` (as long as `x` is finite), this aligns with C standard and
+is considered a bug fix ([#47102])
 
- - When methods are replaced with exactly equivalent ones, the old method is no
-   longer deleted implicitly simultaneously, although the new method does take
-   priority and become more specific than the old method. Thus if the new
-   method is deleted later, the old method will resume operating. This can be
-   useful to mocking frameworks (such as in SparseArrays, Pluto, and Mocking,
-   among others), as they do not need to explicitly restore the old method.
-   While inference and compilation still must be repeated with this, it also
-   may pave the way for inference to be able to intelligently re-use the old
-   results, once the new method is deleted. ([#53415])
+  - The `hash` algorithm and its values have changed. Most `hash` specializations will remain correct and require no action. Types that reimplement the core hashing logic independently, such as some third-party string packages do, may require a migration to the new algorithm. ([#57509])
 
 Compiler/Runtime improvements
 -----------------------------
@@ -23,8 +19,18 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* The option `--sysimage-native-code=no` has been deprecated.
+
 Multi-threading changes
 -----------------------
+
+* A new `AbstractSpinLock` is defined with `SpinLock <: AbstractSpinLock` ([#55944]).
+* A new `PaddedSpinLock <: AbstractSpinLock` is defined.  It has extra padding to avoid false sharing ([#55944]).
+* New types are defined to handle the pattern of code that must run once per process, called
+  a `OncePerProcess{T}` type, which allows defining a function that should be run exactly once
+  the first time it is called, and then always return the same result value of type `T`
+  every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
+  similar usage with threads or tasks. ([#TBD])
 
 Build system changes
 --------------------
@@ -32,55 +38,34 @@ Build system changes
 New library functions
 ---------------------
 
-* `logrange(start, stop; length)` makes a range of constant ratio, instead of constant step ([#39071])
+* `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
+* Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
 
 New library features
 --------------------
 
-* `tempname` can now take a suffix string to allow the file name to include a suffix and include that suffix in
-  the uniquing checking ([#53474])
+* `fieldoffset` now also accepts the field name as a symbol as `fieldtype` already did ([#58100]).
+* `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
+* `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
 
 Standard library changes
 ------------------------
 
-#### StyledStrings
-
 #### JuliaSyntaxHighlighting
-
-#### Package Manager
 
 #### LinearAlgebra
 
-#### Logging
-
-#### Printf
-
 #### Profile
-
-#### Random
 
 #### REPL
 
-#### SuiteSparse
-
-#### SparseArrays
-
 #### Test
 
-#### Dates
-
-#### Statistics
-
-#### Distributed
-
-#### Unicode
-
-#### DelimitedFiles
+* Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
 
 #### InteractiveUtils
 
-Deprecated or removed
----------------------
+* Introspection utilities such as `@code_typed`, `@which` and `@edit` now accept type annotations as substitutes for values, recognizing forms such as `f(1, ::Float64, 3)` or even `sum(::Vector{T}; init = ::T) where {T<:Real}`. Type-annotated variables as in `f(val::Int; kw::Float64)` are not evaluated if the type annotation provides the necessary information, making this syntax compatible with signatures found in stacktraces ([#57909], [#58222]).
 
 External dependencies
 ---------------------

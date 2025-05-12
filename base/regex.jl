@@ -28,7 +28,7 @@ mutable struct Regex <: AbstractPattern
 
     function Regex(pattern::AbstractString, compile_options::Integer,
                    match_options::Integer)
-        pattern = String(pattern)
+        pattern = String(pattern)::String
         compile_options = UInt32(compile_options)
         match_options = UInt32(match_options)
         if (compile_options & ~PCRE.COMPILE_MASK) != 0
@@ -69,11 +69,11 @@ Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_COMPILER_OPTS, DEFAULT_M
 
 function compile(regex::Regex)
     if regex.regex == C_NULL
-        if PCRE.PCRE_COMPILE_LOCK === nothing
+        if !isdefinedglobal(PCRE, :PCRE_COMPILE_LOCK)
             regex.regex = PCRE.compile(regex.pattern, regex.compile_options)
             PCRE.jit_compile(regex.regex)
         else
-            l = PCRE.PCRE_COMPILE_LOCK::Threads.SpinLock
+            l = PCRE.PCRE_COMPILE_LOCK
             lock(l)
             try
                 if regex.regex == C_NULL
@@ -188,8 +188,13 @@ Methods that accept a `RegexMatch` object are defined for [`iterate`](@ref),
 [`getindex`](@ref), where keys are the names or numbers of a capture group.
 See [`keys`](@ref keys(::RegexMatch)) for more information.
 
+`Tuple(m)`, `NamedTuple(m)`, and `Dict(m)` can be used to construct more flexible collection types from `RegexMatch` objects.
+
+!!! compat "Julia 1.11"
+    Constructing NamedTuples and Dicts from RegexMatches requires Julia 1.11
+
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> m = match(r"(?<hour>\\d+):(?<minute>\\d+)(am|pm)?", "11:30 in the morning")
 RegexMatch("11:30", hour="11", minute="30", 3=nothing)
 
@@ -210,6 +215,12 @@ julia> hr, min, ampm = m; # destructure capture groups by iteration
 
 julia> hr
 "11"
+
+julia> Dict(m)
+Dict{Any, Union{Nothing, SubString{String}}} with 3 entries:
+  "hour"   => "11"
+  3        => nothing
+  "minute" => "30"
 ```
 """
 struct RegexMatch{S<:AbstractString} <: AbstractMatch
@@ -225,7 +236,7 @@ RegexMatch(match::SubString{S}, captures::Vector{Union{Nothing,SubString{S}}},
     RegexMatch{S}(match, captures, offset, offsets, regex)
 
 """
-    keys(m::RegexMatch) -> Vector
+    keys(m::RegexMatch)::Vector
 
 Return a vector of keys for all capture groups of the underlying regex.
 A key is included even if the capture group fails to match.
@@ -288,6 +299,9 @@ end
 iterate(m::RegexMatch, args...) = iterate(m.captures, args...)
 length(m::RegexMatch) = length(m.captures)
 eltype(m::RegexMatch) = eltype(m.captures)
+
+NamedTuple(m::RegexMatch) = NamedTuple{Symbol.(Tuple(keys(m)))}(values(m))
+Dict(m::RegexMatch) = Dict(pairs(m))
 
 function occursin(r::Regex, s::AbstractString; offset::Integer=0)
     compile(r)
@@ -381,9 +395,13 @@ end
     match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
 Search for the first match of the regular expression `r` in `s` and return a [`RegexMatch`](@ref)
-object containing the match, or nothing if the match failed. The matching substring can be
-retrieved by accessing `m.match` and the captured sequences can be retrieved by accessing
-`m.captures` The optional `idx` argument specifies an index at which to start the search.
+object containing the match, or nothing if the match failed.
+The optional `idx` argument specifies an index at which to start the search.
+The matching substring can be retrieved by accessing `m.match`, the captured sequences can be retrieved by accessing `m.captures`.
+The resulting [`RegexMatch`](@ref) object can be used to construct other collections: e.g. `Tuple(m)`, `NamedTuple(m)`.
+
+!!! compat "Julia 1.11"
+    Constructing NamedTuples and Dicts requires Julia 1.11
 
 # Examples
 ```jldoctest
@@ -784,7 +802,7 @@ end
 ## hash ##
 const hashre_seed = UInt === UInt64 ? 0x67e195eb8555e72d : 0xe32373e4
 function hash(r::Regex, h::UInt)
-    h += hashre_seed
+    h ⊻= hashre_seed
     h = hash(r.pattern, h)
     h = hash(r.compile_options, h)
     h = hash(r.match_options, h)
@@ -793,8 +811,8 @@ end
 ## String operations ##
 
 """
-    *(s::Regex, t::Union{Regex,AbstractString,AbstractChar}) -> Regex
-    *(s::Union{Regex,AbstractString,AbstractChar}, t::Regex) -> Regex
+    *(s::Regex, t::Union{Regex,AbstractString,AbstractChar})::Regex
+    *(s::Union{Regex,AbstractString,AbstractChar}, t::Regex)::Regex
 
 Concatenate regexes, strings and/or characters, producing a [`Regex`](@ref).
 String and character arguments must be matched exactly in the resulting regex,
@@ -876,7 +894,7 @@ end
 
 
 """
-    ^(s::Regex, n::Integer) -> Regex
+    ^(s::Regex, n::Integer)::Regex
 
 Repeat a regex `n` times.
 
