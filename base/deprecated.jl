@@ -601,6 +601,18 @@ to_power_type(x) = oftype(x*x, x)
 
 # BEGIN 1.14 deprecations
 
+## These are all mapreduce internals that were not exported or public, but have deprecations to minimize disruptions
+function reducedim_initarray end
+const _dep_message_reducedim_initarray = ", these internals have been removed. To customize the array returned by dimensional reductions, implement mapreduce_similar instead"
+deprecate(Base, :reducedim_initarray)
+function _mapreduce_dim end
+const _dep_message__mapreduce_dim = ", these internals have been removed. To customize the array returned by dimensional reductions, implement mapreduce_similar instead"
+deprecate(Base, :_mapreduce_dim)
+@deprecate_binding mapreducedim! Base.mapreduce! false
+@deprecate_binding _mapreducedim! Base.mapreduce! false
+@deprecate_binding reducedim! Base.reduce! false
+@deprecate mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer, blksize::Int=pairwise_blocksize(f, op)) Base.mapreduce_pairwise(f, op, A, _InitialValue(), ifirst:ilast) false
+
 # These operators are new in 1.14, but these fallback methods are added for
 # compatibility while packages adjust to defining both operators, to allow
 # Base and other packages to start using these.
