@@ -70,7 +70,8 @@ hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
 hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
 function hash_integer(n::Integer, h::UInt)
-    h ⊻= hash_uint((n % UInt) ⊻ h)
+    # when possible, try to make hash_integer match hash
+    h = hash((n % UInt), h)
     n = abs(n)
     n >>>= sizeof(UInt) << 3
     while n != 0
@@ -146,6 +147,7 @@ function hash(x::Real, h::UInt)
             if 0 <= pow # if pow is non-negative, it is an integer
                 left <= 63 && return hash(Int64(num) << Int(pow), h)
                 left <= 64 && !signbit(num) && return hash(UInt64(num) << Int(pow), h)
+                return hash_integer(num << pow, h)
             end # typemin(Int64) handled by Float64 case
             # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
             # Float64s only have 53 mantisa bits (including implicit bit)

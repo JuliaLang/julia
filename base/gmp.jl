@@ -847,70 +847,34 @@ if Limb === UInt64 === UInt
     # On 64 bit systems we can define
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
-
-    using .Base: hash_finalizer
-
-    function hash_integer(n::BigInt, h::UInt)
-        GC.@preserve n begin
-            s = n.size
-            s == 0 && return hash_integer(0, h)
-            p = convert(Ptr{UInt64}, n.d)
-            b = unsafe_load(p)
-            h ⊻= hash_finalizer(ifelse(s < 0, -b, b) ⊻ h)
-            for k = 2:abs(s)
-                h ⊻= hash_finalizer(unsafe_load(p, k) ⊻ h)
-            end
-            return h
-        end
-    end
-
     function hash(x::BigInt, h::UInt)
         GC.@preserve x begin
             sz = x.size
-            sz == 0 && return hash(0, h)
-            ptr = Ptr{UInt64}(x.d)
-            if sz == 1
-                return hash(unsafe_load(ptr), h)
-            elseif sz == -1
-                limb = unsafe_load(ptr)
-                limb <= typemin(Int) % UInt && return hash(-(limb % Int), h)
+            sz == 0 && return hash(0, h) # canonicalize 0
+
+            nlimbs = abs(sz)
+            p = Ptr{UInt64}(x.d)
+
+            if nlimbs == 1
+                b = unsafe_load(p)
+                return hash(ifelse(sz < 0, -b, b), h)
             end
-            pow = trailing_zeros(x)
-            nd = Base.ndigits0z(x, 2)
-            idx = (pow >>> 6) + 1
-            shift = (pow & 63) % UInt
-            upshift = BITS_PER_LIMB - shift
-            asz = abs(sz)
-            if shift == 0
-                limb = unsafe_load(ptr, idx)
-            else
-                limb1 = unsafe_load(ptr, idx)
-                limb2 = idx < asz ? unsafe_load(ptr, idx+1) : UInt(0)
-                limb = limb2 << upshift | limb1 >> shift
-            end
-            if nd <= 1024 && nd - pow <= 53
-                return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
-            end
-            h = hash_integer(pow, h)
-            h ⊻= hash_finalizer(flipsign(limb, sz) ⊻ h)
-            for idx = idx+1:asz
-                if shift == 0
-                    limb = unsafe_load(ptr, idx)
-                else
-                    limb1 = limb2
-                    if idx == asz
-                        limb = limb1 >> shift
-                        limb == 0 && break # don't hash leading zeros
-                    else
-                        limb2 = unsafe_load(ptr, idx+1)
-                        limb = limb2 << upshift | limb1 >> shift
-                    end
-                end
-                h ⊻= hash_finalizer(limb ⊻ h)
-            end
+
+            # mix sign
+            h = hash(sz < 0, h)
+            h = Base.hash_bytes(
+                    Ptr{UInt8}(p),
+                    8 * nlimbs,
+                    UInt64(h),
+                    Base.HASH_SECRET
+                ) % UInt
+
             return h
         end
     end
+
+    # Wrapper used by `hash_integer` in rational hashing
+    hash_integer(n::BigInt, h::UInt) = hash(n, h)
 end
 
 module MPQ
