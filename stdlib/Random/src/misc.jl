@@ -267,6 +267,9 @@ number generator (see [Random Numbers](@ref)).
 To permute `v` in-place, see [`shuffle!`](@ref). To obtain randomly permuted
 indices, see [`randperm`](@ref).
 
+!!! compat "Julia 1.13"
+    Shuffling an `NTuple` value requires Julia v1.13 or above.
+
 # Examples
 ```jldoctest
 julia> shuffle(Xoshiro(123), Vector(1:10))
