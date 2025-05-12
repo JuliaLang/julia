@@ -270,7 +270,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
                 Name,
                 (GlobalVariable *)nullptr,
                 GV->getThreadLocalMode(),
-                GV->getType()->getAddressSpace());
+                cast<PointerType>(TypeRemapper.remapType(GV->getType()))->getAddressSpace());
         NGV->copyAttributesFrom(GV);
         VMap[GV] = NGV;
     }
@@ -290,7 +290,7 @@ bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
 
         auto *NGA = GlobalAlias::create(
                 TypeRemapper.remapType(GA->getValueType()),
-                GA->getType()->getPointerAddressSpace(),
+                cast<PointerType>(TypeRemapper.remapType(GA->getType()))->getAddressSpace(),
                 GA->getLinkage(),
                 Name,
                 &M);
