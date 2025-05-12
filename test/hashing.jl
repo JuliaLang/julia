@@ -309,3 +309,10 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
 end
 
 @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
+
+@testset "issue #58386" begin
+    for n in [-12345, -12, -1, 0, 1, 17, 2049]
+        # Base.hash_integer should coincide with hash for small numbers (#58386)
+        @test hash(n, Base.HASH_SEED) == Base.hash_integer(n, Base.HASH_SEED)
+    end
+end
