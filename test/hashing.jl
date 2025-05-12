@@ -311,8 +311,11 @@ end
 @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
 
 @testset "issue #58386" begin
-    for n in [-12345, -12, -1, 0, 1, 17, 2049]
-        # Base.hash_integer should coincide with hash for small numbers (#58386)
-        @test hash(n, Base.HASH_SEED) == Base.hash_integer(n, Base.HASH_SEED)
+    for T in [Int, UInt, Int128, UInt128]
+        for a in [typemin(T), typemax(T), zero(T), one(T), -one(T), T(17)]
+            @test hash(a) == hash(big(a))
+            @test hash(a) == Base.hash_integer(a, Base.HASH_SEED)
+            @test hash(big(a)) == Base.hash_integer(big(a), Base.HASH_SEED)
+        end
     end
 end

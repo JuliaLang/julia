@@ -815,10 +815,4 @@ end
         bfloat = big(11.0)^i
         @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
     end
-    for n in [-12345, -12, -1, 0, 1, 17, 2049]
-        # hashes of small numbers should coincide with Int
-        @test hash(n) == hash(big(n))
-        # Base.hash_integer should coincide with hash for small numbers (#58386)
-        @test hash(big(n), Base.HASH_SEED) == Base.hash_integer(big(n), Base.HASH_SEED)
-    end
 end
