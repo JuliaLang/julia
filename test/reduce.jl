@@ -771,3 +771,60 @@ end
         Val(any(in((:one,:two,:three)),(:four,:three)))
     end |> only == Val{true}
 end
+
+@testset "type stability of internals for mean (etc); Statistics#160" begin
+    @test (@inferred Missing mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, view([1.0,2.0,missing],1:2), dims=:)) == 3.0
+    @test (@inferred Missing mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, view([1,2,missing],1:2), dims=:, init=0.0)) == 3.0
+    @test (@inferred Union{Missing,Int} mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, view([1,2,missing],1:2), dims=:, init=0)) == 3.0
+    @test_broken (@inferred Union{Missing,Int} mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, view([1,2,missing],1:2), dims=:)) == 3.0
+
+    @test (@inferred Missing reduce((x,y)->Base.add_sum(x, y)/1, view([1.0,2.0,missing],1:2), dims=:)) == 3.0
+    @test (@inferred Missing reduce((x,y)->Base.add_sum(x, y)/1, view([1,2,missing],1:2), dims=:, init=0.0)) == 3.0
+    @test (@inferred Union{Missing,Int} reduce((x,y)->Base.add_sum(x, y)/1, view([1,2,missing],1:2), dims=:, init=0)) == 3.0
+    @test_broken (@inferred Union{Missing,Int} reduce((x,y)->Base.add_sum(x, y)/1, view([1,2,missing],1:2), dims=:)) == 3.0
+
+    @test (@inferred Missing mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, skipmissing(view([1.0,2.0,missing],1:2)))) == 3.0
+    @test (@inferred Missing mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)), init=0.0)) == 3.0
+    @test (@inferred Union{Missing,Int} mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)), init=0)) == 3.0
+    @test (@inferred Union{Missing,Int} mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)))) == 3.0
+
+    @test (@inferred Missing reduce((x,y)->Base.add_sum(x, y)/1, skipmissing(view([1.0,2.0,missing],1:2)))) == 3.0
+    @test (@inferred Missing reduce((x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)), init=0.0)) == 3.0
+    @test (@inferred Union{Missing,Int} reduce((x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)), init=0)) == 3.0
+    @test (@inferred Union{Missing,Int} reduce((x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)))) == 3.0
+end
+
+linear(x) = (@assert(IndexStyle(x) == IndexLinear()); x)
+cartesian(x) = (y = view(x, axes(x)...); @assert(IndexStyle(y) isa IndexCartesian); y)
+iterlen(x) = (y = Iterators.take(x, length(x)); @assert(Base.IteratorSize(y) isa Union{Base.HasLength, Base.HasShape}); y)
+iterunknown(x) = (y = skipmissing(convert(Array{Union{Missing, eltype(x)}}, x)); @assert(Base.IteratorSize(y) isa Base.SizeUnknown); y)
+# Issues #29883, #52365, #30421, #52457
+@testset "all floating point reductions are pairwise" begin
+    ulp = nextfloat(1f0)-1f0
+    sz = (100000,10)
+    len = prod(sz)
+    arr = fill(0.1f0, sz)
+    @test foldl(+, arr) === 100958.34f0 # Should not SIMD, should be exact
+    @test !(foldl(+, arr) ≈ len/10)
+    @test !isapprox(foldl(+, arr), len/10; rtol=100ulp)
+    @test sum(arr) ≈ len/10
+    @test sum(arr) ≈ len/10 rtol=100ulp
+    for f in (linear, cartesian, iterlen, iterunknown)
+        A = f(arr)
+        @test sum(A) ≈ (len/10) rtol=100ulp
+        @test sum(A; init=0.0) ≈ (len/10) rtol=100ulp
+        if A isa AbstractArray
+            @test only(unique(sum(A; dims=1))) ≈ (sz[1]/10) rtol=100ulp
+            @test only(unique(sum(permutedims(A); dims=2))) ≈ (sz[1]/10) rtol=100ulp
+            @test only(unique(sum(A; dims=1, init=0.0))) ≈ (sz[1]/10) rtol=100ulp
+            @test only(unique(sum(permutedims(A); dims=2, init=0.0))) ≈ (sz[1]/10) rtol=100ulp
+        end
+    end
+
+    @test sum((rand(Float32) for _ in 1:100000000))/100000000 ≈ 0.5
+
+    rng = MersenneTwister(630);
+    v = randn(rng, Float16, 1000)
+    sa = @view v[collect(1:end)]
+    @test sum(sa) ≈ sum(v)
+end

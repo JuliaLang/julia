@@ -242,42 +242,6 @@ julia> foldr(=>, 1:4; init=0)
 """
 foldr(op, itr; kw...) = mapfoldr(identity, op, itr; kw...)
 
-## reduce & mapreduce
-
-# `mapreduce_impl()` is called by `mapreduce()` (via `_mapreduce()`, when `A`
-# supports linear indexing) and does actual calculations (for `A[ifirst:ilast]` subset).
-# For efficiency, no parameter validity checks are done, it's the caller's responsibility.
-# `ifirst:ilast` range is assumed to be a valid non-empty subset of `A` indices.
-
-# This is a generic implementation of `mapreduce_impl()`,
-# certain `op` (e.g. `min` and `max`) may have their own specialized versions.
-@noinline function mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted,
-                                  ifirst::Integer, ilast::Integer, blksize::Int)
-    if ifirst == ilast
-        @inbounds a1 = A[ifirst]
-        return mapreduce_first(f, op, a1)
-    elseif ilast - ifirst < blksize
-        # sequential portion
-        @inbounds a1 = A[ifirst]
-        @inbounds a2 = A[ifirst+1]
-        v = op(f(a1), f(a2))
-        @simd for i = ifirst + 2 : ilast
-            @inbounds ai = A[i]
-            v = op(v, f(ai))
-        end
-        return v
-    else
-        # pairwise portion
-        imid = ifirst + (ilast - ifirst) >> 1
-        v1 = mapreduce_impl(f, op, A, ifirst, imid, blksize)
-        v2 = mapreduce_impl(f, op, A, imid+1, ilast, blksize)
-        return op(v1, v2)
-    end
-end
-
-mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer) =
-    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
-
 """
     mapreduce(f, op, itrs...; [init])
 
@@ -305,8 +269,40 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, itr; kw...) = mapfoldl(f, op, itr; kw...)
-mapreduce(f, op, itr, itrs...; kw...) = reduce(op, Generator(f, itr, itrs...); kw...)
+mapreduce(f, op, x; init=_InitialValue()) = mapreduce_pairwise(f, op, x, init)
+mapreduce(f, op, x, xs...; init=_InitialValue()) = mapreduce_pairwise(identity, op, Generator(f, x, xs...), init)
+
+"""
+    mapreduce(f, op, A::AbstractArray...; dims=:, [init])
+
+Evaluates to the same as `reduce(op, map(f, A...); dims=dims, init=init)`, but is generally
+faster because the intermediate array is avoided.
+
+!!! compat "Julia 1.2"
+    `mapreduce` with multiple iterators requires Julia 1.2 or later.
+
+# Examples
+```jldoctest
+julia> a = reshape(Vector(1:16), (4,4))
+4×4 Matrix{Int64}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+
+julia> mapreduce(isodd, *, a, dims=1)
+1×4 Matrix{Bool}:
+ 0  0  0  0
+
+julia> mapreduce(isodd, |, a, dims=1)
+1×4 Matrix{Bool}:
+ 1  1  1  1
+```
+"""
+mapreduce(f, op, A::AbstractArrayOrBroadcasted; init=_InitialValue(), dims=(:)) = mapreducedim(f, op, A, init, dims)
+mapreduce(f, op, A::AbstractArrayOrBroadcasted, As::AbstractArrayOrBroadcasted...; init=_InitialValue(), dims=(:)) =
+    reduce(op, map(f, A, As...); init, dims)
+mapreducedim(f, op, A, init, ::Colon) = mapreduce_pairwise(f, op, A, init)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -401,11 +397,10 @@ additional methods should only be defined for cases where `op` gives a result wi
 different types than its inputs.
 """
 reduce_first(op, x) = x
-reduce_first(::typeof(+), x::Bool) = Int(x)
 reduce_first(::typeof(*), x::AbstractChar) = string(x)
 
 reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
-reduce_first(::typeof(add_sum), x::Union{Bool,BitSignedSmall})   = Int(x)
+reduce_first(::typeof(add_sum), x::BitSignedSmall)   = Int(x)
 reduce_first(::typeof(add_sum), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
 reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
@@ -423,34 +418,176 @@ The default is `reduce_first(op, f(x))`.
 """
 mapreduce_first(f, op, x) = reduce_first(op, f(x))
 
-_mapreduce(f, op, A::AbstractArrayOrBroadcasted) = _mapreduce(f, op, IndexStyle(A), A)
+_empty_eltype(x) = _empty_eltype(x, IteratorEltype(x))
+_empty_eltype(x, ::HasEltype) = eltype(x)
+_empty_eltype(_, _) = _empty_reduce_error()
+"""
+    _mapreduce_start(f, op, A, init, [a1])
+Perform the first step in a mapped reduction over `A` with 0 or one or more elements.
+The one-element method may be called multiple times within a single reduction at
+the start of each new chain of `op` calls.
+"""
+_mapreduce_start(f, op, A, ::_InitialValue) = mapreduce_empty(f, op, _empty_eltype(A))
+_mapreduce_start(f, op, A, ::_InitialValue, a1) = mapreduce_first(f, op, a1)
+_mapreduce_start(f, op, A, init) = init
+_mapreduce_start(f, op, A, init, a1) = op(init, mapreduce_first(f, op, a1))
 
-function _mapreduce(f, op, ::IndexLinear, A::AbstractArrayOrBroadcasted)
-    inds = LinearIndices(A)
-    n = length(inds)
-    if n == 0
-        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
-    elseif n == 1
-        @inbounds a1 = A[first(inds)]
-        return mapreduce_first(f, op, a1)
-    elseif n < 16 # process short array here, avoid mapreduce_impl() compilation
-        @inbounds i = first(inds)
-        @inbounds a1 = A[i]
-        @inbounds a2 = A[i+=1]
-        s = op(f(a1), f(a2))
-        while i < last(inds)
-            @inbounds Ai = A[i+=1]
-            s = op(s, f(Ai))
-        end
-        return s
+"""
+    mapreduce_pairwise(f, op, A, init)
+    mapreduce_pairwise(f, op, A, init, indices)
+    mapreduce_pairwise(f, op, itr, init, ::Union{HasLength, HasShape}, n, [state])
+    mapreduce_pairwise(f, op, itr, init, ::IteratorSize, n, valstate)
+
+Perform a pairwise reassociation of the mapped reduction with `f` and `op`
+Returns the result `v` or, for the 6+ argument iterator methods, a tuple `(v, state)` or `(v, iterate(itr, state))`
+
+The four-argument entry-point handles the empty case and dispatches to a polyalgorithm
+with three distinct mechanisms for accessing elements and structuring the subsequent
+recursion; all such recursive calls **must** process at least one element.
+
+    * An indexing method recursively splits `indices` until there are fewer than
+      `pairwise_blocksize` indices to process. CartesianIndices split into halves
+      across columns first, then within a single column (if necessary).
+    * An iterable method (with length) recursively takes half as many elements from
+      the iterable until `n` is less than or equal to the `pairwise_blocksize`. This
+      is slightly more complicated than the indexing case as we must additionally pass
+      (and return) the iterable's state along with the result of each part of the
+      reduction.
+    * An iterable method (without length) peels one element (and state) in advance of
+      every recursive call to handle the empty case and ensure that all recursive calls
+      process at least one element. This is slightly more complicated than the length
+      case as we must pass the iterable's next `(val, state)` to each recursive call
+      and similarly return it as the second part of the internal return tuple.
+      Additionally this algorithm effectively works backwards from the other two;
+      instead of starting at the *final* `op` reduction of the (possibly many) branches
+      of reduction chains, this starts at the initial chain of length **up to** the
+      `pairwise_blocksize` and then iteratively widens to incorporate larger chunks
+      (that are then recursively split) as necessary.
+
+All implementations dispatch to a similarly structured `mapreduce_kernel` to handle the
+base case that's essentially a `mapfoldl` that allows for further SIMD-like optimizations
+and reassociations.
+"""
+function mapreduce_pairwise(f, op, A::AbstractArrayOrBroadcasted, init)
+    isempty(A) && return _mapreduce_start(f, op, A, init)
+    length(A) <= pairwise_blocksize(f, op) && return mapreduce_kernel(f, op, A, init, eachindex(A))
+    return mapreduce_pairwise(f, op, A, init, eachindex(A))
+end
+mapreduce_pairwise(f, op, itr, init) = mapreduce_pairwise(f, op, itr, init, IteratorSize(itr))
+function mapreduce_pairwise(f, op, itr, init, S::Union{HasLength, HasShape})
+    n = length(itr)
+    n < 1 && return _mapreduce_start(f, op, itr, init)
+    n <= 16 && return mapfoldl(f, op, itr; init)
+    n <= pairwise_blocksize(f, op) && return mapreduce_kernel(f, op, itr, init, S, n)[1]
+    return mapreduce_pairwise(f, op, itr, init, S, n)[1]
+end
+function mapreduce_pairwise(f::F, op, itr, init, S::IteratorSize) where {F}
+    it = iterate(itr)
+    it === nothing && return _mapreduce_start(f, op, itr, init)
+    n = pairwise_blocksize(f, op)
+    v, it = mapreduce_kernel(f, op, itr, init, S, n, it)
+    while it !== nothing
+        n <<= 1
+        v1, it = mapreduce_pairwise(f, op, itr, init, S, n, it)
+        v = op(v, v1)
+    end
+    return v
+end
+
+function mapreduce_pairwise(f::F, op::G, A, init, inds) where {F,G}
+    if length(inds) <= max(10, pairwise_blocksize(f, op))
+        return mapreduce_kernel(f, op, A, init, inds)
     else
-        return mapreduce_impl(f, op, A, first(inds), last(inds))
+        p1, p2 = halves(inds)
+        v1 = mapreduce_pairwise(f, op, A, init, p1)
+        v2 = mapreduce_pairwise(f, op, A, init, p2)
+        return op(v1, v2)
+    end
+end
+function halves(inds)
+    n = length(inds) >> 1
+    return (inds[begin:begin+n-1], inds[begin+n:end])
+end
+# Recursively find the last non-singleton range in the tuple to halve, keeping the rest whole
+_halves(tup) = length(tup[end]) > 1 ?
+                    (map(_wholes, front(tup))..., halves(tup[end])) :
+                    (_halves(front(tup))..., _wholes(tup[end]))
+_halves(::Tuple{}) = ()
+# This unconditionally re-indexes by begin:end to ensure type stability with the halving re-index
+_wholes(r) = r[begin:end], r[begin:end]
+
+function mapreduce_pairwise(f::F, op::G, itr, init, S::Union{HasLength,HasShape}, n, state...) where {F,G}
+    if n < max(10, pairwise_blocksize(f, op))
+        return mapreduce_kernel(f, op, itr, init, S, n, state...)
+    else
+        ndiv2 = n >> 1
+        v1, s = mapreduce_pairwise(f, op, itr, init, S, ndiv2, state...)
+        v2, s = mapreduce_pairwise(f, op, itr, init, S, n-ndiv2, s)
+        return (op(v1, v2), s)
+    end
+end
+function mapreduce_pairwise(f::F, op, itr, init, S::IteratorSize, n, it) where {F}
+    if n <= max(10, pairwise_blocksize(f, op))
+        v, it = mapreduce_kernel(f, op, itr, init, S, n, it)
+        return it === nothing ? (v, nothing) : (v, it)
+    else
+        ndiv2 = n >> 1
+        v1, it = mapreduce_pairwise(f, op, itr, init, S, ndiv2, it)
+        it === nothing && return (v1, nothing)
+        v2, it = mapreduce_pairwise(f, op, itr, init, S, n-ndiv2, it)
+        v = op(v1, v2)
+        return it === nothing ? (v, nothing) : (v, it)
     end
 end
 
-mapreduce(f, op, a::Number) = mapreduce_first(f, op, a)
+"""
+    mapreduce_kernel(f, op, A, init, inds) -> v
+    mapreduce_kernel(f, op, itr, init, ::Union{HasLength, HasShape}, n, [state]) -> (v, state)
+    mapreduce_kernel(f, op, itr, init, ::IteratorSize, n, valstate) -> (v, iterate(itr, state))
 
-_mapreduce(f, op, ::IndexCartesian, A::AbstractArrayOrBroadcasted) = mapfoldl(f, op, A)
+Perform the mapped reduction with `f` and `op` akin to a `mapfoldl` but permitting SIMD-like
+optimizations and reassociations. Corresponding to `mapreduce_pairwise`, this function uses
+three (and a half) different mechanisms for accessing elements and structuring its loop(s):
+
+* Indexing with `inds` into `A`
+    * (with a dedicated optimization for CartesianIndices)
+* Iterating exactly `n` elements from `itr` with a known length and at least `n` elements remaining
+    This method additionally takes (and returns as the second element in a tuple) the current iterator state
+* Iterating *up to* `n` elements from `itr`, but possibly stopping early
+    This method additionally takes (and returns as the second element in a tuple) the *next* `(val, state)`
+    tuple from the iterator or `nothing`
+"""
+function mapreduce_kernel(f, op, A, init, inds)
+    a1 = @inbounds A[inds[begin]]
+    v = _mapreduce_start(f, op, A, init, a1)
+    length(inds) == 1 && return v
+    @simd for i in inds[begin+1:end]
+        a = @inbounds A[i]
+        v = op(v, f(a))
+    end
+    return v
+end
+function mapreduce_kernel(f, op, itr, init, ::Union{HasLength, HasShape}, n, state...)
+    a1, s = iterate(itr, state...)
+    v = _mapreduce_start(f, op, itr, init, a1)
+    @simd for _ in 2:n
+        a, s = iterate(itr, s)
+        v = op(v, f(a))
+    end
+    return v, s
+end
+function mapreduce_kernel(f, op, itr, init,  ::IteratorSize, n, it)
+    a1, s = it
+    v = _mapreduce_start(f, op, itr, init, a1)
+    @simd for _ in 2:n
+        it = iterate(itr, s)
+        it === nothing && return v, nothing
+        a, s = it
+        v = op(v, f(a))
+    end
+    it = iterate(itr, s)
+    return it === nothing ? (v, nothing) : (v, it)
+end
 
 """
     reduce(op, itr; [init])
@@ -487,9 +624,41 @@ julia> reduce(*, Int[]; init=1)
 1
 ```
 """
-reduce(op, itr; kw...) = mapreduce(identity, op, itr; kw...)
+reduce(op, itr; init=_InitialValue()) = mapreduce(identity, op, itr; init)
 
-reduce(op, a::Number) = a  # Do we want this?
+"""
+    reduce(f, A::AbstractArray; dims=:, [init])
+
+Reduce 2-argument function `f` along dimensions of `A`. `dims` is a vector specifying the
+dimensions to reduce, and the keyword argument `init` is the initial value to use in the
+reductions. For `+`, `*`, `max` and `min` the `init` argument is optional.
+
+The associativity of the reduction is implementation-dependent; if you need a particular
+associativity, e.g. left-to-right, you should write your own loop or consider using
+[`foldl`](@ref) or [`foldr`](@ref). See documentation for [`reduce`](@ref).
+
+# Examples
+```jldoctest
+julia> a = reshape(Vector(1:16), (4,4))
+4×4 Matrix{Int64}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+
+julia> reduce(max, a, dims=2)
+4×1 Matrix{Int64}:
+ 13
+ 14
+ 15
+ 16
+
+julia> reduce(max, a, dims=1)
+1×4 Matrix{Int64}:
+ 4  8  12  16
+```
+"""
+reduce(op, A::AbstractArrayOrBroadcasted; init=_InitialValue(), dims=(:)) = mapreduce(identity, op, A; init, dims)
 
 ###### Specific reduction functions ######
 

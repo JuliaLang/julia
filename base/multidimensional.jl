@@ -1046,6 +1046,42 @@ end
     $(_generate_unsafe_setindex!_body(2))
 end
 
+# Reduction support for CartesianIndices
+halves(inds::CartesianIndices) = map(CartesianIndices∘tuple, _halves(inds.indices)...)
+mapreduce_kernel(f, op, A, init, ::CartesianIndices{0}) = init===_InitialValue() ? mapreduce_first(f, op, only(A)) : op(init, f(only(A)))
+mapreduce_kernel(f, op, A, init, inds::CartesianIndices{1}) = mapreduce_kernel(f, op, A, init, inds.indices[1])
+function mapreduce_kernel(f, op, A, init, inds::CartesianIndices)
+    i1, s = iterate(inds)
+    a1 = @inbounds A[i1]
+    v = _mapreduce_start(f, op, A, init, a1)
+    r = inds.indices[1]
+    if length(r) == 1
+        # SIMD over a one-element loop is less-than-helpful; just iterate
+        # over the rest of the indices without worrying about splitting out
+        # an inner SIMD loop
+        for i in Iterators.rest(inds, s)
+            ai = @inbounds A[i]
+            v = op(v, f(ai))
+        end
+    else
+        # Divide the loop into an outer and inner loop, and skip the first element
+        # in the first iteration of the outer loop
+        outer = CartesianIndices(tail(inds.indices))
+        o1, so = iterate(outer)
+        @simd for i in r[begin+1:end]
+            ai = @inbounds A[i, o1]
+            v = op(v, f(ai))
+        end
+        for o in Iterators.rest(outer, so)
+            @simd for i in r
+                ai = @inbounds A[i, o]
+                v = op(v, f(ai))
+            end
+        end
+    end
+    return v
+end
+
 diff(a::AbstractVector) = diff(a, dims=1)
 
 """
