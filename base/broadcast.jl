@@ -238,6 +238,7 @@ Base.similar(::Broadcasted{ArrayConflict}, ::Type{Bool}, dims) =
     similar(BitArray, dims)
 
 @inline Base.axes(bc::Broadcasted) = _axes(bc, bc.axes)
+@inline Base.axes(bc::Broadcasted, d) = get(axes(bc), d, OneTo(1))
 _axes(::Broadcasted, axes::Tuple) = axes
 @inline _axes(bc::Broadcasted, ::Nothing)  = combine_axes(bc.args...)
 _axes(bc::Broadcasted{<:AbstractArrayStyle{0}}, ::Nothing) = ()
@@ -279,6 +280,7 @@ function _maxndims(Args::Type{<:Tuple{T,Vararg}}) where {T}
 end
 
 Base.size(bc::Broadcasted) = map(length, axes(bc))
+Base.size(bc::Broadcasted, d) = length(axes(bc, d))
 Base.length(bc::Broadcasted) = prod(size(bc))
 
 function Base.iterate(bc::Broadcasted)
