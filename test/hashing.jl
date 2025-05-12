@@ -68,15 +68,16 @@ end
 @test hash(1//6) == hash(big(1)//big(6))
 @test hash(1//6) == hash(0x01//0x06)
 
-# issue #58386
-@testset "hash_integer on corner cases and small values" begin
+@testset "issue #58386" begin
     vals = vcat(
         Any[],
         [f(Int) for f in [typemin, typemax, zero, one, (-)∘one]],
         [f(UInt) for f in [typemin, typemax, zero, one, (-)∘one]],
-        [zero(BigInt), one(BigInt), -one(BigInt)]
+        [f(Int128) for f in [typemin, typemax, zero, one, (-)∘one]],
+        [f(UInt128) for f in [typemin, typemax, zero, one, (-)∘one]],
     )
     for a in vals
+        @test hash(a) == hash(big(a))
         @test (Base.hash_integer(a, Base.HASH_SEED) == hash(a))
     end
 end
