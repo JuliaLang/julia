@@ -68,6 +68,14 @@ end
 @test hash(1//6) == hash(big(1)//big(6))
 @test hash(1//6) == hash(0x01//0x06)
 
+# issue #58386
+@testset "hash_integer on small values" begin
+    vals = Integer[typemin(Int), typemax(Int), typemin(UInt), typemax(UInt), zero(Int), zero(UInt), one(Int), one(UInt)]
+    for a in vals
+        @test (Base.hash_integer(a, Base.HASH_SEED) == hash(a))
+    end
+end
+
 # hashing collections (e.g. issue #6870)
 vals = Any[
     [1,2,3,4], [1 3;2 4], Any[1,2,3,4], [1,3,2,4],
