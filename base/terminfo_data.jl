@@ -133,7 +133,9 @@ function getcustomalias(allterms::Vector{NTuple{3, String}}, type, short, descri
         "csl"   => ":clear_status_line",
         "Ms"    => ":set_host_clipboard",
         "Tc"    => ":truecolor",
-        "XF"    => ":xterm_focus")
+        "XF"    => ":xterm_focus",
+        "fd"    => ":focus_disable",
+        "fe"    => ":focus_enable")
     if startswith(short, 'k') && !occursin("keypad", description)
         return ":key_" * replace(lowercase(description), r"[^a-z]" => '_')
     end
@@ -157,11 +159,11 @@ end
 
 ## GENERATED CODE BEYOND THIS POINT ##
 
-# Terminfo Capabilities as of NCurses 6.4-20230311
-const NCURSES_VERSION = v"6.4.20230311"
+# Terminfo Capabilities as of NCurses 6.5-20251018
+const NCURSES_VERSION = v"6.5.20251018"
 
 """
-Ordered list of known terminal capability flag fields, as of NCurses 6.4-20230311.
+Ordered list of known terminal capability flag fields, as of NCurses 6.5-20251018.
 """
 const TERM_FLAGS = [
     TermCapability(:auto_left_margin,         :bw,    "cub1 wraps from column 0 to last column"),
@@ -211,7 +213,7 @@ const TERM_FLAGS = [
 ]
 
 """
-Ordered list of known terminal capability number fields, as of NCurses 6.4-20230311.
+Ordered list of known terminal capability number fields, as of NCurses 6.5-20251018.
 """
 const TERM_NUMBERS = [
     TermCapability(:columns,                 :cols,   "number of columns in a line"),
@@ -256,7 +258,7 @@ const TERM_NUMBERS = [
 ]
 
 """
-Ordered list of known terminal capability string fields, as of NCurses 6.4-20230311.
+Ordered list of known terminal capability string fields, as of NCurses 6.5-20251018.
 """
 const TERM_STRINGS = [
     TermCapability(:back_tab,                  :cbt,      "back tab (P)"),
@@ -347,8 +349,8 @@ const TERM_STRINGS = [
     TermCapability(:key_sr,                    :kri,      "scroll-backward key"),
     TermCapability(:key_stab,                  :khts,     "set-tab key"),
     TermCapability(:key_up,                    :kcuu1,    "up-arrow key"),
-    TermCapability(:keypad_local,              :rmkx,     "leave 'keyboard_transmit' mode"),
-    TermCapability(:keypad_xmit,               :smkx,     "enter 'keyboard_transmit' mode"),
+    TermCapability(:keypad_local,              :rmkx,     "leave keypad transmit mode"),
+    TermCapability(:keypad_xmit,               :smkx,     "enter keypad transmit mode"),
     TermCapability(:lab_f0,                    :lf0,      "label on function key f0 if not f0"),
     TermCapability(:lab_f1,                    :lf1,      "label on function key f1 if not f1"),
     TermCapability(:lab_f10,                   :lf10,     "label on function key f10 if not f10"),
@@ -530,7 +532,7 @@ const TERM_STRINGS = [
     TermCapability(:key_f63,                   :kf63,     "F63 function key"),
     TermCapability(:clr_bol,                   :el1,      "Clear to beginning of line"),
     TermCapability(:clear_margins,             :mgc,      "clear right and left soft margins"),
-    TermCapability(:set_left_margin,           :smgl,     "set left soft margin at current column."),
+    TermCapability(:set_left_margin,           :smgl,     "set left soft margin at current column (not in BSD termcap)"),
     TermCapability(:set_right_margin,          :smgr,     "set right soft margin at current column"),
     TermCapability(:label_format,              :fln,      "label format"),
     TermCapability(:set_clock,                 :sclk,     "set clock, #1 hrs #2 mins #3 secs"),
@@ -621,7 +623,7 @@ const TERM_STRINGS = [
     TermCapability(:set_a_foreground,          :setaf,    "Set foreground color to #1, using ANSI escape"),
     TermCapability(:set_a_background,          :setab,    "Set background color to #1, using ANSI escape"),
     TermCapability(:pkey_plab,                 :pfxl,     "Program function key #1 to type string #2 and show string #3"),
-    TermCapability(:device_type,               :devt,     "Indicate language/codeset support"),
+    TermCapability(:device_type,               :devt,     "Indicate language, codeset support"),
     TermCapability(:code_set_init,             :csin,     "Init sequence for multiple codesets"),
     TermCapability(:set0_des_seq,              :s0ds,     "Shift to codeset 0 (EUC set 0, ASCII)"),
     TermCapability(:set1_des_seq,              :s1ds,     "Shift to codeset 1"),
@@ -676,7 +678,7 @@ const TERM_STRINGS = [
 ]
 
 """
-Terminfo extensions that NCurses 6.4-20230311 is aware of.
+Terminfo extensions that NCurses 6.5-20251018 is aware of.
 """
 const TERM_USER = Dict{Tuple{DataType, Symbol}, Union{Tuple{Nothing, String}, Tuple{Symbol, String}}}(
     (Int,    :CO )    => (nothing, "number of indexed colors overlaying RGB space"),
@@ -731,6 +733,8 @@ const TERM_USER = Dict{Tuple{DataType, Symbol}, Union{Tuple{Nothing, String}, Tu
     (String, :RV)     => (nothing, "report terminal secondary device attributes"),
     (String, :XR)     => (nothing, "report terminal version as a free-format string."),
     (Bool,   :XF)     => (:xterm_focus, "terminal supports xterm focus in/out"),
+    (String, :fd)     => (:focus_disable, "disable xterm focus-events"),
+    (String, :fe)     => (:focus_enable, "enable xterm focus-events"),
     (String, :rv)     => (nothing, "response to RV, regular expression"),
     (String, :xr)     => (nothing, "response to XR, regular expression"),
     (String, :csl)    => (:clear_status_line, "clear status line"),
