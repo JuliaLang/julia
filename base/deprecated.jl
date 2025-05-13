@@ -612,6 +612,8 @@ deprecate(Base, :_mapreduce_dim)
 @deprecate_binding _mapreducedim! Base.mapreduce! false
 @deprecate_binding reducedim! Base.reduce! false
 @deprecate mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer, blksize::Int=pairwise_blocksize(f, op)) Base.mapreduce_pairwise(f, op, A, _InitialValue(), ifirst:ilast) false
+@deprecate _mapreduce(f, op, A) Base.mapreduce_pairwise(f, op, A, Base._InitialValue()) false
+@deprecate _mapreduce(f, op, _, A) Base.mapreduce_pairwise(f, op, A, Base._InitialValue()) false
 
 # These operators are new in 1.14, but these fallback methods are added for
 # compatibility while packages adjust to defining both operators, to allow
