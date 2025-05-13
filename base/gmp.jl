@@ -856,7 +856,7 @@ if Limb === UInt64 === UInt
             s == 0 && return hash_integer(0, h)
             p = convert(Ptr{UInt64}, n.d)
             b = unsafe_load(p)
-            h ⊻= hash_finalizer(ifelse(s < 0, -b, b) ⊻ h)
+            h = hash(ifelse(s < 0, -b, b), h)
             for k = 2:abs(s)
                 h ⊻= hash_finalizer(unsafe_load(p, k) ⊻ h)
             end

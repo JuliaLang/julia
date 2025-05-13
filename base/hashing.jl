@@ -69,8 +69,9 @@ hash(x::UInt64, h::UInt) = hash_uint64(hash_mix_linear(x, h))
 hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
 hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
+# this should coincide with the hash of UInt64 if `n` fits in UInt64
 function hash_integer(n::Integer, h::UInt)
-    h ⊻= hash_uint((n % UInt) ⊻ h)
+    h = hash((n % UInt), h)
     n = abs(n)
     n >>>= sizeof(UInt) << 3
     while n != 0
