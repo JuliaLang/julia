@@ -311,15 +311,16 @@ end
 ## forking
 
 """
-    Random.fork(rng::AbstractRNG, [dims...])::typeof(rng)
+    Random.fork(rng::AbstractRNG)::typeof(rng)
+    Random.fork(rng::AbstractRNG, dims...)::Array{typeof(rng)}
 
-Create deterministically a new independent RNG object from an existing one, of the same type.
+Return a new independent RNG derived from `rng`, of the same type.
 When `dims` is specified (as integers or a tuple of integers),
-an array of such independent RNGs is created.
+return an array of independent RNGs.
 
-This is the recommended way to initialize fresh RNG instances when reproducibility might be
-required, and can be useful in particular in multi-threaded contexts, where race conditions
-must be avoided. For example:
+This is the recommended method to initialize reproducible RNG instances,
+especially in multi-threaded contexts, where race conditions must be avoided.
+For example:
 ```julia
 function dotask(rng::Xoshiro)
     num_subtasks = 10
@@ -331,29 +332,28 @@ function dotask(rng::Xoshiro)
     result
 end
 ```
-Note that this functions generally mutates its `rng` argument, so calling it on the same `rng`
-must not be done concurrently from multiple threads.
-
-Currently, a method is only implemented for `Xoshiro`.
+Note that this function generally mutates its `rng` argument, so concurrent
+calls on the same `rng` from multiple threads are unsafe.
 
 !!! note
-    `Random.fork(::Xoshiro)` uses the same algorithm as when the task-local RNG
+    Currently, this function is only implemented for `Xoshiro`, where it uses
+    the same algorithm as when the task-local RNG
     of a new task is created from the task-local RNG of the parent task.
 
 !!! compat "Julia 1.13"
-    This function was introduced in Julia 1.13.
+    This function requires Julia 1.13 or later.
 
 # Examples
 ```jldoctest
 julia> x = Xoshiro(0)
 Xoshiro(0xdb2fa90498613fdf, 0x48d73dc42d195740, 0x8c49bc52dc8a77ea, 0x1911b814c02405e8, 0x22a21880af5dc689)
 
-julia> [x, fork(x)] # x is mutated
+julia> [x, Random.fork(x)] # x is mutated
 2-element Vector{Xoshiro}:
  Xoshiro(0xdb2fa90498613fdf, 0x48d73dc42d195740, 0x8c49bc52dc8a77ea, 0x1911b814c02405e8, 0x26b589433d8074be)
  Xoshiro(0x545f53b997598dfb, 0xac80f92d91bb35a5, 0xb6eb3382e8c409ca, 0xa9aa6968fbdd5e83, 0x26b589433d8074be)
 
-julia> fork(x, 3)
+julia> Random.fork(x, 3)
 3-element Vector{Xoshiro}:
  Xoshiro(0xfc86733bafa6df6d, 0x5ff051ecb5937fcf, 0x935c4e55a82ca686, 0xa57b44768cdb84e9, 0x845f4ebfc53d5497)
  Xoshiro(0x9c49327a59542654, 0x7c2f821b7716e6b7, 0x586a3fe58fed92f7, 0x28bbf526c1aca281, 0x425e2dc6f55934e4)

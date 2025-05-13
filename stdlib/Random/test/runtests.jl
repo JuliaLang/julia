@@ -1301,6 +1301,8 @@ end
 end
 
 @testset "fork" begin
+    # fork(::Xoshiro) uses the same algorithm as TaskLocalRNG() upon task spawning,
+    # so we test here that they behave the same, but this could change
     xx = copy(TaskLocalRNG())
     x0 = copy(xx)
     x1 = Random.fork(xx)
@@ -1308,6 +1310,9 @@ end
     @test x1 isa Xoshiro && x2 isa Xoshiro
     @test x1 == x2 # currently, equality involves all 5 UInt64 words of the state
     @test xx == TaskLocalRNG()
+    @test xx != x0 # the source is mutated in fork
+    @test x1 != xx
+    @test x1 != x0
 
     # fork is deterministic
     copy!(xx, x0)
@@ -1340,19 +1345,19 @@ end
     @test xx == x1
 
     # arrays
-    y2 = fork(xx, 2)
+    y2 = Random.fork(xx, 2)
     @test y2 isa Vector{Xoshiro} && size(y2) == (2,)
-    y34 = fork(xx, 3, 0x4)
+    y34 = Random.fork(xx, 3, 0x4)
     @test y34 isa Matrix{Xoshiro} && size(y34) == (3, 4)
-    y123 = fork(xx, (1, 2, 3))
+    y123 = Random.fork(xx, (1, 2, 3))
     @test y123 isa Array{Xoshiro, 3} && size(y123) == (1, 2, 3)
-    y0 = fork(xx, ())
+    y0 = Random.fork(xx, ())
     @test y0 isa Array{Xoshiro, 0} && size(y0) == ()
     @test allunique([y2..., y34..., y123..., y0...])
 
     # fork is currently unsupported for other RNGs
     for rng = (RandomDevice(), MersenneTwister(0), TaskLocalRNG(), SeedHasher(0))
-        @test_throws MethodError fork(rng)
-        @test_throws MethodError fork(rng, (2, 3))
+        @test_throws MethodError Random.fork(rng)
+        @test_throws MethodError Random.fork(rng, (2, 3))
     end
 end
