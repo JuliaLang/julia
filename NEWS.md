@@ -236,9 +236,11 @@ New library features
 Standard library changes
 ------------------------
 
-* Empty dimensional reductions (e.g., `reduce` and `mapreduce` with the `dims` keyword
+* Empty dimensional reductions (`reduce`, `mapreduce`, `sum`, `minimum`, etc., with the `dims` keyword
   selecting one or more dimensions) now behave like their whole-array (`dims=:`) counterparts,
-  only returning values in unambiguous cases and erroring otherwise.
+  only returning values in unambiguous cases and erroring otherwise.  For example,
+  `minimum([], dims=2)` is now an error; it would previously return an empty array.
+  This can be addressed by specifying an `init` keyword argument as the error message directs ([#58418]).
 * `codepoint(c)` now succeeds for overlong encodings.  `Base.ismalformed`, `Base.isoverlong`, and
   `Base.show_invalid` are now `public` and documented (but not exported) ([#55152]).
 * `isspace` now returns `true` for U+2028 (LINE SEPARATOR) and U+2029 (PARAGRAPH SEPARATOR),
