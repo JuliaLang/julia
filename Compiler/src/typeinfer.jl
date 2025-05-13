@@ -362,7 +362,7 @@ function adjust_effects(ipo_effects::Effects, def::Method, world::UInt)
     valid_worlds = WorldRange(0, typemax(UInt))
     if is_effect_overridden(override, :consistent)
         # See note on `typemax(Int)` instead of `deleted_world` in adjust_effects!
-        override_valid_worlds = WorldRange(def.primary_world, typemax(Int))
+        override_valid_worlds = WorldRange(def.primary_world, typemax(UInt))
         if world in override_valid_worlds
             ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
             valid_worlds = override_valid_worlds
