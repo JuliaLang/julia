@@ -1134,26 +1134,42 @@ end
 end
 
 @testset "nth" begin
+
     Z = Array{Int,0}(undef)
     Z[] = 17
-    itrs = Any[collect(1:1000), 10:6:1000, "∀ϵ>0", (1, 3, 5, 10, 78), reshape(1:30, (5, 6)),
-        Z, 3, true, 'x', 4=>5, view(Z), view(reshape(1:30, (5, 6)), 2:4, 2:6),
-        (x^2 for x in 1:10), Iterators.Filter(isodd, 1:10), Iterators.flatten((1:10, 50:60)),
-        pairs(50:60), zip(1:10, 21:30, 51:60), Iterators.product(1:3, 10:12),
-        Iterators.repeated(3.14159, 5), (a=2, b=3, c=5, d=7, e=11), Iterators.cycle(collect(1:100)),
-        Iterators.cycle([1, 2, 3, 4, 5], 5)]
-    ns = Any[
-        234, 123, 3, 2, 21, 1, 1, 1, 1, 1, 1, 10, 9, 3, 15, 7, 6, 3, 4, 4, 99999, 25
-    ]
-    expected = Any[
-        234, 742, '>', 3, 21, 17, 3, true, 'x', 4, 17, 22, 81, 5, 54, (7=>56), (6, 26, 56), (3, 10), 3.14159, 7, 99, 5
-    ]
-    @test length(itrs) == length(ns) == length(expected)
+    it_result_pairs = Dict(
+        (Z, 1) => 17,
+        (collect(1:1000), 234) => 234,
+        (10:6:1000, 123) => 10 + 6 * 122,
+        ("∀ϵ>0", 3) => '>',
+        ((1, 3, 5, 10, 78), 2) => 3,
+        (reshape(1:30, (5, 6)), 21) => 21,
+        (3, 1) => 3,
+        (true, 1) => true,
+        ('x', 1) => 'x',
+        (4 => 5, 2) => 5,
+        (view(Z), 1) => 17,
+        (view(reshape(1:30, (5, 6)), 2:4, 2:6), 10) => 22,
+        ((x^2 for x in 1:10), 9) => 81,
+        (Iterators.Filter(isodd, 1:10), 3) => 5,
+        (Iterators.flatten((1:10, 50:60)), 15) => 54,
+        (pairs(50:60), 7) => 7 => 56,
+        (zip(1:10, 21:30, 51:60), 6) => (6, 26, 56),
+        (Iterators.product(1:3, 10:12), 3) => (3, 10),
+        (Iterators.repeated(3.14159, 5), 4) => 3.14159,
+        ((a=2, b=3, c=5, d=7, e=11), 4) => 7,
+        (Iterators.cycle(collect(1:100)), 9999) => 99,
+        (Iterators.cycle([1, 2, 3, 4, 5], 5), 25) => 5
+        (Iterators.cycle("String", 10), 16) => 'i',
+        (Iterators.cycle((), 1000)) => ()
+    )
+
     testset = zip(itrs, ns, expected)
-    @testset "iter: $IT" for (IT, n, exp) in testset
-        @test exp == nth(IT, n)
+    @testset "iter: $IT" for (IT, n) in keys(it_result_pairs)
+        @test it_result_pairs[(IT, n)] == nth(IT, n)
+
         IT isa Iterators.Cycle && continue # cycles are infinite so never OOB
-        @test_throws Union{ArgumentError,BoundsError} nth(IT, 999999999)
+        @test_throws Union{ArgumentError} nth(IT, 999999999)
     end
 end
 
