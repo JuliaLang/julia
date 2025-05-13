@@ -923,11 +923,6 @@ end
 end
 @propagate_inbounds getindex(P::PairsVector, i::CartesianIndex{1}) = P[i.I[1]]
 @propagate_inbounds getindex(P::PairsArray{<:Any,N}, I::Vararg{Int, N}) where {N} = P[CartesianIndex(I)]
-# Defer a few functions to the parent array
-similar(P::PairsArray, ::Type{T}, dims::Tuple{Union{Int, AbstractUnitRange}, Vararg{Union{Int, AbstractUnitRange}}}) where {T} = similar(P.array, T, dims)
-similar(P::PairsArray, ::Type{T}, dims::Tuple{Union{Int, Base.OneTo}, Vararg{Union{Int, Base.OneTo}}}) where {T} = similar(P.array, T, dims)
-similar(P::PairsArray, ::Type{T}, dims::Tuple{Int, Vararg{Int}}) where {T} = similar(P.array, T, dims)
-similar(P::PairsArray, ::Type{T}, dims::Tuple{}) where {T} = similar(P.array, T, dims)
 mapreduce_similar(P::PairsArray, ::Type{T}, dims) where {T} = mapreduce_similar(P.array, T, dims)
 
 # Use an ad-hoc specialized StructArray to allow in-place AoS->SoA transform
