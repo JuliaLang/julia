@@ -1048,9 +1048,9 @@ end
 
 # Reduction support for CartesianIndices
 halves(inds::CartesianIndices) = map(CartesianIndices∘tuple, _halves(inds.indices)...)
-mapreduce_kernel(f, op, A, init, ::CartesianIndices{0}) = init===_InitialValue() ? mapreduce_first(f, op, only(A)) : op(init, f(only(A)))
-mapreduce_kernel(f, op, A, init, inds::CartesianIndices{1}) = mapreduce_kernel(f, op, A, init, inds.indices[1])
-function mapreduce_kernel(f, op, A, init, inds::CartesianIndices)
+function mapreduce_kernel(f, op, A, init, inds::CartesianIndices{N}) where {N}
+    N == 0 && return init===_InitialValue() ? mapreduce_first(f, op, only(A)) : op(init, f(only(A)))
+    N == 1 && return mapreduce_kernel(f, op, A, init, inds.indices[1])
     i1, s = iterate(inds)
     a1 = @inbounds A[i1]
     v = _mapreduce_start(f, op, A, init, a1)
