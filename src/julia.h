@@ -232,15 +232,6 @@ JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_wait_for_compiled_addr;
 
-typedef struct _jl_line_info_node_t {
-    JL_DATA_TYPE
-    struct _jl_module_t *module;
-    jl_value_t *method; // may contain a jl_symbol, jl_method_t, or jl_method_instance_t
-    jl_sym_t *file;
-    int32_t line;
-    int32_t inlined_at;
-} jl_line_info_node_t;
-
 struct jl_codeloc_t {
     int32_t line;
     int32_t to;
