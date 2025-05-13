@@ -1,9 +1,9 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 # Updating this listing is fairly easy, assuming existence of a unix system,
-# posix shell, and `awk`. Just update the version string in the commented out
-# `NCURSES_VERSION` variable, and run this file. This works because this file is
-# a bit of a quine.
+# posix shell, and `awk`. Just call this file with `sh`, and it will be
+# updated to the latest terminfo snapshot. This works because the file is a
+# bit of a quine.
 
 #=
 awk '/^#=run/{flag=1;next}/=#/{flag=0}flag{gsub(/__FILE__/,"\"'"$0"'\"");print}' "$0" | \
@@ -41,9 +41,9 @@ version_info = IOBuffer()
 standard_caps = IOBuffer()
 user_caps = IOBuffer()
 
-Downloads.download("https://raw.githubusercontent.com/mirror/ncurses/master/VERSION", version_info)
-Downloads.download("https://raw.githubusercontent.com/mirror/ncurses/master/include/Caps", standard_caps)
-Downloads.download("https://raw.githubusercontent.com/mirror/ncurses/master/include/Caps-ncurses", user_caps)
+Downloads.download("https://raw.githubusercontent.com/ThomasDickey/ncurses-snapshots/refs/heads/master/VERSION", version_info)
+Downloads.download("https://raw.githubusercontent.com/ThomasDickey/ncurses-snapshots/refs/heads/master/include/Caps", standard_caps)
+Downloads.download("https://raw.githubusercontent.com/ThomasDickey/ncurses-snapshots/refs/heads/master/include/Caps-ncurses", user_caps)
 
 const TERM_FLAGS   = NTuple{3, String}[]
 const TERM_NUMBERS = NTuple{3, String}[]
@@ -67,6 +67,7 @@ for line in eachline(seekstart(standard_caps))
         @warn "Unrecognised capability type: $type"
         continue
     end
+    description = replace(description, r"\\f[BPRI]?" => "")
     push!(caplist, (name, shortcode, description))
 end
 
