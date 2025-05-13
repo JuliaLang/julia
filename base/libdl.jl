@@ -222,11 +222,40 @@ find_library(libname::Union{Symbol,AbstractString}, extrapaths=String[]) =
 
 Given a library `handle` from `dlopen`, return the full path.
 """
-function dlpath(handle::Ptr{Cvoid})
-    p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Cvoid},), handle)
-    s = unsafe_string(p)
-    Sys.iswindows() && Libc.free(p)
-    return s
+function dlpath end
+
+# Use caching MacOS because it gets really slow when lots of libs are loaded (avoids jl_pathname_for_handle)
+@static if Sys.isapple()
+    const dlpath_cache_lock = Base.ReentrantLock()
+    const dlpath_cache = Dict{Ptr{Cvoid},String}()
+    function dlpath(handle::Ptr{Cvoid})
+        @lock dlpath_cache_lock begin
+            path = get(dlpath_cache, handle, nothing)
+            if path !== nothing
+                return path
+            else
+                num_images = ccall(:_dyld_image_count, Cint, ())
+                # start at 1 instead of 0 to skip self
+                for i in 1:num_images-1 # 0-based
+                    name = unsafe_string(ccall(:_dyld_get_image_name, Cstring, (UInt32,), i))
+                    h = dlopen(name, RTLD_NOLOAD; throw_error=false)
+                    dlpath_cache[h] = name
+                    dlclose(h)
+                    if h == handle
+                        return name
+                    end
+                end
+            end
+        end
+        return nothing
+    end
+else
+    function dlpath(handle::Ptr{Cvoid})
+        p = ccall(:jl_pathname_for_handle, Cstring, (Ptr{Cvoid},), handle)
+        s = unsafe_string(p)
+        Sys.iswindows() && Libc.free(p)
+        return s
+    end
 end
 
 """
