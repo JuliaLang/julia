@@ -15,7 +15,9 @@ using Base.GMP.MPZ
 using Base.GMP: Limb
 using SHA: SHA, SHA2_256_CTX, SHA2_512_CTX, SHA_CTX
 
-using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
+using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing,
+    _throw_argerror
+
 import Base: copymutable, copy, copy!, ==, hash, convert,
              rand, randn, show
 

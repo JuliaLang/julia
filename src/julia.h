@@ -232,15 +232,6 @@ JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_wait_for_compiled_addr;
 
-typedef struct _jl_line_info_node_t {
-    JL_DATA_TYPE
-    struct _jl_module_t *module;
-    jl_value_t *method; // may contain a jl_symbol, jl_method_t, or jl_method_instance_t
-    jl_sym_t *file;
-    int32_t line;
-    int32_t inlined_at;
-} jl_line_info_node_t;
-
 struct jl_codeloc_t {
     int32_t line;
     int32_t to;
@@ -1617,7 +1608,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->name->mutabl)
 #define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_immutable(t)   (!((jl_datatype_t*)t)->name->mutabl)
-#define jl_is_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
+#define jl_may_be_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_uniontype(v)   jl_typetagis(v,jl_uniontype_tag<<4)
 #define jl_is_typevar(v)     jl_typetagis(v,jl_tvar_tag<<4)
 #define jl_is_unionall(v)    jl_typetagis(v,jl_unionall_tag<<4)
