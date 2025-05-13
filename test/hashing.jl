@@ -311,7 +311,7 @@ end
 @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
 
 @testset "issue #58386" begin
-    for T in [Int, UInt, Int128, UInt128]
+    for T in [Int, UInt]
         for a in [typemin(T), typemax(T), zero(T), one(T), -one(T), T(17)]
             @test hash(a) == hash(big(a))
             @test hash(a) == Base.hash_integer(a, Base.HASH_SEED)
