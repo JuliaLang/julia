@@ -9,25 +9,37 @@ if !Sys.iswindows()
     using OpenSSL_jll
 end
 
-const PATH_list = String[]
-const LIBPATH_list = String[]
-
 export libssh2
 
 # These get calculated in __init__()
 const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
+const LIBPATH_list = String[]
 artifact_dir::String = ""
-libssh2_handle::Ptr{Cvoid} = C_NULL
 libssh2_path::String = ""
 
+
+_libssh2_dependencies = LazyLibrary[]
 if Sys.iswindows()
-    const libssh2 = "libssh2.dll"
+    const _libssh2_path = BundledLazyLibraryPath("libssh2.dll")
 elseif Sys.isapple()
-    const libssh2 = "@rpath/libssh2.1.dylib"
+    const _libssh2_path = BundledLazyLibraryPath("libssh2.1.dylib")
+    push!(_libssh2_dependencies, libcrypto)
 else
-    const libssh2 = "libssh2.so.1"
+    const _libssh2_path = BundledLazyLibraryPath("libssh2.so.1")
+    push!(_libssh2_dependencies, libcrypto)
 end
+
+const libssh2 = LazyLibrary(_libssh2_path, dependencies=_libssh2_dependencies)
+
+function eager_mode()
+    @static if !Sys.iswindows()
+        OpenSSL_jll.eager_mode()
+    end
+    dlopen(libssh2)
+end
+is_available() = true
 
 function __init__()
     global libssh2_handle = dlopen(libssh2)
@@ -36,15 +48,5 @@ function __init__()
     LIBPATH[] = dirname(libssh2_path)
     push!(LIBPATH_list, LIBPATH[])
 end
-
-
-# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
-# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
-# there isn't one.  It instead returns the overall Julia prefix.
-is_available() = true
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_libssh2_path() = libssh2_path
 
 end  # module LibSSH2_jll
