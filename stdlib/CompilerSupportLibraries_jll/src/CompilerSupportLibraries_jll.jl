@@ -64,13 +64,30 @@ if @isdefined(_libatomic_path)
     const libatomic = LazyLibrary(_libatomic_path)
 end
 const libgcc_s = LazyLibrary(_libgcc_s_path)
-libgfortran_deps = [libgcc_s]
-if @isdefined _libquadmath_path
-    const libquadmath = LazyLibrary(_libquadmath_path)
-    push!(libgfortran_deps, libquadmath)
+
+@static if Sys.isfreebsd()
+    _libgfortran_deps = LazyLibrary[]
+else
+    _libgfortran_deps = [libgcc_s]
+    if @isdefined _libquadmath_path
+        const libquadmath = LazyLibrary(_libquadmath_path)
+        push!(_libgfortran_deps, libquadmath)
+    end
 end
-const libgfortran = LazyLibrary(_libgfortran_path, dependencies=libgfortran_deps)
-const libstdcxx = LazyLibrary(_libstdcxx_path, dependencies=[libgcc_s])
+
+const libgfortran = LazyLibrary(_libgfortran_path, dependencies=_libgfortran_deps)
+
+if Sys.isfreebsd()
+    _libstdcxx_dependencies = LazyLibrary[]
+elseif Sys.isapple()
+    _libstdcxx_dependencies = LazyLibrary[libgcc_s]
+elseif Sys.islinux()
+    _libstdcxx_dependencies = LazyLibrary[libgcc_s]
+else
+    _libstdcxx_dependencies = LazyLibrary[libgcc_s, libgfortran]
+end
+const libstdcxx = LazyLibrary(_libstdcxx_path, dependencies=_libstdcxx_dependencies)
+
 const libgomp = LazyLibrary(_libgomp_path)
 
 # Some installations (such as those from-source) may not have `libssp`
@@ -114,6 +131,11 @@ function __init__()
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libgcc_s_path)
     push!(LIBPATH_list, LIBPATH[])
+end
+
+if Base.generating_output()
+    precompile(eager_mode, ())
+    precompile(is_available, ())
 end
 
 end  # module CompilerSupportLibraries_jll
