@@ -2,7 +2,7 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl
 baremodule OpenBLAS_jll
-using Base, Libdl, Base.BinaryPlatforms
+using Base, Libdl
 using CompilerSupportLibraries_jll
 
 export libopenblas
