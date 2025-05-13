@@ -1339,7 +1339,8 @@ end
 function simple_hash(str)
     ind = 1
     h = UInt64(0)
-    while ind <= length(str)
+    L = length(str)
+    while ind <= L
         h = simple_hash(str[ind], h)
         ind = nextind(str, ind)
     end
