@@ -308,4 +308,10 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
     @test hash(5//3) == hash(big(5)//3)
 end
 
-@test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
+@testset "concrete eval type hash" begin
+    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
+
+    f(h...) = hash(Char, h...);
+    src = only(code_typed(f, Tuple{UInt}))[1]
+    @test count(stmt -> Meta.isexpr(stmt, :foreigncall), src.code) == 0
+end
