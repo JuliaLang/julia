@@ -749,7 +749,7 @@ end
 
 # record the backedges
 function store_backedges(caller::CodeInstance, edges::SimpleVector)
-    isa(caller.def.def, Method) || return # don't add backedges to toplevel method instance
+    isa(get_ci_mi(caller).def, Method) || return # don't add backedges to toplevel method instance
 
     backedges = ForwardToBackedgeIterator(edges)
     for (i, (invokesig, item)) in enumerate(backedges)
