@@ -345,11 +345,11 @@ end
 
 const CommutativeOps = Union{typeof(+),typeof(Base.add_sum),typeof(min),typeof(max),typeof(Base._extrema_rf),typeof(|),typeof(&)}
 
-function Base.mapreduce(f, op::CommutativeOps, A::PermutedDimsArray; init=Base._InitialValue(), dims=(:))
-    mapreduce(f, op, parent(A); init, dims)
+function Base.mapreducedim(f, op::CommutativeOps, A::PermutedDimsArray, init, dims::Colon)
+    Base.mapreducedim(f, op, parent(A), init, dims)
 end
-function Base.mapreduce(f::typeof(identity), op::Union{typeof(Base.mul_prod),typeof(*)}, A::PermutedDimsArray{<:Union{Real,Complex}}; init=_InitialValue(), dims=(:))
-    mapreduce(f, op, parent(A); init, dims)
+function Base.mapreducedim(f::typeof(identity), op::Union{typeof(Base.mul_prod),typeof(*)}, A::PermutedDimsArray{<:Union{Real,Complex}}, init, dims::Colon)
+    Base.mapreducedim(f, op, parent(A), init, dims)
 end
 
 function Base.mapreduce!(f, op::CommutativeOps, B::AbstractArray{T,N}, A::PermutedDimsArray{S,N,perm,iperm}; init=Base._InitialValue()) where {T,S,N,perm,iperm}
