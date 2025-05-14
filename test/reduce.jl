@@ -586,7 +586,7 @@ struct NonFunctionIsZero end
 @test count(NonFunctionIsZero(), [0]) == 1
 @test count(NonFunctionIsZero(), [1]) == 0
 
-@test count(Iterators.repeated(true, 3), init=0x00) === UInt(3)
+@test count(Iterators.repeated(true, 3), init=UInt(0)) === UInt(3)
 @test count(!=(2), Iterators.take(1:7, 3), init=Int32(0)) === 2
 @test count(identity, [true, false], init=Int8(0)) === 1
 @test count(!, [true false; false true], dims=:, init=Int16(0)) === 2
