@@ -402,7 +402,7 @@ reduce_first(::typeof(+), x::Bool) = Int(x)
 reduce_first(::typeof(*), x::AbstractChar) = string(x)
 
 reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
-reduce_first(::typeof(add_sum), x::Union{Bool,BitSignedSmall})   = Int(x)
+reduce_first(::typeof(add_sum), x::BitSignedSmall)   = Int(x)
 reduce_first(::typeof(add_sum), x::BitUnsignedSmall) = UInt(x)
 reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
 reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
