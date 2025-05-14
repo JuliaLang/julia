@@ -394,6 +394,7 @@ additional methods should only be defined for cases where `op` gives a result wi
 different types than its inputs.
 """
 reduce_first(op, x) = x
+reduce_first(::typeof(+), x::Bool) = Int(x)
 reduce_first(::typeof(*), x::AbstractChar) = string(x)
 
 reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
