@@ -12,3 +12,4 @@ CODEOWNERS @JuliaLang/github-actions
 /base/binaryplatforms.jl @giordano
 /src/julia_gcext.h @fingolfin
 /test/gcext/gcext.c @fingolfin
+
