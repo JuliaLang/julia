@@ -14,11 +14,8 @@ The reduction operator used in `sum`. The main difference from [`+`](@ref) is th
 integers are promoted to `Int`/`UInt`.
 """
 add_sum(x, y) = x + y
-add_sum(x::Integer, y::Integer)::Integer = add_sum_integer(x, y)
-add_sum_integer(x::Bool, y::Bool) = Int(x) + Int(y)
-add_sum_integer(x::Union{Bool,BitSignedSmall}, y::Union{Bool,BitSignedSmall}) = Int(x) + Int(y)
-add_sum_integer(x::Union{Bool,BitUnsignedSmall}, y::Union{Bool,BitUnsignedSmall}) = UInt(x) + UInt(y)
-add_sum_integer(x, y) = x+y
+add_sum(x::Union{Bool,BitIntegerSmall}, y::Union{Bool,BitIntegerSmall}) = Int(x) + Int(y)
+add_sum(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) + UInt(y)
 add_sum(x::Real, y::Real)::Real = x + y
 
 """
@@ -1076,7 +1073,7 @@ julia> count(i->(4<=i<=6), [2,3,4,5,6])
 julia> count([true, false, true, true])
 3
 
-julia> count(>(3), 1:7, init=0x00)
+julia> count(>(3), 1:7, init=UInt(0))
 0x0000000000000004
 ```
 """
