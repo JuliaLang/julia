@@ -1,6 +1,22 @@
 name: Assign Committer
 on:
-  pull_request:
+  # Important security note: Do NOT use `actions/checkout`
+  # or any other method for checking out the pull request's source code.
+  # This is because the pull request's source code is untrusted, but the
+  # GITHUB_TOKEN has write permissions (because of the `on: pull_request_target` event).
+  #
+  # Quoting from the GitHub Docs:
+  # > For workflows that are triggered by the pull_request_target event, the GITHUB_TOKEN is granted
+  # > read/write repository permission unless the permissions key is specified and the workflow can access secrets,
+  # > even when it is triggered from a fork.
+  # >
+  # > Although the workflow runs in the context of the base of the pull request,
+  # > you should make sure that you do not check out, build, or run untrusted code from the pull request with this event.
+  #
+  # Source: https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#pull_request_target
+  #
+  # See also: https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
+  pull_request_target:
     types: [opened, reopened, ready_for_review]
 
 permissions:
@@ -11,6 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.pull_request.draft != true }}
     steps:
+      # Important security note: As discussed above, do NOT use `actions/checkout`
+      # or any other method for checking out the pull request's source code.
+      # This is because the pull request's source code is untrusted, but the
+      # GITHUB_TOKEN has write permissions (because of the `on: pull_request_target` event).
       - name: Add Assignee
         # We pin all third-party actions to a full length commit SHA
         # https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#using-third-party-actions
