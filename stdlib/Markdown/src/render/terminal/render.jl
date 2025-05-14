@@ -117,9 +117,12 @@ end
 
 function term(io::IO, md::Code, columns)
     code = if md.language == "julia"
-        highlight(md.code)
+        hl = AnnotatedString(md.code)
+        StyledStrings.face!(hl, :markdown_code)
+        highlight!(hl)
     elseif md.language == "julia-repl" || Base.startswith(md.language, "jldoctest")
         hl = AnnotatedString(md.code)
+        StyledStrings.face!(hl, :markdown_code)
         for (; match) in eachmatch(r"(?:^|\n)julia>", hl)
             StyledStrings.face!(match, :markdown_julia_prompt)
             afterprompt = match.offset + ncodeunits(match) + 1
