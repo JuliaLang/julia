@@ -2255,6 +2255,77 @@ end
 
 typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T = typed_hvncat(T, rows_to_dimshape(rows), true, as...)
 
+# A fast version of hvcat for the case where we have static size information of xs
+# and the number of rows is known at compile time -- we can eliminate all the runtime
+# size checks. For cases that static size information is not beneficial, we fall back to
+# the general hvcat/typed_hvcat methods.
+@generated function typed_hvcat_static(::Type{T}, ::Val{rows}, xs::Number...) where {T<:Number, rows}
+    nr = length(rows)
+    nc = rows[1]
+    for i = 2:nr
+        if nc != rows[i]
+            return quote
+                msg = "row " * string($i) * " has mismatched number of columns (expected " * string($nc) * ", got " * string($rows[$i]) * ")"
+                throw(DimensionMismatch(msg))
+            end
+        end
+    end
+
+    len = length(xs)
+    if nr*nc != len
+        return quote
+            msg = "argument count " * string($len) * " does not match specified shape " * string(($nr, $nc))
+            throw(ArgumentError(msg))
+        end
+    end
+
+    if len <= 16
+        # For small array construction, manually unroll the loop for better performance
+        assigns = Expr[]
+        k = 1
+        for i in 1:nr
+            for j in 1:nc
+                ex = :(a[$i, $j] = xs[$k])
+                push!(assigns, ex)
+                k += 1
+            end
+        end
+
+        return quote
+            a = Matrix{$T}(undef, $nr, $nc)
+            $(assigns...)
+            return a
+        end
+    end
+
+    quote
+        a = Matrix{$T}(undef, $nr, $nc)
+        k = 1
+        @inbounds for i in 1:$nr
+            for j in 1:$nc
+                a[i,j] = xs[k]
+                k += 1
+            end
+        end
+        a
+    end
+end
+@inline function hvcat_static(::Val{rows}, x::T, xs::Vararg{T}) where {rows, T<:Number}
+    typed_hvcat_static(T, Val{rows}(), x, xs...)
+end
+@inline function hvcat_static(::Val{rows}, xs::Number...) where {rows}
+    typed_hvcat_static(promote_typeof(xs...), Val{rows}(), xs...)
+end
+@inline function typed_hvcat_static(::Type{T}, ::Val{rows}, xs...) where {T, rows}
+    # fallback to the general case
+    typed_hvcat(T, rows, xs...)
+end
+@inline function hvcat_static(::Val{rows}, xs...) where {rows}
+    # fallback to the general case
+    hvcat(rows, xs...)
+end
+
+
 ## N-dimensional concatenation ##
 
 """
@@ -2748,6 +2819,94 @@ end
         Ai += increment
     end
     Ai
+end
+
+# Static version of hvncat for better performance with scalar numbers
+# See the comments for hvcat_static for more details.
+@generated function typed_hvncat_static(::Type{T}, ::Val{dims}, ::Val{row_first}, xs::Number...) where {T<:Number, dims, row_first}
+    for d in dims
+        if d <= 0
+            return quote
+                throw(ArgumentError("`dims` argument must contain positive integers"))
+            end
+        end
+    end
+
+    N = length(dims)
+    lengtha = prod(dims)
+    lengthx = length(xs)
+    if lengtha != lengthx
+        return quote
+            msg = "argument count does not match specified shape (expected " * string($lengtha) * ", got " * string($lengthx) * ")"
+            throw(ArgumentError(msg))
+        end
+    end
+
+    if lengthx <= 16
+        # For small array construction, manually unroll the loop
+        assigns = Expr[]
+        nr, nc = dims[1], dims[2]
+        na = if N > 2
+            n = 1
+            for d in 3:N
+                n *= dims[d]
+            end
+            n
+        else
+            1
+        end
+        nrc = nr * nc
+
+        if row_first
+            k = 1
+            for d in 1:na
+                dd = nrc * (d - 1)
+                for i in 1:nr
+                    Ai = dd + i
+                    for j in 1:nc
+                        ex = :(A[$Ai] = xs[$k])
+                        push!(assigns, ex)
+                        k += 1
+                        Ai += nr
+                    end
+                end
+            end
+        else
+            k = 1
+            for i in 1:lengtha
+                ex = :(A[$i] = xs[$k])
+                push!(assigns, ex)
+                k += 1
+            end
+        end
+
+        return quote
+            A = Array{$T, $N}(undef, $dims...)
+            $(assigns...)
+            return A
+        end
+    end
+
+    # For larger arrays, use the regular loop
+    quote
+        A = Array{$T, $N}(undef, $dims...)
+        hvncat_fill!(A, $row_first, xs)
+        return A
+    end
+end
+@inline function hvncat_static(::Val{dims}, ::Val{row_first}, x::T, xs::Vararg{T}) where {dims, row_first, T<:Number}
+    typed_hvncat_static(T, Val{dims}(), Val{row_first}(), x, xs...)
+end
+@inline function hvncat_static(::Val{dims}, ::Val{row_first}, xs::Number...) where {dims, row_first}
+    typed_hvncat_static(promote_typeof(xs...), Val{dims}(), Val{row_first}(), xs...)
+end
+@inline function typed_hvncat_static(::Type{T}, ::Val{dims}, ::Val{row_first}, xs...) where {T, dims, row_first}
+    # fallback to the general case
+    typed_hvncat(T, dims, row_first, xs...)
+end
+@inline function hvncat_static(::Val{dims}, ::Val{row_first}, xs...) where {dims, row_first}
+    # fallback to the general case
+    hvncat(dims, row_first, xs...)
 end
 
 """

@@ -1745,6 +1745,153 @@ using Base: typed_hvncat
     @test [["A";"B"];;"C";"D"] == ["A" "C"; "B" "D"]
 end
 
+@testset "array construction using numbers" begin
+    # test array construction using hvcat [x x; y y] and hvncat [x x;;; y y]
+
+    @testset "hvcat array construction" begin
+        function test_hvcat(x1, x2, x3, x4)
+            # small arrays are constructed differently (manually unrolled)
+            A = [x1 x2; x3 x4]
+            @test A[1,1] == x1
+            @test A[1,2] == x2
+            @test A[2,1] == x3
+            @test A[2,2] == x4
+
+            AT = Float64[x1 x2; x3 x4]
+            @test AT == A
+
+            # large arrays are constructed using a loop
+            A = [x1 x2 x3 x4; x2 x3 x4 x1; x3 x4 x1 x2; x4 x1 x2 x3; x1 x2 x3 x4]
+            @test A[1,1] == x1
+            @test A[1,2] == x2
+            @test A[1,3] == x3
+            @test A[1,4] == x4
+            @test A[2,1] == x2
+            @test A[2,2] == x3
+            @test A[2,3] == x4
+            @test A[2,4] == x1
+            @test A[3,1] == x3
+            @test A[3,2] == x4
+            @test A[3,3] == x1
+            @test A[3,4] == x2
+            @test A[4,1] == x4
+            @test A[4,2] == x1
+            @test A[4,3] == x2
+            @test A[4,4] == x3
+            @test A[5,1] == x1
+            @test A[5,2] == x2
+            @test A[5,3] == x3
+            @test A[5,4] == x4
+            AT = Float64[x1 x2 x3 x4; x2 x3 x4 x1; x3 x4 x1 x2; x4 x1 x2 x3; x1 x2 x3 x4]
+            @test AT == A
+        end
+
+        test_hvcat(1, 2, 3, 4)
+        test_hvcat(1.0, 2.0, 3.0, 4.0)
+        test_hvcat(1.0, 2, 3.0, 4)
+    end
+
+    @testset "hvncat array construction" begin
+        # Test hvncat with dims as Int and Tuple, row_first true/false
+        # Testing 3D and 4D outputs, same and mixed element types, and different sizes
+
+        function test_hvncat(x1, x2, x3, x4)
+            # 3D arrays with dims as Int (row-first by default)
+            A = [x1 x2;;; x3 x4]  # 1x2x2 Array (row-first)
+            @test size(A) == (1, 2, 2)
+            @test A[1,1,1] == x1
+            @test A[1,1,2] == x3
+            @test A[1,2,1] == x2
+            @test A[1,2,2] == x4
+
+            AT = Float64[x1 x2;;; x3 x4]
+            @test AT == A
+
+            A = [x1 x2; x3 x4;;; x2 x3; x4 x1;;; x3 x4; x1 x2;;; x4 x1; x2 x3;;; x1 x2; x3 x4]
+            @test size(A) == (2, 2, 5)
+
+            @test A[:, :, 1] == [x1 x2; x3 x4]
+            @test A[:, :, 2] == [x2 x3; x4 x1]
+            @test A[:, :, 3] == [x3 x4; x1 x2]
+            @test A[:, :, 4] == [x4 x1; x2 x3]
+            @test A[:, :, 5] == [x1 x2; x3 x4]
+
+            AT = Float64[x1 x2; x3 x4;;; x2 x3; x4 x1;;; x3 x4; x1 x2;;; x4 x1; x2 x3;;; x1 x2; x3 x4]
+            @test AT == A
+        end
+
+        test_hvncat(1, 2, 3, 4)
+        test_hvncat(1.0, 2.0, 3.0, 4.0)
+        test_hvncat(1.0, 2, 3.0, 4)
+    end
+
+    @testset "hvcat vs hvcat_static" begin
+        # number cases generate the same result
+        @test Base.hvcat_static(Val{(2,2)}(), 1, 2, 3, 4) == hvcat((2, 2), 1, 2, 3, 4)
+        @test Base.hvcat_static(Val{(2,2)}(), 1, 2, 3.0, 4.0) == hvcat((2, 2), 1, 2, 3.0, 4.0)
+        @test Base.typed_hvcat_static(Float64, Val{(2,2)}(), 1, 2, 3, 4) == Base.typed_hvcat(Float64, (2, 2), 1, 2, 3, 4)
+        @test Base.typed_hvcat_static(Float64, Val{(2,2)}(), 1, 2, 3.0, 4.0) == Base.typed_hvcat(Float64, (2, 2), 1, 2, 3.0, 4.0)
+
+        # non-number cases will be fallbacks to hvcat
+        @test Base.hvcat_static(Val{(2,2)}(), "a", "b", "c", "d") == hvcat((2, 2), "a", "b", "c", "d")
+        @test Base.typed_hvcat_static(String, Val{(2,2)}(), "a", "b", "c", "d") == Base.typed_hvcat(String, (2, 2), "a", "b", "c", "d")
+
+        # non-scalar cases will be fallbacks to hvcat
+        @test Base.hvcat_static(Val{(2,2)}(), [1 2], [2 2], [3 3], [4 4]) == hvcat((2, 2), [1 2], [2 2], [3 3], [4 4])
+        @test Base.typed_hvcat_static(Float64, Val{(2,2)}(), [1 2], [2 2], [3 3], [4 4]) == Base.typed_hvcat(Float64, (2, 2), [1 2], [2 2], [3 3], [4 4])
+
+        @test_throws DimensionMismatch hvcat((2,4), 2, 3, 4, 5)
+        @test_throws DimensionMismatch Base.hvcat_static(Val{(2,4)}(), 2, 3, 4, 5)
+    end
+
+    @testset "hvncat vs hvncat_static" begin
+        # basic test
+        x = rand(8)
+
+        A = Base.hvncat_static(Val{(2, 2, 2)}(), Val{true}(), x...)
+        B = hvncat((2, 2, 2), true, x...)
+        @test A == B
+
+        A = Base.hvncat_static(Val{(2, 2, 2)}(), Val{false}(), x...)
+        B = hvncat((2, 2, 2), false, x...)
+        @test A == B
+
+        # test different eltypes
+        x, y = rand(4), rand(1:10, 4)
+        A = Base.hvncat_static(Val{(2, 2, 2)}(), Val{true}(), x..., y...)
+        B = hvncat((2, 2, 2), true, x..., y...)
+        @test A == B
+
+        A = Base.hvncat_static(Val{(2, 2, 2)}(), Val{false}(), x..., y...)
+        B = hvncat((2, 2, 2), false, x..., y...)
+        @test A == B
+
+        # test large array
+        x = rand(24)
+        A = Base.hvncat_static(Val{(2, 3, 4)}(), Val{true}(), x...)
+        B = hvncat((2, 3, 4), true, x...)
+        @test A == B
+
+        A = Base.hvncat_static(Val{(2, 3, 4)}(), Val{false}(), x...)
+        B = hvncat((2, 3, 4), false, x...)
+        @test A == B
+    end
+
+    @testset "Static method doesn't apply to non-number types" begin
+        # StaticArrays "abused" the syntax SA[1 2; 3 4] to create a static array
+        # but unfortunately SA isn't a number-like type.
+        # We need to ensure that our typed_hvcat_static specialization doesn't affect its usage
+        # and returns the same result as the non-static version.
+
+        struct FOO end
+        Base.typed_hvcat(::Type{FOO}, dims::Dims, xs::Number...) = "Foo typed_hvcat"
+        Base.typed_hvncat(::Type{FOO}, dims::Dims, row_first::Bool, xs::Number...) = "Foo typed_hvncat"
+
+        @test FOO[1 2; 3 4] == "Foo typed_hvcat"
+        @test FOO[1 2;;; 3 4] == "Foo typed_hvncat"
+    end
+end
+
 @testset "stack" begin
     # Basics
     for args in ([[1, 2]], [1:2, 3:4], [[1 2; 3 4], [5 6; 7 8]],
