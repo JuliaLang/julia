@@ -7,6 +7,9 @@ using Base, Libdl
 
 export libzstd, zstd, zstdmt
 
+# These get calculated in __init__()
+libzstd_handle::Ptr{Cvoid} = C_NULL
+
 if Sys.iswindows()
     const libzstd = "libzstd.dll"
 elseif Sys.isapple()
