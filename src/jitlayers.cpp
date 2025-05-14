@@ -788,6 +788,7 @@ void jl_emit_codeinst_to_jit_impl(
     }
     jl_optimize_roots(params, jl_get_ci_mi(codeinst), *result_m.getModuleUnlocked()); // contains safepoints
     params.temporary_roots = nullptr;
+    params.temporary_roots_set.clear();
     JL_GC_POP();
     { // drop lock before acquiring engine_lock
         auto release = std::move(params.tsctx_lock);
@@ -2007,16 +2008,13 @@ JuliaOJIT::JuliaOJIT()
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin))), JITSymbolFlags::Exported};
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
-#if JL_LLVM_VERSION < 200000
 #ifdef _COMPILER_ASAN_ENABLED_
     // this is a hack to work around a bad assertion:
     //   /workspace/srcdir/llvm-project/llvm/lib/ExecutionEngine/Orc/Core.cpp:3028: llvm::Error llvm::orc::ExecutionSession::OL_notifyResolved(llvm::orc::MaterializationResponsibility&, const SymbolMap&): Assertion `(KV.second.getFlags() & ~JITSymbolFlags::Common) == (I->second & ~JITSymbolFlags::Common) && "Resolving symbol with incorrect flags"' failed.
-    // hopefully fixed upstream by e7698a13e319a9919af04d3d693a6f6ea7168a44
     static int64_t jl___asan_globals_registered;
     orc::SymbolMap asan_crt;
     asan_crt[mangle("___asan_globals_registered")] = {ExecutorAddr::fromPtr(&jl___asan_globals_registered), JITSymbolFlags::Common | JITSymbolFlags::Exported};
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
-#endif
 #endif
 }
 

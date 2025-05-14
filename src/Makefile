@@ -29,7 +29,7 @@ endif
 JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 ifeq ($(USECLANG),1)
-FLAGS += -Wno-return-type-c-linkage -Wno-atomic-alignment
+FLAGS += -Wno-return-type-c-linkage -Wno-atomic-alignment -Wno-nullability-extension -Wno-nullability-completeness # required to be allowed to use nullability extension and not be required to annotate all of everything
 endif
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
@@ -225,6 +225,12 @@ SHIPFLAGS_GCC     += $(FLAGS) $(ADDL_SHIPFLAGS)
 DEBUGFLAGS_GCC    += $(FLAGS) $(ADDL_DEBUGFLAGS)
 SHIPFLAGS_CLANG   += $(FLAGS) $(ADDL_SHIPFLAGS)
 DEBUGFLAGS_CLANG  += $(FLAGS) $(ADDL_DEBUGFLAGS)
+
+DEBUGFLAGS_CLANG  += -Wno-nullability-extension -Wno-nullability-completeness # required to be allowed to use nullability extension and not be required to annotate all of everything
+ifeq ($(USEGCC),1) # TODO: we currently set flags incorrectly for clang analyze, but mostly it works out okay
+DEBUGFLAGS_CLANG  += -Wno-unknown-warning-option
+endif
+DEBUGFLAGS_CLANG  += -Wno-return-type-c-linkage # TODO: do we care about fixing this instead? (it is not a bug, just a nuisance)
 
 ifeq ($(USE_CROSS_FLISP), 1)
 FLISPDIR := $(BUILDDIR)/flisp/host

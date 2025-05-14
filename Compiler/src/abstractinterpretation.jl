@@ -3545,7 +3545,7 @@ function merge_override_effects!(interp::AbstractInterpreter, effects::Effects, 
             # N.B.: We'd like deleted_world here, but we can't add an appropriate edge at this point.
             # However, in order to reach here in the first place, ordinary method lookup would have
             # had to add an edge and appropriate invalidation trigger.
-            valid_worlds = WorldRange(m.primary_world, typemax(Int))
+            valid_worlds = WorldRange(m.primary_world, typemax(UInt))
             if sv.world.this in valid_worlds
                 update_valid_age!(sv, valid_worlds)
             else
