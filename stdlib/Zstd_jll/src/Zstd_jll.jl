@@ -10,7 +10,7 @@ export libzstd, zstd, zstdmt
 if Sys.iswindows()
     const libzstd = "libzstd.dll"
 elseif Sys.isapple()
-    const libzstd = "@rpath/libstd.1.dylib"
+    const libzstd = "@rpath/libzstd.1.dylib"
 else
     const libzstd = "libzstd.so.1"
 end
