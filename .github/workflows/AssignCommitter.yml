@@ -37,6 +37,8 @@ jobs:
         # https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#using-third-party-actions
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
+          retries: 5 # retry GitHub API requests up to 5 times, with exponential backoff
+          retry-exempt-status-codes: 403
           script: |
             if (context.payload.pull_request.assignees.length === 0) {
               // Find suitable assignees
