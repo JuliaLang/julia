@@ -30,6 +30,9 @@ New language features
   `Threads.@spawn :samepool foo()` which is shorthand for `Threads.@spawn Threads.threadpool() foo()` ([#57109]).
 * The `@ccall` macro can now take a `gc_safe` argument, that if set to true allows the runtime to run garbage collection concurrently to the `ccall` ([#49933]).
 * A single method covering multiple functions is now allowed in more cases. See issue #54620. ([#58131]).
+* The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
+  is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
+  ([JuliaLang/JuliaSyntax.jl#525], [#57143]).
 
 Language changes
 ----------------
@@ -290,6 +293,8 @@ Tooling Improvements
 [#57081]: https://github.com/JuliaLang/julia/issues/57081
 [#57087]: https://github.com/JuliaLang/julia/issues/57087
 [#57109]: https://github.com/JuliaLang/julia/issues/57109
+[#57143]: https://github.com/JuliaLang/julia/issues/57143
 [#57253]: https://github.com/JuliaLang/julia/issues/57253
 [#57727]: https://github.com/JuliaLang/julia/issues/57727
 [#58131]: https://github.com/JuliaLang/julia/issues/58131
+[JuliaLang/JuliaSyntax.jl#525]: https://github.com/JuliaLang/JuliaSyntax.jl/pull/525
