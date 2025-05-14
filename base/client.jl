@@ -64,13 +64,12 @@ function repl_cmd(cmd, out)
         cd(dir)
         println(out, pwd())
     else
-        iswindows = @static Sys.iswindows() ? true : false
         if shell_name == "nu"
             # remove backticks and apostrophes that dont play nice with nushell
-            shell_escape_cmd = replace(shell_escape(cmd), r"`|'" => "")
+            shell_escape_cmd = replace(shell_escape(cmd), "'" => "", "`" => "")
             shell_escape_cmd = "try { $shell_escape_cmd } catch { |err| \$err.rendered }"
             cmd = `$shell -c $shell_escape_cmd`
-        elseif !iswindows
+        elseif !Sys.iswindows()
             if shell_name == "fish"
                 shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
             else
