@@ -232,15 +232,6 @@ JL_DLLEXPORT extern const jl_callptr_t jl_f_opaque_closure_call_addr;
 
 JL_DLLEXPORT extern const jl_callptr_t jl_fptr_wait_for_compiled_addr;
 
-typedef struct _jl_line_info_node_t {
-    JL_DATA_TYPE
-    struct _jl_module_t *module;
-    jl_value_t *method; // may contain a jl_symbol, jl_method_t, or jl_method_instance_t
-    jl_sym_t *file;
-    int32_t line;
-    int32_t inlined_at;
-} jl_line_info_node_t;
-
 struct jl_codeloc_t {
     int32_t line;
     int32_t to;
@@ -331,8 +322,8 @@ typedef struct _jl_method_t {
     struct _jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
+    _Atomic(int32_t) dispatch_status; // bits defined in staticdata.jl
     _Atomic(size_t) primary_world;
-    _Atomic(size_t) deleted_world;
 
     // method's type signature. redundant with TypeMapEntry->specTypes
     jl_value_t *sig;
@@ -498,17 +489,17 @@ typedef struct _jl_abi_override_t {
 
 typedef struct {
     JL_DATA_TYPE
-    jl_sym_t *name;
-    jl_value_t *lb;   // lower bound
-    jl_value_t *ub;   // upper bound
+    jl_sym_t *JL_NONNULL name;
+    jl_value_t *JL_NONNULL lb;   // lower bound
+    jl_value_t *JL_NONNULL ub;   // upper bound
 } jl_tvar_t;
 
 // UnionAll type (iterated union over all values of a variable in certain bounds)
 // written `body where lb<:var<:ub`
 typedef struct {
     JL_DATA_TYPE
-    jl_tvar_t *var;
-    jl_value_t *body;
+    jl_tvar_t *JL_NONNULL var;
+    jl_value_t *JL_NONNULL body;
 } jl_unionall_t;
 
 // represents the "name" part of a DataType, describing the syntactic structure
@@ -543,8 +534,8 @@ typedef struct {
 
 typedef struct {
     JL_DATA_TYPE
-    jl_value_t *a;
-    jl_value_t *b;
+    jl_value_t *JL_NONNULL a;
+    jl_value_t *JL_NONNULL b;
 } jl_uniontype_t;
 
 // in little-endian, isptr is always the first bit, avoiding the need for a branch in computing isptr
@@ -1617,7 +1608,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->name->mutabl)
 #define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_immutable(t)   (!((jl_datatype_t*)t)->name->mutabl)
-#define jl_is_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
+#define jl_may_be_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_uniontype(v)   jl_typetagis(v,jl_uniontype_tag<<4)
 #define jl_is_typevar(v)     jl_typetagis(v,jl_tvar_tag<<4)
 #define jl_is_unionall(v)    jl_typetagis(v,jl_unionall_tag<<4)
@@ -1942,9 +1933,9 @@ JL_DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, size_t len);
 JL_DLLEXPORT jl_sym_t *jl_get_root_symbol(void);
 JL_DLLEXPORT jl_value_t *jl_get_binding_value(jl_binding_t *b JL_PROPAGATES_ROOT);
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world);
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT);
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_resolved_debug_only(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_if_latest_resolved_and_const_debug_only(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_latest_binding_value_if_const(jl_binding_t *b JL_PROPAGATES_ROOT);
+JL_DLLEXPORT jl_value_t *jl_get_latest_binding_value_if_resolved_debug_only(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_get_latest_binding_value_if_resolved_and_const_debug_only(jl_binding_t *b JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_declare_const_gf(jl_module_t *mod, jl_sym_t *name);
 JL_DLLEXPORT jl_method_t *jl_method_def(jl_svec_t *argdata, jl_methtable_t *mt, jl_code_info_t *f, jl_module_t *module);
 JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo, size_t world, jl_code_instance_t **cache);
@@ -2258,7 +2249,6 @@ JL_DLLEXPORT jl_value_t *jl_parse_string(const char *text, size_t text_len,
 JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *file, int line, size_t world,
                                   bool_t warn);
-JL_DLLEXPORT jl_value_t *jl_lower_expr_mod(jl_value_t *expr, jl_module_t *inmodule);
 // deprecated; use jl_parse_all
 JL_DLLEXPORT jl_value_t *jl_parse_input_line(const char *text, size_t text_len,
                                              const char *filename, size_t filename_len);

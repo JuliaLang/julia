@@ -719,9 +719,12 @@ function _complete_methods(ex_org::Expr, context_module::Module, shift::Bool)
     return kwargs_flag, funct, args_ex, kwargs_ex
 end
 
-function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool=false)
+# cursor_pos: either :positional (complete either kwargs or positional) or :kwargs (beyond semicolon)
+function complete_methods(ex_org::Expr, context_module::Module=Main, shift::Bool=false, cursor_pos::Symbol=:positional)
     kwargs_flag, funct, args_ex, kwargs_ex = _complete_methods(ex_org, context_module, shift)::Tuple{Int, Any, Vector{Any}, Set{Symbol}}
     out = Completion[]
+    # Allow more arguments when cursor before semicolon, even if kwargs are present
+    cursor_pos == :positional && kwargs_flag == 1 && (kwargs_flag = 0)
     kwargs_flag == 2 && return out # one of the kwargs is invalid
     kwargs_flag == 0 && push!(args_ex, Vararg{Any}) # allow more arguments if there is no semicolon
     complete_methods!(out, funct, args_ex, kwargs_ex, shift ? -2 : MAX_METHOD_COMPLETIONS, kwargs_flag == 1)
@@ -898,14 +901,16 @@ end
 end
 
 # Provide completion for keyword arguments in function calls
+# Returns true if the current argument must be a keyword because the cursor is beyond the semicolon
 function complete_keyword_argument!(suggestions::Vector{Completion},
                                     ex::Expr, last_word::String,
-                                    context_module::Module; shift::Bool=false)
+                                    context_module::Module,
+                                    arg_pos::Symbol; shift::Bool=false)
     kwargs_flag, funct, args_ex, kwargs_ex = _complete_methods(ex, context_module, true)::Tuple{Int, Any, Vector{Any}, Set{Symbol}}
-    kwargs_flag == 2 && false # one of the previous kwargs is invalid
+    kwargs_flag == 2 && return false # one of the previous kwargs is invalid
 
     methods = Completion[]
-    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : MAX_METHOD_COMPLETIONS, kwargs_flag == 1)
+    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : MAX_METHOD_COMPLETIONS, arg_pos == :kwargs)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
 
@@ -935,7 +940,7 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     for kwarg in kwargs
         push!(suggestions, KeywordArgumentCompletion(kwarg))
     end
-    return kwargs_flag != 0
+    return kwargs_flag != 0 && arg_pos == :kwargs
 end
 
 function get_loading_candidates(pkgstarts::String, project_file::String)
@@ -1071,7 +1076,8 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
     (kind(cur) in KSet"String Comment ErrorEofMultiComment" || inside_cmdstr) &&
          return Completion[], 1:0, false
 
-    if (n = find_prefix_call(cur_not_ws)) !== nothing
+    n, arg_pos = find_prefix_call(cur_not_ws)
+    if n !== nothing
         func = first(children_nt(n))
         e = Expr(n)
         # Remove arguments past the first parse error (allows unclosed parens)
@@ -1088,7 +1094,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
         #   foo(x, TAB   => list of methods signatures for foo with x as first argument
         if kind(cur_not_ws) in KSet"( , ;"
             # Don't provide method completions unless the cursor is after: '(' ',' ';'
-            return complete_methods(e, context_module, shift), char_range(func), false
+            return complete_methods(e, context_module, shift, arg_pos), char_range(func), false
 
         # Keyword argument completion:
         #   foo(ar TAB   => keyword arguments like `arg1=`
@@ -1096,7 +1102,7 @@ function completions(string::String, pos::Int, context_module::Module=Main, shif
             r = char_range(cur)
             s = string[intersect(r, 1:pos)]
             # Return without adding more suggestions if kwargs only
-            complete_keyword_argument!(suggestions, e, s, context_module; shift) &&
+            complete_keyword_argument!(suggestions, e, s, context_module, arg_pos; shift) &&
                 return sort_suggestions(), r, true
         end
     end
@@ -1184,18 +1190,20 @@ function find_str(cur::CursorNode)
 end
 
 # Is the cursor directly inside of the arguments of a prefix call (no nested
-# expressions)?
+# expressions)?  If so, return:
+#   - The call node
+#   - Either :positional or :kwargs, if the cursor is before or after the `;`
 function find_prefix_call(cur::CursorNode)
     n = cur.parent
-    n !== nothing || return nothing
+    n !== nothing || return nothing, nothing
     is_call(n) = kind(n) in KSet"call dotcall" && is_prefix_call(n)
     if kind(n) == K"parameters"
-        is_call(n.parent) || return nothing
-        n.parent
+        is_call(n.parent) || return nothing, nothing
+        n.parent, :kwargs
     else
         # Check that we are beyond the function name.
-        is_call(n) && cur.index > children_nt(n)[1].index || return nothing
-        n
+        is_call(n) && cur.index > children_nt(n)[1].index || return nothing, nothing
+        n, :positional
     end
 end
 

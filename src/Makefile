@@ -29,7 +29,7 @@ endif
 JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 ifeq ($(USECLANG),1)
-FLAGS += -Wno-return-type-c-linkage -Wno-atomic-alignment
+FLAGS += -Wno-return-type-c-linkage -Wno-atomic-alignment -Wno-nullability-extension -Wno-nullability-completeness # required to be allowed to use nullability extension and not be required to annotate all of everything
 endif
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
@@ -79,7 +79,8 @@ endif
 CODEGEN_SRCS := codegen jitlayers aotcompile debuginfo disasm llvm-simdloop \
 	llvm-pass-helpers llvm-ptls llvm-propagate-addrspaces null_sysimage \
 	llvm-multiversioning llvm-alloc-opt llvm-alloc-helpers cgmemmgr llvm-remove-addrspaces \
-	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures pipeline llvm_api \
+	llvm-remove-ni llvm-julia-licm llvm-demote-float16 llvm-cpufeatures llvm-expand-atomic-modify \
+	pipeline llvm_api \
 	$(GC_CODEGEN_SRCS)
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
@@ -225,6 +226,12 @@ DEBUGFLAGS_GCC    += $(FLAGS) $(ADDL_DEBUGFLAGS)
 SHIPFLAGS_CLANG   += $(FLAGS) $(ADDL_SHIPFLAGS)
 DEBUGFLAGS_CLANG  += $(FLAGS) $(ADDL_DEBUGFLAGS)
 
+DEBUGFLAGS_CLANG  += -Wno-nullability-extension -Wno-nullability-completeness # required to be allowed to use nullability extension and not be required to annotate all of everything
+ifeq ($(USEGCC),1) # TODO: we currently set flags incorrectly for clang analyze, but mostly it works out okay
+DEBUGFLAGS_CLANG  += -Wno-unknown-warning-option
+endif
+DEBUGFLAGS_CLANG  += -Wno-return-type-c-linkage # TODO: do we care about fixing this instead? (it is not a bug, just a nuisance)
+
 ifeq ($(USE_CROSS_FLISP), 1)
 FLISPDIR := $(BUILDDIR)/flisp/host
 FLISP_EXECUTABLE_debug := $(FLISPDIR)/flisp-debug$(BUILD_EXE)
@@ -338,7 +345,7 @@ $(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliase
 		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$@))
 
 # additional dependency links
-$(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj: $(SRCDIR)/intrinsics.h
+$(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.h llvm-julia-passes.inc)
 $(BUILDDIR)/aotcompile.o $(BUILDDIR)/aotcompile.dbg.obj: $(SRCDIR)/jitlayers.h $(SRCDIR)/llvm-codegen-shared.h $(SRCDIR)/processor.h
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: $(SRCDIR)/iddict.c $(SRCDIR)/idset.c $(SRCDIR)/builtin_proto.h
@@ -378,7 +385,8 @@ $(BUILDDIR)/signal-handling.o $(BUILDDIR)/signal-handling.dbg.obj: $(addprefix $
 $(BUILDDIR)/staticdata.o $(BUILDDIR)/staticdata.dbg.obj: $(SRCDIR)/staticdata_utils.c $(SRCDIR)/precompile_utils.c $(SRCDIR)/processor.h $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/toplevel.o $(BUILDDIR)/toplevel.dbg.obj: $(SRCDIR)/builtin_proto.h
 $(BUILDDIR)/ircode.o $(BUILDDIR)/ircode.dbg.obj: $(SRCDIR)/serialize.h $(SRCDIR)/common_symbols1.inc $(SRCDIR)/common_symbols2.inc
-$(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(SRCDIR)/passes.h $(SRCDIR)/jitlayers.h
+$(BUILDDIR)/pipeline.o $(BUILDDIR)/pipeline.dbg.obj: $(addprefix $(SRCDIR)/,passes.h jitlayers.h llvm-julia-passes.inc)
+$(BUILDDIR)/llvm_api.o $(BUILDDIR)/llvm_api.dbg.obj: $(SRCDIR)/llvm-julia-passes.inc
 
 $(addprefix $(BUILDDIR)/,threading.o threading.dbg.obj gc-common.o gc-stock.o gc.dbg.obj init.c init.dbg.obj task.o task.dbg.obj): $(addprefix $(SRCDIR)/,threading.h)
 $(addprefix $(BUILDDIR)/,APInt-C.o APInt-C.dbg.obj runtime_intrinsics.o runtime_intrinsics.dbg.obj): $(SRCDIR)/APInt-C.h

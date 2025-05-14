@@ -88,6 +88,7 @@ vals = Any[
     Dict(42 => 101, 77 => 93), Dict{Any,Any}(42 => 101, 77 => 93),
     (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
     ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
+    join('c':'s'), SubString(join('a':'z'), 3, 19),
     # issue #6900
     Dict(x => x for x in 1:10),
     Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1),
@@ -108,7 +109,7 @@ vals = Any[
     ["a", "b", 1, 2], ["a", 1, 2], ["a", "b", 2, 2], ["a", "a", 1, 2], ["a", "b", 2, 3]
 ]
 
-for a in vals, b in vals
+for (i, a) in enumerate(vals), b in vals[i:end]
     @test isequal(a,b) == (hash(a)==hash(b))
 end
 
@@ -249,7 +250,9 @@ end
         )
 
         for a in vals, b in vals
-            @test isequal(a, b) == (Base.hash_64_32(a) == Base.hash_64_32(b))
+            ha = Base.hash_64_32(a)
+            hb = Base.hash_64_32(b)
+            @test isequal(a, b) == (ha == hb)
         end
     end
 
@@ -260,7 +263,9 @@ end
         )
 
         for a in vals, b in vals
-            @test isequal(a, b) == (Base.hash_32_32(a) == Base.hash_32_32(b))
+            ha = Base.hash_32_32(a)
+            hb = Base.hash_32_32(b)
+            @test isequal(a, b) == (ha == hb)
         end
     end
 end
@@ -303,4 +308,10 @@ struct AUnionParam{T<:Union{Nothing,Float32,Float64}} end
     @test hash(5//3) == hash(big(5)//3)
 end
 
-@test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
+@testset "concrete eval type hash" begin
+    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(hash, Tuple{Type{Int}, UInt}))
+
+    f(h...) = hash(Char, h...);
+    src = only(code_typed(f, Tuple{UInt}))[1]
+    @test count(stmt -> Meta.isexpr(stmt, :foreigncall), src.code) == 0
+end

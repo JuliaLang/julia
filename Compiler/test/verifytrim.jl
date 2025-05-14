@@ -18,6 +18,24 @@ let infos = Any[]
     @test isempty(parents)
 end
 
+finalizer(@nospecialize(f), @nospecialize(o)) = Core.finalizer(f, o)
+
+let infos = typeinf_ext_toplevel(Any[Core.svec(Nothing, Tuple{typeof(finalizer), typeof(identity), Any})], [Base.get_world_counter()], TRIM_UNSAFE)
+    errors, parents = get_verify_typeinf_trim(infos)
+    @test !isempty(errors) # unresolvable finalizer
+
+    # the only error should be a CallMissing error for the Core.finalizer builtin
+    (warn, desc) = only(errors)
+    @test !warn
+    @test desc isa CallMissing
+    @test occursin("finalizer", desc.desc)
+    repr = sprint(verify_print_error, desc, parents)
+    @test occursin(
+        r"""^unresolved finalizer registered from statement \(Core.finalizer\)\(f::Any, o::Any\)::Nothing
+            Stacktrace:
+             \[1\] finalizer\(f::Any, o::Any\)""", repr)
+end
+
 make_cfunction() = @cfunction(+, Float64, (Int64,Int64))
 
 # use TRIM_UNSAFE to bypass verifier inside typeinf_ext_toplevel

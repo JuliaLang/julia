@@ -983,6 +983,13 @@ let ends_with_semicolon = REPL.ends_with_semicolon
     @test ends_with_semicolon("f()= 1;")
     # the next result does not matter because this is not legal syntax
     @test_nowarn ends_with_semicolon("1; #=# 2")
+
+    # #46189 - adjoint operator with comment
+    @test ends_with_semicolon("W';") == true
+    @test ends_with_semicolon("W'; # comment")
+    @test !ends_with_semicolon("W'")
+    @test !ends_with_semicolon("x'")
+    @test !ends_with_semicolon("'a'")
 end
 
 # PR #20794, TTYTerminal with other kinds of streams
@@ -1950,6 +1957,9 @@ end
         @test output == "…[printing stopped after displaying 0 bytes; $hint]"
         @test sprint(io -> show(REPL.LimitIO(io, 5), "abc")) == "\"abc\""
         @test_throws REPL.LimitIOException(1) sprint(io -> show(REPL.LimitIO(io, 1), "abc"))
+
+        # displaying objects at the REPL sometimes needs access to displaysize, like Dict
+        @test displaysize(IOContext(REPL.LimitIO(stdout, 100), stdout)) == displaysize(stdout)
     finally
         REPL.SHOW_MAXIMUM_BYTES = previous
     end
