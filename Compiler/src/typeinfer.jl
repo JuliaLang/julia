@@ -1422,7 +1422,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             # if this method is generally visible to the current compilation world,
             # and this is either the primary world, or not applicable in the primary world
             # then we want to compile and emit this
-            if item.def.primary_world <= world <= item.def.deleted_world
+            if item.def.primary_world <= world
                 ci = typeinf_ext(interp, item, SOURCE_MODE_GET_SOURCE)
                 ci isa CodeInstance && push!(workqueue, ci)
             end
