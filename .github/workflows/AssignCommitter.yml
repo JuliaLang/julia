@@ -19,8 +19,9 @@ on:
   pull_request_target:
     types: [opened, reopened, ready_for_review]
 
+# Permissions for the `GITHUB_TOKEN`:
 permissions:
-  pull-requests: write
+  pull-requests: write # Needed in order to assign a user as the PR assignee
 
 jobs:
   assign-reviewer:
