@@ -1,4 +1,4 @@
-SPARSEARRAYS_BRANCH = mb/mapreducedim_empty
-SPARSEARRAYS_SHA1 = ac0cc6e8278bb614dc2a16e9353fa092dae6606a
+SPARSEARRAYS_BRANCH = mb/ReduceReuse♻
+SPARSEARRAYS_SHA1 = 975f04a739ddbe9e8dc04ed46f3227da0aa912e8
 SPARSEARRAYS_GIT_URL := https://github.com/mbauman/SparseArrays.jl.git
 SPARSEARRAYS_TAR_URL = https://api.github.com/repos/mbauman/SparseArrays.jl/tarball/$1
