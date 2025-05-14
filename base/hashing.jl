@@ -29,7 +29,8 @@ hash(x::Any) = hash(x, zero(UInt))
 hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 # Types can't be deleted, so marking as total allows the compiler to look up the hash
-hash(T::Type, h::UInt) = hash_uint(3h - @assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T))
+@noinline _jl_type_hash(T::Type) = @assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)
+hash(T::Type, h::UInt) = hash_uint(3h - _jl_type_hash(T))
 
 ## hashing general objects ##
 
