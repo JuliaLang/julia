@@ -60,6 +60,10 @@ ifeq ($(BUILD_LLD), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lld
 endif
 
+# Remove ; if it's the first character
+ifneq ($(LLVM_ENABLE_RUNTIMES),)
+	LLVM_ENABLE_RUNTIMES := $(patsubst ;%,%,$(LLVM_ENABLE_RUNTIMES))
+endif
 
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
@@ -70,7 +74,7 @@ LLVM_EXPERIMENTAL_TARGETS :=
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
-LLVM_LDFLAGS :=
+LLVM_LDFLAGS := "-L$(build_shlibdir)" # hacky way to force zlib to be found when linking against libLLVM and sysroot is set
 LLVM_CMAKE :=
 
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
@@ -183,6 +187,11 @@ endif
 
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
+else
+ifeq ($(OS),FreeBSD)
+    # On FreeBSD, we must force even statically-linked code to have -fPIC
+    LLVM_CMAKE += -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE
+endif
 endif
 
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \

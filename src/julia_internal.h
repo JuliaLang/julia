@@ -677,6 +677,10 @@ typedef union {
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
 
+#define METHOD_SIG_LATEST_WHICH             0b0001
+#define METHOD_SIG_LATEST_ONLY              0b0010
+#define METHOD_SIG_PRECOMPILE_MANY          0b0100
+
 JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
 JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
 void jl_engine_sweep(jl_ptls_t *gc_all_tls_states) JL_NOTSAFEPOINT;
@@ -981,6 +985,10 @@ STATIC_INLINE int jl_bkind_is_some_constant(enum jl_partition_kind kind) JL_NOTS
 
 STATIC_INLINE int jl_bkind_is_defined_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
     return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT || kind == PARTITION_KIND_BACKDATED_CONST;
+}
+
+STATIC_INLINE int jl_bkind_is_real_constant(enum jl_partition_kind kind) JL_NOTSAFEPOINT {
+    return kind == PARTITION_KIND_IMPLICIT_CONST || kind == PARTITION_KIND_CONST || kind == PARTITION_KIND_CONST_IMPORT;
 }
 
 JL_DLLEXPORT jl_binding_partition_t *jl_get_binding_partition(jl_binding_t *b JL_PROPAGATES_ROOT, size_t world) JL_GLOBALLY_ROOTED;

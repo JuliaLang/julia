@@ -1159,14 +1159,18 @@ function is_builtin(𝕃ₒ::AbstractLattice, s::Signature)
 end
 
 function handle_invoke_call!(todo::Vector{Pair{Int,Any}},
-    ir::IRCode, idx::Int, stmt::Expr, info::InvokeCallInfo, flag::UInt32,
+    ir::IRCode, idx::Int, stmt::Expr, @nospecialize(info), flag::UInt32,
     sig::Signature, state::InliningState)
-    match = info.match
+    nspl = nsplit(info)
+    nspl == 0 && return nothing # e.g. InvokeCICallInfo
+    @assert nspl == 1
+    mresult = getsplit(info, 1)
+    match = mresult.matches[1]
     if !match.fully_covers
         # TODO: We could union split out the signature check and continue on
         return nothing
     end
-    result = info.result
+    result = getresult(info, 1)
     if isa(result, ConcreteResult)
         item = concrete_result_item(result, info, state)
     elseif isa(result, SemiConcreteResult)
@@ -1648,7 +1652,7 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
             handle_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, ModifyOpInfo)
             handle_modifyop!_call!(ir, idx, stmt, info, state)
-        elseif isa(info, InvokeCallInfo)
+        elseif sig.f === Core.invoke
             handle_invoke_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, FinalizerInfo)
             handle_finalizer_call!(ir, idx, stmt, info, state)

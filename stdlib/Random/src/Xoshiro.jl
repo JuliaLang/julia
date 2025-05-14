@@ -232,7 +232,7 @@ rng_native_52(::TaskLocalRNG) = UInt64
 # this variant of setstate! initializes the internal splitmix state, a.k.a. `s4`
 @inline function initstate!(x::Union{TaskLocalRNG, Xoshiro}, state)
     length(state) == 4 && eltype(state) == UInt64 ||
-        throw(ArgumentError("initstate! expects a list of 4 `UInt64` values"))
+        _throw_argerror("initstate! expects a list of 4 `UInt64` values")
     s0, s1, s2, s3 = state
     setstate!(x, (s0, s1, s2, s3, 1s0 + 3s1 + 5s2 + 7s3))
 end

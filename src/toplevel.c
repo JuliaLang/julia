@@ -195,8 +195,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 
     for (int i = 0; i < jl_array_nrows(exprs); i++) {
         // process toplevel form
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        form = jl_lower(jl_array_ptr_ref(exprs, i), newm, filename, lineno, ~(size_t)0, 0);
+        form = jl_svecref(jl_lower(jl_array_ptr_ref(exprs, i), newm, filename, lineno, ~(size_t)0, 0), 0);
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         (void)jl_toplevel_eval_flex(newm, form, 1, 1, &filename, &lineno);
     }
@@ -417,7 +416,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
             jl_module_t *mod = jl_globalref_mod(f);
             jl_sym_t *name = jl_globalref_name(f);
             jl_binding_t *b = jl_get_binding(mod, name);
-            called = jl_get_binding_value_if_const(b);
+            called = jl_get_latest_binding_value_if_const(b);
         }
         else if (jl_is_quotenode(f)) {
             called = jl_quotenode_value(f);
@@ -518,11 +517,15 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instance_t *mi, jl_code_info_t *src)
 {
+    jl_svec_t *edges = jl_emptysvec;
+    if (src->edges && jl_is_svec(src->edges))
+        edges = (jl_svec_t*)src->edges;
+
     // Do not compress this, we expect it to be shortlived.
     jl_code_instance_t *ci = jl_new_codeinst(mi, (jl_value_t*)jl_uninferred_sym,
         (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, jl_nothing,
         (jl_value_t*)src, 0, src->min_world, src->max_world,
-        0, NULL, NULL, NULL);
+        0, NULL, NULL, edges);
     return ci;
 }
 
@@ -649,10 +652,8 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     JL_GC_PUSH4(&mfunc, &thk, &ex, &root);
 
     size_t last_age = ct->world_age;
-    if (!expanded && jl_needs_lowering(e)) {
-        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        ex = (jl_expr_t*)jl_lower(e, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1);
-        ct->world_age = last_age;
+    if (!expanded && (jl_needs_lowering(e))) {
+        ex = (jl_expr_t*)jl_svecref(jl_lower(e, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1), 0);
     }
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
@@ -709,8 +710,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         for (i = 0; i < jl_array_nrows(ex->args); i++) {
             root = jl_array_ptr_ref(ex->args, i);
             if (jl_needs_lowering(root)) {
-                ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-                root = jl_lower(root, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1);
+                root = jl_svecref(jl_lower(root, m, *toplevel_filename, *toplevel_lineno, ~(size_t)0, 1), 0);
             }
             ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             res = jl_toplevel_eval_flex(m, root, fast, 1, toplevel_filename, toplevel_lineno);
@@ -888,8 +888,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
                 jl_lineno = lineno;
                 continue;
             }
-            ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
-            expression = jl_lower(expression, module, jl_string_data(filename), lineno, ~(size_t)0, 1);
+            expression = jl_svecref(jl_lower(expression, module, jl_string_data(filename), lineno, ~(size_t)0, 1), 0);
             ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }
