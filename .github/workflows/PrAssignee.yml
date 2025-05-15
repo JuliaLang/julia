@@ -147,6 +147,6 @@ jobs:
               body: comment_body,
             });
             console.log('Successfully posted bot comment on the PR');
-            
+
 
             //
