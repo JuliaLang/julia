@@ -71,7 +71,6 @@ jobs:
                 ref: 'main',
               });
 
-              fileContentsObject.content
               const fileContentsBufferObj = Buffer.from(fileContentsObj.content, "base64");
               const fileContentsText = fileContentsBufferObj.toString("utf8");
 
