@@ -75,7 +75,7 @@ jobs:
 
               // Find lines that match ^(@[a-zA-Z0-9]+)(\s*#.*)?\n$ and extract the usernames
               // const regex = /^(@[a-zA-Z0-9]+)(\s*#.*)?\n$/; // TODO: Fix this regex.
-              const regex = /^(\@.*?)$/;
+              const regex = /^(.*?)$/;
               const reviewer_candidates = fileContentsText
                 .split('\n')
                 .map(line => line.trim())
