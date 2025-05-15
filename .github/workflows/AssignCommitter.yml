@@ -80,7 +80,7 @@ jobs:
 
             // Find lines that match ^(@[a-zA-Z0-9]+)(\s*#.*)?\n$ and extract the usernames
             // const regex = /^(@[a-zA-Z0-9]+)(\s*#.*)?\n$/; // TODO: Fix this regex.
-            const regex = /^(.*?)$/;
+            const regex = /^@(.*?)$/;
             const reviewer_candidates = fileContentsText
               .split('\n')
               .map(line => line.trim())
@@ -90,18 +90,19 @@ jobs:
             console.log('reviewer_candidates: ', reviewer_candidates);
 
             if (reviewer_candidates.length < 1) {
-              const error_msg = 'ERROR: Could not find any reviewer_candidates';
-              console.error(error_msg);
-              throw new Error(error_msg);
+              const msg = 'ERROR: Could not find any reviewer_candidates';
+              console.error(msg);
+              throw new Error(msg);
             }
 
-            if (isCollaborator) {
+            if (isCollaborator == true) {
               // The PR author is a committer, so we skip assigning them
               console.log('Skipping PR authored by committer: ', prAuthor);
               return;
             }
 
             // Assign random committer
+            return; // TODO: Delete this line.
             await github.rest.issues.addAssignees({
               owner: context.repo.owner,
               repo: context.repo.repo,
