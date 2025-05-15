@@ -21,7 +21,6 @@ on:
 
 # Permissions for the `GITHUB_TOKEN`:
 permissions:
-  metadata: read
   pull-requests: write # Needed in order to assign a user as the PR assignee
 
 jobs:
@@ -53,11 +52,12 @@ jobs:
             // We use the /repos/{owner}/{repo}/collaborators/{username} endpoint to avoid
             // neeing org scope permissions
             // TODO: Uncomment the following lines:
-            // const { data: isCollaborator } = await github.rest.repos.checkCollaborator({
-            //   owner: context.repo.owner,
-            //   repo: context.repo.repo,
-            //   username: prAuthor,
-            // });
+            const { data: _isCollaborator } = await github.rest.repos.checkCollaborator({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: prAuthor,
+            });
+            console.log('_isCollaborator: ', _isCollaborator);
             const isCollaborator = false; // TODO: Delete this line
 
             console.log('prAuthor: ', prAuthor);
