@@ -21,7 +21,7 @@ function paragraph(stream::IO, md::MD)
             char == '\r' && !eof(stream) && peek(stream, Char) == '\n' && read(stream, Char)
             if prev_char == '\\'
                 write(buffer, '\n')
-            elseif blankline(stream) || parse(stream, md, breaking = true)
+            elseif blankline(stream) || _parse(stream, md, breaking = true)
                 break
             else
                 write(buffer, ' ')

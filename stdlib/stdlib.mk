@@ -8,8 +8,8 @@ INDEPENDENT_STDLIBS := \
 	Markdown Mmap NetworkOptions Profile Printf Pkg REPL Serialization SharedArrays \
 	SparseArrays Statistics StyledStrings SuiteSparse_jll Tar Test TOML Unicode UUIDs \
 	dSFMT_jll GMP_jll libLLVM_jll LLD_jll LLVMLibUnwind_jll LibUnwind_jll LibUV_jll \
-	LibCURL_jll LibSSH2_jll LibGit2_jll nghttp2_jll  MozillaCACerts_jll MbedTLS_jll \
-	MPFR_jll OpenLibm_jll PCRE2_jll p7zip_jll Zlib_jll
+	LibCURL_jll LibSSH2_jll LibGit2_jll nghttp2_jll  MozillaCACerts_jll \
+	MPFR_jll OpenLibm_jll OpenSSL_jll PCRE2_jll p7zip_jll Zlib_jll
 
 STDLIBS := $(STDLIBS_WITHIN_SYSIMG) $(INDEPENDENT_STDLIBS)
 VERSDIR := v$(shell cut -d. -f1-2 < $(JULIAHOME)/VERSION)

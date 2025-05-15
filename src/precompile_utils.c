@@ -170,6 +170,10 @@ static void jl_compile_all_defs(jl_array_t *mis, int all)
     size_t i, l = jl_array_nrows(allmeths);
     for (i = 0; i < l; i++) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(allmeths, i);
+        int is_macro_method = jl_symbol_name(m->name)[0] == '@';
+        if (is_macro_method && !all)
+            continue; // Avoid inference / pre-compilation for macros
+
         if (jl_is_datatype(m->sig) && jl_isa_compileable_sig((jl_tupletype_t*)m->sig, jl_emptysvec, m)) {
             // method has a single compilable specialization, e.g. its definition
             // signature is concrete. in this case we can just hint it.
@@ -203,8 +207,8 @@ static int precompile_enq_specialization_(jl_method_instance_t *mi, void *closur
         else if (jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return) {
             jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
             if (inferred &&
-                inferred != jl_nothing &&
-                (jl_options.compile_enabled != JL_OPTIONS_COMPILE_ALL && jl_ir_inlining_cost(inferred) == UINT16_MAX)) {
+                (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL || inferred == jl_nothing ||
+                 ((jl_is_string(inferred) || jl_is_code_info(inferred)) && jl_ir_inlining_cost(inferred) == UINT16_MAX))) {
                 do_compile = 1;
             }
             else if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL || jl_atomic_load_relaxed(&codeinst->precompile)) {
@@ -264,22 +268,18 @@ static void *jl_precompile_(jl_array_t *m, int external_linkage)
         jl_value_t *item = jl_array_ptr_ref(m, i);
         if (jl_is_method_instance(item)) {
             mi = (jl_method_instance_t*)item;
-            size_t min_world = 0;
-            size_t max_world = ~(size_t)0;
             if (mi != jl_atomic_load_relaxed(&mi->def.method->unspecialized) && !jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->sparam_vals, mi->def.method))
-                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), &min_world, &max_world, 0);
+                mi = jl_get_specialization1((jl_tupletype_t*)mi->specTypes, jl_atomic_load_acquire(&jl_world_counter), 0);
             if (mi)
                 jl_array_ptr_1d_push(m2, (jl_value_t*)mi);
         }
         else {
             assert(jl_is_simplevector(item));
-            assert(jl_svec_len(item) == 2);
+            assert(jl_svec_len(item) == 2 || jl_svec_len(item) == 3);
             jl_array_ptr_1d_push(m2, item);
         }
     }
-    void *native_code = jl_create_native(m2, NULL, NULL, 0, 1, external_linkage,
-                                         jl_atomic_load_acquire(&jl_world_counter),
-                                         NULL);
+    void *native_code = jl_create_native(m2, NULL, 0, external_linkage, jl_atomic_load_acquire(&jl_world_counter));
     JL_GC_POP();
     return native_code;
 }
@@ -338,7 +338,7 @@ static void *jl_precompile_worklist(jl_array_t *worklist, jl_array_t *extext_met
             n = jl_array_nrows(new_ext_cis);
             for (i = 0; i < n; i++) {
                 jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(new_ext_cis, i);
-                precompile_enq_specialization_(ci->def, m);
+                precompile_enq_specialization_(jl_get_ci_mi(ci), m);
             }
         }
     }
@@ -374,8 +374,7 @@ static void *jl_precompile_trimmed(size_t world)
     jl_value_t *ccallable = NULL;
     JL_GC_PUSH2(&m, &ccallable);
     jl_method_instance_t *mi;
-    while (1)
-    {
+    while (1) {
         mi = (jl_method_instance_t*)arraylist_pop(jl_entrypoint_mis);
         if (mi == NULL)
             break;
@@ -387,10 +386,18 @@ static void *jl_precompile_trimmed(size_t world)
             jl_array_ptr_1d_push(m, ccallable);
     }
 
-    jl_cgparams_t params = jl_default_cgparams;
-    params.trim = jl_options.trim;
-    void *native_code = jl_create_native(m, NULL, &params, 0, /* imaging */ 1, 0,
-                                         world, NULL);
+    void *native_code = NULL;
+    JL_TRY {
+        native_code = jl_create_native(m, NULL, jl_options.trim, 0, world);
+    } JL_CATCH {
+        jl_value_t *exc = jl_current_exception(jl_current_task);
+        if (!jl_isa(exc, (jl_value_t*)jl_trimfailure_type))
+            jl_rethrow(); // unexpected exception, expose the stacktrace
+
+        // The verification check failed. The error message should already have
+        // been printed, so give up here and exit (w/o a stack trace).
+        exit(1);
+    }
     JL_GC_POP();
     return native_code;
 }
@@ -409,20 +416,21 @@ static void jl_rebuild_methtables(arraylist_t* MIs, htable_t* mtables)
             ptrhash_put(mtables, old_mt, jl_new_method_table(name, m->module));
         jl_methtable_t *mt = (jl_methtable_t*)ptrhash_get(mtables, old_mt);
         size_t world =  jl_atomic_load_acquire(&jl_world_counter);
-        jl_value_t * lookup = jl_methtable_lookup(mt, m->sig, world);
+        jl_value_t *lookup = jl_methtable_lookup(mt, m->sig, world);
         // Check if the method is already in the new table, if not then insert it there
         if (lookup == jl_nothing || (jl_method_t*)lookup != m) {
             //TODO: should this be a function like unsafe_insert_method?
             size_t min_world = jl_atomic_load_relaxed(&m->primary_world);
-            size_t max_world = jl_atomic_load_relaxed(&m->deleted_world);
+            size_t max_world = ~(size_t)0;
+            assert(min_world == jl_atomic_load_relaxed(&m->primary_world));
+            int dispatch_status = jl_atomic_load_relaxed(&m->dispatch_status);
             jl_atomic_store_relaxed(&m->primary_world, ~(size_t)0);
-            jl_atomic_store_relaxed(&m->deleted_world, 1);
+            jl_atomic_store_relaxed(&m->dispatch_status, 0);
             jl_typemap_entry_t *newentry = jl_method_table_add(mt, m, NULL);
             jl_atomic_store_relaxed(&m->primary_world, min_world);
-            jl_atomic_store_relaxed(&m->deleted_world, max_world);
+            jl_atomic_store_relaxed(&m->dispatch_status, dispatch_status);
             jl_atomic_store_relaxed(&newentry->min_world, min_world);
-            jl_atomic_store_relaxed(&newentry->max_world, max_world);
+            jl_atomic_store_relaxed(&newentry->max_world, max_world); // short-circuit jl_method_table_insert
         }
     }
-
 }

@@ -64,6 +64,7 @@ JL_DLLEXPORT int jl_test_cpu_feature(jl_cpu_feature_t feature);
 static const uint32_t jl_sysimg_tag_mask = 0x80000000u;
 static const uint32_t jl_sysimg_val_mask = ~((uint32_t)0x80000000u);
 
+// A parsed image file
 typedef struct _jl_image_fptrs_t {
     // number of functions
     uint32_t nptrs;
@@ -82,14 +83,14 @@ typedef struct _jl_image_fptrs_t {
     const uint32_t *clone_idxs;
 } jl_image_fptrs_t;
 
-typedef struct {
+struct _jl_image_t {
     uint64_t base;
     const char *gvars_base;
     const int32_t *gvars_offsets;
     uint32_t ngvars;
     jl_image_fptrs_t fptrs;
     void **jl_small_typeof;
-} jl_image_t;
+};
 
 // The header for each image
 // Details important counts about the image
@@ -206,8 +207,8 @@ typedef struct {
  *
  * Return the data about the function pointers selected.
  */
-jl_image_t jl_init_processor_sysimg(void *hdl);
-jl_image_t jl_init_processor_pkgimg(void *hdl);
+jl_image_t jl_init_processor_sysimg(jl_image_buf_t image, const char *cpu_target);
+jl_image_t jl_init_processor_pkgimg(jl_image_buf_t image);
 
 // Return the name of the host CPU as a julia string.
 JL_DLLEXPORT jl_value_t *jl_get_cpu_name(void);
@@ -224,6 +225,18 @@ JL_DLLEXPORT int32_t jl_set_zero_subnormals(int8_t isZero);
 JL_DLLEXPORT int32_t jl_get_zero_subnormals(void);
 JL_DLLEXPORT int32_t jl_set_default_nans(int8_t isDefault);
 JL_DLLEXPORT int32_t jl_get_default_nans(void);
+
+/**
+ * System image contents.
+ *
+ * These symbols are typically dummy values, unless statically linking
+ * libjulia-* and the sysimage together (see null_sysimage.c), in which
+ * case they allow accessing the local copy of the sysimage.
+ **/
+extern char jl_system_image_data;
+extern size_t jl_system_image_size;
+extern jl_image_pointers_t jl_image_pointers;
+
 #ifdef __cplusplus
 }
 
@@ -239,7 +252,7 @@ extern JL_DLLEXPORT bool jl_processor_print_help;
  * If the detected/specified CPU name is not available on the LLVM version specified,
  * a fallback CPU name will be used. Unsupported features will be ignored.
  */
-extern "C" JL_DLLEXPORT std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(bool imaging, uint32_t &flags) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT std::pair<std::string,llvm::SmallVector<std::string, 0>> jl_get_llvm_target(const char *cpu_target, bool imaging, uint32_t &flags) JL_NOTSAFEPOINT;
 
 /**
  * Returns the CPU name and feature string to be used by LLVM disassembler.
@@ -263,7 +276,7 @@ struct jl_target_spec_t {
 /**
  * Return the list of targets to clone
  */
-extern "C" JL_DLLEXPORT llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(void) JL_NOTSAFEPOINT;
+extern "C" JL_DLLEXPORT llvm::SmallVector<jl_target_spec_t, 0> jl_get_llvm_clone_targets(const char *cpu_target) JL_NOTSAFEPOINT;
 // NOLINTEND(clang-diagnostic-return-type-c-linkage)
 struct FeatureName {
     const char *name;

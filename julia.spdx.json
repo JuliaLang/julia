@@ -231,16 +231,16 @@
             "summary": "libssh2 is a library implementing the SSH2 protocol, available under the revised BSD license."
         },
         {
-            "name": "mbedtls",
-            "SPDXID": "SPDXRef-mbedtls",
-            "downloadLocation": "git+https://github.com/ARMmbed/mbedtls.git",
+            "name": "OpenSSL",
+            "SPDXID": "SPDXRef-OpenSSL",
+            "downloadLocation": "git+https://github.com/openssl/openssl.git",
             "filesAnalyzed": false,
-            "homepage": "https://tls.mbed.org",
-            "sourceInfo": "The version in use can be found in the file deps/mbedtls.version",
+            "homepage": "https://www.openssl.org",
+            "sourceInfo": "The version in use can be found in the file deps/openssl.version",
             "licenseConcluded": "Apache-2.0",
             "licenseDeclared": "Apache-2.0",
-            "copyrightText": "NOASSERTION",
-            "summary": "An open source, portable, easy to use, readable and flexible SSL library."
+            "copyrightText": "Copyright (c) 1998-2024 The OpenSSL Project Authors. Copyright (c) 1995-1998 Eric A. Young, Tim J. Hudson.",
+            "summary": "OpenSSL is a robust, commercial-grade, full-featured Open Source Toolkit for the TLS (formerly SSL), DTLS and QUIC (currently client side only) protocols.",
         },
         {
             "name": "mpfr",
@@ -560,7 +560,7 @@
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },
         {
-            "spdxElementId": "SPDXRef-mbedtls",
+            "spdxElementId": "SPDXRef-OpenSSL",
             "relationshipType": "BUILD_DEPENDENCY_OF",
             "relatedSpdxElement": "SPDXRef-JuliaMain"
         },

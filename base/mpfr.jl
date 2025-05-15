@@ -18,14 +18,18 @@ import
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
         isone, big, _string_n, decompose, minmax, _precision_with_base_2,
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
-        uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask
+        uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
+        ispositive, isnegative
+
+import .Core: AbstractFloat
+import .Base: Rational, Float16, Float32, Float64, Bool
 
 using .Base.Libc
 import ..Rounding: Rounding,
     rounding_raw, setrounding_raw, rounds_to_nearest, rounds_away_from_zero,
     tie_breaker_is_to_even, correct_rounding_requires_increment
 
-import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp
+import ..GMP: ClongMax, CulongMax, CdoubleMax, Limb, libgmp, BigInt
 
 import ..FastMath.sincos_fast
 
@@ -211,6 +215,8 @@ end
 Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ptr{BigFloat}) = error("not compatible with mpfr")
 Base.unsafe_convert(::Type{Ref{BigFloat}}, x::Ref{BigFloat}) = error("not compatible with mpfr")
 Base.cconvert(::Type{Ref{BigFloat}}, x::BigFloat) = x.d # BigFloatData is the Ref type for BigFloat
+Base.cconvert(::Type{Ref{BigFloat}}, x::Number) = convert(BigFloat, x).d # avoid default conversion to Ref(BigFloat(x))
+Base.cconvert(::Type{Ref{BigFloat}}, x::Ref{BigFloat}) = x[].d
 function Base.unsafe_convert(::Type{Ref{BigFloat}}, x::BigFloatData)
     d = getfield(x, :d)
     p = Base.unsafe_convert(Ptr{Limb}, d)
@@ -238,7 +244,7 @@ Base.copyto!(fd::BigFloatData, limbs) = copyto!(getfield(fd, :d), offset_p_limbs
 
 include("rawbigfloats.jl")
 
-rounding_raw(::Type{BigFloat}) = something(Base.ScopedValues.get(CURRENT_ROUNDING_MODE), ROUNDING_MODE[])
+rounding_raw(::Type{BigFloat}) = @something(Base.ScopedValues.get(CURRENT_ROUNDING_MODE), ROUNDING_MODE[])
 setrounding_raw(::Type{BigFloat}, r::MPFRRoundingMode) = ROUNDING_MODE[]=r
 function setrounding_raw(f::Function, ::Type{BigFloat}, r::MPFRRoundingMode)
     Base.ScopedValues.@with(CURRENT_ROUNDING_MODE => r, f())
@@ -1039,7 +1045,7 @@ _convert_precision_from_base(precision::Integer, base::Integer) =
     base == 2 ? precision : ceil(Int, precision * log2(base))
 
 _precision_with_base_2(::Type{BigFloat}) =
-    Int(something(Base.ScopedValues.get(CURRENT_PRECISION), DEFAULT_PRECISION[])) # default precision of the type BigFloat itself
+    Int(@something(Base.ScopedValues.get(CURRENT_PRECISION), DEFAULT_PRECISION[])) # default precision of the type BigFloat itself
 
 """
     setprecision([T=BigFloat,] precision::Int; base=2)
@@ -1129,6 +1135,10 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 
 iszero(x::BigFloat) = x.exp == mpfr_special_exponent_zero
 isone(x::BigFloat) = x == Clong(1)
+
+# In theory, `!iszero(x) && !isnan(x)` should be the same as `x.exp > mpfr_special_exponent_nan`, but this is safer.
+ispositive(x::BigFloat) = !signbit(x) && !iszero(x) && !isnan(x)
+isnegative(x::BigFloat) = signbit(x) && !iszero(x) && !isnan(x)
 
 @eval typemax(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
@@ -1224,7 +1234,7 @@ function _prettify_bigfloat(s::String)::String
             string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac == "0" ? "" : frac)
         end
     else
-        string(mantissa, 'e', exponent)
+        string(mantissa, 'e', expo)
     end
 end
 
