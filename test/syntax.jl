@@ -1939,7 +1939,7 @@ end
 # eval'ing :const exprs
 eval(Expr(:const, :_var_30877))
 @test !isdefined(@__MODULE__, :_var_30877)
-@test isconst(@__MODULE__, :_var_30877)
+@test !isconst(@__MODULE__, :_var_30877)
 
 # anonymous kw function in value position at top level
 f30926 = function (;k=0)
@@ -2285,6 +2285,11 @@ end
     @test Meta.parse("a ⥺ b") == Expr(:call, :⥺, :a, :b)
     @test Meta.parse("a ⭃ b") == Expr(:call, :⭃, :a, :b)
     @test Meta.parse("a ⥷ b") == Expr(:call, :⥷, :a, :b)
+end
+
+# issue 57143
+@testset "binary 🢲" begin
+    @test Meta.parse("a 🢲 b") == Expr(:call, :🢲, :a, :b)
 end
 
 # only allow certain characters after interpolated vars (#25231)
