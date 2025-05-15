@@ -116,14 +116,14 @@ jobs:
             // Assign random committer
             const selected_assignee = assignee_candidates[Math.floor(Math.random()*assignee_candidates.length)]
             console.log('selected_assignee: ', selected_assignee);
-            console.log(`Attempting to assign @{selected_assignee} to this PR...`);
+            console.log(`Attempting to assign @${selected_assignee} to this PR...`);
             await github.rest.issues.addAssignees({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
               assignees: selected_assignee,
             });
-            console.log(`Successfully assigned @{selected_assignee} to this PR.`);
+            console.log(`Successfully assigned @${selected_assignee} to this PR.`);
 
             // Add the "pr review" label
             const pr_review_label = 'status: waiting for PR reviewer';
