@@ -936,6 +936,7 @@ f(x::Int; y=3) = x + y
 @test hasmethod(f, Tuple{Int})
 @test hasmethod(f, Tuple{Int}, ())
 @test hasmethod(f, Tuple{Int}, (:y,))
+@test !hasmethod(f, Tuple{Int}, (:x,))
 @test !hasmethod(f, Tuple{Int}, (:jeff,))
 @test !hasmethod(f, Tuple{Int}, (:y,), world=typemin(UInt))
 g(; b, c, a) = a + b + c
