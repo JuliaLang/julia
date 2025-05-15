@@ -48,10 +48,9 @@ jobs:
             }
             const prAuthor = context.payload.pull_request.user.login;
 
-            // Check if the PR is opened by a collaborator on the repo (aka a committer)
+            // Check if the PR is opened by a collaborator on the repo (aka a committer).
             // We use the /repos/{owner}/{repo}/collaborators/{username} endpoint to avoid
-            // neeing org scope permissions
-            // TODO: Uncomment the following lines:
+            // neeing org scope permissions.
             const isCollaboratorResponseObj = await github.request('GET /repos/{owner}/{repo}/collaborators/{username}', {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -61,13 +60,13 @@ jobs:
               }
             })
             if (isCollaboratorResponseObj.status == 204) {
-              let isCollaborator = true;
-            } elseif (isCollaboratorResponseObj.status == 404) {
-              let isCollaborator = false;
+              var isCollaborator = true;
+            } else if (isCollaboratorResponseObj.status == 404) {
+              var isCollaborator = false;
             } else {
               console.error('Unable to process the response from checkCollaborator');
               console.error('isCollaboratorResponseObj: ', isCollaboratorResponseObj);
-              let isCollaborator = false;
+              var isCollaborator = false;
             }
 
             console.log('prAuthor: ', prAuthor);
