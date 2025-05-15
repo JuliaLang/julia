@@ -52,7 +52,7 @@ jobs:
             // We use the /repos/{owner}/{repo}/collaborators/{username} endpoint to avoid
             // neeing org scope permissions
             // TODO: Uncomment the following lines:
-            const _isCollaborator = await octokit.request('GET /repos/{owner}/{repo}/collaborators/{username}', {
+            const _isCollaborator = await github.request('GET /repos/{owner}/{repo}/collaborators/{username}', {
               owner: context.repo.owner,
               repo: context.repo.repo,
               username: prAuthor,
