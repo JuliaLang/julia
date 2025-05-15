@@ -44,7 +44,7 @@ jobs:
             console.log('prAssignees: ', prAssignees);
             if (prAssignees.length >= 1) {
               console.log('Pull request already has at least one assignee. Will not assign any new assignees.');
-              return;
+              // return; // TODO: Uncomment this line.
             }
             const prAuthor = context.payload.pull_request.user.login;
 
