@@ -374,11 +374,15 @@ $(1)_rel_eval = $(call rel_path,$(2),$($(1)))
 $(1)_rel = $$(call hit_cache,$(1)_rel_eval)
 endef
 $(foreach D,libdir private_libdir datarootdir libexecdir private_libexecdir docdir sysconfdir includedir,$(eval $(call cache_rel_path,$(D),$(bindir))))
-$(foreach D,build_libdir build_private_libdir,$(eval $(call cache_rel_path,$(D),$(build_bindir))))
+$(foreach D,build_libdir build_private_libdir                                                           ,$(eval $(call cache_rel_path,$(D),$(build_bindir))))
 
 # Save a special one: reverse_private_libdir_rel: usually just `../`, but good to be general:
 reverse_private_libdir_rel_eval = $(call rel_path,$(private_libdir),$(libdir))
 reverse_private_libdir_rel = $(call hit_cache,reverse_private_libdir_rel_eval)
+reverse_private_libexecdir_rel_eval = $(call rel_path,$(private_libexecdir),$(private_libdir))
+reverse_private_libexecdir_rel = $(call hit_cache,reverse_private_libexecdir_rel_eval)
+reverse_build_private_libexecdir_rel_eval = $(call rel_path,$(build_private_libexecdir),$(build_libdir))
+reverse_build_private_libexecdir_rel = $(call hit_cache,reverse_build_private_libexecdir_rel_eval)
 
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755

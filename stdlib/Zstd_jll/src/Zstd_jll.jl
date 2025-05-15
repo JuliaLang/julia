@@ -11,7 +11,7 @@ export libzstd, zstd, zstdmt
 libzstd_handle::Ptr{Cvoid} = C_NULL
 
 if Sys.iswindows()
-    const libzstd = "libzstd.dll"
+    const libzstd = "libzstd-1.dll"
 elseif Sys.isapple()
     const libzstd = "@rpath/libzstd.1.dylib"
 else
@@ -26,10 +26,21 @@ else
     const zstdmt_exe = "zstdmt"
 end
 
+if Sys.iswindows()
+function adjust_ENV(cmd::Cmd)
+    dllPATH = Sys.BINDIR
+    oldPATH = get(ENV, "PATH", "")
+    newPATH = isempty(oldPATH) ? dllPATH : "$dllPATH;$oldPATH"
+    return addenv(cmd, "PATH"=>newPATH)
+end
+else
+adjust_ENV(cmd::Cmd) = cmd
+end
+
 zstd(f::Function) = f(zstd())
-zstd() = `$(Sys.BINDIR)/$zstd_exe`
 zstdmt(f::Function) = f(zstdmt())
-zstdmt() = `$(Sys.BINDIR)/$zstdmt_exe`
+zstd() = adjust_ENV(`$(Sys.BINDIR)/$(Base.PRIVATE_LIBEXECDIR)/$zstd_exe`)
+zstdmt() = adjust_ENV(`$(Sys.BINDIR)/$(Base.PRIVATE_LIBEXECDIR)/$zstdmt_exe`)
 
 function __init__()
     global libzstd_handle = dlopen(libzstd)
