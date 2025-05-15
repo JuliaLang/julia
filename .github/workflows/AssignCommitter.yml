@@ -104,6 +104,7 @@ jobs:
 
             // Assign random committer
             const random_committer = reviewer_candidates[Math.floor(Math.random()*reviewer_candidates.length)]
+            console.log('random_committer: ', random_committer);
             await github.rest.issues.addAssignees({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -121,8 +122,7 @@ jobs:
             });
 
             // Post a comment
-            const comment_body = `Hello. I am a bot.
-                                  I have assigned \`@${random_committer}\` to this pull request.`
+            const comment_body = `Hello. I am a bot.\n\nI have assigned \`@${random_committer}\` to this pull request.`
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
