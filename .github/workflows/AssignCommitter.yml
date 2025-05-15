@@ -76,7 +76,7 @@ jobs:
               // Find lines that match ^(@[a-zA-Z0-9]+)(\s*#.*)?\n$ and extract the usernames
               const reviewer_candidates = fileContentsText
                 .split('\n')
-                //.map(line => line.match(/^(@[a-zA-Z0-9]+)(\s*#.*)?\n$/))
+                .map(line => line.match(/^(@[a-zA-Z0-9]+)(\s*#.*)?\n$/))
                 //.filter(match => match !== null)
                 //.map(match => match[1].substring(1)); // Remove the @ symbol
               console.log('reviewer_candidates: ', reviewer_candidates);
