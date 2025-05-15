@@ -110,6 +110,7 @@ not_const = 1
 @test isconst(@__MODULE__, :a_const) == true
 @test isconst(Base, :pi) == true
 @test isconst(@__MODULE__, :pi) == true
+@test isconst(GlobalRef(@__MODULE__, :pi)) == true
 @test isconst(@__MODULE__, :not_const) == false
 @test isconst(@__MODULE__, :is_not_defined) == false
 
@@ -345,6 +346,7 @@ tlayout = TLayout(5,7,11)
 @test !hasproperty(tlayout, :p)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
+@test [fieldoffset(TLayout, s) for s = (:x, :y, :z)] == [0, 2, 4]
 @test fieldnames(Complex) === (:re, :im)
 @test_throws BoundsError fieldtype(TLayout, 0)
 @test_throws ArgumentError fieldname(TLayout, 0)
@@ -359,6 +361,10 @@ tlayout = TLayout(5,7,11)
 # issue #30505
 @test fieldtype(Union{Tuple{Char},Tuple{Char,Char}},2) === Char
 @test_throws BoundsError fieldtype(Union{Tuple{Char},Tuple{Char,Char}},3)
+
+@test [fieldindex(TLayout, i) for i = (:x, :y, :z)] == [1, 2, 3]
+@test fieldname(TLayout, fieldindex(TLayout, :z)) === :z
+@test fieldindex(TLayout, fieldname(TLayout, 3)) === 3
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
 @test_throws ArgumentError fieldnames(Union{})
@@ -568,7 +574,7 @@ fLargeTable() = 4
 fLargeTable(::Union, ::Union) = "a"
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "a"
 fLargeTable(::Union, ::Union) = "b"
-@test length(methods(fLargeTable)) == 206
+@test length(methods(fLargeTable)) == 205
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
 # issue #15280
@@ -930,6 +936,7 @@ f(x::Int; y=3) = x + y
 @test hasmethod(f, Tuple{Int})
 @test hasmethod(f, Tuple{Int}, ())
 @test hasmethod(f, Tuple{Int}, (:y,))
+@test !hasmethod(f, Tuple{Int}, (:x,))
 @test !hasmethod(f, Tuple{Int}, (:jeff,))
 @test !hasmethod(f, Tuple{Int}, (:y,), world=typemin(UInt))
 g(; b, c, a) = a + b + c
@@ -968,10 +975,6 @@ f20872(::Val, ::Val) = false
 @test which(f20872, Tuple{Val,Val{N}} where N).sig == Tuple{typeof(f20872), Val, Val}
 @test_throws ErrorException which(f20872, Tuple{Any,Val{N}} where N)
 @test which(Tuple{typeof(f20872), Val{1}, Val{2}}).sig == Tuple{typeof(f20872), Val, Val}
-
-module M29962 end
-# make sure checking if a binding is deprecated does not resolve it
-@test !Base.isdeprecated(M29962, :sin) && !Base.isbindingresolved(M29962, :sin)
 
 # @locals
 using Base: @locals
@@ -1214,6 +1217,8 @@ end
 
 @test Base.ismutationfree(Type{Union{}})
 
+@test !Base.ismutationfree(Core.SimpleVector)
+
 module TestNames
 
 public publicized
@@ -1298,3 +1303,24 @@ end
 @test Base.infer_return_type(code_lowered, (Any,Any)) == Vector{Core.CodeInfo}
 
 @test methods(Union{}) == Any[m.method for m in Base._methods_by_ftype(Tuple{Core.TypeofBottom, Vararg}, 1, Base.get_world_counter())] # issue #55187
+
+# which should not look through const bindings, even if they have the same value
+# as a previous implicit import
+module SinConst
+const sin = Base.sin
+end
+
+@test which(SinConst, :sin) === SinConst
+
+# `which` should error if there is not a unique binding that a constant was imported from
+module X1ConstConflict
+const xconstconflict = 1
+export xconstconflict
+end
+module X2ConstConflict
+const xconstconflict = 1
+export xconstconflict
+end
+using .X1ConstConflict, .X2ConstConflict
+
+@test_throws ErrorException which(@__MODULE__, :xconstconflict)

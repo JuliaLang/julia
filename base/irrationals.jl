@@ -60,19 +60,39 @@ AbstractFloat(x::AbstractIrrational) = Float64(x)::Float64
 Float16(x::AbstractIrrational) = Float16(Float32(x)::Float32)
 Complex{T}(x::AbstractIrrational) where {T<:Real} = Complex{T}(T(x))
 
-function _irrational_to_rational(::Type{T}, x::AbstractIrrational) where T<:Integer
-    o = precision(BigFloat)
+function _irrational_to_rational_at_current_precision(::Type{T}, x::AbstractIrrational) where {T <: Integer}
+    bx = BigFloat(x)
+    r = rationalize(T, bx, tol = 0)
+    if abs(BigFloat(r) - bx) > eps(bx)
+        r
+    else
+        nothing  # Error is too small, repeat with greater precision.
+    end
+end
+function _irrational_to_rational_at_precision(::Type{T}, x::AbstractIrrational, p::Int) where {T <: Integer}
+    f = let x = x
+        () -> _irrational_to_rational_at_current_precision(T, x)
+    end
+    setprecision(f, BigFloat, p)
+end
+function _irrational_to_rational_at_current_rounding_mode(::Type{T}, x::AbstractIrrational) where {T <: Integer}
+    if T <: BigInt
+        _throw_argument_error_irrational_to_rational_bigint()  # avoid infinite loop
+    end
     p = 256
     while true
-        setprecision(BigFloat, p)
-        bx = BigFloat(x)
-        r = rationalize(T, bx, tol=0)
-        if abs(BigFloat(r) - bx) > eps(bx)
-            setprecision(BigFloat, o)
+        r = _irrational_to_rational_at_precision(T, x, p)
+        if r isa Number
             return r
         end
         p += 32
     end
+end
+function _irrational_to_rational(::Type{T}, x::AbstractIrrational) where {T <: Integer}
+    f = let x = x
+        () -> _irrational_to_rational_at_current_rounding_mode(T, x)
+    end
+    setrounding(f, BigFloat, RoundNearest)
 end
 Rational{T}(x::AbstractIrrational) where {T<:Integer} = _irrational_to_rational(T, x)
 _throw_argument_error_irrational_to_rational_bigint() = throw(ArgumentError("Cannot convert an AbstractIrrational to a Rational{BigInt}: use rationalize(BigInt, x) instead"))

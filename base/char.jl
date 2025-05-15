@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: AbstractChar, Char
+
 """
 The `AbstractChar` type is the supertype of all character implementations
 in Julia. A character represents a Unicode code point, and can be converted
@@ -52,7 +54,7 @@ Char
 (::Type{T})(x::T) where {T<:AbstractChar} = x
 
 """
-    ncodeunits(c::Char) -> Int
+    ncodeunits(c::Char)::Int
 
 Return the number of code units required to encode a character as UTF-8.
 This is the number of bytes which will be printed if the character is written
@@ -72,7 +74,7 @@ function ncodeunits(c::Char)
 end
 
 """
-    codepoint(c::AbstractChar) -> Integer
+    codepoint(c::AbstractChar)::Integer
 
 Return the Unicode codepoint (an unsigned integer) corresponding
 to the character `c` (or throw an exception if `c` does not represent
@@ -112,7 +114,7 @@ end
 #           not to support malformed or overlong encodings.
 
 """
-    ismalformed(c::AbstractChar) -> Bool
+    ismalformed(c::AbstractChar)::Bool
 
 Return `true` if `c` represents malformed (non-Unicode) data according to the
 encoding used by `c`. Defaults to `false` for non-`Char` types.
@@ -122,7 +124,7 @@ See also [`show_invalid`](@ref).
 ismalformed(c::AbstractChar) = false
 
 """
-    isoverlong(c::AbstractChar) -> Bool
+    isoverlong(c::AbstractChar)::Bool
 
 Return `true` if `c` represents an overlong UTF-8 sequence. Defaults
 to `false` for non-`Char` types.
@@ -147,7 +149,7 @@ isoverlong(c::AbstractChar) = false
 end
 
 """
-    decode_overlong(c::AbstractChar) -> Integer
+    decode_overlong(c::AbstractChar)::Integer
 
 When [`isoverlong(c)`](@ref) is `true`, `decode_overlong(c)` returns
 the Unicode codepoint value of `c`. `AbstractChar` implementations
@@ -220,10 +222,7 @@ in(x::AbstractChar, y::AbstractChar) = x == y
 ==(x::Char, y::Char) = bitcast(UInt32, x) == bitcast(UInt32, y)
 isless(x::Char, y::Char) = bitcast(UInt32, x) < bitcast(UInt32, y)
 hash(x::Char, h::UInt) =
-    hash_uint64(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
-
-first_utf8_byte(c::Char) = (bitcast(UInt32, c) >> 24) % UInt8
-first_utf8_byte(c::AbstractChar) = first_utf8_byte(Char(c)::Char)
+    hash_finalizer(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h)) % UInt
 
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))

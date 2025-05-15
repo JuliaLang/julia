@@ -271,7 +271,7 @@ function securezero! end
 unsafe_securezero!(p::Ptr{Cvoid}, len::Integer=1) = Ptr{Cvoid}(unsafe_securezero!(Ptr{UInt8}(p), len))
 
 """
-    Base.getpass(message::AbstractString; with_suffix::Bool=true) -> Base.SecretBuffer
+    Base.getpass(message::AbstractString; with_suffix::Bool=true)::Base.SecretBuffer
 
 Display a message and wait for the user to input a secret, returning an `IO`
 object containing the secret. If `with_suffix` is `true` (the default), the
@@ -383,7 +383,7 @@ end
 getpass(prompt::AbstractString; with_suffix::Bool=true) = getpass(stdin, stdout, prompt; with_suffix)
 
 """
-    prompt(message; default="") -> Union{String, Nothing}
+    prompt(message; default="")::Union{String, Nothing}
 
 Displays the `message` then waits for user input. Input is terminated when a newline (\\n)
 is encountered or EOF (^D) character is entered on a blank line. If a `default` is provided
@@ -508,7 +508,7 @@ unsafe_crc32c(a, n, crc) = ccall(:jl_crc32c, UInt32, (UInt32, Ptr{UInt8}, Csize_
 _crc32c(a::NTuple{<:Any, UInt8}, crc::UInt32=0x00000000) =
     unsafe_crc32c(Ref(a), length(a) % Csize_t, crc)
 
-function _crc32c(a::DenseBytes, crc::UInt32=0x00000000)
+function _crc32c(a::DenseUInt8OrInt8, crc::UInt32=0x00000000)
     unsafe_crc32c(a, length(a) % Csize_t, crc)
 end
 
@@ -678,7 +678,7 @@ end
 
 """
     Base.runtests(tests=["all"]; ncores=ceil(Int, Sys.CPU_THREADS / 2),
-                  exit_on_error=false, revise=false, propagate_project=true, [seed])
+                  exit_on_error=false, revise=false, propagate_project=true, [seed], [julia_args::Cmd])
 
 Run the Julia unit tests listed in `tests`, which can be either a string or an array of
 strings, using `ncores` processors. If `exit_on_error` is `false`, when one test
@@ -689,12 +689,14 @@ to the standard libraries before running the tests.
 If `propagate_project` is true the current project is propagated to the test environment.
 If a seed is provided via the keyword argument, it is used to seed the
 global RNG in the context where the tests are run; otherwise the seed is chosen randomly.
+The argument `julia_args` can be used to pass custom `julia` command line flags to the test process.
 """
 function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
                   exit_on_error::Bool=false,
                   revise::Bool=false,
                   propagate_project::Bool=false,
-                  seed::Union{BitInteger,Nothing}=nothing)
+                  seed::Union{BitInteger,Nothing}=nothing,
+                  julia_args::Cmd=``)
     if isa(tests,AbstractString)
         tests = split(tests)
     end
@@ -710,7 +712,7 @@ function runtests(tests = ["all"]; ncores::Int = ceil(Int, Sys.CPU_THREADS / 2),
     delete!(ENV2, "JULIA_PROJECT")
     project_flag = propagate_project ? `--project` : ``
     try
-        run(setenv(`$(julia_cmd()) $project_flag $(joinpath(Sys.BINDIR,
+        run(setenv(`$(julia_cmd()) $julia_args $project_flag $(joinpath(Sys.BINDIR,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
         nothing
     catch

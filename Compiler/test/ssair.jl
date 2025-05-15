@@ -1,5 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+include("setup_Compiler.jl")
 include("irutils.jl")
 
 using Test
@@ -134,7 +135,7 @@ let code = Any[
         Expr(:boundscheck),
         Compiler.GotoIfNot(SSAValue(1), 6),
         # block 2
-        Expr(:call, GlobalRef(Base, :size), Compiler.Argument(3)),
+        Expr(:call, size, Compiler.Argument(3)),
         Compiler.ReturnNode(),
         # block 3
         Core.PhiNode(),
@@ -418,7 +419,7 @@ end
     @test first(only(Base.code_ircode(+, (Float64, Float64)))) isa Compiler.IRCode
     @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = 3))) isa
           Compiler.IRCode
-    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = "SROA"))) isa
+    @test first(only(Base.code_ircode(+, (Float64, Float64); optimize_until = "CC: SROA"))) isa
           Compiler.IRCode
 
     function demo(f)
@@ -428,7 +429,7 @@ end
     end
     @test first(only(Base.code_ircode(demo))) isa Compiler.IRCode
     @test first(only(Base.code_ircode(demo; optimize_until = 3))) isa Compiler.IRCode
-    @test first(only(Base.code_ircode(demo; optimize_until = "SROA"))) isa Compiler.IRCode
+    @test first(only(Base.code_ircode(demo; optimize_until = "CC: SROA"))) isa Compiler.IRCode
 end
 
 # slots after SSA conversion
@@ -441,12 +442,12 @@ end
 let # #self#, a, b, c, d
     unopt = code_typed1(f_with_slots, (Int,Int); optimize=false)
     @test length(unopt.slotnames) == length(unopt.slotflags) == length(unopt.slottypes) == 5
-    ir_withslots = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="convert")))
+    ir_withslots = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="CC: CONVERT")))
     @test length(ir_withslots.argtypes) == 5
     # #self#, a, b
     opt = code_typed1(f_with_slots, (Int,Int); optimize=true)
     @test length(opt.slotnames) == length(opt.slotflags) == length(opt.slottypes) == 3
-    ir_ssa = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="slot2reg")))
+    ir_ssa = first(only(Base.code_ircode(f_with_slots, (Int,Int); optimize_until="CC: SLOT2REG")))
     @test length(ir_ssa.argtypes) == 3
 end
 
@@ -597,9 +598,10 @@ import Core: SSAValue
 import .Compiler: NewInstruction, insert_node!
 
 # insert_node! for pending node
-let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
+let ir = Base.code_ircode((Int,Int); optimize_until="CC: INLINING") do a, b
         a^b
     end |> only |> first
+    ir = Compiler.compact!(ir)
     nstmts = length(ir.stmts)
     invoke_idx = findfirst(@nospecialize(stmt)->Meta.isexpr(stmt, :invoke), ir.stmts.stmt)
     @test invoke !== nothing
@@ -658,9 +660,10 @@ let code = Any[
 end
 
 # insert_node! with new instruction with flag computed
-let ir = Base.code_ircode((Int,Int); optimize_until="inlining") do a, b
+let ir = Base.code_ircode((Int,Int); optimize_until="CC: INLINING") do a, b
         a^b
     end |> only |> first
+    ir = Compiler.compact!(ir)
     invoke_idx = findfirst(@nospecialize(stmt)->Meta.isexpr(stmt, :invoke), ir.stmts.stmt)
     @test invoke_idx !== nothing
     invoke_expr = ir.stmts.stmt[invoke_idx]
@@ -722,7 +725,7 @@ end
         @test any(j -> isa(unopt.code[j], Core.Const) && unopt.ssavaluetypes[j] == Union{}, 1:length(unopt.code))
 
         # Any GotoIfNot destinations after IRCode conversion should not be statically unreachable
-        ircode = first(only(Base.code_ircode(f_with_maybe_nonbool_cond, (Int, Bool); optimize_until="convert")))
+        ircode = first(only(Base.code_ircode(f_with_maybe_nonbool_cond, (Int, Bool); optimize_until="CC: CONVERT")))
         for i = 1:length(ircode.stmts)
             expr = ircode.stmts[i][:stmt]
             if isa(expr, GotoIfNot)
@@ -818,3 +821,6 @@ let cl = Int32[32, 1, 1, 1000, 240, 230]
     cl2 = ccall(:jl_uncompress_codelocs, Any, (Any, Int), str, 2)
     @test cl == cl2
 end
+
+@test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = "nonexisting pass name")
+@test_throws ErrorException Base.code_ircode(+, (Float64, Float64); optimize_until = typemax(Int))
