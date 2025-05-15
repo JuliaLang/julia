@@ -29,6 +29,7 @@
 #include <llvm/Transforms/IPO/Annotation2Metadata.h>
 #include <llvm/Transforms/IPO/ConstantMerge.h>
 #include <llvm/Transforms/IPO/ForceFunctionAttrs.h>
+#include <llvm/Transforms/IPO/FunctionAttrs.h>
 #include <llvm/Transforms/IPO/GlobalDCE.h>
 #include <llvm/Transforms/IPO/GlobalOpt.h>
 #include <llvm/Transforms/IPO/StripDeadPrototypes.h>
@@ -381,9 +382,15 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
     if (options.enable_early_optimizations) {
       invokeOptimizerEarlyCallbacks(MPM, PB, O);
       {
+          if (O.getSpeedupLevel() >= 2) {
+              MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
+              MPM.addPass(createModuleToFunctionPassAdaptor(InvalidateAnalysisPass<AAManager>()));
+          }
           CGSCCPassManager CGPM;
           invokeCGSCCCallbacks(CGPM, PB, O);
           if (O.getSpeedupLevel() >= 2) {
+              if (options.enable_attributes)
+                CGPM.addPass(PostOrderFunctionAttrsPass());
               FunctionPassManager FPM;
               JULIA_PASS(FPM.addPass(AllocOptPass()));
               FPM.addPass(Float2IntPass());
@@ -391,9 +398,6 @@ static void buildEarlyOptimizerPipeline(ModulePassManager &MPM, PassBuilder *PB,
               CGPM.addPass(createCGSCCToFunctionPassAdaptor(std::move(FPM)));
           }
           MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(std::move(CGPM)));
-      }
-      if (O.getSpeedupLevel() >= 2) {
-          MPM.addPass(RequireAnalysisPass<GlobalsAA, Module>());
       }
       // MPM.addPass(createModuleToFunctionPassAdaptor(InvalidateAnalysisPass<AAManager>()));
       if (options.dump_native) {
@@ -630,13 +634,21 @@ static void buildPipeline(ModulePassManager &MPM, PassBuilder *PB, OptimizationL
     {
         FunctionPassManager FPM;
         buildLoopOptimizerPipeline(FPM, PB, O, options);
-        buildScalarOptimizerPipeline(FPM, PB, O, options);
+        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+        if (options.enable_attributes)
+            MPM.addPass(createModuleToPostOrderCGSCCPassAdaptor(PostOrderFunctionAttrsPass()));
+        FunctionPassManager FPM2;
+        buildScalarOptimizerPipeline(FPM2, PB, O, options);
+        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM2)));
+        if (options.enable_attributes)
+            MPM.addPass(ReversePostOrderFunctionAttrsPass());
+        FunctionPassManager FPM3;
         if (O.getSpeedupLevel() >= 2) {
-            buildVectorPipeline(FPM, PB, O, options);
+            buildVectorPipeline(FPM3, PB, O, options);
         }
         if (options.warn_missed_transformations)
-            FPM.addPass(WarnMissedTransformationsPass());
-        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+            FPM3.addPass(WarnMissedTransformationsPass());
+        MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM3)));
     }
     buildIntrinsicLoweringPipeline(MPM, PB, O, options);
     buildCleanupPipeline(MPM, PB, O, options);
@@ -830,6 +842,7 @@ static std::optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJul
             OPTION(enable_scalar_optimizations),
             OPTION(enable_loop_optimizations),
             OPTION(enable_vector_pipeline),
+            OPTION(enable_attributes)
             OPTION(remove_ni),
             OPTION(cleanup),
             OPTION(warn_missed_transformations)
