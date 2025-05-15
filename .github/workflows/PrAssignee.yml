@@ -87,7 +87,7 @@ jobs:
             const fileContentsText = fileContentsBufferObj.toString("utf8");
 
             // Find lines that match the following regex, and extract the usernames:
-            // const regex = /^(@[a-zA-Z0-9]+)(\s*#.*)?\n$/; // TODO: Fix this regex.
+            // const regex = /^(@[a-zA-Z0-9]+)(\s*#.*)?$/; // TODO: Fix this regex.
             const regex = /^@(.*?)$/;
             const assignee_candidates = fileContentsText
               .split('\n')
