@@ -41,6 +41,7 @@ jobs:
           retry-exempt-status-codes: 403
           script: |
             const prAssignees = context.payload.pull_request.assignees
+              .map(obj => obj.login)
             console.log('prAssignees: ', prAssignees);
             const prAuthor = context.payload.pull_request.user.login;
 
