@@ -138,7 +138,7 @@ jobs:
             console.log('Successfully added pr_review_label to this PR');
 
             // Post a comment
-            const comment_body = `Hello. I am a bot.\n\nI have assigned \`@${selected_assignee}\` to this pull request.\n\n\`@${selected_assignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.`
+            const comment_body = `Hello! I am a bot.\n\nThank you for your pull request!\n\nI have assigned \`@${selected_assignee}\` to this pull request.\n\n\`@${selected_assignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.`
             console.log('Attempting to post bot comment on the PR...');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
