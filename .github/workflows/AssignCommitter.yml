@@ -21,6 +21,7 @@ on:
 
 # Permissions for the `GITHUB_TOKEN`:
 permissions:
+  metadata: read
   pull-requests: write # Needed in order to assign a user as the PR assignee
 
 jobs:
