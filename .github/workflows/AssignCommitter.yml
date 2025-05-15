@@ -62,10 +62,11 @@ jobs:
             console.log('prAuthor: ', prAuthor);
             console.log('isCollaborator: ', isCollaborator);
 
-            // Load the list of assignable reviewres the JuliaLang/pr-assignment repo
-            // at https://github.com/JuliaLang/pr-assignment/blob/main/users.txt
-            // NOTE to reviewers: If you want to be assigned to new PRs, please add your
-            // GitHub username to that file
+            // Load the list of assignable reviewers from the JuliaLang/pr-assignment repo at:
+            // https://github.com/JuliaLang/pr-assignment/blob/main/users.txt
+            //
+            // NOTE to JuliaLang committers: If you want to be assigned to new PRs, please add your
+            // GitHub username to that file.
 
             // Load file contents
             const { data: fileContentsObj } = await github.rest.repos.getContent({
@@ -78,7 +79,7 @@ jobs:
             const fileContentsBufferObj = Buffer.from(fileContentsObj.content, "base64");
             const fileContentsText = fileContentsBufferObj.toString("utf8");
 
-            // Find lines that match ^(@[a-zA-Z0-9]+)(\s*#.*)?\n$ and extract the usernames
+            // Find lines that match the following regex, and extract the usernames:
             // const regex = /^(@[a-zA-Z0-9]+)(\s*#.*)?\n$/; // TODO: Fix this regex.
             const regex = /^@(.*?)$/;
             const reviewer_candidates = fileContentsText
@@ -86,9 +87,9 @@ jobs:
               .map(line => line.trim())
               .map(line => line.match(regex))
               .filter(match => match !== null)
-              .map(match => match[1]); // Remove the @ symbol
-            console.log('reviewer_candidates: ', reviewer_candidates);
+              .map(match => match[1]);
 
+            console.log('reviewer_candidates: ', reviewer_candidates);
             if (reviewer_candidates.length < 1) {
               const msg = 'ERROR: Could not find any reviewer_candidates';
               console.error(msg);
@@ -102,18 +103,32 @@ jobs:
             }
 
             // Assign random committer
-            return; // TODO: Delete this line.
+            const random_committer = reviewer_candidates[Math.floor(Math.random()*reviewer_candidates.length)]
             await github.rest.issues.addAssignees({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              assignees: reviewer_candidates[Math.floor(Math.random()*reviewer_candidates.length)],
+              assignees: random_committer,
             });
 
             // Add the "pr review" label
+            const pr_review_label = 'status: waiting for PR reviewer';
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              labels: ['status: waiting for PR reviewer'],
+              labels: [pr_review_label],
             });
+
+            // Post a comment
+            const comment_body = `Hello. I am a bot.
+                                  I have assigned \`@${random_committer}\` to this pull request.`
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: comment_body,
+            });
+            
+
+            //
