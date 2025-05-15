@@ -52,7 +52,7 @@ jobs:
             // We use the /repos/{owner}/{repo}/collaborators/{username} endpoint to avoid
             // neeing org scope permissions
             // TODO: Uncomment the following lines:
-            const _isCollaborator = await github.request('GET /repos/{owner}/{repo}/collaborators/{username}', {
+            const isCollaboratorResponseObj = await github.request('GET /repos/{owner}/{repo}/collaborators/{username}', {
               owner: context.repo.owner,
               repo: context.repo.repo,
               username: prAuthor,
@@ -60,8 +60,15 @@ jobs:
                 'X-GitHub-Api-Version': '2022-11-28'
               }
             })
-            console.log('_isCollaborator: ', _isCollaborator);
-            const isCollaborator = false; // TODO: Delete this line
+            if (isCollaboratorResponseObj.status == 204) {
+              let isCollaborator = true;
+            } elseif (isCollaboratorResponseObj.status == 404) {
+              let isCollaborator = false;
+            } else {
+              console.error('Unable to process the response from checkCollaborator');
+              console.error('isCollaboratorResponseObj: ', isCollaboratorResponseObj);
+              let isCollaborator = false;
+            }
 
             console.log('prAuthor: ', prAuthor);
             console.log('isCollaborator: ', isCollaborator);
