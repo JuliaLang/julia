@@ -93,5 +93,4 @@ jobs:
                 issue_number: context.payload.pull_request.number,
                 labels: ['status: waiting for PR reviewer'],
               });
-              }
             }
