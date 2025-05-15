@@ -842,7 +842,7 @@ static std::optional<std::pair<OptimizationLevel, OptimizationOptions>> parseJul
             OPTION(enable_scalar_optimizations),
             OPTION(enable_loop_optimizations),
             OPTION(enable_vector_pipeline),
-            OPTION(enable_attributes)
+            OPTION(enable_attributes),
             OPTION(remove_ni),
             OPTION(cleanup),
             OPTION(warn_missed_transformations)
