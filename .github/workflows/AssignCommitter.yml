@@ -67,7 +67,7 @@ jobs:
               const { data: fileContentsObj } = await github.rest.repos.getContent({
                 owner: 'JuliaLang',
                 repo: 'pr-assignment',
-                filepath: 'users.txt',
+                path: 'users.txt',
                 ref: 'main',
               });
 
