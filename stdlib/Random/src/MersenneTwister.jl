@@ -51,6 +51,14 @@ The `seed` may be an integer, a string, or a vector of `UInt32` integers.
 If no seed is provided, a randomly generated one is created (using entropy from the system).
 See the [`seed!`](@ref) function for reseeding an already existing `MersenneTwister` object.
 
+`MersenneTwister` supports "jumping ahead" via [`Random.jump`](@ref), with an
+arbitrary number of steps, where one step represents consuming two `Float64` values.
+Given `MersenneTwister`'s huge period of `2^19937-1`, there is a lot of flexibility
+for arranging -- via different numbers of jump steps -- computations with multiple
+levels of parallelism requiring non-overlapping random subsequences.
+Prior to Julia 1.13, the same functionality was available from the `Future` stdlib
+with the `Future.randjump` function.
+
 !!! compat "Julia 1.11"
     Passing a negative integer seed requires at least Julia 1.11.
 
@@ -554,7 +562,7 @@ function rand!(r::MersenneTwister, A1::Array{Bool}, sp::SamplerType{Bool})
 end
 
 
-### randjump
+### jump
 
 # Old randjump methods are deprecated, the scalar version is in the Future module.
 
@@ -568,17 +576,16 @@ function _randjump(r::MersenneTwister, jumppoly::DSFMT.GF2X)
     s
 end
 
-# NON-PUBLIC
-function jump(r::MersenneTwister, steps::Integer)
-    iseven(steps) || throw(DomainError(steps, "steps must be even"))
-    # steps >= 0 checked in calc_jump (`steps >> 1 < 0` if `steps < 0`)
-    j = _randjump(r, Random.DSFMT.calc_jump(steps >> 1))
-    j.adv_jump += steps
-    j
+function jump(rng::MersenneTwister; by::Real=NaN)
+    isnan(by) && (by = 2.0^128)
+    steps = BigInt(by)
+    # steps >= 0 checked in calc_jump
+    jumped = _randjump(rng, DSFMT.calc_jump(steps))
+    jumped.adv_jump += steps
+    jumped
 end
 
-# NON-PUBLIC
-jump!(r::MersenneTwister, steps::Integer) = copy!(r, jump(r, steps))
+jump!(rng::MersenneTwister; by::Real=NaN) = copy!(rng, jump(rng; by))
 
 
 ### constructors matching show (EXPERIMENTAL)
@@ -642,7 +649,7 @@ function advance!(r::MersenneTwister, adv_jump, adv, adv_vals, idxF, adv_ints, i
     ms = dsfmt_get_min_array_size() % Int
     work = sizehint!(Vector{Float64}(), 2ms)
 
-    adv_jump != 0 && jump!(r, adv_jump)
+    adv_jump != 0 && jump!(r; by=adv_jump)
     advF = (adv_vals, idxF) != (0, 0)
     advI = (adv_ints, idxI) != (0, 0)
 
