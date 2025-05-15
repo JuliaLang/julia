@@ -47,11 +47,11 @@ jobs:
               // We use the /repos/{owner}/{repo}/collaborators/{username} endpoint to avoid
               // neeing org scope permissions
               // TODO: Uncomment the following lines:
-              # const { data: isCollaborator } = await github.rest.repos.checkCollaborator({
-              #   owner: context.repo.owner,
-              #   repo: context.repo.repo,
-              #   username: prAuthor,
-              # });
+              // const { data: isCollaborator } = await github.rest.repos.checkCollaborator({
+              //   owner: context.repo.owner,
+              //   repo: context.repo.repo,
+              //   username: prAuthor,
+              // });
               const isCollaborator = false; // TODO: Delete this line
 
               console.log('prAuthor: ', prAuthor);
