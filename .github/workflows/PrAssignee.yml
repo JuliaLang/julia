@@ -110,7 +110,7 @@ jobs:
 
             if (isCollaborator == true) {
               // The PR author is a committer, so we skip assigning them
-              console.log('Skipping PR authored by committer: ', prAuthor);
+              console.log('Skipping PR authored by JuliaLang committer: ', prAuthor);
               // return; // TODO: Uncomment this line.
             }
 
