@@ -27,20 +27,43 @@ else
 end
 
 if Sys.iswindows()
+    const pathsep = ';'
+elseif Sys.isapple()
+    const pathsep = ':'
+else
+    const pathsep = ':'
+end
+
+if Sys.iswindows()
 function adjust_ENV(cmd::Cmd)
     dllPATH = Sys.BINDIR
     oldPATH = get(ENV, "PATH", "")
-    newPATH = isempty(oldPATH) ? dllPATH : "$dllPATH;$oldPATH"
+    newPATH = isempty(oldPATH) ? dllPATH : "$dllPATH$pathsep$oldPATH"
     return addenv(cmd, "PATH"=>newPATH)
 end
 else
 adjust_ENV(cmd::Cmd) = cmd
 end
 
-zstd(f::Function) = f(zstd())
-zstdmt(f::Function) = f(zstdmt())
-zstd() = adjust_ENV(`$(Sys.BINDIR)/$(Base.PRIVATE_LIBEXECDIR)/$zstd_exe`)
-zstdmt() = adjust_ENV(`$(Sys.BINDIR)/$(Base.PRIVATE_LIBEXECDIR)/$zstdmt_exe`)
+function adjust_ENV()
+    addPATH = joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR)
+    oldPATH = get(ENV, "PATH", "")
+    newPATH = isempty(oldPATH) ? addPATH : "$addPATH$pathsep$oldPATH"
+    return ("PATH"=>newPATH,)
+end
+
+function zstd(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true) # deprecated, for compat only
+    withenv((adjust_PATH ? adjust_ENV() : ())...) do
+        f(zstd())
+    end
+end
+function zstdmt(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true) # deprecated, for compat only
+    withenv((adjust_PATH ? adjust_ENV() : ())...) do
+        f(zstdmt())
+    end
+end
+zstd() = adjust_ENV(`$(joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, zstd_exe))`)
+zstdmt() = adjust_ENV(`$(joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, zstdmt_exe))`)
 
 function __init__()
     global libzstd_handle = dlopen(libzstd)

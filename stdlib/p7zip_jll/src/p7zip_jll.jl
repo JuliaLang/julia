@@ -24,24 +24,20 @@ else
     const pathsep = ':'
 end
 
-function adjust_ENV!(env::Dict{keytype(Base.EnvDict),valtype(Base.EnvDict)}, PATH::String, adjust_PATH::Bool, adjust_LIBPATH::Bool)
-    if adjust_PATH || (Sys.iswindows() && adjust_LIBPATH)
-        oldPATH = get(env, "PATH", "")
-        env["PATH"] = isempty(oldPATH) ? PATH : string(PATH, pathsep, oldPATH)
-    end
-    return env
+function adjust_ENV()
+    addPATH = PATH[]
+    oldPATH = get(ENV, "PATH", "")
+    newPATH = isempty(oldPATH) ? addPATH : "$addPATH$pathsep$oldPATH"
+    return ("PATH"=>newPATH,)
 end
 
-function p7zip(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
-    env = adjust_ENV!(empty(ENV), PATH[], adjust_PATH, adjust_LIBPATH)
-    withenv(env...) do
-        return f(p7zip_path)
+function p7zip(f::Function; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true) # deprecated, for compat only
+    withenv((adjust_PATH ? adjust_ENV() : ())...) do
+        return f(p7zip())
     end
 end
-function p7zip(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true)
-    env = adjust_ENV!(copy(ENV), PATH[], adjust_PATH, adjust_LIBPATH)
-    return Cmd(Cmd([p7zip_path]); env)
-end
+# the 7z.exe we ship has no dependencies, so it needs no PATH adjustment
+p7zip(; adjust_PATH::Bool = true, adjust_LIBPATH::Bool = true) = `$p7zip_path`
 
 function init_p7zip_path()
     # Prefer our own bundled p7zip, but if we don't have one, pick it up off of the PATH
