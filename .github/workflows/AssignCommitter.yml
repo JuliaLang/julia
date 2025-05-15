@@ -71,6 +71,8 @@ jobs:
                 ref: 'main',
               });
 
+              console.log('fileContentsObj: ', fileContentsObj); // TODO: Delete this line.
+              Object.keys(fileContentsObj).forEach((prop)=> console.log(prop)); // TODO: Delete this line.
               const fileContentsBufferObj = Buffer.from(fileContentsObj.content, "base64");
               const fileContentsText = fileContentsBufferObj.toString("utf8");
 
