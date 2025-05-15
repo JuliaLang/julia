@@ -64,15 +64,20 @@ jobs:
               // GitHub username to that file
 
               // Load file contents
-              const { data: fileContents } = await github.rest.repos.getContent({
+              const { data: fileContentsObj } = await github.rest.repos.getContent({
                 owner: 'JuliaLang',
                 repo: 'pr-assignment',
                 filepath: 'users.txt',
                 ref: 'main',
               });
 
+              fileContentsObject.content
+              const fileContentsBufferObj = Buffer.from(fileContentsObj.content, "base64");
+              const fileContentsText = fileContentsBufferObj.toString("utf8");
+
               // Find lines that match ^(@[a-zA-Z0-9]+)(\s*#.*)?\n$ and extract the usernames
-              const reviewer_candidates = fileContents
+              console.log('fileContentsText: ', fileContentsText); // TODO: Delete this line.
+              const reviewer_candidates = fileContentsText
                 .split('\n')
                 .map(line => line.match(/^(@[a-zA-Z0-9]+)(\s*#.*)?\n$/))
                 .filter(match => match !== null)
