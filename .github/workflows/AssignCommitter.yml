@@ -52,6 +52,9 @@ jobs:
                 username: prAuthor,
               });
 
+              console.log('prAuthor: ', prAuthor);
+              console.log('isCollaborator: ', isCollaborator);
+
               if (isCollaborator) {
                 // The PR author is a committer, so we skip assigning them
                 console.log(`Skipping PR authored by committer: ${prAuthor}`);
@@ -75,7 +78,6 @@ jobs:
               const fileContentsText = fileContentsBufferObj.toString("utf8");
 
               // Find lines that match ^(@[a-zA-Z0-9]+)(\s*#.*)?\n$ and extract the usernames
-              console.log('fileContentsText: ', fileContentsText); // TODO: Delete this line.
               const reviewer_candidates = fileContentsText
                 .split('\n')
                 .map(line => line.match(/^(@[a-zA-Z0-9]+)(\s*#.*)?\n$/))
