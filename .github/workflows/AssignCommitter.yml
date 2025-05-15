@@ -81,6 +81,12 @@ jobs:
                 //.map(match => match[1].substring(1)); // Remove the @ symbol
               console.log('reviewer_candidates: ', reviewer_candidates);
 
+              if (reviewer_candidates.length < 1) {
+                const error_msg = 'ERROR: Could not find any reviewer_candidates';
+                console.error(error_msg);
+                throw new Error(error_msg);
+              }
+
               if (isCollaborator) {
                 // The PR author is a committer, so we skip assigning them
                 console.log('Skipping PR authored by committer: ', prAuthor);
