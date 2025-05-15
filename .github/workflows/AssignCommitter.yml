@@ -52,11 +52,14 @@ jobs:
             // We use the /repos/{owner}/{repo}/collaborators/{username} endpoint to avoid
             // neeing org scope permissions
             // TODO: Uncomment the following lines:
-            const { data: _isCollaborator } = await github.rest.repos.checkCollaborator({
+            const _isCollaborator = await octokit.request('GET /repos/{owner}/{repo}/collaborators/{username}', {
               owner: context.repo.owner,
               repo: context.repo.repo,
               username: prAuthor,
-            });
+              headers: {
+                'X-GitHub-Api-Version': '2022-11-28'
+              }
+            })
             console.log('_isCollaborator: ', _isCollaborator);
             const isCollaborator = false; // TODO: Delete this line
 
