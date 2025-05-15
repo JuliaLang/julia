@@ -40,9 +40,9 @@ jobs:
           retries: 5 # retry GitHub API requests up to 5 times, with exponential backoff
           retry-exempt-status-codes: 403
           script: |
-            const prAssignees = context.payload.pull_request.assignees
+            const oldPrAssignees = context.payload.pull_request.assignees
               .map(obj => obj.login)
-            console.log('prAssignees: ', prAssignees);
+            console.log('oldPrAssignees: ', oldPrAssignees);
             const prAuthor = context.payload.pull_request.user.login;
 
             // Check if the PR is opened by a collaborator on the repo (aka a committer).
@@ -103,7 +103,7 @@ jobs:
               throw new Error(msg);
             }
 
-            if (prAssignees.length >= 1) {
+            if (oldPrAssignees.length >= 1) {
               console.log('Pull request already has at least one assignee. Will not assign any new assignees.');
               // return; // TODO: Uncomment this line.
             }
