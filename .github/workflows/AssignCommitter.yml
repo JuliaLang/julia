@@ -42,10 +42,6 @@ jobs:
           script: |
             const prAssignees = context.payload.pull_request.assignees
             console.log('prAssignees: ', prAssignees);
-            if (prAssignees.length >= 1) {
-              console.log('Pull request already has at least one assignee. Will not assign any new assignees.');
-              // return; // TODO: Uncomment this line.
-            }
             const prAuthor = context.payload.pull_request.user.login;
 
             // Check if the PR is opened by a collaborator on the repo (aka a committer).
@@ -92,34 +88,39 @@ jobs:
             // Find lines that match the following regex, and extract the usernames:
             // const regex = /^(@[a-zA-Z0-9]+)(\s*#.*)?\n$/; // TODO: Fix this regex.
             const regex = /^@(.*?)$/;
-            const reviewer_candidates = fileContentsText
+            const assignee_candidates = fileContentsText
               .split('\n')
               .map(line => line.trim())
               .map(line => line.match(regex))
               .filter(match => match !== null)
               .map(match => match[1]);
 
-            console.log('reviewer_candidates: ', reviewer_candidates);
-            if (reviewer_candidates.length < 1) {
-              const msg = 'ERROR: Could not find any reviewer_candidates';
+            console.log('assignee_candidates: ', assignee_candidates);
+            if (assignee_candidates.length < 1) {
+              const msg = 'ERROR: Could not find any assignee_candidates';
               console.error(msg);
               throw new Error(msg);
+            }
+
+            if (prAssignees.length >= 1) {
+              console.log('Pull request already has at least one assignee. Will not assign any new assignees.');
+              // return; // TODO: Uncomment this line.
             }
 
             if (isCollaborator == true) {
               // The PR author is a committer, so we skip assigning them
               console.log('Skipping PR authored by committer: ', prAuthor);
-              return;
+              // return; // TODO: Uncomment this line.
             }
 
             // Assign random committer
-            const random_committer = reviewer_candidates[Math.floor(Math.random()*reviewer_candidates.length)]
-            console.log('random_committer: ', random_committer);
+            const selected_assignee = assignee_candidates[Math.floor(Math.random()*assignee_candidates.length)]
+            console.log('selected_assignee: ', selected_assignee);
             await github.rest.issues.addAssignees({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              assignees: random_committer,
+              assignees: selected_assignee,
             });
 
             // Add the "pr review" label
@@ -132,7 +133,7 @@ jobs:
             });
 
             // Post a comment
-            const comment_body = `Hello. I am a bot.\n\nI have assigned \`@${random_committer}\` to this pull request.`
+            const comment_body = `Hello. I am a bot.\n\nI have assigned \`@${selected_assignee}\` to this pull request.`
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
