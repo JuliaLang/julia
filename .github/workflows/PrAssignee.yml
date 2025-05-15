@@ -123,7 +123,7 @@ jobs:
               issue_number: context.payload.pull_request.number,
               assignees: selected_assignee,
             });
-            console.log(`Successfully assigned @${selected_assignee} to this PR.`);
+            console.log(`Successfully assigned @${selected_assignee} to this PR`);
 
             // Add the "pr review" label
             const pr_review_label = 'status: waiting for PR reviewer';
@@ -134,7 +134,7 @@ jobs:
               issue_number: context.payload.pull_request.number,
               labels: [pr_review_label],
             });
-            console.log('Successfully added pr_review_label to this PR.');
+            console.log('Successfully added pr_review_label to this PR');
 
             // Post a comment
             const comment_body = `Hello. I am a bot.\n\nI have assigned \`@${selected_assignee}\` to this pull request.\n\n\`@${selected_assignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.`
@@ -145,7 +145,7 @@ jobs:
               issue_number: context.payload.pull_request.number,
               body: comment_body,
             });
-            console.log('Successfully posted bot comment on the PR.');
+            console.log('Successfully posted bot comment on the PR');
             
 
             //
