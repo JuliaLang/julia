@@ -1,4 +1,4 @@
-name: Assign Committer
+name: PR Assignee
 on:
   # Important security note: Do NOT use `actions/checkout`
   # or any other method for checking out the pull request's source code.
@@ -24,7 +24,7 @@ permissions:
   pull-requests: write # Needed in order to assign a user as the PR assignee
 
 jobs:
-  assign-reviewer:
+  pr-assignee:
     runs-on: ubuntu-latest
     if: ${{ github.event.pull_request.draft != true }}
     steps:
