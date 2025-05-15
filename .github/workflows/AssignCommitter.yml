@@ -54,8 +54,8 @@ jobs:
               // });
               const isCollaborator = false; // TODO: Delete this line
 
-              console.log('prAuthor: ', prAuthor);
-              console.log('isCollaborator: ', isCollaborator);
+              console.log(`prAuthor: ${prAuthor}`);
+              console.log(`isCollaborator: ${isCollaborator}`);
 
               if (isCollaborator) {
                 // The PR author is a committer, so we skip assigning them
@@ -85,6 +85,7 @@ jobs:
                 .map(line => line.match(/^(@[a-zA-Z0-9]+)(\s*#.*)?\n$/))
                 .filter(match => match !== null)
                 .map(match => match[1].substring(1)); // Remove the @ symbol
+              console.log(`reviewer_candidates: ${reviewer_candidates}`);
 
               // Assign random committer
               await github.rest.issues.addAssignees({
