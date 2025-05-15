@@ -81,7 +81,7 @@ jobs:
                 .map(line => line.trim())
                 .map(line => line.match(regex))
                 .filter(match => match !== null)
-                //.map(match => match[1].substring(1)); // Remove the @ symbol
+                .map(match => match[1].substring(1)); // Remove the @ symbol
               console.log('reviewer_candidates: ', reviewer_candidates);
 
               if (reviewer_candidates.length < 1) {
