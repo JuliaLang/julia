@@ -3492,10 +3492,15 @@
 (define (analyze-vars e env captvars sp tab)
   (if (or (atom? e) (quoted? e))
       (begin
-        (if (symbol? e)
-            (let ((vi (get tab e #f)))
-              (if vi
-                  (vinfo:set-read! vi #t))))
+        (cond
+         ((symbol? e)
+          (let ((vi (get tab e #f)))
+            (if vi
+                (vinfo:set-read! vi #t))))
+         ((nospecialize-meta? e)
+          (let ((vi (get tab (caddr e) #f)))
+            (if vi
+                (vinfo:set-nospecialize! vi #t)))))
         e)
       (case (car e)
         ((local-def) ;; a local that we know has an assignment that dominates all usages
@@ -3593,21 +3598,6 @@ f(x) = yt(x)
                 (const (globalref (thismodule) ,name) ,s)
                 (call (core _typebody!) (false) ,s (call (core svec) ,@types))
                 (return (null)))))))))
-
-(define (type-for-closure name fields super)
-  (let ((s (make-ssavalue)))
-    `((thunk ,(linearize `(lambda ()
-       (() () 0 ())
-       (block (global ,name)
-              (= ,s (call (core _structtype) (thismodule) (inert ,name) (call (core svec))
-                          (call (core svec) ,@(map quotify fields))
-                          (call (core svec))
-                          (false) ,(length fields)))
-              (call (core _setsuper!) ,s ,super)
-              (const (globalref (thismodule) ,name) ,s)
-              (call (core _typebody!) (false) ,s
-                    (call (core svec) ,@(map (lambda (v) '(core Box)) fields)))
-              (return (null)))))))))
 
 ;; better versions of above, but they get handled wrong in many places
 ;; need to fix that in order to handle #265 fully (and use the definitions)
@@ -4022,6 +4012,10 @@ f(x) = yt(x)
       (let ((cv (assq v (cadr (lam:vinfo lam)))))
         (and cv (vinfo:asgn cv) (vinfo:capt cv)))))
 
+(define (is-var-nospecialize? v lam)
+  (let ((vi (assq v (car (lam:vinfo lam)))))
+    (and vi (vinfo:nospecialize vi))))
+
 (define (toplevel-preserving? e)
   (and (pair? e) (memq (car e) '(if elseif block trycatch tryfinally trycatchelse))))
 
@@ -4313,16 +4307,14 @@ f(x) = yt(x)
                         (closure-param-syms (map (lambda (s) (make-ssavalue)) closure-param-names))
                         (typedef  ;; expression to define the type
                          (let* ((fieldtypes (map (lambda (v)
-                                                   (if (is-var-boxed? v lam)
-                                                       '(core Box)
-                                                       (make-ssavalue)))
+                                                   (cond ((is-var-boxed? v lam) '(core Box))
+                                                         ((is-var-nospecialize? v lam) (vinfo:type (assq v (car (lam:vinfo lam)))))
+                                                         (else (make-ssavalue))))
                                                  capt-vars))
                                 (para (append closure-param-syms
                                               (filter ssavalue? fieldtypes)))
                                 (fieldnames (append closure-param-names (filter (lambda (v) (not (is-var-boxed? v lam))) capt-vars))))
-                           (if (null? para)
-                               (type-for-closure type-name capt-vars '(core Function))
-                               (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function)))))
+                           (type-for-closure-parameterized type-name para fieldnames capt-vars fieldtypes '(core Function))))
                         (mk-method ;; expression to make the method
                          (if short '()
                              (let* ((iskw ;; TODO jb/functions need more robust version of this
@@ -4352,7 +4344,7 @@ f(x) = yt(x)
                                 (P (append
                                     closure-param-names
                                     (filter identity (map (lambda (v ve)
-                                                            (if (is-var-boxed? v lam)
+                                                            (if (or (is-var-boxed? v lam) (is-var-nospecialize? v lam))
                                                                 #f
                                                                 `(call (core _typeof_captured_variable) ,ve)))
                                                           capt-vars var-exprs)))))
