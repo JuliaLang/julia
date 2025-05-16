@@ -65,8 +65,8 @@ function repl_cmd(cmd, out)
         println(out, pwd())
     else
         if shell_name == "nu"
-            # remove backticks and apostrophes that dont play nice with nushell
-            shell_escape_cmd = replace(shell_escape(cmd), "'" => "", "`" => "")
+            # remove apostrophes that dont play nice with nushell
+            shell_escape_cmd = replace(shell_escape(cmd), "'" => "")
             shell_escape_cmd = "try { $shell_escape_cmd } catch { |err| \$err.rendered }"
             cmd = `$shell -c $shell_escape_cmd`
         elseif !Sys.iswindows()
