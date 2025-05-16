@@ -42,8 +42,7 @@ end
 is_available() = true
 
 function __init__()
-    global libssh2_handle = dlopen(libssh2)
-    global libssh2_path = dlpath(libssh2_handle)
+    global libssh2_path = string(_libssh2_path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libssh2_path)
     push!(LIBPATH_list, LIBPATH[])

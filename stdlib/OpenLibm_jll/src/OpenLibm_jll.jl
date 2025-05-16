@@ -13,7 +13,6 @@ export libopenlibm
 const PATH = Ref("")
 const LIBPATH = Ref("")
 artifact_dir::String = ""
-libopenlibm_handle::Ptr{Cvoid} = C_NULL
 libopenlibm_path::String = ""
 
 if Sys.iswindows()
