@@ -1734,6 +1734,17 @@ function banner(io::IO = stdout; short = false)
         end
     end
 
+    loaded_user_modules = filter(names(Main,imported=true)) do m
+        typeof(getfield(Main, m)) <: Module && m ∉ (:Base, :Core, :Main)
+    end
+    if isempty(loaded_user_modules)
+        loaded_modules_string = ""
+    else
+        # account for what has been printed before on this line
+        allowed_width = displaysize(io)[2] - 26
+        loaded_modules_string = rtruncate("Loaded packages: $(join(loaded_user_modules, ", "))", allowed_width)
+    end
+
     commit_date = isempty(Base.GIT_VERSION_INFO.date_string) ? "" : " ($(split(Base.GIT_VERSION_INFO.date_string)[1]))"
 
     if get(io, :color, false)::Bool
@@ -1758,7 +1769,7 @@ function banner(io::IO = stdout; short = false)
               $(jl)| | | | | | |/ _` |$(tx)  |
               $(jl)| | |_| | | | (_| |$(tx)  |  Version $(VERSION)$(commit_date)
              $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $(commit_string)
-            $(jl)|__/$(tx)                   |
+            $(jl)|__/$(tx)                   |  $(loaded_modules_string)
 
             """)
         end
