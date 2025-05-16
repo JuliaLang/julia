@@ -696,76 +696,14 @@ function show_can_elide(p::TypeVar, wheres::Vector, elide::Int, env::SimpleVecto
 end
 
 function show_typeparams(io::IO, env::SimpleVector, orig::SimpleVector, wheres::Vector)
-    n = length(env)
-    elide = length(wheres)
-    function egal_var(p::TypeVar, @nospecialize o)
-        return o isa TypeVar &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.ub, o.ub) != 0 &&
-            ccall(:jl_types_egal, Cint, (Any, Any), p.lb, o.lb) != 0
-    end
-    for i = n:-1:1
-        p = env[i]
-        if p isa TypeVar
-            if i == n && egal_var(p, orig[i]) && show_can_elide(p, wheres, elide, env, i)
-                n -= 1
-                elide -= 1
-            elseif p.lb === Union{} && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
-                elide -= 1
-            elseif p.ub === Any && isgensym(p.name) && show_can_elide(p, wheres, elide, env, i)
-                elide -= 1
-            end
-        end
-    end
-    if n > 0
-        print(io, "{")
-        for i = 1:n
-            p = env[i]
-            if p isa TypeVar
-                if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
-                    print(io, "<:")
-                    show(io, p.ub)
-                elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
-                    print(io, ">:")
-                    show(io, p.lb)
-                else
-                    show(io, p)
-                end
-            else
-                show(io, p)
-            end
-            i < n && print(io, ", ")
-        end
-        print(io, "}")
-    end
-    resize!(wheres, elide)
+    show(io, string_typeparams(io, env, orig, wheres)
     nothing
 end
 
 function show_typealias(io::IO, name::GlobalRef, x::Type, env::SimpleVector, wheres::Vector)
-    if !(get(io, :compact, false)::Bool)
-        # Print module prefix unless alias is visible from module passed to
-        # IOContext. If :module is not set, default to Main.
-        # nothing can be used to force printing prefix.
-        from = get(io, :module, Main)
-        if (from === nothing || !isvisible(name.name, name.mod, from))
-            show(io, name.mod)
-            print(io, ".")
-        end
-    end
-    print(io, name.name)
-    isempty(env) && return
-    io = IOContext(io)
-    for p in wheres
-        io = IOContext(io, :unionall_env => p)
-    end
-    orig = getfield(name.mod, name.name)
-    vars = TypeVar[]
-    while orig isa UnionAll
-        push!(vars, orig.var)
-        orig = orig.body
-    end
-    show_typeparams(io, env, Core.svec(vars...), wheres)
-    nothing
+    (s, _) = string_type_alias_and_params(io, name, x, env, wheres)
+    show(io, s)
+    return nothing
 end
 
 function make_wheres(io::IO, env::SimpleVector, @nospecialize(x::Type))
@@ -2568,7 +2506,7 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) && _isself(uw)
         uwmod = parentmodule(uw)
         if qualified && !isexported(uwmod, uw.name.mt.name) && uwmod !== Main
-            print_within_stacktrace(io, uwmod, '.', bold=true)
+            print_within_stacktrace(io, string_type_depth_limited(io, uwmod), '.', bold=true)
         end
         s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
         print_within_stacktrace(io, s, bold=true)
@@ -2576,13 +2514,13 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
         uwf = unwrap_unionall(f)
         parens = isa(f, UnionAll) && !(isa(uwf, DataType) && f === uwf.name.wrapper)
         parens && print(io, "(")
-        print_within_stacktrace(io, f, bold=true)
+        print_within_stacktrace(io, string_type_depth_limited(io, f), bold=true)
         parens && print(io, ")")
     else
         if html
-            print(io, "($fargname::<b>", ft, "</b>)")
+            print(io, "($fargname::<b>", string_type_depth_limited(io, ft), "</b>)")
         else
-            print_within_stacktrace(io, "($fargname::", ft, ")", bold=true)
+            print_within_stacktrace(io, "($fargname::", string_type_depth_limited(io, ft), ")", bold=true)
         end
     end
     nothing
@@ -2629,7 +2567,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
             print_within_stacktrace(io, argnames[i]; color=:light_black)
         end
         print(io, "::")
-        print_type_bicolor(env_io, sig[i]; use_color = get(io, :backtrace, false)::Bool)
+        print_type_bicolor(env_io, string_type_depth_limited(io, sig[i]); use_color = get(io, :backtrace, false)::Bool)
     end
     if kwargs !== nothing
         print(io, "; ")
@@ -2637,38 +2575,177 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
         for (k, t) in kwargs
             first || print(io, ", ")
             first = false
-            print_within_stacktrace(io, k; color=:light_black)
+            print_within_stacktrace(io, string_type_depth_limited(io, k); color=:light_black)
             if t == pairs(NamedTuple)
                 # omit type annotation for splat keyword argument
                 print(io, "...")
             else
                 print(io, "::")
-                print_type_bicolor(io, t; use_color = get(io, :backtrace, false)::Bool)
+                print_type_bicolor(io, string_type_depth_limited(io, t); use_color = get(io, :backtrace, false)::Bool)
             end
         end
     end
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
     str = String(take!(buf))
-    str = type_limited_string_from_context(out, str)
     print(out, str)
     nothing
 end
 
-function type_limited_string_from_context(out::IO, str::String)
+function type_limited_string_from_context(out::IO, @nospecialize(T))
     typelimitflag = get(out, :stacktrace_types_limited, nothing)
     if typelimitflag isa RefValue{Bool}
         sz = get(out, :displaysize, Base.displaysize_(out))::Tuple{Int, Int}
-        str_lim = type_depth_limit(str, max(sz[2], 120))
-        if sizeof(str_lim) < sizeof(str)
-            typelimitflag[] = true
-        end
+        # str_lim = type_depth_limit(str, max(sz[2], 120))
+        str_lim = string_type_depth_limited(T, max(sz[2], 120))
+        # if sizeof(str_lim) < sizeof(str) # this would be slow, do we need this?
+        #     typelimitflag[] = true
+        # end
         str = str_lim
     end
-    return str
+    return string(T)
 end
 
 # limit nesting depth of `{ }` until string textwidth is less than `n`
+
+function _max_display_size(io::IO)
+    sz = get(io, :displaysize, displaysize(io))::Tuple{Int, Int}
+    return max(sz[2], 120)
+end
+
+# string_type_depth_limited(@nospecialize(T), _width = nothing; maxdepth = nothing)::String =
+#     string_type_depth_limited(stdout, _width, T; maxdepth)
+
+function string_type_depth_limited(io::IO, _width, @nospecialize(T); maxdepth = nothing)::String
+    str_lim = _string_type_depth_limited(io, T, maxdepth)
+    width = isnothing(_width) ? _max_display_size(io) : _width
+    return Base.type_depth_limit(str_lim, width; maxdepth)
+end
+
+function string_typeparams(io::IO, env::Core.SimpleVector, orig::Core.SimpleVector, wheres::Vector)
+    n = length(env)
+    elide = length(wheres)
+    function egal_var(p::TypeVar, @nospecialize o)
+        return o isa TypeVar &&
+            ccall(:jl_types_egal, Cint, (Any, Any), p.ub, o.ub) != 0 &&
+            ccall(:jl_types_egal, Cint, (Any, Any), p.lb, o.lb) != 0
+    end
+    for i = n:-1:1
+        p = env[i]
+        if p isa TypeVar
+            if i == n && egal_var(p, orig[i]) && Base.show_can_elide(p, wheres, elide, env, i)
+                n -= 1
+                elide -= 1
+            elseif p.lb === Union{} && isgensym(p.name) && Base.show_can_elide(p, wheres, elide, env, i)
+                elide -= 1
+            elseif p.ub === Any && isgensym(p.name) && Base.show_can_elide(p, wheres, elide, env, i)
+                elide -= 1
+            end
+        end
+    end
+    s_result = if n > 0
+        params_string = join(
+            map(1:n) do i
+                p = env[i]
+                suffix = i < n ? ", " : ""
+                if p isa TypeVar
+                    if p.lb === Union{} && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
+                        string("<:", p.ub, suffix)
+                    elseif p.ub === Any && something(findfirst(@nospecialize(w) -> w === p, wheres), 0) > elide
+                        string(">:", p.lb, suffix)
+                    else
+                        string(p, suffix)
+                    end
+                else
+                    string(p, suffix)
+                end
+            end
+        )
+        string("{", params_string, "}")
+    else
+        ""
+    end
+    resize!(wheres, elide)
+    return s_result
+end
+
+function string_type_alias_and_params(io::IO, name::Core.GlobalRef, x::Type, env::Core.SimpleVector, wheres::Vector)
+    alias = if !(get(io, :compact, false)::Bool)
+        # Print module prefix unless alias is visible from module passed to
+        # IOContext. If :module is not set, default to Main.
+        # nothing can be used to force printing prefix.
+        from = get(io, :module, Main)
+        if (from === nothing || !Base.isvisible(name.name, name.mod, from))
+            string(name.mod, ".", name.name)
+        else
+            string(name.name)
+        end
+    else
+        string(name.name)
+    end
+    if isempty(env)
+        return (alias, ())
+    end
+    io = IOContext(io)
+    for p in wheres
+        io = IOContext(io, :unionall_env => p)
+    end
+    orig = getfield(name.mod, name.name)
+    vars = TypeVar[]
+    while orig isa UnionAll
+        push!(vars, orig.var)
+        orig = orig.body
+    end
+    return string(alias, string_typeparams(io, env, Core.svec(vars...), wheres))
+end
+
+function _string_type_depth_limited(io::IO, @nospecialize(T), maxdepth, depth = 0)::String
+    maxdepth === nothing && return string(T)
+    param_length(T) = hasproperty(T, :parameters) ? length(T.parameters) : length(T)
+    if hasproperty(T, :name)
+        properT = Base.makeproper(io, T)
+        alias = Base.make_typealias(properT)
+
+        if alias === nothing
+            s = T.name.wrapper
+            if depth > maxdepth
+                return ""
+            elseif depth == maxdepth
+                return "$s{…}"
+            elseif depth + 1 == maxdepth
+                param_length(T) == 0 && return string(s)
+                if all(x->param_length(x)==1, T.parameters)
+                    ps = map(T.parameters) do p
+                        _string_type_depth_limited(io, p, maxdepth, depth+1)
+                    end
+                    return "$s{$(join(ps, ", "))}"
+                else
+                    return "$s{…}"
+                end
+            else
+                param_length(T) == 0 && return string(s)
+                ps = map(T.parameters) do p
+                    _string_type_depth_limited(io, p, maxdepth, depth+1)
+                end
+                return "$s{$(join(ps, ", "))}"
+            end
+        else
+            wheres = Base.make_wheres(io, alias[2], T)
+            return string_type_alias_and_params(io, alias[1], T, alias[2], wheres)
+        end
+    elseif T isa UnionAll
+        return string(T)
+    else
+        if depth > maxdepth
+            return ""
+        elseif depth == maxdepth
+            return "…"
+        else
+            return string(T)
+        end
+    end
+end
+
 function type_depth_limit(str::String, n::Int; maxdepth = nothing)
     depth = 0
     width_at = Int[]                       # total textwidth at each nesting depth

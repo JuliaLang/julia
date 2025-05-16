@@ -209,32 +209,32 @@ end
 struct F49231{a,b,c,d,e,f,g} end
 (::F49231)(a,b,c) = error("oops")
 
-@testset "type_depth_limit" begin
+@testset "string_type_depth_limited" begin
     tdl = Base.type_depth_limit
 
-    str = repr(typeof(view([1, 2, 3], 1:2)))
-    @test tdl(str, 0, maxdepth = 1) == "SubArray{…}"
-    @test tdl(str, 0, maxdepth = 2) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
-    @test tdl(str, 0, maxdepth = 3) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{…}}, true}"
-    @test tdl(str, 0, maxdepth = 4) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{$Int}}, true}"
-    @test tdl(str, 3) == "SubArray{…}"
-    @test tdl(str, 44) == "SubArray{…}"
-    @test tdl(str, 45) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
-    @test tdl(str, 59) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
-    @test tdl(str, 60) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{…}}, true}"
-    @test tdl(str, 100) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{$Int}}, true}"
+    typ = typeof(view([1, 2, 3], 1:2))
+    @test tdl(typ, 0, maxdepth = 1) == "SubArray{…}"
+    @test tdl(typ, 0, maxdepth = 2) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
+    @test tdl(typ, 0, maxdepth = 3) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{…}}, true}"
+    @test tdl(typ, 0, maxdepth = 4) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{$Int}}, true}"
+    @test tdl(typ, 3) == "SubArray{…}"
+    @test tdl(typ, 44) == "SubArray{…}"
+    @test tdl(typ, 45) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
+    @test tdl(typ, 59) == "SubArray{$Int, 1, Vector{…}, Tuple{…}, true}"
+    @test tdl(typ, 60) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{…}}, true}"
+    @test tdl(typ, 100) == "SubArray{$Int, 1, Vector{$Int}, Tuple{UnitRange{$Int}}, true}"
 
-    str = repr(Vector{V} where V<:AbstractVector{T} where T<:Real)
-    @test tdl(str, 0, maxdepth = 1) == "Vector{…} where {…}"
-    @test tdl(str, 0, maxdepth = 2) == "Vector{V} where {T<:Real, V<:AbstractVector{…}}"
-    @test tdl(str, 0, maxdepth = 3) == "Vector{V} where {T<:Real, V<:AbstractVector{T}}"
-    @test tdl(str, 20) == "Vector{…} where {…}"
-    @test tdl(str, 46) == "Vector{…} where {…}"
-    @test tdl(str, 47) == "Vector{V} where {T<:Real, V<:AbstractVector{T}}"
+    typ = Vector{V} where V<:AbstractVector{T} where T<:Real
+    @test tdl(typ, 0, maxdepth = 1) == "Vector{…} where {…}"
+    @test tdl(typ, 0, maxdepth = 2) == "Vector{V} where {T<:Real, V<:AbstractVector{…}}"
+    @test tdl(typ, 0, maxdepth = 3) == "Vector{V} where {T<:Real, V<:AbstractVector{T}}"
+    @test tdl(typ, 20) == "Vector{…} where {…}"
+    @test tdl(typ, 46) == "Vector{…} where {…}"
+    @test tdl(typ, 47) == "Vector{V} where {T<:Real, V<:AbstractVector{T}}"
 
-    str = "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
-    @test tdl(str, 105) == "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{…}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
-    @test tdl(str, 85) == "F49231{Vector,Val{…},Vector{…},Tuple{…},Int,Int,Int}"
+    typ = F49231{Vector,Val{('}','}')},Vector{Vector{Vector{Vector}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}
+    @test tdl(typ, 105) == "F49231{Vector,Val{('}','}')},Vector{Vector{Vector{…}}},Tuple{Int,Int,Int,Int,Int,Int,Int},Int,Int,Int}"
+    @test tdl(typ, 85) == "F49231{Vector,Val{…},Vector{…},Tuple{…},Int,Int,Int}"
 
     # Stacktrace
     a = UInt8(81):UInt8(160)
@@ -257,6 +257,20 @@ struct F49231{a,b,c,d,e,f,g} end
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,132)))
     @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n\e[90m")
+end
+
+Base.@kwdef struct F55952{A,B}
+    num::Int = 1
+end
+
+@testset "Depth-limited type printing performance for highly nested types" begin
+    nest_val(na, nb, ::Val{1}) = F55952{na, nb}()
+    nest_val(na, nb, ::Val{n}) where {n} = nest_val(F55952{na, nb}, F55952{na, nb}, Val(n-1))
+    nest_val(na, nb, n::Int) = nest_val(na, nb, Val(n))
+    nest_val(n) = nest_val(1, 1, n)
+    # be careful with changing to a larger number
+    # ~10 seconds before #55952 is fixed:
+    @test 1 > @elapsed sprint(show, typeof(nest_val(23)))
 end
 
 @testset "Base.StackTraces docstrings" begin
