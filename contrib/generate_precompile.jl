@@ -103,6 +103,7 @@ precompile(Base.CoreLogging.current_logger_for_env, (Base.CoreLogging.LogLevel, 
 precompile(Base.CoreLogging.env_override_minlevel, (Symbol, Module))
 precompile(Base.StackTraces.lookup, (Ptr{Nothing},))
 precompile(Tuple{typeof(Base.run_module_init), Module, Int})
+precompile(Tuple{Type{Base.VersionNumber}, Int32, Int32, Int32})
 
 # Presence tested in the tests
 precompile(Tuple{typeof(Base.print), Base.IOStream, String})
@@ -140,6 +141,9 @@ for match = Base._methods(+, (Int, Int), -1, Base.get_world_counter())
 end
 empty!(Set())
 push!(push!(Set{Union{GlobalRef,Symbol}}(), :two), GlobalRef(Base, :two))
+get!(ENV, "___DUMMY", "")
+ENV["___DUMMY"]
+delete!(ENV, "___DUMMY")
 (setindex!(Dict{String,Base.PkgId}(), Base.PkgId(Base), "file.jl"))["file.jl"]
 (setindex!(Dict{Symbol,Vector{Int}}(), [1], :two))[:two]
 (setindex!(Dict{Base.PkgId,String}(), "file.jl", Base.PkgId(Base)))[Base.PkgId(Base)]
@@ -208,6 +212,9 @@ if Artifacts !== nothing
       cd(oldpwd)
     end
     dlopen("libjulia$(Base.isdebugbuild() ? "-debug" : "")", RTLD_LAZY | RTLD_DEEPBIND)
+    """
+    hardcoded_precompile_statements *= """
+    precompile(Tuple{typeof(Artifacts._artifact_str), Module, String, Base.SubString{String}, String, Base.Dict{String, Any}, Base.SHA1, Base.BinaryPlatforms.Platform, Base.Val{Artifacts}})
     """
 end
 
