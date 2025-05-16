@@ -811,8 +811,10 @@ end
 
 @testset "hashing" begin
     for i in 1:10:100
-        bint = big(11)^i
-        bfloat = big(11.0)^i
-        @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+        for shift in 0:3
+            bint = big(11)^i << shift
+            bfloat = float(bint)
+            @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+        end
     end
 end
