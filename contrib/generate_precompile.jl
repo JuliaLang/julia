@@ -42,6 +42,11 @@ precompile(Base.indexed_iterate, (Pair{Symbol, Union{Nothing, String}}, Int, Int
 precompile(Tuple{typeof(Base.Threads.atomic_add!), Base.Threads.Atomic{Int}, Int})
 precompile(Tuple{typeof(Base.Threads.atomic_sub!), Base.Threads.Atomic{Int}, Int})
 
+# error handling
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:prefix,), Tuple{String}}, typeof(Base.show_backtrace), Base.TTY, Array{Union{Ptr{Nothing}, Base.InterpreterIP}, 1}})
+precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:backtrace,), Tuple{Bool}}, typeof(Base.showerror), Base.IOContext{Base.GenericIOBuffer{Memory{UInt8}}}, ErrorException, Array{Union{Ptr{Nothing}, Base.InterpreterIP}, 1}})
+precompile(Tuple{Base.var"##with_output_color#856", Bool, Bool, Bool, Bool, Bool, Bool, typeof(Base.with_output_color), Function, Symbol, Base.TTY, Symbol, Vararg{Any}})
+
 # LazyArtifacts (but more generally helpful)
 precompile(Tuple{Type{Base.Val{x} where x}, Module})
 precompile(Tuple{Type{NamedTuple{(:honor_overrides,), T} where T<:Tuple}, Tuple{Bool}})
