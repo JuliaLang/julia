@@ -185,7 +185,6 @@ function hash(x::Real, h::UInt)
         num = -num
         den = -den
     end
-    num_, pow_ = num, pow
     num_z = trailing_zeros(num)
     num >>= num_z
     den_z = trailing_zeros(den)
@@ -212,9 +211,9 @@ function hash(x::Real, h::UInt)
     # handle generic rational values
     h = hash_integer(pow, h)
 
-    # hashing the non-shifted numerator greatly simplifies specializations
-    # for memory-backed bitinteger types
-    h = hash_integer(iszero(pow_) ? num_ : num, h)
+    # hashing the numerator shifted to pow = 0 greatly simplifies
+    # specializations for memory-backed bitinteger types
+    h = hash_integer(num << pow, h)
     return h
 end
 
