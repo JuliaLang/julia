@@ -140,7 +140,7 @@
   (and (pair? e)
        (or (memq (car e) '(toplevel line module export public
                                     error incomplete))
-           (and (memq (car e) '(global const)) (every symbol? (cdr e))))))
+           (and (memq (car e) '(global)) (every symbol? (cdr e))))))
 
 (define *in-lowering* #f)
 
