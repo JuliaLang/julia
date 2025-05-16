@@ -186,7 +186,12 @@ function hash(x::Real, h::UInt)
         den = -den
     end
     num_z = trailing_zeros(num)
-    num >>= num_z
+
+    if x isa BigFloat
+        GMP.MPZ.fdiv_q_2exp!(num, num_z)
+    else
+        num >>= num_z
+    end
     den_z = trailing_zeros(den)
     den >>= den_z
     pow += num_z - den_z
@@ -213,7 +218,11 @@ function hash(x::Real, h::UInt)
 
     # trimming only whole words of trailing zeros simplifies greatly
     # some specializations for memory-backed bitintegers
-    h = hash_integer((pow > 0) ? (num << (pow % 64)) : num, h)
+    if pow > 0
+        p64 = pow % 64
+        num = (x isa BigFloat) ? GMP.MPZ.mul_2exp!(num, p64) : (num << p64)
+    end
+    h = hash_integer(num, h)
     return h
 end
 
