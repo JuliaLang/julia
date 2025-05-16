@@ -213,7 +213,7 @@ function hash(x::Real, h::UInt)
 
     # hashing the numerator shifted to pow = 0 greatly simplifies
     # specializations for memory-backed bitinteger types
-    h = hash_integer(num << pow, h)
+    h = hash_integer((pow > 0) ? (num << pow) : num, h)
     return h
 end
 
