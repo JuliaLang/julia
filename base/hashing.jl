@@ -173,8 +173,6 @@ end
 ## generic hashing for rational values ##
 _hash_shr!(x, n) = (x >> n)
 _hash_shl!(x, n) = (x << n)
-_hash_shr!(x::BigInt, n) = GMP.MPZ.fdiv_q_2exp!(x, n)
-_hash_shl!(x::BigInt, n) = GMP.MPZ.mul_2exp!(x, n)
 function hash(x::Real, h::UInt)
     # decompose x as num*2^pow/den
     num, pow, den = decompose(x)
