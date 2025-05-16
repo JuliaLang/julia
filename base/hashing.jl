@@ -171,6 +171,10 @@ function hash(x::Float16, h::UInt)
 end
 
 ## generic hashing for rational values ##
+_hash_shr!(x, n) = (x >> n)
+_hash_shl!(x, n) = (x << n)
+_hash_shr!(x::BigInt, n) = GMP.MPZ.fdiv_q_2exp!(x, n)
+_hash_shl!(x::BigInt, n) = GMP.MPZ.mul_2exp!(x, n)
 function hash(x::Real, h::UInt)
     # decompose x as num*2^pow/den
     num, pow, den = decompose(x)
@@ -187,11 +191,7 @@ function hash(x::Real, h::UInt)
     end
     num_z = trailing_zeros(num)
 
-    if x isa BigFloat
-        GMP.MPZ.fdiv_q_2exp!(num, num_z)
-    else
-        num >>= num_z
-    end
+    num = _hash_shr!(num, num_z)
     den_z = trailing_zeros(den)
     den >>= den_z
     pow += num_z - den_z
@@ -218,11 +218,7 @@ function hash(x::Real, h::UInt)
 
     # trimming only whole words of trailing zeros simplifies greatly
     # some specializations for memory-backed bitintegers
-    if pow > 0
-        p64 = pow % 64
-        num = (x isa BigFloat) ? GMP.MPZ.mul_2exp!(num, p64) : (num << p64)
-    end
-    h = hash_integer(num, h)
+    h = hash_integer((pow > 0) ? _hash_shl!(num, pow % 64) : num, h)
     return h
 end
 
