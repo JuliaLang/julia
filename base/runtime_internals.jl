@@ -1478,6 +1478,15 @@ end
 _uncompressed_ir(codeinst::CodeInstance, s::String) =
     ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
 
+function get_ci_mi(codeinst::CodeInstance)
+    def = codeinst.def
+    if def isa Core.ABIOverride
+        return def.def
+    else
+        return def::MethodInstance
+    end
+end
+
 """
     Base.generating_output([incremental::Bool])::Bool
 

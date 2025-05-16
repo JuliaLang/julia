@@ -65,7 +65,9 @@ using Base: @_foldable_meta, @_gc_preserve_begin, @_gc_preserve_end, @nospeciali
     structdiff, tls_world_age, unconstrain_vararg_length, unionlen, uniontype_layout,
     uniontypes, unsafe_convert, unwrap_unionall, unwrapva, vect, widen_diagonal,
     _uncompressed_ir, maybe_add_binding_backedge!, datatype_min_ninitialized,
-    partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using
+    partialstruct_init_undefs, fieldcount_noerror, _eval_import, _eval_using,
+    get_ci_mi
+
 using Base.Order
 
 import Base: ==, _topmod, append!, convert, copy, copy!, findall, first, get, get!,
