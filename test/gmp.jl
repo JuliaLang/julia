@@ -815,6 +815,10 @@ end
             bint = big(11)^i << shift
             bfloat = float(bint)
             @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+            @test hash(bint, Base.HASH_SEED) ==
+                @invoke(hash(bint::Real, Base.HASH_SEED))
+            @test Base.hash_integer(bint, Base.HASH_SEED) ==
+                @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
         end
     end
 end

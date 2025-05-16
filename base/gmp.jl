@@ -879,18 +879,31 @@ if Limb === UInt64 === UInt
             idx = (pow >>> 6) + 1
             shift = (pow & 63) % UInt
             upshift = BITS_PER_LIMB - shift
+            asz = abs(sz)
             if shift == 0
                 limb = unsafe_load(ptr, idx)
             else
                 limb1 = unsafe_load(ptr, idx)
-                limb2 = idx < abs(sz) ? unsafe_load(ptr, idx+1) : UInt(0)
+                limb2 = idx < asz ? unsafe_load(ptr, idx+1) : UInt(0)
                 limb = limb2 << upshift | limb1 >> shift
             end
             if nd <= 1024 && nd - pow <= 53
                 return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
             end
             h = hash_integer(pow, h)
-            h = hash_integer(x, h)
+
+            h ⊻= (sz < 0)
+            trailing_zero_words = idx - 1
+            GC.@preserve x begin
+                shift_asz = asz - trailing_zero_words
+
+                h = hash_bytes(
+                    Ptr{UInt8}(x.d) + 8 * trailing_zero_words,
+                    8 * shift_asz,
+                    h,
+                    HASH_SECRET
+                )
+            end
             return h
         end
     end
