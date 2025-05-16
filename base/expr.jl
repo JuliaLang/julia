@@ -1684,15 +1684,23 @@ function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
     end
     ci.isva = isva
     code = ci.code
-    bindings = IdSet{Core.Binding}()
+    bindings = Core.svec()
     for i = 1:length(code)
         stmt = code[i]
         if isa(stmt, GlobalRef)
-            push!(bindings, convert(Core.Binding, stmt))
+            # plain loop is used rather than fancy `any` or `IdSet` to avoid world-age issues
+            # if we want to use generated function during the early bootstrap stage when
+            # these functions are not available. (e.g., using `@generated` in `abstractarray.jl`)
+            for x in bindings
+                if x === stmt
+                    continue
+                end
+            end
+            bindings = Core.svec(bindings..., convert(Core.Binding, stmt))
         end
     end
     if !isempty(bindings)
-        ci.edges = Core.svec(bindings...)
+        ci.edges = bindings
     end
     return ci
 end
