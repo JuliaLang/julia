@@ -848,19 +848,18 @@ if Limb === UInt64 === UInt
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
 
-    using .Base: hash_finalizer
+    using .Base: HASH_SECRET, hash_bytes, hash_finalizer
 
     function hash_integer(n::BigInt, h::UInt)
         GC.@preserve n begin
             s = n.size
-            s == 0 && return hash_integer(0, h)
-            p = convert(Ptr{UInt64}, n.d)
-            b = unsafe_load(p)
-            h ⊻= hash_finalizer(ifelse(s < 0, -b, b) ⊻ h)
-            for k = 2:abs(s)
-                h ⊻= hash_finalizer(unsafe_load(p, k) ⊻ h)
-            end
-            return h
+            h ⊻= (s < 0)
+            hash_bytes(
+                Ptr{UInt8}(n.d),
+                8 * abs(s),
+                h,
+                HASH_SECRET
+            )
         end
     end
 
@@ -880,34 +879,18 @@ if Limb === UInt64 === UInt
             idx = (pow >>> 6) + 1
             shift = (pow & 63) % UInt
             upshift = BITS_PER_LIMB - shift
-            asz = abs(sz)
             if shift == 0
                 limb = unsafe_load(ptr, idx)
             else
                 limb1 = unsafe_load(ptr, idx)
-                limb2 = idx < asz ? unsafe_load(ptr, idx+1) : UInt(0)
+                limb2 = idx < abs(sz) ? unsafe_load(ptr, idx+1) : UInt(0)
                 limb = limb2 << upshift | limb1 >> shift
             end
             if nd <= 1024 && nd - pow <= 53
                 return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
             end
             h = hash_integer(pow, h)
-            h ⊻= hash_finalizer(flipsign(limb, sz) ⊻ h)
-            for idx = idx+1:asz
-                if shift == 0
-                    limb = unsafe_load(ptr, idx)
-                else
-                    limb1 = limb2
-                    if idx == asz
-                        limb = limb1 >> shift
-                        limb == 0 && break # don't hash leading zeros
-                    else
-                        limb2 = unsafe_load(ptr, idx+1)
-                        limb = limb2 << upshift | limb1 >> shift
-                    end
-                end
-                h ⊻= hash_finalizer(limb ⊻ h)
-            end
+            h = hash_integer(x, h)
             return h
         end
     end

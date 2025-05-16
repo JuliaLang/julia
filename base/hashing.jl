@@ -69,16 +69,70 @@ hash(x::UInt64, h::UInt) = hash_uint64(hash_mix_linear(x, h))
 hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
 hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
-function hash_integer(n::Integer, h::UInt)
-    h ⊻= hash_uint((n % UInt) ⊻ h)
-    n = abs(n)
-    n >>>= sizeof(UInt) << 3
-    while n != 0
-        h ⊻= hash_uint((n % UInt) ⊻ h)
-        n >>>= sizeof(UInt) << 3
+function hash_integer(
+        x::Integer,
+        seed::UInt64 = HASH_SEED,
+        secret::NTuple{3, UInt64} = HASH_SECRET
+    )
+    seed ⊻= (x < 0)
+    u = abs(x)
+
+    # always left-pad to multiple of 8 bytes
+    buflen = UInt(cld(top_set_bit(u), 64) * 8)
+    seed = seed ⊻ (hash_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
+
+    a = zero(UInt64)
+    b = zero(UInt64)
+
+    if buflen ≤ 16
+        a = (UInt64(u % UInt32) << 32) |
+            UInt64((u >>> ((buflen - 4) * 8)) % UInt32)
+
+        delta = (buflen & 24) >>> (buflen >>> 3)
+
+        b = (UInt64((u >>> (8 * delta)) % UInt32) << 32) |
+            UInt64((u >>> (8 * (buflen - 4 - delta))) % UInt32)
+    else
+        a = (u >>> 8(buflen - 16)) % UInt
+        b = (u >>> 8(buflen - 8)) % UInt
+
+        i = buflen
+        if i > 48
+            see1 = seed
+            see2 = seed
+            while i ≥ 48
+                l0 = u % UInt; u >>>= 64
+                l1 = u % UInt; u >>>= 64
+                l2 = u % UInt; u >>>= 64
+                l3 = u % UInt; u >>>= 64
+                l4 = u % UInt; u >>>= 64
+                l5 = u % UInt; u >>>= 64
+
+                seed = hash_mix(l0 ⊻ secret[1], l1 ⊻ seed)
+                see1 = hash_mix(l2 ⊻ secret[2], l3 ⊻ see1)
+                see2 = hash_mix(l4 ⊻ secret[3], l5 ⊻ see2)
+            end
+            seed = seed ⊻ see1 ⊻ see2
+            i -= 48
+        end
+        if i > 16
+            l0 = u % UInt; u >>>= 64
+            l1 = u % UInt; u >>>= 64
+            seed = hash_mix(l0 ⊻ secret[3], l1 ⊻ seed ⊻ secret[2])
+            if i > 32
+                l2 = u % UInt; u >>>= 64
+                l3 = u % UInt; u >>>= 64
+                seed = hash_mix(l2 ⊻ secret[3], l3 ⊻ seed)
+            end
+        end
     end
-    return h
+
+    a = a ⊻ secret[2]
+    b = b ⊻ seed
+    b, a = mul_parts(a, b)
+    return hash_mix(a ⊻ secret[1] ⊻ buflen, b ⊻ secret[2])
 end
+
 
 ## efficient value-based hashing of floats ##
 
@@ -131,6 +185,7 @@ function hash(x::Real, h::UInt)
         num = -num
         den = -den
     end
+    num_, pow_ = num, pow
     num_z = trailing_zeros(num)
     num >>= num_z
     den_z = trailing_zeros(den)
@@ -156,7 +211,10 @@ function hash(x::Real, h::UInt)
     end
     # handle generic rational values
     h = hash_integer(pow, h)
-    h = hash_integer(num, h)
+
+    # hashing the non-shifted numerator greatly simplifies specializations
+    # for memory-backed bitinteger types
+    h = hash_integer(iszero(pow_) ? num_ : num, h)
     return h
 end
 
@@ -209,7 +267,7 @@ end
     else
         pos = 1
         i = buflen
-        while i ≥ 48
+        if i > 48
             see1 = seed
             see2 = seed
             while i ≥ 48
