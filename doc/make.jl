@@ -450,6 +450,7 @@ const devurl = "v$(VERSION.major).$(VERSION.minor)-dev"
 
 # Hack to make rc docs visible in the version selector
 struct Versions versions end
+Documenter.determine_deploy_subfolder(deploy_decision, ::Versions) = deploy_decision.subfolder
 function Documenter.Writers.HTMLWriter.expand_versions(dir::String, v::Versions)
     # Find all available docs
     available_folders = readdir(dir)

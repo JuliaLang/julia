@@ -188,7 +188,7 @@ invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPar
     invalidate_code_for_globalref!(convert(Core.Binding, gr), invalidated_bpart, new_bpart, new_max_world)
 
 function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeInstance})
-    meth = isa(edge, Method) ? edge : Compiler.get_ci_mi(edge).def
+    meth = isa(edge, Method) ? edge : get_ci_mi(edge).def
     ccall(:jl_maybe_add_binding_backedge, Cint, (Any, Any, Any), b, edge, meth)
     return nothing
 end
