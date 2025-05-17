@@ -777,7 +777,7 @@ end
 
 """
     ImmutableDict(key=>value, key=>value, ...)
-	
+
 `ImmutableDict{K,V}()`
 
 `ImmutableDict` is a dictionary implemented as an immutable linked
