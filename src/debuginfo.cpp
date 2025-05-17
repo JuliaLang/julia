@@ -145,8 +145,8 @@ struct unw_table_entry
 template <typename T>
 static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 {
-    assert(0 == jl_lock_profile_rd_held());
-    jl_lock_profile_wr();
+    int havelock = jl_lock_profile_wr();
+    assert(havelock);
 #ifndef _OS_WINDOWS_
     sigset_t sset;
     sigset_t oset;
@@ -157,7 +157,8 @@ static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 #ifndef _OS_WINDOWS_
     pthread_sigmask(SIG_SETMASK, &oset, NULL);
 #endif
-    jl_unlock_profile_wr();
+    if (havelock)
+        jl_unlock_profile_wr();
 }
 
 
@@ -464,8 +465,8 @@ static int lookup_pointer(
 
     // DWARFContext/DWARFUnit update some internal tables during these queries, so
     // a lock is needed.
-    assert(0 == jl_lock_profile_rd_held());
-    jl_lock_profile_wr();
+    if (!jl_lock_profile_wr())
+        return lookup_pointer(object::SectionRef(), NULL, frames, pointer, slide, demangle, noInline);
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
     jl_unlock_profile_wr();
 
@@ -490,7 +491,8 @@ static int lookup_pointer(
             info = inlineInfo.getFrame(i);
         }
         else {
-            jl_lock_profile_wr();
+            int havelock = jl_lock_profile_wr();
+            assert(havelock); (void)havelock;
             info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
             jl_unlock_profile_wr();
         }
@@ -1198,8 +1200,8 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    assert(0 == jl_lock_profile_rd_held());
-    jl_lock_profile_wr();
+    if (!jl_lock_profile_wr())
+        return 0;
 
     if (symsize)
         *symsize = 0;
