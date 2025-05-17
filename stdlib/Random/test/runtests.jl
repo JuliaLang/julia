@@ -1299,3 +1299,65 @@ end
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(Random))
 end
+
+@testset "fork" begin
+    # fork(::Xoshiro) uses the same algorithm as TaskLocalRNG() upon task spawning,
+    # so we test here that they behave the same, but this could change
+    xx = copy(TaskLocalRNG())
+    x0 = copy(xx)
+    x1 = Random.fork(xx)
+    x2 = fetch(@async copy(TaskLocalRNG()))
+    @test x1 isa Xoshiro && x2 isa Xoshiro
+    @test x1 == x2 # currently, equality involves all 5 UInt64 words of the state
+    @test xx == TaskLocalRNG()
+    @test xx != x0 # the source is mutated in fork
+    @test x1 != xx
+    @test x1 != x0
+
+    # fork is deterministic
+    copy!(xx, x0)
+    x3 = Random.fork(xx)
+    @test x3 == x2
+    @test rand(x3, UInt128) == rand(x2, UInt128)
+
+    # seed! uses the same mechanism
+    copy!(xx, x0)
+    x4 = Xoshiro(0, 0, 0, 0, 0)
+    @test x4 === Random.seed!(x4, xx)
+    @test x4 == x1
+    copy!(TaskLocalRNG(), x0)
+    x5 = Xoshiro(0, 0, 0, 0, 0)
+    @test x5 === Random.seed!(x5, TaskLocalRNG())
+    @test x5 == x1
+    @test xx == TaskLocalRNG() # both are in the same state after being forked off
+
+    @test TaskLocalRNG() == Random.seed!(TaskLocalRNG(), copy!(xx, x0))
+    @test TaskLocalRNG() == x4
+    copy!(TaskLocalRNG(), x0)
+    @test TaskLocalRNG() == Random.seed!(TaskLocalRNG(), TaskLocalRNG())
+
+    # self-seeding
+    copy!(xx, x0)
+    copy!(TaskLocalRNG(), x0)
+    @test xx === Random.seed!(xx, xx)
+    @test TaskLocalRNG() === Random.seed!(TaskLocalRNG(), TaskLocalRNG())
+    @test xx == TaskLocalRNG()
+    @test xx == x1
+
+    # arrays
+    y2 = Random.fork(xx, 2)
+    @test y2 isa Vector{Xoshiro} && size(y2) == (2,)
+    y34 = Random.fork(xx, 3, 0x4)
+    @test y34 isa Matrix{Xoshiro} && size(y34) == (3, 4)
+    y123 = Random.fork(xx, (1, 2, 3))
+    @test y123 isa Array{Xoshiro, 3} && size(y123) == (1, 2, 3)
+    y0 = Random.fork(xx, ())
+    @test y0 isa Array{Xoshiro, 0} && size(y0) == ()
+    @test allunique([y2..., y34..., y123..., y0...])
+
+    # fork is currently unsupported for other RNGs
+    for rng = (RandomDevice(), MersenneTwister(0), TaskLocalRNG(), SeedHasher(0))
+        @test_throws MethodError Random.fork(rng)
+        @test_throws MethodError Random.fork(rng, (2, 3))
+    end
+end

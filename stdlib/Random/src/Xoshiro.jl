@@ -246,6 +246,9 @@ hash(x::Union{TaskLocalRNG, Xoshiro}, h::UInt) = hash(getstate(x), h + 0x49a62c2
 seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::AbstractRNG) =
     initstate!(rng, rand(seeder, NTuple{4, UInt64}))
 
+# when seeder is a Xoshiro, use forking instead of regular seeding, to avoid correlations
+seed!(rng::Union{TaskLocalRNG, Xoshiro}, seeder::Union{TaskLocalRNG, Xoshiro}) =
+    setstate!(rng, _fork(seeder))
 
 @inline function rand(x::Union{TaskLocalRNG, Xoshiro}, ::SamplerType{UInt64})
     s0, s1, s2, s3 = getstate(x)
@@ -296,3 +299,40 @@ for FT in (Float16, Float32, Float64)
     @eval rand(r::Union{TaskLocalRNG, Xoshiro}, ::SamplerTrivial{CloseOpen01{$(FT)}}) =
         _uint2float(rand(r, $(UT)), $(FT))
 end
+
+
+## fork Xoshiro RNGs, in the same way that TaskLocalRNG() is forked upon task spawning
+## cf. jl_rng_split in src/task.c
+
+const xoshiro_split_a = (
+    0x214c146c88e47cb7,
+    0xa66d8cc21285aafa,
+    0x68c7ef2d7b1a54d4,
+    0xb053a7d7aa238c61,
+)
+
+const xoshiro_split_m = (
+    0xaef17502108ef2d9,
+    0xf34026eeb86766af,
+    0x38fd70ad58dd9fbb,
+    0x6677f9b93ab0c04d,
+)
+
+function _fork(src::Union{Xoshiro, TaskLocalRNG})
+    s0, s1, s2, s3, s4 = getstate(src)
+    x = s4
+    s4 = x * 0xd1342543de82ef95 + 1
+
+    state = map((s0, s1, s2, s3), xoshiro_split_a, xoshiro_split_m) do c, ai, mi
+        w = x ⊻ ai
+        c += w * (2*c + 1)
+        c ⊻= c >> ((c >> 59) + 5)
+        c *= mi
+        c ⊻= c >> 43
+        c
+    end
+    setstate!(src, (s0, s1, s2, s3, s4)) # only for s4, other values are unchanged
+    (state..., s4)
+end
+
+fork(src::Xoshiro) = Xoshiro(_fork(src)...)
