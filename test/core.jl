@@ -8534,3 +8534,9 @@ module GlobalBindingMulti
     using .M.C
 end
 @test GlobalBindingMulti.S === GlobalBindingMulti.M.C.S
+
+#58434 bitsegal comparison of oddly sized fields
+primitive type ByteString58434 (18 * 8) end
+
+@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
+@test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)
