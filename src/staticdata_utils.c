@@ -332,9 +332,9 @@ static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env)
 // Collect methods of external functions defined by modules in the worklist
 // "extext" = "extending external"
 // Also collect relevant backedges
-static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m)
+static void jl_collect_extext_methods(jl_array_t *s, jl_array_t *mod_array)
 {
-    foreach_mtable_in_module(m, jl_collect_methtable_from_mod, s);
+    jl_foreach_reachable_mtable(jl_collect_methtable_from_mod, mod_array, s);
 }
 
 static void jl_record_edges(jl_method_instance_t *caller, jl_array_t *edges)
@@ -727,9 +727,7 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
         }
         for (i = 0; i < l; i++) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
-            jl_methtable_t *mt = jl_method_get_table(entry->func.method);
-            assert((jl_value_t*)mt != jl_nothing);
-            jl_method_table_activate(mt, entry);
+            jl_method_table_activate(entry);
         }
     }
 }

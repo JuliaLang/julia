@@ -218,7 +218,7 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
     return invoke(Core.kwcall, T, kwargs, f, args...)
 end
 # invoke does not have its own call cache, but kwcall for invoke does
-setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args...
+setfield!(typeof(invoke).name, :max_args, Int32(3), :monotonic) # invoke, f, T, args...
 
 # define applicable(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to applicable
@@ -252,7 +252,7 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(invokelatest), f, args...)
     @inline
     return Core.invokelatest(Core.kwcall, kwargs, f, args...)
 end
-setfield!(typeof(invokelatest).name.mt, :max_args, 2, :monotonic) # invokelatest, f, args...
+setfield!(typeof(invokelatest).name, :max_args, Int32(2), :monotonic) # invokelatest, f, args...
 
 """
     invoke_in_world(world, f, args...; kwargs...)
@@ -286,7 +286,7 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke_in_world), world::UInt,
     @inline
     return Core.invoke_in_world(world, Core.kwcall, kwargs, f, args...)
 end
-setfield!(typeof(invoke_in_world).name.mt, :max_args, 3, :monotonic) # invoke_in_world, world, f, args...
+setfield!(typeof(invoke_in_world).name, :max_args, Int32(3), :monotonic) # invoke_in_world, world, f, args...
 
 # core operations & types
 include("promotion.jl")
