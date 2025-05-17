@@ -555,6 +555,16 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 show_repl(io::IO, mime::MIME"text/plain", x) = show(io, mime, x)
 
+function show_repl(io::IO, mime::MIME"text/plain", c::AbstractChar)
+    show(io, mime, c) # Call the original Base.show
+    # Check for LaTeX/emoji alias and print if found and using symbol_latex which is used in help?> mode
+    latex = symbol_latex(string(c))
+    if !isempty(latex)
+        print(io, ", input as ")
+        printstyled(io, latex, "<tab>"; color=:cyan)
+    end
+end
+
 show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
     print(io, JuliaSyntaxHighlighting.highlight(
         sprint(show, ex, context=IOContext(io, :color => false))))

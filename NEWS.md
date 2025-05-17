@@ -62,6 +62,8 @@ Standard library changes
 
 #### REPL
 
+* The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
+
 #### Test
 
 * Test failures when using the `@test` macro now show evaluated arguments for all function calls ([#57825], [#57839]).
