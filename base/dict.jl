@@ -776,20 +776,60 @@ struct ImmutableDict{K,V} <: AbstractDict{K,V}
 end
 
 """
-    ImmutableDict
+    ImmutableDict(key=>value, key=>value, ...)
 
-`ImmutableDict` is a dictionary implemented as an immutable linked list,
-which is optimal for small dictionaries that are constructed over many individual insertions.
-Note that it is not possible to remove a value, although it can be partially overridden and hidden
-by inserting a new value with the same key.
+`ImmutableDict{K,V}()`
 
-    ImmutableDict(KV::Pair)
+`ImmutableDict` is a dictionary implemented as an immutable linked
+list, used for small mappings with a few entries where the overhead
+of accessing a hash table is higher than that of a linear search of a
+linked list.
 
-Create a new entry in the `ImmutableDict` for a `key => value` pair
+    Base.ImmutableDict(key=>value, key=>value, ...)
+
+`Base.ImmutableDict(key=>value, key=>value, ...)` constructs a linked
+list; the first argument sets the type of the keys and values. Keys
+are compared with `isequal`.
+
+`Base.ImmutableDict{K,V}()` constructs an empty list with keys of type
+K and values of type V.
+
+    Base.ImmutableDict(imdict, key=>value, key=>value, ...)
+
+`Base.ImmutableDict(imdict, key=>value, key=>value, ...)` constructs a
+new `ImmutableDict` from an existing `ImmutableDict` and additional KV
+pairs, returning a new list.  The original `ImmutableDict` becomes the
+tail of the new list.
+
+Pairs cannot be removed from an immutable dictionary, but they can be
+shadowed by adding an additional pair with a duplicate key; indexing
+operations will find the the last key added.
 
  - use `(key => value) in dict` to see if this particular combination is in the properties set
  - use `get(dict, key, default)` to retrieve the most recent value for a particular key
 
+# Examples
+
+    julia> ctypes = Base.ImmutableDict("char"=>:char, "int"=>:int)
+    Base.ImmutableDict{String, Symbol} with 2 entries:
+      "int"  => :int
+      "char" => :char
+
+    julia> ctypes = Base.ImmutableDict(ctypes, "float"=>:float, "double"=>:double)
+    Base.ImmutableDict{String, Symbol} with 4 entries:
+      "double" => :double
+      "float"  => :float
+      "int"    => :int
+      "char"   => :char
+
+    julia> viewparameters = Base.ImmutableDict{String,Any}()
+    Base.ImmutableDict{String, Any}()
+
+    julia> viewparameters = Base.ImmutableDict(
+               viewparameters, "type"=>"perspective", "direction"=>(0, 0, 1))
+    Base.ImmutableDict{String, Any} with 2 entries:
+      "direction" => (0, 0, 1)
+      "type"      => "perspective"
 """
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
