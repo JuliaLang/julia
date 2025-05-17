@@ -559,18 +559,20 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     // this here by blocking. This also synchronizes our read of `current_task`
     // (which is the flag we currently use to check the liveness state of a thread).
 #ifdef _OS_WINDOWS_
-    jl_lock_profile_wr();
+    int havelock = jl_lock_profile_wr();
+    assert(havelock); (void)havelock;
 #elif defined(JL_DISABLE_LIBUNWIND)
     // nothing
 #elif defined(__APPLE__)
-    jl_lock_profile_wr();
+    int havelock = jl_lock_profile_wr();
+    assert(havelock); (void)havelock;
 #else
     pthread_mutex_lock(&in_signal_lock);
 #endif
     jl_atomic_store_relaxed(&ptls->current_task, NULL); // indicate dead
     // finally, release all of the locks we had grabbed
 #ifdef _OS_WINDOWS_
-    jl_unlock_profile_wr();
+    if (havelock) jl_unlock_profile_wr();
 #elif defined(JL_DISABLE_LIBUNWIND)
     // nothing
 #elif defined(__APPLE__)
