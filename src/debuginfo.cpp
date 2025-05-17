@@ -20,6 +20,8 @@
 #include <llvm/Object/MachO.h>
 #include <llvm/Object/COFF.h>
 #include <llvm/Object/ELFObjectFile.h>
+#include <llvm-Compression.h>
+#include <llvm/Support/Compression.h>
 
 #ifdef _OS_DARWIN_
 #include <CoreFoundation/CoreFoundation.h>
