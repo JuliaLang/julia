@@ -50,24 +50,28 @@ JL_DLLEXPORT int jl_is_initialized(void)
  * @param argc The number of command line arguments.
  * @param argv Array of command line arguments.
  */
-JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv)
+JL_DLLEXPORT jl_value_t *jl_set_ARGS(int argc, char **argv)
 {
-    if (jl_core_module != NULL) {
-        jl_array_t *args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
-        if (args == NULL) {
-            args = jl_alloc_vec_any(0);
-            JL_GC_PUSH1(&args);
+    jl_array_t *args = NULL;
+    jl_value_t *vecstr = NULL;
+    JL_GC_PUSH2(&args, &vecstr);
+    if (jl_core_module != NULL)
+        args = (jl_array_t*)jl_get_global(jl_core_module, jl_symbol("ARGS"));
+    if (args == NULL) {
+        vecstr = jl_apply_array_type((jl_value_t*)jl_string_type, 1);
+        args = jl_alloc_array_1d(vecstr, 0);
+        if (jl_core_module != NULL)
             jl_set_const(jl_core_module, jl_symbol("ARGS"), (jl_value_t*)args);
-            JL_GC_POP();
-        }
-        assert(jl_array_nrows(args) == 0);
-        jl_array_grow_end(args, argc);
-        int i;
-        for (i = 0; i < argc; i++) {
-            jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
-            jl_array_ptr_set(args, i, s);
-        }
     }
+    assert(jl_array_nrows(args) == 0);
+    jl_array_grow_end(args, argc);
+    int i;
+    for (i = 0; i < argc; i++) {
+        jl_value_t *s = (jl_value_t*)jl_cstr_to_string(argv[i]);
+        jl_array_ptr_set(args, i, s);
+    }
+    JL_GC_POP();
+    return (jl_value_t*)args;
 }
 
 JL_DLLEXPORT void jl_init_with_image_handle(void *handle) {
