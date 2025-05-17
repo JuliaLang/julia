@@ -99,7 +99,7 @@ LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYP
 LLVM_CMAKE += -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD:STRING="$(LLVM_EXPERIMENTAL_TARGETS)"
 LLVM_CMAKE += -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
 LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=FORCE_ON -DZLIB_ROOT="$(build_prefix)"
-LLVM_CMAKE += -DLLVM_ENABLE_ZSTD=OFF
+LLVM_CMAKE += -DLLVM_ENABLE_ZSTD=FORCE_ON -DZSTD_ROOT="$(build_prefix)"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
@@ -250,6 +250,11 @@ endif
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
+
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zstd
+endif
+
 
 # NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
 
