@@ -776,41 +776,60 @@ struct ImmutableDict{K,V} <: AbstractDict{K,V}
 end
 
 """
-    ImmutableDict
+    ImmutableDict(key=>value, key=>value, ...)
+	
+`ImmutableDict{K,V}()`
 
 `ImmutableDict` is a dictionary implemented as an immutable linked
-list. It's for small heavily-used mappings with a few entries, where
-the overhead of accessing a hash table is higher than that of a linear
-search of a linked list.  `ImmutableDict` is `public` rather than
-`export`; to access it one must write `Base.ImmutableDict`
+list, used for small mappings with a few entries where the overhead
+of accessing a hash table is higher than that of a linear search of a
+linked list.
 
-To create an `ImmutableDict` use
+    Base.ImmutableDict(key=>value, key=>value, ...)
 
-    imdict = Base.ImmutableDict(key=>value, key=>value, ...)
+`Base.ImmutableDict(key=>value, key=>value, ...)` constructs a linked
+list; the first argument sets the type of the keys and values. Keys
+are compared with `isequal`.
 
-This will put the first elements in the dictionary and also define the
-type of the dictionary elements; the returned value will be the head
-of the list. To add to the dictionary use
+`Base.ImmutableDict{K,V}()` constructs an empty list with keys of type
+K and values of type V.
 
-    imdict = Base.ImmutableDict(imdict, key=>value, key=>value, ...)
+    Base.ImmutableDict(imdict, key=>value, key=>value, ...)
 
-Pairs cannot be removed from the dictionary, but they can be shadowed
-by adding an additional pair with a duplicate key; indexing operations
-will find the the last key added.
+`Base.ImmutableDict(imdict, key=>value, key=>value, ...)` constructs a
+new `ImmutableDict` from an existing `ImmutableDict` and additional KV
+pairs, returning a new list.  The original `ImmutableDict` becomes the
+tail of the new list.
 
-The types of elements may be specified; this is useful when keys or
-values of  `Union` or `Any` types are desired.
-
-    imdict = Base.ImmutableDict{Symbol,Any}(key=>value, key=>value, ...)
-
-An empty `ImmutableDict` can be created by specifying the type and
-giving no pairs; the type must be specified.
-
-    imdict = Base.ImmutableDict{Symbol,Any}()
+Pairs cannot be removed from an immutable dictionary, but they can be
+shadowed by adding an additional pair with a duplicate key; indexing
+operations will find the the last key added.
 
  - use `(key => value) in dict` to see if this particular combination is in the properties set
  - use `get(dict, key, default)` to retrieve the most recent value for a particular key
 
+# Examples
+
+    julia> ctypes = Base.ImmutableDict("char"=>:char, "int"=>:int)
+    Base.ImmutableDict{String, Symbol} with 2 entries:
+      "int"  => :int
+      "char" => :char
+
+    julia> ctypes = Base.ImmutableDict(ctypes, "float"=>:float, "double"=>:double)
+    Base.ImmutableDict{String, Symbol} with 4 entries:
+      "double" => :double
+      "float"  => :float
+      "int"    => :int
+      "char"   => :char
+
+    julia> viewparameters = Base.ImmutableDict{String,Any}()
+    Base.ImmutableDict{String, Any}()
+
+    julia> viewparameters = Base.ImmutableDict(
+               viewparameters, "type"=>"perspective", "direction"=>(0, 0, 1))
+    Base.ImmutableDict{String, Any} with 2 entries:
+      "direction" => (0, 0, 1)
+      "type"      => "perspective"
 """
 ImmutableDict
 ImmutableDict(KV::Pair{K,V}) where {K,V} = ImmutableDict{K,V}(KV[1], KV[2])
