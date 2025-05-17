@@ -843,7 +843,6 @@ Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), st
 
 ## streamlined hashing for BigInt, by avoiding allocation from shifts ##
 
-Base._hash_shr!(x::BigInt, n) = MPZ.fdiv_q_2exp!(x, n)
 Base._hash_shl!(x::BigInt, n) = MPZ.mul_2exp!(x, n)
 
 if Limb === UInt64 === UInt

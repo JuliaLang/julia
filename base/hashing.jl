@@ -171,7 +171,6 @@ function hash(x::Float16, h::UInt)
 end
 
 ## generic hashing for rational values ##
-_hash_shr!(x, n) = (x >> n)
 _hash_shl!(x, n) = (x << n)
 function hash(x::Real, h::UInt)
     # decompose x as num*2^pow/den
@@ -189,7 +188,7 @@ function hash(x::Real, h::UInt)
     end
     num_z = trailing_zeros(num)
 
-    num = _hash_shr!(num, num_z)
+    num >>= num_z
     den_z = trailing_zeros(den)
     den >>= den_z
     pow += num_z - den_z
