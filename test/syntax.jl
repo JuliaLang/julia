@@ -4330,3 +4330,12 @@ let ex = @Meta.lower function return_my_method(); 1; end
     code[end] = Core.ReturnNode(Core.SSAValue(idx))
     @test isa(Core.eval(@__MODULE__, ex), Method)
 end
+
+# Capturing a @nospecialize argument should result in an Any field in the closure
+module NoSpecClosure
+    K(@nospecialize(x)) = y -> x
+end
+let f = NoSpecClosure.K(1)
+    @test f(2) == 1
+    @test typeof(f).parameters == Core.svec()
+end
