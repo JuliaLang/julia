@@ -2638,12 +2638,12 @@ static void jl_prune_module_bindings(jl_module_t * m) JL_GC_DISABLED
     jl_gc_wb(m, jl_atomic_load_relaxed(&bindingkeyset2));
 }
 
-static void strip_slotnames(jl_array_t *slotnames)
+static void strip_slotnames(jl_array_t *slotnames, int n)
 {
     // replace slot names with `?`, except unused_sym since the compiler looks at it
     jl_sym_t *questionsym = jl_symbol("?");
-    int i, l = jl_array_len(slotnames);
-    for (i = 0; i < l; i++) {
+    int i;
+    for (i = 0; i < n; i++) {
         jl_value_t *s = jl_array_ptr_ref(slotnames, i);
         if (s != (jl_value_t*)jl_unused_sym)
             jl_array_ptr_set(slotnames, i, questionsym);
@@ -2662,7 +2662,7 @@ static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, jl_code_
     else {
         ci = (jl_code_info_t*)ci_;
     }
-    strip_slotnames(ci->slotnames);
+    strip_slotnames(ci->slotnames, jl_array_len(ci->slotnames));
     ci->debuginfo = jl_nulldebuginfo;
     jl_gc_wb(ci, ci->debuginfo);
     jl_value_t *ret = (jl_value_t*)ci;
@@ -2736,7 +2736,11 @@ static int strip_all_codeinfos__(jl_typemap_entry_t *def, void *_env)
             }
             jl_array_t *slotnames = jl_uncompress_argnames(m->slot_syms);
             JL_GC_PUSH1(&slotnames);
-            strip_slotnames(slotnames);
+            int tostrip = jl_array_len(slotnames);
+            // for keyword methods, strip only nargs to keep the keyword names at the end for reflection
+            if (jl_tparam0(jl_unwrap_unionall(m->sig)) == jl_typeof(jl_kwcall_func))
+                tostrip = m->nargs;
+            strip_slotnames(slotnames, tostrip);
             m->slot_syms = jl_compress_argnames(slotnames);
             jl_gc_wb(m, m->slot_syms);
             JL_GC_POP();
