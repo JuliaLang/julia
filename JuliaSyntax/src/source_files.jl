@@ -156,9 +156,6 @@ function SourceFile(code::AbstractString; filename=nothing, first_line=1,
         # The line is considered to start after the `\n`
         code[i] == '\n' && push!(line_starts, i+1)
     end
-    if isempty(code) || last(code) != '\n'
-        push!(line_starts, ncodeunits(code)+1)
-    end
     SourceFile(code, first_index-1, filename, first_line, line_starts)
 end
 
@@ -168,8 +165,7 @@ end
 
 # Get line number of the given byte within the code
 function _source_line_index(source::SourceFile, byte_index)
-    lineidx = searchsortedlast(source.line_starts, byte_index - source.byte_offset)
-    return (lineidx < lastindex(source.line_starts)) ? lineidx : lineidx-1
+    searchsortedlast(source.line_starts, byte_index - source.byte_offset)
 end
 _source_line(source::SourceFile, lineidx) = lineidx + source.first_line - 1
 
@@ -204,7 +200,10 @@ function source_line_range(source::SourceFile, byte_index::Integer;
                            context_lines_before=0, context_lines_after=0)
     lineidx = _source_line_index(source, byte_index)
     fbyte = source.line_starts[max(lineidx-context_lines_before, 1)]
-    lbyte = source.line_starts[min(lineidx+1+context_lines_after, end)] - 1
+    lline = lineidx + context_lines_after
+    lbyte = lline >= lastindex(source.line_starts) ?
+        ncodeunits(source.code) : source.line_starts[lline + 1] - 1
+
     return (fbyte + source.byte_offset,
             lbyte + source.byte_offset)
 end

@@ -37,6 +37,11 @@
     e = try node.val = :q catch e e end
     @test occursin("immutable", e.msg) && occursin("SyntaxData", e.msg)
 
+    # Newline-terminated source
+    t = parsestmt(SyntaxNode, "a*b + c\n")
+    @test sprint(highlight, t[1][3]) == "a*b + c\n# ╙"
+    @test sprint(highlight, t.source, t.raw, 1, 3) == "a*b + c\n# ╙"
+
     # copy
     t = parsestmt(SyntaxNode, "a*b + c")
     ct = copy(t)
