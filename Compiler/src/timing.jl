@@ -6,7 +6,7 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
         file = QuoteNode(file)
 
         # XXX: This buffer must be large enough to store any jl_timing_block_t (runtime-checked)
-        buffer = (0, 0, 0, 0, 0, 0, 0)
+        buffer = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
         buffer_size = Core.sizeof(buffer)
         return quote
             if $event[] === C_NULL
