@@ -145,7 +145,7 @@ function mapreducedim_naive(f::F, op::OP, A, init, is_inner_dim, inner, outer, a
     lsiz = linear_size(A, is_inner_dim)
     if lsiz > 0
         i0 = first(LinearIndices(A))
-        alloc(mapreduce_pairwise(f, op, A, init, (i0:lsiz) .+ (lsiz*(i-1))) for (i,_) in enumerate(outer))
+        alloc(mapreduce_pairwise(f, op, A, init, (i0:i0+lsiz-1) .+ (lsiz*(i-1))) for (i,_) in enumerate(outer))
     else
         alloc(mapreduce_pairwise(f, op, A, init, mergeindices(is_inner_dim, inner, i)) for i in outer)
     end
