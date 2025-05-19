@@ -357,6 +357,10 @@ $(eval $(call bb-install,lld,LLD,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
 
+# work-around for Yggdrasil packaging bug (https://github.com/JuliaPackaging/Yggdrasil/pull/11231)
+$(build_prefix)/manifest/llvm-tools uninstall-llvm-tools: \
+	TAR:=$(TAR) --exclude=llvm-config.exe
+
 endif # USE_BINARYBUILDER_LLVM
 
 get-lld: get-llvm

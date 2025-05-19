@@ -210,11 +210,18 @@ CG_DEBUG_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia-debug -ljulia-internal-de
 RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a -ljulia $(RT_LIBS)
 CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 
-OBJS := $(SRCS:%=$(BUILDDIR)/%.o) $(BUILDDIR)/llvm-Compression.o
-DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj) $(BUILDDIR)/llvm-Compression.dbg.obj
+OBJS := $(SRCS:%=$(BUILDDIR)/%.o)
+DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
-CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o) $(BUILDDIR)/llvm-Compression.o
-CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj) $(BUILDDIR)/llvm-Compression.dbg.obj
+CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
+CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
+
+ifeq ($(OS)_$(BINARY),WINNT_32)
+OBJS += $(BUILDDIR)/llvm-Compression.o
+DOBJS += $(BUILDDIR)/llvm-Compression.dbg.obj
+CODEGEN_OBJS += $(BUILDDIR)/llvm-Compression.o
+CODEGEN_DOBJS += $(BUILDDIR)/llvm-Compression.dbg.obj
+endif
 
 # Add SONAME defines so we can embed proper `dlopen()` calls.
 ADDL_SHIPFLAGS  := -DJL_SYSTEM_IMAGE_PATH=$(call shell_escape,$(call c_escape,$(call normalize_path,$(build_private_libdir_rel)/sys.$(SHLIB_EXT)))) \
