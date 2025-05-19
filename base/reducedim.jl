@@ -109,11 +109,22 @@ else
 end
 
 function mapreducedim(f::F, op::OP, A, init, dims, alloc=_MapReduceAllocator(A)) where {F, OP}
-    # It's advantageous to additionally consider singleton dimensions as part of the
-    # reduction as that allows more cases to be considered contiguous
-    is_inner_dim = ntuple(d->d in dims || size(A, d) == 1, ndims(A))
+    if alloc isa _MapReduceInPlace
+        # We can ignore dims and just trust the output array's axes. Note that the
+        # other branch here optimizes for the case where the input array _also_ has
+        # a singleton dimension, but we cannot do that here because OffsetArrays
+        # supports reductions into differently-offset singleton dimensions. This means
+        # we cannot index directly into A with an `outer` index. The output may also have
+        # fewer dimensions than A, so we may need to add trailing dims here:
+        outer = CartesianIndices(ntuple(d->axes(alloc.A, d), ndims(A)))
+        is_inner_dim = map(==(1), size(outer))
+    else
+        # It's advantageous to additionally consider singleton dimensions as part of the
+        # reduction as that allows more cases to be considered contiguous
+        is_inner_dim = ntuple(d->d in dims || size(A, d) == 1, ndims(A))
+        outer = CartesianIndices(reduced_indices(A, dims))
+    end
     inner = CartesianIndices(map((b,ax)->b ? ax : reduced_index(ax), is_inner_dim, axes(A)))
-    outer = CartesianIndices(reduced_indices(A, dims))
     n = length(inner)
     # Handle the empty and trivial 1-element cases:
     if (n == 0 || isempty(A))
@@ -126,7 +137,7 @@ function mapreducedim(f::F, op::OP, A, init, dims, alloc=_MapReduceAllocator(A))
     if is_inner_dim == keep_first_trues(is_inner_dim) || _mapreduce_might_widen(f, op, A, init, alloc)
         # Column major contiguous reduction! This is the easy case
         return mapreducedim_naive(f, op, A, init, is_inner_dim, inner, outer, alloc)
-    elseif 1 in dims
+    elseif is_inner_dim[1] # `dims` includes the first dimension
         return mapreducedim_colmajor(f, op, A, init, is_inner_dim, inner, outer, alloc)
     else
         return mapreducedim_rowmajor(f, op, A, init, is_inner_dim, inner, outer, alloc)
@@ -152,8 +163,8 @@ function mapreducedim_naive(f::F, op::OP, A, init, is_inner_dim, inner, outer, a
 end
 function mapreducedim_colmajor(f::F, op::OP, A, init, is_inner_dim, inner, outer, alloc, enforce_pairwise=true) where {F, OP}
     is_contiguous_inner = keep_first_trues(is_inner_dim)
-    contiguous_inner = mergeindices(is_contiguous_inner, inner, first(outer))
-    discontiguous_inner = mergeindices(is_contiguous_inner, first(outer), inner)
+    contiguous_inner = mergeindices(is_contiguous_inner, inner, first(inner))
+    discontiguous_inner = mergeindices(is_contiguous_inner, first(inner), inner)
     if enforce_pairwise && length(discontiguous_inner) > pairwise_blocksize(f, op)
         return mapreducedim_naive(f, op, A, init, is_inner_dim, inner, outer, alloc)
     end
@@ -176,7 +187,7 @@ function mapreducedim_rowmajor(f::F, op::OP, A, init, is_inner_dim, inner, outer
         return mapreducedim_naive(f, op, A, init, is_inner_dim, inner, outer, alloc)
     end
     # Take one element from each outer iteration to initialize R
-    R = alloc(_mapreduce_start(f, op, A, init, A[o]) for o in outer)
+    R = alloc(_mapreduce_start(f, op, A, init, A[mergeindices(is_inner_dim, first(inner), o)]) for o in outer)
     for i in Iterators.drop(inner, 1)
         @simd for o in outer
             # SIMD still helps here! It doesn't reassociate _within_ each reduction, but it can allow
@@ -198,12 +209,10 @@ Compute `mapreduce(f, op, A; init, dims)` where `dims` are the singleton dimensi
     The previous values in `R` are _not_ used as initial values; they are completely ignored
 """
 function mapreduce!(f, op, R::AbstractArray, A::AbstractArrayOrBroadcasted; init=_InitialValue(), update=false)
-    if ndims(R) > ndims(A) || !all(d->size(R, d) in (1, size(A, d)), 1:max(ndims(R), ndims(A)))
+    if ndims(R) > ndims(A) || !all(d->size(R, d) == 1 || axes(R, d) == axes(A, d), 1:max(ndims(R), ndims(A)))
         throw(DimensionMismatch())
     end
-    is_inner_dim = ntuple(d->size(R, d)==1, ndims(A))
-    dims = findall(is_inner_dim) #TODO: do better
-    return mapreducedim(f, op, A, init, dims, _MapReduceInPlace(R, op, update))
+    return mapreducedim(f, op, A, init, nothing, _MapReduceInPlace(R, op, update))
 end
 
 """
