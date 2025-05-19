@@ -80,16 +80,12 @@ end
 function String(v::ReinterpretArray{UInt8, 1, S, Vector{S}, IsReshaped}) where {S, IsReshaped}
     len = length(v)
     len == 0 && return ""
-    ref = v.parent.ref
-    if ref.ptr_or_offset == ref.mem.ptr
-        str = ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), ref.mem, len)
-    else
-        str = ccall(:jl_pchar_to_string, Ref{String}, (Ptr{S}, Int), ref, len)
-    end
-    # optimized empty!(v.parent); sizehint!(v.parent, 0) calls
-    setfield!(v.parent, :size, (0,))
-    setfield!(v.parent, :ref, memoryref(Memory{S}()))
-    return str
+    return ccall(:jl_pchar_to_string, Ref{String}, (Ptr{S}, Int), v.parent.ref, len)
+end
+function String(v::ReinterpretArray{UInt8, 1, S, Memory{S}, IsReshaped}) where {S, IsReshaped}
+    len = length(v)
+    len == 0 && return ""
+    return ccall(:jl_pchar_to_string, Ref{String}, (Ptr{S}, Int), v.parent.ptr, len)
 end
 
 "Create a string re-using the memory, if possible.
