@@ -493,6 +493,7 @@
 (define (vinfo:never-undef v) (< 0 (logand (caddr v) 4)))
 (define (vinfo:read v) (< 0 (logand (caddr v) 8)))
 (define (vinfo:sa v) (< 0 (logand (caddr v) 16)))
+(define (vinfo:nospecialize v) (< 0 (logand (caddr v) 128)))
 (define (set-bit x b val) (if val (logior x b) (logand x (lognot b))))
 ;; record whether var is captured
 (define (vinfo:set-capt! v c)  (set-car! (cddr v) (set-bit (caddr v) 1 c)))
@@ -507,6 +508,7 @@
 ;; occurs undef: mask 32
 ;; whether var is called (occurs in function call head position)
 (define (vinfo:set-called! v a)  (set-car! (cddr v) (set-bit (caddr v) 64 a)))
+(define (vinfo:set-nospecialize! v c)  (set-car! (cddr v) (set-bit (caddr v) 128 c)))
 
 (define var-info-for assq)
 

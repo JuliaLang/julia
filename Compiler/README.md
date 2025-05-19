@@ -16,13 +16,13 @@ your `Project.toml` as follows:
 Compiler = "807dbc54-b67e-4c79-8afb-eafe4df6f2e1"
 
 [compat]
-Compiler = "0"
+Compiler = "0.1"
 ```
 
-With the setup above, [the special placeholder version (v0.0.0)](https://github.com/JuliaLang/BaseCompiler.jl)
+With the setup above, [the special placeholder version (v0.1.0)](https://github.com/JuliaLang/BaseCompiler.jl)
 will be installed by default.[^1]
 
-[^1]: Currently, only version v0.0.0 is registered in the [General](https://github.com/JuliaRegistries/General) registry.
+[^1]: Currently, only version v0.1.0 is registered in the [General](https://github.com/JuliaRegistries/General) registry.
 
 If needed, you can switch to a custom implementation of the `Compiler` module by running
 ```julia-repl
