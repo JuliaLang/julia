@@ -2204,8 +2204,19 @@ static jl_value_t *strip_codeinfo_meta(jl_method_t *m, jl_value_t *ci_, int orig
             jl_array_ptr_set(ci->slotnames, i, questionsym);
     }
     if (orig) {
-        m->slot_syms = jl_compress_argnames(ci->slotnames);
+        jl_array_t *slotnames = jl_uncompress_argnames(m->slot_syms);
+        JL_GC_PUSH1(&slotnames);
+        int tostrip = jl_array_len(slotnames);
+        if (jl_tparam0(jl_unwrap_unionall(m->sig)) == jl_typeof(jl_kwcall_func))
+            tostrip = m->nargs;
+        for (i = 0; i < tostrip; i++) {
+            jl_value_t *s = jl_array_ptr_ref(slotnames, i);
+            if (s != (jl_value_t*)jl_unused_sym)
+                jl_array_ptr_set(ci->slotnames, i, questionsym);
+        }
+        m->slot_syms = jl_compress_argnames(slotnames);
         jl_gc_wb(m, m->slot_syms);
+        JL_GC_POP();
     }
     jl_value_t *ret = (jl_value_t*)ci;
     if (compressed)
