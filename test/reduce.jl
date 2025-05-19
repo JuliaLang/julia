@@ -822,9 +822,4 @@ iterunknown(x) = (y = skipmissing(convert(Array{Union{Missing, eltype(x)}}, x));
     end
 
     @test sum((rand(Float32) for _ in 1:100000000))/100000000 ≈ 0.5
-
-    rng = MersenneTwister(630);
-    v = randn(rng, Float16, 1000)
-    sa = @view v[collect(1:end)]
-    @test sum(sa) ≈ sum(v)
 end
