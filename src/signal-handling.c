@@ -102,7 +102,7 @@ void jl_init_profile_lock(void)
 #endif
 }
 
-static uintptr_t jl_lock_profile_rd_held(void)
+static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 {
 #ifndef _OS_WINDOWS_
     return (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
