@@ -113,18 +113,19 @@ jobs:
               // return; // TODO: Uncomment this line.
             }
 
+            var DID_ENCOUNTER_ERROR = false;
+
             // Assign random committer
             const selected_assignee = assignee_candidates[Math.floor(Math.random()*assignee_candidates.length)]
             console.log('selected_assignee: ', selected_assignee);
             console.log(`Attempting to assign @${selected_assignee} to this PR...`);
-            const TODO_RESULT_FOO = await github.rest.issues.addAssignees({
+            await github.rest.issues.addAssignees({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
               # assignees: selected_assignee,
               assignees: 'dfgdsfgdfgdfgdfgdfgdfg23423423@#$@#$@#$42fsdfsf',
             });
-            console.log('TODO_RESULT_FOO: ', TODO_RESULT_FOO); // TODO: Delete this line.
 
             // Add the "pr review" label
             const pr_review_label = 'status: waiting for PR reviewer';
@@ -136,6 +137,16 @@ jobs:
               labels: [pr_review_label],
             });
 
+            // Now get the updated PR data, and see if we were successful:
+            const TODO = await github.rest.pulls({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              labels: [pr_review_label],
+            });
+            console.log('TODO: ', TODO);
+            // DID_ENCOUNTER_ERROR = true;
+
             // Post a comment
             const comment_body = `Hello! I am a bot.\n\nThank you for your pull request!\n\nI have assigned \`@${selected_assignee}\` to this pull request.\n\n\`@${selected_assignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.`
             console.log('Attempting to post bot comment on the PR...');
@@ -146,5 +157,12 @@ jobs:
               body: comment_body,
             });
 
+            // Sanity check 1: Make sure that assignee was successfully assigned.
+            // Sanity check 2: 
+            // Exit with error if any 
+            if (DID_ENCOUNTER_ERROR) {
+              const msg = 'ERROR: Encountered at least one error while running the script';
+              console.error(msg);
+              throw new Error(msg);
+            }
 
-            //
