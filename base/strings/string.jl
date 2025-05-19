@@ -259,7 +259,7 @@ const _GUTF8_DFA_TABLE, _GUTF8_DFA_REVERSE_TABLE = let
         forward_dfa_table[n] = forward_class_rows[1 + byte_class[n]]
         reverse_dfa_table[n] = reverse_class_rows[1 + byte_class[n]]
     end
-    (forward_dfa_table, reverse_dfa_table)
+    (tuple(forward_dfa_table...), tuple(reverse_dfa_table...))
 end
 ##
 @inline function _gutf8_dfa_step(state::_GUTF8State, byte::UInt8)
@@ -433,7 +433,7 @@ const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute bas
         class_row[i]=row
     end
 
-    map(c->class_row[c+1],character_classes)
+    tuple(map(c->class_row[c+1],character_classes)...)
 end
 
 
