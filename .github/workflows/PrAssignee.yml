@@ -121,7 +121,8 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              assignees: selected_assignee,
+              # assignees: selected_assignee,
+              assignees: 'dfgdsfgdfgdfgdfgdfgdfg23423423@#$@#$@#$42fsdfsf',
             });
             console.log('TODO_RESULT_FOO: ', TODO_RESULT_FOO); // TODO: Delete this line.
 
