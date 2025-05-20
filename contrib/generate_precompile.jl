@@ -397,6 +397,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             if precompile(ps...)
                 n_succeeded += 1
             else
+                Base.get_bool_env("CI", false) && error("Precompilation failed for $statement")
                 @warn "Failed to precompile expression" form=statement _module=nothing _file=nothing _line=0
             end
             failed = length(statements) - n_succeeded
@@ -404,6 +405,7 @@ generate_precompile_statements() = try # Make sure `ansi_enablecursor` is printe
             print_state("step3" => string("R$n_succeeded", failed > 0 ? " ($failed failed)" : ""))
         catch ex
             # See #28808
+            Base.get_bool_env("CI", false) && error("Precompilation failed for $statement")
             @warn "Failed to precompile expression" form=statement exception=(ex,catch_backtrace()) _module=nothing _file=nothing _line=0
         end
     end
