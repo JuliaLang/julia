@@ -962,6 +962,7 @@ _unzip(Z::ZippedArray) = (Z.first, Z.second)
 _unzip(A::AbstractArray) = ([a[1] for a in A], [a[2] for a in A])
 
 _transform_pair(f) = x-> (x[1], f(x[2]))
+_transform_pair(::Type{F}) where {F} = x-> (x[1], F(x[2]))
 _transform_pair(f::typeof(identity)) = f
 
 """
