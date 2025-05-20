@@ -564,12 +564,15 @@ isbindingresolved
 function reducedim_init end
 const _dep_message_reducedim_init = ", these internals have been removed. To customize the array returned by dimensional reductions, implement mapreduce_similar instead"
 deprecate(Base, :reducedim_init)
+deprecate(Base, Symbol("#reducedim_init"))
 function reducedim_initarray end
 const _dep_message_reducedim_initarray = ", these internals have been removed. To customize the array returned by dimensional reductions, implement mapreduce_similar instead"
 deprecate(Base, :reducedim_initarray)
+deprecate(Base, Symbol("#reducedim_initarray"))
 function _mapreduce_dim end
 const _dep_message__mapreduce_dim = ", these internals have been removed. To customize the array returned by dimensional reductions, implement mapreduce_similar instead"
 deprecate(Base, :_mapreduce_dim)
+deprecate(Base, Symbol("#_mapreduce_dim"))
 @deprecate_binding mapreducedim! Base.mapreduce! false
 @deprecate_binding _mapreducedim! Base.mapreduce! false
 @deprecate_binding reducedim! Base.reduce! false
