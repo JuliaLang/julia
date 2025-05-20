@@ -831,7 +831,8 @@ See also: [`names`](@ref), [`Docs.hasdoc`](@ref), [`Base.ispublic`](@ref).
 """
 function undocumented_names(mod::Module; private::Bool=false)
     filter!(names(mod; all=true)) do sym
-        !hasdoc(mod, sym) && !startswith(string(sym), '#') &&
+        !Base.isdeprecated(mod, sym) &&
+            !hasdoc(mod, sym) && !startswith(string(sym), '#') &&
             (private || Base.ispublic(mod, sym))
     end
 end
