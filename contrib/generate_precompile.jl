@@ -49,7 +49,6 @@ precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:allow_typevars, :volatile_inf
 precompile(Tuple{typeof(Base.getindex), Type{Pair{Base.PkgId, UInt128}}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Pair{Base.PkgId, UInt128}, Vararg{Pair{Base.PkgId, UInt128}}})
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}, Core.SimpleVector})
 precompile(Tuple{typeof(Base.Compiler.ir_to_codeinf!), Base.Compiler.OptimizationState{Base.Compiler.NativeInterpreter}})
-precompile(Tuple{Base.IncludeInto, RelocatableFolders.Path})
 
 # LazyArtifacts (but more generally helpful)
 precompile(Tuple{Type{Base.Val{x} where x}, Module})
