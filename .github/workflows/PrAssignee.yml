@@ -104,7 +104,7 @@ jobs:
 
             if (oldPrAssignees.length >= 1) {
               console.log('Pull request already has at least one assignee. Will not assign any new assignees.');
-              // return;
+              return;
             }
 
             if (isCollaborator == true) {
