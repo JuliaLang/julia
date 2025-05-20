@@ -8,6 +8,13 @@ using Random
     @test String("abc!") == "abc!"
     @test String(0x61:0x63) == "abc"
 
+    v32 = copy(reinterpret(UInt32, v))
+    @test String(reinterpret(UInt8, v32)) == "abc!" && !isempty(v32)
+    @test 1 == @allocations String(reinterpret(UInt8, v32))
+    m32 = v32.ref.mem
+    @test String(reinterpret(UInt8, m32)) == "abc!" && !isempty(m32)
+    @test 1 == @allocations String(reinterpret(UInt8, m32))
+
     # Check that resizing empty source vector does not corrupt string
     b = IOBuffer()
     @inferred write(b, "ab")
