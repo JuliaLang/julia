@@ -8,6 +8,7 @@ using Random
     @test String("abc!") == "abc!"
     @test String(0x61:0x63) == "abc"
 
+    v = [0x61,0x62,0x63,0x21]
     v32 = copy(reinterpret(UInt32, v))
     @test String(reinterpret(UInt8, v32)) == "abc!" && !isempty(v32)
     @test 1 == @allocations String(reinterpret(UInt8, v32))
