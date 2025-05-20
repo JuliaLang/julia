@@ -143,7 +143,8 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.payload.pull_request.number,
             });
-            console.log('updated_pr_data: ', updated_pr_data);
+            console.log('DEBUG: updated_pr_data: ', updated_pr_data); // TODO: Delete this line.
+            console.log('DEBUG: updated_pr_data.assignees: ', updated_pr_data.assignees); // TODO: Delete this line.
             if (false) {
               console.log(' pr_review_label');
               console.log(`Successfully assigned @${selected_assignee}`);
