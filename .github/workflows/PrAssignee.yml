@@ -145,7 +145,7 @@ jobs:
             console.log('DEBUG: updatedPrData.data: ', updatedPrData.data); // TODO: Delete this line.
             const newPrAssignees = updatedPrData
               .data
-              .labels
+              .assignees
               .map(element => element.login)
             console.log('newPrAssignees: ', newPrAssignees);
             if (newPrAssignees.includes(selectedAssignee)) {
@@ -156,7 +156,7 @@ jobs:
             }
             const newPrLabels = updatedPrData
               .data
-              .assignees
+              .labels
               .map(element => element.name)
             console.log('newPrLabels: ', newPrLabels);
             if (newPrLabels.includes(prReviewLabel)) {
