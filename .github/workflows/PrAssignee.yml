@@ -144,7 +144,7 @@ jobs:
               pull_number: context.payload.pull_request.number,
             });
             console.log('DEBUG: updated_pr_data.data: ', updated_pr_data.data); // TODO: Delete this line.
-            console.log('DEBUG: updated_pr_data.assignees: ', updated_pr_data.assignees); // TODO: Delete this line.
+            console.log('DEBUG: updated_pr_data.data.assignees: ', updated_pr_data.data.assignees); // TODO: Delete this line.
             if (false) {
               console.log(' pr_review_label');
               console.log(`Successfully assigned @${selected_assignee}`);
