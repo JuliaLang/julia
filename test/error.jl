@@ -110,6 +110,7 @@ end
             push!(visited, mod)
             for name in names(mod, all=true)
                 isdefinedglobal(mod, name) || continue
+                Base.isdeprecated(mod, name) && continue
                 value = getglobal(mod, name)
                 if value isa Module
                     value === Main && continue
