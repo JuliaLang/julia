@@ -78,8 +78,13 @@ function String(v::Vector{UInt8})
     return str
 end
 
-"Create a string re-using the memory, if possible.
-Mutating or reading the memory after calling this function is undefined behaviour."
+"""
+    unsafe_takestring(m::Memory{UInt8})::String
+
+Create a `String` from `m`, changing the interpretation of the contents of `m`.
+This is done without copying, if possible. Thus, any access to `m` after
+calling this function, either to read or to write, is undefined behaviour.
+"""
 function unsafe_takestring(m::Memory{UInt8})
     isempty(m) ? "" : ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))
 end

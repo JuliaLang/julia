@@ -32,6 +32,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
     if isa(op, SSAValue)
         op.id > 0 || @verify_error "Def ($(op.id)) is invalid in final IR"
         if op.id > length(ir.stmts)
+            if op.id - length(ir.stmts) > length(ir.new_nodes.info)
+                @verify_error "Def ($(op.id)) points to non-existent new node"
+                raise_error()
+            end
             def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
         else
             def_bb = block_for_inst(ir.cfg, op.id)
