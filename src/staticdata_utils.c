@@ -83,8 +83,14 @@ static uint64_t jl_worklist_key(jl_array_t *worklist) JL_NOTSAFEPOINT
 }
 
 static jl_array_t *newly_inferred JL_GLOBALLY_ROOTED /*FIXME*/;
+static _Atomic(int) track_newly_inferred = 0;
 // Mutex for newly_inferred
 jl_mutex_t newly_inferred_mutex;
+
+JL_DLLEXPORT void jl_track_newly_inferred(int enable)
+{
+    jl_atomic_store_release(&track_newly_inferred, enable);
+}
 
 // Register array of newly-inferred MethodInstances
 // This gets called as the first step of Base.include_package_for_output
@@ -97,9 +103,11 @@ JL_DLLEXPORT void jl_set_newly_inferred(jl_value_t* _newly_inferred)
 JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
 {
     JL_LOCK(&newly_inferred_mutex);
-    size_t end = jl_array_len(newly_inferred);
-    jl_array_grow_end(newly_inferred, 1);
-    jl_arrayset(newly_inferred, ci, end);
+    if (jl_atomic_load_acquire(&track_newly_inferred)) {
+        size_t end = jl_array_len(newly_inferred);
+        jl_array_grow_end(newly_inferred, 1);
+        jl_arrayset(newly_inferred, ci, end);
+    }
     JL_UNLOCK(&newly_inferred_mutex);
 }
 
@@ -228,8 +236,11 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
 
 static int is_relocatable_ci(htable_t *relocatable_ext_cis, jl_code_instance_t *ci)
 {
-    if (!ci->relocatability)
+    if (!ci->relocatability && !jl_object_in_image((jl_value_t *)ci)) {
+        // we don't care about re-locatability for duplicated CI's
+        // since the original copy will provide sufficient roots anyway
         return 0;
+    }
     jl_method_instance_t *mi = ci->def;
     jl_method_t *m = mi->def.method;
     if (!ptrhash_has(relocatable_ext_cis, ci) && jl_object_in_image((jl_value_t*)m) && (!jl_is_method(m) || jl_object_in_image((jl_value_t*)m->module)))
@@ -258,8 +269,11 @@ static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_ca
     for (i = n0; i-- > 0; ) {
         jl_code_instance_t *ci = (jl_code_instance_t*)jl_array_ptr_ref(list, i);
         assert(jl_is_code_instance(ci));
-        if (!ci->relocatability)
+        if (!ci->relocatability && !jl_object_in_image((jl_value_t *)ci)) {
+            // we don't care about re-locatability for duplicated CI's
+            // since the original copy will provide sufficient roots anyway
             continue;
+        }
         jl_method_instance_t *mi = ci->def;
         jl_method_t *m = mi->def.method;
         if (ci->inferred && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
@@ -1133,6 +1147,10 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
             jl_method_instance_t *caller = ci->def;
             if (ci->inferred && jl_rettype_inferred(caller, minworld, ~(size_t)0) == jl_nothing) {
                 jl_mi_cache_insert(caller, ci);
+            } else if (jl_atomic_load_relaxed(&ci->invoke) != NULL &&
+                       jl_method_compiled(caller, ci->min_world) == NULL) {
+                // new CI has fresh code for us
+                jl_mi_cache_insert(caller, ci);
             }
             //jl_static_show((jl_stream*)ios_stderr, (jl_value_t*)caller);
             //ios_puts("free\n", ios_stderr);
@@ -1170,13 +1188,18 @@ static void jl_insert_backedges(jl_array_t *edges, jl_array_t *ext_targets, jl_a
         // then enable any methods associated with it
         void *ci = ptrhash_get(&visited, (void*)caller);
         //assert(ci != HT_NOTFOUND);
-        if (ci != HT_NOTFOUND) {
+        if (ci != HT_NOTFOUND && maxvalid != 0) {
             // have some new external code to use
             assert(jl_is_code_instance(ci));
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
             assert(codeinst->min_world == minworld && codeinst->inferred);
+            assert(maxvalid >= minworld);
             codeinst->max_world = maxvalid;
             if (jl_rettype_inferred(caller, minworld, maxvalid) == jl_nothing) {
+                jl_mi_cache_insert(caller, codeinst);
+            } else if (jl_atomic_load_relaxed(&codeinst->invoke) != NULL &&
+                       jl_method_compiled(caller, codeinst->min_world) == NULL) {
+                // new CI has fresh code for us
                 jl_mi_cache_insert(caller, codeinst);
             }
         }

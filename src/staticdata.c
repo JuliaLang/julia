@@ -612,8 +612,22 @@ static void jl_load_sysimg_so(void)
 static int jl_needs_serialization(jl_serializer_state *s, jl_value_t *v) JL_NOTSAFEPOINT
 {
     // ignore items that are given a special relocation representation
-    if (s->incremental && jl_object_in_image(v))
+    if (s->incremental && jl_object_in_image(v)) {
+        if (native_functions && jl_is_code_instance(v)) {
+            // serialize a copy of a CodeInstance, if we have code to add for it
+            int32_t invokeptr_id = 0;
+            int32_t specfptr_id = 0;
+            // see if we generated code for it
+            jl_get_function_id(
+                native_functions,
+                (jl_code_instance_t *)v,
+                &invokeptr_id,
+                &specfptr_id
+            );
+            return (invokeptr_id != 0) || (specfptr_id != 0);
+        }
         return 0;
+    }
 
     if (v == NULL || jl_is_symbol(v) || v == jl_nothing) {
         return 0;
@@ -1061,15 +1075,16 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         uint8_t u8 = *(uint8_t*)v;
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
     }
-    if (s->incremental && jl_object_in_image(v)) {
-        assert(link_ids);
-        uintptr_t item = add_external_linkage(s, v, link_ids);
-        assert(item && "no external linkage identified");
-        return item;
-    }
     if (idx == HT_NOTFOUND) {
         idx = ptrhash_get(&serialization_order, v);
         if (idx == HT_NOTFOUND) {
+            if (s->incremental && jl_object_in_image(v)) {
+                assert(link_ids);
+                uintptr_t item = add_external_linkage(s, v, link_ids);
+                assert(item && "no external linkage identified");
+                return item;
+            }
+            // something went wrong
             jl_(jl_typeof(v));
             jl_(v);
         }

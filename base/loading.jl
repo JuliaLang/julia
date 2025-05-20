@@ -2287,7 +2287,7 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
     end
 
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), Core.Compiler.newly_inferred)
-    Core.Compiler.track_newly_inferred.x = true
+    ccall(:jl_track_newly_inferred, Cvoid, (Cint,), 1)
     try
         Base.include(Base.__toplevel__, input)
     catch ex
@@ -2295,7 +2295,7 @@ function include_package_for_output(pkg::PkgId, input::String, depot_path::Vecto
         @debug "Aborting `create_expr_cache'" exception=(ErrorException("Declaration of __precompile__(false) not allowed"), catch_backtrace())
         exit(125) # we define status = 125 means PrecompileableError
     finally
-        Core.Compiler.track_newly_inferred.x = false
+        ccall(:jl_track_newly_inferred, Cvoid, (Cint,), 0)
     end
 end
 
