@@ -137,14 +137,13 @@ jobs:
               labels: [pr_review_label],
             });
 
-            // Now get the updated PR data, and see if we were successful:
-            const TODO = await github.rest.pulls({
+            // Now get the updated PR info, and see if we were successful:
+            const updated_pr_data = await github.rest.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              labels: [pr_review_label],
+              pull_number: context.payload.pull_request.number,
             });
-            console.log('TODO: ', TODO);
+            console.log('updated_pr_data: ', updated_pr_data);
             // DID_ENCOUNTER_ERROR = true;
 
             // Post a comment
