@@ -1045,3 +1045,52 @@ end
         @test ai == oi.parent .+ CartesianIndex(1,2,3)
     end
 end
+
+@testset "in-place reduction aliasing, issue #39385" begin
+    a = [1 2 3];
+    b = copy(a); @test sum!(b, b) == sum(a; dims=()) == a
+    b = copy(a); @test prod!(b, b) == prod(a; dims=()) == a
+    a = [true, false]
+    b = copy(a); @test any!(a, a) == any(a; dims=()) == a
+    b = copy(a); @test all!(a, a) == all(a; dims=()) == a
+
+    A = collect(reshape(1:105, 7, 5, 3))
+    B = copy(A); @test sum!(B,B) == A
+    B = copy(A); @test prod!(B,B) == A
+
+    B = copy(A); @test sum!(view(B, 1:1, :, :),B) == sum(A; dims=1)
+    B = copy(A); @test sum!(view(B, :, 1:1, :),B) == sum(A; dims=2)
+    B = copy(A); @test sum!(view(B, :, :, 1:1),B) == sum(A; dims=3)
+    B = copy(A); @test sum!(view(B, 1:1, 1:1, :),B) == sum(A; dims=(1,2))
+    B = copy(A); @test sum!(view(B, 1:1, :, 1:1),B) == sum(A; dims=(1,3))
+    B = copy(A); @test sum!(view(B, :, 1:1, 1:1),B) == sum(A; dims=(2,3))
+    B = copy(A); @test sum!(view(B, 1:1, 1:1, 1:1),B) == sum(A; dims=(1,2,3))
+
+    B = copy(A); @test prod!(view(B, 1:1, :, :),B) == prod(A; dims=1)
+    B = copy(A); @test prod!(view(B, :, 1:1, :),B) == prod(A; dims=2)
+    B = copy(A); @test prod!(view(B, :, :, 1:1),B) == prod(A; dims=3)
+    B = copy(A); @test prod!(view(B, 1:1, 1:1, :),B) == prod(A; dims=(1,2))
+    B = copy(A); @test prod!(view(B, 1:1, :, 1:1),B) == prod(A; dims=(1,3))
+    B = copy(A); @test prod!(view(B, :, 1:1, 1:1),B) == prod(A; dims=(2,3))
+    B = copy(A); @test prod!(view(B, 1:1, 1:1, 1:1),B) == prod(A; dims=(1,2,3))
+
+    A = rand(7, 5, 3) .> 0.9
+    B = copy(A); @test any!(B, B) == any(A, dims=())
+    B = copy(A); @test all!(!, B, B) == all(!, A, dims=())
+
+    B = copy(A); @test any!(view(B, 1:1, :, :),B) == any(A; dims=1)
+    B = copy(A); @test any!(view(B, :, 1:1, :),B) == any(A; dims=2)
+    B = copy(A); @test any!(view(B, :, :, 1:1),B) == any(A; dims=3)
+    B = copy(A); @test any!(view(B, 1:1, 1:1, :),B) == any(A; dims=(1,2))
+    B = copy(A); @test any!(view(B, 1:1, :, 1:1),B) == any(A; dims=(1,3))
+    B = copy(A); @test any!(view(B, :, 1:1, 1:1),B) == any(A; dims=(2,3))
+    B = copy(A); @test any!(view(B, 1:1, 1:1, 1:1),B) == any(A; dims=(1,2,3))
+
+    B = copy(A); @test all!(!, view(B, 1:1, :, :),B) == all(!, A; dims=1)
+    B = copy(A); @test all!(!, view(B, :, 1:1, :),B) == all(!, A; dims=2)
+    B = copy(A); @test all!(!, view(B, :, :, 1:1),B) == all(!, A; dims=3)
+    B = copy(A); @test all!(!, view(B, 1:1, 1:1, :),B) == all(!, A; dims=(1,2))
+    B = copy(A); @test all!(!, view(B, 1:1, :, 1:1),B) == all(!, A; dims=(1,3))
+    B = copy(A); @test all!(!, view(B, :, 1:1, 1:1),B) == all(!, A; dims=(2,3))
+    B = copy(A); @test all!(!, view(B, 1:1, 1:1, 1:1),B) == all(!, A; dims=(1,2,3))
+end
