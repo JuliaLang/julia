@@ -87,7 +87,7 @@ jobs:
             const fileContentsText = fileContentsBufferObj.toString("utf8");
 
             // Find lines that match the following regex, and extract the usernames:
-            const regex = /^@([a-zA-z0-9\-]+)(\s*?)?(#[\S]*?)?$/;
+            const regex = /^@([a-zA-Z0-9\-]+)(\s*?)?(#[\S]*?)?$/;
             const assigneeCandidates = fileContentsText
               .split('\n')
               .map(line => line.trim())
@@ -124,7 +124,6 @@ jobs:
 
             if (isCollaborator == true) {
 
-              // return; // TODO: Uncomment this line.
               if (thisIsActionsRunnerDebugMode) {
                 // The PR author is a committer
                 // But thisIsActionsRunnerDebugMode is true, so we proceed to still run the rest of the script
