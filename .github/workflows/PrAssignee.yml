@@ -123,7 +123,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              # assignees: selected_assignee,
+              // assignees: selected_assignee,
               assignees: 'underscores_not_allowed',
             });
 
