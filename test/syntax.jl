@@ -1939,7 +1939,7 @@ end
 # eval'ing :const exprs
 eval(Expr(:const, :_var_30877))
 @test !isdefined(@__MODULE__, :_var_30877)
-@test isconst(@__MODULE__, :_var_30877)
+@test !isconst(@__MODULE__, :_var_30877)
 
 # anonymous kw function in value position at top level
 f30926 = function (;k=0)
@@ -2285,6 +2285,11 @@ end
     @test Meta.parse("a ⥺ b") == Expr(:call, :⥺, :a, :b)
     @test Meta.parse("a ⭃ b") == Expr(:call, :⭃, :a, :b)
     @test Meta.parse("a ⥷ b") == Expr(:call, :⥷, :a, :b)
+end
+
+# issue 57143
+@testset "binary 🢲" begin
+    @test Meta.parse("a 🢲 b") == Expr(:call, :🢲, :a, :b)
 end
 
 # only allow certain characters after interpolated vars (#25231)
@@ -3573,6 +3578,8 @@ end
 # issue #45162
 f45162(f) = f(x=1)
 @test first(methods(f45162)).called != 0
+f45162_2(f) = f([]...)
+@test first(methods(f45162_2)).called != 0
 
 # issue #45024
 @test_parseerror "const x" "expected assignment after \"const\""
@@ -4322,4 +4329,13 @@ let ex = @Meta.lower function return_my_method(); 1; end
     idx = findfirst(ex->Meta.isexpr(ex, :method) && length(ex.args) > 1, code)
     code[end] = Core.ReturnNode(Core.SSAValue(idx))
     @test isa(Core.eval(@__MODULE__, ex), Method)
+end
+
+# Capturing a @nospecialize argument should result in an Any field in the closure
+module NoSpecClosure
+    K(@nospecialize(x)) = y -> x
+end
+let f = NoSpecClosure.K(1)
+    @test f(2) == 1
+    @test typeof(f).parameters == Core.svec()
 end

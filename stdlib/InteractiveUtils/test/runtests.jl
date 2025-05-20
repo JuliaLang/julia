@@ -337,6 +337,7 @@ end
     @test (@which (::Base.RefValue{Int}).x = ::Int).name === :setproperty!
     @test (@which (::Float64)^2).name === :literal_pow
     @test (@which [::Int]).name === :vect
+    @test (@which [undef_var::Int]).name === :vect
     @test (@which [::Int 2]).name === :hcat
     @test (@which [::Int; 2]).name === :vcat
     @test (@which Int[::Int 2]).name === :typed_hcat
@@ -345,6 +346,7 @@ end
     @test (@which Int[::Int 2;3 (::Int)]).name === :typed_hvcat
     @test (@which (::Vector{Float64})').name === :adjoint
     @test (@which "$(::Symbol) is a symbol").sig === Tuple{typeof(string), Vararg{Union{Char, String, Symbol}}}
+    @test (@which +(some_x::Int, some_y::Float64)).name === :+
     @test (@which +(::Any, ::Any, ::Any, ::Any...)).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
     @test (@which +(::Any, ::Any, ::Any, ::Vararg{Any})).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
     n = length(@code_typed +(::Float64, ::Vararg{Float64}))
@@ -358,6 +360,7 @@ end
     @test (@which +(::T, ::T) where {T<:Number}).sig === Tuple{typeof(+), T, T} where {T<:Number}
     @test (@which round(::Float64; digits=3)).name === :round
     @test (@which round(1.2; digits = ::Int)).name === :round
+    @test (@which round(1.2; digits::Int)).name === :round
     @test (@code_typed round(::T; digits = ::T) where {T<:Float64})[2] === Union{}
     @test (@code_typed round(::T; digits = ::T) where {T<:Int})[2] === Float64
     base = 10

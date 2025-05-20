@@ -80,6 +80,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->partial = NULL;
     tn->atomicfields = NULL;
     tn->constfields = NULL;
+    jl_atomic_store_relaxed(&tn->cache_entry_count, 0);
     tn->max_methods = 0;
     tn->constprop_heustic = 0;
     return tn;
@@ -701,6 +702,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     // Should never happen
                     throw_ovf(should_malloc, desc, st, fsz);
                 desc[i].isptr = 0;
+
                 if (jl_is_uniontype(fld)) {
                     fsz += 1; // selector byte
                     zeroinit = 1;
@@ -708,6 +710,11 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     isbitsegal = 0;
                 }
                 else {
+                    if (fsz > jl_datatype_size(fld)) {
+                        // We have to pad the size to integer size class, but it means this has some padding
+                        isbitsegal = 0;
+                        haspadding = 1;
+                    }
                     uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
                     if (((jl_datatype_t*)fld)->layout->flags.haspadding)
                         haspadding = 1;

@@ -65,9 +65,9 @@ typedef struct {
 // Most of the complexity is due to the "diagonal rule", requiring us to
 // identify which type vars range over only concrete types.
 typedef struct jl_varbinding_t {
-    jl_tvar_t *var;
-    jl_value_t *lb;
-    jl_value_t *ub;
+    jl_tvar_t *var; // store NULL to "delete" this from env (temporarily)
+    jl_value_t *JL_NONNULL lb;
+    jl_value_t *JL_NONNULL ub;
     int8_t right;       // whether this variable came from the right side of `A <: B`
     int8_t occurs_inv;  // occurs in invariant position
     int8_t occurs_cov;  // # of occurrences in covariant position
@@ -356,7 +356,7 @@ static void free_stenv(jl_stenv_t *e) JL_NOTSAFEPOINT
 
 static void restore_env(jl_stenv_t *e, jl_savedenv_t *se, int root) JL_NOTSAFEPOINT
 {
-    jl_value_t **roots = NULL;
+    jl_value_t *JL_NONNULL *roots = NULL;
     int nroots = 0;
     if (root) {
         if (se->gcframe.nroots == JL_GC_ENCODE_PUSHARGS(1)) {
@@ -1069,7 +1069,8 @@ static int forall_exists_equal(jl_value_t *x, jl_value_t *y, jl_stenv_t *e);
 
 static int subtype_tuple_varargs(
     jl_vararg_t *vtx, jl_vararg_t *vty,
-    size_t vx, size_t vy,
+    jl_value_t *lastx, jl_value_t *lasty,
+    size_t vx, size_t vy, size_t x_reps,
     jl_stenv_t *e, int param)
 {
     jl_value_t *xp0 = jl_unwrap_vararg(vtx); jl_value_t *xp1 = jl_unwrap_vararg_num(vtx);
@@ -1111,12 +1112,30 @@ static int subtype_tuple_varargs(
             }
         }
     }
-
-    // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
-    // simulate the possibility of multiple arguments, which is needed
-    // to implement the diagonal rule correctly.
-    if (!subtype(xp0, yp0, e, param)) return 0;
-    if (!subtype(xp0, yp0, e, 1)) return 0;
+    int x_same = vx > 1 || (lastx && obviously_egal(xp0, lastx));
+    int y_same = vy > 1 || (lasty && obviously_egal(yp0, lasty));
+    // keep track of number of consecutive identical subtyping
+    x_reps = y_same && x_same ? x_reps + 1 : 1;
+    if (x_reps > 2) {
+        // an identical type on the left doesn't need to be compared to the same
+        // element type on the right more than twice.
+    }
+    else if (x_same && e->Runions.depth == 0 && y_same &&
+        !jl_has_free_typevars(xp0) && !jl_has_free_typevars(yp0)) {
+        // fast path for repeated elements
+    }
+    else if ((e->Runions.depth == 0 ? !jl_has_free_typevars(xp0) : jl_is_concrete_type(xp0)) && !jl_has_free_typevars(yp0)) {
+        // fast path for separable sub-formulas
+        if (!jl_subtype(xp0, yp0))
+            return 0;
+    }
+    else {
+        // in Vararg{T1} <: Vararg{T2}, need to check subtype twice to
+        // simulate the possibility of multiple arguments, which is needed
+        // to implement the diagonal rule correctly.
+        if (!subtype(xp0, yp0, e, param)) return 0;
+        if (x_reps < 2 && !subtype(xp0, yp0, e, 1)) return 0;
+    }
 
 constrain_length:
     if (!yp1) {
@@ -1163,12 +1182,14 @@ constrain_length:
     if (bxp1) {
         if (bxp1->intvalued == 0)
             bxp1->intvalued = 1;
+        assert(bxp1->lb); // make static analyzer happy
         if (jl_is_long(bxp1->lb))
             xp1 = bxp1->lb;
     }
     if (byp1) {
         if (byp1->intvalued == 0)
             byp1->intvalued = 1;
+        assert(byp1->lb); // make static analyzer happy
         if (jl_is_long(byp1->lb))
             yp1 = byp1->lb;
     }
@@ -1246,7 +1267,8 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
             return subtype_tuple_varargs(
                 (jl_vararg_t*)xi,
                 (jl_vararg_t*)yi,
-                vx, vy, e, param);
+                lastx, lasty,
+                vx, vy, x_reps, e, param);
         }
 
         if (j >= ly)
@@ -1267,7 +1289,7 @@ static int subtype_tuple_tail(jl_datatype_t *xd, jl_datatype_t *yd, int8_t R, jl
              (yi == lastx && !vx && vy && jl_is_concrete_type(xi)))) {
             // fast path for repeated elements
         }
-        else if (e->Runions.depth == 0 && !jl_has_free_typevars(xi) && !jl_has_free_typevars(yi)) {
+        else if ((e->Runions.depth == 0 ? !jl_has_free_typevars(xi) : jl_is_concrete_type(xi)) && !jl_has_free_typevars(yi)) {
             // fast path for separable sub-formulas
             if (!jl_subtype(xi, yi))
                 return 0;

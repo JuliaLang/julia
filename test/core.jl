@@ -35,12 +35,12 @@ end
 for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
-        (Core.Method, [:primary_world, :deleted_world]),
+        (Core.Method, [:primary_world, :dispatch_status]),
         (Core.MethodInstance, [:cache, :flags]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
-        (Core.TypeName, [:cache, :linearcache]),
+        (Core.TypeName, [:cache, :linearcache, :cache_entry_count]),
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
@@ -8534,3 +8534,9 @@ module GlobalBindingMulti
     using .M.C
 end
 @test GlobalBindingMulti.S === GlobalBindingMulti.M.C.S
+
+#58434 bitsegal comparison of oddly sized fields
+primitive type ByteString58434 (18 * 8) end
+
+@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
+@test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)

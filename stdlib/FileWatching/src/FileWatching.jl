@@ -488,11 +488,10 @@ end
 
 function getproperty(fdw::FDWatcher, s::Symbol)
     # support deprecated field names
-    s === :readable && return fdw.mask.readable
-    s === :writable && return fdw.mask.writable
+    s === :readable && return getfield(fdw, :mask).readable
+    s === :writable && return getfield(fdw, :mask).writable
     return getfield(fdw, s)
 end
-
 
 close(t::_FDWatcher, mask::FDEvent) = close(t, mask.readable, mask.writable)
 function close(t::_FDWatcher, readable::Bool, writable::Bool)

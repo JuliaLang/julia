@@ -951,6 +951,16 @@ for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
     end
 end
 
+# Issue #42326
+primitive type PadAfter64_42326 448 end
+mutable struct CheckPadAfter64_42326
+    a::UInt64
+    pad::PadAfter64_42326
+    b::UInt64
+end
+@test fieldoffset(CheckPadAfter64_42326, 3) == 80
+@test sizeof(CheckPadAfter64_42326) == 96
+
 @noinline Base.@nospecializeinfer f55768(@nospecialize z::UnionAll) = z === Vector
 @test f55768(Vector)
 @test f55768(Vector{T} where T)
@@ -1033,3 +1043,7 @@ end
 const x57872 = "Hello"
 f57872() = (Core.isdefinedglobal(@__MODULE__, Base.compilerbarrier(:const, :x57872)), x57872) # Extra globalref here to force world age bounds
 @test f57872() == (true, "Hello")
+
+@noinline f_mutateany(@nospecialize x) = x[] = 1
+g_mutateany() = (y = Ref(0); f_mutateany(y); y[])
+@test g_mutateany() === 1

@@ -346,6 +346,7 @@ tlayout = TLayout(5,7,11)
 @test !hasproperty(tlayout, :p)
 @test [(fieldoffset(TLayout,i), fieldname(TLayout,i), fieldtype(TLayout,i)) for i = 1:fieldcount(TLayout)] ==
     [(0, :x, Int8), (2, :y, Int16), (4, :z, Int32)]
+@test [fieldoffset(TLayout, s) for s = (:x, :y, :z)] == [0, 2, 4]
 @test fieldnames(Complex) === (:re, :im)
 @test_throws BoundsError fieldtype(TLayout, 0)
 @test_throws ArgumentError fieldname(TLayout, 0)
@@ -360,6 +361,10 @@ tlayout = TLayout(5,7,11)
 # issue #30505
 @test fieldtype(Union{Tuple{Char},Tuple{Char,Char}},2) === Char
 @test_throws BoundsError fieldtype(Union{Tuple{Char},Tuple{Char,Char}},3)
+
+@test [fieldindex(TLayout, i) for i = (:x, :y, :z)] == [1, 2, 3]
+@test fieldname(TLayout, fieldindex(TLayout, :z)) === :z
+@test fieldindex(TLayout, fieldname(TLayout, 3)) === 3
 
 @test fieldnames(NTuple{3, Int}) == ntuple(i -> fieldname(NTuple{3, Int}, i), 3) == (1, 2, 3)
 @test_throws ArgumentError fieldnames(Union{})
@@ -931,6 +936,7 @@ f(x::Int; y=3) = x + y
 @test hasmethod(f, Tuple{Int})
 @test hasmethod(f, Tuple{Int}, ())
 @test hasmethod(f, Tuple{Int}, (:y,))
+@test !hasmethod(f, Tuple{Int}, (:x,))
 @test !hasmethod(f, Tuple{Int}, (:jeff,))
 @test !hasmethod(f, Tuple{Int}, (:y,), world=typemin(UInt))
 g(; b, c, a) = a + b + c

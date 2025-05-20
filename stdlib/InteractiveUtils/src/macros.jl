@@ -23,6 +23,7 @@ end
 
 function get_typeof(@nospecialize ex)
     isexpr(ex, :(::), 1) && return esc(ex.args[1])
+    isexpr(ex, :(::), 2) && return esc(ex.args[2])
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
         isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, esc(splatted.args[1]))
@@ -93,6 +94,7 @@ function are_kwargs_valid(kwargs::Vector{Any})
     for kwarg in kwargs
         isexpr(kwarg, :..., 1) && continue
         isexpr(kwarg, :kw, 2) && isa(kwarg.args[1], Symbol) && continue
+        isexpr(kwarg, :(::), 2) && continue
         isa(kwarg, Symbol) && continue
         return false
     end
@@ -113,6 +115,8 @@ function generate_merged_namedtuple_type(kwargs::Vector{Any})
             push!(nts, Expr(:call, typeof_nt, esc(ex.args[1])))
         elseif isexpr(ex, :kw, 2)
             push!(ntargs, ex.args[1]::Symbol => get_typeof(ex.args[2]))
+        elseif isexpr(ex, :(::), 2)
+            push!(ntargs, ex.args[1]::Symbol => get_typeof(ex))
         else
             ex::Symbol
             push!(ntargs, ex => get_typeof(ex))
@@ -558,8 +562,8 @@ in the current environment.
 When using `@activate`, additional options for a component may be specified in
 square brackets `@activate Compiler[:option1, :option]`
 
-Currently `@activate Compiler` is the only available component that may be
-activatived.
+Currently `Compiler` and `JuliaLowering` are the only available components that
+may be activatived.
 
 For `@activate Compiler`, the following options are available:
 1. `:reflection` - Activate the compiler for reflection purposes only.
@@ -593,7 +597,7 @@ macro activate(what)
     if !isa(Component, Symbol)
         error("Usage Error: Component $Component is not a symbol")
     end
-    allowed_components = (:Compiler,)
+    allowed_components = (:Compiler, :JuliaLowering)
     if !(Component in allowed_components)
         error("Usage Error: Component $Component is not recognized. Expected one of $allowed_components")
     end
