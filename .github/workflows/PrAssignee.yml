@@ -121,9 +121,16 @@ jobs:
             console.log('thisIsActionsDebugMode: ', thisIsActionsDebugMode);
 
             if (isCollaborator == true) {
-              // The PR author is a committer, so we skip assigning them
-              console.log('Skipping PR authored by JuliaLang committer: ', prAuthor);
+              
               // return; // TODO: Uncomment this line.
+              if (thisIsActionsDebugMode) {
+                // The PR author is a committer
+                // But thisIsActionsDebugMode is true, so we proceed to still run the rest of the script
+                console.log('PR is authored by JuliaLang committer, but thisIsActionsDebugMode is true, so we will still run the rest of the script: ', prAuthor);
+              } else {
+                // The PR author is a committer, so we skip assigning them
+                console.log('Skipping PR authored by JuliaLang committer: ', prAuthor);
+              }
             }
 
             var weDidEncounterError = false;
