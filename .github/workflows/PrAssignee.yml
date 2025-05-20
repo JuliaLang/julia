@@ -138,13 +138,25 @@ jobs:
             });
 
             // Now get the updated PR info, and see if we were successful:
-            const updated_pr_data = await github.rest.get({
+            const updated_pr_data = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.payload.pull_request.number,
             });
             console.log('updated_pr_data: ', updated_pr_data);
-            // DID_ENCOUNTER_ERROR = true;
+            if (false) {
+              console.log(' pr_review_label');
+              console.log(`Successfully assigned @${selected_assignee}`);
+            } else {
+              DID_ENCOUNTER_ERROR = true;
+              console.log(`ERROR: Failed to assign @${selected_assignee}`);
+            }
+            if (false) {
+              console.log('Successfully added pr_review_label');
+            } else {
+              DID_ENCOUNTER_ERROR = true;
+              console.log('ERROR: Failed to add add pr_review_label');
+            }
 
             // Post a comment
             const comment_body = `Hello! I am a bot.\n\nThank you for your pull request!\n\nI have assigned \`@${selected_assignee}\` to this pull request.\n\n\`@${selected_assignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.`
