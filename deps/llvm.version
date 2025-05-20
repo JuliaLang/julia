@@ -2,7 +2,7 @@
 
 ## jll artifact
 LLVM_JLL_NAME := libLLVM
-LLVM_ASSERT_JLL_VER := 20.1.2+0
+LLVM_ASSERT_JLL_VER := 20.1.2+1
 ## source build
 # Version number of LLVM
 LLVM_VER := 20.1.2
