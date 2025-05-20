@@ -88,16 +88,16 @@ jobs:
 
             // Find lines that match the following regex, and extract the usernames:
             const regex = /^@([a-zA-z0-9\-]+)(\s*?)?(#[\S]*?)?$/;
-            const assignee_candidates = fileContentsText
+            const assigneeCandidates = fileContentsText
               .split('\n')
               .map(line => line.trim())
               .map(line => line.match(regex))
               .filter(match => match !== null)
               .map(match => match[1]);
 
-            console.log('assignee_candidates: ', assignee_candidates);
-            if (assignee_candidates.length < 1) {
-              const msg = 'ERROR: Could not find any assignee_candidates';
+            console.log('assigneeCandidates: ', assigneeCandidates);
+            if (assigneeCandidates.length < 1) {
+              const msg = 'ERROR: Could not find any assigneeCandidates';
               console.error(msg);
               throw new Error(msg);
             }
@@ -113,69 +113,69 @@ jobs:
               // return; // TODO: Uncomment this line.
             }
 
-            var DID_ENCOUNTER_ERROR = false;
+            var weDidEncounterError = false;
 
             // Assign random committer
-            const selected_assignee = assignee_candidates[Math.floor(Math.random()*assignee_candidates.length)]
-            console.log('selected_assignee: ', selected_assignee);
-            console.log(`Attempting to assign @${selected_assignee} to this PR...`);
+            const selectedAssignee = assigneeCandidates[Math.floor(Math.random()*assigneeCandidates.length)]
+            console.log('selectedAssignee: ', selectedAssignee);
+            console.log(`Attempting to assign @${selectedAssignee} to this PR...`);
             await github.rest.issues.addAssignees({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              assignees: selected_assignee,
+              assignees: selectedAssignee,
             });
 
             // Add the "pr review" label
-            const pr_review_label = 'status: waiting for PR reviewer';
-            console.log('Attempting to add pr_review_label to this PR...');
+            const prReviewLabel = 'status: waiting for PR reviewer';
+            console.log('Attempting to add prReviewLabel to this PR...');
             await github.rest.issues.addLabels({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              labels: [pr_review_label],
+              labels: [prReviewLabel],
             });
 
             // Now get the updated PR info, and see if we were successful:
-            const updated_pr_data = await github.rest.pulls.get({
+            const updatedPrData = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.payload.pull_request.number,
             });
-            console.log('DEBUG: updated_pr_data.data: ', updated_pr_data.data); // TODO: Delete this line.
-            const updated_pr_assignees = updated_pr_data
+            console.log('DEBUG: updatedPrData.data: ', updatedPrData.data); // TODO: Delete this line.
+            const newPrAssignees = updatedPrData
               .data
               .assignees
               .map(element => element.login)
-            console.log('DEBUG: updated_pr_assignees: ', updated_pr_assignees); // TODO: Delete this line.
-            if (updated_pr_assignees.includes(selected_assignee)) {
-              console.log(' pr_review_label');
-              console.log(`Successfully assigned @${selected_assignee}`);
+            console.log('newPrAssignees: ', newPrAssignees);
+            if (newPrAssignees.includes(selectedAssignee)) {
+              console.log(' prReviewLabel');
+              console.log(`Successfully assigned @${selectedAssignee}`);
             } else {
-              DID_ENCOUNTER_ERROR = true;
-              console.log(`ERROR: Failed to assign @${selected_assignee}`);
+              weDidEncounterError = true;
+              console.log(`ERROR: Failed to assign @${selectedAssignee}`);
             }
             if (false) {
-              console.log('Successfully added pr_review_label');
+              console.log('Successfully added prReviewLabel');
             } else {
-              DID_ENCOUNTER_ERROR = true;
-              console.log('ERROR: Failed to add add pr_review_label');
+              weDidEncounterError = true;
+              console.log('ERROR: Failed to add add prReviewLabel');
             }
 
             // Post a comment
-            const comment_body = `Hello! I am a bot.\n\nThank you for your pull request!\n\nI have assigned \`@${selected_assignee}\` to this pull request.\n\n\`@${selected_assignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.`
+            const commentBody = `Hello! I am a bot.\n\nThank you for your pull request!\n\nI have assigned \`@${selectedAssignee}\` to this pull request.\n\n\`@${selectedAssignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.`
             console.log('Attempting to post bot comment on the PR...');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.payload.pull_request.number,
-              body: comment_body,
+              body: commentBody,
             });
 
             // Sanity check 1: Make sure that assignee was successfully assigned.
             // Sanity check 2:
             // Exit with error if any
-            if (DID_ENCOUNTER_ERROR) {
+            if (weDidEncounterError) {
               const msg = 'ERROR: Encountered at least one error while running the script';
               console.error(msg);
               throw new Error(msg);
