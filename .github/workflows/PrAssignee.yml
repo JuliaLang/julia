@@ -107,7 +107,7 @@ jobs:
               return;
             }
 
-            
+
             const RUNNER_DEBUG_original = process.env.RUNNER_DEBUG;
             console.log('RUNNER_DEBUG_original: ', RUNNER_DEBUG_original);
             if (RUNNER_DEBUG_original === undefined) {
@@ -123,7 +123,7 @@ jobs:
             console.log('thisIsActionsRunnerDebugMode: ', thisIsActionsRunnerDebugMode);
 
             if (isCollaborator == true) {
-              
+
               // return; // TODO: Uncomment this line.
               if (thisIsActionsRunnerDebugMode) {
                 // The PR author is a committer
@@ -199,11 +199,9 @@ jobs:
               body: commentBody,
             });
 
-            // Sanity check 1: Make sure that assignee was successfully assigned.
-            // Sanity check 2:
-            // Exit with error if any
+            // Exit with error if any problems were encountered earlier
             if (weDidEncounterError) {
-              const msg = 'ERROR: Encountered at least one error while running the script';
+              const msg = 'ERROR: Encountered at least one problem while running the script';
               console.error(msg);
               throw new Error(msg);
             }
