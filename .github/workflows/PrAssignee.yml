@@ -103,7 +103,7 @@ jobs:
             }
 
             if (oldPrAssignees.length >= 1) {
-              console.log('Pull request already has at least one assignee. Will not assign any new assignees.');
+              console.log('Skipping this PR, because it already has at least one assignee');
               return;
             }
 
@@ -130,6 +130,7 @@ jobs:
               } else {
                 // The PR author is a committer, so we skip assigning them
                 console.log('Skipping PR authored by JuliaLang committer: ', prAuthor);
+                return;
               }
             }
 
