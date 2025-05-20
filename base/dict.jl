@@ -776,7 +776,7 @@ struct ImmutableDict{K,V} <: AbstractDict{K,V}
 end
 
 """
-    ImmutableDict(key=>value, key=>value, ...)
+    ImmutableDict(key1=>value1, key2=>value2, ...)
 
 `ImmutableDict{K,V}()`
 
