@@ -170,11 +170,10 @@ jobs:
             });
 
             // Sanity check 1: Make sure that assignee was successfully assigned.
-            // Sanity check 2: 
-            // Exit with error if any 
+            // Sanity check 2:
+            // Exit with error if any
             if (DID_ENCOUNTER_ERROR) {
               const msg = 'ERROR: Encountered at least one error while running the script';
               console.error(msg);
               throw new Error(msg);
             }
-
