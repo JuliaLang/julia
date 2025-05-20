@@ -785,18 +785,17 @@ list, used for small mappings with a few entries where the overhead
 of accessing a hash table is higher than that of a linear search of a
 linked list.
 
-    Base.ImmutableDict(key=>value, key=>value, ...)
 
-`Base.ImmutableDict(key=>value, key=>value, ...)` constructs a linked
+`Base.ImmutableDict(key1=>value1, key2=>value2, ...)` constructs a linked
 list; the first argument sets the type of the keys and values. Keys
 are compared with `isequal`.
 
 `Base.ImmutableDict{K,V}()` constructs an empty list with keys of type
 K and values of type V.
 
-    Base.ImmutableDict(imdict, key=>value, key=>value, ...)
+    Base.ImmutableDict(imdict, key1=>value1, key2=>value2, ...)
 
-`Base.ImmutableDict(imdict, key=>value, key=>value, ...)` constructs a
+`Base.ImmutableDict(imdict, key1=>value1, key2=>value2, ...)` constructs a
 new `ImmutableDict` from an existing `ImmutableDict` and additional KV
 pairs, returning a new list.  The original `ImmutableDict` becomes the
 tail of the new list.
