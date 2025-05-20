@@ -145,17 +145,21 @@ jobs:
             console.log('DEBUG: updatedPrData.data: ', updatedPrData.data); // TODO: Delete this line.
             const newPrAssignees = updatedPrData
               .data
-              .assignees
+              .labels
               .map(element => element.login)
             console.log('newPrAssignees: ', newPrAssignees);
             if (newPrAssignees.includes(selectedAssignee)) {
-              console.log(' prReviewLabel');
               console.log(`Successfully assigned @${selectedAssignee}`);
             } else {
               weDidEncounterError = true;
               console.log(`ERROR: Failed to assign @${selectedAssignee}`);
             }
-            if (false) {
+            const newPrLabels = updatedPrData
+              .data
+              .assignees
+              .map(element => element.name)
+            console.log('newPrLabels: ', newPrLabels);
+            if (newPrLabels.includes(prReviewLabel)) {
               console.log('Successfully added prReviewLabel');
             } else {
               weDidEncounterError = true;
