@@ -104,7 +104,7 @@ jobs:
 
             if (oldPrAssignees.length >= 1) {
               console.log('Pull request already has at least one assignee. Will not assign any new assignees.');
-              // return; // TODO: Uncomment this line.
+              // return;
             }
 
             if (isCollaborator == true) {
@@ -142,7 +142,6 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.payload.pull_request.number,
             });
-            console.log('DEBUG: updatedPrData.data: ', updatedPrData.data); // TODO: Delete this line.
             const newPrAssignees = updatedPrData
               .data
               .assignees
