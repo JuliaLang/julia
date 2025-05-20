@@ -107,26 +107,28 @@ jobs:
               return;
             }
 
-            const ACTIONS_STEP_DEBUG_original = process.env.ACTIONS_STEP_DEBUG;
-            if (ACTIONS_STEP_DEBUG_original === undefined) {
-              var thisIsActionsDebugMode = false;
+            
+            const RUNNER_DEBUG_original = process.env.RUNNER_DEBUG;
+            console.log('RUNNER_DEBUG_original: ', RUNNER_DEBUG_original);
+            if (RUNNER_DEBUG_original === undefined) {
+              var thisIsActionsRunnerDebugMode = false;
             } else {
-              const ACTIONS_STEP_DEBUG_trimmed = ACTIONS_STEP_DEBUG_original.trim().toLowerCase()
-              if (ACTIONS_STEP_DEBUG_trimmed.length < 1) {
-                var thisIsActionsDebugMode = false;
+              const RUNNER_DEBUG_trimmed = RUNNER_DEBUG_original.trim().toLowerCase()
+              if (RUNNER_DEBUG_trimmed.length < 1) {
+                var thisIsActionsRunnerDebugMode = false;
               } else {
-                var thisIsActionsDebugMode = ACTIONS_STEP_DEBUG_trimmed == 'true';
+                var thisIsActionsRunnerDebugMode = (RUNNER_DEBUG_trimmed == 'true') || (RUNNER_DEBUG_trimmed == '1');
               }
             }
-            console.log('thisIsActionsDebugMode: ', thisIsActionsDebugMode);
+            console.log('thisIsActionsRunnerDebugMode: ', thisIsActionsRunnerDebugMode);
 
             if (isCollaborator == true) {
               
               // return; // TODO: Uncomment this line.
-              if (thisIsActionsDebugMode) {
+              if (thisIsActionsRunnerDebugMode) {
                 // The PR author is a committer
-                // But thisIsActionsDebugMode is true, so we proceed to still run the rest of the script
-                console.log('PR is authored by JuliaLang committer, but thisIsActionsDebugMode is true, so we will still run the rest of the script: ', prAuthor);
+                // But thisIsActionsRunnerDebugMode is true, so we proceed to still run the rest of the script
+                console.log('PR is authored by JuliaLang committer, but thisIsActionsRunnerDebugMode is true, so we will still run the rest of the script: ', prAuthor);
               } else {
                 // The PR author is a committer, so we skip assigning them
                 console.log('Skipping PR authored by JuliaLang committer: ', prAuthor);
