@@ -810,7 +810,7 @@ end
 types(ir::Union{IRCode, IncrementalCompact}) = TypesView(ir)
 
 function getindex(compact::IncrementalCompact, ssa::SSAValue)
-    (1 ≤ ssa.id ≤ compact.result_idx) || throw(InvalidIRError())
+    (1 ≤ ssa.id < compact.result_idx) || throw(InvalidIRError())
     return compact.result[ssa.id]
 end
 

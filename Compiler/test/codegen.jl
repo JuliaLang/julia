@@ -951,6 +951,16 @@ for (T, StructName) in ((Int128, :Issue55558), (UInt128, :UIssue55558))
     end
 end
 
+# Issue #42326
+primitive type PadAfter64_42326 448 end
+mutable struct CheckPadAfter64_42326
+    a::UInt64
+    pad::PadAfter64_42326
+    b::UInt64
+end
+@test fieldoffset(CheckPadAfter64_42326, 3) == 80
+@test sizeof(CheckPadAfter64_42326) == 96
+
 @noinline Base.@nospecializeinfer f55768(@nospecialize z::UnionAll) = z === Vector
 @test f55768(Vector)
 @test f55768(Vector{T} where T)
