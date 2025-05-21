@@ -368,26 +368,28 @@ of the variable ranges `rx`, `ry`, etc. and each `F(x,y,...)` evaluation returns
 The following example computes a weighted average of the current element and its left and right
 neighbor along a 1-d grid:
 
-```julia-repl
+```jldoctest
+julia> using Random; Random.seed!(123);
+
 julia> x = rand(8)
 8-element Vector{Float64}:
- 0.843025
- 0.869052
- 0.365105
- 0.699456
- 0.977653
- 0.994953
- 0.41084
- 0.809411
+ 0.7707864222395195
+ 0.43009866508481656
+ 0.9132914819972693
+ 0.23930242380301098
+ 0.03253516768904202
+ 0.5195039001969006
+ 0.6190085962740097
+ 0.8809321400533938
 
 julia> [ 0.25*x[i-1] + 0.5*x[i] + 0.25*x[i+1] for i=2:length(x)-1 ]
 6-element Vector{Float64}:
- 0.736559
- 0.57468
- 0.685417
- 0.912429
- 0.8446
- 0.656511
+ 0.6360455586271805
+ 0.6239460232205915
+ 0.3561078743230833
+ 0.2059691648692489
+ 0.42263789108921325
+ 0.6598708081745784
 ```
 
 The resulting array type depends on the types of the computed elements just like [array literals](@ref man-array-literals) do. In order to control the
@@ -413,9 +415,10 @@ julia> sum(1/n^2 for n=1:1000)
 When writing a generator expression with multiple dimensions inside an argument list, parentheses
 are needed to separate the generator from subsequent arguments:
 
-```julia-repl
+```jldoctest
 julia> map(tuple, 1/(i+j) for i=1:2, j=1:2, [1:4;])
 ERROR: syntax: invalid iteration specification
+[...]
 ```
 
 All comma-separated expressions after `for` are interpreted as ranges. Adding parentheses lets
@@ -1036,34 +1039,42 @@ It is sometimes useful to perform element-by-element binary operations on arrays
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
 be to replicate the vector to the size of the matrix:
 
-```julia-repl
-julia> a = rand(2, 1); A = rand(2, 3);
+```jldoctest
+julia> using Random; Random.seed!(456);
+
+julia> a = rand(2, 1)
+2×1 Matrix{Float64}:
+ 0.11269401538661211
+ 0.22842828038095203
+
+julia> A = rand(2, 3)
+2×3 Matrix{Float64}:
+ 0.3490117499194373  0.5594866337069132  0.7781619592999701
+ 0.4448344904993087  0.6616098977970025  0.8843444913195951
 
 julia> repeat(a, 1, 3) + A
 2×3 Matrix{Float64}:
- 1.20813  1.82068  1.25387
- 1.56851  1.86401  1.67846
+ 0.4617057653060494  0.6721806490935253  0.8908559746865822
+ 0.6732627708802607  0.8900381781779545  1.112772771700547
+
+julia> broadcast(+, a, A)
+2×3 Matrix{Float64}:
+ 0.4617057653060494  0.6721806490935253  0.8908559746865822
+ 0.6732627708802607  0.8900381781779545  1.112772771700547
+
+julia> b = rand(1,2)
+1×2 Matrix{Float64}:
+ 0.9981864098510094  0.00026386188508001725
+
+julia> broadcast(+, a, b)
+2×2 Matrix{Float64}:
+ 1.1108804252376215  0.11295787727169212
+ 1.2266146902319615  0.22869214226603204
 ```
 
 This is wasteful when dimensions get large, so Julia provides [`broadcast`](@ref), which expands
 singleton dimensions in array arguments to match the corresponding dimension in the other array
 without using extra memory, and applies the given function elementwise:
-
-```julia-repl
-julia> broadcast(+, a, A)
-2×3 Matrix{Float64}:
- 1.20813  1.82068  1.25387
- 1.56851  1.86401  1.67846
-
-julia> b = rand(1,2)
-1×2 Matrix{Float64}:
- 0.867535  0.00457906
-
-julia> broadcast(+, a, b)
-2×2 Matrix{Float64}:
- 1.71056  0.847604
- 1.73659  0.873631
-```
 
 [Dotted operators](@ref man-dot-operators) such as `.+` and `.*` are equivalent
 to `broadcast` calls (except that they fuse, as [described above](@ref man-array-and-vectorized-operators-and-functions)). There is also a

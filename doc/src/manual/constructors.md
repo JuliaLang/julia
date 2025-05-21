@@ -182,7 +182,7 @@ julia> mutable struct SelfReferential
 This type may appear innocuous enough, until one considers how to construct an instance of it.
 If `a` is an instance of `SelfReferential`, then a second instance can be created by the call:
 
-```julia-repl
+```julia; jldoctest = false
 julia> b = SelfReferential(a)
 ```
 
@@ -247,14 +247,14 @@ and does not reference other objects. The plain data types consist of primitive 
 and immutable structs of other plain data types (see also: [`isbits`](@ref), [`isbitstype`](@ref)).
 The initial contents of a plain data type is undefined:
 
-```julia-repl
+```jldoctest; filter = r"HasPlain\(-?\d+\)"
 julia> struct HasPlain
            n::Int
            HasPlain() = new()
        end
 
 julia> HasPlain()
-HasPlain(438103441441)
+HasPlain(12345) # Filtered output
 ```
 
 Arrays of plain data types exhibit the same behavior.
@@ -583,7 +583,7 @@ method. This includes types, i.e., objects of type [`Type`](@ref); and construct
 in fact, be viewed as just callable type objects. For example, there are many methods
 defined on `Bool` and various supertypes of it:
 
-```julia-repl
+```julia; jldoctest = false
 julia> methods(Bool)
 # 10 methods for type constructor:
   [1] Bool(x::BigFloat)

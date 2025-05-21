@@ -93,34 +93,42 @@ Naturally, you can also prepare expressions or perform calculations before the `
 Perhaps the single most powerful feature in `Cartesian` is the ability to supply anonymous-function
 expressions that get evaluated at parsing time. Let's consider a simple example:
 
-```julia
-@nexprs 2 j->(i_j = 1)
+```jldoctest
+julia> import Base.Cartesian: @nexprs
+
+julia> @nexprs 2 j->(i_j = 1);
+
+julia> i_1
+1
+
+julia> i_2
+1
 ```
 
 `@nexprs` generates `n` expressions that follow a pattern. This code would generate the following
 statements:
 
-```julia
-i_1 = 1
-i_2 = 1
-```
-
 In each generated statement, an "isolated" `j` (the variable of the anonymous function) gets replaced
 by values in the range `1:2`. Generally speaking, Cartesian employs a LaTeX-like syntax. This
 allows you to do math on the index `j`. Here's an example computing the strides of an array:
 
-```julia
-s_1 = 1
-@nexprs 3 j->(s_{j+1} = s_j * size(A, j))
-```
+```jldoctest
+julia> import Base.Cartesian: @nexprs
 
-would generate expressions
+julia> A = ones(2,3,4); # Define A for size(A, j) to work
 
-```julia
-s_1 = 1
-s_2 = s_1 * size(A, 1)
-s_3 = s_2 * size(A, 2)
-s_4 = s_3 * size(A, 3)
+julia> s_1 = 1;
+
+julia> @nexprs 3 j->(s_{j+1} = s_j * size(A, j));
+
+julia> s_2 # s_1 * size(A, 1) = 1 * 2
+2
+
+julia> s_3 # s_2 * size(A, 2) = 2 * 3
+6
+
+julia> s_4 # s_3 * size(A, 3) = 6 * 4
+24
 ```
 
 Anonymous-function expressions have many uses in practice.

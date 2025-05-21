@@ -27,38 +27,63 @@ Let's first look at an example of **lexical** scope. A `let` statement begins
 a new lexical scope within which the outer definition of `x` is shadowed by
 it's inner definition.
 
-```julia
+```jldoctest
+julia> x = 1
+1
+
+julia> let x = 5
+           @show x
+       end
+x = 5
+5
+
+julia> @show x
 x = 1
-let x = 5
-    @show x # 5
-end
-@show x # 1
+1
 ```
 
 In the following example, since Julia uses lexical scope, the variable `x` in the body
 of `f` refers to the `x` defined in the global scope, and entering a `let` scope does
 not change the value `f` observes.
 
-```julia
+```jldoctest
+julia> x = 1
+1
+
+julia> f() = @show x
+f (generic function with 1 method)
+
+julia> let x = 5
+           f() # Should print x = 1 from global scope
+       end
 x = 1
-f() = @show x
-let x = 5
-    f() # 1
-end
-f() # 1
+1
+
+julia> f() # Should print x = 1 from global scope
+x = 1
+1
 ```
 
 Now using a `ScopedValue` we can use **dynamic** scoping.
 
-```julia
-using Base.ScopedValues
+```jldoctest
+julia> using Base.ScopedValues
 
-x = ScopedValue(1)
-f() = @show x[]
-with(x=>5) do
-    f() # 5
-end
-f() # 1
+julia> x = ScopedValue(1)
+ScopedValue{Int64}(1)
+
+julia> f() = @show x[]
+f (generic function with 1 method)
+
+julia> with(x=>5) do
+           f()
+       end
+x[] = 5
+5
+
+julia> f()
+x[] = 1
+1
 ```
 
 Note that the observed value of the `ScopedValue` is dependent on the execution
@@ -68,32 +93,53 @@ It often makes sense to use a `const` variable to point to a scoped value,
 and you can set the value of multiple `ScopedValue`s with one call to `with`.
 
 
-```julia
-using Base.ScopedValues
+```jldoctest
+julia> using Base.ScopedValues
 
-f() = @show a[]
-g() = @show b[]
+julia> f_multi() = @show a[]; # Renamed to avoid conflict
+f_multi (generic function with 1 method)
 
-const a = ScopedValue(1)
-const b = ScopedValue(2)
+julia> g_multi() = @show b[]; # Renamed to avoid conflict
+g_multi (generic function with 1 method)
 
-f() # a[] = 1
-g() # b[] = 2
+julia> const a = ScopedValue(1);
 
-# Enter a new dynamic scope and set value.
-with(a => 3) do
-    f() # a[] = 3
-    g() # b[] = 2
-    with(a => 4, b => 5) do
-        f() # a[] = 4
-        g() # b[] = 5
-    end
-    f() # a[] = 3
-    g() # b[] = 2
-end
+julia> const b = ScopedValue(2);
 
-f() # a[] = 1
-g() # b[] = 2
+julia> f_multi()
+a[] = 1
+1
+
+julia> g_multi()
+b[] = 2
+2
+
+julia> # Enter a new dynamic scope and set value.
+       with(a => 3) do
+           f_multi() # a[] = 3
+           g_multi() # b[] = 2
+           with(a => 4, b => 5) do
+               f_multi() # a[] = 4
+               g_multi() # b[] = 5
+           end
+           f_multi() # a[] = 3
+           g_multi() # b[] = 2
+       end
+a[] = 3
+b[] = 2
+a[] = 4
+b[] = 5
+a[] = 3
+b[] = 2
+5
+
+julia> f_multi()
+a[] = 1
+1
+
+julia> g_multi()
+b[] = 2
+2
 ```
 
 `ScopedValues` provides a macro version of `with`. The expression `@with var=>val expr`
@@ -102,23 +148,22 @@ is equivalent to `with(var=>val) do expr end`. However, `with` requires a zero-a
 closure or function, which results in an extra call-frame. As an example, consider the
 following function `f`:
 
-```julia
-using Base.ScopedValues
-const a = ScopedValue(1)
-f(x) = a[] + x
-```
+```jldoctest
+julia> using Base.ScopedValues;
 
-If you wish to run `f` in a dynamic scope with `a` set to `2`, then you can use `with`:
+julia> const a_with = ScopedValue(1); # Renamed to avoid conflict
 
-```julia
-with(() -> f(10), a=>2)
-```
+julia> f_with(x) = a_with[] + x;
+f_with (generic function with 1 method)
 
-However, this requires wrapping `f` in a zero-argument function. If you wish to avoid
-the extra call-frame, then you can use the `@with` macro:
+julia> # If you wish to run f_with in a dynamic scope with a_with set to 2, then you can use with:
+       with(() -> f_with(10), a_with=>2)
+12
 
-```julia
-@with a=>2 f(10)
+julia> # However, this requires wrapping f_with in a zero-argument function.
+       # If you wish to avoid the extra call-frame, then you can use the @with macro:
+       @with a_with=>2 f_with(10)
+12
 ```
 
 !!! note
@@ -128,7 +173,7 @@ In the example below we open a new dynamic scope before launching a task.
 The parent task and the two child tasks observe independent values of the
 same scoped value at the same time.
 
-```julia
+```julia; jldoctest = false
 using Base.ScopedValues
 import Base.Threads: @spawn
 
@@ -152,7 +197,7 @@ Care is also required when storing references to mutable state in scoped
 values. You might want to explicitly [unshare mutable state](@ref unshare_mutable_state)
 when entering a new dynamic scope.
 
-```julia
+```julia; jldoctest = false
 using Base.ScopedValues
 import Base.Threads: @spawn
 
@@ -217,7 +262,7 @@ end
 ## Idioms
 ### [Unshare mutable state](@id unshare_mutable_state)
 
-```julia
+```julia; jldoctest = false
 using Base.ScopedValues
 import Base.Threads: @spawn
 
@@ -274,20 +319,23 @@ in these cases.
 If you find yourself creating many `ScopedValue`'s for one given module,
 it may be better to use a dedicated struct to hold them.
 
-```julia
-using Base.ScopedValues
+```jldoctest
+julia> using Base.ScopedValues;
 
-Base.@kwdef struct Configuration
-    color::Bool = false
-    verbose::Bool = false
-end
+julia> Base.@kwdef struct Configuration
+                   color::Bool = false
+                   verbose::Bool = false
+               end;
 
-const CONFIG = ScopedValue(Configuration(color=true))
+julia> const CONFIG = ScopedValue(Configuration(color=true));
 
-@with CONFIG => Configuration(color=CONFIG[].color, verbose=true) begin
-    @show CONFIG[].color # true
-    @show CONFIG[].verbose # true
-end
+julia> @with CONFIG => Configuration(color=CONFIG[].color, verbose=true) begin
+                   @show CONFIG[].color
+                   @show CONFIG[].verbose
+               end
+CONFIG[].color = true
+CONFIG[].verbose = true
+true
 ```
 
 ## API docs

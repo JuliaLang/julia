@@ -65,18 +65,13 @@ a function will be visible to the caller. (This is the same behavior found in Sc
 Python, Ruby and Perl, among other dynamic languages.)
 
 For example, in the function
-```julia
+```jldoctest
 function f(x, y)
     x[1] = 42    # mutates x
     y = 7 + y    # new binding for y, no mutation
     return y
 end
-```
-The statement `x[1] = 42` *mutates* the object `x`, and hence this change *will* be visible in the array passed
-by the caller for this argument. On the other hand, the assignment `y = 7 + y` changes the *binding* ("name")
-`y` to refer to a new value `7 + y`, rather than mutating the *original* object referred to by `y`,
-and hence does *not* change the corresponding argument passed by the caller. This can be seen if we call `f(x, y)`:
-```julia-repl
+
 julia> a = [4, 5, 6]
 3-element Vector{Int64}:
  4
@@ -98,6 +93,10 @@ julia> a  # a[1] is changed to 42 by f
 julia> b  # not changed
 3
 ```
+The statement `x[1] = 42` *mutates* the object `x`, and hence this change *will* be visible in the array passed
+by the caller for this argument. On the other hand, the assignment `y = 7 + y` changes the *binding* ("name")
+`y` to refer to a new value `7 + y`, rather than mutating the *original* object referred to by `y`,
+and hence does *not* change the corresponding argument passed by the caller. This can be seen if we call `f(x, y)`:
 As a common convention in Julia (not a syntactic requirement), such a function would
 [typically be named `f!(x, y)`](@ref man-punctuation) rather than `f(x, y)`, as a visual reminder at
 the call site that at least one of the arguments (often the first one) is being mutated.

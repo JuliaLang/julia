@@ -48,7 +48,7 @@ argument values to be passed to the function.
 As a complete but simple example, the following calls the `clock` function from the standard C
 library on most Unix-derived systems:
 
-```julia-repl
+```jldoctest; filter = r"\d+"
 julia> t = @ccall clock()::Int32
 2292761
 
@@ -59,9 +59,9 @@ Int32
 `clock` takes no arguments and returns an `Int32`. To call the `getenv` function
 to get a pointer to the value of an environment variable, one makes a call like this:
 
-```julia-repl
+```jldoctest; filter = r"Cstring\(@0x[0-9a-f]+\)"
 julia> path = @ccall getenv("SHELL"::Cstring)::Cstring
-Cstring(@0x00007fff5fbffc45)
+Cstring(@0x...) # Output will be filtered
 
 julia> unsafe_string(path)
 "/bin/bash"
@@ -89,12 +89,20 @@ indicate errors in different ways, including by returning -1, 0, 1, and other sp
 This wrapper throws an exception indicating the problem if the caller tries to get a non-existent
 environment variable:
 
-```julia-repl
-julia> getenv("SHELL")
-"/bin/bash"
+```jldoctest
+julia> function getenv(var::AbstractString)
+           val = @ccall getenv(var::Cstring)::Cstring
+           if val == C_NULL
+               error("getenv: undefined variable: ", var)
+           end
+           return unsafe_string(val)
+       end
+getenv (generic function with 1 method)
 
-julia> getenv("FOOBAR")
-ERROR: getenv: undefined variable: FOOBAR
+julia> getenv("A_VARIABLE_THAT_SHOULD_NOT_EXIST_IN_TEST_ENV")
+ERROR: getenv: undefined variable: A_VARIABLE_THAT_SHOULD_NOT_EXIST_IN_TEST_ENV
+Stacktrace:
+[...]
 ```
 
 Here is a slightly more complex example that discovers the local machine's hostname.
@@ -139,7 +147,7 @@ void say_y(int y)
 and compile it with `gcc -fPIC -shared -o mylib.so mylib.c`.
 It can then be called by specifying the (absolute) path as the library name:
 
-```julia-repl
+```julia; jldoctest = false
 julia> @ccall "./mylib.so".say_y(5::Cint)::Cvoid
 Hello from C: got y = 5.
 ```
@@ -958,7 +966,9 @@ To call variadic C functions a `semicolon` can be used in the argument list to
 separate required arguments from variadic arguments. An example with the
 `printf` function is given below:
 
-```julia-repl
+```jldoctest
+julia> foo = 3;
+
 julia> @ccall printf("%s = %d\n"::Cstring ; "foo"::Cstring, foo::Cint)::Cint
 foo = 3
 8
@@ -1045,9 +1055,9 @@ Global variables exported by native libraries can be accessed by name using the 
 function. The arguments to [`cglobal`](@ref) are a symbol specification identical to that used
 by [`ccall`](@ref), and a type describing the value stored in the variable:
 
-```julia-repl
+```jldoctest; filter = r"Ptr\{Int32\} @0x[0-9a-f]+"
 julia> cglobal((:errno, :libc), Int32)
-Ptr{Int32} @0x00007f418d0816b8
+Ptr{Int32} @0x... # Output will be filtered
 ```
 
 The result is a pointer giving the address of the value. The value can be manipulated through

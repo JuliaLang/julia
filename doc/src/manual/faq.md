@@ -79,8 +79,13 @@ this to happen with [`GC.gc()`](@ref Base.GC.gc). Moreover, an attempt to use `A
 Perhaps you've defined a type and then realize you need to add a new field. If you try this at
 the REPL, you get the error:
 
-```
+```jldoctest
+julia> struct MyType end
+
+julia> struct MyType end
 ERROR: invalid redefinition of constant MyType
+Stacktrace:
+[...]
 ```
 
 Types in module `Main` cannot be redefined.
@@ -616,7 +621,7 @@ arithmetic. For example, since Julia integers use normal machine integer arithme
 to aggressively optimize simple little functions like `f(k) = 5k-1`. The machine code for this
 function is just this:
 
-```julia-repl
+```julia; jldoctest = false
 julia> code_native(f, Tuple{Int})
   .text
 Filename: none
@@ -667,7 +672,7 @@ L26:
 Since the call to `f` gets inlined, the loop body ends up being just a single `leaq` instruction.
 Next, consider what happens if we make the number of loop iterations fixed:
 
-```julia-repl
+```julia; jldoctest = false
 julia> function g(k)
            for i = 1:10
                k = f(k)
@@ -718,7 +723,7 @@ for all integer operations. You can follow the status of the discussion
 As the error states, an immediate cause of an `UndefVarError` on a remote node is that a binding
 by that name does not exist. Let us explore some of the possible causes.
 
-```julia-repl
+```julia; jldoctest = false
 julia> module Foo
            foo() = remotecall_fetch(x->x, 2, "Hello")
        end
@@ -736,7 +741,7 @@ an `UndefVarError` is thrown.
 Globals under modules other than `Main` are not serialized by value to the remote node. Only a reference is sent.
 Functions which create global bindings (except under `Main`) may cause an `UndefVarError` to be thrown later.
 
-```julia-repl
+```julia; jldoctest = false
 julia> @everywhere module Foo
            function foo()
                global gvar = "Hello"
@@ -941,7 +946,7 @@ While the streaming I/O API is synchronous, the underlying implementation is ful
 
 Consider the printed output from the following:
 
-```
+```julia; jldoctest = false
 julia> @sync for i in 1:3
            Threads.@spawn write(stdout, string(i), " Foo ", " Bar ")
        end
@@ -954,7 +959,7 @@ yields to other tasks while waiting for that part of the I/O to complete.
 `print` and `println` "lock" the stream during a call. Consequently changing `write` to `println`
 in the above example results in:
 
-```
+```jldoctest
 julia> @sync for i in 1:3
            Threads.@spawn println(stdout, string(i), " Foo ", " Bar ")
        end
@@ -965,7 +970,7 @@ julia> @sync for i in 1:3
 
 You can lock your writes with a `ReentrantLock` like this:
 
-```
+```jldoctest
 julia> l = ReentrantLock();
 
 julia> @sync for i in 1:3
@@ -991,7 +996,7 @@ because they are a special case which makes logical sense given the generic
 definition of arrays, but might be a bit unintuitive at first. The following
 line defines a zero-dimensional array:
 
-```
+```jldoctest
 julia> A = zeros()
 0-dimensional Array{Float64,0}:
 0.0
@@ -1029,7 +1034,7 @@ but the analogous operation with a zero-dimensional array
 
 You may find that simple benchmarks of linear algebra building blocks like
 
-```julia
+```julia; jldoctest = false
 using BenchmarkTools
 A = randn(1000, 1000)
 B = randn(1000, 1000)

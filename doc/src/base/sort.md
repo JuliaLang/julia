@@ -39,67 +39,63 @@ julia> a
 Instead of directly sorting an array, you can compute a permutation of the array's
 indices that puts the array into sorted order:
 
-```julia-repl
+```jldoctest
+julia> using Random; Random.seed!(789);
+
 julia> v = randn(5)
 5-element Vector{Float64}:
-  0.297288
-  0.382396
- -0.597634
- -0.0104452
- -0.839027
+  0.7069993539890807
+  0.0315264896902309
+ -0.005136512690490074
+ -0.6287689836139616
+ -2.053146356931535
 
 julia> p = sortperm(v)
 5-element Vector{Int64}:
  5
- 3
  4
- 1
+ 3
  2
+ 1
 
 julia> v[p]
 5-element Vector{Float64}:
- -0.839027
- -0.597634
- -0.0104452
-  0.297288
-  0.382396
+ -2.053146356931535
+ -0.6287689836139616
+ -0.005136512690490074
+  0.0315264896902309
+  0.7069993539890807
+
+julia> sort(v, by=abs)
+5-element Vector{Float64}:
+ -0.005136512690490074
+  0.0315264896902309
+ -0.6287689836139616
+  0.7069993539890807
+ -2.053146356931535
+
+julia> sort(v, by=abs, rev=true)
+5-element Vector{Float64}:
+ -2.053146356931535
+  0.7069993539890807
+ -0.6287689836139616
+  0.0315264896902309
+ -0.005136512690490074
+
+julia> sort(v, alg=InsertionSort)
+5-element Vector{Float64}:
+ -2.053146356931535
+ -0.6287689836139616
+ -0.005136512690490074
+  0.0315264896902309
+  0.7069993539890807
 ```
 
 Arrays can be sorted according to an arbitrary transformation of their values:
 
-```julia-repl
-julia> sort(v, by=abs)
-5-element Vector{Float64}:
- -0.0104452
-  0.297288
-  0.382396
- -0.597634
- -0.839027
-```
-
 Or in reverse order by a transformation:
 
-```julia-repl
-julia> sort(v, by=abs, rev=true)
-5-element Vector{Float64}:
- -0.839027
- -0.597634
-  0.382396
-  0.297288
- -0.0104452
-```
-
 If needed, the sorting algorithm can be chosen:
-
-```julia-repl
-julia> sort(v, alg=InsertionSort)
-5-element Vector{Float64}:
- -0.839027
- -0.597634
- -0.0104452
-  0.297288
-  0.382396
-```
 
 All the sorting and order related functions rely on a "less than" relation defining a
 [strict weak order](https://en.wikipedia.org/wiki/Weak_ordering#Strict_weak_orderings)
