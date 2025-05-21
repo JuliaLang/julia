@@ -1047,3 +1047,22 @@ f57872() = (Core.isdefinedglobal(@__MODULE__, Base.compilerbarrier(:const, :x578
 @noinline f_mutateany(@nospecialize x) = x[] = 1
 g_mutateany() = (y = Ref(0); f_mutateany(y); y[])
 @test g_mutateany() === 1
+
+# 58470 tbaa for unionselbyte for mut and immut
+
+mutable struct Wrapper58470
+    x::Union{Nothing,Int}
+end
+
+function findsomething58470(dict, inds)
+    default = Wrapper58470(nothing)
+    for i in inds
+        x = get(dict, i, default).x
+        if !isnothing(x)
+            return x
+        end
+    end
+    return nothing
+end
+
+@test occursin("tindex_ptr", get_llvm(findsomething58470, Tuple{Dict{Int64, Wrapper58470}, Vector{Int}}))
