@@ -17,6 +17,7 @@ add_sum(x, y) = x + y
 add_sum(x::BitSignedSmall, y::BitSignedSmall) = Int(x) + Int(y)
 add_sum(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) + UInt(y)
 add_sum(x::Real, y::Real)::Real = x + y
+add_sum(x) = +(x)
 
 """
     Base.mul_prod(x, y)
@@ -28,6 +29,7 @@ mul_prod(x, y) = x * y
 mul_prod(x::BitSignedSmall, y::BitSignedSmall) = Int(x) * Int(y)
 mul_prod(x::BitUnsignedSmall, y::BitUnsignedSmall) = UInt(x) * UInt(y)
 mul_prod(x::Real, y::Real)::Real = x * y
+mul_prod(x) = *(x)
 
 and_all(x, y) = (x && y)::Bool
 or_any(x, y) = (x || y)::Bool
@@ -397,18 +399,7 @@ The default is `x` for most types. The main purpose is to ensure type stability,
 additional methods should only be defined for cases where `op` gives a result with
 different types than its inputs.
 """
-reduce_first(op, x) = x
-reduce_first(::typeof(+), x::Bool) = Int(x)
-reduce_first(::typeof(*), x::AbstractChar) = string(x)
-
-reduce_first(::typeof(add_sum), x) = reduce_first(+, x)
-reduce_first(::typeof(add_sum), x::BitSignedSmall)   = Int(x)
-reduce_first(::typeof(add_sum), x::BitUnsignedSmall) = UInt(x)
-reduce_first(::typeof(mul_prod), x) = reduce_first(*, x)
-reduce_first(::typeof(mul_prod), x::BitSignedSmall)   = Int(x)
-reduce_first(::typeof(mul_prod), x::BitUnsignedSmall) = UInt(x)
-reduce_first(::typeof(vcat), x) = vcat(x)
-reduce_first(::typeof(hcat), x) = hcat(x)
+reduce_first(op, x) = applicable(op, x) ? op(x) : x
 
 """
     Base.mapreduce_first(f, op, x)
