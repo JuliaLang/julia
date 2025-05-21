@@ -34,8 +34,8 @@ hash(data::Any) = hash(data, HASH_SEED)
 hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 # Types can't be deleted, so marking as total allows the compiler to look up the hash
-hash(T::Type, h::UInt) =
-    hash((@assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)), h)
+@noinline _jl_type_hash(T::Type) = @assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)
+hash(T::Type, h::UInt) = hash(_jl_type_hash(T), h)
 hash(@nospecialize(data), h::UInt) = hash(objectid(data), h)
 
 function mul_parts(a::UInt64, b::UInt64)

@@ -4,6 +4,10 @@ inputfile = ARGS[1]
 output_type = ARGS[2]
 add_ccallables = ARGS[3] == "true"
 
+# Run the verifier in the current world (before modifications), so that error
+# messages and types print in their usual way.
+Core.Compiler._verify_trim_world_age[] = Base.get_world_counter()
+
 # Initialize some things not usually initialized when output is requested
 Sys.__init__()
 Base.init_depot_path()

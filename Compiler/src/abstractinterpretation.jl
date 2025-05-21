@@ -2215,16 +2215,10 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
     return CallMeta(ret, Any, Effects(EFFECTS_TOTAL; nothrow), call.info)
 end
 
-function ci_abi(ci::CodeInstance)
+function get_ci_abi(ci::CodeInstance)
     def = ci.def
     isa(def, ABIOverride) && return def.abi
     (def::MethodInstance).specTypes
-end
-
-function get_ci_mi(ci::CodeInstance)
-    def = ci.def
-    isa(def, ABIOverride) && return def.def
-    return def::MethodInstance
 end
 
 function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState)
@@ -2238,7 +2232,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         if isa(method_or_ci, CodeInstance)
             our_world = sv.world.this
             argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
-            specsig = ci_abi(method_or_ci)
+            specsig = get_ci_abi(method_or_ci)
             defdef = get_ci_mi(method_or_ci).def
             exct = method_or_ci.exctype
             if !hasintersect(argtype, specsig)
@@ -3545,7 +3539,7 @@ function merge_override_effects!(interp::AbstractInterpreter, effects::Effects, 
             # N.B.: We'd like deleted_world here, but we can't add an appropriate edge at this point.
             # However, in order to reach here in the first place, ordinary method lookup would have
             # had to add an edge and appropriate invalidation trigger.
-            valid_worlds = WorldRange(m.primary_world, typemax(Int))
+            valid_worlds = WorldRange(m.primary_world, typemax(UInt))
             if sv.world.this in valid_worlds
                 update_valid_age!(sv, valid_worlds)
             else

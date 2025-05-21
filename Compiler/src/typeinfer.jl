@@ -475,7 +475,7 @@ function adjust_effects(ipo_effects::Effects, def::Method, world::UInt)
     valid_worlds = WorldRange(0, typemax(UInt))
     if is_effect_overridden(override, :consistent)
         # See note on `typemax(Int)` instead of `deleted_world` in adjust_effects!
-        override_valid_worlds = WorldRange(def.primary_world, typemax(Int))
+        override_valid_worlds = WorldRange(def.primary_world, typemax(UInt))
         if world in override_valid_worlds
             ipo_effects = Effects(ipo_effects; consistent=ALWAYS_TRUE)
             valid_worlds = override_valid_worlds
@@ -749,7 +749,7 @@ end
 
 # record the backedges
 function store_backedges(caller::CodeInstance, edges::SimpleVector)
-    isa(caller.def.def, Method) || return # don't add backedges to toplevel method instance
+    isa(get_ci_mi(caller).def, Method) || return # don't add backedges to toplevel method instance
 
     backedges = ForwardToBackedgeIterator(edges)
     for (i, (invokesig, item)) in enumerate(backedges)
@@ -1683,7 +1683,8 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     return codeinfos
 end
 
-verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = invokelatest(verify_typeinf_trim, stdout, codeinfos, onlywarn)
+const _verify_trim_world_age = RefValue{UInt}(typemax(UInt))
+verify_typeinf_trim(codeinfos::Vector{Any}, onlywarn::Bool) = Core._call_in_world(_verify_trim_world_age[], verify_typeinf_trim, stdout, codeinfos, onlywarn)
 
 function return_type(@nospecialize(f), t::DataType) # this method has a special tfunc
     world = tls_world_age()
