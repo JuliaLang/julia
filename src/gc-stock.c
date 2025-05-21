@@ -3293,6 +3293,34 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
         target_heap = jl_atomic_load_relaxed(&gc_heap_stats.heap_target);
     }
 
+#ifdef GC_ENABLE_HIDDEN_CTRLS
+    // Kill the process if we are above the hard heap limit
+    if (heap_size > jl_options.hard_heap_limit) {
+        jl_errorf("Heap size of %zu bytes exceeds the hard limit of %zu bytes. "
+                  "Please increase the heap limit with `--hard-heap-limit`.",
+                  heap_size, jl_options.hard_heap_limit);
+    }
+    // Ignore heap limit computation from MemBalancer-like heuristics
+    // if the user has set a `--hard-heap-limit` through the command line.
+    // Note that if we reach this code, we can guarantee that the heap size
+    // is less than the hard limit, so there will be some room to grow the heap
+    // until the next GC without hitting the hard limit.
+    if (jl_options.hard_heap_limit != UINT64_MAX) {
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, jl_options.hard_heap_limit);
+        target_heap = jl_options.hard_heap_limit;
+    }
+    // Ignore heap limit computation from MemBalancer-like heuristics
+    // if the heap target increment goes above the value specified through
+    // `--upper-bound-for-heap-target-increment`.
+    // Note that if we reach this code, we can guarantee that the heap size
+    // is less than the hard limit, so there will be some room to grow the heap
+    // until the next GC without hitting the hard limit.
+    if (target_heap - heap_size > jl_options.upper_bound_for_heap_target_increment) {
+        target_heap = heap_size + jl_options.upper_bound_for_heap_target_increment;
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
+    }
+#endif
+
     double old_ratio = (double)promoted_bytes/(double)heap_size;
     if (heap_size > user_max) {
         next_sweep_full = 1;
@@ -3703,7 +3731,7 @@ void jl_gc_init(void)
     if (jl_options.heap_size_hint == 0) {
         char *cp = getenv(HEAP_SIZE_HINT);
         if (cp)
-            hint = parse_heap_size_hint(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"");
+            hint = parse_heap_size_option(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"");
     }
 #ifdef _P64
     total_mem = uv_get_total_memory();

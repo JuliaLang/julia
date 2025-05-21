@@ -74,6 +74,9 @@
 // GC_TIME prints time taken by each phase of GC
 // #define GC_TIME
 
+// GC_ENABLE_HIDDEN_CTRLS enables hidden options to control heap size and heap limit
+#define GC_ENABLE_HIDDEN_CTRLS
+
 // pool allocator configuration options
 
 // GC_SMALL_PAGE allocates objects in 4k pages
