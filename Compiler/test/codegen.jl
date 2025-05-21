@@ -1048,8 +1048,7 @@ f57872() = (Core.isdefinedglobal(@__MODULE__, Base.compilerbarrier(:const, :x578
 g_mutateany() = (y = Ref(0); f_mutateany(y); y[])
 @test g_mutateany() === 1
 
-# 58470 tbaa for unionselbyte for mut and immut
-
+# 58470 tbaa for unionselbyte of heap allocated mutables
 mutable struct Wrapper58470
     x::Union{Nothing,Int}
 end
@@ -1065,4 +1064,8 @@ function findsomething58470(dict, inds)
     return nothing
 end
 
-@test occursin("tindex_ptr", get_llvm(findsomething58470, Tuple{Dict{Int64, Wrapper58470}, Vector{Int}}))
+let io = IOBuffer()
+    code_llvm(io, findsomething58470, Tuple{Dict{Int64, Wrapper58470}, Vector{Int}}, dump_module=true, raw=true, optimize=false)
+    str = String(take!(io))
+    @test !occursin("jtbaa_unionselbyte", str)
+end
