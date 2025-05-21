@@ -2298,16 +2298,11 @@ typed_hvcat(::Type{T}, rows::Tuple{Vararg{Int}}, as...) where T = typed_hvncat(T
         end
     end
 
+    # For generic fallback case, directly call a normal `hvcat_fill!` function
+    # to avoid the overhead of generating a large number of duplicated expressions.
     quote
         a = Matrix{$T}(undef, $nr, $nc)
-        k = 1
-        @inbounds for i in 1:$nr
-            for j in 1:$nc
-                a[i,j] = xs[k]
-                k += 1
-            end
-        end
-        a
+        hvcat_fill!(a, xs)
     end
 end
 @inline function hvcat_static(::Val{rows}, x::T, xs::Vararg{T}) where {rows, T<:Number}
