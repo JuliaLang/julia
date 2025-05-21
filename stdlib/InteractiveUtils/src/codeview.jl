@@ -210,7 +210,7 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         tt = Base.to_tuple_type(t)
         if !isdefined(f.source, :source)
             # OC was constructed from inferred source. There's only one
-            # specialization and we can't infer anything more precise either.
+            # specialization and we can't infer anything more preise either.
             world = f.source.primary_world
             mi = f.source.specializations::Core.MethodInstance
             Base.hasintersect(typeof(f).parameters[1], tt) || (warning = OC_MISMATCH_WARNING)
@@ -236,22 +236,22 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         end
         if isempty(str)
             # if that failed (or we want metadata), use LLVM to generate more accurate assembly output
+            interp = Base.Compiler.NativeInterpreter(world)
             if !isa(f, Core.OpaqueClosure)
-                src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
+                ci = Base.Compiler.typeinf_ext(interp, mi, Base.Compiler.SOURCE_MODE_GET_SOURCE)
             else
-                src, rt = Base.get_oc_code_rt(nothing, f, tt, true)
+                ci = Base.get_oc_ci(nothing, f, tt, true)
             end
-            src isa Core.CodeInfo || error("failed to infer source for $mi")
-            str = _dump_function_native_assembly(mi, src, wrapper, syntax, debuginfo, binary, raw, params)
+            str = _dump_function_native_assembly(ci, nothing, wrapper, syntax, debuginfo, binary, raw, params)
         end
     else
+        interp = Base.Compiler.NativeInterpreter(world)
         if !isa(f, Core.OpaqueClosure)
-            src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
+            ci = Base.Compiler.typeinf_ext(interp, mi, Base.Compiler.SOURCE_MODE_GET_SOURCE)
         else
-            src, rt = Base.get_oc_code_rt(nothing, f, tt, true)
+            ci = Base.get_oc_ci(nothing, f, tt, true)
         end
-        src isa Core.CodeInfo || error("failed to infer source for $mi")
-        str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, params)
+        str = _dump_function_llvm(ci, nothing, wrapper, !raw, dump_module, optimize, debuginfo, params)
     end
     str = warning * str
     return str
@@ -271,12 +271,23 @@ struct LLVMFDump
     f::Ptr{Cvoid} # opaque
 end
 
-function _dump_function_native_assembly(mi::Core.MethodInstance, src::Core.CodeInfo,
+function get_llvm_defn!(llvmf_dump::Ref{LLVMFDump}, ci::Core.CodeInstance, src::Core.CodeInfo,
+        wrapper::Bool, optimize::Bool, params::CodegenParams)
+    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, ci::Any, src::Any,
+        wrapper::Bool, optimize::Bool, params::CodegenParams)::Cvoid
+end
+
+function get_llvm_defn!(llvmf_dump::Ref{LLVMFDump}, ci::Core.CodeInstance, src::Nothing,
+    wrapper::Bool, optimize::Bool, params::CodegenParams)
+    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, ci::Any, C_NULL::Ptr{Cvoid},
+        wrapper::Bool, optimize::Bool, params::CodegenParams)::Cvoid
+end
+
+function _dump_function_native_assembly(ci::Core.CodeInstance, src::Union{Core.CodeInfo, Nothing},
                                         wrapper::Bool, syntax::Symbol, debuginfo::Symbol,
                                         binary::Bool, raw::Bool, params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
-    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, src::Any, wrapper::Bool,
-                             true::Bool, params::CodegenParams)::Cvoid
+    get_llvm_defn!(llvmf_dump, ci, src, wrapper, true, params)
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = @ccall jl_dump_function_asm(llvmf_dump::Ptr{LLVMFDump}, false::Bool,
                                       syntax::Ptr{UInt8}, debuginfo::Ptr{UInt8},
@@ -285,13 +296,12 @@ function _dump_function_native_assembly(mi::Core.MethodInstance, src::Core.CodeI
 end
 
 function _dump_function_llvm(
-        mi::Core.MethodInstance, src::Core.CodeInfo, wrapper::Bool,
+        ci::Core.CodeInstance, src::Union{Core.CodeInfo, Nothing}, wrapper::Bool,
         strip_ir_metadata::Bool, dump_module::Bool,
         optimize::Bool, debuginfo::Symbol,
         params::CodegenParams)
     llvmf_dump = Ref{LLVMFDump}()
-    @ccall jl_get_llvmf_defn(llvmf_dump::Ptr{LLVMFDump}, mi::Any, src::Any,
-                             wrapper::Bool, optimize::Bool, params::CodegenParams)::Cvoid
+    get_llvm_defn!(llvmf_dump, ci, src, wrapper, optimize, params)
     llvmf_dump[].f == C_NULL && error("could not compile the specified method")
     str = @ccall jl_dump_function_ir(llvmf_dump::Ptr{LLVMFDump}, strip_ir_metadata::Bool,
                                      dump_module::Bool, debuginfo::Ptr{UInt8})::Ref{String}

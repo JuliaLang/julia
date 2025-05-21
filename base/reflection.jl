@@ -309,31 +309,28 @@ function code_typed_by_type(@nospecialize(tt::Type);
     return asts
 end
 
-function get_oc_code_rt(passed_interp, oc::Core.OpaqueClosure, types, optimize::Bool)
+function get_oc_ci(passed_interp, oc::Core.OpaqueClosure, types, optimize::Bool)
     @nospecialize oc types
     ccall(:jl_is_in_pure_context, Bool, ()) &&
         error("code reflection cannot be used from generated functions")
     m = oc.source
     if isa(m, Method)
         if isdefined(m, :source)
+            tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
+            mi = specialize_method(m, tt, Core.svec())
             if optimize
-                tt = Tuple{typeof(oc.captures), to_tuple_type(types).parameters...}
-                mi = specialize_method(m, tt, Core.svec())
                 interp = invoke_interp_compiler(passed_interp, :_default_interp, m.primary_world)
-                code = invoke_interp_compiler(passed_interp, :typeinf_code, interp, mi, optimize)
-                if code isa CodeInfo
-                    return Pair{CodeInfo, Any}(code, code.rettype)
-                end
-                error("inference not successful")
+                return invoke_interp_compiler(passed_interp, :typeinf_ext, interp, mi, Base.Compiler.SOURCE_MODE_GET_SOURCE)
             else
                 code = _uncompressed_ir(m)
-                return Pair{CodeInfo, Any}(code, typeof(oc).parameters[2])
+                return CodeInstance(mi, nothing, Any, Any, nothing, code,
+                    UInt32(0), typmin(UInt), typemax(UInt), UInt32(0), nothing,
+                    UInt8(0), nothing, Core.svec())
             end
         else
             # OC constructed from optimized IR
             codeinst = m.specializations.cache
-            # XXX: the inferred field is not normally a CodeInfo, but this assumes it is guaranteed to be always
-            return Pair{CodeInfo, Any}(codeinst.inferred, codeinst.rettype)
+            return codeinst
         end
     else
         error("encountered invalid Core.OpaqueClosure object")
@@ -346,9 +343,10 @@ function code_typed_opaque_closure(oc::Core.OpaqueClosure, types;
                                    interp=nothing,
                                    _...)
     @nospecialize oc types
-    (code, rt) = get_oc_code_rt(interp, oc, types, optimize)
+    ci = get_oc_ci(interp, oc, types, optimize)
+    code = ci.inferred::CodeInfo
     debuginfo === :none && remove_linenums!(code)
-    return Any[Pair{CodeInfo,Any}(code, rt)]
+    return Any[Pair{CodeInfo,Any}(code, ci.rettype)]
 end
 
 """
