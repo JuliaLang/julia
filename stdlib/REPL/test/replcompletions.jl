@@ -2650,3 +2650,17 @@ let s = "\"example: \$(named.len"
     @test "len2" in c
     @test r == 19:21
 end
+
+# #58296 - complete positional arguments before semicolon
+let s = "string(findfi|; base=16)"
+    c, r = test_complete_pos(s)
+    @test "findfirst" in c
+    @test r == 8:13
+end
+
+# Unknown functions should not cause completions to fail
+let s = "foo58296(findfi"
+    c, r = test_complete(s)
+    @test "findfirst" in c
+    @test r == 10:15
+end

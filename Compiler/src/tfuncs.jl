@@ -450,6 +450,10 @@ end
                     return Const(true)
                 end
             end
+        # datatype_fieldcount is what `fieldcount` uses internally
+        # and returns nothing (!==0) for non-definite field counts.
+        elseif datatype_fieldcount(a1) === 0
+            return Const(false)
         end
     elseif isa(a1, Union)
         # Results can only be `Const` or `Bool`

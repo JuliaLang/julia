@@ -30,7 +30,6 @@ JL_DLLEXPORT jl_sym_t *jl_module_sym;
 JL_DLLEXPORT jl_sym_t *jl_slot_sym;
 JL_DLLEXPORT jl_sym_t *jl_export_sym;
 JL_DLLEXPORT jl_sym_t *jl_public_sym;
-JL_DLLEXPORT jl_sym_t *jl_import_sym;
 JL_DLLEXPORT jl_sym_t *jl_toplevel_sym;
 JL_DLLEXPORT jl_sym_t *jl_quote_sym;
 JL_DLLEXPORT jl_sym_t *jl_line_sym;
@@ -51,7 +50,6 @@ JL_DLLEXPORT jl_sym_t *jl_pop_exception_sym;
 JL_DLLEXPORT jl_sym_t *jl_exc_sym;
 JL_DLLEXPORT jl_sym_t *jl_error_sym;
 JL_DLLEXPORT jl_sym_t *jl_new_sym;
-JL_DLLEXPORT jl_sym_t *jl_using_sym;
 JL_DLLEXPORT jl_sym_t *jl_splatnew_sym;
 JL_DLLEXPORT jl_sym_t *jl_block_sym;
 JL_DLLEXPORT jl_sym_t *jl_new_opaque_closure_sym;
@@ -349,8 +347,6 @@ void jl_init_common_symbols(void)
     jl_module_sym = jl_symbol("module");
     jl_export_sym = jl_symbol("export");
     jl_public_sym = jl_symbol("public");
-    jl_import_sym = jl_symbol("import");
-    jl_using_sym = jl_symbol("using");
     jl_assign_sym = jl_symbol("=");
     jl_method_sym = jl_symbol("method");
     jl_exc_sym = jl_symbol("the_exception");
@@ -1275,13 +1271,12 @@ JL_DLLEXPORT jl_value_t *jl_macroexpand1(jl_value_t *expr, jl_module_t *inmodule
     return expr;
 }
 
-// Main entry point to flisp lowering.  Most arguments are optional; see `jl_lower_expr_mod`.
 // warn: Print any lowering warnings returned; otherwise ignore
 JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
-                                     const char *file, int line, size_t world, bool_t warn)
+                                     const char *filename, int line, size_t world, bool_t warn)
 {
     JL_TIMING(LOWERING, LOWERING);
-    jl_timing_show_location(file, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
+    jl_timing_show_location(filename, line, inmodule, JL_TIMING_DEFAULT_BLOCK);
     jl_array_t *kwargs = NULL;
     JL_GC_PUSH3(&expr, &kwargs, &inmodule);
     expr = jl_copy_ast(expr);
@@ -1290,7 +1285,7 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
     fl_context_t *fl_ctx = &ctx->fl;
     value_t arg = julia_to_scm(fl_ctx, expr);
     value_t e = fl_applyn(fl_ctx, 3, symbol_value(symbol(fl_ctx, "jl-lower-to-thunk")), arg,
-                          symbol(fl_ctx, file), fixnum(line));
+                          symbol(fl_ctx, filename), fixnum(line));
     value_t lwr = car_(e);
     value_t warnings = car_(cdr_(e));
     expr = scm_to_julia(fl_ctx, lwr, inmodule);
@@ -1306,6 +1301,7 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
             jl_error("julia-logmsg: bad argument list - expected "
                      ":warn level (symbol) group (symbol) id file line msg . kwargs");
         }
+        JL_GC_PUSH1(&warning);
         jl_value_t *level = jl_exprarg(warning, 0);
         jl_value_t *group = jl_exprarg(warning, 1);
         jl_value_t *id = jl_exprarg(warning, 2);
@@ -1318,22 +1314,45 @@ JL_DLLEXPORT jl_value_t *jl_fl_lower(jl_value_t *expr, jl_module_t *inmodule,
         }
         JL_TYPECHK(logmsg, long, level);
         jl_log(jl_unbox_long(level), NULL, group, id, file, line, (jl_value_t*)kwargs, msg);
+        JL_GC_POP();
     }
+    jl_value_t *result = (jl_value_t *)jl_svec1(expr);
     JL_GC_POP();
-    return expr;
+    return result;
 }
 
-// Lower an expression tree into Julia's intermediate-representation.
+// Main C entry point to lowering.  Calls jl_fl_lower during bootstrap, and
+// Core._lower otherwise (this is also jl_fl_lower unless we have JuliaLowering)
 JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
-                                  const char *file, int line, size_t world, bool_t warn)
+                                  const char *filename, int line, size_t world, bool_t warn)
 {
-    // TODO: Allow change of lowerer
-    return jl_fl_lower(expr, inmodule, file, line, world, warn);
-}
-
-JL_DLLEXPORT jl_value_t *jl_lower_expr_mod(jl_value_t *expr, jl_module_t *inmodule)
-{
-    return jl_lower(expr, inmodule, "none", 0, ~(size_t)0, 0);
+    jl_value_t *core_lower = NULL;
+    if (jl_core_module) {
+        core_lower = jl_get_global(jl_core_module, jl_symbol("_lower"));
+    }
+    if (!core_lower || core_lower == jl_nothing) {
+        return jl_fl_lower(expr, inmodule, filename, line, world, warn);
+    }
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 7);
+    args[0] = core_lower;
+    args[1] = expr;
+    args[2] = (jl_value_t*)inmodule;
+    args[3] = jl_cstr_to_string(filename);
+    args[4] = jl_box_ulong(line);
+    args[5] = jl_box_ulong(world);
+    args[6] = warn ? jl_true : jl_false;
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    jl_value_t *result = jl_apply(args, 7);
+    ct->world_age = last_age;
+    args[0] = result; // root during error check below
+    JL_TYPECHK(parse, simplevector, result);
+    if (jl_svec_len(result) < 1)
+        jl_error("Result from lowering should be `svec(a::Any, x::Any...)`");
+    JL_GC_POP();
+    return result;
 }
 
 jl_code_info_t *jl_outer_ctor_body(jl_value_t *thistype, size_t nfields, size_t nsparams, jl_module_t *inmodule, const char *file, int line)

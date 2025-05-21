@@ -1141,7 +1141,7 @@ function datatype_fieldcount(t::DataType)
             return length(names)
         end
         if types isa DataType && types <: Tuple
-            return fieldcount(types)
+            return datatype_fieldcount(types)
         end
         return nothing
     elseif isabstracttype(t)
@@ -1478,6 +1478,15 @@ end
 _uncompressed_ir(codeinst::CodeInstance, s::String) =
     ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
 
+function get_ci_mi(codeinst::CodeInstance)
+    def = codeinst.def
+    if def isa Core.ABIOverride
+        return def.def
+    else
+        return def::MethodInstance
+    end
+end
+
 """
     Base.generating_output([incremental::Bool])::Bool
 
@@ -1622,12 +1631,18 @@ end
 
 is_nospecialized(method::Method) = method.nospecialize ≠ 0
 is_nospecializeinfer(method::Method) = method.nospecializeinfer && is_nospecialized(method)
+
+"""
+Return MethodInstance corresponding to `atype` and `sparams`.
+
+No widening / narrowing / compileable-normalization of `atype` is performed.
+"""
 function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     @inline
     if isa(atype, UnionAll)
         atype, sparams = normalize_typevars(method, atype, sparams)
     end
-    if is_nospecializeinfer(method)
+    if is_nospecializeinfer(method) # TODO: this shouldn't be here
         atype = get_nospecializeinfer_sig(method, atype, sparams)
     end
     if preexisting

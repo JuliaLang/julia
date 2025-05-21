@@ -785,6 +785,12 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         }
         goto done_fields; // for now
     }
+    if (s->incremental && jl_is_mtable(v)) {
+        jl_methtable_t *mt = (jl_methtable_t *)v;
+        // Any back-edges will be re-validated and added by staticdata.jl, so
+        // drop them from the image here
+        record_field_change((jl_value_t**)&mt->backedges, NULL);
+    }
     if (jl_is_method_instance(v)) {
         jl_method_instance_t *mi = (jl_method_instance_t*)v;
         if (s->incremental) {
@@ -800,12 +806,14 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 // we only need 3 specific fields of this (the rest are restored afterward, if valid)
                 // in particular, cache is repopulated by jl_mi_cache_insert for all foreign function,
                 // so must not be present here
-                record_field_change((jl_value_t**)&mi->backedges, NULL);
                 record_field_change((jl_value_t**)&mi->cache, NULL);
             }
             else {
                 assert(!needs_recaching(v, s->query_cache));
             }
+            // Any back-edges will be re-validated and added by staticdata.jl, so
+            // drop them from the image here
+            record_field_change((jl_value_t**)&mi->backedges, NULL);
             // n.b. opaque closures cannot be inspected and relied upon like a
             // normal method since they can get improperly introduced by generated
             // functions, so if they appeared at all, we will probably serialize
@@ -1805,16 +1813,11 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 jl_method_t *m = (jl_method_t*)v;
                 jl_method_t *newm = (jl_method_t*)&f->buf[reloc_offset];
                 if (s->incremental) {
-                    if (jl_atomic_load_relaxed(&newm->deleted_world) == ~(size_t)0) {
-                        if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
-                            jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
-                            jl_atomic_store_relaxed(&newm->deleted_world, 1); // max_world
-                            arraylist_push(&s->fixup_objs, (void*)reloc_offset);
-                        }
-                    }
-                    else {
-                        jl_atomic_store_relaxed(&newm->primary_world, 1);
-                        jl_atomic_store_relaxed(&newm->deleted_world, 0);
+                    if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
+                        jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
+                        int dispatch_status = jl_atomic_load_relaxed(&newm->dispatch_status);
+                        jl_atomic_store_relaxed(&newm->dispatch_status, dispatch_status & METHOD_SIG_LATEST_ONLY ? 0 : METHOD_SIG_PRECOMPILE_MANY);
+                        arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
                 }
                 else {
@@ -3052,9 +3055,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
     int en = jl_gc_enable(0);
     if (native_functions) {
         size_t num_gvars, num_external_fns;
-        jl_get_llvm_gvs(native_functions, &num_gvars, NULL);
+        jl_get_llvm_gv_inits(native_functions, &num_gvars, NULL);
         arraylist_grow(&gvars, num_gvars);
-        jl_get_llvm_gvs(native_functions, &num_gvars, gvars.items);
+        jl_get_llvm_gv_inits(native_functions, &num_gvars, gvars.items);
         jl_get_llvm_external_fns(native_functions, &num_external_fns, NULL);
         arraylist_grow(&external_fns, num_external_fns);
         jl_get_llvm_external_fns(native_functions, &num_external_fns,
@@ -3593,8 +3596,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
             jl_errorf("System image file \"%s\" not found.", fname);
         ios_bufmode(&f, bm_none);
 
-        JL_SIGATOMIC_BEGIN();
-
         ios_seek_end(&f);
         size_t len = ios_pos(&f);
         char *sysimg = (char*)jl_gc_perm_alloc(len, 0, 64, 0);
@@ -3604,8 +3605,6 @@ JL_DLLEXPORT jl_image_buf_t jl_preload_sysimg(const char *fname)
             jl_errorf("Error reading system image file.");
 
         ios_close(&f);
-
-        JL_SIGATOMIC_END();
 
         jl_sysimage_buf = (jl_image_buf_t) {
             .kind = JL_IMAGE_KIND_JI,
@@ -4410,7 +4409,11 @@ static jl_value_t *jl_restore_package_image_from_stream(ios_t *f, jl_image_t *im
             JL_SIGATOMIC_END();
 
             // Add roots to methods
-            jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            int failed = jl_copy_roots(method_roots_list, jl_worklist_key((jl_array_t*)restored));
+            if (failed != 0) {
+                jl_printf(JL_STDERR, "Error copying roots to methods from Module: %s\n", pkgname);
+                abort();
+            }
             // Insert method extensions and handle edges
             int new_methods = jl_array_nrows(extext_methods) > 0;
             if (!new_methods) {

@@ -461,9 +461,7 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
                             "       (this should not happen, please file a bug report)\n");
             exit(1);
         }
-        const char *image_path = jl_pathname_for_handle(handle);
-        jl_enter_threaded_region(); // This should maybe be behind a lock, but it's harmless if done twice
-        jl_init_with_image(NULL, image_path);
+        jl_init_with_image_handle(handle);
         return &jl_get_current_task()->gcstack;
     }
 
@@ -561,18 +559,20 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     // this here by blocking. This also synchronizes our read of `current_task`
     // (which is the flag we currently use to check the liveness state of a thread).
 #ifdef _OS_WINDOWS_
-    jl_lock_profile_wr();
+    int havelock = jl_lock_profile_wr();
+    assert(havelock); (void)havelock;
 #elif defined(JL_DISABLE_LIBUNWIND)
     // nothing
 #elif defined(__APPLE__)
-    jl_lock_profile_wr();
+    int havelock = jl_lock_profile_wr();
+    assert(havelock); (void)havelock;
 #else
     pthread_mutex_lock(&in_signal_lock);
 #endif
     jl_atomic_store_relaxed(&ptls->current_task, NULL); // indicate dead
     // finally, release all of the locks we had grabbed
 #ifdef _OS_WINDOWS_
-    jl_unlock_profile_wr();
+    if (havelock) jl_unlock_profile_wr();
 #elif defined(JL_DISABLE_LIBUNWIND)
     // nothing
 #elif defined(__APPLE__)

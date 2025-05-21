@@ -59,6 +59,7 @@ USE_SYSTEM_LIBGIT2:=0
 USE_SYSTEM_PATCHELF:=0
 USE_SYSTEM_LIBWHICH:=0
 USE_SYSTEM_ZLIB:=0
+USE_SYSTEM_ZSTD:=0
 USE_SYSTEM_P7ZIP:=0
 USE_SYSTEM_LLD:=0
 
@@ -373,11 +374,15 @@ $(1)_rel_eval = $(call rel_path,$(2),$($(1)))
 $(1)_rel = $$(call hit_cache,$(1)_rel_eval)
 endef
 $(foreach D,libdir private_libdir datarootdir libexecdir private_libexecdir docdir sysconfdir includedir,$(eval $(call cache_rel_path,$(D),$(bindir))))
-$(foreach D,build_libdir build_private_libdir,$(eval $(call cache_rel_path,$(D),$(build_bindir))))
+$(foreach D,build_libdir build_private_libdir                                                           ,$(eval $(call cache_rel_path,$(D),$(build_bindir))))
 
 # Save a special one: reverse_private_libdir_rel: usually just `../`, but good to be general:
 reverse_private_libdir_rel_eval = $(call rel_path,$(private_libdir),$(libdir))
 reverse_private_libdir_rel = $(call hit_cache,reverse_private_libdir_rel_eval)
+reverse_private_libexecdir_rel_eval = $(call rel_path,$(private_libexecdir),$(private_libdir))
+reverse_private_libexecdir_rel = $(call hit_cache,reverse_private_libexecdir_rel_eval)
+reverse_build_private_libexecdir_rel_eval = $(call rel_path,$(build_private_libexecdir),$(build_libdir))
+reverse_build_private_libexecdir_rel = $(call hit_cache,reverse_build_private_libexecdir_rel_eval)
 
 INSTALL_F := $(JULIAHOME)/contrib/install.sh 644
 INSTALL_M := $(JULIAHOME)/contrib/install.sh 755
@@ -1417,7 +1422,7 @@ CSL_NEXT_GLIBCXX_VERSION=GLIBCXX_3\.4\.34|GLIBCXX_3\.5\.|GLIBCXX_4\.
 # Note: we explicitly _do not_ define `CSL` here, since it requires some more
 # advanced techniques to decide whether it should be installed from a BB source
 # or not.  See `deps/csl.mk` for more detail.
-BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB P7ZIP LLD LIBTRACYCLIENT BOLT
+BB_PROJECTS := BLASTRAMPOLINE OPENBLAS LLVM LIBSUITESPARSE OPENLIBM GMP OPENSSL LIBSSH2 NGHTTP2 MPFR CURL LIBGIT2 PCRE LIBUV LIBUNWIND DSFMT OBJCONV ZLIB ZSTD P7ZIP LLD LIBTRACYCLIENT BOLT
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
 BB_PROJECTS += MMTK_JULIA
