@@ -183,6 +183,28 @@ ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(
 
 ## shuffle & shuffle!
 
+function shuffle(rng::AbstractRNG, tup::NTuple{N}) where {N}
+    @inline let  # `@inline` and `@inbounds` are here to help escape analysis
+        # use a narrow integer type to save stack space and prevent heap allocation
+        Ind = if N ≤ typemax(UInt8)
+            UInt8
+        elseif N ≤ typemax(UInt16)
+            UInt16
+        else
+            UInt
+        end
+        clo = @inbounds let mem = Memory{Ind}(undef, N)
+            shuffle!(rng, copyto!(mem, Base.OneTo(N)))  # just use `randperm!` once it supports `Memory`
+            let mem = mem, tup = tup
+                function closure(i::Int)
+                    @inbounds tup[mem[i]]
+                end
+            end
+        end
+        ntuple(clo, Val{N}())::typeof(tup)
+    end
+end
+
 """
     shuffle!([rng=default_rng(),] v::AbstractArray)
 
@@ -238,12 +260,15 @@ end
 shuffle!(a::AbstractArray) = shuffle!(default_rng(), a)
 
 """
-    shuffle([rng=default_rng(),] v::AbstractArray)
+    shuffle([rng=default_rng(),] v::Union{NTuple,AbstractArray})
 
 Return a randomly permuted copy of `v`. The optional `rng` argument specifies a random
 number generator (see [Random Numbers](@ref)).
 To permute `v` in-place, see [`shuffle!`](@ref). To obtain randomly permuted
 indices, see [`randperm`](@ref).
+
+!!! compat "Julia 1.13"
+    Shuffling an `NTuple` value requires Julia v1.13 or above.
 
 # Examples
 ```jldoctest
@@ -261,8 +286,10 @@ julia> shuffle(Xoshiro(123), Vector(1:10))
   7
 ```
 """
+function shuffle end
+
 shuffle(r::AbstractRNG, a::AbstractArray) = shuffle!(r, copymutable(a))
-shuffle(a::AbstractArray) = shuffle(default_rng(), a)
+shuffle(a::Union{Tuple, AbstractArray}) = shuffle(default_rng(), a)
 
 shuffle(r::AbstractRNG, a::Base.OneTo) = randperm(r, last(a))
 
