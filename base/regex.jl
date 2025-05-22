@@ -424,6 +424,17 @@ true
 """
 function match end
 
+"""
+    match(r::Regex, s::AbstractString)
+
+Searches for the first match of the regular expression `r` in `s`.
+Returns a `RegexMatch` object if a match is found, otherwise `nothing`.
+
+# Examples
+```julia
+match(r"\d+", "Julia 1.9")  # returns RegexMatch("1")
+"""
+
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
                add_opts::UInt32=UInt32(0))
     compile(re)

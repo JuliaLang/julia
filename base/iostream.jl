@@ -74,6 +74,15 @@ Return the file descriptor backing the stream, file, or socket.
 fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
 stat(s::IOStream) = stat(fd(s))
+"""
+    isopen(s::IOStream)
+
+Check if the stream is not yet inactive.
+An inactive `IOStream` may still have data to read in its buffer,
+use [`eof`](@ref) to check for the ability to read data.
+Use the `FileWatching` package to be notified when a file might be writable or readable.
+
+"""
 
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Cvoid},), s.ios) != 0
 
