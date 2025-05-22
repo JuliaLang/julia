@@ -111,6 +111,7 @@ public
     reseteof,
     link_pipe!,
     dup,
+    showarg,
 
 # filesystem operations
     rename,
