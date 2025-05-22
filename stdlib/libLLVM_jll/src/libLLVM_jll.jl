@@ -3,7 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/libLLVM_jll.jl
 
 baremodule libLLVM_jll
-using Base, Libdl
+using Base, Libdl, Zlib_jll, Zstd_jll
 
 const PATH_list = String[]
 const LIBPATH_list = String[]
