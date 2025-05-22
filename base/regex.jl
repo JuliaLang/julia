@@ -434,7 +434,6 @@ Returns a `RegexMatch` object if a match is found, otherwise `nothing`.
 ```julia
 match(r"\d+", "Julia 1.9")  # returns RegexMatch("1")
 """
-
 function match(re::Regex, str::Union{SubString{String}, String}, idx::Integer,
                add_opts::UInt32=UInt32(0))
     compile(re)

@@ -9,7 +9,7 @@ Create a async condition that wakes up tasks waiting for it
 (by calling [`wait`](@ref) on the object)
 when notified from C by a call to `uv_async_send`.
 Waiting tasks are woken with an error when the object is closed (by [`close`](@ref)).
-Use [`isopen`](@ref) to check whether it is still active. An closed condition is inactive and will. 
+Use [`isopen`](@ref) to check whether it is still active. An closed condition is inactive and will not wake tasks. 
 
 This provides an implicit acquire & release memory ordering between the sending and waiting threads.
 """
@@ -212,7 +212,6 @@ isopen(t::Union{Timer, AsyncCondition}) = @atomic :acquire t.isopen
 Close an object `t` and thus mark it as inactive. Once a timer or condition is inactive, it will not produce a new event.
 See also: [`isopen`](@ref)
 """
-
 function close(t::Union{Timer, AsyncCondition})
     t.handle == C_NULL && !t.isopen && return # short-circuit path, :monotonic
     iolock_begin()
