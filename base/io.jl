@@ -69,7 +69,7 @@ A closed IO is in an undefined state and should not be written to or read from.
 When attempting to do so, the IO may throw an exception, continue to behave
 normally, or read/write zero bytes, depending on the implementation.
 However, implementations should make sure that reading to or writing from a
-closed IO does not cause undefined behaviour. 
+closed IO does not cause undefined behaviour.
 
 This function is generically defined to only `flush` the io. That allows
 wrapping IOs to close its underlying IO.
