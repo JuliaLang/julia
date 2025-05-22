@@ -3212,7 +3212,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t target_heap;
     const char *reason = ""; (void)reason; // for GC_TIME output stats
     old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
-    if (collection == JL_GC_AUTO) {
+    if (collection == JL_GC_AUTO && jl_options.hard_heap_limit == UINT64_MAX) {
         // update any heuristics only when the user does not force the GC
         // but still update the timings, since GC was run and reset, even if it was too early
         uint64_t target_allocs = 0.0;
@@ -3301,21 +3301,12 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
                   heap_size, jl_options.hard_heap_limit);
     }
     // Ignore heap limit computation from MemBalancer-like heuristics
-    // if the user has set a `--hard-heap-limit` through the command line.
-    // Note that if we reach this code, we can guarantee that the heap size
-    // is less than the hard limit, so there will be some room to grow the heap
-    // until the next GC without hitting the hard limit.
-    if (jl_options.hard_heap_limit != UINT64_MAX) {
-        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, jl_options.hard_heap_limit);
-        target_heap = jl_options.hard_heap_limit;
-    }
-    // Ignore heap limit computation from MemBalancer-like heuristics
     // if the heap target increment goes above the value specified through
     // `--upper-bound-for-heap-target-increment`.
     // Note that if we reach this code, we can guarantee that the heap size
     // is less than the hard limit, so there will be some room to grow the heap
     // until the next GC without hitting the hard limit.
-    if (target_heap - heap_size > jl_options.upper_bound_for_heap_target_increment) {
+    if (jl_options.upper_bound_for_heap_target_increment != UINT64_MAX) {
         target_heap = heap_size + jl_options.upper_bound_for_heap_target_increment;
         jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
     }
@@ -3718,6 +3709,9 @@ void jl_gc_init(void)
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
     jl_atomic_store_relaxed(&gc_heap_stats.heap_target, default_collect_interval);
+    if (jl_options.hard_heap_limit != UINT64_MAX) {
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, jl_options.hard_heap_limit);
+    }
     gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;

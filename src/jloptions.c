@@ -988,13 +988,13 @@ restart_switch:
         case opt_hard_heap_limit:
             if (optarg != NULL)
                 jl_options.hard_heap_limit = parse_heap_size_option(optarg, "--hard-heap-limit=<size>[<unit>]");
-            if (jl_options.hard_heap_limit == 0)
+            if (jl_options.hard_heap_limit == 0 || jl_options.hard_heap_limit == UINT64_MAX) // UINT64_MAX is a special value for "no limit specified"
                 jl_errorf("julia: invalid memory size specified in --hard-heap-limit=<size>[<unit>]");
             break;
         case opt_upper_bound_for_heap_target_increment:
             if (optarg != NULL)
                 jl_options.upper_bound_for_heap_target_increment = parse_heap_size_option(optarg, "--upper-bound-for-heap-target-increment=<size>[<unit>]");
-            if (jl_options.upper_bound_for_heap_target_increment == 0)
+            if (jl_options.upper_bound_for_heap_target_increment == 0 || jl_options.upper_bound_for_heap_target_increment == UINT64_MAX) // UINT64_MAX is a special value for "no limit specified"
                 jl_errorf("julia: invalid memory size specified in --upper-bound-for-heap-target-increment=<size>[<unit>]");
             break;
 #endif
