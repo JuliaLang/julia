@@ -2002,7 +2002,7 @@ setindex!(b::Ref, x, ::CartesianIndex{0}) = setindex!(b, x)
 
 ## hashing AbstractArray ## can't be put in abstractarray.jl due to bootstrapping problems with the use of @nexpr
 
-function _hash_fib(A::AbstractArray, h::UInt)
+function _hash_fib(A, h::UInt)
     # Goal: Hash approximately log(N) entries with a higher density of hashed elements
     # weighted towards the end and special consideration for repeated values. Colliding
     # hashes will often subsequently be compared by equality -- and equality between arrays
@@ -2029,7 +2029,7 @@ function _hash_fib(A::AbstractArray, h::UInt)
     linidx = key_to_linear[keyidx]
     fibskip = prevfibskip = oneunit(linidx)
     first_linear = first(LinearIndices(linear_to_key))
-    @nexprs 8 i -> p_i = h
+    @nexprs 4 i -> p_i = h
 
     n = 0
     while true
@@ -2037,8 +2037,8 @@ function _hash_fib(A::AbstractArray, h::UInt)
         # Hash the element
         elt = A[keyidx]
 
-        stream_idx = mod1(n, 8)
-        @nexprs 8 i -> stream_idx == i && (p_i = hash(keyidx => elt, p_i))
+        stream_idx = mod1(n, 4)
+        @nexprs 4 i -> stream_idx == i && (p_i = hash_mix_linear(hash(keyidx, p_i), hash(elt, p_i)))
 
         # Skip backwards a Fibonacci number of indices -- this is a linear index operation
         linidx = key_to_linear[keyidx]
@@ -2061,18 +2061,15 @@ function _hash_fib(A::AbstractArray, h::UInt)
         keyidx === nothing && break
     end
 
-    @nexprs 8 i -> h = hash_mix_linear(p_i, h)
+    @nexprs 4 i -> h = hash_mix_linear(p_i, h)
     return hash_uint(h)
 end
 
-const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
-function hash(A::AbstractArray, h::UInt)
-    h ⊻= hash_abstractarray_seed
+function hash_shaped(A, h::UInt)
     # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
     # Instead hash the tuple of firsts and lasts along each dimension
     h = hash(map(first, axes(A)), h)
     h = hash(map(last, axes(A)), h)
-
     len = length(A)
 
     if len < 8
@@ -2101,3 +2098,6 @@ function hash(A::AbstractArray, h::UInt)
         return _hash_fib(A, h)
     end
 end
+
+const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
+hash(A::AbstractArray, h::UInt) = hash_shaped(A, h ⊻ hash_abstractarray_seed)
