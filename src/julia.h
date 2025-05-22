@@ -331,8 +331,8 @@ typedef struct _jl_method_t {
     struct _jl_module_t *module;
     jl_sym_t *file;
     int32_t line;
+    _Atomic(int32_t) dispatch_status; // bits defined in staticdata.jl
     _Atomic(size_t) primary_world;
-    _Atomic(size_t) deleted_world;
 
     // method's type signature. redundant with TypeMapEntry->specTypes
     jl_value_t *sig;
@@ -1631,7 +1631,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->name->mutabl)
 #define jl_is_mutable_datatype(t) (jl_is_datatype(t) && (((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_immutable(t)   (!((jl_datatype_t*)t)->name->mutabl)
-#define jl_is_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
+#define jl_may_be_immutable_datatype(t) (jl_is_datatype(t) && (!((jl_datatype_t*)t)->name->mutabl))
 #define jl_is_uniontype(v)   jl_typetagis(v,jl_uniontype_tag<<4)
 #define jl_is_typevar(v)     jl_typetagis(v,jl_tvar_tag<<4)
 #define jl_is_unionall(v)    jl_typetagis(v,jl_unionall_tag<<4)

@@ -1402,8 +1402,9 @@ function matching_cache_argtypes(𝕃::AbstractLattice, mi::MethodInstance,
             if slotid !== nothing
                 # using union-split signature, we may be able to narrow down `Conditional`
                 sigt = widenconst(slotid > nargs ? argtypes[slotid] : cache_argtypes[slotid])
-                thentype = tmeet(cnd.thentype, sigt)
-                elsetype = tmeet(cnd.elsetype, sigt)
+                ⊓ = meet(𝕃)
+                thentype = cnd.thentype ⊓ sigt
+                elsetype = cnd.elsetype ⊓ sigt
                 if thentype === Bottom && elsetype === Bottom
                     # we accidentally proved this method match is impossible
                     # TODO bail out here immediately rather than just propagating Bottom ?
@@ -2119,7 +2120,7 @@ function abstract_call_builtin(interp::AbstractInterpreter, f::Builtin, (; fargs
                 else
                     thentype = form_partially_defined_struct(argtype2, argtypes[3])
                     if thentype !== nothing
-                        elsetype = argtype2
+                        elsetype = widenslotwrapper(argtype2)
                         if rt === Const(false)
                             thentype = Bottom
                         elseif rt === Const(true)
@@ -2210,7 +2211,7 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
     return CallMeta(ret, Any, Effects(EFFECTS_TOTAL; nothrow), call.info)
 end
 
-function ci_abi(ci::CodeInstance)
+function get_ci_abi(ci::CodeInstance)
     def = ci.def
     isa(def, ABIOverride) && return def.abi
     (def::MethodInstance).specTypes
@@ -2233,7 +2234,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         if isa(method_or_ci, CodeInstance)
             our_world = sv.world.this
             argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
-            specsig = ci_abi(method_or_ci)
+            specsig = get_ci_abi(method_or_ci)
             defdef = get_ci_mi(method_or_ci).def
             exct = method_or_ci.exctype
             if !hasintersect(argtype, specsig)
@@ -3229,7 +3230,7 @@ function abstract_eval_isdefined_expr(interp::AbstractInterpreter, e::Expr, ssta
         elseif !vtyp.undef
             rt = Const(true) # definitely assigned previously
         else # form `Conditional` to refine `vtyp.undef` in the then branch
-            rt = Conditional(sym, vtyp.typ, vtyp.typ; isdefined=true)
+            rt = Conditional(sym, widenslotwrapper(vtyp.typ), widenslotwrapper(vtyp.typ); isdefined=true)
         end
         return RTEffects(rt, Union{}, EFFECTS_TOTAL)
     end
@@ -3497,7 +3498,7 @@ function merge_override_effects!(interp::AbstractInterpreter, effects::Effects, 
             # N.B.: We'd like deleted_world here, but we can't add an appropriate edge at this point.
             # However, in order to reach here in the first place, ordinary method lookup would have
             # had to add an edge and appropriate invalidation trigger.
-            valid_worlds = WorldRange(m.primary_world, typemax(Int))
+            valid_worlds = WorldRange(m.primary_world, typemax(UInt))
             if sv.world.this in valid_worlds
                 update_valid_age!(sv, valid_worlds)
             else

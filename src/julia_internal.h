@@ -207,10 +207,9 @@ JL_DLLEXPORT double jl_get_profile_peek_duration(void);
 JL_DLLEXPORT void jl_set_profile_peek_duration(double);
 
 JL_DLLEXPORT void jl_init_profile_lock(void);
-JL_DLLEXPORT uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT;
-JL_DLLEXPORT void jl_lock_profile(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+JL_DLLEXPORT int jl_lock_profile(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_unlock_profile(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
-JL_DLLEXPORT void jl_lock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
+JL_DLLEXPORT int jl_lock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_ENTER;
 JL_DLLEXPORT void jl_unlock_profile_wr(void) JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE;
 void jl_with_stackwalk_lock(void (*f)(void*) JL_NOTSAFEPOINT, void *ctx) JL_NOTSAFEPOINT;
 
@@ -673,6 +672,10 @@ typedef union {
 // Also defined in typeinfer.jl - See documentation there.
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
+
+#define METHOD_SIG_LATEST_WHICH             0b0001
+#define METHOD_SIG_LATEST_ONLY              0b0010
+#define METHOD_SIG_PRECOMPILE_MANY          0b0100
 
 JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
 JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
