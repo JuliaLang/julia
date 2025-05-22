@@ -331,6 +331,10 @@ documentation between different versions of a function:
 @doc (@doc foo!) foo
 ```
 
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, retrieving documentation with the `@doc` macro requires that
+    the `REPL` stdlib is loaded.
+
 Or for use with Julia's metaprogramming functionality:
 
 ```julia
