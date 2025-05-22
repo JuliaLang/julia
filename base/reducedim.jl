@@ -51,6 +51,15 @@ mergeindices(b::NTuple{N,Bool}, x::CartesianIndex{N}, y::CartesianIndex{N}) wher
 keep_first_trues(::Tuple{}) = ()
 keep_first_trues(t) = t[1] ? (true, keep_first_trues(tail(t))...) : ntuple(Returns(false), length(t))
 
+# These functions aren't used in the implementation here, but are used widely in the ecosystem
+promote_union(T::Union) = promote_type(promote_union(T.a), promote_union(T.b))
+promote_union(T) = T
+_realtype(::Type{<:Complex}) = Real
+_realtype(::Type{Complex{T}}) where T<:Real = T
+_realtype(T::Type) = T
+-_realtype(::Union{typeof(abs),typeof(abs2)}, T) = _realtype(T)
+_realtype(::Any, T) = T
+
 mapreduce_similar(A, ::Type{T}, dims) where {T} = similar(A, T, dims)
 
 # These special internal types allow exposing both in- and out-of-place array initialization
