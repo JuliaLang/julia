@@ -771,3 +771,9 @@ end
         Val(any(in((:one,:two,:three)),(:four,:three)))
     end |> only == Val{true}
 end
+
+# `reduce(vcat, A)` should not alias the input for length-1 collections
+let A=[1;;]
+    @test reduce(vcat, Any[A]) !== A
+    @test reduce(hcat, Any[A]) !== A
+end
