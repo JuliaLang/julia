@@ -83,7 +83,8 @@ function get_deps_readelf(lib_path::String)
     libs = split(readchomp(`readelf -d $(lib_path)`), "\n")
 
     # Only keep `(NEEDED)` lines
-    libs = filter(l -> occursin("(NEEDED)", l), libs)
+    needed_str = Sys.isfreebsd() ? "NEEDED" : "(NEEDED)"
+    libs = filter(l -> occursin(needed_str, l), libs)
 
     # Grab the SONAME from "Shared library: [$SONAME]"
     libs = map(libs) do lib
