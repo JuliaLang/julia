@@ -57,7 +57,7 @@ promote_union(T) = T
 _realtype(::Type{<:Complex}) = Real
 _realtype(::Type{Complex{T}}) where T<:Real = T
 _realtype(T::Type) = T
--_realtype(::Union{typeof(abs),typeof(abs2)}, T) = _realtype(T)
+_realtype(::Union{typeof(abs),typeof(abs2)}, T) = _realtype(T)
 _realtype(::Any, T) = T
 
 mapreduce_similar(A, ::Type{T}, dims) where {T} = similar(A, T, dims)
