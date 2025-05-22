@@ -681,7 +681,7 @@ static int needs_recaching(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAF
 
 static int needs_uniquing(jl_value_t *v, jl_query_cache *query_cache) JL_NOTSAFEPOINT
 {
-    assert(!jl_object_in_image(v));
+    assert(!jl_object_in_image(v) || jl_is_code_instance(v));
     return caching_tag(v, query_cache) == 1;
 }
 
@@ -1037,8 +1037,8 @@ static uintptr_t add_external_linkage(jl_serializer_state *s, jl_value_t *v, jl_
 // Return the integer `id` for `v`. Generically this is looked up in `serialization_order`,
 // but symbols, small integers, and a couple of special items (`nothing` and the root Task)
 // have special handling.
-#define backref_id(s, v, link_ids) _backref_id(s, (jl_value_t*)(v), link_ids)
-static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids) JL_NOTSAFEPOINT
+#define backref_id(s, v, link_ids) _backref_id(s, (jl_value_t*)(v), link_ids, /* allow_copies */ 1)
+static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *link_ids, int allow_copies) JL_NOTSAFEPOINT
 {
     assert(v != NULL && "cannot get backref to NULL object");
     void *idx = HT_NOTFOUND;
@@ -1075,10 +1075,18 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v, jl_array_t *
         uint8_t u8 = *(uint8_t*)v;
         return ((uintptr_t)TagRef << RELOC_TAG_OFFSET) + u8 + 2 + NBOX_C + NBOX_C;
     }
+    if (!allow_copies) {
+        if (s->incremental && jl_object_in_image(v)) {
+            assert(link_ids);
+            uintptr_t item = add_external_linkage(s, v, link_ids);
+            assert(item && "no external linkage identified");
+            return item;
+        }
+    }
     if (idx == HT_NOTFOUND) {
         idx = ptrhash_get(&serialization_order, v);
         if (idx == HT_NOTFOUND) {
-            if (s->incremental && jl_object_in_image(v)) {
+            if (allow_copies && s->incremental && jl_object_in_image(v)) {
                 assert(link_ids);
                 uintptr_t item = add_external_linkage(s, v, link_ids);
                 assert(item && "no external linkage identified");
@@ -1225,7 +1233,7 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
     for (size_t item = 0; item < l; item++) {
         jl_value_t *v = (jl_value_t*)serialization_queue.items[item];           // the object
         JL_GC_PROMISE_ROOTED(v);
-        assert(!(s->incremental && jl_object_in_image(v)));
+        assert(!(s->incremental && jl_object_in_image(v) && !jl_is_code_instance(v)));
         jl_datatype_t *t = (jl_datatype_t*)jl_typeof(v);
         assert((t->instance == NULL || t->instance == v) && "detected singleton construction corruption");
         ios_t *f = s->s;
@@ -2097,7 +2105,7 @@ static uint32_t write_gvars(jl_serializer_state *s, arraylist_t *globals, arrayl
     for (size_t i = 0; i < external_fns->len; i++) {
         jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
         assert(ci && (jl_atomic_load_relaxed(&ci->specsigflags) & 0b001));
-        uintptr_t item = backref_id(s, (void*)ci, s->link_ids_external_fnvars);
+        uintptr_t item = _backref_id(s, (jl_value_t*)ci, s->link_ids_external_fnvars, /* allow_copies */ 0);
         uintptr_t reloc = get_reloc_for_item(item, 0);
         write_reloc_t(s->gvar_record, reloc);
     }
