@@ -363,7 +363,7 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
 
 STATIC_INLINE void wake_any(jl_task_t *ct) JL_NOTSAFEPOINT
 {
-    // Find sleeping thread to wake up
+    // Find sleeping thread to wake up in the default thread pool
     int self = jl_atomic_load_relaxed(&ct->tid);
     int nthreads = jl_atomic_load_acquire(&jl_n_threads);
     int idle_threads = jl_atomic_load_relaxed(&n_threads_idle);
@@ -378,7 +378,7 @@ STATIC_INLINE void wake_any(jl_task_t *ct) JL_NOTSAFEPOINT
                 break;
             }
         }
-        for (int tid = 0; tid < self; tid++) {
+        for (int tid = jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE]; tid < self; tid++) {
             if ((tid != self) && wake_thread(tid)) {
                 anysleep = 1;
                 break;

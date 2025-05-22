@@ -137,6 +137,7 @@ struct _jl_bt_element_t;
 typedef struct _jl_tls_states_t {
     int16_t tid;
     int8_t threadpoolid;
+    int16_t threadpool_tid;
     uint64_t rngseed;
     _Atomic(volatile size_t *) safepoint; // may be changed to the suspend page by any thread
     _Atomic(int8_t) sleep_check_state; // read/write from foreign threads

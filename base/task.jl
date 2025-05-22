@@ -973,7 +973,7 @@ function enq_work(t::Task)
         end
     end
 
-    if (tid == 0)
+    if (tid == 0 && Threads.threadpool(t) == :default)
         ccall(:jl_wake_any_thread, Cvoid, (Any,), current_task())
     else
         ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
@@ -1206,7 +1206,8 @@ function trypoptask(W::StickyWorkqueue)
         end
         return t
     end
-    return Scheduler.dequeue!()
+    t = Scheduler.dequeue!()
+    return t
 end
 
 checktaskempty = Scheduler.checktaskempty

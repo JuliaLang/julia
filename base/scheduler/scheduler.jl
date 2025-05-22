@@ -57,8 +57,9 @@ Base.@assume_effects :total function rand_uniform_max_int32(max::UInt32, seed::U
 end
 
 include("scheduler/partr.jl")
+include("scheduler/workstealing.jl")
 
-const ChosenScheduler = Partr
+const ChosenScheduler = Workstealing
 
 
 
