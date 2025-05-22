@@ -645,6 +645,8 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     return codeinst;
 }
 
+static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time, int is_recompile);
+
 JL_DLLEXPORT void jl_update_codeinst(
         jl_code_instance_t *codeinst, jl_value_t *inferred,
         int32_t const_flags, size_t min_world, size_t max_world,
@@ -667,6 +669,15 @@ JL_DLLEXPORT void jl_update_codeinst(
     if ((const_flags & 1) != 0) {
         assert(codeinst->rettype_const);
         jl_atomic_store_release(&codeinst->invoke, jl_fptr_const_return);
+        // Emit a `precompile` since this code's compilation is now complete. It was just inferred and it will require
+        // no codegen since it returns a constant value.
+        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+        if (jl_is_method(mi->def.value) && jl_isa_compileable_sig((jl_tupletype_t *)mi->specTypes, mi->sparam_vals, mi->def.method)) {
+            // This isa_compileable_sig check is required because `precompile(...)` will reject the signature otherwise,
+            // assuming it is too wide to compile to a good result. That happens even though we know a posteriori that
+            // the signature compiles to a function with excellent performance (a const-return function).
+            record_precompile_statement(mi, 0.0, 0);
+        }
     }
     jl_atomic_store_release(&codeinst->inferred, inferred);
     jl_gc_wb(codeinst, inferred);
