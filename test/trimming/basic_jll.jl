@@ -1,5 +1,3 @@
-module MyApp
-
 using Libdl
 using Zstd_jll
 
@@ -11,7 +9,7 @@ function print_string(fptr::Ptr{Cvoid})
     println(Core.stdout, unsafe_string(ccall(fptr, Cstring, ())))
 end
 
-Base.@ccallable function main()::Cint
+function @main(args::Vector{String})::Cint
     # Test the basic "Hello, world!"
     println(Core.stdout, "Julia! Hello, world!")
 
@@ -26,6 +24,4 @@ Base.@ccallable function main()::Cint
     ccall(cfunc, Cvoid, (Ptr{Cvoid},), fptr)
 
     return 0
-end
-
 end
