@@ -217,6 +217,7 @@ DevDocs = [
         "devdocs/functions.md",
         "devdocs/cartesian.md",
         "devdocs/meta.md",
+        "devdocs/jldoctests.md",
         "devdocs/subarrays.md",
         "devdocs/isbitsunionarrays.md",
         "devdocs/sysimg.md",
