@@ -671,7 +671,7 @@ JL_DLLEXPORT jl_value_t *jl_argument_datatype(jl_value_t *argt JL_PROPAGATES_ROO
 
 static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
 {
-    jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
+    jl_sym_t *globname = dv->name->singletonname;
     if (globname && dv->name->module) {
         jl_binding_t *b = jl_get_module_binding(dv->name->module, globname, 0);
         jl_value_t *bv = jl_get_latest_binding_value_if_resolved_and_const_debug_only(b);
@@ -683,7 +683,7 @@ static int is_globname_binding(jl_value_t *v, jl_datatype_t *dv) JL_NOTSAFEPOINT
 
 static int is_globfunction(jl_value_t *v, jl_datatype_t *dv, jl_sym_t **globname_out) JL_NOTSAFEPOINT
 {
-    jl_sym_t *globname = dv->name->mt != NULL ? dv->name->mt->name : NULL;
+    jl_sym_t *globname = dv->name->singletonname;
     *globname_out = globname;
     if (globname && !strchr(jl_symbol_name(globname), '#') && !strchr(jl_symbol_name(globname), '@')) {
         return 1;
@@ -813,6 +813,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (v == (jl_value_t*)jl_methtable_type) {
         n += jl_printf(out, "Core.MethodTable");
+    }
+    else if (v == (jl_value_t*)jl_methcache_type) {
+        n += jl_printf(out, "Core.MethodCache");
     }
     else if (v == (jl_value_t*)jl_any_type) {
         n += jl_printf(out, "Any");
@@ -996,6 +999,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (v == jl_nothing || (jl_nothing && (jl_value_t*)vt == jl_typeof(jl_nothing))) {
         n += jl_printf(out, "nothing");
+    }
+    else if (v == (jl_value_t*)jl_method_table) {
+        n += jl_printf(out, "Core._");
     }
     else if (vt == jl_string_type) {
         n += jl_static_show_string(out, jl_string_data(v), jl_string_len(v), 1);
@@ -1426,10 +1432,8 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
         return n;
     }
     if ((jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) &&
-            ((jl_datatype_t*)ftype)->name->mt &&
-            ((jl_datatype_t*)ftype)->name->mt != jl_type_type_mt &&
-            ((jl_datatype_t*)ftype)->name->mt != jl_nonfunction_mt) {
-        n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->mt->name);
+            !jl_is_type_type(ftype) && !jl_is_type_type((jl_value_t*)((jl_datatype_t*)ftype)->super)) { // aka !iskind
+        n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->singletonname);
     }
     else {
         n += jl_printf(s, "(::");

@@ -47,17 +47,16 @@ end
 add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo) = _add_edges_impl(edges, info)
 function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
     if !fully_covering(info)
-        # add legacy-style missing backedge info also
         exists = false
         for i in 2:length(edges)
-            if edges[i] === info.mt && edges[i-1] == info.atype
+            if edges[i] === Core._ && edges[i-1] == info.atype
                 exists = true
                 break
             end
         end
         if !exists
             push!(edges, info.atype)
-            push!(edges, info.mt)
+            push!(edges, Core._)
         end
     end
     nmatches = length(info.results)
