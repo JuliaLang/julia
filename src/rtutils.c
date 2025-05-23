@@ -827,7 +827,7 @@ static size_t jl_static_show_float(JL_STREAM *out, double v,
         // If no decimal point or exponent will be printed, we must add ".0"
         double ipart, fpart;
         fpart = modf(v, &ipart);
-        int dotzero = v == 0 || (fpart == 0.0 && ipart < 1e17);
+        int dotzero = v == 0 || (fpart == 0.0 && fabs(ipart) < 1e17);
         n += jl_printf(out, "%.17g%s", v, dotzero ? ".0" : "");
     }
     else if (vt == jl_float32_type) {

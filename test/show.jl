@@ -1582,10 +1582,14 @@ struct var"%X%" end  # Invalid name without '#'
             Float16(0.4893243538921085), Float32(0.4893243538921085), Float64(0.4893243538921085),
             floatmax(Float16),           floatmax(Float32),           floatmax(Float64),
             floatmin(Float16),           floatmin(Float32),           floatmin(Float64),
-            typemax(Float16),            typemax(Float32),            typemax(Float64),
-            typemin(Float16),            typemin(Float32),            typemin(Float64),
+            Inf16,                       Inf32,                       Inf,
+            -Inf16,                      -Inf32,                      -Inf,
             nextfloat(Float16(0)),       nextfloat(Float32(0)),       nextfloat(Float64(0)),
             NaN16,                       NaN32,                       NaN,
+            Float16(1e3),                1f7,                         1e16,
+            Float16(-1e3),               -1f7,                        -1e16,
+            Float16(1e4),                1f8,                         1e17,
+            Float16(-1e4),               -1f8,                        -1e17,
 
             # :var"" escaping rules differ from strings (#58484)
             :foo,
@@ -1597,6 +1601,12 @@ struct var"%X%" end  # Invalid name without '#'
             :+, :var"+-",
             :(=), :(:), :(::),  # Requires quoting
             Symbol("a\nb"),
+
+            Val(Float16(1.0)), Val(1f0),      Val(1.0),
+            Val(:abc),         Val(:(=)),     Val(:var"a\b"),
+
+            Val(1),       Val(Int8(1)),  Val(Int16(1)),  Val(Int32(1)),  Val(Int64(1)),  Val(Int128(1)),
+            Val(UInt(1)), Val(UInt8(1)), Val(UInt16(1)), Val(UInt32(1)), Val(UInt64(1)), Val(UInt128(1)),
 
             # BROKEN
             # Symbol("a\xffb"),
