@@ -1332,3 +1332,22 @@ let err_str
     err_str = @except_str f56325(1,2) MethodError
     @test occursin("The anonymous function", err_str)
 end
+
+@testset "FieldError with changing fields" begin
+    # https://discourse.julialang.org/t/better-error-message-for-modified-structs-in-julia-1-12/129265
+    module FieldErrorTest
+    struct Point end
+    p = Point()
+    end
+
+    err_str1 = @except_str FieldErrorTest.p.x FieldError
+    @test occursin("FieldErrorTest.Point", err_str1)
+
+    @eval FieldErrorTest struct Point{T}
+        x::T
+        y::T
+    end
+    err_str2 = @except_str FieldErrorTest.p.x FieldError
+    @test occursin("@world", err_str2)
+    @test occursin("FieldErrorTest.Point", err_str2)
+end
