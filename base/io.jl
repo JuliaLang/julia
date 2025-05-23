@@ -41,7 +41,7 @@ buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 """
     isopen(object)::Bool
 
-Determine whether an object, such as an IO or timer, is not yet closed.
+Determine whether an object, such as an IO or timer, is still open and hence active.
 
 See also: [`close`](@ref)
 
@@ -74,7 +74,7 @@ However, implementations should make sure that reading to or writing from a
 closed IO does not cause undefined behaviour.
 
 This function is generically defined to only `flush` the io. That allows
-wrapping IOs to close its underlying IO.
+wrapping IOs to close their underlying IOs.
 
 See also: [`isopen`](@ref)
 """
