@@ -95,7 +95,7 @@ _libklu_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcolamd, libb
 const libklu = LazyLibrary(_libklu_path; dependencies=_libklu_dependencies)
 
 if Sys.isfreebsd()
-    _libspqr_dependencies = LazyLibrary[libcholmod, libblastrampoline, libsuitesparseconfig, libcxx] # libcxxrt ?
+    _libspqr_dependencies = LazyLibrary[libcholmod, libblastrampoline, libsuitesparseconfig]
 elseif Sys.isapple()
     _libspqr_dependencies = LazyLibrary[libsuitesparseconfig, libcholmod, libblastrampoline]
 else

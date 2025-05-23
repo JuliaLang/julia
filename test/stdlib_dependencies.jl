@@ -87,6 +87,7 @@ function is_system_lib_freebsd(lib)
         "librt",
         "libutil",
         "libexecinfo",
+        "libcxxrt",
     ]
     return lib ∈ system_libs
 end
