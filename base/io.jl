@@ -73,9 +73,6 @@ normally, or read/write zero bytes, depending on the implementation.
 However, implementations should make sure that reading to or writing from a
 closed IO does not cause undefined behaviour.
 
-This function is generically defined to only `flush` the io. That allows
-wrapping IOs to close their underlying IOs.
-
 See also: [`isopen`](@ref)
 """
 function close end
