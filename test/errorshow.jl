@@ -1350,6 +1350,3 @@ let err_str
     err_str = @except_str f56325(1,2) MethodError
     @test occursin("The anonymous function", err_str)
 end
-
-
-
