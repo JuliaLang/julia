@@ -43,7 +43,7 @@ function get_deps_otool(lib_path::String)
 
     # Get rid of any self-referential links
     self_lib = strip_soversion_macos(basename(lib_path))
-    libs = filter(l -> l != self_lib, libs)
+    libs = filter(!=(self_lib), libs)
     return libs
 end
 
@@ -98,7 +98,7 @@ function get_deps_readelf(lib_path::String)
 
     # Only keep `(NEEDED)` lines
     needed_str = Sys.isfreebsd() ? "NEEDED" : "(NEEDED)"
-    libs = filter(l -> occursin(needed_str, l), libs)
+    libs = filter(contains(needed_str), libs)
 
     # Grab the SONAME from "Shared library: [$SONAME]"
     libs = map(libs) do lib
