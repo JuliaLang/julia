@@ -1018,7 +1018,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "#<intrinsic #%d %s>", f, jl_intrinsic_name(f));
     }
     else if (vt == jl_long_type) {
-        // Avoid unecessary Int64(x)/Int32(x)
+        // Avoid unnecessary Int64(x)/Int32(x)
         n += jl_printf(out, "%" PRIdPTR, *(intptr_t*)v);
     }
     else if (vt == jl_int64_type) {
