@@ -2682,17 +2682,12 @@ static jl_cgval_t convert_julia_type(jl_codectx_t &ctx, const jl_cgval_t &v, jl_
     return jl_cgval_t(v, typ, new_tindex);
 }
 
-std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &context, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &context,
+                                              const DataLayout &DL, const Triple &triple,
+                                              bool toplevel) JL_NOTSAFEPOINT
 {
     ++ModulesCreated;
     auto m = std::make_unique<Module>(name, context);
-    // According to clang darwin above 10.10 supports dwarfv4
-    if (!m->getModuleFlag("Dwarf Version")) {
-        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
-    }
-    if (!m->getModuleFlag("Debug Info Version"))
-        m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
-            llvm::DEBUG_METADATA_VERSION);
     m->setDataLayout(DL);
     m->setTargetTriple(triple.str());
 
@@ -2703,9 +2698,19 @@ std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &conte
         m->setOverrideStackAlignment(16);
     }
 
+    // when this is a toplevel module, add additional flags.
+    // otherwise, these are inherited from the parent module when linking.
+    if (toplevel) {
+        // According to clang darwin above 10.10 supports dwarfv4
+        m->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 4);
+        m->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                         llvm::DEBUG_METADATA_VERSION);
+
 #if defined(JL_DEBUG_BUILD)
-    m->setStackProtectorGuard("global");
+        m->setStackProtectorGuard("global");
 #endif
+    }
+
     return m;
 }
 
