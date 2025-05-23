@@ -189,13 +189,13 @@ end
 
 default_is_code_macro(fcn) = startswith(string(fcn), "code_")
 
-function gen_call_with_extracted_types(__module__, fcn, ex0, kws=Expr[]; is_code_macro = default_is_code_macro(fcn))
+function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_code_macro = default_is_code_macro(fcn))
     if isexpr(ex0, :ref)
         ex0 = replace_ref_begin_end!(ex0)
     end
     # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
     if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
-        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], Expr[]; is_code_macro)
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], kws; is_code_macro)
     end
     where_params = nothing
     if isa(ex0, Expr)
