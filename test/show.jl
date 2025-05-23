@@ -1600,7 +1600,7 @@ struct var"%X%" end  # Invalid name without '#'
 
             # BROKEN
             # Symbol("a\xffb"),
-            # User-defined primtive types
+            # User-defined primitive types
             # Non-canonical NaNs
             # BFloat16
         )
