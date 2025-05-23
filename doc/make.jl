@@ -8,6 +8,10 @@ push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
 using Pkg
 Pkg.instantiate()
 
+if "deps" in ARGS
+    exit()
+end
+
 using Documenter
 import LibGit2
 
