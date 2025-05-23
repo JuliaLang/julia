@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 export threadid, nthreads, @threads, @spawn,
-       threadpool, nthreadpools
+       threadpool, nthreadpools, maxthreadid
 
 public Condition, threadpoolsize, ngcthreads
 
