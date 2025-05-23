@@ -91,6 +91,7 @@ end
 
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])
+    unsafe_string(p::Cstring)
 
 Copy a string from the address of a C-style (NUL-terminated) string encoded as UTF-8.
 (The pointer can be safely freed afterwards.) If `length` is specified
