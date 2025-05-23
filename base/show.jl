@@ -3225,8 +3225,8 @@ summary(io::IO, f::Function) = show(io, MIME"text/plain"(), f)
     Base.showarg(io::IO, x, toplevel)
 
 Show the quasi-type of `x` where quasi-type is the type of `x` or an expression (possibly
-containing quasi-types) that would generate an object of the same type as `x`, whichever is
-shorter.
+containing quasi-types) that would generate an object of the same type as `x`. The shorter
+of these two options is typically used.
 
 This function is used by summary to display type information in terms of sequences of
 function calls on objects.
