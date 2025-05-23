@@ -203,6 +203,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_co
     end
     if isa(ex0, Expr)
         if ex0.head === :do && isexpr(get(ex0.args, 1, nothing), :call)
+            # Normalize `f(args...) do ... end` calls to `f(do_anonymous_function, args...)`
             if length(ex0.args) != 2
                 return Expr(:call, :error, "ill-formed do call")
             end
@@ -223,7 +224,8 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_co
                 $(gen_call_with_extracted_types(__module__, fcn, :($dotfuncname($(args...))), kws; is_code_macro))
             end
         elseif isexpr(ex0, :.) && !is_code_macro
-            fully_qualified_symbol = true # of the form A.B.C.D
+            # First investigate whether `ex0` has the form A.B.C.D.
+            fully_qualified_symbol = true
             ex1 = ex0
             while ex1 isa Expr && ex1.head === :.
                 fully_qualified_symbol = (length(ex1.args) == 2 &&
