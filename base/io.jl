@@ -78,10 +78,7 @@ wrapping IOs to close their underlying IOs.
 
 See also: [`isopen`](@ref)
 """
-function close(io::IO)
-    flush(io)
-    nothing
-end
+function close end
 
 """
     closewrite(stream)
