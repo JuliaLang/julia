@@ -703,7 +703,7 @@ let oldout = stdout, olderr = stderr
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123.0\"C\"\n"
         @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
@@ -1570,8 +1570,41 @@ struct var"%X%" end  # Invalid name without '#'
             typeof(+),
             var"#f#",
             typeof(var"#f#"),
+
+            # Integers should round-trip (#52677)
+            1, UInt(1),
+            Int8(1),  Int16(1),  Int32(1),  Int64(1),
+            UInt8(1), UInt16(1), UInt32(1), UInt64(1),
+
+            # Float round-trip
+            Float16(1),                  Float32(1),                  Float64(1),
+            Float16(1.5),                Float32(1.5),                Float64(1.5),
+            Float16(0.4893243538921085), Float32(0.4893243538921085), Float64(0.4893243538921085),
+            floatmax(Float16),           floatmax(Float32),           floatmax(Float64),
+            floatmin(Float16),           floatmin(Float32),           floatmin(Float64),
+            typemax(Float16),            typemax(Float32),            typemax(Float64),
+            typemin(Float16),            typemin(Float32),            typemin(Float64),
+            nextfloat(Float16(0)),       nextfloat(Float32(0)),       nextfloat(Float64(0)),
+            NaN16,                       NaN32,                       NaN,
+
+            # :var"" escaping rules differ from strings (#58484)
+            :foo,
+            :var"bar baz",
+            :var"a $b",         # No escaping for $ in raw string
+            :var"a\b",          # No escaping for backslashes in middle
+            :var"a\\",          # Backslashes must be escaped at the end
+            :var"\"",
+            :+, :var"+-",
+            :(=), :(:), :(::),  # Requires quoting
+            Symbol("a\nb"),
+
+            # BROKEN
+            # Symbol("a\xffb"),
+            # User-defined primtive types
+            # Non-canonical NaNs
+            # BFloat16
         )
-        @test v == eval(Meta.parse(static_shown(v)))
+        @test v === eval(Meta.parse(static_shown(v)))
     end
 end
 
