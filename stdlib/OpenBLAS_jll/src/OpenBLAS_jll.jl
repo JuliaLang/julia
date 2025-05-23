@@ -29,18 +29,14 @@ else
     const _libopenblas_path = BundledLazyLibraryPath(string("libopenblas", libsuffix, ".so"))
 end
 
+_libopenblas_dependencies = LazyLibrary[libgfortran]
 if Sys.isapple()
-    _libopenblas_dependencies = LazyLibrary[libgfortran]
     if isdefined(CompilerSupportLibraries_jll, :libquadmath)
         push!(_libopenblas_dependencies, CompilerSupportLibraries_jll.libquadmath)
     end
     if Sys.ARCH != :aarch64
         push!(_libopenblas_dependencies, CompilerSupportLibraries_jll.libgcc_s)
     end
-elseif Sys.isfreebsd()
-    _libopenblas_dependencies = LazyLibrary[]
-else
-    _libopenblas_dependencies = LazyLibrary[libgfortran]
 end
 const libopenblas = LazyLibrary(_libopenblas_path, dependencies=_libopenblas_dependencies)
 

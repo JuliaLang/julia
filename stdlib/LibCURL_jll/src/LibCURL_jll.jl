@@ -19,13 +19,9 @@ const LIBPATH_list = String[]
 artifact_dir::String = ""
 libcurl_path::String = ""
 
-if Sys.isfreebsd()
-    _libcurl_dependencies = LazyLibrary[]
-else
-    _libcurl_dependencies = LazyLibrary[libz, libnghttp2, libssh2]
-    if !(Sys.iswindows() || Sys.isapple())
-        append!(_libcurl_dependencies, [libssl, libcrypto])
-    end
+_libcurl_dependencies = LazyLibrary[libz, libnghttp2, libssh2]
+if !(Sys.iswindows() || Sys.isapple())
+    append!(_libcurl_dependencies, [libssl, libcrypto])
 end
 
 if Sys.iswindows()

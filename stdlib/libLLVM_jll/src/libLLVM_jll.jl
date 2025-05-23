@@ -24,7 +24,7 @@ else
 end
 
 if Sys.isfreebsd()
-    _libLLVM_dependencies = LazyLibrary[libzstd]
+    _libLLVM_dependencies = LazyLibrary[libz, libzstd, libcxx, libgcc_s] # libcxxrt ?
 elseif Sys.isapple()
     _libLLVM_dependencies = LazyLibrary[libz, libzstd]
 else

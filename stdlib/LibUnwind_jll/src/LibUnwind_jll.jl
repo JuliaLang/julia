@@ -18,10 +18,11 @@ artifact_dir::String = ""
 libunwind_path::String = ""
 
 const _libunwind_path = BundledLazyLibraryPath("libunwind.so.8")
-_libunwind_dependencies = if Sys.isfreebsd()
-    LazyLibrary[]
+
+if Sys.isfreebsd()
+    _libunwind_dependencies = LazyLibrary[libz]
 else
-    LazyLibrary[libgcc_s, libz]
+    _libunwind_dependencies = LazyLibrary[libgcc_s, libz]
 end
 const libunwind = LazyLibrary(_libunwind_path, dependencies=_libunwind_dependencies)
 

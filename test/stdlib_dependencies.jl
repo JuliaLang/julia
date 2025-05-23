@@ -78,6 +78,19 @@ function is_system_lib_linux(lib)
     return lib ∈ system_libs
 end
 
+function is_system_lib_freebsd(lib)
+    system_libs = [
+        "libc",
+        "libm",
+        "libthr",      # primary threading library
+        "libpthread",  # alias kept for compatibility
+        "librt",
+        "libutil",
+        "libexecinfo",
+    ]
+    return lib ∈ system_libs
+end
+
 function get_deps_readelf(lib_path::String)
     # Split into lines
     libs = split(readchomp(`readelf -d $(lib_path)`), "\n")
@@ -111,7 +124,7 @@ if Sys.islinux() || Sys.isfreebsd()
     end
     get_deps = get_deps_readelf
     strip_soversion = strip_soversion_linux
-    is_system_lib = is_system_lib_linux
+    is_system_lib = Sys.islinux() ? is_system_lib_linux : is_system_lib_freebsd
 elseif Sys.isapple()
     # On macOS, we need `otool` available
     if Sys.which("otool") === nothing

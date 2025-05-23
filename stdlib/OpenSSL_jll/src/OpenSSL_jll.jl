@@ -34,11 +34,7 @@ end
 
 const libcrypto = LazyLibrary(_libcrypto_path)
 
-if Sys.isfreebsd()
-    _libssl_dependencies = LazyLibrary[]
-else
-    _libssl_dependencies = LazyLibrary[libcrypto]
-end
+_libssl_dependencies = LazyLibrary[libcrypto]
 const libssl = LazyLibrary(_libssl_path, dependencies=_libssl_dependencies)
 
 function eager_mode()

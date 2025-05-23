@@ -30,8 +30,6 @@ const libgmp = LazyLibrary(_libgmp_path)
 
 if Sys.isapple()
     _libgmpxx_dependencies = LazyLibrary[libgmp]
-elseif Sys.isfreebsd()
-    _libgmpxx_dependencies = LazyLibrary[]
 else
     _libgmpxx_dependencies = LazyLibrary[libgmp, libstdcxx, libgcc_s]
 end

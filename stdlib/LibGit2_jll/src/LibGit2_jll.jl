@@ -27,13 +27,7 @@ else
     const _libgit2_path = BundledLazyLibraryPath("libgit2.so.1.9")
 end
 
-if Sys.isfreebsd()
-    _libgit2_dependencies = LazyLibrary[]
-elseif Sys.islinux()
-    _libgit2_dependencies = LazyLibrary[libssh2, libssl, libcrypto]
-else
-    _libgit2_dependencies = LazyLibrary[libssh2]
-end
+_libgit2_dependencies = LazyLibrary[libssh2]
 const libgit2 = LazyLibrary(_libgit2_path, dependencies=_libgit2_dependencies)
 
 function eager_mode()

@@ -22,11 +22,7 @@ else
     const _libmpfr_path = BundledLazyLibraryPath("libmpfr.so.6")
 end
 
-if Sys.isfreebsd()
-    _libmpfr_dependencies = LazyLibrary[]
-else
-    _libmpfr_dependencies = LazyLibrary[libgmp]
-end
+_libmpfr_dependencies = LazyLibrary[libgmp]
 
 const libmpfr = LazyLibrary(_libmpfr_path, dependencies=_libmpfr_dependencies)
 
