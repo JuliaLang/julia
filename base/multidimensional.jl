@@ -2078,7 +2078,7 @@ function hash_shaped(A, h::UInt)
             h = hash(elt, h)
         end
         return h
-    elseif len < 65536
+    elseif len < 32768
         # separate accumulator streams, unrolled
         @nexprs 8 i -> p_i = h
         n  = 1
