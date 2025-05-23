@@ -61,7 +61,7 @@ struct JLOptions
     permalloc_pkgimg::Int8
     heap_size_hint::UInt64
     hard_heap_limit::UInt64
-    upper_bound_for_heap_target_increment::UInt64
+    heap_target_increment::UInt64
     trace_compile_timing::Int8
     trim::Int8
     task_metrics::Int8

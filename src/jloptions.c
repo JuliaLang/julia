@@ -152,8 +152,8 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // strip-ir
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
-                        UINT64_MAX, // hard-heap-limit
-                        UINT64_MAX, // upper-bound-for-heap-target-increment
+                        GC_HARD_HEAP_LIMIT_FOR_UNSET_FLAG, // hard-heap-limit
+                        GC_HEAP_TARGET_INCREMENT_FOR_UNSET_FLAG, // heap-target-increment
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
                         0, // task_metrics
@@ -298,7 +298,7 @@ static const char opts[]  =
     "                                               number of bytes, optionally in units of: B, K (kibibytes),\n"
     "                                               M (mebibytes), G (gibibytes), T (tebibytes), or % (percentage\n"
     "                                               of physical memory).\n\n"
-    " --upper-bound-for-heap-target-increment=<size>[<unit>] Set an upper bound on how much the heap target\n"
+    " --heap-target-increment=<size>[<unit>] Set an upper bound on how much the heap target\n"
     "                                               can increase between consecutive collections. The value may be\n"
     "                                               specified as a number of bytes, optionally in units of: B,\n"
     "                                               K (kibibytes), M (mebibytes), G (gibibytes), T (tebibytes),\n"
@@ -396,7 +396,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_ir,
            opt_heap_size_hint,
            opt_hard_heap_limit,
-           opt_upper_bound_for_heap_target_increment,
+           opt_heap_target_increment,
            opt_gc_threads,
            opt_permalloc_pkgimg,
            opt_trim,
@@ -469,7 +469,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
         { "hard-heap-limit", required_argument, 0, opt_hard_heap_limit },
-        { "upper-bound-for-heap-target-increment", required_argument, 0, opt_upper_bound_for_heap_target_increment },
+        { "heap-target-increment", required_argument, 0, opt_heap_target_increment },
         { "trim",  optional_argument, 0, opt_trim },
         { 0, 0, 0, 0 }
     };
@@ -988,14 +988,14 @@ restart_switch:
         case opt_hard_heap_limit:
             if (optarg != NULL)
                 jl_options.hard_heap_limit = parse_heap_size_option(optarg, "--hard-heap-limit=<size>[<unit>]");
-            if (jl_options.hard_heap_limit == 0 || jl_options.hard_heap_limit == UINT64_MAX) // UINT64_MAX is a special value for "no limit specified"
+            if (jl_options.hard_heap_limit == 0 || jl_options.hard_heap_limit == GC_HARD_HEAP_LIMIT_FOR_UNSET_FLAG)
                 jl_errorf("julia: invalid memory size specified in --hard-heap-limit=<size>[<unit>]");
             break;
-        case opt_upper_bound_for_heap_target_increment:
+        case opt_heap_target_increment:
             if (optarg != NULL)
-                jl_options.upper_bound_for_heap_target_increment = parse_heap_size_option(optarg, "--upper-bound-for-heap-target-increment=<size>[<unit>]");
-            if (jl_options.upper_bound_for_heap_target_increment == 0 || jl_options.upper_bound_for_heap_target_increment == UINT64_MAX) // UINT64_MAX is a special value for "no limit specified"
-                jl_errorf("julia: invalid memory size specified in --upper-bound-for-heap-target-increment=<size>[<unit>]");
+                jl_options.heap_target_increment = parse_heap_size_option(optarg, "--heap-target-increment=<size>[<unit>]");
+            if (jl_options.heap_target_increment == 0 || jl_options.heap_target_increment == GC_HEAP_TARGET_INCREMENT_FOR_UNSET_FLAG)
+                jl_errorf("julia: invalid memory size specified in --heap-target-increment=<size>[<unit>]");
             break;
 #endif
         case opt_gc_threads:
