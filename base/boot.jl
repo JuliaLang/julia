@@ -370,7 +370,6 @@ struct ErrorException <: Exception
     msg::AbstractString
 end
 
-import .Intrinsics: ult_int
 struct Summarized
     desc::Union{Nothing,String}
     size::Union{Nothing, Tuple{Vararg{Int}}}
