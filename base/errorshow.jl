@@ -57,7 +57,7 @@ function showerror(io::IO, ex::BoundsError)
     if isdefined(ex, :a)
         print(io, ": attempt to access ")
         a = ex.a
-        if isa(a, Core.Summarized)
+        if isa(a, Core.BoundsErrorSummary)
             if isnothing(a.desc)
                 if length(a.size) == 1
                     print(io, only(a.size))
