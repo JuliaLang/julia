@@ -19,6 +19,34 @@ todouble(sign, exp, mant) = Core.bitcast(Float64, (UInt64(sign) << 63) | (UInt64
     @test Ryu.writeshortest(-Inf) == "-Inf"
 end
 
+@testset "OutputOptions" begin
+    # plus
+    @test "+1" == Base.Ryu.writeshortest(1.0, true, false, false)
+    @test "-1" == Base.Ryu.writeshortest(-1.0, true, false, false)
+
+    # space
+    @test " 1" == Ryu.writeshortest(1.0, false,  true,  false)
+
+    # hash
+    @test "0" == Ryu.writeshortest(0.0, false, false, false)
+
+    # precision
+    @test "9.9900" == Ryu.writeshortest(9.99, false, false, true, 5)
+    @test "1." == Ryu.writeshortest(1.0, false, false, true, 1)
+
+    # expchar
+    @test "1.0d6" == Ryu.writeshortest(1e6, false, false, true, -1, UInt8('d'))
+
+    # padexp
+    @test "3.0e+08" == Ryu.writeshortest(3e8, false, false, true, -1, UInt8('e'), true)
+
+    # decchar
+    @test "3,14" == Ryu.writeshortest(3.14, false, false, true, -1, UInt8('e'), false, UInt8(','))
+
+    # compact
+    @test "0.333333" == Ryu.writeshortest(1/3, false, false, true, -1, UInt8('e'), false, UInt8('.'), false, true)
+end
+
 @testset "SwitchToSubnormal" begin
     @test "2.2250738585072014e-308" == Ryu.writeshortest(2.2250738585072014e-308)
 end
@@ -241,6 +269,17 @@ end # Float64
     @test "-Inf" == Ryu.writeshortest(Float32(-Inf))
 end
 
+@testset "OutputOptions" begin
+    # typed
+    @test "1.0f0" == Ryu.writeshortest(Float32(1.0), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "Inf32" == Ryu.writeshortest(Float32(Inf), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "NaN32" == Ryu.writeshortest(Float32(NaN), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "3.14f0" == Ryu.writeshortest(Float32(3.14), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+
+    # typed and no-hash
+    @test "1f0" == Ryu.writeshortest(1.0f0, false, false, false, -1, UInt8('e'), false, UInt8('.'), true)
+end
+
 @testset "SwitchToSubnormal" begin
     @test "1.1754944e-38" == Ryu.writeshortest(1.1754944f-38)
 end
@@ -339,6 +378,17 @@ end # Float32
     @test "NaN" == Ryu.writeshortest(Float16(NaN))
     @test "Inf" == Ryu.writeshortest(Float16(Inf))
     @test "-Inf" == Ryu.writeshortest(Float16(-Inf))
+end
+
+@testset "OutputOptions" begin
+    # typed
+    @test "Float16(1.0)" == Ryu.writeshortest(Float16(1.0), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "Inf16" == Ryu.writeshortest(Float16(Inf), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "NaN16" == Ryu.writeshortest(Float16(NaN), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+    @test "Float16(3.14)" == Ryu.writeshortest(Float16(3.14), false, false, true, -1, UInt8('e'), false, UInt8('.'), true)
+
+    # typed and no-hash
+    @test "Float16(1)" == Ryu.writeshortest(Float16(1.0), false, false, false, -1, UInt8('e'), false, UInt8('.'), true)
 end
 
 let x=floatmin(Float16)
