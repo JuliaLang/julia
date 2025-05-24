@@ -193,15 +193,15 @@ function merge_namedtuple_types(nt::Type{<:NamedTuple}, nts::Type{<:NamedTuple}.
     NamedTuple{Tuple(names), Tuple{types...}}
 end
 
-default_is_code_macro(fcn) = startswith(string(fcn), "code_")
+is_code_macro(fcn) = startswith(string(fcn), "code_")
 
-function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_code_macro = default_is_code_macro(fcn))
+function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_source_reflection = !is_code_macro(fcn), supports_binding_reflection = false)
     if isexpr(ex0, :ref)
         ex0 = replace_ref_begin_end!(ex0)
     end
     # assignments get bypassed: @edit a = f(x) <=> @edit f(x)
     if isa(ex0, Expr) && ex0.head == :(=) && isa(ex0.args[1], Symbol) && isempty(kws)
-        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], kws; is_code_macro)
+        return gen_call_with_extracted_types(__module__, fcn, ex0.args[2], kws; is_source_reflection, supports_binding_reflection)
     end
     where_params = nothing
     if isa(ex0, Expr)
@@ -218,8 +218,10 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_co
             insert!(args, (isnothing(i) ? 2 : 1+i::Int), ex0.args[2])
             ex0 = Expr(:call, args...)
         end
-        if is_broadcasting_expr(ex0) && is_code_macro
-            # Manually wrap a dot call in a function
+        if is_broadcasting_expr(ex0) && !is_source_reflection
+            # Manually wrap a dot call in a function.
+            # We don't do that if `fcn` reflects into the source,
+            # because that destroys provenance information.
             args = Any[]
             ex, i = recursive_dotcalls!(copy(ex0), args)
             xargs = [Symbol('x', j) for j in 1:i-1]
@@ -227,10 +229,15 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_co
             dotfuncdef = :(local $dotfuncname($(xargs...)) = $ex)
             return quote
                 $(esc(dotfuncdef))
-                $(gen_call_with_extracted_types(__module__, fcn, :($dotfuncname($(args...))), kws; is_code_macro))
+                $(gen_call_with_extracted_types(__module__, fcn, :($dotfuncname($(args...))), kws; is_source_reflection, supports_binding_reflection))
             end
-        elseif isexpr(ex0, :.) && !is_code_macro
-            # First investigate whether `ex0` has the form A.B.C.D.
+        elseif isexpr(ex0, :.) && is_source_reflection
+            # If `ex0` has the form A.B (or some chain A.B.C.D) and `fcn` reflects into the source,
+            # `A` (or `A.B.C`) may be a module, in which case `fcn` is probably more interested in
+            # the binding rather than the `getproperty` call.
+            # If binding reflection is not supported, we generate an error; `getproperty(::Module, field)`
+            # is not going to be interesting to reflect into, so best to allow future non-breaking support
+            # for binding reflection in case the macro may eventually support that.
             fully_qualified_symbol = true
             ex1 = ex0
             while ex1 isa Expr && ex1.head === :.
@@ -242,18 +249,19 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_co
             end
             fully_qualified_symbol &= ex1 isa Symbol
             if fully_qualified_symbol || isexpr(ex1, :(::), 1)
-                getproperty_ex = :($(fcn)(Base.getproperty, $(typesof_expr(ex0.args, where_params))))
-                isexpr(ex0.args[1], :(::), 1) && return getproperty_ex
+                call_reflection = :($(fcn)(Base.getproperty, $(typesof_expr(ex0.args, where_params))))
+                isexpr(ex0.args[1], :(::), 1) && return call_reflection
+                if supports_binding_reflection
+                    binding_reflection = :($fcn(arg1, $(ex0.args[2])))
+                else
+                    binding_reflection = :(error("expression is not a function call"))
+                end
                 return quote
                     local arg1 = $(esc(ex0.args[1]))
                     if isa(arg1, Module)
-                        $(if string(fcn) == "which"
-                                :(which(arg1, $(ex0.args[2])))
-                            else
-                                :(error("expression is not a function call"))
-                            end)
+                        $binding_reflection
                     else
-                        $getproperty_ex
+                        $call_reflection
                     end
                 end
             end
@@ -355,7 +363,7 @@ Same behaviour as `gen_call_with_extracted_types` except that keyword arguments
 of the form "foo=bar" are passed on to the called function as well.
 The keyword arguments must be given before the mandatory argument.
 """
-function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; is_code_macro = default_is_code_macro(fcn))
+function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; is_source_reflection = !is_code_macro(fcn), supports_binding_reflection = false)
     kws = Expr[]
     arg = ex0[end] # Mandatory argument
     for i in 1:length(ex0)-1
@@ -369,13 +377,15 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; is_code_
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
     end
-    return gen_call_with_extracted_types(__module__, fcn, arg, kws; is_code_macro)
+    return gen_call_with_extracted_types(__module__, fcn, arg, kws; is_source_reflection, supports_binding_reflection)
 end
 
 for fname in [:which, :less, :edit, :functionloc]
     @eval begin
         macro ($fname)(ex0)
-            gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0, Expr[]; is_code_macro = false)
+            gen_call_with_extracted_types(__module__, $(Expr(:quote, fname)), ex0, Expr[];
+                                          is_source_reflection = true,
+                                          supports_binding_reflection = $(fname === :which))
         end
     end
 end
@@ -388,13 +398,13 @@ end
 for fname in [:code_warntype, :code_llvm, :code_native,
               :infer_return_type, :infer_effects, :infer_exception_type]
     @eval macro ($fname)(ex0...)
-        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_code_macro = true)
+        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_source_reflection = false)
     end
 end
 
 for fname in [:code_typed, :code_lowered, :code_ircode]
     @eval macro ($fname)(ex0...)
-        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_code_macro = true)
+        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_source_reflection = false)
         quote
             local results = $thecall
             length(results) == 1 ? results[1] : results
