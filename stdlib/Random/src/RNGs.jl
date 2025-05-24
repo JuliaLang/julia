@@ -306,3 +306,61 @@ function hash_seed(str::AbstractString, ctx::SHA_CTX)
     end
     SHA.update!(ctx, (0x05,))
 end
+
+
+## forking
+
+"""
+    Random.fork(rng::AbstractRNG)::typeof(rng)
+    Random.fork(rng::AbstractRNG, dims...)::Array{typeof(rng)}
+
+Return a new independent RNG derived from `rng`, of the same type.
+When `dims` is specified (as integers or a tuple of integers),
+return an array of independent RNGs.
+
+This is the recommended method to initialize reproducible RNG instances,
+especially in multi-threaded contexts, where race conditions must be avoided.
+For example:
+```julia
+function dotask(rng::Xoshiro)
+    num_subtasks = 10
+    rngs = Random.fork(rng, num_subtasks)
+    result = Vector(undef, num_subtasks)
+    Threads.@threads for i=1:num_subtasks
+        result[i] = dosubtask(i, rngs[i])
+    end
+    result
+end
+```
+Note that this function generally mutates its `rng` argument, so concurrent
+calls on the same `rng` from multiple threads are unsafe.
+
+!!! note
+    Currently, this function is only implemented for `Xoshiro`, where it uses
+    the same algorithm as when the task-local RNG
+    of a new task is created from the task-local RNG of the parent task.
+
+!!! compat "Julia 1.13"
+    This function requires Julia 1.13 or later.
+
+# Examples
+```jldoctest
+julia> x = Xoshiro(0)
+Xoshiro(0xdb2fa90498613fdf, 0x48d73dc42d195740, 0x8c49bc52dc8a77ea, 0x1911b814c02405e8, 0x22a21880af5dc689)
+
+julia> [x, Random.fork(x)] # x is mutated
+2-element Vector{Xoshiro}:
+ Xoshiro(0xdb2fa90498613fdf, 0x48d73dc42d195740, 0x8c49bc52dc8a77ea, 0x1911b814c02405e8, 0x26b589433d8074be)
+ Xoshiro(0x545f53b997598dfb, 0xac80f92d91bb35a5, 0xb6eb3382e8c409ca, 0xa9aa6968fbdd5e83, 0x26b589433d8074be)
+
+julia> Random.fork(x, 3)
+3-element Vector{Xoshiro}:
+ Xoshiro(0xfc86733bafa6df6d, 0x5ff051ecb5937fcf, 0x935c4e55a82ca686, 0xa57b44768cdb84e9, 0x845f4ebfc53d5497)
+ Xoshiro(0x9c49327a59542654, 0x7c2f821b7716e6b7, 0x586a3fe58fed92f7, 0x28bbf526c1aca281, 0x425e2dc6f55934e4)
+ Xoshiro(0xd5cbe598083243e0, 0xfba09a94aaf998af, 0xa674c207f3796c54, 0x084d4986ad49c4eb, 0x52a722b1a914a4b5)
+```
+"""
+fork
+
+fork(rng::AbstractRNG, dims::Dims) = typeof(rng)[fork(rng) for _=LinearIndices(dims)]
+fork(rng::AbstractRNG, d1::Integer, dims::Integer...) = fork(rng, Dims((d1, dims...)))
