@@ -74,6 +74,14 @@
 // GC_TIME prints time taken by each phase of GC
 // #define GC_TIME
 
+// GC_ENABLE_HIDDEN_CTRLS enables hidden options to control heap size and heap limit
+#define GC_ENABLE_HIDDEN_CTRLS
+#ifdef GC_ENABLE_HIDDEN_CTRLS
+// GC_ENABLE_HIDDEN_CTRLS will enable the --hard-heap-limit and --heap-target-increment flags
+#define GC_HARD_HEAP_LIMIT_FOR_UNSET_FLAG (UINT64_MAX)
+#define GC_HEAP_TARGET_INCREMENT_FOR_UNSET_FLAG (UINT64_MAX)
+#endif
+
 // pool allocator configuration options
 
 // GC_SMALL_PAGE allocates objects in 4k pages

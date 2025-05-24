@@ -3212,7 +3212,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t target_heap;
     const char *reason = ""; (void)reason; // for GC_TIME output stats
     old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
-    if (collection == JL_GC_AUTO) {
+    if (collection == JL_GC_AUTO && jl_options.hard_heap_limit == GC_HARD_HEAP_LIMIT_FOR_UNSET_FLAG) {
         // update any heuristics only when the user does not force the GC
         // but still update the timings, since GC was run and reset, even if it was too early
         uint64_t target_allocs = 0.0;
@@ -3292,6 +3292,25 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     else {
         target_heap = jl_atomic_load_relaxed(&gc_heap_stats.heap_target);
     }
+
+#ifdef GC_ENABLE_HIDDEN_CTRLS
+    // Kill the process if we are above the hard heap limit
+    if (heap_size > jl_options.hard_heap_limit) {
+        jl_errorf("Heap size of %zu bytes exceeds the hard limit of %zu bytes. "
+                  "Please increase the heap limit with `--hard-heap-limit`.",
+                  heap_size, jl_options.hard_heap_limit);
+    }
+    // Ignore heap limit computation from MemBalancer-like heuristics
+    // if the heap target increment goes above the value specified through
+    // `--heap-target-increment`.
+    // Note that if we reach this code, we can guarantee that the heap size
+    // is less than the hard limit, so there will be some room to grow the heap
+    // until the next GC without hitting the hard limit.
+    if (jl_options.heap_target_increment != GC_HARD_HEAP_LIMIT_FOR_UNSET_FLAG) {
+        target_heap = heap_size + jl_options.heap_target_increment;
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
+    }
+#endif
 
     double old_ratio = (double)promoted_bytes/(double)heap_size;
     if (heap_size > user_max) {
@@ -3690,6 +3709,9 @@ void jl_gc_init(void)
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
     jl_atomic_store_relaxed(&gc_heap_stats.heap_target, default_collect_interval);
+    if (jl_options.hard_heap_limit != GC_HARD_HEAP_LIMIT_FOR_UNSET_FLAG) {
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, jl_options.hard_heap_limit);
+    }
     gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
@@ -3703,7 +3725,7 @@ void jl_gc_init(void)
     if (jl_options.heap_size_hint == 0) {
         char *cp = getenv(HEAP_SIZE_HINT);
         if (cp)
-            hint = parse_heap_size_hint(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"");
+            hint = parse_heap_size_option(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"");
     }
 #ifdef _P64
     total_mem = uv_get_total_memory();
