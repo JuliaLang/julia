@@ -67,6 +67,8 @@ function repl_cmd(cmd, out)
         @static if !Sys.iswindows()
             if shell_name == "fish"
                 shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
+            elseif shell_name == "nu"
+                shell_escape_cmd = "$(shell_escape_posixly(cmd))"
             else
                 shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
             end
