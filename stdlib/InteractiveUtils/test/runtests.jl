@@ -521,6 +521,13 @@ a14637 = A14637(0)
 @test (@code_typed optimize=false [1, 2.0] .= 1 .+ round.(base = 1, [1, 3]; digits = 3))[2] == Vector{Float64}
 @test (@code_typed optimize=false [1] .+ [2])[2] == Vector{Int}
 @test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
+expansion = string(@macroexpand @code_typed optimize=false max.(Ref.([5, 6])...))
+@test contains(expansion, "(x1) =") # presence of wrapper function
+# Make sure broadcasts in nested arguments are not processed.
+v = Any[1]
+expansion = string(@macroexpand @code_typed v[1] = rand.(Ref(1)))
+@test contains(expansion, "Typeof(rand.(Ref(1)))")
+@test !contains(expansion, "(x1) =")
 
 # Issue # 45889
 @test !isempty(@code_typed 3 .+ 6)

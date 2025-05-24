@@ -61,7 +61,13 @@ The list `args` contains the original arguments that have been replaced.
 """
 function recursive_dotcalls!(ex, args, i=1)
     if is_broadcasting_expr(ex)
-        (start, branches) = is_broadcasting_assignment(ex) ? (1, ex.args) : isexpr(ex, :.) ? (1, ex.args[2].args) : (2, ex.args)
+        if is_broadcasting_assignment(ex)
+            (start, branches) = (1, ex.args)
+        elseif isexpr(ex, :.)
+            (start, branches) = (1, ex.args[2].args)
+        else
+            (start, branches) = (2, ex.args)
+        end
         for j in start:length(branches)::Int
             branch, i = recursive_dotcalls!(branches[j], args, i)
             branches[j] = branch
