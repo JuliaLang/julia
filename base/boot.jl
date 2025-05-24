@@ -373,7 +373,7 @@ end
 struct BoundsErrorSummary
     desc::Union{Nothing,String}
     size::Union{Nothing, Tuple{Vararg{Int}}}
-    atype::Type
+    atype::DataType
     function BoundsErrorSummary(a)
         # try to get a summary of `a` here now rather than capturing it for later inspection,
         # in order to allow compiler analyses or optimization passes to assume the invariant
