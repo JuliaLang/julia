@@ -35,8 +35,17 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     }
     JL_TYPECHK(new_opaque_closure, type, rt_lb);
     JL_TYPECHK(new_opaque_closure, type, rt_ub);
-    JL_TYPECHK(new_opaque_closure, method, source_);
-    jl_method_t *source = (jl_method_t*)source_;
+    jl_method_t *source = NULL;
+    jl_code_instance_t *ci = NULL;
+    jl_method_instance_t *mi = NULL;
+    if (jl_is_code_instance(source_)) {
+        ci = (jl_code_instance_t *)source_;
+        mi = jl_get_ci_mi(ci);
+        source = mi->def.method;
+    } else {
+        JL_TYPECHK(new_opaque_closure, method, source_);
+        source = (jl_method_t*)source_;
+    }
     if (!source->isva) {
         if (jl_is_va_tuple(argt))
             jl_error("Argument type tuple is vararg but method is not");
@@ -50,20 +59,20 @@ static jl_opaque_closure_t *new_opaque_closure(jl_tupletype_t *argt, jl_value_t 
     JL_GC_PUSH2(&sigtype, &selected_rt);
     sigtype = jl_argtype_with_function(captures, (jl_value_t*)argt);
 
-    jl_method_instance_t *mi = NULL;
-    if (source->source) {
-        mi = jl_specializations_get_linfo(source, sigtype, jl_emptysvec);
-    }
-    else {
-        mi = (jl_method_instance_t *)jl_atomic_load_relaxed(&source->specializations);
-        if (!jl_subtype(sigtype, mi->specTypes)) {
-            jl_error("sigtype mismatch in optimized opaque closure");
+    if (mi == NULL) {
+        if (source->source) {
+            mi = jl_specializations_get_linfo(source, sigtype, jl_emptysvec);
+        }
+        else {
+            mi = (jl_method_instance_t *)jl_atomic_load_relaxed(&source->specializations);
+            if (!jl_subtype(sigtype, mi->specTypes)) {
+                jl_error("sigtype mismatch in optimized opaque closure");
+            }
         }
     }
     jl_task_t *ct = jl_current_task;
     size_t world = ct->world_age;
-    jl_code_instance_t *ci = NULL;
-    if (do_compile) {
+    if (do_compile && (ci == NULL || jl_atomic_load_relaxed(&ci->invoke) == NULL)) {
         ci = jl_compile_method_internal(mi, world);
     }
 

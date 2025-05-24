@@ -56,6 +56,9 @@ static size_t get_max_varargs(
     if (may_increase != NULL)
         *may_increase = 0;
 
+    if (m->is_for_opaque_closure)
+        return UINT8_MAX; // FIXME
+
     if (m->max_varargs != UINT8_MAX)
         max_varargs = m->max_varargs;
     else if (kwmt != NULL && kwmt != jl_type_type_mt && kwmt != jl_nonfunction_mt && kwmt != jl_kwcall_mt) {

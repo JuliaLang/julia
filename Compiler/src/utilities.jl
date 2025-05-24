@@ -158,8 +158,12 @@ end
 
 function get_compileable_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return nothing
-    mt = ccall(:jl_method_get_table, Any, (Any,), method)
-    mt === nothing && return nothing
+    if method.is_for_opaque_closure
+        mt = nothing
+    else
+        mt = ccall(:jl_method_get_table, Any, (Any,), method)
+        mt === nothing && return nothing
+    end
     return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
         mt, atype, sparams, method, #=int return_if_compileable=#1)
 end

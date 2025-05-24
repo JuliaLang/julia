@@ -6130,7 +6130,7 @@ static void emit_stmtpos(jl_codectx_t &ctx, jl_value_t *expr, int ssaval_result)
     }
 }
 
-static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_method_t *closure_method, jl_tupletype_t *env_t, jl_tupletype_t *argt_typ, jl_value_t *rettype)
+static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_code_instance_t *ci, jl_tupletype_t *env_t, jl_tupletype_t *argt_typ, jl_value_t *rettype)
 {
     jl_svec_t *sig_args = NULL;
     jl_value_t *sigtype = NULL;
@@ -6144,19 +6144,9 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     }
     sigtype = jl_apply_tuple_type_v(jl_svec_data(sig_args), nsig);
 
-    jl_method_instance_t *mi;
-    jl_code_instance_t *ci;
-
-    if (closure_method->source) {
-        mi = jl_specializations_get_linfo(closure_method, sigtype, jl_emptysvec);
-        ci = (jl_code_instance_t*)jl_rettype_inferred_addr(mi, ctx.min_world, ctx.max_world);
-    }
-    else {
-        mi = (jl_method_instance_t*)jl_atomic_load_relaxed(&closure_method->specializations);
-        assert(jl_is_method_instance(mi));
-        ci = jl_atomic_load_relaxed(&mi->cache);
-    }
-    if (ci == NULL || (jl_value_t*)ci == jl_nothing || ci->rettype != rettype || !jl_egal(sigtype, mi->specTypes)) { // TODO: correctly handle the ABI conversion if rettype != ci->rettype
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    if (ci == NULL || (jl_value_t*)ci == jl_nothing || ci->rettype != rettype || !jl_egal(sigtype, mi->specTypes)) {
+        // TODO: handle the ABI conversion if rettype != ci->rettype
         JL_GC_POP();
         return std::make_pair((Function*)NULL, (Function*)NULL);
     }
@@ -6180,7 +6170,6 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
         else {
             proto_oc = it->second.decl->getName();
         }
-        need_to_emit = false;
     }
     else {
         if (specsig) {
@@ -6501,10 +6490,17 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         }
         bool can_optimize = argt.constant != NULL && lb.constant != NULL && ub.constant != NULL &&
             jl_is_tuple_type(argt.constant) &&
-            jl_is_type(lb.constant) && jl_is_type(ub.constant) && jl_is_method(source.constant) &&
-            ((jl_method_t*)source.constant)->nargs > 0 &&
-            jl_is_valid_oc_argtype((jl_tupletype_t*)argt.constant, (jl_method_t*)source.constant);
+            jl_is_type(lb.constant) && jl_is_type(ub.constant) && jl_is_code_instance(source.constant);
 
+        jl_code_instance_t *ci = nullptr;
+        jl_method_instance_t *mi = nullptr;
+        if (can_optimize) {
+            ci = (jl_code_instance_t *)source.constant;
+            mi = jl_get_ci_mi(ci);
+            if (!(jl_is_method(mi->def.value) && mi->def.method->nargs > 0 &&
+                  jl_is_valid_oc_argtype((jl_tupletype_t *)argt.constant, mi->def.method)))
+                can_optimize = false;
+        }
 
         if (can_optimize) {
             jl_value_t *closure_t = NULL;
@@ -6527,7 +6523,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
             if (jl_is_concrete_type(env_t)) {
                 jl_tupletype_t *argt_typ = (jl_tupletype_t*)argt.constant;
                 Function *F, *specF;
-                std::tie(F, specF) = get_oc_function(ctx, (jl_method_t*)source.constant, (jl_tupletype_t*)env_t, argt_typ, ub.constant);
+                std::tie(F, specF) = get_oc_function(ctx, (jl_code_instance_t*)source.constant, (jl_tupletype_t*)env_t, argt_typ, ub.constant);
                 if (F) {
                     jl_cgval_t jlcall_ptr = mark_julia_type(ctx, F, false, jl_voidpointer_type);
                     jl_cgval_t world_age = mark_julia_type(ctx, get_tls_world_age(ctx), false, jl_long_type);
@@ -6540,10 +6536,13 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
                     // TODO: Inline the env at the end of the opaque closure and generate a descriptor for GC
                     jl_cgval_t env = emit_new_struct(ctx, env_t, ncapture_args, ArrayRef<jl_cgval_t>(argv).drop_front(nargs-ncapture_args));
 
+                    jl_method_instance_t *mi = jl_get_ci_mi((jl_code_instance_t *)source.constant);
+                    jl_cgval_t method = mark_julia_const(ctx, mi->def.value);
+
                     jl_cgval_t closure_fields[5] = {
                         env,
                         world_age,
-                        source,
+                        method,
                         jlcall_ptr,
                         fptr
                     };

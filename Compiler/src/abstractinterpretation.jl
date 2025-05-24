@@ -3221,6 +3221,7 @@ function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, 
     effects = Effects() # TODO
     if length(e.args) >= 5
         ea = e.args
+        ea[5] isa CodeInstance && error("type inference data-flow error: tried to double infer a function")
         argtypes = collect_argtypes(interp, ea, sstate, sv)
         if argtypes === nothing
             rt = Bottom
@@ -3229,10 +3230,6 @@ function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, 
             mi = frame_instance(sv)
             rt = opaque_closure_tfunc(𝕃ᵢ, argtypes[1], argtypes[2], argtypes[3],
                 argtypes[5], argtypes[6:end], mi)
-            if ea[4] !== true && isa(rt, PartialOpaque)
-                rt = widenconst(rt)
-                # Propagation of PartialOpaque disabled
-            end
             if isa(rt, PartialOpaque) && isa(sv, InferenceState) && !call_result_unused(sv, sv.currpc)
                 # Infer this now so that the specialization is available to
                 # optimization.
@@ -3244,6 +3241,10 @@ function abstract_eval_new_opaque_closure(interp::AbstractInterpreter, e::Expr, 
                     sv.stmt_info[sv.currpc] = OpaqueClosureCreateInfo(callinfo)
                     nothing
                 end
+            end
+            if ea[4] !== true && isa(rt, PartialOpaque)
+                rt = widenconst(rt)
+                # Propagation of PartialOpaque disabled
             end
         end
     end

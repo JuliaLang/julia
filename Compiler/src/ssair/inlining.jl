@@ -741,7 +741,7 @@ function rewrite_apply_exprargs!(todo::Vector{Pair{Int,Any}},
                 call = thisarginfo.each[i]
                 new_stmt = Expr(:call, argexprs[2], def, state...)
                 state1 = insert_node!(ir, idx, NewInstruction(new_stmt, call.rt))
-                new_sig = call_sig(ir, new_stmt)::Signature
+                new_sig = call_sig(ir, new_stmt, istate)::Signature
                 new_info = call.info
                 # See if we can inline this call to `iterate`
                 handle_call!(todo, ir, state1.id, new_stmt, new_info, flag, new_sig, istate)
@@ -1057,8 +1057,22 @@ function inline_splatnew!(ir::IRCode, idx::Int, stmt::Expr, @nospecialize(rt), s
     return nothing
 end
 
-function call_sig(ir::IRCode, stmt::Expr)
+function call_sig(ir::IRCode, stmt::Expr, state::InliningState)
     isempty(stmt.args) && return nothing
+    if stmt.head === :new_opaque_closure
+        𝕃ₒ = optimizer_lattice(state.interp)
+        env = tuple_tfunc(𝕃ₒ, Any[
+            argextype(arg, ir)
+            for arg in stmt.args[6:end]
+        ])
+        ft = env
+        f = singleton_type(ft) # nothing
+        argtt, argtt_exact = instanceof_tfunc(argextype(stmt.args[1], ir))
+        argtt_exact || return nothing
+        has_free_typevars(env) && return nothing
+        argtypes = Any[env, argtt.parameters...]
+        return Signature(f, ft, argtypes)
+    end
     if stmt.head === :call
         offset = 1
     elseif stmt.head === :invoke
@@ -1198,25 +1212,6 @@ function invoke_signature(argtypes::Vector{Any})
     return rewrap_unionall(Tuple{ft, unwrap_unionall(argtyps).parameters...}, argtyps)
 end
 
-function narrow_opaque_closure!(ir::IRCode, stmt::Expr, @nospecialize(info::CallInfo), state::InliningState)
-    if isa(info, OpaqueClosureCreateInfo)
-        lbt = argextype(stmt.args[2], ir)
-        lb, exact = instanceof_tfunc(lbt)
-        exact || return
-        ubt = argextype(stmt.args[3], ir)
-        ub, exact = instanceof_tfunc(ubt)
-        exact || return
-        # Narrow opaque closure type
-        𝕃ₒ = optimizer_lattice(state.interp)
-        newT = widenconst(tmeet(𝕃ₒ, tmerge(𝕃ₒ, lb, info.unspec.rt), ub))
-        if newT != ub
-            # N.B.: Narrowing the ub requires a backedge on the mi whose type
-            # information we're using, since a change in that function may
-            # invalidate ub result.
-            stmt.args[3] = newT
-        end
-    end
-end
 
 # As a matter of convenience, this pass also computes effect-freenes.
 # For primitives, we do that right here. For proper calls, we will
@@ -1245,10 +1240,12 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
     if head !== :call
         if head === :splatnew
             inline_splatnew!(ir, idx, stmt, rt, state)
-        elseif head === :new_opaque_closure
-            narrow_opaque_closure!(ir, stmt, inst[:info], state)
         elseif head === :invoke
-            sig = call_sig(ir, stmt)
+            sig = call_sig(ir, stmt, state)
+            sig === nothing && return nothing
+            return stmt, sig
+        elseif head === :new_opaque_closure
+            sig = call_sig(ir, stmt, state)
             sig === nothing && return nothing
             return stmt, sig
         end
@@ -1256,7 +1253,7 @@ function process_simple!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, flag
         return nothing
     end
 
-    sig = call_sig(ir, stmt)
+    sig = call_sig(ir, stmt, state)
     sig === nothing && return nothing
 
     # Handle _apply_iterate
@@ -1514,6 +1511,43 @@ function handle_cases!(todo::Vector{Pair{Int,Any}}, ir::IRCode, idx::Int, stmt::
     return nothing
 end
 
+function handle_new_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
+    ir::IRCode, idx::Int, stmt::Expr, info::OpaqueClosureCreateInfo,
+    flag::UInt32, sig::Signature, state::InliningState)
+    # Insert the CodeInstance here
+
+    (; info, rt) = info.unspec
+
+    mi = specialize_method(info.match)
+    et = InliningEdgeTracker(state)
+    invoke_case = compileable_specialization(mi, Effects(), et, info, state)
+    invoke_case === nothing && return
+    !isa(invoke_case.invoke, CodeInstance) && return
+
+    lbt = argextype(stmt.args[2], ir)
+    lb, exact = instanceof_tfunc(lbt)
+    exact || return
+    ubt = argextype(stmt.args[3], ir)
+    ub, exact = instanceof_tfunc(ubt)
+    exact || return
+
+    # Narrow opaque closure type
+    𝕃ₒ = optimizer_lattice(state.interp)
+    newT = widenconst(tmeet(𝕃ₒ, tmerge(𝕃ₒ, lb, rt), ub))
+    if newT != ub
+        # N.B.: Narrowing the ub requires a backedge on the mi whose type
+        # information we're using, since a change in that function may
+        # invalidate ub result.
+        stmt.args[3] = newT
+    end
+
+    # Replace Method w/ CodeInstance
+    stmt.args[5] = invoke_case.invoke
+    ir[SSAValue(idx)][:stmt] = stmt
+
+    return
+end
+
 function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
     ir::IRCode, idx::Int, stmt::Expr, info::OpaqueClosureCallInfo,
     flag::UInt32, sig::Signature, state::InliningState)
@@ -1525,7 +1559,7 @@ function handle_opaque_closure_call!(todo::Vector{Pair{Int,Any}},
     elseif isa(result, ConcreteResult)
         item = concrete_result_item(result, info, state)
     elseif isa(result, SemiConcreteResult)
-        item = item = semiconcrete_result_item(result, info, flag, state)
+        item = semiconcrete_result_item(result, info, flag, state)
     else
         @assert result === nothing || result isa VolatileInferenceResult
         volatile_inf_result = result
@@ -1648,7 +1682,9 @@ function assemble_inline_todo!(ir::IRCode, state::InliningState)
         end
 
         # handle special cased builtins
-        if isa(info, OpaqueClosureCallInfo)
+        if isa(info, OpaqueClosureCreateInfo)
+            handle_new_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
+        elseif isa(info, OpaqueClosureCallInfo)
             handle_opaque_closure_call!(todo, ir, idx, stmt, info, flag, sig, state)
         elseif isa(info, ModifyOpInfo)
             handle_modifyop!_call!(ir, idx, stmt, info, state)
