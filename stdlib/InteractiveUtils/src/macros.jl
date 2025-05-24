@@ -219,7 +219,7 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             ex0 = Expr(:call, args...)
         end
         if is_broadcasting_expr(ex0) && !is_source_reflection
-            # Manually wrap a dot call in a function.
+            # Manually wrap top-level broadcasts in a function.
             # We don't do that if `fcn` reflects into the source,
             # because that destroys provenance information.
             args = Any[]
