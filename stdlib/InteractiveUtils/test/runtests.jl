@@ -373,6 +373,13 @@ end
     @test (@which round(1.2; digits = ::Float64, kwargs_1...)).name === :round
     @test (@which round(1.2; sigdigits = ::Int, kwargs_1...)).name === :round
     @test (@which round(1.2; kwargs_1..., kwargs_2..., base)).name === :round
+    @test (@code_typed optimize=false round.([1.0, 2.0]; digits = ::Int64))[2] == Vector{Float64}
+    @test (@code_typed optimize=false round.(::Vector{Float64}, base = 2; digits = ::Int64))[2] == Vector{Float64}
+    @test (@code_typed optimize=false round.(base = ::Int64, ::Vector{Float64}; digits = ::Int64))[2] == Vector{Float64}
+    @test (@code_typed optimize=false [1, 2] .= ::Int)[2] == Vector{Int}
+    @test (@code_typed optimize=false ::Vector{Int} .= ::Int)[2] == Vector{Int}
+    @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ ::Vector{Int})[2] == Vector{Float64}
+    @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ round.(base = ::Int, ::Vector{Int}; digits = 3))[2] == Vector{Float64}
 end
 
 module MacroTest
@@ -505,7 +512,22 @@ a14637 = A14637(0)
 @test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
 @test (@code_typed Ref.([1,2])[1].x)[2] == Int
 @test (@code_typed max.(Ref(true).x))[2] == Bool
+@test (@code_typed optimize=false round.([1.0, 2.0]; digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false round.([1.0, 2.0], base = 2; digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false round.(base = 2, [1.0, 2.0], digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false [1, 2] .= 2)[2] == Vector{Int}
+@test (@code_typed optimize=false [1, 2] .<<= 2)[2] == Vector{Int}
+@test (@code_typed optimize=false [1, 2.0] .= 1 .+ [2, 3])[2] == Vector{Float64}
+@test (@code_typed optimize=false [1, 2.0] .= 1 .+ round.(base = 1, [1, 3]; digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false [1] .+ [2])[2] == Vector{Int}
 @test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
+expansion = string(@macroexpand @code_typed optimize=false max.(Ref.([5, 6])...))
+@test contains(expansion, "(x1) =") # presence of wrapper function
+# Make sure broadcasts in nested arguments are not processed.
+v = Any[1]
+expansion = string(@macroexpand @code_typed v[1] = rand.(Ref(1)))
+@test contains(expansion, "Typeof(rand.(Ref(1)))")
+@test !contains(expansion, "(x1) =")
 
 # Issue # 45889
 @test !isempty(@code_typed 3 .+ 6)
@@ -619,7 +641,7 @@ end
     @test_throws err @code_lowered 1
     @test_throws err @code_lowered 1.0
 
-    @test_throws "is too complex" @code_lowered a .= 1 + 2
+    @test_throws "dot expressions are not lowered to a single function call" @which a .= 1 + 2
     @test_throws "invalid keyword argument syntax" @eval @which round(1; digits(3))
 end
 
