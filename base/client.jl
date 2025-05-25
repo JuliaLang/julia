@@ -65,6 +65,19 @@ end
 function prepare_shell_command(::ShellSpecification{false,:nu}, raw_string)
     return `nu -c $raw_string`
 end
+function prepare_shell_command(::ShellSpecification{true,:cmd}, cmd)
+    return Cmd(`cmd /s /c $(string('"', cmd, '"'))`; windows_verbatim=true)
+end
+function prepare_shell_command(::ShellSpecification{true,:powershell}, cmd)
+    return `powershell -Command $cmd`
+end
+function prepare_shell_command(::ShellSpecification{true,:pwsh}, cmd)
+    return `pwsh -Command $cmd`
+end
+function prepare_shell_command(::ShellSpecification{true,:busybox}, cmd)
+    return `busybox sh -c $(shell_escape_posixly(cmd))`
+end
+
 
 """
     needs_cmd(::ShellSpecification) -> Bool
@@ -83,13 +96,19 @@ Determines if a command is a `cd` command. Overload this for
 shells that have a different syntax for `cd`.
 """
 is_cd_cmd(::ShellSpecification, cmd::Cmd) = cmd.exec[1] == "cd"
-is_cd_cmd(::ShellSpecification, cmd::String) = false
+is_cd_cmd(::ShellSpecification{true,:cmd}, cmd::Cmd) = cmd.exec[1] in ("cd", "chdir")
+is_cd_cmd(::ShellSpecification{true,:powershell}, cmd::Cmd) = cmd.exec[1] ∈ ("Set-Location", "cd", "sl", "chdir")
+is_cd_cmd(::ShellSpecification{true,:pwsh}, cmd::Cmd) = cmd.exec[1] ∈ ("Set-Location", "cd", "sl", "chdir")
+is_cd_cmd(::ShellSpecification{true,:busybox}, cmd::Cmd) = cmd.exec[1] == "cd"
+is_cd_cmd(::ShellSpecification, cmd::String) = false  # Safe default
 is_cd_cmd(::ShellSpecification{false,:nu}, raw_string::String) = startswith(strip(raw_string), "cd")
 
 function pre_repl_cmd(raw_string, parsed, out)
-    shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
-    shell_name = Base.basename(shell[1])
-    shell_spec = ShellSpecification{@static(Sys.iswindows() ? true : false),Symbol(shell_name)}()
+    is_windows = Sys.iswindows()
+    shell_path = shell_split(get(ENV, "JULIA_SHELL", is_windows ? "cmd" : get(ENV, "SHELL", "/bin/sh")))
+    shell_name = Base.basename(shell_path[1])
+    normalized_shell_name = is_windows ? lowercase(splitext(shell_name)[1]) : shell_name
+    shell_spec = ShellSpecification{is_windows,Symbol(normalized_shell_name)}()
     if needs_cmd(shell_spec)
         cmd = Base.cmd_gen(parsed)
         return repl_cmd(shell_spec, cmd, parsed, out)
