@@ -1925,15 +1925,15 @@ end
         cd(dir) do
             withenv("OLDPWD" => nothing) do
                 io = IOBuffer()
-                Base.pre_repl_cmd("cd", Base.shell_parse("cd")[1], io)
-                Base.pre_repl_cmd("cd -", Base.shell_parse("cd -")[1], io)
+                Base.pre_repl_cmd("cd", eval(Base.shell_parse("cd")[1]), io)
+                Base.pre_repl_cmd("cd -", eval(Base.shell_parse("cd -")[1]), io)
                 @test realpath(pwd()) == realpath(dir)
                 if !Sys.iswindows()
                     # Delete the working directory and check we can cd out of it
                     # Cannot delete the working directory on Windows
                     rm(dir)
                     @test_throws Base._UVError("pwd()", Base.UV_ENOENT) pwd()
-                    Base.pre_repl_cmd("cd \\~", Base.shell_parse("cd \\~")[1], io)
+                    Base.pre_repl_cmd("cd \\~", eval(Base.shell_parse("cd \\~")[1]), io)
                 end
             end
         end
