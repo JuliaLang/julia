@@ -1333,8 +1333,7 @@ function setup_interface(
         # and pass into Base.repl_cmd for processing (handles `ls` and `cd`
         # special)
         on_done = respond(repl, julia_prompt) do line
-            Expr(:call, :(Base.repl_cmd),
-                :(Base.cmd_gen($(Base.shell_parse(line::String)[1]))),
+            Expr(:call, :(Base.pre_repl_cmd),
                 line::String,
                 outstream(repl))
         end,
