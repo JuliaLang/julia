@@ -1335,6 +1335,7 @@ function setup_interface(
         on_done = respond(repl, julia_prompt) do line
             Expr(:call, :(Base.repl_cmd),
                 :(Base.cmd_gen($(Base.shell_parse(line::String)[1]))),
+                line::String,
                 outstream(repl))
         end,
         sticky = true)

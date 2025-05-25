@@ -31,7 +31,38 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-function repl_cmd(cmd, out)
+"""
+    ShellSpecification{is_windows, shell_sym}
+
+A type used for dispatch to select the appropriate shell command preparation logic.
+It is parameterized by `is_windows::Bool` indicating the operating system,
+and `shell_sym::Symbol` representing the basename of the shell executable.
+"""
+struct ShellSpecification{is_windows,shell} end
+
+"""
+    prepare_shell_command(spec::ShellSpecification, cmd::Cmd, raw_string::String) -> Cmd
+
+Returns a `Cmd` object configured for execution according to `spec`,
+using the provided `cmd` (parsed command) and `raw_string` (original input).
+Specialized methods for `ShellSpecification` define shell- and OS-specific behavior.
+"""
+function prepare_shell_command(::ShellSpecification{true,SHELL}, cmd, _) where {SHELL}
+    return cmd
+end
+function prepare_shell_command(::ShellSpecification{false,SHELL}, cmd, _) where {SHELL}
+    shell_escape_cmd = "$(shell_escape_posixly(cmd)) && true"
+    return `$SHELL -c $shell_escape_cmd`
+end
+function prepare_shell_command(::ShellSpecification{false,:fish}, cmd, _)
+    shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
+    return `fish -c $shell_escape_cmd`
+end
+function prepare_shell_command(::ShellSpecification{false,:nu}, _, raw_string)
+    return `nu -c $raw_string`
+end
+
+function repl_cmd(cmd, raw_string, out)
     shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
     shell_name = Base.basename(shell[1])
 
@@ -64,21 +95,10 @@ function repl_cmd(cmd, out)
         cd(dir)
         println(out, pwd())
     else
-        if shell_name == "nu"
-            # remove apostrophes that dont play nice with nushell
-            shell_escape_cmd = replace(shell_escape(cmd), "'" => "")
-            shell_escape_cmd = "try { $shell_escape_cmd } catch { |err| \$err.rendered }"
-            cmd = `$shell -c $shell_escape_cmd`
-        elseif !Sys.iswindows()
-            if shell_name == "fish"
-                shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
-            else
-                shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
-            end
-            cmd = `$shell -c $shell_escape_cmd`
-        end
+        shell_spec = ShellSpecification{Sys.iswindows(),Symbol(shell_name)}()
+        prepared_cmd = prepare_shell_command(shell_spec, cmd, raw_string)
         try
-            run(ignorestatus(cmd))
+            run(ignorestatus(prepared_cmd))
         catch
             # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
             # Julia throws an exception if it can't find the program, but the stack trace isn't useful
@@ -89,6 +109,8 @@ function repl_cmd(cmd, out)
     end
     nothing
 end
+
+@deprecate repl_cmd(cmd, out) repl_cmd(cmd, string(cmd), out)
 
 # deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)
