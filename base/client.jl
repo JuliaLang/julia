@@ -32,11 +32,11 @@ stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bol
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 """
-    ShellSpecification{is_windows, shell_sym}
+    ShellSpecification{is_windows, shell}
 
 A type used for dispatch to select the appropriate shell command preparation logic.
 It is parameterized by `is_windows::Bool` indicating the operating system,
-and `shell_sym::Symbol` representing the basename of the shell executable.
+and `shell::Symbol` representing the basename of the shell executable.
 """
 struct ShellSpecification{is_windows,shell} end
 
@@ -47,12 +47,12 @@ Returns a `Cmd` object configured for execution according to `spec`,
 using the provided `cmd` (parsed command) and `raw_string` (original input).
 Specialized methods for `ShellSpecification` define shell- and OS-specific behavior.
 """
-function prepare_shell_command(::ShellSpecification{true,SHELL}, cmd, _) where {SHELL}
+function prepare_shell_command(::ShellSpecification{true,shell}, cmd, _) where {shell}
     return cmd
 end
-function prepare_shell_command(::ShellSpecification{false,SHELL}, cmd, _) where {SHELL}
+function prepare_shell_command(::ShellSpecification{false,shell}, cmd, _) where {shell}
     shell_escape_cmd = "$(shell_escape_posixly(cmd)) && true"
-    return `$SHELL -c $shell_escape_cmd`
+    return `$shell -c $shell_escape_cmd`
 end
 function prepare_shell_command(::ShellSpecification{false,:fish}, cmd, _)
     shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
