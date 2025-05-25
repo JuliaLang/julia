@@ -1264,7 +1264,6 @@ end
     inner_it_result = iterate(inner_iterator, next_inner_state)
     if inner_it_result !== nothing
         item, next_inner_state = inner_it_result
-
         return item, (next_outer_state, inner_iterator, next_inner_state)
     end
 
