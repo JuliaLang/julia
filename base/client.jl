@@ -110,7 +110,8 @@ function repl_cmd(cmd, raw_string, out)
     nothing
 end
 
-@deprecate repl_cmd(cmd, out) repl_cmd(cmd, string(cmd), out)
+# For backward compatibility
+repl_cmd(cmd, out) = repl_cmd(cmd, string(cmd), out)
 
 # deprecated function--preserved for DocTests.jl
 function ip_matches_func(ip, func::Symbol)
