@@ -270,7 +270,7 @@ function show(io::IO, s::SkipMissing)
 end
 
 # Simple optimization for mapreduce if the array cannot hold Missing
-mapreduce(f, op, itr::SkipMissing{<:AbstractArray}; init=Base._InitialValue(), dims=(:)) =
+mapreduce(f::F, op::G, itr::SkipMissing{<:AbstractArray}; init=Base._InitialValue(), dims=(:)) where {F,G} =
     mapreducedim(f, op, eltype(itr.x) >: Missing ? itr : itr.x, init, dims)
 
 """

@@ -269,8 +269,8 @@ implementations may reuse the return value of `f` for elements that appear multi
 `itr`. Use [`mapfoldl`](@ref) or [`mapfoldr`](@ref) instead for
 guaranteed left or right associativity and invocation of `f` for every value.
 """
-mapreduce(f, op, x; init=_InitialValue()) = mapreduce_pairwise(f, op, x, init)
-mapreduce(f, op, x, xs...; init=_InitialValue()) = mapreduce_pairwise(identity, op, Generator(f, x, xs...), init)
+mapreduce(f::F, op::G, x; init=_InitialValue()) where {F,G} = mapreduce_pairwise(f, op, x, init)
+mapreduce(f::F, op::G, x, xs...; init=_InitialValue()) where {F,G} = mapreduce_pairwise(identity, op, Generator(f, x, xs...), init)
 
 """
     mapreduce(f, op, A::AbstractArray...; dims=:, [init])
@@ -299,10 +299,10 @@ julia> mapreduce(isodd, |, a, dims=1)
  1  1  1  1
 ```
 """
-mapreduce(f, op, A::AbstractArrayOrBroadcasted; init=_InitialValue(), dims=(:)) = mapreducedim(f, op, A, init, dims)
-mapreduce(f, op, A::AbstractArrayOrBroadcasted, As::AbstractArrayOrBroadcasted...; init=_InitialValue(), dims=(:)) =
+mapreduce(f::F, op::G, A::AbstractArrayOrBroadcasted; init=_InitialValue(), dims=(:)) where {F,G} = mapreducedim(f, op, A, init, dims)
+mapreduce(f::F, op::G, A::AbstractArrayOrBroadcasted, As::AbstractArrayOrBroadcasted...; init=_InitialValue(), dims=(:)) where {F,G} =
     reduce(op, map(f, A, As...); init, dims)
-mapreducedim(f, op, A, init, ::Colon) = mapreduce_pairwise(f, op, A, init)
+mapreducedim(f::F, op::G, A, init, ::Colon) where {F,G} = mapreduce_pairwise(f, op, A, init)
 
 # Note: sum_seq usually uses four or more accumulators after partial
 # unrolling, so each accumulator gets at most 256 numbers
@@ -469,12 +469,12 @@ All implementations dispatch to a similarly structured `mapreduce_kernel` to han
 base case that's essentially a `mapfoldl` that allows for further SIMD-like optimizations
 and reassociations.
 """
-function mapreduce_pairwise(f, op, A::AbstractArrayOrBroadcasted, init)
+function mapreduce_pairwise(f::F, op::G, A::AbstractArrayOrBroadcasted, init) where {F, G}
     isempty(A) && return _mapreduce_start(f, op, A, init)
     length(A) <= pairwise_blocksize(f, op) && return mapreduce_kernel(f, op, A, init, eachindex(A))
     return mapreduce_pairwise(f, op, A, init, eachindex(A))
 end
-mapreduce_pairwise(f, op, itr, init) = mapreduce_pairwise(f, op, itr, init, IteratorSize(itr))
+mapreduce_pairwise(f::F, op::G, itr, init) where {F, G} = mapreduce_pairwise(f, op, itr, init, IteratorSize(itr)) 
 function mapreduce_pairwise(f, op, itr, init, S::Union{HasLength, HasShape})
     n = length(itr)
     n < 1 && return _mapreduce_start(f, op, itr, init)
@@ -482,7 +482,7 @@ function mapreduce_pairwise(f, op, itr, init, S::Union{HasLength, HasShape})
     n <= pairwise_blocksize(f, op) && return mapreduce_kernel(f, op, itr, init, S, n)[1]
     return mapreduce_pairwise(f, op, itr, init, S, n)[1]
 end
-function mapreduce_pairwise(f::F, op, itr, init, S::IteratorSize) where {F}
+function mapreduce_pairwise(f::F, op::G, itr, init, S::IteratorSize) where {F, G}
     it = iterate(itr)
     it === nothing && return _mapreduce_start(f, op, itr, init)
     n = pairwise_blocksize(f, op)
@@ -527,7 +527,7 @@ function mapreduce_pairwise(f::F, op::G, itr, init, S::Union{HasLength,HasShape}
         return (op(v1, v2), s)
     end
 end
-function mapreduce_pairwise(f::F, op, itr, init, S::IteratorSize, n, it) where {F}
+function mapreduce_pairwise(f::F, op::G, itr, init, S::IteratorSize, n, it) where {F,G}
     if n <= max(10, pairwise_blocksize(f, op))
         v, it = mapreduce_kernel(f, op, itr, init, S, n, it)
         return it === nothing ? (v, nothing) : (v, it)
