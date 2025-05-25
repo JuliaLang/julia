@@ -86,12 +86,12 @@ is_cd_cmd(::ShellSpecification, cmd::Cmd) = cmd.exec[1] == "cd"
 is_cd_cmd(::ShellSpecification, cmd::String) = false
 is_cd_cmd(::ShellSpecification{false,:nu}, raw_string::String) = startswith(strip(raw_string), "cd")
 
-function pre_repl_cmd(raw_string, out)
+function pre_repl_cmd(raw_string, parsed, out)
     shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
     shell_name = Base.basename(shell[1])
     shell_spec = ShellSpecification{@static(Sys.iswindows() ? true : false),Symbol(shell_name)}()
     if needs_cmd(shell_spec)
-        cmd = Base.cmd_gen(Base.shell_parse(raw_string)[1])
+        cmd = Base.cmd_gen(parsed)
         return repl_cmd(cmd, shell_spec, out)
     else
         return repl_cmd(raw_string, shell_spec, out)
