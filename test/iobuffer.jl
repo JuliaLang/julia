@@ -321,6 +321,36 @@ end
     @test_throws ArgumentError seek(io, 0)
 end
 
+@testset "takestring!" begin
+    buf = IOBuffer()
+    write(buf, "abcø")
+    s = takestring!(buf)
+    @test isempty(takestring!(buf))
+    @test s == "abcø"
+    write(buf, "xyz")
+    @test takestring!(buf) == "xyz"
+    buf = IOBuffer()
+
+    # Test with a nonzero offset in the buffer
+    v = rand(UInt8, 8)
+    for i in 1:8
+        pushfirst!(v, rand(UInt8))
+    end
+    buf = IOBuffer(v)
+    s = String(copy(v))
+    @test takestring!(buf) == s
+
+    # Test with a non-writable IOBuffer
+    buf = IOBuffer(b"abcdef")
+    read(buf, UInt8)
+    @test takestring!(buf) == "abcdef"
+
+    buf = new_unseekable_buffer()
+    write(buf, "abcde")
+    read(buf, UInt16)
+    @test takestring!(buf) == "cde"
+end
+
 @testset "Read/write readonly IOBuffer" begin
     io = IOBuffer("hamster\nguinea pig\nturtle")
     @test position(io) == 0
