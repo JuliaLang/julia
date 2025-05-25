@@ -92,28 +92,28 @@ function pre_repl_cmd(raw_string, parsed, out)
     shell_spec = ShellSpecification{@static(Sys.iswindows() ? true : false),Symbol(shell_name)}()
     if needs_cmd(shell_spec)
         cmd = Base.cmd_gen(parsed)
-        return repl_cmd(cmd, shell_spec, out)
+        return repl_cmd(shell_spec, cmd, parsed, out)
     else
-        return repl_cmd(raw_string, shell_spec, out)
+        return repl_cmd(shell_spec, raw_string, parsed, out)
     end
 end
-function repl_cmd(cmd::Cmd, shell_spec, out)
+function repl_cmd(shell_spec, cmd::Cmd, parsed, out)
     cmd.exec .= expanduser.(cmd.exec)
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
     end
     if is_cd_cmd(shell_spec, cmd)
-        return repl_cd_cmd(shell_spec, cmd, out)
+        return repl_cd_cmd(shell_spec, cmd, parsed, out)
     end
-    return repl_cmd_execute(cmd, shell_spec, out)
+    return repl_cmd_execute(shell_spec, cmd, out)
 end
-function repl_cmd(raw_string::String, shell_spec, out)
+function repl_cmd(shell_spec, raw_string::String, parsed, out)
     if is_cd_cmd(shell_spec, raw_string)
-        return repl_cd_cmd(shell_spec, raw_string, out)
+        return repl_cd_cmd(shell_spec, raw_string, parsed, out)
     end
-    return repl_cmd_execute(raw_string, shell_spec, out)
+    return repl_cmd_execute(shell_spec, raw_string, out)
 end
-function repl_cmd_execute(cmd_or_string, shell_spec, out)
+function repl_cmd_execute(shell_spec, cmd_or_string, out)
     prepared_cmd = prepare_shell_command(shell_spec, cmd_or_string)
     try
         run(ignorestatus(prepared_cmd))
@@ -129,12 +129,12 @@ end
 
 
 """
-    repl_cd_cmd(shell_spec::ShellSpecification, cmd, out)
+    repl_cd_cmd(shell_spec::ShellSpecification, cmd, parsed, out)
 
 Parses a `cd` command and executes it. Overload this for
 shells that have a different syntax for `cd`.
 """
-function repl_cd_cmd(::ShellSpecification, cmd::Cmd, out)
+function repl_cd_cmd(::ShellSpecification, cmd, _, out)
     if length(cmd.exec) > 2
         throw(ArgumentError("cd method only takes one argument"))
     elseif length(cmd.exec) == 2
@@ -158,8 +158,8 @@ function repl_cd_cmd(::ShellSpecification, cmd::Cmd, out)
     cd(dir)
     println(out, pwd())
 end
-function repl_cd_cmd(shell_spec::ShellSpecification{false,:nu}, raw_string::String, out)
-    repl_cd_cmd(shell_spec, Base.cmd_gen(Base.shell_parse(raw_string)[1]), out)
+function repl_cd_cmd(spec::ShellSpecification{false,:nu}, _, parsed, out)
+    repl_cd_cmd(spec, Base.cmd_gen(parsed), parsed, out)
 end
 
 # deprecated function--preserved for DocTests.jl
