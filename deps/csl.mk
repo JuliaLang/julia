@@ -128,6 +128,7 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_libdir)/
 endif
 endif
+
 ifeq ($(OS),WINNT)
 uninstall-csl: uninstall-gcc-libraries
 uninstall-gcc-libraries:
@@ -137,4 +138,5 @@ uninstall-gcc-libraries:
 	-rm -f $(build_private_libdir)/libmsvcrt.a
 	-rm -f $(build_private_libdir)/libssp.dll.a
 	-rm -f $(build_libdir)/libssp.dll.a
+.PHONY: uninstall-gcc-libraries
 endif

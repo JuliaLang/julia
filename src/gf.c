@@ -771,7 +771,7 @@ int foreach_mtable_in_module(
         if ((void*)b == jl_nothing)
             break;
         jl_sym_t *name = b->globalref->name;
-        jl_value_t *v = jl_get_binding_value_if_const(b);
+        jl_value_t *v = jl_get_latest_binding_value_if_const(b);
         if (v) {
             jl_value_t *uw = jl_unwrap_unionall(v);
             if (jl_is_datatype(uw)) {
@@ -4642,8 +4642,6 @@ JL_DLLEXPORT void jl_extern_c(jl_value_t *name, jl_value_t *declrt, jl_tupletype
         jl_error("@ccallable: function object must be a singleton");
 
     // compute / validate return type
-    if (!jl_is_concrete_type(declrt) || jl_is_kind(declrt))
-        jl_error("@ccallable: return type must be concrete and correspond to a C type");
     if (!jl_type_mappable_to_c(declrt))
         jl_error("@ccallable: return type doesn't correspond to a C type");
 

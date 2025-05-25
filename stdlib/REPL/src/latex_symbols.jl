@@ -517,6 +517,7 @@ const latex_symbols = Dict(
     "\\mapsto" => "↦",
     "\\hookleftarrow" => "↩",
     "\\hookrightarrow" => "↪",
+    "\\hookunderrightarrow" => "🢲",
     "\\looparrowleft" => "↫",
     "\\looparrowright" => "↬",
     "\\leftrightsquigarrow" => "↭",

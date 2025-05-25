@@ -586,11 +586,11 @@ struct NonFunctionIsZero end
 @test count(NonFunctionIsZero(), [0]) == 1
 @test count(NonFunctionIsZero(), [1]) == 0
 
-@test count(Iterators.repeated(true, 3), init=0x04) === 0x07
-@test count(!=(2), Iterators.take(1:7, 3), init=Int32(0)) === Int32(2)
-@test count(identity, [true, false], init=Int8(5)) === Int8(6)
-@test count(!, [true false; false true], dims=:, init=Int16(0)) === Int16(2)
-@test isequal(count(identity, [true false; false true], dims=2, init=UInt(4)), reshape(UInt[5, 5], 2, 1))
+@test count(Iterators.repeated(true, 3), init=UInt(0)) === UInt(3)
+@test count(!=(2), Iterators.take(1:7, 3), init=Int32(0)) === 2
+@test count(identity, [true, false], init=Int8(0)) === 1
+@test count(!, [true false; false true], dims=:, init=Int16(0)) === 2
+@test isequal(count(identity, [true false; false true], dims=2, init=UInt(0)), reshape(UInt[1, 1], 2, 1))
 
 ## cumsum, cummin, cummax
 
@@ -770,4 +770,10 @@ end
     @test Base.return_types() do
         Val(any(in((:one,:two,:three)),(:four,:three)))
     end |> only == Val{true}
+end
+
+# `reduce(vcat, A)` should not alias the input for length-1 collections
+let A=[1;;]
+    @test reduce(vcat, Any[A]) !== A
+    @test reduce(hcat, Any[A]) !== A
 end

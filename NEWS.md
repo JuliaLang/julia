@@ -5,6 +5,9 @@ New language features
 ---------------------
 
   - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
+  - The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
+    is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
+    ([JuliaLang/JuliaSyntax.jl#525], [#57143])
 
 Language changes
 ----------------
@@ -47,6 +50,7 @@ New library features
 * `fieldoffset` now also accepts the field name as a symbol as `fieldtype` already did ([#58100]).
 * `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
+* `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
 
 Standard library changes
 ------------------------
@@ -58,6 +62,8 @@ Standard library changes
 #### Profile
 
 #### REPL
+
+* The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
 
 #### Test
 

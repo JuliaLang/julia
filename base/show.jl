@@ -390,12 +390,12 @@ julia> io = IOBuffer();
 
 julia> printstyled(IOContext(io, :color => true), "string", color=:red)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "\\e[31mstring\\e[39m"
 
 julia> printstyled(io, "string", color=:red)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "string"
 ```
 
@@ -2649,7 +2649,7 @@ function show_tuple_as_call(out::IO, name::Symbol, sig::Type;
     end
     print_within_stacktrace(io, ")", bold=true)
     show_method_params(io, tv)
-    str = String(take!(buf))
+    str = takestring!(buf)
     str = type_limited_string_from_context(out, str)
     print(out, str)
     nothing
@@ -2758,7 +2758,7 @@ function type_depth_limit(str::String, n::Int; maxdepth = nothing)
         end
         prev = di
     end
-    return String(take!(output))
+    return unsafe_takestring!(output)
 end
 
 function print_type_bicolor(io, type; kwargs...)
@@ -3193,7 +3193,7 @@ summary(io::IO, x) = print(io, typeof(x))
 function summary(x)
     io = IOBuffer()
     summary(io, x)
-    String(take!(io))
+    takestring!(io)
 end
 
 ## `summary` for AbstractArrays
