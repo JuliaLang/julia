@@ -217,7 +217,6 @@ DevDocs = [
         "devdocs/functions.md",
         "devdocs/cartesian.md",
         "devdocs/meta.md",
-        "devdocs/jldoctests.md",
         "devdocs/subarrays.md",
         "devdocs/isbitsunionarrays.md",
         "devdocs/sysimg.md",
@@ -257,6 +256,15 @@ DevDocs = [
         "devdocs/build/arm.md",
         "devdocs/build/riscv.md",
         "devdocs/build/distributing.md",
+    ],
+    "Contributor's Guide" => [
+        "devdocs/contributing/code-changes.md",
+        "devdocs/contributing/tests.md",
+        "devdocs/contributing/documentation.md",
+        "devdocs/contributing/jldoctest.md",
+        "devdocs/contributing/patch-releases.md",
+        "devdocs/contributing/formatting.md",
+        "devdocs/contributing/git-workflow.md",
     ]
 ]
 

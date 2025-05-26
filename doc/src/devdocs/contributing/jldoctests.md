@@ -1,6 +1,6 @@
-# Best practices for jldoctests
-This page describes how to write and maintain `jldoctest` blocks in the documentation. Following these guidelines helps keep doctests reliable and easy to read.
+# [Writing jldoctests](@id writing-jldoctests)
 
+This page describes how to write and maintain `jldoctest` blocks in the documentation. Following these guidelines helps keep doctests reliable and easy to read.
 
 ## Filters
 
