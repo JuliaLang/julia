@@ -607,3 +607,20 @@ let R = reinterpret(reshape, Float32, ComplexF32[1.0f0+2.0f0*im, 4.0f0+3.0f0*im]
     @test !isassigned(R, 5)
     @test Array(R)::Matrix{Float32} == [1.0f0 4.0f0; 2.0f0 3.0f0]
 end
+
+
+@testset "trailing singleton indices" begin
+    R = reinterpret(reshape, Float32, rand(ComplexF32, 5))
+    ref = Array(R)
+
+    @test R[1, :, 1]        == ref[1, :]
+    @test R[1, :, 1, 1, 1]  == ref[1, :]
+    @test R[1, :, UInt8(1)] == ref[1, :]
+
+    R[2, :, 1] .= 0f0
+    ref[2,   :] .= 0f0
+    @test R[2, :, 1] == ref[2, :]
+
+    @test R[4] == ref[4]
+    @test_throws BoundsError R[1, :, 2]
+end
