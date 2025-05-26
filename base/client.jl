@@ -67,7 +67,6 @@ function repl_cmd(cmd, out)
         if shell_name == "nu"
             # remove apostrophes that dont play nice with nushell
             shell_escape_cmd = replace(shell_escape(cmd), "'" => "")
-            shell_escape_cmd = "try { $shell_escape_cmd } catch { |err| \$err.rendered }"
             cmd = `$shell -c $shell_escape_cmd`
         elseif !Sys.iswindows()
             if shell_name == "fish"
