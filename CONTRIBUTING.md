@@ -63,7 +63,7 @@ developer documentation. Here you can find more in-depth guidance for how to wri
 specific kinds of changes. In particular, you want want to read:
 
 - [How to contribute code changes](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/contributing/code-changes.md)
-- [How to contribute additional tests](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/contributing/code-changes.md)
+- [How to contribute additional tests](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/contributing/tests.md)
 - [How to work on documentation](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/contributing/documentation.md)
 - [Workflow tips for working with git](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/contributing/git-workflow.md)
 
