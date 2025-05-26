@@ -29,7 +29,7 @@ endif
 JCFLAGS += -Wold-style-definition -Wstrict-prototypes -Wc++-compat
 
 ifeq ($(USECLANG),1)
-FLAGS += -Wno-return-type-c-linkage -Wno-atomic-alignment
+FLAGS += -Wno-return-type-c-linkage -Wno-atomic-alignment -Wno-nullability-extension -Wno-nullability-completeness # required to be allowed to use nullability extension and not be required to annotate all of everything
 endif
 
 ifeq (${USE_THIRD_PARTY_GC},mmtk)
@@ -170,6 +170,7 @@ CG_LLVMLINK += $(LLVM_LDFLAGS) -lLLVM
 else
 CG_LLVMLINK += $(LLVM_LDFLAGS) $(LLVM_SHARED_LINK_FLAG)
 endif # OS
+CG_LLVMLINK += -lz -lzstd
 endif # USE_LLVM_SHLIB
 endif # USE_SYSTEM_LLVM
 
@@ -178,7 +179,9 @@ FLAGS += -DLLVM_SHLIB
 endif # USE_LLVM_SHLIB == 1
 endif # JULIACODEGEN == LLVM
 
-RT_LLVM_LINK_ARGS := $(shell $(LLVM_CONFIG_HOST) --libs $(RT_LLVM_LIBS) --system-libs --link-static)
+# Use subst to work around llvm-configure bug in Yggdrasil build: https://github.com/llvm/llvm-project/pull/139945
+CG_LLVMLINK := $(subst /workspace/destdir/lib/libzstd.dll.a,-lzstd,$(CG_LLVMLINK))
+RT_LLVM_LINK_ARGS := $(subst /workspace/destdir/lib/libzstd.dll.a,-lzstd,$(shell $(LLVM_CONFIG_HOST) --libs $(RT_LLVM_LIBS) --system-libs --link-static))
 RT_LLVMLINK += $(LLVM_LDFLAGS) $(RT_LLVM_LINK_ARGS)
 ifeq ($(OS), WINNT)
 RT_LLVMLINK += -luuid -lole32
@@ -213,6 +216,13 @@ DOBJS := $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 CODEGEN_OBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.o)
 CODEGEN_DOBJS := $(CODEGEN_SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
+ifeq ($(OS)_$(BINARY),WINNT_32)
+OBJS += $(BUILDDIR)/llvm-Compression.o
+DOBJS += $(BUILDDIR)/llvm-Compression.dbg.obj
+CODEGEN_OBJS += $(BUILDDIR)/llvm-Compression.o
+CODEGEN_DOBJS += $(BUILDDIR)/llvm-Compression.dbg.obj
+endif
+
 # Add SONAME defines so we can embed proper `dlopen()` calls.
 ADDL_SHIPFLAGS  := -DJL_SYSTEM_IMAGE_PATH=$(call shell_escape,$(call c_escape,$(call normalize_path,$(build_private_libdir_rel)/sys.$(SHLIB_EXT)))) \
                    -DJL_LIBJULIA_SONAME=$(call shell_escape,$(call c_escape,$(LIBJULIA_PATH_REL).$(JL_MAJOR_SHLIB_EXT)))
@@ -225,6 +235,12 @@ SHIPFLAGS_GCC     += $(FLAGS) $(ADDL_SHIPFLAGS)
 DEBUGFLAGS_GCC    += $(FLAGS) $(ADDL_DEBUGFLAGS)
 SHIPFLAGS_CLANG   += $(FLAGS) $(ADDL_SHIPFLAGS)
 DEBUGFLAGS_CLANG  += $(FLAGS) $(ADDL_DEBUGFLAGS)
+
+DEBUGFLAGS_CLANG  += -Wno-nullability-extension -Wno-nullability-completeness # required to be allowed to use nullability extension and not be required to annotate all of everything
+ifeq ($(USEGCC),1) # TODO: we currently set flags incorrectly for clang analyze, but mostly it works out okay
+DEBUGFLAGS_CLANG  += -Wno-unknown-warning-option
+endif
+DEBUGFLAGS_CLANG  += -Wno-return-type-c-linkage # TODO: do we care about fixing this instead? (it is not a bug, just a nuisance)
 
 ifeq ($(USE_CROSS_FLISP), 1)
 FLISPDIR := $(BUILDDIR)/flisp/host

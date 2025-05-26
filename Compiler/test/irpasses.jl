@@ -2111,3 +2111,13 @@ let src = code_typed1(()) do
     end
     @test count(iscall((src, isdefined)), src.code) == 0
 end
+# We should successfully fold the default values of a ScopedValue
+const svalconstprop = ScopedValue(1)
+foosvalconstprop() = svalconstprop[]
+
+let src = code_typed1(foosvalconstprop, ())
+    function is_constfield_load(expr)
+        iscall((src, getfield))(expr) && expr.args[3] in (:(:has_default), :(:default))
+    end
+    @test count(is_constfield_load, src.code) == 0
+end
