@@ -1,5 +1,24 @@
+# Get the buildroot and stdlibdir from the make environment to make sure we're
+# generating docs for the current julia source tree, regardless of what julia
+# executable we're using. If these arguments are not passed, fall back to
+# assuming that we're running a just-built version of julia and generating docs
+# in tree.
 let r = r"buildroot=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
-    global const buildrootdoc = i === nothing ? (@__DIR__) : joinpath(first(match(r, ARGS[i]).captures), "doc")
+    if i === nothing
+        global const buildrootdoc = @__DIR__
+        global const buildroot = abspath(joinpath(buildrootdoc, ".."))
+    else
+        global const buildroot = first(match(r, ARGS[i]).captures)
+        global const buildrootdoc = joinpath(buildroot, "doc")
+    end
+end
+
+let r = r"stdlibdir=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
+    if i === nothing
+        global const STDLIB_DIR = Sys.STDLIB
+    else
+        global const STDLIB_DIR = first(match(r, ARGS[i]).captures)
+    end
 end
 
 # Install dependencies needed to build the documentation.
@@ -28,7 +47,6 @@ cp_q(src, dest) = isfile(dest) || cp(src, dest)
 
 # make links for stdlib package docs, this is needed until #552 in Documenter.jl is finished
 const STDLIB_DOCS = []
-const STDLIB_DIR = Sys.STDLIB
 const EXT_STDLIB_DOCS = ["Pkg"]
 cd(joinpath(buildrootdoc, "src")) do
     Base.rm("stdlib"; recursive=true, force=true)
