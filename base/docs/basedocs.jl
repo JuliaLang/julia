@@ -2855,6 +2855,9 @@ a value set.
 If `allow_import` is `false`, the global variable must be defined inside `m`
 and may not be imported from another module.
 
+!!! compat "Julia 1.12"
+    This function requires Julia 1.12 or later.
+
 See also [`@isdefined`](@ref).
 
 # Examples
