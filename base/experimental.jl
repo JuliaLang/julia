@@ -686,4 +686,25 @@ function wait_with_timeout(c::GenericCondition; first::Bool=false, timeout::Real
     end
 end
 
+### @await
+"""
+    Base.Experimental.@oc_await [argt] [C->retblock]
+
+Capture the current function's execution context for later resumption.
+By default, immediately returns to the caller, returning an `OpaqueClosure` that
+may be invoked to continue execution. If the optional `C->retblock` argument is
+provided, `reblock` is executed in the context of the current function, with the
+continuation bound to `C`. If `argt` is provided, the continuation will further
+expect arguments `argt` to be provided when invoked.
+"""
+macro oc_await(args...)
+    @assert length(args) == 0 # TODO
+    label = gensym()
+    quote
+        return $(Expr(:symbolicawait, label, Tuple{}, Int32(0)))
+        $(Expr(:symboliclabel, label))
+        ()
+    end
+end
+
 end # module

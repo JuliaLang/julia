@@ -429,6 +429,7 @@
            ((macrocall) e) ; invalid syntax anyways, so just act like it's quoted.
            ((symboliclabel) e)
            ((symbolicgoto) e)
+           ((symbolicawait) `(symbolicawait ,(cadr e) ,(resolve-expansion-vars-with-new-env (caddr e) env m lno parent-scope inarg) ,(cadddr e)))
            ((struct)
             `(struct ,(cadr e) ,(resolve-expansion-vars- (caddr e) env m lno parent-scope inarg)
                      ,(map (lambda (x)
@@ -668,12 +669,12 @@
       `(hygienic-scope ,(rename-symbolic-labels- (cadr e) (table) parent-scope) ,m ,@lno)))
    ((and (eq? (car e) 'escape) (not (null? parent-scope)))
     `(escape ,(apply rename-symbolic-labels- (cadr e) parent-scope)))
-   ((or (eq? (car e) 'symbolicgoto) (eq? (car e) 'symboliclabel))
+   ((memq (car e) '(symbolicgoto symboliclabel symbolicawait))
     (let* ((s (cadr e))
            (havelabel (if (or (null? parent-scope) (not (symbol? s))) s (get relabels s #f)))
            (newlabel (if havelabel havelabel (named-gensy s))))
       (if (not havelabel) (put! relabels s newlabel))
-      `(,(car e) ,newlabel)))
+      `(,(car e) ,newlabel ,@(cddr e))))
    (else
     (cons (car e)
           (map (lambda (x) (rename-symbolic-labels- x relabels parent-scope))

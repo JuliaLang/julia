@@ -25,7 +25,7 @@ typedef struct {
     int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
 } interpreter_state;
-
+const int INTERPRETER_STATE_BOXED_SIZE = 9;
 
 // general alloca rules are incompatible on C and C++, so define a macro that deals with the difference
 #ifdef __cplusplus
@@ -466,6 +466,39 @@ static size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns, size_
     return ip;
 }
 
+jl_value_t *jl_await_resume_interpreter_specptr(jl_opaque_closure_t *F)
+{
+    jl_task_t *ct = jl_current_task;
+    size_t last_age = ct->world_age;
+    ct->world_age = F->world;
+    jl_svec_t *state = (jl_svec_t*)F->captures;
+    interpreter_state *s;
+    unsigned nroots = jl_svec_len(state) - INTERPRETER_STATE_BOXED_SIZE;
+    JL_GC_PUSHFRAME(s, s->locals, nroots);
+    jl_array_t *stmts = (jl_array_t*)jl_svecref(state, 0);
+    s->src = (jl_code_info_t*)jl_svecref(state, 1);
+    s->mi = (jl_method_instance_t*)jl_svecref(state, 2);
+    s->ci = (jl_code_instance_t*)jl_svecref(state, 3);
+    s->module = (jl_module_t*)jl_svecref(state, 4);
+    s->sparam_vals = (jl_svec_t*)jl_svecref(state, 5);
+    s->ip = jl_unbox_long(jl_svecref(state, 6));
+    s->continue_at = jl_unbox_int32(jl_svecref(state, 7));
+    int toplevel = jl_unbox_int32(jl_svecref(state, 8));
+    s->preevaluation = 0;
+    memcpy(s->locals, jl_svec_data(state) + INTERPRETER_STATE_BOXED_SIZE, sizeof(jl_value_t*) * nroots);
+    JL_GC_ENABLEFRAME(s);
+    jl_value_t *r = eval_body(stmts, s, s->ip, toplevel);
+    JL_GC_POP();
+    ct->world_age = last_age;
+    return r;
+}
+
+JL_CALLABLE(jl_await_resume_interpreter)
+{
+    assert(nargs == 0);
+    return jl_await_resume_interpreter_specptr(((jl_opaque_closure_t*)F));
+}
+
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
 {
     jl_handler_t __eh;
@@ -571,6 +604,37 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                 assert(jl_enternode_catch_dest(stmt) != 0);
                 continue;
             }
+        }
+        else if (jl_is_awaitnode(stmt)) {
+            jl_value_t *oc_type JL_ALWAYS_LEAFTYPE = jl_apply_type2((jl_value_t*)jl_opaque_closure_type,
+                (jl_value_t*)jl_emptytuple_type, (jl_value_t*)jl_any_type);
+            JL_GC_PROMISE_ROOTED(oc_type);
+            jl_opaque_closure_t *oc = (jl_opaque_closure_t*)jl_gc_alloc(ct->ptls,
+                sizeof(jl_opaque_closure_t), oc_type);
+            oc->captures = (jl_value_t*)NULL;
+            oc->world = jl_current_task->world_age;
+            oc->invoke = &jl_await_resume_interpreter;
+            oc->specptr = &jl_await_resume_interpreter_specptr;
+            oc->source = jl_nothing;
+            s->locals[jl_source_nslots(s->src) + s->ip] = (jl_value_t*)oc;
+
+            unsigned nroots = jl_source_nslots(s->src) + jl_source_nssavalues(s->src);
+            jl_svec_t *captures = jl_alloc_svec(nroots + INTERPRETER_STATE_BOXED_SIZE);
+            oc->captures = (jl_value_t*)captures;
+            jl_gc_wb(oc, captures);
+            memcpy(jl_svec_data(captures) + INTERPRETER_STATE_BOXED_SIZE, s->locals,
+                   sizeof(jl_value_t*) * nroots); // No wb, because `captures` is fresh (cf jl_gc_wb_fresh)
+            jl_svecset(captures, 0, stmts);
+            jl_svecset(captures, 1, s->src);
+            jl_svecset(captures, 2, s->mi);
+            jl_svecset(captures, 3, s->ci);
+            jl_svecset(captures, 4, s->module);
+            jl_svecset(captures, 5, s->sparam_vals);
+            jl_svecset(captures, 6, jl_box_long(jl_awaitnode_continue_dest(stmt)));
+            jl_svecset(captures, 7, jl_box_int32(s->continue_at));
+            jl_svecset(captures, 8, jl_box_int32(toplevel));
+            ip = next_ip;
+            continue;
         }
         else if (jl_is_expr(stmt)) {
             // Most exprs are allowed to end a BB by fall through
@@ -822,9 +886,12 @@ JL_DLLEXPORT const jl_callptr_t jl_fptr_interpret_call_addr = &jl_fptr_interpret
 
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **args, size_t nargs)
 {
-    jl_method_t *source = oc->source;
+    if (!jl_is_method(oc->source)) {
+        jl_error("Internal Error: Opaque closure was set to interpreter, but no interpretable source was provided.");
+    }
+    jl_method_t *source = (jl_method_t*)oc->source;
     jl_code_info_t *code = NULL;
-    if (source->source) {
+    if (jl_is_method(source) && ((jl_method_t*)source)->source) {
         code = jl_uncompress_ir(source, NULL, (jl_value_t*)source->source);
     }
     else {

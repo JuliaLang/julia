@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 isterminator(@nospecialize(stmt)) = isa(stmt, GotoNode) || isa(stmt, GotoIfNot) ||
-    isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isexpr(stmt, :leave)
+    isa(stmt, ReturnNode) || isa(stmt, EnterNode) || isa(stmt, AwaitNode) || isexpr(stmt, :leave)
 
 struct CFG
     blocks::Vector{BasicBlock}
@@ -59,13 +59,13 @@ block_for_inst(cfg::CFG, inst::Int) = block_for_inst(cfg.index, inst)
             # This is a fake dest to force the next stmt to start a bb
             idx < length(stmts) && push!(jump_dests, idx+1)
             push!(jump_dests, stmt.label)
-        elseif isa(stmt, EnterNode)
+        elseif isa(stmt, EnterNode) || isa(stmt, AwaitNode)
             # :enter starts/ends a BB
             push!(jump_dests, idx)
             push!(jump_dests, idx+1)
-            # The catch block is a jump dest
-            if stmt.catch_dest != 0
-                push!(jump_dests, stmt.catch_dest)
+            dst = jump_dest(stmt)
+            if dst != 0
+                push!(jump_dests, dst)
             end
         elseif isa(stmt, Expr)
             if stmt.head === :leave
@@ -126,12 +126,13 @@ function compute_basic_blocks(stmts::Vector{Any})
                 push!(blocks[block′].preds, num)
                 push!(b.succs, block′)
             end
-        elseif isa(terminator, EnterNode)
+        elseif isa(terminator, EnterNode) || isa(terminator, AwaitNode)
             # :enter gets a virtual edge to the exception handler and
             # the exception handler gets a virtual edge from outside
             # the function.
-            if terminator.catch_dest != 0
-                block′ = block_for_inst(basic_block_index, terminator.catch_dest)
+            dest = jump_dest(terminator)
+            if dest != 0
+                block′ = block_for_inst(basic_block_index, dest)
                 push!(blocks[block′].preds, num)
                 push!(blocks[block′].preds, 0)
                 push!(b.succs, block′)
@@ -549,6 +550,9 @@ struct UndefToken end; const UNDEF_TOKEN = UndefToken()
         isdefined(stmt, :scope) || return OOB_TOKEN
         op == 1 || return OOB_TOKEN
         return stmt.scope
+    elseif isa(stmt, AwaitNode)
+        op == 1 || return OOB_TOKEN
+        return stmt.argt
     elseif isa(stmt, PiNode)
         isdefined(stmt, :val) || return OOB_TOKEN
         op == 1 || return OOB_TOKEN
@@ -609,6 +613,9 @@ end
     elseif isa(stmt, EnterNode)
         op == 1 || throw(BoundsError())
         stmt = EnterNode(stmt.catch_dest, v)
+    elseif isa(stmt, AwaitNode)
+        op == 1 || throw(BoundsError())
+        stmt = AwaitNode(stmt.continue_dest, v, stmt.flags)
     elseif isa(stmt, Union{AnySSAValue, Argument, GlobalRef})
         op == 1 || throw(BoundsError())
         stmt = v
@@ -640,7 +647,11 @@ end
 function userefs(@nospecialize(x))
     relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
         isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, OldSSAValue) || isa(x, NewSSAValue) ||
+<<<<<<< HEAD
         isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode) || isa(x, Argument)
+=======
+        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode) || isa(x, AwaitNode)
+>>>>>>> 2278c4b62f (WIP/RFC: Add `await` mechanism)
     return UseRefIterator(x, relevant)
 end
 
@@ -1517,12 +1528,13 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             result[result_idx][:stmt] = GotoIfNot(cond, label)
             result_idx += 1
         end
-    elseif cfg_transforms_enabled && isa(stmt, EnterNode)
-        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::EnterNode
-        if stmt.catch_dest != 0
-            label = bb_rename_succ[stmt.catch_dest]
+    elseif cfg_transforms_enabled && (isa(stmt, EnterNode) || isa(stmt, AwaitNode))
+        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::typeof(stmt)
+        dest = jump_dest(stmt)
+        if dest != 0
+            label = bb_rename_succ[dest]
             @assert label > 0
-            result[result_idx][:stmt] = EnterNode(stmt, label)
+            result[result_idx][:stmt] = typeof(stmt)(stmt, label)
         else
             result[result_idx][:stmt] = stmt
         end
@@ -1590,7 +1602,7 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
         ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:stmt] = stmt
         result_idx += 1
-    elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode) || isa(stmt, GotoIfNot) || isa(stmt, EnterNode)
+    elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode) || isa(stmt, GotoIfNot) || isa(stmt, EnterNode) || isa(stmt, AwaitNode)
         ssa_rename[idx] = SSAValue(result_idx)
         result[result_idx][:stmt] = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)
         result_idx += 1

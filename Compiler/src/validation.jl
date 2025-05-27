@@ -172,6 +172,7 @@ function validate_code!(errors::Vector{InvalidCodeError}, c::CodeInfo, is_top_le
                 end
                 validate_val!(x.scope)
             end
+        elseif isa(x, AwaitNode)
         elseif isa(x, ReturnNode)
             if isdefined(x, :val)
                 if !is_valid_return(x.val)

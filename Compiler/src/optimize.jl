@@ -873,7 +873,7 @@ end
 function ((; sv)::ScanStmt)(inst::Instruction, lstmt::Int, bb::Int)
     stmt = inst[:stmt]
 
-    if isa(stmt, EnterNode)
+    if isa(stmt, EnterNode) || isa(stmt, AwaitNode)
         # try/catch not yet modeled
         give_up_refinements!(sv)
         return nothing
@@ -1572,6 +1572,20 @@ function renumber_ir_elements!(body::Vector{Any}, ssachangemap::Vector{Int}, lab
                         body[i] = EnterNode(tgt + labelchangemap[tgt], SSAValue(el.scope.id + ssachangemap[el.scope.id]))
                     else
                         body[i] = EnterNode(el, tgt + labelchangemap[tgt])
+                    end
+                end
+            end
+        elseif isa(el, AwaitNode)
+            tgt = el.continue_dest
+            if tgt != 0
+                was_deleted = labelchangemap[tgt] == typemin(Int)
+                if was_deleted
+                    body[i] = nothing
+                else
+                    if isa(el.argt, SSAValue)
+                        body[i] = AwaitNode(tgt + labelchangemap[tgt], SSAValue(el.argt.id + ssachangemap[el.argt.id]))
+                    else
+                        body[i] = AwaitNode(el, tgt + labelchangemap[tgt])
                     end
                 end
             end

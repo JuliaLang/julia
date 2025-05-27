@@ -197,7 +197,7 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     elseif isa(stmt, PhiCNode)
         # Currently not modeled
         return false
-    elseif isa(stmt, EnterNode)
+    elseif isa(stmt, EnterNode) || isa(stmt, AwaitNode)
         # TODO: Propagate scope type changes
         return false
     elseif isa(stmt, ReturnNode)
@@ -235,6 +235,12 @@ function reprocess_instruction!(interp::AbstractInterpreter, inst::Instruction, 
     return false
 end
 
+jump_dest(stmt::EnterNode) = stmt.catch_dest
+jump_dest(stmt::AwaitNode) = stmt.continue_dest
+jump_dest(stmt::GotoIfNot) = stmt.dest
+jump_dest(stmt::GotoNode)  = stmt.label
+const JumpingTerminators = Union{GotoNode, GotoIfNot, EnterNode, AwaitNode}
+
 # Process the terminator and add the successor to `bb_ip`. Returns whether a backedge was seen.
 function process_terminator!(@nospecialize(stmt), bb::Int, bb_ip::BitSetBoundedMinPrioritySet)
     if isa(stmt, ReturnNode)
@@ -248,8 +254,8 @@ function process_terminator!(@nospecialize(stmt), bb::Int, bb_ip::BitSetBoundedM
         backedge || push!(bb_ip, stmt.dest)
         push!(bb_ip, bb+1)
         return backedge
-    elseif isa(stmt, EnterNode)
-        dest = stmt.catch_dest
+    elseif isa(stmt, EnterNode) || isa(stmt, AwaitNode)
+        dest = jump_dest(stmt)
         if dest ≠ 0
             @assert dest > bb
             push!(bb_ip, dest)

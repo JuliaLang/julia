@@ -3425,6 +3425,12 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_svec(2, jl_long_type, jl_any_type),
                         jl_emptysvec, 0, 0, 1);
 
+    jl_awaitnode_type =
+        jl_new_datatype(jl_symbol("AwaitNode"), core, jl_any_type, jl_emptysvec,
+                        jl_perm_symsvec(3, "continue_dest", "argt", "flags"),
+                        jl_svec(3, jl_long_type, jl_any_type, jl_uint32_type),
+                        jl_emptysvec, 0, 0, 1);
+
     jl_returnnode_type =
         jl_new_datatype(jl_symbol("ReturnNode"), core, jl_any_type, jl_emptysvec,
                         jl_perm_symsvec(1, "val"),

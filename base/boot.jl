@@ -527,6 +527,7 @@ eval(Core, quote
     GotoIfNot(@nospecialize(cond), dest::Int) = $(Expr(:new, :GotoIfNot, :cond, :dest))
     EnterNode(dest::Int) = $(Expr(:new, :EnterNode, :dest))
     EnterNode(dest::Int, @nospecialize(scope)) = $(Expr(:new, :EnterNode, :dest, :scope))
+    AwaitNode(dest::Int, @nospecialize(argt::Type), flags::UInt32) = $(Expr(:new, :AwaitNode, :dest, :argt, :flags))
     LineNumberNode(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))
     function LineNumberNode(l::Int, @nospecialize(f))
         isa(f, String) && (f = Symbol(f))
@@ -749,12 +750,12 @@ module IR
 export CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode, memoryref
+    Const, PartialStruct, InterConditional, EnterNode, AwaitNode, memoryref
 
 using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnNode,
     NewvarNode, SSAValue, SlotNumber, Argument,
     PiNode, PhiNode, PhiCNode, UpsilonNode, DebugInfo,
-    Const, PartialStruct, InterConditional, EnterNode, memoryref
+    Const, PartialStruct, InterConditional, EnterNode, AwaitNode, memoryref
 
 end # module IR
 
@@ -1106,6 +1107,10 @@ const check_top_bit = check_sign_bit
 # For convenience
 EnterNode(old::EnterNode, new_dest::Int) = isdefined(old, :scope) ?
     EnterNode(new_dest, old.scope) : EnterNode(new_dest)
+AwaitNode(old::AwaitNode, new_dest::Int) = AwaitNode(new_dest, old.argt, old.flags)
+AwaitNode(dest::Int) = AwaitNode(dest, Tuple{}, Int32(0))
+GotoNode(old::GotoNode, new_dest::Int) = GotoNode(new_dest)
+GotoIfNot(old::GotoIfNot, new_dest::Int) = GotoIfNot(old.cond, new_dest)
 
 # typename(_).constprop_heuristic
 const FORCE_CONST_PROP      = 0x1

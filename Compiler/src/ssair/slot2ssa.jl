@@ -378,7 +378,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             if isa(terminator, GotoIfNot)
                 # Need to break the critical edge
                 push!(result_order, 0)
-            elseif isa(terminator, EnterNode) || isexpr(terminator, :leave)
+            elseif isa(terminator, EnterNode) || isa(terminator, AwaitNode) || isexpr(terminator, :leave)
                 # Cannot extend the BasicBlock with a goto, have to split it
                 push!(result_order, 0)
             else
@@ -436,7 +436,7 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
             else
                 result[inst_range[end]][:stmt] = GotoNode(bb_rename[terminator.label])
             end
-        elseif isa(terminator, GotoIfNot) || isa(terminator, EnterNode) || isexpr(terminator, :leave)
+        elseif isa(terminator, GotoIfNot) || isa(terminator, EnterNode) || isa(terminator, AwaitNode) || isexpr(terminator, :leave)
             # Check if we need to break the critical edge or split the block
             if bb_rename[bb + 1] != new_bb + 1
                 @assert result_order[new_bb + 1] == 0
@@ -445,10 +445,8 @@ function domsort_ssa!(ir::IRCode, domtree::DomTree)
                 node = result[nidx]
                 node[:stmt], node[:type], node[:line] = GotoNode(bb_rename[bb + 1]), Any, NoLineUpdate
             end
-            if isa(terminator, GotoIfNot)
-                result[inst_range[end]][:stmt] = GotoIfNot(terminator.cond, bb_rename[terminator.dest])
-            elseif isa(terminator, EnterNode)
-                result[inst_range[end]][:stmt] = EnterNode(terminator, terminator.catch_dest == 0 ? 0 : bb_rename[terminator.catch_dest])
+            if isa(terminator, JumpingTerminators)
+                result[inst_range[end]][:stmt] = typeof(terminator)(terminator, bb_rename[jump_dest(terminator)])
             else
                 @assert isexpr(terminator, :leave)
             end
@@ -852,9 +850,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     for (bb, idx) in bbidxiter(ir)
         stmt = code[idx]
         # Convert GotoNode/GotoIfNot/PhiNode to BB addressing
-        if isa(stmt, GotoNode)
-            new_code[idx] = GotoNode(block_for_inst(cfg, stmt.label))
-        elseif isa(stmt, GotoIfNot)
+        if isa(stmt, GotoIfNot)
             new_dest = block_for_inst(cfg, stmt.dest)
             if new_dest == bb+1
                 # Drop this node - it's a noop
@@ -862,9 +858,10 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             else
                 new_code[idx] = GotoIfNot(stmt.cond, new_dest)
             end
-        elseif isa(stmt, EnterNode)
-            except_bb = stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest)
-            new_code[idx] = EnterNode(stmt, except_bb)
+        elseif isa(stmt, JumpingTerminators)
+            dst = jump_dest(stmt)
+            new_dst = dst == 0 ? 0 : block_for_inst(cfg, dst)
+            new_code[idx] = typeof(stmt)(stmt, new_dst)
             ssavalmap[idx] = SSAValue(idx) # Slot to store token for pop_exception
         elseif isexpr(stmt, :leave) || isexpr(stmt, :(=)) || isa(stmt, ReturnNode) ||
             isexpr(stmt, :meta) || isa(stmt, NewvarNode)

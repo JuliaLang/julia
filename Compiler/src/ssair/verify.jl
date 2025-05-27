@@ -244,6 +244,11 @@ function verify_ir(ir::IRCode, print::Bool=true,
                 @verify_error "Block $idx successors ($(block.succs)), does not match :enter terminator"
                 raise_error()
             end
+        elseif isa(terminator, AwaitNode)
+            if (block.succs != Int[terminator.catch_dest, idx+1] && block.succs != Int[idx+1, terminator.continue_dest])
+                @verify_error "Block $idx successors ($(block.succs)), does not match AwaitNode terminator"
+                raise_error()
+            end
         else
             if length(block.succs) != 1 || block.succs[1] != idx + 1
                 # As a special case, we allow extra statements in the BB of an :enter

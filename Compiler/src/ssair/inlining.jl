@@ -424,6 +424,8 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 stmt′ = GotoNode(stmt′.label + bb_offset)
             elseif isa(stmt′, EnterNode)
                 stmt′ = EnterNode(stmt′, stmt′.catch_dest == 0 ? 0 : stmt′.catch_dest + bb_offset)
+            elseif isa(stmt′, AwaitNode)
+                error("TODO")
             elseif isa(stmt′, GotoIfNot)
                 stmt′ = GotoIfNot(stmt′.cond, stmt′.dest + bb_offset)
             elseif isa(stmt′, PhiNode)
