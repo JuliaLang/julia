@@ -406,7 +406,7 @@ function cache_result!(interp::AbstractInterpreter, result::InferenceResult)
         code_cache(interp)[linfo] = ci = CodeInstance(interp, result, inferred_result, valid_worlds)
         if track_newly_inferred[]
             m = linfo.def
-            if isa(m, Method) && m.module != Core
+            if isa(m, Method)
                 ccall(:jl_push_newly_inferred, Cvoid, (Any,), ci)
             end
         end
