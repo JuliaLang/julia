@@ -7,6 +7,9 @@
 abstract type AbstractBroadcasted end
 const AbstractArrayOrBroadcasted = Union{AbstractArray, AbstractBroadcasted}
 
+has_fast_linear_indexing(a::AbstractArrayOrBroadcasted) = IndexStyle(a) === IndexLinear()
+has_fast_linear_indexing(a::AbstractVector) = true
+
 """
     Base.add_sum(x, y)
 
