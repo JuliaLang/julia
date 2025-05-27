@@ -198,7 +198,7 @@ julia> io = IOBuffer();
 julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
 56
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization. It has many members."
 
 julia> io = IOBuffer(b"JuliaLang is a GitHub organization.")
@@ -216,7 +216,7 @@ IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=fa
 julia> write(io, "JuliaLang is a GitHub organization.")
 34
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization"
 
 julia> length(read(IOBuffer(b"data", read=true, truncate=false)))
@@ -782,6 +782,80 @@ function take!(io::IOBuffer)
     end
     return data
 end
+
+"Internal method. This method can be faster than takestring!, because it does not
+reset the buffer to a usable state, and it does not check for io.reinit.
+Using the buffer after calling unsafe_takestring! may cause undefined behaviour.
+This function is meant to be used when the buffer is only used as a temporary
+string builder, which is discarded after the string is built."
+function unsafe_takestring!(io::IOBuffer)
+    used_span = get_used_span(io)
+    nbytes = length(used_span)
+    from = first(used_span)
+    isempty(used_span) && return ""
+    # The C function can only copy from the start of the memory.
+    # Fortunately, in most cases, the offset will be zero.
+    return if isone(from)
+        ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), io.data, nbytes)
+    else
+        mem = StringMemory(nbytes % UInt)
+        unsafe_copyto!(mem, 1, io.data, from, nbytes)
+        unsafe_takestring(mem)
+    end
+end
+
+"""
+    takestring!(io::IOBuffer) -> String
+
+Return the content of `io` as a `String`, resetting the buffer to its initial
+state.
+This is preferred over calling `String(take!(io))` to create a string from
+an `IOBuffer`.
+
+# Examples
+```jldoctest
+julia> io = IOBuffer();
+
+julia> write(io, [0x61, 0x62, 0x63]);
+
+julia> s = takestring!(io)
+"abc"
+
+julia> isempty(take!(io)) # io is now empty
+true
+```
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+"""
+function takestring!(io::IOBuffer)
+    # If the buffer has been used up and needs to be replaced, there are no bytes, and
+    # we can return an empty string without interacting with the buffer at all.
+    io.reinit && return ""
+
+    # If the iobuffer is writable, taking will remove the buffer from `io`.
+    # So, we reset the iobuffer, and directly unsafe takestring.
+    return if io.writable
+        s = unsafe_takestring!(io)
+        io.reinit = true
+        io.mark = -1
+        io.ptr = 1
+        io.size = 0
+        io.offset_or_compacted = 0
+        s
+    else
+        # If the buffer is not writable, taking will NOT remove the buffer,
+        # so if we just converted the buffer to a string, garbage collecting
+        # the string would free the memory underneath the iobuffer
+        used_span = get_used_span(io)
+        mem = StringMemory(length(used_span))
+        unsafe_copyto!(mem, 1, io.data, first(used_span), length(used_span))
+        unsafe_takestring(mem)
+    end
+end
+
+# Fallback methods
+takestring!(io::GenericIOBuffer) = String(take!(io))
 
 """
     _unsafe_take!(io::IOBuffer)
