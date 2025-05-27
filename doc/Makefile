@@ -30,6 +30,13 @@ $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt:
 	@mkdir -p "$(SRCCACHE)"
 	$(JLDOWNLOAD) "$@" https://www.unicode.org/Public/$(UNICODE_DATA_VERSION)/ucd/UnicodeData.txt
 
+# NEWS.md and stdlib are in-tree build artifacts - don't link them for oot builds.
+DOC_FILES=$(filter-out NEWS.md stdlib,$(notdir $(wildcard $(SRCDIR)/src/*)))
+src/%:
+	@mkdir -p src
+	ln -s $(SRCDIR)/src/$* $@
+src: $(addprefix src/,$(DOC_FILES))
+
 deps: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
 	cp "$<" UnicodeData.txt
