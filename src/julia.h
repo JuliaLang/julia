@@ -2579,7 +2579,7 @@ uint64_t parse_heap_size_hint(const char *optarg, const char *option_name);
 
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv
-JL_DLLEXPORT void jl_set_ARGS(int argc, char **argv);
+JL_DLLEXPORT jl_value_t *jl_set_ARGS(int argc, char **argv);
 
 JL_DLLEXPORT int jl_generating_output(void) JL_NOTSAFEPOINT;
 
