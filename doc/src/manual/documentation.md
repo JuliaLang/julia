@@ -37,7 +37,9 @@ the documented object. Here is a basic example:
 "Tell whether there are too foo items in the array."
 foo(xs::Array) = ...
 ```
-
+!!! note "Reminder"
+    Having any lines between the docstring and the object being documented (function, macro, type or instance), while human readable, are not allowed and may break automated documentation tools.
+    
 Documentation is interpreted as [Markdown](https://en.wikipedia.org/wiki/Markdown), so you can
 use indentation and code fences to delimit code examples from text. Technically, any object can
 be associated with any other as metadata; Markdown happens to be the default, but one can construct
@@ -242,12 +244,6 @@ As in the example above, we recommend following some simple conventions when wri
    ```
 
    This makes it clearer where docstrings start and end.
-
-   !!! note
-       If using [`Documenter.jl`](https://github.com/JuliaDocs/Documenter.jl) to create documentation, ensure that
-       there are no empty or comment lines between the end of the docstring (`"""`) and the function declaration.
-       Any lines between the end of the docstring and the function declaration will result in `Documenter` not finding
-       the docstring (and ensuring an associated `no docs found` error).
    
 10. Respect the line length limit used in the surrounding code.
 
