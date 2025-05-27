@@ -37,7 +37,7 @@ end
 ###### Generic reduction functions #####
 
 # Given two indices or ranges, merge them by dimension akin to a broadcasted `ifelse` over the dims
-_sliceall(x) = x[begin]:x[end] # avoid instabilities with OneTos and offset axes
+_sliceall(x) = first(x):last(x) # avoid instabilities with OneTos and offset axes
 _ifelseslice(b,x,y) = ifelse(b, _sliceall(x), _sliceall(y))
 mergeindices(b::NTuple{N,Bool}, x::CartesianIndices{N}, y::CartesianIndices{N}) where {N} =
     CartesianIndices(map(_ifelseslice, b, x.indices, y.indices))
