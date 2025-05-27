@@ -39,7 +39,7 @@ foo(xs::Array) = ...
 ```
 !!! note "Reminder"
     Having any lines between the docstring and the object being documented (function, macro, type or instance), while human readable, are not allowed and may break automated documentation tools.
-    
+
 Documentation is interpreted as [Markdown](https://en.wikipedia.org/wiki/Markdown), so you can
 use indentation and code fences to delimit code examples from text. Technically, any object can
 be associated with any other as metadata; Markdown happens to be the default, but one can construct
@@ -244,7 +244,7 @@ As in the example above, we recommend following some simple conventions when wri
    ```
 
    This makes it clearer where docstrings start and end.
-   
+
 10. Respect the line length limit used in the surrounding code.
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
