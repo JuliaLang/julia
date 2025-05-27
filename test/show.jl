@@ -1597,7 +1597,10 @@ struct var"%X%" end  # Invalid name without '#'
             :var"a $b",         # No escaping for $ in raw string
             :var"a\b",          # No escaping for backslashes in middle
             :var"a\\",          # Backslashes must be escaped at the end
-            :var"\"",
+            :var"a\\\\",
+            :var"a\"b",
+            :var"a\"",
+            :var"\\\"",
             :+, :var"+-",
             :(=), :(:), :(::),  # Requires quoting
             Symbol("a\nb"),

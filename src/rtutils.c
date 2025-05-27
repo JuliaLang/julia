@@ -729,15 +729,23 @@ static size_t jl_static_show_string(JL_STREAM *out, const char *str, size_t len,
             n += len;
         }
         else if (raw) {
+            // REF: Base.escape_raw_string
+            int escapes = 0;
             for (size_t i = 0; i < len; i++) {
                 uint8_t c = str[i];
-                if (c == '"')
-                    jl_uv_puts(out, "\\\"", 2);
-                else if (c == '\\' && i == len - 1)
-                    jl_uv_puts(out, "\\\\", 2);
-                else
-                    jl_uv_puts(out, str + i, 1);
+                if (c == '\\') {
+                    escapes++;
+                }
+                else {
+                     if (c == '"')
+                         for (escapes++; escapes > 0; escapes--)
+                             jl_uv_puts(out, "\\", 1);
+                     escapes = 0;
+                }
+                jl_uv_puts(out, str + i, 1);
             }
+            for (; escapes > 0; escapes--)
+                jl_uv_puts(out, "\\", 1);
         }
         else {
             char buf[512];
