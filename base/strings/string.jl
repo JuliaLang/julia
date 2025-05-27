@@ -188,6 +188,111 @@ end
 typemin(::Type{String}) = ""
 typemin(::String) = typemin(String)
 
+##
+#=
+  ┌─────────────────────────────────────────────────────┐
+  │                 Forward Mode State Diagram          │
+  │  GENERALIZED  ┌──────────────2──────────────┐       │
+  │    UTF-8      │                             │       │
+  │               ├────────3────────┐           │       │
+  │   GUTF-8      │                 │           │       │
+  │    ┌─0─┐      │     ┌─┐        ┌▼┐         ┌▼┐      │
+  │    │   │      ├─4──►│3├───1────►2├────1────►1├────┐ │
+  │   ┌▼───┴┐     │     └─┘        └─┘         └─┘    │ │
+  │   │  0  ├─────┘   Needs 3    Needs 2     Needs 1  │ │
+  │   └───▲─┘        ContBytes  ContBytes   ContBytes │ │
+  │       │                                           │ │
+  │       │           ContByte=Transition 1           │ │
+  │       └─────────────────────1─────────────────────┘ │
+  │  ┌─┐                                                │
+  │  │4│◄───All undefined transitions result in state 4 │
+  │  └─┘      State machine must be reset after state 4 │
+  └─────────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────┐
+  │                 Reverse Mode State Diagram          │
+  │  GENERALIZED  ┌──◄───────────2:4────────────┐       │
+  │    UTF-8      │                             │       │
+  │   GUTF-8      ├──◄─────3:4──────┐           │       │
+  │               │                 │           │       │
+  │  ┌─0,2:4─┐    │     ┌─┐        ┌┴┐         ┌┴┐      │
+  │  │       │    ├─4───┤3│◄──1────┤2│◄───1────┤1│◄───┐ │
+  │ ┌▼───────┴┐   │     └─┘        └─┘         └─┘    │ │
+  │ │    0    │◄──┘   Needs 3    Needs 2     Needs 1  │ │
+  │ └─────┬───┘      ContBytes  ContBytes   ContBytes │ │
+  │       │                                           │ │
+  │       │           ContByte=Transition 1           │ │
+  │       └─────────────────────1─────────────────────┘ │
+  │  ┌─┐                                                │
+  │  │4│◄───All undefined transitions result in state 4 │
+  │  └─┘      State machine must be reset after state 4 │
+  └─────────────────────────────────────────────────────┘
+=#
+const _GUTF8State = UInt16
+const _GUTF8_SHIFT_MASK = _GUTF8State(0b1111)
+const _GUTF8_DFA_ACCEPT = _GUTF8State(0)
+const _GUTF8_DFA_INVALID = _GUTF8State(4)
+
+const _GUTF8_DFA_TABLE, _GUTF8_DFA_REVERSE_TABLE = let
+    # It should be noted that even though the invalid state is state 4 the shift is 1
+    # which is the second lowest state shift.
+    shifts = [0, 13, 6, 10, 4]
+
+    # Both of these state tables are only 4 states wide even though there are 5 states
+    # because the machine must be reset once it is in state 4
+    forward_state_table  = [    [0,  4,  4,  4],
+                                [4,  0,  1,  2],
+                                [1,  4,  4,  4],
+                                [2,  4,  4,  4],
+                                [3,  4,  4,  4],
+                                [4,  4,  4,  4] ]
+
+    reverse_state_table  = [    [0,  4,  4,  4],
+                                [1,  2,  3,  4],
+                                [0,  0,  4,  4],
+                                [0,  0,  0,  4],
+                                [0,  0,  0,  0],
+                                [4,  4,  4,  4] ]
+
+
+    f(from, to) = _GUTF8State(shifts[to + 1]) << shifts[from + 1]
+    r(state_row) = |([f(n - 1, state_row[n]) for n in 1:length(state_row)]...)
+    forward_class_rows = [r(forward_state_table[n]) for n in 1:length(forward_state_table)]
+    reverse_class_rows = [r(reverse_state_table[n]) for n in 1:length(reverse_state_table)]
+
+    byte_class = [  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x00:0x0F      00000000:00001111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x10:0x1F      00010000:00011111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x20:0x2F      00100000:00101111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x30:0x3F      00110000:00111111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x40:0x4F      01000000:01001111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x50:0x5F      01010000:01011111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x60:0x6F      01100000:01101111
+                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,    #  0x70:0x7F      01110000:01111111
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,    #  0x80:0x8F      10000000:10001111
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,    #  0x90:0x9F      10010000:10011111
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,    #  0xA0:0xAF      10100000:10101111
+                    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,    #  0xB0:0xBF      10110000:10111111
+                    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,    #  0xC0:0xCF      11000000:11001111
+                    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,    #  0xD0:0xDF      11010000:11011111
+                    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,    #  0xE0:0xEF      11100000:11101111
+                    4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 5, 5, 5, 5  ]  #  0xF0:0xFF      11110000:11111111
+    forward_dfa_table = zeros(_GUTF8State, 256)
+    reverse_dfa_table = zeros(_GUTF8State, 256)
+    for n in 1:256
+        forward_dfa_table[n] = forward_class_rows[1 + byte_class[n]]
+        reverse_dfa_table[n] = reverse_class_rows[1 + byte_class[n]]
+    end
+    (tuple(forward_dfa_table...), tuple(reverse_dfa_table...))
+end
+##
+@inline function _gutf8_dfa_step(state::_GUTF8State, byte::UInt8)
+    @inbounds (_GUTF8_DFA_TABLE[byte + 1] >> state) & _GUTF8_SHIFT_MASK
+end
+
+@inline function _gutf8_dfa_reverse_step(state::_GUTF8State, byte::UInt8)
+    @inbounds (_GUTF8_DFA_REVERSE_TABLE[byte + 1] >> state) & _GUTF8_SHIFT_MASK
+end
+
 ## thisind, nextind ##
 
 @propagate_inbounds thisind(s::String, i::Int) = _thisind_str(s, i)
@@ -196,22 +301,17 @@ typemin(::String) = typemin(String)
 @inline function _thisind_str(s, i::Int)
     i == 0 && return 0
     n = ncodeunits(s)
-    i == n + 1 && return i
-    @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
-    @inbounds b = codeunit(s, i)
-    (b & 0xc0 == 0x80) & (i-1 > 0) || return i
-    (@noinline function _thisind_continued(s, i, n) # mark the rest of the function as a slow-path
-        local b
-        @inbounds b = codeunit(s, i-1)
-        between(b, 0b11000000, 0b11110111) && return i-1
-        (b & 0xc0 == 0x80) & (i-2 > 0) || return i
-        @inbounds b = codeunit(s, i-2)
-        between(b, 0b11100000, 0b11110111) && return i-2
-        (b & 0xc0 == 0x80) & (i-3 > 0) || return i
-        @inbounds b = codeunit(s, i-3)
-        between(b, 0b11110000, 0b11110111) && return i-3
-        return i
-    end)(s, i, n)
+    (i == n + 1) | (i == 1) && return i
+    @boundscheck Base.between(i, 1, n) || throw(BoundsError(s, i))
+    bytes = codeunits(s)
+    state = _GUTF8_DFA_ACCEPT
+    for j in 0:3
+        k = i - j
+        state = @inbounds _gutf8_dfa_reverse_step(state, bytes[k])
+        (state == _GUTF8_DFA_ACCEPT) && return k
+        (state == _GUTF8_DFA_INVALID) | (k <= 1) && return i
+    end
+    return i # Should never get here
 end
 
 @propagate_inbounds nextind(s::String, i::Int) = _nextind_str(s, i)
@@ -221,32 +321,22 @@ end
     i == 0 && return 1
     n = ncodeunits(s)
     @boundscheck between(i, 1, n) || throw(BoundsError(s, i))
-    @inbounds l = codeunit(s, i)
-    between(l, 0x80, 0xf7) || return i+1
-    (@noinline function _nextind_continued(s, i, n, l) # mark the rest of the function as a slow-path
-        if l < 0xc0
-            # handle invalid codeunit index by scanning back to the start of this index
-            # (which may be the same as this index)
-            i′ = @inbounds thisind(s, i)
-            i′ >= i && return i+1
-            i = i′
-            @inbounds l = codeunit(s, i)
-            (l < 0x80) | (0xf8 ≤ l) && return i+1
-            @assert l >= 0xc0 "invalid codeunit"
-        end
-        # first continuation byte
-        (i += 1) > n && return i
-        @inbounds b = codeunit(s, i)
-        b & 0xc0 ≠ 0x80 && return i
-        ((i += 1) > n) | (l < 0xe0) && return i
-        # second continuation byte
-        @inbounds b = codeunit(s, i)
-        b & 0xc0 ≠ 0x80 && return i
-        ((i += 1) > n) | (l < 0xf0) && return i
-        # third continuation byte
-        @inbounds b = codeunit(s, i)
-        return ifelse(b & 0xc0 ≠ 0x80, i, i+1)
-    end)(s, i, n, l)
+    bytes = codeunits(s)
+    @inbounds l = bytes[i]
+    (l < 0x80) | (0xf8 ≤ l) && return i + 1
+    if l < 0xc0
+        i′ = @inbounds thisind(s, i)
+        (i′ >= i) && return i + 1
+        i = i′
+    end
+    state = _GUTF8_DFA_ACCEPT
+    for j in 0:3
+        k = i + j
+        state = @inbounds _gutf8_dfa_step(state, bytes[k])
+        (state == _GUTF8_DFA_INVALID) && return k #The screening above makes sure this is never returned when k == i
+        (state == _GUTF8_DFA_ACCEPT) | (k >= n) && return k + 1
+    end
+    return i + 4 # Should never get here
 end
 
 ## checking UTF-8 & ASCII validity ##
@@ -366,7 +456,7 @@ const _UTF8_DFA_TABLE = let # let block rather than function doesn't pollute bas
         class_row[i]=row
     end
 
-    map(c->class_row[c+1],character_classes)
+    tuple(map(c->class_row[c+1],character_classes)...)
 end
 
 
@@ -454,64 +544,62 @@ is_valid_continuation(c) = c & 0xc0 == 0x80
     (i % UInt) - 1 < ncodeunits(s) || return nothing
     b = @inbounds codeunit(s, i)
     u = UInt32(b) << 24
-    between(b, 0x80, 0xf7) || return reinterpret(Char, u), i+1
-    return @noinline iterate_continued(s, i, u)
+    (b < 0x80) && return reinterpret(Char, u), i + 1
+    return iterate_continued(s, i, b, u)
 end
 
-# duck-type s so that external UTF-8 string packages like StringViews can hook in
-function iterate_continued(s, i::Int, u::UInt32)
-    u < 0xc0000000 && (i += 1; @goto ret)
+function iterate_continued(s::String, i::Int, b::UInt8, u::UInt32)
     n = ncodeunits(s)
-    # first continuation byte
-    (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 16
-    # second continuation byte
-    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 8
-    # third continuation byte
-    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i)
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b); i += 1
-@label ret
-    return reinterpret(Char, u), i
+    state = _GUTF8_DFA_ACCEPT
+    state = _gutf8_dfa_step(state, b)
+    k = i
+    state <= _GUTF8_DFA_INVALID && @goto ret_kp1
+    shift = 24
+    for j in 1:3
+        k = i + j
+        @inbounds b = codeunit(s, k)
+        state = _gutf8_dfa_step(state, b)
+        state == _GUTF8_DFA_INVALID && @goto ret
+        u |= UInt32(b) << (shift -= 8)
+        (state == _GUTF8_DFA_ACCEPT) && @goto ret_kp1
+        (k >= n) && @goto ret_kp1
+    end
+    @label ret_kp1
+    k += 1
+    @label ret
+    return reinterpret(Char, u), k
 end
+##
 
 @propagate_inbounds function getindex(s::String, i::Int)
     b = codeunit(s, i)
     u = UInt32(b) << 24
-    between(b, 0x80, 0xf7) || return reinterpret(Char, u)
+    #Check u rather than b here because it force compiler to calculate u now
+    (b >= 0x80) || return reinterpret(Char, u)
     return getindex_continued(s, i, u)
 end
 
-# duck-type s so that external UTF-8 string packages like StringViews can hook in
-function getindex_continued(s, i::Int, u::UInt32)
-    if u < 0xc0000000
-        # called from `getindex` which checks bounds
+function getindex_continued(s::String, i::Int, u::UInt32)
+    @inbounds b = codeunit(s,i) #It is faster to refetch b than recalculate u
+    n = ncodeunits(s)
+    shift = 24
+    state = _gutf8_dfa_step(_GUTF8_DFA_ACCEPT, b)
+    if (state == _GUTF8_DFA_INVALID)
+        #Checks whether i is not at the beginning of a character which is an error
+        # or a single invalid byte which returns
         @inbounds isvalid(s, i) && @goto ret
         string_index_err(s, i)
     end
-    n = ncodeunits(s)
-
-    (i += 1) > n && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 1
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 16
-
-    ((i += 1) > n) | (u < 0xe0000000) && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 2
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b) << 8
-
-    ((i += 1) > n) | (u < 0xf0000000) && @goto ret
-    @inbounds b = codeunit(s, i) # cont byte 3
-    b & 0xc0 == 0x80 || @goto ret
-    u |= UInt32(b)
-@label ret
+    for j in 1:3
+        k = i + j
+        @inbounds b = codeunit(s, k)
+        state = _gutf8_dfa_step(state, b)
+        #If the state machine goes to invalid return value from before byte was processed
+        state == _GUTF8_DFA_INVALID && break
+        u |= UInt32(b) << (shift -= 8)
+        ((state == _GUTF8_DFA_ACCEPT) | (k == n)) && break
+    end
+    @label ret
     return reinterpret(Char, u)
 end
 
@@ -547,29 +635,90 @@ end
     @inbounds length_continued(s, i, j, c)
 end
 
-@assume_effects :terminates_locally @inline @propagate_inbounds function length_continued(s::String, i::Int, n::Int, c::Int)
-    i < n || return c
-    b = codeunit(s, i)
-    while true
-        while true
-            (i += 1) ≤ n || return c
-            0xc0 ≤ b ≤ 0xf7 && break
-            b = codeunit(s, i)
+const _STRING_LENGTH_CHUNKING_SIZE = 256
+
+# The current implimentation of this function favors ascii heavy text more than multibyte,
+#  currently it uses a fast loop to scan for non ascii characters then when it encounters a
+#  multibyte character it process only a single multbyte character before going back to look
+#  for non-ascii characters.  A more balanced algorithm would likely want to process multibyte
+#  characters in blocks of 64 bytes
+function _length_nonascii_decrement(
+    cu::AbstractVector{UInt8}, first::Int, last::Int, c::Int, state=_GUTF8_DFA_ACCEPT
+)
+    state = ifelse(state == _GUTF8_DFA_INVALID, _GUTF8_DFA_ACCEPT, state)
+    i = ifelse(state == _GUTF8_DFA_ACCEPT, first - 1, first)
+    #@inbounds b = codeunit(s, first)
+    @inbounds b = cu[first]
+    @inbounds while true
+        #This logic enables the first state to be >_GUTF8_DFA_INVALID so that a chunk
+        # can continue from a previous chunk
+        (state == _GUTF8_DFA_ACCEPT) && (i += 1)
+        #Logic was taken out of the n=1:3 loop below so we must correct the count here
+        (state == _GUTF8_DFA_INVALID) && (c += 1)
+        if state <= _GUTF8_DFA_INVALID
+            #Loop through all the one byte characters
+            while true
+                b = cu[i]
+                ((i += 1) <= last) || break
+                0xc0 ≤ b ≤ 0xf7 && break
+            end
+            state = _gutf8_dfa_step(_GUTF8_DFA_ACCEPT, b)
+            (i <= last) || return (c, state)
         end
-        l = b
-        b = codeunit(s, i) # cont byte 1
-        c -= (x = b & 0xc0 == 0x80)
-        x & (l ≥ 0xe0) || continue
 
-        (i += 1) ≤ n || return c
-        b = codeunit(s, i) # cont byte 2
-        c -= (x = b & 0xc0 == 0x80)
-        x & (l ≥ 0xf0) || continue
-
-        (i += 1) ≤ n || return c
-        b = codeunit(s, i) # cont byte 3
-        c -= (b & 0xc0 == 0x80)
+        #This should get unrolled
+        for n in 1:3
+            state = _gutf8_dfa_step(state, cu[i])
+            c -= 1
+            state <= _GUTF8_DFA_INVALID && break
+            ((i += 1) <= last) || return (c, state)
+        end
     end
+    return (c, state)
+end
+
+function _length_continued_nonascii(
+    cu::AbstractVector{UInt8}, first::Int, last::Int, c::Int
+)
+    chunk_size = _STRING_LENGTH_CHUNKING_SIZE
+
+    start = first
+    stop = min(last, first + chunk_size - 1)
+    state = _GUTF8_DFA_ACCEPT
+
+    while start <= last
+        #First we process a non ascii chunk because we assume the barrier
+        # function sent it here for a reason
+        (c, state) = _length_nonascii_decrement(cu, start, stop, c, state)
+        start = start + chunk_size
+        stop = min(last, stop + chunk_size)
+
+        while state <= _GUTF8_DFA_INVALID
+            _isascii(cu, start, stop) || break
+            (start = start + chunk_size) <= last || break
+            stop = min(last, stop + chunk_size)
+        end
+    end
+    return c
+end
+
+@assume_effects :foldable @inline @propagate_inbounds  function length_continued(s::String, first::Int, last::Int, c::Int)
+    cu = codeunits(s)
+    chunk_size = _STRING_LENGTH_CHUNKING_SIZE
+    first < last || return c
+
+    epilog_bytes = rem(last - first + 1, chunk_size)
+    start = first
+
+    chunk_last = last - epilog_bytes
+    start == last && return c
+    for start in start:chunk_size:chunk_last
+        _isascii(cu, start, start + chunk_size - 1) ||
+            return _length_continued_nonascii(cu, start, last, c)
+    end
+    ((chunk_last + 1 <= last) && _isascii(cu, chunk_last + 1, last)) ||
+        return _length_continued_nonascii(cu, chunk_last + 1, last, c)
+    return c
 end
 
 ## overload methods for efficiency ##

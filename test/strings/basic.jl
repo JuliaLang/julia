@@ -1463,3 +1463,5 @@ if Sys.iswindows()
         @test Base.cwstring(str_3) == UInt16[0x0061, 0x0723, 0xd808, 0xdc00, 0x0000]
     end
 end
+
+@test_throws StringIndexError "α"[2]
