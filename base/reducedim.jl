@@ -133,7 +133,7 @@ function mapreducedim(f::F, op::OP, A, init, dims, alloc=_MapReduceAllocator(A))
         is_inner_dim = ntuple(d->d in dims || size(A, d) == 1, ndims(A))
         outer = CartesianIndices(reduced_indices(A, dims))
     end
-    inner = mergeindices(is_inner_dim, CartesianIndices(A), outer)
+    inner = CartesianIndices(map((b,ax)->b ? ax : reduced_index(ax), is_inner_dim, axes(A)))
     n = length(inner)
     # Handle the empty and trivial 1-element cases:
     if (n == 0 || isempty(A))
