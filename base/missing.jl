@@ -287,25 +287,17 @@ _SkipMissingMapper{T}(f) where {T} = _SkipMissingMapper{T, typeof(f)}(f)
 (smm::_SkipMissingMapper)(::Missing) = missing
 (smm::_SkipMissingMapper{T})(x) where {T} = smm.f(x::T)
 
-mapreduce(f::F, op::G, itr::SkipMissing; init=Base._InitialValue()) where {F,G} = _mapreduce_skipmissing(f, op, itr, init)
-mapreduce(f::F, op::G, itr::SkipMissing{<:AbstractArray}; init=Base._InitialValue()) where {F,G} = _mapreduce_skipmissing_array(f, op, itr, init)
-
-# The case with an init is easy; just use transducers!
-function _mapreduce_skipmissing(f::F, op::G, itr, init) where {F,G}
+function mapreduce(f::F, op::G, itr::SkipMissing; init=Base._InitialValue()) where {F,G}
     (IteratorEltype(itr.x) === HasEltype() && !(eltype(itr.x) >: Missing)) && return mapreduce(f, op, itr.x; init)
-    v = mapreduce_pairwise(_SkipMissingMapper{eltype(itr)}(f), _SkipMissingReducer(op), itr.x, init)
-    return ismissing(v) ? mapreduce_empty(f, op, eltype(itr)) : v
-end
-# Cases without an init require an initial foldl step at the beginning of every chain. This is hard in general
-function _mapreduce_skipmissing(f::F, op::G, itr, init::_InitialValue) where {F,G}
-    (IteratorEltype(itr.x) === HasEltype() && !(eltype(itr.x) >: Missing)) && return mapreduce(f, op, itr.x; init)
+    # Note that we _could_ use the transducers here in cases where `init` is provided, but the cost of
+    # iterating over the unstable `Union{Nothing, Tuple{Union{Missing, T}, IterState}}` is very high
     return mapreduce_pairwise(f, op, itr, init)
 end
 
-# And for Arrays we can do better (either way!) by pretending all indices are available,
+# For Arrays we can do better (either way!) by pretending all indices are available,
 # but ensuring that the kernels carefully init each chain
-function _mapreduce_skipmissing_array(f::F, op::G, itr, init) where {F,G}
-    (IteratorEltype(itr.x) === HasEltype() && !(eltype(itr.x) >: Missing)) && return mapreduce(f, op, itr.x; init)
+function mapreduce(f::F, op::G, itr::SkipMissing{<:AbstractArray}; init=Base._InitialValue()) where {F,G}
+    !(eltype(itr.x) >: Missing) && return mapreduce(f, op, itr.x; init)
     # Ensure we either get an AbstractUnitRange from eachindex or fallback to a CartesianIndices
     ei = eachindex(itr.x)
     inds = ei isa AbstractUnitRange ? ei : CartesianIndices(itr.x)
