@@ -58,13 +58,13 @@ jobs:
                   'X-GitHub-Api-Version': '2022-11-28'
                 }
               });
-            
+
               if (response.status === 204) {
                 isCollaborator = true;
               } else {
                 console.warn('Unexpected status code:', response.status);
               }
-            
+
             } catch (error) {
               if (error.status === 404) {
                 isCollaborator = false;
