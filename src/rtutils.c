@@ -841,7 +841,7 @@ static size_t jl_static_show_float(JL_STREAM *out, double v,
     else if (vt == jl_float32_type) {
         size_t m = snprintf(buf, sizeof buf, "%.9g", v);
         // If the exponent was printed, replace it with 'f'
-        char *p = memchr(buf, 'e', m);
+        char *p = (char *)memchr(buf, 'e', m);
         if (p)
             *p = 'f';
         jl_uv_puts(out, buf, m);
