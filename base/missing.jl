@@ -269,9 +269,93 @@ function show(io::IO, s::SkipMissing)
     print(io, ')')
 end
 
-# Simple optimization for mapreduce if the array cannot hold Missing
-mapreduce(f::F, op::G, itr::SkipMissing{<:AbstractArray}; init=Base._InitialValue(), dims=(:)) where {F,G} =
-    mapreducedim(f, op, eltype(itr.x) >: Missing ? itr : itr.x, init, dims)
+# Transducers for mapreduce; the hardest part is ensuring that the
+# every reduction chain starts correctly when `init` is not provided because
+# we need to call reduce_first on the first *non-missing* value.
+struct _SkipMissingReducer{F} <: Function
+    op::F
+end
+(smr::_SkipMissingReducer)(::Missing, ::Missing) = missing
+(smr::_SkipMissingReducer)(::Missing, y)         = y
+(smr::_SkipMissingReducer)(x,         ::Missing) = x
+(smr::_SkipMissingReducer)(x,         y)         = smr.op(x, y)
+
+struct _SkipMissingMapper{T,F} <: Function
+    f::F
+end
+_SkipMissingMapper{T}(f) where {T} = _SkipMissingMapper{T, typeof(f)}(f)
+(smm::_SkipMissingMapper)(::Missing) = missing
+(smm::_SkipMissingMapper{T})(x) where {T} = smm.f(x::T)
+
+mapreduce(f::F, op::G, itr::SkipMissing; init=Base._InitialValue()) where {F,G} = _mapreduce_skipmissing(f, op, itr, init)
+mapreduce(f::F, op::G, itr::SkipMissing{<:AbstractArray}; init=Base._InitialValue()) where {F,G} = _mapreduce_skipmissing_array(f, op, itr, init)
+
+# The case with an init is easy; just use transducers!
+function _mapreduce_skipmissing(f::F, op::G, itr, init) where {F,G}
+    (IteratorEltype(itr.x) === HasEltype() && !(eltype(itr.x) >: Missing)) && return mapreduce(f, op, itr.x; init)
+    v = mapreduce_pairwise(_SkipMissingMapper{eltype(itr)}(f), _SkipMissingReducer(op), itr.x, init)
+    return ismissing(v) ? mapreduce_empty(f, op, eltype(itr)) : v
+end
+# Cases without an init require an initial foldl step at the beginning of every chain. This is hard in general
+function _mapreduce_skipmissing(f::F, op::G, itr, init::_InitialValue) where {F,G}
+    (IteratorEltype(itr.x) === HasEltype() && !(eltype(itr.x) >: Missing)) && return mapreduce(f, op, itr.x; init)
+    return mapreduce_pairwise(f, op, itr, init)
+end
+
+# And for Arrays we can do better (either way!) by pretending all indices are available,
+# but ensuring that the kernels carefully init each chain
+function _mapreduce_skipmissing_array(f::F, op::G, itr, init) where {F,G}
+    (IteratorEltype(itr.x) === HasEltype() && !(eltype(itr.x) >: Missing)) && return mapreduce(f, op, itr.x; init)
+    # Ensure we either get an AbstractUnitRange from eachindex or fallback to a CartesianIndices
+    ei = eachindex(itr.x)
+    inds = ei isa AbstractUnitRange ? ei : CartesianIndices(itr.x)
+    # The transducers are still useful here; they ensure combined empty chains appropriately skip missing
+    v = mapreduce_pairwise(_SkipMissingMapper{eltype(itr)}(f), _SkipMissingReducer(op), itr, init, inds)
+    return ismissing(v) ? mapreduce_empty(f, op, eltype(itr)) : v
+end
+
+function mapreduce_kernel(f, op, itr::SkipMissing{<:AbstractArray}, init, inds::AbstractUnitRange)
+    i1, iN = first(inds), last(inds)
+    A = itr.x
+    i = i1; ai = missing
+    for outer i in i1:iN
+        ai = @inbounds A[i]
+        !ismissing(ai) && break
+    end
+    ismissing(ai) && return missing
+    v = _mapreduce_start(f, op, A, init, ai::eltype(itr))
+    i == typemax(typeof(i)) && return v
+    for i in i+1:iN
+        @inbounds ai = A[i]
+        if !ismissing(ai)
+            v = op(v, f(ai::eltype(itr)))
+        end
+    end
+    return v
+end
+
+function mapreduce_kernel(f, op, itr::SkipMissing{<:AbstractArray}, init, inds::CartesianIndices)
+    A = itr.x
+    it = iterate(inds)
+    local s
+    ai = missing
+    while it !== nothing
+        i, s = it
+        ai = @inbounds A[i]
+        !ismissing(ai) && break
+        it = iterate(inds, s)
+    end
+    ismissing(ai) && return missing
+    v = _mapreduce_start(f, op, A, init, ai::eltype(itr))
+    for i in Iterators.rest(inds, s)
+        @inbounds ai = A[i]
+        if !ismissing(ai)
+            v = op(v, f(ai::eltype(itr)))
+        end
+    end
+    return v
+end
+
 
 """
     filter(f, itr::SkipMissing{<:AbstractArray})

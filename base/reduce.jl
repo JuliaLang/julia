@@ -478,7 +478,6 @@ mapreduce_pairwise(f::F, op::G, itr, init) where {F, G} = mapreduce_pairwise(f, 
 function mapreduce_pairwise(f, op, itr, init, S::Union{HasLength, HasShape})
     n = length(itr)
     n < 1 && return _mapreduce_start(f, op, itr, init)
-    n <= 16 && return mapfoldl(f, op, itr; init)
     n <= pairwise_blocksize(f, op) && return mapreduce_kernel(f, op, itr, init, S, n)[1]
     return mapreduce_pairwise(f, op, itr, init, S, n)[1]
 end
