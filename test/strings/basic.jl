@@ -49,6 +49,24 @@ using Random
     end
 end
 
+@testset "takestring!" begin
+    v = [0x61, 0x62, 0x63]
+    old_mem = v.ref.mem
+    @test takestring!(v) == "abc"
+    @test isempty(v)
+    @test v.ref.mem !== old_mem # memory is changed
+    for v in [
+        UInt8[],
+        [0x01, 0x02, 0x03],
+        collect(codeunits("æøå"))
+    ]
+        cp = copy(v)
+        s = takestring!(v)
+        @test isempty(v)
+        @test codeunits(s) == cp
+    end
+end
+
 @testset "{starts,ends}with" begin
     @test startswith("abcd", 'a')
     @test startswith('a')("abcd")
