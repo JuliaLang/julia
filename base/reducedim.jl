@@ -117,6 +117,17 @@ else
     _mapreduce_might_widen(_, _, _, _, _) = true
 end
 
+# When performing dimensional reductions over arrays with singleton dimensions, we have
+# a choice as to whether that singleton dimenion should be a part of the reduction or not;
+# it does not affect the output. It's advantageous to additionally consider _leading_ singleton
+# dimensions as part of the reduction as that allows more cases to be considered contiguous;
+# but once we've broken contiguity it's more helpful to _ignore_ those cases.
+compute_inner_dims(flagged_dims, source_size) =
+    flagged_dims[1] || source_size[1] == 1 ?
+        (true, compute_inner_dims(tail(flagged_dims), tail(source_size))...) :
+        (false, map((flag,sz)->flag && sz != 1, tail(flagged_dims), tail(source_size))...)
+compute_inner_dims(::Tuple{}, ::Tuple{}) = ()
+
 function mapreducedim(f::F, op::OP, A, init, dims, alloc=_MapReduceAllocator(A)) where {F, OP}
     if alloc isa _MapReduceInPlace
         # We can ignore dims and just trust the output array's axes. Note that the
@@ -128,9 +139,7 @@ function mapreducedim(f::F, op::OP, A, init, dims, alloc=_MapReduceAllocator(A))
         outer = CartesianIndices(ntuple(d->axes(alloc.A, d), ndims(A)))
         is_inner_dim = map(==(1), size(outer))
     else
-        # It's advantageous to additionally consider singleton dimensions as part of the
-        # reduction as that allows more cases to be considered contiguous
-        is_inner_dim = ntuple(d->d in dims || size(A, d) == 1, ndims(A))
+        is_inner_dim = compute_inner_dims(ntuple(d->d in dims, ndims(A)), size(A))
         outer = CartesianIndices(reduced_indices(A, dims))
     end
     inner = CartesianIndices(map((b,ax)->b ? ax : reduced_index(ax), is_inner_dim, axes(A)))
