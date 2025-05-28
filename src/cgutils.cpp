@@ -1479,6 +1479,7 @@ static Value *emit_sizeof(jl_codectx_t &ctx, const jl_cgval_t &p)
         return dyn_size;
     }
 }
+*/
 
 static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
 {
@@ -1493,7 +1494,6 @@ static Value *emit_datatype_mutabl(jl_codectx_t &ctx, Value *dt)
     mutabl = ctx.builder.CreateLShr(mutabl, 1);
     return ctx.builder.CreateTrunc(mutabl, getInt1Ty(ctx.builder.getContext()));
 }
-*/
 
 static Value *emit_datatype_isprimitivetype(jl_codectx_t &ctx, Value *typ)
 {
@@ -4141,7 +4141,7 @@ static jl_cgval_t emit_setfield(jl_codectx_t &ctx,
         size_t fsz1 = jl_field_size(sty, idx0) - 1;
         Value *ptindex = emit_ptrgep(ctx, addr, fsz1);
         setNameWithField(ctx.emission_context, ptindex, get_objname, sty, idx0, Twine(".tindex_ptr"));
-        return union_store(ctx, addr, ptindex, rhs, cmp, jfty, tbaa, ctx.tbaa().tbaa_unionselbyte,
+        return union_store(ctx, addr, ptindex, rhs, cmp, jfty, tbaa, strct.tbaa,
             Order, FailOrder,
             needlock, issetfield, isreplacefield, isswapfield, ismodifyfield, issetfieldonce,
             modifyop, fname);
@@ -4409,7 +4409,7 @@ static jl_cgval_t emit_new_struct(jl_codectx_t &ctx, jl_value_t *ty, size_t narg
         undef_derived_strct(ctx, strct, sty, strctinfo.tbaa);
         for (size_t i = nargs; i < nf; i++) {
             if (!jl_field_isptr(sty, i) && jl_is_uniontype(jl_field_type(sty, i))) {
-                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_unionselbyte);
+                jl_aliasinfo_t ai = jl_aliasinfo_t::fromTBAA(ctx, strctinfo.tbaa);
                 ai.decorateInst(ctx.builder.CreateAlignedStore(
                         ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0),
                         emit_ptrgep(ctx, strct, jl_field_offset(sty, i) + jl_field_size(sty, i) - 1),

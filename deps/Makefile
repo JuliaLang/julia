@@ -72,10 +72,12 @@ endif
 endif
 endif
 
+PATCHELF_MANIFEST :=
 ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 ifeq ($(USE_SYSTEM_PATCHELF), 0)
 DEP_LIBS += patchelf
 PATCHELF:=$(build_depsbindir)/patchelf
+PATCHELF_MANIFEST:=$(build_prefix)/manifest/patchelf
 else
 PATCHELF:=patchelf
 endif
@@ -157,6 +159,10 @@ ifeq ($(USE_SYSTEM_ZLIB), 0)
 DEP_LIBS += zlib
 endif
 
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+DEP_LIBS += zstd
+endif
+
 ifeq ($(USE_SYSTEM_P7ZIP), 0)
 DEP_LIBS += p7zip
 endif
@@ -204,7 +210,7 @@ DEP_LIBS_STAGED := $(DEP_LIBS)
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
-	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib p7zip csl \
+	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd p7zip csl \
 	sanitizers libsuitesparse lld libtracyclient ittapi nvtx JuliaSyntax \
 	terminfo mmtk_julia
 DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
@@ -256,6 +262,7 @@ include $(SRCDIR)/openblas.mk
 include $(SRCDIR)/utf8proc.mk
 include $(SRCDIR)/libsuitesparse.mk
 include $(SRCDIR)/zlib.mk
+include $(SRCDIR)/zstd.mk
 include $(SRCDIR)/unwind.mk
 include $(SRCDIR)/gmp.mk
 include $(SRCDIR)/mpfr.mk

@@ -452,8 +452,8 @@ function repl_backend_loop(backend::REPLBackend, get_module::Function)
             try
                 ret = f()
                 put!(backend.response_channel, Pair{Any, Bool}(ret, false))
-            catch err
-                put!(backend.response_channel, Pair{Any, Bool}(err, true))
+            catch
+                put!(backend.response_channel, Pair{Any, Bool}(current_exceptions(), true))
             end
         else
             ast = ast_or_func
@@ -555,6 +555,16 @@ display(d::REPLDisplay, x) = display(d, MIME("text/plain"), x)
 
 show_repl(io::IO, mime::MIME"text/plain", x) = show(io, mime, x)
 
+function show_repl(io::IO, mime::MIME"text/plain", c::AbstractChar)
+    show(io, mime, c) # Call the original Base.show
+    # Check for LaTeX/emoji alias and print if found and using symbol_latex which is used in help?> mode
+    latex = symbol_latex(string(c))
+    if !isempty(latex)
+        print(io, ", input as ")
+        printstyled(io, latex, "<tab>"; color=:cyan)
+    end
+end
+
 show_repl(io::IO, ::MIME"text/plain", ex::Expr) =
     print(io, JuliaSyntaxHighlighting.highlight(
         sprint(show, ex, context=IOContext(io, :color => false))))
@@ -594,11 +604,11 @@ function print_response(errio::IO, response, backend::Union{REPLBackendRef,Nothi
                 if val !== nothing && show_value
                     val2, iserr = if specialdisplay === nothing
                         # display calls may require being run on the main thread
-                        eval_with_backend(backend) do
+                        call_on_backend(backend) do
                             Base.invokelatest(display, val)
                         end
                     else
-                        eval_with_backend(backend) do
+                        call_on_backend(backend) do
                             Base.invokelatest(display, specialdisplay, val)
                         end
                     end
@@ -715,7 +725,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             (isa(ast,Expr) && ast.head === :incomplete) || break
         end
         if !isempty(line)
-            response = eval_with_backend(ast, backend)
+            response = eval_on_backend(ast, backend)
             print_response(repl, response, !ends_with_semicolon(line), false)
         end
         write(repl.terminal, '\n')
@@ -923,7 +933,7 @@ function hist_from_file(hp::REPLHistoryProvider, path::String)
 end
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
-    str = rstrip(String(take!(copy(s.input_buffer))))
+    str = rstrip(takestring!(copy(s.input_buffer)))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
     !isempty(hist.history) &&
@@ -1056,7 +1066,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
                              prefix::AbstractString,
                              backwards::Bool,
                              cur_idx::Int = hist.cur_idx)
-    cur_response = String(take!(copy(LineEdit.buffer(s))))
+    cur_response = takestring!(copy(LineEdit.buffer(s)))
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
         cur_idx = hist.last_idx
@@ -1098,7 +1108,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     qpos = position(query_buffer)
     qpos > 0 || return true
     searchdata = beforecursor(query_buffer)
-    response_str = String(take!(copy(response_buffer)))
+    response_str = takestring!(copy(response_buffer))
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1 # position is zero-indexed
@@ -1155,7 +1165,7 @@ end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 function return_callback(s)
-    ast = Base.parse_input_line(String(take!(copy(LineEdit.buffer(s)))), depwarn=false)
+    ast = Base.parse_input_line(takestring!(copy(LineEdit.buffer(s))), depwarn=false)
     return !(isa(ast, Expr) && ast.head === :incomplete)
 end
 
@@ -1166,21 +1176,23 @@ find_hist_file() = get(ENV, "JULIA_HISTORY",
 backend(r::AbstractREPL) = hasproperty(r, :backendref) ? r.backendref : nothing
 
 
-function eval_with_backend(ast::Expr, backend::REPLBackendRef)
+function eval_on_backend(ast, backend::REPLBackendRef)
     put!(backend.repl_channel, (ast, 1)) # (f, show_value)
     return take!(backend.response_channel) # (val, iserr)
 end
-function eval_with_backend(f, backend::REPLBackendRef)
+function call_on_backend(f, backend::REPLBackendRef)
+    applicable(f) || error("internal error: f is not callable")
     put!(backend.repl_channel, (f, 2)) # (f, show_value) 2 indicates function (rather than ast)
     return take!(backend.response_channel) # (val, iserr)
 end
 # if no backend just eval (used by tests)
-function eval_with_backend(f, backend::Nothing)
+eval_on_backend(ast, backend::Nothing) = error("no backend for eval ast")
+function call_on_backend(f, backend::Nothing)
     try
         ret = f()
         return (ret, false) # (val, iserr)
-    catch err
-        return (err, true)
+    catch
+        return (current_exceptions(), true)
     end
 end
 
@@ -1196,7 +1208,7 @@ function respond(f, repl, main; pass_empty::Bool = false, suppress_on_semicolon:
             local response
             try
                 ast = Base.invokelatest(f, line)
-                response = eval_with_backend(ast, backend(repl))
+                response = eval_on_backend(ast, backend(repl))
             catch
                 response = Pair{Any, Bool}(current_exceptions(), true)
             end
@@ -1803,7 +1815,7 @@ function run_frontend(repl::StreamREPL, backend::REPLBackendRef)
             if have_color
                 print(repl.stream, Base.color_normal)
             end
-            response = eval_with_backend(ast, backend)
+            response = eval_on_backend(ast, backend)
             print_response(repl, response, !ends_with_semicolon(line), have_color)
         end
     end

@@ -416,7 +416,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
             jl_module_t *mod = jl_globalref_mod(f);
             jl_sym_t *name = jl_globalref_name(f);
             jl_binding_t *b = jl_get_binding(mod, name);
-            called = jl_get_binding_value_if_const(b);
+            called = jl_get_latest_binding_value_if_const(b);
         }
         else if (jl_is_quotenode(f)) {
             called = jl_quotenode_value(f);
@@ -517,11 +517,15 @@ int jl_needs_lowering(jl_value_t *e) JL_NOTSAFEPOINT
 
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst_for_uninferred(jl_method_instance_t *mi, jl_code_info_t *src)
 {
+    jl_svec_t *edges = jl_emptysvec;
+    if (src->edges && jl_is_svec(src->edges))
+        edges = (jl_svec_t*)src->edges;
+
     // Do not compress this, we expect it to be shortlived.
     jl_code_instance_t *ci = jl_new_codeinst(mi, (jl_value_t*)jl_uninferred_sym,
         (jl_value_t*)jl_any_type, (jl_value_t*)jl_any_type, jl_nothing,
         (jl_value_t*)src, 0, src->min_world, src->max_world,
-        0, NULL, NULL, NULL);
+        0, NULL, NULL, edges);
     return ci;
 }
 
