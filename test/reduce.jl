@@ -44,8 +44,8 @@ end
 let x = rand(10)
     @test 0 == @allocated(sum(Iterators.reverse(x)))
     @test 0 == @allocated(foldr(-, x))
-    @test 0 == @allocated(sum(A))
-    @test 0 == @allocated(sum(log, A))
+    @test 0 == @allocated(sum(x))
+    @test 0 == @allocated(sum(log, x))
 end
 
 # reduce
