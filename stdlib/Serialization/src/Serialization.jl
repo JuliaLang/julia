@@ -80,7 +80,7 @@ const TAGS = Any[
 const NTAGS = length(TAGS)
 @assert NTAGS == 255
 
-const ser_version = 30 # do not make changes without bumping the version #!
+const ser_version = 32 # do not make changes without bumping the version #!
 
 format_version(::AbstractSerializer) = ser_version
 format_version(s::Serializer) = s.version
@@ -534,6 +534,8 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     serialize(s, Base.issingletontype(primary))
     serialize(s, t.flags & 0x1 == 0x1) # .abstract
     serialize(s, t.flags & 0x2 == 0x2) # .mutable
+    ver = format_version(s)
+    ver > 30 && serialize(s, t.flags & 0x4 == 0x4) # .mayinlinealloc
     serialize(s, Int32(length(primary.types) - t.n_uninitialized))
     serialize(s, t.max_methods)
     if isdefined(t, :mt) && t.mt !== Symbol.name.mt
@@ -549,6 +551,10 @@ function serialize_typename(s::AbstractSerializer, t::Core.TypeName)
     else
         writetag(s.io, UNDEFREF_TAG)
     end
+
+    ver > 30 && serialize(s, t.cache_entry_count)
+    ver > 30 && serialize(s, t.constprop_heuristic)
+    ver > 31 && serialize(s, t.relevant_params)
     nothing
 end
 
@@ -1443,8 +1449,10 @@ function deserialize_typename(s::AbstractSerializer, number)
     has_instance = deserialize(s)::Bool
     abstr = deserialize(s)::Bool
     mutabl = deserialize(s)::Bool
+    ver = format_version(s)
+    ver > 30 && deserialize(s)::Bool && (tn.flags |= 0x4)
     ninitialized = deserialize(s)::Int32
-    maxm = format_version(s) >= 18 ? deserialize(s)::UInt8 : UInt8(0)
+    maxm = ver >= 18 ? deserialize(s)::UInt8 : UInt8(0)
 
     if makenew
         # TODO: there's an unhanded cycle in the dependency graph at this point:
@@ -1498,6 +1506,10 @@ function deserialize_typename(s::AbstractSerializer, number)
         mt = Symbol.name.mt
         ccall(:jl_set_nth_field, Cvoid, (Any, Csize_t, Any), tn, Base.fieldindex(Core.TypeName, :mt)-1, mt)
     end
+
+    ver > 30 && (tn.cache_entry_count = deserialize(s)::UInt8)
+    ver > 30 && (tn.constprop_heuristic = deserialize(s)::UInt8)
+    ver > 31 && (tn.relevant_params = deserialize(s)::UInt8)
     return tn
 end
 
