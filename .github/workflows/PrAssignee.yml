@@ -38,7 +38,11 @@ jobs:
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           retries: 5 # retry GitHub API requests up to 5 times, with exponential backoff
-          retry-exempt-status-codes: 403
+          retry-exempt-status-codes: "403,404"
+          # In the above list:
+          #
+          # - 404 is in the list because we will always hit a 404 when the PR author is not
+          #   a committer. This 404 is normal and expected.
           script: |
             const oldPrAssignees = context.payload.pull_request.assignees
               .map(obj => obj.login)
@@ -55,7 +59,26 @@ jobs:
               headers: {
                 'X-GitHub-Api-Version': '2022-11-28'
               }
-            })
+            }).catch((error) => {
+              // So, I'm not sure if the error is being thrown by `@octokit/request.js` or
+              // `@octokit/plugin-retry.js`. I suspect that the initial error is thrown by
+              // `request.js`, and is subsequently propagated by `plugin-retry.js`.
+              //
+              // Anyway, the docs for `request.js` say the following:
+              //
+              // > If an error occurs, the promise is rejected with an `error` object
+              //> containing 3 keys to help with debugging:
+              // >
+              // > - `error.status` The http response status code
+              // > - `error.request` The request options such as `method`, `url` and `data`
+              // > - `error.response` The http response object with `url`, `headers`, and `data`
+              //
+              // Source: https://github.com/octokit/request.js/blob/main/README.md#request
+              //
+              // So, inside this `.catch()`, we simply return that `error` object.
+
+              return error;
+            });
             if (isCollaboratorResponseObj.status == 204) {
               var isCollaborator = true;
             } else if (isCollaboratorResponseObj.status == 404) {
