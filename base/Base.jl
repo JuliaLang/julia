@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+# Hello world
+
 const start_base_include = time_ns()
 
 include("reflection.jl")
