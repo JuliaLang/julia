@@ -836,12 +836,7 @@ static size_t jl_static_show_float(JL_STREAM *out, double v,
         n += jl_printf(out, "%sInf%s", v < 0 ? "-" : "", size_suffix);
     }
     else if (vt == jl_float64_type) {
-        size_t m = snprintf(buf, sizeof buf, "%.17g", v);
-        jl_uv_puts(out, buf, m);
-        n += m;
-        // If there is no decimal point or exponent, disambiguate
-        if (!strpbrk(buf, ".e"))
-            jl_printf(out, ".0");
+        n += jl_printf(buf, sizeof buf, "%#.17g", v);
     }
     else if (vt == jl_float32_type) {
         size_t m = snprintf(buf, sizeof buf, "%.9g", v);
