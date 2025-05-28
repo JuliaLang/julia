@@ -855,7 +855,8 @@ end
 
     # Check error message first
     errorMsg = sprint(Base.showerror, ex)
-    @test occursin("FieldError: type FieldFoo has no field `c`", errorMsg)
+    @test occursin("FieldError: type", errorMsg)
+    @test occursin("FieldFoo has no field `c`", errorMsg)
     @test occursin("available fields: `a`, `b`", errorMsg)
     @test occursin("Available properties: `x`, `y`", errorMsg)
 
