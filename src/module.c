@@ -1157,14 +1157,14 @@ static void jl_binding_dep_message(jl_binding_t *b)
                 jl_printf(JL_STDERR, " instead.");
             }
             else {
-                jl_methtable_t *mt = jl_gf_mtable(v);
-                if (mt != NULL) {
+                jl_typename_t *tn = ((jl_datatype_t*)jl_typeof(v))->name;
+                if (tn != NULL) {
                     jl_printf(JL_STDERR, ", use ");
-                    if (mt->module != jl_core_module) {
-                        jl_static_show(JL_STDERR, (jl_value_t*)mt->module);
+                    if (tn->module != jl_core_module) {
+                        jl_static_show(JL_STDERR, (jl_value_t*)tn->module);
                         jl_printf(JL_STDERR, ".");
                     }
-                    jl_printf(JL_STDERR, "%s", jl_symbol_name(mt->name));
+                    jl_printf(JL_STDERR, "%s", jl_symbol_name(tn->singletonname));
                     jl_printf(JL_STDERR, " instead.");
                 }
             }

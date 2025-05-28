@@ -39,16 +39,16 @@ end
 
 function _isself(ft::DataType)
     ftname = ft.name
-    isdefined(ftname, :mt) || return false
-    name = ftname.mt.name
-    mod = parentmodule(ft)  # NOTE: not necessarily the same as ft.name.mt.module
-    return invokelatest(isdefinedglobal, mod, name) && ft == typeof(invokelatest(getglobal, mod, name))
+    name = ftname.singletonname
+    ftname.name === name && return false
+    mod = parentmodule(ft)
+    return invokelatest(isdefinedglobal, mod, name) && ft === typeof(invokelatest(getglobal, mod, name))
 end
 
 function show(io::IO, ::MIME"text/plain", f::Function)
     get(io, :compact, false)::Bool && return show(io, f)
     ft = typeof(f)
-    name = ft.name.mt.name
+    name = ft.name.singletonname
     if isa(f, Core.IntrinsicFunction)
         print(io, f)
         id = Core.Intrinsics.bitcast(Int32, f)
@@ -542,22 +542,20 @@ module UsesCoreAndBaseOnly
 end
 
 function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
-    ft = typeof(f)
-    mt = ft.name.mt
-    if mt === Symbol.name.mt
-        # uses shared method table
+    fname = typeof(f).name
+    if fname.name === fname.singletonname
         fallback(io, f)
     elseif compact
-        print(io, mt.name)
-    elseif isdefined(mt, :module) && isdefinedglobal(mt.module, mt.name) &&
-            getglobal(mt.module, mt.name) === f
+        print(io, fname.singletonname)
+    elseif isdefined(fname, :module) && isdefinedglobal(fname.module, fname.singletonname) && isconst(fname.module, fname.singletonname) &&
+            getglobal(fname.module, fname.singletonname) === f
         # this used to call the removed internal function `is_exported_from_stdlib`, which effectively
         # just checked for exports from Core and Base.
         mod = get(io, :module, UsesCoreAndBaseOnly)
-        if !(isvisible(mt.name, mt.module, mod) || mt.module === mod)
-            print(io, mt.module, ".")
+        if !(isvisible(fname.singletonname, fname.module, mod) || fname.module === mod)
+            print(io, fname.module, ".")
         end
-        show_sym(io, mt.name)
+        show_sym(io, fname.singletonname)
     else
         fallback(io, f)
     end
@@ -965,7 +963,7 @@ function show(io::IO, ::MIME"text/plain", @nospecialize(x::Type))
     # give a helpful hint for function types
     if x isa DataType && x !== UnionAll && !(get(io, :compact, false)::Bool)
         tn = x.name::Core.TypeName
-        globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+        globname = tn.singletonname
         if is_global_function(tn, globname)
             print(io, " (singleton type of function ")
             show_sym(io, globname)
@@ -1048,11 +1046,11 @@ function isvisible(sym::Symbol, parent::Module, from::Module)
 end
 
 function is_global_function(tn::Core.TypeName, globname::Union{Symbol,Nothing})
-    if globname !== nothing
+    if globname !== nothing && isconcretetype(tn.wrapper) && tn !== DataType.name # ignore that typeof(DataType)===DataType, since it is valid but not useful
         globname_str = string(globname::Symbol)
-        if ('#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
-                isdefinedglobal(tn.module, globname) &&
-                isconcretetype(tn.wrapper) && isa(getglobal(tn.module, globname), tn.wrapper))
+        if '#' ∉ globname_str && '@' ∉ globname_str && isdefined(tn, :module) &&
+                isdefinedglobal(tn.module, globname) && isconst(tn.module, globname) &&
+                isa(getglobal(tn.module, globname), tn.wrapper)
             return true
         end
     end
@@ -1083,7 +1081,7 @@ function show_type_name(io::IO, tn::Core.TypeName)
         # intercept this case and print `UnionAll` instead.
         return print(io, "UnionAll")
     end
-    globname = isdefined(tn, :mt) ? tn.mt.name : nothing
+    globname = tn.singletonname
     globfunc = is_global_function(tn, globname)
     sym = (globfunc ? globname : tn.name)::Symbol
     globfunc && print(io, "typeof(")
@@ -2567,10 +2565,10 @@ function show_signature_function(io::IO, @nospecialize(ft), demangle=false, farg
     uw = unwrap_unionall(ft)
     if ft <: Function && isa(uw, DataType) && isempty(uw.parameters) && _isself(uw)
         uwmod = parentmodule(uw)
-        if qualified && !isexported(uwmod, uw.name.mt.name) && uwmod !== Main
+        if qualified && !isexported(uwmod, uw.name.singletonname) && uwmod !== Main
             print_within_stacktrace(io, uwmod, '.', bold=true)
         end
-        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.mt.name), context=io)
+        s = sprint(show_sym, (demangle ? demangle_function_name : identity)(uw.name.singletonname), context=io)
         print_within_stacktrace(io, s, bold=true)
     elseif isType(ft) && (f = ft.parameters[1]; !isa(f, TypeVar))
         uwf = unwrap_unionall(f)
