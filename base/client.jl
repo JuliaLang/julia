@@ -64,7 +64,11 @@ function repl_cmd(cmd, out)
         cd(dir)
         println(out, pwd())
     else
-        @static if !Sys.iswindows()
+        if shell_name == "nu"
+            # remove apostrophes that dont play nice with nushell
+            shell_escape_cmd = replace(shell_escape(cmd), "'" => "")
+            cmd = `$shell -c $shell_escape_cmd`
+        elseif !Sys.iswindows()
             if shell_name == "fish"
                 shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
             else
