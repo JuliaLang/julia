@@ -47,22 +47,30 @@ jobs:
             // Check if the PR is opened by a collaborator on the repo (aka a committer).
             // We use the /repos/{owner}/{repo}/collaborators/{username} endpoint to avoid
             // neeing org scope permissions.
-            const isCollaboratorResponseObj = await github.request('GET /repos/{owner}/{repo}/collaborators/{username}', {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              username: prAuthor,
-              headers: {
-                'X-GitHub-Api-Version': '2022-11-28'
+            let isCollaborator = false;
+
+            try {
+              const response = await github.request('GET /repos/{owner}/{repo}/collaborators/{username}', {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: prAuthor,
+                headers: {
+                  'X-GitHub-Api-Version': '2022-11-28'
+                }
+              });
+            
+              if (response.status === 204) {
+                isCollaborator = true;
+              } else {
+                console.warn('Unexpected status code:', response.status);
               }
-            })
-            if (isCollaboratorResponseObj.status == 204) {
-              var isCollaborator = true;
-            } else if (isCollaboratorResponseObj.status == 404) {
-              var isCollaborator = false;
-            } else {
-              console.error('Unable to process the response from checkCollaborator');
-              console.error('isCollaboratorResponseObj: ', isCollaboratorResponseObj);
-              var isCollaborator = false;
+            
+            } catch (error) {
+              if (error.status === 404) {
+                isCollaborator = false;
+              } else {
+                console.error('Error checking collaborator status:', error);
+              }
             }
 
             console.log('prAuthor: ', prAuthor);
