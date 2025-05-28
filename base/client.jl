@@ -668,3 +668,14 @@ macro main(args...)
         esc(:main)
     end
 end
+
+try
+    Base._start()  # or whatever the main function is
+catch e
+    if Base.JLOptions().trim > 0 && isa(e, MethodError)
+        println("MethodError: no method matching ", e.f, " with argument types ", e.args)
+        exit(1)
+    end
+    Base.display_error(e, catch_backtrace())
+    exit(1)
+end
