@@ -2570,6 +2570,7 @@ void jl_init_primitives(void) JL_GC_DISABLED
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("GotoIfNot", (jl_value_t*)jl_gotoifnot_type);
     add_builtin("EnterNode", (jl_value_t*)jl_enternode_type);
+    add_builtin("AwaitNode", (jl_value_t*)jl_awaitnode_type);
     add_builtin("ReturnNode", (jl_value_t*)jl_returnnode_type);
     add_builtin("PiNode", (jl_value_t*)jl_pinode_type);
     add_builtin("PhiNode", (jl_value_t*)jl_phinode_type);

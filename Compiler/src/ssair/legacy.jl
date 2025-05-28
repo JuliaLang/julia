@@ -25,14 +25,10 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
     for i = 1:length(code)
         stmt = code[i]
         # Translate statement edges to bb_edges
-        if isa(stmt, GotoNode)
-            code[i] = GotoNode(block_for_inst(cfg, stmt.label))
-        elseif isa(stmt, GotoIfNot)
-            code[i] = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
+        if isa(stmt, JumpingTerminators)
+            code[i] = typeof(stmt)(stmt, block_for_inst(cfg, jump_dest(stmt)))
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Int32[block_for_inst(cfg, Int(edge)) for edge in stmt.edges], stmt.values)
-        elseif isa(stmt, EnterNode)
-            code[i] = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest))
         end
     end
     nstmts = length(code)
@@ -93,14 +89,10 @@ function replace_code_newstyle!(ci::CodeInfo, ir::IRCode)
     # (and undo normalization for now)
     for i = 1:length(code)
         stmt = code[i]
-        if isa(stmt, GotoNode)
-            code[i] = GotoNode(first(ir.cfg.blocks[stmt.label].stmts))
-        elseif isa(stmt, GotoIfNot)
-            code[i] = GotoIfNot(stmt.cond, first(ir.cfg.blocks[stmt.dest].stmts))
+        if isa(stmt, JumpingTerminators)
+            code[i] = typeof(stmt)(stmt, first(ir.cfg.blocks[jump_dest(stmt)].stmts))
         elseif isa(stmt, PhiNode)
             code[i] = PhiNode(Int32[edge == 0 ? 0 : last(ir.cfg.blocks[edge].stmts) for edge in stmt.edges], stmt.values)
-        elseif isa(stmt, EnterNode)
-            code[i] = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : first(ir.cfg.blocks[stmt.catch_dest].stmts))
         end
     end
 end

@@ -13,7 +13,7 @@ using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, argextype, BasicBlock, block_for_ins
     EMPTY_SPTYPES, getdebugidx, IncrementalCompact, InferenceResult, InferenceState,
     InvalidIRError, IRCode, LimitedAccuracy, NativeInterpreter, scan_ssa_use!,
     singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst,
-    get_ci_mi, get_ci_abi
+    get_ci_mi, get_ci_abi, JumpingTerminators, jump_dest
 
 @nospecialize
 
@@ -146,8 +146,12 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
         print(io, "enter #", stmt.catch_dest, "")
         if isdefined(stmt, :scope)
             print(io, " with scope ")
-            show_unquoted(io, stmt.scope, indent)
+
         end
+    elseif isa(stmt, AwaitNode)
+        print(io, "await ")
+        show_unquoted(io, stmt.argt, indent)
+        print(io, " resuming #", stmt.continue_dest)
     elseif stmt isa GotoNode
         print(io, "goto #", stmt.label)
     elseif stmt isa PhiNode
@@ -167,7 +171,8 @@ function should_print_ssa_type(@nospecialize node)
     end
     return !isa(node, PiNode)   && !isa(node, GotoIfNot) &&
            !isa(node, GotoNode) && !isa(node, ReturnNode) &&
-           !isa(node, QuoteNode) && !isa(node, EnterNode)
+           !isa(node, QuoteNode) && !isa(node, EnterNode) &&
+           !isa(node, AwaitNode)
 end
 
 function default_expr_type_printer(io::IO; @nospecialize(type), used::Bool, show_type::Bool=true, _...)
@@ -636,12 +641,9 @@ end
 
 function statement_indices_to_labels(stmt, cfg::CFG)
     # convert statement index to labels, as expected by print_stmt
-    if stmt isa EnterNode
-        stmt = EnterNode(stmt, stmt.catch_dest == 0 ? 0 : block_for_inst(cfg, stmt.catch_dest))
-    elseif isa(stmt, GotoIfNot)
-        stmt = GotoIfNot(stmt.cond, block_for_inst(cfg, stmt.dest))
-    elseif stmt isa GotoNode
-        stmt = GotoNode(block_for_inst(cfg, stmt.label))
+    if isa(stmt, JumpingTerminators)
+        dst = jump_dest(stmt)
+        stmt = typeof(stmt)(stmt, dst == 0 ? 0 : block_for_inst(cfg, dst))
     elseif stmt isa PhiNode
         e = stmt.edges
         stmt = PhiNode(Int32[block_for_inst(cfg, Int(e[i])) for i in 1:length(e)], stmt.values)

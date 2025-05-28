@@ -415,7 +415,7 @@ typedef struct _jl_opaque_closure_t {
     JL_DATA_TYPE
     jl_value_t *captures;
     size_t world;
-    jl_method_t *source;
+    jl_value_t *source; // Arbitrary metadata, but usually a Method or CodeInstance
     jl_fptr_args_t invoke; // n.b. despite the similar name, this is not an invoke ABI (jl_call_t / julia.call2), but rather the fptr1 (jl_fptr_args_t / julia.call) ABI
     void *specptr; // n.b. despite the similarity in field name, this is not arbitrary private data for jlcall, but rather the codegen ABI for specsig, and is mandatory if specsig is valid
 } jl_opaque_closure_t;
@@ -1092,6 +1092,7 @@ extern JL_DLLIMPORT jl_datatype_t *jl_linenumbernode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_gotonode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_gotoifnot_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_enternode_type JL_GLOBALLY_ROOTED;
+extern JL_DLLIMPORT jl_datatype_t *jl_awaitnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_returnnode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_phinode_type JL_GLOBALLY_ROOTED;
 extern JL_DLLIMPORT jl_datatype_t *jl_pinode_type JL_GLOBALLY_ROOTED;
@@ -1445,6 +1446,9 @@ STATIC_INLINE void jl_array_uint32_set(void *a, size_t i, uint32_t x) JL_NOTSAFE
 #define jl_globalref_name(s) (((jl_sym_t**)(s))[1])
 #define jl_quotenode_value(x) (((jl_value_t**)x)[0])
 #define jl_returnnode_value(x) (((jl_value_t**)x)[0])
+#define jl_awaitnode_continue_dest(x) (((intptr_t*)(x))[0])
+#define jl_awaitnode_argt(x) (((jl_value_t**)(x))[1])
+#define jl_awaitnode_flags(x) ((int32_t*)&(((jl_value_t**)(x))[2]))[0]
 
 // get a pointer to the data in a datatype
 #define jl_data_ptr(v)  ((jl_value_t**)v)
@@ -1634,6 +1638,7 @@ static inline int jl_field_isconst(jl_datatype_t *st, int i) JL_NOTSAFEPOINT
 #define jl_is_gotoifnot(v)   jl_typetagis(v,jl_gotoifnot_type)
 #define jl_is_returnnode(v)  jl_typetagis(v,jl_returnnode_type)
 #define jl_is_enternode(v)   jl_typetagis(v,jl_enternode_type)
+#define jl_is_awaitnode(v)   jl_typetagis(v,jl_awaitnode_type)
 #define jl_is_argument(v)    jl_typetagis(v,jl_argument_type)
 #define jl_is_pinode(v)      jl_typetagis(v,jl_pinode_type)
 #define jl_is_phinode(v)     jl_typetagis(v,jl_phinode_type)

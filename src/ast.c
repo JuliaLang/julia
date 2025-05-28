@@ -45,6 +45,7 @@ JL_DLLEXPORT jl_sym_t *jl_do_sym;
 JL_DLLEXPORT jl_sym_t *jl_method_sym;
 JL_DLLEXPORT jl_sym_t *jl_core_sym;
 JL_DLLEXPORT jl_sym_t *jl_enter_sym;
+JL_DLLEXPORT jl_sym_t *jl_await_sym;
 JL_DLLEXPORT jl_sym_t *jl_leave_sym;
 JL_DLLEXPORT jl_sym_t *jl_pop_exception_sym;
 JL_DLLEXPORT jl_sym_t *jl_exc_sym;
@@ -351,6 +352,7 @@ void jl_init_common_symbols(void)
     jl_method_sym = jl_symbol("method");
     jl_exc_sym = jl_symbol("the_exception");
     jl_enter_sym = jl_symbol("enter");
+    jl_await_sym = jl_symbol("await");
     jl_leave_sym = jl_symbol("leave");
     jl_pop_exception_sym = jl_symbol("pop_exception");
     jl_new_sym = jl_symbol("new");
@@ -601,6 +603,13 @@ static jl_value_t *scm_to_julia_(fl_context_t *fl_ctx, value_t e, jl_module_t *m
             if (n == 2) {
                 jl_enternode_scope(temp) = scm_to_julia(fl_ctx, car_(cdr_(e)), mod);
             }
+        }
+        else if (sym == jl_await_sym) {
+            ex = scm_to_julia_(fl_ctx, car_(e), mod);
+            temp = jl_new_struct_uninit(jl_awaitnode_type);
+            jl_awaitnode_continue_dest(temp) = jl_unbox_long(ex);
+            jl_awaitnode_argt(temp) = scm_to_julia(fl_ctx, car_(cdr_(e)), mod);
+            jl_awaitnode_flags(temp) = jl_unbox_uint32(scm_to_julia(fl_ctx, car_(cdr_(cdr_(e))), mod));
         }
         else if (sym == jl_newvar_sym) {
             ex = scm_to_julia_(fl_ctx, car_(e), mod);
