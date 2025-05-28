@@ -739,13 +739,13 @@ static size_t jl_static_show_string(JL_STREAM *out, const char *str, size_t len,
                 else {
                      if (c == '"')
                          for (escapes++; escapes > 0; escapes--)
-                             jl_uv_puts(out, "\\", 1);
+                             n += jl_uv_puts(out, "\\", 1);
                      escapes = 0;
                 }
-                jl_uv_puts(out, str + i, 1);
+                n += jl_uv_puts(out, str + i, 1);
             }
             for (; escapes > 0; escapes--)
-                jl_uv_puts(out, "\\", 1);
+                n += jl_uv_puts(out, "\\", 1);
         }
         else {
             char buf[512];
