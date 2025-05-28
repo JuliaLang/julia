@@ -1580,6 +1580,8 @@ struct var"%X%" end  # Invalid name without '#'
             Float16(1),                  Float32(1),                  Float64(1),
             Float16(1.5),                Float32(1.5),                Float64(1.5),
             Float16(0.4893243538921085), Float32(0.4893243538921085), Float64(0.4893243538921085),
+            # Examples that require the full 5, 9, and 17 digits of precision
+            Float16(0.00010014),         Float32(1.00000075f-36),     Float64(-1.561051336605761e-182),
             floatmax(Float16),           floatmax(Float32),           floatmax(Float64),
             floatmin(Float16),           floatmin(Float32),           floatmin(Float64),
             Inf16,                       Inf32,                       Inf,

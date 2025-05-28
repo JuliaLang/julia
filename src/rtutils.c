@@ -821,10 +821,14 @@ static size_t jl_static_show_float(JL_STREAM *out, double v,
     const char *size_suffix = vt == jl_float16_type ? "16" :
                               vt == jl_float32_type ? "32" :
                                                       "";
-    // Digits required to print p significand bits: ceil(p * log(10, 2))
-    //   Float16   4
-    //   Float32   8
+    // Requires minimum 1 (sign) + 17 (sig) + 1 (dot) + 5 ("e-123") + 1 (null)
+    char buf[32];
+    // Base B significand digits required to print n base-b significand bits
+    // (including leading 1):  N = 2 + floor(n/log(b, B))
+    //   Float16   5
+    //   Float32   9
     //   Float64  17
+    // REF: https://dl.acm.org/doi/pdf/10.1145/93542.93559
     if (isnan(v)) {
         n += jl_printf(out, "NaN%s", size_suffix);
     }
@@ -832,18 +836,27 @@ static size_t jl_static_show_float(JL_STREAM *out, double v,
         n += jl_printf(out, "%sInf%s", v < 0 ? "-" : "", size_suffix);
     }
     else if (vt == jl_float64_type) {
-        // If no decimal point or exponent will be printed, we must add ".0"
-        double ipart, fpart;
-        fpart = modf(v, &ipart);
-        int dotzero = v == 0 || (fpart == 0.0 && fabs(ipart) < 1e17);
-        n += jl_printf(out, "%.17g%s", v, dotzero ? ".0" : "");
+        size_t m = snprintf(buf, sizeof buf, "%.17g", v);
+        jl_uv_puts(out, buf, m);
+        n += m;
+        // If there is no decimal point or exponent, disambiguate
+        if (!strpbrk(buf, ".e"))
+            jl_printf(out, ".0");
     }
     else if (vt == jl_float32_type) {
-        n += jl_printf(out, "Float32(%.8g)", v);
+        size_t m = snprintf(buf, sizeof buf, "%.9g", v);
+        // If the exponent was printed, replace it with 'f'
+        char *p = memchr(buf, 'e', m);
+        if (p)
+            *p = 'f';
+        jl_uv_puts(out, buf, m);
+        // If no exponent was printed, we must add one
+        if (!p)
+            jl_printf(out, "f0");
     }
     else {
         assert(vt == jl_float16_type);
-        n += jl_printf(out, "Float16(%.4g)", v);
+        n += jl_printf(out, "Float16(%.5g)", v);
     }
     return n;
 }
