@@ -703,7 +703,7 @@ let oldout = stdout, olderr = stderr
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123.0\"C\"\n"
+        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123.0000000000000000\"C\"\n"
         @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
@@ -1584,6 +1584,8 @@ struct var"%X%" end  # Invalid name without '#'
             Float16(0.00010014),         Float32(1.00000075f-36),     Float64(-1.561051336605761e-182),
             floatmax(Float16),           floatmax(Float32),           floatmax(Float64),
             floatmin(Float16),           floatmin(Float32),           floatmin(Float64),
+            Float16(0.0),                0.0f0,                       0.0,
+            Float16(-0.0),               -0.0f0,                      -0.0,
             Inf16,                       Inf32,                       Inf,
             -Inf16,                      -Inf32,                      -Inf,
             nextfloat(Float16(0)),       nextfloat(Float32(0)),       nextfloat(Float64(0)),

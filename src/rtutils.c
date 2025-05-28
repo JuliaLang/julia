@@ -739,13 +739,13 @@ static size_t jl_static_show_string(JL_STREAM *out, const char *str, size_t len,
                 else {
                      if (c == '"')
                          for (escapes++; escapes > 0; escapes--)
-                             n += jl_uv_puts(out, "\\", 1);
+                             n += jl_printf(out, "\\");
                      escapes = 0;
                 }
-                n += jl_uv_puts(out, str + i, 1);
+                n += jl_printf(out, "%c", str[i]);
             }
             for (; escapes > 0; escapes--)
-                n += jl_uv_puts(out, "\\", 1);
+                n += jl_printf(out, "\\");
         }
         else {
             char buf[512];
@@ -836,7 +836,7 @@ static size_t jl_static_show_float(JL_STREAM *out, double v,
         n += jl_printf(out, "%sInf%s", v < 0 ? "-" : "", size_suffix);
     }
     else if (vt == jl_float64_type) {
-        n += jl_printf(buf, sizeof buf, "%#.17g", v);
+        n += jl_printf(out, "%#.17g", v);
     }
     else if (vt == jl_float32_type) {
         size_t m = snprintf(buf, sizeof buf, "%.9g", v);
@@ -845,13 +845,14 @@ static size_t jl_static_show_float(JL_STREAM *out, double v,
         if (p)
             *p = 'f';
         jl_uv_puts(out, buf, m);
+        n += m;
         // If no exponent was printed, we must add one
         if (!p)
-            jl_printf(out, "f0");
+            n += jl_printf(out, "f0");
     }
     else {
         assert(vt == jl_float16_type);
-        n += jl_printf(out, "Float16(%.5g)", v);
+        n += jl_printf(out, "Float16(%#.5g)", v);
     }
     return n;
 }
