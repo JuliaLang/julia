@@ -1,5 +1,6 @@
 # Julia Functions
 
+
 This document will explain how functions, method definitions, and method tables work.
 
 ## Method Tables
@@ -15,7 +16,7 @@ has a `TypeName`.
 
 ## [Function calls](@id Function-calls)
 
-Given the call `f(x, y)`, the following steps are performed: first, the method table to use is
+Given the call `f(x, y)`, the following steps are performed: first, the method cache to use is
 accessed as `typeof(f).name.mt`. Second, an argument tuple type is formed, `Tuple{typeof(f), typeof(x), typeof(y)}`.
 Note that the type of the function itself is the first element. This is because the type might
 have parameters, and so needs to take part in dispatch. This tuple type is looked up in the method
@@ -187,7 +188,7 @@ is absent.
 Finally there is the kwsorter definition:
 
 ```
-function (::Core.kwftype(typeof(circle)))(kws, circle, center, radius)
+function (::Core.kwcall)(kws, circle, center, radius)
     if haskey(kws, :color)
         color = kws.color
     else
@@ -205,30 +206,6 @@ function (::Core.kwftype(typeof(circle)))(kws, circle, center, radius)
 end
 ```
 
-The function `Core.kwftype(t)` creates the field `t.name.mt.kwsorter` (if it hasn't been created
-yet), and returns the type of that function.
-
-This design has the feature that call sites that don't use keyword arguments require no special
-handling; everything works as if they were not part of the language at all. Call sites that do
-use keyword arguments are dispatched directly to the called function's kwsorter. For example the
-call:
-
-```julia
-circle((0, 0), 1.0, color = red; other...)
-```
-
-is lowered to:
-
-```julia
-kwcall(merge((color = red,), other), circle, (0, 0), 1.0)
-```
-
-`kwcall` (also in`Core`) denotes a kwcall signature and dispatch.
-The keyword splatting operation (written as `other...`) calls the named tuple `merge` function.
-This function further unpacks each *element* of `other`, expecting each one to contain two values
-(a symbol and a value).
-Naturally, a more efficient implementation is available if all splatted arguments are named tuples.
-Notice that the original `circle` function is passed through, to handle closures.
 
 ## [Compiler efficiency issues](@id compiler-efficiency-issues)
 

@@ -326,7 +326,7 @@ function showerror(io::IO, ex::MethodError)
         print(io, "\nUse square brackets [] for indexing an Array.")
     end
     # Check for local functions that shadow methods in Base
-    let name = ft.name.mt.name
+    let name = ft.name.singletonname
         if f_is_function && isdefined(Base, name)
             basef = getfield(Base, name)
             if basef !== f && hasmethod(basef, arg_types)
