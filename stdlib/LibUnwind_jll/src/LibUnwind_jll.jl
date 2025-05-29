@@ -4,39 +4,46 @@
 
 baremodule LibUnwind_jll
 using Base, Libdl
-
-const PATH_list = String[]
-const LIBPATH_list = String[]
+using CompilerSupportLibraries_jll
+using Zlib_jll
 
 export libunwind
 
 # These get calculated in __init__()
 const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
+const LIBPATH_list = String[]
 artifact_dir::String = ""
-libunwind_handle::Ptr{Cvoid} = C_NULL
 libunwind_path::String = ""
 
-const libunwind = "libunwind.so.8"
+const _libunwind_path = BundledLazyLibraryPath("libunwind.so.8")
+
+if Sys.isfreebsd()
+    _libunwind_dependencies = LazyLibrary[libz]
+else
+    _libunwind_dependencies = LazyLibrary[libgcc_s, libz]
+end
+const libunwind = LazyLibrary(_libunwind_path, dependencies=_libunwind_dependencies)
+
+
+function eager_mode()
+    CompilerSupportLibraries_jll.eager_mode()
+    Zlib_jll.eager_mode()
+    dlopen(libunwind)
+end
+is_available() = @static(Sys.islinux() || Sys.isfreebsd()) ? true : false
 
 function __init__()
-    # We only do something on Linux/FreeBSD
-    @static if Sys.islinux() || Sys.isfreebsd()
-        global libunwind_handle = dlopen(libunwind)
-        global libunwind_path = dlpath(libunwind_handle)
-        global artifact_dir = dirname(Sys.BINDIR)
-        LIBPATH[] = dirname(libunwind_path)
-        push!(LIBPATH_list, LIBPATH[])
-    end
+    global libunwind_path = string(_libunwind_path)
+    global artifact_dir = dirname(Sys.BINDIR)
+    LIBPATH[] = dirname(libunwind_path)
+    push!(LIBPATH_list, LIBPATH[])
 end
 
-# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
-# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
-# there isn't one.  It instead returns the overall Julia prefix.
-is_available() = @static (Sys.islinux() || Sys.isfreebsd()) ? true : false
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_libunwind_path() = libunwind_path
+if Base.generating_output()
+    precompile(eager_mode, ())
+    precompile(is_available, ())
+end
 
 end  # module LibUnwind_jll
