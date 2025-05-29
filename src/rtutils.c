@@ -5,6 +5,8 @@
 */
 #include "platform.h"
 
+#include <float.h>
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -691,12 +693,12 @@ static int is_globfunction(jl_value_t *v, jl_datatype_t *dv, jl_sym_t **globname
     return 0;
 }
 
-static size_t jl_static_show_string(JL_STREAM *out, const char *str, size_t len, int wrap) JL_NOTSAFEPOINT
+static size_t jl_static_show_string(JL_STREAM *out, const char *str, size_t len, int wrap, int raw) JL_NOTSAFEPOINT
 {
     size_t n = 0;
     if (wrap)
         n += jl_printf(out, "\"");
-    if (!u8_isvalid(str, len)) {
+    if (!raw && !u8_isvalid(str, len)) {
         // alternate print algorithm that preserves data if it's not UTF-8
         static const char hexdig[] = "0123456789abcdef";
         for (size_t i = 0; i < len; i++) {
@@ -713,7 +715,11 @@ static size_t jl_static_show_string(JL_STREAM *out, const char *str, size_t len,
         int special = 0;
         for (size_t i = 0; i < len; i++) {
             uint8_t c = str[i];
-            if (c < 32 || c == 0x7f || c == '\\' || c == '"' || c == '$') {
+            if (raw && ((c == '\\' && i == len-1) || c == '"')) {
+                special = 1;
+                break;
+            }
+            else if (!raw && (c < 32 || c == 0x7f || c == '\\' || c == '"' || c == '$')) {
                 special = 1;
                 break;
             }
@@ -721,6 +727,25 @@ static size_t jl_static_show_string(JL_STREAM *out, const char *str, size_t len,
         if (!special) {
             jl_uv_puts(out, str, len);
             n += len;
+        }
+        else if (raw) {
+            // REF: Base.escape_raw_string
+            int escapes = 0;
+            for (size_t i = 0; i < len; i++) {
+                uint8_t c = str[i];
+                if (c == '\\') {
+                    escapes++;
+                }
+                else {
+                     if (c == '"')
+                         for (escapes++; escapes > 0; escapes--)
+                             n += jl_printf(out, "\\");
+                     escapes = 0;
+                }
+                n += jl_printf(out, "%c", str[i]);
+            }
+            for (; escapes > 0; escapes--)
+                n += jl_printf(out, "\\");
         }
         else {
             char buf[512];
@@ -737,18 +762,28 @@ static size_t jl_static_show_string(JL_STREAM *out, const char *str, size_t len,
     return n;
 }
 
+static int jl_is_quoted_sym(const char *sn)
+{
+    static const char *const quoted_syms[] = {":", "::", ":=", "=", "==", "===", "=>", "`"};
+    for (int i = 0; i < sizeof quoted_syms / sizeof *quoted_syms; i++)
+        if (!strcmp(sn, quoted_syms[i]))
+            return 1;
+    return 0;
+}
+
+// TODO: in theory, we need a separate function for showing symbols in an
+// expression context (where `Symbol("foo\x01bar")` is ok) and a syntactic
+// context (where var"" must be used).
 static size_t jl_static_show_symbol(JL_STREAM *out, jl_sym_t *name) JL_NOTSAFEPOINT
 {
     size_t n = 0;
     const char *sn = jl_symbol_name(name);
-    int quoted = !jl_is_identifier(sn) && !jl_is_operator(sn);
-    if (quoted) {
-        n += jl_printf(out, "var");
-        // TODO: this is not quite right, since repr uses String escaping rules, and Symbol uses raw string rules
-        n += jl_static_show_string(out, sn, strlen(sn), 1);
+    if (jl_is_identifier(sn) || (jl_is_operator(sn) && !jl_is_quoted_sym(sn))) {
+        n += jl_printf(out, "%s", sn);
     }
     else {
-        n += jl_printf(out, "%s", sn);
+        n += jl_printf(out, "var");
+        n += jl_static_show_string(out, sn, strlen(sn), 1, 1);
     }
     return n;
 }
@@ -775,6 +810,51 @@ static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
         _iter_count += 1;
     }
     return 0;
+}
+
+static size_t jl_static_show_float(JL_STREAM *out, double v,
+                                   jl_datatype_t *vt) JL_NOTSAFEPOINT
+{
+    size_t n = 0;
+    // TODO: non-canonical NaNs do not round-trip
+    // TOOD: BFloat16
+    const char *size_suffix = vt == jl_float16_type ? "16" :
+                              vt == jl_float32_type ? "32" :
+                                                      "";
+    // Requires minimum 1 (sign) + 17 (sig) + 1 (dot) + 5 ("e-123") + 1 (null)
+    char buf[32];
+    // Base B significand digits required to print n base-b significand bits
+    // (including leading 1):  N = 2 + floor(n/log(b, B))
+    //   Float16   5
+    //   Float32   9
+    //   Float64  17
+    // REF: https://dl.acm.org/doi/pdf/10.1145/93542.93559
+    if (isnan(v)) {
+        n += jl_printf(out, "NaN%s", size_suffix);
+    }
+    else if (isinf(v)) {
+        n += jl_printf(out, "%sInf%s", v < 0 ? "-" : "", size_suffix);
+    }
+    else if (vt == jl_float64_type) {
+        n += jl_printf(out, "%#.17g", v);
+    }
+    else if (vt == jl_float32_type) {
+        size_t m = snprintf(buf, sizeof buf, "%.9g", v);
+        // If the exponent was printed, replace it with 'f'
+        char *p = (char *)memchr(buf, 'e', m);
+        if (p)
+            *p = 'f';
+        jl_uv_puts(out, buf, m);
+        n += m;
+        // If no exponent was printed, we must add one
+        if (!p)
+            n += jl_printf(out, "f0");
+    }
+    else {
+        assert(vt == jl_float16_type);
+        n += jl_printf(out, "Float16(%#.5g)", v);
+    }
+    return n;
 }
 
 // `v` might be pointing to a field inlined in a structure therefore
@@ -957,17 +1037,21 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         int f = *(uint32_t*)jl_data_ptr(v);
         n += jl_printf(out, "#<intrinsic #%d %s>", f, jl_intrinsic_name(f));
     }
+    else if (vt == jl_long_type) {
+        // Avoid unnecessary Int64(x)/Int32(x)
+        n += jl_printf(out, "%" PRIdPTR, *(intptr_t*)v);
+    }
     else if (vt == jl_int64_type) {
-        n += jl_printf(out, "%" PRId64, *(int64_t*)v);
+        n += jl_printf(out, "Int64(%" PRId64 ")", *(int64_t*)v);
     }
     else if (vt == jl_int32_type) {
-        n += jl_printf(out, "%" PRId32, *(int32_t*)v);
+        n += jl_printf(out, "Int32(%" PRId32 ")", *(int32_t*)v);
     }
     else if (vt == jl_int16_type) {
-        n += jl_printf(out, "%" PRId16, *(int16_t*)v);
+        n += jl_printf(out, "Int16(%" PRId16 ")", *(int16_t*)v);
     }
     else if (vt == jl_int8_type) {
-        n += jl_printf(out, "%" PRId8, *(int8_t*)v);
+        n += jl_printf(out, "Int8(%" PRId8 ")", *(int8_t*)v);
     }
     else if (vt == jl_uint64_type) {
         n += jl_printf(out, "0x%016" PRIx64, *(uint64_t*)v);
@@ -988,11 +1072,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "0x%08" PRIx32, *(uint32_t*)v);
 #endif
     }
+    else if (vt == jl_float16_type) {
+        n += jl_static_show_float(out, julia_half_to_float(*(uint16_t *)v), vt);
+    }
     else if (vt == jl_float32_type) {
-        n += jl_printf(out, "%gf", *(float*)v);
+        n += jl_static_show_float(out, *(float *)v, vt);
     }
     else if (vt == jl_float64_type) {
-        n += jl_printf(out, "%g", *(double*)v);
+        n += jl_static_show_float(out, *(double *)v, vt);
     }
     else if (vt == jl_bool_type) {
         n += jl_printf(out, "%s", *(uint8_t*)v ? "true" : "false");
@@ -1004,7 +1091,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "Core.GlobalMethods");
     }
     else if (vt == jl_string_type) {
-        n += jl_static_show_string(out, jl_string_data(v), jl_string_len(v), 1);
+        n += jl_static_show_string(out, jl_string_data(v), jl_string_len(v), 1, 0);
     }
     else if (v == jl_bottom_type) {
         n += jl_printf(out, "Union{}");
@@ -1532,10 +1619,10 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
         }
         jl_printf(str, "\n@ ");
         if (jl_is_string(file)) {
-            jl_static_show_string(str, jl_string_data(file), jl_string_len(file), 0);
+            jl_static_show_string(str, jl_string_data(file), jl_string_len(file), 0, 0);
         }
         else if (jl_is_symbol(file)) {
-            jl_static_show_string(str, jl_symbol_name((jl_sym_t*)file), strlen(jl_symbol_name((jl_sym_t*)file)), 0);
+            jl_static_show_string(str, jl_symbol_name((jl_sym_t*)file), strlen(jl_symbol_name((jl_sym_t*)file)), 0, 0);
         }
         jl_printf(str, ":");
         jl_static_show(str, line);

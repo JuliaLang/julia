@@ -703,7 +703,7 @@ let oldout = stdout, olderr = stderr
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123.0000000000000000\"C\"\n"
         @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
@@ -1570,8 +1570,58 @@ struct var"%X%" end  # Invalid name without '#'
             typeof(+),
             var"#f#",
             typeof(var"#f#"),
+
+            # Integers should round-trip (#52677)
+            1, UInt(1),
+            Int8(1),  Int16(1),  Int32(1),  Int64(1),
+            UInt8(1), UInt16(1), UInt32(1), UInt64(1),
+
+            # Float round-trip
+            Float16(1),                  Float32(1),                  Float64(1),
+            Float16(1.5),                Float32(1.5),                Float64(1.5),
+            Float16(0.4893243538921085), Float32(0.4893243538921085), Float64(0.4893243538921085),
+            # Examples that require the full 5, 9, and 17 digits of precision
+            Float16(0.00010014),         Float32(1.00000075f-36),     Float64(-1.561051336605761e-182),
+            floatmax(Float16),           floatmax(Float32),           floatmax(Float64),
+            floatmin(Float16),           floatmin(Float32),           floatmin(Float64),
+            Float16(0.0),                0.0f0,                       0.0,
+            Float16(-0.0),               -0.0f0,                      -0.0,
+            Inf16,                       Inf32,                       Inf,
+            -Inf16,                      -Inf32,                      -Inf,
+            nextfloat(Float16(0)),       nextfloat(Float32(0)),       nextfloat(Float64(0)),
+            NaN16,                       NaN32,                       NaN,
+            Float16(1e3),                1f7,                         1e16,
+            Float16(-1e3),               -1f7,                        -1e16,
+            Float16(1e4),                1f8,                         1e17,
+            Float16(-1e4),               -1f8,                        -1e17,
+
+            # :var"" escaping rules differ from strings (#58484)
+            :foo,
+            :var"bar baz",
+            :var"a $b",         # No escaping for $ in raw string
+            :var"a\b",          # No escaping for backslashes in middle
+            :var"a\\",          # Backslashes must be escaped at the end
+            :var"a\\\\",
+            :var"a\"b",
+            :var"a\"",
+            :var"\\\"",
+            :+, :var"+-",
+            :(=), :(:), :(::),  # Requires quoting
+            Symbol("a\nb"),
+
+            Val(Float16(1.0)), Val(1f0),      Val(1.0),
+            Val(:abc),         Val(:(=)),     Val(:var"a\b"),
+
+            Val(1),       Val(Int8(1)),  Val(Int16(1)),  Val(Int32(1)),  Val(Int64(1)),  Val(Int128(1)),
+            Val(UInt(1)), Val(UInt8(1)), Val(UInt16(1)), Val(UInt32(1)), Val(UInt64(1)), Val(UInt128(1)),
+
+            # BROKEN
+            # Symbol("a\xffb"),
+            # User-defined primitive types
+            # Non-canonical NaNs
+            # BFloat16
         )
-        @test v == eval(Meta.parse(static_shown(v)))
+        @test v === eval(Meta.parse(static_shown(v)))
     end
 end
 
