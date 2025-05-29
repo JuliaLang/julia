@@ -469,15 +469,13 @@ end
 
 function serialize(s::AbstractSerializer, mt::Core.MethodTable)
     serialize_type(s, typeof(mt))
-    serialize(s, mt.cache)
+    serialize(s, mt.name)
+    serialize(s, mt.module)
     nothing
 end
 
 function serialize(s::AbstractSerializer, mc::Core.MethodCache)
-    serialize_type(s, typeof(mc))
-    serialize(s, mc.name)
-    serialize(s, mc.module)
-    nothing
+    error("cannot serialize MethodCache objects")
 end
 
 
@@ -1134,16 +1132,9 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodTable})
-    mc = deserialize(s)::Core.MethodCache
-    mc === Core.GlobalMethods.cache && return Core.GlobalMethods
-    return getglobal(mc.mod, mc.name)::Core.MethodTable
-end
-
-function deserialize(s::AbstractSerializer, ::Type{Core.MethodCache})
     name = deserialize(s)::Symbol
     mod = deserialize(s)::Module
-    f = Base.unwrap_unionall(getglobal(mod, name))
-    return (f::Core.MethodTable).cache
+    return getglobal(mod, name)::Core.MethodTable
 end
 
 function deserialize(s::AbstractSerializer, ::Type{Core.MethodInstance})

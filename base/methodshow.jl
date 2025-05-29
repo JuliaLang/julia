@@ -365,7 +365,7 @@ end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
 show(io::IO, ::MIME"text/plain", ms::MethodList) = show_method_table(io, ms)
-show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
+show(io::IO, mt::Core.MethodTable) = print(io, mt.module, ".", mt.name, " is a Core.MethodTable with ", length(mt), " methods.")
 
 function inbase(m::Module)
     if m == Base
@@ -469,8 +469,6 @@ function show(io::IO, mime::MIME"text/html", ms::MethodList)
     end
     print(io, "</ul>")
 end
-
-show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, MethodList(mt))
 
 # pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
