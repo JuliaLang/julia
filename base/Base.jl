@@ -335,6 +335,11 @@ function profile_printing_listener(cond::Base.AsyncCondition)
         while _trywait(cond)
             profile = @something(profile, require_stdlib(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))::Module
             invokelatest(profile.peek_report[])
+            if Base.get_bool_env("JULIA_PROFILE_PEEK_TASK_BACKTRACES", true) === true
+                print(stderr, "Printing Julia task backtraces...\n")
+                flush(stderr)
+                ccall(:jl_print_task_backtraces, Cvoid, ())
+            end
             if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
                 fname = invokelatest(profile.take_heap_snapshot)
