@@ -1589,15 +1589,17 @@ JL_DLLEXPORT void jl_test_failure_breakpoint(jl_value_t *v)
 
 // logging tools --------------------------------------------------------------
 
+// DO NOT USE THIS FUNCTION FOR NEW CODE
+// The internal should not be doing anything that requires logging, which means most functions would trigger UB if calling this
 void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
             jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
             jl_value_t *msg)
 {
-    static jl_value_t *logmsg_func = NULL;
-    if (!logmsg_func && jl_base_module) {
-        jl_value_t *corelogging = jl_get_global(jl_base_module, jl_symbol("CoreLogging"));
+    jl_value_t *logmsg_func = NULL;
+    if (jl_base_module) {
+        jl_value_t *corelogging = jl_get_global_value(jl_base_module, jl_symbol("CoreLogging"));
         if (corelogging && jl_is_module(corelogging)) {
-            logmsg_func = jl_get_global((jl_module_t*)corelogging, jl_symbol("logmsg_shim"));
+            logmsg_func = jl_get_global_value((jl_module_t*)corelogging, jl_symbol("logmsg_shim"));
         }
     }
     if (!logmsg_func) {
