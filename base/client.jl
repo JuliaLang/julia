@@ -31,58 +31,135 @@ answer_color() = text_colors[repl_color("JULIA_ANSWER_COLOR", default_color_answ
 stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bold)
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
-function repl_cmd(cmd, out)
+"""
+    ShellSpecification{is_windows, shell}
+
+A type used for dispatch to select the appropriate shell command preparation logic.
+It is parameterized by `is_windows::Bool` indicating the operating system,
+and `shell::Symbol` representing the basename of the shell executable.
+"""
+struct ShellSpecification{is_windows,shell} end
+
+"""
+    prepare_shell_command(spec::ShellSpecification, cmd::Cmd) -> Cmd
+    prepare_shell_command(spec::ShellSpecification, raw_string::String) -> Cmd
+
+Returns a `Cmd` object configured for execution according to `spec`,
+using the provided `cmd` (parsed command) or `raw_string` (original input).
+Specialized methods for `ShellSpecification` define shell- and OS-specific behavior.
+
+Define `Base.needs_cmd(::ShellSpecification)` to `false` for shells that do not require a `Cmd` as input.
+They will then be passed the raw string instead.
+"""
+function prepare_shell_command(::ShellSpecification{true,shell}, cmd) where {shell}
+    return cmd
+end
+function prepare_shell_command(::ShellSpecification{false,shell}, cmd) where {shell}
+    shell_escape_cmd = "$(shell_escape_posixly(cmd)) && true"
+    return `$shell -c $shell_escape_cmd`
+end
+function prepare_shell_command(::ShellSpecification{false,:fish}, cmd)
+    shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
+    return `fish -c $shell_escape_cmd`
+end
+function prepare_shell_command(::ShellSpecification{false,:nu}, raw_string)
+    return `nu -c $raw_string`
+end
+
+"""
+    needs_cmd(::ShellSpecification) -> Bool
+
+This trait is used to determine if the shell specification requires `Cmd` as input.
+Setting this to `false` for a shell can help avoid specific parsing errors.
+"""
+needs_cmd(::ShellSpecification) = true
+needs_cmd(::ShellSpecification{false,:nu}) = false
+
+"""
+    is_cd_cmd(::ShellSpecification, cmd::Cmd) -> Bool
+    is_cd_cmd(::ShellSpecification, cmd::String) -> Bool
+
+Determines if a command is a `cd` command. Overload this for
+shells that have a different syntax for `cd`.
+"""
+is_cd_cmd(::ShellSpecification, cmd::Cmd) = cmd.exec[1] == "cd"
+is_cd_cmd(::ShellSpecification, cmd::String) = false
+is_cd_cmd(::ShellSpecification{false,:nu}, raw_string::String) = startswith(strip(raw_string), "cd")
+
+function pre_repl_cmd(raw_string, parsed, out)
     shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
     shell_name = Base.basename(shell[1])
-
-    # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
+    shell_spec = ShellSpecification{@static(Sys.iswindows() ? true : false),Symbol(shell_name)}()
+    if needs_cmd(shell_spec)
+        cmd = Base.cmd_gen(parsed)
+        return repl_cmd(shell_spec, cmd, parsed, out)
+    else
+        return repl_cmd(shell_spec, raw_string, parsed, out)
+    end
+end
+function repl_cmd(shell_spec, cmd::Cmd, parsed, out)
     cmd.exec .= expanduser.(cmd.exec)
-
     if isempty(cmd.exec)
         throw(ArgumentError("no cmd to execute"))
-    elseif cmd.exec[1] == "cd"
-        if length(cmd.exec) > 2
-            throw(ArgumentError("cd method only takes one argument"))
-        elseif length(cmd.exec) == 2
-            dir = cmd.exec[2]
-            if dir == "-"
-                if !haskey(ENV, "OLDPWD")
-                    error("cd: OLDPWD not set")
-                end
-                dir = ENV["OLDPWD"]
-            end
-        else
-            dir = homedir()
-        end
-        try
-            ENV["OLDPWD"] = pwd()
-        catch ex
-            ex isa IOError || rethrow()
-            # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
-            delete!(ENV, "OLDPWD")
-        end
-        cd(dir)
-        println(out, pwd())
-    else
-        @static if !Sys.iswindows()
-            if shell_name == "fish"
-                shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
-            else
-                shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
-            end
-            cmd = `$shell -c $shell_escape_cmd`
-        end
-        try
-            run(ignorestatus(cmd))
-        catch
-            # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
-            # Julia throws an exception if it can't find the program, but the stack trace isn't useful
-            lasterr = current_exceptions()
-            lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
-            invokelatest(display_error, lasterr)
-        end
+    end
+    if is_cd_cmd(shell_spec, cmd)
+        return repl_cd_cmd(shell_spec, cmd, parsed, out)
+    end
+    return repl_cmd_execute(shell_spec, cmd, out)
+end
+function repl_cmd(shell_spec, raw_string::String, parsed, out)
+    if is_cd_cmd(shell_spec, raw_string)
+        return repl_cd_cmd(shell_spec, raw_string, parsed, out)
+    end
+    return repl_cmd_execute(shell_spec, raw_string, out)
+end
+function repl_cmd_execute(shell_spec, cmd_or_string, out)
+    prepared_cmd = prepare_shell_command(shell_spec, cmd_or_string)
+    try
+        run(ignorestatus(prepared_cmd))
+    catch
+        # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
+        # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+        lasterr = current_exceptions()
+        lasterr = ExceptionStack([(exception = e[1], backtrace = []) for e in lasterr])
+        invokelatest(display_error, lasterr)
     end
     nothing
+end
+
+
+"""
+    repl_cd_cmd(shell_spec::ShellSpecification, cmd, parsed, out)
+
+Parses a `cd` command and executes it. Overload this for
+shells that have a different syntax for `cd`.
+"""
+function repl_cd_cmd(::ShellSpecification, cmd, _, out)
+    if length(cmd.exec) > 2
+        throw(ArgumentError("cd method only takes one argument"))
+    elseif length(cmd.exec) == 2
+        dir = cmd.exec[2]
+        if dir == "-"
+            if !haskey(ENV, "OLDPWD")
+                error("cd: OLDPWD not set")
+            end
+            dir = ENV["OLDPWD"]
+        end
+    else
+        dir = homedir()
+    end
+    try
+        ENV["OLDPWD"] = pwd()
+    catch ex
+        ex isa IOError || rethrow()
+        # if current dir has been deleted, then pwd() will throw an IOError: pwd(): no such file or directory (ENOENT)
+        delete!(ENV, "OLDPWD")
+    end
+    cd(dir)
+    println(out, pwd())
+end
+function repl_cd_cmd(spec::ShellSpecification{false,:nu}, _, parsed, out)
+    repl_cd_cmd(spec, Base.cmd_gen(parsed), parsed, out)
 end
 
 # deprecated function--preserved for DocTests.jl
