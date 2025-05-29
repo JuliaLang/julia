@@ -23,11 +23,16 @@ typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u)) = (@_foldable_met
 typejoin(@nospecialize(t), @nospecialize(s), @nospecialize(u), ts...) = (@_foldable_meta; @_nospecializeinfer_meta; afoldl(typejoin, typejoin(t, s, u), ts...))
 function typejoin(@nospecialize(a), @nospecialize(b))
     @_foldable_meta
+    @_nothrow_meta
     @_nospecializeinfer_meta
     if isa(a, TypeVar)
         return typejoin(a.ub, b)
     elseif isa(b, TypeVar)
         return typejoin(a, b.ub)
+    elseif a === b
+        return a
+    elseif !isa(a, Type) || !isa(b, Type)
+        return Any
     elseif a <: b
         return b
     elseif b <: a
