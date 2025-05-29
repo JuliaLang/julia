@@ -1630,33 +1630,46 @@ nth(itr, n::Integer) = _nth(itr, n)
 
 # infinite cycle
 function nth(itr::Cycle{I}, n::Integer) where {I}
-    n < 0 && throw(ArgumentError("Drop length must be non-negative"))
-
     if IteratorSize(I) isa Union{HasShape, HasLength}
         N = length(itr.xs)
-        N > 0 ? _nth(itr.xs, mod1(n, N)) : throw(ArgumentError("collection must be non-empty"))
+        N == 0 && throw(BoundsError(itr, n))
+
+        # prevent wrap around behaviour
+        return _nth(itr.xs, ifelse(n > 0, mod1(n, N), n))
     else
-        _nth(itr, n)
+        return _nth(itr, n)
     end
 end
 
 # Flatten{Take{Repeated{O}}} is the actual type of an Iterators.cycle(iterable::O, m) iterator
 function nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
-    n < 0 && throw(ArgumentError("Drop length must be non-negative"))
-
     if IteratorSize(O) isa Union{HasShape, HasLength}
         cycles = itr.it.n
-        repeated = itr.it.xs.x
-        k = length(repeated)
-        n > k*cycles ?
-            throw(ArgumentError("collection must be non-empty")) : _nth(repeated, mod1(n, k))
+        torepeat = itr.it.xs.x
+        k = length(torepeat)
+        (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
+
+        # prevent wrap around behaviour
+        return _nth(torepeat, ifelse(n > 0, mod1(n, k), n))
     else
-        _nth(itr, n)
+        return _nth(itr, n)
     end
 end
 
-_nth(itr, n) = first(drop(itr, n-1))
-_nth(itr::AbstractArray, n) = itr[begin + n-1]
+Base.@propagate_inbounds _nth(itr::AbstractArray, n) = itr[begin + n-1]
+
+function _nth(itr, n)
+    # unrolled version of `first(drop)`
+    n > 0 || throw(ArgumentError("n must be positive"))
+    y = iterate(itr)
+    for i in 1:n-1
+        y === nothing && break
+        y = iterate(itr, y[2])
+    end
+    y === nothing && throw(BoundsError(itr, n))
+    y[1]
+end
+
 """
     nth(n::Integer)
 
