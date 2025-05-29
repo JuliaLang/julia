@@ -276,45 +276,43 @@ function mapreduce(f::F, op::G, itr::SkipMissing; init=Base._InitialValue()) whe
 end
 
 function mapreduce_pairwise(f::F, op::G, itr::SkipMissing{<:AbstractArray}, init) where {F,G}
-    # Ensure we either get an AbstractUnitRange from eachindex or fallback to a CartesianIndices
-    ei = eachindex(itr.x)
-    inds = ei isa AbstractUnitRange ? ei : CartesianIndices(itr.x)
-    v = mapreduce_pairwise(f, op, itr, init, inds)
-    return ismissing(v) ? mapreduce_empty(f, op, eltype(itr)) : v
+    v = mapreduce_skipmissing_pairwise(f, op, itr.x, init, eachindex(itr.x))
+    return ismissing(v) ? _mapreduce_start(f, op, itr, init) : v
 end
-function mapreduce_pairwise(f::F, op::G, A::SkipMissing{<:AbstractArray}, init, inds) where {F,G}
+
+# This is based on mapreduce_pairwise, but with special sauce that allows one or both of the pairwise splits
+# to not process any elements; returning `missing` as the sentinel in such a situation
+function mapreduce_skipmissing_pairwise(f::F, op::G, A, init, inds) where {F,G}
     if length(inds) <= max(10, pairwise_blocksize(f, op))
-        return mapreduce_kernel(f, op, A, init, inds)
+        return mapreduce_skipmissing_kernel(f, op, A, init, inds)
     else
         p1, p2 = halves(inds)
-        v1 = mapreduce_pairwise(f, op, A, init, p1)
-        v2 = mapreduce_pairwise(f, op, A, init, p2)
+        v1 = mapreduce_skipmissing_pairwise(f, op, A, init, p1)
+        v2 = mapreduce_skipmissing_pairwise(f, op, A, init, p2)
         return ismissing(v1) ? v2 : ismissing(v2) ? v1 : op(v1, v2)
     end
 end
 
-function mapreduce_kernel(f, op, itr::SkipMissing{<:AbstractArray}, init, inds::AbstractUnitRange)
+function mapreduce_skipmissing_kernel(f, op, A, init, inds::AbstractUnitRange)
     i1, iN = first(inds), last(inds)
-    A = itr.x
     i = i1; ai = missing
     for outer i in i1:iN
         ai = @inbounds A[i]
         !ismissing(ai) && break
     end
     ismissing(ai) && return missing
-    v = _mapreduce_start(f, op, A, init, ai::eltype(itr))
+    v = _mapreduce_start(f, op, A, init, ai)
     i == typemax(typeof(i)) && return v
     for i in i+1:iN
         @inbounds ai = A[i]
         if !ismissing(ai)
-            v = op(v, f(ai::eltype(itr)))
+            v = op(v, f(ai))
         end
     end
     return v
 end
 
-function mapreduce_kernel(f, op, itr::SkipMissing{<:AbstractArray}, init, inds::CartesianIndices)
-    A = itr.x
+function mapreduce_skipmissing_kernel(f, op, A, init, inds)
     it = iterate(inds)
     local s
     ai = missing
@@ -325,11 +323,11 @@ function mapreduce_kernel(f, op, itr::SkipMissing{<:AbstractArray}, init, inds::
         it = iterate(inds, s)
     end
     ismissing(ai) && return missing
-    v = _mapreduce_start(f, op, A, init, ai::eltype(itr))
+    v = _mapreduce_start(f, op, A, init, ai)
     for i in Iterators.rest(inds, s)
         @inbounds ai = A[i]
         if !ismissing(ai)
-            v = op(v, f(ai::eltype(itr)))
+            v = op(v, f(ai))
         end
     end
     return v
