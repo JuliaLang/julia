@@ -557,6 +557,12 @@ static void restore_fp_env(void)
     if (jl_set_zero_subnormals(0) || jl_set_default_nans(0)) {
         jl_error("Failed to configure floating point environment");
     }
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_OFF && jl_atomic_load_relaxed(&jl_n_threads) > 1) {
+        jl_error("Cannot use `--handle-signals=no` with multiple threads (JULIA_NUM_THREADS > 1).\n"
+        "This will cause segmentation faults due to GC safepoint failures.\n"
+        "Remove `--handle-signals=no` or set JULIA_NUM_THREADS=1.\n"
+        "See: https://github.com/JuliaLang/julia/issues/50278");
+    }
 }
 static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, jl_task_t *ct)
 {

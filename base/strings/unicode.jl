@@ -702,7 +702,7 @@ function titlecase(s::AbstractString; wordsep::Function = !isletter, strict::Boo
         end
         c0 = c
     end
-    return String(take!(b))
+    return takestring!(b)
 end
 
 # TODO: improve performance characteristics, room for a ~10x improvement.

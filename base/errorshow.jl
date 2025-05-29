@@ -307,7 +307,7 @@ function showerror(io::IO, ex::MethodError)
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
         show_signature_function(iob, Core.Typeof(f))
         show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
-        str = String(take!(buf))
+        str = takestring!(buf)
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
@@ -328,7 +328,7 @@ function showerror(io::IO, ex::MethodError)
         print(io, "\nIn case you're trying to index into the array, use square brackets [] instead of parentheses ().")
     end
     # Check for local functions that shadow methods in Base
-    let name = ft.name.mt.name
+    let name = ft.name.singletonname
         if f_is_function && isdefined(Base, name)
             basef = getfield(Base, name)
             if basef !== f && hasmethod(basef, arg_types)
@@ -598,7 +598,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             m = parentmodule_before_main(method)
             modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
             print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
-            push!(lines, String(take!(buf)))
+            push!(lines, takestring!(buf))
             push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
         end
     end

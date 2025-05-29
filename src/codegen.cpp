@@ -4990,8 +4990,10 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
         }
         jl_value_t *jt = jl_nth_slot_type(specTypes, i);
         jl_cgval_t arg = update_julia_type(ctx, argv[i], jt);
-        if (arg.typ == jl_bottom_type)
+        if (arg.typ == jl_bottom_type) {
+            emit_error(ctx, "(INTERNAL ERROR - IR Validity): Argument type mismatch in Expr(:invoke)");
             return jl_cgval_t();
+        }
         if (is_uniquerep_Type(jt)) {
             continue;
         }
@@ -5028,7 +5030,7 @@ static jl_cgval_t emit_call_specfun_other(jl_codectx_t &ctx, bool is_opaque_clos
                 Value *val = emit_unbox(ctx, et, arg, jt);
                 if (!val) {
                     // There was a type mismatch of some sort - exit early
-                    CreateTrap(ctx.builder);
+                    emit_error(ctx, "(INTERNAL ERROR - IR Validity): Argument type mismatch in Expr(:invoke)");
                     return jl_cgval_t();
                 }
                 argvals[idx] = val;
@@ -5295,7 +5297,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
     }
     if (result.typ == jl_bottom_type) {
 #ifndef JL_NDEBUG
-        emit_error(ctx, "(Internal Error - IR Validity): Returned from function we expected not to.");
+        emit_error(ctx, "(INTERNAL ERROR - IR Validity): Returned from function we expected not to.");
 #endif
         CreateTrap(ctx.builder);
     }
@@ -5647,7 +5649,7 @@ static jl_cgval_t emit_local(jl_codectx_t &ctx, jl_value_t *slotload)
     if (sym == jl_unused_sym) {
         // This shouldn't happen in well-formed input, but let's be robust,
         // since we otherwise cause undefined behavior here.
-        emit_error(ctx, "(INTERNAL ERROR): Tried to use `#undef#` argument.");
+        emit_error(ctx, "(INTERNAL ERROR - IR Validity): Tried to use `#undef#` argument.");
         return jl_cgval_t();
     }
     return emit_varinfo(ctx, vi, sym);
@@ -6494,7 +6496,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         if (source.constant == NULL) {
             // For now, we require non-constant source to be handled by using
             // eval. This should probably be a verifier error and an abort here.
-            emit_error(ctx, "(internal error) invalid IR: opaque closure source must be constant");
+            emit_error(ctx, "(INTERNAL ERROR - IR Validity): opaque closure source must be constant");
             return jl_cgval_t();
         }
         bool can_optimize = argt.constant != NULL && lb.constant != NULL && ub.constant != NULL &&
@@ -7559,16 +7561,11 @@ static const char *derive_sigt_name(jl_value_t *jargty)
     jl_datatype_t *dt = (jl_datatype_t*)jl_argument_datatype(jargty);
     if ((jl_value_t*)dt == jl_nothing)
         return NULL;
-    jl_sym_t *name = dt->name->name;
-    // if we have a kwcall, use that as the name anyways
-    jl_methtable_t *mt = dt->name->mt;
-    if (mt == jl_type_type_mt || mt == jl_nonfunction_mt || mt == NULL) {
-        // our value for `name` from MethodTable is not good, try to come up with something better
-        if (jl_is_type_type((jl_value_t*)dt)) {
-            dt = (jl_datatype_t*)jl_argument_datatype(jl_tparam0(dt));
-            if ((jl_value_t*)dt != jl_nothing) {
-                name = dt->name->name;
-            }
+    jl_sym_t *name = dt->name->singletonname;
+    if (jl_is_type_type((jl_value_t*)dt)) {
+        dt = (jl_datatype_t*)jl_argument_datatype(jl_tparam0(dt));
+        if ((jl_value_t*)dt != jl_nothing) {
+            name = dt->name->singletonname;
         }
     }
     return jl_symbol_name(name);
@@ -7745,7 +7742,7 @@ const char *jl_generate_ccallable(Module *llvmmod, jl_value_t *nameval, jl_value
     assert(jl_is_datatype(ft));
     jl_value_t *ff = ft->instance;
     assert(ff);
-    const char *name = !jl_is_string(nameval) ? jl_symbol_name(ft->name->mt->name) : jl_string_data(nameval);
+    const char *name = !jl_is_string(nameval) ? jl_symbol_name(ft->name->singletonname) : jl_string_data(nameval);
     jl_value_t *crt = declrt;
     if (jl_is_abstract_ref_type(declrt)) {
         declrt = jl_tparam0(declrt);
@@ -9380,7 +9377,7 @@ static jl_llvm_functions_t
                     // Probably dead code, but let's be loud about it in case it isn't, so we fail
                     // at the point of the miscompile, rather than later when something attempts to
                     // read the scope.
-                    emit_error(ctx, "(INTERNAL ERROR): Attempted to execute EnterNode with bad scope");
+                    emit_error(ctx, "(INTERNAL ERROR - IR Validity): Attempted to execute EnterNode with bad scope");
                     find_next_stmt(-1);
                     continue;
                 }
