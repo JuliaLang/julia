@@ -117,11 +117,53 @@ function get_deps_readelf(lib_path::String)
     return libs
 end
 
+function get_deps_dumpbin(lib_path::String)
+    # Use dumpbin to get the imports from a Windows DLL
+    libs = split(readchomp(`dumpbin /imports $(lib_path)`), "\n")
+    libs = filter(contains("dll"), libs)
+    libs = map(libs) do lib
+        m = match(r"\s+(\S+\.dll)$"i, lib)
+        if m !== nothing
+            return lowercase(m.captures[1])
+        end
+        return ""
+    end
+    libs = filter(!isempty, strip.(libs))
+    libs = strip_soversion_windows.(libs)
+    # Remove self-reference
+    self_lib = strip_soversion_windows(lowercase(basename(lib_path)))
+    libs = filter(!=(self_lib), libs)
+    return libs
+end
 
+function is_system_lib_windows(lib)
+    system_libs = [
+        "kernel32",
+        "user32",
+        "gdi32",
+        "advapi32",
+        "ole32",
+        "oleaut32",
+        "shell32",
+        "ws2_32",
+        "comdlg32",
+        "shlwapi",
+        "rpcrt4",
+        "msvcrt",
+        "comctl32",
+        "ucrtbase",
+        "vcruntime140",
+        "msvcp140"
+    ]
+    return any(syslib -> lowercase(lib) == syslib, system_libs)
+end
+
+throw_no_test = true
 skip = false
-# On linux, we need `readelf` available, otherwise we refuse to attempt this
+# Check for required tools based on platform
 if Sys.islinux() || Sys.isfreebsd()
     if Sys.which("readelf") === nothing
+        throw_no_test && error("`readelf` is required to run `stdlib_dependencies.jl` on Linux or FreeBSD.")
         @debug("Silently skipping stdlib_dependencies.jl as `readelf` not available.")
         skip = true
     end
@@ -131,13 +173,25 @@ if Sys.islinux() || Sys.isfreebsd()
 elseif Sys.isapple()
     # On macOS, we need `otool` available
     if Sys.which("otool") === nothing
+        throw_no_test && error("`otool` is required to run `stdlib_dependencies.jl` on macOS.")
         @debug("Silently skipping stdlib_dependencies.jl as `otool` not available.")
         skip = true
     end
     get_deps = get_deps_otool
     strip_soversion = strip_soversion_macos
     is_system_lib = is_system_lib_macos
+elseif Sys.iswindows()
+    # On Windows, we need `dumpbin` available
+    if Sys.which("dumpbin") === nothing
+        throw_no_test && error("`dumpbin` is required to run `stdlib_dependencies.jl` on Windows.")
+        @debug("Silently skipping stdlib_dependencies.jl as `dumpbin` not available.")
+        skip = true
+    end
+    get_deps = get_deps_dumpbin
+    strip_soversion = strip_soversion_windows
+    is_system_lib = is_system_lib_windows
 else
+    throw_no_test && error("Unsupported platform for `stdlib_dependencies.jl`. Only Linux, FreeBSD, macOS, and Windows are supported.")
     @debug("Don't know how to run `stdlib_dependencies.jl` on this platform")
     skip = true
 end
