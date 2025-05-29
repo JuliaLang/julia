@@ -279,6 +279,15 @@ DevDocs = [
         "devdocs/build/arm.md",
         "devdocs/build/riscv.md",
         "devdocs/build/distributing.md",
+    ],
+    "Contributor's Guide" => [
+        "devdocs/contributing/code-changes.md",
+        "devdocs/contributing/tests.md",
+        "devdocs/contributing/documentation.md",
+        "devdocs/contributing/jldoctests.md",
+        "devdocs/contributing/patch-releases.md",
+        "devdocs/contributing/formatting.md",
+        "devdocs/contributing/git-workflow.md",
     ]
 ]
 
