@@ -1139,7 +1139,7 @@ end
     Z[] = 17
     it_result_pairs = Dict(
         (Z, 1) => 17,
-        (collect(1:1000), 234) => 234,
+        (collect(1:100), 23) => 23,
         (10:6:1000, 123) => 10 + 6 * 122,
         ("∀ϵ>0", 3) => '>',
         ((1, 3, 5, 10, 78), 2) => 3,
@@ -1159,18 +1159,21 @@ end
         (Iterators.repeated(3.14159, 5), 4) => 3.14159,
         ((a=2, b=3, c=5, d=7, e=11), 4) => 7,
         (Iterators.cycle(collect(1:100)), 9999) => 99,
-        (Iterators.cycle([1, 2, 3, 4, 5], 5), 25) => 5
+        (Iterators.cycle([1, 2, 3, 4, 5], 5), 25) => 5,
         (Iterators.cycle("String", 10), 16) => 'i',
-        (Iterators.cycle((), 1000)) => ()
+        (Iterators.cycle(((),)), 1000) => ()
     )
 
-    testset = zip(itrs, ns, expected)
     @testset "iter: $IT" for (IT, n) in keys(it_result_pairs)
         @test it_result_pairs[(IT, n)] == nth(IT, n)
+        @test_throws ArgumentError nth(IT, -42)
 
         IT isa Iterators.Cycle && continue # cycles are infinite so never OOB
-        @test_throws Union{ArgumentError} nth(IT, 999999999)
+        @test_throws BoundsError nth(IT, 999999999)
     end
+
+    empty_cycle = Iterators.cycle([])
+    @test_throws BoundsError nth(empty_cycle, 42)
 end
 
 @testset "Iterators docstrings" begin
