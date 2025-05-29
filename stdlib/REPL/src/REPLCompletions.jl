@@ -917,7 +917,7 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     # like Array, but the REPL's introspection here may know their Type{T}.
     isabstract(f) = isabstracttype(f)
     isabstract(::Type{Type{T}}) where {T} = isabstracttype(T)
-    isabstract(funct) && return fail
+    isabstract(funct) && return false
     complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, arg_pos == :kwargs)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
