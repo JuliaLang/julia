@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-Base.Core.include(Base, "Base.jl") # finish populating Base (currently just has the Compiler)
+Base.include("Base.jl") # finish populating Base (currently just has the Compiler)
 
 # Set up Main module by importing from Base
 using .Base
