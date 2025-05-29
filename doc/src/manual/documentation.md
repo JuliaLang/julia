@@ -38,7 +38,7 @@ the documented object. Here is a basic example:
 foo(xs::Array) = ...
 ```
 !!! note "Reminder"
-    Having any lines between the docstring and the object being documented (function, macro, type or instance), while human readable, are not allowed and may break automated documentation tools.
+    Any empty lines between the docstring and the object being documented detach the former from the latter, making the docstring ineffective.
 
 Documentation is interpreted as [Markdown](https://en.wikipedia.org/wiki/Markdown), so you can
 use indentation and code fences to delimit code examples from text. Technically, any object can
