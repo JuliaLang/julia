@@ -245,16 +245,16 @@ As in the example above, we recommend following some simple conventions when wri
 
    This makes it clearer where docstrings start and end.
 
-10. Respect the line length limit used in the surrounding code.
+9. Respect the line length limit used in the surrounding code.
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
    It is recommended that lines are at most 92 characters wide.
-11. Provide information allowing custom types to implement the function in an
+10. Provide information allowing custom types to implement the function in an
    `# Implementation` section. These implementation details are intended for developers
    rather than users, explaining e.g. which functions should be overridden and which
    functions automatically use appropriate fallbacks. Such details are best kept separate
    from the main description of the function's behavior.
-12. For long docstrings, consider splitting the documentation with an
+11. For long docstrings, consider splitting the documentation with an
    `# Extended help` header. The typical help-mode will show only the
    material above the header; you can access the full help by adding a '?'
    at the beginning of the expression (i.e., "??foo" rather than "?foo").
