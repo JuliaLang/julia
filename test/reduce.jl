@@ -787,13 +787,13 @@ end
 
     @test (@inferred Missing mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, skipmissing(view([1.0,2.0,missing],1:2)))) == 3.0
     @test (@inferred Missing mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)), init=0.0)) == 3.0
-    @test (@inferred Union{Missing,Int} mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)), init=0)) == 3.0
-    @test (@inferred Union{Missing,Int} mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)))) == 3.0
+    @test (@inferred Int mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)), init=0)) == 3.0
+    @test (@inferred Int mapreduce(identity, (x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)))) == 3.0
 
     @test (@inferred Missing reduce((x,y)->Base.add_sum(x, y)/1, skipmissing(view([1.0,2.0,missing],1:2)))) == 3.0
     @test (@inferred Missing reduce((x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)), init=0.0)) == 3.0
-    @test (@inferred Union{Missing,Int} reduce((x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)), init=0)) == 3.0
-    @test (@inferred Union{Missing,Int} reduce((x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)))) == 3.0
+    @test (@inferred Int reduce((x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)), init=0)) == 3.0
+    @test (@inferred Int reduce((x,y)->Base.add_sum(x, y)/1, skipmissing(view([1,2,missing],1:2)))) == 3.0
 end
 
 linear(x) = (@assert(IndexStyle(x) == IndexLinear()); x)

@@ -269,41 +269,28 @@ function show(io::IO, s::SkipMissing)
     print(io, ')')
 end
 
-# Transducers for mapreduce; the hardest part is ensuring that the
-# every reduction chain starts correctly when `init` is not provided because
-# we need to call reduce_first on the first *non-missing* value.
-struct _SkipMissingReducer{F} <: Function
-    op::F
-end
-(smr::_SkipMissingReducer)(::Missing, ::Missing) = missing
-(smr::_SkipMissingReducer)(::Missing, y)         = y
-(smr::_SkipMissingReducer)(x,         ::Missing) = x
-(smr::_SkipMissingReducer)(x,         y)         = smr.op(x, y)
-
-struct _SkipMissingMapper{T,F} <: Function
-    f::F
-end
-_SkipMissingMapper{T}(f) where {T} = _SkipMissingMapper{T, typeof(f)}(f)
-(smm::_SkipMissingMapper)(::Missing) = missing
-(smm::_SkipMissingMapper{T})(x) where {T} = smm.f(x::T)
-
+# Simple optimization: catch skipmissings that wrap iterators that don't include Missing
 function mapreduce(f::F, op::G, itr::SkipMissing; init=Base._InitialValue()) where {F,G}
     (IteratorEltype(itr.x) === HasEltype() && !(eltype(itr.x) >: Missing)) && return mapreduce(f, op, itr.x; init)
-    # Note that we _could_ use the transducers here in cases where `init` is provided, but the cost of
-    # iterating over the unstable `Union{Nothing, Tuple{Union{Missing, T}, IterState}}` is very high
     return mapreduce_pairwise(f, op, itr, init)
 end
 
-# For Arrays we can do better (either way!) by pretending all indices are available,
-# but ensuring that the kernels carefully init each chain
-function mapreduce(f::F, op::G, itr::SkipMissing{<:AbstractArray}; init=Base._InitialValue()) where {F,G}
-    !(eltype(itr.x) >: Missing) && return mapreduce(f, op, itr.x; init)
+function mapreduce_pairwise(f::F, op::G, itr::SkipMissing{<:AbstractArray}, init) where {F,G}
     # Ensure we either get an AbstractUnitRange from eachindex or fallback to a CartesianIndices
     ei = eachindex(itr.x)
     inds = ei isa AbstractUnitRange ? ei : CartesianIndices(itr.x)
-    # The transducers are still useful here; they ensure combined empty chains appropriately skip missing
-    v = mapreduce_pairwise(_SkipMissingMapper{eltype(itr)}(f), _SkipMissingReducer(op), itr, init, inds)
+    v = mapreduce_pairwise(f, op, itr, init, inds)
     return ismissing(v) ? mapreduce_empty(f, op, eltype(itr)) : v
+end
+function mapreduce_pairwise(f::F, op::G, A::SkipMissing{<:AbstractArray}, init, inds) where {F,G}
+    if length(inds) <= max(10, pairwise_blocksize(f, op))
+        return mapreduce_kernel(f, op, A, init, inds)
+    else
+        p1, p2 = halves(inds)
+        v1 = mapreduce_pairwise(f, op, A, init, p1)
+        v2 = mapreduce_pairwise(f, op, A, init, p2)
+        return ismissing(v1) ? v2 : ismissing(v2) ? v1 : op(v1, v2)
+    end
 end
 
 function mapreduce_kernel(f, op, itr::SkipMissing{<:AbstractArray}, init, inds::AbstractUnitRange)
