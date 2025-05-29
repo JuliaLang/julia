@@ -286,7 +286,7 @@ function invmod(n::Integer, m::Integer)
     g, x, y = gcdx(n, m)
     g != 1 && throw(DomainError((n, m), LazyString("Greatest common divisor is ", g, ".")))
     # Note that m might be negative here.
-    if n isa Unsigned && hastypemax(typeof(n)) && x > typemax(n)>>1
+    if x isa Unsigned && hastypemax(typeof(x)) && x > typemax(x)>>1
         # x might have wrapped if it would have been negative
         # adding back m forces a correction
         x += m
@@ -570,7 +570,8 @@ function nextpow(a::Real, x::Real)
     n = ceil(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
     p = a^(n-1)
-    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    hastypemax(typeof(p)) && x > typemax(p) &&
+        throw(DomainError(x,"argument is beyond the range of type of the base"))
     p >= x && return p
     wp = a^n
     wp > p || throw(OverflowError("result is beyond the range of type of the base"))
@@ -611,9 +612,10 @@ function prevpow(a::T, x::Real) where T <: Real
     n = floor(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
     p = a^n
-    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    hastypemax(typeof(p)) && x > typemax(p) &&
+        throw(DomainError(x,"argument is beyond the range of type of the base"))
     if a isa Integer
-        wp, overflow = mul_with_overflow(a, p)
+        wp, overflow = mul_with_overflow(promote(a, p)...)
         wp <= x && !overflow && return wp
     else
         wp = a^(n+1)
@@ -1066,8 +1068,6 @@ end
 
 Return `true` if and only if the extrema `typemax(T)` and `typemin(T)` are defined.
 """
-hastypemax(::Base.BitIntegerType) = true
-hastypemax(::Type{Bool}) = true
 hastypemax(::Type{T}) where {T} = applicable(typemax, T) && applicable(typemin, T)
 
 """

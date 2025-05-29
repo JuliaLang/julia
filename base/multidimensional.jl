@@ -5,7 +5,7 @@ module IteratorsMD
     import .Base: eltype, length, size, first, last, in, getindex, setindex!,
                   min, max, zero, oneunit, isless, eachindex,
                   convert, show, iterate, promote_rule, to_indices, copy,
-                  isassigned
+                  isassigned, lastindex, firstindex
 
     import .Base: +, -, *, (:)
     import .Base: simd_outer_range, simd_inner_length, simd_index, setindex
@@ -103,6 +103,8 @@ module IteratorsMD
 
     # indexing
     getindex(index::CartesianIndex, i::Integer) = index.I[i]
+    firstindex(index::CartesianIndex) = firstindex(index.I)
+    lastindex(index::CartesianIndex) = lastindex(index.I)
     Base.get(A::AbstractArray, I::CartesianIndex, default) = get(A, I.I, default)
     eltype(::Type{T}) where {T<:CartesianIndex} = eltype(fieldtype(T, :I))
 
@@ -146,7 +148,7 @@ module IteratorsMD
     # hashing
     const cartindexhash_seed = UInt == UInt64 ? 0xd60ca92f8284b8b0 : 0xf2ea7c2e
     function Base.hash(ci::CartesianIndex, h::UInt)
-        h += cartindexhash_seed
+        h ⊻= cartindexhash_seed
         for i in ci.I
             h = hash(i, h)
         end
@@ -414,7 +416,9 @@ module IteratorsMD
 
     @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
         axsA = axes(A)
-        Base._all_match_first(axes, axsA, B...) || Base.throw_eachindex_mismatch_indices(IndexCartesian(), axes(A), axes.(B)...)
+        axsBs = map(axes, B)
+        all(==(axsA), axsBs) ||
+            Base.throw_eachindex_mismatch_indices("axes", axsA, axsBs...)
         CartesianIndices(axsA)
     end
 

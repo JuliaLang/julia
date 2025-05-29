@@ -5,6 +5,9 @@
 using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
+# issue #58013
+@test_throws ArgumentError invokelatest()
+
 # test simple method replacement
 begin
     g265a() = f265a(0)
@@ -191,31 +194,26 @@ f_gen265(x::Type{Int}) = 3
 # would have capped those specializations if they were still valid
 f26506(@nospecialize(x)) = 1
 g26506(x) = Base.inferencebarrier(f26506)(x[1])
-z = Any["ABC"]
+z26506 = Any["ABC"]
 f26506(x::Int) = 2
-g26506(z) # Places an entry for f26506(::String) in mt.name.cache
+g26506(z26506) # Places an entry for f26506(::String) in MethodTable cache
+w26506 = Base.get_world_counter()
+cache26506 = ccall(:jl_mt_find_cache_entry, Any, (Any, Any, UInt), Core.GlobalMethods.cache, Tuple{typeof(f26506),String}, w26506)::Core.TypeMapEntry
+@test cache26506.max_world === typemax(UInt)
+w26506 = Base.get_world_counter()
 f26506(x::String) = 3
-let cache = typeof(f26506).name.mt.cache
-    # The entry we created above should have been truncated
-    @test cache.min_world == cache.max_world
-end
-c26506_1, c26506_2 = Condition(), Condition()
-# Captures the world age
-result26506 = Any[]
-t = Task(()->begin
-    wait(c26506_1)
-    push!(result26506, g26506(z))
-    notify(c26506_2)
-end)
-yield(t)
+@test w26506+1 === Base.get_world_counter()
+# The entry we created above should have been truncated
+@test cache26506.max_world == w26506
+# Captures the world age on creation
+t26506 = @task g26506(z26506)
 f26506(x::Float64) = 4
-let cache = typeof(f26506).name.mt.cache
-    # The entry we created above should have been truncated
-    @test cache.min_world == cache.max_world
-end
-notify(c26506_1)
-wait(c26506_2)
-@test result26506[1] == 3
+@test cache26506.max_world == w26506
+f26506(x::String) = 5
+# The entry we created above should not have been changed
+@test cache26506.max_world == w26506
+@test fetch(schedule(t26506)) === 3
+@test g26506(z26506) === 5
 
 # issue #38435
 f38435(::Int, ::Any) = 1
@@ -417,6 +415,27 @@ ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
     "jl_method_table_insert"
 ]
 
+# logging issue #58080
+f58080(::Integer) = 1
+callsf58080rts(x) = f58080(Base.inferencebarrier(x)::Signed)
+invokesf58080s(x) = invoke(f58080, Tuple{Signed}, x)
+# compilation
+invokesf58080s(1)                        # invoked callee
+callsf58080rts(1)                        # runtime-dispatched callee
+# invalidation
+logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1);
+f58080(::Int) = 2
+f58080(::Signed) = 4
+ccall(:jl_debug_method_invalidation, Any, (Cint,), 0);
+@test logmeths[1].def.name === :callsf58080rts
+m58080i = which(f58080, (Int,))
+m58080s = which(f58080, (Signed,))
+idxi = findfirst(==(m58080i), logmeths)
+@test logmeths[idxi+1] == "jl_method_table_insert"
+@test logmeths[idxi+2].def.name === :invokesf58080s
+@test logmeths[end-1] == m58080s
+@test logmeths[end] == "jl_method_table_insert"
+
 # issue #50091 -- missing invoke edge affecting nospecialized dispatch
 module ExceptionUnwrapping
 @nospecialize
@@ -478,6 +497,8 @@ Base.delete_method(fshadow_m2)
 @test Base.morespecific(fshadow_m3, fshadow_m1)
 @test !Base.morespecific(fshadow_m2, fshadow_m3)
 
+@test_throws "Method of fshadow already disabled" Base.delete_method(fshadow_m2)
+
 # Generated functions without edges must have min_world = 1.
 # N.B.: If changing this, move this test to precompile and make sure
 # that the specialization survives revalidation.
@@ -534,3 +555,12 @@ module C57316; import ..X57316.Y57316 as Z, .Z.Y57316 as W; end
 @test !isdefined(B57316, :X57316)
 @test !isdefined(C57316, :X57316)
 @test !isdefined(C57316, :Y57316)
+
+# jl_module_import should always manipulate the latest world
+module M57965
+function f()
+    @eval Random = 1
+    Core._eval_import(true, @__MODULE__, nothing, Expr(:., :Random))
+end
+end
+@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()s

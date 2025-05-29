@@ -15,36 +15,6 @@ function iterate(gri::GlobalRefIterator, i = 1)
     return ((b::Core.Binding).globalref, i+1)
 end
 
-const TYPE_TYPE_MT = Type.body.name.mt
-const NONFUNCTION_MT = Core.MethodTable.name.mt
-function foreach_module_mtable(visit, m::Module, world::UInt)
-    for gb in globalrefs(m)
-        binding = gb.binding
-        bpart = lookup_binding_partition(world, binding)
-        if is_defined_const_binding(binding_kind(bpart))
-            v = partition_restriction(bpart)
-            uw = unwrap_unionall(v)
-            name = gb.name
-            if isa(uw, DataType)
-                tn = uw.name
-                if tn.module === m && tn.name === name && tn.wrapper === v && isdefined(tn, :mt)
-                    # this is the original/primary binding for the type (name/wrapper)
-                    mt = tn.mt
-                    if mt !== nothing && mt !== TYPE_TYPE_MT && mt !== NONFUNCTION_MT
-                        @assert mt.module === m
-                        visit(mt) || return false
-                    end
-                end
-            elseif isa(v, Core.MethodTable) && v.module === m && v.name === name
-                # this is probably an external method table here, so let's
-                # assume so as there is no way to precisely distinguish them
-                visit(v) || return false
-            end
-        end
-    end
-    return true
-end
-
 function foreachgr(visit, src::CodeInfo)
     stmts = src.code
     for i = 1:length(stmts)
@@ -124,12 +94,12 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
     (_, (ib, ibpart)) = Compiler.walk_binding_partition(b, invalidated_bpart, new_max_world)
     (_, (nb, nbpart)) = Compiler.walk_binding_partition(b, new_bpart, new_max_world+1)
 
-    # abstract_eval_globalref_partition is the maximum amount of information that inference
+    # `abstract_eval_partition_load` is the maximum amount of information that inference
     # reads from a binding partition. If this information does not change - we do not need to
     # invalidate any code that inference created, because we know that the result will not change.
     need_to_invalidate_code =
-        Compiler.abstract_eval_globalref_partition(nothing, ib, ibpart) !==
-        Compiler.abstract_eval_globalref_partition(nothing, nb, nbpart)
+        Compiler.abstract_eval_partition_load(nothing, ib, ibpart) !==
+        Compiler.abstract_eval_partition_load(nothing, nb, nbpart)
 
     need_to_invalidate_export = export_affecting_partition_flags(invalidated_bpart) !==
                                 export_affecting_partition_flags(new_bpart)
@@ -188,7 +158,7 @@ invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPar
     invalidate_code_for_globalref!(convert(Core.Binding, gr), invalidated_bpart, new_bpart, new_max_world)
 
 function maybe_add_binding_backedge!(b::Core.Binding, edge::Union{Method, CodeInstance})
-    meth = isa(edge, Method) ? edge : Compiler.get_ci_mi(edge).def
+    meth = isa(edge, Method) ? edge : get_ci_mi(edge).def
     ccall(:jl_maybe_add_binding_backedge, Cint, (Any, Any, Any), b, edge, meth)
     return nothing
 end
@@ -210,7 +180,7 @@ function scan_new_method!(methods_with_invalidated_source::IdSet{Method}, method
         b = convert(Core.Binding, gr)
         if binding_was_invalidated(b)
             # TODO: We could turn this into an addition if condition. For now, use it as a reasonably cheap
-            # additional consistency chekc
+            # additional consistency check
             @assert !image_backedges_only
             push!(methods_with_invalidated_source, method)
         end

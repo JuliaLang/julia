@@ -18,7 +18,8 @@ import
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
         isone, big, _string_n, decompose, minmax, _precision_with_base_2,
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
-        uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask
+        uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
+        ispositive, isnegative
 
 import .Core: AbstractFloat
 import .Base: Rational, Float16, Float32, Float64, Bool
@@ -1135,6 +1136,10 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 iszero(x::BigFloat) = x.exp == mpfr_special_exponent_zero
 isone(x::BigFloat) = x == Clong(1)
 
+# In theory, `!iszero(x) && !isnan(x)` should be the same as `x.exp > mpfr_special_exponent_nan`, but this is safer.
+ispositive(x::BigFloat) = !signbit(x) && !iszero(x) && !isnan(x)
+isnegative(x::BigFloat) = signbit(x) && !iszero(x) && !isnan(x)
+
 @eval typemax(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
@@ -1229,7 +1234,7 @@ function _prettify_bigfloat(s::String)::String
             string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac == "0" ? "" : frac)
         end
     else
-        string(mantissa, 'e', exponent)
+        string(mantissa, 'e', expo)
     end
 end
 

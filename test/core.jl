@@ -17,15 +17,17 @@ for (T, c) in (
         (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results, :time_infer_total, :time_infer_cache_saved, :time_infer_self]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
-        (Core.MethodTable, [:module]),
+        (Core.MethodTable, [:cache, :module, :name]),
+        (Core.MethodCache, []),
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
-        (Core.TypeName, [:name, :module, :names, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
+        (Core.TypeName, [:name, :module, :names, :wrapper, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
         (Core.Memory, [:length, :ptr]),
         (Core.GenericMemoryRef, [:mem, :ptr_or_offset]),
         (Task, [:metrics_enabled]),
+        (Core.BindingPartition, [:restriction, :kind]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if isconst(T, i))) == Set(c)
 end
@@ -34,16 +36,18 @@ end
 for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
-        (Core.Method, [:primary_world, :deleted_world]),
+        (Core.Method, [:primary_world, :dispatch_status]),
         (Core.MethodInstance, [:cache, :flags]),
-        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
+        (Core.MethodTable, [:defs]),
+        (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
-        (Core.TypeName, [:cache, :linearcache]),
+        (Core.TypeName, [:cache, :linearcache, :Typeofwrapper, :max_args, :cache_entry_count]),
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
         (Task, [:_state, :running_time_ns, :finished_at, :first_enqueued_at, :last_started_running_at]),
+        (Core.BindingPartition, [:min_world, :max_world, :next]),
     )
     @test Set((fieldname(T, i) for i in 1:fieldcount(T) if Base.isfieldatomic(T, i))) == Set(c)
 end
@@ -2645,11 +2649,14 @@ struct D14919 <: Function; end
 @test B14919()() == "It's a brand new world"
 @test C14919()() == D14919()() == "Boo."
 
-for f in (:Any, :Function, :(Core.Builtin), :(Union{Nothing, Type}), :(Union{typeof(+), Type}), :(Union{typeof(+), typeof(-)}), :(Base.Callable))
-    @test_throws ErrorException("Method dispatch is unimplemented currently for this method signature") @eval (::$f)() = 1
-end
-for f in (:(Core.getfield), :((::typeof(Core.getfield))), :((::Core.IntrinsicFunction)))
-    @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
+let ex = ErrorException("cannot add methods to a builtin function")
+    for f in (:(Core.Any), :(Core.Function), :(Core.Builtin), :(Base.Callable), :(Union{Nothing,F} where F), :(typeof(Core.getfield)), :(Core.IntrinsicFunction))
+        @test_throws ex @eval (::$f)() = 1
+    end
+    @test_throws ex @eval (::Union{Nothing,F})() where {F<:Function} = 1
+    for f in (:(Core.getfield),)
+        @test_throws ex @eval $f() = 1
+    end
 end
 
 # issue #33370
@@ -4951,6 +4958,9 @@ let ft = Base.datatype_fieldtypes
     @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
 end
 
+# issue #54969
+@test !isdefined(Memory.body, :instance)
+
 # `where` syntax in constructor definitions
 (A12238{T} where T<:Real)(x) = 0
 @test A12238{<:Real}(0) == 0
@@ -5087,7 +5097,7 @@ function f16340(x::T) where T
     return g
 end
 let g = f16340(1)
-    @test isa(typeof(g).name.mt.defs.sig, UnionAll)
+    @test isa(only(methods(g)).sig, UnionAll)
 end
 
 # issue #16793
@@ -7340,7 +7350,7 @@ Array{Int}(undef, bignum, bignum, 0, bignum, bignum)
 # but also test that it does throw if the axes multiply to a multiple of typemax(UInt)
 @test_throws ArgumentError Array{Int}(undef, bignum, bignum)
 @test_throws ArgumentError Array{Int}(undef, 1, bignum, bignum)
-# also test that we always throw erros for negative dims even if other dims are 0 or the product is positive
+# also test that we always throw errors for negative dims even if other dims are 0 or the product is positive
 @test_throws ArgumentError Array{Int}(undef, 0, -4, -4)
 @test_throws ArgumentError Array{Int}(undef, -4, 1, 0)
 @test_throws ArgumentError Array{Int}(undef, -4, -4, 1)
@@ -8308,11 +8318,12 @@ end
 module OverlayModule
 
 using Base.Experimental: @MethodTable, @overlay
+using Test
 
 @MethodTable mt
 # long function def
-@overlay mt function sin(x::Float64)
-    1
+let m = @overlay mt function sin(x::Float64); 1; end
+    @test isa(m, Method)
 end
 # short function def
 @overlay mt cos(x::Float64) = 2
@@ -8528,3 +8539,9 @@ module GlobalBindingMulti
     using .M.C
 end
 @test GlobalBindingMulti.S === GlobalBindingMulti.M.C.S
+
+#58434 bitsegal comparison of oddly sized fields
+primitive type ByteString58434 (18 * 8) end
+
+@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
+@test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)

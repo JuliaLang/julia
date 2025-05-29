@@ -1,11 +1,9 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
-
 #include "julia.h"
 #include "julia_internal.h"
 #include "julia_assert.h"
@@ -457,15 +455,14 @@ JL_DLLEXPORT jl_gcframe_t **jl_autoinit_and_adopt_thread(void)
 {
     if (!jl_is_initialized()) {
         void *retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
-        void *sysimg_handle = jl_find_dynamic_library_by_addr(retaddr, /* throw_err */ 0);
-
-        if (sysimg_handle == NULL) {
+        void *handle = jl_find_dynamic_library_by_addr(retaddr, 0);
+        if (handle == NULL) {
             fprintf(stderr, "error: runtime auto-initialization failed due to bad sysimage lookup\n"
                             "       (this should not happen, please file a bug report)\n");
-            abort();
+            exit(1);
         }
-
-        assert(0 && "TODO: implement auto-init");
+        jl_init_with_image_handle(handle);
+        return &jl_get_current_task()->gcstack;
     }
 
     return jl_adopt_thread();
@@ -562,18 +559,20 @@ static void jl_delete_thread(void *value) JL_NOTSAFEPOINT_ENTER
     // this here by blocking. This also synchronizes our read of `current_task`
     // (which is the flag we currently use to check the liveness state of a thread).
 #ifdef _OS_WINDOWS_
-    jl_lock_profile_wr();
+    int havelock = jl_lock_profile_wr();
+    assert(havelock); (void)havelock;
 #elif defined(JL_DISABLE_LIBUNWIND)
     // nothing
 #elif defined(__APPLE__)
-    jl_lock_profile_wr();
+    int havelock = jl_lock_profile_wr();
+    assert(havelock); (void)havelock;
 #else
     pthread_mutex_lock(&in_signal_lock);
 #endif
     jl_atomic_store_relaxed(&ptls->current_task, NULL); // indicate dead
     // finally, release all of the locks we had grabbed
 #ifdef _OS_WINDOWS_
-    jl_unlock_profile_wr();
+    if (havelock) jl_unlock_profile_wr();
 #elif defined(JL_DISABLE_LIBUNWIND)
     // nothing
 #elif defined(__APPLE__)

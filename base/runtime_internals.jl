@@ -1007,10 +1007,25 @@ morespecific(@nospecialize(a), @nospecialize(b)) = (@_total_meta; ccall(:jl_type
 morespecific(a::Method, b::Method) = ccall(:jl_method_morespecific, Cint, (Any, Any), a, b) != 0
 
 """
-    fieldoffset(type, i)
+    fieldoffset(type, name::Symbol | i::Integer)
 
-The byte offset of field `i` of a type relative to the data start. For example, we could
-use it in the following manner to summarize information about a struct:
+The byte offset of a field (specified by name or index) of a type relative to its start.
+
+# Examples
+```jldoctest
+julia> struct Foo
+           x::Int64
+           y::String
+       end
+
+julia> fieldoffset(Foo, 2)
+0x0000000000000008
+
+julia> fieldoffset(Foo, :x)
+0x0000000000000000
+```
+
+We can use it to summarize information about a struct:
 
 ```jldoctest
 julia> structinfo(T) = [(fieldoffset(T,i), fieldname(T,i), fieldtype(T,i)) for i = 1:fieldcount(T)];
@@ -1032,8 +1047,12 @@ julia> structinfo(Base.Filesystem.StatStruct)
  (0x0000000000000060, :ctime, Float64)
  (0x0000000000000068, :ioerrno, Int32)
 ```
+
+!!! compat "Julia 1.13"
+    Specifying the field by name rather than index requires Julia 1.13 or later.
 """
 fieldoffset(x::DataType, idx::Integer) = (@_foldable_meta; ccall(:jl_get_field_offset, Csize_t, (Any, Cint), x, idx))
+fieldoffset(x::DataType, name::Symbol) = fieldoffset(x, fieldindex(x, name))
 
 """
     fieldtype(T, name::Symbol | index::Int)
@@ -1057,7 +1076,7 @@ String
 fieldtype
 
 """
-    Base.fieldindex(T, name::Symbol, err:Bool=true)
+    fieldindex(T, name::Symbol, err:Bool=true)
 
 Get the index of a named field, throwing an error if the field does not exist (when err==true)
 or returning 0 (when err==false).
@@ -1069,14 +1088,20 @@ julia> struct Foo
            y::String
        end
 
-julia> Base.fieldindex(Foo, :z)
+julia> fieldindex(Foo, :y)
+2
+
+julia> fieldindex(Foo, :z)
 ERROR: FieldError: type Foo has no field `z`, available fields: `x`, `y`
 Stacktrace:
 [...]
 
-julia> Base.fieldindex(Foo, :z, false)
+julia> fieldindex(Foo, :z, false)
 0
 ```
+
+!!! compat "Julia 1.13"
+    This function is exported as of Julia 1.13.
 """
 function fieldindex(T::DataType, name::Symbol, err::Bool=true)
     return err ? _fieldindex_maythrow(T, name) : _fieldindex_nothrow(T, name)
@@ -1116,7 +1141,7 @@ function datatype_fieldcount(t::DataType)
             return length(names)
         end
         if types isa DataType && types <: Tuple
-            return fieldcount(types)
+            return datatype_fieldcount(types)
         end
         return nothing
     elseif isabstracttype(t)
@@ -1331,14 +1356,14 @@ hasproperty(x, s::Symbol) = s in propertynames(x)
 Make method `m` uncallable and force recompilation of any methods that use(d) it.
 """
 function delete_method(m::Method)
-    ccall(:jl_method_table_disable, Cvoid, (Any, Any), get_methodtable(m), m)
+    ccall(:jl_method_table_disable, Cvoid, (Any,), m)
 end
 
 
 # type for reflecting and pretty-printing a subset of methods
 mutable struct MethodList <: AbstractArray{Method,1}
     ms::Array{Method,1}
-    mt::Core.MethodTable
+    tn::Core.TypeName # contains module.singletonname globalref for altering some aspects of printing
 end
 
 size(m::MethodList) = size(m.ms)
@@ -1349,10 +1374,10 @@ function MethodList(mt::Core.MethodTable)
     visit(mt) do m
         push!(ms, m)
     end
-    return MethodList(ms, mt)
+    return MethodList(ms, Any.name)
 end
 
-function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodTable, mod)
+function matches_to_methods(ms::Array{Any,1}, tn::Core.TypeName, mod)
     # Lack of specialization => a comprehension triggers too many invalidations via _collect, so collect the methods manually
     ms = Method[(ms[i]::Core.MethodMatch).method for i in 1:length(ms)]
     # Remove shadowed methods with identical type signatures
@@ -1367,7 +1392,7 @@ function matches_to_methods(ms::Array{Any,1}, mt::Core.MethodTable, mod)
     mod === nothing || filter!(ms) do m
         return parentmodule(m) ∈ mod
     end
-    return MethodList(ms, mt)
+    return MethodList(ms, tn)
 end
 
 """
@@ -1389,7 +1414,7 @@ function methods(@nospecialize(f), @nospecialize(t),
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     ms = _methods(f, t, -1, world)::Vector{Any}
-    return matches_to_methods(ms, typeof(f).name.mt, mod)
+    return matches_to_methods(ms, typeof(f).name, mod)
 end
 methods(@nospecialize(f), @nospecialize(t), mod::Module) = methods(f, t, (mod,))
 
@@ -1400,7 +1425,7 @@ function methods_including_ambiguous(@nospecialize(f), @nospecialize(t))
     min = RefValue{UInt}(typemin(UInt))
     max = RefValue{UInt}(typemax(UInt))
     ms = _methods_by_ftype(tt, nothing, -1, world, true, min, max, Ptr{Int32}(C_NULL))::Vector{Any}
-    return matches_to_methods(ms, typeof(f).name.mt, nothing)
+    return matches_to_methods(ms, typeof(f).name, nothing)
 end
 
 function methods(@nospecialize(f),
@@ -1452,6 +1477,15 @@ end
 
 _uncompressed_ir(codeinst::CodeInstance, s::String) =
     ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
+
+function get_ci_mi(codeinst::CodeInstance)
+    def = codeinst.def
+    if def isa Core.ABIOverride
+        return def.def
+    else
+        return def::MethodInstance
+    end
+end
 
 """
     Base.generating_output([incremental::Bool])::Bool
@@ -1589,20 +1623,24 @@ end
 
 function get_nospecializeinfer_sig(method::Method, @nospecialize(atype), sparams::SimpleVector)
     isa(atype, DataType) || return method.sig
-    mt = ccall(:jl_method_get_table, Any, (Any,), method)
-    mt === nothing && return method.sig
-    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Any, Cint),
-        mt, atype, sparams, method, #=int return_if_compileable=#0)
+    return ccall(:jl_normalize_to_compilable_sig, Any, (Any, Any, Any, Cint),
+        atype, sparams, method, #=int return_if_compileable=#0)
 end
 
 is_nospecialized(method::Method) = method.nospecialize ≠ 0
 is_nospecializeinfer(method::Method) = method.nospecializeinfer && is_nospecialized(method)
+
+"""
+Return MethodInstance corresponding to `atype` and `sparams`.
+
+No widening / narrowing / compileable-normalization of `atype` is performed.
+"""
 function specialize_method(method::Method, @nospecialize(atype), sparams::SimpleVector; preexisting::Bool=false)
     @inline
     if isa(atype, UnionAll)
         atype, sparams = normalize_typevars(method, atype, sparams)
     end
-    if is_nospecializeinfer(method)
+    if is_nospecializeinfer(method) # TODO: this shouldn't be here
         atype = get_nospecializeinfer_sig(method, atype, sparams)
     end
     if preexisting

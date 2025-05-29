@@ -332,9 +332,9 @@ static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env)
 // Collect methods of external functions defined by modules in the worklist
 // "extext" = "extending external"
 // Also collect relevant backedges
-static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m)
+static void jl_collect_extext_methods(jl_array_t *s, jl_array_t *mod_array)
 {
-    foreach_mtable_in_module(m, jl_collect_methtable_from_mod, s);
+    jl_foreach_reachable_mtable(jl_collect_methtable_from_mod, mod_array, s);
 }
 
 static void jl_record_edges(jl_method_instance_t *caller, jl_array_t *edges)
@@ -706,9 +706,7 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
         else if (jl_is_method(obj)) {
             jl_method_t *m = (jl_method_t*)obj;
             assert(jl_atomic_load_relaxed(&m->primary_world) == ~(size_t)0);
-            assert(jl_atomic_load_relaxed(&m->deleted_world) == WORLD_AGE_REVALIDATION_SENTINEL);
             jl_atomic_store_release(&m->primary_world, world);
-            jl_atomic_store_release(&m->deleted_world, ~(size_t)0);
         }
         else if (jl_is_code_instance(obj)) {
             jl_code_instance_t *ci = (jl_code_instance_t*)obj;
@@ -729,24 +727,36 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
         }
         for (i = 0; i < l; i++) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
-            jl_methtable_t *mt = jl_method_get_table(entry->func.method);
-            assert((jl_value_t*)mt != jl_nothing);
-            jl_method_table_activate(mt, entry);
+            jl_method_table_activate(entry);
         }
     }
 }
 
-static void jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
+static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
 {
     size_t i, l = jl_array_nrows(method_roots_list);
+    int failed = 0;
     for (i = 0; i < l; i+=2) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(method_roots_list, i);
         jl_array_t *roots = (jl_array_t*)jl_array_ptr_ref(method_roots_list, i+1);
         if (roots) {
             assert(jl_is_array(roots));
+            if (m->root_blocks) {
+                // check for key collision
+                uint64_t *blocks = jl_array_data(m->root_blocks, uint64_t);
+                size_t nx2 = jl_array_nrows(m->root_blocks);
+                for (size_t i = 0; i < nx2; i+=2) {
+                    if (blocks[i] == key) {
+                        // found duplicate block
+                        failed = -1;
+                    }
+                }
+            }
+
             jl_append_method_roots(m, key, roots);
         }
     }
+    return failed;
 }
 
 static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods)

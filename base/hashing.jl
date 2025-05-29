@@ -1,6 +1,11 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-## hashing a single value ##
+const HASH_SEED = UInt == UInt64 ? 0xbdd89aa982704029 : 0xeabe9406
+const HASH_SECRET = tuple(
+    0x2d358dccaa6c78a5,
+    0x8bb84b93962eacc9,
+    0x4b33a62ed433d4a3,
+)
 
 """
     hash(x[, h::UInt])::UInt
@@ -17,75 +22,52 @@ The hash value may change when a new Julia process is started.
 
 ```jldoctest; filter = r"0x[0-9a-f]{16}"
 julia> a = hash(10)
-0x95ea2955abd45275
+0x759d18cc5346a65f
 
 julia> hash(10, a) # only use the output of another hash function as the second argument
-0xd42bad54a8575b16
+0x03158cd61b1b0bd1
 ```
 
 See also: [`objectid`](@ref), [`Dict`](@ref), [`Set`](@ref).
 """
-hash(x::Any) = hash(x, zero(UInt))
+hash(data::Any) = hash(data, HASH_SEED)
 hash(w::WeakRef, h::UInt) = hash(w.value, h)
 
 # Types can't be deleted, so marking as total allows the compiler to look up the hash
-hash(T::Type, h::UInt) = hash_uint(3h - @assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T))
+@noinline _jl_type_hash(T::Type) = @assume_effects :total ccall(:jl_type_hash, UInt, (Any,), T)
+hash(T::Type, h::UInt) = hash(_jl_type_hash(T), h)
+hash(@nospecialize(data), h::UInt) = hash(objectid(data), h)
 
-## hashing general objects ##
+function mul_parts(a::UInt64, b::UInt64)
+    p = widemul(a, b)
+    return (p >> 64) % UInt64, p % UInt64
+end
+hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
-hash(@nospecialize(x), h::UInt) = hash_uint(3h - objectid(x))
-
-hash(x::Symbol) = objectid(x)
-
-## core data hashing functions ##
-
-function hash_64_64(n::UInt64)
-    a::UInt64 = n
-    a = ~a + a << 21
-    a =  a ⊻ a >> 24
-    a =  a + a << 3 + a << 8
-    a =  a ⊻ a >> 14
-    a =  a + a << 2 + a << 4
-    a =  a ⊻ a >> 28
-    a =  a + a << 31
-    return a
+# faster-but-weaker than hash_mix intended for small keys
+hash_mix_linear(x::UInt64, h::UInt) = 3h - x
+function hash_finalizer(x::UInt64)
+    x ⊻= (x >> 32)
+    x *= 0x63652a4cd374b267
+    x ⊻= (x >> 33)
+    return x
 end
 
-function hash_64_32(n::UInt64)
-    a::UInt64 = n
-    a = ~a + a << 18
-    a =  a ⊻ a >> 31
-    a =  a * 21
-    a =  a ⊻ a >> 11
-    a =  a + a << 6
-    a =  a ⊻ a >> 22
-    return a % UInt32
-end
-
-function hash_32_32(n::UInt32)
-    a::UInt32 = n
-    a = a + 0x7ed55d16 + a << 12
-    a = a ⊻ 0xc761c23c ⊻ a >> 19
-    a = a + 0x165667b1 + a << 5
-    a = a + 0xd3a2646c ⊻ a << 9
-    a = a + 0xfd7046c5 + a << 3
-    a = a ⊻ 0xb55a4f09 ⊻ a >> 16
-    return a
-end
+hash_64_64(data::UInt64) = hash_finalizer(data)
+hash_64_32(data::UInt64) = hash_64_64(data) % UInt32
+hash_32_32(data::UInt32) = hash_64_32(UInt64(data))
 
 if UInt === UInt64
-    hash_uint64(x::UInt64) = hash_64_64(x)
-    hash_uint(x::UInt)     = hash_64_64(x)
+    const hash_uint64 = hash_64_64
+    const hash_uint = hash_64_64
 else
-    hash_uint64(x::UInt64) = hash_64_32(x)
-    hash_uint(x::UInt)     = hash_32_32(x)
+    const hash_uint64 = hash_64_32
+    const hash_uint = hash_32_32
 end
 
-## efficient value-based hashing of integers ##
-
-hash(x::Int64,  h::UInt) = hash_uint64(bitcast(UInt64, x)) - 3h
-hash(x::UInt64, h::UInt) = hash_uint64(x) - 3h
-hash(x::Union{Bool,Int8,UInt8,Int16,UInt16,Int32,UInt32}, h::UInt) = hash(Int64(x), h)
+hash(x::UInt64, h::UInt) = hash_uint64(hash_mix_linear(x, h))
+hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
+hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
 function hash_integer(n::Integer, h::UInt)
     h ⊻= hash_uint((n % UInt) ⊻ h)
@@ -100,7 +82,7 @@ end
 
 ## efficient value-based hashing of floats ##
 
-const hx_NaN = hash_uint64(reinterpret(UInt64, NaN))
+const hx_NaN = hash(reinterpret(UInt64, NaN))
 function hash(x::Float64, h::UInt)
     # see comments on trunc and hash(Real, UInt)
     if typemin(Int64) <= x < typemax(Int64)
@@ -116,7 +98,7 @@ function hash(x::Float64, h::UInt)
     elseif isnan(x)
         return hx_NaN ⊻ h # NaN does not have a stable bit pattern
     end
-    return hash_uint64(bitcast(UInt64, x)) - 3h
+    return hash(bitcast(UInt64, x), h)
 end
 
 hash(x::Float32, h::UInt) = hash(Float64(x), h)
@@ -131,7 +113,7 @@ function hash(x::Float16, h::UInt)
     elseif isnan(x)
         return hx_NaN ⊻ h # NaN does not have a stable bit pattern
     end
-    return hash_uint64(bitcast(UInt64, Float64(x))) - 3h
+    return hash(bitcast(UInt64, Float64(x)), h)
 end
 
 ## generic hashing for rational values ##
@@ -180,21 +162,100 @@ end
 
 
 ## symbol & expression hashing ##
-
 if UInt === UInt64
-    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x83c7900696d26dc6))
-    hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x2c97bf8b3de87020)
+    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h ⊻ 0x83c7900696d26dc6))
+    hash(x::QuoteNode, h::UInt) = hash(x.value, h ⊻ 0x2c97bf8b3de87020)
 else
-    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h + 0x96d26dc6))
-    hash(x::QuoteNode, h::UInt) = hash(x.value, h + 0x469d72af)
+    hash(x::Expr, h::UInt) = hash(x.args, hash(x.head, h ⊻ 0x469d72af))
+    hash(x::QuoteNode, h::UInt) = hash(x.value, h ⊻ 0x469d72af)
 end
 
-## hashing strings ##
+hash(x::Symbol) = objectid(x)
 
+
+load_le(::Type{T}, ptr::Ptr{UInt8}, i) where {T <: Union{UInt32, UInt64}} =
+    unsafe_load(convert(Ptr{T}, ptr + i - 1))
+
+function read_small(ptr::Ptr{UInt8}, n::Int)
+    return (UInt64(unsafe_load(ptr)) << 56) |
+        (UInt64(unsafe_load(ptr, div(n, 2) + 1)) << 32) |
+        UInt64(unsafe_load(ptr, n))
+end
+
+@assume_effects :terminates_globally function hash_bytes(
+        ptr::Ptr{UInt8},
+        n::Int,
+        seed::UInt64,
+        secret::NTuple{3, UInt64}
+    )
+    # Adapted with gratitude from [rapidhash](https://github.com/Nicoshev/rapidhash)
+    buflen = UInt64(n)
+    seed = seed ⊻ (hash_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
+
+    a = zero(UInt64)
+    b = zero(UInt64)
+
+    if buflen ≤ 16
+        if buflen ≥ 4
+            a = (UInt64(load_le(UInt32, ptr, 1)) << 32) |
+                UInt64(load_le(UInt32, ptr, n - 3))
+
+            delta = (buflen & 24) >>> (buflen >>> 3)
+            b = (UInt64(load_le(UInt32, ptr, delta + 1)) << 32) |
+                UInt64(load_le(UInt32, ptr, n - 3 - delta))
+        elseif buflen > 0
+            a = read_small(ptr, n)
+        end
+    else
+        pos = 1
+        i = buflen
+        while i ≥ 48
+            see1 = seed
+            see2 = seed
+            while i ≥ 48
+                seed = hash_mix(
+                    load_le(UInt64, ptr, pos) ⊻ secret[1],
+                    load_le(UInt64, ptr, pos + 8) ⊻ seed
+                )
+                see1 = hash_mix(
+                    load_le(UInt64, ptr, pos + 16) ⊻ secret[2],
+                    load_le(UInt64, ptr, pos + 24) ⊻ see1
+                )
+                see2 = hash_mix(
+                    load_le(UInt64, ptr, pos + 32) ⊻ secret[3],
+                    load_le(UInt64, ptr, pos + 40) ⊻ see2
+                )
+                pos += 48
+                i -= 48
+            end
+            seed = seed ⊻ see1 ⊻ see2
+        end
+        if i > 16
+            seed = hash_mix(
+                load_le(UInt64, ptr, pos) ⊻ secret[3],
+                load_le(UInt64, ptr, pos + 8) ⊻ seed ⊻ secret[2]
+            )
+            if i > 32
+                seed = hash_mix(
+                    load_le(UInt64, ptr, pos + 16) ⊻ secret[3],
+                    load_le(UInt64, ptr, pos + 24) ⊻ seed
+                )
+            end
+        end
+
+        a = load_le(UInt64, ptr, n - 15)
+        b = load_le(UInt64, ptr, n - 7)
+    end
+
+    a = a ⊻ secret[2]
+    b = b ⊻ seed
+    b, a = mul_parts(a, b)
+    return hash_mix(a ⊻ secret[1] ⊻ buflen, b ⊻ secret[2])
+end
+
+@assume_effects :total hash(data::String, h::UInt) =
+    GC.@preserve data hash_bytes(pointer(data), sizeof(data), UInt64(h), HASH_SECRET) % UInt
+
+# no longer used in Base, but a lot of packages access these internals
 const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
 const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
-
-@assume_effects :total function hash(s::String, h::UInt)
-    h += memhash_seed
-    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), s, sizeof(s), h % UInt32) + h
-end

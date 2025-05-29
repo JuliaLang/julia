@@ -58,4 +58,10 @@ function __init__()
     LIBPATH[] = dirname(libblastrampoline_path)
     push!(LIBPATH_list, LIBPATH[])
 end
+
+if Base.generating_output()
+    precompile(eager_mode, ())
+    precompile(is_available, ())
+end
+
 end  # module libblastrampoline_jll
