@@ -915,7 +915,7 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     # take many seconds to run over the thousands of possible methods. Note that
     # isabstracttype would return naively return true for common constructor calls
     # like Array, but the REPL's introspection here may know their Type{T}.
-    isconcretype(funct) || return false
+    isconcretetype(funct) || return false
     complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, arg_pos == :kwargs)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
