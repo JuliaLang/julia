@@ -41,7 +41,7 @@ jobs:
           retry-exempt-status-codes: 404
           # Don't retry 404 because we will hit a 404 when the PR author is a committer.
           # This 404 is normal and expected.
-          # Do retry 400 and other 4xx errors because github sometimes (erroneously) 
+          # Do retry 400 and other 4xx errors because github sometimes (erroneously)
           # returns a 4xx error code due to server errors.
           script: |
             const oldPrAssignees = context.payload.pull_request.assignees
