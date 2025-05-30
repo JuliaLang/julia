@@ -288,6 +288,7 @@ DevDocs = [
         "devdocs/contributing/patch-releases.md",
         "devdocs/contributing/formatting.md",
         "devdocs/contributing/git-workflow.md",
+        "devdocs/contributing/aiagents.md"
     ]
 ]
 
