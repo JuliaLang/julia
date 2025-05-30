@@ -2094,9 +2094,7 @@ JL_DLLEXPORT jl_value_t *jl_get_existing_strong_gf(jl_binding_t *b JL_PROPAGATES
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_globalref_is_const(jl_globalref_t *gr);
-JL_DLLEXPORT jl_value_t *jl_get_globalref_value(jl_globalref_t *gr);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
-JL_DLLEXPORT jl_value_t *jl_get_global_value(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported);

@@ -413,7 +413,7 @@ static void jl_init_task_lock(jl_task_t *ct)
     ct->world_age = jl_get_world_counter();
     jl_function_t *done = jl_atomic_load_relaxed(&init_task_lock_func);
     if (done == NULL) {
-        done = (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("init_task_lock"));
+        done = (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("init_task_lock"), ct->world_age);
         if (done != NULL)
             jl_atomic_store_release(&init_task_lock_func, done);
     }

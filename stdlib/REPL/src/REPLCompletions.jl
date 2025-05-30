@@ -609,7 +609,7 @@ function CC.builtin_tfunction(interp::REPLInterpreter, @nospecialize(f),
                 if isa(a1val, Module) && isa(a2val, Symbol)
                     g = GlobalRef(a1val, a2val)
                     if isdefined_globalref(g)
-                        return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
+                        return Const(ccall(:jl_eval_globalref, Any, (Any, UInt), g, tls_world_age()))
                     end
                     return Union{}
                 end
