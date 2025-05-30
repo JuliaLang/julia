@@ -244,7 +244,6 @@ As in the example above, we recommend following some simple conventions when wri
    ```
 
    This makes it clearer where docstrings start and end.
-
 9. Respect the line length limit used in the surrounding code.
 
    Docstrings are edited using the same tools as code. Therefore, the same conventions should apply.
