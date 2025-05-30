@@ -1,15 +1,14 @@
 Julia v1.12 Release Notes
-========================
+=========================
 
 New language features
 ---------------------
 
-* New option `--trim` creates smaller binaries by removing code that was not proven to be reachable from
-  entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]). To support
-  Core.finalizer, inference will now opportunistically discover future invokelatest calls and compile
-  the required code for them.
-* Redefinition of constants is now well defined and follows world age semantics. Additional redefinitions
-  (e.g. of structs) are now allowed. See [the new manual chapter on world age](https://docs.julialang.org/en/v1.13-dev/manual/worldage/).
+* New experimental option `--trim` that creates smaller binaries by removing code not proven to be reachable from
+  entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]). Not all
+  code is expected to work with this option, and since it is experimental you may encounter problems.
+* Redefinition of constants is now well defined and follows world age semantics ([#57253]). Additional redefinitions
+  (e.g. of types) are now allowed. See [the new manual chapter on world age](https://docs.julialang.org/en/v1.13-dev/manual/worldage/).
 * A new keyword argument `usings::Bool` has been added to `names`, returning all names visible
   via `using` ([#54609]).
 * The `@atomic` macro family now supports reference assignment syntax, e.g. `@atomic :monotonic v[3] += 4`,
@@ -59,7 +58,7 @@ Language changes
 * Calling `using` on a package name inside of that package of that name (especially relevant
   for a submodule) now explicitly uses that package without examining the Manifest and
   environment, which is identical to the behavior of `..Name`. This appears to better match
-  how users expect this to behave in the wild. ([#57727])
+  how users expect this to behave in the wild ([#57727]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -283,9 +282,10 @@ Tooling Improvements
 [#57081]: https://github.com/JuliaLang/julia/issues/57081
 [#57087]: https://github.com/JuliaLang/julia/issues/57087
 [#57109]: https://github.com/JuliaLang/julia/issues/57109
+[#57253]: https://github.com/JuliaLang/julia/issues/57253
 
 Julia v1.11 Release Notes
-========================
+=========================
 
 New language features
 ---------------------
