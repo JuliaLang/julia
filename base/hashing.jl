@@ -69,7 +69,8 @@ hash(x::UInt64, h::UInt) = hash_uint64(hash_mix_linear(x, h))
 hash(x::Int64, h::UInt) = hash(bitcast(UInt64, x), h)
 hash(x::Union{Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32}, h::UInt) = hash(Int64(x), h)
 
-function hash_integer(
+hash_integer(x::Integer, h::UInt) = _hash_integer(x, UInt64(h)) % UInt
+function _hash_integer(
         x::Integer,
         seed::UInt64 = HASH_SEED,
         secret::NTuple{3, UInt64} = HASH_SECRET
