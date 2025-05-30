@@ -870,9 +870,8 @@ function type_annotate!(interp::AbstractInterpreter, sv::InferenceState)
             if is_meta_expr(expr) # keep any lexically scoped expressions
                 ssavaluetypes[i] = Any # 3
             else
-                ssavaluetypes[i] = Bottom # 3
                 # annotate that this statement actually is dead
-                stmts[i] = Const(expr)
+                ssavaluetypes[i] = Bottom # 3
             end
         end
     end
