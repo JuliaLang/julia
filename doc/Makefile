@@ -42,7 +42,7 @@ deps: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	cp "$<" UnicodeData.txt
 
 alldeps: deps
-	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) deps
+	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) deps $(DOCUMENTER_OPTIONS)
 
 checksum-unicodedata: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"

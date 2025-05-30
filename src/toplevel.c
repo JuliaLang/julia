@@ -54,12 +54,6 @@ void jl_init_main_module(void)
     jl_set_initial_const(jl_main_module, jl_symbol("Core"), (jl_value_t*)jl_core_module, 0); // const Core.Main = Main
 }
 
-static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROOT)
-{
-    return (jl_function_t*)jl_get_global(m, jl_symbol("__init__"));
-}
-
-
 void jl_module_run_initializer(jl_module_t *m)
 {
     JL_TIMING(INIT_MODULE, INIT_MODULE);
@@ -68,9 +62,12 @@ void jl_module_run_initializer(jl_module_t *m)
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_function_t *f = jl_module_get_initializer(m);
-        if (f != NULL)
+        jl_value_t *f = jl_get_global_value(m, jl_symbol("__init__"));
+        if (f != NULL) {
+            JL_GC_PUSH1(&f);
             jl_apply(&f, 1);
+            JL_GC_POP();
+        }
         ct->world_age = last_age;
     }
     JL_CATCH {
@@ -110,7 +107,7 @@ jl_array_t *jl_get_loaded_modules(void)
 static int jl_is__toplevel__mod(jl_module_t *mod)
 {
     return jl_base_module &&
-        (jl_value_t*)mod == jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
+        (jl_value_t*)mod == jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"));
 }
 
 // TODO: add locks around global state mutation operations
@@ -829,7 +826,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     jl_filename = "none";
     size_t last_age = ct->world_age;
     JL_TRY {
-        ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         v = jl_toplevel_eval(m, ex);
     }
     JL_CATCH {
@@ -889,7 +886,7 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
                 continue;
             }
             expression = jl_svecref(jl_lower(expression, module, jl_string_data(filename), lineno, ~(size_t)0, 1), 0);
-            ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }
         ct->world_age = last_age;
