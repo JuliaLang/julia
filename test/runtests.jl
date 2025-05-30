@@ -28,9 +28,9 @@ end
 if use_revise
     # First put this at the top of the DEPOT PATH to install revise if necessary.
     # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
-    pushfirst!(DEPOT_PATH, joinpath(buildroot, "test", "deps"))
+    pushfirst!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
     using Pkg
-    Pkg.activate(joinpath(@__DIR__, "deps"))
+    Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
     Pkg.instantiate()
     using Revise
     union!(Revise.stdlib_names, Symbol.(STDLIBS))

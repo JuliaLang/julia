@@ -9,6 +9,7 @@
 /usr-staging
 /Make.user
 /julia-*
+/deps/jlutilities/depot
 /source-dist.tmp
 /source-dist.tmp1
 /test/results_*.json
