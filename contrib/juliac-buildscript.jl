@@ -189,7 +189,6 @@ import Base.Experimental.entrypoint
 function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
     args = ccall(:jl_set_ARGS, Any, (Cint, Ptr{Ptr{Cchar}}), argc, argv)::Vector{String}
     return Main.main(args)
-    end
 end
 
 let mod = Base.include(Main, ARGS[1])
