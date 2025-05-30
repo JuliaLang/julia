@@ -83,3 +83,6 @@ created in the first block remain available in the following ones.
 When a snippet needs to preserve its result for later examples, give it a label
 and reuse that label. This avoids repeating setup code and mirrors a REPL
 session more closely.
+
+## Further reading
+For a complete reference of doctest syntax, see the [corresponding Documenter.jl docs](https://documenter.juliadocs.org/stable/man/doctests/).
