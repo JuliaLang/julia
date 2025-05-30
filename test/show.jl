@@ -1595,6 +1595,9 @@ struct var"%X%" end  # Invalid name without '#'
             Float16(1e4),                1f8,                         1e17,
             Float16(-1e4),               -1f8,                        -1e17,
 
+            # Pointers should round-trip
+            Ptr{Cvoid}(0), Ptr{Cvoid}(typemax(UInt)), Ptr{Any}(0), Ptr{Any}(typemax(UInt)),
+
             # :var"" escaping rules differ from strings (#58484)
             :foo,
             :var"bar baz",
