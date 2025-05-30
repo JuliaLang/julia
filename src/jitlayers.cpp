@@ -689,8 +689,14 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
             if (!decls.specFunctionObject.empty())
                 NewDefs.push_back(decls.specFunctionObject);
         }
-        auto Addrs = jl_ExecutionEngine->findSymbols(NewDefs);
-
+            // Split batches to avoid stack overflow in the JIT linker.
+        SmallVector<uint64_t, 0> Addrs;
+        for (size_t i = 0; i < NewDefs.size(); i += 1000) {
+            auto end = std::min(i + 1000, NewDefs.size());
+            SmallVector<StringRef> batch(NewDefs.begin() + i, NewDefs.begin() + end);
+            auto AddrsBatch = jl_ExecutionEngine->findSymbols(batch);
+            Addrs.append(AddrsBatch);
+        }
         size_t nextaddr = 0;
         for (auto &this_code : linkready) {
             auto it = invokenames.find(this_code);
