@@ -571,7 +571,9 @@ function mapreduce_kernel(f, op, itr, init, ::Union{HasLength, HasShape}, n, sta
     a1, s = iterate(itr, state...)
     v = _mapreduce_start(f, op, itr, init, a1)
     @simd for _ in 2:n
-        a, s = iterate(itr, s)
+        it = iterate(itr, s)
+        it === nothing && return v, s # This will only happen if an iterator lied about its length
+        a, s = it
         v = op(v, f(a))
     end
     return v, s
