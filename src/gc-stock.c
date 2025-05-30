@@ -4080,6 +4080,16 @@ JL_DLLEXPORT const char* jl_gc_active_impl(void) {
     return "Built with stock GC";
 }
 
+JL_DLLEXPORT void jl_gc_preserve_begin_hook(int n, ...) JL_NOTSAFEPOINT
+{
+    jl_unreachable();
+}
+
+JL_DLLEXPORT void jl_gc_preserve_end_hook(void) JL_NOTSAFEPOINT
+{
+    jl_unreachable();
+}
+
 #ifdef __cplusplus
 }
 #endif

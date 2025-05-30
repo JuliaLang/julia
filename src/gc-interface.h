@@ -109,6 +109,13 @@ JL_DLLEXPORT const char* jl_gc_active_impl(void);
 // It still needs to be annotated with JL_DLLEXPORT since it is called from Rust by MMTk.
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 
+// TODO: The preserve hook functions may be temporary. We should see the performance impact of the change.
+
+// Runtime hook for gc preserve begin. The GC needs to make sure that the preserved objects and its children stay alive and won't move.
+JL_DLLEXPORT void jl_gc_preserve_begin_hook(int n, ...) JL_NOTSAFEPOINT;
+// Runtime hook for gc preserve end. The GC needs to make sure that the preserved objects and its children stay alive and won't move.
+JL_DLLEXPORT void jl_gc_preserve_end_hook(void) JL_NOTSAFEPOINT;
+
 // ========================================================================= //
 // Metrics
 // ========================================================================= //
