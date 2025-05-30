@@ -38,11 +38,11 @@ jobs:
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         with:
           retries: 5 # retry GitHub API requests up to 5 times, with exponential backoff
-          retry-exempt-status-codes: "403,404"
-          # In the above list:
-          #
-          # - 404 is in the list because we will always hit a 404 when the PR author is not
-          #   a committer. This 404 is normal and expected.
+          retry-exempt-status-codes: 404
+          # Don't retry 404 because we will hit a 404 when the PR author is a committer.
+          # This 404 is normal and expected.
+          # Do retry 400 and other 4xx errors because github sometimes (erroneously)
+          # returns a 4xx error code due to server errors.
           script: |
             const oldPrAssignees = context.payload.pull_request.assignees
               .map(obj => obj.login)
