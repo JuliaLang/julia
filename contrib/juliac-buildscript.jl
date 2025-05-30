@@ -188,16 +188,12 @@ import Base.Experimental.entrypoint
 # for use as C main if needed
 function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
     args = ccall(:jl_set_ARGS, Any, (Cint, Ptr{Ptr{Cchar}}), argc, argv)::Vector{String}
-    return Main.main(args)
     try
-        argc::Cint, argv::Ptr{Ptr{Cchar}} # existing main execution code
+        return Main.main(args)
     catch e
-        # generic error handling, mimic default exception behavior
         Base.show_backtrace(stderr, catch_backtrace())
         println(stderr, "Error: ", e)
-        # exit or handle as needed
-        exit(1)
-        end
+        return 1  # Or `exit(1)` if appropriate in context
     end
 end
 
