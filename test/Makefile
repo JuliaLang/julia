@@ -54,7 +54,7 @@ relocatedepot:
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,RELOCATEDEPOT="" $(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) $@)
 
-revise-relocatedepot: revise-% : dep_revise
+revise-relocatedepot: revise-% :
 	@rm -rf $(SRCDIR)/relocatedepot
 	@cd $(SRCDIR) && \
 	$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) $(TEST_JULIA_OPTIONS) ./runtests.jl $(TEST_SCRIPT_OPTIONS) --revise $*)
