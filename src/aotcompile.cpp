@@ -108,20 +108,37 @@ jl_get_llvm_mis_impl(void *native_code, size_t *num_elements, jl_method_instance
     }
 }
 
+// get the list of global variables managed by the compiler
 extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_gvs_impl(void *native_code,
                                                           size_t *num_elements, void **data)
 {
-    // map a memory location (jl_value_t or jl_binding_t) to a GlobalVariable
     jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
-    auto &value_map = desc->jl_value_to_llvm;
+    auto &gvars = desc->jl_sysimg_gvars;
 
     if (data == NULL) {
-        *num_elements = value_map.size();
+        *num_elements = gvars.size();
         return;
     }
 
-    assert(*num_elements == value_map.size());
-    memcpy(data, value_map.data(), *num_elements * sizeof(void *));
+    assert(*num_elements == gvars.size());
+    memcpy(data, gvars.data(), *num_elements * sizeof(void *));
+}
+
+// get the initializer values (jl_value_t or jl_binding_t ptr) of managed global variables
+extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_gv_inits_impl(void *native_code,
+                                                               size_t *num_elements,
+                                                               void **data)
+{
+    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
+    auto &inits = desc->jl_value_to_llvm;
+
+    if (data == NULL) {
+        *num_elements = inits.size();
+        return;
+    }
+
+    assert(*num_elements == inits.size());
+    memcpy(data, inits.data(), *num_elements * sizeof(void *));
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN void jl_get_llvm_external_fns_impl(void *native_code,

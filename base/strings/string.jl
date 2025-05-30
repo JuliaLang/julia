@@ -62,8 +62,8 @@ In other cases, `Vector{UInt8}` data may be copied, but `v` is truncated anyway
 to guarantee consistent behavior.
 """
 String(v::AbstractVector{UInt8}) = unsafe_takestring(copyto!(StringMemory(length(v)), v))
+
 function String(v::Vector{UInt8})
-    #return ccall(:jl_array_to_string, Ref{String}, (Any,), v)
     len = length(v)
     len == 0 && return ""
     ref = v.ref
@@ -78,11 +78,34 @@ function String(v::Vector{UInt8})
     return str
 end
 
-"Create a string re-using the memory, if possible.
-Mutating or reading the memory after calling this function is undefined behaviour."
+"""
+    unsafe_takestring(m::Memory{UInt8})::String
+
+Create a `String` from `m`, changing the interpretation of the contents of `m`.
+This is done without copying, if possible. Thus, any access to `m` after
+calling this function, either to read or to write, is undefined behaviour.
+"""
 function unsafe_takestring(m::Memory{UInt8})
     isempty(m) ? "" : ccall(:jl_genericmemory_to_string, Ref{String}, (Any, Int), m, length(m))
 end
+
+"""
+    takestring!(x) -> String
+
+Create a string from the content of `x`, emptying `x`.
+
+# Examples
+```jldoctest
+julia> v = [0x61, 0x62, 0x63];
+
+julia> s = takestring!(v)
+"abc"
+
+julia> isempty(v)
+true
+```
+"""
+takestring!(v::Vector{UInt8}) = String(v)
 
 """
     unsafe_string(p::Ptr{UInt8}, [length::Integer])

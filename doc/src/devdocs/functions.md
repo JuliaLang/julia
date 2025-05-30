@@ -1,25 +1,22 @@
 # Julia Functions
 
+
 This document will explain how functions, method definitions, and method tables work.
 
 ## Method Tables
 
 Every function in Julia is a generic function. A generic function is conceptually a single function,
-but consists of many definitions, or methods. The methods of a generic function are stored in
-a method table. Method tables (type `MethodTable`) are associated with `TypeName`s. A `TypeName`
-describes a family of parameterized types. For example `Complex{Float32}` and `Complex{Float64}`
-share the same `Complex` type name object.
-
-All objects in Julia are potentially callable, because every object has a type, which in turn
-has a `TypeName`.
+but consists of many definitions, or methods. The methods of a generic function are stored in a
+method table. There is one global method table (type `MethodTable`) named `Core.GlobalMethods`. Any
+default operation on methods (such as calls) uses that table.
 
 ## [Function calls](@id Function-calls)
 
-Given the call `f(x, y)`, the following steps are performed: first, the method table to use is
-accessed as `typeof(f).name.mt`. Second, an argument tuple type is formed, `Tuple{typeof(f), typeof(x), typeof(y)}`.
-Note that the type of the function itself is the first element. This is because the type might
-have parameters, and so needs to take part in dispatch. This tuple type is looked up in the method
-table.
+Given the call `f(x, y)`, the following steps are performed: First, a tuple type is formed,
+`Tuple{typeof(f), typeof(x), typeof(y)}`. Note that the type of the function itself is the first
+element. This is because the function itself participates symmetrically in method lookup with the
+other arguments. This tuple type is looked up in the global method table. However, the system can
+then cache the results, so these steps can be skipped later for similar lookups.
 
 This dispatch process is performed by `jl_apply_generic`, which takes two arguments: a pointer
 to an array of the values `f`, `x`, and `y`, and the number of values (in this case 3).
@@ -48,15 +45,6 @@ jl_value_t *jl_call(jl_function_t *f, jl_value_t **args, int32_t nargs);
 
 Given the above dispatch process, conceptually all that is needed to add a new method is (1) a
 tuple type, and (2) code for the body of the method. `jl_method_def` implements this operation.
-`jl_method_table_for` is called to extract the relevant method table from what would be
-the type of the first argument. This is much more complicated than the corresponding procedure
-during dispatch, since the argument tuple type might be abstract. For example, we can define:
-
-```julia
-(::Union{Foo{Int},Foo{Int8}})(x) = 0
-```
-
-which works since all possible matching methods would belong to the same method table.
 
 ## Creating generic functions
 
@@ -93,9 +81,7 @@ end
 
 ## Constructors
 
-A constructor call is just a call to a type. The method table for `Type` contains all
-constructor definitions. All subtypes of `Type` (`Type`, `UnionAll`, `Union`, and `DataType`)
-currently share a method table via special arrangement.
+A constructor call is just a call to a type, to a method defined on `Type{T}`.
 
 ## Builtins
 
@@ -117,7 +103,7 @@ function lines(words)
             n += length(w)+1
         end
     end
-    String(take!(io))
+    takestring!(io)
 end
 import Markdown
 [string(n) for n in names(Core;all=true)
@@ -127,17 +113,13 @@ import Markdown
     Markdown.parse
 ```
 
-These are all singleton objects whose types are subtypes of `Builtin`, which is a subtype of
-`Function`. Their purpose is to expose entry points in the run time that use the "jlcall" calling
-convention:
+These are mostly singleton objects all of whose types are subtypes of `Builtin`, which is a
+subtype of `Function`. Their purpose is to expose entry points in the run time that use the
+"jlcall" calling convention:
 
 ```c
 jl_value_t *(jl_value_t*, jl_value_t**, uint32_t)
 ```
-
-The method tables of builtins are empty. Instead, they have a single catch-all method cache entry
-(`Tuple{Vararg{Any}}`) whose jlcall fptr points to the correct function. This is kind of a hack
-but works reasonably well.
 
 ## Keyword arguments
 
@@ -187,7 +169,7 @@ is absent.
 Finally there is the kwsorter definition:
 
 ```
-function (::Core.kwftype(typeof(circle)))(kws, circle, center, radius)
+function (::Core.kwcall)(kws, circle, center, radius)
     if haskey(kws, :color)
         color = kws.color
     else
@@ -205,30 +187,6 @@ function (::Core.kwftype(typeof(circle)))(kws, circle, center, radius)
 end
 ```
 
-The function `Core.kwftype(t)` creates the field `t.name.mt.kwsorter` (if it hasn't been created
-yet), and returns the type of that function.
-
-This design has the feature that call sites that don't use keyword arguments require no special
-handling; everything works as if they were not part of the language at all. Call sites that do
-use keyword arguments are dispatched directly to the called function's kwsorter. For example the
-call:
-
-```julia
-circle((0, 0), 1.0, color = red; other...)
-```
-
-is lowered to:
-
-```julia
-kwcall(merge((color = red,), other), circle, (0, 0), 1.0)
-```
-
-`kwcall` (also in`Core`) denotes a kwcall signature and dispatch.
-The keyword splatting operation (written as `other...`) calls the named tuple `merge` function.
-This function further unpacks each *element* of `other`, expecting each one to contain two values
-(a symbol and a value).
-Naturally, a more efficient implementation is available if all splatted arguments are named tuples.
-Notice that the original `circle` function is passed through, to handle closures.
 
 ## [Compiler efficiency issues](@id compiler-efficiency-issues)
 
@@ -251,18 +209,13 @@ sees an argument in the `Function` type hierarchy passed to a slot declared as `
 it behaves as if the `@nospecialize` annotation were applied. This heuristic seems to be extremely
 effective in practice.
 
-The next issue concerns the structure of method cache hash tables. Empirical studies show that
-the vast majority of dynamically-dispatched calls involve one or two arguments. In turn, many
-of these cases can be resolved by considering only the first argument. (Aside: proponents of single
-dispatch would not be surprised by this at all. However, this argument means "multiple dispatch
-is easy to optimize in practice", and that we should therefore use it, *not* "we should use single
-dispatch"!) So the method cache uses the type of the first argument as its primary key. Note,
-however, that this corresponds to the *second* element of the tuple type for a function call (the
-first element being the type of the function itself). Typically, type variation in head position
-is extremely low -- indeed, the majority of functions belong to singleton types with no parameters.
-However, this is not the case for constructors, where a single method table holds constructors
-for every type. Therefore the `Type` method table is special-cased to use the *first* tuple type
-element instead of the second.
+The next issue concerns the structure of method tables. Empirical studies show that the vast
+majority of dynamically-dispatched calls involve one or two arguments. In turn, many of these cases
+can be resolved by considering only the first argument. (Aside: proponents of single dispatch would
+not be surprised by this at all. However, this argument means "multiple dispatch is easy to optimize
+in practice", and that we should therefore use it, *not* "we should use single dispatch"!). So the
+method table and cache splits up on the structure based on a left-to-right decision tree so allow
+efficient nearest-neighbor searches.
 
 The front end generates type declarations for all closures. Initially, this was implemented by
 generating normal type declarations. However, this produced an extremely large number of constructors,
