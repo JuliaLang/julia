@@ -2,51 +2,62 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/GMP_jll.jl
 baremodule GMP_jll
-using Base, Libdl
-
-const PATH_list = String[]
-const LIBPATH_list = String[]
+using Base, Libdl, CompilerSupportLibraries_jll
 
 export libgmp, libgmpxx
 
 # These get calculated in __init__()
 const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
+const LIBPATH_list = String[]
 artifact_dir::String = ""
-libgmp_handle::Ptr{Cvoid} = C_NULL
 libgmp_path::String = ""
-libgmpxx_handle::Ptr{Cvoid} = C_NULL
 libgmpxx_path::String = ""
 
 if Sys.iswindows()
-    const libgmp = "libgmp-10.dll"
-    const libgmpxx = "libgmpxx-4.dll"
+    const _libgmp_path = BundledLazyLibraryPath("libgmp-10.dll")
+    const _libgmpxx_path = BundledLazyLibraryPath("libgmpxx-4.dll")
 elseif Sys.isapple()
-    const libgmp = "@rpath/libgmp.10.dylib"
-    const libgmpxx = "@rpath/libgmpxx.4.dylib"
+    const _libgmp_path = BundledLazyLibraryPath("libgmp.10.dylib")
+    const _libgmpxx_path = BundledLazyLibraryPath("libgmpxx.4.dylib")
 else
-    const libgmp = "libgmp.so.10"
-    const libgmpxx = "libgmpxx.so.4"
+    const _libgmp_path = BundledLazyLibraryPath("libgmp.so.10")
+    const _libgmpxx_path = BundledLazyLibraryPath("libgmpxx.so.4")
 end
 
+const libgmp = LazyLibrary(_libgmp_path)
+
+if Sys.isfreebsd()
+    _libgmpxx_dependencies = LazyLibrary[libgmp, libgcc_s]
+elseif Sys.isapple()
+    _libgmpxx_dependencies = LazyLibrary[libgmp]
+else
+    _libgmpxx_dependencies = LazyLibrary[libgmp, libstdcxx, libgcc_s]
+end
+const libgmpxx = LazyLibrary(
+    _libgmpxx_path,
+    dependencies=_libgmpxx_dependencies,
+)
+
+function eager_mode()
+    CompilerSupportLibraries_jll.eager_mode()
+    dlopen(libgmp)
+    dlopen(libgmpxx)
+end
+is_available() = true
+
 function __init__()
-    global libgmp_handle = dlopen(libgmp)
-    global libgmp_path = dlpath(libgmp_handle)
-    global libgmpxx_handle = dlopen(libgmpxx)
-    global libgmpxx_path = dlpath(libgmpxx_handle)
+    global libgmp_path = string(_libgmp_path)
+    global libgmpxx_path = string(_libgmpxx_path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libgmp_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 
-# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
-# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
-# there isn't one.  It instead returns the overall Julia prefix.
-is_available() = true
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_libgmp_path() = libgmp_path
-get_libgmpxx_path() = libgmpxx_path
+if Base.generating_output()
+    precompile(eager_mode, ())
+    precompile(is_available, ())
+end
 
 end  # module GMP_jll
