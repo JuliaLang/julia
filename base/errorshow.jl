@@ -382,7 +382,7 @@ end
 
 function showerror(io::IO, exc::FieldError)
     @nospecialize
-    print(io, "FieldError: type $(exc.type |> nameof) has no field `$(exc.field)`")
+    print(io, "FieldError: type $(exc.type.name.wrapper) has no field `$(exc.field)`")
     Base.Experimental.show_error_hints(io, exc)
 end
 
@@ -1127,7 +1127,7 @@ Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 function fielderror_listfields_hint_handler(io, exc)
     fields = fieldnames(exc.type)
     if isempty(fields)
-        print(io, "; $(nameof(exc.type)) has no fields at all.")
+        print(io, "; $(exc.type.name.wrapper) has no fields at all.")
     else
         print(io, ", available fields: $(join(map(k -> "`$k`", fields), ", "))")
     end
