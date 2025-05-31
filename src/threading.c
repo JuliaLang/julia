@@ -740,6 +740,8 @@ void jl_init_threading(void)
             if (errno != 0 || endptr == cp || nthreads <= 0)
                 nthreads = 1;
             cp = endptr;
+            if (nthreads == 1) // User asked for 1 thread so lets assume they dont want an interactive thread
+                nthreadsi = 0;
         }
         if (*cp == ',') {
             cp++;
