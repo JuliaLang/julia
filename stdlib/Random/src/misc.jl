@@ -184,7 +184,17 @@ ltm52(n::Int, mask::Int=nextpow(2, n)-1) = LessThan(n-1, Masked(mask, UInt52Raw(
 ## shuffle & shuffle!
 
 function shuffle(rng::AbstractRNG, tup::NTuple{N}) where {N}
-    @inline let  # `@inline` and `@inbounds` are here to help escape analysis
+    # `@inline` and `@inbounds` are here to help escape analysis eliminate the `Memory` allocation
+    #
+    # * `@inline` might be necessary because escape analysis relies on everything
+    #   touching the `Memory` being inlined because there's no interprocedural escape
+    #   analysis yet, relevant WIP PR: https://github.com/JuliaLang/julia/pull/56849
+    #
+    # * `@inbounds` might be necessary because escape analysis requires any throws of
+    #   `BoundsError` to be eliminated as dead code, because `BoundsError` stores the
+    #   array itself, making the throw escape the array from the function, relevant
+    #   WIP PR: https://github.com/JuliaLang/julia/pull/56167
+    @inline let
         # use a narrow integer type to save stack space and prevent heap allocation
         Ind = if N ≤ typemax(UInt8)
             UInt8
