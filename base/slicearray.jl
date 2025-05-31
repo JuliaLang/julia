@@ -77,13 +77,13 @@ end
 """
     eachslice(A::AbstractArray; dims, drop=true)
 
-Create a [`Slices`](@ref) object that is an array of slices over dimensions `dims` of `A`, returning
-views that select all the data from the other dimensions in `A`. `dims` can either be an
-integer or a tuple of integers.
+Create a sliced object, usually [`Slices`](@ref), that is an array of slices over dimensions
+`dims` of `A`, returning views that select all the data from the other dimensions in `A`.
+`dims` can either be an integer or a tuple of integers.
 
-If `drop = true` (the default), the outer `Slices` will drop the inner dimensions, and
+If `drop = true` (the default), the outer slices will drop the inner dimensions, and
 the ordering of the dimensions will match those in `dims`. If `drop = false`, then the
-`Slices` will have the same dimensionality as the underlying array, with inner
+slices object will have the same dimensionality as the underlying array, with inner
 dimensions having size 1.
 
 See [`stack`](@ref)`(slices; dims)` for the inverse of `eachslice(A; dims::Integer)`.
@@ -225,7 +225,6 @@ constructed by [`eachcol`](@ref).
 const ColumnSlices{P<:AbstractMatrix,AX,S<:AbstractVector} = Slices{P,Tuple{Colon,Int},AX,S,1}
 
 
-IteratorSize(::Type{Slices{P,SM,AX,S,N}}) where {P,SM,AX,S,N} = HasShape{N}()
 axes(s::Slices) = s.axes
 size(s::Slices) = map(length, s.axes)
 

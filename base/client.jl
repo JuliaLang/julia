@@ -32,9 +32,6 @@ stackframe_lineinfo_color() = repl_color("JULIA_STACKFRAME_LINEINFO_COLOR", :bol
 stackframe_function_color() = repl_color("JULIA_STACKFRAME_FUNCTION_COLOR", :bold)
 
 function repl_cmd(cmd, out)
-    shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
-    shell_name = Base.basename(shell[1])
-
     # Immediately expand all arguments, so that typing e.g. ~/bin/foo works.
     cmd.exec .= expanduser.(cmd.exec)
 
@@ -64,19 +61,15 @@ function repl_cmd(cmd, out)
         cd(dir)
         println(out, pwd())
     else
-        @static if !Sys.iswindows()
-            if shell_name == "fish"
-                shell_escape_cmd = "begin; $(shell_escape_posixly(cmd)); and true; end"
-            else
-                shell_escape_cmd = "($(shell_escape_posixly(cmd))) && true"
-            end
+        if !Sys.iswindows()
+            shell = shell_split(get(ENV, "JULIA_SHELL", get(ENV, "SHELL", "/bin/sh")))
+            shell_escape_cmd = shell_escape_posixly(cmd)
             cmd = `$shell -c $shell_escape_cmd`
         end
         try
             run(ignorestatus(cmd))
         catch
-            # Windows doesn't shell out right now (complex issue), so Julia tries to run the program itself
-            # Julia throws an exception if it can't find the program, but the stack trace isn't useful
+            # Julia throws an exception if it can't find the cmd (which may be the shell itself), but the stack trace isn't useful
             lasterr = current_exceptions()
             lasterr = ExceptionStack([(exception = e[1], backtrace = [] ) for e in lasterr])
             invokelatest(display_error, lasterr)
@@ -223,10 +216,13 @@ function incomplete_tag(ex::Expr)
         return :none
     elseif isempty(ex.args)
         return :other
-    elseif ex.args[1] isa String
-        return fl_incomplete_tag(ex.args[1])
     else
-        return incomplete_tag(ex.args[1])
+        a = ex.args[1]
+        if a isa String
+            return fl_incomplete_tag(a)::Symbol
+        else
+            return incomplete_tag(a)::Symbol
+        end
     end
 end
 incomplete_tag(exc::Meta.ParseError) = incomplete_tag(exc.detail)
@@ -265,7 +261,7 @@ function exec_options(opts)
     distributed_mode = (opts.worker == 1) || (opts.nprocs > 0) || (opts.machine_file != C_NULL)
     if distributed_mode
         let Distributed = require(PkgId(UUID((0x8ba89e20_285c_5b6f, 0x9357_94700520ee1b)), "Distributed"))
-            Core.eval(MainInclude, :(const Distributed = $Distributed))
+            MainInclude.Distributed = Distributed
             Core.eval(Main, :(using Base.MainInclude.Distributed))
             invokelatest(Distributed.process_opts, opts)
         end
@@ -400,7 +396,7 @@ function load_InteractiveUtils(mod::Module=Main)
         try
             # TODO: we have to use require_stdlib here because it is a dependency of REPL, but we would sort of prefer not to
             let InteractiveUtils = require_stdlib(PkgId(UUID(0xb77e0a4c_d291_57a0_90e8_8db25a27a240), "InteractiveUtils"))
-                Core.eval(MainInclude, :(const InteractiveUtils = $InteractiveUtils))
+                MainInclude.InteractiveUtils = InteractiveUtils
             end
         catch ex
             @warn "Failed to import InteractiveUtils into module $mod" exception=(ex, catch_backtrace())
@@ -439,11 +435,12 @@ function run_fallback_repl(interactive::Bool)
                 eval_user_input(stderr, ex, true)
             end
         else
-            while !eof(input)
+            while true
                 if interactive
                     print("julia> ")
                     flush(stdout)
                 end
+                eof(input) && break
                 try
                     line = ""
                     ex = nothing
@@ -534,6 +531,10 @@ A variable referring to the last thrown errors, automatically imported to the in
 The thrown errors are collected in a stack of exceptions.
 """
 global err = nothing
+
+# Used for memoizing require_stdlib of these modules
+global InteractiveUtils::Module
+global Distributed::Module
 
 # weakly exposes ans and err variables to Main
 export ans, err

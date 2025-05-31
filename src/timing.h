@@ -55,6 +55,8 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
 JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event);
 JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *cur_block);
 JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *cur_block);
+JL_DLLEXPORT int jl_timing_enabled(void);
+
 
 #ifdef __cplusplus
 }
@@ -187,6 +189,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(STACKWALK)             \
         X(DL_OPEN)               \
         X(JULIA_INIT)            \
+        X(CORE_COMPILER)        \
 
 
 #define JL_TIMING_COUNTERS \

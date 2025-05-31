@@ -374,7 +374,7 @@ cat_nested_args(t::Tuple) = (cat_nested(t[1])..., cat_nested_args(tail(t))...)
 cat_nested(a) = (a,)
 
 """
-    make_makeargs(t::Tuple) -> Tuple{Vararg{Function}}
+    make_makeargs(t::Tuple)::Tuple{Vararg{Function}}
 
 Each element of `t` is one (consecutive) node in a broadcast tree.
 The returned `Tuple` are functions which take in the (whole) flattened
@@ -414,7 +414,7 @@ prepare_args(::Tuple{}, ::Tuple) = ()
 ## logic for deciding the BroadcastStyle
 
 """
-    combine_styles(cs...) -> BroadcastStyle
+    combine_styles(cs...)::BroadcastStyle
 
 Decides which `BroadcastStyle` to use for any number of value arguments.
 Uses [`BroadcastStyle`](@ref) to get the style for each argument, and uses
@@ -439,7 +439,7 @@ combine_styles(c1, c2) = result_style(combine_styles(c1), combine_styles(c2))
 @inline combine_styles(c1, c2, cs...) = result_style(combine_styles(c1), combine_styles(c2, cs...))
 
 """
-    result_style(s1::BroadcastStyle[, s2::BroadcastStyle]) -> BroadcastStyle
+    result_style(s1::BroadcastStyle[, s2::BroadcastStyle])::BroadcastStyle
 
 Takes one or two `BroadcastStyle`s and combines them using [`BroadcastStyle`](@ref) to
 determine a common `BroadcastStyle`.
@@ -488,7 +488,7 @@ end
 # Indices utilities
 
 """
-    combine_axes(As...) -> Tuple
+    combine_axes(As...)::Tuple
 
 Determine the result axes for broadcasting across all values in `As`.
 
@@ -505,7 +505,7 @@ julia> Broadcast.combine_axes(1, 1, 1)
 combine_axes(A) = axes(A)
 
 """
-    broadcast_shape(As...) -> Tuple
+    broadcast_shape(As...)::Tuple
 
 Determine the result axes for broadcasting across all axes (size Tuples) in `As`.
 
@@ -585,15 +585,17 @@ an `Int`.
 """
 Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = to_index(_newindex(axes(arg), I.I))
 Base.@propagate_inbounds newindex(arg, I::Integer) = to_index(_newindex(axes(arg), (I,)))
-Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(length(ax[1]) == 1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
+Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(length(ax[1]) == 1, ax[1][begin], I[1]), _newindex(tail(ax), tail(I))...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
-Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
+Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][begin], _newindex(tail(ax), ())...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
 @inline newindex(I::CartesianIndex, keep, Idefault) = to_index(_newindex(I.I, keep, Idefault))
-@inline newindex(i::Integer, keep::Tuple, idefault) = ifelse(keep[1], i, idefault[1])
-@inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex(())
+@inline newindex(I::CartesianIndex{1}, keep, Idefault) = newindex(I.I[1], keep, Idefault)
+@inline newindex(i::Integer, keep::Tuple, idefault) = CartesianIndex(ifelse(keep[1], Int(i), Int(idefault[1])), idefault[2])
+@inline newindex(i::Integer, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
+@inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex()
 @inline _newindex(I, keep, Idefault) =
     (ifelse(keep[1], I[1], Idefault[1]), _newindex(tail(I), tail(keep), tail(Idefault))...)
 @inline _newindex(I, keep::Tuple{}, Idefault) = ()  # truncate if keep is shorter than I

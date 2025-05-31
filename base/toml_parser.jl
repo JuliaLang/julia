@@ -315,7 +315,7 @@ function point_to_line(str::AbstractString, a::Int, b::Int, context)
         c == '\n' && break
         print(io1, c)
     end
-    return String(take!(io1.io)), String(take!(io2.io))
+    return takestring!(io1.io), takestring!(io2.io)
 end
 
 function Base.showerror(io::IO, err::ParserError)
@@ -770,7 +770,7 @@ isvalid_hex(c::Char) = isdigit(c) || ('a' <= c <= 'f') || ('A' <= c <= 'F')
 isvalid_oct(c::Char) = '0' <= c <= '7'
 isvalid_binary(c::Char) = '0' <= c <= '1'
 
-const ValidSigs = Union{typeof.([isvalid_hex, isvalid_oct, isvalid_binary, isdigit])...}
+const ValidSigs = Union{typeof(isvalid_hex), typeof(isvalid_oct), typeof(isvalid_binary), typeof(isdigit)}
 # This function eats things accepted by `f` but also allows eating `_` in between
 # digits. Returns if it ate at lest one character and if it ate an underscore
 function accept_batch_underscore(l::Parser, f::ValidSigs, fail_if_underscore=true)::Err{Tuple{Bool, Bool}}

@@ -335,7 +335,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     // let the runtime know this task is dead and find a new task to run
     jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
     if (done == NULL) {
-        done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("task_done_hook"));
+        done = (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("task_done_hook"));
         if (done != NULL)
             jl_atomic_store_release(&task_done_hook_func, done);
     }
@@ -993,7 +993,7 @@ the xoshiro256 state. There are two problems with that fix, however:
    need four variations of the internal RNG stream for the four xoshiro256
    registers. That means we'd have to apply the PCG finalizer, add it to
    our dot product accumulator field in the child task, then apply the
-   MurmurHash3 finalizer to that dot product and use the result to purturb
+   MurmurHash3 finalizer to that dot product and use the result to perturb
    the main RNG state.
 
 We avoid both problems by recognizing that the mixing function can be much less

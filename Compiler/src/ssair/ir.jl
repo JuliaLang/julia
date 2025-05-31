@@ -609,7 +609,7 @@ end
     elseif isa(stmt, EnterNode)
         op == 1 || throw(BoundsError())
         stmt = EnterNode(stmt.catch_dest, v)
-    elseif isa(stmt, Union{AnySSAValue, GlobalRef})
+    elseif isa(stmt, Union{AnySSAValue, Argument, GlobalRef})
         op == 1 || throw(BoundsError())
         stmt = v
     elseif isa(stmt, UpsilonNode)
@@ -640,7 +640,7 @@ end
 function userefs(@nospecialize(x))
     relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
         isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, OldSSAValue) || isa(x, NewSSAValue) ||
-        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode)
+        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode) || isa(x, Argument)
     return UseRefIterator(x, relevant)
 end
 
@@ -810,7 +810,7 @@ end
 types(ir::Union{IRCode, IncrementalCompact}) = TypesView(ir)
 
 function getindex(compact::IncrementalCompact, ssa::SSAValue)
-    (1 ≤ ssa.id ≤ compact.result_idx) || throw(InvalidIRError())
+    (1 ≤ ssa.id < compact.result_idx) || throw(InvalidIRError())
     return compact.result[ssa.id]
 end
 
@@ -1265,39 +1265,48 @@ function process_phinode_values(old_values::Vector{Any}, late_fixup::Vector{Int}
     values = Vector{Any}(undef, length(old_values))
     for i = 1:length(old_values)
         isassigned(old_values, i) || continue
-        val = old_values[i]
-        if isa(val, SSAValue)
-            if do_rename_ssa
-                if !already_inserted(i, OldSSAValue(val.id))
-                    push!(late_fixup, result_idx)
-                    val = OldSSAValue(val.id)
-                else
-                    val = renumber_ssa2(val, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
-                end
-            else
-                used_ssas[val.id] += 1
-            end
-        elseif isa(val, OldSSAValue)
-            if !already_inserted(i, val)
-                push!(late_fixup, result_idx)
-            else
-                # Always renumber these. do_rename_ssa applies only to actual SSAValues
-                val = renumber_ssa2(SSAValue(val.id), ssa_rename, used_ssas, new_new_used_ssas, true, mark_refined!)
-            end
-        elseif isa(val, NewSSAValue)
-            if val.id < 0
-                new_new_used_ssas[-val.id] += 1
-            else
-                @assert do_rename_ssa
-                val = SSAValue(val.id)
-            end
-        end
-        if isa(val, NewSSAValue)
-            push!(late_fixup, result_idx)
-        end
-        values[i] = val
+        values[i] = process_phinode_value(old_values, i, late_fixup, already_inserted, result_idx, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
     end
     return values
+end
+
+function process_phinode_value(old_values::Vector{Any}, i::Int, late_fixup::Vector{Int},
+                               already_inserted, result_idx::Int,
+                               ssa_rename::Vector{Any}, used_ssas::Vector{Int},
+                               new_new_used_ssas::Vector{Int},
+                               do_rename_ssa::Bool,
+                               mark_refined!::Union{Refiner, Nothing})
+    val = old_values[i]
+    if isa(val, SSAValue)
+        if do_rename_ssa
+            if !already_inserted(i, OldSSAValue(val.id))
+                push!(late_fixup, result_idx)
+                val = OldSSAValue(val.id)
+            else
+                val = renumber_ssa2(val, ssa_rename, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
+            end
+        else
+            used_ssas[val.id] += 1
+        end
+    elseif isa(val, OldSSAValue)
+        if !already_inserted(i, val)
+            push!(late_fixup, result_idx)
+        else
+            # Always renumber these. do_rename_ssa applies only to actual SSAValues
+            val = renumber_ssa2(SSAValue(val.id), ssa_rename, used_ssas, new_new_used_ssas, true, mark_refined!)
+        end
+    elseif isa(val, NewSSAValue)
+        if val.id < 0
+            new_new_used_ssas[-val.id] += 1
+        else
+            @assert do_rename_ssa
+            val = SSAValue(val.id)
+        end
+    end
+    if isa(val, NewSSAValue)
+        push!(late_fixup, result_idx)
+    end
+    return val
 end
 
 function renumber_ssa2(val::SSAValue, ssanums::Vector{Any}, used_ssas::Vector{Int},

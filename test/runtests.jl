@@ -13,9 +13,7 @@ include("choosetests.jl")
 include("testenv.jl")
 include("buildkitetestjson.jl")
 
-using .BuildkiteTestJSON
-
-(; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
+(; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
 
 if Sys.islinux()
@@ -28,8 +26,15 @@ else
 end
 
 if use_revise
+    # First put this at the top of the DEPOT PATH to install revise if necessary.
+    # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
+    pushfirst!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
+    using Pkg
+    Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
+    Pkg.instantiate()
     using Revise
     union!(Revise.stdlib_names, Symbol.(STDLIBS))
+    push!(DEPOT_PATH, popfirst!(DEPOT_PATH))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
         using Revise
@@ -37,6 +42,11 @@ if use_revise
         union!(Revise.stdlib_names, Symbol.(STDLIBS))
         revise_trackall()
     end
+end
+
+if isempty(tests)
+    println("No tests selected. Exiting.")
+    exit()
 end
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
@@ -369,6 +379,7 @@ cd(@__DIR__) do
     Test.TESTSET_PRINT_ENABLE[] = false
     o_ts = Test.DefaultTestSet("Overall")
     o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
+    BuildkiteTestJSON.write_testset_json_files(@__DIR__, o_ts)
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
     for (testname, (resp,), duration) in results
@@ -416,11 +427,6 @@ cd(@__DIR__) do
         Test.push_testset(fake)
         Test.record(o_ts, fake)
         Test.pop_testset()
-    end
-
-    if Base.get_bool_env("CI", false)
-        @info "Writing test result data to $(@__DIR__)"
-        write_testset_json_files(@__DIR__, o_ts)
     end
 
     Test.TESTSET_PRINT_ENABLE[] = true

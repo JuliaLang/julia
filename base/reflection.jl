@@ -149,23 +149,22 @@ struct CodegenParams
     use_jlplt::Cint
 
     """
-    If enabled, only provably reachable code (from functions marked with `entrypoint`) is included
-    in the output system image. Errors or warnings can be given for call sites too dynamic to handle.
-    The option is disabled by default. (0=>disabled, 1=>safe (static errors), 2=>unsafe, 3=>unsafe plus warnings)
+        If enabled emit LLVM IR for all functions even if wouldn't be compiled
+        for some reason (i.e functions that return a constant value).
     """
-    trim::Cint
+    force_emit_all::Cint
 
     function CodegenParams(; track_allocations::Bool=true, code_coverage::Bool=true,
                    prefer_specsig::Bool=false,
                    gnu_pubnames::Bool=true, debug_info_kind::Cint = default_debug_info_kind(),
                    debug_info_level::Cint = Cint(JLOptions().debug_level), safepoint_on_entry::Bool=true,
-                   gcstack_arg::Bool=true, use_jlplt::Bool=true, trim::Cint=Cint(0))
+                   gcstack_arg::Bool=true, use_jlplt::Bool=true, force_emit_all::Bool=false)
         return new(
             Cint(track_allocations), Cint(code_coverage),
             Cint(prefer_specsig),
             Cint(gnu_pubnames), debug_info_kind,
             debug_info_level, Cint(safepoint_on_entry),
-            Cint(gcstack_arg), Cint(use_jlplt), Cint(trim))
+            Cint(gcstack_arg), Cint(use_jlplt), Cint(force_emit_all))
     end
 end
 
@@ -927,20 +926,14 @@ end
 # function reflection
 
 """
-    nameof(f::Function) -> Symbol
+    nameof(f::Function)::Symbol
 
 Get the name of a generic `Function` as a symbol. For anonymous functions,
 this is a compiler-generated name. For explicitly-declared subtypes of
 `Function`, it is the name of the function's type.
 """
 function nameof(f::Function)
-    t = typeof(f)
-    mt = t.name.mt
-    if mt === Symbol.name.mt
-        # uses shared method table, so name is not unique to this function type
-        return nameof(t)
-    end
-    return mt.name
+    return typeof(f).name.singletonname
 end
 
 function nameof(f::Core.IntrinsicFunction)
@@ -949,7 +942,7 @@ function nameof(f::Core.IntrinsicFunction)
 end
 
 """
-    parentmodule(f::Function) -> Module
+    parentmodule(f::Function)::Module
 
 Determine the module containing the (first) definition of a generic
 function.
@@ -957,7 +950,7 @@ function.
 parentmodule(f::Function) = parentmodule(typeof(f))
 
 """
-    parentmodule(f::Function, types) -> Module
+    parentmodule(f::Function, types)::Module
 
 Determine the module containing the first method of a generic function `f` matching
 the specified `types`.
@@ -971,7 +964,7 @@ function parentmodule(@nospecialize(f), @nospecialize(types))
 end
 
 """
-    parentmodule(m::Method) -> Module
+    parentmodule(m::Method)::Module
 
 Return the module in which the given method `m` is defined.
 
@@ -981,7 +974,7 @@ Return the module in which the given method `m` is defined.
 parentmodule(m::Method) = m.module
 
 """
-    hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter()) -> Bool
+    hasmethod(f, t::Type{<:Tuple}[, kwnames]; world=get_world_counter())::Bool
 
 Determine whether the given generic function has a method matching the given
 `Tuple` of argument types with the upper bound of world age given by `world`.
@@ -1036,11 +1029,11 @@ function hasmethod(f, t, kwnames::Tuple{Vararg{Symbol}}; world::UInt=get_world_c
     match = ccall(:jl_gf_invoke_lookup, Any, (Any, Any, UInt), tt, nothing, world)
     match === nothing && return false
     kws = ccall(:jl_uncompress_argnames, Array{Symbol,1}, (Any,), (match::Method).slot_syms)
+    kws = kws[((match::Method).nargs + 1):end] # remove positional arguments
     isempty(kws) && return true # some kwfuncs simply forward everything directly
     for kw in kws
         endswith(String(kw), "...") && return true
     end
-    kwnames = collect(kwnames)
     return issubset(kwnames, kws)
 end
 
@@ -1092,7 +1085,7 @@ function bodyfunction(basemethod::Method)
 end
 
 """
-    Base.isambiguous(m1, m2; ambiguous_bottom=false) -> Bool
+    Base.isambiguous(m1, m2; ambiguous_bottom=false)::Bool
 
 Determine whether two methods `m1` and `m2` may be ambiguous for some call
 signature. This test is performed in the context of other methods of the same
@@ -1283,9 +1276,9 @@ function invokelatest_gr(gr::GlobalRef, @nospecialize args...; kwargs...)
     @inline
     kwargs = merge(NamedTuple(), kwargs)
     if isempty(kwargs)
-        return Core._call_latest(apply_gr, gr, args...)
+        return invokelatest(apply_gr, gr, args...)
     end
-    return Core._call_latest(apply_gr_kw, kwargs, gr, args...)
+    return invokelatest(apply_gr_kw, kwargs, gr, args...)
 end
 
 """

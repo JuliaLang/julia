@@ -1,11 +1,14 @@
 Julia v1.12 Release Notes
-========================
+=========================
 
 New language features
 ---------------------
 
-* New option `--trim` creates smaller binaries by removing code that was not proven to be reachable from
-  entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]).
+* New experimental option `--trim` that creates smaller binaries by removing code not proven to be reachable from
+  entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]). Not all
+  code is expected to work with this option, and since it is experimental you may encounter problems.
+* Redefinition of constants is now well defined and follows world age semantics ([#57253]). Additional redefinitions
+  (e.g. of types) are now allowed. See [the new manual chapter on world age](https://docs.julialang.org/en/v1.13-dev/manual/worldage/).
 * A new keyword argument `usings::Bool` has been added to `names`, returning all names visible
   via `using` ([#54609]).
 * The `@atomic` macro family now supports reference assignment syntax, e.g. `@atomic :monotonic v[3] += 4`,
@@ -25,6 +28,7 @@ New language features
 * Support for Unicode 16 ([#56925]).
 * `Threads.@spawn` now takes a `:samepool` argument to specify the same threadpool as the caller.
   `Threads.@spawn :samepool foo()` which is shorthand for `Threads.@spawn Threads.threadpool() foo()` ([#57109]).
+* The `@ccall` macro can now take a `gc_safe` argument, that if set to true allows the runtime to run garbage collection concurrently to the `ccall` ([#49933]).
 
 Language changes
 ----------------
@@ -51,6 +55,10 @@ Language changes
 * Errors during `getfield` now raise a new `FieldError` exception type instead of the generic
   `ErrorException` ([#54504]).
 * Macros in function-signature-position no longer require parentheses. E.g. `function @main(args) ... end` is now permitted, whereas `function (@main)(args) ... end` was required in prior Julia versions.
+* Calling `using` on a package name inside of that package of that name (especially relevant
+  for a submodule) now explicitly uses that package without examining the Manifest and
+  environment, which is identical to the behavior of `..Name`. This appears to better match
+  how users expect this to behave in the wild ([#57727]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -274,9 +282,10 @@ Tooling Improvements
 [#57081]: https://github.com/JuliaLang/julia/issues/57081
 [#57087]: https://github.com/JuliaLang/julia/issues/57087
 [#57109]: https://github.com/JuliaLang/julia/issues/57109
+[#57253]: https://github.com/JuliaLang/julia/issues/57253
 
 Julia v1.11 Release Notes
-========================
+=========================
 
 New language features
 ---------------------
@@ -288,20 +297,6 @@ New language features
 * The new macro `Base.Cartesian.@ncallkw` is analogous to `Base.Cartesian.@ncall`,
   but allows to add keyword arguments to the function call ([#51501]).
 * Support for Unicode 15.1 ([#51799]).
-* Three new types around the idea of text with "annotations" (`Pair{Symbol, Any}`
-  entries, e.g. `:lang => "en"` or `:face => :magenta`). These annotations
-  are preserved across operations (e.g. string concatenation with `*`) when
-  possible.
-  * `AnnotatedString` is a new `AbstractString` type. It wraps an underlying
-    string and allows for annotations to be attached to regions of the string.
-    This type is used extensively in the new `StyledStrings` standard library to
-    hold styling information.
-  * `AnnotatedChar` is a new `AbstractChar` type. It wraps another char and
-    holds a list of annotations that apply to it.
-  * `AnnotatedIOBuffer` is a new `IO` type that mimics an `IOBuffer`, but has
-    specialised `read`/`write` methods for annotated content. This can be
-    thought of both as a "string builder" of sorts and also as glue between
-    annotated and unannotated content.
 * `Manifest.toml` files can now be renamed in the format `Manifest-v{major}.{minor}.toml`
   to be preferentially picked up by the given julia version. i.e. in the same folder,
   a `Manifest-v1.11.toml` would be used by v1.11 and `Manifest.toml` by every other julia
@@ -403,7 +398,20 @@ Standard library changes
 
 #### StyledStrings
 
-* A new standard library for handling styling in a more comprehensive and structured way ([#49586]).
+* A new experimental standard library for handling styling in a more comprehensive and structured way ([#49586]).
+* Three new types around the idea of text with "annotations" (`Pair{Symbol, Any}`
+  entries, e.g. `:lang => "en"` or `:face => :magenta`). These annotations
+  are preserved across operations (e.g. string concatenation with `*`) when
+  possible.
+  * `AnnotatedString` is a new `AbstractString` type. It wraps an underlying
+    string and allows for annotations to be attached to regions of the string.
+    This type is used extensively to hold styling information.
+  * `AnnotatedChar` is a new `AbstractChar` type. It wraps another char and
+    holds a list of annotations that apply to it.
+  * `AnnotatedIOBuffer` is a new `IO` type that mimics an `IOBuffer`, but has
+    specialised `read`/`write` methods for annotated content. This can be
+    thought of both as a "string builder" of sorts and also as glue between
+    annotated and unannotated content.
 * The new `Faces` struct serves as a container for text styling information
   (think typeface, as well as color and decoration), and comes with a framework
   to provide a convenient, extensible (via `addface!`), and customisable (with a
