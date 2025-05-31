@@ -1289,7 +1289,7 @@ end
     end
     # Express one terabyte as 1TB, 1e12, etc.
     one_terabyte_strs_and_vals = [
-        ("1000000000000", 1000000000000), ("1e12", 1e12), ("1TB", 1t), ("1e9gB", 1e9g),
+        ("1000000000000", UInt64(1000000000000)), ("1e12", UInt64(1e12)), ("1TB", UInt64(1t)), ("1e9gB", UInt64(1e9g)),
     ]
     @testset "--hard-heap-limit=$str" for (str, val) in one_terabyte_strs_and_vals
         @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
@@ -1322,7 +1322,7 @@ end
     end
     # Express one terabyte as 1TB, 1e12, etc.
     one_terabyte_strs_and_vals = [
-        ("1000000000000", 1000000000000), ("1e12", 1e12), ("1TB", 1t), ("1e9gB", 1e9g),
+        ("1000000000000", UInt64(1000000000000)), ("1e12", UInt64(1e12)), ("1TB", UInt64(1t)), ("1e9gB", UInt64(1e9g)),
     ]
     @testset "--heap-target-increment=$str" for (str, val) in one_terabyte_strs_and_vals
         @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
