@@ -1,3 +1,7 @@
+```@meta
+EditURL = "https://github.com/JuliaLang/julia/blob/master/stdlib/Test/docs/src/index.md"
+```
+
 # Unit Testing
 
 ```@meta
@@ -20,7 +24,7 @@ The `Test` module provides simple *unit testing* functionality. Unit testing is 
 see if your code is correct by checking that the results are what you expect. It can be helpful
 to ensure your code still works after you make changes, and can be used when developing as a way
 of specifying the behaviors your code should have when complete. You may also want to look at the
-documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#Adding-tests-to-the-package).
+documentation for [adding tests to your Julia Package](https://pkgdocs.julialang.org/dev/creating-packages/#adding-tests-to-packages).
 
 Simple unit testing can be performed with the `@test` and `@test_throws` macros:
 
@@ -55,7 +59,6 @@ julia> @test foo("f") == 20
 Test Failed at none:1
   Expression: foo("f") == 20
    Evaluated: 1 == 20
-
 ERROR: There was an error during testing
 ```
 
@@ -69,6 +72,8 @@ Error During Test
   Test threw an exception of type MethodError
   Expression: foo(:cat) == 1
   MethodError: no method matching length(::Symbol)
+  The function `length` exists, but no method is defined for this combination of argument types.
+
   Closest candidates are:
     length(::SimpleVector) at essentials.jl:256
     length(::Base.MethodList) at reflection.jl:521
@@ -224,8 +229,6 @@ Test Passed
 julia> @test 1 ≈ 0.999999
 Test Failed at none:1
   Expression: 1 ≈ 0.999999
-   Evaluated: 1 ≈ 0.999999
-
 ERROR: There was an error during testing
 ```
 You can specify relative and absolute tolerances by setting the `rtol` and `atol` keyword arguments of `isapprox`, respectively,
@@ -316,8 +319,12 @@ function finish(ts::CustomTestSet)
     # just record if we're not the top-level parent
     if get_testset_depth() > 0
         record(get_testset(), ts)
+        return ts
     end
-    ts
+
+    # so the results are printed if we are at the top level
+    Test.print_test_results(ts)
+    return ts
 end
 ```
 
@@ -330,6 +337,45 @@ And using that testset looks like:
         @test true
     end
 end
+```
+
+In order to use a custom testset and have the recorded results printed as part of any outer default testset,
+also define `Test.get_test_counts`. This might look like so:
+
+```julia
+using Test: AbstractTestSet, Pass, Fail, Error, Broken, get_test_counts, TestCounts, format_duration
+
+function Test.get_test_counts(ts::CustomTestSet)
+    passes, fails, errors, broken = 0, 0, 0, 0
+    # cumulative results
+    c_passes, c_fails, c_errors, c_broken = 0, 0, 0, 0
+
+    for t in ts.results
+        # count up results
+        isa(t, Pass)   && (passes += 1)
+        isa(t, Fail)   && (fails  += 1)
+        isa(t, Error)  && (errors += 1)
+        isa(t, Broken) && (broken += 1)
+        # handle children
+        if isa(t, AbstractTestSet)
+            tc = get_test_counts(t)::TestCounts
+            c_passes += tc.passes + tc.cumulative_passes
+            c_fails  += tc.fails + tc.cumulative_fails
+            c_errors += tc.errors + tc.cumulative_errors
+            c_broken += tc.broken + tc.cumulative_broken
+        end
+    end
+    # get a duration, if we have one
+    duration = format_duration(ts)
+    return TestCounts(true, passes, fails, errors, broken, c_passes, c_fails, c_errors, c_broken, duration)
+end
+```
+
+```@docs
+Test.TestCounts
+Test.get_test_counts
+Test.format_duration
+Test.print_test_results
 ```
 
 ## Test utilities
@@ -368,6 +414,8 @@ Add the following to `src/Example.jl`:
 ```julia
 module Example
 
+export greet, simple_add, type_multiply
+
 function greet()
     "Hello world!"
 end
@@ -379,8 +427,6 @@ end
 function type_multiply(a::Float64, b::Float64)
     a * b
 end
-
-export greet, simple_add, type_multiply
 
 end
 ```
@@ -430,13 +476,13 @@ Using our knowledge of `Test.jl`, here are some example tests we could add to `m
 @testset "Testset 1" begin
     @test 2 == simple_add(1, 1)
     @test 3.5 == simple_add(1, 2.5)
-        @test_throws MethodError simple_add(1, "A")
-        @test_throws MethodError simple_add(1, 2, 3)
+    @test_throws MethodError simple_add(1, "A")
+    @test_throws MethodError simple_add(1, 2, 3)
 end
 
 @testset "Testset 2" begin
     @test 1.0 == type_multiply(1.0, 1.0)
-        @test isa(type_multiply(2.0, 2.0), Float64)
+    @test isa(type_multiply(2.0, 2.0), Float64)
     @test_throws MethodError type_multiply(1, 2.5)
 end
 ```

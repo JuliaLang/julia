@@ -10,7 +10,10 @@ import .Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), xor, 
              trailing_zeros, trailing_ones, count_ones, count_zeros, tryparse_internal,
              bin, oct, dec, hex, isequal, invmod, _prevpow2, _nextpow2, ndigits0zpb,
              widen, signed, unsafe_trunc, trunc, iszero, isone, big, flipsign, signbit,
-             sign, hastypemax, isodd, iseven, digits!, hash, hash_integer, top_set_bit
+             sign, isodd, iseven, digits!, hash, hash_integer, top_set_bit,
+             ispositive, isnegative, clamp, unsafe_takestring
+
+import Core: Signed, Float16, Float32, Float64
 
 if Clong == Int32
     const ClongMax = Union{Int8, Int16, Int32}
@@ -29,10 +32,13 @@ else
     const libgmp = "libgmp.so.10"
 end
 
-version() = VersionNumber(unsafe_string(unsafe_load(cglobal((:__gmp_version, libgmp), Ptr{Cchar}))))
+_version() = unsafe_string(unsafe_load(cglobal((:__gmp_version, libgmp), Ptr{Cchar})))
+version() = VersionNumber(_version())
+major_version() = _version()[1]
 bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, libgmp), Cint)))
 
 const VERSION = version()
+const MAJOR_VERSION = major_version()
 const BITS_PER_LIMB = bits_per_limb()
 
 # GMP's mp_limb_t is by default a typedef of `unsigned long`, but can also be configured to be either
@@ -101,7 +107,7 @@ const ALLOC_OVERFLOW_FUNCTION = Ref(false)
 
 function __init__()
     try
-        if version().major != VERSION.major || bits_per_limb() != BITS_PER_LIMB
+        if major_version() != MAJOR_VERSION || bits_per_limb() != BITS_PER_LIMB
             msg = """The dynamically loaded GMP library (v\"$(version())\" with __gmp_bits_per_limb == $(bits_per_limb()))
                      does not correspond to the compile time version (v\"$VERSION\" with __gmp_bits_per_limb == $BITS_PER_LIMB).
                      Please rebuild Julia."""
@@ -170,8 +176,8 @@ end
 
 invert!(x::BigInt, a::BigInt, b::BigInt) =
     ccall((:__gmpz_invert, libgmp), Cint, (mpz_t, mpz_t, mpz_t), x, a, b)
-invert(a::BigInt, b::BigInt) = invert!(BigInt(), a, b)
 invert!(x::BigInt, b::BigInt) = invert!(x, x, b)
+invert(a::BigInt, b::BigInt) = (ret=BigInt(); invert!(ret, a, b); ret)
 
 for op in (:add_ui, :sub_ui, :mul_ui, :mul_2exp, :fdiv_q_2exp, :pow_ui, :bin_ui)
     op! = Symbol(op, :!)
@@ -251,6 +257,7 @@ function export!(a::AbstractVector{T}, n::BigInt; order::Integer=-1, nails::Inte
     stride(a, 1) == 1 || throw(ArgumentError("a must have stride 1"))
     ndigits = cld(sizeinbase(n, 2), 8*sizeof(T) - nails)
     length(a) < ndigits && resize!(a, ndigits)
+    fill!(a, zero(T))
     count = Ref{Csize_t}()
     ccall((:__gmpz_export, libgmp), Ptr{T}, (Ptr{T}, Ref{Csize_t}, Cint, Csize_t, Cint, Csize_t, mpz_t),
         a, count, order, sizeof(T), endian, nails, n)
@@ -260,8 +267,6 @@ end
 
 limbs_write!(x::BigInt, a) = ccall((:__gmpz_limbs_write, libgmp), Ptr{Limb}, (mpz_t, Clong), x, a)
 limbs_finish!(x::BigInt, a) = ccall((:__gmpz_limbs_finish, libgmp), Cvoid, (mpz_t, Clong), x, a)
-import!(x::BigInt, a, b, c, d, e, f) = ccall((:__gmpz_import, libgmp), Cvoid,
-    (mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}), x, a, b, c, d, e, f)
 
 setbit!(x, a) = (ccall((:__gmpz_setbit, libgmp), Cvoid, (mpz_t, bitcnt_t), x, a); x)
 tstbit(a::BigInt, b) = ccall((:__gmpz_tstbit, libgmp), Cint, (mpz_t, bitcnt_t), a, b) % Bool
@@ -280,8 +285,6 @@ signed(x::BigInt) = x
 
 BigInt(x::BigInt) = x
 Signed(x::BigInt) = x
-
-hastypemax(::Type{BigInt}) = false
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base_::Integer, raise::Bool)
     # don't make a copy in the common case where we are parsing a whole String
@@ -317,11 +320,6 @@ unsafe_trunc(::Type{BigInt}, x::Union{Float16,Float32,Float64}) = MPZ.set_d(x)
 
 function BigInt(x::Float64)
     isinteger(x) || throw(InexactError(:BigInt, BigInt, x))
-    unsafe_trunc(BigInt,x)
-end
-
-function round(::Type{BigInt}, x::Union{Float16,Float32,Float64}, r::RoundingMode{:ToZero})
-    isfinite(x) || throw(InexactError(:trunc, BigInt, x))
     unsafe_trunc(BigInt,x)
 end
 
@@ -363,6 +361,8 @@ end
 
 rem(x::Integer, ::Type{BigInt}) = BigInt(x)
 
+clamp(x, ::Type{BigInt}) = convert(BigInt, x)
+
 isodd(x::BigInt) = MPZ.tstbit(x, 0)
 iseven(x::BigInt) = !isodd(x)
 
@@ -383,7 +383,7 @@ function (::Type{T})(x::BigInt) where T<:Base.BitSigned
     else
         0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError(nameof(T), T, x))
         y = x % T
-        ispos(x) ⊻ (y > 0) && throw(InexactError(nameof(T), T, x)) # catch overflow
+        ispositive(x) ⊻ (y > 0) && throw(InexactError(nameof(T), T, x)) # catch overflow
         y
     end
 end
@@ -606,13 +606,13 @@ Number of ones in the binary representation of abs(x).
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
 function top_set_bit(x::BigInt)
-    isneg(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
+    isnegative(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
     iszero(x) && return 0
     x.size * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, x.size))
 end
 
-divrem(x::BigInt, y::BigInt) = MPZ.tdiv_qr(x, y)
-divrem(x::BigInt, y::Integer) = MPZ.tdiv_qr(x, big(y))
+divrem(x::BigInt, y::BigInt,  ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, y)
+divrem(x::BigInt, y::Integer, ::typeof(RoundToZero) = RoundToZero) = MPZ.tdiv_qr(x, BigInt(y))
 
 cmp(x::BigInt, y::BigInt) = sign(MPZ.cmp(x, y))
 cmp(x::BigInt, y::ClongMax) = sign(MPZ.cmp_si(x, y))
@@ -663,11 +663,6 @@ end
 powermod(x::Integer, p::Integer, m::BigInt) = powermod(big(x), big(p), m)
 
 function gcdx(a::BigInt, b::BigInt)
-    if iszero(b) # shortcut this to ensure consistent results with gcdx(a,b)
-        return a < 0 ? (-a,-ONE,b) : (a,one(BigInt),b)
-        # we don't return the globals ONE and ZERO in case the user wants to
-        # mutate the result
-    end
     g, s, t = MPZ.gcdext(a, b)
     if t == 0
         # work around a difference in some versions of GMP
@@ -705,7 +700,7 @@ function prod(arr::AbstractArray{BigInt})
     foldl(MPZ.mul!, arr; init)
 end
 
-factorial(n::BigInt) = !isneg(n) ? MPZ.fac_ui(n) : throw(DomainError(n, "`n` must not be negative."))
+factorial(n::BigInt) = !isnegative(n) ? MPZ.fac_ui(n) : throw(DomainError(n, "`n` must not be negative."))
 
 function binomial(n::BigInt, k::Integer)
     k < 0 && return BigInt(0)
@@ -737,17 +732,17 @@ isone(x::BigInt) = x == Culong(1)
 <(i::Integer, x::BigInt) = cmp(x,i) > 0
 <(x::BigInt, f::CdoubleMax) = isnan(f) ? false : cmp(x,f) < 0
 <(f::CdoubleMax, x::BigInt) = isnan(f) ? false : cmp(x,f) > 0
-isneg(x::BigInt) = x.size < 0
-ispos(x::BigInt) = x.size > 0
+isnegative(x::BigInt) = x.size < 0
+ispositive(x::BigInt) = x.size > 0
 
-signbit(x::BigInt) = isneg(x)
+signbit(x::BigInt) = isnegative(x)
 flipsign!(x::BigInt, y::Integer) = (signbit(y) && (x.size = -x.size); x)
 flipsign( x::BigInt, y::Integer) = signbit(y) ? -x : x
 flipsign( x::BigInt, y::BigInt)  = signbit(y) ? -x : x
 # above method to resolving ambiguities with flipsign(::T, ::T) where T<:Signed
 function sign(x::BigInt)
-    isneg(x) && return -one(x)
-    ispos(x) && return one(x)
+    isnegative(x) && return -one(x)
+    ispositive(x) && return one(x)
     return x
 end
 
@@ -759,13 +754,13 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
     iszero(n) && pad < 1 && return ""
     nd1 = ndigits(n, base=base)
     nd  = max(nd1, pad)
-    sv  = Base.StringVector(nd + isneg(n))
+    sv  = Base.StringMemory(nd + isnegative(n))
     GC.@preserve sv MPZ.get_str!(pointer(sv) + nd - nd1, base, n)
-    @inbounds for i = (1:nd-nd1) .+ isneg(n)
+    @inbounds for i = (1:nd-nd1) .+ isnegative(n)
         sv[i] = '0' % UInt8
     end
-    isneg(n) && (sv[1] = '-' % UInt8)
-    String(sv)
+    isnegative(n) && (sv[1] = '-' % UInt8)
+    unsafe_takestring(sv)
 end
 
 function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
@@ -774,7 +769,7 @@ function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:
             # fast path using mpz_get_str via string(n; base)
             s = codeunits(string(n; base))
             i, j = firstindex(a)-1, length(s)+1
-            lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isneg(n))
+            lasti = min(lastindex(a), firstindex(a) + length(s)-1 - isnegative(n))
             while i < lasti
                 # base ≤ 36: 0-9, plus a-z for 10-35
                 # base > 36: 0-9, plus A-Z for 10-35 and a-z for 36..61
@@ -783,14 +778,14 @@ function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:
             end
             lasti = lastindex(a)
             while i < lasti; a[i+=1] = zero(T); end
-            return isneg(n) ? map!(-,a,a) : a
+            return isnegative(n) ? map!(-,a,a) : a
         elseif a isa StridedVector{<:Base.BitInteger} && stride(a,1) == 1 && ispow2(base) && base-1 ≤ typemax(T)
             # fast path using mpz_export
             origlen = length(a)
             _, writelen = MPZ.export!(a, n; nails = 8sizeof(T) - trailing_zeros(base))
             length(a) != origlen && resize!(a, origlen) # truncate to least-significant digits
             a[begin+writelen:end] .= zero(T)
-            return isneg(n) ? map!(-,a,a) : a
+            return isnegative(n) ? map!(-,a,a) : a
         end
     end
     return invoke(digits!, Tuple{typeof(a), Integer}, a, n; base) # slow generic fallback
@@ -839,7 +834,12 @@ Base.add_with_overflow(a::BigInt, b::BigInt) = a + b, false
 Base.sub_with_overflow(a::BigInt, b::BigInt) = a - b, false
 Base.mul_with_overflow(a::BigInt, b::BigInt) = a * b, false
 
-Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)
+# checked_pow doesn't follow the same promotion rules as the others, above.
+Base.checked_pow(x::BigInt, p::Integer) = x^p
+Base.checked_pow(x::Integer, p::BigInt) = x^p
+Base.checked_pow(x::BigInt, p::BigInt) = x^p
+
+Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)::BigInt
 
 ## streamlined hashing for BigInt, by avoiding allocation from shifts ##
 
@@ -848,7 +848,7 @@ if Limb === UInt64 === UInt
     # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
     # and of hash
 
-    using .Base: hash_uint
+    using .Base: hash_finalizer
 
     function hash_integer(n::BigInt, h::UInt)
         GC.@preserve n begin
@@ -856,9 +856,9 @@ if Limb === UInt64 === UInt
             s == 0 && return hash_integer(0, h)
             p = convert(Ptr{UInt64}, n.d)
             b = unsafe_load(p)
-            h ⊻= hash_uint(ifelse(s < 0, -b, b) ⊻ h)
+            h ⊻= hash_finalizer(ifelse(s < 0, -b, b) ⊻ h)
             for k = 2:abs(s)
-                h ⊻= hash_uint(unsafe_load(p, k) ⊻ h)
+                h ⊻= hash_finalizer(unsafe_load(p, k) ⊻ h)
             end
             return h
         end
@@ -892,7 +892,7 @@ if Limb === UInt64 === UInt
                 return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
             end
             h = hash_integer(pow, h)
-            h ⊻= hash_uint(flipsign(limb, sz) ⊻ h)
+            h ⊻= hash_finalizer(flipsign(limb, sz) ⊻ h)
             for idx = idx+1:asz
                 if shift == 0
                     limb = unsafe_load(ptr, idx)
@@ -906,7 +906,7 @@ if Limb === UInt64 === UInt
                         limb = limb2 << upshift | limb1 >> shift
                     end
                 end
-                h ⊻= hash_uint(limb ⊻ h)
+                h ⊻= hash_finalizer(limb ⊻ h)
             end
             return h
         end
@@ -917,7 +917,7 @@ module MPQ
 
 # Rational{BigInt}
 import .Base: unsafe_rational, __throw_rational_argerror_zero
-import ..GMP: BigInt, MPZ, Limb, isneg, libgmp
+import ..GMP: BigInt, MPZ, Limb, libgmp
 
 gmpq(op::Symbol) = (Symbol(:__gmpq_, op), libgmp)
 
@@ -995,7 +995,7 @@ end
 # define add, sub, mul, div, and their inplace versions
 function add!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
     if iszero(x.den) || iszero(y.den)
-        if iszero(x.den) && iszero(y.den) && isneg(x.num) != isneg(y.num)
+        if iszero(x.den) && iszero(y.den) && isnegative(x.num) != isnegative(y.num)
             throw(DivideError())
         end
         return set!(z, iszero(x.den) ? x : y)
@@ -1008,7 +1008,7 @@ end
 
 function sub!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
     if iszero(x.den) || iszero(y.den)
-        if iszero(x.den) && iszero(y.den) && isneg(x.num) == isneg(y.num)
+        if iszero(x.den) && iszero(y.den) && isnegative(x.num) == isnegative(y.num)
             throw(DivideError())
         end
         iszero(x.den) && return set!(z, x)
@@ -1025,7 +1025,7 @@ function mul!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
         if iszero(x.num) || iszero(y.num)
             throw(DivideError())
         end
-        return set_si!(z, ifelse(xor(isneg(x.num), isneg(y.num)), -1, 1), 0)
+        return set_si!(z, ifelse(xor(isnegative(x.num), isnegative(y.num)), -1, 1), 0)
     end
     zq = _MPQ(z)
     ccall((:__gmpq_mul, libgmp), Cvoid,
@@ -1038,7 +1038,7 @@ function div!(z::Rational{BigInt}, x::Rational{BigInt}, y::Rational{BigInt})
         if iszero(y.den)
             throw(DivideError())
         end
-        isneg(y.num) || return set!(z, x)
+        isnegative(y.num) || return set!(z, x)
         return set_si!(z, flipsign(-1, x.num), 0)
     elseif iszero(y.den)
         return set_si!(z, 0, 1)

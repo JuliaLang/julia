@@ -1,8 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,TYPED
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaLICM' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 @tag = external addrspace(10) global {}, align 16
 
@@ -98,9 +96,6 @@ L3:                                               ; preds = %L3.loopexit, %top
 L4:                                               ; preds = %top
   %current_task112 = getelementptr inbounds {}**, {}*** %1, i64 -12
   %current_task1 = bitcast {}*** %current_task112 to {}**
-  ; TYPED: %3 = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task1, i64 8, {} addrspace(10)* @tag)
-  ; TYPED-NEXT: %4 = bitcast {} addrspace(10)* %3 to i8 addrspace(10)*
-  ; TYPED-NEXT: call void @llvm.memset.p10i8.i64(i8 addrspace(10)* align {{[0-9]+}} %4, i8 0, i64 8, i1 false)
 
   ; OPAQUE: %3 = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task1, i64 8, ptr addrspace(10) @tag)
   ; OPAQUE-NEXT: call void @llvm.memset.p10.i64(ptr addrspace(10) align {{[0-9]+}} %3, i8 0, i64 8, i1 false)
@@ -110,8 +105,6 @@ L4:                                               ; preds = %top
 
 L22:                                              ; preds = %L4, %L22
   %value_phi5 = phi i64 [ 1, %L4 ], [ %5, %L22 ]
-  ; TYPED: %value_phi5 = phi i64 [ 1, %L4 ], [ %6, %L22 ]
-  ; TYPED-NEXT %5 = bitcast {} addrspace(10)* %3 to i64 addrspace(10)*
 
   ; OPAQUE: %value_phi5 = phi i64 [ 1, %L4 ], [ %5, %L22 ]
   ; OPAQUE-NEXT %4 = bitcast ptr addrspace(10) %3 to ptr addrspace(10)
@@ -133,9 +126,6 @@ top:
   br label %preheader
 ; CHECK: preheader:
 preheader:
-; TYPED-NEXT: %alloc = call noalias nonnull {} addrspace(10)* @julia.gc_alloc_obj({}** nonnull %current_task, i64 8, {} addrspace(10)* @tag)
-; TYPED-NEXT: [[casted:%.*]] = bitcast {} addrspace(10)* %alloc to i8 addrspace(10)*
-; TYPED-NEXT: call void @llvm.memset.p10i8.i64(i8 addrspace(10)* align {{[0-9]+}} [[casted]], i8 0, i64 8, i1 false)
 
 ; OPAQUE-NEXT: %alloc = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_obj(ptr nonnull %current_task, i64 8, ptr addrspace(10) @tag)
 ; OPAQUE-NEXT: call void @llvm.memset.p10.i64(ptr addrspace(10) align {{[0-9]+}} %alloc, i8 0, i64 8, i1 false)
@@ -162,7 +152,7 @@ declare void @llvm.lifetime.end.p0i8(i64 immarg, i8* nocapture) #2
 declare void @ijl_gc_queue_root({} addrspace(10)*) #3
 
 ; Function Attrs: allocsize(1)
-declare noalias nonnull {} addrspace(10)* @ijl_gc_pool_alloc(i8*, i32, i32) #1
+declare noalias nonnull {} addrspace(10)* @ijl_gc_small_alloc(i8*, i32, i32, i8*) #1
 
 ; Function Attrs: allocsize(1)
 declare noalias nonnull {} addrspace(10)* @ijl_gc_big_alloc(i8*, i64) #1

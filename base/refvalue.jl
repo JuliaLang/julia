@@ -9,7 +9,7 @@ mutable struct RefValue{T} <: Ref{T}
 end
 RefValue(x::T) where {T} = RefValue{T}(x)
 """
-    isassigned(ref::RefValue) -> Bool
+    isassigned(ref::RefValue)::Bool
 
 Test whether the given [`Ref`](@ref) is associated with a value.
 This is always true for a [`Ref`](@ref) of a bitstype object.
@@ -46,9 +46,9 @@ function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefValue{T})
         # Instead, explicitly load the pointer from the `RefValue`,
         # which also ensures this returns same pointer as the one rooted in the `RefValue` object.
         p = atomic_pointerref(Ptr{Ptr{Cvoid}}(pointer_from_objref(b)), :monotonic)
-    end
-    if p == C_NULL
-        throw(UndefRefError())
+        if p == C_NULL
+            throw(UndefRefError())
+        end
     end
     return p
 end

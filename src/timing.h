@@ -55,6 +55,8 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
 JL_DLLEXPORT void _jl_timing_block_init(char *buf, size_t size, jl_timing_event_t *event);
 JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *cur_block);
 JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *cur_block);
+JL_DLLEXPORT int jl_timing_enabled(void);
+
 
 #ifdef __cplusplus
 }
@@ -66,7 +68,7 @@ JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *cur_block);
 #define HAVE_TIMING_SUPPORT
 #endif
 
-#if defined( USE_TRACY ) || defined( USE_ITTAPI ) || defined( USE_TIMING_COUNTS )
+#if defined( USE_TRACY ) || defined( USE_ITTAPI ) || defined( USE_NVTX ) || defined( USE_TIMING_COUNTS )
 #define ENABLE_TIMINGS
 #endif
 
@@ -113,6 +115,12 @@ typedef struct ___tracy_source_location_data TracySrcLocData;
 
 #ifdef USE_ITTAPI
 #include <ittapi/ittnotify.h>
+#endif
+
+#ifdef USE_NVTX
+#pragma GCC visibility push(default)
+#include <nvtx3/nvToolsExt.h>
+#pragma GCC visibility pop
 #endif
 
 #ifdef __cplusplus
@@ -181,6 +189,7 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str);
         X(STACKWALK)             \
         X(DL_OPEN)               \
         X(JULIA_INIT)            \
+        X(CORE_COMPILER)        \
 
 
 #define JL_TIMING_COUNTERS \
@@ -276,6 +285,20 @@ typedef struct _jl_timing_counts_t {
 #define _ITTAPI_STOP(block)
 #endif
 
+
+#ifdef USE_NVTX
+#define _NVTX_EVENT_MEMBER              nvtxEventAttributes_t nvtx_attrs;
+#define _NVTX_BLOCK_MEMBER              nvtxRangeId_t nvtx_rangeid;
+#define _NVTX_START(block)              (block)->nvtx_rangeid = nvtxDomainRangeStartEx(jl_timing_nvtx_domain, &(block)->event->nvtx_attrs)
+#define _NVTX_STOP(block)               nvtxDomainRangeEnd(jl_timing_nvtx_domain, (block)->nvtx_rangeid)
+#else
+#define _NVTX_EVENT_MEMBER
+#define _NVTX_BLOCK_MEMBER
+#define _NVTX_START(block)
+#define _NVTX_STOP(block)
+#endif
+
+
 /**
  * Top-level jl_timing implementation
  **/
@@ -292,6 +315,7 @@ extern const char *jl_timing_subsystems[(int)JL_TIMING_SUBSYSTEM_LAST];
 struct _jl_timing_event_t { // typedef in julia.h
     _TRACY_EVENT_MEMBER
     _ITTAPI_EVENT_MEMBER
+    _NVTX_EVENT_MEMBER
     _COUNTS_EVENT_MEMBER
 
     int subsystem;
@@ -310,6 +334,7 @@ struct _jl_timing_block_t { // typedef in julia.h
 
     _TRACY_BLOCK_MEMBER
     _ITTAPI_BLOCK_MEMBER
+    _NVTX_BLOCK_MEMBER
     _COUNTS_BLOCK_MEMBER
 
     uint8_t is_running;
@@ -362,6 +387,12 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
 #define _ITTAPI_COUNTER_MEMBER
 #endif
 
+#ifdef USE_NVTX
+#define _NVTX_COUNTER_MEMBER void * __nvtx_null;
+#else
+#define _NVTX_COUNTER_MEMBER
+#endif
+
 #ifdef USE_TRACY
 # define _TRACY_COUNTER_MEMBER jl_tracy_counter_t tracy_counter;
 # else
@@ -376,6 +407,7 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
 
 typedef struct {
     _ITTAPI_COUNTER_MEMBER
+    _NVTX_COUNTER_MEMBER
     _TRACY_COUNTER_MEMBER
     _COUNTS_MEMBER
 } jl_timing_counter_t;

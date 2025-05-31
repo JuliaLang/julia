@@ -19,7 +19,7 @@
 Sampler(::Type{RNG}, ::Type{T}, n::Repetition) where {RNG<:AbstractRNG,T<:AbstractFloat} =
     Sampler(RNG, CloseOpen01(T), n)
 
-# generic random generation function which can be used by RNG implementors
+# generic random generation function which can be used by RNG implementers
 # it is not defined as a fallback rand method as this could create ambiguities
 
 rand(r::AbstractRNG, ::SamplerTrivial{CloseOpen01{Float16}}) =
@@ -57,7 +57,7 @@ Sampler(::Type{<:AbstractRNG}, I::FloatInterval{BigFloat}, ::Repetition) =
     SamplerBigFloat{typeof(I)}(precision(BigFloat))
 
 function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat)
-    precision(z) == sp.prec || throw(ArgumentError("incompatible BigFloat precision"))
+    precision(z) == sp.prec || _throw_argerror("incompatible BigFloat precision")
     limbs = sp.limbs
     rand!(rng, limbs)
     @inbounds begin
@@ -66,7 +66,7 @@ function _rand!(rng::AbstractRNG, z::BigFloat, sp::SamplerBigFloat)
         limbs[end] |= Limb_high_bit
     end
     z.sign = 1
-    GC.@preserve limbs unsafe_copyto!(z.d, pointer(limbs), sp.nlimbs)
+    copyto!(z.d, limbs)
     randbool
 end
 
@@ -130,7 +130,7 @@ rand(r::AbstractRNG, sp::SamplerTrivial{<:UniformBits{T}}) where {T} =
 
 #### BitInteger
 
-# rand_generic methods are intended to help RNG implementors with common operations
+# rand_generic methods are intended to help RNG implementers with common operations
 # we don't call them simply `rand` as this can easily contribute to create
 # ambiguities with user-side methods (forcing the user to resort to @eval)
 
@@ -229,6 +229,9 @@ uint_sup(::Type{<:Base.BitInteger32}) = UInt32
 uint_sup(::Type{<:Union{Int64,UInt64}}) = UInt64
 uint_sup(::Type{<:Union{Int128,UInt128}}) = UInt128
 
+@noinline empty_collection_error() = throw(ArgumentError("collection must be non-empty"))
+
+
 #### Fast
 
 struct SamplerRangeFast{U<:BitUnsigned,T<:BitInteger} <: Sampler{T}
@@ -242,7 +245,7 @@ SamplerRangeFast(r::AbstractUnitRange{T}) where T<:BitInteger =
     SamplerRangeFast(r, uint_sup(T))
 
 function SamplerRangeFast(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
-    isempty(r) && throw(ArgumentError("collection must be non-empty"))
+    isempty(r) && empty_collection_error()
     m = (last(r) - first(r)) % unsigned(T) % U # % unsigned(T) to not propagate sign bit
     bw = (Base.top_set_bit(m)) % UInt # bit-width
     mask = ((1 % U) << bw) - (1 % U)
@@ -294,7 +297,7 @@ rem_knuth(a::T, b::T) where {T<:Unsigned} = b != 0 ? a % b : a
 # maximum multiple of k <= sup decremented by one,
 # that is 0xFFFF...FFFF if k = (typemax(T) - typemin(T)) + 1 and sup == typemax(T) - 1
 # with intentional underflow
-# see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
+# see https://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
 
 # sup == 0 means typemax(T) + 1
 maxmultiple(k::T, sup::T=zero(T)) where {T<:Unsigned} =
@@ -316,7 +319,7 @@ SamplerRangeInt(r::AbstractUnitRange{T}) where T<:BitInteger =
     SamplerRangeInt(r, uint_sup(T))
 
 function SamplerRangeInt(r::AbstractUnitRange{T}, ::Type{U}) where {T,U}
-    isempty(r) && throw(ArgumentError("collection must be non-empty"))
+    isempty(r) && empty_collection_error()
     a = first(r)
     m = (last(r) - first(r)) % unsigned(T) % U
     k = m + one(U)
@@ -362,7 +365,7 @@ struct SamplerRangeNDL{U<:Unsigned,T} <: Sampler{T}
 end
 
 function SamplerRangeNDL(r::AbstractUnitRange{T}) where {T}
-    isempty(r) && throw(ArgumentError("collection must be non-empty"))
+    isempty(r) && empty_collection_error()
     a = first(r)
     U = uint_sup(T)
     s = (last(r) - first(r)) % unsigned(T) % U + one(U) # overflow ok
@@ -375,16 +378,20 @@ function rand(rng::AbstractRNG, sp::SamplerRangeNDL{U,T}) where {U,T}
     s = sp.s
     x = widen(rand(rng, U))
     m = x * s
-    l = m % U
-    if l < s
-        t = mod(-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
-        while l < t
-            x = widen(rand(rng, U))
-            m = x * s
-            l = m % U
-        end
+    r::T = (m % U) < s ? rand_unlikely(rng, s, m) % T :
+           iszero(s)   ? x % T :
+                         (m >> (8*sizeof(U))) % T
+    r + sp.a
+end
+
+# similar to `randn_unlikely` : splitting this unlikely path out results in faster code
+@noinline function rand_unlikely(rng, s::U, m)::U where {U}
+    t = mod(-s, s) # as s is unsigned, -s is equal to 2^L - s in the paper
+    while (m % U) < t
+        x = widen(rand(rng, U))
+        m = x * s
     end
-    (s == 0 ? x : m >> (8*sizeof(U))) % T + sp.a
+    (m >> (8*sizeof(U))) % U
 end
 
 
@@ -401,7 +408,7 @@ end
 function SamplerBigInt(::Type{RNG}, r::AbstractUnitRange{BigInt}, N::Repetition=Val(Inf)
                        ) where {RNG<:AbstractRNG}
     m = last(r) - first(r)
-    m.size < 0 && throw(ArgumentError("collection must be non-empty"))
+    m.size < 0 && empty_collection_error()
     nlimbs = Int(m.size)
     hm = nlimbs == 0 ? Limb(0) : GC.@preserve m unsafe_load(m.d, nlimbs)
     highsp = Sampler(RNG, Limb(0):hm, N)
@@ -457,7 +464,7 @@ rand(rng::AbstractRNG, sp::SamplerSimple{<:AbstractArray,<:Sampler}) =
 ## random values from Dict
 
 function Sampler(::Type{RNG}, t::Dict, ::Repetition) where RNG<:AbstractRNG
-    isempty(t) && throw(ArgumentError("collection must be non-empty"))
+    isempty(t) && empty_collection_error()
     # we use Val(Inf) below as rand is called repeatedly internally
     # even for generating only one random value from t
     SamplerSimple(t, Sampler(RNG, LinearIndices(t.slots), Val(Inf)))
@@ -486,7 +493,7 @@ rand(rng::AbstractRNG, sp::SamplerTag{<:Set,<:Sampler}) = rand(rng, sp.data).fir
 ## random values from BitSet
 
 function Sampler(RNG::Type{<:AbstractRNG}, t::BitSet, n::Repetition)
-    isempty(t) && throw(ArgumentError("collection must be non-empty"))
+    isempty(t) && empty_collection_error()
     SamplerSimple(t, Sampler(RNG, minimum(t):maximum(t), Val(Inf)))
 end
 

@@ -90,17 +90,12 @@ f(x) = (y = h(x); y)
 trace = (try; f(3); catch; stacktrace(catch_backtrace()); end)[1:3]
 can_inline = Bool(Base.JLOptions().can_inline)
 for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false))
-    @test frame.func === typeof(func).name.mt.name
+    @test frame.func === typeof(func).name.singletonname
     # broken until #50082 can be addressed
-    if inlined
-        @test frame.linfo.def.module === which(func, (Any,)).module broken=true
-        @test frame.linfo.def === which(func, (Any,)) broken=true
-        @test frame.linfo.specTypes === Tuple{typeof(func), Int} broken=true
-    else
-        @test frame.linfo.def.module === which(func, (Any,)).module
-        @test frame.linfo.def === which(func, (Any,))
-        @test frame.linfo.specTypes === Tuple{typeof(func), Int}
-    end
+    mi = isa(frame.linfo, Core.CodeInstance) ? frame.linfo.def : frame.linfo
+    @test mi.def.module === which(func, (Any,)).module broken=inlined
+    @test mi.def === which(func, (Any,)) broken=inlined
+    @test mi.specTypes === Tuple{typeof(func), Int} broken=inlined
     # line
     @test frame.file === Symbol(@__FILE__)
     @test !frame.from_c
@@ -108,21 +103,16 @@ for (frame, func, inlined) in zip(trace, [g,h,f], (can_inline, can_inline, false
 end
 end
 
-let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo,
-    li = ccall(:jl_new_method_instance_uninit, Ref{Core.MethodInstance}, ()),
-    sf
-
-    setfield!(li, :uninferred, src, :monotonic)
-    li.specTypes = Tuple{}
-    li.def = @__MODULE__
+let src = Meta.lower(Main, quote let x = 1 end end).args[1]::Core.CodeInfo
+    li = ccall(:jl_method_instance_for_thunk, Ref{Core.MethodInstance}, (Any, Any), src, @__MODULE__)
     sf = StackFrame(:a, :b, 3, li, false, false, 0)
     repr = string(sf)
     @test repr == "Toplevel MethodInstance thunk at b:3"
 end
-let li = typeof(fieldtype).name.mt.cache.func::Core.MethodInstance,
+let li = only(methods(fieldtype)).unspecialized,
     sf = StackFrame(:a, :b, 3, li, false, false, 0),
     repr = string(sf)
-    @test repr == "fieldtype(...) at b:3"
+    @test repr == "fieldtype(::Vararg{Any}) at b:3"
 end
 
 let ctestptr = cglobal((:ctest, "libccalltest")),
@@ -267,4 +257,8 @@ struct F49231{a,b,c,d,e,f,g} end
     end
     str = sprint(Base.show_backtrace, st, context = (:limit=>true, :stacktrace_types_limited => Ref(false), :color=>true, :displaysize=>(50,132)))
     @test contains(str, "[2] \e[0m\e[1m(::$F49231{Vector, Val{…}, Vector{…}, NTuple{…}, $Int, $Int, $Int})\e[22m\e[0m\e[1m(\e[22m\e[90ma\e[39m::\e[0m$Int, \e[90mb\e[39m::\e[0m$Int, \e[90mc\e[39m::\e[0m$Int\e[0m\e[1m)\e[22m\n\e[90m")
+end
+
+@testset "Base.StackTraces docstrings" begin
+    @test isempty(Docs.undocumented_names(StackTraces))
 end

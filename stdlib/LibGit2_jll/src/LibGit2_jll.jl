@@ -3,44 +3,56 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl
 
 baremodule LibGit2_jll
-using Base, Libdl, MbedTLS_jll, LibSSH2_jll
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
-
-const PATH_list = String[]
-const LIBPATH_list = String[]
+using Base, Libdl, LibSSH2_jll
+if !(Sys.iswindows() || Sys.isapple())
+    # On Windows and macOS we use system SSL/crypto libraries
+    using OpenSSL_jll
+end
 
 export libgit2
 
 # These get calculated in __init__()
 const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
+const LIBPATH_list = String[]
 artifact_dir::String = ""
-libgit2_handle::Ptr{Cvoid} = C_NULL
 libgit2_path::String = ""
 
 if Sys.iswindows()
-    const libgit2 = "libgit2.dll"
+    const _libgit2_path = BundledLazyLibraryPath("libgit2.dll")
 elseif Sys.isapple()
-    const libgit2 = "@rpath/libgit2.1.7.dylib"
+    const _libgit2_path = BundledLazyLibraryPath("libgit2.1.9.dylib")
 else
-    const libgit2 = "libgit2.so.1.7"
+    const _libgit2_path = BundledLazyLibraryPath("libgit2.so.1.9")
 end
 
+if Sys.isfreebsd()
+    _libgit2_dependencies = LazyLibrary[libssh2, libssl, libcrypto]
+else
+    _libgit2_dependencies = LazyLibrary[libssh2]
+end
+const libgit2 = LazyLibrary(_libgit2_path, dependencies=_libgit2_dependencies)
+
+function eager_mode()
+    LibSSH2_jll.eager_mode()
+    @static if !(Sys.iswindows() || Sys.isapple())
+        OpenSSL_jll.eager_mode()
+    end
+    dlopen(libgit2)
+end
+is_available() = true
+
 function __init__()
-    global libgit2_handle = dlopen(libgit2)
-    global libgit2_path = dlpath(libgit2_handle)
+    global libgit2_path = string(_libgit2_path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libgit2_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 
-# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
-# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
-# there isn't one.  It instead returns the overall Julia prefix.
-is_available() = true
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_libgit2_path() = libgit2_path
+if Base.generating_output()
+    precompile(eager_mode, ())
+    precompile(is_available, ())
+end
 
 end  # module LibGit2_jll

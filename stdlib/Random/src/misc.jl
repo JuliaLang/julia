@@ -97,7 +97,7 @@ end
 #  size-m subset of A where m is fixed!)
 function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
     require_one_based_indexing(S, A)
-    0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
+    0 <= p <= 1 || _throw_argerror(LazyString("probability ", p, " not in [0,1]"))
     n = length(A)
     p == 1 && return copyto!(resize!(S, n), A)
     empty!(S)
@@ -218,6 +218,21 @@ function shuffle!(r::AbstractRNG, a::AbstractArray)
         i == 1 + mask && (mask = 2 * mask + 1)
     end
     return a
+end
+
+function shuffle!(r::AbstractRNG, a::AbstractArray{Bool})
+    old_count = count(a)
+    len = length(a)
+    uncommon_value = 2old_count <= len
+    fuel = uncommon_value ? old_count : len - old_count
+    fuel == 0 && return a
+    a .= !uncommon_value
+    while fuel > 0
+        k = rand(r, eachindex(a))
+        fuel -= a[k] != uncommon_value
+        a[k] = uncommon_value
+    end
+    a
 end
 
 shuffle!(a::AbstractArray) = shuffle!(default_rng(), a)
