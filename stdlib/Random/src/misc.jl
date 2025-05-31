@@ -203,15 +203,12 @@ function shuffle(rng::AbstractRNG, tup::NTuple{N}) where {N}
         else
             UInt
         end
-        clo = @inbounds let mem = Memory{Ind}(undef, N)
-            shuffle!(rng, copyto!(mem, Base.OneTo(N)))  # just use `randperm!` once it supports `Memory`
-            let mem = mem, tup = tup
-                function closure(i::Int)
-                    @inbounds tup[mem[i]]
-                end
-            end
+        # TODO: use `randperm!` instead of `copyto!` from a unit range once `randperm!` supports `Memory`
+        mem = @inbounds shuffle!(rng, copyto!(Memory{Ind}(undef, N), Base.OneTo(N)))
+        function closure(i::Int)
+            @inbounds tup[mem[i]]
         end
-        ntuple(clo, Val{N}())::typeof(tup)
+        ntuple(closure, Val{N}())::typeof(tup)
     end
 end
 
