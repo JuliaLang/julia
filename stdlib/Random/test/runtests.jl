@@ -1079,14 +1079,12 @@ end
         end
     end
     @testset "not identity" begin
-        function is_not_identity_at_least_once()
-            function f(::Any)
-                tup = ntuple(identity, 9)
-                tup !== shuffle(tup)
-            end
-            @test any(f, 1:1000000)
+        function shuffle_is_identity()
+            tup = ntuple(identity, 9)
+            tup === shuffle(tup)
         end
-        is_not_identity_at_least_once()
+        # shuffling may behave as the identity sometimes, but if it doesn't manage to actually reorder some of the elements at least once, something is wrong
+        @test any((_ -> !shuffle_is_identity()), 1:1000000)
     end
 end
 
