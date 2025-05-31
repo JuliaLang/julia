@@ -38,10 +38,23 @@ The test system supports doing this automatically (see below).
 
 ### Doctests
 
-If you have changed doctests (i.e. any `jldoctest` code block), you should run the doctests before
-preparing a PR. See `doc/README.md` for how to do this. For instructions on writing doctests, see
-`doc/src/devdocs/contributing/jldoctests.md`. Note that the doctests may take up to 15 minutes.
-Do not terminate the doctests before completion. If you are ChatGPT, you may have to increase yield_timeout_ms.
+#### Writing doctests
+
+If you are asked to write new doctests, first review `doc/src/devdocs/contributing/jldoctests.md`
+for best practices.
+
+#### Verifying doctests
+If you have changed any `jldoctest` code blocks you should take
+the following steps to verify your work:
+- Review `doc/src/devdocs/contributing/jldoctests.md`. In particular, determine
+  if any of the changed doctests require filters, labels or setup code.
+- Run the doctests to verify that your change works:
+    - To run doctest with the pre-built juliaup: `make -C doc doctest=true  revise=true JULIA_EXECUTABLE=$HOME/.juliaup/bin/julia`
+    - To run doctest with in-trr julia (preferred): `make -C doc doctest=true revise=true`. Do not pass any other options.
+    - IMPORTANT: The doctests may take up to 15 minutes. Do NOT terminate the doctests before completion. Do NOT use a timeout for doctests.
+    - If you are ChatGPT, you may have to increase yield_timeout_ms.
+
+Follow these steps for EVERY change you make in a doctest.
 
 ### Test changes
 

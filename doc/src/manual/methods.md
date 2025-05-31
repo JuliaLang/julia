@@ -288,13 +288,14 @@ Such specializations are *not* listed by `methods`, as this doesn't create new `
 
 For example, if you create a method
 
-```
-mysum(x::Real, y::Real) = x + y
+```jldoctest mysum_example
+julia> mysum(x::Real, y::Real) = x + y
+mysum (generic function with 1 method)
 ```
 
 you've given the function `mysum` one new method (possibly its only method), and that method takes any pair of `Real` number inputs. But if you then execute
 
-```julia-repl
+```jldoctest mysum_example
 julia> mysum(1, 2)
 3
 
