@@ -1340,7 +1340,7 @@ JL_CALLABLE(jl_f_getglobal)
         jl_atomic_error("getglobal: module binding cannot be read non-atomically");
     else if (order >= jl_memory_order_seq_cst)
         jl_fence();
-    jl_value_t *v = jl_eval_global_var(mod, sym); // relaxed load
+    jl_value_t *v = jl_eval_global_var(mod, sym, jl_current_task->world_age); // relaxed load
     if (order >= jl_memory_order_acquire)
         jl_fence();
     return v;

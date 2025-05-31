@@ -3287,6 +3287,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         jl_perm_symsvec(3, "mod", "name", "binding"),
                         jl_svec(3, jl_module_type, jl_symbol_type, jl_binding_type),
                         jl_emptysvec, 0, 0, 3);
+    jl_globalref_type->name->mayinlinealloc = 0; // not at all worthwhile, since the only constructor returns a boxed object
 
     jl_core_module = jl_new_module(jl_symbol("Core"), NULL);
 

@@ -249,7 +249,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     if (jl_base_module) {
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_atexit"));
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_atexit"), ct->world_age);
         if (f != NULL) {
             jl_value_t **fargs;
             JL_GC_PUSHARGS(fargs, 2);
@@ -357,7 +357,7 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
         jl_task_t *ct = jl_get_current_task();
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_postoutput"));
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_postoutput"), ct->world_age);
         if (f != NULL) {
             JL_TRY {
                 JL_GC_PUSH1(&f);

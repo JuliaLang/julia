@@ -1596,10 +1596,11 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
             jl_value_t *msg)
 {
     jl_value_t *logmsg_func = NULL;
+    jl_task_t *ct = jl_current_task;
     if (jl_base_module) {
-        jl_value_t *corelogging = jl_get_global_value(jl_base_module, jl_symbol("CoreLogging"));
+        jl_value_t *corelogging = jl_get_global_value(jl_base_module, jl_symbol("CoreLogging"), ct->world_age);
         if (corelogging && jl_is_module(corelogging)) {
-            logmsg_func = jl_get_global_value((jl_module_t*)corelogging, jl_symbol("logmsg_shim"));
+            logmsg_func = jl_get_global_value((jl_module_t*)corelogging, jl_symbol("logmsg_shim"), ct->world_age);
         }
     }
     if (!logmsg_func) {

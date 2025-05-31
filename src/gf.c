@@ -512,13 +512,13 @@ JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t w
     ct->world_age = jl_typeinf_world;
     jl_value_t **fargs;
     JL_GC_PUSHARGS(fargs, 4);
-    jl_module_t *CC = (jl_module_t*)jl_get_global_value(jl_core_module, jl_symbol("Compiler"));
+    jl_module_t *CC = (jl_module_t*)jl_get_global_value(jl_core_module, jl_symbol("Compiler"), ct->world_age);
     if (CC != NULL && jl_is_module(CC)) {
         JL_GC_PROMISE_ROOTED(CC);
-        fargs[0] = jl_get_global_value(CC, jl_symbol("NativeInterpreter"));;
+        fargs[0] = jl_get_global_value(CC, jl_symbol("NativeInterpreter"), ct->world_age);
         fargs[1] = jl_box_ulong(world);
         fargs[1] = jl_apply(fargs, 2);
-        fargs[0] = jl_get_global_value(CC, jl_symbol("typeinf_code"));
+        fargs[0] = jl_get_global_value(CC, jl_symbol("typeinf_code"), ct->world_age);
         fargs[2] = (jl_value_t*)mi;
         fargs[3] = jl_true;
         ci = (jl_code_info_t*)jl_apply(fargs, 4);
