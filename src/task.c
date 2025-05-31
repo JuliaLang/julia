@@ -1035,6 +1035,7 @@ main RNG state collision.
 [4]:
 https://discourse.julialang.org/t/linear-relationship-between-xoshiro-tasks/110454
 */
+// if this code is updated, the julia equivalent should be updated as well in Random.fork()
 void jl_rng_split(uint64_t dst[JL_RNG_SIZE], uint64_t src[JL_RNG_SIZE]) JL_NOTSAFEPOINT
 {
     // load and advance the internal LCG state

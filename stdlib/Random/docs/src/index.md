@@ -83,6 +83,7 @@ Random.TaskLocalRNG
 Random.Xoshiro
 Random.MersenneTwister
 Random.RandomDevice
+Random.fork
 ```
 
 ## [Hooking into the `Random` API](@id rand-api-hook)
