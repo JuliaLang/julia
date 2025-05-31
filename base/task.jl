@@ -1212,8 +1212,8 @@ function wait()
         end
         task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
     end
-    set_next_task(task::Task)
-    try_yieldto(ensure_rescheduled)
+    set_next_task(task)
+    return try_yieldto(ensure_rescheduled)
 end
 
 if Sys.iswindows()
