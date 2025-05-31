@@ -1619,7 +1619,7 @@ julia> Iterators.nth(2:2:10, 4)
 julia> Iterators.nth(reshape(1:30, (5,6)), 6)
 6
 
-julia> stateful = Iterators.Stateful(1:10); nth(stateful, 7)
+julia> stateful = Iterators.Stateful(1:10); Iterators.nth(stateful, 7)
 7
 
 julia> first(stateful)
@@ -1635,7 +1635,7 @@ function nth(itr::Cycle{I}, n::Integer) where {I}
         N == 0 && throw(BoundsError(itr, n))
 
         # prevent wrap around behaviour
-        return _nth(itr.xs, ifelse(n > 0, mod1(n, N), n))
+        return _nth(itr.xs, n > 0 ? mod1(n, N) : n)
     else
         return _nth(itr, n)
     end
@@ -1650,7 +1650,7 @@ function nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
         (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
 
         # prevent wrap around behaviour
-        return _nth(torepeat, ifelse(n > 0, mod1(n, k), n))
+        return _nth(torepeat, n > 0 ? mod1(n, k) : n)
     else
         return _nth(itr, n)
     end
@@ -1660,7 +1660,7 @@ Base.@propagate_inbounds _nth(itr::AbstractArray, n) = itr[begin + n-1]
 
 function _nth(itr, n)
     # unrolled version of `first(drop)`
-    n > 0 || throw(ArgumentError("n must be positive"))
+    n > 0 || throw(BoundsError(itr, n))
     y = iterate(itr)
     for i in 1:n-1
         y === nothing && break
