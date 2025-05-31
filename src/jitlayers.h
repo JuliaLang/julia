@@ -671,15 +671,22 @@ private:
     OptSelLayerT OptSelLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT;
-inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT {
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx,
+                                              const DataLayout &DL, const Triple &triple,
+                                              bool toplevel) JL_NOTSAFEPOINT;
+inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx,
+                                                 const DataLayout &DL, const Triple &triple,
+                                                 bool toplevel = true) JL_NOTSAFEPOINT
+{
     auto lock = ctx.getLock();
-    return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), DL, triple), ctx);
+    return orc::ThreadSafeModule(
+        jl_create_llvm_module(name, *ctx.getContext(), DL, triple, toplevel), ctx);
 }
 
 Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
     if (!_shared_module) {
-        _shared_module = jl_create_llvm_module("globals", getContext(), DL, TargetTriple);
+        _shared_module =
+            jl_create_llvm_module("globals", getContext(), DL, TargetTriple, true);
     }
     return *_shared_module;
 }
