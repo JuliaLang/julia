@@ -624,10 +624,11 @@ AbstractArray{T,N}(A::AbstractArray{S,N}) where {T,N,S} = copyto_axcheck!(simila
 ## copying iterators to containers
 
 """
-    collect(element_type, collection)
+    collect(element_type, iterator)
 
-Return an `Array` with the given element type of all items in a collection or iterable.
+Return a mutable array with the given element type of all items in a collection or iterator.
 The result has the same shape and number of dimensions as `collection`.
+The array type may vary based on the type of `iterator` and on the element type.
 
 # Examples
 ```jldoctest
@@ -676,17 +677,18 @@ _array_for(::Type{T}, itr, isz) where {T} = _array_for(T, isz, _similar_shape(it
 """
     collect(iterator)
 
-Return an `Array` of all items in a collection or iterator. For dictionaries, returns
-a `Vector` of `key=>value` [Pair](@ref Pair)s. If the argument is array-like or is an iterator
+Return a mutable array of all items in a collection or iterator. For dictionaries, return
+a vector of `key=>value` [Pair](@ref Pair)s. If the argument is array-like or is an iterator
 with the [`HasShape`](@ref IteratorSize) trait, the result will have the same shape
 and number of dimensions as the argument.
 
 Used by [comprehensions](@ref man-comprehensions) to turn a [generator expression](@ref man-generators)
-into an `Array`. Thus, *on generators*, the square-brackets notation may be used instead of calling `collect`,
+into an array. Thus, *on generators*, the square-brackets notation may be used instead of calling `collect`,
 see second example.
 
 The element type of the returned array is based on the types of the values collected. However, if the
 iterator is empty then the element type of the returned (empty) array is determined by type inference.
+The array type may vary based on the type of `iterator` and on the element type.
 
 # Examples
 
