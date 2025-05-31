@@ -978,11 +978,10 @@ end
     @test accumulate(+, (x^2 for x in 1:3); init=100) == [101, 105, 114]
 end
 
-
-@testset "Iterators.tail_if_any" begin
-    @test Iterators.tail_if_any(()) == ()
-    @test Iterators.tail_if_any((1, 2)) == (2,)
-    @test Iterators.tail_if_any((1,)) == ()
+@testset "issue #58109" begin
+    i = Iterators.map(identity, 3)
+    j = Iterators.map(sqrt, 7)
+    @test (@inferred Base.IteratorSize(i)) === @inferred Base.IteratorSize(eltype([i, j]))
 end
 
 @testset "IteratorSize trait for zip" begin
