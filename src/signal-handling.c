@@ -102,7 +102,7 @@ void jl_init_profile_lock(void)
 #endif
 }
 
-uintptr_t jl_lock_profile_rd_held(void)
+static uintptr_t jl_lock_profile_rd_held(void) JL_NOTSAFEPOINT
 {
 #ifndef _OS_WINDOWS_
     return (uintptr_t)pthread_getspecific(debuginfo_asyncsafe_held);
@@ -111,38 +111,69 @@ uintptr_t jl_lock_profile_rd_held(void)
 #endif
 }
 
-void jl_lock_profile(void)
+int jl_lock_profile(void)
 {
     uintptr_t held = jl_lock_profile_rd_held();
-    if (held++ == 0)
+    if (held == -1)
+        return 0;
+    if (held == 0) {
+        held = -1;
+#ifndef _OS_WINDOWS_
+        pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+#else
+        TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
+#endif
         uv_rwlock_rdlock(&debuginfo_asyncsafe);
+        held = 0;
+    }
+    held++;
 #ifndef _OS_WINDOWS_
     pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 #else
     TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
 #endif
+    return 1;
 }
 
 JL_DLLEXPORT void jl_unlock_profile(void)
 {
     uintptr_t held = jl_lock_profile_rd_held();
-    assert(held);
-    if (--held == 0)
-        uv_rwlock_rdunlock(&debuginfo_asyncsafe);
+    assert(held && held != -1);
+    held--;
 #ifndef _OS_WINDOWS_
     pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
 #else
     TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
 #endif
+    if (held == 0)
+        uv_rwlock_rdunlock(&debuginfo_asyncsafe);
 }
 
-void jl_lock_profile_wr(void)
+int jl_lock_profile_wr(void)
 {
+    uintptr_t held = jl_lock_profile_rd_held();
+    if (held)
+        return 0;
+    held = -1;
+#ifndef _OS_WINDOWS_
+    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+#else
+    TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
+#endif
     uv_rwlock_wrlock(&debuginfo_asyncsafe);
+    return 1;
 }
 
 void jl_unlock_profile_wr(void)
 {
+    uintptr_t held = jl_lock_profile_rd_held();
+    assert(held == -1);
+    held = 0;
+#ifndef _OS_WINDOWS_
+    pthread_setspecific(debuginfo_asyncsafe_held, (void*)held);
+#else
+    TlsSetValue(debuginfo_asyncsafe_held, (void*)held);
+#endif
     uv_rwlock_wrunlock(&debuginfo_asyncsafe);
 }
 

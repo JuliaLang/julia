@@ -569,10 +569,8 @@ int has_covariant_var(jl_datatype_t *ttypes, jl_tvar_t *tv)
 
 void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure)
 {
-    // n.b. we could consider mt->max_args here too, so this optimization
-    //      usually works even if the user forgets the `slurp...` argument, but
-    //      there is discussion that parameter may be going away? (and it is
-    //      already not accurately up-to-date for all tables currently anyways)
+    // TODO: we should consider nparams(closure->type) here too, so this optimization
+    //      usually works even if the user forgets the `slurp...` argument
     if (closure->search_slurp && ml->va) {
         jl_value_t *sig = jl_unwrap_unionall((jl_value_t*)ml->sig);
         size_t nargs = jl_nparams(sig);

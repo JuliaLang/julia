@@ -502,6 +502,8 @@ Base.delete_method(fshadow_m2)
 @test Base.morespecific(fshadow_m3, fshadow_m1)
 @test !Base.morespecific(fshadow_m2, fshadow_m3)
 
+@test_throws "Method of fshadow already disabled" Base.delete_method(fshadow_m2)
+
 # Generated functions without edges must have min_world = 1.
 # N.B.: If changing this, move this test to precompile and make sure
 # that the specialization survives revalidation.

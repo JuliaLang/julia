@@ -417,7 +417,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
             jl_module_t *mod = jl_globalref_mod(f);
             jl_sym_t *name = jl_globalref_name(f);
             jl_binding_t *b = jl_get_binding(mod, name);
-            called = jl_get_binding_value_if_const(b);
+            called = jl_get_latest_binding_value_if_const(b);
         }
         else if (jl_is_quotenode(f)) {
             called = jl_quotenode_value(f);
