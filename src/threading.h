@@ -12,6 +12,8 @@ extern "C" {
 
 #define PROFILE_JL_THREADING            0
 
+extern uv_barrier_t thread_init_done;
+
 extern _Atomic(jl_ptls_t*) jl_all_tls_states JL_GLOBALLY_ROOTED; /* thread local storage */
 
 typedef struct _jl_threadarg_t {
@@ -25,8 +27,8 @@ jl_ptls_t jl_init_threadtls(int16_t tid) JL_NOTSAFEPOINT;
 
 // provided by a threading infrastructure
 void jl_init_threadinginfra(void);
-void jl_gc_mark_threadfun(void *arg);
-void jl_gc_sweep_threadfun(void *arg);
+void jl_parallel_gc_threadfun(void *arg);
+void jl_concurrent_gc_threadfun(void *arg);
 void jl_threadfun(void *arg);
 
 #ifdef __cplusplus

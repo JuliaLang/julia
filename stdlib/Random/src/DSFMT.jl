@@ -65,7 +65,8 @@ function dsfmt_init_gen_rand(s::DSFMT_state, seed::UInt32)
           s.val, seed)
 end
 
-function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{UInt32})
+function dsfmt_init_by_array(s::DSFMT_state, seed::StridedVector{UInt32})
+    strides(seed) == (1,) || throw(ArgumentError("seed must have its stride equal to 1"))
     ccall((:dsfmt_init_by_array,:libdSFMT),
           Cvoid,
           (Ptr{Cvoid}, Ptr{UInt32}, Int32),
@@ -125,15 +126,17 @@ function mulxmod!(f::GF2X, m::GF2X, deg=degree(m))::GF2X
 end
 
 # cache for X^(2i) mod m
-const _squares = Dict{GF2X, Vector{GF2X}}()
+const _squares = Base.Lockable(Dict{GF2X, Vector{GF2X}}())
 
 # compute f^2 mod m
 function sqrmod!(f::GF2X, m::GF2X)::GF2X
     d = degree(m)-1
     0 <= degree(f) <= d || throw(DomainError("f must satisfy 0 <= degree(f) <= degree(m)-1"))
-    sqrs = get!(_squares, m) do
+    sqrs = @lock _squares get(_squares[], m, nothing)
+    if sqrs === nothing
         x2i = GF2X(1)
-        GF2X[copy(mulxmod!(mulxmod!(x2i, m, d+1), m, d+1)) for i=1:d]
+        sqrs = GF2X[copy(mulxmod!(mulxmod!(x2i, m, d+1), m, d+1)) for i=1:d]
+        @lock _squares get!(_squares[], m, sqrs)
     end
     foldl(filter(i->coeff(f, i), 0:degree(f)); init=GF2X(0)) do g, i
         i <= d÷2 ? # optimization for "simple" squares
@@ -153,16 +156,10 @@ function powxmod(e::BigInt, m::GF2X)::GF2X
 end
 
 "Cached jump polynomials for `MersenneTwister`."
-const JumpPolys = Dict{BigInt,GF2X}()
+const JumpPolys = Base.Lockable(Dict{BigInt,GF2X}())
 
-const CharPoly_ref = Ref{GF2X}()
-# Ref because it can not be initialized at load time
-function CharPoly()
-    if !isassigned(CharPoly_ref)
-        CharPoly_ref[] = GF2X(Poly19937)
-    end
-    return CharPoly_ref[]
-end
+# OncePerProcess because it can not be initialized at load time
+const CharPoly = OncePerProcess{GF2X}(() -> GF2X(Poly19937))
 
 """
     calc_jump(steps::Integer)
@@ -174,12 +171,17 @@ less than the period (e.g. ``steps ≪ 2^19937-1``).
 function calc_jump(steps::Integer,
                    charpoly::GF2X=CharPoly())::GF2X
     steps < 0 && throw(DomainError("jump steps must be >= 0 (got $steps)"))
-    if isempty(JumpPolys)
-        JumpPolys[big(10)^20] = GF2X(JPOLY1e20)
+    poly = @lock JumpPolys begin
+        if isempty(JumpPolys[])
+            JumpPolys[][big(10)^20] = GF2X(JPOLY1e20)
+        end
+        get(JumpPolys[], steps, nothing)
     end
-    get!(JumpPolys, steps) do
-        powxmod(big(steps), charpoly)
+    if poly === nothing
+        poly = powxmod(big(steps), charpoly)
+        @lock JumpPolys get!(JumpPolys[], steps, poly)
     end
+    poly
 end
 
 
@@ -194,9 +196,11 @@ function dsfmt_jump(s::DSFMT_state, jp::GF2X)
     work = zeros(Int32, JN32)
     rwork = reinterpret(UInt64, work)
     dsfmt = Vector{UInt64}(undef, nval >> 1)
-    GC.@preserve dsfmt val begin
-        pdsfmt = Base.unsafe_convert(Ptr{Cvoid}, dsfmt)
-        pval = Base.unsafe_convert(Ptr{Cvoid}, val)
+    dsfmtref = Base.cconvert(Ptr{Cvoid}, dsfmt)
+    valref = Base.cconvert(Ptr{Cvoid}, val)
+    GC.@preserve dsfmtref valref begin
+        pdsfmt = Base.unsafe_convert(Ptr{Cvoid}, dsfmtref)
+        pval = Base.unsafe_convert(Ptr{Cvoid}, valref)
         Base.Libc.memcpy(pdsfmt, pval, (nval - 1) * sizeof(Int32))
     end
     dsfmt[end] = UInt64(N*2)

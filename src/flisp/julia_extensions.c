@@ -76,7 +76,7 @@ static int is_wc_cat_id_start(uint32_t wc, utf8proc_category_t cat)
              wc != 0x233f &&  // notslash
              wc != 0x00a6) || // broken bar
 
-            // math symbol (category Sm) whitelist
+            // math symbol (category Sm) allowlist
             (wc >= 0x2140 && wc <= 0x2a1c &&
              ((wc >= 0x2140 && wc <= 0x2144) || // ⅀, ⅁, ⅂, ⅃, ⅄
               wc == 0x223f || wc == 0x22be || wc == 0x22bf || // ∿, ⊾, ⊿
@@ -130,6 +130,9 @@ JL_DLLEXPORT int jl_id_start_char(uint32_t wc)
         return 1;
     if (wc < 0xA1 || wc > 0x10ffff)
         return 0;
+    // "Rightwards Arrow with Lower Hook"
+    if (wc == 0x1f8b2)
+    	return 1;
     return is_wc_cat_id_start(wc, utf8proc_category((utf8proc_int32_t) wc));
 }
 
@@ -147,7 +150,9 @@ JL_DLLEXPORT int jl_id_char(uint32_t wc)
         cat == UTF8PROC_CATEGORY_SK || cat == UTF8PROC_CATEGORY_ME ||
         cat == UTF8PROC_CATEGORY_NO ||
         // primes (single, double, triple, their reverses, and quadruple)
-        (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057))
+        (wc >= 0x2032 && wc <= 0x2037) || (wc == 0x2057) ||
+        // "Rightwards Arrow with Lower Hook"
+        wc == 0x1f8b2)
         return 1;
     return 0;
 }
@@ -405,7 +410,7 @@ value_t fl_string_only_julia_char(fl_context_t *fl_ctx, value_t *args, uint32_t 
     uint8_t *s = (uint8_t*)cvalue_data(args[0]);
     size_t len = cv_len((cvalue_t*)ptr(args[0]));
     uint32_t u = _string_only_julia_char(s, len);
-    if (u == (uint32_t)-1)
+    if (u == UINT32_MAX)
         return fl_ctx->F;
     return fl_list2(fl_ctx, fl_ctx->jl_char_sym, mk_uint32(fl_ctx, u));
 }

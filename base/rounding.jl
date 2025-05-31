@@ -2,7 +2,7 @@
 
 module Rounding
 
-let fenv_consts = Vector{Cint}(undef, 9)
+let fenv_consts = Array{Cint,1}(undef, 9)
     ccall(:jl_get_fenv_consts, Cvoid, (Ptr{Cint},), fenv_consts)
     global const JL_FE_INEXACT = fenv_consts[1]
     global const JL_FE_UNDERFLOW = fenv_consts[2]
@@ -131,15 +131,14 @@ rounds_away_from_zero(t::Tuple{Any,Bool}) = rounds_away_from_zero(t...)
 tie_breaker_is_to_even(t::Tuple{Any,Bool}) = tie_breaker_is_to_even(first(t))
 tie_breaker_rounds_away_from_zero(t::Tuple{Any,Bool}) = tie_breaker_rounds_away_from_zero(t...)
 
-abstract type RoundingIncrementHelper end
-struct FinalBit <: RoundingIncrementHelper end
-struct RoundBit <: RoundingIncrementHelper end
-struct StickyBit <: RoundingIncrementHelper end
+struct FinalBit end
+struct RoundBit end
+struct StickyBit end
 
 function correct_rounding_requires_increment(x, rounding_mode, sign_bit::Bool)
     r = (rounding_mode, sign_bit)
     f = let y = x
-        (z::RoundingIncrementHelper) -> y(z)::Bool
+        (z::Union{FinalBit,RoundBit,StickyBit}) -> y(z)::Bool
     end
     if rounds_to_nearest(r)
         if f(RoundBit())
@@ -282,9 +281,20 @@ function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:ToZero}) where T
         y < x ? nextfloat(y) : y
     end
 end
+function _convert_rounding(::Type{T}, x::Real, r::RoundingMode{:FromZero}) where T<:AbstractFloat
+    y = convert(T,x)::T
+    if x < 0.0
+        y > x ? prevfloat(y) : y
+    else
+        y < x ? nextfloat(y) : y
+    end
+end
+
+
+# Default definitions
 
 """
-    set_zero_subnormals(yes::Bool) -> Bool
+    set_zero_subnormals(yes::Bool)::Bool
 
 If `yes` is `false`, subsequent floating-point operations follow rules for IEEE arithmetic
 on subnormal values ("denormals"). Otherwise, floating-point operations are permitted (but
@@ -301,7 +311,7 @@ break identities such as `(x-y==0) == (x==y)`.
 set_zero_subnormals(yes::Bool) = ccall(:jl_set_zero_subnormals,Int32,(Int8,),yes)==0
 
 """
-    get_zero_subnormals() -> Bool
+    get_zero_subnormals()::Bool
 
 Return `false` if operations on subnormal floating-point values ("denormals") obey rules
 for IEEE arithmetic, and `true` if they might be converted to zeros.
@@ -313,8 +323,8 @@ for IEEE arithmetic, and `true` if they might be converted to zeros.
 get_zero_subnormals() = ccall(:jl_get_zero_subnormals,Int32,())!=0
 
 end #module
+using .Rounding
 
-# Docstring listed here so it appears above the complex docstring.
 """
     round([T,] x, [r::RoundingMode])
     round(x, [r::RoundingMode]; digits::Integer=0, base = 10)
@@ -327,7 +337,7 @@ Without keyword arguments, `x` is rounded to an integer value, returning a value
 thrown if the value is not representable by `T`, similar to [`convert`](@ref).
 
 If the `digits` keyword argument is provided, it rounds to the specified number of digits
-after the decimal place (or before if negative), in base `base`.
+after the decimal place (or before if `digits` is negative), in base `base`.
 
 If the `sigdigits` keyword argument is provided, it rounds to the specified number of
 significant digits, in base `base`.
@@ -336,6 +346,10 @@ The [`RoundingMode`](@ref) `r` controls the direction of the rounding; the defau
 [`RoundNearest`](@ref), which rounds to the nearest integer, with ties (fractional values
 of 0.5) being rounded to the nearest even integer. Note that `round` may give incorrect
 results if the global rounding mode is changed (see [`rounding`](@ref)).
+
+When rounding to a floating point type, will round to integers representable by that type
+(and Inf) rather than true integers. Inf is treated as one ulp greater than the
+`floatmax(T)` for purposes of determining "nearest", similar to [`convert`](@ref).
 
 # Examples
 ```jldoctest
@@ -362,6 +376,12 @@ julia> round(123.456; sigdigits=2)
 
 julia> round(357.913; sigdigits=4, base=2)
 352.0
+
+julia> round(Float16, typemax(UInt128))
+Inf16
+
+julia> floor(Float16, typemax(UInt128))
+Float16(6.55e4)
 ```
 
 !!! note
@@ -388,4 +408,84 @@ julia> round(357.913; sigdigits=4, base=2)
 
 To extend `round` to new numeric types, it is typically sufficient to define `Base.round(x::NewType, r::RoundingMode)`.
 """
-round(T::Type, x)
+function round end
+
+"""
+    trunc([T,] x)
+    trunc(x; digits::Integer= [, base = 10])
+    trunc(x; sigdigits::Integer= [, base = 10])
+
+`trunc(x)` returns the nearest integral value of the same type as `x` whose absolute value
+is less than or equal to the absolute value of `x`.
+
+`trunc(T, x)` converts the result to type `T`, throwing an `InexactError` if the truncated
+value is not representable a `T`.
+
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
+
+To support `trunc` for a new type, define `Base.round(x::NewType, ::RoundingMode{:ToZero})`.
+
+See also: [`%`](@ref rem), [`floor`](@ref), [`unsigned`](@ref), [`unsafe_trunc`](@ref).
+
+# Examples
+```jldoctest
+julia> trunc(2.22)
+2.0
+
+julia> trunc(-2.22, digits=1)
+-2.2
+
+julia> trunc(Int, -2.22)
+-2
+```
+"""
+function trunc end
+
+"""
+    floor([T,] x)
+    floor(x; digits::Integer= [, base = 10])
+    floor(x; sigdigits::Integer= [, base = 10])
+
+`floor(x)` returns the nearest integral value of the same type as `x` that is less than or
+equal to `x`.
+
+`floor(T, x)` converts the result to type `T`, throwing an `InexactError` if the floored
+value is not representable a `T`.
+
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
+
+To support `floor` for a new type, define `Base.round(x::NewType, ::RoundingMode{:Down})`.
+"""
+function floor end
+
+"""
+    ceil([T,] x)
+    ceil(x; digits::Integer= [, base = 10])
+    ceil(x; sigdigits::Integer= [, base = 10])
+
+`ceil(x)` returns the nearest integral value of the same type as `x` that is greater than or
+equal to `x`.
+
+`ceil(T, x)` converts the result to type `T`, throwing an `InexactError` if the ceiled
+value is not representable as a `T`.
+
+Keywords `digits`, `sigdigits` and `base` work as for [`round`](@ref).
+
+To support `ceil` for a new type, define `Base.round(x::NewType, ::RoundingMode{:Up})`.
+"""
+function ceil end
+
+trunc(x; kws...) = round(x, RoundToZero; kws...)
+floor(x; kws...) = round(x, RoundDown; kws...)
+ ceil(x; kws...) = round(x, RoundUp; kws...)
+round(x; kws...) = round(x, RoundNearest; kws...)
+
+trunc(::Type{T}, x) where T = round(T, x, RoundToZero)
+floor(::Type{T}, x) where T = round(T, x, RoundDown)
+ ceil(::Type{T}, x) where T = round(T, x, RoundUp)
+round(::Type{T}, x) where T = round(T, x, RoundNearest)
+
+round(::Type{T}, x, r::RoundingMode) where T = _round_convert(T, round(x, r), x, r)
+_round_convert(::Type{T}, x_integer, x, r) where T = convert(T, x_integer)
+
+round(x::Integer, r::RoundingMode) = x

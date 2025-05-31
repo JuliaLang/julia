@@ -23,29 +23,29 @@ static int jl_is_any(jl_value_t *t1)
     return t1 == (jl_value_t*)jl_any_type;
 }
 
-static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT) JL_NOTSAFEPOINT
+static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int invariant) JL_NOTSAFEPOINT
 {
     if (jl_is_unionall(t1))
         t1 = jl_unwrap_unionall(t1);
     if (jl_is_vararg(t1)) {
-        return jl_type_extract_name(jl_unwrap_vararg(t1));
+        return jl_type_extract_name(jl_unwrap_vararg(t1), invariant);
     }
     else if (jl_is_typevar(t1)) {
-        return jl_type_extract_name(((jl_tvar_t*)t1)->ub);
+        return jl_type_extract_name(((jl_tvar_t*)t1)->ub, invariant);
     }
     else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type || t1 == (jl_value_t*)jl_typeofbottom_type->super) {
         return (jl_value_t*)jl_typeofbottom_type->name; // put Union{} and typeof(Union{}) and Type{Union{}} together for convenience
     }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
-        if (!jl_is_kind(t1))
-            return (jl_value_t*)dt->name;
-        return NULL;
+        if (jl_is_kind(t1) && !invariant)
+            return (jl_value_t*)jl_type_typename;
+        return (jl_value_t*)dt->name;
     }
     else if (jl_is_uniontype(t1)) {
         jl_uniontype_t *u1 = (jl_uniontype_t*)t1;
-        jl_value_t *tn1 = jl_type_extract_name(u1->a);
-        jl_value_t *tn2 = jl_type_extract_name(u1->b);
+        jl_value_t *tn1 = jl_type_extract_name(u1->a, invariant);
+        jl_value_t *tn2 = jl_type_extract_name(u1->b, invariant);
         if (tn1 == tn2)
             return tn1;
         // TODO: if invariant is false, instead find the nearest common ancestor
@@ -71,7 +71,7 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
     }
     else if (jl_is_datatype(t1)) {
         jl_datatype_t *dt = (jl_datatype_t*)t1;
-        if ((invariant || !dt->name->abstract) && !jl_is_kind(t1))
+        if (invariant || !dt->name->abstract || dt->name == jl_type_typename)
             return 1;
         return 0;
     }
@@ -81,8 +81,8 @@ static int jl_type_extract_name_precise(jl_value_t *t1, int invariant)
             return 0;
         if (!jl_type_extract_name_precise(u1->b, invariant))
             return 0;
-        jl_value_t *tn1 = jl_type_extract_name(u1->a);
-        jl_value_t *tn2 = jl_type_extract_name(u1->b);
+        jl_value_t *tn1 = jl_type_extract_name(u1->a, invariant);
+        jl_value_t *tn2 = jl_type_extract_name(u1->b, invariant);
         if (tn1 == tn2)
             return 1;
         return 0;
@@ -277,37 +277,37 @@ static int is_cache_leaf(jl_value_t *ty, int tparam)
     return (jl_is_concrete_type(ty) && (tparam || !jl_is_kind(ty)));
 }
 
-static _Atomic(jl_value_t*) *mtcache_hash_lookup_bp(jl_array_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT
+static _Atomic(jl_value_t*) *mtcache_hash_lookup_bp(jl_genericmemory_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT
 {
-    if (cache == (jl_array_t*)jl_an_empty_vec_any)
+    if (cache == (jl_genericmemory_t*)jl_an_empty_memory_any)
         return NULL;
     _Atomic(jl_value_t*) *pml = jl_table_peek_bp(cache, ty);
     JL_GC_PROMISE_ROOTED(pml); // clang-sa doesn't trust our JL_PROPAGATES_ROOT claim
     return pml;
 }
 
-static void mtcache_hash_insert(_Atomic(jl_array_t*) *cache, jl_value_t *parent, jl_value_t *key, jl_typemap_t *val)
+static void mtcache_hash_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *parent, jl_value_t *key, jl_typemap_t *val)
 {
     int inserted = 0;
-    jl_array_t *a = jl_atomic_load_relaxed(cache);
-    if (a == (jl_array_t*)jl_an_empty_vec_any) {
-        a = jl_alloc_vec_any(16);
-        jl_atomic_store_release(cache, a);
+    jl_genericmemory_t *a = jl_atomic_load_relaxed(pcache);
+    if (a == (jl_genericmemory_t*)jl_an_empty_memory_any) {
+        a = jl_alloc_memory_any(16);
+        jl_atomic_store_release(pcache, a);
         if (parent)
             jl_gc_wb(parent, a);
     }
     a = jl_eqtable_put(a, key, val, &inserted);
     assert(inserted);
-    if (a != jl_atomic_load_relaxed(cache)) {
-        jl_atomic_store_release(cache, a);
+    if (a != jl_atomic_load_relaxed(pcache)) {
+        jl_atomic_store_release(pcache, a);
         if (parent)
             jl_gc_wb(parent, a);
     }
 }
 
-static jl_typemap_t *mtcache_hash_lookup(jl_array_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT
+static jl_typemap_t *mtcache_hash_lookup(jl_genericmemory_t *cache JL_PROPAGATES_ROOT, jl_value_t *ty) JL_NOTSAFEPOINT
 {
-    if (cache == (jl_array_t*)jl_an_empty_vec_any)
+    if (cache == (jl_genericmemory_t*)jl_an_empty_memory_any)
         return (jl_typemap_t*)jl_nothing;
     jl_typemap_t *ml = (jl_typemap_t*)jl_eqtable_get(cache, ty, jl_nothing);
     return ml;
@@ -315,17 +315,17 @@ static jl_typemap_t *mtcache_hash_lookup(jl_array_t *cache JL_PROPAGATES_ROOT, j
 
 // ----- Sorted Type Signature Lookup Matching ----- //
 
-static int jl_typemap_array_visitor(jl_array_t *a, jl_typemap_visitor_fptr fptr, void *closure)
+static int jl_typemap_memory_visitor(jl_genericmemory_t *a, jl_typemap_visitor_fptr fptr, void *closure)
 {
-    size_t i, l = jl_array_len(a);
-    _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_data(a);
+    size_t i, l = a->length;
+    _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*) a->ptr;
     for (i = 1; i < l; i += 2) {
         jl_value_t *d = jl_atomic_load_relaxed(&data[i]);
         JL_GC_PROMISE_ROOTED(d);
         if (d == NULL)
             continue;
-        if (jl_is_array(d)) {
-            if (!jl_typemap_array_visitor((jl_array_t*)d, fptr, closure))
+        if (jl_is_genericmemory(d)) {
+            if (!jl_typemap_memory_visitor((jl_genericmemory_t*)d, fptr, closure))
                 return 0;
         }
         else {
@@ -352,23 +352,23 @@ int jl_typemap_visitor(jl_typemap_t *cache, jl_typemap_visitor_fptr fptr, void *
 {
     if (jl_typeof(cache) == (jl_value_t*)jl_typemap_level_type) {
         jl_typemap_level_t *node = (jl_typemap_level_t*)cache;
-        jl_array_t *a;
+        jl_genericmemory_t *a;
         JL_GC_PUSH1(&a);
         a = jl_atomic_load_relaxed(&node->targ);
-        if (a != (jl_array_t*)jl_an_empty_vec_any)
-            if (!jl_typemap_array_visitor(a, fptr, closure))
+        if (a != (jl_genericmemory_t*)jl_an_empty_memory_any)
+            if (!jl_typemap_memory_visitor(a, fptr, closure))
                 goto exit;
         a = jl_atomic_load_relaxed(&node->arg1);
-        if (a != (jl_array_t*)jl_an_empty_vec_any)
-            if (!jl_typemap_array_visitor(a, fptr, closure))
+        if (a != (jl_genericmemory_t*)jl_an_empty_memory_any)
+            if (!jl_typemap_memory_visitor(a, fptr, closure))
                 goto exit;
         a = jl_atomic_load_relaxed(&node->tname);
-        if (a != (jl_array_t*)jl_an_empty_vec_any)
-            if (!jl_typemap_array_visitor(a, fptr, closure))
+        if (a != (jl_genericmemory_t*)jl_an_empty_memory_any)
+            if (!jl_typemap_memory_visitor(a, fptr, closure))
                 goto exit;
         a = jl_atomic_load_relaxed(&node->name1);
-        if (a != (jl_array_t*)jl_an_empty_vec_any)
-            if (!jl_typemap_array_visitor(a, fptr, closure))
+        if (a != (jl_genericmemory_t*)jl_an_empty_memory_any)
+            if (!jl_typemap_memory_visitor(a, fptr, closure))
                 goto exit;
         if (!jl_typemap_node_visitor(jl_atomic_load_relaxed(&node->linear), fptr, closure))
             goto exit;
@@ -451,12 +451,12 @@ static int concrete_intersects(jl_value_t *t, jl_value_t *ty, int8_t tparam)
 
 // tparam bit 0 is ::Type{T} (vs. T)
 // tparam bit 1 is typename(T) (vs. T)
-static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, int8_t tparam,
+static int jl_typemap_intersection_memory_visitor(jl_genericmemory_t *a, jl_value_t *ty, int8_t tparam,
                                                  int8_t offs, struct typemap_intersection_env *closure)
 {
     JL_GC_PUSH1(&a);
-    size_t i, l = jl_array_len(a);
-    _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_data(a);
+    size_t i, l = a->length;
+    _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*) a->ptr;
     unsigned height = 0;
     jl_datatype_t *tydt = jl_any_type;
     if (tparam & 2) {
@@ -469,7 +469,7 @@ static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, 
             tydt = (jl_datatype_t*)ttype;
         }
         else if (ttype) {
-            ttype = jl_type_extract_name(ttype);
+            ttype = jl_type_extract_name(ttype, tparam & 1);
             tydt = ttype ? (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)ttype)->wrapper) : NULL;
         }
         if (tydt == jl_any_type)
@@ -492,8 +492,8 @@ static int jl_typemap_intersection_array_visitor(jl_array_t *a, jl_value_t *ty, 
                     tname_intersection_dt(tydt, (jl_typename_t*)t, height)) {
                 if ((tparam & 1) && t == (jl_value_t*)jl_typeofbottom_type->name) // skip Type{Union{}} and Type{typeof(Union{})}, since the caller should have already handled those
                     continue;
-                if (jl_is_array(ml)) {
-                    if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, ty, tparam & ~2, offs, closure))
+                if (jl_is_genericmemory(ml)) {
+                    if (!jl_typemap_intersection_memory_visitor((jl_genericmemory_t*)ml, ty, tparam & ~2, offs, closure))
                         goto exit;
                 }
                 else {
@@ -531,9 +531,9 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     // that can be absolutely critical for speed
     register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
     for (;  ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
-        if (closure->max_valid < ml->min_world)
+        if (closure->max_valid < jl_atomic_load_relaxed(&ml->min_world))
             continue;
-        if (closure->min_valid > ml->max_world)
+        if (closure->min_valid > jl_atomic_load_relaxed(&ml->max_world))
             continue;
         jl_svec_t **penv = NULL;
         if (closure->env) {
@@ -569,10 +569,8 @@ int has_covariant_var(jl_datatype_t *ttypes, jl_tvar_t *tv)
 
 void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure)
 {
-    // n.b. we could consider mt->max_args here too, so this optimization
-    //      usually works even if the user forgets the `slurp...` argument, but
-    //      there is discussion that parameter may be going away? (and it is
-    //      already not accurately up-to-date for all tables currently anyways)
+    // TODO: we should consider nparams(closure->type) here too, so this optimization
+    //      usually works even if the user forgets the `slurp...` argument
     if (closure->search_slurp && ml->va) {
         jl_value_t *sig = jl_unwrap_unionall((jl_value_t*)ml->sig);
         size_t nargs = jl_nparams(sig);
@@ -627,21 +625,21 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
             if (jl_has_free_typevars(ty))
                 ty = jl_rewrap_unionall(ty, closure->type);
             JL_GC_PUSH1(&ty);
-            jl_array_t *targ = jl_atomic_load_relaxed(&cache->targ);
-            jl_array_t *tname = jl_atomic_load_relaxed(&cache->tname);
+            jl_genericmemory_t *targ = jl_atomic_load_relaxed(&cache->targ);
+            jl_genericmemory_t *tname = jl_atomic_load_relaxed(&cache->tname);
             int maybe_type = 0;
             int maybe_kind = 0;
             int exclude_typeofbottom = 0;
             jl_value_t *typetype = NULL;
             jl_value_t *name = NULL;
             // pre-check: optimized pre-intersection test to see if `ty` could intersect with any Type or Kind
-            if (targ != (jl_array_t*)jl_an_empty_vec_any || tname != (jl_array_t*)jl_an_empty_vec_any) {
+            if (targ != (jl_genericmemory_t*)jl_an_empty_memory_any || tname != (jl_genericmemory_t*)jl_an_empty_memory_any) {
                 maybe_kind = jl_has_intersect_kind_not_type(ty);
                 maybe_type = maybe_kind || jl_has_intersect_type_not_kind(ty);
                 if (maybe_type && !maybe_kind) {
                     typetype = jl_unwrap_unionall(ty);
                     typetype = jl_is_type_type(typetype) ? jl_tparam0(typetype) : NULL;
-                    name = typetype ? jl_type_extract_name(typetype) : NULL;
+                    name = typetype ? jl_type_extract_name(typetype, 1) : NULL;
                     if (!typetype)
                         exclude_typeofbottom = !jl_subtype((jl_value_t*)jl_typeofbottom_type, ty);
                     else if (jl_is_typevar(typetype))
@@ -651,7 +649,7 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                 }
             }
             // First check for intersections with methods defined on Type{T}, where T was a concrete type
-            if (targ != (jl_array_t*)jl_an_empty_vec_any && maybe_type &&
+            if (targ != (jl_genericmemory_t*)jl_an_empty_memory_any && maybe_type &&
                     (!typetype || jl_has_free_typevars(typetype) || is_cache_leaf(typetype, 1))) { // otherwise cannot contain this particular kind, so don't bother with checking
                 if (!exclude_typeofbottom) {
                     // detect Type{Union{}}, Type{Type{Union{}}}, and Type{typeof(Union{}} and do those early here
@@ -680,18 +678,18 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                         // attempt semi-direct lookup of types via their names
                         // consider the type name first
                         jl_value_t *ml = mtcache_hash_lookup(targ, (jl_value_t*)name);
-                        if (jl_is_array(ml)) {
+                        if (jl_is_genericmemory(ml)) {
                             if (typetype && !jl_has_free_typevars(typetype)) {
                                 // direct lookup of leaf types
                                 if (is_cache_leaf(typetype, 1)) {
-                                    ml = mtcache_hash_lookup((jl_array_t*)ml, typetype);
+                                    ml = mtcache_hash_lookup((jl_genericmemory_t*)ml, typetype);
                                     if (ml != jl_nothing) {
                                         if (!jl_typemap_intersection_visitor((jl_typemap_t*)ml, offs+1, closure)) { JL_GC_POP(); return 0; }
                                     }
                                 }
                             }
                             else {
-                                if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, ty, 1, offs, closure)) { JL_GC_POP(); return 0; }
+                                if (!jl_typemap_intersection_memory_visitor((jl_genericmemory_t*)ml, ty, 1, offs, closure)) { JL_GC_POP(); return 0; }
                             }
                         }
                         else if (ml != jl_nothing) {
@@ -699,43 +697,43 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                         }
                     }
                     else {
-                        // else an array scan is required to consider all the possible subtypes
-                        if (!jl_typemap_intersection_array_visitor(targ, exclude_typeofbottom && !maybe_kind ? ty : (jl_value_t*)jl_any_type, 3, offs, closure)) { JL_GC_POP(); return 0; }
+                        // else a scan is required to consider all the possible subtypes
+                        if (!jl_typemap_intersection_memory_visitor(targ, exclude_typeofbottom && !maybe_kind ? ty : (jl_value_t*)jl_any_type, 3, offs, closure)) { JL_GC_POP(); return 0; }
                     }
                 }
             }
-            jl_array_t *cachearg1 = jl_atomic_load_relaxed(&cache->arg1);
-            if (cachearg1 != (jl_array_t*)jl_an_empty_vec_any) {
+            jl_genericmemory_t *cachearg1 = jl_atomic_load_relaxed(&cache->arg1);
+            if (cachearg1 != (jl_genericmemory_t*)jl_an_empty_memory_any) {
                 if (is_cache_leaf(ty, 0)) {
                     jl_typename_t *name = ty == jl_bottom_type ? jl_typeofbottom_type->name : ((jl_datatype_t*)ty)->name;
                     // direct lookup of leaf types
                     jl_value_t *ml = mtcache_hash_lookup(cachearg1, (jl_value_t*)name);
-                    if (jl_is_array(ml))
-                        ml = mtcache_hash_lookup((jl_array_t*)ml, ty);
+                    if (jl_is_genericmemory(ml))
+                        ml = mtcache_hash_lookup((jl_genericmemory_t*)ml, ty);
                     if (ml != jl_nothing) {
                         if (!jl_typemap_intersection_visitor(ml, offs+1, closure)) { JL_GC_POP(); return 0; }
                     }
                 }
                 else {
-                    jl_value_t *name = jl_type_extract_name(ty);
+                    jl_value_t *name = jl_type_extract_name(ty, 0);
                     if (name && jl_type_extract_name_precise(ty, 0)) {
                         // direct lookup of leaf types
                         jl_value_t *ml = mtcache_hash_lookup(cachearg1, name);
-                        if (jl_is_array(ml)) {
-                            if (!jl_typemap_intersection_array_visitor((jl_array_t*)ml, ty, 0, offs, closure)) { JL_GC_POP(); return 0; }
+                        if (jl_is_genericmemory(ml)) {
+                            if (!jl_typemap_intersection_memory_visitor((jl_genericmemory_t*)ml, ty, 0, offs, closure)) { JL_GC_POP(); return 0; }
                         }
                         else {
                             if (!jl_typemap_intersection_visitor((jl_typemap_t*)ml, offs+1, closure)) { JL_GC_POP(); return 0; }
                         }
                     }
                     else {
-                        // else an array scan is required to check subtypes
-                        if (!jl_typemap_intersection_array_visitor(cachearg1, ty, 2, offs, closure)) { JL_GC_POP(); return 0; }
+                        // else a scan is required to check subtypes
+                        if (!jl_typemap_intersection_memory_visitor(cachearg1, ty, 2, offs, closure)) { JL_GC_POP(); return 0; }
                     }
                 }
             }
             // Next check for intersections with methods defined on Type{T}, where T was not concrete (it might even have been a TypeVar), but had an extractable TypeName
-            if (tname != (jl_array_t*)jl_an_empty_vec_any && maybe_type) {
+            if (tname != (jl_genericmemory_t*)jl_an_empty_memory_any && maybe_type) {
                 if (!exclude_typeofbottom || (!typetype && jl_isa((jl_value_t*)jl_typeofbottom_type, ty))) {
                     // detect Type{Union{}}, Type{Type{Union{}}}, and Type{typeof(Union{}} and do those early here
                     // otherwise the possibility of encountering `Type{Union{}}` in this intersection may
@@ -775,14 +773,14 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                     }
                 }
                 else {
-                    // else an array scan is required to check subtypes of typetype too
+                    // else a scan is required to check subtypes of typetype too
                     tname = jl_atomic_load_relaxed(&cache->tname);  // may be GC'd earlier
-                    if (!jl_typemap_intersection_array_visitor(tname, exclude_typeofbottom && !maybe_kind ? ty : (jl_value_t*)jl_any_type, 3, offs, closure)) { JL_GC_POP(); return 0; }
+                    if (!jl_typemap_intersection_memory_visitor(tname, exclude_typeofbottom && !maybe_kind ? ty : (jl_value_t*)jl_any_type, 3, offs, closure)) { JL_GC_POP(); return 0; }
                 }
             }
-            jl_array_t *name1 = jl_atomic_load_relaxed(&cache->name1);
-            if (name1 != (jl_array_t*)jl_an_empty_vec_any) {
-                jl_value_t *name = jl_type_extract_name(ty);
+            jl_genericmemory_t *name1 = jl_atomic_load_relaxed(&cache->name1);
+            if (name1 != (jl_genericmemory_t*)jl_an_empty_memory_any) {
+                jl_value_t *name = jl_type_extract_name(ty, 0);
                 if (name && jl_type_extract_name_precise(ty, 0)) {
                     jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
                     // direct lookup of concrete types
@@ -798,8 +796,8 @@ int jl_typemap_intersection_visitor(jl_typemap_t *map, int offs,
                     }
                 }
                 else {
-                    // else an array scan is required to check subtypes
-                    if (!jl_typemap_intersection_array_visitor(name1, ty, 2, offs, closure)) { JL_GC_POP(); return 0; }
+                    // else a scan is required to check subtypes
+                    if (!jl_typemap_intersection_memory_visitor(name1, ty, 2, offs, closure)) { JL_GC_POP(); return 0; }
                 }
             }
             JL_GC_POP();
@@ -836,9 +834,7 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
     size_t n = jl_nparams(unw);
     int typesisva = n == 0 ? 0 : jl_is_vararg(jl_tparam(unw, n-1));
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
-        if (search->max_valid < ml->min_world)
-            continue;
-        if (search->min_valid > ml->max_world)
+        if (search->world < jl_atomic_load_relaxed(&ml->min_world) || search->world > jl_atomic_load_relaxed(&ml->max_world))
             continue;
         size_t lensig = jl_nparams(jl_unwrap_unionall((jl_value_t*)ml->sig));
         if (lensig == n || (ml->va && lensig <= n+1)) {
@@ -877,24 +873,7 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
                     }
                 }
                 if (ismatch) {
-                    if (search->world < ml->min_world) {
-                        // ignore method table entries that are part of a later world
-                        if (search->max_valid >= ml->min_world)
-                            search->max_valid = ml->min_world - 1;
-                    }
-                    else if (search->world > ml->max_world) {
-                        // ignore method table entries that have been replaced in the current world
-                        if (search->min_valid <= ml->max_world)
-                            search->min_valid = ml->max_world + 1;
-                    }
-                    else {
-                        // intersect the env valid range with method's valid range
-                        if (search->min_valid < ml->min_world)
-                            search->min_valid = ml->min_world;
-                        if (search->max_valid > ml->max_world)
-                            search->max_valid = ml->max_world;
-                        return ml;
-                    }
+                    return ml;
                 }
             }
             if (resetenv)
@@ -908,7 +887,7 @@ static jl_typemap_entry_t *jl_typemap_entry_lookup_by_type(
         jl_typemap_entry_t *ml, struct jl_typemap_assoc *search)
 {
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
-        if (search->world < ml->min_world || search->world > ml->max_world)
+        if (search->world < jl_atomic_load_relaxed(&ml->min_world) || search->world > jl_atomic_load_relaxed(&ml->max_world))
             continue;
         // unroll the first few cases here, to the extent that is possible to do fast and easily
         jl_value_t *types = search->types;
@@ -989,12 +968,12 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
             if (jl_is_type_type(ty)) {
                 jl_value_t *a0 = jl_tparam0(ty);
                 if (is_cache_leaf(a0, 1)) {
-                    jl_array_t *targ = jl_atomic_load_relaxed(&cache->targ);
-                    if (targ != (jl_array_t*)jl_an_empty_vec_any) {
+                    jl_genericmemory_t *targ = jl_atomic_load_relaxed(&cache->targ);
+                    if (targ != (jl_genericmemory_t*)jl_an_empty_memory_any) {
                         jl_typename_t *name = a0 == jl_bottom_type ? jl_typeofbottom_type->name : ((jl_datatype_t*)a0)->name;
                         jl_value_t *ml = mtcache_hash_lookup(targ, (jl_value_t*)name);
-                        if (jl_is_array(ml))
-                            ml = mtcache_hash_lookup((jl_array_t*)ml, a0);
+                        if (jl_is_genericmemory(ml))
+                            ml = mtcache_hash_lookup((jl_genericmemory_t*)ml, a0);
                         if (ml != jl_nothing) {
                             jl_typemap_entry_t *li = jl_typemap_assoc_by_type((jl_typemap_t*)ml, search, offs + 1, subtype);
                             if (li) return li;
@@ -1004,12 +983,12 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                 }
             }
             if (is_cache_leaf(ty, 0)) {
-                jl_array_t *cachearg1 = jl_atomic_load_relaxed(&cache->arg1);
-                if (cachearg1 != (jl_array_t*)jl_an_empty_vec_any) {
+                jl_genericmemory_t *cachearg1 = jl_atomic_load_relaxed(&cache->arg1);
+                if (cachearg1 != (jl_genericmemory_t*)jl_an_empty_memory_any) {
                     jl_typename_t *name = ty == jl_bottom_type ? jl_typeofbottom_type->name : ((jl_datatype_t*)ty)->name;
                     jl_value_t *ml = mtcache_hash_lookup(cachearg1, (jl_value_t*)name);
-                    if (jl_is_array(ml))
-                        ml = mtcache_hash_lookup((jl_array_t*)ml, ty);
+                    if (jl_is_genericmemory(ml))
+                        ml = mtcache_hash_lookup((jl_genericmemory_t*)ml, ty);
                     if (ml != jl_nothing) {
                         jl_typemap_entry_t *li = jl_typemap_assoc_by_type((jl_typemap_t*)ml, search, offs + 1, subtype);
                         if (li) return li;
@@ -1020,9 +999,9 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
         }
         if (ty || subtype) {
             // now look at the optimized TypeName caches
-            jl_array_t *tname = jl_atomic_load_relaxed(&cache->tname);
-            if (tname != (jl_array_t*)jl_an_empty_vec_any) {
-                jl_value_t *a0 = ty && jl_is_type_type(ty) ? jl_type_extract_name(jl_tparam0(ty)) : NULL;
+            jl_genericmemory_t *tname = jl_atomic_load_relaxed(&cache->tname);
+            if (tname != (jl_genericmemory_t*)jl_an_empty_memory_any) {
+                jl_value_t *a0 = ty && jl_is_type_type(ty) ? jl_type_extract_name(jl_tparam0(ty), 1) : NULL;
                 if (a0) { // TODO: if we start analyzing Union types in jl_type_extract_name, then a0 might be over-approximated here, leading us to miss possible subtypes
                     jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper);
                     while (1) {
@@ -1039,9 +1018,10 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                 }
                 else {
                     if (!ty || !jl_has_empty_intersection((jl_value_t*)jl_type_type, ty)) {
+                        jl_genericmemory_t *tname = jl_atomic_load_relaxed(&cache->tname); // reload after type-intersect
                         // couldn't figure out unique `a0` initial point, so scan all for matches
-                        size_t i, l = jl_array_len(tname);
-                        _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_ptr_data(tname);
+                        size_t i, l = tname->length;
+                        _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*) jl_genericmemory_ptr_data(tname);
                         JL_GC_PUSH1(&tname);
                         for (i = 1; i < l; i += 2) {
                             jl_typemap_t *ml = jl_atomic_load_relaxed(&data[i]);
@@ -1057,10 +1037,10 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                     }
                 }
             }
-            jl_array_t *name1 = jl_atomic_load_relaxed(&cache->name1);
-            if (name1 != (jl_array_t*)jl_an_empty_vec_any) {
+            jl_genericmemory_t *name1 = jl_atomic_load_relaxed(&cache->name1);
+            if (name1 != (jl_genericmemory_t*)jl_an_empty_memory_any) {
                 if (ty) {
-                    jl_value_t *a0 = jl_type_extract_name(ty);
+                    jl_value_t *a0 = jl_type_extract_name(ty, 0);
                     if (a0) { // TODO: if we start analyzing Union types in jl_type_extract_name, then a0 might be over-approximated here, leading us to miss possible subtypes
                         jl_datatype_t *super = (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper);
                         while (1) {
@@ -1079,8 +1059,8 @@ jl_typemap_entry_t *jl_typemap_assoc_by_type(
                 }
                 else {
                     // doing subtype, but couldn't figure out unique `ty`, so scan all for supertypes
-                    size_t i, l = jl_array_len(name1);
-                    _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_ptr_data(name1);
+                    size_t i, l = name1->length;
+                    _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*) jl_genericmemory_ptr_data(name1);
                     JL_GC_PUSH1(&name1);
                     for (i = 1; i < l; i += 2) {
                         jl_typemap_t *ml = jl_atomic_load_relaxed(&data[i]);
@@ -1119,7 +1099,7 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
     // some manually-unrolled common special cases
     while (ml->simplesig == (void*)jl_nothing && ml->guardsigs == jl_emptysvec && ml->isleafsig) {
         // use a tight loop for as long as possible
-        if (world >= ml->min_world && world <= ml->max_world) {
+        if (world >= jl_atomic_load_relaxed(&ml->min_world) && world <= jl_atomic_load_relaxed(&ml->max_world)) {
             if (n == jl_nparams(ml->sig) && jl_typeof(arg1) == jl_tparam(ml->sig, 0)) {
                 if (n == 1)
                     return ml;
@@ -1144,7 +1124,7 @@ jl_typemap_entry_t *jl_typemap_entry_assoc_exact(jl_typemap_entry_t *ml, jl_valu
     }
 
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
-        if (world < ml->min_world || world > ml->max_world)
+        if (world < jl_atomic_load_relaxed(&ml->min_world) || world > jl_atomic_load_relaxed(&ml->max_world))
             continue; // ignore replaced methods
         size_t lensig = jl_nparams(ml->sig);
         if (lensig == n || (ml->va && lensig <= n+1)) {
@@ -1198,27 +1178,27 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
         jl_value_t *a1 = (offs == 0 ? arg1 : args[offs - 1]);
         jl_value_t *ty = jl_typeof(a1);
         assert(jl_is_datatype(ty));
-        jl_array_t *targ = jl_atomic_load_relaxed(&cache->targ);
-        if (targ != (jl_array_t*)jl_an_empty_vec_any && is_cache_leaf(a1, 1)) {
+        jl_genericmemory_t *targ = jl_atomic_load_relaxed(&cache->targ);
+        if (targ != (jl_genericmemory_t*)jl_an_empty_memory_any && is_cache_leaf(a1, 1)) {
             jl_typename_t *name = a1 == jl_bottom_type ? jl_typeofbottom_type->name : ((jl_datatype_t*)a1)->name;
             jl_value_t *ml_or_cache = mtcache_hash_lookup(targ, (jl_value_t*)name);
-            if (jl_is_array(ml_or_cache))
-                ml_or_cache = mtcache_hash_lookup((jl_array_t*)ml_or_cache, a1);
+            if (jl_is_genericmemory(ml_or_cache))
+                ml_or_cache = mtcache_hash_lookup((jl_genericmemory_t*)ml_or_cache, a1);
             jl_typemap_entry_t *ml = jl_typemap_assoc_exact(ml_or_cache, arg1, args, n, offs+1, world);
             if (ml) return ml;
         }
-        jl_array_t *cachearg1 = jl_atomic_load_relaxed(&cache->arg1);
-        if (cachearg1 != (jl_array_t*)jl_an_empty_vec_any && is_cache_leaf(ty, 0)) {
+        jl_genericmemory_t *cachearg1 = jl_atomic_load_relaxed(&cache->arg1);
+        if (cachearg1 != (jl_genericmemory_t*)jl_an_empty_memory_any && is_cache_leaf(ty, 0)) {
             jl_typename_t *name = ty == jl_bottom_type ? jl_typeofbottom_type->name : ((jl_datatype_t*)ty)->name;
             jl_value_t *ml_or_cache = mtcache_hash_lookup(cachearg1, (jl_value_t*)name);
-            if (jl_is_array(ml_or_cache))
-                ml_or_cache = mtcache_hash_lookup((jl_array_t*)ml_or_cache, ty);
+            if (jl_is_genericmemory(ml_or_cache))
+                ml_or_cache = mtcache_hash_lookup((jl_genericmemory_t*)ml_or_cache, ty);
             jl_typemap_entry_t *ml = jl_typemap_assoc_exact((jl_typemap_t*)ml_or_cache, arg1, args, n, offs+1, world);
             if (ml) return ml;
         }
-        jl_array_t *tname = jl_atomic_load_relaxed(&cache->tname);
-        if (jl_is_kind(ty) && tname != (jl_array_t*)jl_an_empty_vec_any) {
-            jl_value_t *name = jl_type_extract_name(a1);
+        jl_genericmemory_t *tname = jl_atomic_load_relaxed(&cache->tname);
+        if (jl_is_kind(ty) && tname != (jl_genericmemory_t*)jl_an_empty_memory_any) {
+            jl_value_t *name = jl_type_extract_name(a1, 1);
             if (name) {
                 if (ty != (jl_value_t*)jl_datatype_type)
                     a1 = jl_unwrap_unionall(((jl_typename_t*)name)->wrapper);
@@ -1235,8 +1215,8 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
             }
             else {
                 // couldn't figure out unique `name` initial point, so must scan all for matches
-                size_t i, l = jl_array_len(tname);
-                _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*)jl_array_ptr_data(tname);
+                size_t i, l = tname->length;
+                _Atomic(jl_typemap_t*) *data = (_Atomic(jl_typemap_t*)*) jl_genericmemory_ptr_data(tname);
                 JL_GC_PUSH1(&tname);
                 for (i = 1; i < l; i += 2) {
                     jl_typemap_t *ml_or_cache = jl_atomic_load_relaxed(&data[i]);
@@ -1251,8 +1231,8 @@ jl_typemap_entry_t *jl_typemap_level_assoc_exact(jl_typemap_level_t *cache, jl_v
                 JL_GC_POP();
             }
         }
-        jl_array_t *name1 = jl_atomic_load_relaxed(&cache->name1);
-        if (name1 != (jl_array_t*)jl_an_empty_vec_any) {
+        jl_genericmemory_t *name1 = jl_atomic_load_relaxed(&cache->name1);
+        if (name1 != (jl_genericmemory_t*)jl_an_empty_memory_any) {
             while (1) {
                 name1 = jl_atomic_load_relaxed(&cache->name1); // reload after tree descent (which may hit safepoints)
                 jl_typemap_t *ml_or_cache = mtcache_hash_lookup(
@@ -1297,25 +1277,26 @@ static jl_typemap_level_t *jl_new_typemap_level(void)
     jl_typemap_level_t *cache =
         (jl_typemap_level_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typemap_level_t),
                                          jl_typemap_level_type);
-    jl_atomic_store_relaxed(&cache->arg1, (jl_array_t*)jl_an_empty_vec_any);
-    jl_atomic_store_relaxed(&cache->targ, (jl_array_t*)jl_an_empty_vec_any);
-    jl_atomic_store_relaxed(&cache->name1, (jl_array_t*)jl_an_empty_vec_any);
-    jl_atomic_store_relaxed(&cache->tname, (jl_array_t*)jl_an_empty_vec_any);
+    jl_atomic_store_relaxed(&cache->arg1, (jl_genericmemory_t*)jl_an_empty_memory_any);
+    jl_atomic_store_relaxed(&cache->targ, (jl_genericmemory_t*)jl_an_empty_memory_any);
+    jl_atomic_store_relaxed(&cache->name1, (jl_genericmemory_t*)jl_an_empty_memory_any);
+    jl_atomic_store_relaxed(&cache->tname, (jl_genericmemory_t*)jl_an_empty_memory_any);
     jl_atomic_store_relaxed(&cache->linear, (jl_typemap_entry_t*)jl_nothing);
     jl_atomic_store_relaxed(&cache->any, jl_nothing);
     return cache;
 }
 
-static void jl_typemap_array_insert_(
-        jl_typemap_t *map, _Atomic(jl_array_t*) *pcache, jl_value_t *key, jl_typemap_entry_t *newrec,
+static void jl_typemap_memory_insert_(
+        jl_typemap_t *map, _Atomic(jl_genericmemory_t*) *pcache, jl_value_t *key, jl_typemap_entry_t *newrec,
         jl_value_t *parent, int8_t tparam, int8_t offs, jl_value_t *doublesplit);
 
 static jl_value_t *jl_method_convert_list_to_cache(
         jl_typemap_t *map, jl_typemap_entry_t *ml, int8_t tparam, int8_t offs, int8_t doublesplit)
 {
-    jl_value_t *cache = doublesplit ? jl_an_empty_vec_any : (jl_value_t*)jl_new_typemap_level();
+    _Atomic(jl_genericmemory_t*) dblcache = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    jl_typemap_level_t *cache = doublesplit ? NULL : jl_new_typemap_level();
     jl_typemap_entry_t *next = NULL;
-    JL_GC_PUSH3(&cache, &next, &ml);
+    JL_GC_PUSH4(&cache, &dblcache, &next, &ml);
     while (ml != (void*)jl_nothing) {
         next = jl_atomic_load_relaxed(&ml->next);
         jl_atomic_store_relaxed(&ml->next, (jl_typemap_entry_t*)jl_nothing);
@@ -1336,14 +1317,14 @@ static jl_value_t *jl_method_convert_list_to_cache(
                 assert(jl_is_type_type(key));
                 key = jl_tparam0(key);
             }
-            jl_typemap_array_insert_(map, (_Atomic(jl_array_t*)*)&cache, key, ml, NULL, 0, offs, NULL);
+            jl_typemap_memory_insert_(map, &dblcache, key, ml, NULL, 0, offs, NULL);
         }
         else
-            jl_typemap_level_insert_(map, (jl_typemap_level_t*)cache, ml, offs);
+            jl_typemap_level_insert_(map, cache, ml, offs);
         ml = next;
     }
     JL_GC_POP();
-    return cache;
+    return doublesplit ? (jl_value_t*)jl_atomic_load_relaxed(&dblcache) : (jl_value_t*)cache;
 }
 
 static void jl_typemap_list_insert_(
@@ -1371,9 +1352,9 @@ static void jl_typemap_insert_generic(
         jl_typemap_entry_t *newrec, int8_t tparam, int8_t offs, jl_value_t *doublesplit)
 {
     jl_value_t *ml = jl_atomic_load_relaxed(pml);
-    if (jl_is_array(ml)) {
+    if (jl_is_genericmemory(ml)) {
         assert(doublesplit);
-        jl_typemap_array_insert_(map, (_Atomic(jl_array_t*)*)pml, doublesplit, newrec, parent, 0, offs, NULL);
+        jl_typemap_memory_insert_(map, (_Atomic(jl_genericmemory_t*)*)pml, doublesplit, newrec, parent, 0, offs, NULL);
         return;
     }
     if (jl_typeof(ml) == (jl_value_t*)jl_typemap_level_type) {
@@ -1389,7 +1370,7 @@ static void jl_typemap_insert_generic(
         jl_atomic_store_release(pml, ml);
         jl_gc_wb(parent, ml);
         if (doublesplit)
-            jl_typemap_array_insert_(map, (_Atomic(jl_array_t*)*)pml, doublesplit, newrec, parent, 0, offs, NULL);
+            jl_typemap_memory_insert_(map, (_Atomic(jl_genericmemory_t*)*)pml, doublesplit, newrec, parent, 0, offs, NULL);
         else
             jl_typemap_level_insert_(map, (jl_typemap_level_t*)ml, newrec, offs);
         return;
@@ -1399,16 +1380,16 @@ static void jl_typemap_insert_generic(
         parent, newrec);
 }
 
-static void jl_typemap_array_insert_(
-        jl_typemap_t *map, _Atomic(jl_array_t*) *pcache, jl_value_t *key, jl_typemap_entry_t *newrec,
+static void jl_typemap_memory_insert_(
+        jl_typemap_t *map, _Atomic(jl_genericmemory_t*) *pcache, jl_value_t *key, jl_typemap_entry_t *newrec,
         jl_value_t *parent, int8_t tparam, int8_t offs, jl_value_t *doublesplit)
 {
-    jl_array_t *cache = jl_atomic_load_relaxed(pcache);
+    jl_genericmemory_t *cache = jl_atomic_load_relaxed(pcache);
     _Atomic(jl_value_t*) *pml = mtcache_hash_lookup_bp(cache, key);
     if (pml == NULL)
         mtcache_hash_insert(pcache, parent, key, (jl_typemap_t*)newrec);
     else
-        jl_typemap_insert_generic(map, pml, (jl_value_t*)cache, newrec, tparam, offs + (doublesplit ? 0 : 1), doublesplit);
+        jl_typemap_insert_generic(map, pml, (jl_value_t*) cache, newrec, tparam, offs + (doublesplit ? 0 : 1), doublesplit);
 }
 
 static void jl_typemap_level_insert_(
@@ -1451,13 +1432,13 @@ static void jl_typemap_level_insert_(
             jl_value_t *a0 = jl_tparam0(t1);
             if (is_cache_leaf(a0, 1)) {
                 jl_typename_t *name = a0 == jl_bottom_type ? jl_typeofbottom_type->name : ((jl_datatype_t*)a0)->name;
-                jl_typemap_array_insert_(map, &cache->targ, (jl_value_t*)name, newrec, (jl_value_t*)cache, 1, offs, jl_is_datatype(name->wrapper) ? NULL : a0);
+                jl_typemap_memory_insert_(map, &cache->targ, (jl_value_t*)name, newrec, (jl_value_t*)cache, 1, offs, jl_is_datatype(name->wrapper) ? NULL : a0);
                 return;
             }
         }
         if (is_cache_leaf(t1, 0)) {
             jl_typename_t *name = t1 == jl_bottom_type ? jl_typeofbottom_type->name : ((jl_datatype_t*)t1)->name;
-            jl_typemap_array_insert_(map, &cache->arg1, (jl_value_t*)name, newrec, (jl_value_t*)cache, 0, offs, jl_is_datatype(name->wrapper) ? NULL : t1);
+            jl_typemap_memory_insert_(map, &cache->arg1, (jl_value_t*)name, newrec, (jl_value_t*)cache, 0, offs, jl_is_datatype(name->wrapper) ? NULL : t1);
             return;
         }
 
@@ -1465,14 +1446,14 @@ static void jl_typemap_level_insert_(
         jl_value_t *a0;
         t1 = jl_unwrap_unionall(t1);
         if (jl_is_type_type(t1)) {
-            a0 = jl_type_extract_name(jl_tparam0(t1));
+            a0 = jl_type_extract_name(jl_tparam0(t1), 1);
             jl_datatype_t *super = a0 ? (jl_datatype_t*)jl_unwrap_unionall(((jl_typename_t*)a0)->wrapper) : jl_any_type;
-            jl_typemap_array_insert_(map, &cache->tname, (jl_value_t*)super->name, newrec, (jl_value_t*)cache, 1, offs, NULL);
+            jl_typemap_memory_insert_(map, &cache->tname, (jl_value_t*)super->name, newrec, (jl_value_t*)cache, 1, offs, NULL);
             return;
         }
-        a0 = jl_type_extract_name(t1);
+        a0 = jl_type_extract_name(t1, 0);
         if (a0 && a0 != (jl_value_t*)jl_any_type->name) {
-            jl_typemap_array_insert_(map, &cache->name1, a0, newrec, (jl_value_t*)cache, 0, offs, NULL);
+            jl_typemap_memory_insert_(map, &cache->name1, a0, newrec, (jl_value_t*)cache, 0, offs, NULL);
             return;
         }
     }
@@ -1516,8 +1497,8 @@ jl_typemap_entry_t *jl_typemap_alloc(
     newrec->func.value = newvalue;
     newrec->guardsigs = guardsigs;
     jl_atomic_store_relaxed(&newrec->next, (jl_typemap_entry_t*)jl_nothing);
-    newrec->min_world = min_world;
-    newrec->max_world = max_world;
+    jl_atomic_store_relaxed(&newrec->min_world, min_world);
+    jl_atomic_store_relaxed(&newrec->max_world, max_world);
     newrec->va = isva;
     newrec->issimplesig = issimplesig;
     newrec->isleafsig = isleafsig;

@@ -54,7 +54,7 @@ linking against `libjulia`.
 The first thing that must be done before calling any other Julia C function is to
 initialize Julia. This is done by calling `jl_init`, which tries to automatically determine
 Julia's install location. If you need to specify a custom location, or specify which system
-image to load, use `jl_init_with_image` instead.
+image to load, use `jl_init_with_image_file` or `jl_init_with_image_handle` instead.
 
 The second statement in the test program evaluates a Julia statement using a call to `jl_eval_string`.
 
@@ -247,7 +247,7 @@ Its second argument `args` is an array of `jl_value_t*` arguments and `nargs` is
 arguments.
 
 There is also an alternative, possibly simpler, way of calling Julia functions and that is via [`@cfunction`](@ref).
-Using `@cfunction` allows you to do the type conversions on the Julia side which typically is easier than doing it on
+Using `@cfunction` allows you to do the type conversions on the Julia side, which is typically easier than doing it on
 the C side. The `sqrt` example above would with `@cfunction` be written as:
 
 ```c
@@ -255,7 +255,10 @@ double (*sqrt_jl)(double) = jl_unbox_voidpointer(jl_eval_string("@cfunction(sqrt
 double ret = sqrt_jl(2.0);
 ```
 
-where we first define a C callable function in Julia, extract the function pointer from it and finally call it.
+where we first define a C callable function in Julia, extract the function pointer from it, and finally call it.
+In addition to simplifying type conversions by doing them in the higher-level language, calling Julia functions
+via `@cfunction` pointers eliminates the dynamic-dispatch overhead required by `jl_call` (for which all of the
+arguments are "boxed"), and should have performance equivalent to native C function pointers.
 
 ## Memory Management
 
@@ -409,7 +412,7 @@ per pointer using
 ```c
 jl_module_t *mod = jl_main_module;
 jl_sym_t *var = jl_symbol("var");
-jl_binding_t *bp = jl_get_binding_wr(mod, var);
+jl_binding_t *bp = jl_get_binding_wr(mod, var, 1);
 jl_checked_assignment(bp, mod, var, val);
 ```
 
@@ -432,26 +435,28 @@ object has just been allocated and no garbage collection has run since then. Not
 `jl_...` functions can sometimes invoke garbage collection.
 
 The write barrier is also necessary for arrays of pointers when updating their data directly.
-For example:
+Calling `jl_array_ptr_set` is usually much preferred. But direct updates can be done. For example:
 
 ```c
 jl_array_t *some_array = ...; // e.g. a Vector{Any}
-void **data = (void**)jl_array_data(some_array);
+void **data = jl_array_data(some_array, void*);
 jl_value_t *some_value = ...;
 data[0] = some_value;
-jl_gc_wb(some_array, some_value);
+jl_gc_wb(jl_array_owner(some_array), some_value);
 ```
 
 ### Controlling the Garbage Collector
 
 There are some functions to control the GC. In normal use cases, these should not be necessary.
 
-| Function             | Description                                  |
-|:-------------------- |:-------------------------------------------- |
-| `jl_gc_collect()`    | Force a GC run                               |
-| `jl_gc_enable(0)`    | Disable the GC, return previous state as int |
-| `jl_gc_enable(1)`    | Enable the GC,  return previous state as int |
-| `jl_gc_is_enabled()` | Return current state as int                  |
+| Function                           | Description                                                         |
+| :--------------------------------- | :------------------------------------------------------------------ |
+| `jl_gc_collect(JL_GC_FULL)`        | Force a GC run on all objects                                       |
+| `jl_gc_collect(JL_GC_INCREMENTAL)` | Force a GC run only on young objects                                |
+| `jl_gc_collect(JL_GC_AUTO)`        | Force a GC run, automatically choosing between full and incremental |
+| `jl_gc_enable(0)`                  | Disable the GC, return previous state as int                        |
+| `jl_gc_enable(1)`                  | Enable the GC, return previous state as int                         |
+| `jl_gc_is_enabled()`               | Return current state as int                                         |
 
 ## Working with Arrays
 
@@ -487,13 +492,13 @@ referenced.
 In order to access the data of `x`, we can use `jl_array_data`:
 
 ```c
-double *xData = (double*)jl_array_data(x);
+double *xData = jl_array_data(x, double);
 ```
 
 Now we can fill the array:
 
 ```c
-for(size_t i=0; i<jl_array_len(x); i++)
+for (size_t i = 0; i < jl_array_nrows(x); i++)
     xData[i] = i;
 ```
 
@@ -527,10 +532,11 @@ that creates a 2D array and accesses its properties:
 ```c
 // Create 2D array of float64 type
 jl_value_t *array_type = jl_apply_array_type((jl_value_t*)jl_float64_type, 2);
-jl_array_t *x  = jl_alloc_array_2d(array_type, 10, 5);
+int dims[] = {10,5};
+jl_array_t *x  = jl_alloc_array_nd(array_type, dims, 2);
 
 // Get array pointer
-double *p = (double*)jl_array_data(x);
+double *p = jl_array_data(x, double);
 // Get number of dimensions
 int ndims = jl_array_ndims(x);
 // Get the size of the i-th dim

@@ -3,14 +3,17 @@
 using Test
 using Distributed
 using Dates
-import REPL
+if !Sys.iswindows() && isa(stdin, Base.TTY)
+    import REPL
+end
 using Printf: @sprintf
 using Base: Experimental
 
 include("choosetests.jl")
 include("testenv.jl")
+include("buildkitetestjson.jl")
 
-(; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
+(; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
 
 if Sys.islinux()
@@ -23,8 +26,15 @@ else
 end
 
 if use_revise
+    # First put this at the top of the DEPOT PATH to install revise if necessary.
+    # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
+    pushfirst!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
+    using Pkg
+    Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
+    Pkg.instantiate()
     using Revise
     union!(Revise.stdlib_names, Symbol.(STDLIBS))
+    push!(DEPOT_PATH, popfirst!(DEPOT_PATH))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
         using Revise
@@ -34,25 +44,17 @@ if use_revise
     end
 end
 
+if isempty(tests)
+    println("No tests selected. Exiting.")
+    exit()
+end
+
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
     parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
 else
     typemax(Csize_t)
 end
 limited_worker_rss = max_worker_rss != typemax(Csize_t)
-
-function test_path(test)
-    t = split(test, '/')
-    if t[1] in STDLIBS
-        if length(t) == 2
-            return joinpath(STDLIB_DIR, t[1], "test", t[2])
-        else
-            return joinpath(STDLIB_DIR, t[1], "test", "runtests")
-        end
-    else
-        return joinpath(@__DIR__, test)
-    end
-end
 
 # Check all test files exist
 isfiles = isfile.(test_path.(tests) .* ".jl")
@@ -84,12 +86,14 @@ move_to_node1("stress")
 # since it starts a lot of workers and can easily exceed the maximum memory
 limited_worker_rss && move_to_node1("Distributed")
 
-# Shuffle LinearAlgebra tests to the front, because they take a while, so we might
+# Move LinearAlgebra and Pkg tests to the front, because they take a while, so we might
 # as well get them all started early.
-linalg_test_ids = findall(x->occursin("LinearAlgebra", x), tests)
-linalg_tests = tests[linalg_test_ids]
-deleteat!(tests, linalg_test_ids)
-prepend!(tests, linalg_tests)
+for prependme in ["LinearAlgebra", "Pkg"]
+    prependme_test_ids = findall(x->occursin(prependme, x), tests)
+    prependme_tests = tests[prependme_test_ids]
+    deleteat!(tests, prependme_test_ids)
+    prepend!(tests, prependme_tests)
+end
 
 import LinearAlgebra
 cd(@__DIR__) do
@@ -118,14 +122,16 @@ cd(@__DIR__) do
     @everywhere include("testdefs.jl")
 
     if use_revise
-        Base.invokelatest(revise_trackall)
+        @invokelatest revise_trackall()
         Distributed.remotecall_eval(Main, workers(), revise_init_expr)
     end
 
     println("""
         Running parallel tests with:
+          getpid() = $(getpid())
           nworkers() = $(nworkers())
-          nthreads() = $(Threads.threadpoolsize())
+          nthreads(:interactive) = $(Threads.threadpoolsize(:interactive))
+          nthreads(:default) = $(Threads.threadpoolsize(:default))
           Sys.CPU_THREADS = $(Sys.CPU_THREADS)
           Sys.total_memory() = $(Base.format_bytes(Sys.total_memory()))
           Sys.free_memory() = $(Base.format_bytes(Sys.free_memory()))
@@ -255,7 +261,7 @@ cd(@__DIR__) do
                         wrkr = p
                         before = time()
                         resp, duration = try
-                                r = remotecall_fetch(runtests, wrkr, test, test_path(test); seed=seed)
+                                r = remotecall_fetch(@Base.world(runtests, ∞), wrkr, test, test_path(test); seed=seed)
                                 r, time() - before
                             catch e
                                 isa(e, InterruptException) && return
@@ -315,7 +321,7 @@ cd(@__DIR__) do
             t == "SharedArrays" && (isolate = false)
             before = time()
             resp, duration = try
-                    r = Base.invokelatest(runtests, t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
+                    r = @invokelatest runtests(t, test_path(t), isolate, seed=seed) # runtests is defined by the include above
                     r, time() - before
                 catch e
                     isa(e, InterruptException) && rethrow()
@@ -373,6 +379,7 @@ cd(@__DIR__) do
     Test.TESTSET_PRINT_ENABLE[] = false
     o_ts = Test.DefaultTestSet("Overall")
     o_ts.time_end = o_ts.time_start + o_ts_duration # manually populate the timing
+    BuildkiteTestJSON.write_testset_json_files(@__DIR__, o_ts)
     Test.push_testset(o_ts)
     completed_tests = Set{String}()
     for (testname, (resp,), duration) in results
@@ -421,14 +428,15 @@ cd(@__DIR__) do
         Test.record(o_ts, fake)
         Test.pop_testset()
     end
+
     Test.TESTSET_PRINT_ENABLE[] = true
     println()
     # o_ts.verbose = true # set to true to show all timings when successful
     Test.print_test_results(o_ts, 1)
     if !o_ts.anynonpass
-        println("    \033[32;1mSUCCESS\033[0m")
+        printstyled("    SUCCESS\n"; bold=true, color=:green)
     else
-        println("    \033[31;1mFAILURE\033[0m\n")
+        printstyled("    FAILURE\n\n"; bold=true, color=:red)
         skipped > 0 &&
             println("$skipped test", skipped > 1 ? "s were" : " was", " skipped due to failure.")
         println("The global RNG seed was 0x$(string(seed, base = 16)).\n")

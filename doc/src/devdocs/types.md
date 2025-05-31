@@ -1,6 +1,6 @@
 # More about types
 
-If you've used Julia for a while, you understand the fundamental role that types play.  Here we
+If you've used Julia for a while, you understand the fundamental role that types play. Here we
 try to get under the hood, focusing particularly on [Parametric Types](@ref).
 
 ## Types and sets (and `Any` and `Union{}`/`Bottom`)
@@ -52,7 +52,7 @@ julia> typejoin(Tuple{Integer, Float64}, Tuple{Int, Real})
 Tuple{Integer, Real}
 ```
 
-While these operations may seem abstract, they lie at the heart of Julia.  For example, method
+While these operations may seem abstract, they lie at the heart of Julia. For example, method
 dispatch is implemented by stepping through the items in a method list until reaching one for which
 the type of the argument tuple is a subtype of the method signature.
 For this algorithm to work, it's important that methods be sorted by their specificity, and that the
@@ -93,13 +93,15 @@ UnionAll
   var: TypeVar
     name: Symbol T
     lb: Union{}
-    ub: Any
+    ub: abstract type Any
   body: UnionAll
     var: TypeVar
       name: Symbol N
       lb: Union{}
-      ub: Any
-    body: Array{T, N} <: DenseArray{T, N}
+      ub: abstract type Any
+    body: mutable struct Array{T, N} <: DenseArray{T, N}
+      ref::MemoryRef{T}
+      size::NTuple{N, Int64}
 ```
 
 This indicates that `Array` actually names a `UnionAll` type. There is one `UnionAll` type for
@@ -174,33 +176,37 @@ julia> dump(Array{Int,1}.name)
 TypeName
   name: Symbol Array
   module: Module Core
-  names: empty SimpleVector
+  singletonname: Symbol Array
+  names: SimpleVector
+    1: Symbol ref
+    2: Symbol size
+  atomicfields: Ptr{Nothing}(0x0000000000000000)
+  constfields: Ptr{Nothing}(0x0000000000000000)
   wrapper: UnionAll
     var: TypeVar
       name: Symbol T
       lb: Union{}
-      ub: Any
+      ub: abstract type Any
     body: UnionAll
       var: TypeVar
         name: Symbol N
         lb: Union{}
-        ub: Any
-      body: Array{T, N} <: DenseArray{T, N}
+        ub: abstract type Any
+      body: mutable struct Array{T, N} <: DenseArray{T, N}
+  Typeofwrapper: abstract type Type{Array} <: Any
   cache: SimpleVector
     ...
-
   linearcache: SimpleVector
     ...
-
-  hash: Int64 -7900426068641098781
-  mt: MethodTable
-    name: Symbol Array
-    defs: Nothing nothing
-    cache: Nothing nothing
-    max_args: Int64 0
-    module: Module Core
-    : Int64 0
-    : Int64 0
+  hash: Int64 2594190783455944385
+  backedges: #undef
+  partial: #undef
+  max_args: Int32 0
+  n_uninitialized: Int32 0
+  flags: UInt8 0x02
+  cache_entry_count: UInt8 0x00
+  max_methods: UInt8 0x00
+  constprop_heuristic: UInt8 0x00
 ```
 
 In this case, the relevant field is `wrapper`, which holds a reference to the top-level type used
@@ -223,7 +229,7 @@ Ptr{Cvoid} @0x00007fcc7de64850
 The `wrapper` field of [`Array`](@ref) points to itself, but for `Array{TV,NV}` it points back
 to the original definition of the type.
 
-What about the other fields? `hash` assigns an integer to each type.  To examine the `cache`
+What about the other fields? `hash` assigns an integer to each type. To examine the `cache`
 field, it's helpful to pick a type that is less heavily used than Array. Let's first create our
 own type:
 
@@ -243,8 +249,8 @@ variables are not cached.
 
 ## Tuple types
 
-Tuple types constitute an interesting special case.  For dispatch to work on declarations like
-`x::Tuple`, the type has to be able to accommodate any tuple.  Let's check the parameters:
+Tuple types constitute an interesting special case. For dispatch to work on declarations like
+`x::Tuple`, the type has to be able to accommodate any tuple. Let's check the parameters:
 
 ```jldoctest
 julia> Tuple
@@ -489,7 +495,7 @@ julia> function mysubtype(a,b)
        end
 ```
 
-and then set a breakpoint in `jl_breakpoint`.  Once this breakpoint gets triggered, you can set
+and then set a breakpoint in `jl_breakpoint`. Once this breakpoint gets triggered, you can set
 breakpoints in other functions.
 
 As a warm-up, try the following:
@@ -519,10 +525,6 @@ than the other.)  Likewise, `Tuple{Int,Vararg{Int}}` is not a subtype of `Tuple{
 considered more specific. However, `morespecific` does get a bonus for length: in particular,
 `Tuple{Int,Int}` is more specific than `Tuple{Int,Vararg{Int}}`.
 
-If you're debugging how methods get sorted, it can be convenient to define the function:
-
-```julia
-type_morespecific(a, b) = ccall(:jl_type_morespecific, Cint, (Any,Any), a, b)
-```
-
-which allows you to test whether tuple type `a` is more specific than tuple type `b`.
+Additionally, if 2 methods are defined with identical signatures, per type-equal, then they
+will instead by compared by order of addition, such that the later method is more specific
+than the earlier one.

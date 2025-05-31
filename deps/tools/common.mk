@@ -36,8 +36,8 @@ CMAKE_COMMON += -DCMAKE_C_COMPILER_LAUNCHER=ccache
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 CMAKE_CC := "$$(which $(shell echo $(CC_ARG) | cut -d' ' -f1))"
 CMAKE_CXX := "$$(which $(shell echo $(CXX_ARG) | cut -d' ' -f1))"
-CMAKE_CC_ARG := $(shell echo $(CC_ARG) | cut -d' ' -f2-)
-CMAKE_CXX_ARG := $(shell echo $(CXX_ARG) | cut -d' ' -f2-)
+CMAKE_CC_ARG := $(shell echo $(CC_ARG) | cut -s -d' ' -f2-)
+CMAKE_CXX_ARG := $(shell echo $(CXX_ARG) | cut -s -d' ' -f2-)
 else
 CMAKE_CC := "$$(which $(CC_BASE))"
 CMAKE_CXX := "$$(which $(CXX_BASE))"
@@ -187,7 +187,7 @@ UNINSTALL_$(strip $1) := $2 staged-uninstaller
 
 $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tar | $(build_prefix)/manifest
 	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
-	$(UNTAR) $$< -C $$(build_prefix)
+	$$(UNTAR) $$< -C $$(build_prefix)
 	$6
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
 .PHONY: $(addsuffix -$(strip $1),stage install distclean uninstall reinstall)

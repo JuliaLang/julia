@@ -15,10 +15,6 @@ struct DemoteFloat16Pass : PassInfoMixin<DemoteFloat16Pass> {
     static bool isRequired() { return true; }
 };
 
-struct CombineMulAddPass : PassInfoMixin<CombineMulAddPass> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-};
-
 struct LateLowerGCPass : PassInfoMixin<LateLowerGCPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
@@ -33,10 +29,6 @@ struct PropagateJuliaAddrspacesPass : PassInfoMixin<PropagateJuliaAddrspacesPass
     static bool isRequired() { return true; }
 };
 
-struct LowerExcHandlersPass : PassInfoMixin<LowerExcHandlersPass> {
-    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
-    static bool isRequired() { return true; }
-};
 
 struct GCInvariantVerifierPass : PassInfoMixin<GCInvariantVerifierPass> {
     bool Strong;
@@ -51,6 +43,11 @@ struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
     static bool isRequired() { return true; }
 };
 
+struct ExpandAtomicModifyPass : PassInfoMixin<ExpandAtomicModifyPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+};
+
+
 // Module Passes
 struct CPUFeaturesPass : PassInfoMixin<CPUFeaturesPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
@@ -64,7 +61,7 @@ struct RemoveNIPass : PassInfoMixin<RemoveNIPass> {
 
 struct MultiVersioningPass : PassInfoMixin<MultiVersioningPass> {
     bool external_use;
-    MultiVersioningPass(bool external_use = false) : external_use(external_use) {}
+    MultiVersioningPass(bool external_use = false) JL_NOTSAFEPOINT : external_use(external_use) {}
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;
     static bool isRequired() { return true; }
 };

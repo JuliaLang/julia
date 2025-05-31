@@ -28,7 +28,7 @@ abstract type  MultiplicativeInverse{T} <: Number end
 # Division of Int32 by 3:
 #   floor((2^32+2)/3 * n/2^32) = floor(n/3 + 2n/(3*2^32))
 # The correction term, 2n/(3*2^32), is strictly less than 1/3 for any
-# nonnegative n::Int32, so this divides any nonnegative Int32 by 3.
+# non-negative n::Int32, so this divides any non-negative Int32 by 3.
 # (When n < 0, we add 1, and one can show that this computes
 # ceil(n/d) = -floor(abs(n)/d).)
 #

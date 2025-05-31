@@ -67,6 +67,9 @@ end
 
 function html(io::IO, code::Code)
     withtag(io, :pre) do
+        if code.language == "styled"
+            code = Code("", String(styled(code.code)))
+        end
         maybe_lang = !isempty(code.language) ? Any[:class=>"language-$(code.language)"] : []
         withtag(io, :code, maybe_lang...) do
             htmlesc(io, code.code)
@@ -134,6 +137,9 @@ function htmlinline(io::IO, content::Vector)
 end
 
 function htmlinline(io::IO, code::Code)
+    if code.language == "styled"
+        code = Code("", String(styled(code.code)))
+    end
     withtag(io, :code) do
         htmlesc(io, code.code)
     end
@@ -182,6 +188,21 @@ htmlinline(io::IO, x) = tohtml(io, x)
 
 export html
 
+"""
+    html([io::IO], md)
+
+Output the contents of the Markdown object `md` in HTML format, either
+writing to an (optional) `io` stream or returning a string.
+
+One can alternatively use `show(io, "text/html", md)` or `repr("text/html", md)`, which
+differ in that they wrap the output in a `<div class="markdown"> ... </div>` element.
+
+# Examples
+```jldoctest
+julia> html(md"hello _world_")
+"<p>hello <em>world</em></p>\\n"
+```
+"""
 html(md) = sprint(html, md)
 
 function show(io::IO, ::MIME"text/html", md::MD)

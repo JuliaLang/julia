@@ -19,6 +19,11 @@ Julia's compiler works.
 It is also worth emphasizing that functions should take arguments, instead of operating directly
 on global variables (aside from constants like [`pi`](@ref)).
 
+## Write docstrings
+
+Comments describing an object should typically be written as [docstrings](@ref man-writing-documentation) for editor and REPL accessibility.
+Inline comments (`# comment`) and multiline comments (`#= comment =#`) are appropriate for information that is intended only for the reader of the code (as opposed to a user).
+
 ## Avoid writing overly-specific types
 
 Code should be as generic as possible. Instead of writing:
@@ -116,7 +121,7 @@ end
 
 Julia Base uses this convention throughout and contains examples of functions
 with both copying and modifying forms (e.g., [`sort`](@ref) and [`sort!`](@ref)), and others
-which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)).  It
+which are just modifying (e.g., [`push!`](@ref), [`pop!`](@ref), [`splice!`](@ref)). It
 is typical for such functions to also return the modified array for convenience.
 
 Functions related to IO or making use of random number generators (RNG) are notable exceptions:
@@ -167,16 +172,18 @@ Counter-examples to this rule include [`NamedTuple`](@ref), [`RegexMatch`](@ref 
 ## Use naming conventions consistent with Julia `base/`
 
   * modules and type names use capitalization and camel case: `module SparseArrays`, `struct UnitRange`.
-  * functions are lowercase ([`maximum`](@ref), [`convert`](@ref)) and, when readable, with multiple
-    words squashed together ([`isequal`](@ref), [`haskey`](@ref)). When necessary, use underscores
-    as word separators. Underscores are also used to indicate a combination of concepts ([`remotecall_fetch`](@ref)
-    as a more efficient implementation of `fetch(remotecall(...))`) or as modifiers.
+  * constants use all uppercase and underscores ([`LOAD_PATH`](@ref), [`VERSION`](@ref)).
+  * while anything not marked with `public` or `export` is considered internal, a prefix of
+    `_` also indicates that an object is not intended for public use.
   * functions mutating at least one of their arguments end in `!`.
   * conciseness is valued, but avoid abbreviation ([`indexin`](@ref) rather than `indxin`) as
     it becomes difficult to remember whether and how particular words are abbreviated.
 
 If a function name requires multiple words, consider whether it might represent more than one
 concept and might be better split into pieces.
+
+Function names should be written in snake case ([`minimum`](@ref), [`count_zeros`](@ref), [`escape_string`](@ref)).
+Base often breaks this convention by squashing words together ([`splitpath`](@ref), [`readeach`](@ref)) but this style is not recommended for packages.
 
 ## Write functions with argument ordering similar to Julia Base
 
@@ -262,6 +269,29 @@ Splicing function arguments can be addictive. Instead of `[a..., b...]`, use sim
 which already concatenates arrays. [`collect(a)`](@ref) is better than `[a...]`, but since `a`
 is already iterable it is often even better to leave it alone, and not convert it to an array.
 
+## Ensure constructors return an instance of their own type
+
+When a method `T(x)` is called on a type `T`, it is generally expected to return a value of type T.
+Defining a [constructor](@ref man-constructors) that returns an unexpected type can lead to confusing and unpredictable behavior:
+
+```jldoctest
+julia> struct Foo{T}
+           x::T
+       end
+
+julia> Base.Float64(foo::Foo) = Foo(Float64(foo.x))  # Do not define methods like this
+
+julia> Float64(Foo(3))  # Should return `Float64`
+Foo{Float64}(3.0)
+
+julia> Foo{Int}(x) = Foo{Float64}(x)  # Do not define methods like this
+
+julia> Foo{Int}(3)  # Should return `Foo{Int}`
+Foo{Float64}(3.0)
+```
+
+To maintain code clarity and ensure type consistency, always design constructors to return an instance of the type they are supposed to construct.
+
 ## Don't use unnecessary static parameters
 
 A function signature:
@@ -346,7 +376,7 @@ This would provide custom showing of vectors with a specific new element type. W
 this should be avoided. The trouble is that users will expect a well-known type like `Vector()`
 to behave in a certain way, and overly customizing its behavior can make it harder to work with.
 
-## Avoid type piracy
+## [Avoid type piracy](@id avoid-type-piracy)
 
 "Type piracy" refers to the practice of extending or redefining methods in Base
 or other packages on types that you have not defined. In extreme cases, you can crash Julia

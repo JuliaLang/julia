@@ -2,11 +2,11 @@
 
 function Base.length(blob::GitBlob)
     ensure_initialized()
-    return ccall((:git_blob_rawsize, :libgit2), Int64, (Ptr{Cvoid},), blob.ptr)
+    return ccall((:git_blob_rawsize, libgit2), Int64, (Ptr{Cvoid},), blob)
 end
 
 """
-    rawcontent(blob::GitBlob) -> Vector{UInt8}
+    rawcontent(blob::GitBlob)::Vector{UInt8}
 
 Fetch the *raw* contents of the [`GitBlob`](@ref) `blob`. This is an
 `Array` containing the contents of the blob, which may be binary or may be Unicode.
@@ -20,12 +20,12 @@ is binary and not valid Unicode.
 """
 function rawcontent(blob::GitBlob)
     ensure_initialized()
-    ptr = ccall((:git_blob_rawcontent, :libgit2), Ptr{UInt8}, (Ptr{Cvoid},), blob.ptr)
+    ptr = ccall((:git_blob_rawcontent, libgit2), Ptr{UInt8}, (Ptr{Cvoid},), blob)
     copy(unsafe_wrap(Array, ptr, (length(blob),), own = false))
 end
 
 """
-    content(blob::GitBlob) -> String
+    content(blob::GitBlob)::String
 
 Fetch the contents of the [`GitBlob`](@ref) `blob`. If the `blob` contains
 binary data (which can be determined using [`isbinary`](@ref)),
@@ -39,7 +39,7 @@ function content(blob::GitBlob)
 end
 
 """
-    isbinary(blob::GitBlob) -> Bool
+    isbinary(blob::GitBlob)::Bool
 
 Use a heuristic to guess if a file is binary: searching for NULL bytes and
 looking for a reasonable ratio of printable to non-printable characters among
@@ -47,7 +47,7 @@ the first 8000 bytes.
 """
 function isbinary(blob::GitBlob)
     ensure_initialized()
-    bin_flag = ccall((:git_blob_is_binary, :libgit2), Cint, (Ptr{Cvoid},), blob.ptr)
+    bin_flag = ccall((:git_blob_is_binary, libgit2), Cint, (Ptr{Cvoid},), blob)
     return bin_flag == 1
 end
 
@@ -67,9 +67,9 @@ id = LibGit2.addblob!(repo, blob_file)
 function addblob!(repo::GitRepo, path::AbstractString)
     ensure_initialized()
     id_ref = Ref{GitHash}()
-    @check ccall((:git_blob_create_from_disk, :libgit2), Cint,
+    @check ccall((:git_blob_create_from_disk, libgit2), Cint,
                  (Ptr{GitHash}, Ptr{Cvoid}, Cstring),
-                 id_ref, repo.ptr, path)
+                 id_ref, repo, path)
     return id_ref[]
 end
 

@@ -1,5 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+"""
+    MD
+
+`MD` represents a Markdown document. Note that the `MD` constructor should not generally be
+used directly, since it constructs the internal data structures. Instead, you can construct
+`MD` objects using the exported macros [`@md_str`](@ref) and [`@doc_str`](@ref).
+"""
 mutable struct MD
     content::Vector{Any}
     meta::Dict{Symbol, Any}
@@ -56,7 +63,7 @@ function parseinline(stream::IO, md::MD, config::Config)
         char = peek(stream, Char)
         if haskey(config.inner, char) &&
                 (inner = parseinline(stream, md, config.inner[char])) !== nothing
-            c = String(take!(buffer))
+            c = takestring!(buffer)
             !isempty(c) && push!(content, c)
             buffer = IOBuffer()
             push!(content, inner)
@@ -64,7 +71,7 @@ function parseinline(stream::IO, md::MD, config::Config)
             write(buffer, read(stream, Char))
         end
     end
-    c = String(take!(buffer))
+    c = takestring!(buffer)
     !isempty(c) && push!(content, c)
     return content
 end
@@ -76,7 +83,7 @@ parseinline(s, md::MD) = parseinline(s, md, config(md))
 
 # Block parsing
 
-function parse(stream::IO, block::MD, config::Config; breaking = false)
+function _parse(stream::IO, block::MD, config::Config; breaking = false)
     skipblank(stream)
     eof(stream) && return false
     for parser in (breaking ? config.breaking : [config.breaking; config.regular])
@@ -85,12 +92,17 @@ function parse(stream::IO, block::MD, config::Config; breaking = false)
     return false
 end
 
-parse(stream::IO, block::MD; breaking = false) =
-  parse(stream, block, config(block), breaking = breaking)
+_parse(stream::IO, block::MD; breaking = false) =
+    _parse(stream, block, config(block), breaking = breaking)
 
+"""
+    parse(stream::IO)::MD
+
+Parse the content of `stream` as Julia-flavored Markdown text and return the corresponding `MD` object.
+"""
 function parse(stream::IO; flavor = julia)
     isa(flavor, Symbol) && (flavor = flavors[flavor])
     markdown = MD(flavor)
-    while parse(stream, markdown, flavor) end
+    while _parse(stream, markdown, flavor) end
     return markdown
 end

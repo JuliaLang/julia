@@ -352,6 +352,38 @@ end
     end
 end
 
+@testset "rounding floats with specified return type #50778" begin
+    @test round(Float64, 1.2) === 1.0
+    @test round(Float32, 1e60) === Inf32
+    x = floatmax(Float32)-1.0
+    @test round(Float32, x) == x
+end
+
+@testset "rounding complex numbers (#42060, #47128)" begin
+    # 42060
+    @test ceil(Complex(4.6, 2.2)) === Complex(5.0, 3.0)
+    @test floor(Complex(4.6, 2.2)) === Complex(4.0, 2.0)
+    @test trunc(Complex(4.6, 2.2)) === Complex(4.0, 2.0)
+    @test round(Complex(4.6, 2.2)) === Complex(5.0, 2.0)
+    @test ceil(Complex(-4.6, -2.2)) === Complex(-4.0, -2.0)
+    @test floor(Complex(-4.6, -2.2)) === Complex(-5.0, -3.0)
+    @test trunc(Complex(-4.6, -2.2)) === Complex(-4.0, -2.0)
+    @test round(Complex(-4.6, -2.2)) === Complex(-5.0, -2.0)
+
+    # 47128
+    @test round(Complex{Int}, Complex(4.6, 2.2)) === Complex(5, 2)
+    @test ceil(Complex{Int}, Complex(4.6, 2.2)) === Complex(5, 3)
+end
+
+@testset "rounding to custom integers" begin
+    struct Int50812 <: Integer
+        x::Int
+    end
+    @test round(Int50812, 1.2) === Int50812(1)
+    @test round(Int50812, π) === Int50812(3)
+    @test ceil(Int50812, π) === Int50812(4)
+end
+
 const MPFRRM = Base.MPFR.MPFRRoundingMode
 
 function mpfr_to_ieee(::Type{Float32}, x::BigFloat, r::MPFRRM)
@@ -380,11 +412,14 @@ function float_samples(::Type{T}, exponents, n::Int) where {T<:AbstractFloat}
     ret
 end
 
+# a reasonable range of values for testing behavior between 1:200
+const fib200 = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 200]
+
 @testset "IEEEFloat(::BigFloat) against MPFR" begin
-    for pr ∈ 1:200
+    for pr ∈ fib200
         setprecision(BigFloat, pr) do
             exp = exponent(floatmax(Float64)) + 10
-            bf_samples = float_samples(BigFloat, (-exp):exp, 20)
+            bf_samples = float_samples(BigFloat, (-exp):exp, 20) # about 82680 random values
             for mpfr_rm ∈ mpfr_rounding_modes, bf ∈ bf_samples, F ∈ (Float32, Float64)
                 @test (
                     mpfr_to_ieee(F, bf, mpfr_rm) ===
@@ -402,10 +437,10 @@ const native_rounding_modes = (
 
 # Checks that each rounding mode is faithful.
 @testset "IEEEFloat(::BigFloat) faithful rounding" begin
-    for pr ∈ 1:200
+    for pr ∈ fib200
         setprecision(BigFloat, pr) do
             exp = 500
-            bf_samples = float_samples(BigFloat, (-exp):exp, 20)
+            bf_samples = float_samples(BigFloat, (-exp):exp, 20) # about 40040 random values
             for rm ∈ (mpfr_rounding_modes..., Base.MPFR.MPFRRoundFaithful,
                       native_rounding_modes...),
                 bf ∈ bf_samples,
@@ -415,4 +450,61 @@ const native_rounding_modes = (
             end
         end
     end
+end
+
+@testset "round(Int, -Inf16) should throw (#51113)" begin
+    @test_throws InexactError round(Int32, -Inf16)
+    @test_throws InexactError round(Int64, -Inf16)
+    @test_throws InexactError round(Int128, -Inf16)
+    # More comprehensive testing is present in test/floatfuncs.jl
+end
+
+@testset "floor(<:AbstractFloat, large_number) (#52355)" begin
+    @test floor(Float32, 0xffff_ffff) == prevfloat(2f0^32) <= 0xffff_ffff
+    @test trunc(Float16, typemax(UInt128)) == floatmax(Float16)
+    @test round(Float16, typemax(UInt128)) == Inf16
+    for i in [-BigInt(floatmax(Float64)), -BigInt(floatmax(Float64))*100, BigInt(floatmax(Float64)), BigInt(floatmax(Float64))*100]
+        f = ceil(Float64, i)
+        @test f >= i
+        @test isinteger(f) || isinf(f)
+        @test prevfloat(f) < i
+    end
+end
+
+@testset "π to `BigFloat` with `setrounding`" begin
+    function irrational_to_big_float(c::AbstractIrrational)
+        BigFloat(c)
+    end
+
+    function irrational_to_big_float_with_rounding_mode(c::AbstractIrrational, rm::RoundingMode)
+        f = () -> irrational_to_big_float(c)
+        setrounding(f, BigFloat, rm)
+    end
+
+    function irrational_to_big_float_with_rounding_mode_and_precision(c::AbstractIrrational, rm::RoundingMode, prec::Int)
+        f = () -> irrational_to_big_float_with_rounding_mode(c, rm)
+        setprecision(f, BigFloat, prec)
+    end
+
+    for c ∈ (π, MathConstants.γ, MathConstants.catalan)
+        for p ∈ 1:40
+            @test (
+                irrational_to_big_float_with_rounding_mode_and_precision(c, RoundDown, p) < c <
+                irrational_to_big_float_with_rounding_mode_and_precision(c, RoundUp, p)
+            )
+        end
+    end
+end
+
+@testset "Rounding to floating point types with RoundFromZero #55820" begin
+    @testset "Testing float types: $f" for f ∈ (Float16, Float32, Float64, BigFloat)
+        @testset "Testing value types: $t" for t ∈ (Bool, Rational{Int8})
+            @test iszero(f(zero(t), RoundFromZero))
+        end
+    end
+    @test Float16(100000, RoundToZero) === floatmax(Float16)
+    @test Float16(100000, RoundFromZero) === Inf16
+    @test Float16(-100000, RoundToZero) === -floatmax(Float16)
+    @test Float16(-100000, RoundFromZero) === -Inf16
+    @test Float32(nextfloat(0.0), RoundFromZero) === nextfloat(0.0f0)
 end
