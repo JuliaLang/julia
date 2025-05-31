@@ -1380,10 +1380,11 @@ promote_rule(::Type{LinRange{A,L}}, b::Type{StepRangeLen{T2,R2,S2,L2}}) where {A
 
 ## concatenation ##
 
+_maybe_checked_length(ra) = length(ra)
 function vcat(rs::AbstractRange{T}...) where T
     n::Int = 0
     for ra in rs
-        n += length(ra)
+        n += _maybe_checked_length(ra)
     end
     a = Vector{T}(undef, n)
     i = 1
@@ -1400,7 +1401,7 @@ end
 # See https://github.com/JuliaLang/julia/pull/27302
 # Similarly, collect(r::AbstractRange) uses iteration
 function Array{T,1}(r::AbstractRange{T}) where {T}
-    a = Vector{T}(undef, length(r))
+    a = Vector{T}(undef, _maybe_checked_length(r))
     i = 1
     for x in r
         @inbounds a[i] = x
