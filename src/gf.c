@@ -1891,6 +1891,19 @@ JL_DLLEXPORT void jl_invalidate_code_instance(jl_code_instance_t *replaced, size
     invalidate_code_instance(replaced, max_world, 1);
 }
 
+JL_DLLEXPORT void jl_maybe_log_binding_invalidation(jl_value_t *replaced)
+{
+    if (_jl_debug_method_invalidation) {
+        if (replaced) {
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, replaced);
+        }
+        jl_value_t *loctag = jl_cstr_to_string("jl_maybe_log_binding_invalidation");
+        JL_GC_PUSH1(&loctag);
+        jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+        JL_GC_POP();
+    }
+}
+
 static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth) {
     uint8_t recursion_flags = 0;
     jl_array_t *backedges = jl_mi_get_backedges_mutate(replaced_mi, &recursion_flags);
