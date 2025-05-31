@@ -721,18 +721,18 @@ end
         return x
     end
     let
-        # At least some statements should have been found to be statically unreachable and wrapped in Const(...)::Union{}
+        # At least some statements should have been found to be statically unreachable
         unopt = code_typed1(f_with_maybe_nonbool_cond, (Int, Bool); optimize=false)
-        @test any(j -> isa(unopt.code[j], Core.Const) && unopt.ssavaluetypes[j] == Union{}, 1:length(unopt.code))
+        @test any(j -> unopt.ssavaluetypes[j] === Union{}, 1:length(unopt.code))
 
         # Any GotoIfNot destinations after IRCode conversion should not be statically unreachable
         ircode = first(only(Base.code_ircode(f_with_maybe_nonbool_cond, (Int, Bool); optimize_until="CC: CONVERT")))
         for i = 1:length(ircode.stmts)
             expr = ircode.stmts[i][:stmt]
             if isa(expr, GotoIfNot)
-                # If this statement is Core.Const(...)::Union{}, that means this code was not reached
-                @test !(isa(ircode.stmts[i+1][:stmt], Core.Const) && (unopt.ssavaluetypes[i+1] === Union{}))
-                @test !(isa(ircode.stmts[expr.dest][:stmt], Core.Const) && (unopt.ssavaluetypes[expr.dest] === Union{}))
+                # GotoIfNot branch destinations should not be unreachable
+                @test !(unopt.ssavaluetypes[i+1] === Union{})
+                @test !(unopt.ssavaluetypes[expr.dest] === Union{})
             end
         end
     end
