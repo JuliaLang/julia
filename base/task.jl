@@ -1220,7 +1220,7 @@ function wait()
     # We may have already switched tasks (via the scheduler task), so
     # only switch if we haven't.
     if !have_result
-        @assert task isa Task
+        task = task::Task
         set_next_task(task)
         result = try_yieldto(ensure_rescheduled)
     end
