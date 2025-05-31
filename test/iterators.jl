@@ -1167,6 +1167,7 @@ end
     @testset "iter: $IT" for (IT, n) in keys(it_result_pairs)
         @test it_result_pairs[(IT, n)] == nth(IT, n)
         @test_throws ArgumentError nth(IT, -42)
+        @test_throws BoundsError nth(IT, -42)
 
         IT isa Iterators.Cycle && continue # cycles are infinite so never OOB
         @test_throws BoundsError nth(IT, 999999999)
