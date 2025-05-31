@@ -27,3 +27,4 @@ Example:
 open("model.jls", "w") do io
     serialize(io, my_model)
 end
+```
