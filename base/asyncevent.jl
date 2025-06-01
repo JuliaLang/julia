@@ -76,8 +76,7 @@ Waiting tasks are woken after an initial delay of at least `delay` seconds, and 
 at least `interval` seconds again elapse. If `interval` is equal to `0`, the timer is only triggered
 once. When the timer is closed (by [`close`](@ref)) waiting tasks are woken with an error. Use
 [`isopen`](@ref) to check whether a timer is still active. An inactive timer will not fire.
-Use `t.timeout` and `t.interval` to read
-the setup conditions of a `Timer` `t`.
+Use `t.timeout` and `t.interval` to read the setup conditions of a `Timer` `t`.
 
 ```julia-repl
 julia> t = Timer(1.0; interval=0.5)
