@@ -21,7 +21,7 @@ lists. Metadata for free pages, however, may be stored into three separate lock-
 
 Julia's pool allocator follows a "tiered" allocation discipline. When requesting a memory page for the pool allocator, Julia will:
 
-- Try to claim a page from `page_pool_lazily_freed`, which contains pages which were empty on the last stop-the-world phase, but not yet madivsed by a concurrent sweeper GC thread.
+- Try to claim a page from `page_pool_lazily_freed`, which contains pages which were empty on the last stop-the-world phase, but not yet madvised by a concurrent sweeper GC thread.
 
 - If it failed claiming a page from `page_pool_lazily_freed`, it will try to claim a page from `the page_pool_clean`, which contains pages which were mmaped on a previous page allocation request but never accessed.
 

@@ -114,7 +114,7 @@
                    (deparse-prefix-call (cadr e) (cddr e) #\( #\)))))
            (($ &)          (if (and (pair? (cadr e))
                                     (not (memq (caadr e)
-                                               '(outerref null true false tuple $ vect braces))))
+                                               '(null true false tuple $ vect braces))))
                                (string (car e) "(" (deparse (cadr e)) ")")
                                (string (car e) (deparse (cadr e)))))
            ((|::|)         (if (length= e 2)
@@ -254,7 +254,6 @@
            ((top)          (deparse (cadr e)))
            ((core)         (string "Core." (deparse (cadr e))))
            ((globalref)    (string (deparse (cadr e)) "." (deparse-colon-dot (caddr e))))
-           ((outerref)     (string (deparse (cadr e))))
            ((ssavalue)     (string "SSAValue(" (cadr e) ")"))
            ((line)         (if (length= e 2)
                                (string "# line " (cadr e))
@@ -298,7 +297,7 @@
 ;; predicates and accessors
 
 (define (quoted? e)
-  (memq (car e) '(quote top core globalref outerref line break inert meta inbounds inline noinline loopinfo)))
+  (memq (car e) '(quote top core globalref line break inert meta inbounds inline noinline loopinfo)))
 (define (quotify e) `',e)
 (define (unquote e)
   (if (and (pair? e) (memq (car e) '(quote inert)))
@@ -393,9 +392,6 @@
 (define (globalref? e)
   (and (pair? e) (eq? (car e) 'globalref)))
 
-(define (outerref? e)
-  (and (pair? e) (eq? (car e) 'outerref)))
-
 (define (nothing? e)
   (and (pair? e) (eq? (car e) 'null)))
 
@@ -453,7 +449,7 @@
                   (check-dotop (cadr e))))))
   e)
 
-(define (vararg? x) (and (pair? x) (eq? (car x) '...)))
+(define (vararg? x) (and (pair? x) (eq? (car x) '...) (length= x 2)))
 (define (vararg-type-expr? x)
   (or (eq? x 'Vararg)
       (and (length> x 1)
@@ -497,6 +493,7 @@
 (define (vinfo:never-undef v) (< 0 (logand (caddr v) 4)))
 (define (vinfo:read v) (< 0 (logand (caddr v) 8)))
 (define (vinfo:sa v) (< 0 (logand (caddr v) 16)))
+(define (vinfo:nospecialize v) (< 0 (logand (caddr v) 128)))
 (define (set-bit x b val) (if val (logior x b) (logand x (lognot b))))
 ;; record whether var is captured
 (define (vinfo:set-capt! v c)  (set-car! (cddr v) (set-bit (caddr v) 1 c)))
@@ -511,6 +508,7 @@
 ;; occurs undef: mask 32
 ;; whether var is called (occurs in function call head position)
 (define (vinfo:set-called! v a)  (set-car! (cddr v) (set-bit (caddr v) 64 a)))
+(define (vinfo:set-nospecialize! v c)  (set-car! (cddr v) (set-bit (caddr v) 128 c)))
 
 (define var-info-for assq)
 

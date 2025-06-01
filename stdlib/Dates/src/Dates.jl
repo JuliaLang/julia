@@ -32,7 +32,7 @@ for more information.
 """
 module Dates
 
-import Base: ==, isless, div, fld, mod, rem, gcd, lcm, +, -, *, /, %, broadcast
+import Base: ==, isless, div, fld, mod, rem, gcd, lcm, +, -, *, /, %
 using Printf: @sprintf
 
 using Base.Iterators
@@ -80,5 +80,7 @@ export Period, DatePeriod, TimePeriod,
        tonext, toprev, tofirst, tolast,
        # io.jl
        ISODateTimeFormat, ISODateFormat, ISOTimeFormat, DateFormat, RFC1123Format, @dateformat_str
+
+public format
 
 end # module

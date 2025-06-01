@@ -23,9 +23,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#define DEFINE_BUILTIN_GLOBALS
 #include "builtin_proto.h"
-#undef DEFINE_BUILTIN_GLOBALS
 #include "threading.h"
 #include "julia_assert.h"
 #include "processor.h"
@@ -44,6 +42,7 @@ extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 
 // list of modules being deserialized with __init__ methods
 jl_array_t *jl_module_init_order;
+arraylist_t *jl_entrypoint_mis;
 
 JL_DLLEXPORT size_t jl_page_size;
 
@@ -64,39 +63,29 @@ void jl_init_stack_limits(int ismaster, void **stack_lo, void **stack_hi)
     // threads since it seems to return bogus values for master thread on Linux
     // and possibly OSX.
     if (!ismaster) {
-#  if defined(_OS_LINUX_)
+#  if defined(_OS_LINUX_) || defined(_OS_FREEBSD_)
         pthread_attr_t attr;
+#if defined(_OS_FREEBSD_)
+        pthread_attr_init(&attr);
+        pthread_attr_get_np(pthread_self(), &attr);
+#else
         pthread_getattr_np(pthread_self(), &attr);
+#endif
         void *stackaddr;
         size_t stacksize;
         pthread_attr_getstack(&attr, &stackaddr, &stacksize);
         pthread_attr_destroy(&attr);
-        *stack_lo = (void*)stackaddr;
-#pragma GCC diagnostic push
-#if defined(_COMPILER_GCC_) && __GNUC__ >= 12
-#pragma GCC diagnostic ignored "-Wdangling-pointer"
-#endif
-        *stack_hi = (void*)__builtin_frame_address(0);
-#pragma GCC diagnostic pop
+        *stack_lo = stackaddr;
+        *stack_hi = (char*)stackaddr + stacksize;
         return;
 #  elif defined(_OS_DARWIN_)
         extern void *pthread_get_stackaddr_np(pthread_t thread);
         extern size_t pthread_get_stacksize_np(pthread_t thread);
         pthread_t thread = pthread_self();
         void *stackaddr = pthread_get_stackaddr_np(thread);
-        *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)__builtin_frame_address(0);
-        return;
-#  elif defined(_OS_FREEBSD_)
-        pthread_attr_t attr;
-        pthread_attr_init(&attr);
-        pthread_attr_get_np(pthread_self(), &attr);
-        void *stackaddr;
-        size_t stacksize;
-        pthread_attr_getstack(&attr, &stackaddr, &stacksize);
-        pthread_attr_destroy(&attr);
-        *stack_lo = (void*)stackaddr;
-        *stack_hi = (void*)__builtin_frame_address(0);
+        size_t stacksize = pthread_get_stacksize_np(thread);
+        *stack_lo = (char*)stackaddr - stacksize;
+        *stack_hi = stackaddr;
         return;
 #  else
 #      warning "Getting precise stack size for thread is not supported."
@@ -258,7 +247,9 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     }
 
     if (jl_base_module) {
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             jl_value_t **fargs;
             JL_GC_PUSHARGS(fargs, 2);
@@ -266,23 +257,25 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
             fargs[1] = jl_box_int32(exitcode);
             JL_TRY {
                 assert(ct);
-                size_t last_age = ct->world_age;
-                ct->world_age = jl_get_world_counter();
                 jl_apply(fargs, 2);
-                ct->world_age = last_age;
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\natexit hook threw an error: ");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }
             JL_GC_POP();
         }
+        ct->world_age = last_age;
     }
 
-    if (ct && exitcode == 0)
+    if (ct && exitcode == 0) {
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
         jl_write_compiler_output();
+        ct->world_age = last_age;
+    }
 
     jl_print_gc_stats(JL_STDERR);
     if (jl_options.code_coverage)
@@ -317,7 +310,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
                     assert(item);
                     uv_unref(item->h);
                     jl_printf((JL_STREAM*)STDERR_FILENO, "error during exit cleanup: close: ");
-                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                    jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                     jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                     jlbacktrace(); // written to STDERR_FILENO
                     item = next_shutdown_queue_item(item);
@@ -338,15 +331,15 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
                          // we would like to guarantee this, but cannot currently, so there is still a small race window
                          // that needs to be fixed in libuv
     }
-    if (ct)
-        (void)jl_gc_safe_enter(ct->ptls); // park in gc-safe
     if (loop != NULL) {
         // TODO: consider uv_loop_close(loop) here, before shutdown?
         uv_library_shutdown();
         // no JL_UV_UNLOCK(), since it is now torn down
     }
-
-    // TODO: Destroy threads?
+    if (ct)
+        jl_safepoint_suspend_all_threads(ct); // Destroy other threads, so that they don't segfault
+    if (ct)
+        (void)jl_gc_safe_enter(ct->ptls); // park in gc-safe
 
     jl_destroy_timing(); // cleans up the current timing_stack for noreturn
 #ifdef USE_TIMING_COUNTS
@@ -362,21 +355,23 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
 
     if (jl_base_module) {
         jl_task_t *ct = jl_get_current_task();
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_postoutput"));
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_postoutput"));
         if (f != NULL) {
             JL_TRY {
-                size_t last_age = ct->world_age;
-                ct->world_age = jl_get_world_counter();
+                JL_GC_PUSH1(&f);
                 jl_apply(&f, 1);
-                ct->world_age = last_age;
+                JL_GC_POP();
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\npostoutput hook threw an error: ");
-                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception());
+                jl_static_show((JL_STREAM*)STDERR_FILENO, jl_current_exception(ct));
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\n");
                 jlbacktrace(); // written to STDERR_FILENO
             }
         }
+        ct->world_age = last_age;
     }
     return;
 }
@@ -449,6 +444,7 @@ static void *init_stdio_handle(const char *stdio, uv_os_fd_t fd, int readable)
     // This also helps limit the impact other libraries can cause on our file handle.
     if ((err = uv_dup(fd, &fd)))
         jl_errorf("error initializing %s in uv_dup: %s (%s %d)", stdio, uv_strerror(err), uv_err_name(err), err);
+    assert(fd != -1); // This avoids a bug in clang's static analyzer, if an error did not occur, fd != -1
     switch(uv_guess_handle(fd)) {
     case UV_TTY:
         handle = malloc_s(sizeof(uv_tty_t));
@@ -539,169 +535,6 @@ int jl_isabspath(const char *in) JL_NOTSAFEPOINT
     return 0; // relative path
 }
 
-static char *absrealpath(const char *in, int nprefix)
-{ // compute an absolute realpath location, so that chdir doesn't change the file reference
-  // ignores (copies directly over) nprefix characters at the start of abspath
-#ifndef _OS_WINDOWS_
-    char *out = realpath(in + nprefix, NULL);
-    if (out) {
-        if (nprefix > 0) {
-            size_t sz = strlen(out) + 1;
-            char *cpy = (char*)malloc_s(sz + nprefix);
-            memcpy(cpy, in, nprefix);
-            memcpy(cpy + nprefix, out, sz);
-            free(out);
-            out = cpy;
-        }
-    }
-    else {
-        size_t sz = strlen(in + nprefix) + 1;
-        if (in[nprefix] == PATHSEPSTRING[0]) {
-            out = (char*)malloc_s(sz + nprefix);
-            memcpy(out, in, sz + nprefix);
-        }
-        else {
-            size_t path_size = JL_PATH_MAX;
-            char *path = (char*)malloc_s(JL_PATH_MAX);
-            if (uv_cwd(path, &path_size)) {
-                jl_error("fatal error: unexpected error while retrieving current working directory");
-            }
-            out = (char*)malloc_s(path_size + 1 + sz + nprefix);
-            memcpy(out, in, nprefix);
-            memcpy(out + nprefix, path, path_size);
-            out[nprefix + path_size] = PATHSEPSTRING[0];
-            memcpy(out + nprefix + path_size + 1, in + nprefix, sz);
-            free(path);
-        }
-    }
-#else
-    // GetFullPathName intentionally errors if given an empty string so manually insert `.` to invoke cwd
-    char *in2 = (char*)malloc_s(JL_PATH_MAX);
-    if (strlen(in) - nprefix == 0) {
-        memcpy(in2, in, nprefix);
-        in2[nprefix] = '.';
-        in2[nprefix+1] = '\0';
-        in = in2;
-    }
-    DWORD n = GetFullPathName(in + nprefix, 0, NULL, NULL);
-    if (n <= 0) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
-    }
-    char *out = (char*)malloc_s(n + nprefix);
-    DWORD m = GetFullPathName(in + nprefix, n, out + nprefix, NULL);
-    if (n != m + 1) {
-        jl_error("fatal error: jl_options.image_file path too long or GetFullPathName failed");
-    }
-    memcpy(out, in, nprefix);
-    free(in2);
-#endif
-    return out;
-}
-
-// create an absolute-path copy of the input path format string
-// formed as `joinpath(replace(pwd(), "%" => "%%"), in)`
-// unless `in` starts with `%`
-static const char *absformat(const char *in)
-{
-    if (in[0] == '%' || jl_isabspath(in))
-        return in;
-    // get an escaped copy of cwd
-    size_t path_size = JL_PATH_MAX;
-    char path[JL_PATH_MAX];
-    if (uv_cwd(path, &path_size)) {
-        jl_error("fatal error: unexpected error while retrieving current working directory");
-    }
-    size_t sz = strlen(in) + 1;
-    size_t i, fmt_size = 0;
-    for (i = 0; i < path_size; i++)
-        fmt_size += (path[i] == '%' ? 2 : 1);
-    char *out = (char*)malloc_s(fmt_size + 1 + sz);
-    fmt_size = 0;
-    for (i = 0; i < path_size; i++) { // copy-replace pwd portion
-        char c = path[i];
-        out[fmt_size++] = c;
-        if (c == '%')
-            out[fmt_size++] = '%';
-    }
-    out[fmt_size++] = PATHSEPSTRING[0]; // path sep
-    memcpy(out + fmt_size, in, sz); // copy over format, including nul
-    return out;
-}
-
-static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
-{
-    // this function resolves the paths in jl_options to absolute file locations as needed
-    // and it replaces the pointers to `julia_bindir`, `julia_bin`, `image_file`, and output file paths
-    // it may fail, print an error, and exit(1) if any of these paths are longer than JL_PATH_MAX
-    //
-    // note: if you care about lost memory, you should call the appropriate `free()` function
-    // on the original pointer for each `char*` you've inserted into `jl_options`, after
-    // calling `julia_init()`
-    char *free_path = (char*)malloc_s(JL_PATH_MAX);
-    size_t path_size = JL_PATH_MAX;
-    if (uv_exepath(free_path, &path_size)) {
-        jl_error("fatal error: unexpected error while retrieving exepath");
-    }
-    if (path_size >= JL_PATH_MAX) {
-        jl_error("fatal error: jl_options.julia_bin path too long");
-    }
-    jl_options.julia_bin = (char*)malloc_s(path_size + 1);
-    memcpy((char*)jl_options.julia_bin, free_path, path_size);
-    ((char*)jl_options.julia_bin)[path_size] = '\0';
-    if (!jl_options.julia_bindir) {
-        jl_options.julia_bindir = getenv("JULIA_BINDIR");
-        if (!jl_options.julia_bindir) {
-            jl_options.julia_bindir = dirname(free_path);
-        }
-    }
-    if (jl_options.julia_bindir)
-        jl_options.julia_bindir = absrealpath(jl_options.julia_bindir, 0);
-    free(free_path);
-    free_path = NULL;
-    if (jl_options.image_file) {
-        if (rel == JL_IMAGE_JULIA_HOME && !jl_isabspath(jl_options.image_file)) {
-            // build time path, relative to JULIA_BINDIR
-            free_path = (char*)malloc_s(JL_PATH_MAX);
-            int n = snprintf(free_path, JL_PATH_MAX, "%s" PATHSEPSTRING "%s",
-                             jl_options.julia_bindir, jl_options.image_file);
-            if (n >= JL_PATH_MAX || n < 0) {
-                jl_error("fatal error: jl_options.image_file path too long");
-            }
-            jl_options.image_file = free_path;
-        }
-        if (jl_options.image_file)
-            jl_options.image_file = absrealpath(jl_options.image_file, 0);
-        if (free_path) {
-            free(free_path);
-            free_path = NULL;
-        }
-    }
-    if (jl_options.outputo)
-        jl_options.outputo = absrealpath(jl_options.outputo, 0);
-    if (jl_options.outputji)
-        jl_options.outputji = absrealpath(jl_options.outputji, 0);
-    if (jl_options.outputbc)
-        jl_options.outputbc = absrealpath(jl_options.outputbc, 0);
-    if (jl_options.outputasm)
-        jl_options.outputasm = absrealpath(jl_options.outputasm, 0);
-    if (jl_options.machine_file)
-        jl_options.machine_file = absrealpath(jl_options.machine_file, 0);
-    if (jl_options.output_code_coverage)
-        jl_options.output_code_coverage = absformat(jl_options.output_code_coverage);
-    if (jl_options.tracked_path)
-        jl_options.tracked_path = absrealpath(jl_options.tracked_path, 0);
-
-    const char **cmdp = jl_options.cmds;
-    if (cmdp) {
-        for (; *cmdp; cmdp++) {
-            const char *cmd = *cmdp;
-            if (cmd[0] == 'L') {
-                *cmdp = absrealpath(cmd, 1);
-            }
-        }
-    }
-}
-
 JL_DLLEXPORT int jl_is_file_tracked(jl_sym_t *path)
 {
     const char* path_ = jl_symbol_name(path);
@@ -726,30 +559,132 @@ static void restore_fp_env(void)
     if (jl_set_zero_subnormals(0) || jl_set_default_nans(0)) {
         jl_error("Failed to configure floating point environment");
     }
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_OFF && jl_atomic_load_relaxed(&jl_n_threads) > 1) {
+        jl_error("Cannot use `--handle-signals=no` with multiple threads (JULIA_NUM_THREADS > 1).\n"
+        "This will cause segmentation faults due to GC safepoint failures.\n"
+        "Remove `--handle-signals=no` or set JULIA_NUM_THREADS=1.\n"
+        "See: https://github.com/JuliaLang/julia/issues/50278");
+    }
+}
+static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, jl_task_t *ct)
+{
+    JL_TIMING(JULIA_INIT, JULIA_INIT);
+
+    if (sysimage.kind == JL_IMAGE_KIND_SO)
+        jl_gc_notify_image_load(sysimage.data, sysimage.size);
+
+    if (jl_options.cpu_target == NULL)
+        jl_options.cpu_target = "native";
+
+    // Parse image, perform relocations, and init JIT targets, etc.
+    jl_image_t parsed_image = jl_init_processor_sysimg(sysimage, jl_options.cpu_target);
+
+    jl_init_codegen();
+    jl_init_common_symbols();
+
+    if (sysimage.kind != JL_IMAGE_KIND_NONE) {
+        // Load the .ji or .so sysimage
+        jl_restore_system_image(&parsed_image, sysimage);
+    } else {
+        // No sysimage provided, init a minimal environment
+        jl_init_types();
+        jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
+        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
+    }
+
+    jl_init_flisp();
+    jl_init_serializer();
+
+    if (sysimage.kind == JL_IMAGE_KIND_NONE) {
+        jl_top_module = jl_core_module;
+        jl_init_intrinsic_functions();
+        jl_init_primitives();
+        jl_init_main_module();
+        jl_load(jl_core_module, "boot.jl");
+        post_boot_hooks();
+    }
+
+    if (jl_base_module == NULL) {
+        // nthreads > 1 requires code in Base
+        jl_atomic_store_relaxed(&jl_n_threads, 1);
+        jl_n_markthreads = 0;
+        jl_n_sweepthreads = 0;
+        jl_n_gcthreads = 0;
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
+        jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
+    } else {
+        post_image_load_hooks();
+    }
+    jl_start_threads();
+    jl_start_gc_threads();
+    uv_barrier_wait(&thread_init_done);
+
+    jl_gc_enable(1);
+
+    if ((sysimage.kind != JL_IMAGE_KIND_NONE) &&
+            (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
+        jl_array_t *init_order = jl_module_init_order;
+        JL_GC_PUSH1(&init_order);
+        jl_module_init_order = NULL;
+        int i, l = jl_array_nrows(init_order);
+        for (i = 0; i < l; i++) {
+            jl_value_t *mod = jl_array_ptr_ref(init_order, i);
+            jl_module_run_initializer((jl_module_t*)mod);
+        }
+        JL_GC_POP();
+    }
+
+    if (jl_options.trim) {
+        jl_entrypoint_mis = (arraylist_t *)malloc_s(sizeof(arraylist_t));
+        arraylist_new(jl_entrypoint_mis, 0);
+    }
+
+    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
+        jl_install_sigint_handler();
 }
 
-static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct);
 
 JL_DLLEXPORT int jl_default_debug_info_kind;
+JL_DLLEXPORT jl_cgparams_t jl_default_cgparams = {
+        /* track_allocations */ 1,
+        /* code_coverage */ 1,
+        /* prefer_specsig */ 0,
+#ifdef _OS_WINDOWS_
+        /* gnu_pubnames */ 0,
+#else
+        /* gnu_pubnames */ 1,
+#endif
+        /* debug_info_kind */ 0, // later DICompileUnit::DebugEmissionKind::FullDebug,
+        /* debug_info_level */ 0, // later jl_options.debug_level,
+        /* safepoint_on_entry */ 1,
+        /* gcstack_arg */ 1,
+        /* use_jlplt*/ 1 ,
+        /*force_emit_all=*/ 0};
 
 static void init_global_mutexes(void) {
     JL_MUTEX_INIT(&jl_modules_mutex, "jl_modules_mutex");
     JL_MUTEX_INIT(&precomp_statement_out_lock, "precomp_statement_out_lock");
     JL_MUTEX_INIT(&newly_inferred_mutex, "newly_inferred_mutex");
     JL_MUTEX_INIT(&global_roots_lock, "global_roots_lock");
-    JL_MUTEX_INIT(&jl_codegen_lock, "jl_codegen_lock");
     JL_MUTEX_INIT(&typecache_lock, "typecache_lock");
     JL_MUTEX_INIT(&profile_show_peek_cond_lock, "profile_show_peek_cond_lock");
 }
 
-JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
+JL_DLLEXPORT void jl_init_(jl_image_buf_t sysimage)
 {
     // initialize many things, in no particular order
     // but generally running from simple platform things to optional
     // configuration features
-    jl_init_timing();
+
     // Make sure we finalize the tls callback before starting any threads.
     (void)jl_get_pgcstack();
+
+    // initialize symbol-table lock
+    uv_mutex_init(&symtab_lock);
+    // initialize the live tasks lock
+    uv_mutex_init(&live_tasks_lock);
+    // initialize the profiler buffer lock
+    uv_mutex_init(&bt_data_prof_lock);
 
     // initialize backtraces
     jl_init_profile_lock();
@@ -792,8 +727,8 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     void *stack_lo, *stack_hi;
     jl_init_stack_limits(1, &stack_lo, &stack_hi);
 
-    jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library);
-    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type);
+    jl_libjulia_internal_handle = jl_find_dynamic_library_by_addr(&jl_load_dynamic_library, /* throw_err */ 1);
+    jl_libjulia_handle = jl_find_dynamic_library_by_addr(&jl_any_type, /* throw_err */ 1);
 #ifdef _OS_WINDOWS_
     jl_exe_handle = GetModuleHandleA(NULL);
     jl_RTLD_DEFAULT_handle = jl_libjulia_internal_handle;
@@ -826,6 +761,7 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 
     arraylist_new(&jl_linkage_blobs, 0);
     arraylist_new(&jl_image_relocs, 0);
+    arraylist_new(&jl_top_mods, 0);
     arraylist_new(&eytzinger_image_tree, 0);
     arraylist_new(&eytzinger_idxs, 0);
     arraylist_push(&eytzinger_idxs, (void*)0);
@@ -836,76 +772,15 @@ JL_DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 #if defined(_COMPILER_GCC_) && __GNUC__ >= 12
 #pragma GCC diagnostic ignored "-Wdangling-pointer"
 #endif
+    if (jl_options.task_metrics == JL_OPTIONS_TASK_METRICS_ON) {
+        // enable before creating the root task so it gets timings too.
+        jl_atomic_fetch_add(&jl_task_metrics_enabled, 1);
+    }
     // warning: this changes `jl_current_task`, so be careful not to call that from this function
     jl_task_t *ct = jl_init_root_task(ptls, stack_lo, stack_hi);
 #pragma GCC diagnostic pop
     JL_GC_PROMISE_ROOTED(ct);
-    _finish_julia_init(rel, ptls, ct);
-}
-
-static NOINLINE void _finish_julia_init(JL_IMAGE_SEARCH rel, jl_ptls_t ptls, jl_task_t *ct)
-{
-    JL_TIMING(JULIA_INIT, JULIA_INIT);
-    jl_resolve_sysimg_location(rel);
-    // loads sysimg if available, and conditionally sets jl_options.cpu_target
-    if (rel == JL_IMAGE_IN_MEMORY)
-        jl_set_sysimg_so(jl_exe_handle);
-    else if (jl_options.image_file)
-        jl_preload_sysimg_so(jl_options.image_file);
-    if (jl_options.cpu_target == NULL)
-        jl_options.cpu_target = "native";
-    jl_init_codegen();
-
-    jl_init_common_symbols();
-    if (jl_options.image_file) {
-        jl_restore_system_image(jl_options.image_file);
-    } else {
-        jl_init_types();
-        jl_global_roots_list = (jl_genericmemory_t*)jl_an_empty_memory_any;
-        jl_global_roots_keyset = (jl_genericmemory_t*)jl_an_empty_memory_any;
-    }
-
-    jl_init_flisp();
-    jl_init_serializer();
-
-    if (!jl_options.image_file) {
-        jl_top_module = jl_core_module;
-        jl_init_intrinsic_functions();
-        jl_init_primitives();
-        jl_init_main_module();
-        jl_load(jl_core_module, "boot.jl");
-        post_boot_hooks();
-    }
-
-    if (jl_base_module == NULL) {
-        // nthreads > 1 requires code in Base
-        jl_atomic_store_relaxed(&jl_n_threads, 1);
-        jl_n_markthreads = 0;
-        jl_n_sweepthreads = 0;
-        jl_n_gcthreads = 0;
-        jl_n_threads_per_pool[0] = 1;
-        jl_n_threads_per_pool[1] = 0;
-    } else {
-        post_image_load_hooks();
-    }
-    jl_start_threads();
-
-    jl_gc_enable(1);
-
-    if (jl_options.image_file && (!jl_generating_output() || jl_options.incremental) && jl_module_init_order) {
-        jl_array_t *init_order = jl_module_init_order;
-        JL_GC_PUSH1(&init_order);
-        jl_module_init_order = NULL;
-        int i, l = jl_array_nrows(init_order);
-        for (i = 0; i < l; i++) {
-            jl_value_t *mod = jl_array_ptr_ref(init_order, i);
-            jl_module_run_initializer((jl_module_t*)mod);
-        }
-        JL_GC_POP();
-    }
-
-    if (jl_options.handle_signals == JL_OPTIONS_HANDLE_SIGNALS_ON)
-        jl_install_sigint_handler();
+    _finish_jl_init_(sysimage, ptls, ct);
 }
 
 #ifdef __cplusplus

@@ -54,7 +54,7 @@ linking against `libjulia`.
 The first thing that must be done before calling any other Julia C function is to
 initialize Julia. This is done by calling `jl_init`, which tries to automatically determine
 Julia's install location. If you need to specify a custom location, or specify which system
-image to load, use `jl_init_with_image` instead.
+image to load, use `jl_init_with_image_file` or `jl_init_with_image_handle` instead.
 
 The second statement in the test program evaluates a Julia statement using a call to `jl_eval_string`.
 
@@ -412,7 +412,7 @@ per pointer using
 ```c
 jl_module_t *mod = jl_main_module;
 jl_sym_t *var = jl_symbol("var");
-jl_binding_t *bp = jl_get_binding_wr(mod, var);
+jl_binding_t *bp = jl_get_binding_wr(mod, var, 1);
 jl_checked_assignment(bp, mod, var, val);
 ```
 
@@ -449,12 +449,14 @@ jl_gc_wb(jl_array_owner(some_array), some_value);
 
 There are some functions to control the GC. In normal use cases, these should not be necessary.
 
-| Function             | Description                                  |
-|:-------------------- |:-------------------------------------------- |
-| `jl_gc_collect()`    | Force a GC run                               |
-| `jl_gc_enable(0)`    | Disable the GC, return previous state as int |
-| `jl_gc_enable(1)`    | Enable the GC,  return previous state as int |
-| `jl_gc_is_enabled()` | Return current state as int                  |
+| Function                           | Description                                                         |
+| :--------------------------------- | :------------------------------------------------------------------ |
+| `jl_gc_collect(JL_GC_FULL)`        | Force a GC run on all objects                                       |
+| `jl_gc_collect(JL_GC_INCREMENTAL)` | Force a GC run only on young objects                                |
+| `jl_gc_collect(JL_GC_AUTO)`        | Force a GC run, automatically choosing between full and incremental |
+| `jl_gc_enable(0)`                  | Disable the GC, return previous state as int                        |
+| `jl_gc_enable(1)`                  | Enable the GC, return previous state as int                         |
+| `jl_gc_is_enabled()`               | Return current state as int                                         |
 
 ## Working with Arrays
 

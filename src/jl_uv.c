@@ -160,10 +160,10 @@ static void jl_uv_call_close_callback(jl_value_t *val)
 {
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 2); // val is "rooted" in the finalizer list only right now
-    args[0] = jl_get_global(jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module),
+    args[0] = jl_eval_global_var(
+            jl_base_relative_to(((jl_datatype_t*)jl_typeof(val))->name->module),
             jl_symbol("_uv_hook_close")); // topmod(typeof(val))._uv_hook_close
     args[1] = val;
-    assert(args[0]);
     jl_apply(args, 2); // TODO: wrap in try-catch?
     JL_GC_POP();
 }
@@ -373,8 +373,6 @@ JL_DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data;
  */
 JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
-extern _Atomic(unsigned) _threadedregion;
-
 /**
  * @brief Process pending UV events.
  *
@@ -387,7 +385,7 @@ JL_DLLEXPORT int jl_process_events(void)
     jl_task_t *ct = jl_current_task;
     uv_loop_t *loop = jl_io_loop;
     jl_gc_safepoint_(ct->ptls);
-    if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == 0)) {
+    if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == jl_atomic_load_relaxed(&io_loop_tid))) {
         if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
             JL_PROBE_RT_START_PROCESS_EVENTS(ct);
             loop->stop_flag = 0;
@@ -637,7 +635,7 @@ JL_DLLEXPORT int jl_fs_write(uv_os_fd_t handle, const char *data, size_t len,
 {
     jl_task_t *ct = jl_get_current_task();
     // TODO: fix this cheating
-    if (jl_get_safe_restore() || ct == NULL || jl_atomic_load_relaxed(&ct->tid) != 0)
+    if (jl_get_safe_restore() || ct == NULL || jl_atomic_load_relaxed(&ct->tid) != jl_atomic_load_relaxed(&io_loop_tid))
 #ifdef _OS_WINDOWS_
         return WriteFile(handle, data, len, NULL, NULL);
 #else
@@ -718,7 +716,7 @@ JL_DLLEXPORT void jl_uv_puts(uv_stream_t *stream, const char *str, size_t n)
 
     // TODO: Hack to make CoreIO thread-safer
     jl_task_t *ct = jl_get_current_task();
-    if (ct == NULL || jl_atomic_load_relaxed(&ct->tid) != 0) {
+    if (ct == NULL || jl_atomic_load_relaxed(&ct->tid) != jl_atomic_load_relaxed(&io_loop_tid)) {
         if (stream == JL_STDOUT) {
             fd = UV_STDOUT_FD;
         }
@@ -1162,6 +1160,8 @@ JL_DLLEXPORT uv_handle_type jl_uv_handle_type(uv_handle_t *handle)
 
 JL_DLLEXPORT int jl_tty_set_mode(uv_tty_t *handle, int mode)
 {
+    if (!handle)
+        return UV__EOF;
     if (handle->type != UV_TTY) return 0;
     uv_tty_mode_t mode_enum = UV_TTY_MODE_NORMAL;
     if (mode)

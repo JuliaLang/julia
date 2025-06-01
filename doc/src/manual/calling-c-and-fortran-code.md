@@ -27,9 +27,9 @@ commonly passed in registers when using C or Julia calling conventions.
 The syntax for [`@ccall`](@ref) to generate a call to the library function is:
 
 ```julia
-  @ccall library.function_name(argvalue1::argtype1, ...)::returntype
-  @ccall function_name(argvalue1::argtype1, ...)::returntype
-  @ccall $function_pointer(argvalue1::argtype1, ...)::returntype
+@ccall library.function_name(argvalue1::argtype1, ...)::returntype
+@ccall function_name(argvalue1::argtype1, ...)::returntype
+@ccall $function_pointer(argvalue1::argtype1, ...)::returntype
 ```
 
 where `library` is a string constant or literal (but see [Non-constant Function
@@ -276,17 +276,17 @@ it to be freed prematurely.
 
 First, let's review some relevant Julia type terminology:
 
-| Syntax / Keyword              | Example                                     | Description                                                                                                                                                                                                                                                                    |
-|:----------------------------- |:------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `mutable struct`              | `BitSet`                                    | "Leaf Type" :: A group of related data that includes a type-tag, is managed by the Julia GC, and is defined by object-identity. The type parameters of a leaf type must be fully defined (no `TypeVars` are allowed) in order for the instance to be constructed.              |
-| `abstract type`               | `Any`, `AbstractArray{T, N}`, `Complex{T}`  | "Super Type" :: A super-type (not a leaf-type) that cannot be instantiated, but can be used to describe a group of types.                                                                                                                                                      |
-| `T{A}`                        | `Vector{Int}`                               | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization).                                                                                                                                                                          |
-|                               |                                             | "TypeVar" :: The `T` in the type parameter declaration is referred to as a TypeVar (short for type variable).                                                                                                                                                                  |
-| `primitive type`              | `Int`, `Float64`                            | "Primitive Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                           |
-| `struct`                      | `Pair{Int, Int}`                            | "Struct" :: A type with all fields defined to be constant. It is defined by-value, and may be stored with a type-tag.                                                                                                                                                       |
-|                               | `ComplexF64` (`isbits`)                     | "Is-Bits"   :: A `primitive type`, or a `struct` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                       |
-| `struct ...; end`             | `nothing`                                   | "Singleton" :: a Leaf Type or Struct with no fields.                                                                                                                                                                                                                        |
-| `(...)` or `tuple(...)`       | `(1, 2, 3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous struct type, or a constant array. Represented as either an array or a struct.                                                                                                                                |
+| Syntax / Keyword              | Example                                     | Description                                                                                                                                                                                                                                                                                                       |
+|:----------------------------- |:------------------------------------------- |:------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `mutable struct`              | `BitSet`                                    | "Concrete Type" :: A group of related data that includes a type-tag, is managed by the Julia GC, and is defined by object-identity. The type parameters of a concrete type must be fully defined (no `TypeVars` are allowed) in order for the instance to be constructed. Also see [`isconcretetype`](@ref).      |
+| `abstract type`               | `Any`, `AbstractArray{T, N}`, `Complex{T}`  | "Super Type" :: A super-type (not a concrete type) that cannot be instantiated, but can be used to describe a group of types. Also see [`isabstracttype`](@ref).                                                                                                                                                  |
+| `T{A}`                        | `Vector{Int}`                               | "Type Parameter" :: A specialization of a type (typically used for dispatch or storage optimization).                                                                                                                                                                                                             |
+|                               |                                             | "TypeVar" :: The `T` in the type parameter declaration is referred to as a TypeVar (short for type variable).                                                                                                                                                                                                     |
+| `primitive type`              | `Int`, `Float64`                            | "Primitive Type" :: A type with no fields, but a size. It is stored and defined by-value.                                                                                                                                                                                                                         |
+| `struct`                      | `Pair{Int, Int}`                            | "Struct" :: A type with all fields defined to be constant. It is defined by-value, and may be stored with a type-tag.                                                                                                                                                                                             |
+|                               | `ComplexF64` (`isbits`)                     | "Is-Bits"   :: A `primitive type`, or a `struct` type where all fields are other `isbits` types. It is defined by-value, and is stored without a type-tag.                                                                                                                                                        |
+| `struct ...; end`             | `nothing`                                   | "Singleton" :: a concrete Type or Struct with no fields.                                                                                                                                                                                                                                                          |
+| `(...)` or `tuple(...)`       | `(1, 2, 3)`                                 | "Tuple" :: an immutable data-structure similar to an anonymous struct type, or a constant array. Represented as either an array or a struct.                                                                                                                                                                      |
 
 ### [Bits Types](@id man-bits-types)
 
@@ -547,15 +547,14 @@ is not valid, since the type layout of `T` is not known statically.
 
 ### SIMD Values
 
-Note: This feature is currently implemented on 64-bit x86 and AArch64 platforms only.
-
 If a C/C++ routine has an argument or return value that is a native SIMD type, the corresponding
 Julia type is a homogeneous tuple of `VecElement` that naturally maps to the SIMD type. Specifically:
 
->   * The tuple must be the same size as the SIMD type. For example, a tuple representing an `__m128`
->     on x86 must have a size of 16 bytes.
->   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a primitive type that
->     is 1, 2, 4 or 8 bytes.
+>   * The tuple must be the same size and elements as the SIMD type. For example, a tuple
+>     representing an `__m128` on x86 must have a size of 16 bytes and Float32 elements.
+>   * The element type of the tuple must be an instance of `VecElement{T}` where `T` is a
+>     primitive type with a power-of-two number of bytes (e.g. 1, 2, 4, 8, 16, etc) such as
+>     Int8 or Float64.
 
 For instance, consider this C routine that uses AVX intrinsics:
 
@@ -626,8 +625,12 @@ For translating a C argument list to Julia:
       * argument value will be copied (passed by value)
   * `struct T` (including typedef to a struct)
 
-      * `T`, where `T` is a Julia leaf type
+      * `T`, where `T` is a concrete Julia type
       * argument value will be copied (passed by value)
+  * `vector T` (or `__attribute__ vector_size`, or a typedef such as `__m128`)
+
+      * `NTuple{N, VecElement{T}}`, where `T` is a primitive Julia type of the correct size
+        and N is the number of elements in the vector (equal to `vector_size / sizeof T`).
   * `void*`
 
       * depends on how this parameter is used, first translate this to the intended pointer type, then
@@ -674,13 +677,16 @@ For translating a C return type to Julia:
   * `T`, where `T` is one of the primitive types: `char`, `int`, `long`, `short`, `float`, `double`,
     `complex`, `enum` or any of their `typedef` equivalents
 
-      * `T`, where `T` is an equivalent Julia Bits Type (per the table above)
-      * if `T` is an `enum`, the argument type should be equivalent to `Cint` or `Cuint`
+      * same as C argument list
       * argument value will be copied (returned by-value)
   * `struct T` (including typedef to a struct)
 
-      * `T`, where `T` is a Julia Leaf Type
+      * same as C argument list
       * argument value will be copied (returned by-value)
+
+  * `vector T`
+
+      * same as C argument list
   * `void*`
 
       * depends on how this parameter is used, first translate this to the intended pointer type, then
@@ -825,7 +831,7 @@ Instead define a [`Base.cconvert`](@ref) method and pass the variables directly 
 automatically arranges that all of its arguments will be preserved from garbage collection until
 the call returns. If a C API will store a reference to memory allocated by Julia, after the `@ccall`
 returns, you must ensure that the object remains visible to the garbage collector. The suggested
-way to do this is to make a global variable of type `Array{Ref,1}` to hold these values until
+way to do this is to make a global variable of type `Vector{Ref}` to hold these values until
 the C library notifies you that it is finished with them.
 
 Whenever you have created a pointer to Julia data, you must ensure the original data exists until
@@ -996,7 +1002,7 @@ A table of translations between the macro and function interfaces is given below
 |------------------------------------------------------------------------------|-----------------------------------------------------------------------------|
 | `@ccall clock()::Int32`                                                      | `ccall(:clock, Int32, ())`                                                  |
 | `@ccall f(a::Cint)::Cint`                                                    | `ccall(:a, Cint, (Cint,), a)`                                               |
-| `@ccall "mylib".f(a::Cint, b::Cdouble)::Cvoid`                               | `ccall((:f, "mylib"), Cvoid, (Cint, Cdouble), (a, b))`                      |
+| `@ccall "mylib".f(a::Cint, b::Cdouble)::Cvoid`                               | `ccall((:f, "mylib"), Cvoid, (Cint, Cdouble), a, b)`                        |
 | `@ccall $fptr.f()::Cvoid`                                                    | `ccall(fptr, f, Cvoid, ())`                                                 |
 | `@ccall printf("%s = %d\n"::Cstring ; "foo"::Cstring, foo::Cint)::Cint`      | `<unavailable>`                                                             |
 | `@ccall printf("%s = %s\n"::Cstring ; "2 + 2"::Cstring, "5"::Cstring)::Cint` | `ccall(:printf, Cint, (Cstring, Cstring...), "%s = %s\n", "2 + 2", "5")`    |

@@ -1,29 +1,19 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,TYPED
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext -passes='JuliaMultiVersioning' -S %s | FileCheck %s --allow-unused-prefixes=false --check-prefixes=CHECK,OPAQUE
 
 ; CHECK: @jl_gvar_base = hidden constant i64 0
 ; CHECK: @jl_gvar_offsets = hidden constant [0 x i32] zeroinitializer
 ; CHECK: @jl_fvar_idxs = hidden constant [1 x i32] zeroinitializer
 ; CHECK: @jl_gvar_idxs = hidden constant [0 x i32] zeroinitializer
-; TYPED: @subtarget_cloned_gv = hidden global i64* null
 ; OPAQUE: @subtarget_cloned_gv = hidden global ptr null
-; TYPED: @subtarget_cloned.reloc_slot = hidden global i32 (i32)* null
 ; OPAQUE: @subtarget_cloned.reloc_slot = hidden global ptr null
 ; CHECK: @jl_fvar_count = hidden constant i64 1
-; TYPED: @jl_fvar_ptrs = hidden global [1 x i64*] [i64* bitcast (i32 (i32)* @subtarget_cloned to i64*)] 
-; OPAQUE: @jl_fvar_ptrs = hidden global [1 x ptr] [ptr @subtarget_cloned] 
+; OPAQUE: @jl_fvar_ptrs = hidden global [1 x ptr] [ptr @subtarget_cloned]
 ; CHECK: @jl_clone_slots = hidden constant [5 x i32]
 ; CHECK-SAME: i32 2, i32 0, {{.*}} sub {{.*}}@subtarget_cloned.reloc_slot{{.*}}@jl_clone_slots
 ; CHECK: @jl_clone_idxs = hidden constant [13 x i32]
 ; COM: TODO actually check the clone idxs maybe?
-; TYPED: @jl_clone_ptrs = hidden constant [4 x i64*]
-; TYPED-SAME: @subtarget_cloned.1
-; TYPED-SAME: @subtarget_cloned.2
-; TYPED-SAME: @subtarget_cloned
-; TYPED-SAME: @subtarget_cloned
 ; OPAQUE: @jl_clone_ptrs = hidden constant [4 x ptr] [ptr @subtarget_cloned.1, ptr @subtarget_cloned.2, ptr @subtarget_cloned, ptr @subtarget_cloned]
 
 @jl_fvars = global [1 x i64*] [i64* bitcast (i32 (i32)* @subtarget_cloned to i64*)], align 8

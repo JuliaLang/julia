@@ -29,6 +29,7 @@ Base.Filesystem.operm
 Base.Filesystem.cp
 Base.download
 Base.Filesystem.mv
+Base.Filesystem.rename
 Base.Filesystem.rm
 Base.Filesystem.touch
 Base.Filesystem.tempname

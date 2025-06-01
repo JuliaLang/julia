@@ -1,8 +1,6 @@
 ; This file is a part of Julia. License is MIT: https://julialang.org/license
 
-; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext --passes='function(AllocOpt)' -S %s | FileCheck %s --check-prefixes=TYPED
-
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext --passes='function(AllocOpt)' -S %s | FileCheck %s --check-prefixes=OPAQUE
+; RUN: opt --load-pass-plugin=libjulia-codegen%shlibext --passes='function(AllocOpt)' -S %s | FileCheck %s --check-prefixes=OPAQUE
 
 source_filename = "text"
 target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128-ni:10:11:12:13"
@@ -28,15 +26,6 @@ entry:
   %l = load {} addrspace(10)*, {} addrspace(10)* addrspace(10)* %i23
   ret void
 }
-
-; TYPED:   %[[i0:.+]] = alloca {} addrspace(10)*, i64 1000, align 16
-; TYPED:   %[[i1:.+]] = bitcast {} addrspace(10)** %[[i0]] to i8*
-; TYPED:   %i18 = bitcast i8* %[[i1]] to {}*
-; TYPED:   %_malloccache.i = bitcast {}* %i18 to {} addrspace(10)**
-; TYPED:   %i23 = getelementptr inbounds {} addrspace(10)*, {} addrspace(10)** %_malloccache.i, i64 %iv.i
-; TYPED:   store {} addrspace(10)* %arg, {} addrspace(10)** %i23, align 8
-; TYPED:   %i24 = bitcast {} addrspace(10)** %_malloccache.i to {}*
-; TYPED:   %l = load {} addrspace(10)*, {} addrspace(10)** %i23, align 8
 
 ; OPAQUE:   %[[i0:.+]] = alloca ptr addrspace(10), i64 1000, align 16
 ; OPAQUE:   %i23 = getelementptr inbounds ptr addrspace(10), ptr %i18, i64 %iv.i

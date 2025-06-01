@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 using Test, Random
-using Test: guardseed
+using Test: guardseed, _should_escape_call, _escape_call
 using Serialization
 using Distributed: RemoteException
 
@@ -115,54 +115,65 @@ let fails = @testset NoThrowTestSet begin
         @test_throws OverflowError error()
         # 2 - Fail - no exception
         @test_throws OverflowError 1 + 1
-        # 3 - Fail - comparison
+        # 3 & 4 - Fail - comparison
+        @test 1 == 2
         @test 1+1 == 2+2
-        # 4 - Fail - approximate comparison
+        # 5 - Fail - approximate comparison
         @test 1/1 ≈ 2/1
-        # 5 - Fail - chained comparison
+        # 6 - Fail - chained comparison
         @test 1+0 == 2+0 == 3+0
-        # 6 - Fail - comparison call
+        # 7 - Fail - comparison call
         @test ==(1 - 2, 2 - 1)
-        # 7 - Fail - splatting
+        # 8 - Fail - splatting
         @test ==(1:2...)
-        # 8 - Fail - isequal
+        # 9 & 10 - Fail - broadcast
+        @test 1*1 .== 2*2
+        @test (==).(1*1, 2*2)
+        # 11 & 12 - Fail qualified functions
+        @test Base.:(==)(1*1, 2*2)
+        @test Base.:(==).(1*1, 2*2)
+        # 13 - Fail - isequal
         @test isequal(0 / 0, 1 / 0)
-        # 9 - Fail - function splatting
+        # 14 - Fail - function splatting
         @test isequal(1:2...)
-        # 10 - Fail - isapprox
+        # 15 - Fail - isapprox
         @test isapprox(0 / 1, -1 / 0)
-        # 11 & 12 - Fail - function with keyword
+        # 16 & 17 - Fail - function with keyword
         @test isapprox(1 / 2, 2 / 1, atol=1 / 1)
         @test isapprox(1 - 2, 2 - 1; atol=1 - 1)
-        # 13 - Fail - function keyword splatting
+        # 18 - Fail - function keyword splatting
         k = [(:atol, 0), (:nans, true)]
         @test isapprox(1, 2; k...)
-        # 14 - Fail - call negation
+        # 19 - Fail - call negation
         @test !isequal(1, 2 - 1)
-        # 15 - Fail - comparison negation
+        # 20 - Fail - comparison negation
         @test !(2 + 3 == 1 + 4)
-        # 16 - Fail - chained negation
+        # 21 - Fail - chained negation
         @test !(2 + 3 == 1 + 4 == 5)
-        # 17 - Fail - isempty
+        # 22 - Fail - isempty
         nonempty = [1, 2, 3]
         @test isempty(nonempty)
         str1 = "Hello"
         str2 = "World"
-        # 18 - Fail - occursin
+        # 23 - Fail - occursin
         @test occursin(str1, str2)
-        # 19 - Fail - startswith
+        # 24 - Fail - startswith
         @test startswith(str1, str2)
-        # 20 - Fail - endswith
+        # 25 - Fail - endswith
         @test endswith(str1, str2)
-        # 21 - Fail - contains
-        @test contains(str1, str2)
-        # 22 - Fail - Type Comparison
+        # 26 - Fail - contains
+        @test Base.contains(str1, str2)
+        # 27 - Fail - issetequal
+        @test issetequal([2, 3] .- 1, [1, 3])
+        # 28 - Fail - Type Comparison
         @test typeof(1) <: typeof("julia")
-        # 23 - 26 - Fail - wrong message
+        # 29 - Fail - assignment
+        @test (i = length([1, 2])) == 3
+        # 30 - 33 - Fail - wrong message
         @test_throws "A test" error("a test")
         @test_throws r"sqrt\([Cc]omplx" sqrt(-1)
         @test_throws str->occursin("a T", str) error("a test")
-        @test_throws ["BoundsError", "aquire", "1-element", "at index [2]"] [1][2]
+        @test_throws ["BoundsError", "acquire", "1-element", "at index [2]"] [1][2]
     end
     for fail in fails
         @test fail isa Test.Fail
@@ -179,122 +190,157 @@ let fails = @testset NoThrowTestSet begin
     end
 
     let str = sprint(show, fails[3])
+        @test occursin("Expression: 1 == 2", str)
+        @test !occursin("Evaluated", str)
+    end
+
+    let str = sprint(show, fails[4])
         @test occursin("Expression: 1 + 1 == 2 + 2", str)
         @test occursin("Evaluated: 2 == 4", str)
     end
 
-    let str = sprint(show, fails[4])
+    let str = sprint(show, fails[5])
         @test occursin("Expression: 1 / 1 ≈ 2 / 1", str)
         @test occursin("Evaluated: 1.0 ≈ 2.0", str)
     end
 
-    let str = sprint(show, fails[5])
+    let str = sprint(show, fails[6])
         @test occursin("Expression: 1 + 0 == 2 + 0 == 3 + 0", str)
         @test occursin("Evaluated: 1 == 2 == 3", str)
     end
 
-    let str = sprint(show, fails[6])
+    let str = sprint(show, fails[7])
         @test occursin("Expression: 1 - 2 == 2 - 1", str)
         @test occursin("Evaluated: -1 == 1", str)
     end
 
-    let str = sprint(show, fails[7])
+    let str = sprint(show, fails[8])
         @test occursin("Expression: (==)(1:2...)", str)
-        @test !occursin("Evaluated", str)
+        @test occursin("Evaluated: 1 == 2", str)
     end
 
-    let str = sprint(show, fails[8])
+    let str = sprint(show, fails[9])
+        @test occursin("Expression: 1 * 1 .== 2 * 2", str)
+        @test occursin("Evaluated: 1 .== 4", str)
+    end
+
+    let str = sprint(show, fails[10])
+        @test occursin("Expression: (==).(1 * 1, 2 * 2)", str)
+        @test occursin("Evaluated: (==).(1, 4)", str)
+    end
+
+    let str = sprint(show, fails[11])
+        @test occursin("Expression: Base.:(==)(1 * 1, 2 * 2)", str)
+        @test occursin("Evaluated: Base.:(==)(1, 4)", str)
+    end
+
+    let str = sprint(show, fails[12])
+        @test occursin("Expression: Base.:(==).(1 * 1, 2 * 2)", str)
+        @test occursin("Evaluated: Base.:(==).(1, 4)", str)
+    end
+
+    let str = sprint(show, fails[13])
         @test occursin("Expression: isequal(0 / 0, 1 / 0)", str)
         @test occursin("Evaluated: isequal(NaN, Inf)", str)
     end
 
-    let str = sprint(show, fails[9])
+    let str = sprint(show, fails[14])
         @test occursin("Expression: isequal(1:2...)", str)
         @test occursin("Evaluated: isequal(1, 2)", str)
     end
 
-    let str = sprint(show, fails[10])
+    let str = sprint(show, fails[15])
         @test occursin("Expression: isapprox(0 / 1, -1 / 0)", str)
         @test occursin("Evaluated: isapprox(0.0, -Inf)", str)
     end
 
-    let str = sprint(show, fails[11])
+    let str = sprint(show, fails[16])
         @test occursin("Expression: isapprox(1 / 2, 2 / 1, atol = 1 / 1)", str)
         @test occursin("Evaluated: isapprox(0.5, 2.0; atol = 1.0)", str)
     end
 
-    let str = sprint(show, fails[12])
+    let str = sprint(show, fails[17])
         @test occursin("Expression: isapprox(1 - 2, 2 - 1; atol = 1 - 1)", str)
         @test occursin("Evaluated: isapprox(-1, 1; atol = 0)", str)
     end
 
-    let str = sprint(show, fails[13])
+    let str = sprint(show, fails[18])
         @test occursin("Expression: isapprox(1, 2; k...)", str)
         @test occursin("Evaluated: isapprox(1, 2; atol = 0, nans = true)", str)
     end
 
-    let str = sprint(show, fails[14])
+    let str = sprint(show, fails[19])
         @test occursin("Expression: !(isequal(1, 2 - 1))", str)
         @test occursin("Evaluated: !(isequal(1, 1))", str)
     end
 
-    let str = sprint(show, fails[15])
+    let str = sprint(show, fails[20])
         @test occursin("Expression: !(2 + 3 == 1 + 4)", str)
         @test occursin("Evaluated: !(5 == 5)", str)
     end
 
-    let str = sprint(show, fails[16])
+    let str = sprint(show, fails[21])
         @test occursin("Expression: !(2 + 3 == 1 + 4 == 5)", str)
         @test occursin("Evaluated: !(5 == 5 == 5)", str)
     end
 
-    let str = sprint(show, fails[17])
+    let str = sprint(show, fails[22])
         @test occursin("Expression: isempty(nonempty)", str)
         @test occursin("Evaluated: isempty([1, 2, 3])", str)
     end
 
-    let str = sprint(show, fails[18])
+    let str = sprint(show, fails[23])
         @test occursin("Expression: occursin(str1, str2)", str)
         @test occursin("Evaluated: occursin(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[19])
+    let str = sprint(show, fails[24])
         @test occursin("Expression: startswith(str1, str2)", str)
         @test occursin("Evaluated: startswith(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[20])
+    let str = sprint(show, fails[25])
         @test occursin("Expression: endswith(str1, str2)", str)
         @test occursin("Evaluated: endswith(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[21])
-        @test occursin("Expression: contains(str1, str2)", str)
-        @test occursin("Evaluated: contains(\"Hello\", \"World\")", str)
+    let str = sprint(show, fails[26])
+        @test occursin("Expression: Base.contains(str1, str2)", str)
+        @test occursin("Evaluated: Base.contains(\"Hello\", \"World\")", str)
     end
 
-    let str = sprint(show, fails[22])
+    let str = sprint(show, fails[27])
+        @test occursin("Expression: issetequal([2, 3] .- 1, [1, 3])", str)
+        @test occursin("Evaluated: issetequal([1, 2], [1, 3])", str)
+    end
+
+    let str = sprint(show, fails[28])
         @test occursin("Expression: typeof(1) <: typeof(\"julia\")", str)
         @test occursin("Evaluated: $(typeof(1)) <: $(typeof("julia"))", str)
     end
 
-    let str = sprint(show, fails[23])
+    let str = sprint(show, fails[29])
+        @test occursin("Expression: (i = length([1, 2])) == 3", str)
+        @test occursin("Evaluated: 2 == 3", str)
+    end
+
+    let str = sprint(show, fails[30])
         @test occursin("Expected: \"A test\"", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[24])
+    let str = sprint(show, fails[31])
         @test occursin("Expected: r\"sqrt\\([Cc]omplx\"", str)
         @test occursin(r"Message: .*Try sqrt\(Complex", str)
     end
 
-    let str = sprint(show, fails[25])
+    let str = sprint(show, fails[32])
         @test occursin("Expected: < match function >", str)
         @test occursin("Message: \"a test\"", str)
     end
 
-    let str = sprint(show, fails[26])
-        @test occursin("Expected: [\"BoundsError\", \"aquire\", \"1-element\", \"at index [2]\"]", str)
+    let str = sprint(show, fails[33])
+        @test occursin("Expected: [\"BoundsError\", \"acquire\", \"1-element\", \"at index [2]\"]", str)
         @test occursin(r"Message: \"BoundsError.* 1-element.*at index \[2\]", str)
     end
 
@@ -345,9 +391,9 @@ let retval_tests = @testset NoThrowTestSet begin
         pass_mock = Test.Pass(:test, 1, 2, 3, LineNumberNode(0, "A Pass Mock"))
         @test Test.record(ts, pass_mock) isa Test.Pass
         error_mock = Test.Error(:test, 1, 2, 3, LineNumberNode(0, "An Error Mock"))
-        @test Test.record(ts, error_mock) isa Test.Error
+        @test Test.record(ts, error_mock; print_result=false) isa Test.Error
         fail_mock = Test.Fail(:test, 1, 2, 3, nothing, LineNumberNode(0, "A Fail Mock"), false)
-        @test Test.record(ts, fail_mock) isa Test.Fail
+        @test Test.record(ts, fail_mock; print_result=false) isa Test.Fail
         broken_mock = Test.Broken(:test, LineNumberNode(0, "A Broken Mock"))
         @test Test.record(ts, broken_mock) isa Test.Broken
     end
@@ -770,9 +816,9 @@ end
     """)
     msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --color=no $runtests`), stderr=devnull), String)
     msg = win2unix(msg)
-    regex = r"((?:Tests|Other tests|Testset without source): Test Failed (?:.|\n)*?)\n\nStacktrace:(?:.|\n)*?(?=\n(?:Tests|Other tests))"
+    regex = r"((?:Tests|Other tests|Testset without source): Test Failed (?:.|\n)*?)\n  Stacktrace:(?:.|\n)*?(?=\n(?:Tests|Other tests))"
     failures = map(eachmatch(regex, msg)) do m
-        m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n+Stacktrace:\n((?:.|\n)*)", m.match)
+        m = match(r"(Tests|Other tests|Testset without source): .*? at (.*?)\n  Expression: (.*)(?:.|\n)*\n  Stacktrace:\n((?:.|\n)*)", m.match)
         (; testset = m[1], source = m[2], ex = m[3], stacktrace = m[4])
     end
     @test length(failures) == 8 # 8 failed tests
@@ -870,12 +916,12 @@ let msg = read(pipeline(ignorestatus(`$(Base.julia_cmd()) --startup-file=no --co
             end
         end'`), stderr=devnull), String)
     @test occursin(r"""
-        Test Summary: | Pass  Fail  Total  Time
-        Foo Tests     |    2     2      4  \s*\d*.\ds
-          Animals     |    1     1      2  \s*\d*.\ds
-            Felines   |    1            1  \s*\d*.\ds
-            Canines   |          1      1  \s*\d*.\ds
-          Arrays      |    1     1      2  \s*\d*.\ds
+        Test Summary: \| Pass  Fail  Total +Time
+        Foo Tests     \|    2     2      4  \s*\d*\.\ds
+          Animals     \|    1     1      2  \s*\d*\.\ds
+            Felines   \|    1            1  \s*\d*\.\ds
+            Canines   \|          1      1  \s*\d*\.\ds
+          Arrays      \|    1     1      2  \s*\d*\.\ds
         """, msg)
 end
 
@@ -1253,17 +1299,17 @@ end
 
 @testset "verbose option" begin
     expected = r"""
-    Test Summary:             | Pass  Total  Time
-    Parent                    |    9      9  \s*\d*.\ds
-      Child 1                 |    3      3  \s*\d*.\ds
-        Child 1.1 (long name) |    1      1  \s*\d*.\ds
-        Child 1.2             |    1      1  \s*\d*.\ds
-        Child 1.3             |    1      1  \s*\d*.\ds
-      Child 2                 |    3      3  \s*\d*.\ds
-      Child 3                 |    3      3  \s*\d*.\ds
-        Child 3.1             |    1      1  \s*\d*.\ds
-        Child 3.2             |    1      1  \s*\d*.\ds
-        Child 3.3             |    1      1  \s*\d*.\ds
+    Test Summary:             \| Pass  Total +Time
+    Parent                    \|    9      9  \s*\d*\.\ds
+      Child 1                 \|    3      3  \s*\d*\.\ds
+        Child 1\.1 \(long name\) \|    1      1  \s*\d*\.\ds
+        Child 1\.2             \|    1      1  \s*\d*\.\ds
+        Child 1\.3             \|    1      1  \s*\d*\.\ds
+      Child 2                 \|    3      3  \s*\d*\.\ds
+      Child 3                 \|    3      3  \s*\d*\.\ds
+        Child 3\.1             \|    1      1  \s*\d*\.\ds
+        Child 3\.2             \|    1      1  \s*\d*\.\ds
+        Child 3\.3             \|    1      1  \s*\d*\.\ds
     """
 
     mktemp() do f, _
@@ -1324,9 +1370,9 @@ end
 @testset "failfast option" begin
     @testset "non failfast (default)" begin
         expected = r"""
-        Test Summary: | Pass  Fail  Error  Total  Time
-        Foo           |    1     2      1      4  \s*\d*.\ds
-          Bar         |    1     1             2  \s*\d*.\ds
+        Test Summary: \| Pass  Fail  Error  Total +Time
+        Foo           \|    1     2      1      4  \s*\d*\.\ds
+          Bar         \|    1     1             2  \s*\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1350,8 +1396,8 @@ end
     end
     @testset "failfast" begin
         expected = r"""
-        Test Summary: | Fail  Total  Time
-        Foo           |    1      1  \s*\d*.\ds
+        Test Summary: \| Fail  Total +Time
+        Foo           \|    1      1  \s*\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1375,9 +1421,9 @@ end
     end
     @testset "failfast passes to child testsets" begin
         expected = r"""
-        Test Summary: | Fail  Total  Time
-        PackageName   |    1      1  \s*\d*.\ds
-          1           |    1      1  \s*\d*.\ds
+        Test Summary: \| Fail  Total +Time
+        Foo           \|    1      1  \s*\d*\.\ds
+          1           \|    1      1  \s*\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1401,8 +1447,8 @@ end
     end
     @testset "failfast via env var" begin
         expected = r"""
-        Test Summary: | Fail  Total  Time
-        Foo           |    1      1  \s*\d*.\ds
+        Test Summary: \| Fail  Total +Time
+        Foo           \|    1      1  \s*\d*\.\ds
         """
 
         mktemp() do f, _
@@ -1532,6 +1578,22 @@ end
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_1
     # Decorated LoadErrors are not unwrapped if a LoadError was thrown.
     @test_throws LoadError("file", 111, ErrorException("Real error")) @macroexpand @test_macro_throw_2
+end
+
+# Issue 54807
+struct FEexc
+    a::Nothing
+    b::Nothing
+end
+
+@testset "FieldError Shim tests and Softdeprecation of @test_throws ErrorException" begin
+    feexc = FEexc(nothing, nothing)
+    # This is redundant regular test for FieldError
+    @test_throws FieldError feexc.c
+    # This should raise ErrorException
+    @test_throws ErrorException feexc.a = 1
+    # This is test for FieldError shim and deprecation
+    @test_deprecated @test_throws ErrorException feexc.c
 end
 
 # Issue 25483
@@ -1696,17 +1758,111 @@ end
 
         # this tests both the `TestCounts` parts as well as the fallback `x`s
         expected = r"""
-                    Test Summary: | Pass  Fail  Error  Broken  Total  Time
-                    outer         |    3     1      1       1      6  \s*\d*.\ds
-                      a           |    1                           1  \s*\d*.\ds
-                      custom      |    1     1      1       1      4  \s*?s
-                      no-record   |    x     x      x       x      ?  \s*?s
-                      b           |    1                           1  \s*\d*.\ds
-                    ERROR: Some tests did not pass: 3 passed, 1 failed, 1 errored, 1 broken.
+                    Test Summary: \| Pass  Fail  Error  Broken  Total +Time
+                    outer         \|    3     1      1       1      6  \s*\d*.\ds
+                      a           \|    1                           1  \s*\d*.\ds
+                      custom      \|    1     1      1       1      4  \s*\?s
+                      no-record   \|    x     x      x       x      \?  \s*\?s
+                      b           \|    1                           1  \s*\d*.\ds
+                    RNG of the outermost testset: .*
                     """
 
         cmd    = `$(Base.julia_cmd()) --startup-file=no --color=no $f`
         result = read(pipeline(ignorestatus(cmd), stderr=devnull), String)
         @test occursin(expected, result)
+    end
+
+end
+
+@testset "Deprecated multiple arguments" begin
+    msg1 = """Multiple descriptions provided to @testset. \
+        This is deprecated and may error in the future."""
+    @test_deprecated msg1 @macroexpand @testset "name1" "name2" begin end
+    msg2 = """Multiple testset types provided to @testset. \
+        This is deprecated and may error in the future."""
+    @test_deprecated msg2 @macroexpand @testset DefaultTestSet DefaultTestSet begin end
+end
+
+# Issue #54082
+module M54082 end
+@testset "@test_throws UndefVarError(:var)" begin
+    # Single-arg `UndefVarError` should match all `UndefVarError` for the
+    # same variable name, regardless of scope, to keep pre-v1.11 behaviour.
+    f54082() = var
+    @test_throws UndefVarError(:var) f54082()
+    # But if scope is set, then it has to match.
+    @test_throws UndefVarError(:var, M54082) M54082.var
+    let result = @testset NoThrowTestSet begin
+            # Wrong module scope
+            @test_throws UndefVarError(:var, Main) M54082.var
+        end
+        @test only(result) isa Test.Fail
+    end
+end
+
+@testset "Set RNG of testset" begin
+    rng1 = Xoshiro(0x2e026445595ed28e, 0x07bb81ac4c54926d, 0x83d7d70843e8bad6, 0xdbef927d150af80b, 0xdbf91ddf2534f850)
+    rng2 = Xoshiro(0xc380f460355639ee, 0xb39bc754b7d63bbf, 0x1551dbcfb5ed5668, 0x71ab5a18fec21a25, 0x649d0c1be1ca5436)
+    rng3 = Xoshiro(0xee97f5b53f7cdc49, 0x480ac387b0527d3d, 0x614b416502a9e0f5, 0x5250cb36e4a4ceb1, 0xed6615c59e475fa0)
+
+    @testset rng=rng1 begin
+        @test rand() == rand(rng1)
+    end
+
+    @testset rng=rng2 "Outer" begin
+        @test rand() == rand(rng2)
+        @testset rng=rng3 "Inner: $(i)" for i in 1:10
+            @test rand() == rand(rng3)
+        end
+    end
+end
+
+@testset "_should_escape_call" begin
+    @test !_should_escape_call(:(f()))
+    @test _should_escape_call(:(f(x)))
+    @test _should_escape_call(:(x == y))
+    @test _should_escape_call(:(f.(x)))
+    @test !_should_escape_call(:f)
+    @test !_should_escape_call(:(f = 1))
+    @test !_should_escape_call(:(f.x))
+end
+
+@testset "_escape_call" begin
+    @testset "invalid call" begin
+        @test_throws ArgumentError _escape_call(:f)
+        @test_throws ArgumentError _escape_call(:(f = 1))
+        @test_throws ArgumentError _escape_call(:(f.x))
+    end
+
+    @testset "positional arguments" begin
+        func = esc(:f)
+        quoted_func = :(:f)
+        @test _escape_call(:(f())) == (; func, args=[], kwargs=[], quoted_func)
+        @test _escape_call(:(f(x))) == (; func, args=[esc(:x)], kwargs=[], quoted_func)
+        @test _escape_call(:(f(x...))) ==  (; func, args=[:($(esc(:x))...)], kwargs=[], quoted_func)
+    end
+
+    @testset "keyword arguments" begin
+        func = esc(:f)
+        quoted_func = :(:f)
+        @test _escape_call(:(f(y=1))) == (; func, args=[], kwargs=[:(:y => $(esc(1)))], quoted_func)
+        @test _escape_call(:(f(; y))) == (; func, args=[], kwargs=[:(:y => $(esc(:y)))], quoted_func)
+        @test _escape_call(:(f(; y=1))) == (; func, args=[], kwargs=[:(:y => $(esc(1)))], quoted_func)
+        @test _escape_call(:(f(y=1; z))) == (; func, args=[], kwargs=[:(:y => $(esc(1))), :(:z => $(esc(:z)))], quoted_func)
+        @test _escape_call(:(f(; y.z))) == (; func, args=[], kwargs=[:(:z => $(esc(:(y.z))))], quoted_func)
+        @test _escape_call(:(f(; y...))) ==  (; func, args=[], kwargs=[:($(esc(:y))...)], quoted_func)
+    end
+
+    @testset "comparison" begin
+        @test _escape_call(:(x == y)) ==  (; func=esc(:(==)), args=[esc(:x), esc(:y)], kwargs=[], quoted_func=:(:(==)))
+    end
+
+    @testset "broadcast" begin
+        args = [esc(:x), esc(:y)]
+        kwargs = []
+        @test _escape_call(:(f.(x, y))) == (; func=Expr(:., esc(:f)), args, kwargs, quoted_func=QuoteNode(Expr(:., :f)))
+        @test _escape_call(:(Main.f.(x, y))) == (; func=:(Broadcast.BroadcastFunction($(esc(:(Main.f))))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(Main.f))))
+        @test _escape_call(:(x .== y)) == (; func=esc(:(.==)), args, kwargs, quoted_func=:(:.==))
+        @test _escape_call(:((==).(x, y))) == (; func=Expr(:., esc(:(==))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(==))))
     end
 end

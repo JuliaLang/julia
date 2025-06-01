@@ -6,6 +6,7 @@ TOOLDIR=$(TOOLCHAIN)/usr/tools
 USECLANG=1
 override CC=$(TOOLDIR)/clang
 override CXX=$(TOOLDIR)/clang++
+override PATCHELF=$(TOOLDIR)/patchelf
 export ASAN_SYMBOLIZER_PATH=$(TOOLDIR)/llvm-symbolizer
 
 USE_BINARYBUILDER_LLVM=1
@@ -15,9 +16,6 @@ override SANITIZE_ADDRESS=1
 
 # make the GC use regular malloc/frees, which are hooked by ASAN
 override WITH_GC_DEBUG_ENV=1
-
-# default to a debug build for better line number reporting
-override JULIA_BUILD_MODE=debug
 
 # Enable Julia assertions and LLVM assertions
 FORCE_ASSERTIONS=1
