@@ -214,9 +214,9 @@ function hash(x::Real, h::UInt)
     # handle generic rational values
     h = hash_integer(pow, h)
 
-    # trimming only whole words of trailing zeros simplifies greatly
+    # trimming only whole bytes of trailing zeros simplifies greatly
     # some specializations for memory-backed bitintegers
-    h = hash_integer((pow > 0) ? _hash_shl!(num, pow % 64) : num, h)
+    h = hash_integer((pow > 0) ? _hash_shl!(num, pow % 8) : num, h)
     return h
 end
 

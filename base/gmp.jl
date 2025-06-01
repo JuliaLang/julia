@@ -895,13 +895,11 @@ if Limb === UInt64 === UInt
             h = hash_integer(pow, h)
 
             h ⊻= (sz < 0)
-            trailing_zero_words = idx - 1
+            trailing_zero_bytes = div(pow, 8)
             GC.@preserve x begin
-                shift_asz = asz - trailing_zero_words
-
                 h = hash_bytes(
-                    Ptr{UInt8}(x.d) + 8 * trailing_zero_words,
-                    8 * shift_asz,
+                    Ptr{UInt8}(x.d) + 8 * trailing_zero_bytes,
+                    8 * (asz - trailing_zero_bytes),
                     h,
                     HASH_SECRET
                 )
