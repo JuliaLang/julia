@@ -1219,10 +1219,8 @@ end
     # Set the hard heap limit to 100MB, try to allocate an array of 200MB
     # and assert that the process is aborted, by checking the exit code.
     cmd = `$(Base.julia_cmd()) --startup-file=no --hard-heap-limit=100M -e "a = Array{UInt8}(undef, 200*1024*1024); GC.gc()"`
-    p = open(pipeline(cmd, stderr=devnull, stdout=devnull))
-    exitcode = wait(p)
     # The process should be aborted with an error code
-    @test exitcode != 0
+    @test !success(run(cmd, wait=false))
 end
 end
 
