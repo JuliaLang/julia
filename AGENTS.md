@@ -19,7 +19,7 @@ will not be reflected, unless you use `Revise`.
 
 ## For all changes
 
-1. Run `make test-whitespace` before creating the PR to make sure you're not committing any whitespace errors.
+1. Run `make check-whitespace` before creating the PR to make sure you're not committing any whitespace errors.
 
 ## Building Julia
 
@@ -47,8 +47,18 @@ Do not terminate the doctests before completion. If you are ChatGPT, you may hav
 
 If you have changed a test (e.g. `foo`), you should run `make test-revise-foo` for the
 corresponding test to ensure that the test is still passing with your changes.
-If you are adding a new test, add it to an existing test file. Do not
-create a new test file unless explicitly instructed.
+- If you are adding a new test, add it to an existing test file. Do not create a new test file unless explicitly instructed.
+- Write one comment at the top of the test to explain what is being tested.
+  Otherwise keep comments minimal.
+
+### Writing code
+After writing code, look up the docstring for each function you used. If there
+are recommendations or additional considerations that apply to these functions,
+make sure to take them into account.
+
+#### Specific instructions
+- Do not `ccall` runtime C functions directly if there are existing wrappers for the function.
+- Do not explicitly add a module prefix if the code you're adding is in the same module. E.g. do not use `Base.` for code in Base unless required.
 
 ## Commit message formatting
 
@@ -58,3 +68,8 @@ of the purpose of the changes made. Do not specifically mention added tests, com
 documentation, etc., unless this is the main purpose of the change. Do not mention
 the test plan, unless it differs from what you were instructed to do in AGENTS.md.
 If your change fixes one or more issues, use the syntax "Fixes #" at the end of the commit message, but do not include it in the title.
+
+When creating pull requests, if the pull request consists of one commit only,
+use the body of the commit for the body of the pull request. If there are multiple
+commits in the pull request, follow the same guidelines for the pull request
+as for the commit body.
