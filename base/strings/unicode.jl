@@ -262,17 +262,15 @@ julia> textwidth('⛵')
 2
 ```
 """
-function textwidth(c::AbstractChar)
-    ismalformed(c) && return 1
-    i = codepoint(c)
-    i < 0x7f && return Int(i >= 0x20) # ASCII fast path
-    Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), i))
-end
+textwidth(c::AbstractChar) = textwidth(Char(c)::Char)
 
 function textwidth(c::Char)
-    b = bswap(reinterpret(UInt32, c)) # from isascii(c)
+    u = reinterpret(UInt32, c)
+    b = bswap(u) # from isascii(c)
     b < 0x7f && return Int(b >= 0x20) # ASCII fast path
-    ismalformed(c) && return 1
+    # We can't know a priori how terminals will render invalid UTF8 chars,
+    # so we conservatively decide a width of 1.
+    (ismalformed(c) || is_overlong_enc(u)) && return 1
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 end
 
