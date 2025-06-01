@@ -191,11 +191,22 @@ function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
     try
         return Main.main(args)
     catch e
-        Base.show_backtrace(stderr, catch_backtrace())
-        println(stderr, "Error: ", e)
-        return 1  # Or `exit(1)` if appropriate in context
+        if isa(e, MethodError)
+            # Try to get a message string safely
+            msg = try
+                sprint(showerror, e)
+            catch
+                "MethodError occurred"
+            end
+            ccall(:jl_safe_printf, Cvoid, (Cstring,), "Error: %s\n", msg)
+        else
+            # Optional: fallback for other errors
+            ccall(:jl_safe_printf, Cvoid, (Cstring,), "Unhandled error occurred\n")
+        end
+        return 1
     end
 end
+
 
 let mod = Base.include(Main, ARGS[1])
     Core.@latestworld
