@@ -334,7 +334,63 @@ Since all packages in a package directory environment are, by definition, subdir
 
 The third and final kind of environment is one that combines other environments by overlaying several of them, making the packages in each available in a single composite environment. These composite environments are called *environment stacks*. The Julia `LOAD_PATH` global defines an environment stack—the environment in which the Julia process operates. If you want your Julia process to have access only to the packages in one project or package directory, make it the only entry in `LOAD_PATH`. It is often quite useful, however, to have access to some of your favorite tools—standard libraries, profilers, debuggers, personal utilities, etc.—even if they are not dependencies of the project you're working on. By adding an environment containing these tools to the load path, you immediately have access to them in top-level code without needing to add them to your project.
 
-The mechanism for combining the roots, graph and paths data structures of the components of an environment stack is simple: they are merged as dictionaries, favoring earlier entries over later ones in the case of key collisions. In other words, if we have `stack = [env₁, env₂, …]` then we have:
+For example, set up an environment
+
+```julia
+using Pkg
+Pkg.activate("sci-tools"; shared=true)
+Pkg.add(["Plots", "LaTeXStrings"])
+```
+
+and load it in your [`startup.jl`](../command-line-interface/#Startup-file):
+
+```julia
+# startup.jl
+try
+    push!(LOAD_PATH, expanduser("~/.julia/environments/sci-tools"))
+    using Plots
+    using LaTeXStrings
+catch e
+    @warn "Failed to auto-load school tools" exception=(e, catch_backtrace())
+end
+```
+
+Make a project:
+
+```shell
+mkdir -p projects/chem
+cd projects/chem
+cp ~/Downloads/data.xyz .
+```
+
+```julia
+(@v1.11) pkg> activate .
+(chem) pkg> add Chemfiles
+```
+
+This is your stacked environment:
+
+```julia
+(chem) pkg> st
+Status `~/projects/chem/Project.toml`
+  [46823bd8] Chemfiles v0.10.42
+
+julia> LOAD_PATH
+4-element Vector{String}:
+ "@"
+ "@v#.#"
+ "@stdlib"
+ "/home/user/.julia/environments/sci-tools"
+```
+
+Now you can write some code, run it with `julia --project=. -i code.jl`, and you can explore and debug data created `plot()`ing it,
+but you can share you `chem/` folder with others or deploy it to servers without the needing to install `Plots` or `LaTeXStrings`.
+
+The mechanism can load any number of extra environments. For a further example, you could create a "profilers" environment and only load it when needed by temporarily adding `push!(LOAD_PATH, expanduser("~/.julia/environments/profilers"))` to the top of your programs.
+
+However in practice, most of the time it suffices to keep your common tools in the default environment `@v#.#`, which is automatically on the stack.
+
+In detail, the mechanism for combining the roots, graph and paths data structures of the components of an environment stack is simple: they are merged as dictionaries, favoring earlier entries over later ones in the case of key collisions. In other words, if we have `stack = [env₁, env₂, …]` then we have:
 
 ```julia
 roots = reduce(merge, reverse([roots₁, roots₂, …]))
