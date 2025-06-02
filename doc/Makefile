@@ -70,4 +70,4 @@ deploy: deps
 
 update-documenter:
 	@echo "Updating Documenter."
-	JULIA_PKG_PRECOMPILE_AUTO=0 $(JULIA_EXECUTABLE) --project --color=yes -e 'using Pkg; Pkg.update("Documenter")'
+	JULIA_PKG_PRECOMPILE_AUTO=0 $(JULIA_EXECUTABLE) --project=$(call cygpath_w,$(SRCDIR)/../deps/jlutilities/documenter/) --color=yes -e 'using Pkg; Pkg.update("Documenter")'

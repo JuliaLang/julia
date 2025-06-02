@@ -1065,13 +1065,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_uint8_type) {
         n += jl_printf(out, "0x%02" PRIx8, *(uint8_t*)v);
     }
-    else if (jl_pointer_type && jl_is_cpointer_type((jl_value_t*)vt)) {
-#ifdef _P64
-        n += jl_printf(out, "0x%016" PRIx64, *(uint64_t*)v);
-#else
-        n += jl_printf(out, "0x%08" PRIx32, *(uint32_t*)v);
-#endif
-    }
     else if (vt == jl_float16_type) {
         n += jl_static_show_float(out, julia_half_to_float(*(uint16_t *)v), vt);
     }

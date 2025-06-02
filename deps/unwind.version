@@ -1,6 +1,8 @@
+# -*- makefile -*-
+
 ## jll artifact
 UNWIND_JLL_NAME := LibUnwind
 
 ## source build
-UNWIND_VER_TAG := 1.8.1
-UNWIND_VER := 1.8.1
+UNWIND_VER_TAG := 1.8.2
+UNWIND_VER := 1.8.2
