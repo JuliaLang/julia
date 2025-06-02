@@ -8,6 +8,7 @@ if !(Sys.iswindows() || Sys.isapple())
     # On Windows and macOS we use system SSL/crypto libraries
     using OpenSSL_jll
 end
+using CompilerSupportLibraries_jll
 
 export libcurl
 
@@ -20,7 +21,9 @@ artifact_dir::String = ""
 libcurl_path::String = ""
 
 _libcurl_dependencies = LazyLibrary[libz, libnghttp2, libssh2]
-if !(Sys.iswindows() || Sys.isapple())
+if Sys.iswindows()
+    push!(_libcurl_dependencies, libgcc_s)
+elseif !Sys.isapple()
     append!(_libcurl_dependencies, [libssl, libcrypto])
 end
 
@@ -41,6 +44,12 @@ function eager_mode()
     Zlib_jll.eager_mode()
     nghttp2_jll.eager_mode()
     LibSSH2_jll.eager_mode()
+    @static if Sys.iswindows()
+        CompilerSupportLibraries_jll.eager_mode()
+    end
+    @static if !(Sys.iswindows() || Sys.isapple())
+        OpenSSL_jll.eager_mode()
+    end
     dlopen(libcurl)
 end
 is_available() = true

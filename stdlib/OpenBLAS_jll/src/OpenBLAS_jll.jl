@@ -38,6 +38,9 @@ if Sys.isapple()
         push!(_libopenblas_dependencies, CompilerSupportLibraries_jll.libgcc_s)
     end
 end
+if Sys.iswindows()
+    push!(_libopenblas_dependencies, CompilerSupportLibraries_jll.libgcc_s)
+end
 const libopenblas = LazyLibrary(_libopenblas_path, dependencies=_libopenblas_dependencies)
 
 # Conform to LazyJLLWrappers API

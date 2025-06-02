@@ -2,7 +2,7 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/MPFR_jll.jl
 baremodule MPFR_jll
-using Base, Libdl, GMP_jll
+using Base, Libdl, GMP_jll, CompilerSupportLibraries_jll
 
 export libmpfr
 
@@ -22,12 +22,20 @@ else
     const _libmpfr_path = BundledLazyLibraryPath("libmpfr.so.6")
 end
 
-_libmpfr_dependencies = LazyLibrary[libgmp]
+if Sys.iswindows()
+    _libmpfr_dependencies = LazyLibrary[libgmp, libgcc_s]
+else
+    _libmpfr_dependencies = LazyLibrary[libgmp]
+end
 
 const libmpfr = LazyLibrary(_libmpfr_path, dependencies=_libmpfr_dependencies)
 
 function eager_mode()
     dlopen(libmpfr)
+    GMP_jll.eager_mode()
+    @static if Sys.iswindows()
+        CompilerSupportLibraries_jll.eager_mode()
+    end
 end
 is_available() = true
 

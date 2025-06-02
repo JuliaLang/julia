@@ -3,7 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/Zstd_jll.j:
 #
 baremodule Zstd_jll
-using Base, Libdl
+using Base, Libdl, CompilerSupportLibraries_jll
 
 export libzstd, zstd, zstdmt
 
@@ -23,7 +23,12 @@ else
     const _libzstd_path = BundledLazyLibraryPath("libzstd.so.1")
 end
 
-const libzstd = LazyLibrary(_libzstd_path)
+if Sys.iswindows()
+    _libzstd_dependencies = LazyLibrary[libgcc_s]
+else
+    _libzstd_dependencies = LazyLibrary[]
+end
+const libzstd = LazyLibrary(_libzstd_path, dependencies=_libzstd_dependencies)
 
 if Sys.iswindows()
     const zstd_exe = "zstd.exe"
@@ -75,6 +80,9 @@ zstdmt() = adjust_ENV(`$(joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, zstdmt_ex
 # Function to eagerly dlopen our library and thus resolve all dependencies
 function eager_mode()
     dlopen(libzstd)
+    @static if Sys.iswindows()
+        CompilerSupportLibraries_jll.eager_mode()
+    end
 end
 
 is_available() = true

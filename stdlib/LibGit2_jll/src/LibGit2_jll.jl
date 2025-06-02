@@ -8,6 +8,7 @@ if !(Sys.iswindows() || Sys.isapple())
     # On Windows and macOS we use system SSL/crypto libraries
     using OpenSSL_jll
 end
+using CompilerSupportLibraries_jll
 
 export libgit2
 
@@ -27,7 +28,9 @@ else
     const _libgit2_path = BundledLazyLibraryPath("libgit2.so.1.9")
 end
 
-if Sys.isfreebsd()
+if Sys.iswindows()
+    _libgit2_dependencies = LazyLibrary[libssh2, libgcc_s]
+elseif Sys.isfreebsd()
     _libgit2_dependencies = LazyLibrary[libssh2, libssl, libcrypto]
 else
     _libgit2_dependencies = LazyLibrary[libssh2]
@@ -38,6 +41,9 @@ function eager_mode()
     LibSSH2_jll.eager_mode()
     @static if !(Sys.iswindows() || Sys.isapple())
         OpenSSL_jll.eager_mode()
+    end
+    @static if Sys.iswindows()
+        CompilerSupportLibraries_jll.eager_mode()
     end
     dlopen(libgit2)
 end

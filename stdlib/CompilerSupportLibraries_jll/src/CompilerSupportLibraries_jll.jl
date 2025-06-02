@@ -76,7 +76,12 @@ const libgfortran = LazyLibrary(_libgfortran_path, dependencies=_libgfortran_dep
 _libstdcxx_dependencies = LazyLibrary[libgcc_s]
 const libstdcxx = LazyLibrary(_libstdcxx_path, dependencies=_libstdcxx_dependencies)
 
-const libgomp = LazyLibrary(_libgomp_path)
+if Sys.iswindows()
+    _libgomp_dependencies = LazyLibrary[libgcc_s]
+else
+    _libgomp_dependencies = LazyLibrary[]
+end
+const libgomp = LazyLibrary(_libgomp_path, dependencies=_libgomp_dependencies)
 
 # Some installations (such as those from-source) may not have `libssp`
 # So let's do a compile-time check to see if we've got it.

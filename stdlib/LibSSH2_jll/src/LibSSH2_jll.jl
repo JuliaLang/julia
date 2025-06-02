@@ -8,6 +8,7 @@ if !Sys.iswindows()
     # On Windows we use system SSL/crypto libraries
     using OpenSSL_jll
 end
+using CompilerSupportLibraries_jll
 
 export libssh2
 
@@ -22,7 +23,7 @@ libssh2_path::String = ""
 
 if Sys.iswindows()
     const _libssh2_path = BundledLazyLibraryPath("libssh2.dll")
-    _libssh2_dependencies = LazyLibrary[]
+    _libssh2_dependencies = LazyLibrary[libgcc_s]
 elseif Sys.isapple()
     const _libssh2_path = BundledLazyLibraryPath("libssh2.1.dylib")
     _libssh2_dependencies = LazyLibrary[libz, libcrypto]
@@ -40,6 +41,8 @@ function eager_mode()
     Zlib_jll.eager_mode()
     @static if !Sys.iswindows()
         OpenSSL_jll.eager_mode()
+    else
+        CompilerSupportLibraries_jll.eager_mode()
     end
     dlopen(libssh2)
 end

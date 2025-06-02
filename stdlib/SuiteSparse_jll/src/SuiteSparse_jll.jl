@@ -71,37 +71,73 @@ const libsuitesparseconfig = LazyLibrary(_libsuitesparseconfig_path)
 const libldl = LazyLibrary(_libldl_path)
 const libbtf = LazyLibrary(_libbtf_path)
 
-_libcolamd_dependencies = LazyLibrary[libsuitesparseconfig]
+if Sys.iswindows()
+    _libcolamd_dependencies = LazyLibrary[libsuitesparseconfig, libgcc_s]
+else
+    _libcolamd_dependencies = LazyLibrary[libsuitesparseconfig]
+end
 const libcolamd = LazyLibrary(_libcolamd_path; dependencies=_libcolamd_dependencies)
 
-_libamd_dependencies = LazyLibrary[libsuitesparseconfig]
+if Sys.iswindows()
+    _libamd_dependencies = LazyLibrary[libsuitesparseconfig, libgcc_s]
+else
+    _libamd_dependencies = LazyLibrary[libsuitesparseconfig]
+end
 const libamd = LazyLibrary(_libamd_path; dependencies=_libamd_dependencies)
 
-_libcamd_dependencies = LazyLibrary[libsuitesparseconfig]
+if Sys.iswindows()
+    _libcamd_dependencies = LazyLibrary[libsuitesparseconfig, libgcc_s]
+else
+    _libcamd_dependencies = LazyLibrary[libsuitesparseconfig]
+end
 const libcamd = LazyLibrary(_libcamd_path; dependencies=_libcamd_dependencies)
 
-_libccolamd_dependencies = LazyLibrary[libsuitesparseconfig]
+if Sys.iswindows()
+    _libccolamd_dependencies = LazyLibrary[libsuitesparseconfig, libgcc_s]
+else
+    _libccolamd_dependencies = LazyLibrary[libsuitesparseconfig]
+end
 const libccolamd = LazyLibrary(_libccolamd_path; dependencies=_libccolamd_dependencies)
 
-_librbio_dependencies = LazyLibrary[libsuitesparseconfig]
+if Sys.iswindows()
+    _librbio_dependencies = LazyLibrary[libsuitesparseconfig, libgcc_s]
+else
+    _librbio_dependencies = LazyLibrary[libsuitesparseconfig]
+end
 const librbio = LazyLibrary(_librbio_path; dependencies=_librbio_dependencies)
 
-_libcholmod_dependencies = LazyLibrary[
-    libsuitesparseconfig, libamd, libcamd, libccolamd, libcolamd, libblastrampoline
+if Sys.iswindows()
+    _libcholmod_dependencies = LazyLibrary[
+        libsuitesparseconfig, libamd, libcamd, libccolamd, libcolamd, libblastrampoline, libgcc_s
     ]
+else
+    _libcholmod_dependencies = LazyLibrary[
+        libsuitesparseconfig, libamd, libcamd, libccolamd, libcolamd, libblastrampoline
+    ]
+end
 const libcholmod = LazyLibrary(_libcholmod_path; dependencies=_libcholmod_dependencies)
 
-_libklu_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcolamd, libbtf]
+if Sys.iswindows()
+    _libklu_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcolamd, libbtf, libgcc_s]
+else
+    _libklu_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcolamd, libbtf]
+end
 const libklu = LazyLibrary(_libklu_path; dependencies=_libklu_dependencies)
 
-if Sys.isfreebsd() || Sys.isapple()
+if Sys.iswindows()
+    _libspqr_dependencies = LazyLibrary[libsuitesparseconfig, libcholmod, libblastrampoline, libgcc_s]
+elseif Sys.isfreebsd() || Sys.isapple()
     _libspqr_dependencies = LazyLibrary[libsuitesparseconfig, libcholmod, libblastrampoline]
 else
     _libspqr_dependencies = LazyLibrary[libsuitesparseconfig, libcholmod, libblastrampoline, libstdcxx, libgcc_s]
 end
 const libspqr = LazyLibrary(_libspqr_path; dependencies=_libspqr_dependencies)
 
-_libumfpack_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcholmod, libblastrampoline]
+if Sys.iswindows()
+    _libumfpack_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcholmod, libblastrampoline, libgcc_s]
+else
+    _libumfpack_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcholmod, libblastrampoline]
+end
 const libumfpack = LazyLibrary(_libumfpack_path; dependencies=_libumfpack_dependencies)
 
 function eager_mode()

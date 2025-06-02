@@ -3,6 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenLibm_jll.jl
 baremodule OpenLibm_jll
 using Base, Libdl
+using CompilerSupportLibraries_jll
 
 export libopenlibm
 
@@ -21,11 +22,18 @@ elseif Sys.isapple()
 else
     const _libopenlibm_path = BundledLazyLibraryPath("libopenlibm.so.4")
 end
-
-const libopenlibm = LazyLibrary(_libopenlibm_path)
+if Sys.iswindows()
+    const _libopenlibm_dependencies = LazyLibrary[CompilerSupportLibraries_jll.libgcc_s]
+else
+    const _libopenlibm_dependencies = LazyLibrary[]
+end
+const libopenlibm = LazyLibrary(_libopenlibm_path, dependencies=_libopenlibm_dependencies)
 
 function eager_mode()
     dlopen(libopenlibm)
+    @static if Sys.iswindows()
+        CompilerSupportLibraries_jll.eager_mode()
+    end
 end
 is_available() = true
 

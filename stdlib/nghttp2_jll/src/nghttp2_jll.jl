@@ -2,7 +2,7 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/nghttp2_jll.jl
 baremodule nghttp2_jll
-using Base, Libdl
+using Base, Libdl, CompilerSupportLibraries_jll
 
 export libnghttp2
 
@@ -22,10 +22,16 @@ else
     const _libnghttp2_path = BundledLazyLibraryPath("libnghttp2.so.14")
 end
 
-const libnghttp2 = LazyLibrary(_libnghttp2_path)
+if Sys.iswindows()
+    _libnghttp2_dependencies = LazyLibrary[libgcc_s]
+else
+    _libnghttp2_dependencies = LazyLibrary[]
+end
+const libnghttp2 = LazyLibrary(_libnghttp2_path, dependencies=_libnghttp2_dependencies)
 
 function eager_mode()
     dlopen(libnghttp2)
+    Sys.iswindows() && CompilerSupportLibraries_jll.eager_mode()
 end
 is_available() = true
 

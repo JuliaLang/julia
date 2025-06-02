@@ -195,7 +195,9 @@ try
             "comctl32",
             "ucrtbase",
             "vcruntime140",
-            "msvcp140"
+            "msvcp140",
+            "libwinpthread",
+            "ntdll"
         ]
         return any(syslib -> lowercase(lib) == syslib, system_libs)
     end
