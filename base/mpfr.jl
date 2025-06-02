@@ -1054,6 +1054,14 @@ Set the precision (in bits, by default) to be used for `T` arithmetic.
 If `base` is specified, then the precision is the minimum required to give
 at least `precision` digits in the given `base`.
 
+!!! note
+     Temporarily sets the precision for BigFloat operations to `precision` bits within the scope of function `f`. This function is now thread-safe due to the use of `ScopedValue`, ensuring that precision settings do not interfere across threads.
+
+Example:
+    setprecision(256) do
+        # Operations here use 256-bit precision
+    end
+
 !!! warning
 
     This function is not thread-safe. It will affect code running on all threads, but
