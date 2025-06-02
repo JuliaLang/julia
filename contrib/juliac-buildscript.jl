@@ -188,13 +188,7 @@ import Base.Experimental.entrypoint
 # for use as C main if needed
 function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
     args = ccall(:jl_set_ARGS, Any, (Cint, Ptr{Ptr{Cchar}}), argc, argv)::Vector{String}
-    try
-        return Main.main(args)
-    catch e
-        Base.show_backtrace(stderr, catch_backtrace())
-        println(stderr, "Error: ", e)
-        return 1  # Or `exit(1)` if appropriate in context
-    end
+    return Main.main(args)
 end
 
 let mod = Base.include(Main, ARGS[1])
