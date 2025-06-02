@@ -153,6 +153,7 @@ try
             "libm",
             "librt",
             "libpthread",
+            "ld-linux",
             "ld-linux-x86-64",
             "ld-linux-x86",
             "ld-linux-aarch64",

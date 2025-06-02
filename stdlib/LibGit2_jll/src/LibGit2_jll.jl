@@ -30,7 +30,7 @@ end
 
 if Sys.iswindows()
     _libgit2_dependencies = LazyLibrary[libssh2, libgcc_s]
-elseif Sys.isfreebsd()
+elseif Sys.isfreebsd() || Sys.islinux()
     _libgit2_dependencies = LazyLibrary[libssh2, libssl, libcrypto]
 else
     _libgit2_dependencies = LazyLibrary[libssh2]
