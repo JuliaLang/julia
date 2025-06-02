@@ -250,7 +250,7 @@ try
                     # This is a manually-managed special case
                     if stdlib_name == "libblastrampoline_jll" &&
                        prop_name == :libblastrampoline &&
-                       extraneous_deps == ["libopenblas64_"]
+                       extraneous_deps in (["libopenblas64_"], ["libopenblas"])
                         deps_mismatch = false
                     end
 
