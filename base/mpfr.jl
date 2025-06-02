@@ -1061,9 +1061,7 @@ at least `precision` digits in the given `base`.
 
 Example:
     ```julia
-    setprecision(256) do
-        # Operations here use 256-bit precision
-    end
+    setprecision(256) 
 ```
 
 !!! compat "Julia 1.8"
