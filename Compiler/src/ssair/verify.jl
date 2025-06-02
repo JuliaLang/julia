@@ -32,6 +32,10 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
     if isa(op, SSAValue)
         op.id > 0 || @verify_error "Def ($(op.id)) is invalid in final IR"
         if op.id > length(ir.stmts)
+            if op.id - length(ir.stmts) > length(ir.new_nodes.info)
+                @verify_error "Def ($(op.id)) points to non-existent new node"
+                raise_error()
+            end
             def_bb = block_for_inst(ir.cfg, ir.new_nodes.info[op.id - length(ir.stmts)].pos)
         else
             def_bb = block_for_inst(ir.cfg, op.id)
@@ -62,17 +66,14 @@ function check_op(ir::IRCode, domtree::DomTree, @nospecialize(op), use_bb::Int, 
             raise_error()
         end
     elseif isa(op, GlobalRef)
-        bpart = lookup_binding_partition(min_world(ir.valid_worlds), op)
-        while is_some_imported(binding_kind(bpart)) && max_world(ir.valid_worlds) <= bpart.max_world
-            imported_binding = partition_restriction(bpart)::Core.Binding
-            bpart = lookup_binding_partition(min_world(ir.valid_worlds), imported_binding)
-        end
-        if (!is_defined_const_binding(binding_kind(bpart)) || (bpart.max_world < max_world(ir.valid_worlds))) &&
-                (op.mod !== Core) && (op.mod !== Base)
-            # Core and Base are excluded because the frontend uses them for intrinsics, etc.
-            # TODO: Decide which way to go with these.
-            @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
-            raise_error()
+        if op.mod !== Core && op.mod !== Base
+            (valid_worlds, alldef) = scan_leaf_partitions(nothing, op, WorldWithRange(min_world(ir.valid_worlds), ir.valid_worlds)) do _, _, bpart
+                is_defined_const_binding(binding_kind(bpart))
+            end
+            if !alldef || max_world(valid_worlds) < max_world(ir.valid_worlds) || min_world(valid_worlds) > min_world(ir.valid_worlds)
+                @verify_error "Unbound or partitioned GlobalRef not allowed in value position"
+                raise_error()
+            end
         end
     elseif isa(op, Expr)
         # Only Expr(:boundscheck) is allowed in value position

@@ -345,6 +345,10 @@ end
 # issue #15828
 @test Meta.lower(Main, Meta.parse("x...")) == Expr(:error, "\"...\" expression outside call")
 
+# issue #57153 - malformed "..." expr
+@test Meta.lower(@__MODULE__, :(identity($(Expr(:(...), 1, 2, 3))))) ==
+    (Expr(:error, "wrong number of expressions following \"...\""))
+
 # issue #15830
 @test Meta.lower(Main, Meta.parse("foo(y = (global x)) = y")) == Expr(:error, "misplaced \"global\" declaration")
 
@@ -592,10 +596,9 @@ let thismodule = @__MODULE__,
     @test !isdefined(M16096, :foo16096)
     @test !isdefined(M16096, :it)
     @test typeof(local_foo16096).name.module === thismodule
-    @test typeof(local_foo16096).name.mt.module === thismodule
-    @test getfield(thismodule, typeof(local_foo16096).name.mt.name) === local_foo16096
+    @test getfield(thismodule, typeof(local_foo16096).name.singletonname) === local_foo16096
     @test getfield(thismodule, typeof(local_foo16096).name.name) === typeof(local_foo16096)
-    @test !isdefined(M16096, typeof(local_foo16096).name.mt.name)
+    @test !isdefined(M16096, typeof(local_foo16096).name.singletonname)
     @test !isdefined(M16096, typeof(local_foo16096).name.name)
 end
 
@@ -1292,6 +1295,10 @@ let args = (Int, Any)
     @test >:(reverse(args)...)
 end
 
+# Chaining of <: and >: in `where`
+@test isa(Vector{T} where Int<:T<:Number, UnionAll)
+@test isa(Vector{T} where Number>:T>:Int, UnionAll)
+
 # issue #25947
 let getindex = 0, setindex! = 1, colon = 2, vcat = 3, hcat = 4, hvcat = 5
     a = [10,9,8]
@@ -1931,7 +1938,7 @@ end
 # eval'ing :const exprs
 eval(Expr(:const, :_var_30877))
 @test !isdefined(@__MODULE__, :_var_30877)
-@test isconst(@__MODULE__, :_var_30877)
+@test !isconst(@__MODULE__, :_var_30877)
 
 # anonymous kw function in value position at top level
 f30926 = function (;k=0)
@@ -2279,6 +2286,11 @@ end
     @test Meta.parse("a ⥷ b") == Expr(:call, :⥷, :a, :b)
 end
 
+# issue 57143
+@testset "binary 🢲" begin
+    @test Meta.parse("a 🢲 b") == Expr(:call, :🢲, :a, :b)
+end
+
 # only allow certain characters after interpolated vars (#25231)
 @test_parseerror("\"\$x෴  \"",
                  "interpolated variable \$x ends with invalid character \"෴\"; use \"\$(x)\" instead.")
@@ -2409,15 +2421,6 @@ macro a35391(b)
 end
 @test @a35391(0) === (0,)
 
-# global declarations from the top level are not inherited by functions.
-# don't allow such a declaration to override an outer local, since it's not
-# clear what it should do.
-@test Meta.lower(Main, :(let
-                           x = 1
-                           let
-                             global x
-                           end
-                         end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
 # note: this `begin` block must be at the top level
 _temp_33553 = begin
     global _x_this_remains_undefined
@@ -2428,6 +2431,70 @@ _temp_33553 = begin
 end
 @test _temp_33553 == 2
 @test !@isdefined(_x_this_remains_undefined)
+
+module GlobalContainment
+using Test
+@testset "scope of global declarations" begin
+
+    # global declarations from the top level are not inherited by functions.
+    # don't allow such a declaration to override an outer local, since it's not
+    # clear what it should do.
+    @test Meta.lower(
+        Main,
+        :(let
+              x = 1
+              let
+                  global x
+              end
+          end)) == Expr(:error, "`global x`: x is a local variable in its enclosing scope")
+
+    # a declared global can shadow a local in an outer scope
+    @test let
+        function f()
+            g0 = 2
+            let; global g0 = 1; end
+            a = () -> (global g0 = 1); a();
+            return g0
+        end
+        (f(), g0);
+    end === (2, 1)
+    @test let
+        function f()
+            let; global g2 = 1; end;
+            let; try; g2 = 2; catch _; end; end;
+        end
+        (f(), g2)
+    end === (2, 1)
+
+    # an inner global declaration should not interfere with the closure (#57547)
+    @test let
+        g3 = 1
+        function f()
+            let; global g3 = 2; end;
+            return g3
+        end
+        f()
+    end === 1
+    @test_throws UndefVarError let
+        function returns_global()
+            for i in 1
+                global ge = 2
+            end
+            return ge # local declared below
+        end
+        ge = returns_global()
+    end
+    @test let
+        function f(x::T) where T
+            function g(x)
+                let; global T = 1; end
+                x::T
+            end; g(x)
+        end; f(1)
+    end === 1
+
+end
+end
 
 # lowering of adjoint
 @test (1 + im)' == 1 - im
@@ -2685,6 +2752,18 @@ import .TestImportAs.Mod2 as M2
 @test !@isdefined(Mod2)
 @test M2 === TestImportAs.Mod2
 
+# 57702: nearby bindings shouldn't cause us to closure-convert in import/using
+module OddImports
+using Test
+module ABC end
+x = let; let; import .ABC; end; let; ABC() = (ABC,); end; end
+y = let; let; using  .ABC; end; let; ABC() = (ABC,); end; end
+z = let; let; import SHA: R; end; let; R(x...) = R(x); end; end
+@test x isa Function
+@test y isa Function
+@test z isa Function
+end
+
 @testset "unicode modifiers after '" begin
     @test Meta.parse("a'ᵀ") == Expr(:call, Symbol("'ᵀ"), :a)
     @test Meta.parse("a'⁻¹") == Expr(:call, Symbol("'⁻¹"), :a)
@@ -2810,6 +2889,20 @@ macro m38386()
 end
 @m38386
 @test isempty(methods(f38386))
+
+@testset "non-lhs all-underscore vars should fail in lowering" begin
+    # OK
+    @test (_ = 1) === 1
+    @test ((_, _) = (1, 2)) == (1, 2)
+    @test Meta.isexpr(Meta.lower(Main, :(for _ in 1:2; 1; end)), :thunk)
+    @test (try; throw(1); catch _; 2; end) === 2
+    @test (let _ = 1; 2; end) === 2
+    # ERROR: syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+    @test Meta.isexpr(Meta.lower(Main, :(_ = 1; a = _)), :error)
+    @test Meta.isexpr(Meta.lower(Main, :(let; function f(); _; end; end)), :error)
+    @test Meta.isexpr(Meta.lower(Main, :(let; function f(); _; 1; end; end)), :error)
+    @test Meta.isexpr(Meta.lower(Main, :(begin; _; 1; end)), :error)
+end
 
 @testset "all-underscore varargs on the rhs" begin
     @test ncalls_in_lowered(quote _..., = a end, GlobalRef(Base, :rest)) == 0
@@ -3484,6 +3577,8 @@ end
 # issue #45162
 f45162(f) = f(x=1)
 @test first(methods(f45162)).called != 0
+f45162_2(f) = f([]...)
+@test first(methods(f45162_2)).called != 0
 
 # issue #45024
 @test_parseerror "const x" "expected assignment after \"const\""
@@ -3800,7 +3895,7 @@ module ImplicitCurlies
     end
     @test !@isdefined(ImplicitCurly6)
     # Check return value of assignment expr
-    @test isa((const ImplicitCurly7{T} = Ref{T}), UnionAll)
+    @test isa(Core.eval(@__MODULE__, :(const ImplicitCurly7{T} = Ref{T})), UnionAll)
     @test isa(begin; ImplicitCurly8{T} = Ref{T}; end, UnionAll)
 end
 
@@ -3836,7 +3931,8 @@ const (gconst_assign(), hconst_assign()) = (2, 3)
 # and the conversion, but not the rhs.
 struct CantConvert; end
 Base.convert(::Type{CantConvert}, x) = error()
-@test (const _::CantConvert = 1) == 1
+# @test splices into a function, where const cannot appear
+@test Core.eval(@__MODULE__, :(const _::CantConvert = 1)) == 1
 @test !isconst(@__MODULE__, :_)
 @test_throws ErrorException("expected") (const _ = error("expected"))
 
@@ -3965,8 +4061,13 @@ end
 
 # Test trying to define a constant and then trying to assign to the same value
 module AssignConstValueTest
+    using Test
     const x = 1
-    x = 1
+    @test_throws ErrorException @eval x = 1
+    @test_throws ErrorException @eval begin
+        @Base.Experimental.force_compile
+        global x = 1
+    end
 end
 @test isconst(AssignConstValueTest, :x)
 
@@ -4102,3 +4203,138 @@ module Ambig57404
     using .B
 end
 @test Ambig57404.S == 1
+
+# Issue #56904 - lambda linearized twice
+@test (let; try 3; finally try 1; f(() -> x); catch x; end; end; x = 7; end) === 7
+@test (let; try 3; finally try 4; finally try 1; f(() -> x); catch x; end; end; end; x = 7; end) === 7
+
+# Issue #57546 - explicit function declaration should create new global
+module FuncDecl57546
+    using Test
+    @test_nowarn @eval function Any end
+    @test isa(Any, Function)
+    @test isempty(methods(Any))
+end
+
+# #57334
+let
+    x57334 = Ref(1)
+    @test_throws "syntax: cannot declare \"x57334[]\" `const`" Core.eval(@__MODULE__, :(const x57334[] = 1))
+end
+
+# #57470
+module M57470
+using ..Test
+
+@test_throws(
+    "syntax: `global const` declaration not allowed inside function",
+    Core.eval(@__MODULE__, :(function f57470()
+                                 const global x57470 = 1
+                             end)))
+@test_throws(
+    "unsupported `const` declaration on local variable",
+    Core.eval(@__MODULE__, :(let
+                                 const y57470 = 1
+                             end))
+)
+
+let
+    global a57470
+    const a57470 = 1
+end
+@test a57470 === 1
+
+let
+    global const z57470 = 1
+    const global w57470 = 1
+end
+
+@test z57470 === 1
+@test w57470 === 1
+
+const (; field57470_1, field57470_2) = (field57470_1 = 1, field57470_2 = 2)
+@test field57470_1 === 1
+@test field57470_2 === 2
+
+# TODO: 1.11 allows these, but should we?
+const X57470{T}, Y57470{T} = Int, Bool
+@test X57470 === Int
+@test Y57470 === Bool
+const A57470{T}, B57470{T} = [Int, Bool]
+@test A57470 === Int
+@test B57470 === Bool
+const a57470, f57470(x), T57470{U} = [1, 2, Int]
+@test a57470 === 1
+@test f57470(0) === 2
+@test T57470 === Int
+
+module M57470_sub end
+@test_throws("syntax: cannot declare \"M57470_sub.x\" `const`",
+             Core.eval(@__MODULE__, :(const M57470_sub.x = 1)))
+
+# # `const global` should not trample previously declared `local`
+@test_throws(
+    "syntax: variable \"v57470\" declared both local and global",
+    Core.eval(@__MODULE__, :(let
+                                 local v57470
+                                 const global v57470 = 1
+                             end))
+)
+
+# Chain of assignments must happen right-to-left:
+let
+    x = [0, 0]; i = 1
+    i = x[i] = 2
+    @test x == [2, 0]
+    x = [0, 0]; i = 1
+    x[i] = i = 2
+    @test x == [0, 2]
+end
+
+# Global const decl inside local scope
+let
+    const global letf_57470(x)::Int = 2+x
+    const global letT_57470{T} = Int64
+end
+@test letf_57470(3) == 5
+@test letT_57470 === Int64
+
+end
+
+# #57574
+module M57574
+struct A{T} end
+out = let
+    for B in ()
+    end
+    let
+        B{T} = A{T}
+        B
+    end
+end
+end
+@test M57574.out === M57574.A
+
+# Double import of CONST_IMPORT symbol
+module DoubleImport
+    import Test: Random
+    import Random
+end
+@test DoubleImport.Random === Test.Random
+
+# Expr(:method) returns the method
+let ex = @Meta.lower function return_my_method(); 1; end
+    code = ex.args[1].code
+    idx = findfirst(ex->Meta.isexpr(ex, :method) && length(ex.args) > 1, code)
+    code[end] = Core.ReturnNode(Core.SSAValue(idx))
+    @test isa(Core.eval(@__MODULE__, ex), Method)
+end
+
+# Capturing a @nospecialize argument should result in an Any field in the closure
+module NoSpecClosure
+    K(@nospecialize(x)) = y -> x
+end
+let f = NoSpecClosure.K(1)
+    @test f(2) == 1
+    @test typeof(f).parameters == Core.svec()
+end

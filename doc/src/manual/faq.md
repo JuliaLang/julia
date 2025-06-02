@@ -1090,8 +1090,7 @@ You may wish to test against the nightly version to ensure that such regressions
 Finally, you may also consider building Julia from source for yourself. This option is mainly for those individuals who are comfortable at the command line, or interested in learning.
 If this describes you, you may also be interested in reading our [guidelines for contributing](https://github.com/JuliaLang/julia/blob/master/CONTRIBUTING.md).
 
-Links to each of these download types can be found on the download page at [https://julialang.org/downloads/](https://julialang.org/downloads/).
-Note that not all versions of Julia are available for all platforms.
+The [`juliaup` install manager](https://julialang.org/install/) has pre-defined channels named `release` and `lts` for the latest stable release and the current LTS release, as well as version-specific channels.
 
 ### How can I transfer the list of installed packages after updating my version of Julia?
 

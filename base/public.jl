@@ -10,6 +10,7 @@ public
 
 # Types
     AbstractLock,
+    AbstractOneTo,
     AbstractPipe,
     AsyncCondition,
     CodeUnits,
@@ -27,6 +28,7 @@ public
 # Semaphores
     Semaphore,
     acquire,
+    @acquire,
     release,
 
 # arrays
@@ -52,6 +54,7 @@ public
     active_project,
 
 # Reflection and introspection
+    get_extension,
     isambiguous,
     isexpr,
     isidentifier,
@@ -108,6 +111,7 @@ public
     reseteof,
     link_pipe!,
     dup,
+    showarg,
 
 # filesystem operations
     rename,
