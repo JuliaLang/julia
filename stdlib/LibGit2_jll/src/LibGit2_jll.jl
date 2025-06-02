@@ -8,7 +8,9 @@ if !(Sys.iswindows() || Sys.isapple())
     # On Windows and macOS we use system SSL/crypto libraries
     using OpenSSL_jll
 end
-using CompilerSupportLibraries_jll
+if Sys.iswindows()
+    using CompilerSupportLibraries_jll
+end
 
 export libgit2
 

@@ -2,7 +2,10 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/nghttp2_jll.jl
 baremodule nghttp2_jll
-using Base, Libdl, CompilerSupportLibraries_jll
+using Base, Libdl
+if Sys.iswindows()
+    using CompilerSupportLibraries_jll
+end
 
 export libnghttp2
 
@@ -31,7 +34,9 @@ const libnghttp2 = LazyLibrary(_libnghttp2_path, dependencies=_libnghttp2_depend
 
 function eager_mode()
     dlopen(libnghttp2)
-    Sys.iswindows() && CompilerSupportLibraries_jll.eager_mode()
+    @static if Sys.iswindows()
+        CompilerSupportLibraries_jll.eager_mode()
+    end
 end
 is_available() = true
 

@@ -3,7 +3,10 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/Zstd_jll.j:
 #
 baremodule Zstd_jll
-using Base, Libdl, CompilerSupportLibraries_jll
+using Base, Libdl
+if Sys.iswindows()
+    using CompilerSupportLibraries_jll
+end
 
 export libzstd, zstd, zstdmt
 
@@ -79,10 +82,10 @@ zstdmt() = adjust_ENV(`$(joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, zstdmt_ex
 
 # Function to eagerly dlopen our library and thus resolve all dependencies
 function eager_mode()
-    dlopen(libzstd)
     @static if Sys.iswindows()
         CompilerSupportLibraries_jll.eager_mode()
     end
+    dlopen(libzstd)
 end
 
 is_available() = true

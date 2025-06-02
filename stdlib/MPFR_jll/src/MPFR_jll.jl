@@ -2,7 +2,10 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/MPFR_jll.jl
 baremodule MPFR_jll
-using Base, Libdl, GMP_jll, CompilerSupportLibraries_jll
+using Base, Libdl, GMP_jll
+if Sys.iswindows()
+    using CompilerSupportLibraries_jll
+end
 
 export libmpfr
 

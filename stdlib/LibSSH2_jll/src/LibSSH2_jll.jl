@@ -7,8 +7,9 @@ using Base, Libdl, Zlib_jll
 if !Sys.iswindows()
     # On Windows we use system SSL/crypto libraries
     using OpenSSL_jll
+else
+    using CompilerSupportLibraries_jll
 end
-using CompilerSupportLibraries_jll
 
 export libssh2
 

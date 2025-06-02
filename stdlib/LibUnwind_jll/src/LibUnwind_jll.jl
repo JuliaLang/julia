@@ -4,8 +4,10 @@
 
 baremodule LibUnwind_jll
 using Base, Libdl
-using CompilerSupportLibraries_jll
 using Zlib_jll
+if !Sys.isfreebsd()
+    using CompilerSupportLibraries_jll
+end
 
 export libunwind
 
@@ -28,7 +30,9 @@ const libunwind = LazyLibrary(_libunwind_path, dependencies=_libunwind_dependenc
 
 
 function eager_mode()
-    CompilerSupportLibraries_jll.eager_mode()
+    @static if !Sys.isfreebsd()
+        CompilerSupportLibraries_jll.eager_mode()
+    end
     Zlib_jll.eager_mode()
     dlopen(libunwind)
 end
