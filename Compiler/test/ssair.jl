@@ -459,7 +459,7 @@ let
             @test stmt.cond === v
         elseif isa(stmt, ReturnNode) || isa(stmt, UpsilonNode)
             @test stmt.val === v
-        elseif isa(stmt, SSAValue) || isa(stmt, NewSSAValue)
+        elseif isa(stmt, SSAValue) || isa(stmt, NewSSAValue) || isa(stmt, Argument)
             @test stmt === v
         elseif isa(stmt, PiNode)
             @test stmt.val === v && stmt.typ === typeof(stmt)
@@ -508,6 +508,7 @@ let
         GotoNode(5),
         SSAValue(7),
         NewSSAValue(9),
+        Argument(1),
         ReturnNode(SSAValue(11)),
     ]
 

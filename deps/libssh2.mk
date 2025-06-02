@@ -37,7 +37,7 @@ LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
+	$(CMAKE) -G"Unix Makefiles" $(dir $<) $(LIBSSH2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured

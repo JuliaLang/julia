@@ -90,7 +90,7 @@ function ==(a::StackFrame, b::StackFrame)
 end
 
 function hash(frame::StackFrame, h::UInt)
-    h += 0xf4fbda67fe20ce88 % UInt
+    h ⊻= 0xf4fbda67fe20ce88 % UInt
     h = hash(frame.line, h)
     h = hash(frame.file, h)
     h = hash(frame.func, h)
@@ -273,8 +273,12 @@ function show_spec_linfo(io::IO, frame::StackFrame)
         if linfo isa Union{MethodInstance, CodeInstance}
             def = frame_method_or_module(frame)
             if def isa Module
-                Base.show_mi(io, linfo, #=from_stackframe=#true)
+                Base.show_mi(io, linfo::MethodInstance, #=from_stackframe=#true)
+            elseif linfo isa CodeInstance && linfo.owner !== nothing
+                show_custom_spec_sig(io, linfo.owner, linfo, frame)
             else
+                # Equivalent to the default implementation of `show_custom_spec_sig`
+                # for `linfo isa CodeInstance`, but saves an extra dynamic dispatch.
                 show_spec_sig(io, def, frame_mi(frame).specTypes)
             end
         else
@@ -282,6 +286,12 @@ function show_spec_linfo(io::IO, frame::StackFrame)
             show_spec_sig(io, m, m.sig)
         end
     end
+end
+
+# Can be extended by compiler packages to customize backtrace display of custom code instance frames
+function show_custom_spec_sig(io::IO, @nospecialize(owner), linfo::CodeInstance, frame::StackFrame)
+    mi = get_ci_mi(linfo)
+    return show_spec_sig(io, mi.def, mi.specTypes)
 end
 
 function show_spec_sig(io::IO, m::Method, @nospecialize(sig::Type))

@@ -562,8 +562,8 @@ in the current environment.
 When using `@activate`, additional options for a component may be specified in
 square brackets `@activate Compiler[:option1, :option]`
 
-Currently `@activate Compiler` is the only available component that may be
-activatived.
+Currently `Compiler` and `JuliaLowering` are the only available components that
+may be activatived.
 
 For `@activate Compiler`, the following options are available:
 1. `:reflection` - Activate the compiler for reflection purposes only.
@@ -597,7 +597,7 @@ macro activate(what)
     if !isa(Component, Symbol)
         error("Usage Error: Component $Component is not a symbol")
     end
-    allowed_components = (:Compiler,)
+    allowed_components = (:Compiler, :JuliaLowering)
     if !(Component in allowed_components)
         error("Usage Error: Component $Component is not recognized. Expected one of $allowed_components")
     end

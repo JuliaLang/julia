@@ -5,41 +5,41 @@
 baremodule dSFMT_jll
 using Base, Libdl
 
-const PATH_list = String[]
-const LIBPATH_list = String[]
-
 export libdSFMT
 
 # These get calculated in __init__()
 const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
+const LIBPATH_list = String[]
 artifact_dir::String = ""
-libdSFMT_handle::Ptr{Cvoid} = C_NULL
 libdSFMT_path::String = ""
 
 if Sys.iswindows()
-    const libdSFMT = "libdSFMT.dll"
+    const _libdSFMT_path = BundledLazyLibraryPath("libdSFMT.dll")
 elseif Sys.isapple()
-    const libdSFMT = "@rpath/libdSFMT.dylib"
+    const _libdSFMT_path = BundledLazyLibraryPath("libdSFMT.dylib")
 else
-    const libdSFMT = "libdSFMT.so"
+    const _libdSFMT_path = BundledLazyLibraryPath("libdSFMT.so")
 end
 
+const libdSFMT = LazyLibrary(_libdSFMT_path)
+
+function eager_mode()
+    dlopen(libdSFMT)
+end
+is_available() = true
+
 function __init__()
-    global libdSFMT_handle = dlopen(libdSFMT)
-    global libdSFMT_path = dlpath(libdSFMT_handle)
+    global libdSFMT_path = string(_libdSFMT_path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libdSFMT_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 
-# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
-# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
-# there isn't one.  It instead returns the overall Julia prefix.
-is_available() = true
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_libdSFMT_path() = libdSFMT_path
+if Base.generating_output()
+    precompile(eager_mode, ())
+    precompile(is_available, ())
+end
 
 end  # module dSFMT_jll

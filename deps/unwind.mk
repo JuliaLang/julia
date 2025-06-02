@@ -35,11 +35,7 @@ $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-revert_prelink_unwind.patch-applie
 	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-revert_prelink_unwind.patch
 	echo 1 > $@
 
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-aarch64-inline-asm.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-revert_prelink_unwind.patch-applied
-	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-aarch64-inline-asm.patch
-	echo 1 > $@
-
-$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-aarch64-inline-asm.patch-applied
+$(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-disable-initial-exec-tls.patch-applied: $(SRCCACHE)/libunwind-$(UNWIND_VER)/libunwind-revert_prelink_unwind.patch-applied
 	cd $(SRCCACHE)/libunwind-$(UNWIND_VER) && patch -p1 -f -u -l < $(SRCDIR)/patches/libunwind-disable-initial-exec-tls.patch
 	echo 1 > $@
 

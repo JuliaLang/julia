@@ -47,17 +47,16 @@ end
 add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo) = _add_edges_impl(edges, info)
 function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
     if !fully_covering(info)
-        # add legacy-style missing backedge info also
         exists = false
         for i in 2:length(edges)
-            if edges[i] === info.mt && edges[i-1] == info.atype
+            if edges[i] === Core.GlobalMethods && edges[i-1] == info.atype
                 exists = true
                 break
             end
         end
         if !exists
             push!(edges, info.atype)
-            push!(edges, info.mt)
+            push!(edges, Core.GlobalMethods)
         end
     end
     nmatches = length(info.results)
@@ -278,6 +277,7 @@ struct InvokeCICallInfo <: CallInfo
 end
 add_edges_impl(edges::Vector{Any}, info::InvokeCICallInfo) =
     add_inlining_edge!(edges, info.edge)
+nsplit_impl(info::InvokeCICallInfo) = 0
 
 """
     info::InvokeCallInfo
@@ -389,6 +389,11 @@ function add_inlining_edge!(edges::Vector{Any}, edge::CodeInstance)
     push!(edges, edge)
     nothing
 end
+
+nsplit_impl(info::InvokeCallInfo) = 1
+getsplit_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; MethodLookupResult(Core.MethodMatch[info.match],
+    WorldRange(typemin(UInt), typemax(UInt)), false))
+getresult_impl(info::InvokeCallInfo, idx::Int) = (@assert idx == 1; info.result)
 
 
 """

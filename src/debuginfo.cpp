@@ -20,6 +20,8 @@
 #include <llvm/Object/MachO.h>
 #include <llvm/Object/COFF.h>
 #include <llvm/Object/ELFObjectFile.h>
+#include <llvm-Compression.h>
+#include <llvm/Support/Compression.h>
 
 #ifdef _OS_DARWIN_
 #include <CoreFoundation/CoreFoundation.h>
@@ -145,8 +147,8 @@ struct unw_table_entry
 template <typename T>
 static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 {
-    assert(0 == jl_lock_profile_rd_held());
-    jl_lock_profile_wr();
+    int havelock = jl_lock_profile_wr();
+    assert(havelock);
 #ifndef _OS_WINDOWS_
     sigset_t sset;
     sigset_t oset;
@@ -157,7 +159,8 @@ static void jl_profile_atomic(T f) JL_NOTSAFEPOINT
 #ifndef _OS_WINDOWS_
     pthread_sigmask(SIG_SETMASK, &oset, NULL);
 #endif
-    jl_unlock_profile_wr();
+    if (havelock)
+        jl_unlock_profile_wr();
 }
 
 
@@ -335,9 +338,18 @@ void JITDebugInfoRegistry::registerJITObject(const object::ObjectFile &Object,
 #endif // defined(_OS_WINDOWS_)
 
     SmallVector<uint8_t, 0> packed;
-    compression::zlib::compress(ArrayRef<uint8_t>((uint8_t*)Object.getData().data(), Object.getData().size()), packed, compression::zlib::DefaultCompression);
-    jl_jit_add_bytes(packed.size());
-    auto ObjectCopy = new LazyObjectInfo{packed, Object.getData().size()}; // intentionally leaked so that we don't need to ref-count it, intentionally copied so that we exact-size the allocation (since no shrink_to_fit function)
+    ArrayRef<uint8_t> unpacked = arrayRefFromStringRef(Object.getData());
+    std::optional<compression::Format> F;
+    if (compression::zstd::isAvailable())
+        F = compression::Format::Zstd;
+    else if (compression::zlib::isAvailable())
+        F = compression::Format::Zlib;
+    if (F)
+        compression::compress(*F, unpacked, packed);
+    // intentionally leak this so that we don't need to ref-count it
+    // intentionally copy the input so that we exact-size the allocation (since no shrink_to_fit function)
+    auto ObjectCopy = new LazyObjectInfo{SmallVector<uint8_t, 0>(F ? ArrayRef(packed) : unpacked), F ? Object.getData().size() : 0};
+    jl_jit_add_bytes(ObjectCopy->data.size());
     auto symbols = object::computeSymbolSizes(Object);
     bool hassection = false;
     for (const auto &sym_size : symbols) {
@@ -464,8 +476,8 @@ static int lookup_pointer(
 
     // DWARFContext/DWARFUnit update some internal tables during these queries, so
     // a lock is needed.
-    assert(0 == jl_lock_profile_rd_held());
-    jl_lock_profile_wr();
+    if (!jl_lock_profile_wr())
+        return lookup_pointer(object::SectionRef(), NULL, frames, pointer, slide, demangle, noInline);
     auto inlineInfo = context->getInliningInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
     jl_unlock_profile_wr();
 
@@ -490,7 +502,8 @@ static int lookup_pointer(
             info = inlineInfo.getFrame(i);
         }
         else {
-            jl_lock_profile_wr();
+            int havelock = jl_lock_profile_wr();
+            assert(havelock); (void)havelock;
             info = context->getLineInfoForAddress(makeAddress(Section, pointer + slide), infoSpec);
             jl_unlock_profile_wr();
         }
@@ -1198,8 +1211,8 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         object::SectionRef *Section, llvm::DIContext **context) JL_NOTSAFEPOINT
 {
     int found = 0;
-    assert(0 == jl_lock_profile_rd_held());
-    jl_lock_profile_wr();
+    if (!jl_lock_profile_wr())
+        return 0;
 
     if (symsize)
         *symsize = 0;
@@ -1212,7 +1225,8 @@ int jl_DI_for_fptr(uint64_t fptr, uint64_t *symsize, int64_t *slide,
         if (!lazyobject->object && !lazyobject->data.empty()) {
             if (lazyobject->uncompressedsize) {
                 SmallVector<uint8_t, 0> unpacked;
-                Error E = compression::zlib::decompress(lazyobject->data, unpacked, lazyobject->uncompressedsize);
+                compression::Format F = compression::zstd::isAvailable() ? compression::Format::Zstd : compression::Format::Zlib;
+                Error E = compression::decompress(F, lazyobject->data, unpacked, lazyobject->uncompressedsize);
                 if (E)
                     lazyobject->data.clear();
                 else

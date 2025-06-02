@@ -406,6 +406,8 @@ let err_str,
     @test occursin("MethodError: no method matching Bool()", err_str)
     err_str = @except_str :a() MethodError
     @test occursin("MethodError: objects of type Symbol are not callable", err_str)
+    err_str = @except_str missing(1) MethodError
+    @test occursin("MethodError: objects of type Missing are not callable", err_str)
     err_str = @except_str EightBitType() MethodError
     @test occursin("MethodError: no method matching $(curmod_prefix)EightBitType()", err_str)
     err_str = @except_str i() MethodError
@@ -939,6 +941,24 @@ end
                               "importing it from a particular module, or qualifying the name ",
                               "with the module it should come from.")
     @test_throws expected_message X.x
+end
+
+# Module for UndefVarError world age testing
+module TestWorldAgeUndef end
+
+@testset "UndefVarError world age hint" begin
+    ex = try
+        TestWorldAgeUndef.newvar
+    catch e
+        e
+    end
+    @test ex isa UndefVarError
+
+    Core.eval(TestWorldAgeUndef, :(newvar = 42))
+
+    err_str = sprint(Base.showerror, ex)
+    @test occursin("The binding may be too new: running in world age", err_str)
+    @test occursin("while current world is", err_str)
 end
 
 # test showing MethodError with type argument

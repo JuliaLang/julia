@@ -96,7 +96,7 @@ function issorted(itr;
     end
 end
 
-function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering)
+function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Ordering; scratch::Union{Nothing, Vector} = nothing)
     # TODO move k from `alg` to `kw`
     # Don't perform InitialOptimizations before Bracketing. The optimizations take O(n)
     # time and so does the whole sort. But do perform them before recursive calls because
@@ -105,7 +105,7 @@ function partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange}, o::Orde
     _sort!(v, BoolOptimization(
         Small{12}( # Very small inputs should go straight to insertion sort
             BracketedSort(k))),
-        o, (;))
+        o, (; scratch))
     maybeview(v, k)
 end
 
@@ -166,8 +166,8 @@ julia> a
 ```
 """
 partialsort!(v::AbstractVector, k::Union{Integer,OrdinalRange};
-             lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward) =
-    partialsort!(v, k, ord(lt,by,rev,order))
+             lt=isless, by=identity, rev::Union{Bool,Nothing}=nothing, order::Ordering=Forward, kws...) =
+    partialsort!(v, k, ord(lt,by,rev,order); kws...)
 
 """
     partialsort(v, k, by=identity, lt=isless, rev=false)
