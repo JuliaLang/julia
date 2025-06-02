@@ -978,7 +978,6 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     }
 
     // Merge everything (invalidates GlobalValue pointers)
-    // data->modules.push_back(&combined_mod);
     if (!data->split_modules)
         merge_compiled_functions(params, *data, external_linkage);
 
@@ -1049,6 +1048,10 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
         }
     }
 
+    StringSet<> const_names;
+    for (auto [_, c] : params.mergedConstants)
+        const_names.insert(c->getName());
+
 #ifndef NDEBUG
     for (auto gv : data->jl_sysimg_gvars) {
         assert(gv);
@@ -1063,14 +1066,18 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     CreateNativeGlobals += data->jl_sysimg_gvars.size() + data->jl_external_to_llvm.size();
     CreateNativeMethods += data->jl_sysimg_fvars.size();
 
+    // TODO: find a nicer way to track the names we must rename and make local;
+    // not every "julia"-owned global is tracked in jl_codegen_params_t.
     auto rename_global_objs = [&](Module &M) {
         for (auto &gv : M.global_objects()) {
             auto name = gv.getName();
-            if (fvars_names.contains(name) || gvars_names.contains(name)) {
-                makeSafeName(gv);
+            int local = fvars_names.contains(name) || gvars_names.contains(name);
+            if (local) {
                 gv.setVisibility(GlobalObject::HiddenVisibility);
                 gv.setDSOLocal(true);
             }
+            if (local || const_names.contains(name))
+                makeSafeName(gv);
         }
     };
     rename_global_objs(*data->combined_mod.getModuleUnlocked());
