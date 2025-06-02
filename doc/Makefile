@@ -42,7 +42,7 @@ deps: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	cp "$<" UnicodeData.txt
 
 alldeps: deps
-	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) deps
+	$(JULIA_EXECUTABLE) --color=yes $(call cygpath_w,$(SRCDIR)/make.jl) deps $(DOCUMENTER_OPTIONS)
 
 checksum-unicodedata: $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt
 	$(JLCHECKSUM) "$<"
@@ -70,4 +70,4 @@ deploy: deps
 
 update-documenter:
 	@echo "Updating Documenter."
-	JULIA_PKG_PRECOMPILE_AUTO=0 $(JULIA_EXECUTABLE) --project --color=yes -e 'using Pkg; Pkg.update("Documenter")'
+	JULIA_PKG_PRECOMPILE_AUTO=0 $(JULIA_EXECUTABLE) --project=$(call cygpath_w,$(SRCDIR)/../deps/jlutilities/documenter/) --color=yes -e 'using Pkg; Pkg.update("Documenter")'

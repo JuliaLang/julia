@@ -249,7 +249,7 @@ JL_DLLEXPORT void jl_atexit_hook(int exitcode) JL_NOTSAFEPOINT_ENTER
     if (jl_base_module) {
         size_t last_age = ct->world_age;
         ct->world_age = jl_get_world_counter();
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_atexit"));
         if (f != NULL) {
             jl_value_t **fargs;
             JL_GC_PUSHARGS(fargs, 2);
@@ -355,13 +355,14 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
 
     if (jl_base_module) {
         jl_task_t *ct = jl_get_current_task();
-        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_postoutput"));
+        size_t last_age = ct->world_age;
+        ct->world_age = jl_get_world_counter();
+        jl_value_t *f = jl_get_global_value(jl_base_module, jl_symbol("_postoutput"));
         if (f != NULL) {
             JL_TRY {
-                size_t last_age = ct->world_age;
-                ct->world_age = jl_get_world_counter();
+                JL_GC_PUSH1(&f);
                 jl_apply(&f, 1);
-                ct->world_age = last_age;
+                JL_GC_POP();
             }
             JL_CATCH {
                 jl_printf((JL_STREAM*)STDERR_FILENO, "\npostoutput hook threw an error: ");
@@ -370,6 +371,7 @@ JL_DLLEXPORT void jl_postoutput_hook(void)
                 jlbacktrace(); // written to STDERR_FILENO
             }
         }
+        ct->world_age = last_age;
     }
     return;
 }
@@ -599,7 +601,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_init_primitives();
         jl_init_main_module();
         jl_load(jl_core_module, "boot.jl");
-        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
         post_boot_hooks();
     }
 
@@ -612,7 +613,6 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
         jl_n_threads_per_pool[JL_THREADPOOL_ID_INTERACTIVE] = 0;
         jl_n_threads_per_pool[JL_THREADPOOL_ID_DEFAULT] = 1;
     } else {
-        jl_current_task->world_age = jl_atomic_load_acquire(&jl_world_counter);
         post_image_load_hooks();
     }
     jl_start_threads();
