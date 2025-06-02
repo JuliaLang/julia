@@ -1055,18 +1055,14 @@ If `base` is specified, then the precision is the minimum required to give
 at least `precision` digits in the given `base`.
 
 !!! note
-     Temporarily sets the precision for BigFloat operations to `precision` bits within the scope of function `f`. This function is now thread-safe due to the use of `ScopedValue`, ensuring that precision settings do not interfere across threads.
+Temporarily sets the precision for BigFloat operations to `precision` bits within the
+scope of function `f`. This function is now thread-safe due to the use of `ScopedValue`,
+ensuring that precision settings do not interfere across threads.
 
 Example:
     setprecision(256) do
         # Operations here use 256-bit precision
     end
-
-!!! warning
-
-    This function is not thread-safe. It will affect code running on all threads, but
-    its behavior is undefined if called concurrently with computations that use the
-    setting.
 
 !!! compat "Julia 1.8"
     The `base` keyword requires at least Julia 1.8.
