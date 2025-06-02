@@ -268,6 +268,10 @@ try
                     end
                 end
             end
+            if isdefined(m, :eager_mode)
+                # If the JLL has an eager_mode function, call it
+                Base.invokelatest(getproperty(m, :eager_mode))
+            end
         end
     end
 
