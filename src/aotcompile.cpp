@@ -44,6 +44,8 @@
 #include <llvm/Support/Caching.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
+#include <llvm/Support/BLAKE3.h>
+#include <llvm/Support/HashBuilder.h>
 
 using namespace llvm;
 
@@ -1975,6 +1977,16 @@ worker_results operator+(worker_results x, const worker_results &y)
     return {x.hits + y.hits, x.misses + y.misses, x.added_size + y.added_size};
 }
 
+static std::string compute_cache_key(const ModuleHash &modhash)
+{
+    llvm::HashBuilder<llvm::BLAKE3, llvm::endianness::little> hasher;
+    hasher.update(LLVM_VERSION_STRING);
+    // TODO: what else should determine the key?  Target and data layout are
+    // already in the bitcode.
+    hasher.update(ArrayRef<uint8_t>((uint8_t *)&modhash[0], sizeof(ModuleHash)));
+    return toHex(hasher.final());
+}
+
 static void add_output_cached(SmallVector<AOTOutputs, 16> &outputs,
                               SmallVector<std::unique_ptr<Module>, 0> &modules, TargetMachine &SourceTM,
                               unsigned threads)
@@ -2036,9 +2048,8 @@ static void add_output_cached(SmallVector<AOTOutputs, 16> &outputs,
                         std::tie(modhash, modid, bitcode) = std::move(serialized.back());
                         serialized.pop_back();
                     }
-                    modhash_str = toHex(
-                        ArrayRef<uint8_t>((uint8_t *)&modhash[0], sizeof(ModuleHash)));
-                    add_stream = check(cache(0, modhash_str, modid));
+                    auto key = compute_cache_key(modhash);
+                    add_stream = check(cache(0, key, modid));
                     if (!add_stream) {
                         hits++;
                         continue;
