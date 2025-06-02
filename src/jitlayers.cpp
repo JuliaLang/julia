@@ -689,7 +689,10 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
             if (!decls.specFunctionObject.empty())
                 NewDefs.push_back(decls.specFunctionObject);
         }
-            // Split batches to avoid stack overflow in the JIT linker.
+        // Split batches to avoid stack overflow in the JIT linker.
+        // FIXME: Patch ORCJITs InPlaceTaskDispatcher to not recurse on task dispatches but
+        // push the tasks to a queue to be drained later. This avoids the stackoverflow caused by recursion
+        // in the linker when compiling a large number of functions at once.
         SmallVector<uint64_t, 0> Addrs;
         for (size_t i = 0; i < NewDefs.size(); i += 1000) {
             auto end = std::min(i + 1000, NewDefs.size());
