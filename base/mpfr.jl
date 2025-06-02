@@ -1060,9 +1060,11 @@ at least `precision` digits in the given `base`.
     ensuring that precision settings do not interfere across threads.
 
 Example:
+    ```julia
     setprecision(256) do
         # Operations here use 256-bit precision
     end
+```
 
 !!! compat "Julia 1.8"
     The `base` keyword requires at least Julia 1.8.
