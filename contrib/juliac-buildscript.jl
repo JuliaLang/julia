@@ -187,12 +187,12 @@ import Base.Experimental.entrypoint
 
 # for use as C main if needed
 function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
-    args = ccall(:jl_set_ARGS, Any, (Cint, Ptr{Ptr{Cchar}}), argc, argv)::Vector{String}
+    ccall(:jl_set_ARGS, Cvoid, (Cint, Ptr{Ptr{Cchar}}), argc, argv)
+    args = [unsafe_string(unsafe_load(argv, i)) for i in 1:argc]  # convert C char** to Vector{String}
     try
         return Main.main(args)
     catch e
         if isa(e, MethodError)
-            # Try to get a message string safely
             msg = try
                 sprint(showerror, e)
             catch
@@ -200,13 +200,11 @@ function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
             end
             ccall(:jl_safe_printf, Cvoid, (Cstring,), "Error: %s\n", msg)
         else
-            # Optional: fallback for other errors
             ccall(:jl_safe_printf, Cvoid, (Cstring,), "Unhandled error occurred\n")
         end
         return 1
     end
 end
-
 
 let mod = Base.include(Main, ARGS[1])
     Core.@latestworld
