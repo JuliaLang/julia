@@ -1061,7 +1061,7 @@ at least `precision` digits in the given `base`.
 
 Example:
     ```julia
-    setprecision(256) 
+    setprecision(256)
 ```
 
 !!! compat "Julia 1.8"
