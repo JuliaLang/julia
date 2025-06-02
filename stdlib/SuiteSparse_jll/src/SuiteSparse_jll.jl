@@ -78,28 +78,28 @@ else
 end
 const libcolamd = LazyLibrary(_libcolamd_path; dependencies=_libcolamd_dependencies)
 
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     _libamd_dependencies = LazyLibrary[libsuitesparseconfig, libgcc_s]
 else
     _libamd_dependencies = LazyLibrary[libsuitesparseconfig]
 end
 const libamd = LazyLibrary(_libamd_path; dependencies=_libamd_dependencies)
 
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     _libcamd_dependencies = LazyLibrary[libsuitesparseconfig, libgcc_s]
 else
     _libcamd_dependencies = LazyLibrary[libsuitesparseconfig]
 end
 const libcamd = LazyLibrary(_libcamd_path; dependencies=_libcamd_dependencies)
 
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     _libccolamd_dependencies = LazyLibrary[libsuitesparseconfig, libgcc_s]
 else
     _libccolamd_dependencies = LazyLibrary[libsuitesparseconfig]
 end
 const libccolamd = LazyLibrary(_libccolamd_path; dependencies=_libccolamd_dependencies)
 
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     _librbio_dependencies = LazyLibrary[libsuitesparseconfig, libgcc_s]
 else
     _librbio_dependencies = LazyLibrary[libsuitesparseconfig]
@@ -117,7 +117,7 @@ else
 end
 const libcholmod = LazyLibrary(_libcholmod_path; dependencies=_libcholmod_dependencies)
 
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     _libklu_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcolamd, libbtf, libgcc_s]
 else
     _libklu_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcolamd, libbtf]
@@ -133,7 +133,7 @@ else
 end
 const libspqr = LazyLibrary(_libspqr_path; dependencies=_libspqr_dependencies)
 
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     _libumfpack_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcholmod, libblastrampoline, libgcc_s]
 else
     _libumfpack_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcholmod, libblastrampoline]

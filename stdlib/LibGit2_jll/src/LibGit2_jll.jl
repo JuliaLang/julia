@@ -30,7 +30,7 @@ else
     const _libgit2_path = BundledLazyLibraryPath("libgit2.so.1.9")
 end
 
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     _libgit2_dependencies = LazyLibrary[libssh2, libgcc_s]
 elseif Sys.isfreebsd() || Sys.islinux()
     _libgit2_dependencies = LazyLibrary[libssh2, libssl, libcrypto]
