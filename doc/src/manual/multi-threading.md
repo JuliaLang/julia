@@ -342,27 +342,43 @@ to a global or closure variable) accessed by other threads. Failing to do this c
 #### [Using Base.Lockable to associate a lock and a value](@id man-lockable)
 As mentioned in the previous section, the helper-type [`Base.Lockable`](@ref) can be used to programmatically ensure the association between a lock and a value. This is generally recommended, as it is both less prone to error and more readable for others compared to having the association only by convention.
 
-
+Any object can be wrapped in `Base.Lockable`:
 ```julia-repl
-julia> my_array = [];                   # Simple empty array
+julia> my_array = [];
 
-julia> my_locked_array = Base.Lockable(my_array);  # The lock type defaults toReentrantLock(), which is fine in most cases
+julia> my_locked_array = Base.Lockable(my_array);
+```
 
-julia> lock(identity, my_locked_array)  # The first argument is a function that is applied to the "unlocked" array, so `identity` is good for inspecting the associated value in a thread-safe manner
-Any[]
-
-julia> lock(my_locked_array) do x       # The functional version of lock` along with the do-syntax` is a convenient way to work with a Lockable object
-           push!(x, 1)
-       end;
-
-julia> lock(identity, my_locked_array)  # The array is now mutated, without any risk of data-races
+If the lock is held, the underlying object can be accessed with the empty indexing notation:
+```julia-repl
+julia> begin
+           lock(my_locked_array)
+           try
+               push!(my_locked_array[], 1)
+           finally
+               unlock(my_locked_array)
+           end
+       end
 1-element Vector{Any}:
  1
+```
 
-julia> my_array                         # The original array is identical to the one contained in my_locked_array``
-1-element Vector{Any}:
+It is usually easier and safer to pass a function as the first argument to `lock`. The function is applied to the unlocked object, and the locking/unlocking is handled in the background. Anonymus functions, named functions, and do-blocks can all work well here:
+```julia-repl
+julia> lock(x -> push!(x, 2), my_locked_array);
+
+julia> lock(display, my_locked_array)
+2-element Vector{Any}:
  1
+ 2
 
+julia> lock(my_locked_array) do x
+           x[1] = π
+           display(x)
+       end
+2-element Vector{Any}:
+ π = 3.1415926535897...
+ 2
 ```
 
 ### [Atomic Operations](@id man-atomic-operations)
