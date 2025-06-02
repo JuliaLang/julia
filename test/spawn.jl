@@ -621,7 +621,7 @@ end
 
 # readlines(::Cmd), accidentally broken in #20203
 let str = "foo\nbar"
-    @test readlines(`$echocmd $str`) == collect(eachline(IOBuffer(str)))
+    @test readlines(`$echocmd $str`) == split(str)
 end
 
 # issue #19864 (PR #20497)
