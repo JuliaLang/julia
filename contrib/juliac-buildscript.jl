@@ -188,21 +188,21 @@ import Base.Experimental.entrypoint
 # for use as C main if needed
 function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
     ccall(:jl_set_ARGS, Cvoid, (Cint, Ptr{Ptr{Cchar}}), argc, argv)
-    args = [unsafe_string(unsafe_load(argv, i)) for i in 1:argc]  # convert C char** to Vector{String}
+    args = [unsafe_string(unsafe_load(argv, i)) for i in 1:argc]
     try
-        return Main.main(args)
+      return Main.main(args)
     catch e
         if isa(e, MethodError)
             msg = try
-                sprint(showerror, e)
-            catch
-                "MethodError occurred"
-            end
-            ccall(:jl_safe_printf, Cvoid, (Cstring,), "Error: %s\n", msg)
-        else
-            ccall(:jl_safe_printf, Cvoid, (Cstring,), "Unhandled error occurred\n")
+            sprint(showerror, e)
+        catch
+            "MethodError occurred"
         end
-        return 1
+        ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Error: %s\n", msg)
+        else
+        ccall(:jl_safe_printf, Cvoid, (Cstring,), "Unhandled error occurred\n")
+        end
+      return 1
     end
 end
 
