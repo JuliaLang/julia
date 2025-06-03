@@ -313,6 +313,7 @@ const _promote_type_binary_recursion_depth_limit_exception = let
 end
 function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple{Vararg{Nothing}}) where {T,S}
     err() = throw(_promote_type_binary_recursion_depth_limit_exception)
+    normalize_type(::Type{X}) where {X} = X
     if recursion_depth_limit === ()
         @noinline err()
     end
@@ -324,8 +325,8 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
     end
     l = tail(recursion_depth_limit)
     # Try promote_rule in both orders.
-    st = promote_rule(S, T)
-    ts = promote_rule(T, S)
+    st = normalize_type(promote_rule(S, T))
+    ts = normalize_type(promote_rule(T, S))
     # If no promote_rule is defined, both directions give Bottom. In that
     # case use typejoin on the original types instead.
     if (st <: Bottom) && (ts <: Bottom)
