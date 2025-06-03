@@ -200,17 +200,17 @@ jobs:
               weDidEncounterError = true;
               console.log(`ERROR: Failed to assign @${selectedAssignee}`);
             }
-            const newPrLabels = updatedPrData
-              .data
-              .labels
-              .map(element => element.name)
-            console.log('newPrLabels: ', newPrLabels);
-            if (newPrLabels.includes(prReviewLabel)) {
-              console.log('Successfully added prReviewLabel');
-            } else {
-              weDidEncounterError = true;
-              console.log('ERROR: Failed to add add prReviewLabel');
-            }
+            // const newPrLabels = updatedPrData
+            //   .data
+            //   .labels
+            //   .map(element => element.name)
+            // console.log('newPrLabels: ', newPrLabels);
+            // if (newPrLabels.includes(prReviewLabel)) {
+            //   console.log('Successfully added prReviewLabel');
+            // } else {
+            //   weDidEncounterError = true;
+            //   console.log('ERROR: Failed to add add prReviewLabel');
+            // }
 
             // Post a comment
             const commentBody = `Hello! I am a bot.\n\nThank you for your pull request!\n\nI have assigned \`@${selectedAssignee}\` to this pull request.\n\n\`@${selectedAssignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.`
