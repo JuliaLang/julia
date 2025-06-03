@@ -91,7 +91,7 @@ Multi-threading changes
   the first time it is called, and then always return the same result value of type `T`
   every subsequent time afterwards. There are also `OncePerThread{T}` and `OncePerTask{T}` types for
   similar usage with threads or tasks ([#55793]).
-* `setprecision` utilizes `ScopedValue` for enhancing thread safety when setting precision levels. 
+* `setprecision` utilizes `ScopedValue` for enhancing thread safety when setting precision levels.
   This change allows for safer precision adjustments in multi-threaded environments. ([#51362])
 
 Build system changes
