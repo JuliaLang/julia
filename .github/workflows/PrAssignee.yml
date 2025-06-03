@@ -71,11 +71,7 @@ jobs:
             )
             const allCollaboratorsNested = await Promise.all(allCollaboratorsNestedPromises);
             const allCollaboratorsFlattened = allCollaboratorsNested.flat();
-            if (allCollaboratorsFlattened.includes(prAuthor)) {
-              var isCollaborator = true;
-            } else {
-              var isCollaborator = false;
-            }
+            const isCollaborator = allCollaboratorsFlattened.includes(prAuthor);
 
             // console.log('allCollaboratorsFlattened: ', allCollaboratorsFlattened); // TODO: comment this line out once you are finished debugging
 
