@@ -1050,19 +1050,22 @@ _precision_with_base_2(::Type{BigFloat}) =
 """
     setprecision([T=BigFloat,] precision::Int; base=2)
 
-Set the precision (in bits, by default) to be used for `T` arithmetic.
+Set the global precision (in bits, by default) to be used for `T` arithmetic.
 If `base` is specified, then the precision is the minimum required to give
 at least `precision` digits in the given `base`.
 
-!!! note
-    Temporarily sets the precision for BigFloat operations to `precision` bits within the
-    scope of function `f`. This function is now thread-safe due to the use of `ScopedValue`,
-    ensuring that precision settings do not interfere across threads.
-
 Example:
-    ```julia
+```julia
     setprecision(256)
 ```
+
+!!! note
+    Temporarily sets the precision for BigFloat operations to `precision` bits within the
+    scope of function `f`. This method is thread-safe due to the use of ScopedValue, ensuring
+    that precision settings do not interfere across threads.
+
+!!! compat "Julia 1.12"
+    Thread safety via ScopedValue is guaranteed starting with Julia 1.12. ([#51362])
 
 !!! compat "Julia 1.8"
     The `base` keyword requires at least Julia 1.8.
