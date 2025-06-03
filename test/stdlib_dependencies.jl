@@ -7,32 +7,7 @@ Pkg.add(Pkg.PackageSpec(name="ObjectFile", uuid="d8793406-e978-5875-9003-1fc021f
 using ObjectFile
 try
 
-    # Remove `.X.dylib` or just `.dylib`
-    function strip_soversion_macos(lib)
-        m = match(r"^(.*?)(\.\d+)*\.dylib$", lib)
-        if m !== nothing
-            return m.captures[1]
-        end
-        return lib
-    end
-
-    # Remove `.so.X` or just `.so`
-    function strip_soversion_linux(lib)
-        m = match(r"^(.*?)\.so(\.\d+)*$", lib)
-        if m !== nothing
-            return m.captures[1]
-        end
-        return lib
-    end
-
-    # Remove `-X.dll` or just `.dll`
-    function strip_soversion_windows(lib)
-        m = match(r"^(.*?)(-\d+)*\.dll$", lib)
-        if m !== nothing
-            return m.captures[1]
-        end
-        return lib
-    end
+    strip_soversion(lib::AbstractString) = Base.BinaryPlatforms.parse_dl_name_version(lib)[1]
 
     function get_deps_objectfile_macos(lib_path::String)
         open(lib_path, "r") do io
@@ -56,10 +31,9 @@ try
                     end
                 end
             end
-
-            libs = strip_soversion_macos.(raw_libs)
+            libs = strip_soversion.(raw_libs)
             # Get rid of any self-referential links
-            self_lib = strip_soversion_macos(basename(lib_path))
+            self_lib = strip_soversion(basename(lib_path))
             libs = filter(!=(self_lib), libs)
             return libs
         end
@@ -86,7 +60,7 @@ try
                 end
             end
 
-            libs = strip_soversion_linux.(raw_libs)
+            libs = strip_soversion.(raw_libs)
             # Self-reference is typically not listed in NEEDED for ELF, so no explicit filter here.
             return libs
         end
@@ -111,9 +85,9 @@ try
                 end
             end
 
-            libs = strip_soversion_windows.(collect(raw_libs_set))
-            # Remove self-reference
-            self_lib = strip_soversion_windows(lowercase(basename(lib_path)))
+            libs = strip_soversion.(collect(raw_libs_set))
+            # Get rid of any self-referential links
+            self_lib = strip_soversion(lowercase(basename(lib_path)))
             libs = filter(!=(self_lib), libs)
             return libs
         end
@@ -205,13 +179,10 @@ try
 
     # Set up platform-specific functions
     if Sys.islinux() || Sys.isfreebsd()
-        strip_soversion = strip_soversion_linux
         is_system_lib = Sys.islinux() ? is_system_lib_linux : is_system_lib_freebsd
     elseif Sys.isapple()
-        strip_soversion = strip_soversion_macos
         is_system_lib = is_system_lib_macos
     elseif Sys.iswindows()
-        strip_soversion = strip_soversion_windows
         is_system_lib = is_system_lib_windows
     else
         error("Unsupported platform for `stdlib_dependencies.jl`. Only Linux, FreeBSD, macOS, and Windows are supported.")
