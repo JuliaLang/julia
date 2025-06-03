@@ -76,7 +76,7 @@ jobs:
             } else {
               var isCollaborator = false;
             }
-            github.log.info(allCollaboratorsFlattened); // TODO
+            console.log('allCollaboratorsFlattened: ', allCollaboratorsFlattened); // TODO
 
             console.log('prAuthor: ', prAuthor);
             console.log('isCollaborator: ', isCollaborator);
