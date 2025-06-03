@@ -2642,7 +2642,7 @@ void jl_dump_native_impl(void *native_code,
         };
 
         write_output(unopt_bc_fname, "unopt_", ".bc", std::mem_fn(&AOTOutputs::unopt));
-        write_output(unopt_bc_fname, "opt_", ".bc", std::mem_fn(&AOTOutputs::opt));
+        write_output(bc_fname, "opt_", ".bc", std::mem_fn(&AOTOutputs::opt));
         write_output(obj_fname, "", ".o", std::mem_fn(&AOTOutputs::obj));
         write_output(asm_fname, "", ".s", std::mem_fn(&AOTOutputs::asm_));
     }
