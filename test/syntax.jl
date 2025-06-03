@@ -4299,6 +4299,16 @@ end
 @test letf_57470(3) == 5
 @test letT_57470 === Int64
 
+end # M57470_sub
+
+# lowering globaldecl with complex type
+module M58609
+using Test
+global x::T where T
+global y::Type{<:Number}
+
+@test Core.get_binding_type(M58609, :x) === Any
+@test Core.get_binding_type(M58609, :y) == Type{<:Number}
 end
 
 # #57574

@@ -64,18 +64,16 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   per_page: 100,
-                  permission: 'push',
+                  permission: perm,
                 },
                 (response) => response.data.map((collaboratorInfo) => collaboratorInfo.login),
               )
             )
             const allCollaboratorsNested = await Promise.all(allCollaboratorsNestedPromises);
             const allCollaboratorsFlattened = allCollaboratorsNested.flat();
-            if (allCollaboratorsFlattened.includes(prAuthor)) {
-              var isCollaborator = true;
-            } else {
-              var isCollaborator = false;
-            }
+            const isCollaborator = allCollaboratorsFlattened.includes(prAuthor);
+
+            // console.log('allCollaboratorsFlattened: ', allCollaboratorsFlattened); // TODO: comment this line out once you are finished debugging
 
             console.log('prAuthor: ', prAuthor);
             console.log('isCollaborator: ', isCollaborator);
@@ -160,15 +158,16 @@ jobs:
               assignees: selectedAssignee,
             });
 
-            // Add the "pr review" label
-            const prReviewLabel = 'status: waiting for PR reviewer';
-            console.log('Attempting to add prReviewLabel to this PR...');
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              labels: [prReviewLabel],
-            });
+            // The following is commented out because the label only makes sense in the presence of a larger state machine
+            // // Add the "pr review" label
+            // const prReviewLabel = 'status: waiting for PR reviewer';
+            // console.log('Attempting to add prReviewLabel to this PR...');
+            // await github.rest.issues.addLabels({
+            //   owner: context.repo.owner,
+            //   repo: context.repo.repo,
+            //   issue_number: context.payload.pull_request.number,
+            //   labels: [prReviewLabel],
+            // });
 
             // Now get the updated PR info, and see if we were successful:
             const updatedPrData = await github.rest.pulls.get({
@@ -187,17 +186,17 @@ jobs:
               weDidEncounterError = true;
               console.log(`ERROR: Failed to assign @${selectedAssignee}`);
             }
-            const newPrLabels = updatedPrData
-              .data
-              .labels
-              .map(element => element.name)
-            console.log('newPrLabels: ', newPrLabels);
-            if (newPrLabels.includes(prReviewLabel)) {
-              console.log('Successfully added prReviewLabel');
-            } else {
-              weDidEncounterError = true;
-              console.log('ERROR: Failed to add add prReviewLabel');
-            }
+            // const newPrLabels = updatedPrData
+            //   .data
+            //   .labels
+            //   .map(element => element.name)
+            // console.log('newPrLabels: ', newPrLabels);
+            // if (newPrLabels.includes(prReviewLabel)) {
+            //   console.log('Successfully added prReviewLabel');
+            // } else {
+            //   weDidEncounterError = true;
+            //   console.log('ERROR: Failed to add add prReviewLabel');
+            // }
 
             // Post a comment
             const commentBody = `Hello! I am a bot.\n\nThank you for your pull request!\n\nI have assigned \`@${selectedAssignee}\` to this pull request.\n\n\`@${selectedAssignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.`
