@@ -343,8 +343,7 @@ end
     P
 end
 
-const CommutativeOps = Union{typeof(+),typeof(Base.add_sum),typeof(min),typeof(max),typeof(Base._extrema_rf),typeof(|),typeof(&)}
-
+using Base: CommutativeOps
 function Base.mapreducedim(f, op::CommutativeOps, A::PermutedDimsArray, init, dims::Colon)
     Base.mapreducedim(f, op, parent(A), init, dims)
 end

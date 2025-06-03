@@ -435,30 +435,39 @@ the start of each new chain of `op` calls.
 
 """
     mapreduce_pairwise(f, op, A, init)
-    mapreduce_pairwise(f, op, A, init, indices)
-    mapreduce_pairwise(f, op, itr, init, ::Union{HasLength, HasShape}, n, [state])
-    mapreduce_pairwise(f, op, itr, init, ::IteratorSize, n, valstate)
+    mapreduce_pairwise(f, op, A, init, indices::AbstractArray)
+    mapreduce_pairwise(f, op, itr, init, ::Union{HasLength, HasShape})
+    mapreduce_pairwise(f, op, itr, init, ::IteratorSize)
 
 Perform a pairwise reassociation of the mapped reduction with `f` and `op`
 Returns the result `v` or, for the 6+ argument iterator methods, a tuple `(v, state)` or `(v, iterate(itr, state))`
 
-The four-argument entry-point handles the empty case and dispatches to a polyalgorithm
+These entry-points handle the empty case and dispatches to a polyalgorithm
 with three distinct mechanisms for accessing elements and structuring the subsequent
-recursion; all such recursive calls **must** process at least one element.
+recursion; the methods with length must process at least one element.
+
+    mapreduce_pairwise(f, op, A, init, indices::AbstractArray)
 
     * An indexing method recursively splits `indices` until there are fewer than
       `pairwise_blocksize` indices to process. CartesianIndices split into halves
       across columns first, then within a single column (if necessary).
+
+    mapreduce_pairwise(f, op, itr, init, ::Union{HasLength, HasShape}, n, [state]) -> (value, state)
+
     * An iterable method (with length) recursively takes half as many elements from
       the iterable until `n` is less than or equal to the `pairwise_blocksize`. This
       is slightly more complicated than the indexing case as we must additionally pass
       (and return) the iterable's state along with the result of each part of the
       reduction.
-    * An iterable method (without length) peels one element (and state) in advance of
-      every recursive call to handle the empty case and ensure that all recursive calls
-      process at least one element. This is slightly more complicated than the length
-      case as we must pass the iterable's next `(val, state)` to each recursive call
-      and similarly return it as the second part of the internal return tuple.
+
+    mapreduce_pairwise(f, op, itr, init, ::IteratorSize, n, [state]) -> (value, state) | nothing | Some(value)
+
+    * An iterable method (without length) that — unlike the above two methods — might
+      not process any values (because we don't know if there are values in the iterable).
+      This is slightly more complicated than the length case as there are three possibilities:
+        - there may not be any values left in the iterator at all (returning `nothing`)
+        - there may have been _some_ values but the iterator was exhausted (returning `Some` value)
+        - there may be more values left, returning a `(value, state)` tuple
       Additionally this algorithm effectively works backwards from the other two;
       instead of starting at the *final* `op` reduction of the (possibly many) branches
       of reduction chains, this starts at the initial chain of length **up to** the
@@ -471,24 +480,34 @@ and reassociations.
 """
 function mapreduce_pairwise(f::F, op::G, A::AbstractArrayOrBroadcasted, init) where {F, G}
     n = length(A)
-    n <= 16 && return mapfoldl(f, op, A; init) # The overhead of SIMD is more expensive than a straight loop
+    n == 0 && return _mapreduce_start(f, op, A, init)
     n <= pairwise_blocksize(f, op) && return mapreduce_kernel(f, op, A, init, eachindex(A))
     return mapreduce_pairwise(f, op, A, init, eachindex(A))
 end
 mapreduce_pairwise(f::F, op::G, itr, init) where {F, G} = mapreduce_pairwise(f, op, itr, init, IteratorSize(itr)) 
 function mapreduce_pairwise(f, op, itr, init, S::Union{HasLength, HasShape})
     n = length(itr)
-    n <= pairwise_blocksize(f, op) && return mapfoldl(f, op, itr; init) # Iterators typically won't SIMD
+    n == 0 && return _mapreduce_start(f, op, itr, init)
+    # Note that there can be a significant advantage to the for-loop lowering of mapfoldl
+    n <= pairwise_blocksize(f, op) && return mapreduce_kernel(f, op, itr, init, S, n)[1]
     return mapreduce_pairwise(f, op, itr, init, S, n)[1]
 end
+# There are three possible return values for partial reductions of SizeUnknown
+# No values -> return nothing
+# Some values, but ended -> return Some(value)
+# Some values, more to come -> return value, state
 function mapreduce_pairwise(f::F, op::G, itr, init, S::IteratorSize) where {F, G}
-    it = iterate(itr)
-    it === nothing && return _mapreduce_start(f, op, itr, init)
     n = pairwise_blocksize(f, op)
-    v, it = mapreduce_kernel(f, op, itr, init, S, n, it)
-    while it !== nothing
+    ret = mapreduce_kernel(f, op, itr, init, S, n)
+    ret === nothing && return _mapreduce_start(f, op, itr, init)
+    ret isa Some && return something(ret)
+    v, s = ret
+    while n < prevpow(2, typemax(n))
         n <<= 1
-        v1, it = mapreduce_pairwise(f, op, itr, init, S, n, it)
+        ret = mapreduce_pairwise(f, op, itr, init, S, n, s)
+        ret === nothing && return v
+        ret isa Some && return op(v, something(ret))
+        v1, s = ret
         v = op(v, v1)
     end
     return v
@@ -517,7 +536,7 @@ _halves(::Tuple{}) = ()
 _wholes(r) = r[begin:end], r[begin:end]
 
 function mapreduce_pairwise(f::F, op::G, itr, init, S::Union{HasLength,HasShape}, n, state...) where {F,G}
-    if n < max(10, pairwise_blocksize(f, op))
+    if n <= max(10, pairwise_blocksize(f, op))
         return mapreduce_kernel(f, op, itr, init, S, n, state...)
     else
         ndiv2 = n >> 1
@@ -526,24 +545,27 @@ function mapreduce_pairwise(f::F, op::G, itr, init, S::Union{HasLength,HasShape}
         return (op(v1, v2), s)
     end
 end
-function mapreduce_pairwise(f::F, op::G, itr, init, S::IteratorSize, n, it) where {F,G}
+function mapreduce_pairwise(f::F, op::G, itr, init, S::IteratorSize, n, state...) where {F,G}
     if n <= max(10, pairwise_blocksize(f, op))
-        v, it = mapreduce_kernel(f, op, itr, init, S, n, it)
-        return it === nothing ? (v, nothing) : (v, it)
+        return mapreduce_kernel(f, op, itr, init, S, n, state...)
     else
         ndiv2 = n >> 1
-        v1, it = mapreduce_pairwise(f, op, itr, init, S, ndiv2, it)
-        it === nothing && return (v1, nothing)
-        v2, it = mapreduce_pairwise(f, op, itr, init, S, n-ndiv2, it)
-        v = op(v1, v2)
-        return it === nothing ? (v, nothing) : (v, it)
+        ret = mapreduce_pairwise(f, op, itr, init, S, ndiv2, state...)
+        ret === nothing && return nothing
+        ret isa Some && return ret
+        v1, s = ret
+        ret = mapreduce_pairwise(f, op, itr, init, S, n-ndiv2, s)
+        ret === nothing && return Some(v1)
+        ret isa Some && return Some(op(v1, something(ret)))
+        v2, s = ret
+        return (op(v1, v2), s)
     end
 end
 
 """
-    mapreduce_kernel(f, op, A, init, inds) -> v
+    mapreduce_kernel(f, op, A, init, inds::AbstractArray) -> v
     mapreduce_kernel(f, op, itr, init, ::Union{HasLength, HasShape}, n, [state]) -> (v, state)
-    mapreduce_kernel(f, op, itr, init, ::IteratorSize, n, valstate) -> (v, iterate(itr, state))
+    mapreduce_kernel(f, op, itr, init, ::IteratorSize, n, [state]) -> (v, state) | nothing | Some(v)
 
 Perform the mapped reduction with `f` and `op` akin to a `mapfoldl` but permitting SIMD-like
 optimizations and reassociations. Corresponding to `mapreduce_pairwise`, this function uses
@@ -557,20 +579,22 @@ three (and a half) different mechanisms for accessing elements and structuring i
     This method additionally takes (and returns as the second element in a tuple) the *next* `(val, state)`
     tuple from the iterator or `nothing`
 """
-function mapreduce_kernel(f, op, A, init, inds)
+function mapreduce_kernel(f::F, op::G, A, init, inds::AbstractArray) where {F, G}
+    is_commutative_op(op) && return mapreduce_kernel_commutative(f, op, A, init, inds)
     a1 = @inbounds A[inds[begin]]
     v = _mapreduce_start(f, op, A, init, a1)
     length(inds) == 1 && return v
-    @simd for i in inds[begin+1:end]
+    for i in inds[begin+1:end]
         a = @inbounds A[i]
         v = op(v, f(a))
     end
     return v
 end
-function mapreduce_kernel(f, op, itr, init, ::Union{HasLength, HasShape}, n, state...)
+function mapreduce_kernel(f::F, op::G, itr, init, S::Union{HasLength, HasShape}, n, state...) where {F, G}
+    is_commutative_op(op) && return mapreduce_kernel_commutative(f, op, itr, init, S, n, state...)
     a1, s = iterate(itr, state...)
     v = _mapreduce_start(f, op, itr, init, a1)
-    @simd for _ in 2:n
+    for _ in 2:n
         it = iterate(itr, s)
         it === nothing && return v, s # This will only happen if an iterator lied about its length
         a, s = it
@@ -578,17 +602,19 @@ function mapreduce_kernel(f, op, itr, init, ::Union{HasLength, HasShape}, n, sta
     end
     return v, s
 end
-function mapreduce_kernel(f, op, itr, init,  ::IteratorSize, n, it)
+function mapreduce_kernel(f::F, op::G, itr, init, S::IteratorSize, n, state...) where {F, G}
+    is_commutative_op(op) && return mapreduce_kernel_commutative(f, op, itr, init, S, n, state...)
+    it = iterate(itr, state...)
+    it === nothing && return nothing
     a1, s = it
     v = _mapreduce_start(f, op, itr, init, a1)
-    @simd for _ in 2:n
+    for _ in 2:n
         it = iterate(itr, s)
-        it === nothing && return v, nothing
+        it === nothing && return Some(v)
         a, s = it
         v = op(v, f(a))
     end
-    it = iterate(itr, s)
-    return it === nothing ? (v, nothing) : (v, it)
+    return (v, s)
 end
 
 """
@@ -1281,3 +1307,8 @@ for (fred, f) in ((maximum, max), (minimum, min), (sum, add_sum))
         isempty(r) ? init : op(init, $fred(r))
     end
 end
+
+# Reduction kernels that explicitly encode simplistic SIMD-ish reorderings
+const CommutativeOps = Union{typeof(+),typeof(Base.add_sum),typeof(min),typeof(max),typeof(Base._extrema_rf),typeof(|),typeof(&)}
+is_commutative_op(::CommutativeOps) = true
+is_commutative_op(::Any) = false

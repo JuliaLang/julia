@@ -402,7 +402,7 @@ function exprresolve_conditional(ex::Expr)
                 return true, exprresolve_cond_dict[callee](ex.args[2], ex.args[3])
             end
         end
-    elseif Meta.isexpr(ex, :block, 2) && ex.args[1] isa LineNumberNode
+    elseif ex.head === :block && length(ex.args) == 2 && ex.args[1] isa LineNumberNode
         return exprresolve_conditional(ex.args[2])
     end
     false, false
