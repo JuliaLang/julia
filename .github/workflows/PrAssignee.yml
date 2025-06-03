@@ -172,15 +172,16 @@ jobs:
               assignees: selectedAssignee,
             });
 
-            // Add the "pr review" label
-            const prReviewLabel = 'status: waiting for PR reviewer';
-            console.log('Attempting to add prReviewLabel to this PR...');
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              labels: [prReviewLabel],
-            });
+            // The following is commented out because the label only makes sense in the presence of a larger state machine
+            // // Add the "pr review" label
+            // const prReviewLabel = 'status: waiting for PR reviewer';
+            // console.log('Attempting to add prReviewLabel to this PR...');
+            // await github.rest.issues.addLabels({
+            //   owner: context.repo.owner,
+            //   repo: context.repo.repo,
+            //   issue_number: context.payload.pull_request.number,
+            //   labels: [prReviewLabel],
+            // });
 
             // Now get the updated PR info, and see if we were successful:
             const updatedPrData = await github.rest.pulls.get({
