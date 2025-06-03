@@ -992,7 +992,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 return n;
             }
         }
-        if (ctx.quiet) {
+        if (ctx.suppress_datatype_names) {
             return jl_static_show_symbol(out, dv->name->name);
         }
         jl_sym_t *globname;
@@ -1369,7 +1369,23 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             size_t i = 0;
             if (vt == jl_typemap_entry_type)
                 i = 1;
+            jl_value_t *names = isnamedtuple ? jl_tparam0(vt) : (jl_value_t*)jl_field_names(vt);
             for (; i < tlen; i++) {
+                if (!istuple && (!ctx.suppress_field_names || isnamedtuple)) {
+                    if (!isnamedtuple)
+                        n += jl_printf(out, "#= ");
+                    jl_sym_t *fname = (jl_sym_t*)(isnamedtuple ? jl_fieldref_noalloc(names, i) : jl_svecref(names, i));
+                    if (fname == NULL || !jl_is_symbol(fname))
+                        n += jl_static_show_x(out, (jl_value_t*)fname, depth, ctx);
+                    else if (jl_is_operator(jl_symbol_name(fname)))
+                        n += jl_printf(out, "(%s)", jl_symbol_name(fname));
+                    else
+                        n += jl_static_show_symbol(out, fname);
+                    if (isnamedtuple)
+                        n += jl_printf(out, "=");
+                    else
+                        n += jl_printf(out, " =#");
+                }
                 size_t offs = jl_field_offset(vt, i);
                 char *fld_ptr = (char*)v + offs;
                 if (jl_field_isptr(vt, i)) {
@@ -1467,17 +1483,28 @@ static size_t jl_static_show_next_(JL_STREAM *out, jl_value_t *v, jl_value_t *pr
 
 JL_DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v) JL_NOTSAFEPOINT
 {
-    jl_static_show_config_t ctx = { /* quiet */ 0 };
+    jl_static_show_config_t ctx = {
+        /* suppress_datatype_names */ 0,
+        /* suppress_field_names */ 0,
+    };
+    return jl_static_show_x(out, v, 0, ctx);
+}
+
+JL_DLLEXPORT size_t jl_static_show_(JL_STREAM *out, jl_value_t *v, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
+{
     return jl_static_show_x(out, v, 0, ctx);
 }
 
 JL_DLLEXPORT size_t jl_static_show_func_sig(JL_STREAM *s, jl_value_t *type) JL_NOTSAFEPOINT
 {
-    jl_static_show_config_t ctx = { /* quiet */ 0 };
+    jl_static_show_config_t ctx = {
+        /* suppress_datatype_names */ 0,
+        /* suppress_field_names */ 0,
+    };
     return jl_static_show_func_sig_(s, type, ctx);
 }
 
-size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
+JL_DLLEXPORT size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT
 {
     size_t n = 0;
     size_t i;

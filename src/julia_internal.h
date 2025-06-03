@@ -636,8 +636,12 @@ void jl_gc_reset_alloc_count(void);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
-typedef struct _jl_static_show_config_t { uint8_t quiet; } jl_static_show_config_t;
-size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
+typedef struct _jl_static_show_config_t {
+    uint8_t suppress_datatype_names;
+    uint8_t suppress_field_names;
+} jl_static_show_config_t;
+JL_DLLEXPORT size_t jl_static_show_(JL_STREAM *out, jl_value_t *v, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_config_t ctx) JL_NOTSAFEPOINT;
 
 STATIC_INLINE jl_value_t *undefref_check(jl_datatype_t *dt, jl_value_t *v) JL_NOTSAFEPOINT
 {
