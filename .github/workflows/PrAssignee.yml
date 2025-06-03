@@ -64,7 +64,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   per_page: 100,
-                  permission: 'push',
+                  permission: perm,
                 },
                 (response) => response.data.map((collaboratorInfo) => collaboratorInfo.login),
               )
@@ -76,6 +76,8 @@ jobs:
             } else {
               var isCollaborator = false;
             }
+
+            // console.log('allCollaboratorsFlattened: ', allCollaboratorsFlattened); // TODO: comment this line out once you are finished debugging
 
             console.log('prAuthor: ', prAuthor);
             console.log('isCollaborator: ', isCollaborator);
