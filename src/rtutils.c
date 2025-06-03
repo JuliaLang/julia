@@ -1369,18 +1369,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             size_t i = 0;
             if (vt == jl_typemap_entry_type)
                 i = 1;
-            jl_value_t *names = isnamedtuple ? jl_tparam0(vt) : (jl_value_t*)jl_field_names(vt);
             for (; i < tlen; i++) {
-                if (!istuple) {
-                    jl_sym_t *fname = (jl_sym_t*)(isnamedtuple ? jl_fieldref_noalloc(names, i) : jl_svecref(names, i));
-                    if (fname == NULL || !jl_is_symbol(fname))
-                        n += jl_static_show_x(out, (jl_value_t*)fname, depth, ctx);
-                    else if (jl_is_operator(jl_symbol_name(fname)))
-                        n += jl_printf(out, "(%s)", jl_symbol_name(fname));
-                    else
-                        n += jl_static_show_symbol(out, fname);
-                    n += jl_printf(out, "=");
-                }
                 size_t offs = jl_field_offset(vt, i);
                 char *fld_ptr = (char*)v + offs;
                 if (jl_field_isptr(vt, i)) {
