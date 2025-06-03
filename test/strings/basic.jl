@@ -49,6 +49,24 @@ using Random
     end
 end
 
+@testset "takestring!" begin
+    v = [0x61, 0x62, 0x63]
+    old_mem = v.ref.mem
+    @test takestring!(v) == "abc"
+    @test isempty(v)
+    @test v.ref.mem !== old_mem # memory is changed
+    for v in [
+        UInt8[],
+        [0x01, 0x02, 0x03],
+        collect(codeunits("æøå"))
+    ]
+        cp = copy(v)
+        s = takestring!(v)
+        @test isempty(v)
+        @test codeunits(s) == cp
+    end
+end
+
 @testset "{starts,ends}with" begin
     @test startswith("abcd", 'a')
     @test startswith('a')("abcd")
@@ -877,6 +895,11 @@ end
             end
         end
     end
+
+    @testset "return type infers to `Int`" begin
+        @test Int === Base.infer_return_type(prevind, Tuple{AbstractString, Vararg})
+        @test Int === Base.infer_return_type(nextind, Tuple{AbstractString, Vararg})
+    end
 end
 
 @testset "first and last" begin
@@ -1421,5 +1444,22 @@ end
         @test transcode(String, transcode(Int32, transcode(UInt8, str))) == str
         @test transcode(String, transcode(UInt32, transcode(UInt8, str))) == str
         @test transcode(String, transcode(UInt8, transcode(UInt16, str))) == str
+    end
+end
+
+if Sys.iswindows()
+    @testset "cwstring" begin
+        # empty string
+        str_0 = ""
+        # string with embedded NUL character
+        str_1 = "Au\000B"
+        # string with terminating NUL character
+        str_2 = "Wordu\000"
+        # "Regular" string with UTF-8 characters of differing byte counts
+        str_3 = "aܣ𒀀"
+        @test Base.cwstring(str_0) == UInt16[0x0000]
+        @test_throws ArgumentError Base.cwstring(str_1)
+        @test_throws ArgumentError Base.cwstring(str_2)
+        @test Base.cwstring(str_3) == UInt16[0x0061, 0x0723, 0xd808, 0xdc00, 0x0000]
     end
 end

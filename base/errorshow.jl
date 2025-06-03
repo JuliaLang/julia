@@ -291,7 +291,9 @@ function showerror(io::IO, ex::MethodError)
     elseif isempty(methods(f)) && isa(f, DataType) && isabstracttype(f)
         print(io, "no constructors have been defined for ", f)
     elseif isempty(methods(f)) && !isa(f, Function) && !isa(f, Type)
-        print(io, "objects of type ", ft, " are not callable")
+        println(io, "objects of type ", ft, " are not callable.")
+        print(io, "In case you did not try calling it explicitly, check if a ", ft,
+            " has been passed as an argument to a method that expects a callable instead.")
     else
         if ft <: Function && isempty(ft.parameters) && _isself(ft)
             f_is_function = true
@@ -305,7 +307,7 @@ function showerror(io::IO, ex::MethodError)
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
         show_signature_function(iob, Core.Typeof(f))
         show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
-        str = String(take!(buf))
+        str = takestring!(buf)
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
@@ -323,10 +325,10 @@ function showerror(io::IO, ex::MethodError)
         end
     end
     if ft <: AbstractArray
-        print(io, "\nUse square brackets [] for indexing an Array.")
+        print(io, "\nIn case you're trying to index into the array, use square brackets [] instead of parentheses ().")
     end
     # Check for local functions that shadow methods in Base
-    let name = ft.name.mt.name
+    let name = ft.name.singletonname
         if f_is_function && isdefined(Base, name)
             basef = getfield(Base, name)
             if basef !== f && hasmethod(basef, arg_types)
@@ -346,7 +348,9 @@ function showerror(io::IO, ex::MethodError)
         curworld = get_world_counter()
         print(io, "\nThe applicable method may be too new: running in world age $(ex.world), while current world is $(curworld).")
     elseif f isa Function
-        print(io, "\nThe function `$f` exists, but no method is defined for this combination of argument types.")
+        print(io, "\nThe ")
+        isgensym(nameof(f)) && print(io, "anonymous ")
+        print(io, "function `$f` exists, but no method is defined for this combination of argument types.")
     elseif f isa Type
         print(io, "\nThe type `$f` exists, but no method is defined for this combination of argument types when trying to construct it.")
     else
@@ -588,15 +592,13 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             end
             if ex.world < reinterpret(UInt, method.primary_world)
                 print(iob, " (method too new to be called from this world context.)")
-            elseif ex.world > reinterpret(UInt, method.deleted_world)
-                print(iob, " (method deleted before this world age.)")
             end
             println(iob)
 
             m = parentmodule_before_main(method)
             modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
             print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
-            push!(lines, String(take!(buf)))
+            push!(lines, takestring!(buf))
             push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
         end
     end
@@ -1011,10 +1013,10 @@ function _backtrace_collapse_repeated_locations!(trace)
             [3] g(x::Int64) <-- useless
             @ Main ./REPL[1]:1
             =#
-            if frame.linfo isa MethodInstance && last_frame.linfo isa MethodInstance &&
-                frame.linfo.def isa Method && last_frame.linfo.def isa Method
-                m, last_m = frame.linfo.def::Method, last_frame.linfo.def::Method
-                params, last_params = Base.unwrap_unionall(m.sig).parameters, Base.unwrap_unionall(last_m.sig).parameters
+            m, last_m = StackTraces.frame_method_or_module(frame),
+                        StackTraces.frame_method_or_module(last_frame)
+            if m isa Method && last_m isa Method
+                params, last_params = Base.unwrap_unionall(m.sig).parameters::SimpleVector, Base.unwrap_unionall(last_m.sig).parameters::SimpleVector
                 if last_m.nkw != 0
                     pos_sig_params = last_params[(last_m.nkw+2):end]
                     issame = true
@@ -1099,7 +1101,7 @@ Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 #    eg: d = Dict; d["key"] = 2
 function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
     @nospecialize
-    if ex.f == setindex!
+    if ex.f === setindex!
         T = arg_types[1]
         if T <: Number
             print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
@@ -1118,9 +1120,8 @@ Experimental.register_error_hint(nonsetable_type_hint_handler, MethodError)
 
 # Display a hint in case the user tries to use the + operator on strings
 # (probably attempting concatenation)
-function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
-    @nospecialize
-    if (ex.f === +) && !isempty(arg_types) && all(i -> i <: AbstractString, arg_types)
+function string_concatenation_hint_handler(@nospecialize(io::IO), ex::MethodError, arg_types::Vector{Any}, kwargs::Vector{Any})
+    if (ex.f === +) && !isempty(arg_types) && all(@nospecialize(a) -> unwrapva(a) <: AbstractString, arg_types)
         print(io, "\nString concatenation is performed with ")
         printstyled(io, "*", color=:cyan)
         print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")
@@ -1192,6 +1193,118 @@ function _propertynames_bytype(T::Type)
 end
 
 Experimental.register_error_hint(fielderror_listfields_hint_handler, FieldError)
+
+function UndefVarError_hint(io::IO, ex::UndefVarError)
+    var = ex.var
+    if isdefined(ex, :scope)
+        scope = ex.scope
+        if scope isa Module
+            bpart = lookup_binding_partition(ex.world, GlobalRef(scope, var))
+            kind = binding_kind(bpart)
+
+            # Get the current world's binding partition for comparison
+            curworld = tls_world_age()
+            cur_bpart = lookup_binding_partition(curworld, GlobalRef(scope, var))
+            cur_kind = binding_kind(cur_bpart)
+
+            # Track if we printed the "too new" message
+            printed_too_new = false
+
+            # Check if the binding exists in the current world but was undefined in the error's world
+            if kind === PARTITION_KIND_GUARD
+                if isdefinedglobal(scope, var)
+                    print(io, "\nThe binding may be too new: running in world age $(ex.world), while current world is $(curworld).")
+                    printed_too_new = true
+                else
+                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                end
+            elseif kind === PARTITION_KIND_GLOBAL || kind === PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_DECLARED
+                print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
+            elseif kind === PARTITION_KIND_FAILED
+                print(io, "\nHint: It looks like two or more modules export different ",
+                "bindings with this name, resulting in ambiguity. Try explicitly ",
+                "importing it from a particular module, or qualifying the name ",
+                "with the module it should come from.")
+            elseif is_some_explicit_imported(kind)
+                print(io, "\nSuggestion: this global was defined as `$(partition_restriction(bpart).globalref)` but not assigned a value.")
+            elseif kind === PARTITION_KIND_BACKDATED_CONST
+                print(io, "\nSuggestion: define the const at top-level before running function that uses it (stricter Julia v1.12+ rule).")
+            end
+
+            # Check if binding kind changed between the error's world and current world
+            if !printed_too_new && kind !== cur_kind
+                print(io, "\nNote: the binding state changed since the error occurred (was: $(kind), now: $(cur_kind)).")
+            end
+        elseif scope === :static_parameter
+            print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")
+        elseif scope === :local
+            print(io, "\nSuggestion: check for an assignment to a local variable that shadows a global of the same name.")
+        end
+    else
+        scope = undef
+    end
+    if scope !== Base
+        warned = _UndefVarError_warnfor(io, [Base], var)
+
+        if !warned
+            modules_to_check = (m for m in Base.loaded_modules_order
+                                if m !== Core && m !== Base && m !== Main && m !== scope)
+            warned |= _UndefVarError_warnfor(io, modules_to_check, var)
+        end
+
+        warned || _UndefVarError_warnfor(io, [Core, Main], var)
+    end
+    return nothing
+end
+
+function _UndefVarError_warnfor(io::IO, modules, var::Symbol)
+    active_mod = Base.active_module()
+
+    warned = false
+    # collect modules which export or make public the variable by
+    # the module in which the variable is defined
+    to_warn_about = Dict{Module, Vector{Module}}()
+    for m in modules
+        # only include in info if binding has a value and is exported or public
+        if !Base.isdefined(m, var) || (!Base.isexported(m, var) && !Base.ispublic(m, var))
+            continue
+        end
+        warned = true
+
+        # handle case where the undefined variable is the name of a loaded module
+        if Symbol(m) == var && !isdefined(active_mod, var)
+            print(io, "\nHint: $m is loaded but not imported in the active module $active_mod.")
+            continue
+        end
+
+        binding_m = Base.binding_module(m, var)
+        if !haskey(to_warn_about, binding_m)
+            to_warn_about[binding_m] = [m]
+        else
+            push!(to_warn_about[binding_m], m)
+        end
+    end
+
+    for (binding_m, modules) in pairs(to_warn_about)
+        print(io, "\nHint: a global variable of this name also exists in ", binding_m, ".")
+        for m in modules
+            m == binding_m && continue
+            how_available = if Base.isexported(m, var)
+                "exported by"
+            elseif Base.ispublic(m, var)
+                "declared public in"
+            end
+            print(io, "\n    - Also $how_available $m")
+            if !isdefined(active_mod, nameof(m)) || (getproperty(active_mod, nameof(m)) !== m)
+                print(io, " (loaded but not imported in $active_mod)")
+            end
+            print(io, ".")
+        end
+    end
+    return warned
+end
+
+Base.Experimental.register_error_hint(UndefVarError_hint, UndefVarError)
 
 # ExceptionStack implementation
 size(s::ExceptionStack) = size(s.stack)

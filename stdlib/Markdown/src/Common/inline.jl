@@ -166,7 +166,10 @@ function linebreak(stream::IO, md::MD)
 end
 
 @trigger '-' ->
-function en_dash(stream::IO, md::MD)
+function en_or_em_dash(stream::IO, md::MD)
+    if startswith(stream, "---")
+        return "—"
+    end
     if startswith(stream, "--")
         return "–"
     end

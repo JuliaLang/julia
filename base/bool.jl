@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Bool
+
 # promote Bool to any other numeric type
 promote_rule(::Type{Bool}, ::Type{T}) where {T<:Number} = T
 
@@ -154,6 +156,7 @@ abs(x::Bool) = x
 abs2(x::Bool) = x
 iszero(x::Bool) = !x
 isone(x::Bool) = x
+ispositive(x::Bool) = x # could use fallback once #21712 is resolved
 
 <(x::Bool, y::Bool) = y&!x
 <=(x::Bool, y::Bool) = y|!x

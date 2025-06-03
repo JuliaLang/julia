@@ -5,6 +5,9 @@
 using Base: get_world_counter, tls_world_age
 @test typemax(UInt) > get_world_counter() == tls_world_age() > 0
 
+# issue #58013
+@test_throws ArgumentError invokelatest()
+
 # test simple method replacement
 begin
     g265a() = f265a(0)
@@ -107,7 +110,7 @@ end
 g265() = [f265(x) for x in 1:3.]
 wc265 = get_world_counter()
 wc265_41332a = Task(tls_world_age)
-@test tls_world_age() == wc265
+@test tls_world_age() == wc265 + 1
 (function ()
     global wc265_41332b = Task(tls_world_age)
     @eval f265(::Any) = 1.0
@@ -115,24 +118,24 @@ wc265_41332a = Task(tls_world_age)
     global wc265_41332d = Task(tls_world_age)
     nothing
 end)()
-@test wc265 + 2 == get_world_counter() == tls_world_age()
+@test wc265 + 12 == get_world_counter() == tls_world_age()
 schedule(wc265_41332a)
 schedule(wc265_41332b)
 schedule(wc265_41332c)
 schedule(wc265_41332d)
-@test wc265 == fetch(wc265_41332a)
-@test wc265 + 1 == fetch(wc265_41332b)
-@test wc265 + 2 == fetch(wc265_41332c)
-@test wc265 + 1 == fetch(wc265_41332d)
+@test wc265 + 1 == fetch(wc265_41332a)
+@test wc265 + 10 == fetch(wc265_41332b)
+@test wc265 + 12 == fetch(wc265_41332c)
+@test wc265 + 10 == fetch(wc265_41332d)
 chnls, tasks = Base.channeled_tasks(2, wfunc)
 t265 = tasks[1]
 
 wc265 = get_world_counter()
 @test put_n_take!(get_world_counter, ()) == wc265
-@test put_n_take!(tls_world_age, ()) == wc265
+@test put_n_take!(tls_world_age, ()) + 3 == wc265
 f265(::Int) = 1
 @test put_n_take!(get_world_counter, ()) == wc265 + 1 == get_world_counter() == tls_world_age()
-@test put_n_take!(tls_world_age, ()) == wc265
+@test put_n_take!(tls_world_age, ()) + 3 == wc265
 
 @test g265() == Int[1, 1, 1]
 @test Core.Compiler.return_type(f265, Tuple{Any,}) == Union{Float64, Int}
@@ -162,12 +165,12 @@ let ex = t265.exception
     @test ex isa MethodError
     @test ex.f == h265
     @test ex.args == ()
-    @test ex.world == wc265
+    @test ex.world == wc265-3
     str = sprint(showerror, ex)
     wc = get_world_counter()
     cmps = """
         MethodError: no method matching h265()
-        The applicable method may be too new: running in world age $wc265, while current world is $wc."""
+        The applicable method may be too new: running in world age $(wc265-3), while current world is $wc."""
     @test startswith(str, cmps)
     cmps = "\n  h265() (method too new to be called from this world context.)\n   $loc_h265"
     @test occursin(cmps, str)
@@ -191,31 +194,26 @@ f_gen265(x::Type{Int}) = 3
 # would have capped those specializations if they were still valid
 f26506(@nospecialize(x)) = 1
 g26506(x) = Base.inferencebarrier(f26506)(x[1])
-z = Any["ABC"]
+z26506 = Any["ABC"]
 f26506(x::Int) = 2
-g26506(z) # Places an entry for f26506(::String) in mt.name.cache
+g26506(z26506) # Places an entry for f26506(::String) in MethodTable cache
+w26506 = Base.get_world_counter()
+cache26506 = ccall(:jl_mt_find_cache_entry, Any, (Any, Any, UInt), Core.GlobalMethods.cache, Tuple{typeof(f26506),String}, w26506)::Core.TypeMapEntry
+@test cache26506.max_world === typemax(UInt)
+w26506 = Base.get_world_counter()
 f26506(x::String) = 3
-let cache = typeof(f26506).name.mt.cache
-    # The entry we created above should have been truncated
-    @test cache.min_world == cache.max_world
-end
-c26506_1, c26506_2 = Condition(), Condition()
-# Captures the world age
-result26506 = Any[]
-t = Task(()->begin
-    wait(c26506_1)
-    push!(result26506, g26506(z))
-    notify(c26506_2)
-end)
-yield(t)
+@test w26506+1 === Base.get_world_counter()
+# The entry we created above should have been truncated
+@test cache26506.max_world == w26506
+# Captures the world age on creation
+t26506 = @task g26506(z26506)
 f26506(x::Float64) = 4
-let cache = typeof(f26506).name.mt.cache
-    # The entry we created above should have been truncated
-    @test cache.min_world == cache.max_world
-end
-notify(c26506_1)
-wait(c26506_2)
-@test result26506[1] == 3
+@test cache26506.max_world == w26506
+f26506(x::String) = 5
+# The entry we created above should not have been changed
+@test cache26506.max_world == w26506
+@test fetch(schedule(t26506)) === 3
+@test g26506(z26506) === 5
 
 # issue #38435
 f38435(::Int, ::Any) = 1
@@ -417,6 +415,55 @@ ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
     "jl_method_table_insert"
 ]
 
+# logging issue #58080
+f58080(::Integer) = 1
+callsf58080rts(x) = f58080(Base.inferencebarrier(x)::Signed)
+invokesf58080s(x) = invoke(f58080, Tuple{Signed}, x)
+# compilation
+invokesf58080s(1)                        # invoked callee
+callsf58080rts(1)                        # runtime-dispatched callee
+# invalidation
+logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1);
+f58080(::Int) = 2
+f58080(::Signed) = 4
+ccall(:jl_debug_method_invalidation, Any, (Cint,), 0);
+@test logmeths[1].def.name === :callsf58080rts
+m58080i = which(f58080, (Int,))
+m58080s = which(f58080, (Signed,))
+idxi = findfirst(==(m58080i), logmeths)
+@test logmeths[idxi+1] == "jl_method_table_insert"
+@test logmeths[idxi+2].def.name === :invokesf58080s
+@test logmeths[end-1] == m58080s
+@test logmeths[end] == "jl_method_table_insert"
+
+# logging binding invalidations
+struct LogBindingInvalidation
+    x::Int
+end
+makelbi(x) = LogBindingInvalidation(x)
+const glbi = makelbi(1)
+oLBI, oglbi = LogBindingInvalidation, glbi
+flbi() = @__MODULE__().glbi.x
+flbi()
+milbi1 = only(Base.specializations(only(methods(makelbi))))
+milbi2 = only(Base.specializations(only(methods(flbi))))
+logmeths = ccall(:jl_debug_method_invalidation, Any, (Cint,), 1)
+struct LogBindingInvalidation
+    x::Float64
+end
+const glbi = makelbi(2.0)
+@test flbi() === 2.0
+ccall(:jl_debug_method_invalidation, Any, (Cint,), 0)
+@test milbi1.cache.def ∈ logmeths
+@test milbi2.cache.next.def ∈ logmeths
+i = findfirst(x -> isa(x, Core.BindingPartition), logmeths)
+T = logmeths[i].restriction
+@test T === oLBI
+@test logmeths[i+1] == "jl_maybe_log_binding_invalidation"
+T = logmeths[end-1].restriction
+@test T === oglbi
+@test logmeths[end] == "jl_maybe_log_binding_invalidation"
+
 # issue #50091 -- missing invoke edge affecting nospecialized dispatch
 module ExceptionUnwrapping
 @nospecialize
@@ -478,6 +525,8 @@ Base.delete_method(fshadow_m2)
 @test Base.morespecific(fshadow_m3, fshadow_m1)
 @test !Base.morespecific(fshadow_m2, fshadow_m3)
 
+@test_throws "Method of fshadow already disabled" Base.delete_method(fshadow_m2)
+
 # Generated functions without edges must have min_world = 1.
 # N.B.: If changing this, move this test to precompile and make sure
 # that the specialization survives revalidation.
@@ -500,3 +549,46 @@ end
 end
 
 @test_throws ErrorException("Generated function result with `edges == nothing` and `max_world == typemax(UInt)` must have `min_world == 1`") generated_no_edges()
+
+# Test that backdating of constants is working for structs
+before_backdate_age = Base.tls_world_age()
+struct FooBackdated
+    x::Vector{FooBackdated}
+
+    FooBackdated() = new(FooBackdated[])
+end
+@test Base.invoke_in_world(before_backdate_age, isdefined, @__MODULE__, :FooBackdated)
+
+# Test that ambiguous binding intersect the using'd binding's world ranges
+module AmbigWorldTest
+    using Test
+    module M1; export x; end
+    module M2; export x; end
+    using .M1, .M2
+    Core.eval(M1, :(x=1))
+    Core.eval(M2, :(x=2))
+    @test_throws UndefVarError x
+    @test convert(Core.Binding, GlobalRef(@__MODULE__, :x)).partitions.min_world == max(
+        convert(Core.Binding, GlobalRef(M1, :x)).partitions.min_world,
+        convert(Core.Binding, GlobalRef(M2, :x)).partitions.min_world
+    )
+end
+
+module X57316; module Y57316; end; end
+module A57316; using ..X57316.Y57316, .Y57316.Y57316; end
+module B57316; import ..X57316.Y57316, .Y57316.Y57316; end
+module C57316; import ..X57316.Y57316 as Z, .Z.Y57316 as W; end
+@test X57316.Y57316 === A57316.Y57316 === B57316.Y57316 === C57316.Z === C57316.W
+@test !isdefined(A57316, :X57316)
+@test !isdefined(B57316, :X57316)
+@test !isdefined(C57316, :X57316)
+@test !isdefined(C57316, :Y57316)
+
+# jl_module_import should always manipulate the latest world
+module M57965
+function f()
+    @eval Random = 1
+    Core._eval_import(true, @__MODULE__, nothing, Expr(:., :Random))
+end
+end
+@test_throws ErrorException("importing Random into M57965 conflicts with an existing global") M57965.f()s

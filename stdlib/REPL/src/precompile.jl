@@ -8,6 +8,7 @@ import ..REPL
 Base._track_dependencies[] = false
 try
     Base.include(@__MODULE__, joinpath(Sys.BINDIR, "..", "share", "julia", "test", "testhelpers", "FakePTYs.jl"))
+    @Core.latestworld
     import .FakePTYs: open_fake_pty
 finally
     Base._track_dependencies[] = true
@@ -57,6 +58,7 @@ function repl_workload()
     printstyled("a", "b")
     display([1])
     display([1 2; 3 4])
+    display("a string")
     foo(x) = 1
     @time @eval foo(1)
     ; pwd

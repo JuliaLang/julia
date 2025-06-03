@@ -6,7 +6,7 @@ Methods for working with Iterators.
 baremodule Iterators
 
 # small dance to make this work from Base or Intrinsics
-import ..@__MODULE__, ..parentmodule
+import Base: @__MODULE__, parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
     @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
@@ -17,13 +17,14 @@ using .Base:
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
     afoldl
+using .Core
 using Core: @doc
 
-using .Base:
-    cld, fld, SubArray, view, resize!, IndexCartesian
-using .Base.Checked: checked_mul
+using Base:
+    cld, fld, resize!, IndexCartesian, Checked
+using .Checked: checked_mul
 
-import .Base:
+import Base:
     first, last,
     isempty, length, size, axes, ndims,
     eltype, IteratorSize, IteratorEltype, promote_typejoin,
@@ -1327,7 +1328,7 @@ eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
 # Arrays use a generic `view`-of-a-`vec`, so we cannot exactly predict what we'll get back
 eltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = AbstractVector{eltype(T)}
 # But for some common implementations in Base we know the answer exactly
-eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
+eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = Base.SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
 
 IteratorEltype(::Type{PartitionIterator{T}}) where {T} = IteratorEltype(T)
 IteratorEltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
@@ -1353,7 +1354,7 @@ end
 function iterate(itr::PartitionIterator{<:AbstractArray}, state = firstindex(itr.c))
     state > lastindex(itr.c) && return nothing
     r = min(state + itr.n - 1, lastindex(itr.c))
-    return @inbounds view(itr.c, state:r), r + 1
+    return @inbounds Base.view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end

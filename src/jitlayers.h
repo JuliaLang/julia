@@ -1,5 +1,6 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
+#include "llvm/ADT/SmallSet.h"
 #include <llvm/ADT/MapVector.h>
 #include <llvm/ADT/StringSet.h>
 #include <llvm/Support/AllocatorBase.h>
@@ -68,19 +69,12 @@
 
 using namespace llvm;
 
-extern "C" jl_cgparams_t jl_default_cgparams;
-
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeContext, LLVMOrcThreadSafeContextRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(orc::ThreadSafeModule, LLVMOrcThreadSafeModuleRef)
 
 void addTargetPasses(legacy::PassManagerBase *PM, const Triple &triple, TargetIRAnalysis analysis) JL_NOTSAFEPOINT;
-void jl_merge_module(orc::ThreadSafeModule &dest, orc::ThreadSafeModule src) JL_NOTSAFEPOINT;
 GlobalVariable *jl_emit_RTLD_DEFAULT_var(Module *M) JL_NOTSAFEPOINT;
 DataLayout jl_create_datalayout(TargetMachine &TM) JL_NOTSAFEPOINT;
-
-static inline bool imaging_default() JL_NOTSAFEPOINT {
-    return jl_options.image_codegen || (jl_generating_output() && (!jl_options.incremental || jl_options.use_pkgimages));
-}
 
 struct OptimizationOptions {
     bool lower_intrinsics;
@@ -184,10 +178,15 @@ struct jl_locked_stream {
     }
 };
 
-typedef struct _jl_llvm_functions_t {
+struct jl_llvm_functions_t {
     std::string functionObject;     // jlcall llvm Function name
     std::string specFunctionObject; // specialized llvm Function name
-} jl_llvm_functions_t;
+    jl_llvm_functions_t() JL_NOTSAFEPOINT = default;
+    jl_llvm_functions_t &operator=(const jl_llvm_functions_t&) JL_NOTSAFEPOINT = default;
+    jl_llvm_functions_t(const jl_llvm_functions_t &) JL_NOTSAFEPOINT = default;
+    jl_llvm_functions_t(jl_llvm_functions_t &&) JL_NOTSAFEPOINT = default;
+    ~jl_llvm_functions_t() JL_NOTSAFEPOINT = default;
+};
 
 struct jl_returninfo_t {
     llvm::FunctionCallee decl;
@@ -211,6 +210,22 @@ struct jl_codegen_call_target_t {
     llvm::Function *decl;
     llvm::Function *oc;
     bool specsig;
+    bool external_linkage; // whether codegen would like this edge to be externally-available
+    bool private_linkage; // whether codegen would like this edge to be internally-available
+    // external = ExternalLinkage (similar to "extern")
+    // private = InternalLinkage (similar to "static")
+    // external+private = AvailableExternallyLinkage+ExternalLinkage or ExternalLinkage (similar to "static inline")
+    // neither = unused
+};
+
+// reification of a call to jl_jit_abi_convert, so that it isn't necessary to parse the Modules to recover this info
+struct cfunc_decl_t {
+    jl_value_t *declrt;
+    jl_value_t *sigt;
+    size_t nargs;
+    bool specsig;
+    llvm::GlobalVariable *theFptr;
+    llvm::GlobalVariable *cfuncdata;
 };
 
 typedef SmallVector<std::pair<jl_code_instance_t*, jl_codegen_call_target_t>, 0> jl_workqueue_t;
@@ -222,19 +237,20 @@ struct jl_codegen_params_t {
     DataLayout DL;
     Triple TargetTriple;
 
-    inline LLVMContext &getContext() {
+    inline LLVMContext &getContext() JL_NOTSAFEPOINT {
         return *tsctx.getContext();
     }
     typedef StringMap<GlobalVariable*> SymMapGV;
     // outputs
     jl_workqueue_t workqueue;
+    SmallVector<cfunc_decl_t,0> cfuncs;
     std::map<void*, GlobalVariable*> global_targets;
     jl_array_t *temporary_roots = nullptr;
+    SmallSet<jl_value_t *, 8> temporary_roots_set;
     std::map<std::tuple<jl_code_instance_t*,bool>, GlobalVariable*> external_fns;
     std::map<jl_datatype_t*, DIType*> ditypes;
     std::map<jl_datatype_t*, Type*> llvmtypes;
     DenseMap<Constant*, GlobalVariable*> mergedConstants;
-    llvm::MapVector<jl_method_instance_t*, std::tuple<jl_method_instance_t*, CallFrames>> enqueuers;
     // Map from symbol name (in a certain library) to its GV in sysimg and the
     // DL handle address in the current session.
     StringMap<std::pair<GlobalVariable*,SymMapGV>> libMapGV;
@@ -259,13 +275,14 @@ struct jl_codegen_params_t {
     bool cache = false;
     bool external_linkage = false;
     bool imaging_mode;
+    bool safepoint_on_entry = true;
     bool use_swiftcc = true;
     jl_codegen_params_t(orc::ThreadSafeContext ctx, DataLayout DL, Triple triple) JL_NOTSAFEPOINT  JL_NOTSAFEPOINT_ENTER
       : tsctx(std::move(ctx)),
         tsctx_lock(tsctx.getLock()),
         DL(std::move(DL)),
         TargetTriple(std::move(triple)),
-        imaging_mode(imaging_default())
+        imaging_mode(1)
     {
         // LLVM's RISC-V back-end currently does not support the Swift calling convention
         if (TargetTriple.isRISCV())
@@ -275,10 +292,14 @@ struct jl_codegen_params_t {
     ~jl_codegen_params_t() JL_NOTSAFEPOINT JL_NOTSAFEPOINT_LEAVE = default;
 };
 
+const char *jl_generate_ccallable(Module *llvmmod, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt, jl_codegen_params_t &params);
+
 jl_llvm_functions_t jl_emit_code(
         orc::ThreadSafeModule &M,
         jl_method_instance_t *mi,
         jl_code_info_t *src,
+        jl_value_t *abi_at,
+        jl_value_t *abi_rt,
         jl_codegen_params_t &params);
 
 jl_llvm_functions_t jl_emit_codeinst(
@@ -287,6 +308,14 @@ jl_llvm_functions_t jl_emit_codeinst(
         jl_code_info_t *src,
         jl_codegen_params_t &params);
 
+jl_llvm_functions_t jl_emit_codedecls(
+        orc::ThreadSafeModule &M,
+        jl_code_instance_t *codeinst,
+        jl_codegen_params_t &params);
+
+void linkFunctionBody(Function &Dst, Function &Src) JL_NOTSAFEPOINT;
+void emit_always_inline(orc::ThreadSafeModule &result_m, jl_codegen_params_t &params) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
+
 enum CompilationPolicy {
     Default = 0,
     Extern = 1,
@@ -294,6 +323,13 @@ enum CompilationPolicy {
 
 Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_tupletype_t *argt,
     jl_codegen_params_t &params);
+
+extern "C" JL_DLLEXPORT_CODEGEN
+void *jl_jit_abi_convert(jl_task_t *ct, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, _Atomic(void*) *fptr, _Atomic(size_t) *last_world, void *data);
+std::string emit_abi_dispatcher(Module *M, jl_codegen_params_t &params, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, jl_code_instance_t *codeinst, Value *invoke);
+std::string emit_abi_converter(Module *M, jl_codegen_params_t &params, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, jl_code_instance_t *codeinst, Value *target, bool target_specsig);
+std::string emit_abi_constreturn(Module *M, jl_codegen_params_t &params, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, jl_value_t *rettype_const);
+std::string emit_abi_constreturn(Module *M, jl_codegen_params_t &params, bool specsig, jl_code_instance_t *codeinst);
 
 Function *emit_tojlinvoke(jl_code_instance_t *codeinst, StringRef theFptrName, Module *M, jl_codegen_params_t &params) JL_NOTSAFEPOINT;
 void emit_specsig_to_fptr1(
@@ -306,6 +342,8 @@ Function *get_or_emit_fptr1(StringRef Name, Module *M) JL_NOTSAFEPOINT;
 void jl_init_function(Function *F, const Triple &TT) JL_NOTSAFEPOINT;
 
 void add_named_global(StringRef name, void *addr) JL_NOTSAFEPOINT;
+
+Constant *literal_pointer_val_slot(jl_codegen_params_t &params, Module *M, jl_value_t *p);
 
 static inline Constant *literal_static_pointer_val(const void *p, Type *T) JL_NOTSAFEPOINT
 {
@@ -633,8 +671,8 @@ private:
     OptSelLayerT OptSelLayer;
 };
 extern JuliaOJIT *jl_ExecutionEngine;
-std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT;
-inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout &DL = jl_ExecutionEngine->getDataLayout(), const Triple &triple = jl_ExecutionEngine->getTargetTriple()) JL_NOTSAFEPOINT {
+std::unique_ptr<Module> jl_create_llvm_module(StringRef name, LLVMContext &ctx, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT;
+inline orc::ThreadSafeModule jl_create_ts_module(StringRef name, orc::ThreadSafeContext ctx, const DataLayout &DL, const Triple &triple) JL_NOTSAFEPOINT {
     auto lock = ctx.getLock();
     return orc::ThreadSafeModule(jl_create_llvm_module(name, *ctx.getContext(), DL, triple), ctx);
 }
@@ -647,7 +685,7 @@ Module &jl_codegen_params_t::shared_module() JL_NOTSAFEPOINT {
 }
 void fixupTM(TargetMachine &TM) JL_NOTSAFEPOINT;
 
-void optimizeDLSyms(Module &M);
+void optimizeDLSyms(Module &M) JL_NOTSAFEPOINT_LEAVE JL_NOTSAFEPOINT_ENTER;
 
 // NewPM
 #include "passes.h"

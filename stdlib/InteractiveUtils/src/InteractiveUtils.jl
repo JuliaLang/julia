@@ -17,7 +17,7 @@ export apropos, edit, less, code_warntype, code_llvm, code_native, methodswith, 
 import Base.Docs.apropos
 
 using Base: unwrap_unionall, rewrap_unionall, isdeprecated, Bottom, summarysize,
-    signature_type, format_bytes, isbindingresolved
+    signature_type, format_bytes
 using Base.Libc
 using Markdown
 
@@ -148,7 +148,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     if verbose
         cpuio = IOBuffer() # print cpu_summary with correct alignment
         Sys.cpu_summary(cpuio)
-        for (i, line) in enumerate(split(chomp(String(take!(cpuio))), "\n"))
+        for (i, line) in enumerate(split(chomp(takestring!(cpuio)), "\n"))
             prefix = i == 1 ? "  CPU: " : "       "
             println(io, prefix, line)
         end
@@ -166,6 +166,7 @@ function versioninfo(io::IO=stdout; verbose::Bool=false)
     end
     println(io, "  WORD_SIZE: ", Sys.WORD_SIZE)
     println(io, "  LLVM: libLLVM-",Base.libllvm_version," (", Sys.JIT, ", ", Sys.CPU_NAME, ")")
+    println(io, "  GC: ", unsafe_string(ccall(:jl_gc_active_impl, Ptr{UInt8}, ())))
     println(io, """Threads: $(Threads.nthreads(:default)) default, $(Threads.nthreads(:interactive)) interactive, \
       $(Threads.ngcthreads()) GC (on $(Sys.CPU_THREADS) virtual cores)""")
 
@@ -263,7 +264,7 @@ function _subtypes_in!(mods::Array, x::Type)
         m = pop!(mods)
         xt = xt::DataType
         for s in names(m, all = true)
-            if isbindingresolved(m, s) && !isdeprecated(m, s) && isdefined(m, s)
+            if !isdeprecated(m, s) && isdefined(m, s)
                 t = getfield(m, s)
                 dt = isa(t, UnionAll) ? unwrap_unionall(t) : t
                 if isa(dt, DataType)
