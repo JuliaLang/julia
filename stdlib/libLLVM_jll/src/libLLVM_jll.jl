@@ -13,27 +13,23 @@ const PATH_list = String[]
 const LIBPATH = Ref("")
 const LIBPATH_list = String[]
 artifact_dir::String = ""
+
 libLLVM_path::String = ""
-
-if Sys.iswindows()
-    const _libLLVM_path = BundledLazyLibraryPath("$(Base.libllvm_name).dll")
-elseif Sys.isapple()
-    const _libLLVM_path = BundledLazyLibraryPath("libLLVM.dylib")
-else
-    const _libLLVM_path = BundledLazyLibraryPath("$(Base.libllvm_name).so")
-end
-
-if Sys.isapple()
-    _libLLVM_dependencies = LazyLibrary[libz, libzstd]
-elseif Sys.isfreebsd()
-    _libLLVM_dependencies = LazyLibrary[libz, libzstd, libgcc_s]
-else
-    _libLLVM_dependencies = LazyLibrary[libz, libzstd, libstdcxx, libgcc_s]
-end
-
 const libLLVM = LazyLibrary(
-    _libLLVM_path,
-    dependencies=_libLLVM_dependencies,
+    if Sys.iswindows()
+        BundledLazyLibraryPath("$(Base.libllvm_name).dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libLLVM.dylib")
+    else
+        BundledLazyLibraryPath("$(Base.libllvm_name).so")
+    end,
+    dependencies = if Sys.isapple()
+        LazyLibrary[libz, libzstd]
+    elseif Sys.isfreebsd()
+        LazyLibrary[libz, libzstd, libgcc_s]
+    else
+        LazyLibrary[libz, libzstd, libstdcxx, libgcc_s]
+    end
 )
 
 function eager_mode()
@@ -45,7 +41,7 @@ end
 is_available() = true
 
 function __init__()
-    global libLLVM_path = string(_libLLVM_path)
+    global libLLVM_path = string(libLLVM.path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libLLVM_path)
     push!(LIBPATH_list, LIBPATH[])
