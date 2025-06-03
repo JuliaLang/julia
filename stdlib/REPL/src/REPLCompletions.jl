@@ -563,18 +563,18 @@ CC.bail_out_toplevel_call(::REPLInterpreter, ::CC.InferenceLoopState, ::CC.Infer
 # be employed, for instance, by `typeinf_ext_toplevel`.
 is_repl_frame(sv::CC.InferenceState) = sv.linfo.def isa Module && sv.cache_mode === CC.CACHE_MODE_NULL
 
-function is_call_graph_uncached(sv::CC.InferenceState)
+function is_call_stack_uncached(sv::CC.InferenceState)
     CC.is_cached(sv) && return false
     parent = CC.frame_parent(sv)
     parent === nothing && return true
-    return is_call_graph_uncached(parent::CC.InferenceState)
+    return is_call_stack_uncached(parent::CC.InferenceState)
 end
 
 # aggressive global binding resolution within `repl_frame`
 function CC.abstract_eval_globalref(interp::REPLInterpreter, g::GlobalRef, bailed::Bool,
                                     sv::CC.InferenceState)
     # Ignore saw_latestworld
-    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
+    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
         partition = CC.abstract_eval_binding_partition!(interp, g, sv)
         if CC.is_defined_const_binding(CC.binding_kind(partition))
             return CC.RTEffects(Const(CC.partition_restriction(partition)), Union{}, CC.EFFECTS_TOTAL)
@@ -598,33 +598,11 @@ function is_repl_frame_getproperty(sv::CC.InferenceState)
     return is_repl_frame(CC.frame_parent(sv))
 end
 
-# aggressive global binding resolution for `getproperty(::Module, ::Symbol)` calls within `repl_frame`
-function CC.builtin_tfunction(interp::REPLInterpreter, @nospecialize(f),
-                              argtypes::Vector{Any}, sv::CC.InferenceState)
-    if f === Core.getglobal && (interp.limit_aggressive_inference ? is_repl_frame_getproperty(sv) : is_call_graph_uncached(sv))
-        if length(argtypes) == 2
-            a1, a2 = argtypes
-            if isa(a1, Const) && isa(a2, Const)
-                a1val, a2val = a1.val, a2.val
-                if isa(a1val, Module) && isa(a2val, Symbol)
-                    g = GlobalRef(a1val, a2val)
-                    if isdefined_globalref(g)
-                        return Const(ccall(:jl_get_globalref_value, Any, (Any,), g))
-                    end
-                    return Union{}
-                end
-            end
-        end
-    end
-    return @invoke CC.builtin_tfunction(interp::CC.AbstractInterpreter, f::Any,
-                                        argtypes::Vector{Any}, sv::CC.InferenceState)
-end
-
 # aggressive concrete evaluation for `:inconsistent` frames within `repl_frame`
 function CC.concrete_eval_eligible(interp::REPLInterpreter, @nospecialize(f),
                                    result::CC.MethodCallResult, arginfo::CC.ArgInfo,
                                    sv::CC.InferenceState)
-    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_graph_uncached(sv))
+    if (interp.limit_aggressive_inference ? is_repl_frame(sv) : is_call_stack_uncached(sv))
         neweffects = CC.Effects(result.effects; consistent=CC.ALWAYS_TRUE)
         result = CC.MethodCallResult(result.rt, result.exct, neweffects, result.edge,
                                      result.edgecycle, result.edgelimited, result.volatile_inf_result)
@@ -910,7 +888,13 @@ function complete_keyword_argument!(suggestions::Vector{Completion},
     kwargs_flag == 2 && return false # one of the previous kwargs is invalid
 
     methods = Completion[]
-    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, shift ? -1 : MAX_METHOD_COMPLETIONS, arg_pos == :kwargs)
+    # Limit kwarg completions to cases when function is concretely known; looking up
+    # matching methods for abstract functions — particularly `Any` or `Function` — can
+    # take many seconds to run over the thousands of possible methods. Note that
+    # isabstracttype would return naively return true for common constructor calls
+    # like Array, but the REPL's introspection here may know their Type{T}.
+    isconcretetype(funct) || return false
+    complete_methods!(methods, funct, Any[Vararg{Any}], kwargs_ex, -1, arg_pos == :kwargs)
     # TODO: use args_ex instead of Any[Vararg{Any}] and only provide kwarg completion for
     # method calls compatible with the current arguments.
 

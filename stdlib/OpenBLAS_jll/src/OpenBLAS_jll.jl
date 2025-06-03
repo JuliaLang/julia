@@ -2,7 +2,7 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/OpenBLAS_jll.jl
 baremodule OpenBLAS_jll
-using Base, Libdl, Base.BinaryPlatforms
+using Base, Libdl
 using CompilerSupportLibraries_jll
 
 export libopenblas
@@ -28,7 +28,17 @@ elseif Sys.isapple()
 else
     const _libopenblas_path = BundledLazyLibraryPath(string("libopenblas", libsuffix, ".so"))
 end
-const libopenblas = LazyLibrary(_libopenblas_path, dependencies=[libgfortran])
+
+_libopenblas_dependencies = LazyLibrary[libgfortran]
+if Sys.isapple()
+    if isdefined(CompilerSupportLibraries_jll, :libquadmath)
+        push!(_libopenblas_dependencies, CompilerSupportLibraries_jll.libquadmath)
+    end
+    if Sys.ARCH != :aarch64
+        push!(_libopenblas_dependencies, CompilerSupportLibraries_jll.libgcc_s)
+    end
+end
+const libopenblas = LazyLibrary(_libopenblas_path, dependencies=_libopenblas_dependencies)
 
 # Conform to LazyJLLWrappers API
 function eager_mode()

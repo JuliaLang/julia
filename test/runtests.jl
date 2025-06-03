@@ -13,7 +13,7 @@ include("choosetests.jl")
 include("testenv.jl")
 include("buildkitetestjson.jl")
 
-(; tests, net_on, exit_on_error, use_revise, seed) = choosetests(ARGS)
+(; tests, net_on, exit_on_error, use_revise, buildroot, seed) = choosetests(ARGS)
 tests = unique(tests)
 
 if Sys.islinux()
@@ -26,8 +26,15 @@ else
 end
 
 if use_revise
+    # First put this at the top of the DEPOT PATH to install revise if necessary.
+    # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
+    pushfirst!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
+    using Pkg
+    Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
+    Pkg.instantiate()
     using Revise
     union!(Revise.stdlib_names, Symbol.(STDLIBS))
+    push!(DEPOT_PATH, popfirst!(DEPOT_PATH))
     # Remote-eval the following to initialize Revise in workers
     const revise_init_expr = quote
         using Revise
@@ -35,6 +42,11 @@ if use_revise
         union!(Revise.stdlib_names, Symbol.(STDLIBS))
         revise_trackall()
     end
+end
+
+if isempty(tests)
+    println("No tests selected. Exiting.")
+    exit()
 end
 
 const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
