@@ -304,6 +304,44 @@ JL_DLLEXPORT void jl_wakeup_thread(int16_t tid) JL_NOTSAFEPOINT
     wakeup_thread(ct, tid);
 }
 
+STATIC_INLINE void wake_any(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    jl_fence(); // [^store_buffering_1]
+    // Find sleeping thread to wake up
+    int self = jl_atomic_load_relaxed(&ct->tid);
+    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
+    int idle_threads = jl_atomic_load_relaxed(&n_threads_idle);
+    jl_task_t *uvlock = jl_atomic_load_relaxed(&jl_uv_mutex.owner);
+    if (uvlock == ct)
+        uv_stop(jl_global_event_loop());
+    if (idle_threads > 0) {
+        for (int i = 1; i < nthreads; i++) {
+            int tid = self + i;
+            if (tid >= nthreads)
+                tid -= nthreads;
+            if ((tid != self) && wake_thread(tid)) {
+                if (uvlock != ct) {
+                    jl_fence();
+                    jl_ptls_t other = jl_atomic_load_relaxed(&jl_all_tls_states)[tid];
+                    jl_task_t *tid_task = jl_atomic_load_relaxed(&other->current_task);
+                    // now that we have changed the thread to not-sleeping, ensure that
+                    // either it has not yet acquired the libuv lock, or that it will
+                    // observe the change of state to not_sleeping
+                    if (jl_atomic_load_relaxed(&jl_uv_mutex.owner) == tid_task)
+                        wake_libuv();
+                }
+                break;
+            }
+        }
+    }
+}
+
+JL_DLLEXPORT void jl_wake_any_thread(jl_task_t *ct)
+{
+    wake_any(ct);
+}
+
+
 // get the next runnable task
 static jl_task_t *get_next_task(jl_value_t *trypoptask, jl_value_t *q)
 {
@@ -361,43 +399,6 @@ static int may_sleep(jl_ptls_t ptls) JL_NOTSAFEPOINT
 }
 
 
-STATIC_INLINE void wake_any(jl_task_t *ct) JL_NOTSAFEPOINT
-{
-    // Find sleeping thread to wake up
-    int self = jl_atomic_load_relaxed(&ct->tid);
-    int nthreads = jl_atomic_load_acquire(&jl_n_threads);
-    int idle_threads = jl_atomic_load_relaxed(&n_threads_idle);
-    jl_task_t *uvlock = jl_atomic_load_relaxed(&jl_uv_mutex.owner);
-    if (uvlock == ct)
-        uv_stop(jl_global_event_loop());
-    if (idle_threads > 0) {
-        int anysleep = 0;
-        for (int tid = self + 1; tid < nthreads; tid++) {
-            if ((tid != self) && wake_thread(tid)) {
-                anysleep = 1;
-                break;
-            }
-        }
-        for (int tid = 0; tid < self; tid++) {
-            if ((tid != self) && wake_thread(tid)) {
-                anysleep = 1;
-                break;
-            }
-        }
-        if (anysleep) {
-            jl_fence(); // This fence is expensive but needed for libuv to do RUN_ONCE
-            if (uvlock != ct && jl_atomic_load_relaxed(&jl_uv_mutex.owner) != NULL)
-                wake_libuv();
-        }
-    }
-}
-
-JL_DLLEXPORT void jl_wake_any_thread(jl_task_t *ct)
-{
-    wake_any(ct);
-}
-
-
 JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, jl_value_t *checkempty)
 {
     jl_task_t *ct = jl_current_task;
@@ -406,7 +407,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
     while (1) {
         jl_task_t *task = get_next_task(trypoptask, q);
         if (task) {
-            wake_any(ct);
             return task;
         }
 
@@ -589,7 +589,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 jl_rethrow();
             }
             if (task) {
-                wake_any(ct);
                 return task;
             }
         }
