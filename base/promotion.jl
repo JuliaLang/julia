@@ -324,7 +324,9 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
     end
     l = tail(recursion_depth_limit)
     # Try promote_rule in both orders.
-    promote_result(T, S, promote_rule(T,S), promote_rule(S,T), l)
+    st = promote_rule(S, T)
+    ts = promote_rule(T, S)
+    promote_result(T, S, ts, st, l)
 end
 
 """
