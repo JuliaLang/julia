@@ -311,23 +311,17 @@ const _promote_type_binary_recursion_depth_limit_exception = let
     s = "`promote_type`: recursion depth limit reached, giving up; check for faulty/conflicting/missing `promote_rule` methods"
     ArgumentError(s)
 end
-function _promote_type_binary(::Type, ::Type, ::Tuple{})
-    @noinline
-    throw(_promote_type_binary_recursion_depth_limit_exception)
-end
-function _promote_type_binary(::Type{Bottom}, ::Type{Bottom}, ::Tuple{Nothing,Vararg{Nothing}})
-    Bottom
-end
-function _promote_type_binary(::Type{T}, ::Type{T}, ::Tuple{Nothing,Vararg{Nothing}}) where {T}
-    T
-end
-function _promote_type_binary(::Type{T}, ::Type{Bottom}, ::Tuple{Nothing,Vararg{Nothing}}) where {T}
-    T
-end
-function _promote_type_binary(::Type{Bottom}, ::Type{T}, ::Tuple{Nothing,Vararg{Nothing}}) where {T}
-    T
-end
-function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple{Nothing,Vararg{Nothing}}) where {T,S}
+function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple{Vararg{Nothing}}) where {T,S}
+    err() = throw(_promote_type_binary_recursion_depth_limit_exception)
+    if recursion_depth_limit === ()
+        @noinline err()
+    end
+    if T <: Bottom
+        return S
+    end
+    if S <: Bottom
+        return T
+    end
     l = tail(recursion_depth_limit)
     # Try promote_rule in both orders.
     promote_result(T, S, promote_rule(T,S), promote_rule(S,T), l)
