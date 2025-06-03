@@ -64,7 +64,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   per_page: 100,
-                  permission: 'push',
+                  permission: perm,
                 },
                 (response) => response.data.map((collaboratorInfo) => collaboratorInfo.login),
               )
