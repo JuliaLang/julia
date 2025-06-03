@@ -363,7 +363,7 @@ julia> begin
  1
 ```
 
-It is usually easier and safer to pass a function as the first argument to `lock`. The function is applied to the unlocked object, and the locking/unlocking is handled in the background. Anonymus functions, named functions, and do-blocks can all work well here:
+It is usually easier and safer to pass a function as the first argument to `lock`. The function is applied to the unlocked object, and the locking/unlocking is handled in the background. Anonymous functions, named functions, and do-blocks can all work well here:
 ```julia-repl
 julia> lock(x -> push!(x, 2), my_locked_array);
 
