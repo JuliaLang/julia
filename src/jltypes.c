@@ -3133,6 +3133,7 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_tuple_typename = jl_anytuple_type->name;
     // fix some miscomputed values, since we didn't know this was going to be a Tuple in jl_precompute_memoized_dt
     jl_tuple_typename->wrapper = (jl_value_t*)jl_anytuple_type; // remove UnionAll wrappers
+    jl_tuple_typename->hasdefaultctors = 1;
     jl_anytuple_type->isconcretetype = 0;
     jl_anytuple_type->maybe_subtype_of_cache = 0;
     jl_anytuple_type->layout = NULL;

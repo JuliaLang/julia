@@ -85,6 +85,7 @@ JL_DLLEXPORT jl_typename_t *jl_new_typename_in(jl_sym_t *name, jl_module_t *modu
     tn->abstract = abstract;
     tn->mutabl = mutabl;
     tn->mayinlinealloc = 0;
+    tn->hasdefaultctors = 0;
     tn->partial = NULL;
     tn->atomicfields = NULL;
     tn->constfields = NULL;

@@ -1355,7 +1355,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         // In many cases, default constructors may not be available (e.g. primitive types
         // never have them), so print these as "reinterpret(Foo, ...)" to make sure that
         // these round-trip as expected.
-        int reinterpret = isprimitivetype;
+        int reinterpret = (!vt->name->hasdefaultctors && !istuple && !isnamedtuple) || isprimitivetype;
 
         size_t tlen = jl_datatype_nfields(vt);
         if (reinterpret)
