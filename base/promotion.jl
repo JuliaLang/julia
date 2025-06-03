@@ -312,10 +312,13 @@ const _promote_type_binary_recursion_depth_limit_exception = let
     ArgumentError(s)
 end
 function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple{Vararg{Nothing}}) where {T,S}
-    err() = throw(_promote_type_binary_recursion_depth_limit_exception)
+    function err()
+        @noinline
+        throw(_promote_type_binary_recursion_depth_limit_exception)
+    end
     normalize_type(::Type{X}) where {X} = X
     if recursion_depth_limit === ()
-        @noinline err()
+        err()
     end
     if T <: Bottom
         return S
