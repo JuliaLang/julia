@@ -335,7 +335,7 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
     if (st <: Bottom) && (ts <: Bottom)
         typejoin(T, S)
     end
-    _promote_type_binary(st, ts, l)
+    _promote_type_binary(ts, st, l)
 end
 
 """
