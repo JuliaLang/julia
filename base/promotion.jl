@@ -307,10 +307,13 @@ promote_type(T) = T
 promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
 promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
+const _promote_type_binary_recursion_depth_limit_exception = let
+    s = "`promote_type`: recursion depth limit reached, giving up; check for faulty/conflicting/missing `promote_rule` methods"
+    ArgumentError(s)
+end
 function _promote_type_binary(::Type, ::Type, ::Tuple{})
     @noinline
-    s = "`promote_type`: recursion depth limit reached, giving up; check for faulty/conflicting/missing `promote_rule` methods"
-    throw(ArgumentError(s))
+    throw(_promote_type_binary_recursion_depth_limit_exception)
 end
 function _promote_type_binary(::Type{Bottom}, ::Type{Bottom}, ::Tuple{Nothing,Vararg{Nothing}})
     Bottom
