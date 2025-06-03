@@ -333,8 +333,8 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
     promote_result(T, S, promote_rule(T,S), promote_rule(S,T), l)
 end
 
-const _promote_type_binary_recursion_depth_limit = let n = nothing  # recursion depth limit to prevent stack overflow
-    n2 = (n, n)
+const _promote_type_binary_recursion_depth_limit = let  # recursion depth limit to prevent stack overflow
+    n2 = (nothing, nothing)
     n4 = (n2..., n2...)
     (n4..., n4..., n2...)
 end
