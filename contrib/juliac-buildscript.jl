@@ -198,7 +198,7 @@ function _main(argc::Cint, argv::Ptr{Ptr{Cchar}})::Cint
         catch
             "MethodError occurred"
         end
-        ccall(:jl_safe_printf, Cvoid, (Cstring, Cstring), "Error: %s\n", msg)
+        ccall(:jl_safe_printf, Cvoid, (Cstring,), "Error: $msg\n")
         else
         ccall(:jl_safe_printf, Cvoid, (Cstring,), "Unhandled error occurred\n")
         end
