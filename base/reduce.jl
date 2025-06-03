@@ -428,10 +428,10 @@ Perform the first step in a mapped reduction over `A` with 0 or one or more elem
 The one-element method may be called multiple times within a single reduction at
 the start of each new chain of `op` calls.
 """
-_mapreduce_start(f, op, A, ::_InitialValue) = mapreduce_empty(f, op, _empty_eltype(A))
-_mapreduce_start(f, op, A, ::_InitialValue, a1) = mapreduce_first(f, op, a1)
-_mapreduce_start(f, op, A, init) = init
-_mapreduce_start(f, op, A, init, a1) = op(init, mapreduce_first(f, op, a1))
+@inline _mapreduce_start(f, op, A, ::_InitialValue) = mapreduce_empty(f, op, _empty_eltype(A))
+@inline _mapreduce_start(f, op, A, ::_InitialValue, a1) = mapreduce_first(f, op, a1)
+@inline _mapreduce_start(f, op, A, init) = init
+@inline _mapreduce_start(f, op, A, init, a1) = op(init, f(a1))
 
 """
     mapreduce_pairwise(f, op, A, init)
