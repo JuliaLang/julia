@@ -69,6 +69,9 @@ documentation, etc., unless this is the main purpose of the change. Do not menti
 the test plan, unless it differs from what you were instructed to do in AGENTS.md.
 If your change fixes one or more issues, use the syntax "Fixes #" at the end of the commit message, but do not include it in the title.
 
+When referencing external GitHub PRs or issues, use proper GitHub interlinking format (e.g., `owner/repo#123` for PRs/issues).
+When fixing CI failures, include the link to the specific CI failure in the commit message.
+
 When creating pull requests, if the pull request consists of one commit only,
 use the body of the commit for the body of the pull request. If there are multiple
 commits in the pull request, follow the same guidelines for the pull request
