@@ -357,12 +357,6 @@ const _promote_type_binary_recursion_depth_limit = let
 end
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @inline
-    # Try promote_rule in both orders. Typically only one is defined,
-    # and there is a fallback returning Bottom below, so the common case is
-    #   promote_type(T, S) =>
-    #   promote_result(T, S, result, Bottom) =>
-    #   typejoin(result, Bottom) => result
     _promote_type_binary(T, S, _promote_type_binary_recursion_depth_limit)
 end
 
