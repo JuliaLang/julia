@@ -1348,8 +1348,18 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         // typeof(v) isa DataType, so v is an *instance of* a type that is a Datatype,
         // meaning v is e.g. an instance of a struct. These are printed as a call to a
         // type constructor, such as e.g. `Base.UnitRange{Int64}(start=1, stop=2)`
+
         int istuple = jl_is_tuple_type(vt), isnamedtuple = jl_is_namedtuple_type(vt);
+        int isprimitivetype = jl_is_primitivetype(vt);
+
+        // In many cases, default constructors may not be available (e.g. primitive types
+        // never have them), so print these as "reinterpret(Foo, ...)" to make sure that
+        // these round-trip as expected.
+        int reinterpret = isprimitivetype;
+
         size_t tlen = jl_datatype_nfields(vt);
+        if (reinterpret)
+            n += jl_printf(out, "Base.reinterpret(");
         if (isnamedtuple) {
             if (tlen == 0)
                 n += jl_printf(out, "NamedTuple");
@@ -1357,7 +1367,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         else if (!istuple) {
             n += jl_static_show_x(out, (jl_value_t*)vt, depth, ctx);
         }
-        n += jl_printf(out, "(");
+        if (reinterpret)
+            n += jl_printf(out, ", ");
+        if (!isprimitivetype)
+            n += jl_printf(out, "(");
         size_t nb = jl_datatype_size(vt);
         if (nb > 0 && tlen == 0) {
             uint8_t *data = (uint8_t*)v;
@@ -1405,7 +1418,10 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 n += jl_static_show_next_(out, next, v, depth, ctx);
             }
         }
-        n += jl_printf(out, ")");
+        if (!isprimitivetype)
+            n += jl_printf(out, ")");
+        if (reinterpret)
+            n += jl_printf(out, ")");
     }
     else {
         n += jl_printf(out, "<?#%p::", (void*)v);

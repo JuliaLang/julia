@@ -1520,7 +1520,7 @@ function static_shown(x)
 end
 
 # Test for PR 17803
-@test static_shown(Int128(-1)) == "Int128(0xffffffffffffffffffffffffffffffff)"
+@test static_shown(Int128(-1)) == "Base.reinterpret(Int128, 0xffffffffffffffffffffffffffffffff)"
 
 # PR #22160
 @test static_shown(:aa) == ":aa"
@@ -1618,9 +1618,12 @@ struct var"%X%" end  # Invalid name without '#'
             Val(1),       Val(Int8(1)),  Val(Int16(1)),  Val(Int32(1)),  Val(Int64(1)),  Val(Int128(1)),
             Val(UInt(1)), Val(UInt8(1)), Val(UInt16(1)), Val(UInt32(1)), Val(UInt64(1)), Val(UInt128(1)),
 
+            # Primitive types should round-trip via reinterpret(...)
+            Val(Char('u')), Val(Char('\0')),
+
             # BROKEN
             # Symbol("a\xffb"),
-            # User-defined primitive types
+            # User-defined primitive types with size not a power-of-two
             # Non-canonical NaNs
             # BFloat16
         )
