@@ -22,13 +22,12 @@ let r = r"stdlibdir=(.+)", i = findfirst(x -> occursin(r, x), ARGS)
 end
 
 # Install dependencies needed to build the documentation.
-Base.ACTIVE_PROJECT[] = nothing
-empty!(LOAD_PATH)
-push!(LOAD_PATH, @__DIR__, "@stdlib")
+documenter_project_dir = joinpath(@__DIR__, "..", "deps", "jlutilities", "documenter")
 empty!(DEPOT_PATH)
-push!(DEPOT_PATH, joinpath(buildrootdoc, "deps"))
+push!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
 push!(DEPOT_PATH, abspath(Sys.BINDIR, "..", "share", "julia"))
 using Pkg
+Pkg.activate(documenter_project_dir)
 Pkg.instantiate()
 
 if "deps" in ARGS
@@ -279,6 +278,16 @@ DevDocs = [
         "devdocs/build/arm.md",
         "devdocs/build/riscv.md",
         "devdocs/build/distributing.md",
+    ],
+    "Contributor's Guide" => [
+        "devdocs/contributing/code-changes.md",
+        "devdocs/contributing/tests.md",
+        "devdocs/contributing/documentation.md",
+        "devdocs/contributing/jldoctests.md",
+        "devdocs/contributing/patch-releases.md",
+        "devdocs/contributing/formatting.md",
+        "devdocs/contributing/git-workflow.md",
+        "devdocs/contributing/aiagents.md"
     ]
 ]
 
@@ -304,12 +313,8 @@ end
 
 const use_revise = "revise=true" in ARGS
 if use_revise
-    let revise_env = joinpath(buildrootdoc, "deps", "revise")
-        Pkg.activate(revise_env)
-        Pkg.add("Revise"; preserve=Pkg.PRESERVE_NONE)
-        Base.ACTIVE_PROJECT[] = nothing
-        pushfirst!(LOAD_PATH, revise_env)
-    end
+    Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
+    Pkg.instantiate()
 end
 function maybe_revise(ex)
     use_revise || return ex

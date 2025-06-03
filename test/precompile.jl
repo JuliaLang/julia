@@ -967,6 +967,12 @@ precompile_test_harness("code caching") do dir
         const gib = makewib(1)
         fib() = gib.ib.x
 
+        struct LogBindingInvalidation
+            x::Int
+        end
+        const glbi = LogBindingInvalidation(1)
+        flbi() = @__MODULE__().glbi.x
+
         # force precompilation
         build_stale(37)
         stale('c')
@@ -991,10 +997,13 @@ precompile_test_harness("code caching") do dir
         useA() = $StaleA.stale("hello")
         useA2() = useA()
 
+        useflbi() = $StaleA.flbi()
+
         # force precompilation
         begin
             Base.Experimental.@force_compile
             useA2()
+            useflbi()
         end
         precompile($StaleA.fib, ())
 
@@ -1034,6 +1043,13 @@ precompile_test_harness("code caching") do dir
             ib::InvalidatedBinding
         end
         const gib = makewib(2.0)
+    end)
+    # TODO: test a "method_globalref" invalidation also
+    Base.eval(MA, quote
+        struct LogBindingInvalidation # binding invalidations can't be done during precompilation
+            x::Float64
+        end
+        const glbi = LogBindingInvalidation(2.0)
     end)
     @eval using $StaleC
     invalidations = Base.StaticData.debug_method_invalidation(true)
@@ -1095,6 +1111,16 @@ precompile_test_harness("code caching") do dir
         mi = only(Base.specializations(m))
         @test !hasvalid(mi, world)
         @test any(x -> x isa Core.CodeInstance && x.def === mi, invalidations)
+
+        idxb = findfirst(x -> x isa Core.Binding, invalidations)
+        @test invalidations[idxb+1] == "insert_backedges_callee"
+        idxv = findnext(==("verify_methods"), invalidations, idxb)
+        if invalidations[idxv-1].def.def.name === :getproperty
+            idxv = findnext(==("verify_methods"), invalidations, idxv+1)
+        end
+        @test invalidations[idxv-1].def.def.name === :flbi
+        idxv = findnext(==("verify_methods"), invalidations, idxv+1)
+        @test invalidations[idxv-1].def.def.name === :useflbi
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges

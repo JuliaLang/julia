@@ -1154,21 +1154,41 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     if isdefined(ex, :scope)
         scope = ex.scope
         if scope isa Module
-            bpart = Base.lookup_binding_partition(ex.world, GlobalRef(scope, var))
-            kind = Base.binding_kind(bpart)
-            if kind === Base.PARTITION_KIND_GLOBAL || kind === Base.PARTITION_KIND_UNDEF_CONST || kind == Base.PARTITION_KIND_DECLARED
+            bpart = lookup_binding_partition(ex.world, GlobalRef(scope, var))
+            kind = binding_kind(bpart)
+
+            # Get the current world's binding partition for comparison
+            curworld = tls_world_age()
+            cur_bpart = lookup_binding_partition(curworld, GlobalRef(scope, var))
+            cur_kind = binding_kind(cur_bpart)
+
+            # Track if we printed the "too new" message
+            printed_too_new = false
+
+            # Check if the binding exists in the current world but was undefined in the error's world
+            if kind === PARTITION_KIND_GUARD
+                if isdefinedglobal(scope, var)
+                    print(io, "\nThe binding may be too new: running in world age $(ex.world), while current world is $(curworld).")
+                    printed_too_new = true
+                else
+                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                end
+            elseif kind === PARTITION_KIND_GLOBAL || kind === PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_DECLARED
                 print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
-            elseif kind === Base.PARTITION_KIND_FAILED
+            elseif kind === PARTITION_KIND_FAILED
                 print(io, "\nHint: It looks like two or more modules export different ",
                 "bindings with this name, resulting in ambiguity. Try explicitly ",
                 "importing it from a particular module, or qualifying the name ",
                 "with the module it should come from.")
-            elseif kind === Base.PARTITION_KIND_GUARD
-                print(io, "\nSuggestion: check for spelling errors or missing imports.")
-            elseif Base.is_some_explicit_imported(kind)
-                print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
-            elseif kind === Base.PARTITION_KIND_BACKDATED_CONST
+            elseif is_some_explicit_imported(kind)
+                print(io, "\nSuggestion: this global was defined as `$(partition_restriction(bpart).globalref)` but not assigned a value.")
+            elseif kind === PARTITION_KIND_BACKDATED_CONST
                 print(io, "\nSuggestion: define the const at top-level before running function that uses it (stricter Julia v1.12+ rule).")
+            end
+
+            # Check if binding kind changed between the error's world and current world
+            if !printed_too_new && kind !== cur_kind
+                print(io, "\nNote: the binding state changed since the error occurred (was: $(kind), now: $(cur_kind)).")
             end
         elseif scope === :static_parameter
             print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")

@@ -67,20 +67,25 @@ function invalidate_method_for_globalref!(gr::GlobalRef, method::Method, invalid
     binding = convert(Core.Binding, gr)
     if isdefined(method, :source)
         src = _uncompressed_ir(method)
-        old_stmts = src.code
         invalidate_all = should_invalidate_code_for_globalref(gr, src)
     end
+    invalidated_any = false
     for mi in specializations(method)
         isdefined(mi, :cache) || continue
         ci = mi.cache
+        invalidated = false
         while true
             if ci.max_world > new_max_world && (invalidate_all || scan_edge_list(ci, binding))
                 ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), ci, new_max_world)
+                invalidated = true
             end
             isdefined(ci, :next) || break
             ci = ci.next
         end
+        invalidated && ccall(:jl_maybe_log_binding_invalidation, Cvoid, (Any,), mi)
+        invalidated_any |= invalidated
     end
+    return invalidated_any
 end
 
 export_affecting_partition_flags(bpart::Core.BindingPartition) =
@@ -104,18 +109,21 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
     need_to_invalidate_export = export_affecting_partition_flags(invalidated_bpart) !==
                                 export_affecting_partition_flags(new_bpart)
 
+    invalidated_any = false
+    queued_bindings = Tuple{Core.Binding, Core.BindingPartition, Core.BindingPartition}[]    # defer handling these to keep the logging coherent
     if need_to_invalidate_code
         if (b.flags & BINDING_FLAG_ANY_IMPLICIT_EDGES) != 0
             nmethods = ccall(:jl_module_scanned_methods_length, Csize_t, (Any,), gr.mod)
             for i = 1:nmethods
                 method = ccall(:jl_module_scanned_methods_getindex, Any, (Any, Csize_t), gr.mod, i)::Method
-                invalidate_method_for_globalref!(gr, method, invalidated_bpart, new_max_world)
+                invalidated_any |= invalidate_method_for_globalref!(gr, method, invalidated_bpart, new_max_world)
             end
         end
         if isdefined(b, :backedges)
             for edge in b.backedges
                 if isa(edge, CodeInstance)
                     ccall(:jl_invalidate_code_instance, Cvoid, (Any, UInt), edge, new_max_world)
+                    invalidated_any = true
                 elseif isa(edge, Core.Binding)
                     isdefined(edge, :partitions) || continue
                     latest_bpart = edge.partitions
@@ -124,9 +132,9 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                     if is_some_binding_imported(binding_kind(latest_bpart))
                         partition_restriction(latest_bpart) === b || continue
                     end
-                    invalidate_code_for_globalref!(edge, latest_bpart, latest_bpart, new_max_world)
+                    push!(queued_bindings, (edge, latest_bpart, latest_bpart))
                 else
-                    invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
+                    invalidated_any |= invalidate_method_for_globalref!(gr, edge::Method, invalidated_bpart, new_max_world)
                 end
             end
         end
@@ -148,11 +156,16 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
                     ccall(:jl_maybe_reresolve_implicit, Any, (Any, Csize_t), user_binding, new_max_world) :
                     latest_bpart
                 if need_to_invalidate_code || new_bpart !== latest_bpart
-                    invalidate_code_for_globalref!(convert(Core.Binding, user_binding), latest_bpart, new_bpart, new_max_world)
+                    push!(queued_bindings, (convert(Core.Binding, user_binding), latest_bpart, new_bpart))
                 end
             end
         end
     end
+    invalidated_any && ccall(:jl_maybe_log_binding_invalidation, Cvoid, (Any,), invalidated_bpart)
+    for (edge, invalidated_bpart, new_bpart) in queued_bindings
+        invalidated_any |= invalidate_code_for_globalref!(edge, invalidated_bpart, new_bpart, new_max_world)
+    end
+    return invalidated_any
 end
 invalidate_code_for_globalref!(gr::GlobalRef, invalidated_bpart::Core.BindingPartition, new_bpart::Core.BindingPartition, new_max_world::UInt) =
     invalidate_code_for_globalref!(convert(Core.Binding, gr), invalidated_bpart, new_bpart, new_max_world)

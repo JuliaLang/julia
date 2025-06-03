@@ -512,12 +512,13 @@ JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t w
     ct->world_age = jl_typeinf_world;
     jl_value_t **fargs;
     JL_GC_PUSHARGS(fargs, 4);
-    jl_module_t *CC = (jl_module_t*)jl_get_global(jl_core_module, jl_symbol("Compiler"));
+    jl_module_t *CC = (jl_module_t*)jl_get_global_value(jl_core_module, jl_symbol("Compiler"), ct->world_age);
     if (CC != NULL && jl_is_module(CC)) {
-        fargs[0] = jl_get_global(CC, jl_symbol("NativeInterpreter"));;
+        JL_GC_PROMISE_ROOTED(CC);
+        fargs[0] = jl_get_global_value(CC, jl_symbol("NativeInterpreter"), ct->world_age);
         fargs[1] = jl_box_ulong(world);
         fargs[1] = jl_apply(fargs, 2);
-        fargs[0] = jl_get_global(CC, jl_symbol("typeinf_code"));
+        fargs[0] = jl_get_global_value(CC, jl_symbol("typeinf_code"), ct->world_age);
         fargs[2] = (jl_value_t*)mi;
         fargs[3] = jl_true;
         ci = (jl_code_info_t*)jl_apply(fargs, 4);
@@ -1888,6 +1889,19 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
 JL_DLLEXPORT void jl_invalidate_code_instance(jl_code_instance_t *replaced, size_t max_world)
 {
     invalidate_code_instance(replaced, max_world, 1);
+}
+
+JL_DLLEXPORT void jl_maybe_log_binding_invalidation(jl_value_t *replaced)
+{
+    if (_jl_debug_method_invalidation) {
+        if (replaced) {
+            jl_array_ptr_1d_push(_jl_debug_method_invalidation, replaced);
+        }
+        jl_value_t *loctag = jl_cstr_to_string("jl_maybe_log_binding_invalidation");
+        JL_GC_PUSH1(&loctag);
+        jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
+        JL_GC_POP();
+    }
 }
 
 static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth) {

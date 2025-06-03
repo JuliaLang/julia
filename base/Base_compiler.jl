@@ -389,5 +389,9 @@ Core._setlowerer!(fl_lower)
 
 # Further definition of Base will happen in Base.jl if loaded.
 
+# Ensure this file is also tracked
+@assert !isassigned(_included_files, 1)
+_included_files[1] = (@__MODULE__, ccall(:jl_prepend_cwd, Any, (Any,), "Base_compiler.jl"))
+
 end # module Base
 using .Base
