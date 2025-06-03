@@ -319,14 +319,19 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
     if T <: Bottom
         return S
     end
-    if S <: Bottom
+    if (S <: Bottom) || ((S <: T) && (T <: S))
         return T
     end
     l = tail(recursion_depth_limit)
     # Try promote_rule in both orders.
     st = promote_rule(S, T)
     ts = promote_rule(T, S)
-    promote_result(T, S, ts, st, l)
+    # If no promote_rule is defined, both directions give Bottom. In that
+    # case use typejoin on the original types instead.
+    if (st <: Bottom) && (ts <: Bottom)
+        typejoin(T, S)
+    end
+    _promote_type_binary(st, ts, l)
 end
 
 """
@@ -367,11 +372,6 @@ promote_rule(::Type{Bottom}, slurp...) = Bottom
 promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly necessary, since the next method would match unambiguously anyways
 promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
 promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
-
-promote_result(::Type,::Type,::Type{T},::Type{S},l::Tuple{Vararg{Nothing}}) where {T,S} = (@inline; _promote_type_binary(T,S,l))
-# If no promote_rule is defined, both directions give Bottom. In that
-# case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom},::Tuple{Vararg{Nothing}}) where {T,S} = (@inline; typejoin(T, S))
 
 """
     promote(xs...)
