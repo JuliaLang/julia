@@ -1065,7 +1065,7 @@ Example:
     that precision settings do not interfere across threads.
 
 !!! compat "Julia 1.12"
-    Thread safety via ScopedValue is guaranteed starting with Julia 1.12. ([#51362])
+    Thread safety via ScopedValue is guaranteed starting with Julia 1.12.
 
 !!! compat "Julia 1.8"
     The `base` keyword requires at least Julia 1.8.
