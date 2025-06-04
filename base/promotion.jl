@@ -307,51 +307,57 @@ promote_type(T) = T
 promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
 promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
+const _promote_type_binary_recursion_depth_limit_exception = let
+    s = "`promote_type`: recursion depth limit reached, giving up; check for faulty/conflicting/missing `promote_rule` methods"
+    ArgumentError(s)
+end
+function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple{Vararg{Nothing}}) where {T,S}
+    function err()
+        @noinline
+        throw(_promote_type_binary_recursion_depth_limit_exception)
+    end
+    type_is_bottom(::Type{X}) where {X} = X === Bottom
+    function types_are_equal(::Type{A}, ::Type{B}) where {A,B}
+        @_total_meta
+        ccall(:jl_types_equal, Cint, (Any, Any), A, B) !== Cint(0)
+    end
+    normalize_type(::Type{X}) where {X} = X
+    if type_is_bottom(T)
+        return S
+    end
+    if type_is_bottom(S) || types_are_equal(S, T)
+        return T
+    end
+    if recursion_depth_limit === ()
+        err()
+    end
+    l = tail(recursion_depth_limit)
+    # Try promote_rule in both orders.
+    st = normalize_type(promote_rule(S, T))
+    ts = normalize_type(promote_rule(T, S))
+    # If no promote_rule is defined, both directions give Bottom. In that
+    # case use typejoin on the original types instead.
+    if type_is_bottom(st) && type_is_bottom(ts)
+        normalize_type(typejoin(T, S))
+    else
+        _promote_type_binary(ts, st, l)
+    end
+end
+
+"""
+    _promote_type_binary_recursion_depth_limit::Tuple{Vararg{Nothing}}
+
+Recursion depth limit for `_promote_type_binary`, to prevent stack overflow.
+"""
+const _promote_type_binary_recursion_depth_limit = let
+    n2 = (nothing, nothing)
+    n4 = (n2..., n2...)
+    n8 = (n4..., n4...)
+    (n8..., n2...)
+end
+
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @_terminates_locally_meta
-    normalized_type(::Type{Typ}) where {Typ} = Typ
-    normalized_promote_rule(::Type{A}, ::Type{B}) where {A,B} = normalized_type(promote_rule(A, B))
-    types_are_equal(::Type{A}, ::Type{B}) where {A,B} = (A <: B) && (B <: A)
-    is_bottom(::Type{Typ}) where {Typ} = Typ === Bottom
-    function throw_conflicting_promote_rules((@nospecialize i1::Type), (@nospecialize i2::Type), (@nospecialize left::Type), (@nospecialize right::Type))
-        @noinline
-        @_nospecializeinfer_meta
-        s = LazyString("`promote_type(", i1, ", ", i2, ")` failed, there are conflicting `promote_rule` definitions for types ", left, ", ", right)
-        throw(ArgumentError(s))
-    end
-    function throw_gave_up((@nospecialize i1::Type), (@nospecialize i2::Type), (@nospecialize left::Type), (@nospecialize right::Type))
-        @noinline
-        @_nospecializeinfer_meta
-        s = LazyString("`promote_type(", i1, ", ", i2, ")` failed, ended up with (", left, ", ", right, "), check for faulty/conflicting/missing `promote_rule` methods")
-        throw(ArgumentError(s))
-    end
-    left = T
-    right = S
-    for _ ∈ 1:50  # must be finite to guarantee local termination
-        if is_bottom(left)
-            return right
-        end
-        if is_bottom(right) || types_are_equal(left, right)
-            return left
-        end
-        # Try `promote_rule` in both orders.
-        a = normalized_promote_rule(left, right)
-        b = normalized_promote_rule(right, left)
-        if (
-            (types_are_equal(left, a) && types_are_equal(right, b)) ||
-            (types_are_equal(left, b) && types_are_equal(right, a))
-        )
-            throw_conflicting_promote_rules(T, S, left, right)
-        end
-        if is_bottom(a) && is_bottom(b)
-            # If no `promote_rule` is defined, both directions give `Bottom`. In that
-            # case use `typejoin` on the original types.
-            return normalized_type(typejoin(left, right))
-        end
-        left = a
-        right = b
-    end
-    throw_gave_up(T, S, left, right)
+    _promote_type_binary(T, S, _promote_type_binary_recursion_depth_limit)
 end
 
 """
