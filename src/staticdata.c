@@ -3419,9 +3419,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 
 static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_array_t *mod_array, jl_array_t **udeps, int64_t *srctextpos, int64_t *checksumpos)
 {
-    assert(jl_precompile_toplevel_module == NULL);
-    jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
-
     *checksumpos = write_header(f, 0);
     write_uint8(f, jl_cache_flags());
     // write description of contents (name, uuid, buildid)
@@ -3479,9 +3476,7 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
         // Generate _native_data`
         if (_native_data != NULL) {
             jl_prepare_serialization_data(mod_array, newly_inferred, &extext_methods, &new_ext_cis, NULL, &query_cache);
-            jl_precompile_toplevel_module = (jl_module_t*)jl_array_ptr_ref(worklist, jl_array_len(worklist)-1);
             *_native_data = jl_precompile_worklist(worklist, extext_methods, new_ext_cis);
-            jl_precompile_toplevel_module = NULL;
             extext_methods = NULL;
             new_ext_cis = NULL;
         }
@@ -3528,7 +3523,6 @@ JL_DLLEXPORT void jl_create_system_image(void **_native_data, jl_array_t *workli
     // Re-enable running julia code for postoutput hooks, atexit, etc.
     jl_gc_enable_finalizers(ct, 1);
     ct->reentrant_timing &= ~0b1000u;
-    jl_precompile_toplevel_module = NULL;
 
     if (worklist) {
         // Go back and update the checksum in the header
