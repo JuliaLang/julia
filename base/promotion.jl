@@ -311,10 +311,18 @@ const _promote_type_binary_recursion_depth_limit_exception = let
     s = "`promote_type`: recursion depth limit reached, giving up; check for faulty/conflicting/missing `promote_rule` methods"
     ArgumentError(s)
 end
+const _promote_type_binary_detected_infinite_recursion_exception = let
+    s = "`promote_type`: detected unbounded recursion caused by faulty `promote_rule` logic"
+    ArgumentError(s)
+end
 function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple{Vararg{Nothing}}) where {T,S}
     function err_giving_up()
         @noinline
         throw(_promote_type_binary_recursion_depth_limit_exception)
+    end
+    function err_detected_infinite_recursion()
+        @noinline
+        throw(_promote_type_binary_detected_infinite_recursion_exception)
     end
     type_is_bottom(::Type{X}) where {X} = X === Bottom
     function types_are_equal(::Type{A}, ::Type{B}) where {A,B}
@@ -322,6 +330,7 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
         ccall(:jl_types_equal, Cint, (Any, Any), A, B) !== Cint(0)
     end
     normalize_type(::Type{X}) where {X} = X
+    detect_loop(::Type{A}, ::Type{B}) where {A, B} = types_are_equal(T, A) && types_are_equal(S, B)
     if type_is_bottom(T)
         return S
     end
@@ -335,6 +344,11 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
     # case use typejoin on the original types instead.
     if type_is_bottom(st) && type_is_bottom(ts)
         return normalize_type(typejoin(T, S))
+    end
+    if detect_loop(ts, st) || detect_loop(st, ts)
+        # This is not strictly necessary, as we already limit the recursion depth, but
+        # makes for nicer UX.
+        err_detected_infinite_recursion()
     end
     if recursion_depth_limit === ()
         err_giving_up()
