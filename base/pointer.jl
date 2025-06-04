@@ -4,8 +4,8 @@
     Ptr{T}
 
 A memory address referring to data of type `T`. Use [`reinterpret`](@ref) to get a pointer
-with the same address but a different type. There is no guarantee that the memory is 
-actually valid, or that it actually represents data of the specified type. 
+with the same address but a different type. There is no guarantee that the memory is
+actually valid, or that it actually represents data of the specified type.
 """
 Ptr
 
