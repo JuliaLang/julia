@@ -579,6 +579,7 @@ static Function *aot_abi_converter(jl_codegen_params_t &params, Module *M, jl_va
         gf_thunk_name = emit_abi_dispatcher(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget);
     }
     auto F = M->getFunction(gf_thunk_name);
+    F->setVisibility(Function::HiddenVisibility);
     assert(F);
     return F;
 }
@@ -979,6 +980,22 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
         gvars.push_back(decl->getName().str());
     }
 
+    // Miscellaneous Julia-internal names that must be mangled and made hidden
+    StringSet<> other_names;
+    auto merge_gvmap_names = [&](auto map) {
+        for (auto &[_, gv] : map)
+            other_names.insert(gv->getName());
+    };
+    merge_gvmap_names(params.mergedConstants);
+    merge_gvmap_names(params.symMapDefault);
+    merge_gvmap_names(params.symMapExe);
+    merge_gvmap_names(params.symMapDll);
+    merge_gvmap_names(params.symMapDlli);
+    for (auto &[_, gv] : params.libMapGV) {
+        other_names.insert(gv.first->getName());
+        merge_gvmap_names(gv.second);
+    }
+
     // Merge everything (invalidates GlobalValue pointers)
     if (!data->split_modules)
         merge_compiled_functions(params, *data, external_linkage);
@@ -1050,10 +1067,6 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
         }
     }
 
-    StringSet<> const_names;
-    for (auto [_, c] : params.mergedConstants)
-        const_names.insert(c->getName());
-
 #ifndef NDEBUG
     for (auto gv : data->jl_sysimg_gvars) {
         assert(gv);
@@ -1068,18 +1081,24 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     CreateNativeGlobals += data->jl_sysimg_gvars.size() + data->jl_external_to_llvm.size();
     CreateNativeMethods += data->jl_sysimg_fvars.size();
 
-    // TODO: find a nicer way to track the names we must rename and make local;
-    // not every "julia"-owned global is tracked in jl_codegen_params_t.
+    StringSet<> hidden_names;
+    auto merge_names = [&](StringSet<> &s) {
+        hidden_names.insert(s.begin(), s.end());
+        s.clear();
+    };
+    merge_names(gvars_names);
+    merge_names(fvars_names);
+    merge_names(other_names);
+
     auto rename_global_objs = [&](Module &M) {
         for (auto &gv : M.global_objects()) {
             auto name = gv.getName();
-            int local = fvars_names.contains(name) || gvars_names.contains(name);
-            if (local) {
+            if (!hidden_names.contains(name))
+                continue;
+            // Worth setting dso_local even if it implied by hidden?
+            if (gv.hasExternalLinkage())
                 gv.setVisibility(GlobalObject::HiddenVisibility);
-                gv.setDSOLocal(true);
-            }
-            if (local || const_names.contains(name))
-                makeSafeName(gv);
+            makeSafeName(gv);
         }
     };
     rename_global_objs(*data->combined_mod.getModuleUnlocked());

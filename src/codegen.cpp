@@ -7306,6 +7306,8 @@ static Function *gen_cfun_wrapper(
             funcName, M);
     jl_init_function(cw, params.TargetTriple);
     cw->setAttributes(AttributeList::get(M->getContext(), {attributes, cw->getAttributes()}));
+    // funcName should not be directly accessible from C and must be mangled
+    cw->setVisibility(Function::HiddenVisibility);
 
     jl_codectx_t ctx(M->getContext(), params, 0, 0);
     ctx.f = cw;
