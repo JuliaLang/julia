@@ -544,21 +544,21 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     jl_value_t *get_compiletime_prefs_func = NULL;
     JL_GC_PUSH8(&depots, &prefs_list, &unique_func, &replace_depot_func, &normalize_depots_func, &toplevel, &prefs_hash_func, &get_compiletime_prefs_func);
 
-    jl_array_t *udeps = (jl_array_t*)jl_get_global_value(jl_base_module, jl_symbol("_require_dependencies"));
+    jl_array_t *udeps = (jl_array_t*)jl_get_global_value(jl_base_module, jl_symbol("_require_dependencies"), ct->world_age);
     *udepsp = udeps;
 
     // unique(udeps) to eliminate duplicates while preserving order:
     // we preserve order so that the topmost included .jl file comes first
     if (udeps) {
-        unique_func = jl_eval_global_var(jl_base_module, jl_symbol("unique"));
+        unique_func = jl_eval_global_var(jl_base_module, jl_symbol("unique"), ct->world_age);
         jl_value_t *uniqargs[2] = {unique_func, (jl_value_t*)udeps};
         udeps = (jl_array_t*)jl_apply(uniqargs, 2);
         *udepsp = udeps;
         JL_TYPECHK(write_dependency_list, array_any, (jl_value_t*)udeps);
     }
 
-    replace_depot_func = jl_get_global_value(jl_base_module, jl_symbol("replace_depot_path"));
-    normalize_depots_func = jl_eval_global_var(jl_base_module, jl_symbol("normalize_depots_for_relocation"));
+    replace_depot_func = jl_get_global_value(jl_base_module, jl_symbol("replace_depot_path"), ct->world_age);
+    normalize_depots_func = jl_eval_global_var(jl_base_module, jl_symbol("normalize_depots_for_relocation"), ct->world_age);
 
     depots = jl_apply(&normalize_depots_func, 1);
 
@@ -616,9 +616,9 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     // Calculate Preferences hash for current package.
     if (jl_base_module) {
         // Toplevel module is the module we're currently compiling, use it to get our preferences hash
-        toplevel = jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"));
-        prefs_hash_func = jl_eval_global_var(jl_base_module, jl_symbol("get_preferences_hash"));
-        get_compiletime_prefs_func = jl_eval_global_var(jl_base_module, jl_symbol("get_compiletime_preferences"));
+        toplevel = jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
+        prefs_hash_func = jl_eval_global_var(jl_base_module, jl_symbol("get_preferences_hash"), ct->world_age);
+        get_compiletime_prefs_func = jl_eval_global_var(jl_base_module, jl_symbol("get_compiletime_preferences"), ct->world_age);
 
         if (toplevel) {
             // call get_compiletime_prefs(__toplevel__)

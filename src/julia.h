@@ -2094,9 +2094,7 @@ JL_DLLEXPORT jl_value_t *jl_get_existing_strong_gf(jl_binding_t *b JL_PROPAGATES
 JL_DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var, int allow_import);
 JL_DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT int jl_globalref_is_const(jl_globalref_t *gr);
-JL_DLLEXPORT jl_value_t *jl_get_globalref_value(jl_globalref_t *gr);
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m JL_PROPAGATES_ROOT, jl_sym_t *var);
-JL_DLLEXPORT jl_value_t *jl_get_global_value(jl_module_t *m, jl_sym_t *var);
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 JL_DLLEXPORT void jl_set_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT);
 void jl_set_initial_const(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT, int exported);
@@ -2580,7 +2578,7 @@ JL_DLLEXPORT ssize_t jl_sizeof_jl_options(void);
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp);
 JL_DLLEXPORT char *jl_format_filename(const char *output_pattern);
 
-uint64_t parse_heap_size_hint(const char *optarg, const char *option_name);
+uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int allow_pct);
 
 // Set julia-level ARGS array according to the arguments provided in
 // argc/argv

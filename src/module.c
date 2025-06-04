@@ -1540,20 +1540,20 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
 }
 
 
-// get the value (or null) in the current world
-JL_DLLEXPORT jl_value_t *jl_get_globalref_value(jl_globalref_t *gr)
+// get the value (or null) in the world
+jl_value_t *jl_get_globalref_value(jl_globalref_t *gr, size_t world)
 {
     jl_binding_t *b = gr->binding;
     if (!b)
         b = jl_get_module_binding(gr->mod, gr->name, 1);
-    return jl_get_binding_value_depwarn(b, jl_current_task->world_age);
+    return jl_get_binding_value_depwarn(b, world);
 }
 
-// get the value (or null) in the current world
-JL_DLLEXPORT jl_value_t *jl_get_global_value(jl_module_t *m, jl_sym_t *var)
+// get the value (or null) in the world
+jl_value_t *jl_get_global_value(jl_module_t *m, jl_sym_t *var, size_t world)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
-    return jl_get_binding_value_depwarn(b, jl_current_task->world_age);
+    return jl_get_binding_value_depwarn(b, world);
 }
 
 // get the global (or null) in the latest world
