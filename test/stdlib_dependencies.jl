@@ -26,6 +26,7 @@ try
                             lib_name = last(split(lib_name, "@rpath/"))
                             # Get basename
                             lib_name = basename(lib_name)
+                            isempty(splitext(lib_name)[2]) && continue # skip frameworks
                             push!(raw_libs, lib_name)
                         end
                     end
