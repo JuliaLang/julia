@@ -2028,6 +2028,14 @@ g4731() = f4731()
     Base.promote_rule(::Type{Issue13193_Interval{T}}, ::Type{S}) where {T, S<:Number} = Issue13193_Interval{promote_type(T,S)}
     @test_throws ArgumentError promote_type(Issue13193_Interval{Int}, Issue13193_SIQuantity{Int})
 end
+@testset "straightforward conflict in `promote_rule` definitions" begin
+    struct ConflictingPromoteRuleDefinitionsA end
+    struct ConflictingPromoteRuleDefinitionsB end
+    Base.promote_rule(::Type{ConflictingPromoteRuleDefinitionsA}, ::Type{ConflictingPromoteRuleDefinitionsB}) = ConflictingPromoteRuleDefinitionsA
+    Base.promote_rule(::Type{ConflictingPromoteRuleDefinitionsB}, ::Type{ConflictingPromoteRuleDefinitionsA}) = ConflictingPromoteRuleDefinitionsB
+    @test_throws ArgumentError promote_type(ConflictingPromoteRuleDefinitionsA, ConflictingPromoteRuleDefinitionsB)
+    @test_throws ArgumentError promote_type(ConflictingPromoteRuleDefinitionsB, ConflictingPromoteRuleDefinitionsA)
+end
 
 # issue #4675
 f4675(x::StridedArray...) = 1
