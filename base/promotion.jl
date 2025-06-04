@@ -338,10 +338,9 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
     # If no promote_rule is defined, both directions give Bottom. In that
     # case use typejoin on the original types instead.
     if type_is_bottom(st) && type_is_bottom(ts)
-        normalize_type(typejoin(T, S))
-    else
-        _promote_type_binary(ts, st, l)
+        return normalize_type(typejoin(T, S))
     end
+    _promote_type_binary(ts, st, l)
 end
 
 """
