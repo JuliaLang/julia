@@ -258,6 +258,13 @@ function tailjoin(A::SimpleVector, i::Int)
     return t
 end
 
+## type equality
+
+function _types_are_equal(A::Type, B::Type)
+    @_total_meta
+    ccall(:jl_types_equal, Cint, (Any, Any), A, B) !== Cint(0)
+end
+
 ## promotion mechanism ##
 
 """
@@ -325,16 +332,12 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
         throw(_promote_type_binary_detected_infinite_recursion_exception)
     end
     type_is_bottom(::Type{X}) where {X} = X === Bottom
-    function types_are_equal(::Type{A}, ::Type{B}) where {A,B}
-        @_total_meta
-        ccall(:jl_types_equal, Cint, (Any, Any), A, B) !== Cint(0)
-    end
     normalize_type(::Type{X}) where {X} = X
-    detect_loop(::Type{A}, ::Type{B}) where {A, B} = types_are_equal(T, A) && types_are_equal(S, B)
+    detect_loop(::Type{A}, ::Type{B}) where {A, B} = _types_are_equal(T, A) && _types_are_equal(S, B)
     if type_is_bottom(T)
         return S
     end
-    if type_is_bottom(S) || types_are_equal(S, T)
+    if type_is_bottom(S) || _types_are_equal(S, T)
         return T
     end
     # Try promote_rule in both orders.
