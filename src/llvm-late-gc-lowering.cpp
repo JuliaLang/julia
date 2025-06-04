@@ -1,6 +1,8 @@
 // This file is a part of Julia. License is MIT: https://julialang.org/license
 
 #include "llvm-gc-interface-passes.h"
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/Support/Casting.h"
 
 #define DEBUG_TYPE "late_lower_gcroot"
 
@@ -171,12 +173,12 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
             (void)LI;
             break;
         }
-        else if (auto II = dyn_cast<IntrinsicInst>(CurrentV)) {
-            // Some intrinsics behave like LoadInst followed by a SelectInst
-            // This should never happen in a derived addrspace (since those cannot be stored to memory)
-            // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
+        else if (auto *II = dyn_cast<IntrinsicInst>(CurrentV)) {
             if (II->getIntrinsicID() == Intrinsic::masked_load ||
                 II->getIntrinsicID() == Intrinsic::masked_gather) {
+                // Some intrinsics behave like LoadInst followed by a SelectInst
+                // This should never happen in a derived addrspace (since those cannot be stored to memory)
+                // so we don't need to lift these operations, but we do need to check if it's loaded and continue walking the base pointer
                 if (auto VTy = dyn_cast<VectorType>(II->getType())) {
                     if (hasLoadedTy(VTy->getElementType())) {
                         Value *Mask = II->getOperand(2);
@@ -205,6 +207,24 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 // In general a load terminates a walk
                 break;
             }
+            else if (II->getIntrinsicID() == Intrinsic::vector_extract) {
+                if (auto VTy = dyn_cast<VectorType>(II->getType())) {
+                    if (hasLoadedTy(VTy->getElementType())) {
+                        Value *Idx = II->getOperand(1);
+                        if (!isa<ConstantInt>(Idx)) {
+                            assert(isa<UndefValue>(Idx) && "unimplemented");
+                            (void)Idx;
+                        }
+                        CurrentV = II->getOperand(0);
+                        fld_idx = -1;
+                        continue;
+                    }
+                }
+                break;
+            } else {
+                // Unknown Intrinsic
+                break;
+            }
         }
         else if (auto CI = dyn_cast<CallInst>(CurrentV)) {
             auto callee = CI->getCalledFunction();
@@ -212,9 +232,11 @@ static std::pair<Value*,int> FindBaseValue(const State &S, Value *V, bool UseCac
                 CurrentV = CI->getArgOperand(0);
                 continue;
             }
+            // Unknown Call
             break;
         }
         else {
+            // Unknown Instruction
             break;
         }
     }
@@ -518,6 +540,22 @@ SmallVector<int, 0> LateLowerGCFrame::NumberAllBase(State &S, Value *CurrentV) {
         Numbers = NumberAll(S, IEI->getOperand(0));
         int ElNumber = Number(S, IEI->getOperand(1));
         Numbers[idx] = ElNumber;
+    // C++17
+    // } else if (auto *II = dyn_cast<IntrinsicInst>(CurrentV); II && II->getIntrinsicID() == Intrinsic::vector_insert) {
+    } else if (isa<IntrinsicInst>(CurrentV) && cast<IntrinsicInst>(CurrentV)->getIntrinsicID() == Intrinsic::vector_insert) {
+        auto *II = dyn_cast<IntrinsicInst>(CurrentV);
+        // Vector insert is a bit like a shuffle so use the same approach
+        SmallVector<int, 0> Numbers1 = NumberAll(S, II->getOperand(0));
+        SmallVector<int, 0> Numbers2 = NumberAll(S, II->getOperand(1));
+        unsigned first_idx = cast<ConstantInt>(II->getOperand(2))->getZExtValue();
+        for (unsigned i = 0; i < Numbers1.size(); ++i) {
+            if (i < first_idx)
+                Numbers.push_back(Numbers1[i]);
+            else if (i - first_idx < Numbers2.size())
+                Numbers.push_back(Numbers2[i - first_idx]);
+            else
+                Numbers.push_back(Numbers1[i]);
+        }
     } else if (auto *IVI = dyn_cast<InsertValueInst>(CurrentV)) {
         Numbers = NumberAll(S, IVI->getAggregateOperand());
         auto Tracked = TrackCompositeType(IVI->getType());
@@ -1149,6 +1187,10 @@ State LateLowerGCFrame::LocalScan(Function &F) {
                                 continue;
                             }
                         }
+                    }
+                    if (II->getIntrinsicID() == Intrinsic::vector_extract || II->getIntrinsicID() == Intrinsic::vector_insert) {
+                        // These are not real defs
+                        continue;
                     }
                 }
                 auto callee = CI->getCalledFunction();

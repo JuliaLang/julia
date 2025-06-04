@@ -620,7 +620,9 @@ end
 @test reduce(&, [`$echocmd abc`, `$echocmd def`, `$echocmd hij`]) == `$echocmd abc` & `$echocmd def` & `$echocmd hij`
 
 # readlines(::Cmd), accidentally broken in #20203
-@test sort(readlines(`$lscmd -A`)) == sort(readdir())
+let str = "foo\nbar"
+    @test readlines(`$echocmd $str`) == split(str)
+end
 
 # issue #19864 (PR #20497)
 let c19864 = readchomp(pipeline(ignorestatus(

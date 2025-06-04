@@ -12,7 +12,8 @@ using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, argextype, BasicBlock, block_for_ins
     CachedMethodTable, CFG, compute_basic_blocks, DebugInfoStream, Effects,
     EMPTY_SPTYPES, getdebugidx, IncrementalCompact, InferenceResult, InferenceState,
     InvalidIRError, IRCode, LimitedAccuracy, NativeInterpreter, scan_ssa_use!,
-    singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst
+    singleton_type, sptypes_from_meth_instance, StmtRange, Timings, VarState, widenconst,
+    get_ci_mi, get_ci_abi
 
 @nospecialize
 
@@ -95,16 +96,14 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
     elseif isexpr(stmt, :invoke) && length(stmt.args) >= 2 && isa(stmt.args[1], Union{MethodInstance,CodeInstance})
         stmt = stmt::Expr
         # TODO: why is this here, and not in Base.show_unquoted
-        printstyled(io, "   invoke "; color = :light_black)
-        mi = stmt.args[1]
-        if !(mi isa Core.MethodInstance)
-            mi = (mi::Core.CodeInstance).def
-        end
-        if isa(mi, Core.ABIOverride)
-            abi = mi.abi
-            mi = mi.def
+        ci = stmt.args[1]
+        if ci isa Core.CodeInstance
+            printstyled(io, "   invoke "; color = :light_black)
+            mi = get_ci_mi(ci)
+            abi = get_ci_abi(ci)
         else
-            abi = mi.specTypes
+            printstyled(io, "dynamic invoke "; color = :yellow)
+            abi = (ci::Core.MethodInstance).specTypes
         end
         show_unquoted(io, stmt.args[2], indent)
         print(io, "(")

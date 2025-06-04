@@ -35,7 +35,7 @@ end
 for (T, c) in (
         (Core.CodeInfo, []),
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
-        (Core.Method, [:primary_world, :deleted_world]),
+        (Core.Method, [:primary_world, :dispatch_status]),
         (Core.MethodInstance, [:cache, :flags]),
         (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
@@ -307,22 +307,9 @@ end  |> only == Type{typejoin(Int, UInt)}
     typejoin(Int, UInt, Float64)
 end  |> only == Type{typejoin(Int, UInt, Float64)}
 
-let res = @test_throws TypeError let
-        Base.Experimental.@force_compile
-        typejoin(1, 2)
-        nothing
-    end
-    err = res.value
-    @test err.func === :<:
-end
-let res = @test_throws TypeError let
-        Base.Experimental.@force_compile
-        typejoin(1, 2, 3)
-        nothing
-    end
-    err = res.value
-    @test err.func === :<:
-end
+@test typejoin(1, 2) === Any
+@test typejoin(1, 2, 3) === Any
+@test typejoin(Int, Int, 3) === Any
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
@@ -8518,3 +8505,9 @@ module GlobalBindingMulti
     using .M.C
 end
 @test GlobalBindingMulti.S === GlobalBindingMulti.M.C.S
+
+#58434 bitsegal comparison of oddly sized fields
+primitive type ByteString58434 (18 * 8) end
+
+@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
+@test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)

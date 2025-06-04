@@ -1935,7 +1935,7 @@ end
 # eval'ing :const exprs
 eval(Expr(:const, :_var_30877))
 @test !isdefined(@__MODULE__, :_var_30877)
-@test isconst(@__MODULE__, :_var_30877)
+@test !isconst(@__MODULE__, :_var_30877)
 
 # anonymous kw function in value position at top level
 f30926 = function (;k=0)
@@ -3514,6 +3514,8 @@ end
 # issue #45162
 f45162(f) = f(x=1)
 @test first(methods(f45162)).called != 0
+f45162_2(f) = f([]...)
+@test first(methods(f45162_2)).called != 0
 
 # issue #45024
 @test_parseerror "const x" "expected assignment after \"const\""
@@ -4235,6 +4237,16 @@ end
 @test letf_57470(3) == 5
 @test letT_57470 === Int64
 
+end # M57470_sub
+
+# lowering globaldecl with complex type
+module M58609
+using Test
+global x::T where T
+global y::Type{<:Number}
+
+@test Core.get_binding_type(M58609, :x) === Any
+@test Core.get_binding_type(M58609, :y) == Type{<:Number}
 end
 
 # #57574
