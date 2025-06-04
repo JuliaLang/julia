@@ -1234,10 +1234,20 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 # While the definitions for IndexLinear are all simple enough to inline on their
 # own, IndexCartesian's CartesianIndices is more complicated and requires explicit
 # inlining.
-function iterate(A::AbstractArray, state=(eachindex(A),))
+_iterate_starting_state(A) = _iterate_starting_state(A, IndexStyle(A))
+_iterate_starting_state(A, ::IndexLinear) = firstindex(A)
+_iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
+iterate(A::AbstractArray, state = _iterate_starting_state(A)) = _iterate(A, state)
+function _iterate(A::AbstractArray, state::Tuple)
     y = iterate(state...)
     y === nothing && return nothing
     A[y[1]], (state[1], tail(y)...)
+end
+_check_inrange(state, inds) = state in inds
+_check_inrange(state::Int, inds::AbstractOneTo{Int}) = (state - 1)%UInt < length(inds)%UInt
+function _iterate(A::AbstractArray, state::Integer)
+    _check_inrange(state, eachindex(A)) || return nothing
+    @inbounds(A[state]), state + 1
 end
 
 isempty(a::AbstractArray) = (length(a) == 0)
