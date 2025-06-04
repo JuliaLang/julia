@@ -61,6 +61,10 @@ Standard library changes
 
 #### Profile
 
+#### Random
+
+* New `Random.jump` function to advance the state ("jump ahead") of `Xoshiro` or `MersenneTwister` RNGs ([#58353]).
+
 #### REPL
 
 * The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
