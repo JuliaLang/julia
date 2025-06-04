@@ -955,7 +955,7 @@ static NOINLINE int true_main(int argc, char *argv[])
     ct->world_age = jl_get_world_counter();
 
     jl_function_t *start_client = jl_base_module ?
-        (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("_start")) : NULL;
+        (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("_start"), ct->world_age) : NULL;
 
     if (start_client) {
         int ret = 1;

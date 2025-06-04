@@ -62,7 +62,7 @@ void jl_module_run_initializer(jl_module_t *m)
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_value_t *f = jl_get_global_value(m, jl_symbol("__init__"));
+        jl_value_t *f = jl_get_global_value(m, jl_symbol("__init__"), ct->world_age);
         if (f != NULL) {
             JL_GC_PUSH1(&f);
             jl_apply(&f, 1);
@@ -104,10 +104,10 @@ jl_array_t *jl_get_loaded_modules(void)
     return NULL;
 }
 
-static int jl_is__toplevel__mod(jl_module_t *mod)
+static int jl_is__toplevel__mod(jl_module_t *mod, jl_task_t *ct)
 {
     return jl_base_module &&
-        (jl_value_t*)mod == jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"));
+        (jl_value_t*)mod == jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
 }
 
 // TODO: add locks around global state mutation operations
@@ -129,7 +129,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         jl_type_error("module", (jl_value_t*)jl_symbol_type, (jl_value_t*)name);
     }
 
-    int is_parent__toplevel__ = jl_is__toplevel__mod(parent_module);
+    int is_parent__toplevel__ = jl_is__toplevel__mod(parent_module, ct);
     // If we have `Base`, don't also try to import `Core` - the `Base` exports are a superset.
     // While we allow multiple imports of the same binding from different modules, various error printing
     // performs reflection on which module a binding came from and we'd prefer users see "Base" here.
@@ -247,19 +247,18 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     return (jl_value_t*)newm;
 }
 
-static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast, const char **toplevel_filename, int *toplevel_lineno)
+static jl_value_t *jl_eval_dot_expr(jl_task_t *ct, jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast, const char **toplevel_filename, int *toplevel_lineno)
 {
-    jl_task_t *ct = jl_current_task;
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 3);
     args[1] = jl_toplevel_eval_flex(m, x, fast, 0, toplevel_filename, toplevel_lineno);
     args[2] = jl_toplevel_eval_flex(m, f, fast, 0, toplevel_filename, toplevel_lineno);
     if (jl_is_module(args[1])) {
         JL_TYPECHK(getglobal, symbol, args[2]);
-        args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2]);
+        args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2], ct->world_age);
     }
     else {
-        args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
+        args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"), ct->world_age);
         size_t last_age = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         args[0] = jl_apply(args, 3);
@@ -604,6 +603,16 @@ JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno)
 {
     jl_task_t *ct = jl_current_task;
+    if (jl_is_globalref(e)) {
+        return jl_eval_globalref((jl_globalref_t*)e, ct->world_age);
+    }
+    if (jl_is_symbol(e)) {
+        char *n = jl_symbol_name((jl_sym_t*)e), *n0 = n;
+        while (*n == '_') ++n;
+        if (*n == 0 && n > n0)
+            jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno, "all-underscore identifiers are write-only and their values cannot be used in expressions");
+        return jl_eval_global_var(m, (jl_sym_t*)e, ct->world_age);
+    }
     if (!jl_is_expr(e)) {
         if (jl_is_linenode(e)) {
             *toplevel_lineno = jl_linenode_line(e);
@@ -617,12 +626,6 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_lineno = *toplevel_lineno;
             return jl_nothing;
         }
-        if (jl_is_symbol(e)) {
-            char *n = jl_symbol_name((jl_sym_t*)e), *n0 = n;
-            while (*n == '_') ++n;
-            if (*n == 0 && n > n0)
-                jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno, "all-underscore identifiers are write-only and their values cannot be used in expressions");
-        }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
     }
 
@@ -635,7 +638,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         jl_value_t *rhs = jl_exprarg(ex, 1);
         // only handle `a.b` syntax here, so qualified names can be eval'd in pure contexts
         if (jl_is_quotenode(rhs) && jl_is_symbol(jl_fieldref(rhs, 0))) {
-            return jl_eval_dot_expr(m, lhs, rhs, fast, toplevel_filename, toplevel_lineno);
+            return jl_eval_dot_expr(ct, m, lhs, rhs, fast, toplevel_filename, toplevel_lineno);
         }
     }
 
@@ -727,7 +730,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     }
     else if (jl_is_symbol(ex)) {
         JL_GC_POP();
-        return jl_eval_global_var(m, (jl_sym_t*)ex);
+        return jl_eval_global_var(m, (jl_sym_t*)ex, ct->world_age);
     }
     else if (head == NULL) {
         JL_GC_POP();
@@ -804,7 +807,7 @@ JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
                 }
             }
             JL_UNLOCK(&jl_modules_mutex);
-            if (!open && !jl_is__toplevel__mod(m)) {
+            if (!open && !jl_is__toplevel__mod(m, jl_current_task)) {
                 const char* name = jl_symbol_name(m->name);
                 jl_errorf("Evaluation into the closed module `%s` breaks incremental compilation "
                           "because the side effects will not be permanent. "
