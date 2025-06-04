@@ -2286,3 +2286,11 @@ end
         @test_throws "no method matching $Int(::$Infinity)" similar(ones(2), OneToInf())
     end
 end
+
+@testset "iterate for linear indexing" begin
+    A = [1 2; 3 4]
+    v = view(A, :)
+    @test sum(x for x in v) == sum(A)
+    v2 = view(A, Base.IdentityUnitRange(1:length(v)))
+    @test sum(x for x in v2) == sum(A)
+end
