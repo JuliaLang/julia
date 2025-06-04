@@ -11,11 +11,6 @@ Serialization.serialize
 Serialization.deserialize
 Serialization.writeheader
 ```
-## File Format and Conventions
-
-!!! note
-    Julia's binary serialization format is not guaranteed to be stable across Julia versions or platforms.
-    It is best suited for temporary storage of data within the same Julia version.
 
 ### Recommended File Extension
 
