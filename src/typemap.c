@@ -31,7 +31,7 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
         return jl_type_extract_name(jl_unwrap_vararg(t1), invariant);
     }
     else if (jl_is_typevar(t1)) {
-        return jl_type_extract_name(((jl_tvar_t*)t1)->ub, invariant);
+        return jl_type_extract_name(((jl_tvar_t*)t1)->ub, 0);
     }
     else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type || t1 == (jl_value_t*)jl_typeofbottom_type->super) {
         return (jl_value_t*)jl_typeofbottom_type->name; // put Union{} and typeof(Union{}) and Type{Union{}} together for convenience
@@ -569,10 +569,8 @@ int has_covariant_var(jl_datatype_t *ttypes, jl_tvar_t *tv)
 
 void typemap_slurp_search(jl_typemap_entry_t *ml, struct typemap_intersection_env *closure)
 {
-    // n.b. we could consider mt->max_args here too, so this optimization
-    //      usually works even if the user forgets the `slurp...` argument, but
-    //      there is discussion that parameter may be going away? (and it is
-    //      already not accurately up-to-date for all tables currently anyways)
+    // TODO: we should consider nparams(closure->type) here too, so this optimization
+    //      usually works even if the user forgets the `slurp...` argument
     if (closure->search_slurp && ml->va) {
         jl_value_t *sig = jl_unwrap_unionall((jl_value_t*)ml->sig);
         size_t nargs = jl_nparams(sig);

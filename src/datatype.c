@@ -702,6 +702,7 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     // Should never happen
                     throw_ovf(should_malloc, desc, st, fsz);
                 desc[i].isptr = 0;
+
                 if (jl_is_uniontype(fld)) {
                     fsz += 1; // selector byte
                     zeroinit = 1;
@@ -709,6 +710,11 @@ void jl_compute_field_offsets(jl_datatype_t *st)
                     isbitsegal = 0;
                 }
                 else {
+                    if (fsz > jl_datatype_size(fld)) {
+                        // We have to pad the size to integer size class, but it means this has some padding
+                        isbitsegal = 0;
+                        haspadding = 1;
+                    }
                     uint32_t fld_npointers = ((jl_datatype_t*)fld)->layout->npointers;
                     if (((jl_datatype_t*)fld)->layout->flags.haspadding)
                         haspadding = 1;

@@ -572,6 +572,32 @@ fLargeTable(::Union, ::Union) = "b"
 @test length(methods(fLargeTable)) == 205
 @test fLargeTable(Union{Int, Missing}, Union{Int, Missing}) == "b"
 
+# issue #58479
+fLargeTable(::Type) = "Type"
+fLargeTable(::Type{<:DataType}) = "DataType"
+@test fLargeTable(Type) == "Type"
+@test fLargeTable(DataType) == "DataType"
+@test fLargeTable(Type{DataType}) == "DataType"
+@test fLargeTable(Type{UnionAll}) == "DataType"
+@test fLargeTable(Type{Int}) == "DataType"
+@test fLargeTable(Type{Vector}) == "Type"
+@test fLargeTable(Type{Type{Union{}}}) == "DataType"
+@test fLargeTable(Type{Union{}}) == "Type"
+@test fLargeTable(Union{}) == "DataType"
+@test fLargeTable(Type{<:DataType}) == "Type"
+fLargeTable(::Type{<:UnionAll}) = "UnionAll"
+@test fLargeTable(UnionAll) == "UnionAll"
+@test fLargeTable(Type{Vector}) == "UnionAll"
+@test fLargeTable(Type{Int}) == "DataType"
+@test fLargeTable(Type{Type{Union{}}}) == "DataType"
+@test fLargeTable(Type{Union{}}) == "Type"
+@test_throws MethodError fLargeTable(Union{})
+@test fLargeTable(Type{<:DataType}) == "Type"
+@test fLargeTable(Type{Vector{T}} where T) == "DataType"
+@test fLargeTable(Union{DataType,Type{Vector{T}} where T}) == "DataType"
+@test fLargeTable(Union{DataType,UnionAll,Type{Vector{T}} where T}) == "Type"
+@test fLargeTable(Union{Type{Vector},Type{Vector{T}} where T}) == "Type"
+
 # issue #15280
 function f15280(x) end
 @test functionloc(f15280)[2] > 0
@@ -931,6 +957,7 @@ f(x::Int; y=3) = x + y
 @test hasmethod(f, Tuple{Int})
 @test hasmethod(f, Tuple{Int}, ())
 @test hasmethod(f, Tuple{Int}, (:y,))
+@test !hasmethod(f, Tuple{Int}, (:x,))
 @test !hasmethod(f, Tuple{Int}, (:jeff,))
 @test !hasmethod(f, Tuple{Int}, (:y,), world=typemin(UInt))
 g(; b, c, a) = a + b + c
