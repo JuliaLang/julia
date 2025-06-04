@@ -1247,7 +1247,7 @@ _check_inrange(state, inds) = state in inds
 _check_inrange(state::Int, inds::AbstractOneTo{Int}) = (state - 1)%UInt < length(inds)%UInt
 function _iterate(A::AbstractArray, state::Integer)
     _check_inrange(state, eachindex(IndexLinear(), A)) || return nothing
-    @inbounds(A[state]), state + 1
+    @inbounds(A[state]), state + oneunit(state)
 end
 
 isempty(a::AbstractArray) = (length(a) == 0)
