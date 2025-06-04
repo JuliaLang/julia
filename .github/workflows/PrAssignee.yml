@@ -49,45 +49,29 @@ jobs:
             console.log('oldPrAssignees: ', oldPrAssignees);
             const prAuthor = context.payload.pull_request.user.login;
 
-            // Check if the PR is opened by a collaborator on the repo (aka a committer).
-            // We use the /repos/{owner}/{repo}/collaborators/{username} endpoint to avoid
-            // neeing org scope permissions.
-            const isCollaboratorResponseObj = await github.request('GET /repos/{owner}/{repo}/collaborators/{username}', {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              username: prAuthor,
-              headers: {
-                'X-GitHub-Api-Version': '2022-11-28'
-              }
-            }).catch((error) => {
-              // So, I'm not sure if the error is being thrown by `@octokit/request.js` or
-              // `@octokit/plugin-retry.js`. I suspect that the initial error is thrown by
-              // `request.js`, and is subsequently propagated by `plugin-retry.js`.
-              //
-              // Anyway, the docs for `request.js` say the following:
-              //
-              // > If an error occurs, the promise is rejected with an `error` object
-              //> containing 3 keys to help with debugging:
-              // >
-              // > - `error.status` The http response status code
-              // > - `error.request` The request options such as `method`, `url` and `data`
-              // > - `error.response` The http response object with `url`, `headers`, and `data`
-              //
-              // Source: https://github.com/octokit/request.js/blob/main/README.md#request
-              //
-              // So, inside this `.catch()`, we simply return that `error` object.
-
-              return error;
-            });
-            if (isCollaboratorResponseObj.status == 204) {
-              var isCollaborator = true;
-            } else if (isCollaboratorResponseObj.status == 404) {
-              var isCollaborator = false;
-            } else {
-              console.error('Unable to process the response from checkCollaborator');
-              console.error('isCollaboratorResponseObj: ', isCollaboratorResponseObj);
-              var isCollaborator = false;
-            }
+            // Check if the PR is opened by a collaborator on the repo, aka someone with write (commit) permissions or higher.
+            const relevantPerms = [
+              // 'triage', // Uncomment this line if you don't want PRs from triagers to get auto-assignees.
+              'push',
+              'maintain',
+              'admin',
+            ]
+            const allCollaboratorsNestedPromises = relevantPerms.map(
+              (perm) => github.paginate(
+                // We use the `/repos/{owner}/{repo}/collaborators` endpoint to avoid needing org scope permissions:
+                '/repos/{owner}/{repo}/collaborators',
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  per_page: 100,
+                  permission: perm,
+                },
+                (response) => response.data.map((collaboratorInfo) => collaboratorInfo.login),
+              )
+            )
+            const allCollaboratorsNested = await Promise.all(allCollaboratorsNestedPromises);
+            const allCollaboratorsFlattened = allCollaboratorsNested.flat();
+            const isCollaborator = allCollaboratorsFlattened.includes(prAuthor);
 
             console.log('prAuthor: ', prAuthor);
             console.log('isCollaborator: ', isCollaborator);
@@ -200,17 +184,17 @@ jobs:
               weDidEncounterError = true;
               console.log(`ERROR: Failed to assign @${selectedAssignee}`);
             }
-            const newPrLabels = updatedPrData
-              .data
-              .labels
-              .map(element => element.name)
-            console.log('newPrLabels: ', newPrLabels);
-            if (newPrLabels.includes(prReviewLabel)) {
-              console.log('Successfully added prReviewLabel');
-            } else {
-              weDidEncounterError = true;
-              console.log('ERROR: Failed to add add prReviewLabel');
-            }
+            // const newPrLabels = updatedPrData
+            //   .data
+            //   .labels
+            //   .map(element => element.name)
+            // console.log('newPrLabels: ', newPrLabels);
+            // if (newPrLabels.includes(prReviewLabel)) {
+            //   console.log('Successfully added prReviewLabel');
+            // } else {
+            //   weDidEncounterError = true;
+            //   console.log('ERROR: Failed to add add prReviewLabel');
+            // }
 
             // Post a comment
             const commentBody = `Hello! I am a bot.\n\nThank you for your pull request!\n\nI have assigned \`@${selectedAssignee}\` to this pull request.\n\n\`@${selectedAssignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.`
