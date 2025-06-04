@@ -927,7 +927,7 @@ function finish_show_ir(io::IO, cfg::CFG, config::IRShowConfig)
     return nothing
 end
 
-function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
+function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir; verbose_linetable=get(io, :verbose_linetable, false));
                  pop_new_node! = new_nodes_iter(ir))
     used = stmts_used(io, ir)
     cfg = ir.cfg
@@ -952,7 +952,7 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
     finish_show_ir(io, cfg, config)
 end
 
-function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir))
+function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir; verbose_linetable=get(io, :verbose_linetable, false)))
     cfg = compact.ir.cfg
 
 
