@@ -5184,10 +5184,12 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
         if (jl_is_method_instance(lival.constant)) {
             mi = (jl_method_instance_t*)lival.constant;
         }
-        else {
+        else if (jl_is_code_instance(lival.constant)) {
             ci = lival.constant;
-            assert(jl_is_code_instance(ci));
             mi = jl_get_ci_mi((jl_code_instance_t*)ci);
+        } else {
+            emit_error(ctx, "(Internal ERROR - IR Validity): Invoke target is not a method instance or code instance");
+            return jl_cgval_t();
         }
         assert(jl_is_method_instance(mi));
         if (mi == ctx.linfo) {
