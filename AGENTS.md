@@ -51,6 +51,17 @@ corresponding test to ensure that the test is still passing with your changes.
 - Write one comment at the top of the test to explain what is being tested.
   Otherwise keep comments minimal.
 
+### External dependencies
+
+When modifying external dependencies (patches in `deps/patches/` or version updates in `deps/`):
+
+1. Always test builds with `USE_BINARYBUILDER=0` to ensure source builds work correctly
+2. For patches to external libraries:
+   - Verify the patch applies cleanly by running the extraction and patch steps
+   - Test the full build of the dependency: `make -C deps USE_BINARYBUILDER=0 compile-<depname>`
+   - Prefer using the full upstream commit in `git am` format (e.g., `git format-patch`) which includes proper commit metadata
+3. When updating dependency versions, ensure all associated patches still apply
+
 ### Writing code
 After writing code, look up the docstring for each function you used. If there
 are recommendations or additional considerations that apply to these functions,
