@@ -29,12 +29,6 @@ Base.size(a::SizedArray) = size(typeof(a))
 Base.size(::Type{<:SizedArray{SZ}}) where {SZ} = SZ
 Base.getindex(A::SizedArray, i...) = getindex(A.data, i...)
 Base.zero(::Type{T}) where T <: SizedArray = SizedArray{size(T)}(zeros(eltype(T), size(T)))
-function Base.one(::Type{SizedMatrix{SZ,T,A}}) where {SZ,T,A}
-    allequal(SZ) || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
-    D = diagm(fill(one(T), SZ[1]))
-    SizedArray{SZ}(convert(A, D))
-end
-Base.parent(S::SizedArray) = S.data
 +(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = SizedArray{SZ}(S1.data + S2.data)
 ==(S1::SizedArray{SZ}, S2::SizedArray{SZ}) where {SZ} = S1.data == S2.data
 function *(S1::SizedArray, S2::SizedArray)
