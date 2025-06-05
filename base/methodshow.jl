@@ -216,7 +216,7 @@ show(io::IO, ::MIME"text/plain", m::Method; kwargs...) = show_method(io, m; kwar
 
 function show_method(io::IO, m::Method;
                      modulecolor = :light_black, digit_align_width = 1,
-                     print_signature_only::Bool = get(io, :print_signature_only, false)::Bool)
+                     print_signature_only::Bool = get(io, :print_method_signature_only, false)::Bool)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
