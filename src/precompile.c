@@ -139,7 +139,6 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         }
     }
 
-    assert(jl_precompile_toplevel_module == NULL);
     void *native_code = NULL;
 
     bool_t emit_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
