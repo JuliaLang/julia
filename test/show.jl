@@ -2885,3 +2885,11 @@ end
     @test_repr """:(var"\a\b\t\n\v\f\r\e" = 1)"""
     @test_repr """:(var"\x01\u03c0\U03c0" = 1)"""
 end
+
+# test `print_signature_only::Bool` argument of `Base.show_method`
+f_show_method(x::T) where T<:Integer = :integer
+let io = IOBuffer()
+    m = only(methods(f_show_method))
+    Base.show_method(io, m; print_signature_only=false)
+    @test "f_show_method(x::T) where T<:Integer" == String(take!(io))
+end
