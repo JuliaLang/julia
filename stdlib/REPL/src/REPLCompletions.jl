@@ -330,7 +330,8 @@ end
 
 const PATH_cache_lock = Base.ReentrantLock()
 const PATH_cache = Set{String}()
-PATH_cache_task::Union{Task,Nothing} = nothing # used for sync in tests
+PATH_cache_task::Union{Task,Nothing} = nothing
+PATH_cache_condition::Union{Threads.Condition, Nothing} = nothing # used for sync in tests
 next_cache_update::Float64 = 0.0
 function maybe_spawn_cache_PATH()
     global PATH_cache_task, next_cache_update
@@ -339,7 +340,11 @@ function maybe_spawn_cache_PATH()
         time() < next_cache_update && return
         PATH_cache_task = Threads.@spawn begin
             REPLCompletions.cache_PATH()
-            @lock PATH_cache_lock PATH_cache_task = nothing # release memory when done
+            @lock PATH_cache_lock begin
+                next_cache_update = time() + 10 # earliest next update can run is 10s after
+                PATH_cache_task = nothing # release memory when done
+                PATH_cache_condition !== nothing && notify(PATH_cache_condition)
+            end
         end
         Base.errormonitor(PATH_cache_task)
     end
@@ -349,8 +354,6 @@ end
 function cache_PATH()
     path = get(ENV, "PATH", nothing)
     path isa String || return
-
-    global next_cache_update
 
     # Calling empty! on PATH_cache would be annoying for async typing hints as completions would temporarily disappear.
     # So keep track of what's added this time and at the end remove any that didn't appear this time from the global cache.
@@ -414,7 +417,6 @@ function cache_PATH()
 
     @lock PATH_cache_lock begin
         intersect!(PATH_cache, this_PATH_cache) # remove entries from PATH_cache that weren't found this time
-        next_cache_update = time() + 10 # earliest next update can run is 10s after
     end
 
     @debug "caching PATH files took $t seconds" length(pathdirs) length(PATH_cache)
