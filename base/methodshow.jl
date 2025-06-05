@@ -252,7 +252,7 @@ function show_method(io::IO, m::Method;
         show_method_params(io, tv)
     end
 
-    if print_signature_only
+    if !print_signature_only
         if !(get(io, :compact, false)::Bool) # single-line mode
             println(io)
             digit_align_width += 4
