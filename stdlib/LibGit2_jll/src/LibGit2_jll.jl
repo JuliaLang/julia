@@ -7,7 +7,7 @@ using Base, Libdl, LibSSH2_jll
 if !(Sys.iswindows() || Sys.isapple())
     using OpenSSL_jll
 end
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     using CompilerSupportLibraries_jll
 end
 
@@ -31,8 +31,12 @@ const libgit2 = LazyLibrary(
     else
         error("LibGit2_jll: Library 'libgit2' is not available for $(Sys.KERNEL)")
     end;
-    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
-        LazyLibrary[libssh2, libgcc_s]
+    dependencies = if Sys.iswindows()
+        if Sys.WORD_SIZE == 32
+            LazyLibrary[libssh2, libgcc_s]
+        else
+            LazyLibrary[libssh2]
+        end
     elseif Sys.isfreebsd() || Sys.islinux()
         LazyLibrary[libssh2, libssl, libcrypto]
     else

@@ -7,7 +7,7 @@ using Base, Libdl, nghttp2_jll, LibSSH2_jll, Zlib_jll
 if !(Sys.iswindows() || Sys.isapple())
     using OpenSSL_jll
 end
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     using CompilerSupportLibraries_jll
 end
 
@@ -32,7 +32,11 @@ const libcurl = LazyLibrary(
         error("LibCURL_jll: Library 'libcurl' is not available for $(Sys.KERNEL)")
     end;
     dependencies = if Sys.iswindows()
-        LazyLibrary[libz, libnghttp2, libssh2, libgcc_s]
+        if  Sys.WORD_SIZE == 32
+            LazyLibrary[libz, libnghttp2, libssh2, libgcc_s]
+        else
+            LazyLibrary[libz, libnghttp2, libssh2]
+        end
     elseif Sys.islinux() || Sys.isfreebsd()
         LazyLibrary[libz, libnghttp2, libssh2, libssl, libcrypto]
     elseif Sys.isapple()

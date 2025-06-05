@@ -26,7 +26,7 @@ const libopenlibm = LazyLibrary(
         BundledLazyLibraryPath("libopenlibm.so.4")
     end,
     dependencies = if Sys.iswindows()
-        LazyLibrary[CompilerSupportLibraries_jll.libgcc_s]
+        LazyLibrary[libgcc_s]
     else
         LazyLibrary[]
     end

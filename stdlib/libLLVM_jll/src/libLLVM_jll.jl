@@ -3,7 +3,11 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/libLLVM_jll.jl
 
 baremodule libLLVM_jll
-using Base, Libdl, Zlib_jll, Zstd_jll, CompilerSupportLibraries_jll
+using Base, Libdl, Zlib_jll, Zstd_jll
+
+if !Sys.isapple()
+    using CompilerSupportLibraries_jll
+end
 
 export libLLVM
 
@@ -33,7 +37,9 @@ const libLLVM = LazyLibrary(
 )
 
 function eager_mode()
-    CompilerSupportLibraries_jll.eager_mode()
+    @static if @isdefined CompilerSupportLibraries_jll
+        CompilerSupportLibraries_jll.eager_mode()
+    end
     Zlib_jll.eager_mode()
     # Zstd_jll.eager_mode() # Not lazy yet
     dlopen(libLLVM)

@@ -3,10 +3,14 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibSSH2_jll.jl
 
 baremodule LibSSH2_jll
-using Base, Libdl, Zlib_jll
-if Sys.iswindows()
+using Base, Libdl
+if Sys.isfreebsd() || Sys.isapple()
+    using Zlib_jll
+end
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     using CompilerSupportLibraries_jll
-else
+end
+if !Sys.iswindows()
     using OpenSSL_jll
 end
 
@@ -31,7 +35,11 @@ const libssh2 = LazyLibrary(
         error("LibSSH2_jll: Library 'libssh2' is not available for $(Sys.KERNEL)")
     end;
     dependencies = if Sys.iswindows()
-        LazyLibrary[libgcc_s]
+        if Sys.WORD_SIZE == 32
+            LazyLibrary[libgcc_s]
+        else
+            LazyLibrary[]
+        end
     elseif Sys.islinux()
         LazyLibrary[libcrypto]
     elseif Sys.isfreebsd() || Sys.isapple()
@@ -40,7 +48,9 @@ const libssh2 = LazyLibrary(
 )
 
 function eager_mode()
-    Zlib_jll.eager_mode()
+    @static if @isdefined Zlib_jll
+        Zlib_jll.eager_mode()
+    end
     @static if @isdefined CompilerSupportLibraries_jll
         CompilerSupportLibraries_jll.eager_mode()
     end

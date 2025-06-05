@@ -4,7 +4,9 @@
 baremodule SuiteSparse_jll
 using Base, Libdl
 using libblastrampoline_jll
-using CompilerSupportLibraries_jll
+if !(Sys.isfreebsd() || Sys.isapple())
+    using CompilerSupportLibraries_jll
+end
 
 export libamd, libbtf, libcamd, libccolamd, libcholmod, libcolamd, libklu, libldl, librbio, libspqr, libsuitesparseconfig, libumfpack
 
@@ -66,7 +68,7 @@ const libcolamd = LazyLibrary(
     else
         error("SuiteSparse_jll: Library 'libcolamd' is not available for $(Sys.KERNEL)")
     end;
-    dependencies = if Sys.iswindows()
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
         LazyLibrary[libsuitesparseconfig, libgcc_s]
     else
         LazyLibrary[libsuitesparseconfig]
@@ -224,7 +226,9 @@ const libumfpack = LazyLibrary(
 )
 
 function eager_mode()
-    CompilerSupportLibraries_jll.eager_mode()
+    @static if @isdefined CompilerSupportLibraries_jll
+        CompilerSupportLibraries_jll.eager_mode()
+    end
     libblastrampoline_jll.eager_mode()
 
     dlopen(libamd)

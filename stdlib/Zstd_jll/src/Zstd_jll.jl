@@ -4,7 +4,7 @@
 #
 baremodule Zstd_jll
 using Base, Libdl
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     using CompilerSupportLibraries_jll
 end
 
@@ -28,7 +28,7 @@ const libzstd = LazyLibrary(
     else
         error("Zstd_jll: Library 'libzstd' is not available for $(Sys.KERNEL)")
     end;
-    dependencies = if Sys.iswindows()
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
         LazyLibrary[libgcc_s]
     else
         LazyLibrary[]

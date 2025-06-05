@@ -3,7 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/nghttp2_jll.jl
 baremodule nghttp2_jll
 using Base, Libdl
-if Sys.iswindows()
+if Sys.iswindows() && Sys.WORD_SIZE == 32
     using CompilerSupportLibraries_jll
 end
 
@@ -25,7 +25,7 @@ const libnghttp2 = LazyLibrary(
     else
         BundledLazyLibraryPath("libnghttp2.so.14")
     end,
-    dependencies = if Sys.iswindows()
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
         LazyLibrary[libgcc_s]
     else
         LazyLibrary[]
