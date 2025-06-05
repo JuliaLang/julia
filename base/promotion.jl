@@ -333,6 +333,7 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
     end
     type_is_bottom(::Type{X}) where {X} = X === Bottom
     normalize_type(::Type{X}) where {X} = X
+    normalize_promote_rule(::Type{A}, ::Type{B}) where {A, B} = normalize_type(promote_rule(A, B))
     detect_loop(::Type{A}, ::Type{B}) where {A, B} = _types_are_equal(T, A) && _types_are_equal(S, B)
     if type_is_bottom(T)
         return S
@@ -341,8 +342,8 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
         return T
     end
     # Try promote_rule in both orders.
-    st = normalize_type(promote_rule(S, T))
-    ts = normalize_type(promote_rule(T, S))
+    st = normalize_promote_rule(S, T)
+    ts = normalize_promote_rule(T, S)
     # If no promote_rule is defined, both directions give Bottom. In that
     # case use typejoin on the original types instead.
     if type_is_bottom(st) && type_is_bottom(ts)
