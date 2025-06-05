@@ -364,7 +364,7 @@ let err = tempname(),
             @test startswith(errstr, """start
                 end
                 Internal error: encountered unexpected error during compilation of f_broken_code:
-                ErrorException(\"unsupported or misplaced expression \"invalid\" in function f_broken_code\")
+                ErrorException(\"unsupported or misplaced expression \\\"invalid\\\" in function f_broken_code\")
                 """) || errstr
             @test !endswith(errstr, "\nend\n") || errstr
         end
