@@ -2890,6 +2890,6 @@ end
 f_show_method(x::T) where T<:Integer = :integer
 let io = IOBuffer()
     m = only(methods(f_show_method))
-    Base.show_method(io, m; print_signature_only=false)
+    Base.show_method(io, m; print_signature_only=true)
     @test "f_show_method(x::T) where T<:Integer" == String(take!(io))
 end
