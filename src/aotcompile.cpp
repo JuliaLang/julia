@@ -941,15 +941,24 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     params.temporary_roots_set.clear();
     JL_GC_POP();
 
+    // Collect sysimg-internal symbols that will be mangled, and made hidden if external.
+    StringSet<> internal_names;
+    auto merge_gvmap_names = [&](auto map) {
+        for (auto &[_, gv] : map)
+            internal_names.insert(gv->getName());
+    };
+    merge_gvmap_names(params.symMapDefault);
+    merge_gvmap_names(params.symMapExe);
+    merge_gvmap_names(params.symMapDll);
+    merge_gvmap_names(params.symMapDlli);
+    for (auto &[_, gv] : params.libMapGV) {
+        internal_names.insert(gv.first->getName());
+        merge_gvmap_names(gv.second);
+    }
+
     // Collect gvars before (potentially) merging and destroying global_targets.
     // Also creates definitions in the combined module.
-    StringSet<> gvars_names;
-    DenseSet<GlobalValue *> gvars_set;
     SmallVector<std::string, 0> gvars;
-    auto check_gvar = [&](GlobalValue *v) {
-        assert(gvars_set.insert(v).second && "Duplicate gvar in params!");
-        assert(gvars_names.insert(v->getName()).second && "Duplicate gvar name in params!");
-    };
     auto make_gvar = [&](GlobalVariable *decl) {
         // Ensure a definition exists for this GlobalVariable in the combined module
         auto name = decl->getName();
@@ -957,6 +966,8 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
         if (!gv)
             gv = new GlobalVariable(combined_mod, decl->getType(), false,
                                     GlobalVariable::ExternalLinkage, nullptr, name);
+        internal_names.insert(name);
+        gv->setVisibility(GlobalVariable::HiddenVisibility);
         gv->setInitializer(Constant::getNullValue(decl->getValueType()));
         gv->copyAttributesFrom(decl);
     };
@@ -966,7 +977,6 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     data->jl_external_to_llvm.reserve(params.external_fns.size());
     for (auto [val, decl] : params.global_targets) {
         make_gvar(decl);
-        check_gvar(decl);
         data->jl_value_to_llvm.push_back(val);
         gvars.push_back(decl->getName().str());
     }
@@ -975,25 +985,8 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
         make_gvar(decl);
         assert(specsig && "Error external_fns doesn't handle non-specsig yet");
         (void)specsig;
-        check_gvar(decl);
         data->jl_external_to_llvm.push_back(ci);
         gvars.push_back(decl->getName().str());
-    }
-
-    // Miscellaneous Julia-internal names that must be mangled and made hidden
-    StringSet<> other_names;
-    auto merge_gvmap_names = [&](auto map) {
-        for (auto &[_, gv] : map)
-            other_names.insert(gv->getName());
-    };
-    merge_gvmap_names(params.mergedConstants);
-    merge_gvmap_names(params.symMapDefault);
-    merge_gvmap_names(params.symMapExe);
-    merge_gvmap_names(params.symMapDll);
-    merge_gvmap_names(params.symMapDlli);
-    for (auto &[_, gv] : params.libMapGV) {
-        other_names.insert(gv.first->getName());
-        merge_gvmap_names(gv.second);
     }
 
     // Merge everything (invalidates GlobalValue pointers)
@@ -1019,7 +1012,6 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     }
 
     // Create declarations for functions and choose indices
-    StringSet<> fvars_names;
     auto declare_func = [&](jl_compiled_function_t &func, StringRef name) {
         Function *decl;
         if (data->split_modules) {
@@ -1029,12 +1021,12 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
                 decl = Function::Create(F->getFunctionType(), Function::ExternalLinkage,
                                         name, combined_mod);
             decl->copyAttributesFrom(F);
-            fvars_names.insert(name);
+            internal_names.insert(name);
         }
         else {
             // func.M has been linked into combined_mod, no need to declare
             decl = combined_mod.getFunction(name);
-            fvars_names.insert(name);
+            internal_names.insert(name);
         }
         return decl;
     };
@@ -1081,24 +1073,13 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvm
     CreateNativeGlobals += data->jl_sysimg_gvars.size() + data->jl_external_to_llvm.size();
     CreateNativeMethods += data->jl_sysimg_fvars.size();
 
-    StringSet<> hidden_names;
-    auto merge_names = [&](StringSet<> &s) {
-        hidden_names.insert(s.begin(), s.end());
-        s.clear();
-    };
-    merge_names(gvars_names);
-    merge_names(fvars_names);
-    merge_names(other_names);
-
     auto rename_global_objs = [&](Module &M) {
         for (auto &gv : M.global_objects()) {
-            auto name = gv.getName();
-            if (!hidden_names.contains(name))
-                continue;
-            // Worth setting dso_local even if it implied by hidden?
-            if (gv.hasExternalLinkage())
-                gv.setVisibility(GlobalObject::HiddenVisibility);
-            makeSafeName(gv);
+            if (internal_names.contains(gv.getName())) {
+                makeSafeName(gv);
+                if (gv.hasExternalLinkage())
+                    gv.setVisibility(GlobalObject::HiddenVisibility);
+            }
         }
     };
     rename_global_objs(*data->combined_mod.getModuleUnlocked());

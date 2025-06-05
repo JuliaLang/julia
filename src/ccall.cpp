@@ -249,7 +249,7 @@ static GlobalVariable *emit_plt_thunk(
                                              GlobalVariable::ExternalLinkage,
                                              plt,
                                              fname + "_got");
-    // Should be hidden to avoid indirect through the non-julia GOT
+    // Should be hidden to avoid indirection through the non-julia GOT
     got->setVisibility(GlobalVariable::HiddenVisibility);
     if (runtime_lib) {
         got->addAttribute("julia.libname", f_lib);
