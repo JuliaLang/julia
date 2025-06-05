@@ -3065,7 +3065,7 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                     rt = abstract_eval_value(interp, stmt.val, currstate, frame)
                     rt = widenreturn(rt, BestguessInfo(interp, bestguess, nargs, slottypes, currstate))
                     # narrow representation of bestguess slightly to prepare for tmerge with rt
-                    if rt isa InterConditional && bestguess isa Const
+                    if rt isa InterConditional && bestguess isa Const && bestguess.val isa Bool
                         let slot_id = rt.slot
                             old_id_type = slottypes[slot_id]
                             if bestguess.val === true && rt.elsetype !== Bottom
@@ -3073,6 +3073,15 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState)
                             elseif bestguess.val === false && rt.thentype !== Bottom
                                 bestguess = InterConditional(slot_id, Bottom, old_id_type)
                             end
+                        end
+                    # or narrow representation of rt slightly to prepare for tmerge with bestguess
+                    elseif bestguess isa InterConditional && rt isa Const && rt.val isa Bool
+                        slot_id = bestguess.slot
+                        old_id_type = widenconditional(slottypes[slot_id])
+                        if rt.val === true && bestguess.elsetype !== Bottom
+                            rt = InterConditional(slot_id, old_id_type, Bottom)
+                        elseif rt.val === false && bestguess.thentype !== Bottom
+                            rt = InterConditional(slot_id, Bottom, old_id_type)
                         end
                     end
                     # copy limitations to return value

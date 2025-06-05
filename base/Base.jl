@@ -330,10 +330,6 @@ using .Libc: getpid, gethostname, time, memcpy, memset, memmove, memcmp
 const libblas_name = "libblastrampoline" * (Sys.iswindows() ? "-5" : "")
 const liblapack_name = libblas_name
 
-# Logging
-include("logging.jl")
-using .CoreLogging
-
 # Concurrency
 include("linked_list.jl")
 include("condition.jl")
@@ -344,6 +340,10 @@ include("partr.jl")
 include("task.jl")
 include("threads_overloads.jl")
 include("weakkeydict.jl")
+
+# Logging
+include("logging.jl")
+using .CoreLogging
 
 include("env.jl")
 

@@ -959,6 +959,12 @@ end
     @test Iterators.tail_if_any((1,)) == ()
 end
 
+@testset "issue #58109" begin
+    i = Iterators.map(identity, 3)
+    j = Iterators.map(sqrt, 7)
+    @test (@inferred Base.IteratorSize(i)) === @inferred Base.IteratorSize(eltype([i, j]))
+end
+
 @testset "IteratorSize trait for zip" begin
     @test Base.IteratorSize(zip()) == Base.IsInfinite()                     # for zip of empty tuple
     @test Base.IteratorSize(zip((1,2,3), repeated(0))) == Base.HasLength()  # for zip of ::HasLength and ::IsInfinite
