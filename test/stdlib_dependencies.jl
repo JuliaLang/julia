@@ -173,7 +173,11 @@ try
             "vcruntime140",
             "msvcp140",
             "libwinpthread",
-            "ntdll"
+            "ntdll",
+            "crypt32",
+            "bcrypt",
+            "winhttp",
+            "secur32",
         ]
         return any(syslib -> lowercase(lib) == syslib, system_libs)
     end
