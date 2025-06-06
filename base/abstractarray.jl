@@ -1244,9 +1244,8 @@ function _iterate(A::AbstractArray, state::Tuple)
     A[y[1]], (state[1], tail(y)...)
 end
 function _iterate(A::AbstractArray, state::Integer)
-    inds = eachindex(IndexLinear(), A)
-    checkindex(Bool, inds, state) || return nothing
-    @inbounds(A[state]), state + step(inds)
+    checkbounds(Bool, A, state) || return nothing
+    @inbounds(A[state]), state + one(state)
 end
 
 isempty(a::AbstractArray) = (length(a) == 0)
