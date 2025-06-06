@@ -157,6 +157,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // heap-target-increment
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
+                        0, // show-eval
                         0, // task_metrics
                         -1, // timeout_for_safepoint_straggler_s
     };
@@ -344,6 +345,7 @@ static const char opts_hidden[]  =
     "                                               and can throw errors. With unsafe-warn warnings will be\n"
     "                                               printed for dynamic call sites that might lead to such\n"
     "                                               errors. In safe mode compile-time errors are given instead.\n"
+    " --show-eval={loc|full|no*}                    Show the expression being evaluated before eval.\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -397,6 +399,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_gc_threads,
            opt_permalloc_pkgimg,
            opt_trim,
+           opt_show_eval,
            opt_experimental_features,
     };
     static const char* const shortopts = "+vhqH:e:E:L:J:C:it:p:O:g:m:";
@@ -468,6 +471,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "hard-heap-limit", required_argument, 0, opt_hard_heap_limit },
         { "heap-target-increment", required_argument, 0, opt_heap_target_increment },
         { "trim",  optional_argument, 0, opt_trim },
+        { "show-eval",       optional_argument, 0, opt_show_eval },
         { 0, 0, 0, 0 }
     };
 
@@ -1038,6 +1042,16 @@ restart_switch:
                 jl_options.trim = JL_TRIM_UNSAFE_WARN;
             else
                 jl_errorf("julia: invalid argument to --trim={safe|no|unsafe|unsafe-warn} (%s)", optarg);
+            break;
+        case opt_show_eval:
+            if (optarg == NULL || !strcmp(optarg,"loc"))
+                jl_options.show_eval = 1;
+            else if (!strcmp(optarg,"full"))
+                jl_options.show_eval = 2;
+            else if (!strcmp(optarg,"no"))
+                jl_options.show_eval = 0;
+            else
+                jl_errorf("julia: invalid argument to --show-eval={yes|no} (%s)", optarg);
             break;
         case opt_task_metrics:
             if (!strcmp(optarg, "no"))
