@@ -10,7 +10,7 @@ while [`unsafe_wrap`](@ref) also supports abstract types.
 Use [`reinterpret`](@ref) to get a pointer with the same address but a different type.
 
 !!! warn
-    When T is an [`Union`](@ref) type, the pointer does not contain the necessary information
+    When T is a [`Union`](@ref) type, the pointer does not contain the necessary information
     to reconstruct what elements in the array had which type. Such pointers can't be use to
     retrieve any Julia objects.
 """
