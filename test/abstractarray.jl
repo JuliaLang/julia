@@ -2291,6 +2291,8 @@ end
     A = [1 2; 3 4]
     v = view(A, :)
     @test sum(x for x in v) == sum(A)
-    v2 = view(A, Base.IdentityUnitRange(1:length(v)))
+    v = view(A, 1:2:lastindex(A))
+    @test sum(x for x in v) == sum(A[1:2:end])
+    v2 = view(A, Base.IdentityUnitRange(1:length(A)))
     @test sum(x for x in v2) == sum(A)
 end
