@@ -9900,7 +9900,7 @@ void emit_always_inline(orc::ThreadSafeModule &result_m, jl_codegen_params_t &pa
                 src = (jl_code_info_t*)jl_atomic_load_relaxed(&codeinst->inferred);
                 jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
                 jl_method_t *def = mi->def.method;
-                if (src && (jl_value_t*)src != jl_nothing && jl_is_method(def) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
+                if (src && jl_is_string((jl_value_t*)src) && jl_is_method(def) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX)
                     src = jl_uncompress_ir(def, codeinst, (jl_value_t*)src);
                 if (src && jl_is_code_info(src) && jl_ir_inlining_cost((jl_value_t*)src) < UINT16_MAX) {
                     jl_llvm_functions_t decls = jl_emit_codeinst(result_m, codeinst, src, params); // contains safepoints
