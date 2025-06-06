@@ -92,9 +92,86 @@ function copy(c::CodeInfo)
 end
 
 
-==(x::Expr, y::Expr) = x.head === y.head && isequal(x.args, y.args)
-==(x::QuoteNode, y::QuoteNode) = isequal(x.value, y.value)
-==(stmt1::Core.PhiNode, stmt2::Core.PhiNode) = stmt1.edges == stmt2.edges && stmt1.values == stmt2.values
+function isequal_exprargs(head::Symbol, x::Array{Any,1}, y::Array{Any,1})
+    l = length(x)
+    l == length(y) || return false
+    for i = 1:l
+        if !isassigned(x, i)
+            # phi and phic values are permitted to be undef
+            isassigned(y, i) && return false
+        else
+            isassigned(y, i) || return false
+            xi = x[i]
+            yi = y[i]
+            xi isa typeof(yi) || return false
+            if !(xi === yi)
+                # c.f. list of types in copy_expr also
+                if head === :inert
+                    # XXX: this isn't quite right since ast.c violates this contract and
+                    # makes copies of the contents of QuoteNode and inert Expr, even though
+                    # that generally violates the semantics of `Base.quoted`
+                    return false
+                elseif xi isa Expr
+                    xi == (yi::Expr) || return false
+                elseif xi isa PhiNode
+                    xi == (yi::PhiNode) || return false
+                elseif xi isa PhiCNode
+                    xi == (yi::PhiCNode) || return false
+                elseif xi isa CodeInfo
+                    xi == (yi::CodeInfo) || return false
+                else
+                    return false
+                end
+            end
+        end
+    end
+    return true
+end
+
+# define == such that == inputs to parsing (including line numbers) yield == outputs from lowering (including all metadata)
+# (aside from cases where parsing just returns a number, which are ambiguous here)
+==(x::Expr, y::Expr) = x.head === y.head && isequal_exprargs(x.head, x.args, y.args)
+
+==(stmt1::Core.PhiNode, stmt2::Core.PhiNode) = isequal(stmt1.edges, stmt2.edges) && isequal_exprargs(:phi, stmt1.values, stmt2.values)
+
+==(stmt1::Core.PhiCNode, stmt2::Core.PhiCNode) = isequal_exprargs(:phic, stmt1.values, stmt2.values)
+
+function ==(stmt1::CodeInfo, stmt2::CodeInfo)
+    for i in 1:nfields(stmt1)
+        if !isdefined(stmt1, i)
+            isdefined(stmt2, i) && return false
+        else
+            isdefined(stmt2, i) || return false
+            f1 = getfield(stmt1, i)
+            f2 = getfield(stmt2, i)
+            f1 isa typeof(f2) || return false
+            if f1 isa Vector{Any}
+                # code or types vectors
+                isequal_exprargs(:code, f1, f2::Vector{Any}) || return false
+            elseif f1 isa DebugInfo
+                f1 == f2::DebugInfo || return false
+            elseif f1 isa Vector
+                # misc data
+                l = length(f1)
+                l == length(f2::Vector) || return false
+                for i = 1:l
+                    f1[i] === f2[i] || return false
+                end
+            else
+                # misc fields
+                f1 === f2 || return false
+            end
+        end
+    end
+    return true
+end
+
+function ==(x::DebugInfo, y::DebugInfo)
+    for i in 1:nfields(x)
+        getfield(x, i) == getfield(y, i) || return false
+    end
+    return true
+end
 
 """
     macroexpand(m::Module, x; recursive=true)
@@ -1662,14 +1739,41 @@ end
 is_meta_expr_head(head::Symbol) = head === :boundscheck || head === :meta || head === :loopinfo
 is_meta_expr(@nospecialize x) = isa(x, Expr) && is_meta_expr_head(x.head)
 
-function is_self_quoting(@nospecialize(x))
-    return isa(x,Number) || isa(x,AbstractString) || isa(x,Tuple) || isa(x,Type) ||
-        isa(x,Char) || x === nothing || isa(x,Function)
+"""
+    isa_ast_node(x)
+
+Return false if `x` is not interpreted specially by inference, lowering, or codegen.
+"""
+function isa_ast_node(@nospecialize x)
+    # c.f. Core.IR module, augmented with AST types
+    return x isa NewvarNode ||
+           x isa CodeInfo ||
+           x isa LineNumberNode ||
+           x isa GotoNode ||
+           x isa GotoIfNot ||
+           x isa EnterNode ||
+           x isa ReturnNode ||
+           x isa SSAValue ||
+           x isa SlotNumber ||
+           x isa Argument ||
+           x isa QuoteNode ||
+           x isa GlobalRef ||
+           x isa Symbol ||
+           x isa PiNode ||
+           x isa PhiNode ||
+           x isa PhiCNode ||
+           x isa UpsilonNode ||
+           x isa Expr
 end
 
-function quoted(@nospecialize(x))
-    return is_self_quoting(x) ? x : QuoteNode(x)
-end
+is_self_quoting(@nospecialize(x)) = !isa_ast_node(x)
+
+"""
+    quoted(x)
+
+Return `x` made safe for interpolating into an expression.
+"""
+quoted(@nospecialize(x)) = isa_ast_node(x) ? QuoteNode(x) : x
 
 # Implementation of generated functions
 function generated_body_to_codeinfo(ex::Expr, defmod::Module, isva::Bool)
