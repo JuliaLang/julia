@@ -2888,8 +2888,12 @@ end
 
 # test `print_signature_only::Bool` argument of `Base.show_method`
 f_show_method(x::T) where T<:Integer = :integer
-let io = IOBuffer()
-    m = only(methods(f_show_method))
-    Base.show_method(io, m; print_signature_only=true)
-    @test "f_show_method(x::T) where T<:Integer" == String(take!(io))
+let m = only(methods(f_show_method))
+    let io = IOBuffer()
+        Base.show_method(io, m; print_signature_only=true)
+        @test "f_show_method(x::T) where T<:Integer" == String(take!(io))
+    end
+    let s = sprint(show, m; context=:print_method_signature_only=>true)
+        @test "f_show_method(x::T) where T<:Integer" == s
+    end
 end
