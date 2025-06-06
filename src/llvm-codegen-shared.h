@@ -13,9 +13,6 @@
 
 #include "julia.h"
 
-#define STR(csym)           #csym
-#define XSTR(csym)          STR(csym)
-
 static constexpr std::nullopt_t None = std::nullopt;
 
 enum AddressSpace {

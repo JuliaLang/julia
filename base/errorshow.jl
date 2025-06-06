@@ -326,7 +326,7 @@ function showerror(io::IO, ex::MethodError)
         print(io, "\nUse square brackets [] for indexing an Array.")
     end
     # Check for local functions that shadow methods in Base
-    let name = ft.name.mt.name
+    let name = ft.name.singletonname
         if f_is_function && isdefined(Base, name)
             basef = getfield(Base, name)
             if basef !== f && hasmethod(basef, arg_types)
@@ -378,7 +378,7 @@ end
 
 function showerror(io::IO, exc::FieldError)
     @nospecialize
-    print(io, "FieldError: type $(exc.type |> nameof) has no field `$(exc.field)`")
+    print(io, "FieldError: type $(exc.type.name.wrapper) has no field `$(exc.field)`")
     Base.Experimental.show_error_hints(io, exc)
 end
 
@@ -1117,7 +1117,7 @@ Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 function fielderror_listfields_hint_handler(io, exc)
     fields = fieldnames(exc.type)
     if isempty(fields)
-        print(io, "; $(nameof(exc.type)) has no fields at all.")
+        print(io, "; $(exc.type.name.wrapper) has no fields at all.")
     else
         print(io, ", available fields: $(join(map(k -> "`$k`", fields), ", "))")
     end
