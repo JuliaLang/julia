@@ -71,20 +71,14 @@ jobs:
             )
             const allCollaboratorsNested = await Promise.all(allCollaboratorsNestedPromises);
             const allCollaboratorsFlattened = allCollaboratorsNested.flat();
+
+            // Skip BumpStdlibs.jl PRs
+            allCollaboratorsFlattened.push('DilumAluthgeBot');
+            
             const isCollaborator = allCollaboratorsFlattened.includes(prAuthor);
 
             console.log('prAuthor: ', prAuthor);
             console.log('isCollaborator: ', isCollaborator);
-
-            const hardcodedSkipTheseAuthorsList = [
-              // @DilumAluthgeBot makes the BumpStdlibs.jl PRs.
-              // Each BumpStdlibs.jl PR is triggered by a JuliaLang committer,
-              // and the PR body already pings the triggering committer.
-              // So we don't also need to auto-assign a PR assignee to BumpStdlibs.jl PRs.
-              'DilumAluthgeBot',
-            ];
-            const isHardcodedSkipme = hardcodedSkipTheseAuthorsList.includes(prAuthor);
-            console.log('isHardcodedSkipme: ', isHardcodedSkipme);
 
             // Load the list of assignable reviewers from the JuliaLang/pr-assignment repo at:
             // https://github.com/JuliaLang/pr-assignment/blob/main/users.txt
@@ -140,6 +134,7 @@ jobs:
             console.log('thisIsActionsRunnerDebugMode: ', thisIsActionsRunnerDebugMode);
 
             if (isCollaborator == true) {
+
               if (thisIsActionsRunnerDebugMode) {
                 // The PR author is a committer
                 // But thisIsActionsRunnerDebugMode is true, so we proceed to still run the rest of the script
@@ -148,19 +143,6 @@ jobs:
                 // The PR author is a committer, so we skip assigning them
                 console.log('Skipping PR authored by JuliaLang committer: ', prAuthor);
                 console.log('Note: If you want to run the full script (even though the PR author is a committer), simply re-run this job with Actions debug logging enabled');
-                return;
-              }
-            }
-
-            if (isHardcodedSkipme == true) {
-              if (thisIsActionsRunnerDebugMode) {
-                // The PR author is in the hardcoded "skip me" list
-                // But thisIsActionsRunnerDebugMode is true, so we proceed to still run the rest of the script
-                console.log('PR is authored by a skipme author, but thisIsActionsRunnerDebugMode is true, so we will still run the rest of the script: ', prAuthor);
-              } else {
-                // The PR author is a committer, so we skip assigning them
-                console.log('Skipping PR authored by a skipme author: ', prAuthor);
-                console.log('Note: If you want to run the full script (even though the PR author is a skipme author), simply re-run this job with Actions debug logging enabled');
                 return;
               }
             }
