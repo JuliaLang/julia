@@ -1194,7 +1194,7 @@ Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
 """
 function setprecision(f::Function, ::Type{T}, prec::Integer; kws...) where T
     depwarn("""
-            The fallback `setprecision(::Function, ...)` method is deprecated. Types should
+            The fallback `setprecision(::Function, ...)` method is deprecated. Packages overloading this method should
             implement their own specialization using `ScopedValue` instead.
             """, :setprecision)
     old_prec = precision(T)
