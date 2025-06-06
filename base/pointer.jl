@@ -3,7 +3,7 @@
 """
     Ptr{T}
 
-A memory address referring to data of type `T`. However there is no guarantee that the
+A memory address referring to data of type `T`. However, there is no guarantee that the
 memory is actually valid, or that it actually represents data of the specified type.
 Some operations like [`unsafe_load`](@ref) are only supported when T is an [`isbitstype`](@ref)
 while [`unsafe_wrap`](@ref) also supports abstract types.
