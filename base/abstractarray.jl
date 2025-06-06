@@ -1243,11 +1243,9 @@ function _iterate(A::AbstractArray, state::Tuple)
     y === nothing && return nothing
     A[y[1]], (state[1], tail(y)...)
 end
-_check_inrange(state, inds) = state in inds
-_check_inrange(state::Int, inds::AbstractOneTo{Int}) = (state - 1)%UInt < length(inds)%UInt
 function _iterate(A::AbstractArray, state::Integer)
     inds = eachindex(IndexLinear(), A)
-    _check_inrange(state, inds) || return nothing
+    checkindex(Bool, inds, state) || return nothing
     @inbounds(A[state]), state + step(inds)
 end
 
