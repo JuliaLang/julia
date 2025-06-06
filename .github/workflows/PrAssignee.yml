@@ -76,7 +76,6 @@ jobs:
             allCollaboratorsFlattened.push('DilumAluthgeBot');
             // Skip Dependabot PRs
             allCollaboratorsFlattened.push('dependabot');
-             
 
             const isCollaborator = allCollaboratorsFlattened.includes(prAuthor);
 
