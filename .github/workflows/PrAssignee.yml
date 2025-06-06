@@ -74,6 +74,9 @@ jobs:
 
             // Skip BumpStdlibs.jl PRs
             allCollaboratorsFlattened.push('DilumAluthgeBot');
+            // Skip Dependabot PRs
+            allCollaboratorsFlattened.push('dependabot');
+             
 
             const isCollaborator = allCollaboratorsFlattened.includes(prAuthor);
 
