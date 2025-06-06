@@ -74,7 +74,7 @@ jobs:
 
             // Skip BumpStdlibs.jl PRs
             allCollaboratorsFlattened.push('DilumAluthgeBot');
-            
+
             const isCollaborator = allCollaboratorsFlattened.includes(prAuthor);
 
             console.log('prAuthor: ', prAuthor);
