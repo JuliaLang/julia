@@ -71,6 +71,12 @@ jobs:
             )
             const allCollaboratorsNested = await Promise.all(allCollaboratorsNestedPromises);
             const allCollaboratorsFlattened = allCollaboratorsNested.flat();
+
+            // Skip BumpStdlibs.jl PRs
+            allCollaboratorsFlattened.push('DilumAluthgeBot');
+            // Skip Dependabot PRs
+            allCollaboratorsFlattened.push('dependabot');
+
             const isCollaborator = allCollaboratorsFlattened.includes(prAuthor);
 
             console.log('prAuthor: ', prAuthor);
