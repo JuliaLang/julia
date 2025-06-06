@@ -84,7 +84,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_
     else {
         std::string name = "ccalllib_";
         name += llvm::sys::path::filename(f_lib);
-        name += std::to_string(jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1));
+        freshen_name(name);
         runtime_lib = true;
         auto &libgv = ctx.emission_context.libMapGV[f_lib];
         if (libgv.first == NULL) {
@@ -104,7 +104,7 @@ static bool runtime_sym_gvs(jl_codectx_t &ctx, const char *f_lib, const char *f_
         std::string name = "ccall_";
         name += f_name;
         name += "_";
-        name += std::to_string(jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1));
+        freshen_name(name);
         auto T_pvoidfunc = getPointerTy(M->getContext());
         llvmgv = new GlobalVariable(*M, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
@@ -209,7 +209,7 @@ static Value *runtime_sym_lookup(
         std::string gvname = "libname_";
         gvname += f_name;
         gvname += "_";
-        gvname += std::to_string(jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1));
+        freshen_name(gvname);
         llvmgv = new GlobalVariable(*jl_Module, T_pvoidfunc, false,
                                     GlobalVariable::ExternalLinkage,
                                     Constant::getNullValue(T_pvoidfunc), gvname);
@@ -237,7 +237,8 @@ static GlobalVariable *emit_plt_thunk(
     libptrgv = prepare_global_in(M, libptrgv);
     llvmgv = prepare_global_in(M, llvmgv);
     std::string fname;
-    raw_string_ostream(fname) << "jlplt_" << f_name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+    raw_string_ostream(fname) << "jlplt_" << f_name;
+    freshen_name(fname);
     Function *plt = Function::Create(functype,
                                      GlobalVariable::PrivateLinkage,
                                      fname, M);
@@ -837,8 +838,8 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
     std::string ir_name;
     while (true) {
         raw_string_ostream(ir_name)
-            << (ctx.f->getName().str()) << "u"
-            << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
+            << (ctx.f->getName().str()) << "u";
+        freshen_name(ir_name);
         if (jl_Module->getFunction(ir_name) == NULL)
             break;
     }
