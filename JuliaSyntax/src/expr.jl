@@ -140,7 +140,7 @@ function _string_to_Expr(args)
         #   """\n  a\n  b""" ==>  "a\nb"
         return only(args2)
     else
-        # This only happens when the kind is K"string" or when an error has occurred. 
+        # This only happens when the kind is K"string" or when an error has occurred.
         return Expr(:string, args2...)
     end
 end
@@ -159,7 +159,7 @@ function _fixup_Expr_children!(head, loc, args)
         arg = args[i]
         was_parens = @isexpr(arg, :parens)
         arg = _strip_parens(arg)
-        if @isexpr(arg, :(=)) && eq_to_kw_in_call && i > 1 
+        if @isexpr(arg, :(=)) && eq_to_kw_in_call && i > 1
             arg = Expr(:kw, arg.args...)
         elseif k != K"parens" && @isexpr(arg, :., 1) && arg.args[1] isa Tuple
             h, a = arg.args[1]::Tuple{SyntaxHead,Any}
