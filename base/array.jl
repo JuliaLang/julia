@@ -1105,10 +1105,25 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     # We need at least 2*delta spare slots (delta front + delta back)
     newmemlen = max(overallocation(len), len + 2 * delta + 1)
     newoffset = div(newmemlen - newlen, 2) + 1
+    if newoffset + newlen ≤ memlen
+        # Re-use existing memory buffer
+        src_start  = offset
+        dest_start = newoffset + delta
+        # Defensive bounds check
+        if dest_start + len - 1 > memlen
+            throw(BoundsError("Attempting to copy beyond memory buffer"))
+        end
+        unsafe_copyto!(mem, dest_start, mem, src_start, len)
+        # Zero out old data to help GC (safe bounds)
+        unset_hi = min(memlen, dest_start - 1)
+        @inbounds for j in src_start:unset_hi
+            _unsetindex!(mem, j)
+        end
+        newmem = mem
     else
-        # Allocate a larger buffer --------------------------------------
-        newmem = array_new_memory(mem, newmemlen)
-        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+    # Fall back to allocating a larger buffer
+    newmem = array_new_memory(mem, newmemlen)
+    unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
     end
     # Detect concurrent mutation after potential allocation
     ref === a.ref || throw(ConcurrencyViolationError(
