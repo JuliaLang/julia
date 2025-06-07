@@ -266,6 +266,12 @@ on all of the exported names in `CSV`. Packages can also be renamed to `_`, for 
 import ForwardDiff as _
 ```
 
+Or, with `using`:
+
+```julia
+using ForwardDiff: ForwardDiff as _
+```
+
 This has the effect of loading the package while bringing none of its names (even the module name)
 in your namespace. This is useful to communicate that a package is only loaded for the methods it
 provides, instead of its names.
