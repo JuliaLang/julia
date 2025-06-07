@@ -1110,6 +1110,13 @@ function _growbeg!(a::Vector, delta::Integer)
     mem = ref.mem
     len = length(a)
     offset = memoryrefoffset(ref)
+    if len == 0
+        # Fast path: no data to shift, just shift offset if space permits
+        delta <= length(mem) || throw(ArgumentError("requested prepend exceeds capacity"))
+        setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
+        setfield!(a, :size, (delta,))
+        return
+    end
     newlen = len + delta
     setfield!(a, :size, (newlen,))
     # if offset is far enough advanced to fit data in existing memory without copying
