@@ -2254,7 +2254,7 @@
 
 (define (expand-vcat e
                      (vcat '((top vcat)))
-                     (hvcat '((top hvcat)))
+                     (hvcat '((top hvcat_static)))
                      (hvcat_rows '((top hvcat_rows))))
   (let ((a (cdr e)))
     (if (any assignment? a)
@@ -2276,11 +2276,13 @@
                (if (any (lambda (row) (any vararg? row)) rows)
                    `(call ,@hvcat_rows ,@(map (lambda (x) `(tuple ,@x)) rows))
                    `(call ,@hvcat
-                          (tuple ,@(map length rows))
+                          (new (curly (top Val) (call (core tuple) ,@(map length rows))))
                           ,@(apply append rows))))
              `(call ,@vcat ,@a))))))
 
-(define (expand-ncat e (hvncat '((top hvncat))))
+(define (expand-ncat e
+                     (hvncat '((top hvncat)))
+                     (hvncat_static '((top hvncat_static))))
   (define (is-row a) (and (pair? a)
                           (or (eq? (car a) 'row)
                               (eq? (car a) 'nrow))))
@@ -2384,7 +2386,7 @@
               (let ((shape (get-shape a is-row-first d)))
                 (if (is-balanced shape)
                     (let ((dims `(tuple ,@(reverse (get-dims a is-row-first d)))))
-                     `(call ,@hvncat ,dims ,(tf is-row-first) ,@aflat))
+                     `(call ,@hvncat_static (new (curly (top Val) ,dims)) (new (curly (top Val) ,(tf is-row-first))) ,@aflat))
                     `(call ,@hvncat ,(tuplize shape) ,(tf is-row-first) ,@aflat))))))))
 
 (define (maybe-ssavalue lhss x in-lhs?)
@@ -2899,13 +2901,13 @@
    (lambda (e)
      (let ((t (cadr e))
            (e (cdr e)))
-       (expand-vcat e `((top typed_vcat) ,t) `((top typed_hvcat) ,t) `((top typed_hvcat_rows) ,t))))
+       (expand-vcat e `((top typed_vcat) ,t) `((top typed_hvcat_static) ,t) `((top typed_hvcat_rows) ,t))))
 
    'typed_ncat
    (lambda (e)
      (let ((t (cadr e))
            (e (cdr e)))
-       (expand-ncat e `((top typed_hvncat) ,t))))
+       (expand-ncat e `((top typed_hvncat) ,t) `((top typed_hvncat_static) ,t))))
 
    '|'|  (lambda (e) (expand-forms `(call |'| ,(cadr e))))
 
