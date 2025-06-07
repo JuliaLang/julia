@@ -1074,11 +1074,11 @@ array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when i
 
 function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     @_terminates_locally_meta
-    ref     = a.ref
-    mem     = ref.mem
-    offset  = memoryrefoffset(ref)
-    memlen  = length(mem)
-    newlen  = len + delta              # logical length after grow
+    ref = a.ref
+    mem = ref.mem
+    offset = memoryrefoffset(ref)
+    memlen = length(mem)
+    newlen = len + delta              # logical length after grow
     if len == 0
         # How many unused cells are in front of the current offset?
         headroom = offset - 1
