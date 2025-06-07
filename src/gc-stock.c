@@ -818,20 +818,28 @@ int jl_gc_classify_pools(size_t sz, int *osize)
 
 // sweep phase
 
-gc_fragmentation_stat_t gc_page_fragmentation_stats[JL_GC_N_POOLS];
+JL_DLLEXPORT gc_fragmentation_stat_t jl_gc_page_fragmentation_stats[JL_GC_N_POOLS];
 JL_DLLEXPORT double jl_gc_page_utilization_stats[JL_GC_N_MAX_POOLS];
 
-STATIC_INLINE void gc_update_page_fragmentation_data(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_update_fragmentation_data_for_size_class(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
 {
-    gc_fragmentation_stat_t *stats = &gc_page_fragmentation_stats[pg->pool_n];
+    gc_fragmentation_stat_t *stats = &jl_gc_page_fragmentation_stats[pg->pool_n];
     jl_atomic_fetch_add_relaxed(&stats->n_freed_objs, pg->nfree);
     jl_atomic_fetch_add_relaxed(&stats->n_pages_allocd, 1);
 }
 
-STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
+STATIC_INLINE void gc_reset_fragmentation_data_for_size_classes(void) JL_NOTSAFEPOINT
 {
     for (int i = 0; i < JL_GC_N_POOLS; i++) {
-        gc_fragmentation_stat_t *stats = &gc_page_fragmentation_stats[i];
+        jl_atomic_store_relaxed(&jl_gc_page_fragmentation_stats[i].n_freed_objs, 0);
+        jl_atomic_store_relaxed(&jl_gc_page_fragmentation_stats[i].n_pages_allocd, 0);
+    }
+}
+
+STATIC_INLINE void gc_compute_utilization_data_for_size_classes(void) JL_NOTSAFEPOINT
+{
+    for (int i = 0; i < JL_GC_N_POOLS; i++) {
+        gc_fragmentation_stat_t *stats = &jl_gc_page_fragmentation_stats[i];
         double utilization = 1.0;
         size_t n_freed_objs = jl_atomic_load_relaxed(&stats->n_freed_objs);
         size_t n_pages_allocd = jl_atomic_load_relaxed(&stats->n_pages_allocd);
@@ -839,8 +847,6 @@ STATIC_INLINE void gc_dump_page_utilization_data(void) JL_NOTSAFEPOINT
             utilization -= ((double)n_freed_objs * (double)jl_gc_sizeclasses[i]) / (double)n_pages_allocd / (double)GC_PAGE_SZ;
         }
         jl_gc_page_utilization_stats[i] = utilization;
-        jl_atomic_store_relaxed(&stats->n_freed_objs, 0);
-        jl_atomic_store_relaxed(&stats->n_pages_allocd, 0);
     }
 }
 
@@ -948,7 +954,7 @@ static void gc_sweep_page(gc_page_profiler_serializer_t *s, jl_gc_pool_t *p, jl_
 
 done:
     if (re_use_page) {
-        gc_update_page_fragmentation_data(pg);
+        gc_update_fragmentation_data_for_size_class(pg);
         push_lf_back(allocd, pg);
     }
     else {
@@ -1388,6 +1394,7 @@ static void gc_sweep_pool(void)
         // the actual sweeping
         jl_gc_padded_page_stack_t *new_gc_allocd_scratch = (jl_gc_padded_page_stack_t *) calloc_s(n_threads * sizeof(jl_gc_padded_page_stack_t));
         jl_ptls_t ptls = jl_current_task->ptls;
+        gc_reset_fragmentation_data_for_size_classes();
         gc_sweep_wake_all_pages(ptls, new_gc_allocd_scratch);
         gc_sweep_pool_parallel(ptls);
         gc_sweep_wait_for_all_pages();
@@ -1455,7 +1462,7 @@ static void gc_sweep_pool(void)
 #else
     gc_free_pages();
 #endif
-    gc_dump_page_utilization_data();
+    gc_compute_utilization_data_for_size_classes();
     gc_time_pool_end(current_sweep_full);
 }
 
