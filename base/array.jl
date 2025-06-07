@@ -1111,26 +1111,25 @@ function _growbeg!(a::Vector, delta::Integer)
     @_noub_meta
     delta = Int(delta)
     delta == 0 && return # avoid attempting to index off the end
-    delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
+    delta ≥ 0 || throw(ArgumentError("grow requires delta ≥ 0"))
     ref = a.ref
     mem = ref.mem
     len = length(a)
     offset = memoryrefoffset(ref)
     if len == 0
         # Fast path: no data to shift, just shift offset if space permits
-       delta <= length(a) || throw(ArgumentError("requested prepend exceeds capacity"))
-       offset = memoryrefoffset(a.ref)
-       offset ≥ delta || throw(ArgumentError("requested prepend exceeds capacity"))
-       new_offset = offset - delta
-       setfield!(a, :ref, @inbounds memoryref(a.ref, new_offset + 1))  # Safe: index ≥ 1
-       setfield!(a, :size, (delta,))
-       return
+        offset ≥ delta || throw(ArgumentError("requested prepend exceeds capacity"))
+        new_offset = offset - delta
+        setfield!(a, :ref, @inbounds memoryref(ref, new_offset + 1))
+        setfield!(a, :size, (delta,))
+        return
     end
     newlen = len + delta
     setfield!(a, :size, (newlen,))
     # if offset is far enough advanced to fit data in existing memory without copying
-    if delta <= offset - 1
-        setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
+    if offset ≥ delta
+        new_offset = offset - delta
+        setfield!(a, :ref, @inbounds memoryref(ref, new_offset + 1))
     else
         @noinline _growbeg_internal!(a, delta, len)
     end
