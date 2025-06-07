@@ -72,7 +72,17 @@ end
 
 Base.summary(node::GreenNode) = summary(node.head)
 
-Base.hash(node::GreenNode, h::UInt) = hash((node.head, node.span, node.children), h)
+function Base.hash(node::GreenNode, h::UInt)
+    children = node.children
+    if children === nothing
+        h = hash(nothing, h)
+    else # optimization - avoid extra allocations from `hash(::AbstractVector, ::UInt)`
+        for child in children
+            h = hash(child, h)
+        end
+    end
+    hash(node.head, hash(node.span, h))
+end
 function Base.:(==)(n1::GreenNode, n2::GreenNode)
     n1.head == n2.head && n1.span == n2.span && n1.children == n2.children
 end
@@ -129,4 +139,3 @@ function build_tree(::Type{GreenNode}, stream::ParseStream; kws...)
                         GreenNode(h, span, collect(GreenNode{SyntaxHead}, cs))
     end
 end
-

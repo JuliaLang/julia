@@ -143,7 +143,8 @@ struct SourceFile
     line_starts::Vector{Int}
 end
 
-Base.hash(s::SourceFile, h::UInt) = hash((s.code, s.byte_offset, s.filename, s.first_line, s.line_starts), h)
+Base.hash(s::SourceFile, h::UInt) =
+    hash(s.code, hash(s.byte_offset, hash(s.filename, hash(s.first_line, hash(s.line_starts, h)))))
 function Base.:(==)(a::SourceFile, b::SourceFile)
     a.code == b.code && a.byte_offset == b.byte_offset && a.filename == b.filename &&
     a.first_line == b.first_line && a.line_starts == b.line_starts
