@@ -1139,6 +1139,7 @@ struct _jl_gcframe_t {
 
 #define JL_GC_ENCODE_PUSHARGS(n)   (((size_t)(n))<<2)
 #define JL_GC_ENCODE_PUSH(n)       ((((size_t)(n))<<2)|1)
+#define JL_GC_DECODE_NROOTS(n)     (n >> 2)
 
 #ifdef __clang_gcanalyzer__
 

@@ -1,0 +1,28 @@
+From 9ebe5e12b8a0063953f9ef196b2433eca9933559 Mon Sep 17 00:00:00 2001
+From: Stephen Webb <swebb@qnx.com>
+Date: Tue, 15 Apr 2025 10:48:20 -0400
+Subject: [PATCH] Fix FTBFS in src/ptrace/_UPT_ptrauth_insn_mask.c
+
+Added missing parameter names to make C code comply to ISO/IEC 9899.
+---
+ src/ptrace/_UPT_ptrauth_insn_mask.c | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/src/ptrace/_UPT_ptrauth_insn_mask.c b/src/ptrace/_UPT_ptrauth_insn_mask.c
+index dcc512370..e7b3a514b 100644
+--- a/src/ptrace/_UPT_ptrauth_insn_mask.c
++++ b/src/ptrace/_UPT_ptrauth_insn_mask.c
+@@ -49,9 +49,10 @@ unw_word_t _UPT_ptrauth_insn_mask (UNUSED unw_addr_space_t as, void *arg)
+ 
+ #else
+ 
+-unw_word_t _UPT_ptrauth_insn_mask (unw_addr_space_t, void *)
++unw_word_t _UPT_ptrauth_insn_mask (UNUSED unw_addr_space_t as, UNUSED void *arg)
+ {
+   return 0;
+ }
+ 
+-#endif
+\ No newline at end of file
++#endif
++
