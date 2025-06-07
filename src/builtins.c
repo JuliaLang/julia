@@ -2378,8 +2378,20 @@ JL_CALLABLE(jl_f__equiv_typedef)
 
 JL_CALLABLE(jl_f__defaultctors)
 {
-    JL_NARGS(_defaultctors, 2, 2);
-    jl_ctor_def(args[0], args[1]);
+    JL_NARGS(_defaultctors, 3, 3);
+
+    jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(args[0]);
+    JL_TYPECHK(_defaultctors, datatype, (jl_value_t *)dt);
+    JL_TYPECHK(_defaultctors, linenumbernode, args[1]);
+    JL_TYPECHK(_defaultctors, bool, args[2]);
+
+    if (args[2] == jl_true) {
+        jl_ctor_def(args[0], args[1]);
+        dt->name->hasdefaultctors = 1;
+    } else {
+        dt->name->hasdefaultctors = 0;
+    }
+
     return jl_nothing;
 }
 
