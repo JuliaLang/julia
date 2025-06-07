@@ -1,5 +1,5 @@
 using Libdl
-using Zstd_jll
+using Zstd_jll # Note this uses the vendored older non-LazyLibrary version of Zstd_jll
 
 function @main(args::Vector{String})::Cint
     println(Core.stdout, "Julia! Hello, world!")

@@ -933,7 +933,7 @@ function hist_from_file(hp::REPLHistoryProvider, path::String)
 end
 
 function add_history(hist::REPLHistoryProvider, s::PromptState)
-    str = rstrip(String(take!(copy(s.input_buffer))))
+    str = rstrip(takestring!(copy(s.input_buffer)))
     isempty(strip(str)) && return
     mode = mode_idx(hist, LineEdit.mode(s))
     !isempty(hist.history) &&
@@ -1066,7 +1066,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
                              prefix::AbstractString,
                              backwards::Bool,
                              cur_idx::Int = hist.cur_idx)
-    cur_response = String(take!(copy(LineEdit.buffer(s))))
+    cur_response = takestring!(copy(LineEdit.buffer(s)))
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
         cur_idx = hist.last_idx
@@ -1108,7 +1108,7 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
     qpos = position(query_buffer)
     qpos > 0 || return true
     searchdata = beforecursor(query_buffer)
-    response_str = String(take!(copy(response_buffer)))
+    response_str = takestring!(copy(response_buffer))
 
     # Alright, first try to see if the current match still works
     a = position(response_buffer) + 1 # position is zero-indexed
@@ -1165,7 +1165,7 @@ end
 LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 
 function return_callback(s)
-    ast = Base.parse_input_line(String(take!(copy(LineEdit.buffer(s)))), depwarn=false)
+    ast = Base.parse_input_line(takestring!(copy(LineEdit.buffer(s))), depwarn=false)
     return !(isa(ast, Expr) && ast.head === :incomplete)
 end
 

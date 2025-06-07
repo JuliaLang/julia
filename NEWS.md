@@ -50,6 +50,7 @@ New library features
 * `fieldoffset` now also accepts the field name as a symbol as `fieldtype` already did ([#58100]).
 * `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
+* `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
 
 Standard library changes
 ------------------------
@@ -71,6 +72,7 @@ Standard library changes
 #### InteractiveUtils
 
 * Introspection utilities such as `@code_typed`, `@which` and `@edit` now accept type annotations as substitutes for values, recognizing forms such as `f(1, ::Float64, 3)` or even `sum(::Vector{T}; init = ::T) where {T<:Real}`. Type-annotated variables as in `f(val::Int; kw::Float64)` are not evaluated if the type annotation provides the necessary information, making this syntax compatible with signatures found in stacktraces ([#57909], [#58222]).
+* Code introspection macros such as `@code_lowered` and `@code_typed` now have a much better support for broadcasting expressions, including broadcasting assignments of the form `x .+= f(y)` ([#58349]).
 
 External dependencies
 ---------------------

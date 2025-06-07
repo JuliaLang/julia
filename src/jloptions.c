@@ -36,7 +36,7 @@ JL_DLLEXPORT const char *jl_get_default_sysimg_path(void)
 
 /* This function is also used by gc-stock.c to parse the
  * JULIA_HEAP_SIZE_HINT environment variable. */
-uint64_t parse_heap_size_hint(const char *optarg, const char *option_name)
+uint64_t parse_heap_size_option(const char *optarg, const char *option_name, int allow_pct)
 {
     long double value = 0.0;
     char unit[4] = {0};
@@ -62,14 +62,16 @@ uint64_t parse_heap_size_hint(const char *optarg, const char *option_name)
             multiplier <<= 40;
             break;
         case '%':
-            if (value > 100)
-                jl_errorf("julia: invalid percentage specified in %s", option_name);
-            uint64_t mem = uv_get_total_memory();
-            uint64_t cmem = uv_get_constrained_memory();
-            if (cmem > 0 && cmem < mem)
-                mem = cmem;
-            multiplier = mem/100;
-            break;
+            if (allow_pct) {
+                if (value > 100)
+                    jl_errorf("julia: invalid percentage specified in %s", option_name);
+                uint64_t mem = uv_get_total_memory();
+                uint64_t cmem = uv_get_constrained_memory();
+                if (cmem > 0 && cmem < mem)
+                    mem = cmem;
+                multiplier = mem/100;
+                break;
+            }
         default:
             jl_errorf("julia: invalid argument to %s (%s)", option_name, optarg);
             break;
@@ -151,6 +153,8 @@ JL_DLLEXPORT void jl_init_options(void)
                         0, // strip-ir
                         0, // permalloc_pkgimg
                         0, // heap-size-hint
+                        0, // hard-heap-limit
+                        0, // heap-target-increment
                         0, // trace_compile_timing
                         JL_TRIM_NO, // trim
                         0, // task_metrics
@@ -289,6 +293,14 @@ static const char opts[]  =
     "                                               number of bytes, optionally in units of: B, K (kibibytes),\n"
     "                                               M (mebibytes), G (gibibytes), T (tebibytes), or % (percentage\n"
     "                                               of physical memory).\n\n"
+    " --hard-heap-limit=<size>[<unit>]              Set a hard limit on the heap size: if we ever go above this\n"
+    "                                               limit, we will abort. The value may be specified as a\n"
+    "                                               number of bytes, optionally in units of: B, K (kibibytes),\n"
+    "                                               M (mebibytes), G (gibibytes) or T (tebibytes).\n\n"
+    " --heap-target-increment=<size>[<unit>] Set an upper bound on how much the heap target\n"
+    "                                               can increase between consecutive collections. The value may be\n"
+    "                                               specified as a number of bytes, optionally in units of: B,\n"
+    "                                               K (kibibytes), M (mebibytes), G (gibibytes) or T (tebibytes).\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -380,6 +392,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_strip_metadata,
            opt_strip_ir,
            opt_heap_size_hint,
+           opt_hard_heap_limit,
+           opt_heap_target_increment,
            opt_gc_threads,
            opt_permalloc_pkgimg,
            opt_trim,
@@ -451,6 +465,8 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "strip-ir",        no_argument,       0, opt_strip_ir },
         { "permalloc-pkgimg",required_argument, 0, opt_permalloc_pkgimg },
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
+        { "hard-heap-limit", required_argument, 0, opt_hard_heap_limit },
+        { "heap-target-increment", required_argument, 0, opt_heap_target_increment },
         { "trim",  optional_argument, 0, opt_trim },
         { 0, 0, 0, 0 }
     };
@@ -669,6 +685,9 @@ restart_switch:
                         if (nthreadsi == 0)
                             jl_options.nthreadpools = 1;
                     }
+                } else if (nthreads == 1) { // User asked for 1 thread so don't add an interactive one
+                    jl_options.nthreadpools = 1;
+                    nthreadsi = 0;
                 }
                 jl_options.nthreads = nthreads + nthreadsi;
             }
@@ -960,10 +979,22 @@ restart_switch:
             break;
         case opt_heap_size_hint:
             if (optarg != NULL)
-                jl_options.heap_size_hint = parse_heap_size_hint(optarg, "--heap-size-hint=<size>[<unit>]");
+                jl_options.heap_size_hint = parse_heap_size_option(optarg, "--heap-size-hint=<size>[<unit>]", 1);
             if (jl_options.heap_size_hint == 0)
                 jl_errorf("julia: invalid memory size specified in --heap-size-hint=<size>[<unit>]");
 
+            break;
+        case opt_hard_heap_limit:
+            if (optarg != NULL)
+                jl_options.hard_heap_limit = parse_heap_size_option(optarg, "--hard-heap-limit=<size>[<unit>]", 0);
+            if (jl_options.hard_heap_limit == 0)
+                jl_errorf("julia: invalid memory size specified in --hard-heap-limit=<size>[<unit>]");
+            break;
+        case opt_heap_target_increment:
+            if (optarg != NULL)
+                jl_options.heap_target_increment = parse_heap_size_option(optarg, "--heap-target-increment=<size>[<unit>]", 0);
+            if (jl_options.heap_target_increment == 0)
+                jl_errorf("julia: invalid memory size specified in --heap-target-increment=<size>[<unit>]");
             break;
         case opt_gc_threads:
             errno = 0;

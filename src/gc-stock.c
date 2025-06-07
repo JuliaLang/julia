@@ -2766,7 +2766,7 @@ void gc_mark_clean_reclaim_sets(void)
     }
 }
 
-static void gc_queue_thread_local(jl_gc_markqueue_t *mq, jl_ptls_t ptls2)
+static void gc_queue_thread_local(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPOINT
 {
     jl_task_t *task;
     task = ptls2->root_task;
@@ -2795,7 +2795,7 @@ static void gc_queue_thread_local(jl_gc_markqueue_t *mq, jl_ptls_t ptls2)
     }
 }
 
-static void gc_queue_bt_buf(jl_gc_markqueue_t *mq, jl_ptls_t ptls2)
+static void gc_queue_bt_buf(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPOINT
 {
     jl_bt_element_t *bt_data = ptls2->bt_data;
     size_t bt_size = ptls2->bt_size;
@@ -2809,7 +2809,7 @@ static void gc_queue_bt_buf(jl_gc_markqueue_t *mq, jl_ptls_t ptls2)
     }
 }
 
-static void gc_queue_remset(jl_gc_markqueue_t *mq, jl_ptls_t ptls2)
+static void gc_queue_remset(jl_gc_markqueue_t *mq, jl_ptls_t ptls2) JL_NOTSAFEPOINT
 {
     void **items = ptls2->gc_tls.heap.remset.items;
     size_t len = ptls2->gc_tls.heap.remset.len;
@@ -2824,7 +2824,7 @@ static void gc_queue_remset(jl_gc_markqueue_t *mq, jl_ptls_t ptls2)
     ptls2->gc_tls.heap.remset_nptr = 0;
 }
 
-static void gc_check_all_remsets_are_empty(void)
+static void gc_check_all_remsets_are_empty(void) JL_NOTSAFEPOINT
 {
     for (int i = 0; i < gc_n_threads; i++) {
         jl_ptls_t ptls2 = gc_all_tls_states[i];
@@ -2839,12 +2839,14 @@ extern jl_value_t *cmpswap_names JL_GLOBALLY_ROOTED;
 extern jl_task_t *wait_empty JL_GLOBALLY_ROOTED;
 
 // mark the initial root set
-static void gc_mark_roots(jl_gc_markqueue_t *mq)
+static void gc_mark_roots(jl_gc_markqueue_t *mq) JL_NOTSAFEPOINT
 {
     // modules
     gc_try_claim_and_push(mq, jl_main_module, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_main_module, "main_module");
     // invisible builtin values
+    gc_try_claim_and_push(mq, jl_method_table, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_method_table, "global_method_table");
     gc_try_claim_and_push(mq, jl_an_empty_vec_any, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_an_empty_vec_any, "an_empty_vec_any");
     gc_try_claim_and_push(mq, jl_module_init_order, NULL);
@@ -3021,7 +3023,7 @@ static uint64_t overallocation(uint64_t old_val, uint64_t val, uint64_t max_val)
 size_t jl_maxrss(void);
 
 // Only one thread should be running in this function
-static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
+static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection) JL_NOTSAFEPOINT
 {
     combine_thread_gc_counts(&gc_num, 1);
 
@@ -3212,7 +3214,7 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     uint64_t target_heap;
     const char *reason = ""; (void)reason; // for GC_TIME output stats
     old_heap_size = heap_size; // TODO: Update these values dynamically instead of just during the GC
-    if (collection == JL_GC_AUTO) {
+    if (collection == JL_GC_AUTO && jl_options.hard_heap_limit == 0) {
         // update any heuristics only when the user does not force the GC
         // but still update the timings, since GC was run and reset, even if it was too early
         uint64_t target_allocs = 0.0;
@@ -3291,6 +3293,27 @@ static int _jl_gc_collect(jl_ptls_t ptls, jl_gc_collection_t collection)
     }
     else {
         target_heap = jl_atomic_load_relaxed(&gc_heap_stats.heap_target);
+    }
+
+    // Kill the process if we are above the hard heap limit
+    if (jl_options.hard_heap_limit != 0) {
+        if (heap_size > jl_options.hard_heap_limit) {
+            // Can't use `jl_errorf` here, because it will try to allocate memory
+            // and we are already at the hard limit.
+            jl_safe_printf("Heap size exceeded hard limit of %" PRIu64 " bytes.\n",
+                           jl_options.hard_heap_limit);
+            abort();
+        }
+    }
+    // Ignore heap limit computation from MemBalancer-like heuristics
+    // if the heap target increment goes above the value specified through
+    // `--heap-target-increment`.
+    // Note that if we reach this code, we can guarantee that the heap size
+    // is less than the hard limit, so there will be some room to grow the heap
+    // until the next GC without hitting the hard limit.
+    if (jl_options.heap_target_increment != 0) {
+        target_heap = heap_size + jl_options.heap_target_increment;
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, target_heap);
     }
 
     double old_ratio = (double)promoted_bytes/(double)heap_size;
@@ -3690,6 +3713,9 @@ void jl_gc_init(void)
     arraylist_new(&finalizer_list_marked, 0);
     arraylist_new(&to_finalize, 0);
     jl_atomic_store_relaxed(&gc_heap_stats.heap_target, default_collect_interval);
+    if (jl_options.hard_heap_limit != 0) {
+        jl_atomic_store_relaxed(&gc_heap_stats.heap_target, jl_options.hard_heap_limit);
+    }
     gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
@@ -3703,7 +3729,7 @@ void jl_gc_init(void)
     if (jl_options.heap_size_hint == 0) {
         char *cp = getenv(HEAP_SIZE_HINT);
         if (cp)
-            hint = parse_heap_size_hint(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"");
+            hint = parse_heap_size_option(cp, "JULIA_HEAP_SIZE_HINT=\"<size>[<unit>]\"", 1);
     }
 #ifdef _P64
     total_mem = uv_get_total_memory();

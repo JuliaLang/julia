@@ -2,139 +2,153 @@
 
 ## dummy stub for https://github.com/JuliaBinaryWrappers/SuiteSparse_jll.jl
 baremodule SuiteSparse_jll
-using Base, Libdl, libblastrampoline_jll
-
-const PATH_list = String[]
-const LIBPATH_list = String[]
+using Base, Libdl, libblastrampoline_jll, CompilerSupportLibraries_jll
 
 export libamd, libbtf, libcamd, libccolamd, libcholmod, libcolamd, libklu, libldl, librbio, libspqr, libsuitesparseconfig, libumfpack
 
 # These get calculated in __init__()
 # Man I can't wait until these are automatically handled by an in-Base JLLWrappers clone.
 const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
+const LIBPATH_list = String[]
 artifact_dir::String = ""
-libamd_handle::Ptr{Cvoid} = C_NULL
 libamd_path::String = ""
-libbtf_handle::Ptr{Cvoid} = C_NULL
 libbtf_path::String = ""
-libcamd_handle::Ptr{Cvoid} = C_NULL
 libcamd_path::String = ""
-libccolamd_handle::Ptr{Cvoid} = C_NULL
 libccolamd_path::String = ""
-libcholmod_handle::Ptr{Cvoid} = C_NULL
 libcholmod_path::String = ""
-libcolamd_handle::Ptr{Cvoid} = C_NULL
 libcolamd_path::String = ""
-libklu_handle::Ptr{Cvoid} = C_NULL
 libklu_path::String = ""
-libldl_handle::Ptr{Cvoid} = C_NULL
 libldl_path::String = ""
-librbio_handle::Ptr{Cvoid} = C_NULL
 librbio_path::String = ""
-libspqr_handle::Ptr{Cvoid} = C_NULL
 libspqr_path::String = ""
-libsuitesparseconfig_handle::Ptr{Cvoid} = C_NULL
 libsuitesparseconfig_path::String = ""
-libumfpack_handle::Ptr{Cvoid} = C_NULL
 libumfpack_path::String = ""
 
 if Sys.iswindows()
-    const libamd = "libamd.dll"
-    const libbtf = "libbtf.dll"
-    const libcamd = "libcamd.dll"
-    const libccolamd = "libccolamd.dll"
-    const libcholmod = "libcholmod.dll"
-    const libcolamd = "libcolamd.dll"
-    const libklu = "libklu.dll"
-    const libldl = "libldl.dll"
-    const librbio = "librbio.dll"
-    const libspqr = "libspqr.dll"
-    const libsuitesparseconfig = "libsuitesparseconfig.dll"
-    const libumfpack = "libumfpack.dll"
+    const _libamd_path = BundledLazyLibraryPath("libamd.dll")
+    const _libbtf_path = BundledLazyLibraryPath("libbtf.dll")
+    const _libcamd_path = BundledLazyLibraryPath("libcamd.dll")
+    const _libccolamd_path = BundledLazyLibraryPath("libccolamd.dll")
+    const _libcholmod_path = BundledLazyLibraryPath("libcholmod.dll")
+    const _libcolamd_path = BundledLazyLibraryPath("libcolamd.dll")
+    const _libklu_path = BundledLazyLibraryPath("libklu.dll")
+    const _libldl_path = BundledLazyLibraryPath("libldl.dll")
+    const _librbio_path = BundledLazyLibraryPath("librbio.dll")
+    const _libspqr_path = BundledLazyLibraryPath("libspqr.dll")
+    const _libsuitesparseconfig_path = BundledLazyLibraryPath("libsuitesparseconfig.dll")
+    const _libumfpack_path = BundledLazyLibraryPath("libumfpack.dll")
 elseif Sys.isapple()
-    const libamd = "@rpath/libamd.3.dylib"
-    const libbtf = "@rpath/libbtf.2.dylib"
-    const libcamd = "@rpath/libcamd.3.dylib"
-    const libccolamd = "@rpath/libccolamd.3.dylib"
-    const libcholmod = "@rpath/libcholmod.5.dylib"
-    const libcolamd = "@rpath/libcolamd.3.dylib"
-    const libklu = "@rpath/libklu.2.dylib"
-    const libldl = "@rpath/libldl.3.dylib"
-    const librbio = "@rpath/librbio.4.dylib"
-    const libspqr = "@rpath/libspqr.4.dylib"
-    const libsuitesparseconfig = "@rpath/libsuitesparseconfig.7.dylib"
-    const libumfpack = "@rpath/libumfpack.6.dylib"
+    const _libamd_path = BundledLazyLibraryPath("libamd.3.dylib")
+    const _libbtf_path = BundledLazyLibraryPath("libbtf.2.dylib")
+    const _libcamd_path = BundledLazyLibraryPath("libcamd.3.dylib")
+    const _libccolamd_path = BundledLazyLibraryPath("libccolamd.3.dylib")
+    const _libcholmod_path = BundledLazyLibraryPath("libcholmod.5.dylib")
+    const _libcolamd_path = BundledLazyLibraryPath("libcolamd.3.dylib")
+    const _libklu_path = BundledLazyLibraryPath("libklu.2.dylib")
+    const _libldl_path = BundledLazyLibraryPath("libldl.3.dylib")
+    const _librbio_path = BundledLazyLibraryPath("librbio.4.dylib")
+    const _libspqr_path = BundledLazyLibraryPath("libspqr.4.dylib")
+    const _libsuitesparseconfig_path = BundledLazyLibraryPath("libsuitesparseconfig.7.dylib")
+    const _libumfpack_path = BundledLazyLibraryPath("libumfpack.6.dylib")
 else
-    const libamd = "libamd.so.3"
-    const libbtf = "libbtf.so.2"
-    const libcamd = "libcamd.so.3"
-    const libccolamd = "libccolamd.so.3"
-    const libcholmod = "libcholmod.so.5"
-    const libcolamd = "libcolamd.so.3"
-    const libklu = "libklu.so.2"
-    const libldl = "libldl.so.3"
-    const librbio = "librbio.so.4"
-    const libspqr = "libspqr.so.4"
-    const libsuitesparseconfig = "libsuitesparseconfig.so.7"
-    const libumfpack = "libumfpack.so.6"
+    const _libamd_path = BundledLazyLibraryPath("libamd.so.3")
+    const _libbtf_path = BundledLazyLibraryPath("libbtf.so.2")
+    const _libcamd_path = BundledLazyLibraryPath("libcamd.so.3")
+    const _libccolamd_path = BundledLazyLibraryPath("libccolamd.so.3")
+    const _libcholmod_path = BundledLazyLibraryPath("libcholmod.so.5")
+    const _libcolamd_path = BundledLazyLibraryPath("libcolamd.so.3")
+    const _libklu_path = BundledLazyLibraryPath("libklu.so.2")
+    const _libldl_path = BundledLazyLibraryPath("libldl.so.3")
+    const _librbio_path = BundledLazyLibraryPath("librbio.so.4")
+    const _libspqr_path = BundledLazyLibraryPath("libspqr.so.4")
+    const _libsuitesparseconfig_path = BundledLazyLibraryPath("libsuitesparseconfig.so.7")
+    const _libumfpack_path = BundledLazyLibraryPath("libumfpack.so.6")
 end
 
-function __init__()
+const libsuitesparseconfig = LazyLibrary(_libsuitesparseconfig_path)
+const libldl = LazyLibrary(_libldl_path)
+const libbtf = LazyLibrary(_libbtf_path)
+
+_libcolamd_dependencies = LazyLibrary[libsuitesparseconfig]
+const libcolamd = LazyLibrary(_libcolamd_path; dependencies=_libcolamd_dependencies)
+
+_libamd_dependencies = LazyLibrary[libsuitesparseconfig]
+const libamd = LazyLibrary(_libamd_path; dependencies=_libamd_dependencies)
+
+_libcamd_dependencies = LazyLibrary[libsuitesparseconfig]
+const libcamd = LazyLibrary(_libcamd_path; dependencies=_libcamd_dependencies)
+
+_libccolamd_dependencies = LazyLibrary[libsuitesparseconfig]
+const libccolamd = LazyLibrary(_libccolamd_path; dependencies=_libccolamd_dependencies)
+
+_librbio_dependencies = LazyLibrary[libsuitesparseconfig]
+const librbio = LazyLibrary(_librbio_path; dependencies=_librbio_dependencies)
+
+_libcholmod_dependencies = LazyLibrary[
+    libsuitesparseconfig, libamd, libcamd, libccolamd, libcolamd, libblastrampoline
+    ]
+const libcholmod = LazyLibrary(_libcholmod_path; dependencies=_libcholmod_dependencies)
+
+_libklu_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcolamd, libbtf]
+const libklu = LazyLibrary(_libklu_path; dependencies=_libklu_dependencies)
+
+if Sys.isfreebsd() || Sys.isapple()
+    _libspqr_dependencies = LazyLibrary[libsuitesparseconfig, libcholmod, libblastrampoline]
+else
+    _libspqr_dependencies = LazyLibrary[libsuitesparseconfig, libcholmod, libblastrampoline, libstdcxx, libgcc_s]
+end
+const libspqr = LazyLibrary(_libspqr_path; dependencies=_libspqr_dependencies)
+
+_libumfpack_dependencies = LazyLibrary[libsuitesparseconfig, libamd, libcholmod, libblastrampoline]
+const libumfpack = LazyLibrary(_libumfpack_path; dependencies=_libumfpack_dependencies)
+
+function eager_mode()
+    CompilerSupportLibraries_jll.eager_mode()
     libblastrampoline_jll.eager_mode()
 
+    dlopen(libamd)
+    dlopen(libbtf)
+    dlopen(libcamd)
+    dlopen(libccolamd)
+    dlopen(libcholmod)
+    dlopen(libcolamd)
+    dlopen(libklu)
+    dlopen(libldl)
+    dlopen(librbio)
+    dlopen(libspqr)
+    dlopen(libsuitesparseconfig)
+    dlopen(libumfpack)
+end
+is_available() = true
+
+function __init__()
     # BSD-3-Clause
-    global libamd_handle = dlopen(libamd)
-    global libamd_path = dlpath(libamd_handle)
-    global libcamd_handle = dlopen(libcamd)
-    global libcamd_path = dlpath(libcamd_handle)
-    global libccolamd_handle = dlopen(libccolamd)
-    global libccolamd_path = dlpath(libccolamd_handle)
-    global libcolamd_handle = dlopen(libcolamd)
-    global libcolamd_path = dlpath(libcolamd_handle)
-    global libsuitesparseconfig_handle = dlopen(libsuitesparseconfig)
-    global libsuitesparseconfig_path = dlpath(libsuitesparseconfig_handle)
+    global libamd_path = string(_libamd_path)
+    global libcamd_path = string(_libcamd_path)
+    global libccolamd_path = string(_libccolamd_path)
+    global libcolamd_path = string(_libcolamd_path)
+    global libsuitesparseconfig_path = string(_libsuitesparseconfig_path)
 
     # LGPL-2.1+
-    global libbtf_handle = dlopen(libbtf)
-    global libbtf_path = dlpath(libbtf_handle)
-    global libklu_handle = dlopen(libklu)
-    global libklu_path = dlpath(libklu_handle)
-    global libldl_handle = dlopen(libldl)
-    global libldl_path = dlpath(libldl_handle)
+    global libbtf_path = string(_libbtf_path)
+    global libklu_path = string(_libklu_path)
+    global libldl_path = string(_libldl_path)
 
     # GPL-2.0+
     if Base.USE_GPL_LIBS
-        global libcholmod_handle = dlopen(libcholmod)
-        global libcholmod_path = dlpath(libcholmod_handle)
-        global librbio_handle = dlopen(librbio)
-        global librbio_path = dlpath(librbio_handle)
-        global libspqr_handle = dlopen(libspqr)
-        global libspqr_path = dlpath(libspqr_handle)
-        global libumfpack_handle = dlopen(libumfpack)
-        global libumfpack_path = dlpath(libumfpack_handle)
+        global libcholmod_path = string(_libcholmod_path)
+        global librbio_path = string(_librbio_path)
+        global libspqr_path = string(_libspqr_path)
+        global libumfpack_path = string(_libumfpack_path)
     end
     global artifact_dir = dirname(Sys.BINDIR)
 end
 
-# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
-# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
-# there isn't one.  It instead returns the overall Julia prefix.
-is_available() = true
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_libamd_path() = libamd_path
-get_libbtf_path() = libbtf_path
-get_libcamd_path() = libcamd_path
-get_libccolamd_path() = libccolamd_path
-get_libcholmod_path() = libcholmod_path
-get_libcolamd_path() = libcolamd_path
-get_libklu_path() = libklu_path
-get_libldl_path() = libldl_path
-get_librbio_path() = librbio_path
-get_libspqr_path() = libspqr_path
-get_libsuitesparseconfig_path() = libsuitesparseconfig_path
-get_libumfpack_path() = libumfpack_path
+if Base.generating_output()
+    precompile(eager_mode, ())
+    precompile(is_available, ())
+end
 
 end  # module SuiteSparse_jll

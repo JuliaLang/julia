@@ -348,6 +348,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # -t, --threads
     code = "print(Threads.threadpoolsize())"
+    code2 = "print(Threads.maxthreadid())"
     cpu_threads = ccall(:jl_effective_threads, Int32, ())
     @test string(cpu_threads) ==
         read(`$exename --threads auto -e $code`, String) ==
@@ -358,6 +359,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_NUM_THREADS" => nt) do
             @test read(`$exename --threads=2 -e $code`, String) ==
                 read(`$exename -t 2 -e $code`, String) == "2"
+            if nt === nothing
+                @test read(`$exename -e $code2`, String) == "2" #default + interactive
+            elseif nt == "1"
+                @test read(`$exename -e $code2`, String) == "1" #if user asks for 1 give 1
+            end
         end
     end
     # We want to test oversubscription, but on manycore machines, this can
@@ -1214,6 +1220,12 @@ end
 
     @test readchomp(`$(Base.julia_cmd()) --startup-file=no --heap-size-hint=10M -e "println(@ccall jl_gc_get_max_memory()::UInt64)"`) == "$(1*1024*1024)"
 end
+
+@testset "hard heap limit" begin
+    cmd = `$(Base.julia_cmd()) --hard-heap-limit=30M -E "mutable struct ListNode; v::Int64; next::Union{ListNode, Nothing}; end\n
+        l = ListNode(0, nothing); while true; l = ListNode(0, l); end"`
+    @test !success(cmd)
+end
 end
 
 ## `Main.main` entrypoint
@@ -1250,6 +1262,66 @@ end
     @testset "--heap-size-hint=$str" for (str, val) in [("1", 1), ("1e7", 1e7), ("2.5e7", 2.5e7), ("1MB", 1m), ("2.5g", 2.5g), ("1e4kB", 1e4k),
         ("1e100", typemax(UInt64)), ("1e500g", typemax(UInt64)), ("1e-12t", 1), ("500000000b", 500000000)]
         @test parse(UInt64,read(`$exename --heap-size-hint=$str -E "Base.JLOptions().heap_size_hint"`, String)) == val
+    end
+end
+
+@testset "--hard-heap-limit" begin
+    exename = `$(Base.julia_cmd())`
+    @test errors_not_signals(`$exename --hard-heap-limit -e "exit(0)"`)
+    @testset "--hard-heap-limit=$str" for str in ["asdf","","0","1.2vb","b","GB","2.5GB̂","1.2gb2","42gigabytes","5gig","2GiB","NaNt"]
+        @test errors_not_signals(`$exename --hard-heap-limit=$str -e "exit(0)"`)
+    end
+    k = UInt64(1) << 10
+    m = UInt64(1) << 20
+    g = UInt64(1) << 30
+    t = UInt64(1) << 40
+    one_hundred_mb_strs_and_vals = [
+        ("100000000", 100000000), ("1e8", 1e8), ("100MB", 100m), ("100m", 100m), ("1e5kB", 1e5k),
+    ]
+    @testset "--hard-heap-limit=$str" for (str, val) in one_hundred_mb_strs_and_vals
+        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+    end
+    two_and_a_half_gigabytes_strs_and_vals = [
+        ("2500000000", 2500000000), ("2.5e9", 2.5e9), ("2.5g", 2.5g), ("2.5GB", 2.5g), ("2.5e6mB", 2.5e6m),
+    ]
+    @testset "--hard-heap-limit=$str" for (str, val) in two_and_a_half_gigabytes_strs_and_vals
+        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+    end
+    one_terabyte_strs_and_vals = [
+        ("1TB", 1t), ("1024GB", 1t),
+    ]
+    @testset "--hard-heap-limit=$str" for (str, val) in one_terabyte_strs_and_vals
+        @test parse(UInt64,read(`$exename --hard-heap-limit=$str -E "Base.JLOptions().hard_heap_limit"`, String)) == val
+    end
+end
+
+@testset "--heap-target-increment" begin
+    exename = `$(Base.julia_cmd())`
+    @test errors_not_signals(`$exename --heap-target-increment -e "exit(0)"`)
+    @testset "--heap-target-increment=$str" for str in ["asdf","","0","1.2vb","b","GB","2.5GB̂","1.2gb2","42gigabytes","5gig","2GiB","NaNt"]
+        @test errors_not_signals(`$exename --heap-target-increment=$str -e "exit(0)"`)
+    end
+    k = UInt64(1) << 10
+    m = UInt64(1) << 20
+    g = UInt64(1) << 30
+    t = UInt64(1) << 40
+    one_hundred_mb_strs_and_vals = [
+        ("100000000", 100000000), ("1e8", 1e8), ("100MB", 100m), ("100m", 100m), ("1e5kB", 1e5k),
+    ]
+    @testset "--heap-target-increment=$str" for (str, val) in one_hundred_mb_strs_and_vals
+        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+    end
+    two_and_a_half_gigabytes_strs_and_vals = [
+        ("2500000000", 2500000000), ("2.5e9", 2.5e9), ("2.5g", 2.5g), ("2.5GB", 2.5g), ("2.5e6mB", 2.5e6m),
+    ]
+    @testset "--heap-target-increment=$str" for (str, val) in two_and_a_half_gigabytes_strs_and_vals
+        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
+    end
+    one_terabyte_strs_and_vals = [
+        ("1TB", 1t), ("1024GB", 1t),
+    ]
+    @testset "--heap-target-increment=$str" for (str, val) in one_terabyte_strs_and_vals
+        @test parse(UInt64,read(`$exename --heap-target-increment=$str -E "Base.JLOptions().heap_target_increment"`, String)) == val
     end
 end
 

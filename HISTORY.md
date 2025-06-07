@@ -1,15 +1,14 @@
 Julia v1.12 Release Notes
-========================
+=========================
 
 New language features
 ---------------------
 
-* New option `--trim` creates smaller binaries by removing code that was not proven to be reachable from
-  entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]). To support
-  Core.finalizer, inference will now opportunistically discover future invokelatest calls and compile
-  the required code for them.
-* Redefinition of constants is now well defined and follows world age semantics. Additional redefinitions
-  (e.g. of structs) are now allowed. See [the new manual chapter on world age](https://docs.julialang.org/en/v1.13-dev/manual/worldage/).
+* New experimental option `--trim` that creates smaller binaries by removing code not proven to be reachable from
+  entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]). Not all
+  code is expected to work with this option, and since it is experimental you may encounter problems.
+* Redefinition of constants is now well defined and follows world age semantics ([#57253]). Additional redefinitions
+  (e.g. of types) are now allowed. See [the new manual chapter on world age](https://docs.julialang.org/en/v1.13-dev/manual/worldage/).
 * A new keyword argument `usings::Bool` has been added to `names`, returning all names visible
   via `using` ([#54609]).
 * The `@atomic` macro family now supports reference assignment syntax, e.g. `@atomic :monotonic v[3] += 4`,
@@ -37,9 +36,10 @@ Language changes
 * Julia now defaults to 1 "interactive" thread, in addition to the 1 default "worker" thread. i.e. `-t1,1`.
   This means in default configuration the main task and repl (when in interactive mode), which both run on
   thread 1, now run within the `interactive` threadpool. The libuv IO loop also runs on thread 1,
-  helping efficient utilization of the worker threadpool used by `Threads.@spawn`. Pass `0` to disable the
-  interactive thread i.e. `-t1,0` or `JULIA_NUM_THREADS=1,0`, or `-tauto,0` etc. The zero is explicitly
-  required to disable it, `-t2` will set the equivalent of `-t2,1` ([#57087]).
+  helping efficient utilization of the worker threadpool used by `Threads.@spawn`. Asking for specifically 1 thread
+  (`-t1`/`JULIA_NUM_THREADS=1`) or passing `0` will disable the interactive thread i.e. `-t1,0` or `JULIA_NUM_THREADS=1,0`
+  , or `-tauto,0` etc. Asking for more than 1 thread will enable the interactive thread so
+  `-t2` will set the equivalent of `-t2,1` ([#57087]).
 * When a method is replaced with an exactly equivalent one, the old method is not deleted. Instead, the
   new method takes priority and becomes more specific than the old method. Thus if the new method is deleted
   later, the old method will resume operating. This can be useful in mocking frameworks (as in SparseArrays,
@@ -59,7 +59,7 @@ Language changes
 * Calling `using` on a package name inside of that package of that name (especially relevant
   for a submodule) now explicitly uses that package without examining the Manifest and
   environment, which is identical to the behavior of `..Name`. This appears to better match
-  how users expect this to behave in the wild. ([#57727])
+  how users expect this to behave in the wild ([#57727]).
 
 Compiler/Runtime improvements
 -----------------------------
@@ -283,9 +283,10 @@ Tooling Improvements
 [#57081]: https://github.com/JuliaLang/julia/issues/57081
 [#57087]: https://github.com/JuliaLang/julia/issues/57087
 [#57109]: https://github.com/JuliaLang/julia/issues/57109
+[#57253]: https://github.com/JuliaLang/julia/issues/57253
 
 Julia v1.11 Release Notes
-========================
+=========================
 
 New language features
 ---------------------
