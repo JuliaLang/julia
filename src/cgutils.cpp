@@ -401,8 +401,8 @@ static Constant *julia_pgv(jl_codegen_params_t &params, Module *M, const char *c
     StringRef localname;
     std::string gvname;
     if (!gv) {
-        uint64_t id = jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1); // TODO: use params.global_targets.size()
-        raw_string_ostream(gvname) << cname << id;
+        raw_string_ostream(gvname) << cname;
+        freshen_name(gvname);
         localname = StringRef(gvname);
     }
     else {
@@ -491,7 +491,10 @@ Constant *literal_pointer_val_slot(jl_codegen_params_t &params, Module *M, jl_va
         return julia_pgv(params, M, "jl_sym#", addr, NULL, p);
     }
     // something else gets just a generic name
-    return julia_pgv(params, M, "jl_global#", p);
+    std::string name;
+    auto dt = (jl_datatype_t *)jl_typeof(p);
+    raw_string_ostream(name) << "jl_global_" << jl_symbol_name(dt->name->name);
+    return julia_pgv(params, M, name.c_str(), p);
 }
 
 static size_t dereferenceable_size(jl_value_t *jt)
