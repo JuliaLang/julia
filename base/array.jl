@@ -1121,9 +1121,9 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
         end
         newmem = mem
     else
-    # Fall back to allocating a larger buffer
-    newmem = array_new_memory(mem, newmemlen)
-    unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
+        # Fall back to allocating a larger buffer
+        newmem = array_new_memory(mem, newmemlen)
+        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
     end
     # Detect concurrent mutation after potential allocation
     ref === a.ref || throw(ConcurrencyViolationError(
