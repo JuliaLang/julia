@@ -134,6 +134,8 @@ New library features
 * `Timer` now has readable `timeout` and `interval` properties, and a more descriptive `show` method ([#57081]).
 * `sort` now supports `NTuple`s ([#54494]).
 * `map!(f, A)` now stores the results in `A`, like `map!(f, A, A)` or `A .= f.(A)` ([#40632]).
+* `setprecision` with a function argument (typically a `do` block) is now thread safe. Other forms
+  should be avoided, and types should switch to an implementation using `ScopedValue` ([#51362]).
 
 Standard library changes
 ------------------------
