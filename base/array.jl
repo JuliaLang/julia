@@ -1079,7 +1079,6 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     offset  = memoryrefoffset(ref)
     memlen  = length(mem)
     newlen  = len + delta              # logical length after grow
-    #### NEW: fast path when the vector is empty (len == 0)  (#58640)
     if len == 0
         # How many unused cells are in front of the current offset?
         headroom = offset - 1
@@ -1095,9 +1094,10 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     end
     # Safety: detect concurrent mutation or corrupted state
     if offset + len - 1 > memlen || offset < 1
-        throw(ConcurrencyViolationError(
-              "Vector has invalid state. Resize with correct locks"))
+        throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
     end
+    # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
+    # the +1 is because I didn't want to have an off by 1 error.
     # If there is extra data after the end of the array we can use that space so long as there is enough
     # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
     # Specifically, we want to ensure that we will only do this operation once before
@@ -1125,9 +1125,9 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
         newmem = array_new_memory(mem, newmemlen)
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
     end
-    # Detect concurrent mutation after potential allocation
-    ref === a.ref || throw(ConcurrencyViolationError(
-                           "Vector can not be resized concurrently"))
+    if ref !== a.ref
+        throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
+    end
     setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
 end
 
