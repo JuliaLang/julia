@@ -1098,16 +1098,13 @@ function _growbeg_internal!(a::Vector, delta::Int, len::Int)
         throw(ConcurrencyViolationError(
               "Vector has invalid state. Resize with correct locks"))
     end
+    # If there is extra data after the end of the array we can use that space so long as there is enough
+    # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
+    # Specifically, we want to ensure that we will only do this operation once before
+    # increasing the size of the array, and that we leave enough space at both the beginning and the end.
     # We need at least 2*delta spare slots (delta front + delta back)
-    newmemlen  = max(overallocation(len), len + 2delta + 1)
-    newoffset  = div(newmemlen - newlen, 2) + 1    # centre the data
-    if newoffset + newlen < memlen
-        # Re-use existing buffer ----------------------------------------
-        unsafe_copyto!(mem, newoffset + delta, mem, offset, len)
-        @inbounds for j in offset : newoffset + delta - 1
-            _unsetindex!(mem, j)                   # GC friendliness
-        end
-        newmem = mem
+    newmemlen = max(overallocation(len), len + 2 * delta + 1)
+    newoffset = div(newmemlen - newlen, 2) + 1
     else
         # Allocate a larger buffer --------------------------------------
         newmem = array_new_memory(mem, newmemlen)
