@@ -258,6 +258,13 @@ function tailjoin(A::SimpleVector, i::Int)
     return t
 end
 
+## type equality
+
+function _types_are_equal(A::Type, B::Type)
+    @_total_meta
+    ccall(:jl_types_equal, Cint, (Any, Any), A, B) !== Cint(0)
+end
+
 ## promotion mechanism ##
 
 """
@@ -307,19 +314,76 @@ promote_type(T) = T
 promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
 promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
+# The following four methods are kept temporarily to prevent breaking a broken registered
+# package, PolynomialRings.jl. Deleting these methods causes dispatch ambiguity errors
+# for PolynomialRings.jl, because PolynomialRings.jl adds method to `promote_type`, which
+# is not allowed.
 promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type(::Type{T}, ::Type{T}) where {T} = T
 promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
 promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
 
+const _promote_type_binary_recursion_depth_limit_exception = let
+    s = "`promote_type`: recursion depth limit reached, giving up; check for faulty/conflicting/missing `promote_rule` methods"
+    ArgumentError(s)
+end
+const _promote_type_binary_detected_infinite_recursion_exception = let
+    s = "`promote_type`: detected unbounded recursion caused by faulty `promote_rule` logic"
+    ArgumentError(s)
+end
+function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple{Vararg{Nothing}}) where {T,S}
+    function err_giving_up()
+        @noinline
+        throw(_promote_type_binary_recursion_depth_limit_exception)
+    end
+    function err_detected_infinite_recursion()
+        @noinline
+        throw(_promote_type_binary_detected_infinite_recursion_exception)
+    end
+    type_is_bottom(::Type{X}) where {X} = X === Bottom
+    normalize_type(::Type{X}) where {X} = X
+    normalize_promote_rule(::Type{A}, ::Type{B}) where {A, B} = normalize_type(promote_rule(A, B))
+    detect_loop(::Type{A}, ::Type{B}) where {A, B} = _types_are_equal(T, A) && _types_are_equal(S, B)
+    if type_is_bottom(T)
+        return S
+    end
+    if type_is_bottom(S) || _types_are_equal(S, T)
+        return T
+    end
+    # Try promote_rule in both orders.
+    ts = normalize_promote_rule(T, S)
+    st = normalize_promote_rule(S, T)
+    # If no promote_rule is defined, both directions give Bottom. In that
+    # case use typejoin on the original types instead.
+    if type_is_bottom(st) && type_is_bottom(ts)
+        return normalize_type(typejoin(T, S))
+    end
+    if detect_loop(ts, st) || detect_loop(st, ts)
+        # This is not strictly necessary, as we already limit the recursion depth, but
+        # makes for nicer UX.
+        err_detected_infinite_recursion()
+    end
+    if recursion_depth_limit === ()
+        err_giving_up()
+    end
+    l = tail(recursion_depth_limit)
+    _promote_type_binary(ts, st, l)
+end
+
+"""
+    _promote_type_binary_recursion_depth_limit::Tuple{Vararg{Nothing}}
+
+Recursion depth limit for `_promote_type_binary`, to prevent stack overflow.
+"""
+const _promote_type_binary_recursion_depth_limit = let
+    n2 = (nothing, nothing)
+    n4 = (n2..., n2...)
+    n8 = (n4..., n4...)
+    n8
+end
+
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
-    @inline
-    # Try promote_rule in both orders. Typically only one is defined,
-    # and there is a fallback returning Bottom below, so the common case is
-    #   promote_type(T, S) =>
-    #   promote_result(T, S, result, Bottom) =>
-    #   typejoin(result, Bottom) => result
-    promote_result(T, S, promote_rule(T,S), promote_rule(S,T))
+    _promote_type_binary(T, S, _promote_type_binary_recursion_depth_limit)
 end
 
 """
@@ -338,11 +402,6 @@ promote_rule(::Type{Bottom}, slurp...) = Bottom
 promote_rule(::Type{Bottom}, ::Type{Bottom}, slurp...) = Bottom # not strictly necessary, since the next method would match unambiguously anyways
 promote_rule(::Type{Bottom}, ::Type{T}, slurp...) where {T} = T
 promote_rule(::Type{T}, ::Type{Bottom}, slurp...) where {T} = T
-
-promote_result(::Type,::Type,::Type{T},::Type{S}) where {T,S} = (@inline; promote_type(T,S))
-# If no promote_rule is defined, both directions give Bottom. In that
-# case use typejoin on the original types instead.
-promote_result(::Type{T},::Type{S},::Type{Bottom},::Type{Bottom}) where {T,S} = (@inline; typejoin(T, S))
 
 """
     promote(xs...)
