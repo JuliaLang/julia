@@ -1074,36 +1074,48 @@ array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when i
 
 function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     @_terminates_locally_meta
-    ref = a.ref
-    mem = ref.mem
-    offset = memoryrefoffset(ref)
-    newlen = len + delta
-    memlen = length(mem)
-    if offset + len - 1 > memlen || offset < 1
-        throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
-    end
-    # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
-    # the +1 is because I didn't want to have an off by 1 error.
-    newmemlen = max(overallocation(len), len + 2 * delta + 1)
-    newoffset = div(newmemlen - newlen, 2) + 1
-    # If there is extra data after the end of the array we can use that space so long as there is enough
-    # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
-    # Specifically, we want to ensure that we will only do this operation once before
-    # increasing the size of the array, and that we leave enough space at both the beginning and the end.
-    if newoffset + newlen < memlen
-        newoffset = div(memlen - newlen, 2) + 1
-        newmem = mem
-        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-        for j in offset:newoffset+delta-1
-            @inbounds _unsetindex!(mem, j)
+    ref     = a.ref
+    mem     = ref.mem
+    offset  = memoryrefoffset(ref)
+    memlen  = length(mem)
+    newlen  = len + delta              # logical length after grow
+    #### NEW: fast path when the vector is empty (len == 0)  (#58640)
+    if len == 0
+        # How many unused cells are in front of the current offset?
+        headroom = offset - 1
+        # If there is already enough space at the front, just slide back.
+        if headroom ≥ delta
+            newoffset_rel = 1 - delta              # may be ≤ 0, but safe
+            setfield!(a, :ref, @inbounds memoryref(ref, newoffset_rel))
+            setfield!(a, :size, (delta,))          # len == delta now
+            return
         end
+        # Otherwise fall through to the regular logic below, which will
+        # re-centre the data (still zero-copy if mem is big enough).
+    end
+    # Safety: detect concurrent mutation or corrupted state
+    if offset + len - 1 > memlen || offset < 1
+        throw(ConcurrencyViolationError(
+              "Vector has invalid state. Resize with correct locks"))
+    end
+    # We need at least 2*delta spare slots (delta front + delta back)
+    newmemlen  = max(overallocation(len), len + 2delta + 1)
+    newoffset  = div(newmemlen - newlen, 2) + 1    # centre the data
+    if newoffset + newlen < memlen
+        # Re-use existing buffer ----------------------------------------
+        unsafe_copyto!(mem, newoffset + delta, mem, offset, len)
+        @inbounds for j in offset : newoffset + delta - 1
+            _unsetindex!(mem, j)                   # GC friendliness
+        end
+        newmem = mem
     else
+        # Allocate a larger buffer --------------------------------------
         newmem = array_new_memory(mem, newmemlen)
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
     end
-    if ref !== a.ref
-        throw(ConcurrencyViolationError("Vector can not be resized concurrently"))
-    end
+    # Detect concurrent mutation after potential allocation
+    ref === a.ref || throw(ConcurrencyViolationError(
+                           "Vector can not be resized concurrently"))
     setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
 end
 
@@ -1111,25 +1123,16 @@ function _growbeg!(a::Vector, delta::Integer)
     @_noub_meta
     delta = Int(delta)
     delta == 0 && return # avoid attempting to index off the end
-    delta ≥ 0 || throw(ArgumentError("grow requires delta ≥ 0"))
+    delta >= 0 || throw(ArgumentError("grow requires delta >= 0"))
     ref = a.ref
     mem = ref.mem
     len = length(a)
     offset = memoryrefoffset(ref)
-    if len == 0
-        # Fast path: no data to shift, just shift offset if space permits
-        offset ≥ delta || throw(ArgumentError("requested prepend exceeds capacity"))
-        new_offset = offset - delta
-        setfield!(a, :ref, @inbounds memoryref(ref, new_offset + 1))
-        setfield!(a, :size, (delta,))
-        return
-    end
     newlen = len + delta
     setfield!(a, :size, (newlen,))
     # if offset is far enough advanced to fit data in existing memory without copying
-    if offset ≥ delta
-        new_offset = offset - delta
-        setfield!(a, :ref, @inbounds memoryref(ref, new_offset + 1))
+    if delta <= offset - 1
+        setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
     else
         @noinline _growbeg_internal!(a, delta, len)
     end
