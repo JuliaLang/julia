@@ -3307,4 +3307,3 @@ end
     ref = memoryref(mem, 2)
     @test parent(ref) === mem
 end
-
