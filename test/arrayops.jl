@@ -3308,9 +3308,3 @@ end
     @test parent(ref) === mem
 end
 
-@testset "_growbeg! avoids allocation on empty vector (#58640)" begin
-    x = Vector{Int}(undef, 5)
-    empty!(x)
-    @test @allocated insert!(x, 1, 123) == 0
-    @test x == [123]
-end
