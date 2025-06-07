@@ -1074,30 +1074,54 @@ array_new_memory(mem::Memory, newlen::Int) = typeof(mem)(undef, newlen) # when i
 
 function _growbeg_internal!(a::Vector, delta::Int, len::Int)
     @_terminates_locally_meta
-    ref = a.ref
-    mem = ref.mem
-    offset = memoryrefoffset(ref)
-    newlen = len + delta
-    memlen = length(mem)
+    ref     = a.ref
+    mem     = ref.mem
+    offset  = memoryrefoffset(ref)
+    memlen  = length(mem)
+    newlen  = len + delta              # logical length after grow
+    if len == 0
+        # How many unused cells are in front of the current offset?
+        headroom = offset - 1
+        # If there is already enough space at the front, just slide back.
+        if headroom ≥ delta
+            newoffset_rel = 1 - delta              # may be ≤ 0, but safe
+            setfield!(a, :ref, @inbounds memoryref(ref, newoffset_rel))
+            setfield!(a, :size, (delta,))          # len == delta now
+            return
+        end
+        # Otherwise fall through to the regular logic below, which will
+        # re-centre the data (still zero-copy if mem is big enough).
+    end
+    # Safety: detect concurrent mutation or corrupted state
     if offset + len - 1 > memlen || offset < 1
         throw(ConcurrencyViolationError("Vector has invalid state. Don't modify internal fields incorrectly, or resize without correct locks"))
     end
     # since we will allocate the array in the middle of the memory we need at least 2*delta extra space
     # the +1 is because I didn't want to have an off by 1 error.
-    newmemlen = max(overallocation(len), len + 2 * delta + 1)
-    newoffset = div(newmemlen - newlen, 2) + 1
     # If there is extra data after the end of the array we can use that space so long as there is enough
     # space at the end that there won't be quadratic behavior with a mix of growth from both ends.
     # Specifically, we want to ensure that we will only do this operation once before
     # increasing the size of the array, and that we leave enough space at both the beginning and the end.
-    if newoffset + newlen < memlen
-        newoffset = div(memlen - newlen, 2) + 1
-        newmem = mem
-        unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
-        for j in offset:newoffset+delta-1
-            @inbounds _unsetindex!(mem, j)
+    # We need at least 2*delta spare slots (delta front + delta back)
+    newmemlen = max(overallocation(len), len + 2 * delta + 1)
+    newoffset = div(newmemlen - newlen, 2) + 1
+    if newoffset + newlen ≤ memlen
+        # Re-use existing memory buffer
+        src_start  = offset
+        dest_start = newoffset + delta
+        # Defensive bounds check
+        if dest_start + len - 1 > memlen
+            throw(BoundsError("Attempting to copy beyond memory buffer"))
         end
+        unsafe_copyto!(mem, dest_start, mem, src_start, len)
+        # Zero out old data to help GC (safe bounds)
+        unset_hi = min(memlen, dest_start - 1)
+        @inbounds for j in src_start:unset_hi
+            _unsetindex!(mem, j)
+        end
+        newmem = mem
     else
+        # Fall back to allocating a larger buffer
         newmem = array_new_memory(mem, newmemlen)
         unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
     end
