@@ -1047,14 +1047,15 @@ int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
 
 // Utility function to return whether `e` is any of the special AST types or
 // will always evaluate to itself exactly unchanged. This corresponds to
-// `is_self_quoting` in Core.Compiler utilities.
-int jl_is_ast_node(jl_value_t *e) JL_NOTSAFEPOINT
+// `isa_ast_node` in Core.Compiler utilities.
+int jl_isa_ast_node(jl_value_t *e) JL_NOTSAFEPOINT
 {
     return jl_is_newvarnode(e)
         || jl_is_code_info(e)
         || jl_is_linenode(e)
         || jl_is_gotonode(e)
         || jl_is_gotoifnot(e)
+        || jl_is_enternode(e)
         || jl_is_returnnode(e)
         || jl_is_ssavalue(e)
         || jl_is_slotnumber(e)
@@ -1069,9 +1070,10 @@ int jl_is_ast_node(jl_value_t *e) JL_NOTSAFEPOINT
         || jl_is_expr(e);
 }
 
-static int is_self_quoting_expr(jl_expr_t *e) JL_NOTSAFEPOINT
+static int is_self_escaping_expr(jl_expr_t *e) JL_NOTSAFEPOINT
 {
     return (e->head == jl_inert_sym ||
+            e->head == jl_leave_sym ||
             e->head == jl_core_sym ||
             e->head == jl_line_sym ||
             e->head == jl_lineinfo_sym ||
@@ -1089,12 +1091,13 @@ int need_esc_node(jl_value_t *e) JL_NOTSAFEPOINT
         || jl_is_ssavalue(e)
         || jl_is_slotnumber(e)
         || jl_is_argument(e)
+        || jl_is_enternode(e)
         || jl_is_quotenode(e))
         return 0;
     if (jl_is_expr(e))
-        return !is_self_quoting_expr((jl_expr_t*)e);
+        return !is_self_escaping_expr((jl_expr_t*)e);
     // note: jl_is_globalref(e) is not included here, since we care a little about about having a line number for it
-    return jl_is_ast_node(e);
+    return jl_isa_ast_node(e);
 }
 
 static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx, jl_value_t **lineinfo, size_t world, int throw_load_error)

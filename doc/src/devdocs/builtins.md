@@ -41,4 +41,6 @@ Core.get_binding_type
 Core.IntrinsicFunction
 Core.Intrinsics
 Core.IR
+Base.quoted
+Base.isa_ast_node
 ```
