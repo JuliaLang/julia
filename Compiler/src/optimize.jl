@@ -1245,8 +1245,7 @@ function convert_to_ircode(ci::CodeInfo, sv::OptimizationState)
             empty!(sv.cfg.blocks[block].succs)
 
             if !(idx < length(code) && isa(code[idx + 1], ReturnNode) && !isdefined((code[idx + 1]::ReturnNode), :val))
-                # Any statements from here to the end of the block have been wrapped in Core.Const(...)
-                # by type inference (effectively deleting them). Only task left is to replace the block
+                # Any statements from here to the end of the block are unreachable. Replace the block
                 # terminator with an explicit `unreachable` marker.
 
                 if block_end > idx
