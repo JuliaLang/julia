@@ -357,7 +357,7 @@ static int emit_codeinst_and_edges(jl_code_instance_t *codeinst)
             JL_GC_PUSH1(&code);
             jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
             jl_method_t *def = mi->def.method;
-            if (jl_is_string(code) && jl_is_method(def))
+            if (jl_is_method(def))
                 code = (jl_value_t*)jl_uncompress_ir(def, codeinst, (jl_value_t*)code);
             if (jl_is_code_info(code)) {
                 jl_emit_codeinst_to_jit(codeinst, (jl_code_info_t*)code);
