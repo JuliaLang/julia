@@ -777,55 +777,117 @@ JL_DLLEXPORT int jl_mi_try_insert(jl_method_instance_t *mi JL_ROOTING_ARGUMENT,
     return ret;
 }
 
-static int foreach_typename_in_module(
-        jl_module_t *m,
-        int (*visit)(jl_typename_t *tn, void *env),
-        void *env)
+enum top_typename_facts {
+    EXACTLY_ANY = 1 << 0,
+    HAVE_TYPE = 1 << 1,
+    EXACTLY_TYPE = 1 << 2,
+    HAVE_FUNCTION = 1 << 3,
+    EXACTLY_FUNCTION = 1 << 4,
+    HAVE_KWCALL = 1 << 5,
+    EXACTLY_KWCALL = 1 << 6,
+    SHORT_TUPLE = 1 << 7,
+};
+
+static void foreach_top_nth_typename(void (*f)(jl_typename_t*, int, void*), jl_value_t *a JL_PROPAGATES_ROOT, int n, unsigned *facts, void *env)
 {
-    jl_svec_t *table = jl_atomic_load_relaxed(&m->bindings);
-    for (size_t i = 0; i < jl_svec_len(table); i++) {
-        jl_binding_t *b = (jl_binding_t*)jl_svecref(table, i);
-        if ((void*)b == jl_nothing)
-            break;
-        jl_sym_t *name = b->globalref->name;
-        jl_value_t *v = jl_get_latest_binding_value_if_const(b);
-        if (v) {
-            jl_value_t *uw = jl_unwrap_unionall(v);
-            if (jl_is_datatype(uw)) {
-                jl_typename_t *tn = ((jl_datatype_t*)uw)->name;
-                if (tn->module == m && tn->name == name && tn->wrapper == v) {
-                    // this is the original/primary binding for the type (name/wrapper)
-                    if (!visit(((jl_datatype_t*)uw)->name, env))
-                        return 0;
-                }
+    if (jl_is_datatype(a)) {
+        if (n <= 0) {
+            jl_datatype_t *dt = ((jl_datatype_t*)a);
+            if (dt->name == jl_type_typename) { // key Type{T} on T instead of Type
+                *facts |= HAVE_TYPE;
+                foreach_top_nth_typename(f, jl_tparam0(a), -1, facts, env);
             }
-            else if (jl_is_module(v)) {
-                jl_module_t *child = (jl_module_t*)v;
-                if (child != m && child->parent == m && child->name == name) {
-                    // this is the original/primary binding for the submodule
-                    if (!foreach_typename_in_module(child, visit, env))
-                        return 0;
+            else if (dt == jl_function_type) {
+                if (n == -1) // key Type{>:Function} as Type instead of Function
+                    *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
+                else
+                    *facts |= HAVE_FUNCTION | EXACTLY_FUNCTION;
+            }
+            else if (dt == jl_any_type) {
+                if (n == -1) // key Type{>:Any} and kinds as Type instead of Any
+                    *facts |= EXACTLY_TYPE; // HAVE_TYPE is already set
+                else
+                    *facts |= EXACTLY_ANY;
+            }
+            else if (dt == jl_kwcall_type) {
+                if (n == -1) // key Type{>:typeof(kwcall)} as exactly kwcall
+                    *facts |= EXACTLY_KWCALL;
+                else
+                    *facts |= HAVE_KWCALL;
+            }
+            else {
+                while (1) {
+                    jl_datatype_t *super = dt->super;
+                    if (super == jl_function_type) {
+                        *facts |= HAVE_FUNCTION;
+                        break;
+                    }
+                    if (super == jl_any_type || super->super == dt)
+                        break;
+                    dt = super;
                 }
+                f(dt->name, 1, env);
             }
         }
-        table = jl_atomic_load_relaxed(&m->bindings);
+        else if (jl_is_tuple_type(a)) {
+            if (jl_nparams(a) >= n)
+                foreach_top_nth_typename(f, jl_tparam(a, n - 1), 0, facts, env);
+            else
+                *facts |= SHORT_TUPLE;
+        }
     }
-    return 1;
+    else if (jl_is_typevar(a)) {
+        foreach_top_nth_typename(f, ((jl_tvar_t*)a)->ub, n, facts, env);
+    }
+    else if (jl_is_unionall(a)) {
+        foreach_top_nth_typename(f, ((jl_unionall_t*)a)->body, n, facts, env);
+    }
+    else if (jl_is_uniontype(a)) {
+        jl_uniontype_t *u = (jl_uniontype_t*)a;
+        foreach_top_nth_typename(f, u->a, n, facts, env);
+        foreach_top_nth_typename(f, u->b, n, facts, env);
+    }
 }
 
-static int jl_foreach_reachable_typename(int (*visit)(jl_typename_t *tn, void *env), jl_array_t *mod_array, void *env)
+// Inspect type `argtypes` for all backedge keys that might be relevant to it, splitting it
+// up on some commonly observed patterns to make a better distribution.
+// (It could do some of that balancing automatically, but for now just hard-codes kwcall.)
+// Along the way, record some facts about what was encountered, so that those additional
+// calls can be added later if needed for completeness.
+// The `int explct` argument instructs the caller if the callback is due to an exactly
+// encountered type or if it rather encountered a subtype.
+// This is not capable of walking to all top-typenames for an explicitly encountered
+// Function or Any, so the caller a fallback that can scan the entire  in that case.
+// We do not de-duplicate calls when encountering a Union.
+static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*), jl_value_t *argtypes JL_PROPAGATES_ROOT, int all_subtypes, void *env)
 {
-    for (size_t i = 0; i < jl_array_nrows(mod_array); i++) {
-        jl_module_t *m = (jl_module_t*)jl_array_ptr_ref(mod_array, i);
-        assert(jl_is_module(m));
-        if (m->parent == m) // some toplevel modules (really just Base) aren't actually
-            if (!foreach_typename_in_module(m, visit, env))
-                return 0;
+    unsigned facts = 0;
+    foreach_top_nth_typename(f, argtypes, 1, &facts, env);
+    if (facts & HAVE_KWCALL) {
+        // split kwcall on the 3rd argument instead, using the same logic
+        unsigned kwfacts = 0;
+        foreach_top_nth_typename(f, argtypes, 3, &kwfacts, env);
+        // copy kwfacts to original facts
+        if (kwfacts & SHORT_TUPLE)
+            kwfacts |= (all_subtypes ? EXACTLY_ANY : EXACTLY_KWCALL);
+        facts |= kwfacts;
     }
+    if (all_subtypes && (facts & (EXACTLY_FUNCTION | EXACTLY_TYPE | EXACTLY_ANY)))
+        // flag that we have an explct match than is necessitating a full table scan
+        return 0;
+    // or inform caller of only which supertypes are applicable
+    if (facts & HAVE_FUNCTION)
+        f(jl_function_type->name, facts & EXACTLY_FUNCTION ? 1 : 0, env);
+    if (facts & HAVE_TYPE)
+        f(jl_type_typename, facts & EXACTLY_TYPE ? 1 : 0, env);
+    if (facts & (HAVE_KWCALL | EXACTLY_KWCALL))
+        f(jl_kwcall_type->name, facts & EXACTLY_KWCALL ? 1 : 0, env);
+    f(jl_any_type->name, facts & EXACTLY_ANY ? 1 : 0, env);
     return 1;
 }
 
-int foreach_mtable_in_module(
+
+static int foreach_mtable_in_module(
         jl_module_t *m,
         int (*visit)(jl_methtable_t *mt, void *env),
         void *env)
@@ -2102,41 +2164,56 @@ JL_DLLEXPORT void jl_method_instance_add_backedge(jl_method_instance_t *callee, 
 }
 
 
+static int jl_foreach_top_typename_for(void (*f)(jl_typename_t*, int, void*), jl_value_t *argtypes JL_PROPAGATES_ROOT, int all_subtypes, void *env);
+
 struct _typename_add_backedge {
     jl_value_t *typ;
     jl_value_t *caller;
 };
 
-static void _typename_add_backedge(jl_typename_t *tn, void *env0)
+static void _typename_add_backedge(jl_typename_t *tn, int explct, void *env0)
 {
     struct _typename_add_backedge *env = (struct _typename_add_backedge*)env0;
     JL_GC_PROMISE_ROOTED(env->typ);
     JL_GC_PROMISE_ROOTED(env->caller);
-    if (jl_atomic_load_relaxed(&allow_new_worlds)) {
-        if (!tn->backedges) {
-            // lazy-init the backedges array
-            tn->backedges = jl_alloc_vec_any(2);
-            jl_gc_wb(tn, tn->backedges);
-            jl_array_ptr_set(tn->backedges, 0, env->typ);
-            jl_array_ptr_set(tn->backedges, 1, env->caller);
-        }
-        else {
-            // check if the edge is already present and avoid adding a duplicate
-            size_t i, l = jl_array_nrows(tn->backedges);
-            // reuse an already cached instance of this type, if possible
-            // TODO: use jl_cache_type_(tt) like cache_method does, instead of this linear scan?
-            for (i = 1; i < l; i += 2) {
-                if (jl_array_ptr_ref(tn->backedges, i) != env->caller) {
-                    if (jl_types_equal(jl_array_ptr_ref(tn->backedges, i - 1), env->typ)) {
-                        env->typ = jl_array_ptr_ref(tn->backedges, i - 1);
-                        break;
-                    }
-                }
-            }
-            jl_array_ptr_1d_push(tn->backedges, env->typ);
-            jl_array_ptr_1d_push(tn->backedges, env->caller);
+    if (!explct)
+        return;
+    jl_genericmemory_t *allbackedges = jl_method_table->backedges;
+    jl_array_t *backedges = (jl_array_t*)jl_eqtable_get(allbackedges, (jl_value_t*)tn, NULL);
+    if (backedges == NULL) {
+        backedges = jl_alloc_vec_any(2);
+        JL_GC_PUSH1(&backedges);
+        jl_array_del_end(backedges, 2);
+        jl_genericmemory_t *newtable = jl_eqtable_put(allbackedges, (jl_value_t*)tn, (jl_value_t*)backedges, NULL);
+        JL_GC_POP();
+        if (newtable != allbackedges) {
+            jl_method_table->backedges = newtable;
+            jl_gc_wb(jl_method_table, newtable);
         }
     }
+    // check if the edge is already present and avoid adding a duplicate
+    size_t i, l = jl_array_nrows(backedges);
+    // reuse an already cached instance of this type, if possible
+    // TODO: use jl_cache_type_(tt) like cache_method does, instead of this linear scan?
+    // TODO: use as_global_root and de-dup edges array too
+    for (i = 1; i < l; i += 2) {
+        if (jl_array_ptr_ref(backedges, i) == env->caller) {
+            if (jl_types_equal(jl_array_ptr_ref(backedges, i - 1), env->typ)) {
+                env->typ = jl_array_ptr_ref(backedges, i - 1);
+                return; // this edge already recorded
+            }
+        }
+    }
+    for (i = 1; i < l; i += 2) {
+        if (jl_array_ptr_ref(backedges, i) != env->caller) {
+            if (jl_types_equal(jl_array_ptr_ref(backedges, i - 1), env->typ)) {
+                env->typ = jl_array_ptr_ref(backedges, i - 1);
+                break;
+            }
+        }
+    }
+    jl_array_ptr_1d_push(backedges, env->typ);
+    jl_array_ptr_1d_push(backedges, env->caller);
 }
 
 // add a backedge from a non-existent signature to caller
@@ -2146,11 +2223,13 @@ JL_DLLEXPORT void jl_method_table_add_backedge(jl_value_t *typ, jl_code_instance
     if (!jl_atomic_load_relaxed(&allow_new_worlds))
         return;
     // try to pick the best cache(s) for this typ edge
-    struct _typename_add_backedge env = {typ, (jl_value_t*)caller};
-    jl_methcache_t *mc = jl_method_table->cache;
+    jl_methtable_t *mt = jl_method_table;
+    jl_methcache_t *mc = mt->cache;
     JL_LOCK(&mc->writelock);
-    if (jl_atomic_load_relaxed(&allow_new_worlds))
-        jl_foreach_top_typename_for(_typename_add_backedge, typ, &env);
+    if (jl_atomic_load_relaxed(&allow_new_worlds)) {
+        struct _typename_add_backedge env = {typ, (jl_value_t*)caller};
+        jl_foreach_top_typename_for(_typename_add_backedge, typ, 0, &env);
+    }
     JL_UNLOCK(&mc->writelock);
 }
 
@@ -2164,65 +2243,66 @@ struct _typename_invalidate_backedge {
     int invalidated;
 };
 
-static void _typename_invalidate_backedges(jl_typename_t *tn, void *env0)
+static void _typename_invalidate_backedges(jl_typename_t *tn, int explct, void *env0)
 {
     struct _typename_invalidate_backedge *env = (struct _typename_invalidate_backedge*)env0;
     JL_GC_PROMISE_ROOTED(env->type);
     JL_GC_PROMISE_ROOTED(env->isect); // isJuliaType considers jl_value_t** to be a julia object too
     JL_GC_PROMISE_ROOTED(env->isect2); // isJuliaType considers jl_value_t** to be a julia object too
-    if (tn->backedges) {
-        jl_value_t **backedges = jl_array_ptr_data(tn->backedges);
-        size_t i, na = jl_array_nrows(tn->backedges);
-        size_t ins = 0;
-        for (i = 1; i < na; i += 2) {
-            jl_value_t *backedgetyp = backedges[i - 1];
-            JL_GC_PROMISE_ROOTED(backedgetyp);
-            int missing = 0;
-            if (jl_type_intersection2(backedgetyp, (jl_value_t*)env->type, env->isect, env->isect2)) {
-                // See if the intersection was actually already fully
-                // covered, but that the new method is ambiguous.
-                //  -> no previous method: now there is one, need to update the missing edge
-                //  -> one+ previously matching method(s):
-                //    -> more specific then all of them: need to update the missing edge
-                //      -> some may have been ambiguous: now there is a replacement
-                //      -> some may have been called: now there is a replacement (also will be detected in the loop later)
-                //    -> less specific or ambiguous with any one of them: can ignore the missing edge (not missing)
-                //      -> some may have been ambiguous: still are
-                //      -> some may have been called: they may be partly replaced (will be detected in the loop later)
-                // c.f. `is_replacing`, which is a similar query, but with an existing method match to compare against
-                missing = 1;
-                for (size_t j = 0; j < env->n; j++) {
-                    jl_method_t *m = env->d[j];
-                    JL_GC_PROMISE_ROOTED(m);
-                    if (jl_subtype(*env->isect, m->sig) || (*env->isect2 && jl_subtype(*env->isect2, m->sig))) {
-                        // We now know that there actually was a previous
-                        // method for this part of the type intersection.
-                        if (!jl_type_morespecific(env->type, m->sig)) {
-                            missing = 0;
-                            break;
-                        }
+    jl_array_t *backedges = (jl_array_t*)jl_eqtable_get(jl_method_table->backedges, (jl_value_t*)tn, NULL);
+    if (backedges == NULL)
+        return;
+    jl_value_t **d = jl_array_ptr_data(backedges);
+    size_t i, na = jl_array_nrows(backedges);
+    size_t ins = 0;
+    for (i = 1; i < na; i += 2) {
+        jl_value_t *backedgetyp = d[i - 1];
+        JL_GC_PROMISE_ROOTED(backedgetyp);
+        int missing = 0;
+        if (jl_type_intersection2(backedgetyp, (jl_value_t*)env->type, env->isect, env->isect2)) {
+            // See if the intersection was actually already fully
+            // covered, but that the new method is ambiguous.
+            //  -> no previous method: now there is one, need to update the missing edge
+            //  -> one+ previously matching method(s):
+            //    -> more specific then all of them: need to update the missing edge
+            //      -> some may have been ambiguous: now there is a replacement
+            //      -> some may have been called: now there is a replacement (also will be detected in the loop later)
+            //    -> less specific or ambiguous with any one of them: can ignore the missing edge (not missing)
+            //      -> some may have been ambiguous: still are
+            //      -> some may have been called: they may be partly replaced (will be detected in the loop later)
+            // c.f. `is_replacing`, which is a similar query, but with an existing method match to compare against
+            missing = 1;
+            for (size_t j = 0; j < env->n; j++) {
+                jl_method_t *m = env->d[j];
+                JL_GC_PROMISE_ROOTED(m);
+                if (jl_subtype(*env->isect, m->sig) || (*env->isect2 && jl_subtype(*env->isect2, m->sig))) {
+                    // We now know that there actually was a previous
+                    // method for this part of the type intersection.
+                    if (!jl_type_morespecific(env->type, m->sig)) {
+                        missing = 0;
+                        break;
                     }
                 }
             }
-            *env->isect = *env->isect2 = NULL;
-            if (missing) {
-                jl_code_instance_t *backedge = (jl_code_instance_t*)backedges[i];
-                JL_GC_PROMISE_ROOTED(backedge);
-                invalidate_code_instance(backedge, env->max_world, 0);
-                env->invalidated = 1;
-                if (_jl_debug_method_invalidation)
-                    jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)backedgetyp);
-            }
-            else {
-                backedges[ins++] = backedges[i - 1];
-                backedges[ins++] = backedges[i - 0];
-            }
         }
-        if (ins == 0)
-            tn->backedges = NULL;
-        else
-            jl_array_del_end(tn->backedges, na - ins);
+        *env->isect = *env->isect2 = NULL;
+        if (missing) {
+            jl_code_instance_t *backedge = (jl_code_instance_t*)d[i];
+            JL_GC_PROMISE_ROOTED(backedge);
+            invalidate_code_instance(backedge, env->max_world, 0);
+            env->invalidated = 1;
+            if (_jl_debug_method_invalidation)
+                jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)backedgetyp);
+        }
+        else {
+            d[ins++] = d[i - 1];
+            d[ins++] = d[i - 0];
+        }
     }
+    if (ins == 0)
+        jl_eqtable_pop(jl_method_table->backedges, (jl_value_t*)tn, NULL, NULL);
+    else if (na != ins)
+        jl_array_del_end(backedges, na - ins);
 }
 
 struct invalidate_mt_env {
@@ -2390,14 +2470,6 @@ static int erase_all_backedges(jl_methtable_t *mt, void *env)
     return jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), erase_method_backedges, env);
 }
 
-static int erase_all_mc_backedges(jl_typename_t *tn, void *env)
-{
-    tn->backedges = NULL;
-    return 1;
-}
-
-static int jl_foreach_reachable_typename(int (*visit)(jl_typename_t *tn, void *env), jl_array_t *mod_array, void *env);
-
 JL_DLLEXPORT void jl_disable_new_worlds(void)
 {
     if (jl_generating_output())
@@ -2410,7 +2482,7 @@ JL_DLLEXPORT void jl_disable_new_worlds(void)
     jl_foreach_reachable_mtable(erase_all_backedges, mod_array, (void*)NULL);
 
     JL_LOCK(&jl_method_table->cache->writelock);
-    jl_foreach_reachable_typename(erase_all_mc_backedges, mod_array, (void*)NULL);
+    jl_method_table->backedges = (jl_genericmemory_t*)jl_an_empty_memory_any;
     JL_UNLOCK(&jl_method_table->cache->writelock);
     JL_GC_POP();
 }
@@ -2590,7 +2662,16 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
         jl_methcache_t *mc = jl_method_table->cache;
         JL_LOCK(&mc->writelock);
         struct _typename_invalidate_backedge typename_env = {type, &isect, &isect2, d, n, max_world, invalidated};
-        jl_foreach_top_typename_for(_typename_invalidate_backedges, type, &typename_env);
+        if (!jl_foreach_top_typename_for(_typename_invalidate_backedges, type, 1, &typename_env)) {
+            // if the new method cannot be split into exact backedges, scan the whole table for anything that might be affected
+            jl_genericmemory_t *allbackedges = jl_method_table->backedges;
+            for (size_t i = 0, n = allbackedges->length; i < n; i += 2) {
+                jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
+                jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i+1);
+                if (tn && tn != jl_nothing && backedges)
+                    _typename_invalidate_backedges((jl_typename_t*)tn, 0, &typename_env);
+            }
+        }
         invalidated |= typename_env.invalidated;
         if (oldmi && jl_array_nrows(oldmi)) {
             // search mc->cache and leafcache and drop anything that might overlap with the new method
