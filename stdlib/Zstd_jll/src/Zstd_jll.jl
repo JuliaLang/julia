@@ -4,6 +4,9 @@
 #
 baremodule Zstd_jll
 using Base, Libdl
+if Sys.iswindows() && Sys.WORD_SIZE == 32
+    using CompilerSupportLibraries_jll
+end
 
 export libzstd, zstd, zstdmt
 
@@ -13,17 +16,24 @@ const PATH_list = String[]
 const LIBPATH = Ref("")
 const LIBPATH_list = String[]
 artifact_dir::String = ""
+
 libzstd_path::String = ""
-
-if Sys.iswindows()
-    const _libzstd_path = BundledLazyLibraryPath("libzstd-1.dll")
-elseif Sys.isapple()
-    const _libzstd_path = BundledLazyLibraryPath("libzstd.1.dylib")
-else
-    const _libzstd_path = BundledLazyLibraryPath("libzstd.so.1")
-end
-
-const libzstd = LazyLibrary(_libzstd_path)
+const libzstd = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libzstd-1.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libzstd.1.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libzstd.so.1")
+    else
+        error("Zstd_jll: Library 'libzstd' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows() && Sys.WORD_SIZE == 32
+        LazyLibrary[libgcc_s]
+    else
+        LazyLibrary[]
+    end
+)
 
 if Sys.iswindows()
     const zstd_exe = "zstd.exe"
@@ -74,13 +84,16 @@ zstdmt() = adjust_ENV(`$(joinpath(Sys.BINDIR, Base.PRIVATE_LIBEXECDIR, zstdmt_ex
 
 # Function to eagerly dlopen our library and thus resolve all dependencies
 function eager_mode()
+    @static if @isdefined CompilerSupportLibraries_jll
+        CompilerSupportLibraries_jll.eager_mode()
+    end
     dlopen(libzstd)
 end
 
 is_available() = true
 
 function __init__()
-    global libzstd_path = string(_libzstd_path)
+    global libzstd_path = string(libzstd.path)
     global artifact_dir = dirname(Sys.BINDIR)
 end
 

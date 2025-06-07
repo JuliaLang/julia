@@ -13,17 +13,17 @@ const PATH_list = String[]
 const LIBPATH = Ref("")
 const LIBPATH_list = String[]
 artifact_dir::String = ""
-llvmlibunwind_path::String = ""
 
-const _llvmlibunwind_path = BundledLazyLibraryPath("libunwind")
-const llvmlibunwind = LazyLibrary(_llvmlibunwind_path)
+llvmlibunwind_path::String = ""
+const llvmlibunwind = LazyLibrary(BundledLazyLibraryPath("libunwind"))
+
 function eager_mode()
     dlopen(llvmlibunwind)
 end
 is_available() = @static Sys.isapple() ? true : false
 
 function __init__()
-    global llvmlibunwind_path = string(_llvmlibunwind_path)
+    global llvmlibunwind_path = string(llvmlibunwind.path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(llvmlibunwind_path)
     push!(LIBPATH_list, LIBPATH[])
