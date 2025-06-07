@@ -260,7 +260,15 @@ import BenchmarkTools as BT
 
 `as` works with `using` only when a single identifier is brought into scope.
 For example `using CSV: read as rd` works, but `using CSV as C` does not, since it operates
-on all of the exported names in `CSV`.
+on all of the exported names in `CSV`. Packages can also be renamed to `_`, for example
+
+```julia
+import ForwardDiff as _
+```
+
+This has the effect of loading the package while bringing none of its names (even the module name)
+in your namespace. This is useful to communicate that a package is only loaded for the methods it
+provides, instead of its names.
 
 ### Mixing multiple `using` and `import` statements
 
