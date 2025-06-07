@@ -164,7 +164,7 @@ required intermediate directories.
 Return `path`.
 
 # Examples
-```julia-repl
+```jldoctest; setup = :(curdir = pwd(); testdir = mktempdir(); cd(testdir)), teardown = :(cd(curdir); rm(testdir, recursive=true)), filter = r"^\\".*testingdir\\"\$"
 julia> mkdir("testingdir")
 "testingdir"
 
@@ -516,7 +516,7 @@ If the file does not exist a new file is created.
 Return `path`.
 
 # Examples
-```julia-repl
+```jldoctest; setup = :(curdir = pwd(); testdir = mktempdir(); cd(testdir)), teardown = :(cd(curdir); rm(testdir, recursive=true)), filter = r"[\\d\\.]+e[\\+\\-]?\\d+"
 julia> write("my_little_file", 2);
 
 julia> mtime("my_little_file")
@@ -1134,7 +1134,7 @@ for (path, dirs, files) in walkdir(".")
 end
 ```
 
-```julia-repl
+```jldoctest; setup = :(prevdir = pwd(); tmpdir = mktempdir(); cd(tmpdir)), teardown = :(cd(prevdir); rm(tmpdir, recursive=true))
 julia> mkpath("my/test/dir");
 
 julia> itr = walkdir("my");
