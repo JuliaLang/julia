@@ -3,7 +3,7 @@ using Pkg
 using Test
 prev_env = Base.active_project()
 Pkg.activate(temp=true)
-Pkg.add(Pkg.PackageSpec(name="ObjectFile", uuid="d8793406-e978-5875-9003-1fc021f44a92"))
+Pkg.add(Pkg.PackageSpec(name="ObjectFile", uuid="d8793406-e978-5875-9003-1fc021f44a92", version="0.4"))
 using ObjectFile
 try
 
