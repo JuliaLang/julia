@@ -921,13 +921,22 @@ function iterate(r::Union{StepRangeLen,LinRange}, i::Integer=zero(length(r)))
     unsafe_getindex(r, i), i
 end
 
-iterate(r::OrdinalRange) = isempty(r) ? nothing : (first(r), first(r))
-
-function iterate(r::OrdinalRange{T}, i) where {T}
+_iterate(r::OrdinalRange{T}, i::Nothing) where {T} = isempty(r) ? nothing : (first(r), first(r))
+function _iterate(r::OrdinalRange{T}, i) where {T}
     @inline
     i == last(r) && return nothing
     next = convert(T, i + step(r))
     (next, next)
+end
+iterate(r::OrdinalRange, i = nothing) = _iterate(r, i)
+
+function iterate(r::OneTo, i = oneunit(eltype(r)))
+    # checkbounds and checkindex are equivalent here, as a `OneTo` is its own axis.
+    # We use checkindex to work around failures for non-standard integer types
+    # See https://github.com/JuliaLang/julia/pull/27302
+    checkindex(Bool, r, i) || return nothing
+    # We use `step(r)` instead of `oneunit(i)` to support non-standard integers
+    unsafe_getindex(r, i), i + step(r)
 end
 
 ## indexing
