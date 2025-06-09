@@ -2822,10 +2822,18 @@ end
 end
 
 @testset "AbstractOneTo" begin
-    r = SizedArrays.SOneTo(4)
-    @test !Base.checkindex(Bool, r, 0)
-    for i in r
-        @test Base.checkindex(Bool, r, i)
+    @testset "checkindex" begin
+        r = SizedArrays.SOneTo(4)
+        @test !Base.checkindex(Bool, r, 0)
+        for i in r
+            @test Base.checkindex(Bool, r, i)
+        end
+        @test !Base.checkindex(Bool, r, length(r)+1)
+
+        for v in (0, 1, typemin(Int), typemax(Int))
+            @test !checkindex(Bool, Base.OneTo(0), v)
+        end
+        @test checkindex(Bool, Base.OneTo(typemax(Int)), typemax(Int))
+        @test !checkindex(Bool, Base.OneTo(typemax(Int)-1), typemax(Int))
     end
-    @test !Base.checkindex(Bool, r, length(r)+1)
 end
