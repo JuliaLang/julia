@@ -1231,7 +1231,7 @@ JL_DLLEXPORT void jl_module_import(jl_task_t *ct, jl_module_t *to, jl_module_t *
     jl_binding_partition_t *ownerbpart = bpart;
     jl_walk_binding_inplace(&ownerb, &ownerbpart, ct->world_age);
 
-    if (jl_bkind_is_some_guard(jl_binding_kind(ownerbpart))) {
+    if (jl_bkind_is_some_guard(jl_binding_kind(ownerbpart)) && strcmp(jl_symbol_name(s), "_") != 0) {
         jl_printf(JL_STDERR,
                   "WARNING: Imported binding %s.%s was undeclared at import time during import to %s.\n",
                   jl_symbol_name(from->name), jl_symbol_name(s),

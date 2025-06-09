@@ -2752,6 +2752,23 @@ import .TestImportAs.Mod2 as M2
 @test !@isdefined(Mod2)
 @test M2 === TestImportAs.Mod2
 
+@testset "using statement with underscore symbol" begin
+    # `using Foo: _` is special cased to not warn
+    # https://github.com/JuliaLang/julia/issues/58667
+    exename = Base.julia_cmd()
+    base = """
+        redirect_stderr(stdout)
+        module Mod58667 end
+        """
+    script_nowarn = base * "\nusing .Mod58667: _"
+    warning_str = readchomp(`$exename --startup-file=no -e $script_nowarn`)
+    @test isempty(warning_str)
+    # we do warn on other symbols though (only `_` is special cased)
+    script_warn = base * "\nusing .Mod58667: y"
+    warning_str = readchomp(`$exename --startup-file=no -e $script_warn`)
+    @test warning_str == "WARNING: Imported binding Mod58667.y was undeclared at import time during import to Main."
+end
+
 # 57702: nearby bindings shouldn't cause us to closure-convert in import/using
 module OddImports
 using Test
