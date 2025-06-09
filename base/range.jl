@@ -930,15 +930,12 @@ function _iterate(r::OrdinalRange{T}, i) where {T}
 end
 iterate(r::OrdinalRange, i = nothing) = _iterate(r, i)
 
-# specialized implementation that returns `nothing` for
-# states outside the range
-function iterate(r::AbstractOneTo, i = first(r))
-    # checkbounds and checkindex are equivalent here, as a `AbstractOneTo` is its own axis.
-    # We use checkindex to work around failures for non-standard integer types
-    # See https://github.com/JuliaLang/julia/pull/27302
-    checkindex(Bool, r, i) || return nothing
-    # We use `step(r)` instead of `oneunit(i)` to support non-standard integers
-    unsafe_getindex(r, i), i + step(r)
+# optimized implementation that returns `nothing` for large offsets
+function iterate(r::AbstractOneTo, st = (first(r), zero(step(r))))
+    val, offset = st
+    offset < length(r) || return nothing
+    v = unsafe_getindex(r, val) # convert to eltype(r)
+    v, (val + step(r), oftype(step(r), v))
 end
 
 ## indexing
