@@ -520,7 +520,6 @@ typedef struct {
     _Atomic(jl_value_t*) Typeofwrapper;  // cache for Type{wrapper}
     _Atomic(jl_svec_t*) cache;        // sorted array
     _Atomic(jl_svec_t*) linearcache;  // unsorted array
-    jl_array_t *backedges; // uncovered (sig => caller::CodeInstance) pairs with this type as the function
     jl_array_t *partial;     // incomplete instantiations of this type
     intptr_t hash;
     _Atomic(int32_t) max_args;  // max # of non-vararg arguments in a signature with this type as the function
@@ -882,6 +881,7 @@ typedef struct _jl_methtable_t {
     jl_methcache_t *cache;
     jl_sym_t *name; // sometimes used for debug printing
     jl_module_t *module; // sometimes used for debug printing
+    jl_genericmemory_t *backedges; // IdDict{top typenames, Vector{uncovered (sig => caller::CodeInstance)}}
 } jl_methtable_t;
 
 typedef struct {
