@@ -930,8 +930,10 @@ function _iterate(r::OrdinalRange{T}, i) where {T}
 end
 iterate(r::OrdinalRange, i = nothing) = _iterate(r, i)
 
-function iterate(r::OneTo, i = oneunit(eltype(r)))
-    # checkbounds and checkindex are equivalent here, as a `OneTo` is its own axis.
+# specialized implementation that returns `nothing` for
+# states outside the range
+function iterate(r::AbstractOneTo, i = first(r))
+    # checkbounds and checkindex are equivalent here, as a `AbstractOneTo` is its own axis.
     # We use checkindex to work around failures for non-standard integer types
     # See https://github.com/JuliaLang/julia/pull/27302
     checkindex(Bool, r, i) || return nothing
