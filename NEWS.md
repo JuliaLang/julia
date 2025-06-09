@@ -15,6 +15,7 @@ Language changes
 is considered a bug fix ([#47102])
 
   - The `hash` algorithm and its values have changed. Most `hash` specializations will remain correct and require no action. Types that reimplement the core hashing logic independently, such as some third-party string packages do, may require a migration to the new algorithm. ([#57509])
+  - `using Foo: _` for a module or package `Foo` no longer issues a warning. This syntax can be used to load `Foo` without bringing any of its names (even the name `Foo` itself) into your namespace.
 
 Compiler/Runtime improvements
 -----------------------------
