@@ -6,6 +6,9 @@ using InteractiveUtils: code_llvm
 isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
 using .Main.OffsetArrays
 
+isdefined(Main, :SizedArrays) || @eval Main include("testhelpers/SizedArrays.jl")
+using .Main.SizedArrays
+
 @testset "range construction" begin
     @test_throws ArgumentError range(start=1, step=1, stop=2, length=10)
     @test_throws ArgumentError range(start=1, step=1, stop=10, length=11)
@@ -2816,4 +2819,13 @@ end
     r = StepRangeLen(Date(2020,1,1), Day(1), 4)
     @test StepRange(r) == r
     @test StepRange(r) isa StepRange{Date,Day}
+end
+
+@testset "AbstractOneTo" begin
+    r = SizedArrays.SOneTo(4)
+    @test !Base.checkindex(Bool, r, 0)
+    for i in r
+        @test Base.checkindex(Bool, r, i)
+    end
+    @test !Base.checkindex(Bool, r, length(r)+1)
 end
