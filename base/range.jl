@@ -981,7 +981,7 @@ end
 # unsafe_getindex is separate to make it useful even when running with --check-bounds=yes
 # it assumes the index is inbounds but does not segfault even if the index is out of bounds.
 # it does not check if the index isa bool.
-unsafe_getindex(v::OneTo{T}, i::Integer) where T = convert(T, i)
+unsafe_getindex(v::AbstractOneTo{T}, i::Integer) where T = convert(T, i)
 unsafe_getindex(v::AbstractRange{T}, i::Integer) where T = convert(T, first(v) + (i - oneunit(i))*step_hp(v))
 function unsafe_getindex(r::StepRangeLen{T}, i::Integer) where T
     u = oftype(r.offset, i) - r.offset
