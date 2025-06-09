@@ -491,10 +491,7 @@ Constant *literal_pointer_val_slot(jl_codegen_params_t &params, Module *M, jl_va
         return julia_pgv(params, M, "jl_sym#", addr, NULL, p);
     }
     // something else gets just a generic name
-    std::string name;
-    auto dt = (jl_datatype_t *)jl_typeof(p);
-    raw_string_ostream(name) << "jl_global_" << jl_symbol_name(dt->name->name);
-    return julia_pgv(params, M, name.c_str(), p);
+    return julia_pgv(params, M, "jl_global#", p);
 }
 
 static size_t dereferenceable_size(jl_value_t *jt)
