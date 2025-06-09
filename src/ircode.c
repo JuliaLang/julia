@@ -1271,7 +1271,7 @@ JL_DLLEXPORT uint16_t jl_decode_inlining_cost(uint8_t inlining_cost)
     else if (shift == 0)
         return inlining_cost;
     else
-        return 0x20 | ((inlining_cost & 0x1f) << (shift - 1));
+        return (0x20 | (inlining_cost & 0x1f)) << (shift - 1);
 }
 
 JL_DLLEXPORT uint16_t jl_ir_inlining_cost(jl_value_t *data)
