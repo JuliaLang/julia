@@ -401,8 +401,8 @@ static Constant *julia_pgv(jl_codegen_params_t &params, Module *M, const char *c
     StringRef localname;
     std::string gvname;
     if (!gv) {
-        raw_string_ostream(gvname) << cname;
-        freshen_name(gvname);
+        uint64_t id = jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1); // TODO: use params.global_targets.size()
+        raw_string_ostream(gvname) << cname << id;
         localname = StringRef(gvname);
     }
     else {

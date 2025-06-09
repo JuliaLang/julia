@@ -1576,18 +1576,7 @@ static const auto &builtin_func_map() {
     return *builtins;
 }
 
-static StringMap<uint64_t> fresh_name_map;
-static std::mutex fresh_name_lock;
-
-static void freshen_name(std::string &name)
-{
-    uint64_t n;
-    {
-        std::lock_guard guard{fresh_name_lock};
-        n = fresh_name_map[name]++;
-    }
-    raw_string_ostream(name) << "_" << n;
-}
+static _Atomic(uint64_t) globalUniqueGeneratedNames{1};
 
 // --- code generation ---
 
@@ -5282,8 +5271,7 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, ArrayR
                         else if (always_inline)
                             need_to_emit = true;
                         if (protoname.empty()) {
-                            raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi);
-                            freshen_name(name);
+                            raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
                             protoname = StringRef(name);
                         }
 
@@ -6196,12 +6184,10 @@ static std::pair<Function*, Function*> get_oc_function(jl_codectx_t &ctx, jl_met
     }
     else {
         if (specsig) {
-            raw_string_ostream(name) << "j_" << name_from_method_instance(mi);
-            freshen_name(name);
+            raw_string_ostream(name) << "j_" << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
             protoname = StringRef(name);
         }
-        raw_string_ostream(oc) << "j1_" << name_from_method_instance(mi);
-        freshen_name(name);
+        raw_string_ostream(oc) << "j1_" << name_from_method_instance(mi) << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
         proto_oc = StringRef(oc);
     }
 
@@ -6744,8 +6730,7 @@ static std::string get_function_name(bool specsig, bool needsparams, const char 
         if (unadorned_name[0] == '@')
             unadorned_name++;
     }
-    funcName << unadorned_name;
-    freshen_name(_funcName);
+    funcName << unadorned_name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     return funcName.str();
 }
 
@@ -6827,8 +6812,7 @@ Function *emit_tojlinvoke(jl_code_instance_t *codeinst, Value *theFunc, Module *
     ++EmittedToJLInvokes;
     jl_codectx_t ctx(M->getContext(), params, codeinst);
     std::string name;
-    raw_string_ostream(name) << "tojlinvoke";
-    freshen_name(name);
+    raw_string_ostream(name) << "tojlinvoke" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     Function *f = Function::Create(ctx.types().T_jlfunc,
             GlobalVariable::InternalLinkage,
             name, M);
@@ -7127,8 +7111,7 @@ std::string emit_abi_dispatcher(Module *M, jl_codegen_params_t &params, jl_value
         raw_string_ostream(gf_thunk_name) << "jfptr_" << name_from_method_instance(jl_get_ci_mi(codeinst)) << "_";
     else
         raw_string_ostream(gf_thunk_name) << "j_";
-    raw_string_ostream(gf_thunk_name) << "_gfthunk";
-    freshen_name(gf_thunk_name);
+    raw_string_ostream(gf_thunk_name) << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1) << "_gfthunk";
     if (specsig)
         emit_specsig_to_specsig(M, gf_thunk_name, sigt, declrt, is_opaque_closure, nargs, params,
                 target, sigt, codeinst ? codeinst->rettype : (jl_value_t*)jl_any_type, nullptr, nullptr);
@@ -7141,8 +7124,7 @@ std::string emit_abi_constreturn(Module *M, jl_codegen_params_t &params, jl_valu
 {
     bool is_opaque_closure = false;
     std::string gf_thunk_name;
-    raw_string_ostream(gf_thunk_name) << "jconst";
-    freshen_name(gf_thunk_name);
+    raw_string_ostream(gf_thunk_name) << "jconst_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     if (specsig) {
         emit_specsig_to_specsig(M, gf_thunk_name, sigt, declrt, is_opaque_closure, nargs, params,
                 nullptr, sigt, jl_typeof(rettype_const), nullptr, rettype_const);
@@ -7261,8 +7243,7 @@ static Function *gen_cfun_wrapper(
     bool nest = (!ff || unionall_env);
 
     std::string funcName;
-    raw_string_ostream(funcName) << "jlcapi_" << name;
-    freshen_name(funcName);
+    raw_string_ostream(funcName) << "jlcapi_" << name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
 
     Module *M = into; // Safe because ctx lock is held by params
     AttributeList attributes = sig.attributes;
@@ -8361,8 +8342,7 @@ static jl_llvm_functions_t
         }();
 
         std::string wrapName;
-        raw_string_ostream(wrapName) << "jfptr_" << ctx.name;
-        freshen_name(wrapName);
+        raw_string_ostream(wrapName) << "jfptr_" << ctx.name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
         declarations.functionObject = wrapName;
         size_t nparams = jl_nparams(abi);
         gen_invoke_wrapper(lam, abi, jlrettype, jlrettype, returninfo, nparams, retarg, ctx.is_opaque_closure, declarations.functionObject, M, ctx.emission_context);
@@ -9758,16 +9738,13 @@ jl_llvm_functions_t jl_emit_codedecls(
     bool specsig, needsparams;
     std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(codeinst), mi, codeinst->rettype, params.params->prefer_specsig);
     const char *name = name_from_method_instance(mi);
-    if (specsig) {
-        raw_string_ostream(decls.functionObject) << "jfptr_" << name;
-        freshen_name(decls.functionObject);
-    }
+    if (specsig)
+        raw_string_ostream(decls.functionObject) << "jfptr_" << name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     else if (needsparams)
         decls.functionObject = "jl_fptr_sparam";
     else
         decls.functionObject = "jl_fptr_args";
-    raw_string_ostream(decls.specFunctionObject) << (specsig ? "j_" : "j1_") << name;
-    freshen_name(decls.specFunctionObject);
+    raw_string_ostream(decls.specFunctionObject) << (specsig ? "j_" : "j1_") << name << "_" << jl_atomic_fetch_add_relaxed(&globalUniqueGeneratedNames, 1);
     M.withModuleDo([&](Module &M) {
             bool is_opaque_closure = jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure;
             if (specsig) {
