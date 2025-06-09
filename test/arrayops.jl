@@ -100,6 +100,18 @@ using Dates
     @test Array{eltype(a)}(a) !== a
     @test Vector(a) !== a
 end
+@testset "effect inference for `reshape` for `Array`" begin
+    for Arr ∈ (Array{<:Any, 0}, Vector, Matrix, Array{<:Any, 3})
+        for Shape ∈ (Tuple{Int}, Tuple{Int, Int})
+            effects = Base.infer_effects(reshape, Tuple{Arr{Float32}, Shape})
+            @test Base.Compiler.is_effect_free(effects)
+            @test Base.Compiler.is_terminates(effects)
+            @test Base.Compiler.is_notaskstate(effects)
+            @test Base.Compiler.is_noub(effects)
+            @test Base.Compiler.is_nortcall(effects)
+        end
+    end
+end
 @testset "reshaping SubArrays" begin
     a = Array(reshape(1:5, 1, 5))
     @testset "linearfast" begin
@@ -1761,6 +1773,12 @@ end
     end
 end
 
+@testset "reverse zero dims" begin
+    a = fill(3)
+    @test a == reverse(a)
+    @test a === reverse!(a)
+end
+
 @testset "isdiag, istril, istriu" begin
     # Scalar
     @test isdiag(3)
@@ -2197,7 +2215,7 @@ end
 
 # All we really care about is that we have an optimized
 # implementation, but the seed is a useful way to check that.
-@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed
+@test hash(CartesianIndex()) == Base.IteratorsMD.cartindexhash_seed ⊻ Base.HASH_SEED
 @test hash(CartesianIndex(1, 2)) != hash((1, 2))
 
 @testset "itr, iterate" begin

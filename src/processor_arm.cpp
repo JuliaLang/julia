@@ -166,9 +166,11 @@ enum class CPU : uint32_t {
     apple_a14,
     apple_a15,
     apple_a16,
+    apple_a17,
     apple_m1,
     apple_m2,
     apple_m3,
+    apple_m4,
     apple_s4,
     apple_s5,
 
@@ -355,9 +357,11 @@ constexpr auto apple_a13 = armv8_4a_crypto | get_feature_masks(fp16fml, fullfp16
 constexpr auto apple_a14 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
 constexpr auto apple_a15 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_a16 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
+constexpr auto apple_a17 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_m1 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3);
 constexpr auto apple_m2 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 constexpr auto apple_m3 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
+constexpr auto apple_m4 = armv8_5a_crypto | get_feature_masks(dotprod,fp16fml, fullfp16, sha3, i8mm, bf16);
 // Features based on https://github.com/llvm/llvm-project/blob/82507f1798768280cf5d5aab95caaafbc7fe6f47/llvm/include/llvm/Support/AArch64TargetParser.def
 // and sysctl -a hw.optional
 constexpr auto apple_s4 = apple_a12;
@@ -441,9 +445,11 @@ static constexpr CPUSpec<CPU, feature_sz> cpus[] = {
     {"apple-a14", CPU::apple_a14, CPU::apple_a13, 120000, Feature::apple_a14},
     {"apple-a15", CPU::apple_a15, CPU::apple_a14, 160000, Feature::apple_a15},
     {"apple-a16", CPU::apple_a16, CPU::apple_a14, 160000, Feature::apple_a16},
+    {"apple-a17", CPU::apple_a17, CPU::apple_a16, 190000, Feature::apple_a17},
     {"apple-m1", CPU::apple_m1, CPU::apple_a14, 130000, Feature::apple_m1},
     {"apple-m2", CPU::apple_m2, CPU::apple_m1, 160000, Feature::apple_m2},
     {"apple-m3", CPU::apple_m3, CPU::apple_m2, 180000, Feature::apple_m3},
+    {"apple-m4", CPU::apple_m4, CPU::apple_m3, 190000, Feature::apple_m4},
     {"apple-s4", CPU::apple_s4, CPU::generic, 100000, Feature::apple_s4},
     {"apple-s5", CPU::apple_s5, CPU::generic, 100000, Feature::apple_s5},
     {"thunderx3t110", CPU::marvell_thunderx3t110, CPU::cavium_thunderx2t99, 110000,
@@ -722,6 +728,8 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu()
         return std::make_pair((uint32_t)CPU::apple_m2, Feature::apple_m2);
     else if (cpu_name.find("M3") != StringRef ::npos)
         return std::make_pair((uint32_t)CPU::apple_m3, Feature::apple_m3);
+    else if (cpu_name.find("M4") != StringRef ::npos)
+        return std::make_pair((uint32_t)CPU::apple_m4, Feature::apple_m4);
     else
         return std::make_pair((uint32_t)CPU::apple_m1, Feature::apple_m1);
 }
@@ -1042,7 +1050,10 @@ static CPU get_cpu_name(CPUID cpuid)
         default: return CPU::generic;
         }
     case 0x61: // 'a': Apple
-        // https://opensource.apple.com/source/xnu/xnu-7195.141.2/osfmk/arm/cpuid.h.auto.html
+        // Data here is partially based on these sources:
+        // https://github.com/apple-oss-distributions/xnu/blob/main/osfmk/arm/cpuid.h
+        // https://asahilinux.org/docs/hw/soc/soc-codenames/#socs
+        // https://github.com/llvm/llvm-project/blob/main/llvm/lib/Target/AArch64/AArch64Processors.td
         switch (cpuid.part) {
         case 0x0: // Swift
             return CPU::apple_swift;
@@ -1067,31 +1078,57 @@ static CPU get_cpu_name(CPUID cpuid)
             return CPU::apple_a12;
         case 0xF: // Tempest M9
             return CPU::apple_s4;
-        case 0x12: // Lightning
-        case 0x13: // Thunder
+        case 0x12: // H12 Cebu p-Core "Lightning"
+        case 0x13: // H12 Cebu e-Core "Thunder"
             return CPU::apple_a13;
-        case 0x20: // Icestorm
-        case 0x21: // Firestorm
+        case 0x20: // H13 Sicily e-Core "Icestorm"
+        case 0x21: // H13 Sicily p-Core "Firestorm"
             return CPU::apple_a14;
-        case 0x22: // Icestorm m1
-        case 0x23: // Firestorm m1
-        case 0x24:
-        case 0x25: // From https://github.com/AsahiLinux/m1n1/blob/3b9a71422e45209ef57c563e418f877bf54358be/src/chickens.c#L9
-        case 0x28:
-        case 0x29:
+        case 0x22: // H13G Tonga e-Core "Icestorm" used in Apple M1
+        case 0x23: // H13G Tonga p-Core "Firestorm" used in Apple M1
+        case 0x24: // H13J Jade Chop e-Core "Icestorm" used in Apple M1 Pro
+        case 0x25: // H13J Jade Chop p-Core "Firestorm" used in Apple M1 Pro
+        case 0x28: // H13J Jade Die e-Core "Icestorm" used in Apple M1 Max / Ultra
+        case 0x29: // H13J Jade Die p-Core "Firestorm" used in Apple M1 Max / Ultra
             return CPU::apple_m1;
-        case 0x30: // Blizzard m2
-        case 0x31: // Avalanche m2
-        case 0x32:
-        case 0x33:
-        case 0x34:
-        case 0x35:
-        case 0x38:
-        case 0x39:
+        case 0x30: // H14 Ellis e-Core "Blizzard" used in Apple A15
+        case 0x31: // H14 Ellis p-Core "Avalanche" used in Apple A15
+            return CPU::apple_a15;
+        case 0x32: // H14G Staten e-Core "Blizzard" used in Apple M2
+        case 0x33: // H14G Staten p-Core "Avalanche" used in Apple M2
+        case 0x34: // H14S Rhodes Chop e-Core "Blizzard" used in Apple M2 Pro
+        case 0x35: // H14S Rhodes Chop p-Core "Avalanche" used in Apple M2 Pro
+        case 0x38: // H14C Rhodes Die e-Core "Blizzard" used in Apple M2 Max / Ultra
+        case 0x39: // H14C Rhodes Die p-Core "Avalanche" used in Apple M2 Max / Ultra
             return CPU::apple_m2;
-        case 0x49: // Everest m3
-        case 0x48: // Sawtooth m3
+        case 0x40: // H15 Crete e-Core "Sawtooth" used in Apple A16
+        case 0x41: // H15 Crete p-Core "Everest" used in Apple A16
+            return CPU::apple_a16;
+        case 0x42: // H15 Ibiza e-Core "Sawtooth" used in Apple M3
+        case 0x43: // H15 Ibiza p-Core "Everest" used in Apple M3
+        case 0x44: // H15 Lobos e-Core "Sawtooth" used in Apple M3 Pro
+        case 0x45: // H15 Lobos p-Core "Everest" used in Apple M3 Pro
+        case 0x49: // H15 Palma e-Core "Sawtooth" used in Apple M3 Max
+        case 0x48: // H15 Palma p-Core "Everest" used in Apple M3 Max
             return CPU::apple_m3;
+        //case 0x46: // M11 e-Core "Sawtooth" used in Apple S9
+        //case 0x47:  does not exist
+            //return CPU::apple_s9;
+        case 0x50: // H15 Coll e-Core "Sawtooth" used in Apple A17 Pro
+        case 0x51: // H15 Coll p-Core "Everest" used in Apple A17 Pro
+            return CPU::apple_a17;
+        case 0x52: // H16G Donan e-Core used in Apple M4
+        case 0x53: // H16H Donan p-Core used in Apple M4
+        case 0x54: // H16S Brava S e-Core used in Apple M4 Pro
+        case 0x55: // H16S Brava S p-Core used in Apple M4 Pro
+        case 0x58: // H16C Brava C e-Core used in Apple M4 Max
+        case 0x59: // H16C Brava C p-Core used in Apple M4 Max
+            return CPU::apple_m4;
+        //case 0x60: // H17P Tahiti e-Core used in Apple A18 Pro
+        //case 0x61: // H17P Tahiti p-Core used in Apple A18 Pro
+        //case 0x6a: // H17A Tupai e-Core used in Apple A18
+        //case 0x6b: // H17A Tupai p-Core used in Apple A18
+            //return CPU::apple_a18;
         default: return CPU::generic;
         }
     case 0x68: // 'h': Huaxintong Semiconductor

@@ -2,22 +2,13 @@
 
 module StaticData
 
-using Core: CodeInstance, MethodInstance
-using Base: get_world_counter
+using .Core: CodeInstance, MethodInstance
+using .Base: JLOptions, Compiler, get_world_counter, _methods_by_ftype, get_methodtable, get_ci_mi
 
 const WORLD_AGE_REVALIDATION_SENTINEL::UInt = 1
 const _jl_debug_method_invalidation = Ref{Union{Nothing,Vector{Any}}}(nothing)
 debug_method_invalidation(onoff::Bool) =
     _jl_debug_method_invalidation[] = onoff ? Any[] : nothing
-
-function get_ci_mi(codeinst::CodeInstance)
-    def = codeinst.def
-    if def isa Core.ABIOverride
-        return def.def
-    else
-        return def::MethodInstance
-    end
-end
 
 # Restore backedges to external targets
 # `edges` = [caller1, ...], the list of worklist-owned code instances internally
@@ -73,6 +64,51 @@ end
 
 get_require_world() = unsafe_load(cglobal(:jl_require_world, UInt))
 
+function gen_staged_sig(def::Method, mi::MethodInstance)
+    isdefined(def, :generator) || return nothing
+    isdispatchtuple(mi.specTypes) || return nothing
+    gen = Core.Typeof(def.generator)
+    return Tuple{gen, UInt, Method, Vararg}
+    ## more precise method lookup, but more costly and likely not actually better?
+    #tts = (mi.specTypes::DataType).parameters
+    #sps = Any[Core.Typeof(mi.sparam_vals[i]) for i in 1:length(mi.sparam_vals)]
+    #if def.isva
+    #    return Tuple{gen, UInt, Method, sps..., tts[1:def.nargs - 1]..., Tuple{tts[def.nargs - 1:end]...}}
+    #else
+    #    return Tuple{gen, UInt, Method, sps..., tts...}
+    #end
+end
+
+function needs_instrumentation(codeinst::CodeInstance, mi::MethodInstance, def::Method, validation_world::UInt)
+    if JLOptions().code_coverage != 0 || JLOptions().malloc_log != 0
+        # test if the code needs to run with instrumentation, in which case we cannot use existing generated code
+        if isdefined(def, :debuginfo) ? # generated_only functions do not have debuginfo, so fall back to considering their codeinst debuginfo though this may be slower and less reliable
+            Compiler.should_instrument(def.module, def.debuginfo) :
+            isdefined(codeinst, :debuginfo) && Compiler.should_instrument(def.module, codeinst.debuginfo)
+            return true
+        end
+        gensig = gen_staged_sig(def, mi)
+        if gensig !== nothing
+            # if this is defined by a generator, try to consider forcing re-running the generators too, to add coverage for them
+            minworld = Ref{UInt}(1)
+            maxworld = Ref{UInt}(typemax(UInt))
+            has_ambig = Ref{Int32}(0)
+            result = _methods_by_ftype(gensig, nothing, -1, validation_world, #=ambig=#false, minworld, maxworld, has_ambig)
+            if result !== nothing
+                for k = 1:length(result)
+                    match = result[k]::Core.MethodMatch
+                    genmethod = match.method
+                    # no, I refuse to refuse to recurse into your cursed generated function generators and will only test one level deep here
+                    if isdefined(genmethod, :debuginfo) && Compiler.should_instrument(genmethod.module, genmethod.debuginfo)
+                        return true
+                    end
+                end
+            end
+        end
+    end
+    return false
+end
+
 # Test all edges relevant to a method:
 # - Visit the entire call graph, starting from edges[idx] to determine if that method is valid
 # - Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
@@ -84,6 +120,12 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             return 0, world, max_valid2
         end
     end
+    mi = get_ci_mi(codeinst)
+    def = mi.def::Method
+    if needs_instrumentation(codeinst, mi, def, validation_world)
+        return 0, world, UInt(0)
+    end
+
     # Implicitly referenced bindings in the current module do not get explicit edges.
     # If they were invalidated, they'll be in `mwis`. If they weren't, they imply a minworld
     # of `get_require_world`. In principle, this is only required for methods that do reference
@@ -92,8 +134,6 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     # but no implicit edges) is rare and there would be little benefit to lower the minworld for it
     # in any case, so we just always use `get_require_world` here.
     local minworld::UInt, maxworld::UInt = get_require_world(), validation_world
-    def = get_ci_mi(codeinst).def
-    @assert def isa Method
     if haskey(visiting, codeinst)
         return visiting[codeinst], minworld, maxworld
     end
@@ -125,7 +165,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
                 edge = get_ci_mi(edge)
             end
             if edge isa MethodInstance
-                sig = typeintersect((edge.def::Method).sig, edge.specTypes) # TODO??
+                sig = edge.specTypes
                 min_valid2, max_valid2, matches = verify_call(sig, callees, j, 1, world)
                 j += 1
             elseif edge isa Int
@@ -225,7 +265,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
         end
         @atomic :monotonic child.max_world = maxworld
         if maxworld == validation_world && validation_world == get_world_counter()
-            Base.Compiler.store_backedges(child, child.edges)
+            Compiler.store_backedges(child, child.edges)
         end
         @assert visiting[child] == length(stack) + 1
         delete!(visiting, child)
@@ -239,11 +279,35 @@ end
 
 function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt)
     # verify that these edges intersect with the same methods as before
+    if n == 1
+        # first, fast-path a check if the expected method simply dominates its sig anyways
+        # so the result of ml_matches is already simply known
+        let t = expecteds[i], meth, minworld, maxworld, result
+            if t isa Method
+                meth = t
+            else
+                if t isa CodeInstance
+                    t = get_ci_mi(t)
+                else
+                    t = t::MethodInstance
+                end
+                meth = t.def::Method
+            end
+            if !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                minworld = meth.primary_world
+                @assert minworld ≤ world
+                maxworld = typemax(UInt)
+                result = Any[] # result is unused
+                return minworld, maxworld, result
+            end
+        end
+    end
+    # next, compare the current result of ml_matches to the old result
     lim = _jl_debug_method_invalidation[] !== nothing ? Int(typemax(Int32)) : n
     minworld = Ref{UInt}(1)
     maxworld = Ref{UInt}(typemax(UInt))
     has_ambig = Ref{Int32}(0)
-    result = Base._methods_by_ftype(sig, nothing, lim, world, #=ambig=#false, minworld, maxworld, has_ambig)
+    result = _methods_by_ftype(sig, nothing, lim, world, #=ambig=#false, minworld, maxworld, has_ambig)
     if result === nothing
         maxworld[] = 0
     else
@@ -291,26 +355,28 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
     return minworld[], maxworld[], result
 end
 
+# fast-path dispatch_status bit definitions (false indicates unknown)
+# true indicates this method would be returned as the result from `which` when invoking `method.sig` in the current latest world
+const METHOD_SIG_LATEST_WHICH = 0x1
+# true indicates this method would be returned as the only result from `methods` when calling `method.sig` in the current latest world
+const METHOD_SIG_LATEST_ONLY = 0x2
+
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt)
     @assert invokesig isa Type
     local minworld::UInt, maxworld::UInt
     matched = nothing
-    if invokesig === expected.sig
-        # the invoke match is `expected` for `expected->sig`, unless `expected` is invalid
+    if invokesig === expected.sig && !iszero(expected.dispatch_status & METHOD_SIG_LATEST_WHICH)
+        # the invoke match is `expected` for `expected->sig`, unless `expected` is replaced
         minworld = expected.primary_world
-        maxworld = expected.deleted_world
         @assert minworld ≤ world
-        if maxworld < world
-            maxworld = 0
-        end
-    else
-        minworld = 1
         maxworld = typemax(UInt)
-        mt = Base.get_methodtable(expected)
+    else
+        mt = get_methodtable(expected)
         if mt === nothing
+            minworld = 1
             maxworld = 0
         else
-            matched, valid_worlds = Base.Compiler._findsup(invokesig, mt, world)
+            matched, valid_worlds = Compiler._findsup(invokesig, mt, world)
             minworld, maxworld = valid_worlds.min_world, valid_worlds.max_world
             if matched === nothing
                 maxworld = 0

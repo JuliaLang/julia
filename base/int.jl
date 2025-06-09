@@ -139,6 +139,8 @@ iseven(n::Real) = isinteger(n) && iszero(rem(Integer(n), 2))
 signbit(x::Integer) = x < 0
 signbit(x::Unsigned) = false
 
+isnegative(x::Unsigned) = false
+
 flipsign(x::T, y::T) where {T<:BitSigned} = flipsign_int(x, y)
 flipsign(x::BitSigned, y::BitSigned) = flipsign_int(promote(x, y)...) % typeof(x)
 
@@ -250,7 +252,7 @@ end
 The reduction of `x` modulo `y`, or equivalently, the remainder of `x` after floored
 division by `y`, i.e. `x - y*fld(x,y)` if computed without intermediate rounding.
 
-The result will have the same sign as `y`, and magnitude less than `abs(y)` (with some
+The result will have the same sign as `y` if `isfinite(y)`, and magnitude less than `abs(y)` (with some
 exceptions, see note below).
 
 !!! note
@@ -720,7 +722,7 @@ macro big_str(s::String)
             is_prev_dot = (c == '.')
         end
         print(bf, s[end])
-        s = String(take!(bf))
+        s = unsafe_takestring!(bf)
     end
     n = tryparse(BigInt, s)
     n === nothing || return n

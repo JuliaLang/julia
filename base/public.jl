@@ -54,6 +54,7 @@ public
     active_project,
 
 # Reflection and introspection
+    get_extension,
     isambiguous,
     isexpr,
     isidentifier,
@@ -110,6 +111,7 @@ public
     reseteof,
     link_pipe!,
     dup,
+    showarg,
 
 # filesystem operations
     rename,

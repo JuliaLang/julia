@@ -183,7 +183,8 @@ show(io::IO, ::MIME"text/plain", st::StatStruct) = show_statstruct(io, st, false
 
 # stat & lstat functions
 
-checkstat(s::StatStruct) = Int(s.ioerrno) in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL) ? s : uv_error(string("stat(", repr(s.desc), ")"), s.ioerrno)
+checkstat(s::StatStruct) = Int(s.ioerrno) in (0, Base.UV_ENOENT, Base.UV_ENOTDIR, Base.UV_EINVAL) ? s :
+    _uv_error(string("stat(", repr(s.desc), ")"), s.ioerrno)
 
 macro stat_call(sym, arg1type, arg)
     return quote
@@ -319,7 +320,7 @@ function filemode_string(mode)
         end
         complete && write(str, "-")
     end
-    return String(take!(str))
+    return unsafe_takestring!(str)
 end
 
 """

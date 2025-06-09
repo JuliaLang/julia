@@ -148,7 +148,7 @@ module IteratorsMD
     # hashing
     const cartindexhash_seed = UInt == UInt64 ? 0xd60ca92f8284b8b0 : 0xf2ea7c2e
     function Base.hash(ci::CartesianIndex, h::UInt)
-        h += cartindexhash_seed
+        h ⊻= cartindexhash_seed
         for i in ci.I
             h = hash(i, h)
         end
@@ -416,7 +416,9 @@ module IteratorsMD
 
     @inline function eachindex(::IndexCartesian, A::AbstractArray, B::AbstractArray...)
         axsA = axes(A)
-        Base._all_match_first(axes, axsA, B...) || Base.throw_eachindex_mismatch_indices(IndexCartesian(), axes(A), axes.(B)...)
+        axsBs = map(axes, B)
+        all(==(axsA), axsBs) ||
+            Base.throw_eachindex_mismatch_indices("axes", axsA, axsBs...)
         CartesianIndices(axsA)
     end
 

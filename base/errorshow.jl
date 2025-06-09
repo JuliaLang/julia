@@ -307,7 +307,7 @@ function showerror(io::IO, ex::MethodError)
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
         show_signature_function(iob, Core.Typeof(f))
         show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
-        str = String(take!(buf))
+        str = takestring!(buf)
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
@@ -328,7 +328,7 @@ function showerror(io::IO, ex::MethodError)
         print(io, "\nIn case you're trying to index into the array, use square brackets [] instead of parentheses ().")
     end
     # Check for local functions that shadow methods in Base
-    let name = ft.name.mt.name
+    let name = ft.name.singletonname
         if f_is_function && isdefined(Base, name)
             basef = getfield(Base, name)
             if basef !== f && hasmethod(basef, arg_types)
@@ -382,7 +382,7 @@ end
 
 function showerror(io::IO, exc::FieldError)
     @nospecialize
-    print(io, "FieldError: type $(exc.type |> nameof) has no field `$(exc.field)`")
+    print(io, "FieldError: type $(exc.type.name.wrapper) has no field `$(exc.field)`")
     Base.Experimental.show_error_hints(io, exc)
 end
 
@@ -592,15 +592,13 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             end
             if ex.world < reinterpret(UInt, method.primary_world)
                 print(iob, " (method too new to be called from this world context.)")
-            elseif ex.world > reinterpret(UInt, method.deleted_world)
-                print(iob, " (method deleted before this world age.)")
             end
             println(iob)
 
             m = parentmodule_before_main(method)
             modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
             print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
-            push!(lines, String(take!(buf)))
+            push!(lines, takestring!(buf))
             push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
         end
     end
@@ -638,14 +636,16 @@ const update_stackframes_callback = Ref{Function}(identity)
 const STACKTRACE_MODULECOLORS = Iterators.Stateful(Iterators.cycle([:magenta, :cyan, :green, :yellow]))
 const STACKTRACE_FIXEDCOLORS = IdDict(Base => :light_black, Core => :light_black)
 
-function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool)
+function show_full_backtrace(io::IO, trace::Vector; print_linebreaks::Bool, prefix=nothing)
     num_frames = length(trace)
     ndigits_max = ndigits(num_frames)
 
-    println(io, "\nStacktrace:")
+    println(io)
+    prefix === nothing || print(io, prefix)
+    println(io, "Stacktrace:")
 
     for (i, (frame, n)) in enumerate(trace)
-        print_stackframe(io, i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+        print_stackframe(io, i, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
         if i < num_frames
             println(io)
             print_linebreaks && println(io)
@@ -655,7 +655,7 @@ end
 
 const BIG_STACKTRACE_SIZE = 50 # Arbitrary constant chosen here
 
-function show_reduced_backtrace(io::IO, t::Vector)
+function show_reduced_backtrace(io::IO, t::Vector; prefix=nothing)
     recorded_positions = IdDict{UInt, Vector{Int}}()
     #= For each frame of hash h, recorded_positions[h] is the list of indices i
     such that hash(t[i-1]) == h, ie the list of positions in which the
@@ -701,7 +701,9 @@ function show_reduced_backtrace(io::IO, t::Vector)
 
     try invokelatest(update_stackframes_callback[], displayed_stackframes) catch end
 
-    println(io, "\nStacktrace:")
+    println(io)
+    prefix === nothing || print(io, prefix)
+    println(io, "Stacktrace:")
 
     ndigits_max = ndigits(length(t))
 
@@ -709,8 +711,8 @@ function show_reduced_backtrace(io::IO, t::Vector)
     frame_counter = 1
     for i in eachindex(displayed_stackframes)
         (frame, n) = displayed_stackframes[i]
-
-        print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS)
+        prefix === nothing || print(io, prefix)
+        print_stackframe(io, frame_counter, frame, n, ndigits_max, STACKTRACE_FIXEDCOLORS, STACKTRACE_MODULECOLORS; prefix)
 
         if i < length(displayed_stackframes)
             println(io)
@@ -721,6 +723,7 @@ function show_reduced_backtrace(io::IO, t::Vector)
             cycle_length = repeated_cycle[1][2]
             repetitions = repeated_cycle[1][3]
             popfirst!(repeated_cycle)
+            prefix === nothing || print(io, prefix)
             printstyled(io,
                 "--- the above ", cycle_length, " lines are repeated ",
                   repetitions, " more time", repetitions>1 ? "s" : "", " ---", color = :light_black)
@@ -738,7 +741,7 @@ end
 # Print a stack frame where the module color is determined by looking up the parent module in
 # `modulecolordict`. If the module does not have a color, yet, a new one can be drawn
 # from `modulecolorcycler`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolordict, modulecolorcycler; prefix=nothing)
     m = Base.parentmodule(frame)
     modulecolor = if m !== nothing
         m = parentmodule_before_main(m)
@@ -746,7 +749,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     else
         :default
     end
-    print_stackframe(io, i, frame, n, ndigits_max, modulecolor)
+    print_stackframe(io, i, frame, n, ndigits_max, modulecolor; prefix)
 end
 
 # Gets the topmost parent module that isn't Main
@@ -761,7 +764,7 @@ end
 parentmodule_before_main(x) = parentmodule_before_main(parentmodule(x))
 
 # Print a stack frame where the module color is set manually with `modulecolor`.
-function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor)
+function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulecolor; prefix=nothing)
     file, line = string(frame.file), frame.line
 
     # Used by the REPL to make it possible to open
@@ -776,6 +779,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     digit_align_width = ndigits_max + 2
 
     # frame number
+    prefix === nothing || print(io, prefix)
     print(io, " ", lpad("[" * string(i) * "]", digit_align_width))
     print(io, " ")
 
@@ -785,6 +789,7 @@ function print_stackframe(io, i, frame::StackFrame, n::Int, ndigits_max, modulec
     end
     println(io)
 
+    prefix === nothing || print(io, prefix)
     # @ Module path / file : line
     print_module_path_file(io, modul, file, line; modulecolor, digit_align_width)
 
@@ -813,7 +818,7 @@ function print_module_path_file(io, modul, file, line; modulecolor = :light_blac
     printstyled(io, basename(file), ":", line; color = :light_black, underline = true)
 end
 
-function show_backtrace(io::IO, t::Vector)
+function show_backtrace(io::IO, t::Vector; prefix=nothing)
     if haskey(io, :last_shown_line_infos)
         empty!(io[:last_shown_line_infos])
     end
@@ -835,12 +840,12 @@ function show_backtrace(io::IO, t::Vector)
     end
 
     if length(filtered) > BIG_STACKTRACE_SIZE
-        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered)
+        show_reduced_backtrace(IOContext(io, :backtrace => true), filtered; prefix)
         return
     else
         try invokelatest(update_stackframes_callback[], filtered) catch end
         # process_backtrace returns a Vector{Tuple{Frame, Int}}
-        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks())
+        show_full_backtrace(io, filtered; print_linebreaks = stacktrace_linebreaks(), prefix)
     end
     nothing
 end
@@ -1051,7 +1056,7 @@ Experimental.register_error_hint(noncallable_number_hint_handler, MethodError)
 #    eg: d = Dict; d["key"] = 2
 function nonsetable_type_hint_handler(io, ex, arg_types, kwargs)
     @nospecialize
-    if ex.f == setindex!
+    if ex.f === setindex!
         T = arg_types[1]
         if T <: Number
             print(io, "\nAre you trying to index into an array? For multi-dimensional arrays, separate the indices with commas: ")
@@ -1070,9 +1075,8 @@ Experimental.register_error_hint(nonsetable_type_hint_handler, MethodError)
 
 # Display a hint in case the user tries to use the + operator on strings
 # (probably attempting concatenation)
-function string_concatenation_hint_handler(io, ex, arg_types, kwargs)
-    @nospecialize
-    if (ex.f === +) && !isempty(arg_types) && all(i -> i <: AbstractString, arg_types)
+function string_concatenation_hint_handler(@nospecialize(io::IO), ex::MethodError, arg_types::Vector{Any}, kwargs::Vector{Any})
+    if (ex.f === +) && !isempty(arg_types) && all(@nospecialize(a) -> unwrapva(a) <: AbstractString, arg_types)
         print(io, "\nString concatenation is performed with ")
         printstyled(io, "*", color=:cyan)
         print(io, " (See also: https://docs.julialang.org/en/v1/manual/strings/#man-concatenation).")
@@ -1123,7 +1127,7 @@ Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 function fielderror_listfields_hint_handler(io, exc)
     fields = fieldnames(exc.type)
     if isempty(fields)
-        print(io, "; $(nameof(exc.type)) has no fields at all.")
+        print(io, "; $(exc.type.name.wrapper) has no fields at all.")
     else
         print(io, ", available fields: $(join(map(k -> "`$k`", fields), ", "))")
     end
@@ -1150,19 +1154,41 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     if isdefined(ex, :scope)
         scope = ex.scope
         if scope isa Module
-            bpart = Base.lookup_binding_partition(ex.world, GlobalRef(scope, var))
-            kind = Base.binding_kind(bpart)
-            if kind === Base.PARTITION_KIND_GLOBAL || kind === Base.PARTITION_KIND_UNDEF_CONST || kind == Base.PARTITION_KIND_DECLARED
+            bpart = lookup_binding_partition(ex.world, GlobalRef(scope, var))
+            kind = binding_kind(bpart)
+
+            # Get the current world's binding partition for comparison
+            curworld = tls_world_age()
+            cur_bpart = lookup_binding_partition(curworld, GlobalRef(scope, var))
+            cur_kind = binding_kind(cur_bpart)
+
+            # Track if we printed the "too new" message
+            printed_too_new = false
+
+            # Check if the binding exists in the current world but was undefined in the error's world
+            if kind === PARTITION_KIND_GUARD
+                if isdefinedglobal(scope, var)
+                    print(io, "\nThe binding may be too new: running in world age $(ex.world), while current world is $(curworld).")
+                    printed_too_new = true
+                else
+                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                end
+            elseif kind === PARTITION_KIND_GLOBAL || kind === PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_DECLARED
                 print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
-            elseif kind === Base.PARTITION_KIND_FAILED
+            elseif kind === PARTITION_KIND_FAILED
                 print(io, "\nHint: It looks like two or more modules export different ",
                 "bindings with this name, resulting in ambiguity. Try explicitly ",
                 "importing it from a particular module, or qualifying the name ",
                 "with the module it should come from.")
-            elseif kind === Base.PARTITION_KIND_GUARD
-                print(io, "\nSuggestion: check for spelling errors or missing imports.")
-            elseif Base.is_some_explicit_imported(kind)
-                print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
+            elseif is_some_explicit_imported(kind)
+                print(io, "\nSuggestion: this global was defined as `$(partition_restriction(bpart).globalref)` but not assigned a value.")
+            elseif kind === PARTITION_KIND_BACKDATED_CONST
+                print(io, "\nSuggestion: define the const at top-level before running function that uses it (stricter Julia v1.12+ rule).")
+            end
+
+            # Check if binding kind changed between the error's world and current world
+            if !printed_too_new && kind !== cur_kind
+                print(io, "\nNote: the binding state changed since the error occurred (was: $(kind), now: $(cur_kind)).")
             end
         elseif scope === :static_parameter
             print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")

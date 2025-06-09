@@ -2,6 +2,9 @@
 
 module Base
 
+Core._import(Base, Core, :_eval_import, :_eval_import, true)
+Core._import(Base, Core, :_eval_using, :_eval_using, true)
+
 using .Core.Intrinsics, .Core.IR
 
 # to start, we're going to use a very simple definition of `include`
@@ -185,8 +188,12 @@ end
 """
     time_ns()::UInt64
 
-Get the time in nanoseconds relative to some arbitrary time in the past. The primary use is for measuring the elapsed time
-between two moments in time.
+Get the time in nanoseconds relative to some machine-specific arbitrary time in the past.
+The primary use is for measuring elapsed times during program execution. The return value is guaranteed to
+be monotonic (mod 2⁶⁴) while the system is running, and is unaffected by clock drift or changes to local calendar time,
+but it may change arbitrarily across system reboots or suspensions.
+
+(Although the returned time is always in nanoseconds, the timing resolution is platform-dependent.)
 """
 time_ns() = ccall(:jl_hrtime, UInt64, ())
 
@@ -211,7 +218,7 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke), f, T, args...)
     return invoke(Core.kwcall, T, kwargs, f, args...)
 end
 # invoke does not have its own call cache, but kwcall for invoke does
-setfield!(typeof(invoke).name.mt, :max_args, 3, :monotonic) # invoke, f, T, args...
+setfield!(typeof(invoke).name, :max_args, Int32(3), :monotonic) # invoke, f, T, args...
 
 # define applicable(f, T, args...; kwargs...), without kwargs wrapping
 # to forward to applicable
@@ -245,7 +252,7 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(invokelatest), f, args...)
     @inline
     return Core.invokelatest(Core.kwcall, kwargs, f, args...)
 end
-setfield!(typeof(invokelatest).name.mt, :max_args, 2, :monotonic) # invokelatest, f, args...
+setfield!(typeof(invokelatest).name, :max_args, Int32(2), :monotonic) # invokelatest, f, args...
 
 """
     invoke_in_world(world, f, args...; kwargs...)
@@ -258,7 +265,7 @@ support libraries, etc. In these cases it can be useful to prevent unwanted
 method invalidation and recompilation latency, and to prevent the user from
 breaking supporting infrastructure by mistake.
 
-The current world age can be queried using [`Base.get_world_counter()`](@ref)
+The global world age can be queried using [`Base.get_world_counter()`](@ref)
 and stored for later use within the lifetime of the current Julia session, or
 when serializing and reloading the system image.
 
@@ -279,7 +286,7 @@ function Core.kwcall(kwargs::NamedTuple, ::typeof(invoke_in_world), world::UInt,
     @inline
     return Core.invoke_in_world(world, Core.kwcall, kwargs, f, args...)
 end
-setfield!(typeof(invoke_in_world).name.mt, :max_args, 3, :monotonic) # invoke_in_world, world, f, args...
+setfield!(typeof(invoke_in_world).name, :max_args, Int32(3), :monotonic) # invoke_in_world, world, f, args...
 
 # core operations & types
 include("promotion.jl")
@@ -340,6 +347,7 @@ include("ordering.jl")
 using .Order
 
 include("coreir.jl")
+include("module.jl")
 include("invalidation.jl")
 
 BUILDROOT::String = ""
@@ -375,10 +383,15 @@ const _return_type = Compiler.return_type
 # Enable compiler
 Compiler.bootstrap!()
 
-include("flparse.jl")
+include("flfrontend.jl")
 Core._setparser!(fl_parse)
+Core._setlowerer!(fl_lower)
 
 # Further definition of Base will happen in Base.jl if loaded.
+
+# Ensure this file is also tracked
+@assert !isassigned(_included_files, 1)
+_included_files[1] = (@__MODULE__, ccall(:jl_prepend_cwd, Any, (Any,), "Base_compiler.jl"))
 
 end # module Base
 using .Base

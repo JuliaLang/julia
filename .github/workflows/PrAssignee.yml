@@ -1,0 +1,220 @@
+name: PR Assignee
+on:
+  # Important security note: Do NOT use `actions/checkout`
+  # or any other method for checking out the pull request's source code.
+  # This is because the pull request's source code is untrusted, but the
+  # GITHUB_TOKEN has write permissions (because of the `on: pull_request_target` event).
+  #
+  # Quoting from the GitHub Docs:
+  # > For workflows that are triggered by the pull_request_target event, the GITHUB_TOKEN is granted
+  # > read/write repository permission unless the permissions key is specified and the workflow can access secrets,
+  # > even when it is triggered from a fork.
+  # >
+  # > Although the workflow runs in the context of the base of the pull request,
+  # > you should make sure that you do not check out, build, or run untrusted code from the pull request with this event.
+  #
+  # Source: https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#pull_request_target
+  #
+  # See also: https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+
+# Permissions for the `GITHUB_TOKEN`:
+permissions:
+  pull-requests: write # Needed in order to assign a user as the PR assignee
+
+jobs:
+  pr-assignee:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.draft != true }}
+    steps:
+      # Important security note: As discussed above, do NOT use `actions/checkout`
+      # or any other method for checking out the pull request's source code.
+      # This is because the pull request's source code is untrusted, but the
+      # GITHUB_TOKEN has write permissions (because of the `on: pull_request_target` event).
+      - name: Add Assignee
+        # We pin all third-party actions to a full length commit SHA
+        # https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#using-third-party-actions
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          retries: 5 # retry GitHub API requests up to 5 times, with exponential backoff
+          retry-exempt-status-codes: 404
+          # Don't retry 404 because we will hit a 404 when the PR author is a committer.
+          # This 404 is normal and expected.
+          # Do retry 400 and other 4xx errors because github sometimes (erroneously)
+          # returns a 4xx error code due to server errors.
+          script: |
+            const oldPrAssignees = context.payload.pull_request.assignees
+              .map(obj => obj.login)
+            console.log('oldPrAssignees: ', oldPrAssignees);
+            const prAuthor = context.payload.pull_request.user.login;
+
+            // Check if the PR is opened by a collaborator on the repo, aka someone with write (commit) permissions or higher.
+            const relevantPerms = [
+              // 'triage', // Uncomment this line if you don't want PRs from triagers to get auto-assignees.
+              'push',
+              'maintain',
+              'admin',
+            ]
+            const allCollaboratorsNestedPromises = relevantPerms.map(
+              (perm) => github.paginate(
+                // We use the `/repos/{owner}/{repo}/collaborators` endpoint to avoid needing org scope permissions:
+                '/repos/{owner}/{repo}/collaborators',
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  per_page: 100,
+                  permission: perm,
+                },
+                (response) => response.data.map((collaboratorInfo) => collaboratorInfo.login),
+              )
+            )
+            const allCollaboratorsNested = await Promise.all(allCollaboratorsNestedPromises);
+            const allCollaboratorsFlattened = allCollaboratorsNested.flat();
+
+            // Skip BumpStdlibs.jl PRs
+            allCollaboratorsFlattened.push('DilumAluthgeBot');
+            // Skip Dependabot PRs
+            allCollaboratorsFlattened.push('dependabot');
+
+            const isCollaborator = allCollaboratorsFlattened.includes(prAuthor);
+
+            console.log('prAuthor: ', prAuthor);
+            console.log('isCollaborator: ', isCollaborator);
+
+            // Load the list of assignable reviewers from the JuliaLang/pr-assignment repo at:
+            // https://github.com/JuliaLang/pr-assignment/blob/main/users.txt
+            //
+            // NOTE to JuliaLang committers: If you want to be assigned to new PRs, please add your
+            // GitHub username to that file.
+
+            // Load file contents
+            const { data: fileContentsObj } = await github.rest.repos.getContent({
+              owner: 'JuliaLang',
+              repo: 'pr-assignment',
+              path: 'users.txt',
+              ref: 'main',
+            });
+
+            const fileContentsBufferObj = Buffer.from(fileContentsObj.content, "base64");
+            const fileContentsText = fileContentsBufferObj.toString("utf8");
+
+            // Find lines that match the following regex, and extract the usernames:
+            const regex = /^@([a-zA-Z0-9\-]+)(\s*?)?(#[\S]*?)?$/;
+            const assigneeCandidates = fileContentsText
+              .split('\n')
+              .map(line => line.trim())
+              .map(line => line.match(regex))
+              .filter(match => match !== null)
+              .map(match => match[1]);
+
+            console.log('assigneeCandidates: ', assigneeCandidates);
+            if (assigneeCandidates.length < 1) {
+              const msg = 'ERROR: Could not find any assigneeCandidates';
+              console.error(msg);
+              throw new Error(msg);
+            }
+
+            if (oldPrAssignees.length >= 1) {
+              console.log('Skipping this PR, because it already has at least one assignee');
+              return;
+            }
+
+
+            const RUNNER_DEBUG_original = process.env.RUNNER_DEBUG;
+            console.log('RUNNER_DEBUG_original: ', RUNNER_DEBUG_original);
+            if (RUNNER_DEBUG_original === undefined) {
+              var thisIsActionsRunnerDebugMode = false;
+            } else {
+              const RUNNER_DEBUG_trimmed = RUNNER_DEBUG_original.trim().toLowerCase()
+              if (RUNNER_DEBUG_trimmed.length < 1) {
+                var thisIsActionsRunnerDebugMode = false;
+              } else {
+                var thisIsActionsRunnerDebugMode = (RUNNER_DEBUG_trimmed == 'true') || (RUNNER_DEBUG_trimmed == '1');
+              }
+            }
+            console.log('thisIsActionsRunnerDebugMode: ', thisIsActionsRunnerDebugMode);
+
+            if (isCollaborator == true) {
+
+              if (thisIsActionsRunnerDebugMode) {
+                // The PR author is a committer
+                // But thisIsActionsRunnerDebugMode is true, so we proceed to still run the rest of the script
+                console.log('PR is authored by JuliaLang committer, but thisIsActionsRunnerDebugMode is true, so we will still run the rest of the script: ', prAuthor);
+              } else {
+                // The PR author is a committer, so we skip assigning them
+                console.log('Skipping PR authored by JuliaLang committer: ', prAuthor);
+                console.log('Note: If you want to run the full script (even though the PR author is a committer), simply re-run this job with Actions debug logging enabled');
+                return;
+              }
+            }
+
+            var weDidEncounterError = false;
+
+            // Assign random committer
+            const selectedAssignee = assigneeCandidates[Math.floor(Math.random()*assigneeCandidates.length)]
+            console.log('selectedAssignee: ', selectedAssignee);
+            console.log(`Attempting to assign @${selectedAssignee} to this PR...`);
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              assignees: selectedAssignee,
+            });
+
+            // The following is commented out because the label only makes sense in the presence of a larger state machine
+            // // Add the "pr review" label
+            // const prReviewLabel = 'status: waiting for PR reviewer';
+            // console.log('Attempting to add prReviewLabel to this PR...');
+            // await github.rest.issues.addLabels({
+            //   owner: context.repo.owner,
+            //   repo: context.repo.repo,
+            //   issue_number: context.payload.pull_request.number,
+            //   labels: [prReviewLabel],
+            // });
+
+            // Now get the updated PR info, and see if we were successful:
+            const updatedPrData = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+            const newPrAssignees = updatedPrData
+              .data
+              .assignees
+              .map(element => element.login)
+            console.log('newPrAssignees: ', newPrAssignees);
+            if (newPrAssignees.includes(selectedAssignee)) {
+              console.log(`Successfully assigned @${selectedAssignee}`);
+            } else {
+              weDidEncounterError = true;
+              console.log(`ERROR: Failed to assign @${selectedAssignee}`);
+            }
+            // const newPrLabels = updatedPrData
+            //   .data
+            //   .labels
+            //   .map(element => element.name)
+            // console.log('newPrLabels: ', newPrLabels);
+            // if (newPrLabels.includes(prReviewLabel)) {
+            //   console.log('Successfully added prReviewLabel');
+            // } else {
+            //   weDidEncounterError = true;
+            //   console.log('ERROR: Failed to add add prReviewLabel');
+            // }
+
+            // Post a comment
+            const commentBody = `Hello! I am a bot.\n\nThank you for your pull request!\n\nI have assigned \`@${selectedAssignee}\` to this pull request.\n\n\`@${selectedAssignee}\` can either choose to review this pull request themselves, or they can choose to find someone else to review this pull request.\n\nNote: If you are a Julia committer, please make sure that your organization membership is public.`
+            console.log('Attempting to post bot comment on the PR...');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: commentBody,
+            });
+
+            // Exit with error if any problems were encountered earlier
+            if (weDidEncounterError) {
+              const msg = 'ERROR: Encountered at least one problem while running the script';
+              console.error(msg);
+              throw new Error(msg);
+            }

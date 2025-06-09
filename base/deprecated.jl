@@ -87,7 +87,7 @@ else
 end
 ```
 
-To find out the correct verrsion to use as the first argument, you may use
+To find out the correct version to use as the first argument, you may use
 `Base.__next_removal_version`, which is set to the next version number in which
 the list of changes will be cleared.
 
@@ -211,7 +211,7 @@ macro deprecate(old, new, export_old=true)
             maybe_export,
             :($(esc(old)) = begin
                   $meta
-                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.mt.name)
+                  depwarn($"`$oldcall` is deprecated, use `$newcall` instead.", Core.Typeof($(esc(fnexpr))).name.singletonname)
                   $(esc(new))
               end))
     else
@@ -222,7 +222,7 @@ macro deprecate(old, new, export_old=true)
             export_old ? Expr(:export, esc(old)) : nothing,
             :(function $(esc(old))(args...; kwargs...)
                   $meta
-                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.mt.name)
+                  depwarn($"`$old` is deprecated, use `$new` instead.", Core.Typeof($(esc(old))).name.singletonname)
                   $(esc(new))(args...; kwargs...)
               end))
     end

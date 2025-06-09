@@ -328,23 +328,74 @@ try
 catch err13464
     @test startswith(err13464.msg, "expression is not a function call")
 end
-module MacroTest
-export @macrotest
-macro macrotest(x::Int, y::Symbol) end
-macro macrotest(x::Int, y::Int)
-    nothing #This is here because of #15280
+
+# PR 57909
+@testset "Support for type annotations as arguments" begin
+    @test (@which (::Vector{Int})[::Int]).name === :getindex
+    @test (@which (::Vector{Int})[::Int] = ::Int).name === :setindex!
+    @test (@which (::Base.RefValue{Int}).x).name === :getproperty
+    @test (@which (::Base.RefValue{Int}).x = ::Int).name === :setproperty!
+    @test (@which (::Float64)^2).name === :literal_pow
+    @test (@which [::Int]).name === :vect
+    @test (@which [undef_var::Int]).name === :vect
+    @test (@which [::Int 2]).name === :hcat
+    @test (@which [::Int; 2]).name === :vcat
+    @test (@which Int[::Int 2]).name === :typed_hcat
+    @test (@which Int[::Int; 2]).name === :typed_vcat
+    @test (@which [::Int 2;3 (::Int)]).name === :hvcat
+    @test (@which Int[::Int 2;3 (::Int)]).name === :typed_hvcat
+    @test (@which (::Vector{Float64})').name === :adjoint
+    @test (@which "$(::Symbol) is a symbol").sig === Tuple{typeof(string), Vararg{Union{Char, String, Symbol}}}
+    @test (@which +(some_x::Int, some_y::Float64)).name === :+
+    @test (@which +(::Any, ::Any, ::Any, ::Any...)).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
+    @test (@which +(::Any, ::Any, ::Any, ::Vararg{Any})).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
+    n = length(@code_typed +(::Float64, ::Vararg{Float64}))
+    @test n ≥ 2
+    @test length(@code_typed +(::Float64, ::Float64...)) == n
+    @test (@which +(1, ::Float64)).sig === Tuple{typeof(+), Number, Number}
+    @test (@which +((1, 2)...)).name === :+
+    @test (@which (::typeof(+))(::Int, ::Float64)).sig === Tuple{typeof(+), Number, Number}
+    @test (@code_typed .+(::Float64, ::Vector{Float64})) isa Pair
+    @test (@code_typed .+(::Float64, .*(::Vector{Float64}, ::Int))) isa Pair
+    @test (@which +(::T, ::T) where {T<:Number}).sig === Tuple{typeof(+), T, T} where {T<:Number}
+    @test (@which round(::Float64; digits=3)).name === :round
+    @test (@which round(1.2; digits = ::Int)).name === :round
+    @test (@which round(1.2; digits::Int)).name === :round
+    @test (@code_typed round(::T; digits = ::T) where {T<:Float64})[2] === Union{}
+    @test (@code_typed round(::T; digits = ::T) where {T<:Int})[2] === Float64
+    base = 10
+    kwargs_1 = (; digits = 3)
+    kwargs_2 = (; sigdigits = 3)
+    @test (@which round(1.2; kwargs_1...)).name === :round
+    @test (@which round(1.2; digits = 1, kwargs_1...)).name === :round
+    @test (@code_typed round(1.2; digits = ::Float64, kwargs_1...))[2] === Float64 # picks `3::Int` from `kwargs_1`
+    @test (@code_typed round(1.2; kwargs_1..., digits = ::Float64))[2] === Union{} # picks `::Float64` from parameters
+    @test (@which round(1.2; digits = ::Float64, kwargs_1...)).name === :round
+    @test (@which round(1.2; sigdigits = ::Int, kwargs_1...)).name === :round
+    @test (@which round(1.2; kwargs_1..., kwargs_2..., base)).name === :round
+    @test (@code_typed optimize=false round.([1.0, 2.0]; digits = ::Int64))[2] == Vector{Float64}
+    @test (@code_typed optimize=false round.(::Vector{Float64}, base = 2; digits = ::Int64))[2] == Vector{Float64}
+    @test (@code_typed optimize=false round.(base = ::Int64, ::Vector{Float64}; digits = ::Int64))[2] == Vector{Float64}
+    @test (@code_typed optimize=false [1, 2] .= ::Int)[2] == Vector{Int}
+    @test (@code_typed optimize=false ::Vector{Int} .= ::Int)[2] == Vector{Int}
+    @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ ::Vector{Int})[2] == Vector{Float64}
+    @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ round.(base = ::Int, ::Vector{Int}; digits = 3))[2] == Vector{Float64}
 end
+
+module MacroTest
+var"@which" = parentmodule(@__MODULE__).var"@which"
+macro macrotest(x::Int, y::Symbol) end
+macro macrotest(x::Int, y::Int) end
 end
 
 let
-    using .MacroTest
     a = 1
-    m = getfield(@__MODULE__, Symbol("@macrotest"))
-    @test which(m, Tuple{LineNumberNode, Module, Int, Symbol}) == @which @macrotest 1 a
-    @test which(m, Tuple{LineNumberNode, Module, Int, Int}) == @which @macrotest 1 1
+    m = MacroTest.var"@macrotest"
+    @test which(m, Tuple{LineNumberNode, Module, Int, Symbol}) == @eval MacroTest @which @macrotest 1 a
+    @test which(m, Tuple{LineNumberNode, Module, Int, Int}) == @eval MacroTest @which @macrotest 1 1
 
     @test first(methods(m, Tuple{LineNumberNode, Module, Int, Int})) == @which MacroTest.@macrotest 1 1
-    @test functionloc(@which @macrotest 1 1) == @functionloc @macrotest 1 1
+    @test functionloc(@eval MacroTest @which @macrotest 1 1) == @functionloc MacroTest.@macrotest 1 1
 end
 
 mutable struct A18434
@@ -461,7 +512,22 @@ a14637 = A14637(0)
 @test (@code_typed optimize=true max.([1,7], UInt.([4])))[2] == Vector{UInt}
 @test (@code_typed Ref.([1,2])[1].x)[2] == Int
 @test (@code_typed max.(Ref(true).x))[2] == Bool
+@test (@code_typed optimize=false round.([1.0, 2.0]; digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false round.([1.0, 2.0], base = 2; digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false round.(base = 2, [1.0, 2.0], digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false [1, 2] .= 2)[2] == Vector{Int}
+@test (@code_typed optimize=false [1, 2] .<<= 2)[2] == Vector{Int}
+@test (@code_typed optimize=false [1, 2.0] .= 1 .+ [2, 3])[2] == Vector{Float64}
+@test (@code_typed optimize=false [1, 2.0] .= 1 .+ round.(base = 1, [1, 3]; digits = 3))[2] == Vector{Float64}
+@test (@code_typed optimize=false [1] .+ [2])[2] == Vector{Int}
 @test !isempty(@code_typed optimize=false max.(Ref.([5, 6])...))
+expansion = string(@macroexpand @code_typed optimize=false max.(Ref.([5, 6])...))
+@test contains(expansion, "(x1) =") # presence of wrapper function
+# Make sure broadcasts in nested arguments are not processed.
+v = Any[1]
+expansion = string(@macroexpand @code_typed v[1] = rand.(Ref(1)))
+@test contains(expansion, "Typeof(rand.(Ref(1)))")
+@test !contains(expansion, "(x1) =")
 
 # Issue # 45889
 @test !isempty(@code_typed 3 .+ 6)
@@ -574,6 +640,9 @@ end
     @test_throws err @code_lowered ""
     @test_throws err @code_lowered 1
     @test_throws err @code_lowered 1.0
+
+    @test_throws "dot expressions are not lowered to a single function call" @which a .= 1 + 2
+    @test_throws "invalid keyword argument syntax" @eval @which round(1; digits(3))
 end
 
 using InteractiveUtils: editor
@@ -826,7 +895,13 @@ end
 @test Base.infer_return_type(sin, (Int,)) == InteractiveUtils.@infer_return_type sin(42)
 @test Base.infer_exception_type(sin, (Int,)) == InteractiveUtils.@infer_exception_type sin(42)
 @test first(InteractiveUtils.@code_ircode sin(42)) isa Core.Compiler.IRCode
-@test first(InteractiveUtils.@code_ircode optimize_until="inlining" sin(42)) isa Core.Compiler.IRCode
+@test first(InteractiveUtils.@code_ircode optimize_until="CC: INLINING" sin(42)) isa Core.Compiler.IRCode
+# Test.@inferred also uses `gen_call_with_extracted_types`
+@test Test.@inferred round(1.2) isa Float64
+@test Test.@inferred round(1.3; digits = 3) isa Float64
+# ensure proper inference of the macro output of `@inferred`
+@test Base.infer_return_type(x -> Test.@inferred(round(x)), (Float64,)) === Float64
+@test Base.infer_return_type(x -> Test.@inferred(round(x; digits = 3)), (Float64,)) === Float64
 
 @testset "Docstrings" begin
     @test isempty(Docs.undocumented_names(InteractiveUtils))

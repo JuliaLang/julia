@@ -182,7 +182,7 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n")
             if t.backtrace !== nothing
                 # Capture error message and indent to match
-                join(io, ("      " * line for line in split(t.backtrace, "\n")), "\n")
+                join(io, ("      " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
             end
         end
     elseif t.test_type === :test_throws_nothing
@@ -199,7 +199,6 @@ function Base.show(io::IO, t::Fail)
             print(io, "\n     Context: ", t.context)
         end
     end
-    println(io) # add some visual space to separate sequential failures
 end
 
 """
@@ -269,7 +268,7 @@ function Base.show(io::IO, t::Error)
         println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
         # Capture error message and indent to match
-        join(io, ("  " * line for line in split(t.backtrace, "\n")), "\n")
+        join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     elseif t.test_type === :test_unbroken
         # A test that was expected to fail did not
         println(io, " Unexpected Pass")
@@ -279,7 +278,7 @@ function Base.show(io::IO, t::Error)
         # we had an error outside of a @test
         println(io, "  Got exception outside of a @test")
         # Capture error message and indent to match
-        join(io, ("  " * line for line in split(t.backtrace, "\n")), "\n")
+        join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     end
 end
 
@@ -1169,12 +1168,13 @@ end
 # but do not terminate. Print a backtrace.
 function record(ts::DefaultTestSet, t::Union{Fail, Error}; print_result::Bool=TESTSET_PRINT_ENABLE[])
     if print_result
+        println() # add some visual space to separate sequential failures
         print(ts.description, ": ")
         # don't print for interrupted tests
         if !(t isa Error) || t.test_type !== :test_interrupted
             print(t)
             if !isa(t, Error) # if not gets printed in the show method
-                Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)))
+                Base.show_backtrace(stdout, scrub_backtrace(backtrace(), ts.file, extract_file(t.source)); prefix="  ")
             end
             println()
         end
@@ -1650,9 +1650,9 @@ trigonometric identities |    4      4  0.2s
 
 # `@testset for`
 
-When `@testset for` is used, the macro starts a new test for each iteration of
+When `@testset for` is used, the macro starts a new test set for each iteration of
 the provided loop. The semantics of each test set are otherwise identical to that
-of that `begin/end` case (as if used for each loop iteration).
+of the `begin/end` case (as if used for each loop iteration).
 
 # `@testset let`
 
@@ -1687,7 +1687,6 @@ Test Failed at none:3
   Expression: !(iszero(real(logi)))
    Evaluated: !(iszero(0.0))
      Context: logi = 0.0 + 1.5707963267948966im
-
 ERROR: There was an error during testing
 
 julia> @testset let logi = log(im), op = !iszero
@@ -1699,7 +1698,6 @@ Test Failed at none:3
    Evaluated: op(0.0)
      Context: logi = 0.0 + 1.5707963267948966im
               op = !iszero
-
 ERROR: There was an error during testing
 ```
 """
@@ -2136,7 +2134,7 @@ function _inferred(ex, mod, allow = :(Union{}))
                     kwargs = gensym()
                     quote
                         $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                        inftype = $(gen_call_with_extracted_types(mod, Base.infer_return_type, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                        inftype = $(gen_call_with_extracted_types(mod, Base.infer_return_type, :($(ex.args[1])($(args)...; $(kwargs)...)); is_source_reflection = false))
                     end
                 else
                     # No keywords
@@ -2217,30 +2215,7 @@ function detect_ambiguities(mods::Module...;
             end
         end
     end
-    work = Base.loaded_modules_array()
-    filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
-    while !isempty(work)
-        mod = pop!(work)
-        for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
-            if !isdefined(mod, n)
-                if is_in_mods(mod, recursive, mods)
-                    if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
-                        println("Skipping ", mod, '.', n)  # typically stale exports
-                    end
-                end
-                continue
-            end
-            f = Base.unwrap_unionall(getfield(mod, n))
-            if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
-                push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
-                examine(f.name.mt)
-            end
-        end
-    end
-    examine(Symbol.name.mt)
-    examine(DataType.name.mt)
+    examine(Core.GlobalMethods)
     return collect(ambs)
 end
 
@@ -2288,30 +2263,7 @@ function detect_unbound_args(mods...;
             push!(ambs, m)
         end
     end
-    work = Base.loaded_modules_array()
-    filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
-    while !isempty(work)
-        mod = pop!(work)
-        for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
-            if !isdefined(mod, n)
-                if is_in_mods(mod, recursive, mods)
-                    if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
-                        println("Skipping ", mod, '.', n)  # typically stale exports
-                    end
-                end
-                continue
-            end
-            f = Base.unwrap_unionall(getfield(mod, n))
-            if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
-                push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
-                examine(f.name.mt)
-            end
-        end
-    end
-    examine(Symbol.name.mt)
-    examine(DataType.name.mt)
+    examine(Core.GlobalMethods)
     return collect(ambs)
 end
 
