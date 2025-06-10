@@ -575,11 +575,25 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
     const char *&f_name = out.f_name;
     const char *&f_lib = out.f_lib;
 
-    jl_value_t *ptr = static_eval(ctx, arg);
+    if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_call_sym && jl_expr_nargs(arg) == 3 &&
+        jl_is_globalref(jl_exprarg(arg,0)) && jl_globalref_mod(jl_exprarg(arg,0)) == jl_core_module &&
+        jl_globalref_name(jl_exprarg(arg,0)) == jl_symbol("tuple")) {
+        // 2-tuple expression
+        jl_cgval_t name_val = emit_expr(ctx, jl_exprarg(arg, 1));
+        if (name_val.constant && jl_is_symbol(name_val.constant)) {
+            f_name = jl_symbol_name((jl_sym_t*)name_val.constant);
+            out.lib_expr = jl_exprarg(arg, 2);
+            return;
+        }
+        else if (name_val.constant && jl_is_string(name_val.constant)) {
+            f_name = jl_string_data(name_val.constant);
+            out.gcroot = name_val.constant;
+            out.lib_expr = jl_exprarg(arg, 2);
+            return;
+        }
+
+            jl_value_t *ptr = static_eval(ctx, arg);
     if (ptr == NULL) {
-        if (jl_is_expr(arg) && ((jl_expr_t*)arg)->head == jl_call_sym && jl_expr_nargs(arg) == 3 &&
-            jl_is_globalref(jl_exprarg(arg,0)) && jl_globalref_mod(jl_exprarg(arg,0)) == jl_core_module &&
-            jl_globalref_name(jl_exprarg(arg,0)) == jl_symbol("tuple")) {
             // attempt to interpret a non-constant 2-tuple expression as (func_name, lib_name()), where
             // `lib_name()` will be executed when first used.
             jl_value_t *name_val = static_eval(ctx, jl_exprarg(arg,1));
@@ -2147,7 +2161,7 @@ jl_cgval_t function_sig_t::emit_a_ccall(
     else if (!ctx.params->use_jlplt) {
         if ((symarg.f_lib && !((symarg.f_lib == JL_EXE_LIBNAME) ||
               (symarg.f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
-              (symarg.f_lib == JL_LIBJULIA_DL_LIBNAME))) || symarg.lib_expr) {
+             (symarg.f_lib == JL_LIBJULIA_DL_LIBNAME))) || symarg.lib_expr) {
             emit_error(ctx, "ccall: Had library expression, but symbol lookup was disabled");
         }
         llvmf = jl_Module->getOrInsertFunction(symarg.f_name, functype).getCallee();
