@@ -423,7 +423,8 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         return f;
     };
     jl_callptr_t invoke = nullptr;
-    jl_abi_t from_abi = { sigt, declrt, nargs, specsig };
+    bool is_opaque_closure = false;
+    jl_abi_t from_abi = { sigt, declrt, nargs, specsig, is_opaque_closure };
     if (codeinst != NULL) {
         jl_value_t *astrt = codeinst->rettype;
         if (astrt != (jl_value_t*)jl_bottom_type &&
