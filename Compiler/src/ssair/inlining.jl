@@ -173,9 +173,12 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
             p = state.new_cfg_blocks[new_block].preds
             let bb_rename_range = bb_rename_range
                 map!(p, p) do old_pred_block
+                    # the meaning of predecessor 0 depends on the block we encounter it:
+                    #   - in the first block, it represents the function entry and so needs to be re-mapped
                     if old_block == 1 && old_pred_block == 0
                         return first(bb_rename_range) - 1
                     end
+                    #   - elsewhere, it represents external control-flow from a caught exception which is un-affected by inlining
                     return old_pred_block == 0 ? 0 : bb_rename_range[old_pred_block]
                 end
             end
