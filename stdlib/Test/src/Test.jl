@@ -1925,7 +1925,9 @@ function testset_forloop(args, testloop, source)
             # Something in the test block threw an error. Count that as an
             # error in this test set
             trigger_test_failure_break(err)
-            if !isa(err, FailFastError)
+            if err isa FailFastError
+                get_testset_depth() > 1 ? rethrow() : failfast_print()
+            else
                 record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
             end
         end
