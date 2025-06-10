@@ -203,8 +203,7 @@ function shuffle(rng::AbstractRNG, tup::NTuple{N}) where {N}
         else
             UInt
         end
-        # TODO: use `randperm!` instead of `copyto!` from a unit range once `randperm!` supports `Memory`
-        mem = @inbounds shuffle!(rng, copyto!(Memory{Ind}(undef, N), Base.OneTo(N)))
+        mem = @inbounds randperm!(rng, Memory{Ind}(undef, N))
         function closure(i::Int)
             @inbounds tup[mem[i]]
         end
