@@ -1368,8 +1368,8 @@ static const auto jlgetabiconverter_func = new JuliaFunction<TypeFnContextAndSiz
     XSTR(jl_get_abi_converter),
     [](LLVMContext &C, Type *T_size) {
         Type *T_ptr = getPointerTy(C);
-        return FunctionType::get(T_ptr,
-            {T_ptr, T_ptr, T_ptr, T_ptr}, false); },
+        return FunctionType::get(T_ptr, {T_ptr, T_ptr}, false);
+    },
     nullptr,
 };
 static const auto diff_gc_total_bytes_func = new JuliaFunction<>{
@@ -7167,13 +7167,7 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
         Type *T_size = ctx.types().T_size;
         Constant *Vnull = ConstantPointerNull::get(T_ptr);
         Module *M = jl_Module;
-        GlobalVariable *theFptr = new GlobalVariable(*M, T_ptr, false,
-                GlobalVariable::PrivateLinkage,
-                Vnull);
-        GlobalVariable *last_world_p = new GlobalVariable(*M, T_size, false,
-                GlobalVariable::PrivateLinkage,
-                ConstantInt::get(T_size, 0));
-        ArrayType *T_cfuncdata = ArrayType::get(T_ptr, 6);
+        ArrayType *T_cfuncdata = ArrayType::get(T_ptr, 8);
         size_t flags = specsig;
         GlobalVariable *cfuncdata = new GlobalVariable(*M, T_cfuncdata, false,
                 GlobalVariable::PrivateLinkage,
@@ -7181,12 +7175,15 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
                     Vnull,
                     Vnull,
                     Vnull,
+                    Vnull,
+                    Vnull,
                     literal_pointer_val_slot(ctx.emission_context, M, declrt),
                     literal_pointer_val_slot(ctx.emission_context, M, sigt),
                     literal_static_pointer_val((void*)flags, T_ptr)}));
+        Value *last_world_p = ctx.builder.CreateConstInBoundsGEP1_32(ctx.types().T_size, cfuncdata, 1);
         LoadInst *last_world_v = ctx.builder.CreateAlignedLoad(T_size, last_world_p, ctx.types().alignof_ptr);
         last_world_v->setOrdering(AtomicOrdering::Acquire);
-        LoadInst *callee = ctx.builder.CreateAlignedLoad(T_ptr, theFptr, ctx.types().alignof_ptr);
+        LoadInst *callee = ctx.builder.CreateAlignedLoad(T_ptr, cfuncdata, ctx.types().alignof_ptr);
         callee->setOrdering(AtomicOrdering::Monotonic);
         LoadInst *world_v = ctx.builder.CreateAlignedLoad(ctx.types().T_size,
             prepare_global_in(M, jlgetworld_global), ctx.types().alignof_ptr);
@@ -7195,15 +7192,11 @@ static jl_cgval_t emit_abi_call(jl_codectx_t &ctx, jl_value_t *declrt, jl_value_
         Value *age_not_ok = ctx.builder.CreateICmpNE(last_world_v, world_v);
         Value *target = emit_guarded_test(ctx, age_not_ok, callee, [&] {
                 Function *getcaller = prepare_call(jlgetabiconverter_func);
-                CallInst *cw = ctx.builder.CreateCall(getcaller, {
-                        get_current_task(ctx),
-                        theFptr,
-                        last_world_p,
-                        cfuncdata});
+                CallInst *cw = ctx.builder.CreateCall(getcaller, {get_current_task(ctx), cfuncdata});
                 cw->setAttributes(getcaller->getAttributes());
                 return cw;
             });
-        ctx.emission_context.cfuncs.push_back({declrt, sigt, nargs, specsig, theFptr, cfuncdata});
+        ctx.emission_context.cfuncs.push_back({declrt, sigt, nargs, specsig, cfuncdata});
         if (specsig) {
             // TODO: could we force this to guarantee passing a box for `f` here (since we
             // know we had it here) and on the receiver end (emit_abi_converter /

@@ -224,7 +224,6 @@ struct cfunc_decl_t {
     jl_value_t *sigt;
     size_t nargs;
     bool specsig;
-    llvm::GlobalVariable *theFptr;
     llvm::GlobalVariable *cfuncdata;
 };
 
