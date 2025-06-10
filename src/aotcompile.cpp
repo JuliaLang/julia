@@ -576,7 +576,7 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
     }
     size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
     for (cfunc_decl_t &cfunc : params.cfuncs) {
-        Module *M = cfunc.theFptr->getParent();
+        Module *M = cfunc.cfuncdata->getParent();
         jl_value_t *sigt = cfunc.sigt;
         JL_GC_PROMISE_ROOTED(sigt);
         jl_value_t *declrt = cfunc.declrt;
@@ -585,19 +585,20 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
         jl_code_instance_t *codeinst = nullptr;
         auto assign_fptr = [&params, &cfunc, &codeinst, &unspec](Function *f) {
             ConstantArray *init = cast<ConstantArray>(cfunc.cfuncdata->getInitializer());
-            SmallVector<Constant*,6> initvals;
+            SmallVector<Constant*,8> initvals;
             for (unsigned i = 0; i < init->getNumOperands(); ++i)
                 initvals.push_back(init->getOperand(i));
-            assert(initvals.size() == 6);
+            assert(initvals.size() == 8);
             assert(initvals[0]->isNullValue());
+            assert(initvals[2]->isNullValue());
             if (codeinst) {
                 Constant *llvmcodeinst = literal_pointer_val_slot(params, f->getParent(), (jl_value_t*)codeinst);
-                initvals[0] = llvmcodeinst; // plast_codeinst
+                initvals[2] = llvmcodeinst; // plast_codeinst
             }
-            assert(initvals[2]->isNullValue());
-            initvals[2] = unspec;
+            assert(initvals[4]->isNullValue());
+            initvals[4] = unspec;
+            initvals[0] = f;
             cfunc.cfuncdata->setInitializer(ConstantArray::get(init->getType(), initvals));
-            cfunc.theFptr->setInitializer(f);
         };
         Module *defM = nullptr;
         StringRef func;
