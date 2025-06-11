@@ -66,6 +66,9 @@ has_fma = Dict(
             @test x isa BigInt
             @test x == big(2)
         end
+
+        @test clamp(2.0, Int) === 2
+        @test_throws InexactError clamp(2.5, Int)
     end
 end
 
