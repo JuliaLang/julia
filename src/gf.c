@@ -476,8 +476,6 @@ JL_DLLEXPORT jl_code_instance_t *jl_get_method_inferred(
     return codeinst;
 }
 
-static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time, int is_const_return_abi);
-
 JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
         jl_method_instance_t *mi, jl_value_t *rettype,
         jl_value_t *inferred_const, jl_value_t *inferred,
@@ -503,10 +501,6 @@ JL_DLLEXPORT jl_code_instance_t *jl_new_codeinst(
     jl_atomic_store_relaxed(&codeinst->invoke, NULL);
     if ((const_flags & 1) != 0) {
         assert(const_flags & 2);
-        if (jl_is_method(mi->def.value) && jl_isa_compileable_sig((jl_tupletype_t *)mi->specTypes, mi->sparam_vals, mi->def.method)) {
-            // This code was freshly-inferred, so let's emit a `precompile(...)` statement for it
-            record_precompile_statement(mi, 0.0, 1);
-        }
         jl_atomic_store_relaxed(&codeinst->invoke, jl_fptr_const_return);
     }
     jl_atomic_store_relaxed(&codeinst->specsigflags, 0);
@@ -2398,7 +2392,7 @@ JL_DLLEXPORT void jl_force_trace_compile_timing_disable(void)
     jl_atomic_fetch_add(&jl_force_trace_compile_timing_enabled, -1);
 }
 
-static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time, int is_const_return_abi)
+static void record_precompile_statement(jl_method_instance_t *mi, double compilation_time)
 {
     static ios_t f_precompile;
     static JL_STREAM* s_precompile = NULL;
@@ -2572,7 +2566,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                     codeinst->rettype_const = unspec->rettype_const;
                     jl_atomic_store_release(&codeinst->invoke, unspec_invoke);
                     jl_mi_cache_insert(mi, codeinst);
-                    record_precompile_statement(mi, 0.0, 0);
+                    record_precompile_statement(mi, 0);
                     return codeinst;
                 }
             }
@@ -2589,7 +2583,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
                 0, 1, ~(size_t)0, 0, 0, jl_nothing, 0);
             jl_atomic_store_release(&codeinst->invoke, jl_fptr_interpret_call);
             jl_mi_cache_insert(mi, codeinst);
-            record_precompile_statement(mi, 0.0, 0);
+            record_precompile_statement(mi, 0);
             return codeinst;
         }
         if (compile_option == JL_OPTIONS_COMPILE_OFF) {
@@ -2644,7 +2638,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         jl_mi_cache_insert(mi, codeinst);
     }
     else if (did_compile) {
-        record_precompile_statement(mi, compile_time, 0);
+        record_precompile_statement(mi, compile_time);
     }
     jl_atomic_store_relaxed(&codeinst->precompile, 1);
     return codeinst;
