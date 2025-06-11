@@ -134,10 +134,11 @@ top:
     %pgcstack = call {}*** @julia.get_pgcstack()
     %1 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %1, i64 -12
-
-; CHECK: %current_task = getelementptr inbounds ptr, ptr %1, i64 -12
-    %2 = load float, ptr addrspace(1) %0, align 4, !invariant.load !1
-; CHECK-NEXT: %2 = load float, ptr addrspace(1) %0, align 4, !invariant.load
+; TYPED: %current_task = %current_task = getelementptr inbounds {}*, {}** %1, i64 -12
+; OPAQUE: %current_task = getelementptr inbounds ptr, ptr %1, i64 -12
+    %2 = load float, float addrspace(1)* %0, align 4, !invariant.load !1
+; TYPED-NEXT: %2 = load float, float addrspace(1)* %0, align 4, !invariant.load
+; OPAQUE-NEXT: %2 = load float, ptr addrspace(1) %0, align 4, !invariant.load
     ret void
 }
 
@@ -207,7 +208,7 @@ define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
   %l0 = load {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %e0
   %e1 = extractvalue [2 x {} addrspace(10)* addrspace(11)*] %ar, 1
   %l1 = load {} addrspace(10)*, {} addrspace(10)* addrspace(11)* %e1
-  %r = call i32 @callee_root({} addrspace(10)* %l0, {} addrspace(10)* %l1) 
+  %r = call i32 @callee_root({} addrspace(10)* %l0, {} addrspace(10)* %l1)
   ret void
 }
 
