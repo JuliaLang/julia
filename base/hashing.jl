@@ -111,6 +111,7 @@ function _hash_integer(
             see1 = seed
             see2 = seed
             while i ≥ 48
+                println("i = $i")
                 l0 = u % UInt; u >>>= 64
                 l1 = u % UInt; u >>>= 64
                 l2 = u % UInt; u >>>= 64
@@ -121,9 +122,9 @@ function _hash_integer(
                 seed = hash_mix(l0 ⊻ secret[1], l1 ⊻ seed)
                 see1 = hash_mix(l2 ⊻ secret[2], l3 ⊻ see1)
                 see2 = hash_mix(l4 ⊻ secret[3], l5 ⊻ see2)
+                i -= 48
             end
             seed = seed ⊻ see1 ⊻ see2
-            i -= 48
         end
         if i > 16
             l0 = u % UInt; u >>>= 64

@@ -811,7 +811,7 @@ end
 
 @testset "hashing" begin
     for i in 1:10:100
-        for shift in vcat(0:2:8, 9:8:73)
+        for shift in vcat(0:8, 9:8:81)
             for sgn in (1, -1)
                 bint = sgn * (big(11)^i << shift)
                 bfloat = float(bint)
