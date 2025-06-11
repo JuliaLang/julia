@@ -853,12 +853,16 @@ if Limb === UInt64 === UInt
     using .Base: HASH_SECRET, hash_bytes, hash_finalizer
 
     function hash_integer(n::BigInt, h::UInt)
+        iszero(n) && return hash_integer(0, h)
         GC.@preserve n begin
             s = n.size
             h ⊻= (s < 0)
+
+            us = abs(s)
+            leading_zero_bytes = div(leading_zeros(unsafe_load(n.d, us)), 8)
             hash_bytes(
                 Ptr{UInt8}(n.d),
-                8 * abs(s),
+                8 * us - leading_zero_bytes,
                 h,
                 HASH_SECRET
             )
@@ -895,16 +899,14 @@ if Limb === UInt64 === UInt
             h = hash_integer(pow, h)
 
             h ⊻= (sz < 0)
+            leading_zero_bytes = div(leading_zeros(unsafe_load(x.d, asz)), 8)
             trailing_zero_bytes = div(pow, 8)
-            GC.@preserve x begin
-                h = hash_bytes(
-                    Ptr{UInt8}(x.d) + 8 * trailing_zero_bytes,
-                    8 * (asz - trailing_zero_bytes),
-                    h,
-                    HASH_SECRET
-                )
-            end
-            return h
+            return hash_bytes(
+                Ptr{UInt8}(x.d) + trailing_zero_bytes,
+                8 * asz - (leading_zero_bytes + trailing_zero_bytes),
+                h,
+                HASH_SECRET
+            )
         end
     end
 end
