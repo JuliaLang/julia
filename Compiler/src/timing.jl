@@ -1,26 +1,12 @@
 if ccall(:jl_timing_enabled, Cint, ()) != 0
-    if !isdefined(@__MODULE__, :task_local_storage)
-        # During bootstrapping we assume that things run non-concurrently and it is therefore
-        # safe to use a global variable to store the current timing block.
-        const CURRENT_TIMING_BLOCK = RefValue(C_NULL)
-        @inline _get_current_timing_block_nocheck() = CURRENT_TIMING_BLOCK
-        @inline function set_current_timing_block!(block::Ptr{Cvoid})
-            old_block = CURRENT_TIMING_BLOCK[]
-            CURRENT_TIMING_BLOCK[] = block
-            return old_block
-        end
-        @inline function restore_current_timing_block!(old_block::Ptr{Cvoid})
-            CURRENT_TIMING_BLOCK[] = old_block
-        end
-    else
+    if isdefined(@__MODULE__, :task_local_storage)
         # Consider using ScopedValues when it is fast, c.f https://github.com/topolarity/Tracy.jl/pull/36
-        const TIMING_BLOCK_TLS_KEY = :timing_block_tls_key
         @inline function _get_current_timing_block_nocheck()
-            ref_block = get(task_local_storage(), TIMING_BLOCK_TLS_KEY, nothing)::Union{Nothing, RefValue{Ptr{Cvoid}}}
+            ref_block = get(task_local_storage(), :timing_block_tls_key, nothing)::Union{Nothing, RefValue{Ptr{Cvoid}}}
             return ref_block === nothing ? C_NULL : ref_block[]
         end
         @inline function set_current_timing_block!(block::Ptr{Cvoid})
-            ref_block = get!(()->RefValue(C_NULL), task_local_storage(), TIMING_BLOCK_TLS_KEY)::RefValue{Ptr{Cvoid}}
+            ref_block = get!(()->RefValue(C_NULL), task_local_storage(), :timing_block_tls_key)::RefValue{Ptr{Cvoid}}
             old = ref_block[]
             ref_block[] = block
             return (old, ref_block)
@@ -28,14 +14,19 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
         @inline function restore_current_timing_block!((old, ref)::Tuple{Ptr{Cvoid}, RefValue{Ptr{Cvoid}}})
             ref[] = old
         end
-    end
-
-    function _get_current_timing_block()
-        block = _get_current_timing_block_nocheck()
-        if block === C_NULL
-            error("must be called from within a @zone")
+        @inline function timing_print(str::Union{String, Symbol})
+            ccall(
+                :jl_timing_puts,
+                Cvoid,
+                (Ptr{Cvoid}, Ptr{UInt8}),
+                _get_current_timing_block(),
+                str
+            )
         end
-        return block
+    else
+        set_current_timing_block!(block::Ptr{Cvoid}) = nothing
+        restore_current_timing_block!(::Nothing) = nothing
+        timing_print(str::Union{String, Symbol}) = error("can not add text to zones when thread local storage is not available")
     end
 
     function getzonedexpr(name::Union{Symbol, String}, ex::Expr, func::Symbol, file::Symbol, line::Integer, color::Integer)
@@ -74,15 +65,6 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
     end
     macro zone(name, ex::Expr)
         return getzonedexpr(name, ex, :unknown_julia_function, __source__.file, __source__.line, 0)
-    end
-    @inline function timing_print(str::Union{String, Symbol})
-        ccall(
-            :jl_timing_puts,
-            Cvoid,
-            (Ptr{Cvoid}, Ptr{UInt8}),
-            _get_current_timing_block(),
-            str
-        )
     end
 else
     macro zone(name, ex::Expr)
