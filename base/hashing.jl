@@ -78,21 +78,30 @@ function _hash_integer(
     seed ⊻= (x < 0)
     u = abs(x)
 
-    # always left-pad to multiple of 8 bytes
-    buflen = UInt(cld(top_set_bit(u), 64) * 8)
+    # always left-pad to full byte
+    buflen = UInt(max(cld(top_set_bit(u), 8), 1))
     seed = seed ⊻ (hash_mix(seed ⊻ secret[1], secret[2]) ⊻ buflen)
 
     a = zero(UInt64)
     b = zero(UInt64)
 
     if buflen ≤ 16
-        a = (UInt64(u % UInt32) << 32) |
-            UInt64((u >>> ((buflen - 4) * 8)) % UInt32)
+        if buflen ≥ 4
+            a = (UInt64(u % UInt32) << 32) |
+                UInt64((u >>> ((buflen - 4) * 8)) % UInt32)
 
-        delta = (buflen & 24) >>> (buflen >>> 3)
+            delta = (buflen & 24) >>> (buflen >>> 3)
 
-        b = (UInt64((u >>> (8 * delta)) % UInt32) << 32) |
-            UInt64((u >>> (8 * (buflen - 4 - delta))) % UInt32)
+            b = (UInt64((u >>> (8 * delta)) % UInt32) << 32) |
+                UInt64((u >>> (8 * (buflen - 4 - delta))) % UInt32)
+        else # buflen > 0
+            b0 = u % UInt8
+            b1 = (u >>> (8 * div(buflen, 2))) % UInt8
+            b2 = (u >>> (8 * (buflen - 1))) % UInt8
+            a = (UInt64(b0) << 56) |
+                (UInt64(b1) << 32) |
+                UInt64(b2)
+        end
     else
         a = (u >>> 8(buflen - 16)) % UInt
         b = (u >>> 8(buflen - 8)) % UInt
@@ -112,9 +121,9 @@ function _hash_integer(
                 seed = hash_mix(l0 ⊻ secret[1], l1 ⊻ seed)
                 see1 = hash_mix(l2 ⊻ secret[2], l3 ⊻ see1)
                 see2 = hash_mix(l4 ⊻ secret[3], l5 ⊻ see2)
+                i -= 48
             end
             seed = seed ⊻ see1 ⊻ see2
-            i -= 48
         end
         if i > 16
             l0 = u % UInt; u >>>= 64
