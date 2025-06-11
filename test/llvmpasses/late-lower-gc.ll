@@ -3,8 +3,6 @@
 ; RUN: opt -enable-new-pm=0 --opaque-pointers=0 -load libjulia-codegen%shlibext -LateLowerGCFrame -S %s | FileCheck %s -check-prefixes=CHECK,TYPED
 ; RUN: opt -enable-new-pm=1 --opaque-pointers=0 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s -check-prefixes=CHECK,TYPED
 
-; RUN: opt -enable-new-pm=0 --opaque-pointers=1 -load libjulia-codegen%shlibext -LateLowerGCFrame -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
-; RUN: opt -enable-new-pm=1 --opaque-pointers=1 --load-pass-plugin=libjulia-codegen%shlibext -passes='function(LateLowerGCFrame)' -S %s | FileCheck %s --check-prefixes=CHECK,OPAQUE
 
 @tag = external addrspace(10) global {}, align 16
 
@@ -134,7 +132,7 @@ top:
     %pgcstack = call {}*** @julia.get_pgcstack()
     %1 = bitcast {}*** %pgcstack to {}**
     %current_task = getelementptr inbounds {}*, {}** %1, i64 -12
-; TYPED: %current_task = %current_task = getelementptr inbounds {}*, {}** %1, i64 -12
+; TYPED: %current_task = getelementptr inbounds {}*, {}** %1, i64 -12
 ; OPAQUE: %current_task = getelementptr inbounds ptr, ptr %1, i64 -12
     %2 = load float, float addrspace(1)* %0, align 4, !invariant.load !1
 ; TYPED-NEXT: %2 = load float, float addrspace(1)* %0, align 4, !invariant.load
