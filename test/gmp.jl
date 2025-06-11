@@ -811,14 +811,26 @@ end
 
 @testset "hashing" begin
     for i in 1:10:100
-        for shift in 0:3
-            bint = big(11)^i << shift
-            bfloat = float(bint)
-            @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
-            @test hash(bint, Base.HASH_SEED) ==
-                @invoke(hash(bint::Real, Base.HASH_SEED))
-            @test Base.hash_integer(bint, Base.HASH_SEED) ==
-                @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
+        for shift in vcat(0:2:8, 9:8:73)
+            for sgn in (1, -1)
+                bint = sgn * (big(11)^i << shift)
+                bfloat = float(bint)
+
+                println("i = $i, shift = $shift, sgn = $sgn")
+                @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+                @test hash(bint, Base.HASH_SEED) ==
+                    @invoke(hash(bint::Real, Base.HASH_SEED))
+                @test Base.hash_integer(bint, Base.HASH_SEED) ==
+                    @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
+            end
         end
     end
+
+    bint = big(0)
+    bfloat = float(bint)
+    @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+    @test hash(bint, Base.HASH_SEED) ==
+        @invoke(hash(bint::Real, Base.HASH_SEED))
+    @test Base.hash_integer(bint, Base.HASH_SEED) ==
+        @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
 end
