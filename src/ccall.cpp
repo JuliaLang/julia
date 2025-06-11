@@ -552,11 +552,12 @@ static Value *julia_to_native(
 }
 
 typedef struct {
-    Value *jl_ptr;  // if the argument is a run-time computed pointer
-    void (*fptr)(void);     // if the argument is a constant pointer
-    const char *f_name;   // if the symbol name is known
-    const char *f_lib;    // if a library name is specified
-    jl_value_t *lib_expr; // expression to compute library path lazily
+    Value *jl_ptr;       // if the argument is a run-time computed pointer
+    void (*fptr)(void);  // if the argument is a constant pointer
+    const char *f_name;  // if the symbol name is known
+    const char *f_lib;   // if the library name is known
+    BasicBlock *namebb;  // BB to compute name & lib if not constant
+    jl_cgval_t lib_val;  // run-time library value
     jl_value_t *gcroot;
 } native_sym_arg_t;
 
@@ -579,92 +580,77 @@ static void interpret_symbol_arg(jl_codectx_t &ctx, native_sym_arg_t &out, jl_va
         jl_is_globalref(jl_exprarg(arg,0)) && jl_globalref_mod(jl_exprarg(arg,0)) == jl_core_module &&
         jl_globalref_name(jl_exprarg(arg,0)) == jl_symbol("tuple")) {
         // 2-tuple expression
+        out.namebb = BasicBlock::Create(ctx.builder.getContext(), "", ctx.f);
+        BasicBlock *prevbb = ctx.builder.GetInsertBlock();
+        ctx.builder.SetInsertPoint(out.namebb);
         jl_cgval_t name_val = emit_expr(ctx, jl_exprarg(arg, 1));
         if (name_val.constant && jl_is_symbol(name_val.constant)) {
             f_name = jl_symbol_name((jl_sym_t*)name_val.constant);
-            out.lib_expr = jl_exprarg(arg, 2);
-            return;
         }
         else if (name_val.constant && jl_is_string(name_val.constant)) {
             f_name = jl_string_data(name_val.constant);
-            out.gcroot = name_val.constant;
-            out.lib_expr = jl_exprarg(arg, 2);
-            return;
         }
-
-            jl_value_t *ptr = static_eval(ctx, arg);
-    if (ptr == NULL) {
-            // attempt to interpret a non-constant 2-tuple expression as (func_name, lib_name()), where
-            // `lib_name()` will be executed when first used.
-            jl_value_t *name_val = static_eval(ctx, jl_exprarg(arg,1));
-            if (name_val && jl_is_symbol(name_val)) {
-                f_name = jl_symbol_name((jl_sym_t*)name_val);
-                out.lib_expr = jl_exprarg(arg, 2);
-                return;
-            }
-            else if (name_val && jl_is_string(name_val)) {
-                f_name = jl_string_data(name_val);
-                out.gcroot = name_val;
-                out.lib_expr = jl_exprarg(arg, 2);
-                return;
-            }
+        out.lib_val = emit_expr(ctx, jl_exprarg(arg, 2));
+        if (out.lib_val.constant && jl_is_symbol(out.lib_val.constant)) {
+            f_lib = jl_symbol_name((jl_sym_t*)out.lib_val.constant);
         }
-        jl_cgval_t arg1 = emit_expr(ctx, arg);
-        jl_value_t *ptr_ty = arg1.typ;
-        if (!jl_is_cpointer_type(ptr_ty)) {
-            if (!ccall)
-                return;
-            const char *errmsg = invalid_symbol_err_msg(ccall);
-            emit_cpointercheck(ctx, arg1, errmsg);
+        else if (out.lib_val.constant && jl_is_string(out.lib_val.constant)) {
+            f_lib = jl_string_data(out.lib_val.constant);
         }
-        arg1 = update_julia_type(ctx, arg1, (jl_value_t*)jl_voidpointer_type);
-        jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, arg1, (jl_value_t*)jl_voidpointer_type);
+        ctx.builder.SetInsertPoint(prevbb);
     }
     else {
-        out.gcroot = ptr;
-        if (jl_is_tuple(ptr) && jl_nfields(ptr) == 1) {
-            ptr = jl_fieldref(ptr, 0);
-        }
-
-        if (jl_is_symbol(ptr))
-            f_name = jl_symbol_name((jl_sym_t*)ptr);
-        else if (jl_is_string(ptr))
-            f_name = jl_string_data(ptr);
-
-        if (f_name != NULL) {
-            // just symbol, default to JuliaDLHandle
-            // will look in process symbol table
-            if (!llvmcall) {
-                void *symaddr;
-                std::string iname("i");
-                iname += f_name;
-                if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0)) {
-                    f_lib = JL_LIBJULIA_INTERNAL_DL_LIBNAME;
-                    f_name = jl_symbol_name(jl_symbol(iname.c_str()));
-                }
-                else {
-                    f_lib = jl_dlfind(f_name);
+        // single expression
+        jl_cgval_t arg1 = emit_expr(ctx, arg);
+        if (arg1.constant) {
+            jl_value_t *ptr = arg1.constant;
+            if (jl_is_symbol(ptr))
+                f_name = jl_symbol_name((jl_sym_t*)ptr);
+            else if (jl_is_string(ptr))
+                f_name = jl_string_data(ptr);
+            else if (jl_is_cpointer_type(jl_typeof(ptr)))
+                fptr = *(void(**)(void))jl_data_ptr(ptr);
+            else if (jl_is_tuple(ptr) && jl_nfields(ptr) > 1) {
+                jl_value_t *t0 = jl_fieldref(ptr, 0);
+                if (jl_is_symbol(t0))
+                    f_name = jl_symbol_name((jl_sym_t*)t0);
+                else if (jl_is_string(t0))
+                    f_name = jl_string_data(t0);
+                jl_value_t *t1 = jl_fieldref(ptr, 1);
+                if (jl_is_symbol(t1))
+                    f_lib = jl_symbol_name((jl_sym_t*)t1);
+                else if (jl_is_string(t1))
+                    f_lib = jl_string_data(t1);
+                else
+                    out.lib_val = mark_julia_const(ctx, t1);
+            }
+            if (f_name != NULL && !jl_is_tuple(ptr)) {
+                // just symbol, default to JuliaDLHandle
+                // will look in process symbol table
+                if (!llvmcall) {
+                    void *symaddr;
+                    std::string iname("i");
+                    iname += f_name;
+                    if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0)) {
+                        f_lib = JL_LIBJULIA_INTERNAL_DL_LIBNAME;
+                        f_name = jl_symbol_name(jl_symbol(iname.c_str()));
+                    }
+                    else {
+                        f_lib = jl_dlfind(f_name);
+                    }
                 }
             }
         }
-        else if (jl_is_cpointer_type(jl_typeof(ptr))) {
-            fptr = *(void(**)(void))jl_data_ptr(ptr);
-        }
-        else if (jl_is_tuple(ptr) && jl_nfields(ptr) > 1) {
-            jl_value_t *t0 = jl_fieldref(ptr, 0);
-            if (jl_is_symbol(t0))
-                f_name = jl_symbol_name((jl_sym_t*)t0);
-            else if (jl_is_string(t0))
-                f_name = jl_string_data(t0);
-
-            jl_value_t *t1 = jl_fieldref(ptr, 1);
-            if (jl_is_symbol(t1))
-                f_lib = jl_symbol_name((jl_sym_t*)t1);
-            else if (jl_is_string(t1))
-                f_lib = jl_string_data(t1);
-            else {
-                out.lib_expr = t1;
+        else {
+            jl_value_t *ptr_ty = arg1.typ;
+            if (!jl_is_cpointer_type(ptr_ty)) {
+                if (!ccall)
+                    return;
+                const char *errmsg = invalid_symbol_err_msg(ccall);
+                emit_cpointercheck(ctx, arg1, errmsg);
             }
+            arg1 = update_julia_type(ctx, arg1, (jl_value_t*)jl_voidpointer_type);
+            jl_ptr = emit_unbox(ctx, ctx.types().T_ptr, arg1, (jl_value_t*)jl_voidpointer_type);
         }
     }
 }
@@ -709,14 +695,13 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     else if (sym.fptr != NULL) {
         res = ConstantInt::get(lrt, (uint64_t)sym.fptr);
     }
-    else if (sym.f_name != NULL) {
-        if (sym.lib_expr) {
-            res = runtime_sym_lookup(ctx, getPointerTy(ctx.builder.getContext()), NULL, sym.lib_expr, sym.f_name, ctx.f);
-        }
-        else {
-            res = runtime_sym_lookup(ctx, getPointerTy(ctx.builder.getContext()), sym.f_lib, NULL, sym.f_name, ctx.f);
-        }
-    } else {
+    else if (sym.f_name != NULL && sym.f_lib != NULL) {
+        res = runtime_sym_lookup(ctx, getPointerTy(ctx.builder.getContext()), sym.f_lib, NULL, sym.f_name, ctx.f);
+    }
+    else if (sym.f_name && sym.namebb) {
+        res = runtime_sym_lookup(ctx, getPointerTy(ctx.builder.getContext()), NULL, sym.lib_expr, sym.f_name, ctx.f);
+    }
+    else {
         // Fall back to runtime intrinsic
         JL_GC_POP();
         jl_cgval_t argv[2];
