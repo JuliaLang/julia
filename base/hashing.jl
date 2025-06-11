@@ -111,7 +111,6 @@ function _hash_integer(
             see1 = seed
             see2 = seed
             while i ≥ 48
-                println("i = $i")
                 l0 = u % UInt; u >>>= 64
                 l1 = u % UInt; u >>>= 64
                 l2 = u % UInt; u >>>= 64

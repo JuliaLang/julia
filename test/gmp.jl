@@ -815,8 +815,6 @@ end
             for sgn in (1, -1)
                 bint = sgn * (big(11)^i << shift)
                 bfloat = float(bint)
-
-                println("i = $i, shift = $shift, sgn = $sgn")
                 @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
                 @test hash(bint, Base.HASH_SEED) ==
                     @invoke(hash(bint::Real, Base.HASH_SEED))
