@@ -75,7 +75,7 @@ if ccall(:jl_timing_enabled, Cint, ()) != 0
     macro zone(name, ex::Expr)
         return getzonedexpr(name, ex, :unknown_julia_function, __source__.file, __source__.line, 0)
     end
-    @inline function timing_print(str::Union{String, SubString{String}, Symbol})
+    @inline function timing_print(str::Union{String, Symbol})
         ccall(
             :jl_timing_puts,
             Cvoid,
@@ -88,5 +88,5 @@ else
     macro zone(name, ex::Expr)
         return esc(ex)
     end
-    timing_print(str::Union{String, SubString{String}, Symbol}) = nothing
+    timing_print(str::Union{String, Symbol}) = nothing
 end
