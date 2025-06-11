@@ -874,8 +874,8 @@ end
     end
 
     @testset "return type infers to `Int`" begin
-        @test all(==(Int64), Base.return_types(prevind, Tuple{AbstractString, Vararg}))
-        @test all(==(Int64), Base.return_types(nextind, Tuple{AbstractString, Vararg}))
+        @test all(==(Int), Base.return_types(prevind, Tuple{AbstractString, Vararg}))
+        @test all(==(Int), Base.return_types(nextind, Tuple{AbstractString, Vararg}))
     end
 end
 
