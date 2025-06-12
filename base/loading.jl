@@ -4168,11 +4168,16 @@ julia> # outputs script directory and current working directory
        include("/home/JuliaUser/Projects/test.jl")
 @__DIR__ = /home/JuliaUser/Projects
 pwd() = /home/JuliaUser
+
+See also [`@__RELOCDIR__`](@ref).
 ```
 """
 macro __DIR__()
-    __source__.file === nothing && return nothing
-    _dirname = dirname(String(__source__.file::Symbol))
+    return impl__DIR__(__source__.file)
+end
+function impl__DIR__(file::Union{Nothing,Symbol})
+    file === nothing && return nothing
+    _dirname = dirname(String(file::Symbol))
     return isempty(_dirname) ? pwd() : abspath(_dirname)
 end
 
@@ -4186,6 +4191,69 @@ function expand_compiler_path(tup)
     (tup[1], joinpath(Sys.BINDIR, DATAROOTDIR, tup[2]), tup[3:end]...)
 end
 compiler_chi(tup::Tuple) = CacheHeaderIncludes(expand_compiler_path(tup))
+
+"""
+    @__RELOCDIR__ -> String
+
+Macro to obtain the absolute path of the current directory as a string.
+
+Unlike `@__DIR__`, uses of `@__RELOCDIR__` in a file located on a `DEPOT_PATH` do not
+hinder relocation of said file, provided one does not rely on the returned path being stable.
+I.e. you must not use it to construct relative paths that refer outside of the current depot.
+
+Otherwise, this behaves similar to `@__DIR__`, i.e. if used in a script, returns the directory of
+the script containing the `@__RELOCDIR__` macrocall. If run from a REPL or if evaluated by
+`julia -e <expr>`, returns the current working directory.
+In case the relocation fails the value of `@__DIR__` is returned.
+
+See also [`@__DIR__`](@ref).
+
+!!! compat "Julia 1.12"
+    This macro requires at least Julia 1.12.
+"""
+macro __RELOCDIR__()
+    dir = impl__DIR__(__source__.file)
+    the_depot, subpath = dir, missing
+    for depot in DEPOT_PATH
+        if startswith(dir, string(depot,Filesystem.pathsep())) || dir == depot
+            the_depot = depot
+            subpath = replace(dir, depot=>"", count=1)
+            break
+        end
+    end
+    if ismissing(subpath)
+        @debug("@__RELOCDIR__ is included from $the_depot which is not in DEPOT_PATH.",
+               _group=:relocatable)
+    end
+    return esc(:(Base.resolve_relocdir($subpath, @__DIR__)))
+end
+
+function resolve_relocdir(subpath::Missing, __dir__::String)
+    if !isdir(__dir__)
+        @debug("@__RELOCDIR__ resolved to $__dir__ which does not exist.", _group=:relocatable)
+    end
+    return __dir__
+end
+function resolve_relocdir(subpath::String, __dir__::String)
+    path = nothing
+    for depot in DEPOT_PATH
+        if isdirpath(depot)
+            depot = dirname(depot)
+        end
+        p = depot*subpath
+        if isdir(p)
+            path = p
+            break
+        end
+    end
+    if isnothing(path)
+        path = __dir__
+    end
+    if !isdir(path)
+        @debug("@__RELOCDIR__ resolved to $path which does not exist.", _group=:relocatable)
+    end
+    return path
+end
 
 """
     precompile(f, argtypes::Tuple{Vararg{Any}})
