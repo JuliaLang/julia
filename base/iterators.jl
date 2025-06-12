@@ -1634,7 +1634,7 @@ function nth(itr::Cycle{I}, n::Integer) where {I}
         N = length(itr.xs)
         N == 0 && throw(BoundsError(itr, n))
 
-        # prevent wrap around behaviour
+        # prevents wrap around behaviour and inherit the error handling
         return _nth(itr.xs, n > 0 ? mod1(n, N) : n)
     else
         return _nth(itr, n)
@@ -1649,7 +1649,7 @@ function nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
         k = length(torepeat)
         (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
 
-        # prevent wrap around behaviour
+        # prevent wrap around behaviour and inherit the error handling
         return _nth(torepeat, n > 0 ? mod1(n, k) : n)
     else
         return _nth(itr, n)
@@ -1662,7 +1662,7 @@ function _nth(itr, n)
     # unrolled version of `first(drop)`
     n > 0 || throw(BoundsError(itr, n))
     y = iterate(itr)
-    for i in 1:n-1
+    for _ in 1:n-1
         y === nothing && break
         y = iterate(itr, y[2])
     end

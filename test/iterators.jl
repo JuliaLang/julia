@@ -1164,6 +1164,7 @@ end
         (Iterators.cycle(((),)), 1000) => ()
     )
 
+
     @testset "iter: $IT" for (IT, n) in keys(it_result_pairs)
         @test it_result_pairs[(IT, n)] == nth(IT, n)
         @test_throws BoundsError nth(IT, -42)
@@ -1174,6 +1175,21 @@ end
 
     empty_cycle = Iterators.cycle([])
     @test_throws BoundsError nth(empty_cycle, 42)
+
+    # test the size unknown branch for cycles
+    # only generate odd numbers so we know the actual length
+    # but the iterator is still SizeUnknown()
+    it_size_unknown = Iterators.filter(isodd, 1:2:10)
+    @test IteratorSize(it_size_unknown) isa Base.SizeUnknown
+    @test length(collect(it_size_unknown)) == 5
+
+    cycle_size_unknown = Iterators.cycle(it_size_unknown)
+    finite_cycle_size_unknown = Iterators.cycle(it_size_unknown, 5)
+    @test nth(cycle_size_unknown, 2) == 3
+    @test nth(cycle_size_unknown, 20) == 9 # mod1(20, 5) = 5, wraps 4 times
+    @test nth(finite_cycle_size_unknown, 2) == 3
+    @test nth(finite_cycle_size_unknown, 20) == 9
+    @test_throws BoundsError nth(finite_cycle_size_unknown, 30) # only wraps 5 times, max n is 5 * 5 = 25
 end
 
 @testset "Iterators docstrings" begin
