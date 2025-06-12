@@ -722,6 +722,9 @@ true
 julia> procstate === fetch(@async global_state())
 true
 ```
+
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 """
 mutable struct OncePerProcess{T, F} <: Function
     value::Union{Nothing,T}
@@ -832,6 +835,9 @@ true
 julia> threadvec === thread_state[Threads.threadid()]
 true
 ```
+
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 """
 mutable struct OncePerThread{T, F} <: Function
     @atomic xs::AtomicMemory{T} # values
@@ -961,6 +967,9 @@ julia> taskvec === fetch(@async task_state())
 Making lazy task value...done.
 false
 ```
+
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 """
 mutable struct OncePerTask{T, F} <: Function
     const initializer::F
