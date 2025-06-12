@@ -31,6 +31,12 @@ function prev_sibling_assumed(cursor::GreenTreeCursor)
     GreenTreeCursor(cursor.parser_output, next_idx)
 end
 
+function Base.in(child::GreenTreeCursor, parent::GreenTreeCursor)
+    @assert child.parser_output === parent.parser_output
+    child.position < parent.position || return false
+    return child.position >= parent.position - this(parent).node_span
+end
+
 # Debug printing
 function Base.show(io::IO, node::GreenTreeCursor)
     print(io, Base.summary(this(node)), " @", node.position)
@@ -164,3 +170,6 @@ end
     end
     nothing
 end
+
+Base.in(child::GreenTreeCursor, parent::RedTreeCursor) =
+    in(child, parent.green)

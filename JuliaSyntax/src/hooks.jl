@@ -4,25 +4,51 @@
 const _has_v1_6_hooks  = VERSION >= v"1.6"
 const _has_v1_10_hooks = isdefined(Core, :_setparser!)
 
+struct ErrorSpec
+    child_idx::Int
+    node::RedTreeCursor
+    parent_kind::Kind
+end
+
+function first_error_cursor(stream::ParseStream)
+    output = stream.output
+    for i = 2:length(output)
+        is_error(output[i]) && return GreenTreeCursor(output, i)
+    end
+end
+
 # Find the first error in a SyntaxNode tree, returning the index of the error
 # within its parent and the node itself.
-function _first_error(t::SyntaxNode)
-    if is_error(t)
-        return 0,t
+function first_tree_error(c::RedTreeCursor, error_cursor::GreenTreeCursor)
+    @assert !is_leaf(c) && !is_error(c)
+    first_child = first_error = nothing
+    it = reverse_nontrivia_children(c)
+    r = iterate(it)
+    local child
+    while r !== nothing
+        (child, state) = r
+        r = iterate(it, state)
+        (error_cursor in child || error_cursor == child.green) || continue
+        is_error(child) && break
+        return first_tree_error(child, error_cursor)
     end
-    if !is_leaf(t)
-        for (i,c) in enumerate(children(t))
-            if is_error(c)
-                return i,c
-            else
-                x = _first_error(c)
-                if x != (0,nothing)
-                    return x
-                end
-            end
-        end
+    i = 1 # count node index
+    while r !== nothing
+        i += 1
+        (_, state) = r
+        r = iterate(it, state)
     end
-    return 0,nothing
+    return ErrorSpec(i, child, kind(c))
+end
+
+function first_tree_error(stream::ParseStream)
+    c = RedTreeCursor(stream)
+    err = first_error_cursor(stream)
+    for c in reverse_toplevel_siblings(c)
+        is_error(c) && return ErrorSpec(0, c, K"wrapper")
+        is_leaf(c) && continue
+        return first_tree_error(c, err)
+    end
 end
 
 # Classify an incomplete expression, returning a Symbol compatible with
@@ -32,8 +58,10 @@ end
 # next if the incomplete stream was to continue. (Though this is just rough. In
 # practice several categories are combined for the purposes of the REPL -
 # perhaps we can/should do something more precise in the future.)
-function _incomplete_tag(n::SyntaxNode, codelen)
-    i,c = _first_error(n)
+function _incomplete_tag(theerror::ErrorSpec, codelen)
+    i = theerror.child_idx
+    c = theerror.node
+    kp = theerror.parent_kind
     if isnothing(c) || last_byte(c) < codelen || codelen == 0
         if kind(c) == K"ErrorEofMultiComment"
             # This is the one weird case where the token itself is an
@@ -47,18 +75,16 @@ function _incomplete_tag(n::SyntaxNode, codelen)
         # here as a hard error.
         return :none
     end
-    if kind(c) == K"error" && numchildren(c) > 0
-        for cc in children(c)
+    if kind(c) == K"error" && is_non_terminal(c)
+        for cc in reverse_nontrivia_children(c)
             if kind(cc) == K"error"
                 return :other
             end
         end
     end
-    if isnothing(c.parent)
+    if kp == K"wrapper"
         return :other
-    end
-    kp = kind(c.parent)
-    if kp == K"string" || kp == K"var"
+    elseif kp == K"string" || kp == K"var"
         return :string
     elseif kp == K"cmdstring"
         return :cmd
@@ -181,8 +207,8 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
 
         if any_error(stream)
             pos_before_comments = last_non_whitespace_byte(stream)
-            tree = build_tree(SyntaxNode, stream, first_line=lineno, filename=filename)
-            tag = _incomplete_tag(tree, pos_before_comments)
+            errspec = first_tree_error(stream)
+            tag = _incomplete_tag(errspec, pos_before_comments)
             if _has_v1_10_hooks
                 exc = ParseError(stream, filename=filename, first_line=lineno,
                                  incomplete_tag=tag)
@@ -211,15 +237,15 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int, opti
                 # * truncates the top level expression arg list before that error
                 # * includes the last line number
                 # * appends the error message
-                topex = Expr(tree)
+                source = SourceFile(stream, filename=filename, first_line=lineno)
+                topex = build_tree(Expr, stream, source)
                 @assert topex.head == :toplevel
                 i = findfirst(_has_nested_error, topex.args)
                 if i > 1 && topex.args[i-1] isa LineNumberNode
                     i -= 1
                 end
                 resize!(topex.args, i-1)
-                _,errort = _first_error(tree)
-                push!(topex.args, LineNumberNode(source_line(errort), filename))
+                push!(topex.args, LineNumberNode(source_line(source, first_byte(errspec.node)), filename))
                 push!(topex.args, error_ex)
                 topex
             else
@@ -402,4 +428,3 @@ end
 # Convenience functions to mirror `JuliaSyntax.parsestmt(Expr, ...)` in simple cases.
 fl_parse(::Type{Expr}, args...; kws...) = fl_parse(args...; kws...)
 fl_parseall(::Type{Expr}, args...; kws...) = fl_parseall(args...; kws...)
-
