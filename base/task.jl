@@ -981,25 +981,11 @@ function enq_work(t::Task)
     return t
 end
 
-const ChildFirst = false
-
 function schedule(t::Task)
     # [task] created -scheduled-> wait_time
     maybe_record_enqueued!(t)
-    if ChildFirst
-        ct = current_task()
-        if ct.sticky || t.sticky
-            maybe_record_enqueued!(t)
-            enq_work(t)
-        else
-            maybe_record_enqueued!(t)
-            enq_work(ct)
-            yieldto(t)
-        end
-    else
-        maybe_record_enqueued!(t)
-        enq_work(t)
-    end
+    maybe_record_enqueued!(t)
+    enq_work(t)
     return t
 end
 

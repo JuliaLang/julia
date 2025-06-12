@@ -32,7 +32,10 @@ static const int16_t sleeping_like_the_dead JL_UNUSED = 2;
 // plus a running count of the number of in-flight wake-ups
 // n.b. this may temporarily exceed jl_n_threads
 _Atomic(int) n_threads_running = 0;
-// Number of threads sleeping in the scheduler, this number may be lower than the actual number
+// Number of threads sleeping in the scheduler, this is very similar to n_threads_running
+// But it's managed by the thread itself, so if there are in flight wake-ups/threads going to sleep but not actually asleep
+// then it might be higher than the actual number of threads sleeping.
+// This is fine because as the only consequence is we may try to wake more threads than necessary, which is not a problem.
 _Atomic(int) n_threads_idle = 0;
 // invariant: No thread is ever asleep unless sleep_check_state is sleeping (or we have a wakeup signal pending).
 // invariant: Any particular thread is not asleep unless that thread's sleep_check_state is sleeping.
@@ -206,6 +209,7 @@ static int set_not_sleeping(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     if (jl_atomic_load_relaxed(&ptls->sleep_check_state) != not_sleeping) {
         if (jl_atomic_exchange_relaxed(&ptls->sleep_check_state, not_sleeping) != not_sleeping) {
+            jl_atomic_fetch_add_relaxed(&n_threads_idle, -1);
             return 1;
         }
     }
@@ -430,7 +434,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 if (set_not_sleeping(ptls)) {
                     JL_PROBE_RT_SLEEP_CHECK_TASKQ_WAKE(ptls);
                 }
-                jl_atomic_fetch_add_relaxed(&n_threads_idle, -1);
                 continue;
             }
             volatile int isrunning = 1;
@@ -442,14 +445,12 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     if (set_not_sleeping(ptls)) {
                         JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
                     }
-                    jl_atomic_fetch_add_relaxed(&n_threads_idle, -1);
                     continue; // jump to JL_CATCH
                 }
                 if (task) {
                     if (set_not_sleeping(ptls)) {
                         JL_PROBE_RT_SLEEP_CHECK_TASK_WAKE(ptls);
                     }
-                    jl_atomic_fetch_add_relaxed(&n_threads_idle, -1);
                     continue; // jump to JL_CATCH
                 }
 
@@ -496,7 +497,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         uv_loop_t *loop = jl_global_event_loop();
                         loop->stop_flag = 0;
                         JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_enter = cycleclock() );
-                        active = uv_run(loop, UV_RUN_NOWAIT);
+                        active = uv_run(loop, UV_RUN_ONCE);
                         JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_leave = cycleclock() );
                         jl_gc_safepoint();
                     }
@@ -510,7 +511,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         if (set_not_sleeping(ptls)) {
                             JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls);
                         }
-                        jl_atomic_fetch_add_relaxed(&n_threads_idle, -1);
                         start_cycles = 0;
                         continue; // jump to JL_CATCH
                     }
@@ -520,7 +520,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         if (set_not_sleeping(ptls)) {
                             JL_PROBE_RT_SLEEP_CHECK_UV_WAKE(ptls);
                         }
-                        jl_atomic_fetch_add_relaxed(&n_threads_idle, -1);
                         start_cycles = 0;
                         continue; // jump to JL_CATCH
                     }
@@ -566,7 +565,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                     // else should we warn the user of certain deadlock here if tid == 0 && n_threads_running == 0?
                     uv_cond_wait(&ptls->wake_signal, &ptls->sleep_lock);
                 }
-                jl_atomic_fetch_add_relaxed(&n_threads_idle, -1);
+                jl_atomic_fetch_add_relaxed(&n_threads_idle, -1); // We got woken up by someone else so we are no longer idle
                 assert(jl_atomic_load_relaxed(&ptls->sleep_check_state) == not_sleeping);
                 assert(jl_atomic_load_relaxed(&n_threads_running));
                 start_cycles = 0;
@@ -582,7 +581,6 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
             JL_CATCH {
                 // probably SIGINT, but possibly a user mistake in trypoptask
                 if (!isrunning) {
-                    jl_atomic_fetch_add_relaxed(&n_threads_idle, -1);
                     jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
                 }
                 set_not_sleeping(ptls);
