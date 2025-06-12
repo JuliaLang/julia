@@ -365,15 +365,6 @@ STATIC_INLINE jl_gc_pagemeta_t *pop_page_metadata_back(jl_gc_pagemeta_t **ppg) J
     return v;
 }
 
-#ifdef __clang_gcanalyzer__ /* clang may not have __builtin_ffs */
-unsigned ffs_u32(uint32_t bitvec) JL_NOTSAFEPOINT;
-#else
-STATIC_INLINE unsigned ffs_u32(uint32_t bitvec)
-{
-    return __builtin_ffs(bitvec) - 1;
-}
-#endif
-
 extern bigval_t *oldest_generation_of_bigvals;
 extern int64_t buffered_pages;
 extern int gc_first_tid;
