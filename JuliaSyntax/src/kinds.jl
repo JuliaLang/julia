@@ -27,7 +27,7 @@ primitive type Kind 16 end
 const _kind_str_to_int = Dict{String,UInt16}()
 const _kind_int_to_str = Dict{UInt16,String}()
 const _kind_modules = Dict{Int,Union{Symbol,Module}}(
-    0=>:JuliaSyntax,
+    0=>nameof(@__MODULE__),
     1=>:JuliaLowering,
     2=>:JuliaSyntaxFormatter
 )
@@ -49,7 +49,7 @@ function Kind(s::AbstractString)
     Kind(i)
 end
 
-Base.string(x::Kind) = _kind_int_to_str[reinterpret(UInt16, x)]
+Base.string(x::Kind) = get(_kind_int_to_str, reinterpret(UInt16, x), "<error: unknown kind>")
 Base.print(io::IO, x::Kind) = print(io, string(x))
 
 Base.isless(x::Kind, y::Kind) = reinterpret(UInt16, x) < reinterpret(UInt16, y)
@@ -127,7 +127,7 @@ end
 """
     register_kinds!(mod, module_id, names)
 
-Register custom `Kind`s with the given `names`, belonging to a module `mod`. 
+Register custom `Kind`s with the given `names`, belonging to a module `mod`.
 `names` is an array of arbitrary strings.
 
 In order for kinds to be represented by a small number of bits, some nontrivial

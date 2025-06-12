@@ -57,18 +57,28 @@ const AbstractSyntaxNode = TreeNode{<:AbstractSyntaxData}
 struct SyntaxData <: AbstractSyntaxData
     source::SourceFile
     raw::GreenNode{SyntaxHead}
-    position::Int
+    byte_end::UInt32
     val::Any
+end
+function Base.getproperty(data::SyntaxData, name::Symbol)
+    if name === :position
+        # Previous versions of JuliaSyntax had `position::Int`.
+        # Allow access for compatibility. It was renamed (with changed) semantics
+        # to `byte_end::UInt32` to match the rest of the code base, which identified
+        # nodes, by their last byte.
+        return Int(getfield(data, :byte_end) - getfield(data, :raw).span + UInt32(1))
+    end
+    return getfield(data, name)
 end
 
 Base.hash(data::SyntaxData, h::UInt) =
-    hash(data.source, hash(data.raw, hash(data.position,
+    hash(data.source, hash(data.raw, hash(data.byte_end,
         # Avoid dynamic dispatch:
         # This does not support custom `hash` implementation that may be defined for `typeof(data.val)`,
         # However, such custom user types should not generally appear in the AST.
         Core.invoke(hash, Tuple{Any,UInt}, data.val, h))))
 function Base.:(==)(a::SyntaxData, b::SyntaxData)
-    a.source == b.source && a.raw == b.raw && a.position == b.position && a.val === b.val
+    a.source == b.source && a.raw == b.raw && a.byte_end == b.byte_end && a.val === b.val
 end
 
 """
@@ -80,41 +90,56 @@ text by calling one of the parser API functions such as [`parseall`](@ref)
 """
 const SyntaxNode = TreeNode{SyntaxData}
 
-function SyntaxNode(source::SourceFile, raw::GreenNode{SyntaxHead};
-                    keep_parens=false, position::Integer=1)
+function SyntaxNode(source::SourceFile, cursor::RedTreeCursor;
+                    keep_parens=false)
+    # Build the full GreenNode tree once upfront (including trivia)
+    green = GreenNode(cursor.green)
+
     GC.@preserve source begin
         raw_offset, txtbuf = _unsafe_wrap_substring(source.code)
         offset = raw_offset - source.byte_offset
-        _to_SyntaxNode(source, txtbuf, offset, raw, convert(Int, position), keep_parens)
+        _to_SyntaxNode(source, txtbuf, offset, cursor, green, keep_parens)
     end
 end
 
+function SyntaxNode(source::SourceFile, cursor::RedTreeCursor, green::GreenNode{SyntaxHead};
+                    keep_parens=false)
+    GC.@preserve source begin
+        raw_offset, txtbuf = _unsafe_wrap_substring(source.code)
+        offset = raw_offset - source.byte_offset
+        _to_SyntaxNode(source, txtbuf, offset, cursor, green, keep_parens)
+    end
+end
+
+should_include_node(child) = !is_trivia(child) || is_error(child)
+
 function _to_SyntaxNode(source::SourceFile, txtbuf::Vector{UInt8}, offset::Int,
-                        raw::GreenNode{SyntaxHead},
-                        position::Int, keep_parens::Bool)
-    if is_leaf(raw)
+                        cursor::RedTreeCursor, green::GreenNode{SyntaxHead}, keep_parens::Bool)
+    if is_leaf(cursor)
         # Here we parse the values eagerly rather than representing them as
         # strings. Maybe this is good. Maybe not.
-        valrange = position:position + span(raw) - 1
-        val = parse_julia_literal(txtbuf, head(raw), valrange .+ offset)
-        return SyntaxNode(nothing, nothing, SyntaxData(source, raw, position, val))
+        valrange = byte_range(cursor)
+        val = parse_julia_literal(txtbuf, head(cursor), valrange .+ offset)
+        return SyntaxNode(nothing, nothing, SyntaxData(source, green, cursor.byte_end, val))
     else
         cs = SyntaxNode[]
-        pos = position
-        for (i,rawchild) in enumerate(children(raw))
-            # FIXME: Allowing trivia is_error nodes here corrupts the tree layout.
-            if !is_trivia(rawchild) || is_error(rawchild)
-                push!(cs, _to_SyntaxNode(source, txtbuf, offset, rawchild, pos, keep_parens))
+        green_children = children(green)
+
+        # We need to match up the filtered SyntaxNode children with the unfiltered GreenNode children
+        # Both cursor and green children need to be traversed in the same order
+        # Since cursor iterates in reverse, we need to match from the end of green_children
+        green_idx = green_children === nothing ? 0 : length(green_children)
+
+        for (i, child_cursor) in enumerate(reverse(cursor))
+            if should_include_node(child_cursor)
+                pushfirst!(cs, _to_SyntaxNode(source, txtbuf, offset, child_cursor, green[end-i+1], keep_parens))
             end
-            pos += Int(rawchild.span)
         end
-        if !keep_parens && kind(raw) == K"parens" && length(cs) == 1
+
+        if !keep_parens && kind(cursor) == K"parens" && length(cs) == 1
             return cs[1]
         end
-        if kind(raw) == K"wrapper" && length(cs) == 1
-            return cs[1]
-        end
-        node = SyntaxNode(nothing, cs, SyntaxData(source, raw, position, nothing))
+        node = SyntaxNode(nothing, cs, SyntaxData(source, green, cursor.byte_end, nothing))
         for c in cs
             c.parent = node
         end
@@ -162,9 +187,12 @@ structure.
 """
 head(node::AbstractSyntaxNode) = head(node.raw)
 
-span(node::AbstractSyntaxNode) = span(node.raw)
+span(node::AbstractSyntaxNode) = node.raw.span
 
-byte_range(node::AbstractSyntaxNode) = node.position:(node.position + span(node) - 1)
+byte_range(node::AbstractSyntaxNode) = (node.byte_end - span(node) + 1):node.byte_end
+
+first_byte(node::AbstractSyntaxNode) = first(byte_range(node))
+last_byte(node::AbstractSyntaxNode) = last(byte_range(node))
 
 sourcefile(node::AbstractSyntaxNode) = node.source
 
@@ -271,13 +299,45 @@ function Base.copy(node::TreeNode)
 end
 
 # shallow-copy the data
-Base.copy(data::SyntaxData) = SyntaxData(data.source, data.raw, data.position, data.val)
+Base.copy(data::SyntaxData) = SyntaxData(data.source, data.raw, data.byte_end, data.val)
 
 function build_tree(::Type{SyntaxNode}, stream::ParseStream;
                     filename=nothing, first_line=1, keep_parens=false, kws...)
-    green_tree = build_tree(GreenNode, stream; kws...)
     source = SourceFile(stream, filename=filename, first_line=first_line)
-    SyntaxNode(source, green_tree, position=first_byte(stream), keep_parens=keep_parens)
+    cursor = RedTreeCursor(stream)
+    if has_toplevel_siblings(cursor)
+        # There are multiple toplevel nodes, e.g. because we're using this
+        # to test a partial parse. Wrap everything in K"wrapper"
+
+        # First build the full green tree for all children (including trivia)
+        green_children = GreenNode{SyntaxHead}[]
+        for child in reverse_toplevel_siblings(cursor)
+            pushfirst!(green_children, GreenNode(child.green))
+        end
+
+        # Create a wrapper GreenNode with children
+        green = GreenNode(SyntaxHead(K"wrapper", NON_TERMINAL_FLAG),
+                                  stream.next_byte-1, green_children)
+
+        # Now build SyntaxNodes, iterating through cursors and green nodes together
+        cs = SyntaxNode[]
+        for (i, child) in enumerate(reverse_toplevel_siblings(cursor))
+            if should_include_node(child)
+                pushfirst!(cs, SyntaxNode(source, child, green[end-i+1], keep_parens=keep_parens))
+            end
+        end
+
+        length(cs) == 1 && return only(cs)
+
+        node = SyntaxNode(nothing, cs, SyntaxData(source, green,
+                                                   stream.next_byte-1, nothing))
+        for c in cs
+            c.parent = node
+        end
+        return node
+    else
+        return SyntaxNode(source, cursor, keep_parens=keep_parens)
+    end
 end
 
 @deprecate haschildren(x) !is_leaf(x) false
