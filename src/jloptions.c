@@ -159,6 +159,7 @@ JL_DLLEXPORT void jl_init_options(void)
                         JL_TRIM_NO, // trim
                         0, // task_metrics
                         -1, // timeout_for_safepoint_straggler_s
+                        0, // gc_sweep_always_full
     };
     jl_options_initialized = 1;
 }
@@ -293,14 +294,6 @@ static const char opts[]  =
     "                                               number of bytes, optionally in units of: B, K (kibibytes),\n"
     "                                               M (mebibytes), G (gibibytes), T (tebibytes), or % (percentage\n"
     "                                               of physical memory).\n\n"
-    " --hard-heap-limit=<size>[<unit>]              Set a hard limit on the heap size: if we ever go above this\n"
-    "                                               limit, we will abort. The value may be specified as a\n"
-    "                                               number of bytes, optionally in units of: B, K (kibibytes),\n"
-    "                                               M (mebibytes), G (gibibytes) or T (tebibytes).\n\n"
-    " --heap-target-increment=<size>[<unit>] Set an upper bound on how much the heap target\n"
-    "                                               can increase between consecutive collections. The value may be\n"
-    "                                               specified as a number of bytes, optionally in units of: B,\n"
-    "                                               K (kibibytes), M (mebibytes), G (gibibytes) or T (tebibytes).\n\n"
 ;
 
 static const char opts_hidden[]  =
@@ -344,6 +337,18 @@ static const char opts_hidden[]  =
     "                                               and can throw errors. With unsafe-warn warnings will be\n"
     "                                               printed for dynamic call sites that might lead to such\n"
     "                                               errors. In safe mode compile-time errors are given instead.\n"
+    " --hard-heap-limit=<size>[<unit>]              Set a hard limit on the heap size: if we ever\n"
+    "                                               go above this limit, we will abort. The value\n"
+    "                                               may be specified as a number of bytes,\n"
+    "                                               optionally in units of: B, K (kibibytes),\n"
+    "                                               M (mebibytes), G (gibibytes) or T (tebibytes).\n"
+    " --heap-target-increment=<size>[<unit>]        Set an upper bound on how much the heap\n"
+    "                                               target can increase between consecutive\n"
+    "                                               collections. The value may be specified as\n"
+    "                                               a number of bytes, optionally in units of:\n"
+    "                                               B, K (kibibytes), M (mebibytes), G (gibibytes)\n"
+    "                                               or T (tebibytes).\n"
+    " --gc-sweep-always-full                        Makes the GC always do a full sweep of the heap\n"
 ;
 
 JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
@@ -394,6 +399,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
            opt_heap_size_hint,
            opt_hard_heap_limit,
            opt_heap_target_increment,
+           opt_gc_sweep_always_full,
            opt_gc_threads,
            opt_permalloc_pkgimg,
            opt_trim,
@@ -467,6 +473,7 @@ JL_DLLEXPORT void jl_parse_opts(int *argcp, char ***argvp)
         { "heap-size-hint",  required_argument, 0, opt_heap_size_hint },
         { "hard-heap-limit", required_argument, 0, opt_hard_heap_limit },
         { "heap-target-increment", required_argument, 0, opt_heap_target_increment },
+        { "gc-sweep-always-full", no_argument, 0, opt_gc_sweep_always_full },
         { "trim",  optional_argument, 0, opt_trim },
         { 0, 0, 0, 0 }
     };
@@ -1026,6 +1033,9 @@ restart_switch:
             if (errno != 0 || optarg == endptr || timeout < 1 || timeout > INT16_MAX)
                 jl_errorf("julia: --timeout-for-safepoint-straggler=<seconds>; seconds must be an integer between 1 and %d", INT16_MAX);
             jl_options.timeout_for_safepoint_straggler_s = (int16_t)timeout;
+            break;
+        case opt_gc_sweep_always_full:
+            jl_options.gc_sweep_always_full = 1;
             break;
         case opt_trim:
             if (optarg == NULL || !strcmp(optarg,"safe"))
