@@ -256,7 +256,7 @@ static void finish_params(Module *M, jl_codegen_params_t &params, SmallVector<or
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_jit_abi_converter_impl(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
+void *jl_jit_abi_converter_impl(jl_task_t *ct, void *unspecialized, jl_abi_t from_abi,
                                 jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
 {
     if (codeinst == nullptr && unspecialized != nullptr)
@@ -272,14 +272,14 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, void *unspecialized, jl_value_t *
         Module *M = result_m.getModuleUnlocked();
         if (target) {
             Value *llvmtarget = literal_static_pointer_val((void*)target, PointerType::get(M->getContext(), 0));
-            gf_thunk_name = emit_abi_converter(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget, target_specsig);
+            gf_thunk_name = emit_abi_converter(M, params, from_abi, codeinst, llvmtarget, target_specsig);
         }
         else if (invoke == jl_fptr_const_return_addr) {
-            gf_thunk_name = emit_abi_constreturn(M, params, declrt, sigt, nargs, specsig, codeinst->rettype_const);
+            gf_thunk_name = emit_abi_constreturn(M, params, from_abi, codeinst->rettype_const);
         }
         else {
             Value *llvminvoke = invoke ? literal_static_pointer_val((void*)invoke, PointerType::get(M->getContext(), 0)) : nullptr;
-            gf_thunk_name = emit_abi_dispatcher(M, params, declrt, sigt, nargs, specsig, codeinst, llvminvoke);
+            gf_thunk_name = emit_abi_dispatcher(M, params, from_abi, codeinst, llvminvoke);
         }
         SmallVector<orc::ThreadSafeModule,0> sharedmodules;
         finish_params(M, params, sharedmodules);

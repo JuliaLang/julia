@@ -423,6 +423,8 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         return f;
     };
     jl_callptr_t invoke = nullptr;
+    bool is_opaque_closure = false;
+    jl_abi_t from_abi = { sigt, declrt, nargs, specsig, is_opaque_closure };
     if (codeinst != NULL) {
         jl_value_t *astrt = codeinst->rettype;
         if (astrt != (jl_value_t*)jl_bottom_type &&
@@ -436,23 +438,23 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &f, 1);
         if (invoke != nullptr) {
             if (invoke == jl_fptr_const_return_addr) {
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, nullptr, false));
+                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, from_abi, codeinst, invoke, nullptr, false));
             }
             else if (invoke == jl_fptr_args_addr) {
                 assert(f);
                 if (!specsig && jl_subtype(astrt, declrt))
                     return assign_fptr(f);
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, f, false));
+                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, from_abi, codeinst, invoke, f, false));
             }
             else if (specsigflags & 0b1) {
                 assert(f);
                 if (specsig && jl_egal(mi->specTypes, sigt) && jl_egal(declrt, astrt))
                     return assign_fptr(f);
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, f, true));
+                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, from_abi, codeinst, invoke, f, true));
             }
         }
     }
-    f = jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, nullptr, false);
+    f = jl_jit_abi_converter(ct, cfuncdata->unspecialized, from_abi, codeinst, invoke, nullptr, false);
     if (codeinst == nullptr)
         cfuncdata->unspecialized = f;
     return assign_fptr(f);

@@ -549,16 +549,16 @@ Function *IRLinker_copyFunctionProto(Module *DstM, Function *SF) {
   return F;
 }
 
-static Function *aot_abi_converter(jl_codegen_params_t &params, Module *M, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, bool specsig, jl_code_instance_t *codeinst, Module *defM, StringRef func, StringRef specfunc, bool target_specsig)
+static Function *aot_abi_converter(jl_codegen_params_t &params, Module *M, jl_abi_t from_abi, jl_code_instance_t *codeinst, Module *defM, StringRef func, StringRef specfunc, bool target_specsig)
 {
     std::string gf_thunk_name;
     if (!specfunc.empty()) {
         Value *llvmtarget = IRLinker_copyFunctionProto(M, defM->getFunction(specfunc));
-        gf_thunk_name = emit_abi_converter(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget, target_specsig);
+        gf_thunk_name = emit_abi_converter(M, params, from_abi, codeinst, llvmtarget, target_specsig);
     }
     else {
         Value *llvmtarget = func.empty() ? nullptr : IRLinker_copyFunctionProto(M, defM->getFunction(func));
-        gf_thunk_name = emit_abi_dispatcher(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget);
+        gf_thunk_name = emit_abi_dispatcher(M, params, from_abi, codeinst, llvmtarget);
     }
     auto F = M->getFunction(gf_thunk_name);
     assert(F);
@@ -577,11 +577,11 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
     size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
     for (cfunc_decl_t &cfunc : params.cfuncs) {
         Module *M = cfunc.cfuncdata->getParent();
-        jl_value_t *sigt = cfunc.sigt;
+        jl_value_t *sigt = cfunc.abi.sigt;
         JL_GC_PROMISE_ROOTED(sigt);
-        jl_value_t *declrt = cfunc.declrt;
+        jl_value_t *declrt = cfunc.abi.rt;
         JL_GC_PROMISE_ROOTED(declrt);
-        Function *unspec = aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, nullptr, nullptr, "", "", false);
+        Function *unspec = aot_abi_converter(params, M, cfunc.abi, nullptr, nullptr, "", "", false);
         jl_code_instance_t *codeinst = nullptr;
         auto assign_fptr = [&params, &cfunc, &codeinst, &unspec](Function *f) {
             ConstantArray *init = cast<ConstantArray>(cfunc.cfuncdata->getInitializer());
@@ -622,7 +622,7 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
                     jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
                 }
                 if (func == "jl_fptr_const_return") {
-                    std::string gf_thunk_name = emit_abi_constreturn(M, params, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst->rettype_const);
+                    std::string gf_thunk_name = emit_abi_constreturn(M, params, cfunc.abi, codeinst->rettype_const);
                     auto F = M->getFunction(gf_thunk_name);
                     assert(F);
                     assign_fptr(F);
@@ -630,11 +630,11 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
                 }
                 else if (func == "jl_fptr_args") {
                     assert(!specfunc.empty());
-                    if (!cfunc.specsig && jl_subtype(astrt, declrt)) {
+                    if (!cfunc.abi.specsig && jl_subtype(astrt, declrt)) {
                         assign_fptr(IRLinker_copyFunctionProto(M, defM->getFunction(specfunc)));
                         continue;
                     }
-                    assign_fptr(aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst, defM, func, specfunc, false));
+                    assign_fptr(aot_abi_converter(params, M, cfunc.abi, codeinst, defM, func, specfunc, false));
                     continue;
                 }
                 else if (func == "jl_fptr_sparam" || func == "jl_f_opaque_closure_call") {
@@ -646,12 +646,12 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
                         assign_fptr(IRLinker_copyFunctionProto(M, defM->getFunction(specfunc)));
                         continue;
                     }
-                    assign_fptr(aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst, defM, func, specfunc, true));
+                    assign_fptr(aot_abi_converter(params, M, cfunc.abi, codeinst, defM, func, specfunc, true));
                     continue;
                 }
             }
         }
-        Function *f = codeinst ? aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst, defM, func, "", false) : unspec;
+        Function *f = codeinst ? aot_abi_converter(params, M, cfunc.abi, codeinst, defM, func, "", false) : unspec;
         return assign_fptr(f);
     }
 }
@@ -2483,7 +2483,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             jl_compiled_functions_t compiled_functions;
             size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
             for (cfunc_decl_t &cfunc : output.cfuncs) {
-                jl_value_t *sigt = cfunc.sigt;
+                jl_value_t *sigt = cfunc.abi.sigt;
                 JL_GC_PROMISE_ROOTED(sigt);
                 jl_method_instance_t *mi = jl_get_specialization1((jl_tupletype_t*)sigt, latestworld, 0);
                 if (mi == nullptr)
