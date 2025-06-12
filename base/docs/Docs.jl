@@ -572,7 +572,7 @@ isquotedmacrocall(@nospecialize x) =
 isbasicdoc(@nospecialize x) = isexpr(x, :.) || isa(x, Union{QuoteNode, Symbol})
 is_signature(@nospecialize x) = isexpr(x, :call) || (isexpr(x, :(::), 2) && isexpr(x.args[1], :call)) || isexpr(x, :where)
 
-function _doc(binding::Binding, sig::Type = Union{})
+function _lookup_doc(binding::Binding, sig::Type = Union{})
     if defined(binding)
         result = getdoc(resolve(binding), sig)
         result === nothing || return result
@@ -596,11 +596,19 @@ function _doc(binding::Binding, sig::Type = Union{})
 end
 
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
-_doc(obj::UnionAll) = _doc(Base.unwrap_unionall(obj))
-_doc(object, sig::Type = Union{}) = _doc(aliasof(object, typeof(object)), sig)
-_doc(object, sig...)              = _doc(object, Tuple{sig...})
+_lookup_doc(obj::UnionAll) = _lookup_doc(Base.unwrap_unionall(obj))
+_lookup_doc(object, sig::Type = Union{}) = _lookup_doc(aliasof(object, typeof(object)), sig)
+_lookup_doc(object, sig...)              = _lookup_doc(object, Tuple{sig...})
 
-function simple_lookup_doc(ex)
+function _getdoc(source::LineNumberNode, mod::Module, ex)
+    @nospecialize ex
+    if isexpr(ex, :->) && length(ex.args) > 1
+        return docm(source, mod, ex.args...)
+    elseif (REPL = Base.REPL_MODULE_REF[]) !== Base
+        # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
+        return invokelatest(REPL.lookup_doc, ex)
+    end
+    # simple lookup
     if isa(ex, Expr) && ex.head !== :(.) && Base.isoperator(ex.head)
         # handle syntactic operators, e.g. +=, ::, .=
         ex = ex.head
@@ -608,26 +616,14 @@ function simple_lookup_doc(ex)
     if haskey(keywords, ex)
         return keywords[ex]
     elseif !isa(ex, Expr) && !isa(ex, Symbol)
-        return :($(_doc)($(typeof)($(esc(ex)))))
+        return :($(_lookup_doc)($(typeof)($(esc(ex)))))
     end
     binding = esc(bindingexpr(namify(ex)))
     if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
         sig = esc(signature(ex))
-        :($(_doc)($binding, $sig))
+        return :($(_lookup_doc)($binding, $sig))
     else
-        :($(_doc)($binding))
-    end
-end
-
-function docm(source::LineNumberNode, mod::Module, ex)
-    @nospecialize ex
-    if isexpr(ex, :->) && length(ex.args) > 1
-        return docm(source, mod, ex.args...)
-    elseif (REPL = Base.REPL_MODULE_REF[]) !== Base
-        # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
-        return invokelatest(REPL.lookup_doc, ex)
-    else
-        return simple_lookup_doc(ex)
+        return :($(_lookup_doc)($binding))
     end
     return nothing
 end
@@ -758,6 +754,7 @@ include("utils.jl")
 
 # Swap out the bootstrap macro with the real one.
 Core.atdoc!(docm)
+Core._set_getdoc!(_getdoc)
 
 function loaddocs(docs::Base.CoreDocs.DocLinkedList)
     while isdefined(docs, :doc)

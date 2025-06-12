@@ -762,8 +762,13 @@ using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnN
 end # module IR
 
 # docsystem basics
-macro doc(x...)
-    docex = atdoc(__source__, __module__, x...)
+macro doc(x) # get
+    return _getdoc(__source__, __module__, x)
+end
+macro doc(str, x...) # set
+    # TODO src, mod necessary?
+    # return Expr(:escape, Expr(:doc, #= __source__, __module__,=# str, x))
+    docex = atdoc(__source__, __module__, str, x...)
     isa(docex, Expr) && docex.head === :escape && return docex
     return Expr(:escape, Expr(:var"hygienic-scope", docex, typeof(atdoc).name.module, __source__))
 end
@@ -773,14 +778,18 @@ end
 
 isbasicdoc(@nospecialize x) = (isa(x, Expr) && x.head === :.) || isa(x, Union{QuoteNode, Symbol})
 firstarg(arg1, args...) = arg1
-iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ? iscallexpr(firstarg(ex.args...)) : (isa(ex, Expr) && ex.head === :call)
+iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ?
+    iscallexpr(firstarg(ex.args...)) :
+    (isa(ex, Expr) && ex.head === :call)
 iscallexpr(ex) = false
 function ignoredoc(source, mod, str, expr)
     (isbasicdoc(expr) || iscallexpr(expr)) && return Expr(:escape, nothing)
     Expr(:escape, expr)
 end
 
+global _getdoc = (x...) -> nothing
 global atdoc = ignoredoc
+_set_getdoc!(λ) = global _getdoc = λ
 atdoc!(λ)    = global atdoc = λ
 
 # macros for big integer syntax
