@@ -704,6 +704,9 @@ calls in the same process will return exactly the same value. This is useful in
 code that will be precompiled, as it allows setting up caches or other state
 which won't get serialized.
 
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
 ## Example
 
 ```jldoctest
@@ -722,9 +725,6 @@ true
 julia> procstate === fetch(@async global_state())
 true
 ```
-
-!!! compat "Julia 1.12"
-    This type requires Julia 1.12 or later.
 """
 mutable struct OncePerProcess{T, F} <: Function
     value::Union{Nothing,T}
@@ -817,6 +817,9 @@ if that behavior is correct within your library's threading-safety design.
 
 See also: [`OncePerTask`](@ref).
 
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
 ## Example
 
 ```jldoctest
@@ -835,9 +838,6 @@ true
 julia> threadvec === thread_state[Threads.threadid()]
 true
 ```
-
-!!! compat "Julia 1.12"
-    This type requires Julia 1.12 or later.
 """
 mutable struct OncePerThread{T, F} <: Function
     @atomic xs::AtomicMemory{T} # values
@@ -948,6 +948,9 @@ exactly once per Task. All future calls in the same Task will return exactly the
 
 See also: [`task_local_storage`](@ref).
 
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
 ## Example
 
 ```jldoctest
@@ -967,9 +970,6 @@ julia> taskvec === fetch(@async task_state())
 Making lazy task value...done.
 false
 ```
-
-!!! compat "Julia 1.12"
-    This type requires Julia 1.12 or later.
 """
 mutable struct OncePerTask{T, F} <: Function
     const initializer::F
