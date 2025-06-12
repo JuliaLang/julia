@@ -33,7 +33,5 @@ function docm(source::LineNumberNode, mod::Module, str, x)
     end
     return Expr(:escape, out)
 end
-docm(source::LineNumberNode, mod::Module, x) =
-    (isa(x, Expr) && x.head === :->) ? docm(source, mod, x.args[1], x.args[2].args[2]) : error("invalid '@doc'.")
 
 end

@@ -602,9 +602,7 @@ _lookup_doc(object, sig...)              = _lookup_doc(object, Tuple{sig...})
 
 function _getdoc(source::LineNumberNode, mod::Module, ex)
     @nospecialize ex
-    if isexpr(ex, :->) && length(ex.args) > 1
-        return docm(source, mod, ex.args...)
-    elseif (REPL = Base.REPL_MODULE_REF[]) !== Base
+    if (REPL = Base.REPL_MODULE_REF[]) !== Base
         # TODO: this is a shim to continue to allow `@doc` for looking up docstrings
         return invokelatest(REPL.lookup_doc, ex)
     end
