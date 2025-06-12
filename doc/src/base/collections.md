@@ -186,7 +186,7 @@ thus may be garbage collected even when referenced in a hash table.
 Like `Dict` it uses `hash` for hashing and `isequal` for equality, unlike `Dict` it does
 not convert keys on insertion.
 
- [`ImmutableDict`](@ref Base.ImmutableDict) is a linked list implementation.
+[`ImmutableDict`](@ref Base.ImmutableDict) is a linked list implementation.
 
 [`Dict`](@ref)s can be created by passing pair objects constructed with `=>` to a [`Dict`](@ref)
 constructor: `Dict("A"=>1, "B"=>2)`. This call will attempt to infer type information from the
