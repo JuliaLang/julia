@@ -3,7 +3,7 @@
 
     @test span(t) == 6
     @test !is_leaf(t)
-    @test head(t) == SyntaxHead(K"call", 0x0008)
+    @test head(t) == SyntaxHead(K"call", 0x0088)
     @test span.(children(t)) == [2,1,1,1,1]
     @test head.(children(t)) == [
          SyntaxHead(K"Identifier", 0x0000)

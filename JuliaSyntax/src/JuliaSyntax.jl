@@ -73,7 +73,7 @@ export @K_str, kind
 
 export SyntaxNode
 
-@_public GreenNode,
+@_public GreenNode, RedTreeCursor, GreenTreeCursor,
     span
 
 # Helper utilities
@@ -95,7 +95,8 @@ include("parser_api.jl")
 include("literal_parsing.jl")
 
 # Tree data structures
-include("green_tree.jl")
+include("tree_cursors.jl")
+include("green_node.jl")
 include("syntax_tree.jl")
 include("expr.jl")
 

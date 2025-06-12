@@ -7,8 +7,6 @@ version = "1.0.2"
 Serialization = "1.0"
 julia = "1.0"
 
-[deps]
-
 [extras]
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"

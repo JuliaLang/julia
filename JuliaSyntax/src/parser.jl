@@ -340,6 +340,8 @@ function bump_dotsplit(ps, flags=EMPTY_FLAGS;
         bump_trivia(ps)
         mark = position(ps)
         k = remap_kind != K"None" ? remap_kind : kind(t)
+        # Split the dotted operator into . and the operator
+        # First split emits the . token (1 byte) at position mark.node_index+1
         pos = bump_split(ps, (1, K".", TRIVIA_FLAG), (-1, k, flags))
         if emit_dot_node
             pos = emit(ps, mark, K".")

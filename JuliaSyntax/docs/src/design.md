@@ -56,7 +56,7 @@ We use a hand-written lexer (a heavily modified version of
 The main parser innovation is the `ParseStream` interface which provides a
 stream-like I/O interface for writing the parser. The parser does not
 depend on or produce any concrete tree data structure as part of the parsing
-phase but the output spans can be post-processed into various tree data
+phase but the output nodes can be post-processed into various tree data
 structures as required. This is like the design of rust-analyzer though with a
 simpler implementation.
 
@@ -64,35 +64,39 @@ Parsing proceeds by recursive descent;
 
 * The parser consumes a flat list of lexed tokens as *input* using `peek()` to
   examine tokens and `bump()` to consume them.
-* The parser produces a flat list of text spans as *output* using `bump()` to
-  transfer tokens to the output and `position()`/`emit()` for nonterminal ranges.
+* The parser produces a flat list of `RawGreenNode`s as *output* using `bump()` to
+  transfer tokens to the output and `position()`/`emit()` for nonterminal nodes.
 * Diagnostics are emitted as separate text spans
 * Whitespace and comments are automatically `bump()`ed and don't need to be
   handled explicitly. The exception is syntactically relevant newlines in space
   sensitive mode.
 * Parser modes are passed down the call tree using `ParseState`.
 
-The output spans track the byte range, a syntax "kind" stored as an integer
-tag, and some flags. The kind tag makes the spans a [sum
-type](https://blog.waleedkhan.name/union-vs-sum-types/) but where the type is
-tracked explicitly outside of Julia's type system.
+The output nodes track the byte range, a syntax "kind" stored as an integer
+tag, and some flags. Each node also stores either the number of child nodes
+(for non-terminals) or the original token kind (for terminals). The kind tag
+makes the nodes a [sum type](https://blog.waleedkhan.name/union-vs-sum-types/)
+but where the type is tracked explicitly outside of Julia's type system.
 
-For lossless parsing the output spans must cover the entire input text. Using
+For lossless parsing the output nodes must cover the entire input text. Using
 `bump()`, `position()` and `emit()` in a natural way also ensures that:
-* Spans are cleanly nested with children contained entirely within their parents
-* Siblings spans are emitted in source order
-* Parent spans are emitted after all their children.
+* Nodes are cleanly nested with children contained entirely within their parents
+* Sibling nodes are emitted in source order
+* Parent nodes are emitted after all their children.
 
-These properties make the output spans naturally isomorphic to a
+These properties make the output nodes a post-order traversal of a
 ["green tree"](#raw-syntax-tree--green-tree)
-in the terminology of C#'s Roslyn compiler.
+in the terminology of C#'s Roslyn compiler, with the tree structure
+implicit in the node spans.
 
 ### Tree construction
 
-The `build_tree` function performs a depth-first traversal of the `ParseStream`
-output spans allowing it to be assembled into a concrete tree data structure,
-for example using the `GreenNode` data type. We further build on top of this to
-define `build_tree` for the AST type `SyntaxNode` and for normal Julia `Expr`.
+The `build_tree` function uses the implicit tree structure in the `ParseStream`
+output to assemble concrete tree data structures. Since the output is already
+a post-order traversal of `RawGreenNode`s with node spans encoding parent-child
+relationships, tree construction is straightforward. We build on top of this to
+define `build_tree` for various tree types including `GreenNode`, the AST type
+`SyntaxNode`, and for normal Julia `Expr`.
 
 ### Error recovery
 

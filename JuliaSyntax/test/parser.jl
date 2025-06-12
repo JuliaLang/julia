@@ -5,9 +5,7 @@ function parse_to_sexpr_str(production, code::AbstractString; v=v"1.6", show_kws
     stream = ParseStream(code, version=v)
     production(ParseState(stream))
     JuliaSyntax.validate_tokens(stream)
-    t = build_tree(GreenNode, stream)
-    source = SourceFile(code)
-    s = SyntaxNode(source, t, keep_parens=true)
+    s = build_tree(SyntaxNode, stream, keep_parens=true)
     return sprint(io->show(io, MIME("text/x.sexpression"), s; show_kws...))
 end
 
