@@ -609,9 +609,12 @@ end
     return retexpr
 end
 
-function build_tree(::Type{Expr}, stream::ParseStream;
-                    filename=nothing, first_line=1, kws...)
+function build_tree(::Type{Expr}, stream::ParseStream; filename=nothing, first_line=1, kws...)
     source = SourceFile(stream, filename=filename, first_line=first_line)
+    return build_tree(Expr, stream, source)
+end
+
+function build_tree(::Type{Expr}, stream::ParseStream, source::SourceFile)
     txtbuf = unsafe_textbuf(stream)
     cursor = RedTreeCursor(stream)
     wrapper_head = SyntaxHead(K"wrapper",EMPTY_FLAGS)
