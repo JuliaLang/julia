@@ -4,8 +4,8 @@
 
 using Markdown
 
-using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, isfield, namify, bindingexpr,
-    defined, resolve, getdoc, meta, aliasof, signature
+using Base.Docs: catdoc, modules, DocStr, Binding, MultiDoc, keywords, bindingexpr,
+    defined, resolve, getdoc, meta, aliasof
 
 import Base.Docs: doc, formatdoc, parsedoc, apropos
 
@@ -251,6 +251,31 @@ function doc(binding::Binding, sig::Type = Union{})
     end
 end
 
+# TODO temp utils from Base.Docs so REPL compiles
+function astname(x::Expr, ismacro::Bool)
+    head = x.head
+    if head === :.
+        ismacro ? macroname(x) : x
+    elseif head === :call && isexpr(x.args[1], :(::))
+        return astname((x.args[1]::Expr).args[end], ismacro)
+    else
+        n = isexpr(x, (:module, :struct)) ? 2 : 1
+        astname(x.args[n], ismacro)
+    end
+end
+astname(q::QuoteNode, ismacro::Bool) = astname(q.value, ismacro)
+astname(s::Symbol, ismacro::Bool)    = ismacro ? macroname(s) : s
+astname(@nospecialize(other), ismacro::Bool) = other
+
+namify(@nospecialize x) = astname(x, isexpr(x, :macro))::Union{Symbol,Expr,GlobalRef}
+
+macroname(s::Symbol) = Symbol('@', s)
+macroname(x::Expr)   = Expr(x.head, x.args[1], macroname(x.args[end].value))
+
+isfield(@nospecialize x) = isexpr(x, :.) &&
+    (isa(x.args[1], Symbol) || isfield(x.args[1])) &&
+    (isa(x.args[2], QuoteNode) || isexpr(x.args[2], :quote))
+
 # Some additional convenience `doc` methods that take objects rather than `Binding`s.
 doc(obj::UnionAll) = doc(Base.unwrap_unionall(obj))
 doc(object, sig::Type = Union{}) = doc(aliasof(object, typeof(object)), sig)
@@ -286,7 +311,7 @@ function lookup_doc(ex)
     end
     binding = esc(bindingexpr(namify(ex)))
     if isexpr(ex, :call) || isexpr(ex, :macrocall) || isexpr(ex, :where)
-        sig = esc(signature(ex))
+        sig = Union{} # TODO
         :($(doc)($binding, $sig))
     else
         :($(doc)($binding))

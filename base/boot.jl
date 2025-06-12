@@ -762,35 +762,21 @@ using Core: CodeInfo, MethodInstance, CodeInstance, GotoNode, GotoIfNot, ReturnN
 end # module IR
 
 # docsystem basics
-macro doc(x) # get
-    return _getdoc(__source__, __module__, x)
+macro doc(x) # retrieve doc for x
+    return docm_get(__source__, __module__, x)
 end
-macro doc(str, x...) # set
-    # TODO src, mod necessary?
-    # return Expr(:escape, Expr(:doc, #= __source__, __module__,=# str, x))
-    docex = atdoc(__source__, __module__, str, x...)
-    isa(docex, Expr) && docex.head === :escape && return docex
-    return Expr(:escape, Expr(:var"hygienic-scope", docex, typeof(atdoc).name.module, __source__))
+macro doc(str, x, define=true) # set doc for x
+    # define === false && return Expr(:error, "@doc with define=false not supported")
+    return Expr(:escape, Expr(:doc, str, x, __source__))
 end
-macro __doc__(x)
+macro __doc__(x) # annotate x as documentation target
     return Expr(:escape, Expr(:block, Expr(:meta, :doc), x))
 end
 
-isbasicdoc(@nospecialize x) = (isa(x, Expr) && x.head === :.) || isa(x, Union{QuoteNode, Symbol})
-firstarg(arg1, args...) = arg1
-iscallexpr(ex::Expr) = (isa(ex, Expr) && ex.head === :where) ?
-    iscallexpr(firstarg(ex.args...)) :
-    (isa(ex, Expr) && ex.head === :call)
-iscallexpr(ex) = false
-function ignoredoc(source, mod, str, expr)
-    (isbasicdoc(expr) || iscallexpr(expr)) && return Expr(:escape, nothing)
-    Expr(:escape, expr)
-end
-
-global _getdoc = (x...) -> nothing
-global atdoc = ignoredoc
-_set_getdoc!(λ) = global _getdoc = λ
-atdoc!(λ)    = global atdoc = λ
+global docm_get = (x...) -> nothing
+global setdoc = (x...) -> nothing
+_set_docm_get!(λ) = global docm_get = λ
+_set_setdoc!(λ) = global setdoc = λ
 
 # macros for big integer syntax
 macro int128_str end
@@ -799,7 +785,6 @@ macro big_str end
 
 # macro for command syntax
 macro cmd end
-
 
 # simple stand-alone print definitions for debugging
 abstract type IO end
