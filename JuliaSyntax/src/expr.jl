@@ -526,8 +526,6 @@ end
     elseif k == K"module"
         pushfirst!(args, !has_flags(nodehead, BARE_MODULE_FLAG))
         pushfirst!((args[3]::Expr).args, loc)
-    elseif k == K"inert"
-        return QuoteNode(only(args))
     elseif k == K"quote"
         if length(args) == 1
             a1 = only(args)
