@@ -347,45 +347,45 @@ function _promote_type_binary_detect_loop(T::Type, S::Type, A::Type, B::Type)
     onesided(T::Type, S::Type, A::Type, B::Type) = _types_are_equal(T, A) && _types_are_equal(S, B)
     onesided(T, S, A, B) || onesided(T, S, B, A)
 end
-function _promote_type_binary(T::Type, S::Type, recursion_depth_limit::Tuple{Vararg{Nothing}})
-    # Try promote_rule in both orders.
-    ts = promote_rule(T, S)
-    st = promote_rule(S, T)
-    # If no promote_rule is defined, both directions give Bottom. In that
-    # case use typejoin on the original types instead.
-    st_is_bottom = _type_is_bottom(st)
-    ts_is_bottom = _type_is_bottom(ts)
-    if st_is_bottom && ts_is_bottom
-        return typejoin(T, S)
+macro _promote_type_binary_step()
+    e = quote
+        # Try promote_rule in both orders.
+        ts = promote_rule(T, S)
+        st = promote_rule(S, T)
+        # If no promote_rule is defined, both directions give Bottom. In that
+        # case use typejoin on the original types instead.
+        st_is_bottom = _type_is_bottom(st)
+        ts_is_bottom = _type_is_bottom(ts)
+        if st_is_bottom && ts_is_bottom
+            return typejoin(T, S)
+        end
+        if ts_is_bottom
+            return st
+        end
+        if st_is_bottom || _types_are_equal(st, ts)
+            return ts
+        end
+        if _promote_type_binary_detect_loop(T, S, ts, st)
+            # This is not strictly necessary, as we already limit the recursion depth, but
+            # makes for nicer UX.
+            _promote_type_binary_err_detected_infinite_recursion()
+        end
+        T = ts
+        S = st
     end
-    if ts_is_bottom
-        return st
-    end
-    if st_is_bottom || _types_are_equal(st, ts)
-        return ts
-    end
-    if _promote_type_binary_detect_loop(T, S, ts, st)
-        # This is not strictly necessary, as we already limit the recursion depth, but
-        # makes for nicer UX.
-        _promote_type_binary_err_detected_infinite_recursion()
-    end
-    if recursion_depth_limit === ()
-        _promote_type_binary_err_giving_up()
-    end
-    l = tail(recursion_depth_limit)
-    _promote_type_binary(ts, st, l)
+    esc(e)
 end
+function _promote_type_binary(T::Type, S::Type)
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
+    @_promote_type_binary_step
 
-"""
-    _promote_type_binary_recursion_depth_limit::Tuple{Vararg{Nothing}}
-
-Recursion depth limit for `_promote_type_binary`, to prevent stack overflow.
-"""
-const _promote_type_binary_recursion_depth_limit = let
-    n2 = (nothing, nothing)
-    n4 = (n2..., n2...)
-    n8 = (n4..., n4...)
-    n8
+    _promote_type_binary_err_giving_up()
 end
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
@@ -395,7 +395,7 @@ function promote_type(::Type{T}, ::Type{S}) where {T,S}
     if _type_is_bottom(S) || _types_are_equal(S, T)
         return T
     end
-    _promote_type_binary(T, S, _promote_type_binary_recursion_depth_limit)
+    _promote_type_binary(T, S)
 end
 
 """
