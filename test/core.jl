@@ -2027,6 +2027,9 @@ g4731() = f4731()
     Base.promote_rule(::Type{Issue13193_Interval{T}}, ::Type{Issue13193_Interval{S}}) where {T, S} = Issue13193_Interval{promote_type(T,S)}
     Base.promote_rule(::Type{Issue13193_Interval{T}}, ::Type{S}) where {T, S<:Number} = Issue13193_Interval{promote_type(T,S)}
     @test_throws ArgumentError promote_type(Issue13193_Interval{Int}, Issue13193_SIQuantity{Int})
+    @test_throws ArgumentError promote_type(Issue13193_SIQuantity{Int}, Issue13193_Interval{Int})
+    @test Base.Compiler.is_foldable(Base.infer_effects(promote_type, Tuple{Type{Issue13193_Interval{Int}}, Type{Issue13193_SIQuantity{Int}}}))
+    @test Base.Compiler.is_foldable(Base.infer_effects(promote_type, Tuple{Type{Issue13193_SIQuantity{Int}}, Type{Issue13193_Interval{Int}}}))
 end
 @testset "straightforward conflict in `promote_rule` definitions" begin
     struct ConflictingPromoteRuleDefinitionsA end
@@ -2035,6 +2038,8 @@ end
     Base.promote_rule(::Type{ConflictingPromoteRuleDefinitionsB}, ::Type{ConflictingPromoteRuleDefinitionsA}) = ConflictingPromoteRuleDefinitionsB
     @test_throws ArgumentError promote_type(ConflictingPromoteRuleDefinitionsA, ConflictingPromoteRuleDefinitionsB)
     @test_throws ArgumentError promote_type(ConflictingPromoteRuleDefinitionsB, ConflictingPromoteRuleDefinitionsA)
+    @test Base.Compiler.is_foldable(Base.infer_effects(promote_type, Tuple{Type{ConflictingPromoteRuleDefinitionsA}, Type{ConflictingPromoteRuleDefinitionsB}}))
+    @test Base.Compiler.is_foldable(Base.infer_effects(promote_type, Tuple{Type{ConflictingPromoteRuleDefinitionsB}, Type{ConflictingPromoteRuleDefinitionsA}}))
 end
 
 # issue #4675
