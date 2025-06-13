@@ -318,15 +318,6 @@ promote_type(T) = T
 promote_type(T, S, U) = (@inline; promote_type(promote_type(T, S), U))
 promote_type(T, S, U, V...) = (@inline; afoldl(promote_type, promote_type(T, S, U), V...))
 
-# The following four methods are kept temporarily to prevent breaking a broken registered
-# package, PolynomialRings.jl. Deleting these methods causes dispatch ambiguity errors
-# for PolynomialRings.jl, because PolynomialRings.jl adds method to `promote_type`, which
-# is not allowed.
-promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
-promote_type(::Type{T}, ::Type{T}) where {T} = T
-promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
-promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
-
 """
     TypePromotionError <: Exception
 
