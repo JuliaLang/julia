@@ -327,26 +327,81 @@ promote_type(::Type{T}, ::Type{T}) where {T} = T
 promote_type(::Type{T}, ::Type{Bottom}) where {T} = T
 promote_type(::Type{Bottom}, ::Type{T}) where {T} = T
 
-const _promote_type_binary_recursion_depth_limit_exception = let
-    s = "`promote_type`: recursion depth limit reached, giving up; check for faulty/conflicting/missing `promote_rule` methods"
-    ArgumentError(s)
+"""
+    TypePromotionError <: Exception
+
+Exception type thrown by [`promote_type`](@ref) when giving up for either of two reasons:
+
+* Because bugs in the [`promote_rule`](@ref) logic which would have caused infinite recursion were detected.
+
+* Because a threshold on the recursion depth was reached.
+
+Check for bugs in the [`promote_rule`](@ref) logic if this exception gets thrown.
+"""
+struct TypePromotionError <: Exception
+    T_initial::Type
+    S_initial::Type
+    T::Type
+    S::Type
+    ts::Type
+    st::Type
+    threshold_reached::Bool
 end
-const _promote_type_binary_detected_infinite_recursion_exception = let
-    s = "`promote_type`: detected unbounded recursion caused by faulty `promote_rule` logic"
-    ArgumentError(s)
+
+function showerror(io::IO, e::TypePromotionError)
+    print(io, "TypePromotionError: `promote_type(T, S)` failed: ")
+
+    desc = if e.threshold_reached
+        "giving up because the recursion depth limit was reached: check for faulty/conflicting/missing `promote_rule` methods\n"
+    else
+        "detected unbounded recursion caused by faulty `promote_rule` logic\n"
+    end
+
+    print(io, desc)
+
+    print(io, "    initial `T`: ")
+    show(io, e.T_initial)
+    print(io, '\n')
+
+    print(io, "    initial `S`: ")
+    show(io, e.S_initial)
+    print(io, '\n')
+
+    print(io, "    next-to-last `T`: ")
+    show(io, e.T)
+    print(io, '\n')
+
+    print(io, "    next-to-last `S`: ")
+    show(io, e.S)
+    print(io, '\n')
+
+    print(io, "    last `T`: ")
+    show(io, e.ts)
+    print(io, '\n')
+
+    print(io, "    last `S`: ")
+    show(io, e.st)
+    print(io, '\n')
+
+    nothing
 end
-function _promote_type_binary_err_giving_up()
+
+function _promote_type_binary_err_giving_up(@nospecialize(T_initial::Type), @nospecialize(S_initial::Type), @nospecialize(T::Type), @nospecialize(S::Type), @nospecialize(ts::Type), @nospecialize(st::Type))
     @noinline
-    throw(_promote_type_binary_recursion_depth_limit_exception)
+    @_nospecializeinfer_meta
+    throw(TypePromotionError(T_initial, S_initial, T, S, ts, st, true))
 end
-function _promote_type_binary_err_detected_infinite_recursion()
+function _promote_type_binary_err_detected_infinite_recursion(@nospecialize(T_initial::Type), @nospecialize(S_initial::Type), @nospecialize(T::Type), @nospecialize(S::Type), @nospecialize(ts::Type), @nospecialize(st::Type))
     @noinline
-    throw(_promote_type_binary_detected_infinite_recursion_exception)
+    @_nospecializeinfer_meta
+    throw(TypePromotionError(T_initial, S_initial, T, S, ts, st, false))
 end
+
 function _promote_type_binary_detect_loop(T::Type, S::Type, A::Type, B::Type)
     onesided(T::Type, S::Type, A::Type, B::Type) = _types_are_equal(T, A) && _types_are_equal(S, B)
     onesided(T, S, A, B) || onesided(T, S, B, A)
 end
+
 macro _promote_type_binary_step()
     e = quote
         # Try promote_rule in both orders.
@@ -368,14 +423,18 @@ macro _promote_type_binary_step()
         if _promote_type_binary_detect_loop(T, S, ts, st)
             # This is not strictly necessary, as we already limit the recursion depth, but
             # makes for nicer UX.
-            _promote_type_binary_err_detected_infinite_recursion()
+            _promote_type_binary_err_detected_infinite_recursion(T_initial, S_initial, T, S, ts, st)
         end
         T = ts
         S = st
     end
     esc(e)
 end
+
 function _promote_type_binary(T::Type, S::Type)
+    T_initial = T
+    S_initial = S
+
     @_promote_type_binary_step
     @_promote_type_binary_step
     @_promote_type_binary_step
@@ -385,7 +444,7 @@ function _promote_type_binary(T::Type, S::Type)
     @_promote_type_binary_step
     @_promote_type_binary_step
 
-    _promote_type_binary_err_giving_up()
+    _promote_type_binary_err_giving_up(T_initial, S_initial, T, S, ts, st)
 end
 
 function promote_type(::Type{T}, ::Type{S}) where {T,S}
