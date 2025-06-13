@@ -389,8 +389,8 @@ let ft = Base.datatype_fieldtypes
     @test ft(elT2.body)[1].parameters[1] === elT2
     @test Base.isconcretetype(ft(elT2.body)[1])
 end
-#struct S22624{A,B,C} <: Ref{S22624{Int64,A}}; end
-@test_broken @isdefined S22624
+struct S22624{A,B,C} <: Ref{S22624{Int,A}}; end
+@test sizeof(S22624) == sizeof(S22624{Int,Int,Int}) == 0
 
 # issue #42297
 mutable struct Node42297{T, V}
@@ -429,6 +429,18 @@ mutable struct FooFoo{A,B} y::FooFoo{A} end
 
 @test FooFoo{Int} <: FooFoo{Int,AbstractString}.types[1]
 
+# make sure this self-referential struct doesn't crash type layout
+struct SelfTyA{V}
+    a::Base.RefValue{V}
+end
+struct SelfTyB{T}
+    a::T
+    b::SelfTyA{SelfTyB{T}}
+end
+let T = Base.RefValue{SelfTyB{Int}}
+    @test sizeof(T) === sizeof(Int)
+    @test sizeof(T.types[1]) === 2 * sizeof(Int)
+end
 
 let x = (2,3)
     @test +(x...) == 5
@@ -4125,7 +4137,29 @@ end
 let z1 = Z14477()
     @test isa(z1, Z14477)
     @test isa(z1.fld, Z14477)
+    @test isdefined(z1, :fld)
+    @test !isdefined(z1.fld, :fld)
 end
+struct Z14477B
+    fld::Union{Nothing,Z14477B}
+    Z14477B() = new(new(nothing))
+end
+let z1 = Z14477B()
+    @test isa(z1, Z14477B)
+    @test isa(z1.fld, Z14477B)
+    @test isa(z1.fld.fld, Nothing)
+end
+struct Z14477C{T}
+    fld::Z14477C{Int8}
+    Z14477C() = new{Int16}(new{Int8}())
+end
+let z1 = Z14477C()
+    @test isa(z1, Z14477C)
+    @test isa(z1.fld, Z14477C)
+    @test isdefined(z1, :fld)
+    @test !isdefined(z1.fld, :fld)
+end
+
 
 # issue #8846, generic macros
 macro m8846(a, b=0)
@@ -5664,6 +5698,13 @@ let ni128 = sizeof(FP128test) ÷ sizeof(Int),
     end
     @test reinterpret(UInt128, arr[2].fp) == expected
 end
+
+# make sure VecElement Tuple has the C alignment and ABI for supported types
+primitive type Int24 24 end
+@test Base.datatype_alignment(NTuple{10,VecElement{Int16}}) == 32
+@test Base.datatype_alignment(NTuple{10,VecElement{Int24}}) == 4
+@test Base.datatype_alignment(NTuple{10,VecElement{Int64}}) == 128
+@test Base.datatype_alignment(NTuple{10,VecElement{Int128}}) == 256
 
 # issue #21516
 struct T21516
@@ -8089,3 +8130,8 @@ let widen_diagonal(x::UnionAll) = Base.rewrap_unionall(Base.widen_diagonal(Base.
     @test Tuple === widen_diagonal(Union{Tuple{Vararg{S}}, Tuple{Vararg{T}}} where {S, T})
     @test Tuple{Vararg{Val{<:Set}}} == widen_diagonal(Tuple{Vararg{T}} where T<:Val{<:Set})
 end
+
+myfun57023a(::Type{T}) where {T} = (x = @ccall mycfun()::Ptr{T}; x)
+@test only(code_lowered(myfun57023a)).has_fcall
+myfun57023b(::Type{T}) where {T} = (x = @cfunction myfun57023a Ptr{T} (Ref{T},); x)
+@test only(code_lowered(myfun57023b)).has_fcall

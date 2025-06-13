@@ -74,6 +74,7 @@ print("")
 printstyled("a", "b")
 display([1])
 display([1 2; 3 4])
+display("a string")
 foo(x) = 1
 @time @eval foo(1)
 ; pwd

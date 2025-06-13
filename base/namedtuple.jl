@@ -193,9 +193,8 @@ function convert(::Type{NT}, nt::NamedTuple{names}) where {names, NT<:NamedTuple
 end
 
 if nameof(@__MODULE__) === :Base
-    Tuple(nt::NamedTuple) = (nt...,)
-    (::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
-end
+Tuple(nt::NamedTuple) = (nt...,)
+(::Type{T})(nt::NamedTuple) where {T <: Tuple} = (t = Tuple(nt); t isa T ? t : convert(T, t)::T)
 
 function show(io::IO, t::NamedTuple)
     n = nfields(t)
@@ -228,6 +227,7 @@ function show(io::IO, t::NamedTuple)
         end
         print(io, ")")
     end
+end
 end
 
 eltype(::Type{T}) where T<:NamedTuple = nteltype(T)

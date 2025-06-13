@@ -245,3 +245,11 @@ end
         @test match(re, "ababc").match === SubString("ababc", 3:5)
     end
 end
+
+@testset "#57817: Don't free Regex during exit finalizer calls" begin
+    # this shouldn't segfault
+    cmd = `$(Base.julia_cmd()) -t2 --startup-file=no -e 're = Regex(""); Threads.@spawn match(re, "", 1, UInt32(0))'`
+    for i in 1:10
+        @test success(pipeline(cmd, stderr=stderr))
+    end
+end

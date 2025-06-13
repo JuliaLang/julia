@@ -1955,11 +1955,11 @@ JL_DLLEXPORT jl_array_t *jl_uncompress_argnames(jl_value_t *syms);
 JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
 
 
-JL_DLLEXPORT int jl_is_operator(char *sym);
-JL_DLLEXPORT int jl_is_unary_operator(char *sym);
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(char *sym);
-JL_DLLEXPORT int jl_is_syntactic_operator(char *sym);
-JL_DLLEXPORT int jl_operator_precedence(char *sym);
+JL_DLLEXPORT int jl_is_operator(const char *sym);
+JL_DLLEXPORT int jl_is_unary_operator(const char *sym);
+JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym);
+JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym);
+JL_DLLEXPORT int jl_operator_precedence(const char *sym);
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {

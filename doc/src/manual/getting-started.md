@@ -1,7 +1,7 @@
 # [Getting Started](@id man-getting-started)
 
 Julia installation is straightforward, whether using precompiled binaries or compiling from source.
-Download and install Julia by following the instructions at [https://julialang.org/downloads/](https://julialang.org/downloads/).
+Download and install Julia by following the instructions at [https://julialang.org/install/](https://julialang.org/install/).
 
 If you are coming to Julia from one of the following languages, then you should start by reading the section on noteworthy differences from [MATLAB](@ref Noteworthy-differences-from-MATLAB), [R](@ref Noteworthy-differences-from-R), [Python](@ref Noteworthy-differences-from-Python), [C/C++](@ref Noteworthy-differences-from-C/C) or [Common Lisp](@ref Noteworthy-differences-from-Common-Lisp). This will help you avoid some common pitfalls since Julia differs from those languages in many subtle ways.
 
