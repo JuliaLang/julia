@@ -331,7 +331,7 @@ const _promote_type_binary_detected_infinite_recursion_exception = let
     s = "`promote_type`: detected unbounded recursion caused by faulty `promote_rule` logic"
     ArgumentError(s)
 end
-function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple{Vararg{Nothing}}) where {T,S}
+function _promote_type_binary(T::Type, S::Type, recursion_depth_limit::Tuple{Vararg{Nothing}})
     function err_giving_up()
         @noinline
         throw(_promote_type_binary_recursion_depth_limit_exception)
@@ -341,7 +341,7 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
         throw(_promote_type_binary_detected_infinite_recursion_exception)
     end
     type_is_bottom(X::Type) = X <: Bottom
-    detect_loop(::Type{A}, ::Type{B}) where {A, B} = _types_are_equal(T, A) && _types_are_equal(S, B)
+    detect_loop(T::Type, S::Type, A::Type, B::Type) = _types_are_equal(T, A) && _types_are_equal(S, B)
     if type_is_bottom(T)
         return S
     end
@@ -356,7 +356,7 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
     if type_is_bottom(st) && type_is_bottom(ts)
         return typejoin(T, S)
     end
-    if detect_loop(ts, st) || detect_loop(st, ts)
+    if detect_loop(T, S, ts, st) || detect_loop(T, S, st, ts)
         # This is not strictly necessary, as we already limit the recursion depth, but
         # makes for nicer UX.
         err_detected_infinite_recursion()
