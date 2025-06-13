@@ -1180,7 +1180,7 @@ end
     # only generate odd numbers so we know the actual length
     # but the iterator is still SizeUnknown()
     it_size_unknown = Iterators.filter(isodd, 1:2:10)
-    @test IteratorSize(it_size_unknown) isa Base.SizeUnknown
+    @test Base.IteratorSize(it_size_unknown) isa Base.SizeUnknown
     @test length(collect(it_size_unknown)) == 5
 
     cycle_size_unknown = Iterators.cycle(it_size_unknown)
