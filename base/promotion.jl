@@ -341,7 +341,8 @@ function _promote_type_binary(T::Type, S::Type, recursion_depth_limit::Tuple{Var
         throw(_promote_type_binary_detected_infinite_recursion_exception)
     end
     type_is_bottom(X::Type) = X <: Bottom
-    detect_loop(T::Type, S::Type, A::Type, B::Type) = _types_are_equal(T, A) && _types_are_equal(S, B)
+    detect_loop_onesided(T::Type, S::Type, A::Type, B::Type) = _types_are_equal(T, A) && _types_are_equal(S, B)
+    detect_loop(T::Type, S::Type, A::Type, B::Type) = detect_loop_onesided(T, S, A, B) || detect_loop_onesided(T, S, B, A)
     if type_is_bottom(T)
         return S
     end
@@ -356,7 +357,7 @@ function _promote_type_binary(T::Type, S::Type, recursion_depth_limit::Tuple{Var
     if type_is_bottom(st) && type_is_bottom(ts)
         return typejoin(T, S)
     end
-    if detect_loop(T, S, ts, st) || detect_loop(T, S, st, ts)
+    if detect_loop(T, S, ts, st)
         # This is not strictly necessary, as we already limit the recursion depth, but
         # makes for nicer UX.
         err_detected_infinite_recursion()
