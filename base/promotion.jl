@@ -266,7 +266,7 @@ function _types_are_equal(A::Type, B::Type)
 end
 
 function _type_is_bottom(X::Type)
-    X <: Bottom
+    X === Bottom
 end
 
 ## promotion mechanism ##
