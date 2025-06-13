@@ -402,7 +402,7 @@ function _promote_type_binary_detect_loop(T::Type, S::Type, A::Type, B::Type)
     onesided(T, S, A, B) || onesided(T, S, B, A)
 end
 
-macro _promote_type_binary_step()
+macro _promote_type_binary_step1()
     e = quote
         # Try promote_rule in both orders.
         ts = promote_rule(T, S)
@@ -425,8 +425,22 @@ macro _promote_type_binary_step()
             # makes for nicer UX.
             _promote_type_binary_err_detected_infinite_recursion(T_initial, S_initial, T, S, ts, st)
         end
+    end
+    esc(e)
+end
+
+macro _promote_type_binary_step2()
+    e = quote
         T = ts
         S = st
+    end
+    esc(e)
+end
+
+macro _promote_type_binary_step()
+    e = quote
+        @_promote_type_binary_step1
+        @_promote_type_binary_step2
     end
     esc(e)
 end
@@ -442,7 +456,8 @@ function _promote_type_binary(T::Type, S::Type)
     @_promote_type_binary_step
     @_promote_type_binary_step
     @_promote_type_binary_step
-    @_promote_type_binary_step
+
+    @_promote_type_binary_step1
 
     _promote_type_binary_err_giving_up(T_initial, S_initial, T, S, ts, st)
 end
