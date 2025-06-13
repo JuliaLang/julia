@@ -335,17 +335,19 @@ const _promote_type_binary_detected_infinite_recursion_exception = let
     s = "`promote_type`: detected unbounded recursion caused by faulty `promote_rule` logic"
     ArgumentError(s)
 end
+function _promote_type_binary_err_giving_up()
+    @noinline
+    throw(_promote_type_binary_recursion_depth_limit_exception)
+end
+function _promote_type_binary_err_detected_infinite_recursion()
+    @noinline
+    throw(_promote_type_binary_detected_infinite_recursion_exception)
+end
+function _promote_type_binary_detect_loop(T::Type, S::Type, A::Type, B::Type)
+    onesided(T::Type, S::Type, A::Type, B::Type) = _types_are_equal(T, A) && _types_are_equal(S, B)
+    onesided(T, S, A, B) || onesided(T, S, B, A)
+end
 function _promote_type_binary(T::Type, S::Type, recursion_depth_limit::Tuple{Vararg{Nothing}})
-    function err_giving_up()
-        @noinline
-        throw(_promote_type_binary_recursion_depth_limit_exception)
-    end
-    function err_detected_infinite_recursion()
-        @noinline
-        throw(_promote_type_binary_detected_infinite_recursion_exception)
-    end
-    detect_loop_onesided(T::Type, S::Type, A::Type, B::Type) = _types_are_equal(T, A) && _types_are_equal(S, B)
-    detect_loop(T::Type, S::Type, A::Type, B::Type) = detect_loop_onesided(T, S, A, B) || detect_loop_onesided(T, S, B, A)
     # Try promote_rule in both orders.
     ts = promote_rule(T, S)
     st = promote_rule(S, T)
@@ -362,13 +364,13 @@ function _promote_type_binary(T::Type, S::Type, recursion_depth_limit::Tuple{Var
     if st_is_bottom || _types_are_equal(st, ts)
         return ts
     end
-    if detect_loop(T, S, ts, st)
+    if _promote_type_binary_detect_loop(T, S, ts, st)
         # This is not strictly necessary, as we already limit the recursion depth, but
         # makes for nicer UX.
-        err_detected_infinite_recursion()
+        _promote_type_binary_err_detected_infinite_recursion()
     end
     if recursion_depth_limit === ()
-        err_giving_up()
+        _promote_type_binary_err_giving_up()
     end
     l = tail(recursion_depth_limit)
     _promote_type_binary(ts, st, l)
