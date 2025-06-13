@@ -265,6 +265,10 @@ function _types_are_equal(A::Type, B::Type)
     ccall(:jl_types_equal, Cint, (Any, Any), A, B) !== Cint(0)
 end
 
+function _type_is_bottom(X::Type)
+    X <: Bottom
+end
+
 ## promotion mechanism ##
 
 """
@@ -340,13 +344,12 @@ function _promote_type_binary(T::Type, S::Type, recursion_depth_limit::Tuple{Var
         @noinline
         throw(_promote_type_binary_detected_infinite_recursion_exception)
     end
-    type_is_bottom(X::Type) = X <: Bottom
     detect_loop_onesided(T::Type, S::Type, A::Type, B::Type) = _types_are_equal(T, A) && _types_are_equal(S, B)
     detect_loop(T::Type, S::Type, A::Type, B::Type) = detect_loop_onesided(T, S, A, B) || detect_loop_onesided(T, S, B, A)
-    if type_is_bottom(T)
+    if _type_is_bottom(T)
         return S
     end
-    if type_is_bottom(S) || _types_are_equal(S, T)
+    if _type_is_bottom(S) || _types_are_equal(S, T)
         return T
     end
     # Try promote_rule in both orders.
@@ -354,7 +357,7 @@ function _promote_type_binary(T::Type, S::Type, recursion_depth_limit::Tuple{Var
     st = promote_rule(S, T)
     # If no promote_rule is defined, both directions give Bottom. In that
     # case use typejoin on the original types instead.
-    if type_is_bottom(st) && type_is_bottom(ts)
+    if _type_is_bottom(st) && _type_is_bottom(ts)
         return typejoin(T, S)
     end
     if detect_loop(T, S, ts, st)
