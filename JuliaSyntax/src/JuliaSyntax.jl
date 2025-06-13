@@ -79,29 +79,30 @@ export SyntaxNode
 # Helper utilities
 include("utils.jl")
 
-include("kinds.jl")
+include("julia/kinds.jl")
 
 # Lexing uses a significantly modified version of Tokenize.jl
-include("tokenize.jl")
+include("julia/tokenize.jl")
 
 # Source and diagnostics
-include("source_files.jl")
-include("diagnostics.jl")
+include("core/source_files.jl")
+include("core/diagnostics.jl")
 
 # Parsing
-include("parse_stream.jl")
-include("parser.jl")
-include("parser_api.jl")
-include("literal_parsing.jl")
+include("core/parse_stream.jl")
+include("core/tree_cursors.jl")
+include("julia/julia_parse_stream.jl")
+include("julia/parser.jl")
+include("julia/parser_api.jl")
+include("julia/literal_parsing.jl")
 
 # Tree data structures
-include("tree_cursors.jl")
-include("green_node.jl")
-include("syntax_tree.jl")
-include("expr.jl")
+include("porcelain/green_node.jl")
+include("porcelain/syntax_tree.jl")
+include("integration/expr.jl")
 
 # Hooks to integrate the parser with Base
-include("hooks.jl")
+include("integration/hooks.jl")
 include("precompile.jl")
 
 end
