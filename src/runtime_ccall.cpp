@@ -422,40 +422,25 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
         JL_UNLOCK(&cfun_lock);
         return f;
     };
-    jl_callptr_t invoke = nullptr;
-    if (codeinst != NULL) {
-        jl_value_t *astrt = codeinst->rettype;
-        if (astrt != (jl_value_t*)jl_bottom_type &&
-            jl_type_intersection(astrt, declrt) == jl_bottom_type) {
-            // Do not warn if the function never returns since it is
-            // occasionally required by the C API (typically error callbacks)
-            // even though we're likely to encounter memory errors in that case
-            jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
-        }
-        uint8_t specsigflags;
-        jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &f, 1);
-        if (invoke != nullptr) {
-            if (invoke == jl_fptr_const_return_addr) {
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, nullptr, false));
-            }
-            else if (invoke == jl_fptr_args_addr) {
-                assert(f);
-                if (!specsig && jl_subtype(astrt, declrt))
-                    return assign_fptr(f);
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, f, false));
-            }
-            else if (specsigflags & 0b1) {
-                assert(f);
-                if (specsig && jl_egal(mi->specTypes, sigt) && jl_egal(declrt, astrt))
-                    return assign_fptr(f);
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, f, true));
-            }
-        }
+    bool is_opaque_closure = false;
+    jl_abi_t from_abi = { sigt, declrt, nargs, specsig, is_opaque_closure };
+    if (codeinst == nullptr) {
+        // Generate an adapter to a dynamic dispatch
+        if (cfuncdata->unspecialized == nullptr)
+            cfuncdata->unspecialized = jl_jit_abi_converter(ct, from_abi, nullptr);
+
+        return assign_fptr(cfuncdata->unspecialized);
     }
-    f = jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, nullptr, false);
-    if (codeinst == nullptr)
-        cfuncdata->unspecialized = f;
-    return assign_fptr(f);
+
+    jl_value_t *astrt = codeinst->rettype;
+    if (astrt != (jl_value_t*)jl_bottom_type &&
+        jl_type_intersection(astrt, declrt) == jl_bottom_type) {
+        // Do not warn if the function never returns since it is
+        // occasionally required by the C API (typically error callbacks)
+        // even though we're likely to encounter memory errors in that case
+        jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
+    }
+    return assign_fptr(jl_jit_abi_converter(ct, from_abi, codeinst));
 }
 
 void jl_init_runtime_ccall(void)

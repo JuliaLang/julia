@@ -387,6 +387,16 @@ static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, 
 #define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
 #define GC_IN_IMAGE 4
 
+// data structures for runtime codegen
+typedef struct _jl_abi_t {
+    jl_value_t *sigt;
+    jl_value_t *rt;
+    size_t nargs;
+    int specsig; // bool
+    // OpaqueClosure Methods override the first argument of their signature
+    int is_opaque_closure;
+} jl_abi_t;
+
 // useful constants
 extern jl_methtable_t *jl_method_table JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT jl_method_t *jl_opaque_closure_method JL_GLOBALLY_ROOTED;
@@ -1629,8 +1639,7 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     void *(*init_trampoline)(void *tramp, void **nval),
     jl_unionall_t *env, jl_value_t **vals);
 JL_DLLEXPORT void *jl_get_abi_converter(jl_task_t *ct, void *data);
-JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
-    jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig);
+JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst);
 
 
 // Special filenames used to refer to internal julia libraries
