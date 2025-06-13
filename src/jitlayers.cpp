@@ -255,12 +255,46 @@ static void finish_params(Module *M, jl_codegen_params_t &params, SmallVector<or
     }
 }
 
+// Return a specptr that is ABI-compatible with `from_abi` which invokes `codeinst`.
+//
+// If `codeinst` is NULL, the returned specptr instead performs a standard `apply_generic`
+// call via a dynamic dispatch.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_jit_abi_converter_impl(jl_task_t *ct, void *unspecialized, jl_abi_t from_abi,
-                                jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
+void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
+                                jl_code_instance_t *codeinst)
 {
-    if (codeinst == nullptr && unspecialized != nullptr)
-        return unspecialized;
+    void *target = nullptr;
+    bool target_specsig = false;
+    jl_callptr_t invoke = nullptr;
+    if (codeinst != nullptr) {
+        uint8_t specsigflags;
+        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+        void *specptr = nullptr;
+        jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, /* waitcompile */ 1);
+        if (invoke != nullptr) {
+            if (invoke == jl_fptr_const_return_addr) {
+                target = nullptr;
+                target_specsig = false;
+            }
+            else if (invoke == jl_fptr_args_addr) {
+                assert(specptr != nullptr);
+                if (!from_abi.specsig && jl_subtype(codeinst->rettype, from_abi.rt))
+                    return specptr; // no adapter required
+
+                target = specptr;
+                target_specsig = false;
+            }
+            else if (specsigflags & 0b1) {
+                assert(specptr != nullptr);
+                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt))
+                    return specptr; // no adapter required
+
+                target = specptr;
+                target_specsig = true;
+            }
+        }
+    }
+
     orc::ThreadSafeModule result_m;
     std::string gf_thunk_name;
     {

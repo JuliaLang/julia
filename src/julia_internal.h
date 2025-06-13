@@ -1639,8 +1639,7 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     void *(*init_trampoline)(void *tramp, void **nval),
     jl_unionall_t *env, jl_value_t **vals);
 JL_DLLEXPORT void *jl_get_abi_converter(jl_task_t *ct, void *data);
-JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, void *unspecialized, jl_abi_t from_abi,
-    jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig);
+JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst);
 
 
 // Special filenames used to refer to internal julia libraries
