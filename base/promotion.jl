@@ -340,7 +340,7 @@ function _promote_type_binary(::Type{T}, ::Type{S}, recursion_depth_limit::Tuple
         @noinline
         throw(_promote_type_binary_detected_infinite_recursion_exception)
     end
-    type_is_bottom(::Type{X}) where {X} = X === Bottom
+    type_is_bottom(X::Type) = X <: Bottom
     detect_loop(::Type{A}, ::Type{B}) where {A, B} = _types_are_equal(T, A) && _types_are_equal(S, B)
     if type_is_bottom(T)
         return S
