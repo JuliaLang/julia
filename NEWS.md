@@ -1,12 +1,14 @@
 Julia v1.12 Release Notes
-========================
+=========================
 
 New language features
 ---------------------
 
-* New option `--trim` creates smaller binaries by removing code that was not proven to be reachable from
-  entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]).
-* Redefinition of constants is now well defined and follows world age semantics. Additional redefinitions (e.g. of structs) are now allowed. See [the new manual chapter on world age](https://docs.julialang.org/en/v1.13-dev/manual/worldage/).
+* New experimental option `--trim` that creates smaller binaries by removing code not proven to be reachable from
+  entry points. Entry points can be marked using `Base.Experimental.entrypoint` ([#55047]). Not all
+  code is expected to work with this option, and since it is experimental you may encounter problems.
+* Redefinition of constants is now well defined and follows world age semantics ([#57253]). Additional redefinitions
+  (e.g. of types) are now allowed. See [the new manual chapter on world age](https://docs.julialang.org/en/v1.13-dev/manual/worldage/).
 * A new keyword argument `usings::Bool` has been added to `names`, returning all names visible
   via `using` ([#54609]).
 * The `@atomic` macro family now supports reference assignment syntax, e.g. `@atomic :monotonic v[3] += 4`,
@@ -56,7 +58,7 @@ Language changes
 * Calling `using` on a package name inside of that package of that name (especially relevant
   for a submodule) now explicitly uses that package without examining the Manifest and
   environment, which is identical to the behavior of `..Name`. This appears to better match
-  how users expect this to behave in the wild. ([#57727])
+  how users expect this to behave in the wild ([#57727]).
 
 
 Compiler/Runtime improvements
@@ -132,6 +134,8 @@ New library features
 * `Timer` now has readable `timeout` and `interval` properties, and a more descriptive `show` method ([#57081]).
 * `sort` now supports `NTuple`s ([#54494]).
 * `map!(f, A)` now stores the results in `A`, like `map!(f, A, A)` or `A .= f.(A)` ([#40632]).
+* `setprecision` with a function argument (typically a `do` block) is now thread safe. Other forms
+  should be avoided, and types should switch to an implementation using `ScopedValue` ([#51362]).
 
 Standard library changes
 ------------------------
@@ -223,8 +227,10 @@ Tooling Improvements
 [#40989]: https://github.com/JuliaLang/julia/issues/40989
 [#45793]: https://github.com/JuliaLang/julia/issues/45793
 [#49355]: https://github.com/JuliaLang/julia/issues/49355
+[#49933]: https://github.com/JuliaLang/julia/issues/49933
 [#50988]: https://github.com/JuliaLang/julia/issues/50988
 [#51149]: https://github.com/JuliaLang/julia/issues/51149
+[#51362]: https://github.com/JuliaLang/julia/issues/51362
 [#51810]: https://github.com/JuliaLang/julia/issues/51810
 [#52103]: https://github.com/JuliaLang/julia/issues/52103
 [#52999]: https://github.com/JuliaLang/julia/issues/52999
@@ -281,3 +287,5 @@ Tooling Improvements
 [#57081]: https://github.com/JuliaLang/julia/issues/57081
 [#57087]: https://github.com/JuliaLang/julia/issues/57087
 [#57109]: https://github.com/JuliaLang/julia/issues/57109
+[#57253]: https://github.com/JuliaLang/julia/issues/57253
+[#57727]: https://github.com/JuliaLang/julia/issues/57727

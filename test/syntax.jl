@@ -592,10 +592,9 @@ let thismodule = @__MODULE__,
     @test !isdefined(M16096, :foo16096)
     @test !isdefined(M16096, :it)
     @test typeof(local_foo16096).name.module === thismodule
-    @test typeof(local_foo16096).name.mt.module === thismodule
-    @test getfield(thismodule, typeof(local_foo16096).name.mt.name) === local_foo16096
+    @test getfield(thismodule, typeof(local_foo16096).name.singletonname) === local_foo16096
     @test getfield(thismodule, typeof(local_foo16096).name.name) === typeof(local_foo16096)
-    @test !isdefined(M16096, typeof(local_foo16096).name.mt.name)
+    @test !isdefined(M16096, typeof(local_foo16096).name.singletonname)
     @test !isdefined(M16096, typeof(local_foo16096).name.name)
 end
 
@@ -4237,6 +4236,16 @@ end
 @test letf_57470(3) == 5
 @test letT_57470 === Int64
 
+end # M57470_sub
+
+# lowering globaldecl with complex type
+module M58609
+using Test
+global x::T where T
+global y::Type{<:Number}
+
+@test Core.get_binding_type(M58609, :x) === Any
+@test Core.get_binding_type(M58609, :y) == Type{<:Number}
 end
 
 # #57574

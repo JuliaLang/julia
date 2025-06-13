@@ -2845,6 +2845,8 @@ static void gc_mark_roots(jl_gc_markqueue_t *mq)
     gc_try_claim_and_push(mq, jl_main_module, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_main_module, "main_module");
     // invisible builtin values
+    gc_try_claim_and_push(mq, jl_method_table, NULL);
+    gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_method_table, "global_method_table");
     gc_try_claim_and_push(mq, jl_an_empty_vec_any, NULL);
     gc_heap_snapshot_record_gc_roots((jl_value_t*)jl_an_empty_vec_any, "an_empty_vec_any");
     gc_try_claim_and_push(mq, jl_module_init_order, NULL);
