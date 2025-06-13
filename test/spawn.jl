@@ -4,7 +4,7 @@
 # Cross Platform tests for spawn. #
 ###################################
 
-using Random, Sockets
+using Random, Sockets, SHA
 using Downloads: Downloads, download
 
 valgrind_off = ccall(:jl_running_on_valgrind, Cint, ()) == 0
