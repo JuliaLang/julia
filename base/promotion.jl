@@ -445,9 +445,9 @@ macro _promote_type_binary_step()
     esc(e)
 end
 
-function _promote_type_binary(T::Type, S::Type)
-    T_initial = T
-    S_initial = S
+function _promote_type_binary(::Type{T_initial}, ::Type{S_initial}) where {T_initial, S_initial}
+    T = T_initial
+    S = S_initial
 
     @_promote_type_binary_step
     @_promote_type_binary_step
