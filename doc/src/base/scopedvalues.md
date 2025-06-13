@@ -27,38 +27,57 @@ Let's first look at an example of **lexical** scope. A `let` statement begins
 a new lexical scope within which the outer definition of `x` is shadowed by
 it's inner definition.
 
-```julia
+```jldoctest
+julia> x = 1
+1
+
+julia> let x = 5
+           @show x
+       end;
+x = 5
+
+julia> @show x;
 x = 1
-let x = 5
-    @show x # 5
-end
-@show x # 1
 ```
 
 In the following example, since Julia uses lexical scope, the variable `x` in the body
 of `f` refers to the `x` defined in the global scope, and entering a `let` scope does
 not change the value `f` observes.
 
-```julia
+```jldoctest
+julia> x = 1
+1
+
+julia> f() = @show x
+f (generic function with 1 method)
+
+julia> let x = 5
+           f()
+       end;
 x = 1
-f() = @show x
-let x = 5
-    f() # 1
-end
-f() # 1
+
+julia> f();
+x = 1
 ```
 
 Now using a `ScopedValue` we can use **dynamic** scoping.
 
-```julia
-using Base.ScopedValues
+```jldoctest
+julia> using Base.ScopedValues
 
-x = ScopedValue(1)
-f() = @show x[]
-with(x=>5) do
-    f() # 5
-end
-f() # 1
+julia> x = ScopedValue(1)
+ScopedValue{Int64}(1)
+
+julia> f() = @show x[]
+f (generic function with 1 method)
+
+julia> with(x=>5) do
+           f()
+       end;
+x[] = 5
+
+julia> f();
+x[] = 1
 ```
 
 Note that the observed value of the `ScopedValue` is dependent on the execution

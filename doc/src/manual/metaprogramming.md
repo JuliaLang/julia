@@ -711,7 +711,7 @@ user to optionally specify their own error message, instead of just printing the
 Just like in functions with a variable number of arguments ([Varargs Functions](@ref)), this is specified with an ellipses
 following the last argument:
 
-```jldoctest assert2
+```julia-repl assert2
 julia> macro assert(ex, msgs...)
            msg_body = isempty(msgs) ? ex : msgs[1]
            msg = string(msg_body)

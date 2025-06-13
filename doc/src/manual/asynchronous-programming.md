@@ -203,7 +203,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
     On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
 
-    ```julia-repl
+    ```jldoctest channel_example
     julia> c = Channel(2);
 
     julia> put!(c, 1) # `put!` on an open channel succeeds
@@ -220,7 +220,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
   * [`take!`](@ref) and [`fetch`](@ref) (which retrieves but does not remove the value) on a closed
     channel successfully return any existing values until it is emptied. Continuing the above example:
 
-    ```julia-repl
+    ```jldoctest channel_example
     julia> fetch(c) # Any number of `fetch` calls succeed.
     1
 
