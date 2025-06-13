@@ -294,6 +294,8 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     gc_num.total_time_to_safepoint += duration;
 
     if (!jl_atomic_load_acquire(&jl_gc_disable_counter)) {
+        // This thread will yield.
+        jl_gc_notify_thread_yield(ptls, NULL);
         JL_LOCK_NOGC(&finalizers_lock); // all the other threads are stopped, so this does not make sense, right? otherwise, failing that, this seems like plausibly a deadlock
 #ifndef __clang_gcanalyzer__
         mmtk_block_thread_for_gc();
@@ -321,6 +323,10 @@ JL_DLLEXPORT void jl_gc_prepare_to_collect(void)
     SetLastError(last_error);
 #endif
     errno = last_errno;
+}
+
+JL_DLLEXPORT void jl_gc_notify_thread_yield(jl_ptls_t ptls, void* ctx) {
+    // TODO: Save the context of this thread for conservative scanning.
 }
 
 // ========================================================================= //
