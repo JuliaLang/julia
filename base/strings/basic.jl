@@ -161,8 +161,6 @@ See also [`getindex`](@ref), [`checkbounds`](@ref).
 eltype(::Type{<:AbstractString}) = Char # some string types may use another AbstractChar
 
 
-
-
 """
     sizeof(str::AbstractString)
 
