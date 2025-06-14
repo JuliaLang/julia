@@ -66,6 +66,7 @@ struct JLOptions
     trim::Int8
     task_metrics::Int8
     timeout_for_safepoint_straggler_s::Int16
+    gc_sweep_always_full::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

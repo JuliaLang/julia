@@ -620,7 +620,7 @@ function hash(x::Rational{<:BitInteger64}, h::UInt)
         end
     end
     h = hash_integer(pow, h)
-    h = hash_integer(num, h)
+    h = hash_integer((pow > 0) ? (num << (pow % 64)) : num, h)
     return h
 end
 

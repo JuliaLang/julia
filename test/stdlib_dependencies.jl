@@ -1,148 +1,198 @@
-using Pkg, Test, Libdl
+using Libdl
+using Pkg
+using Test
+prev_env = Base.active_project()
+Pkg.activate(temp=true)
+Pkg.add(Pkg.PackageSpec(name="ObjectFile", uuid="d8793406-e978-5875-9003-1fc021f44a92", version="0.4"))
+using ObjectFile
+try
 
-# Remove `.X.dylib` or just `.dylib`
-function strip_soversion_macos(lib)
-    m = match(r"^(.*?)(\.\d+)*\.dylib$", lib)
-    if m !== nothing
-        return m.captures[1]
-    end
-    return lib
-end
+    strip_soversion(lib::AbstractString) = Base.BinaryPlatforms.parse_dl_name_version(lib)[1]
 
-# Remove `.so.X` or just `.so`
-function strip_soversion_linux(lib)
-    m = match(r"^(.*?)\.so(\.\d+)*$", lib)
-    if m !== nothing
-        return m.captures[1]
-    end
-    return lib
-end
+    function get_deps_objectfile_macos(lib_path::String)
+        open(lib_path, "r") do io
+            obj_handles = readmeta(io)
+            obj = only(obj_handles)  # If more than one its unclear what to do
+            raw_libs = String[]
 
-# Remove `-X.dll` or just `.dll`
-function strip_soversion_windows(lib)
-    m = match(r"^(.*?)(-\d+)*\.dll$", lib)
-    if m !== nothing
-        return m.captures[1]
-    end
-    return lib
-end
-
-
-function get_deps_otool(lib_path::String)
-    libs = split(readchomp(`otool -L $(lib_path)`), "\n")[2:end]
-    # Get rid of `(compatibility version x.y.x)` at the end
-    libs = first.(split.(libs, (" (compatibility",)))
-    # Get rid of any `@rpath/` stuff at the beginning
-    libs = last.(split.(libs, ("@rpath/",)))
-
-    # If there are any absolute paths left, get rid of them here
-    libs = basename.(strip.(libs))
-
-    # Now that we've got the basenames of each library, remove `.x.dylib` if it exists:
-    libs = strip_soversion_macos.(libs)
-
-    # Get rid of any self-referential links
-    self_lib = strip_soversion_macos(basename(lib_path))
-    libs = filter(!=(self_lib), libs)
-    return libs
-end
-
-function is_system_lib_macos(lib)
-    system_libs = [
-        "libSystem.B",
-        "libc++", # While we package libstdc++, we do NOT package libc++.
-        "libiconv", # some things (like git) link against system libiconv
-
-        # macOS frameworks used by things like LibCurl
-        "CoreFoundation",
-        "CoreServices",
-        "Security",
-        "SystemConfiguration"
-    ]
-    return lib ∈ system_libs
-end
-
-function is_system_lib_linux(lib)
-    system_libs = [
-        "libdl",
-        "libc",
-        "libm",
-        "librt",
-        "libpthread",
-        "ld-linux-x86-64",
-        "ld-linux-x86",
-        "ld-linux-aarch64",
-        "ld-linux-armhf",
-        "ld-linux-i386",
-    ]
-    return lib ∈ system_libs
-end
-
-function is_system_lib_freebsd(lib)
-    system_libs = [
-        "libdl",
-        "libc",
-        "libm",
-        "libthr",      # primary threading library
-        "libpthread",  # alias kept for compatibility
-        "librt",
-        "libutil",
-        "libexecinfo",
-        "libc++",
-        "libcxxrt",
-    ]
-    return lib ∈ system_libs
-end
-
-function get_deps_readelf(lib_path::String)
-    # Split into lines
-    libs = split(readchomp(`readelf -d $(lib_path)`), "\n")
-
-    # Only keep `(NEEDED)` lines
-    needed_str = Sys.isfreebsd() ? "NEEDED" : "(NEEDED)"
-    libs = filter(contains(needed_str), libs)
-
-    # Grab the SONAME from "Shared library: [$SONAME]"
-    libs = map(libs) do lib
-        m = match(r"Shared library: \[(.*)\]$", lib)
-        if m !== nothing
-            return basename(m.captures[1])
+            # For Mach-O files, get load commands
+            if isa(obj, ObjectFile.MachOHandle)
+                for lc in ObjectFile.MachOLoadCmds(obj)
+                    if lc isa ObjectFile.MachO.MachOLoadDylibCmd
+                        # Extract the library name from the load command
+                        lib_name = ObjectFile.dylib_name(lc)
+                        if lib_name !== nothing
+                            # Remove @rpath/ prefix if present
+                            lib_name = last(split(lib_name, "@rpath/"))
+                            # Get basename
+                            lib_name = basename(lib_name)
+                            isempty(splitext(lib_name)[2]) && continue # skip frameworks
+                            push!(raw_libs, lib_name)
+                        end
+                    end
+                end
+            end
+            libs = strip_soversion.(raw_libs)
+            # Get rid of any self-referential links
+            self_lib = strip_soversion(basename(lib_path))
+            libs = filter(!=(self_lib), libs)
+            return libs
         end
-        return ""
     end
-    libs = filter(!isempty, strip.(libs))
 
-    # Get rid of soversions in the filenames
-    libs = strip_soversion_linux.(libs)
-    return libs
-end
+    function get_deps_objectfile_linux_freebsd(lib_path::String)
+        open(lib_path, "r") do io
+            obj_handles = readmeta(io)
+            obj = first(obj_handles)  # Take the first handle from the vector
+            raw_libs = String[]
 
+            # For ELF files, get dynamic dependencies
+            if isa(obj, ObjectFile.ELFHandle)
+                # Get all dynamic entries
+                dyn_entries = ObjectFile.ELFDynEntries(obj)
+                for entry in dyn_entries
+                    # Check if the entry is of type DT_NEEDED
+                    if ObjectFile.dyn_entry_type(entry) == ObjectFile.ELF.DT_NEEDED
+                        lib_name = ObjectFile.strtab_lookup(entry)
+                        if lib_name !== nothing && !isempty(lib_name)
+                            push!(raw_libs, basename(lib_name))
+                        end
+                    end
+                end
+            end
 
-skip = false
-# On linux, we need `readelf` available, otherwise we refuse to attempt this
-if Sys.islinux() || Sys.isfreebsd()
-    if Sys.which("readelf") === nothing
-        @debug("Silently skipping stdlib_dependencies.jl as `readelf` not available.")
-        skip = true
+            libs = strip_soversion.(raw_libs)
+            # Self-reference is typically not listed in NEEDED for ELF, so no explicit filter here.
+            return libs
+        end
     end
-    get_deps = get_deps_readelf
-    strip_soversion = strip_soversion_linux
-    is_system_lib = Sys.islinux() ? is_system_lib_linux : is_system_lib_freebsd
-elseif Sys.isapple()
-    # On macOS, we need `otool` available
-    if Sys.which("otool") === nothing
-        @debug("Silently skipping stdlib_dependencies.jl as `otool` not available.")
-        skip = true
-    end
-    get_deps = get_deps_otool
-    strip_soversion = strip_soversion_macos
-    is_system_lib = is_system_lib_macos
-else
-    @debug("Don't know how to run `stdlib_dependencies.jl` on this platform")
-    skip = true
-end
 
-if !skip
+    function get_deps_objectfile_windows(lib_path::String)
+        open(lib_path, "r") do io
+            obj_handles = readmeta(io)
+            obj = first(obj_handles)  # Take the first handle from the vector
+            raw_libs_set = Set{String}() # Use Set for uniqueness of DLL names
+
+            # For COFF/PE files, get import table
+            if isa(obj, ObjectFile.COFFHandle)
+                # Get dynamic links
+                dls = ObjectFile.DynamicLinks(obj)
+                for link in dls
+                    lib_name = ObjectFile.path(link)
+                    if lib_name !== nothing && !isempty(lib_name)
+                        # COFF library names are case-insensitive
+                        push!(raw_libs_set, lowercase(lib_name))
+                    end
+                end
+            end
+
+            libs = strip_soversion.(collect(raw_libs_set))
+            # Get rid of any self-referential links
+            self_lib = strip_soversion(lowercase(basename(lib_path)))
+            libs = filter(!=(self_lib), libs)
+            return libs
+        end
+    end
+
+    function get_deps_objectfile(lib_path::String)
+        if Sys.isapple()
+            return get_deps_objectfile_macos(lib_path)
+        elseif Sys.islinux() || Sys.isfreebsd()
+            return get_deps_objectfile_linux_freebsd(lib_path)
+        elseif Sys.iswindows()
+            return get_deps_objectfile_windows(lib_path)
+        else
+            error("Unsupported platform for ObjectFile.jl dependency extraction")
+        end
+    end
+
+    function is_system_lib_macos(lib)
+        system_libs = [
+            "libSystem.B",
+            "libc++", # While we package libstdc++, we do NOT package libc++.
+            "libiconv", # some things (like git) link against system libiconv
+
+            # macOS frameworks used by things like LibCurl
+            "CoreFoundation",
+            "CoreServices",
+            "Security",
+            "SystemConfiguration"
+        ]
+        return lib ∈ system_libs
+    end
+
+    function is_system_lib_linux(lib)
+        system_libs = [
+            "libdl",
+            "libc",
+            "libm",
+            "librt",
+            "libpthread",
+            "ld-linux",
+            "ld-linux-x86-64",
+            "ld-linux-x86",
+            "ld-linux-aarch64",
+            "ld-linux-armhf",
+            "ld-linux-i386",
+        ]
+        return lib ∈ system_libs
+    end
+
+    function is_system_lib_freebsd(lib)
+        system_libs = [
+            "libdl",
+            "libc",
+            "libm",
+            "libthr",      # primary threading library
+            "libpthread",  # alias kept for compatibility
+            "librt",
+            "libutil",
+            "libexecinfo",
+            "libc++",
+            "libcxxrt",
+        ]
+        return lib ∈ system_libs
+    end
+
+    function is_system_lib_windows(lib)
+        system_libs = [
+            "kernel32",
+            "user32",
+            "gdi32",
+            "advapi32",
+            "ole32",
+            "oleaut32",
+            "shell32",
+            "ws2_32",
+            "comdlg32",
+            "shlwapi",
+            "rpcrt4",
+            "msvcrt",
+            "comctl32",
+            "ucrtbase",
+            "vcruntime140",
+            "msvcp140",
+            "libwinpthread",
+            "ntdll",
+            "crypt32",
+            "bcrypt",
+            "winhttp",
+            "secur32",
+        ]
+        return any(syslib -> lowercase(lib) == syslib, system_libs)
+    end
+
+    # Set up platform-specific functions
+    if Sys.islinux() || Sys.isfreebsd()
+        is_system_lib = Sys.islinux() ? is_system_lib_linux : is_system_lib_freebsd
+    elseif Sys.isapple()
+        is_system_lib = is_system_lib_macos
+    elseif Sys.iswindows()
+        is_system_lib = is_system_lib_windows
+    else
+        error("Unsupported platform for `stdlib_dependencies.jl`. Only Linux, FreeBSD, macOS, and Windows are supported.")
+    end
+
     # Iterate over all JLL stdlibs, check their lazy libraries to ensure
     # that they list all valid library dependencies, avoiding a situation
     # where the JLL wrapper code has fallen out of sync with the binaries
@@ -164,7 +214,7 @@ if !skip
                 if isa(prop, Libdl.LazyLibrary)
                     lib_path = dlpath(prop)
                     lazy_lib_deps = strip_soversion.(basename.(dlpath.(prop.dependencies)))
-                    real_lib_deps = filter(!is_system_lib, get_deps(lib_path))
+                    real_lib_deps = filter(!is_system_lib, get_deps_objectfile(lib_path))
 
                     # See if there are missing dependencies in the lazy library deps
                     missing_deps = setdiff(real_lib_deps, lazy_lib_deps)
@@ -175,8 +225,8 @@ if !skip
 
                     # This is a manually-managed special case
                     if stdlib_name == "libblastrampoline_jll" &&
-                    prop_name == :libblastrampoline &&
-                    extraneous_deps == ["libopenblas64_"]
+                       prop_name == :libblastrampoline &&
+                       extraneous_deps in (["libopenblas64_"], ["libopenblas"])
                         deps_mismatch = false
                     end
 
@@ -185,15 +235,27 @@ if !skip
                     # Print out the deps mismatch if we find one
                     if deps_mismatch
                         @warn("Dependency mismatch",
-                            jll=stdlib_name,
-                            library=string(prop_name),
-                            missing_deps=join(missing_deps, ", "),
-                            extraneous_deps=join(extraneous_deps, ", "),
-                            actual_deps=join(real_lib_deps, ", "),
+                            jll = stdlib_name,
+                            library = string(prop_name),
+                            missing_deps = join(missing_deps, ", "),
+                            extraneous_deps = join(extraneous_deps, ", "),
+                            actual_deps = join(real_lib_deps, ", "),
                         )
                     end
                 end
             end
+            if isdefined(m, :eager_mode)
+                # If the JLL has an eager_mode function, call it
+                Base.invokelatest(getproperty(m, :eager_mode))
+            end
         end
+    end
+
+finally
+    if prev_env !== nothing
+        Pkg.activate(prev_env)
+    else
+        # If no previous environment, activate the default one
+        Pkg.activate()
     end
 end

@@ -892,10 +892,7 @@ void gc_heuristics_summary(
 void jl_gc_debug_init(void)
 {
 #ifdef GC_DEBUG_ENV
-    char *env = getenv("JULIA_GC_NO_GENERATIONAL");
-    if (env && strcmp(env, "0") != 0)
-        jl_gc_debug_env.always_full = 1;
-    env = getenv("JULIA_GC_WAIT_FOR_DEBUGGER");
+    char *env = getenv("JULIA_GC_WAIT_FOR_DEBUGGER");
     jl_gc_debug_env.wait_for_debugger = env && strcmp(env, "0") != 0;
     gc_debug_alloc_init(&jl_gc_debug_env.pool, "POOL");
     gc_debug_alloc_init(&jl_gc_debug_env.other, "OTHER");
