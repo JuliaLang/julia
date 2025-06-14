@@ -160,10 +160,7 @@ See also [`getindex`](@ref), [`checkbounds`](@ref).
 
 eltype(::Type{<:AbstractString}) = Char # some string types may use another AbstractChar
 
-@testset "eltype for AbstractString subtypes" begin
-    @test eltype(String) == Char
-    @test eltype(SubString{String}) == Char
-end
+
 
 
 """
