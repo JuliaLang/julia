@@ -161,6 +161,7 @@ generate_markdown("NEWS")
 Manual = [
     "manual/getting-started.md",
     "manual/installation.md",
+    "manual/memory-management.md",
     "manual/variables.md",
     "manual/integers-and-floating-point-numbers.md",
     "manual/mathematical-operations.md",
