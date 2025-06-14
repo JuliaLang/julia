@@ -33,14 +33,14 @@ const libgit2 = LazyLibrary(
     end;
     dependencies = if Sys.iswindows()
         if Sys.WORD_SIZE == 32
-            LazyLibrary[libssh2, libgcc_s]
+            LazyLibrary[libssh2, libgcc_s, libpcre2_8, libz]
         else
-            LazyLibrary[libssh2]
+            LazyLibrary[libssh2, libpcre2_8, libz]
         end
     elseif Sys.isfreebsd() || Sys.islinux()
-        LazyLibrary[libssh2, libssl, libcrypto]
+        LazyLibrary[libssh2, libssl, libcrypto, libpcre2_8, libz]
     else
-        LazyLibrary[libssh2]
+        LazyLibrary[libssh2, libpcre2_8, libz]
     end
 )
 
