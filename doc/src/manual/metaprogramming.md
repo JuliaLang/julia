@@ -363,6 +363,14 @@ QuoteNode
 
 `QuoteNode` can also be used for certain advanced metaprogramming tasks.
 
+Note that while it does not support `$`, it also does not prevent it, nor does
+it preserve the identity of the wrapped object:
+
+```jldoctest
+julia> b = 2; eval(Expr(:quote, QuoteNode(Expr(:$, :b))))
+:($(QuoteNode(2)))
+```
+
 ### Evaluating expressions
 
 Given an expression object, one can cause Julia to evaluate (execute) it at global scope using

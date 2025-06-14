@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryrefnew, memoryrefget, memoryrefset!
+using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryref, memoryrefnew, memoryrefget, memoryrefset!
 
 const Callable = Union{Function,Type}
 
