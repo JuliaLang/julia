@@ -91,6 +91,8 @@ of compute worker threads or configured by either the `--gcthreads` command line
 !!! compat "Julia 1.10"
     The `--gcthreads` command line argument requires at least Julia 1.10.
 
+For more details about garbage collection configuration and performance tuning, see [Memory Management and Garbage Collection](@ref man-memory-management).
+
 ## [Threadpools](@id man-threadpools)
 
 When a program's threads are busy with many tasks to run, tasks may experience
