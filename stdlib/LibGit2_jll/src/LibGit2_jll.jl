@@ -3,7 +3,7 @@
 ## dummy stub for https://github.com/JuliaBinaryWrappers/LibGit2_jll.jl
 
 baremodule LibGit2_jll
-using Base, Libdl, LibSSH2_jll
+using Base, Libdl, LibSSH2_jll, PRCE2_jll, Zlib_jll
 if !(Sys.iswindows() || Sys.isapple())
     using OpenSSL_jll
 end
