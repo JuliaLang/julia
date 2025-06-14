@@ -3,8 +3,16 @@
 """
     Ptr{T}
 
-A memory address referring to data of type `T`.  However, there is no guarantee that the
+A memory address referring to data of type `T`. However, there is no guarantee that the
 memory is actually valid, or that it actually represents data of the specified type.
+Some operations like [`unsafe_load`](@ref) are only supported when T is an [`isbitstype`](@ref)
+while [`unsafe_wrap`](@ref) also supports abstract types.
+Use [`reinterpret`](@ref) to get a pointer with the same address but a different type.
+
+!!! warning
+    When T is a [`Union`](@ref) type, the pointer does not contain the necessary information
+    to reconstruct what elements in the array had which type. Such pointers can't be use to
+    retrieve any Julia objects.
 """
 Ptr
 
