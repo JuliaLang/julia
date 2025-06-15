@@ -1892,3 +1892,78 @@ end
         @test _escape_call(:((==).(x, y))) == (; func=Expr(:., esc(:(==))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(==))))
     end
 end
+
+# Test logical expression test failures
+@testset "Logical expression expansion" begin
+    # Test basic logical expressions and their display behavior
+    let logical_fails = @testset NoThrowTestSet begin
+            # Literals - should NOT show "Evaluated:"
+            @test false || false
+            @test true && false
+            @test false || (1 == 2)
+            @test (1 < 2) && (3 > 4)
+
+            # Variables - should show "Evaluated:" with substituted values
+            x, y = 1, 2
+            @test x > y || y < x
+
+            # Function calls - should show appropriate expansion
+            @test isempty([1]) && length([1, 2]) == 1
+        end
+
+        for fail in logical_fails
+            @test fail isa Test.Fail
+        end
+
+        # Literals should not show "Evaluated:"
+        for i in 1:4
+            let str = sprint(show, logical_fails[i])
+                @test !occursin("Evaluated:", str)
+            end
+        end
+
+        # Variables should show "Evaluated:" with values
+        let str = sprint(show, logical_fails[5])
+            @test occursin("Expression: x > y || y < x", str)
+            @test occursin("Evaluated: 1 > 2 || 2 < 1", str)
+        end
+
+        # Function calls should show short-circuiting with "..."
+        let str = sprint(show, logical_fails[6])
+            @test occursin("Expression: isempty([1]) && length([1, 2]) == 1", str)
+            @test occursin("Evaluated: isempty([1]) && ...", str)
+        end
+    end
+
+    # Test short-circuiting behavior and "..." notation
+    let short_circuit_fails = @testset NoThrowTestSet begin
+        @test false && (println("should not print"); true)
+        @test (1 == 2) && (3 == 4) && (5 == 6)  # Multi-level short-circuiting
+    end
+
+        let str = sprint(show, short_circuit_fails[1])
+            @test occursin("Evaluated: false && ...", str)
+        end
+        let str = sprint(show, short_circuit_fails[2])
+            @test occursin("Evaluated: 1 == 2 && ...", str)
+        end
+    end
+
+    # Test multi-level expression flattening
+    let recursive_fails = @testset NoThrowTestSet begin
+        @test (1 == 2) || (3 == 4) || (5 == 6)
+        @test (1 == 1) && (2 == 2) && (3 == 4)
+    end
+
+        let str = sprint(show, recursive_fails[1])
+            @test occursin("Evaluated: 1 == 2 || 3 == 4 || 5 == 6", str)
+        end
+        let str = sprint(show, recursive_fails[2])
+            @test occursin("Evaluated: 1 == 1 && 2 == 2 && 3 == 4", str)
+        end
+    end
+
+    # Test that passing expressions don't show expansion details
+    @test true || error("should not be evaluated")
+    @test (1 == 1) && (2 == 2) && (3 == 3)
+end
