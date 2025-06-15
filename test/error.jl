@@ -160,3 +160,6 @@ using .Issue54029
     str = sprint(showerror, ce)
     @test str == "something sad has happened even earlier\n\n...and 2 more exceptions.\n"
 end
+
+@test_throws ErrorException error()
+@test occursin("Generic error occurred", try error() catch e; sprint(showerror, e) end)
