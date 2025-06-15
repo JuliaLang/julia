@@ -703,7 +703,7 @@ let oldout = stdout, olderr = stderr
         redirect_stderr(olderr)
         close(wrout)
         close(wrerr)
-        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123\"C\"\n"
+        @test fetch(out) == "primitive type Int64 <: Signed\nTESTA\nTESTB\nΑ1Β2\"A\"\nA\n123.0000000000000000\"C\"\n"
         @test fetch(err) == "TESTA\nTESTB\nΑ1Β2\"A\"\n"
     finally
         redirect_stdout(oldout)
@@ -858,7 +858,7 @@ struct S45879{P} end
 let ms = methods(S45879)
     @test ms isa Base.MethodList
     @test length(ms) == 0
-    @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
+    @test sprint(show, Base.MethodList(Method[], typeof(S45879).name)) isa String
 end
 
 function f49475(a=12.0; b) end
@@ -1570,8 +1570,61 @@ struct var"%X%" end  # Invalid name without '#'
             typeof(+),
             var"#f#",
             typeof(var"#f#"),
+
+            # Integers should round-trip (#52677)
+            1, UInt(1),
+            Int8(1),  Int16(1),  Int32(1),  Int64(1),
+            UInt8(1), UInt16(1), UInt32(1), UInt64(1),
+
+            # Float round-trip
+            Float16(1),                  Float32(1),                  Float64(1),
+            Float16(1.5),                Float32(1.5),                Float64(1.5),
+            Float16(0.4893243538921085), Float32(0.4893243538921085), Float64(0.4893243538921085),
+            # Examples that require the full 5, 9, and 17 digits of precision
+            Float16(0.00010014),         Float32(1.00000075f-36),     Float64(-1.561051336605761e-182),
+            floatmax(Float16),           floatmax(Float32),           floatmax(Float64),
+            floatmin(Float16),           floatmin(Float32),           floatmin(Float64),
+            Float16(0.0),                0.0f0,                       0.0,
+            Float16(-0.0),               -0.0f0,                      -0.0,
+            Inf16,                       Inf32,                       Inf,
+            -Inf16,                      -Inf32,                      -Inf,
+            nextfloat(Float16(0)),       nextfloat(Float32(0)),       nextfloat(Float64(0)),
+            NaN16,                       NaN32,                       NaN,
+            Float16(1e3),                1f7,                         1e16,
+            Float16(-1e3),               -1f7,                        -1e16,
+            Float16(1e4),                1f8,                         1e17,
+            Float16(-1e4),               -1f8,                        -1e17,
+
+            # Pointers should round-trip
+            Ptr{Cvoid}(0), Ptr{Cvoid}(typemax(UInt)), Ptr{Any}(0), Ptr{Any}(typemax(UInt)),
+
+            # :var"" escaping rules differ from strings (#58484)
+            :foo,
+            :var"bar baz",
+            :var"a $b",         # No escaping for $ in raw string
+            :var"a\b",          # No escaping for backslashes in middle
+            :var"a\\",          # Backslashes must be escaped at the end
+            :var"a\\\\",
+            :var"a\"b",
+            :var"a\"",
+            :var"\\\"",
+            :+, :var"+-",
+            :(=), :(:), :(::),  # Requires quoting
+            Symbol("a\nb"),
+
+            Val(Float16(1.0)), Val(1f0),      Val(1.0),
+            Val(:abc),         Val(:(=)),     Val(:var"a\b"),
+
+            Val(1),       Val(Int8(1)),  Val(Int16(1)),  Val(Int32(1)),  Val(Int64(1)),  Val(Int128(1)),
+            Val(UInt(1)), Val(UInt8(1)), Val(UInt16(1)), Val(UInt32(1)), Val(UInt64(1)), Val(UInt128(1)),
+
+            # BROKEN
+            # Symbol("a\xffb"),
+            # User-defined primitive types
+            # Non-canonical NaNs
+            # BFloat16
         )
-        @test v == eval(Meta.parse(static_shown(v)))
+        @test v === eval(Meta.parse(static_shown(v)))
     end
 end
 
@@ -1598,7 +1651,7 @@ struct f_with_params{t} <: Function end
 end
 
 let io = IOBuffer()
-    show(io, MIME"text/html"(), ModFWithParams.f_with_params.body.name.mt)
+    show(io, MIME"text/html"(), methods(ModFWithParams.f_with_params{Int}()))
     @test occursin("ModFWithParams.f_with_params", String(take!(io)))
 end
 
@@ -1780,10 +1833,10 @@ end
     anonfn_type_repr = "$modname.var\"$(typeof(anonfn).name.name)\""
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
-    @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.singletonname) (generic function with 1 method)"
     mkclosure = x->y->x+y
     clo = mkclosure(10)
-    @test repr("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", clo) == "$(typeof(clo).name.singletonname) (generic function with 1 method)"
     @test repr(UnionAll) == "UnionAll"
 end
 
@@ -1957,9 +2010,9 @@ end
     @test replstr(view(A, [1], :)) == "1×1 view(::Matrix{Float64}, [1], :) with eltype Float64:\n 0.0"
 
     # issue #27680
-    @test showstr(Set([(1.0,1.0), (2.0,2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
-              "Set([(1.0, 1.0), (3.0, 3.0), (2.0, 2.0)])" :
-              "Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])")
+    @test showstr(Set([(1.0, 1.0), (2.0, 2.0), (3.0, 3.0)])) == (sizeof(Int) == 8 ?
+              "Set([(2.0, 2.0), (1.0, 1.0), (3.0, 3.0)])" :
+              "Set([(2.0, 2.0), (1.0, 1.0), (3.0, 3.0)])")
 
     # issue #27747
     let t = (x = Integer[1, 2],)
@@ -2831,4 +2884,16 @@ end
     @test_repr """:(var"~!@#\$%^&*[]_+?" = 1)"""
     @test_repr """:(var"\a\b\t\n\v\f\r\e" = 1)"""
     @test_repr """:(var"\x01\u03c0\U03c0" = 1)"""
+end
+
+# test `print_signature_only::Bool` argument of `Base.show_method`
+f_show_method(x::T) where T<:Integer = :integer
+let m = only(methods(f_show_method))
+    let io = IOBuffer()
+        Base.show_method(io, m; print_signature_only=true)
+        @test "f_show_method(x::T) where T<:Integer" == String(take!(io))
+    end
+    let s = sprint(show, m; context=:print_method_signature_only=>true)
+        @test "f_show_method(x::T) where T<:Integer" == s
+    end
 end

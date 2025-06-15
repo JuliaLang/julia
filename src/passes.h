@@ -43,6 +43,11 @@ struct FinalLowerGCPass : PassInfoMixin<FinalLowerGCPass> {
     static bool isRequired() { return true; }
 };
 
+struct ExpandAtomicModifyPass : PassInfoMixin<ExpandAtomicModifyPass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+};
+
+
 // Module Passes
 struct CPUFeaturesPass : PassInfoMixin<CPUFeaturesPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM) JL_NOTSAFEPOINT;

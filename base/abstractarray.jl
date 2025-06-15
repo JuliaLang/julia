@@ -1234,10 +1234,18 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 # While the definitions for IndexLinear are all simple enough to inline on their
 # own, IndexCartesian's CartesianIndices is more complicated and requires explicit
 # inlining.
-function iterate(A::AbstractArray, state=(eachindex(A),))
+iterate_starting_state(A) = iterate_starting_state(A, IndexStyle(A))
+iterate_starting_state(A, ::IndexLinear) = firstindex(A)
+iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
+iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate(A, state)
+function _iterate(A::AbstractArray, state::Tuple)
     y = iterate(state...)
     y === nothing && return nothing
     A[y[1]], (state[1], tail(y)...)
+end
+function _iterate(A::AbstractArray, state::Integer)
+    checkbounds(Bool, A, state) || return nothing
+    @inbounds(A[state]), state + one(state)
 end
 
 isempty(a::AbstractArray) = (length(a) == 0)
@@ -3563,7 +3571,7 @@ sizehint!(a::AbstractVector, _) = a
 
 const hash_abstractarray_seed = UInt === UInt64 ? 0x7e2d6fb6448beb77 : 0xd4514ce5
 function hash(A::AbstractArray, h::UInt)
-    h += hash_abstractarray_seed
+    h ⊻= hash_abstractarray_seed
     # Axes are themselves AbstractArrays, so hashing them directly would stack overflow
     # Instead hash the tuple of firsts and lasts along each dimension
     h = hash(map(first, axes(A)), h)

@@ -287,7 +287,6 @@
     XX(jl_load_file_string) \
     XX(jl_lookup_code_address) \
     XX(jl_lower) \
-    XX(jl_lower_expr_mod) \
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \
@@ -515,6 +514,7 @@
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
+    YY(jl_get_llvm_gv_inits) \
     YY(jl_get_llvm_external_fns) \
     YY(jl_get_llvm_mis) \
     YY(jl_dump_function_asm) \

@@ -702,7 +702,7 @@ function titlecase(s::AbstractString; wordsep::Function = !isletter, strict::Boo
         end
         c0 = c
     end
-    return String(take!(b))
+    return takestring!(b)
 end
 
 # TODO: improve performance characteristics, room for a ~10x improvement.
@@ -800,7 +800,7 @@ isgraphemebreak(c1::AbstractChar, c2::AbstractChar) =
 # Stateful grapheme break required by Unicode-9 rules: the string
 # must be processed in sequence, with state initialized to Ref{Int32}(0).
 # Requires utf8proc v2.0 or later.
-function isgraphemebreak!(state::Ref{Int32}, c1::AbstractChar, c2::AbstractChar)
+@inline function isgraphemebreak!(state::Ref{Int32}, c1::AbstractChar, c2::AbstractChar)
     if ismalformed(c1) || ismalformed(c2)
         state[] = 0
         return true

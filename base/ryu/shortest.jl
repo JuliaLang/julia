@@ -250,8 +250,10 @@ function writeshortest(buf::AbstractVector{UInt8}, pos, x::T,
             pos += 1
         end
         if precision == -1
-            @inbounds buf[pos] = UInt8('0')
-            pos += 1
+            if hash
+                @inbounds buf[pos] = UInt8('0')
+                pos += 1
+            end
             if typed && x isa Float32
                 @inbounds buf[pos] = UInt8('f')
                 @inbounds buf[pos + 1] = UInt8('0')

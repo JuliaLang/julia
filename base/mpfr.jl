@@ -18,7 +18,8 @@ import
         setrounding, maxintfloat, widen, significand, frexp, tryparse, iszero,
         isone, big, _string_n, decompose, minmax, _precision_with_base_2,
         sinpi, cospi, sincospi, tanpi, sind, cosd, tand, asind, acosd, atand,
-        uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask
+        uinttype, exponent_max, exponent_min, ieee754_representation, significand_mask,
+        ispositive, isnegative
 
 import .Core: AbstractFloat
 import .Base: Rational, Float16, Float32, Float64, Bool
@@ -1135,6 +1136,10 @@ isfinite(x::BigFloat) = !isinf(x) && !isnan(x)
 iszero(x::BigFloat) = x.exp == mpfr_special_exponent_zero
 isone(x::BigFloat) = x == Clong(1)
 
+# In theory, `!iszero(x) && !isnan(x)` should be the same as `x.exp > mpfr_special_exponent_nan`, but this is safer.
+ispositive(x::BigFloat) = !signbit(x) && !iszero(x) && !isnan(x)
+isnegative(x::BigFloat) = signbit(x) && !iszero(x) && !isnan(x)
+
 @eval typemax(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
@@ -1178,9 +1183,29 @@ Often used as `setprecision(T, precision) do ... end`
 Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
 `setprecision`.
 
+!!! warning
+    There is a fallback implementation of this method that calls `precision`
+    and `setprecision`, but it should no longer be relied on. Instead, you
+    should define the 3-argument form directly in a way that uses `ScopedValue`,
+    or recommend that callers use `ScopedValue` and `@with` themselves.
+
 !!! compat "Julia 1.8"
     The `base` keyword requires at least Julia 1.8.
 """
+function setprecision(f::Function, ::Type{T}, prec::Integer; kws...) where T
+    depwarn("""
+            The fallback `setprecision(::Function, ...)` method is deprecated. Packages overloading this method should
+            implement their own specialization using `ScopedValue` instead.
+            """, :setprecision)
+    old_prec = precision(T)
+    setprecision(T, prec; kws...)
+    try
+        return f()
+    finally
+        setprecision(T, old_prec)
+    end
+end
+
 function setprecision(f::Function, ::Type{BigFloat}, prec::Integer; base::Integer=2)
     Base.ScopedValues.@with(CURRENT_PRECISION => _convert_precision_from_base(prec, base), f())
 end

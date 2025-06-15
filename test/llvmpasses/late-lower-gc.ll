@@ -164,6 +164,21 @@ define {} addrspace(10)* @gclift_switch({} addrspace(13)* addrspace(10)* %input,
   ret {} addrspace(10)* %ret
 }
 
+; Shouldn't hang
+define void @vector_insert(<4 x {} addrspace(10)* > %0, <2 x {} addrspace(10)* > %1) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %2 = call <4 x {} addrspace(10)*> @llvm.vector.insert.v4p10.v2p10(<4 x {} addrspace(10)*> %0, <2 x {} addrspace(10)*> %1, i64 2)
+  ret void
+}
+
+define void @vector_extract(<4 x {} addrspace(10)* > %0, <2 x {} addrspace(10)* > %1) {
+top:
+  %pgcstack = call {}*** @julia.get_pgcstack()
+  %2 = call <2 x {} addrspace(10)*> @llvm.vector.extract.v2p10.v4p10(<4 x {} addrspace(10)* > %0, i64 2)
+  ret void
+}
+
 define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
   %v2 = call {}*** @julia.get_pgcstack()
   %e0 = extractvalue [2 x {} addrspace(10)* addrspace(11)*] %ar, 0
@@ -183,6 +198,20 @@ define void @decayar([2 x {} addrspace(10)* addrspace(11)*] %ar) {
 ; CHECK: store ptr addrspace(10) %l1, ptr [[gc_slot_addr_:%.*]], align 8
 ; CHECK: %r = call i32 @callee_root(ptr addrspace(10) %l0, ptr addrspace(10) %l1)
 ; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+
+define swiftcc ptr addrspace(10) @insert_element(ptr swiftself %0) {
+; CHECK-LABEL: @insert_element
+  %2 = alloca [10 x i64], i32 1, align 8
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 10)
+; CHECK: [[gc_slot_addr_:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK: call void @julia.push_gc_frame(ptr %gcframe, i32 10)
+  call void null(ptr sret([2 x [5 x ptr addrspace(10)]]) %2, ptr null, ptr addrspace(11) null, ptr null)
+  %4 = insertelement <4 x ptr> zeroinitializer, ptr %2, i32 0
+; CHECK: [[gc_slot_addr_:%.*]] = insertelement <4 x ptr> zeroinitializer, ptr [[gc_slot_addr_:%.*]], i32 0
+; CHECK: call void @julia.pop_gc_frame(ptr %gcframe)
+  ret ptr addrspace(10) null
+}
+
 
 !0 = !{i64 0, i64 23}
 !1 = !{!1}

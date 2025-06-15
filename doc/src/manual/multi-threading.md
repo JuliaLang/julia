@@ -8,7 +8,7 @@ of Julia multi-threading features.
 By default, Julia starts up with 2 threads of execution; 1 worker thread and 1 interactive thread.
 This can be verified by using the command [`Threads.nthreads()`](@ref):
 
-```jldoctest
+```julia
 julia> Threads.nthreads(:default)
 1
 julia> Threads.nthreads(:interactive)
@@ -37,6 +37,7 @@ each threadpool.
 
 !!! compat "Julia 1.12"
     Starting by default with 1 interactive thread, as well as the 1 worker thread, was made as such in Julia 1.12
+    If the number of threads is set to 1 by either doing `-t1` or `JULIA_NUM_THREADS=1` an interactive thread will not be spawned.
 
 Lets start Julia with 4 threads:
 
@@ -144,6 +145,8 @@ julia> nthreads(:interactive)
 julia> nthreads()
 3
 ```
+!!! note
+    Explicitly asking for 1 thread by doing `-t1` or `JULIA_NUM_THREADS=1` does not add an interactive thread.
 
 !!! note
     The zero-argument version of `nthreads` returns the number of threads

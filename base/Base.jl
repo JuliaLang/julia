@@ -23,7 +23,7 @@ include(strcat(BUILDROOT, "version_git.jl")) # include($BUILDROOT/base/version_g
 # a slightly more verbose fashion than usual, because we're running so early.
 let os = ccall(:jl_get_UNAME, Any, ())
     if os === :Darwin || os === :Apple
-        if Base.DARWIN_FRAMEWORK
+        if DARWIN_FRAMEWORK
             push!(DL_LOAD_PATH, "@loader_path/Frameworks")
         end
         push!(DL_LOAD_PATH, "@loader_path")
@@ -312,8 +312,8 @@ a_method_to_overwrite_in_test() = inferencebarrier(1)
 (this::IncludeInto)(mapexpr::Function, fname::AbstractString) = include(mapexpr, this.m, fname)
 
 # Compatibility with when Compiler was in Core
-@eval Core const Compiler = Main.Base.Compiler
-@eval Compiler const fl_parse = Core.Main.Base.fl_parse
+@eval Core const Compiler = $Base.Compiler
+@eval Compiler const fl_parse = $Base.fl_parse
 
 # External libraries vendored into Base
 Core.println("JuliaSyntax/src/JuliaSyntax.jl")
@@ -329,13 +329,13 @@ if is_primary_base_module
 # Profiling helper
 # triggers printing the report and (optionally) saving a heap snapshot after a SIGINFO/SIGUSR1 profile request
 # Needs to be in Base because Profile is no longer loaded on boot
-function profile_printing_listener(cond::Base.AsyncCondition)
+function profile_printing_listener(cond::AsyncCondition)
     profile = nothing
     try
         while _trywait(cond)
             profile = @something(profile, require_stdlib(PkgId(UUID("9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"), "Profile")))::Module
             invokelatest(profile.peek_report[])
-            if Base.get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
+            if get_bool_env("JULIA_PROFILE_PEEK_HEAP_SNAPSHOT", false) === true
                 println(stderr, "Saving heap snapshot...")
                 fname = invokelatest(profile.take_heap_snapshot)
                 println(stderr, "Heap snapshot saved to `$(fname)`")
@@ -350,8 +350,8 @@ function profile_printing_listener(cond::Base.AsyncCondition)
 end
 
 function start_profile_listener()
-    cond = Base.AsyncCondition()
-    Base.uv_unref(cond.handle)
+    cond = AsyncCondition()
+    uv_unref(cond.handle)
     t = errormonitor(Threads.@spawn(profile_printing_listener(cond)))
     atexit() do
         # destroy this callback when exiting
@@ -411,7 +411,6 @@ end
 const _compiler_require_dependencies = Any[]
 @Core.latestworld
 for i = 1:length(_included_files)
-    isassigned(_included_files, i) || continue
     (mod, file) = _included_files[i]
     if mod === Compiler || parentmodule(mod) === Compiler || endswith(file, "/Compiler.jl")
         _include_dependency!(_compiler_require_dependencies, true, mod, file, true, false)
@@ -427,7 +426,3 @@ end
 @assert length(_compiler_require_dependencies) >= 15
 
 end
-
-# Ensure this file is also tracked
-@assert !isassigned(_included_files, 1)
-_included_files[1] = (parentmodule(Base), abspath(@__FILE__))

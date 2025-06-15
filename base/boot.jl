@@ -1046,8 +1046,9 @@ function struct_name_shim(@nospecialize(x), name::Symbol, mod::Module, @nospecia
     return x === mod ? t : getfield(x, name)
 end
 
-# Binding for the julia parser, called as
-#
+# Bindings for the julia frontend.  The internal jl_parse and jl_lower will call
+# Core._parse and Core._lower respectively (if they are not `nothing`.)
+
 #    Core._parse(text, filename, lineno, offset, options)
 #
 # Parse Julia code from the buffer `text`, starting at `offset` and attributing
@@ -1057,11 +1058,17 @@ end
 #
 # `_parse` must return an `svec` containing an `Expr` and the new offset as an
 # `Int`.
-#
-# The internal jl_parse will call into Core._parse if not `nothing`.
 _parse = nothing
 
+#    Core._lower(code, module, filename="none", linenum=0, world=0xfff..., warn=false)
+#
+# Lower `code` (usually Expr), returning `svec(e::Any xs::Any...)` where `e` is
+# the lowered code, and `xs` is possible additional information from
+# JuliaLowering (TBD).
+_lower = nothing
+
 _setparser!(parser) = setglobal!(Core, :_parse, parser)
+_setlowerer!(lowerer) = setglobal!(Core, :_lower, lowerer)
 
 # support for deprecated uses of builtin functions
 _apply(x...) = _apply_iterate(Main.Base.iterate, x...)

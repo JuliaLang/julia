@@ -363,15 +363,13 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
         arg_n = split_argtypes[i]::Vector{Any}
         sig_n = argtypes_to_type(arg_n)
         sig_n === Bottom && continue
-        mt = ccall(:jl_method_table_for, Any, (Any,), sig_n)
-        mt === nothing && return FailedMethodMatch("Could not identify method table for call")
-        mt = mt::MethodTable
         thismatches = findall(sig_n, method_table(interp); limit = max_methods)
         if thismatches === nothing
             return FailedMethodMatch("For one of the union split cases, too many methods matched")
         end
         valid_worlds = intersect(valid_worlds, thismatches.valid_worlds)
         thisfullmatch = any(match::MethodMatch->match.fully_covers, thismatches)
+        mt = Core.GlobalMethods
         thisinfo = MethodMatchInfo(thismatches, mt, sig_n, thisfullmatch)
         push!(infos, thisinfo)
         for idx = 1:length(thismatches)
@@ -385,11 +383,6 @@ function find_union_split_method_matches(interp::AbstractInterpreter, argtypes::
 end
 
 function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(atype), max_methods::Int)
-    mt = ccall(:jl_method_table_for, Any, (Any,), atype)
-    if mt === nothing
-        return FailedMethodMatch("Could not identify method table for call")
-    end
-    mt = mt::MethodTable
     matches = findall(atype, method_table(interp); limit = max_methods)
     if matches === nothing
         # this means too many methods matched
@@ -397,6 +390,7 @@ function find_simple_method_matches(interp::AbstractInterpreter, @nospecialize(a
         return FailedMethodMatch("Too many methods matched")
     end
     fullmatch = any(match::MethodMatch->match.fully_covers, matches)
+    mt = Core.GlobalMethods
     info = MethodMatchInfo(matches, mt, atype, fullmatch)
     applicable = MethodMatchTarget[MethodMatchTarget(matches[idx], info.edges, idx) for idx = 1:length(matches)]
     return MethodMatches(applicable, info, matches.valid_worlds)
@@ -2215,16 +2209,10 @@ function abstract_call_unionall(interp::AbstractInterpreter, argtypes::Vector{An
     return CallMeta(ret, Any, Effects(EFFECTS_TOTAL; nothrow), call.info)
 end
 
-function ci_abi(ci::CodeInstance)
+function get_ci_abi(ci::CodeInstance)
     def = ci.def
     isa(def, ABIOverride) && return def.abi
     (def::MethodInstance).specTypes
-end
-
-function get_ci_mi(ci::CodeInstance)
-    def = ci.def
-    isa(def, ABIOverride) && return def.def
-    return def::MethodInstance
 end
 
 function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::StmtInfo, sv::AbsIntState)
@@ -2238,7 +2226,7 @@ function abstract_invoke(interp::AbstractInterpreter, arginfo::ArgInfo, si::Stmt
         if isa(method_or_ci, CodeInstance)
             our_world = sv.world.this
             argtype = argtypes_to_type(pushfirst!(argtype_tail(argtypes, 4), ft))
-            specsig = ci_abi(method_or_ci)
+            specsig = get_ci_abi(method_or_ci)
             defdef = get_ci_mi(method_or_ci).def
             exct = method_or_ci.exctype
             if !hasintersect(argtype, specsig)
@@ -3545,7 +3533,7 @@ function merge_override_effects!(interp::AbstractInterpreter, effects::Effects, 
             # N.B.: We'd like deleted_world here, but we can't add an appropriate edge at this point.
             # However, in order to reach here in the first place, ordinary method lookup would have
             # had to add an edge and appropriate invalidation trigger.
-            valid_worlds = WorldRange(m.primary_world, typemax(Int))
+            valid_worlds = WorldRange(m.primary_world, typemax(UInt))
             if sv.world.this in valid_worlds
                 update_valid_age!(sv, valid_worlds)
             else
