@@ -1626,39 +1626,31 @@ julia> first(stateful)
 8
 ```
 """
-nth(itr, n::Integer) = _nth(itr, n)
+nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
+nth(itr::Cycle{I}, n::Integer) where I = _nth(IteratorSize(I), itr, n)
+nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where O = _nth(IteratorSize(O), itr, n)
+@propagate_inbounds nth(itr::AbstractArray, n::Integer) = itr[begin + n - 1]
 
-# infinite cycle
-function nth(itr::Cycle{I}, n::Integer) where {I}
-    if IteratorSize(I) isa Union{HasShape, HasLength}
-        N = length(itr.xs)
-        N == 0 && throw(BoundsError(itr, n))
+function _nth(::Union{HasShape, HasLength}, itr::Cycle{I}, n::Integer) where {I}
+    N = length(itr.xs)
+    N == 0 && throw(BoundsError(itr, n))
 
-        # prevents wrap around behaviour and inherit the error handling
-        return _nth(itr.xs, n > 0 ? mod1(n, N) : n)
-    else
-        return _nth(itr, n)
-    end
+    # prevents wrap around behaviour and inherit the error handling
+    return nth(itr.xs, n > 0 ? mod1(n, N) : n)
 end
 
 # Flatten{Take{Repeated{O}}} is the actual type of an Iterators.cycle(iterable::O, m) iterator
-function nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
-    if IteratorSize(O) isa Union{HasShape, HasLength}
-        cycles = itr.it.n
-        torepeat = itr.it.xs.x
-        k = length(torepeat)
-        (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
+function _nth(::Union{HasShape, HasLength}, itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
+    cycles = itr.it.n
+    torepeat = itr.it.xs.x
+    k = length(torepeat)
+    (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
 
-        # prevent wrap around behaviour and inherit the error handling
-        return _nth(torepeat, n > 0 ? mod1(n, k) : n)
-    else
-        return _nth(itr, n)
-    end
+    # prevent wrap around behaviour and inherit the error handling
+    return nth(torepeat, n > 0 ? mod1(n, k) : n)
 end
 
-Base.@propagate_inbounds _nth(itr::AbstractArray, n) = itr[begin + n-1]
-
-function _nth(itr, n)
+function _nth(::IteratorSize, itr, n::Integer)
     # unrolled version of `first(drop)`
     n > 0 || throw(BoundsError(itr, n))
     y = iterate(itr)
@@ -1669,7 +1661,6 @@ function _nth(itr, n)
     y === nothing && throw(BoundsError(itr, n))
     y[1]
 end
-
 """
     nth(n::Integer)
 
