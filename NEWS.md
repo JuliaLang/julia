@@ -5,6 +5,7 @@ New language features
 ---------------------
 
   - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
+  - New `nth` function to access the `n`-th element of a generic iterable. Also comes with a single argument version to define a function that access always the same element ([#56580])
 
 Language changes
 ----------------
