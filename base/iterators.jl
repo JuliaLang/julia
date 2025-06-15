@@ -1609,7 +1609,7 @@ pairs(s::AbstractString) = IterableStatePairs(s)
 Get the `n`th element of an iterable collection. Throw a `BoundsError`[@ref] if not existing.
 Will advance any `Stateful`[@ref] iterator.
 
-See also: [`first`](@ref), [`last`](@ref), [`nth`](@ref)
+See also: [`first`](@ref), [`last`](@ref)
 
 # Examples
 ```jldoctest
