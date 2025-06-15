@@ -633,7 +633,7 @@ the [Freedesktop File URI spec](https://www.freedesktop.org/wiki/Specifications/
 julia> uripath("/home/user/example file.jl") # On a unix machine
 "file://<hostname>/home/user/example%20file.jl"
 
-juila> uripath("C:\\Users\\user\\example file.jl") # On a windows machine
+julia> uripath("C:\\Users\\user\\example file.jl") # On a windows machine
 "file:///C:/Users/user/example%20file.jl"
 ```
 """
