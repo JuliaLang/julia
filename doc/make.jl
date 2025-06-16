@@ -161,7 +161,6 @@ generate_markdown("NEWS")
 Manual = [
     "manual/getting-started.md",
     "manual/installation.md",
-    "manual/memory-management.md",
     "manual/variables.md",
     "manual/integers-and-floating-point-numbers.md",
     "manual/mathematical-operations.md",
@@ -193,6 +192,7 @@ Manual = [
     "manual/code-loading.md",
     "manual/profile.md",
     "manual/stacktraces.md",
+    "manual/memory-management.md",
     "manual/performance-tips.md",
     "manual/workflow-tips.md",
     "manual/style-guide.md",
