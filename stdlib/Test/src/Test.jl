@@ -719,109 +719,10 @@ function get_test_result(ex, source)
             $negate,
         ))
     elseif isa(ex, Expr) && (ex.head === :|| || ex.head === :&&) && length(ex.args) == 2
-        # Handle logical expressions with expanded sub-expressions
-        left_expr = ex.args[1]
-        right_expr = ex.args[2]
-        op = ex.head
-        short_circuit_val = op === :|| ? true : false
-        op_str = string(op)
-
-        # Check if right side is a nested logical expression
-        is_nested_logical = isa(right_expr, Expr) &&
-                           (right_expr.head === :|| || right_expr.head === :&&) &&
-                           length(right_expr.args) == 2
-
-        left_result = get_test_result(left_expr, source)
-
-        testret = if is_nested_logical
-            # For nested expressions, we need to flatten the representation
-            nested_left_expr = right_expr.args[1]
-            nested_right_expr = right_expr.args[2]
-            nested_op = right_expr.head
-            nested_op_str = string(nested_op)
-
-            nested_left_result = get_test_result(nested_left_expr, source)
-            nested_right_result = get_test_result(nested_right_expr, source)
-
-            quote
-                left_exec = $left_result
-                if isa(left_exec, Returned)
-                    left_val = left_exec.value
-                    left_str = left_exec.data === nothing ? string(left_val) : string(left_exec.data)
-
-                    if left_val === $(short_circuit_val)
-                        # Short-circuit case
-                        expanded_str = string(left_str, " ", $(op_str), " ...")
-                        Returned($(short_circuit_val), expanded_str, $(QuoteNode(source)))
-                    else
-                        # Evaluate nested parts for flattened representation
-                        nested_left_exec = $nested_left_result
-                        nested_right_exec = $nested_right_result
-
-                        if isa(nested_left_exec, Returned) && isa(nested_right_exec, Returned)
-                            nested_left_val = nested_left_exec.value
-                            nested_left_str = nested_left_exec.data === nothing ? string(nested_left_val) : string(nested_left_exec.data)
-                            nested_right_val = nested_right_exec.value
-                            nested_right_str = nested_right_exec.data === nothing ? string(nested_right_val) : string(nested_right_exec.data)
-
-                            # Compute the nested result
-                            nested_result = $(QuoteNode(nested_op)) === :|| ? (nested_left_val || nested_right_val) : (nested_left_val && nested_right_val)
-                            # Final result
-                            result = $(op === :|| ? :(left_val || nested_result) : :(left_val && nested_result))
-
-                            # Build flattened string representation
-                            nested_short_circuit = $(QuoteNode(nested_op)) === :|| ? true : false
-                            nested_str = nested_left_val === nested_short_circuit ?
-                                string(nested_left_str, " ", $(nested_op_str), " ...") :
-                                string(nested_left_str, " ", $(nested_op_str), " ", nested_right_str)
-
-                            expanded_str = string(left_str, " ", $(op_str), " ", nested_str)
-                            # Show expanded form if any part had meaningful variable expansion
-                            has_expansion = left_exec.data !== nothing || nested_left_exec.data !== nothing || nested_right_exec.data !== nothing
-                            final_data = has_expansion ? expanded_str : nothing
-                            Returned(result, final_data, $(QuoteNode(source)))
-                        else
-                            left_exec  # Error case
-                        end
-                    end
-                else
-                    left_exec  # Error case
-                end
-            end
-        else
-            # Handle simple logical expressions
-            right_result = get_test_result(right_expr, source)
-
-            quote
-                left_exec = $left_result
-                if isa(left_exec, Returned)
-                    left_val = left_exec.value
-                    left_str = left_exec.data === nothing ? string(left_val) : string(left_exec.data)
-
-                    if left_val === $(short_circuit_val)
-                        # Short-circuit case
-                        expanded_str = string(left_str, " ", $(op_str), " ...")
-                        Returned($(short_circuit_val), expanded_str, $(QuoteNode(source)))
-                    else
-                        right_exec = $right_result
-                        if isa(right_exec, Returned)
-                            right_val = right_exec.value
-                            right_str = right_exec.data === nothing ? string(right_val) : string(right_exec.data)
-                            result = $(op === :|| ? :(left_val || right_val) : :(left_val && right_val))
-                            expanded_str = string(left_str, " ", $(op_str), " ", right_str)
-                            # Show expanded form if either side had meaningful variable expansion
-                            has_expansion = left_exec.data !== nothing || right_exec.data !== nothing
-                            final_data = has_expansion ? expanded_str : nothing
-                            Returned(result, final_data, $(QuoteNode(source)))
-                        else
-                            right_exec  # Error case
-                        end
-                    end
-                else
-                    left_exec  # Error case
-                end
-            end
-        end
+        # Handle logical expressions using recursive tree-based evaluation
+        logical_tree = build_logical_tree(ex, source)
+        should_negate_root = negate === QuoteNode(true)
+        testret = evaluate_logical_tree(logical_tree, should_negate_root)
     else
         ex = Expr(:block, source, esc(orig_ex))
         testret = :(Returned($ex, nothing, $(QuoteNode(source))))
@@ -2502,6 +2403,8 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
     return true
 end
 
+include("logical_tree.jl")
+using .LogicalTreeTests
 include("logging.jl")
 include("precompile.jl")
 
