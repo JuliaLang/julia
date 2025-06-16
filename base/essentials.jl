@@ -384,6 +384,7 @@ default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
+    @_effect_free_terminates_locally_meta
     elt = eltype(A)
     if (Any <: elt) || (isconcretetype(elt) && isbitstype(elt))
         @boundscheck checkbounds(A, i)
