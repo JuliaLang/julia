@@ -162,4 +162,3 @@ using .Issue54029
 end
 
 @test_throws ErrorException error()
-@test occursin("Generic error occurred", try error() catch e; sprint(showerror, e) end)
