@@ -403,7 +403,7 @@ module IteratorsMD
         getindex(iter, C.indices...)
     end
     @inline Base.getindex(iter::CartesianIndices{0}, ::CartesianIndices{0}) = iter
-    @inline function Base.getindex(iter::CartesianIndices{N}, r::StepRangeLen{CartesianIndex{N},CartesianIndex{N},CartesianIndex{N},<:Integer}) where {N}
+    @inline function Base.getindex(iter::CartesianIndices{N}, r::AbstractRange{CartesianIndex{N}}) where {N}
         @boundscheck checkbounds(iter, r)
         start = first(iter) + CartesianIndex((Tuple(first(r)) .- first.(axes(iter))) .* Tuple(step(iter)))
         stepsz = CartesianIndex(Tuple(step(iter)) .* Tuple(step(r)))
