@@ -1430,7 +1430,8 @@ module KwdefWithEsc_TestModule
 end
 @test isdefined(KwdefWithEsc_TestModule, :Struct)
 
-@kwdef struct TestParametricType{T<:Number}
+@kwdef struct TestParametricType{T<:Number,S}
+    c::S = []
     a::Bool = true
     b::T = 2.0
 end
@@ -1438,9 +1439,11 @@ end
 @testset "@kwdef with parametric type" begin
     tpt1 = @test_nowarn TestParametricType(; a = 1)
     tpt2 = @test_nowarn TestParametricType(; a = 1, b = 2)
-    @testset for tpt in (tpt1, tpt2)
+    tpt3 = @test_nowarn TestParametricType(; a = 1, b = 2, c = [])
+    @testset for tpt in (tpt1, tpt2, tpt3)
         @test tpt.a # == true
         @test tpt.b == 2
+        @test tpt.c == []
     end
 end
 

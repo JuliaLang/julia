@@ -612,8 +612,12 @@ macro kwdef(expr)
             S = T.args[1]
             P = T.args[2:end]
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
+            typespecs = getindex.(getproperty.(collect((arg for arg in fieldsblock.args if !(arg isa Base.LineNumberNode))), :args), 2)
+            order =  identity.(filter(!=(nothing), indexin(typespecs, Q)))
             SQ = :($S{$(Q...)})
-            typecalls = ( :(typeof($(arg.args[1]))) for arg in fieldsblock.args if !(arg isa Base.LineNumberNode) && (arg.args[2] in Q) )
+            typecalls = [ :(typeof($(arg.args[1]))) for arg in fieldsblock.args if !(arg isa Base.LineNumberNode) && (arg.args[2] in Q) ]
+            # Fix ordering
+            typecalls = typecalls[order]
             ST = :($S{$(typecalls...)})
             body1 = Expr(:block, __source__, Expr(:call, esc(ST), fieldnames...))
             sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
