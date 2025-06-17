@@ -39,12 +39,12 @@ appended to an internal buffer of backtraces.
 """
 macro profile(ex)
     return quote
-        try
-            start_timer()
+        start_timer()
+        Base.@__tryfinally(
             $(esc(ex))
-        finally
+            ,
             stop_timer()
-        end
+        )
     end
 end
 

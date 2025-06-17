@@ -5,6 +5,8 @@
 */
 #include "platform.h"
 
+#include <float.h>
+#include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -572,7 +574,7 @@ static size_t jl_show_svec(JL_STREAM *out, jl_svec_t *t, const char *head, const
 JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT;
 JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT int jl_is_identifier(char *str) JL_NOTSAFEPOINT
+JL_DLLEXPORT int jl_is_identifier(const char *str) JL_NOTSAFEPOINT
 {
     size_t i = 0;
     uint32_t wc = u8_nextchar(str, &i);
@@ -655,22 +657,97 @@ static int is_globfunction(jl_value_t *v, jl_datatype_t *dv, jl_sym_t **globname
     return 0;
 }
 
-static size_t jl_static_show_x_sym_escaped(JL_STREAM *out, jl_sym_t *name) JL_NOTSAFEPOINT
+static size_t jl_static_show_string(JL_STREAM *out, const char *str, size_t len, int wrap, int raw) JL_NOTSAFEPOINT
 {
     size_t n = 0;
-
-    char *sn = jl_symbol_name(name);
-    int hidden = 0;
-    if (!(jl_is_identifier(sn) || jl_is_operator(sn))) {
-        hidden = 1;
-    }
-
-    if (hidden) {
-        n += jl_printf(out, "var\"");
-    }
-    n += jl_printf(out, "%s", sn);
-    if (hidden) {
+    if (wrap)
         n += jl_printf(out, "\"");
+    if (!raw && !u8_isvalid(str, len)) {
+        // alternate print algorithm that preserves data if it's not UTF-8
+        static const char hexdig[] = "0123456789abcdef";
+        for (size_t i = 0; i < len; i++) {
+            uint8_t c = str[i];
+            if (c == '\\' || c == '"' || c == '$')
+                n += jl_printf(out, "\\%c", c);
+            else if (c >= 32 && c < 0x7f)
+                n += jl_printf(out, "%c", c);
+            else
+                n += jl_printf(out, "\\x%c%c", hexdig[c>>4], hexdig[c&0xf]);
+        }
+    }
+    else {
+        int special = 0;
+        for (size_t i = 0; i < len; i++) {
+            uint8_t c = str[i];
+            if (raw && ((c == '\\' && i == len-1) || c == '"')) {
+                special = 1;
+                break;
+            }
+            else if (!raw && (c < 32 || c == 0x7f || c == '\\' || c == '"' || c == '$')) {
+                special = 1;
+                break;
+            }
+        }
+        if (!special) {
+            jl_uv_puts(out, str, len);
+            n += len;
+        }
+        else if (raw) {
+            // REF: Base.escape_raw_string
+            int escapes = 0;
+            for (size_t i = 0; i < len; i++) {
+                uint8_t c = str[i];
+                if (c == '\\') {
+                    escapes++;
+                }
+                else {
+                     if (c == '"')
+                         for (escapes++; escapes > 0; escapes--)
+                             n += jl_printf(out, "\\");
+                     escapes = 0;
+                }
+                n += jl_printf(out, "%c", str[i]);
+            }
+            for (; escapes > 0; escapes--)
+                n += jl_printf(out, "\\");
+        }
+        else {
+            char buf[512];
+            size_t i = 0;
+            while (i < len) {
+                size_t r = u8_escape(buf, sizeof(buf), str, &i, len, "\"$", 0);
+                jl_uv_puts(out, buf, r - 1);
+                n += r - 1;
+            }
+        }
+    }
+    if (wrap)
+        n += jl_printf(out, "\"");
+    return n;
+}
+
+static int jl_is_quoted_sym(const char *sn)
+{
+    static const char *const quoted_syms[] = {":", "::", ":=", "=", "==", "===", "=>", "`"};
+    for (int i = 0; i < sizeof quoted_syms / sizeof *quoted_syms; i++)
+        if (!strcmp(sn, quoted_syms[i]))
+            return 1;
+    return 0;
+}
+
+// TODO: in theory, we need a separate function for showing symbols in an
+// expression context (where `Symbol("foo\x01bar")` is ok) and a syntactic
+// context (where var"" must be used).
+static size_t jl_static_show_symbol(JL_STREAM *out, jl_sym_t *name) JL_NOTSAFEPOINT
+{
+    size_t n = 0;
+    const char *sn = jl_symbol_name(name);
+    if (jl_is_identifier(sn) || (jl_is_operator(sn) && !jl_is_quoted_sym(sn))) {
+        n += jl_printf(out, "%s", sn);
+    }
+    else {
+        n += jl_printf(out, "var");
+        n += jl_static_show_string(out, sn, strlen(sn), 1, 1);
     }
     return n;
 }
@@ -697,6 +774,51 @@ static int jl_static_is_function_(jl_datatype_t *vt) JL_NOTSAFEPOINT {
         _iter_count += 1;
     }
     return 0;
+}
+
+static size_t jl_static_show_float(JL_STREAM *out, double v,
+                                   jl_datatype_t *vt) JL_NOTSAFEPOINT
+{
+    size_t n = 0;
+    // TODO: non-canonical NaNs do not round-trip
+    // TOOD: BFloat16
+    const char *size_suffix = vt == jl_float16_type ? "16" :
+                              vt == jl_float32_type ? "32" :
+                                                      "";
+    // Requires minimum 1 (sign) + 17 (sig) + 1 (dot) + 5 ("e-123") + 1 (null)
+    char buf[32];
+    // Base B significand digits required to print n base-b significand bits
+    // (including leading 1):  N = 2 + floor(n/log(b, B))
+    //   Float16   5
+    //   Float32   9
+    //   Float64  17
+    // REF: https://dl.acm.org/doi/pdf/10.1145/93542.93559
+    if (isnan(v)) {
+        n += jl_printf(out, "NaN%s", size_suffix);
+    }
+    else if (isinf(v)) {
+        n += jl_printf(out, "%sInf%s", v < 0 ? "-" : "", size_suffix);
+    }
+    else if (vt == jl_float64_type) {
+        n += jl_printf(out, "%#.17g", v);
+    }
+    else if (vt == jl_float32_type) {
+        size_t m = snprintf(buf, sizeof buf, "%.9g", v);
+        // If the exponent was printed, replace it with 'f'
+        char *p = (char *)memchr(buf, 'e', m);
+        if (p)
+            *p = 'f';
+        jl_uv_puts(out, buf, m);
+        n += m;
+        // If no exponent was printed, we must add one
+        if (!p)
+            n += jl_printf(out, "f0");
+    }
+    else {
+        assert(vt == jl_float16_type);
+        n += jl_printf(out, "Float16(%#.5g)", v);
+    }
+    return n;
 }
 
 // `v` might be pointing to a field inlined in a structure therefore
@@ -788,11 +910,6 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         // Types are printed as a fully qualified name, with parameters, e.g.
         // `Base.Set{Int}`, and function types are printed as e.g. `typeof(Main.f)`
         jl_datatype_t *dv = (jl_datatype_t*)v;
-        jl_sym_t *globname;
-        int globfunc = is_globname_binding(v, dv) && is_globfunction(v, dv, &globname);
-        jl_sym_t *sym = globfunc ? globname : dv->name->name;
-        char *sn = jl_symbol_name(sym);
-        size_t quote = 0;
         if (dv->name == jl_tuple_typename) {
             if (dv == jl_tuple_type)
                 return jl_printf(out, "Tuple");
@@ -825,8 +942,13 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             return n;
         }
         if (ctx.quiet) {
-            return jl_printf(out, "%s", jl_symbol_name(dv->name->name));
+            return jl_static_show_symbol(out, dv->name->name);
         }
+        jl_sym_t *globname;
+        int globfunc = is_globname_binding(v, dv) && is_globfunction(v, dv, &globname);
+        jl_sym_t *sym = globfunc ? globname : dv->name->name;
+        char *sn = jl_symbol_name(sym);
+        size_t quote = 0;
         if (globfunc) {
             n += jl_printf(out, "typeof(");
         }
@@ -839,7 +961,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 quote = 1;
             }
         }
-        n += jl_static_show_x_sym_escaped(out, sym);
+        n += jl_static_show_symbol(out, sym);
         if (globfunc) {
             n += jl_printf(out, ")");
             if (quote) {
@@ -864,17 +986,21 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         int f = *(uint32_t*)jl_data_ptr(v);
         n += jl_printf(out, "#<intrinsic #%d %s>", f, jl_intrinsic_name(f));
     }
+    else if (vt == jl_long_type) {
+        // Avoid unnecessary Int64(x)/Int32(x)
+        n += jl_printf(out, "%" PRIdPTR, *(intptr_t*)v);
+    }
     else if (vt == jl_int64_type) {
-        n += jl_printf(out, "%" PRId64, *(int64_t*)v);
+        n += jl_printf(out, "Int64(%" PRId64 ")", *(int64_t*)v);
     }
     else if (vt == jl_int32_type) {
-        n += jl_printf(out, "%" PRId32, *(int32_t*)v);
+        n += jl_printf(out, "Int32(%" PRId32 ")", *(int32_t*)v);
     }
     else if (vt == jl_int16_type) {
-        n += jl_printf(out, "%" PRId16, *(int16_t*)v);
+        n += jl_printf(out, "Int16(%" PRId16 ")", *(int16_t*)v);
     }
     else if (vt == jl_int8_type) {
-        n += jl_printf(out, "%" PRId8, *(int8_t*)v);
+        n += jl_printf(out, "Int8(%" PRId8 ")", *(int8_t*)v);
     }
     else if (vt == jl_uint64_type) {
         n += jl_printf(out, "0x%016" PRIx64, *(uint64_t*)v);
@@ -888,18 +1014,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_uint8_type) {
         n += jl_printf(out, "0x%02" PRIx8, *(uint8_t*)v);
     }
-    else if (jl_pointer_type && jl_is_cpointer_type((jl_value_t*)vt)) {
-#ifdef _P64
-        n += jl_printf(out, "0x%016" PRIx64, *(uint64_t*)v);
-#else
-        n += jl_printf(out, "0x%08" PRIx32, *(uint32_t*)v);
-#endif
+    else if (vt == jl_float16_type) {
+        n += jl_static_show_float(out, julia__gnu_h2f_ieee(*(uint16_t *)v), vt);
     }
     else if (vt == jl_float32_type) {
-        n += jl_printf(out, "%gf", *(float*)v);
+        n += jl_static_show_float(out, *(float *)v, vt);
     }
     else if (vt == jl_float64_type) {
-        n += jl_printf(out, "%g", *(double*)v);
+        n += jl_static_show_float(out, *(double *)v, vt);
     }
     else if (vt == jl_bool_type) {
         n += jl_printf(out, "%s", *(uint8_t*)v ? "true" : "false");
@@ -908,9 +1030,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, "nothing");
     }
     else if (vt == jl_string_type) {
-        n += jl_printf(out, "\"");
-        jl_uv_puts(out, jl_string_data(v), jl_string_len(v)); n += jl_string_len(v);
-        n += jl_printf(out, "\"");
+        n += jl_static_show_string(out, jl_string_data(v), jl_string_len(v), 1, 0);
     }
     else if (v == jl_bottom_type) {
         n += jl_printf(out, "Union{}");
@@ -959,7 +1079,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
                 n += jl_printf(out, ")");
             n += jl_printf(out, "<:");
         }
-        n += jl_static_show_x_sym_escaped(out, var->name);
+        n += jl_static_show_symbol(out, var->name);
         if (showbounds && (ub != (jl_value_t*)jl_any_type || lb != jl_bottom_type)) {
             // show type-var upper bound if it is defined, or if we showed the lower bound
             int ua = jl_is_unionall(ub);
@@ -977,18 +1097,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             n += jl_static_show_x(out, (jl_value_t*)m->parent, depth, ctx);
             n += jl_printf(out, ".");
         }
-        n += jl_printf(out, "%s", jl_symbol_name(m->name));
+        n += jl_static_show_symbol(out, m->name);
     }
     else if (vt == jl_symbol_type) {
-        char *sn = jl_symbol_name((jl_sym_t*)v);
-        int quoted = !jl_is_identifier(sn) && jl_operator_precedence(sn) == 0;
-        if (quoted)
-            n += jl_printf(out, "Symbol(\"");
-        else
-            n += jl_printf(out, ":");
-        n += jl_printf(out, "%s", sn);
-        if (quoted)
-            n += jl_printf(out, "\")");
+        n += jl_printf(out, ":");
+        n += jl_static_show_symbol(out, (jl_sym_t*)v);
     }
     else if (vt == jl_ssavalue_type) {
         n += jl_printf(out, "SSAValue(%" PRIuPTR ")",
@@ -996,8 +1109,12 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_globalref_type) {
         n += jl_static_show_x(out, (jl_value_t*)jl_globalref_mod(v), depth, ctx);
-        char *name = jl_symbol_name(jl_globalref_name(v));
-        n += jl_printf(out, jl_is_identifier(name) ? ".%s" : ".:(%s)", name);
+        jl_sym_t *name = jl_globalref_name(v);
+        n += jl_printf(out, ".");
+        if (jl_is_operator(jl_symbol_name(name)))
+            n += jl_printf(out, ":(%s)", jl_symbol_name(name));
+        else
+            n += jl_static_show_symbol(out, name);
     }
     else if (vt == jl_gotonode_type) {
         n += jl_printf(out, "goto %" PRIuPTR, jl_gotonode_label(v));
@@ -1031,17 +1148,17 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;
         if (e->head == jl_assign_sym && jl_array_len(e->args) == 2) {
-            n += jl_static_show_x(out, jl_exprarg(e,0), depth, ctx);
+            n += jl_static_show_x(out, jl_exprarg(e, 0), depth, ctx);
             n += jl_printf(out, " = ");
-            n += jl_static_show_x(out, jl_exprarg(e,1), depth, ctx);
+            n += jl_static_show_x(out, jl_exprarg(e, 1), depth, ctx);
         }
         else {
-            char sep = ' ';
-            n += jl_printf(out, "Expr(:%s", jl_symbol_name(e->head));
+            n += jl_printf(out, "Expr(");
+            n += jl_static_show_x(out, (jl_value_t*)e->head, depth, ctx);
             size_t i, len = jl_array_len(e->args);
             for (i = 0; i < len; i++) {
-                n += jl_printf(out, ",%c", sep);
-                n += jl_static_show_x(out, jl_exprarg(e,i), depth, ctx);
+                n += jl_printf(out, ", ");
+                n += jl_static_show_x(out, jl_exprarg(e, i), depth, ctx);
             }
             n += jl_printf(out, ")");
         }
@@ -1128,7 +1245,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             }
         }
 
-        n += jl_static_show_x_sym_escaped(out, sym);
+        n += jl_static_show_symbol(out, sym);
 
         if (globfunc) {
             if (quote) {
@@ -1164,8 +1281,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
             jl_value_t *names = isnamedtuple ? jl_tparam0(vt) : (jl_value_t*)jl_field_names(vt);
             for (; i < tlen; i++) {
                 if (!istuple) {
-                    jl_value_t *fname = isnamedtuple ? jl_fieldref_noalloc(names, i) : jl_svecref(names, i);
-                    n += jl_printf(out, "%s=", jl_symbol_name((jl_sym_t*)fname));
+                    jl_sym_t *fname = (jl_sym_t*)(isnamedtuple ? jl_fieldref_noalloc(names, i) : jl_svecref(names, i));
+                    if (fname == NULL || !jl_is_symbol(fname))
+                        n += jl_static_show_x(out, (jl_value_t*)fname, depth, ctx);
+                    else if (jl_is_operator(jl_symbol_name(fname)))
+                        n += jl_printf(out, "(%s)", jl_symbol_name(fname));
+                    else
+                        n += jl_static_show_symbol(out, fname);
+                    n += jl_printf(out, "=");
                 }
                 size_t offs = jl_field_offset(vt, i);
                 char *fld_ptr = (char*)v + offs;
@@ -1300,7 +1423,7 @@ size_t jl_static_show_func_sig_(JL_STREAM *s, jl_value_t *type, jl_static_show_c
     if ((jl_nparams(ftype) == 0 || ftype == ((jl_datatype_t*)ftype)->name->wrapper) &&
             ((jl_datatype_t*)ftype)->name->mt != jl_type_type_mt &&
             ((jl_datatype_t*)ftype)->name->mt != jl_nonfunction_mt) {
-        n += jl_printf(s, "%s", jl_symbol_name(((jl_datatype_t*)ftype)->name->mt->name));
+        n += jl_static_show_symbol(s, ((jl_datatype_t*)ftype)->name->mt->name);
     }
     else {
         n += jl_printf(s, "(::");
@@ -1399,10 +1522,10 @@ void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
         }
         jl_printf(str, "\n@ ");
         if (jl_is_string(file)) {
-            jl_uv_puts(str, jl_string_data(file), jl_string_len(file));
+            jl_static_show_string(str, jl_string_data(file), jl_string_len(file), 0, 0);
         }
         else if (jl_is_symbol(file)) {
-            jl_printf(str, "%s", jl_symbol_name((jl_sym_t*)file));
+            jl_static_show_string(str, jl_symbol_name((jl_sym_t*)file), strlen(jl_symbol_name((jl_sym_t*)file)), 0, 0);
         }
         jl_printf(str, ":");
         jl_static_show(str, line);

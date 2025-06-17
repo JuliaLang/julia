@@ -3335,12 +3335,19 @@ function ith_all(i, as)
 end
 
 function map_n!(f::F, dest::AbstractArray, As) where F
-    idxs1 = LinearIndices(As[1])
-    @boundscheck LinearIndices(dest) == idxs1 && all(x -> LinearIndices(x) == idxs1, As)
-    for i = idxs1
-        @inbounds I = ith_all(i, As)
-        val = f(I...)
-        @inbounds dest[i] = val
+    idxs = LinearIndices(dest)
+    if all(x -> LinearIndices(x) == idxs, As)
+        for i in idxs
+            @inbounds as = ith_all(i, As)
+            val = f(as...)
+            @inbounds dest[i] = val
+        end
+    else
+        for (i, Is...) in zip(eachindex(dest), map(eachindex, As)...)
+            as = ntuple(j->getindex(As[j], Is[j]), length(As))
+            val = f(as...)
+            dest[i] = val
+        end
     end
     return dest
 end
@@ -3536,7 +3543,31 @@ function _keepat!(a::AbstractVector, m::AbstractVector{Bool})
     deleteat!(a, j:lastindex(a))
 end
 
-## 1-d circshift ##
+"""
+    circshift!(a::AbstractVector, shift::Integer)
+
+Circularly shift, or rotate, the data in vector `a` by `shift` positions.
+
+# Examples
+
+```jldoctest
+julia> circshift!([1, 2, 3, 4, 5], 2)
+5-element Vector{Int64}:
+ 4
+ 5
+ 1
+ 2
+ 3
+
+julia> circshift!([1, 2, 3, 4, 5], -2)
+5-element Vector{Int64}:
+ 3
+ 4
+ 5
+ 1
+ 2
+```
+"""
 function circshift!(a::AbstractVector, shift::Integer)
     n = length(a)
     n == 0 && return

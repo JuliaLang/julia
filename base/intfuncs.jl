@@ -488,7 +488,8 @@ function nextpow(a::Real, x::Real)
     n = ceil(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
     p = a^(n-1)
-    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    hastypemax(typeof(p)) && x > typemax(p) &&
+        throw(DomainError(x,"argument is beyond the range of type of the base"))
     p >= x && return p
     wp = a^n
     wp > p || throw(OverflowError("result is beyond the range of type of the base"))
@@ -529,9 +530,10 @@ function prevpow(a::T, x::Real) where T <: Real
     n = floor(Integer,log(a, x))
     # round-off error of log can go either direction, so need some checks
     p = a^n
-    x > typemax(p) && throw(DomainError(x,"argument is beyond the range of type of the base"))
+    hastypemax(typeof(p)) && x > typemax(p) &&
+        throw(DomainError(x,"argument is beyond the range of type of the base"))
     if a isa Integer
-        wp, overflow = mul_with_overflow(a, p)
+        wp, overflow = mul_with_overflow(promote(a, p)...)
         wp <= x && !overflow && return wp
     else
         wp = a^(n+1)
@@ -763,7 +765,7 @@ function append_c_digits(olength::Int, digits::Unsigned, buf, pos::Int)
     while i >= 2
         d, c = divrem(digits, 0x64)
         digits = oftype(digits, d)
-        @inbounds d100 = _dec_d100[(c % Int) + 1]
+        @inbounds d100 = _dec_d100[(c % Int)::Int + 1]
         @inbounds buf[pos + i - 2] = d100 % UInt8
         @inbounds buf[pos + i - 1] = (d100 >> 0x8) % UInt8
         i -= 2

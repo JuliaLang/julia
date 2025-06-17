@@ -73,11 +73,11 @@ end
 function _prof_expr(expr, opts)
     quote
         $start(; $(esc(opts)))
-        try
+        Base.@__tryfinally(
             $(esc(expr))
-        finally
+            ,
             $stop()
-        end
+        )
     end
 end
 

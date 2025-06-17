@@ -103,62 +103,80 @@ JL_DLLEXPORT void jl_push_newly_inferred(jl_value_t* ci)
     JL_UNLOCK(&newly_inferred_mutex);
 }
 
-
 // compute whether a type references something internal to worklist
 // and thus could not have existed before deserialize
 // and thus does not need delayed unique-ing
-static int type_in_worklist(jl_value_t *v) JL_NOTSAFEPOINT
+static int type_in_worklist(jl_value_t *v, jl_query_cache *cache) JL_NOTSAFEPOINT
 {
     if (jl_object_in_image(v))
         return 0; // fast-path for rejection
+
+    void *cached = HT_NOTFOUND;
+    if (cache != NULL)
+        cached = ptrhash_get(&cache->type_in_worklist, v);
+
+    // fast-path for memoized results
+    if (cached != HT_NOTFOUND)
+        return cached == v;
+
+    int result = 0;
     if (jl_is_uniontype(v)) {
         jl_uniontype_t *u = (jl_uniontype_t*)v;
-        return type_in_worklist(u->a) ||
-               type_in_worklist(u->b);
+        result = type_in_worklist(u->a, cache) ||
+                 type_in_worklist(u->b, cache);
     }
     else if (jl_is_unionall(v)) {
         jl_unionall_t *ua = (jl_unionall_t*)v;
-        return type_in_worklist((jl_value_t*)ua->var) ||
-               type_in_worklist(ua->body);
+        result = type_in_worklist((jl_value_t*)ua->var, cache) ||
+                 type_in_worklist(ua->body, cache);
     }
     else if (jl_is_typevar(v)) {
         jl_tvar_t *tv = (jl_tvar_t*)v;
-        return type_in_worklist(tv->lb) ||
-               type_in_worklist(tv->ub);
+        result = type_in_worklist(tv->lb, cache) ||
+                 type_in_worklist(tv->ub, cache);
     }
     else if (jl_is_vararg(v)) {
         jl_vararg_t *tv = (jl_vararg_t*)v;
-        if (tv->T && type_in_worklist(tv->T))
-            return 1;
-        if (tv->N && type_in_worklist(tv->N))
-            return 1;
+        result = ((tv->T && type_in_worklist(tv->T, cache)) ||
+                  (tv->N && type_in_worklist(tv->N, cache)));
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dt = (jl_datatype_t*)v;
-        if (!jl_object_in_image((jl_value_t*)dt->name))
-            return 1;
-        jl_svec_t *tt = dt->parameters;
-        size_t i, l = jl_svec_len(tt);
-        for (i = 0; i < l; i++)
-            if (type_in_worklist(jl_tparam(dt, i)))
-                return 1;
+        if (!jl_object_in_image((jl_value_t*)dt->name)) {
+            result = 1;
+        }
+        else {
+            jl_svec_t *tt = dt->parameters;
+            size_t i, l = jl_svec_len(tt);
+            for (i = 0; i < l; i++) {
+                if (type_in_worklist(jl_tparam(dt, i), cache)) {
+                    result = 1;
+                    break;
+                }
+            }
+        }
     }
     else {
-        return type_in_worklist(jl_typeof(v));
+        return type_in_worklist(jl_typeof(v), cache);
     }
-    return 0;
+
+    // Memoize result
+    if (cache != NULL)
+        ptrhash_put(&cache->type_in_worklist, (void*)v, result ? (void*)v : NULL);
+
+    return result;
 }
 
 // When we infer external method instances, ensure they link back to the
 // package. Otherwise they might be, e.g., for external macros.
 // Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
-static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited, arraylist_t *stack)
+static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited, arraylist_t *stack, jl_query_cache *query_cache)
 {
     jl_module_t *mod = mi->def.module;
     if (jl_is_method(mod))
         mod = ((jl_method_t*)mod)->module;
     assert(jl_is_module(mod));
-    if (mi->precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes)) {
+    if (mi->precompiled || !jl_object_in_image((jl_value_t*)mod) || type_in_worklist(mi->specTypes, query_cache)) {
         return 1;
     }
     if (!mi->backedges) {
@@ -181,7 +199,7 @@ static int has_backedge_to_worklist(jl_method_instance_t *mi, htable_t *visited,
     while (i < n) {
         jl_method_instance_t *be;
         i = get_next_edge(mi->backedges, i, NULL, &be);
-        int child_found = has_backedge_to_worklist(be, visited, stack);
+        int child_found = has_backedge_to_worklist(be, visited, stack, query_cache);
         if (child_found == 1 || child_found == 2) {
             // found what we were looking for, so terminate early
             found = 1;
@@ -224,7 +242,7 @@ static int is_relocatable_ci(htable_t *relocatable_ext_cis, jl_code_instance_t *
 // from the worklist or explicitly added by a `precompile` statement, and
 // (4) are the most recently computed result for that method.
 // These will be preserved in the image.
-static jl_array_t *queue_external_cis(jl_array_t *list)
+static jl_array_t *queue_external_cis(jl_array_t *list, jl_query_cache *query_cache)
 {
     if (list == NULL)
         return NULL;
@@ -245,7 +263,7 @@ static jl_array_t *queue_external_cis(jl_array_t *list)
         jl_method_instance_t *mi = ci->def;
         jl_method_t *m = mi->def.method;
         if (ci->inferred && jl_is_method(m) && jl_object_in_image((jl_value_t*)m->module)) {
-            int found = has_backedge_to_worklist(mi, &visited, &stack);
+            int found = has_backedge_to_worklist(mi, &visited, &stack, query_cache);
             assert(found == 0 || found == 1 || found == 2);
             assert(stack.len == 0);
             if (found == 1 && ci->max_world == ~(size_t)0) {
@@ -829,17 +847,31 @@ static void jl_insert_methods(jl_array_t *list)
     }
 }
 
-static void jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
+static int jl_copy_roots(jl_array_t *method_roots_list, uint64_t key)
 {
     size_t i, l = jl_array_len(method_roots_list);
+    int failed = 0;
     for (i = 0; i < l; i+=2) {
         jl_method_t *m = (jl_method_t*)jl_array_ptr_ref(method_roots_list, i);
         jl_array_t *roots = (jl_array_t*)jl_array_ptr_ref(method_roots_list, i+1);
         if (roots) {
             assert(jl_is_array(roots));
+            if (m->root_blocks) {
+                // check for key collision
+                uint64_t *blocks = (uint64_t*)jl_array_data(m->root_blocks);
+                size_t nx2 = jl_array_nrows(m->root_blocks);
+                for (size_t i = 0; i < nx2; i+=2) {
+                    if (blocks[i] == key) {
+                        // found duplicate block
+                        failed = -1;
+                    }
+                }
+            }
+
             jl_append_method_roots(m, key, roots);
         }
     }
+    return failed;
 }
 
 
