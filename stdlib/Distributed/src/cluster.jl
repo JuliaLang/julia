@@ -1276,7 +1276,10 @@ function init_bind_addr()
     else
         bind_port = 0
         try
-            bind_addr = string(getipaddr())
+            # Use the first non-link-local IPv4 address
+            addrs = Sockets.getipaddrs(Sockets.IPv4)
+            filter!(!Sockets.islinklocaladdr, addrs)
+            bind_addr = string(first(addrs))
         catch
             # All networking is unavailable, initialize bind_addr to the loopback address
             # Will cause an exception to be raised only when used.
