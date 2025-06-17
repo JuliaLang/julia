@@ -4904,6 +4904,9 @@ let ft = Base.datatype_fieldtypes
     @test !isdefined(ft(B12238.body.body)[1], :instance)  # has free type vars
 end
 
+# issue #54969
+@test !isdefined(Memory.body, :instance)
+
 # `where` syntax in constructor definitions
 (A12238{T} where T<:Real)(x) = 0
 @test A12238{<:Real}(0) == 0
@@ -6253,6 +6256,16 @@ let
     @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A4)), 3)
     A5 = [1 2 3; 4 5 6]
     @test_throws ArgumentError unsafe_wrap(Array, convert(Ptr{Union{Int, Nothing}}, pointer(A5)), 6)
+end
+
+# More unsafe_wrap
+let
+    a = [1, 2, 3]
+    GC.@preserve a begin
+        m = unsafe_wrap(Memory{Int}, pointer(a), (3,))
+        @test m == a
+        @test m isa Memory{Int}
+    end
 end
 
 # copyto!
