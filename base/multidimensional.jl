@@ -429,12 +429,12 @@ module IteratorsMD
     end
     @inline function __inc(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
-        I = state[1] + step(rng)
         if __is_valid_range(I, rng) && state[1] != last(rng)
+            I = state[1] + step(rng)
             return true, (I, tail(state)...)
         end
-        valid, I = __inc(tail(state), tail(indices))
-        return valid, (first(rng), I...)
+        valid, Itail = __inc(tail(state), tail(indices))
+        return valid, (first(rng), Itail...)
     end
 
     @inline __is_valid_range(I, rng::AbstractUnitRange) = I in rng
