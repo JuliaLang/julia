@@ -60,7 +60,7 @@ Julia's garbage collector can leverage multiple threads to improve performance o
 
 By default, Julia uses multiple threads for garbage collection:
 
-* **Mark threads**: Used during the mark phase to trace object references (default: same as compute threads (thread 1 is shared))
+* **Mark threads**: Used during the mark phase to trace object references (default: 1, which is shared with the compute thread if there is only one, otherwise half the number of compute threads)
 * **Sweep threads**: Used for concurrent sweeping of freed memory (default: 0, disabled)
 
 You can configure GC threading using:
