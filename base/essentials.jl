@@ -395,7 +395,7 @@ default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
     (@_boundscheck) && checkbounds(A, i)
-    memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
+    memoryrefget(memoryrefnew(A, i, false), default_access_order(A), false)
 end
 
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
@@ -973,7 +973,7 @@ function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
-setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(memoryrefnew(A), i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
+setindex!(A::Memory{Any}, @nospecialize(x), i::Int) = (memoryrefset!(memoryrefnew(A, i, @_boundscheck), x, :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{T}, x) where {T} = (memoryrefset!(A, convert(T, x), :not_atomic, @_boundscheck); A)
 setindex!(A::MemoryRef{Any}, @nospecialize(x)) = (memoryrefset!(A, x, :not_atomic, @_boundscheck); A)
 
