@@ -1147,7 +1147,11 @@ end
 
 @inline function wait_forever()
     while true
-        wait()
+        try
+            wait()
+        catch
+            # ignore SIGINT and anything thrown from wait()
+        end
     end
 end
 
@@ -1204,11 +1208,13 @@ function wait()
     W = workqueue_for(Threads.threadid())
     task = trypoptask(W)
     if task === nothing
-        # No tasks to run; switch to the scheduler task to run the
-        # thread sleep logic.
-        sched_task = get_sched_task()
-        if ct !== sched_task
-            return yieldto(sched_task)
+        # No tasks to run; if the current task is done/failed, switch to the
+        # scheduler task to run the thread sleep logic.
+        if istaskdone(ct)
+            sched_task = get_sched_task()
+            if ct !== sched_task
+                return yieldto(sched_task)
+            end
         end
         task = ccall(:jl_task_get_next, Ref{Task}, (Any, Any, Any), trypoptask, W, checktaskempty)
     end
