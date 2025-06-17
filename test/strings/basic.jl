@@ -1472,3 +1472,6 @@ end
     u = b"hello"
     @test eltype(u) === UInt8
 end
+
+@test_throws MethodError codeunit("Julia", Int32(2))
+@test codeunit("Julia", UInt8(2)) == codeunit("Julia", 2)
