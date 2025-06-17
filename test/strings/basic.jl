@@ -1464,4 +1464,15 @@ if Sys.iswindows()
     end
 end
 
+
 @test codeunit("Julia", UInt8(2)) == codeunit("Julia", 2)
+
+
+@testset "eltype for AbstractString subtypes" begin
+    @test eltype(String) == Char
+    @test eltype(SubString{String}) == Char
+
+    u = b"hello"
+    @test eltype(u) === UInt8
+end
+

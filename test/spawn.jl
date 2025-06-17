@@ -25,7 +25,7 @@ busybox_hash_correct(file) = bytes2hex(open(SHA.sha256, file)) == "ed2f95da95552
 
 function _tryonce_download_from_cache(desired_url::AbstractString)
     cache_url = "https://cache.julialang.org/$(desired_url)"
-    cache_output_filename = joinpath(mktempdir(), "busybox")
+    cache_output_filename = joinpath(mktempdir(), "busybox" * (Sys.iswindows() ? ".exe" : ""))
     cache_response = Downloads.request(
         cache_url;
         output = cache_output_filename,
