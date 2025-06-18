@@ -733,21 +733,24 @@ object (such as an array), and that object may still be modified. Additionally w
 to assign a value to a variable that is declared constant the following scenarios are possible:
 
 * Attempting to replace a constant without the const `keyword` is disallowed:
-```jldoctest
-julia> const x = 1.0
-1.0
 
-julia> x = 1
-ERROR: invalid assignment to constant x. This redefinition may be permitted using the `const` keyword.
-```
+  ```jldoctest
+  julia> const x = 1.0
+  1.0
+
+  julia> x = 1
+  ERROR: invalid assignment to constant x. This redefinition may be permitted using the `const` keyword.
+  ```
+
 * All other defefinitions of constants are permitted, but may cause significant re-compilation:
-```jldoctest
-julia> const y = 1.0
-1.0
 
-julia> const y = 2.0
-2.0
-```
+  ```jldoctest
+  julia> const y = 1.0
+  1.0
+
+  julia> const y = 2.0
+  2.0
+  ```
 
 !!! compat "Julia 1.12"
     Prior to julia 1.12, redefinition of constants was poorly supported. It was restricted to
