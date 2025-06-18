@@ -615,8 +615,8 @@ macro kwdef(expr)
             SQ = :($S{$(Q...)})
             typecalls = map(Q) do para
                 for arg in fieldsblock.args
-                isa(arg, Base.LineNumberNode) && continue
-                fname, ftype = arg.args
+                    isa(arg, Base.LineNumberNode) && continue
+                    fname, ftype = arg.args
                     ftype === para && return :(typeof($fname))
                 end
             end
