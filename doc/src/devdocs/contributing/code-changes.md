@@ -1,4 +1,6 @@
-### Contributing to core functionality or base libraries
+# Code changes
+
+## Contributing to core functionality or base libraries
 
 *By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
 
@@ -25,7 +27,7 @@ Add new code to Julia's base libraries as follows (this is the "basic" approach;
 
 Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git).
 
-#### Running specific tests
+### Running specific tests
 
 There are `make` targets for running specific tests:
 
@@ -35,7 +37,7 @@ You can also use the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `t
 
     ./usr/bin/julia test/runtests.jl bitarray math
 
-#### Modifying base more efficiently with Revise.jl
+### Modifying base more efficiently with Revise.jl
 
 [Revise](https://github.com/timholy/Revise.jl) is a package that
 tracks changes in source files and automatically updates function
@@ -74,7 +76,7 @@ system image before running the corresponding test. This can be useful as a shor
 on the command line (since tests aren't always designed to be run outside the
 runtest harness).
 
-### Contributing to the standard library
+## Contributing to the standard library
 
 The standard library (stdlib) packages are baked into the Julia system image.
 When running the ordinary test workflow on the stdlib packages, the system image
@@ -92,11 +94,11 @@ not override the package.
 
 Be sure to change the UUID value back before making the pull request.
 
-#### News-worthy changes
+### News-worthy changes
 
 For new functionality and other substantial changes, add a brief summary to `NEWS.md`. The news item should cross reference the pull request (PR) parenthetically, in the form `([#pr])`. To add the PR reference number, first create the PR, then push an additional commit updating `NEWS.md` with the PR reference number. We periodically run `./julia doc/NEWS-update.jl` from the julia directory to update the cross-reference links, but this should not be done in a typical PR in order to avoid conflicting commits.
 
-#### Annotations for new features, deprecations and behavior changes
+### Annotations for new features, deprecations and behavior changes
 
 API additions and deprecations, and minor behavior changes are allowed in minor version releases.
 For documented features that are part of the public API, a compatibility note should be added into
