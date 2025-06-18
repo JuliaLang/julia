@@ -17,8 +17,8 @@ The garbage collector automatically reclaims memory used by objects that are no 
 
 Julia uses a two-tier allocation strategy:
 
-* **Small objects** (≤ 2032 bytes): Allocated using a fast per-thread pool allocator
-* **Large objects** (> 2032 bytes): Allocated directly through the system's `malloc`
+* **Small objects** (currently ≤ 2032 bytes but may change): Allocated using a fast per-thread pool allocator
+* **Large objects** : Allocated directly through the system's `malloc`
 
 This hybrid approach optimizes for both allocation speed and memory efficiency, with the pool allocator providing fast allocation for the many small objects typical in Julia programs.
 
