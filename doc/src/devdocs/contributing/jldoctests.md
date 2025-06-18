@@ -10,7 +10,7 @@ The following are common situations where this may happen:
 - The output contains arrays with undefined memory (e.g. from `undef` or `similar`)
 - The output contains random numbers
 - The output contains timing information
-- The output contains file system pathts
+- The output contains file system paths
 
 
 ### Common filter sequences
