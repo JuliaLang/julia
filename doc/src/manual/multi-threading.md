@@ -84,8 +84,8 @@ julia> Threads.threadid()
 
 ### Multiple GC Threads
 
-The Garbage Collector (GC) can use multiple threads. The amount used is either half the number
-of compute worker threads or configured by either the `--gcthreads` command line argument or by using the
+The Garbage Collector (GC) can use multiple threads. The amount used by default matches the compute
+worker threads or can configured by either the `--gcthreads` command line argument or by using the
 [`JULIA_NUM_GC_THREADS`](@ref JULIA_NUM_GC_THREADS) environment variable.
 
 !!! compat "Julia 1.10"
