@@ -8532,3 +8532,20 @@ primitive type ByteString58434 (18 * 8) end
 
 @test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
 @test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)
+
+@testset "Tests for a_method_to_overwrite_in_test" begin
+    # Test the default method
+    result = a_method_to_overwrite_in_test()
+    @test result == 1
+
+    # Save original method by creating a backup
+    const old_func = a_method_to_overwrite_in_test
+
+    # Overwrite the method to return a different value
+    @eval Base a_method_to_overwrite_in_test() = 42
+    @test a_method_to_overwrite_in_test() == 42
+
+    # Restore the original method
+    @eval Base a_method_to_overwrite_in_test() = $(old_func())
+    @test a_method_to_overwrite_in_test() == 1
+end
