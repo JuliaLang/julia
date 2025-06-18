@@ -349,4 +349,5 @@ end
     s = "I'm a string!"
     @test codeunit(s) == UInt8
     @test codeunit(s, Int8(1)) == codeunit(s, 1)
+    @test codeunit("Julia", UInt8(2)) == codeunit("Julia", 2)
 end
