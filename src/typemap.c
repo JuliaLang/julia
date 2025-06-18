@@ -31,7 +31,7 @@ static jl_value_t *jl_type_extract_name(jl_value_t *t1 JL_PROPAGATES_ROOT, int i
         return jl_type_extract_name(jl_unwrap_vararg(t1), invariant);
     }
     else if (jl_is_typevar(t1)) {
-        return jl_type_extract_name(((jl_tvar_t*)t1)->ub, invariant);
+        return jl_type_extract_name(((jl_tvar_t*)t1)->ub, 0);
     }
     else if (t1 == jl_bottom_type || t1 == (jl_value_t*)jl_typeofbottom_type || t1 == (jl_value_t*)jl_typeofbottom_type->super) {
         return (jl_value_t*)jl_typeofbottom_type->name; // put Union{} and typeof(Union{}) and Type{Union{}} together for convenience

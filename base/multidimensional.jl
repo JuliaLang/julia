@@ -189,6 +189,24 @@ module IteratorsMD
                     step(r), ", ", length(r), ")")
     end
 
+    Base.in(x::CartesianIndex, r::AbstractRange{<:CartesianIndex}) = false
+    function Base.in(x::CartesianIndex{N}, r::AbstractRange{CartesianIndex{N}}) where {N}
+        isempty(r) && return false
+        f, st, l = first(r), step(r), last(r)
+        # The n-th element of the range is a CartesianIndex
+        # whose elements are the n-th along each dimension
+        # Find the first dimension along which the index is changing,
+        # so that n may be uniquely determined
+        for i in 1:N
+            iszero(st[i]) && continue
+            n = findfirst(==(x[i]), f[i]:st[i]:l[i])
+            isnothing(n) && return false
+            return r[n] == x
+        end
+        # if the step is zero, the elements are identical, so compare with the first
+        return x == f
+    end
+
     # Iteration
     const OrdinalRangeInt = OrdinalRange{Int, Int}
     """
@@ -454,12 +472,12 @@ module IteratorsMD
     end
     @inline function __inc(state::Tuple{Int,Int,Vararg{Int}}, indices::Tuple{OrdinalRangeInt,OrdinalRangeInt,Vararg{OrdinalRangeInt}})
         rng = indices[1]
-        I = state[1] + step(rng)
         if state[1] != last(rng)
+            I = state[1] + step(rng)
             return true, (I, tail(state)...)
         end
-        valid, I = __inc(tail(state), tail(indices))
-        return valid, (first(rng), I...)
+        valid, Itail = __inc(tail(state), tail(indices))
+        return valid, (first(rng), Itail...)
     end
 
     # 0-d cartesian ranges are special-cased to iterate once and only once

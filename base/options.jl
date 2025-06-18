@@ -60,10 +60,13 @@ struct JLOptions
     strip_ir::Int8
     permalloc_pkgimg::Int8
     heap_size_hint::UInt64
+    hard_heap_limit::UInt64
+    heap_target_increment::UInt64
     trace_compile_timing::Int8
     trim::Int8
     task_metrics::Int8
     timeout_for_safepoint_straggler_s::Int16
+    gc_sweep_always_full::Int8
 end
 
 # This runs early in the sysimage != is not defined yet

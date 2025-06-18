@@ -1327,9 +1327,8 @@ JL_DLLEXPORT jl_value_t *jl_lower(jl_value_t *expr, jl_module_t *inmodule,
                                   const char *filename, int line, size_t world, bool_t warn)
 {
     jl_value_t *core_lower = NULL;
-    if (jl_core_module) {
-        core_lower = jl_get_global(jl_core_module, jl_symbol("_lower"));
-    }
+    if (jl_core_module)
+        core_lower = jl_get_global_value(jl_core_module, jl_symbol("_lower"), jl_current_task->world_age);
     if (!core_lower || core_lower == jl_nothing) {
         return jl_fl_lower(expr, inmodule, filename, line, world, warn);
     }

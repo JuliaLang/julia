@@ -113,7 +113,9 @@ set_inlineable!(src::CodeInfo, val::Bool) =
 function inline_cost_clamp(x::Int)
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
-    return convert(InlineCostType, x)
+    x = ccall(:jl_encode_inlining_cost, UInt8, (InlineCostType,), x)
+    x = ccall(:jl_decode_inlining_cost, InlineCostType, (UInt8,), x)
+    return x
 end
 
 const SRC_FLAG_DECLARED_INLINE = 0x1

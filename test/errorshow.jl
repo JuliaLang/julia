@@ -857,7 +857,8 @@ end
 
     # Check error message first
     errorMsg = sprint(Base.showerror, ex)
-    @test occursin("FieldError: type FieldFoo has no field `c`", errorMsg)
+    @test occursin("FieldError: type", errorMsg)
+    @test occursin("FieldFoo has no field `c`", errorMsg)
     @test occursin("available fields: `a`, `b`", errorMsg)
     @test occursin("Available properties: `x`, `y`", errorMsg)
 
@@ -880,6 +881,24 @@ end
     # Check hint message
     hintExpected = "Did you mean to access dict values using key: `:c` ? Consider using indexing syntax dict[:c]\n"
     @test occursin(hintExpected, errorMsg)
+end
+
+module FieldErrorTest
+struct Point end
+p = Point()
+end
+
+@testset "FieldError with changing fields" begin
+    # https://discourse.julialang.org/t/better-error-message-for-modified-structs-in-julia-1-12/129265
+    err_str1 = @except_str FieldErrorTest.p.x FieldError
+    @test occursin("FieldErrorTest.Point", err_str1)
+    @eval FieldErrorTest struct Point{T}
+        x::T
+        y::T
+    end
+    err_str2 = @except_str FieldErrorTest.p.x FieldError
+    @test occursin("@world", err_str2)
+    @test occursin("FieldErrorTest.Point", err_str2)
 end
 
 # UndefVar error hints
@@ -941,6 +960,24 @@ end
                               "importing it from a particular module, or qualifying the name ",
                               "with the module it should come from.")
     @test_throws expected_message X.x
+end
+
+# Module for UndefVarError world age testing
+module TestWorldAgeUndef end
+
+@testset "UndefVarError world age hint" begin
+    ex = try
+        TestWorldAgeUndef.newvar
+    catch e
+        e
+    end
+    @test ex isa UndefVarError
+
+    Core.eval(TestWorldAgeUndef, :(newvar = 42))
+
+    err_str = sprint(Base.showerror, ex)
+    @test occursin("The binding may be too new: running in world age", err_str)
+    @test occursin("while current world is", err_str)
 end
 
 # test showing MethodError with type argument

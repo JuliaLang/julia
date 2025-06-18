@@ -41,11 +41,9 @@ buffer_writes(x::IO, bufsize=SZ_UNBUFFERED_IO) = x
 """
     isopen(object)::Bool
 
-Determine whether an object - such as a stream or timer
--- is not yet closed. Once an object is closed, it will never produce a new event.
-However, since a closed stream may still have data to read in its buffer,
-use [`eof`](@ref) to check for the ability to read data.
-Use the `FileWatching` package to be notified when a stream might be writable or readable.
+Determine whether an object, such as an IO or timer, is still open and hence active.
+
+See also: [`close`](@ref)
 
 # Examples
 ```jldoctest
@@ -63,9 +61,19 @@ false
 function isopen end
 
 """
-    close(stream)
+    close(io::IO)
 
-Close an I/O stream. Performs a [`flush`](@ref) first.
+Close `io`. Performs a [`flush`](@ref) first.
+
+Closing an IO signals that its underlying resources (OS handle, network
+connections, etc) should be destroyed.
+A closed IO is in an undefined state and should not be written to or read from.
+When attempting to do so, the IO may throw an exception, continue to behave
+normally, or read/write zero bytes, depending on the implementation.
+However, implementations should make sure that reading to or writing from a
+closed IO does not cause undefined behaviour.
+
+See also: [`isopen`](@ref)
 """
 function close end
 
@@ -97,9 +105,11 @@ julia> read(io, String)
 function closewrite end
 
 """
-    flush(stream)
+    flush(io::IO)
 
-Commit all currently buffered writes to the given stream.
+Commit all currently buffered writes to the given io.
+This has a default implementation `flush(::IO) = nothing`, so may be called
+in generic IO code.
 """
 function flush end
 
@@ -277,13 +287,13 @@ julia> io = IOBuffer();
 julia> write(io, "JuliaLang is a GitHub organization.", " It has many members.")
 56
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization. It has many members."
 
 julia> write(io, "Sometimes those members") + write(io, " write documentation.")
 44
 
-julia> String(take!(io))
+julia> takestring!(io)
 "Sometimes those members write documentation."
 ```
 User-defined plain-data types without `write` methods can be written when wrapped in a `Ref`:
@@ -544,7 +554,7 @@ julia> rm("my_file.txt")
 """
 readuntil(filename::AbstractString, delim; kw...) = open(io->readuntil(io, delim; kw...), convert(String, filename)::String)
 readuntil(stream::IO, delim::UInt8; kw...) = _unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
-readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = String(_unsafe_take!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...)))
+readuntil(stream::IO, delim::Union{AbstractChar, AbstractString}; kw...) = takestring!(copyuntil(IOBuffer(sizehint=16), stream, delim; kw...))
 readuntil(stream::IO, delim::T; keep::Bool=false) where T = _copyuntil(Vector{T}(), stream, delim, keep)
 
 
@@ -566,10 +576,10 @@ Similar to [`readuntil`](@ref), which returns a `String`; in contrast,
 ```jldoctest
 julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
-julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", 'L')))
+julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", 'L'))
 "Julia"
 
-julia> String(take!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true)))
+julia> takestring!(copyuntil(IOBuffer(), "my_file.txt", '.', keep = true))
 "JuliaLang is a GitHub organization."
 
 julia> rm("my_file.txt")
@@ -616,8 +626,7 @@ Logan
 """
 readline(filename::AbstractString; keep::Bool=false) =
     open(io -> readline(io; keep), filename)
-readline(s::IO=stdin; keep::Bool=false) =
-    String(_unsafe_take!(copyline(IOBuffer(sizehint=16), s; keep)))
+readline(s::IO=stdin; keep::Bool=false) = takestring!(copyline(IOBuffer(sizehint=16), s; keep))
 
 """
     copyline(out::IO, io::IO=stdin; keep::Bool=false)
@@ -642,10 +651,10 @@ See also [`copyuntil`](@ref) for reading until more general delimiters.
 ```jldoctest
 julia> write("my_file.txt", "JuliaLang is a GitHub organization.\\nIt has many members.\\n");
 
-julia> String(take!(copyline(IOBuffer(), "my_file.txt")))
+julia> takestring!(copyline(IOBuffer(), "my_file.txt"))
 "JuliaLang is a GitHub organization."
 
-julia> String(take!(copyline(IOBuffer(), "my_file.txt", keep=true)))
+julia> takestring!(copyline(IOBuffer(), "my_file.txt", keep=true))
 "JuliaLang is a GitHub organization.\\n"
 
 julia> rm("my_file.txt")
@@ -1290,7 +1299,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
         buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
         empty!(chunks) # will cause next iteration to terminate
         seekend(r.itr.stream) # reposition to end of stream for isdone
-        s = String(_unsafe_take!(buf))
+        s = unsafe_takestring!(buf)
     else
         # extract the string from chunks[ichunk][inewline+1] to chunks[jchunk][jnewline]
         if ichunk == jchunk # common case: current and previous newline in same chunk
@@ -1307,7 +1316,7 @@ function iterate(r::Iterators.Reverse{<:EachLine}, state)
             end
             write(buf, view(chunks[jchunk], 1:jnewline))
             buf.size = _stripnewline(r.itr.keep, buf.size, buf.data)
-            s = String(_unsafe_take!(buf))
+            s = unsafe_takestring!(buf)
 
             # overwrite obsolete chunks (ichunk+1:jchunk)
             i = jchunk

@@ -2218,7 +2218,7 @@ const include_callbacks = Any[]
 
 # used to optionally track dependencies when requiring a module:
 const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", because they are explicitly loaded, and the process should try to avoid invalidating them
-const _require_dependencies = Any[] # a list of (mod, abspath, fsize, hash, mtime) tuples that are the file dependencies of the module currently being precompiled
+const _require_dependencies = Any[] # a list of (mod::Module, abspath::String, fsize::UInt64, hash::UInt32, mtime::Float64) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 
 function _include_dependency(mod::Module, _path::AbstractString; track_content::Bool=true,
@@ -2244,9 +2244,9 @@ function _include_dependency!(dep_list::Vector{Any}, track_dependencies::Bool,
     else
         @lock require_lock begin
             if track_content
-                hash = isdir(path) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r")
+                hash = (isdir(path) ? _crc32c(join(readdir(path))) : open(_crc32c, path, "r"))::UInt32
                 # use mtime=-1.0 here so that fsize==0 && mtime==0.0 corresponds to a missing include_dependency
-                push!(dep_list, (mod, path, filesize(path), hash, -1.0))
+                push!(dep_list, (mod, path, UInt64(filesize(path)), hash, -1.0))
             else
                 push!(dep_list, (mod, path, UInt64(0), UInt32(0), mtime(path)))
             end
@@ -3346,7 +3346,7 @@ mutable struct CacheHeaderIncludes
     const modpath::Vector{String}   # seemingly not needed in Base, but used by Revise
 end
 
-function CacheHeaderIncludes(dep_tuple::Tuple{Module, String, Int64, UInt32, Float64})
+function CacheHeaderIncludes(dep_tuple::Tuple{Module, String, UInt64, UInt32, Float64})
     return CacheHeaderIncludes(PkgId(dep_tuple[1]), dep_tuple[2:end]..., String[])
 end
 

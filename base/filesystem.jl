@@ -141,7 +141,7 @@ import .Base:
     bytesavailable, position, read, read!, readbytes!, readavailable, seek, seekend, show,
     skip, stat, unsafe_read, unsafe_write, write, transcode, uv_error, _uv_error,
     setup_stdio, rawhandle, OS_HANDLE, INVALID_OS_HANDLE, windowserror, filesize,
-    isexecutable, isreadable, iswritable, MutableDenseArrayType, truncate
+    isexecutable, isreadable, iswritable, MutableDenseArrayType, truncate, unsafe_takestring!
 
 import .Base.RefValue
 

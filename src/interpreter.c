@@ -101,9 +101,8 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 
     fname = eval_value(args[0], s);
     jl_methtable_t *mt = NULL;
-    if (jl_typetagis(fname, jl_methtable_type)) {
+    if (jl_is_mtable(fname))
         mt = (jl_methtable_t*)fname;
-    }
     atypes = eval_value(args[1], s);
     meth = eval_value(args[2], s);
     jl_method_t *ret = jl_method_def((jl_svec_t*)atypes, mt, (jl_code_info_t*)meth, s->module);
@@ -162,17 +161,19 @@ static jl_value_t *do_invoke(jl_value_t **args, size_t nargs, interpreter_state 
     return result;
 }
 
-jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
+// get the global (throwing if null) in the current world
+jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e, size_t world)
 {
-    jl_value_t *v = jl_get_global(m, e);
+    jl_value_t *v = jl_get_global_value(m, e, world);
     if (v == NULL)
         jl_undefined_var_error(e, (jl_value_t*)m);
     return v;
 }
 
-jl_value_t *jl_eval_globalref(jl_globalref_t *g)
+// get the global (throwing if null) in the current world, optimized
+jl_value_t *jl_eval_globalref(jl_globalref_t *g, size_t world)
 {
-    jl_value_t *v = jl_get_globalref_value(g);
+    jl_value_t *v = jl_get_globalref_value(g, world);
     if (v == NULL)
         jl_undefined_var_error(g->name, (jl_value_t*)g->mod);
     return v;
@@ -217,10 +218,10 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return jl_quotenode_value(e);
     }
     if (jl_is_globalref(e)) {
-        return jl_eval_globalref((jl_globalref_t*)e);
+        return jl_eval_globalref((jl_globalref_t*)e, jl_current_task->world_age);
     }
     if (jl_is_symbol(e)) {  // bare symbols appear in toplevel exprs not wrapped in `thunk`
-        return jl_eval_global_var(s->module, (jl_sym_t*)e);
+        return jl_eval_global_var(s->module, (jl_sym_t*)e, jl_current_task->world_age);
     }
     if (jl_is_pinode(e)) {
         jl_value_t *val = eval_value(jl_fieldref_noalloc(e, 0), s);
