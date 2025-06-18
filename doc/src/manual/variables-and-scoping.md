@@ -742,7 +742,7 @@ to assign a value to a variable that is declared constant the following scenario
   ERROR: invalid assignment to constant x. This redefinition may be permitted using the `const` keyword.
   ```
 
-* All other defefinitions of constants are permitted, but may cause significant re-compilation:
+* All other definitions of constants are permitted, but may cause significant re-compilation:
 
   ```jldoctest
   julia> const y = 1.0
