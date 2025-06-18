@@ -1434,6 +1434,7 @@ end
     c::S = []
     a::Bool = true
     b::T = 2.0
+    d::T = 1.0
 end
 
 @testset "@kwdef with parametric type" begin
@@ -1444,6 +1445,7 @@ end
         @test tpt.a # == true
         @test tpt.b == 2
         @test tpt.c == []
+        @test tpt.d == 1
     end
 end
 
