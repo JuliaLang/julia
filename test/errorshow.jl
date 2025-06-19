@@ -1019,6 +1019,20 @@ for (func,str) in ((TestMethodShadow.:+,":+"), (TestMethodShadow.:(==),":(==)"),
     @test occursin("You may have intended to import Base.$str", sprint(Base.showerror, ex))
 end
 
+# Test hint for functions in modules of argument types (issue #58682)
+module TestModuleHint
+    struct Bar end
+    length(x::Bar) = 42
+end
+let ex = try
+        # Call Base.length on TestModuleHint.Bar - should suggest importing TestModuleHint.length
+        length(TestModuleHint.Bar())
+    catch e
+        e
+    end::MethodError
+    @test occursin("may have intended to extend", sprint(Base.showerror, ex))
+end
+
 # Test that implementation detail of include() is hidden from the user by default
 let bt = try
         @noinline include("testhelpers/include_error.jl")
