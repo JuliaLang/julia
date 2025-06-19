@@ -619,11 +619,21 @@ macro kwdef(expr)
                     fname, ftype = arg.args
                     ftype === para && return :(typeof($fname))
                 end
+                return para
             end
-            ST = :($S{$(typecalls...)})
-            body1 = Expr(:block, __source__, Expr(:call, esc(ST), fieldnames...))
-            sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
-            def1 = Expr(:function, sig1, body1)
+            unused = [x for x in Q if x in typecalls]
+            def1 = if typecalls != unused
+                ST = :($S{$(typecalls...)})
+                body1 = Expr(:block, __source__, Expr(:call, esc(ST), fieldnames...))
+                sig1 = if isempty(unused)
+                    Expr(:call, esc(S), Expr(:parameters, parameters...))
+                else
+                    Expr(:call, esc(S), Expr(:parameters, parameters...), esc.(unused)...)
+                end
+                Expr(:function, sig1, body1)
+            else
+                nothing
+            end
             body2 = Expr(:block, __source__, Expr(:call, esc(SQ), fieldnames...))
             sig2 = :($(Expr(:call, esc(SQ), Expr(:parameters, parameters...))) where {$(esc.(P)...)})
             def2 = Expr(:function, sig2, body2)
