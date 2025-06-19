@@ -2296,3 +2296,17 @@ end
     v2 = view(A, Base.IdentityUnitRange(1:length(A)))
     @test sum(x for x in v2) == sum(A)
 end
+
+
+macro foo_54417(x,i)
+    quote
+        val = $x
+        @inbounds $x[$i]
+        val
+    end
+end
+
+@testset "inbounds hygien confusion" begin
+    z = [1,2,3]
+    @test (@foo_54417 z 1) == z
+end
