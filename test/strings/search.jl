@@ -563,3 +563,11 @@ for T = (UInt, BigInt)
         @test findprev(isletter, astr, T(x)) isa Int
     end
 end
+
+@testset "FwCharPosIter constructor" begin
+    s = "hello world"
+    iter = FwCharPosIter(s, 'o')
+    @test iter.string == s
+    @test iter.char == 'o'
+    @test iter.last_char_byte == last_utf8_byte('o')
+end

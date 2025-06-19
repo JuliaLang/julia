@@ -54,10 +54,10 @@ struct FwCharPosIter{S}
     last_char_byte::UInt8
 end
 
-function FwCharPosIter(s::Union{String, SubString{String}}, c::AbstractChar)
-    char = Char(c)::Char
+function FwCharPosIter(s::S, c::AbstractChar) where S <: AbstractString
+    char = Char(c)
     byte = last_utf8_byte(char)
-    FwCharPosIter{typeof(s)}(s, char, byte)
+    return FwCharPosIter{S}(s, char, byte)
 end
 
 # i is the index in the string to search from.
