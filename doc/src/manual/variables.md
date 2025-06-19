@@ -3,21 +3,17 @@
 A variable, in Julia, is a name associated (or bound) to a value. It's useful when you want to
 store a value (that you obtained after some math, for example) for later use. For example:
 
-```julia-repl
-# Assign the value 10 to the variable x
-julia> x = 10
+```jldoctest
+julia> x = 10   # Assign the value 10 to the variable x
 10
 
-# Doing math with x's value
-julia> x + 1
+julia> x + 1    # Doing math with x's value
 11
 
-# Reassign x's value
-julia> x = 1 + 1
+julia> x = 1 + 1   # Reassign x's value
 2
 
-# You can assign values of other types, like strings of text
-julia> x = "Hello World!"
+julia> x = "Hello World!"   # You can assign values of other types, like strings of text
 "Hello World!"
 ```
 
@@ -125,7 +121,7 @@ it from `+ ᵃx` where `ᵃx` is the variable name.
 
 A particular class of variable names is one that contains only underscores. These identifiers are write-only. I.e. they can only be assigned values, which are immediately discarded, and their values cannot be used in any way.
 
-```julia-repl
+```jldoctest
 julia> x, ___ = size([2 2; 1 1])
 (2, 2)
 
@@ -138,12 +134,18 @@ ERROR: syntax: all-underscore identifiers are write-only and their values cannot
 
 The only explicitly disallowed names for variables are the names of the built-in [Keywords](@ref Keywords):
 
-```julia-repl
+```jldoctest
 julia> else = false
-ERROR: syntax: unexpected "else"
+ERROR: ParseError:
+# Error @ none:1:1
+else = false
+└──┘ ── invalid identifier
 
 julia> try = "No"
-ERROR: syntax: unexpected "="
+ERROR: ParseError:
+# Error @ none:1:1
+try = "No"
+└────────┘ ── try without catch or finally
 ```
 
 Some Unicode characters are considered to be equivalent in identifiers.

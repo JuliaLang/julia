@@ -28,7 +28,7 @@ a global variable by the same name is allowed or not.
 !!! tip "A Common Confusion"
     If you run into an unexpectedly undefined variable,
 
-    ```julia
+    ```julia ; nodoctest = "Pseudocode"
     # Print the numbers 1 through 5
     i = 0
     while i < 5
@@ -40,7 +40,7 @@ a global variable by the same name is allowed or not.
     a simple fix is to change all global variable definitions into local definitions
     by wrapping the code in a `let` block or `function`.
 
-    ```julia
+    ```julia ; nodoctest = "Pseudocode"
     # Print the numbers 1 through 5
     let i = 0
         while i < 5
@@ -370,7 +370,7 @@ scope rule applies and `x` is created as local to the `for` loop and therefore g
 undefined after the loop executes. Next, let's consider the body of `sum_to_def` extracted into global
 scope, fixing its argument to `n = 10`
 
-```julia
+```julia ; nodoctest = "Specifically shows scope differences"
 s = 0
 for i = 1:10
     t = s + i
@@ -472,7 +472,7 @@ years were confused about this behavior and complained that it was complicated a
 explain and understand. Fair point. Second, and arguably worse, is that it's bad for programming "at
 scale." When you see a small piece of code in one place like this, it's quite clear what's going on:
 
-```julia
+```julia ; nodoctest="Expects global file scope"
 s = 0
 for i = 1:10
     s += i
@@ -483,7 +483,7 @@ Obviously the intention is to modify the existing global variable `s`. What else
 However, not all real world code is so short or so clear. We found that code like the following
 often occurs in the wild:
 
-```julia
+```julia ; nodoctest="Expects global file scope"
 x = 123
 
 # much later
