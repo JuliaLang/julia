@@ -377,13 +377,26 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
+function _checkbounds_array(::Type{Bool}, A::Union{Array, GenericMemory}, i::Int)
+    @inline
+    ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A)))
+end
+function _checkbounds_array(A::Union{Array, GenericMemory}, i::Int)
+    @inline
+    _checkbounds_array(Bool, A, i) || throw_boundserror(A, (i,))
+end
+
 default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemory{:atomic}) = :monotonic
 default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
-getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryrefnew(memoryrefnew(A), i, @_boundscheck), default_access_order(A), false))
+function getindex(A::GenericMemory, i::Int)
+    @_noub_if_noinbounds_meta
+    (@_boundscheck) && _checkbounds_array(A, i)
+    memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
+end
+
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
@@ -949,13 +962,13 @@ end
 # linear indexing
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
+    @boundscheck _checkbounds_array(A, i)
     memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
 end
 # simple Array{Any} operations needed for bootstrap
 function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
+    @boundscheck _checkbounds_array(A, i)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
