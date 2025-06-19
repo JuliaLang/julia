@@ -2096,6 +2096,7 @@ end
 @nospecs function memoryref_tfunc(𝕃::AbstractLattice, ref, idx, boundscheck)
     memoryref_builtin_common_errorcheck(ref, Const(:not_atomic), boundscheck) || return Bottom
     hasintersect(widenconst(idx), Int) || return Bottom
+    hasintersect(widenconst(ref), GenericMemory) && return memoryref_tfunc(𝕃, ref)
     return ref
 end
 add_tfunc(memoryrefnew, 1, 3, memoryref_tfunc, 1)
