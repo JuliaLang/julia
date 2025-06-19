@@ -168,6 +168,14 @@ end
 rem(a::T, b::MultiplicativeInverse{T}) where {T} =
     a - div(a, b)*b.divisor
 
+mod(a::T, b::UnsignedMultiplicativeInverse{T}) where {T} =
+    rem(a, b)
+
+function mod(a::T, b::SignedMultiplicativeInverse{T}) where {T}
+    r = rem(a, b)
+    signbit(a) == signbit(b.divisor) ? r : r + b.divisor
+end
+
 function divrem(a::T, b::MultiplicativeInverse{T}) where T
     d = div(a, b)
     (d, a - d*b.divisor)
