@@ -54,7 +54,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
 
 * Review discussions on the [Julia Discourse forum](https://discourse.julialang.org).
 
-* If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening. 
+* If your pull request contains substantial contributions from a generative AI tool, please disclose so with details, and review all changes before opening.
 
 * Relax and have fun!
 
