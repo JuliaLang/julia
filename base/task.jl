@@ -937,7 +937,6 @@ end
 
 function enq_work(t::Task)
     (t._state === task_state_runnable && t.queue === nothing) || error("schedule: Task not runnable")
-
     # Sticky tasks go into their thread's work queue.
     if t.sticky
         tid = Threads.threadid(t)
@@ -968,19 +967,40 @@ function enq_work(t::Task)
             ccall(:jl_set_task_tid, Cint, (Any, Cint), t, tid-1)
             push!(workqueue_for(tid), t)
         else
-            # Otherwise, put the task in the multiqueue.
-            Partr.multiq_insert(t, t.priority)
+            # Otherwise, push the task to the scheduler
+            Scheduler.enqueue!(t)
             tid = 0
         end
     end
-    ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+
+    if (tid == 0 && Threads.threadpool(t) == :default)
+        ccall(:jl_wake_any_thread, Cvoid, (Any,), current_task())
+    else
+        ccall(:jl_wakeup_thread, Cvoid, (Int16,), (tid - 1) % Int16)
+    end
     return t
 end
+
+const ChildFirst = false
 
 function schedule(t::Task)
     # [task] created -scheduled-> wait_time
     maybe_record_enqueued!(t)
-    enq_work(t)
+    if ChildFirst
+        ct = current_task()
+        if ct.sticky || t.sticky
+            maybe_record_enqueued!(t)
+            enq_work(t)
+        else
+            maybe_record_enqueued!(t)
+            enq_work(ct)
+            yieldto(t)
+        end
+    else
+        maybe_record_enqueued!(t)
+        enq_work(t)
+    end
+    return t
 end
 
 """
@@ -1186,10 +1206,11 @@ function trypoptask(W::StickyWorkqueue)
         end
         return t
     end
-    return Partr.multiq_deletemin()
+    t = Scheduler.dequeue!()
+    return t
 end
 
-checktaskempty = Partr.multiq_check_empty
+checktaskempty = Scheduler.checktaskempty
 
 function wait()
     ct = current_task()
