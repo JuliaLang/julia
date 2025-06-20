@@ -4710,7 +4710,7 @@ static jl_cgval_t emit_memoryref_direct(jl_codectx_t &ctx, const jl_cgval_t &mem
         ctx.builder.SetInsertPoint(endBB);
     }
     Value *data;
-    
+
     if ((!isboxed && isunion) || isghost) {
         data = idx0;
 
