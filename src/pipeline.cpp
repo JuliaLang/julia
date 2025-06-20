@@ -153,7 +153,9 @@ namespace {
             //     CodeGenOpts.getSanitizeAddressDtor();
             AddressSanitizerOptions Opts;
             // Apple's addrsan really wants to be used with Apple LLVM.
-            Opts.InsertVersionCheck = !__APPLE__;
+    #ifdef __APPLE__
+            Opts.InsertVersionCheck = false;
+    #endif
             // Opts.CompileKernel = CompileKernel;
             // Opts.Recover = CodeGenOpts.SanitizeRecover.has(Mask);
             // Opts.UseAfterScope = CodeGenOpts.SanitizeAddressUseAfterScope;
