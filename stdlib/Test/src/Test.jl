@@ -230,7 +230,8 @@ struct Error <: Result
         end
         if test_type === :test_error || test_type === :nontest_error
             bt_str = try # try the latest world for this, since we might have eval'd new code for show
-                    Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
+                    # Apply REPL backtrace scrubbing to hide REPL internals, similar to how REPL.jl handles it
+                    Base.invokelatest(sprint, Base.show_exception_stack, Base.scrub_repl_backtrace(bt); context=stdout)
                 catch ex
                     "#=ERROR showing exception stack=# " *
                         try
