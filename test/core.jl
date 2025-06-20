@@ -4679,8 +4679,28 @@ end
 @test Macro_Yielding_Global_Assignment.x == 2
 
 # issue #15718
-@test :(f($NaN)) == :(f($NaN))
-@test isequal(:(f($NaN)), :(f($NaN)))
+function compare_test(x, y)
+    lx = Meta.lower(@__MODULE__, x)
+    ly = Meta.lower(@__MODULE__, y)
+    if isequal(x, y)
+        @test x == y
+        @test hash(x) == hash(y)
+        @test isequal(lx, ly)
+        @test lx == ly
+        @test hash(lx) == hash(ly)
+        true
+    else
+        @test x != y
+        @test !isequal(lx, ly)
+        @test lx != ly
+        false
+    end
+end
+@test compare_test(:(f($NaN)), :(f($NaN)))
+@test !compare_test(:(1 + (1 * 1)), :(1 + (1 * 1.0)))
+@test compare_test(:(1 + (1 * $NaN)), :(1 + (1 * $NaN)))
+@test compare_test(QuoteNode(NaN), QuoteNode(NaN))
+@test !compare_test(QuoteNode(1), QuoteNode(1.0))
 
 # PR #16011 Make sure dead code elimination doesn't delete push and pop
 # of metadata

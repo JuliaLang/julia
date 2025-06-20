@@ -904,7 +904,7 @@ end
 
 ## Iteration ##
 
-iterate(A::Array, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
+iterate(A::Array, i=1) = (@inline; _iterate_array(A, i))
 
 ## Indexing: getindex ##
 

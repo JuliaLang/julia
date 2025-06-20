@@ -225,7 +225,12 @@ Memory{T}(x::AbstractArray{S,1}) where {T,S} = copyto_axcheck!(Memory{T}(undef, 
 
 ## Iteration ##
 
-iterate(A::Memory, i=1) = (@inline; (i - 1)%UInt < length(A)%UInt ? (@inbounds A[i], i + 1) : nothing)
+function _iterate_array(A::Union{Memory, Array}, i::Int)
+    @inline
+    (i - 1)%UInt < length(A)%UInt ? (A[i], i + 1) : nothing
+end
+
+iterate(A::Memory, i=1) = (@inline; _iterate_array(A, i))
 
 ## Indexing: getindex ##
 

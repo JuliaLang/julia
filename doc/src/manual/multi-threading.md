@@ -47,7 +47,7 @@ $ julia --threads 4
 
 Let's verify there are 4 threads at our disposal.
 
-```julia-repl
+```jldoctest; filter = r"[0-9]+"
 julia> Threads.nthreads()
 4
 ```
