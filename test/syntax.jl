@@ -2752,6 +2752,19 @@ import .TestImportAs.Mod2 as M2
 @test !@isdefined(Mod2)
 @test M2 === TestImportAs.Mod2
 
+# `using Foo: _` is special cased to not warn so it can be used to load
+# a module only for its side effects. (#58667)
+side_effect_triggered = Ref(false)
+module Mod58667
+__init__() = (parentmodule(@__MODULE__).side_effect_triggered[] = true; nothing)
+end
+@test_nowarn using .Mod58667: _
+@test side_effect_triggered[] # module was loaded!
+# does not warn if you import again:
+@test_nowarn using .Mod58667: _
+# but importing a non-existent non-`_` binding does warn:
+@test_warn "WARNING: Imported binding Mod58667.y was undeclared at import time during import to Main." using .Mod58667: y
+
 # 57702: nearby bindings shouldn't cause us to closure-convert in import/using
 module OddImports
 using Test
