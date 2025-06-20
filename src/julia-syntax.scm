@@ -1023,8 +1023,8 @@
        ;; added alongside (replacing) the old ones, than to not have them and need them.
        ;; Commonly Revise.jl should be used to figure out actually which methods should
        ;; actually be deleted or added anew.
-       ,(if (null? defs)
-          `(call (core _defaultctors) ,newdef (inert ,loc))
+       (call (core _defaultctors) ,newdef (inert ,loc) ,(if (null? defs) '(true) '(false)))
+       ,(if (null? defs) '()
           `(scope-block
             (block
              (hardscope)
