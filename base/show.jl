@@ -538,7 +538,7 @@ function active_module()
     return invokelatest(active_module, active_repl)::Module
 end
 
-module UsesCoreAndBaseOnly
+module UsesBaseOnly
 end
 
 function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
@@ -550,8 +550,8 @@ function show_function(io::IO, f::Function, compact::Bool, fallback::Function)
     elseif isdefined(fname, :module) && isdefinedglobal(fname.module, fname.singletonname) && isconst(fname.module, fname.singletonname) &&
             getglobal(fname.module, fname.singletonname) === f
         # this used to call the removed internal function `is_exported_from_stdlib`, which effectively
-        # just checked for exports from Core and Base.
-        mod = get(io, :module, UsesCoreAndBaseOnly)
+        # just checked for exports from Base.
+        mod = get(io, :module, UsesBaseOnly)
         if !(isvisible(fname.singletonname, fname.module, mod) || fname.module === mod)
             print(io, fname.module, ".")
         end
@@ -825,7 +825,7 @@ function make_typealiases(@nospecialize(x::Type))
     Any === x && return aliases, Union{}
     x <: Tuple && return aliases, Union{}
     mods = modulesof!(Set{Module}(), x)
-    Core in mods && push!(mods, Base)
+    replace!(mods, Core=>Base)
     vars = Dict{Symbol,TypeVar}()
     xenv = UnionAll[]
     each = Any[]
@@ -843,7 +843,7 @@ function make_typealiases(@nospecialize(x::Type))
                     ti === Union{} && continue
                     # make sure this alias wasn't from an unrelated part of the Union
                     mod2 = modulesof!(Set{Module}(), alias)
-                    mod in mod2 || (mod === Base && Core in mods) || continue
+                    mod in mod2 || (mod === Base && Core in mod2) || continue
                     env = env::SimpleVector
                     applied = alias
                     if !isempty(env)

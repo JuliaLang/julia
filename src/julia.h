@@ -438,10 +438,11 @@ typedef struct _jl_code_instance_t {
     jl_value_t *rettype_const; // inferred constant return value, or null
 
     // Inferred result. When part of the runtime cache, either
-    // - A jl_code_info_t (may be compressed) containing the inferred IR
+    // - A jl_code_info_t (may be compressed as a String) containing the inferred IR
     // - jl_nothing, indicating that inference was completed, but the result was
     //               deleted to save space.
-    // - null, indicating that inference was not yet completed or did not succeed
+    // - UInt8, indicating that inference recorded the estimated inlining cost, but deleted the result to save space
+    // - NULL, indicating that inference was not yet completed or did not succeed
     _Atomic(jl_value_t *) inferred;
     _Atomic(jl_debuginfo_t *) debuginfo; // stored information about edges from this object (set once, with a happens-before both source and invoke)
     _Atomic(jl_svec_t *) edges; // forward edge info
@@ -2311,6 +2312,8 @@ JL_DLLEXPORT jl_value_t *jl_uncompress_argname_n(jl_value_t *syms, size_t i);
 JL_DLLEXPORT struct jl_codeloc_t jl_uncompress1_codeloc(jl_value_t *cl, size_t pc) JL_NOTSAFEPOINT;
 JL_DLLEXPORT jl_value_t *jl_compress_codelocs(int32_t firstline, jl_value_t *codelocs, size_t nstmts);
 JL_DLLEXPORT jl_value_t *jl_uncompress_codelocs(jl_value_t *cl, size_t nstmts);
+JL_DLLEXPORT uint8_t jl_encode_inlining_cost(uint16_t inlining_cost) JL_NOTSAFEPOINT;
+JL_DLLEXPORT uint16_t jl_decode_inlining_cost(uint8_t inlining_cost) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT int jl_is_operator(const char *sym);
 JL_DLLEXPORT int jl_is_unary_operator(const char *sym);

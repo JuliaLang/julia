@@ -2488,6 +2488,7 @@ end
 @test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
+@test string(Union{Array, Memory}) == "Union{Array, Memory}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

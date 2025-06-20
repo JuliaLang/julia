@@ -47,7 +47,7 @@ $ julia --threads 4
 
 Let's verify there are 4 threads at our disposal.
 
-```julia-repl
+```jldoctest; filter = r"[0-9]+"
 julia> Threads.nthreads()
 4
 ```
@@ -212,7 +212,7 @@ Note that [`Threads.@threads`](@ref) does not have an optional reduction paramet
 
 ### Using `@threads` without data-races
 
-The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just known that a data race can result in incorrect results and dangerous errors.
+The concept of a data-race is elaborated on in ["Communication and data races between threads"](@ref man-communication-and-data-races). For now, just know that a data race can result in incorrect results and dangerous errors.
 
 Lets say we want to make the function `sum_single` below multithreaded.
 ```julia-repl
