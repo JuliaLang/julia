@@ -301,7 +301,7 @@ bad_read2(a) # it is NOT safe to access `a` here
 ```
 
 ### [Using locks to avoid data-races](@id man-using-locks)
-An important tool to avoid data races, and thereby write thread-safe code, is the concept of a "lock". A lock can be locked and unlocked. If a thread has locked a lock, and not unlocked it, it is said to "hold" the lock. If there is only one lock, and we write code the requires holding the lock to access some data, we can ensure that multiple threads will never access the same data simultaneously.
+An important tool for avoiding data races, and writing thread-safe code in general, is the concept of a "lock". A lock can be locked and unlocked. If a thread has locked a lock, and not unlocked it, it is said to "hold" the lock. If there is only one lock, and we write code the requires holding the lock to access some data, we can ensure that multiple threads will never access the same data simultaneously.
 
 Note that the link between a lock and a variable is made by the programmer, and not the program. A helper-type [`Base.Lockable`](@ref) exists that helps you associate a lock and a value. This is often more safe than keeping track yourself, and is detailed under [Using Base.Lockable to associate a lock and a value](@ref man-lockable).
 
