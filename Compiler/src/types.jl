@@ -180,6 +180,9 @@ Parameters that control abstract interpretation-based type inference operation.
   [`Base.@constprop :none`](@ref Base.@constprop) can have a more fine-grained control on
   this configuration with per-method annotation basis.
 ---
+  - `inf_params.ipo_slot_refinement::Bool = true`\\
+  If `false`, disables interprocedural slot refinement, i.e. the propagation of information obtained from callees such as type assertions on slot arguments mapping back to slots in the caller.
+---
 - `inf_params.aggressive_constant_propagation::Bool = false`\\
   If `true`, forces constant propagation on any methods when any extended lattice
   information available. [`Base.@constprop :aggressive`](@ref Base.@constprop) can have a
@@ -203,6 +206,7 @@ struct InferenceParams
     max_tuple_splat::Int
     tuple_complexity_limit_depth::Int
     ipo_constant_propagation::Bool
+    ipo_slot_refinement::Bool
     aggressive_constant_propagation::Bool
     assume_bindings_static::Bool
     ignore_recursion_hardlimit::Bool
@@ -215,6 +219,7 @@ struct InferenceParams
         max_tuple_splat::Int,
         tuple_complexity_limit_depth::Int,
         ipo_constant_propagation::Bool,
+        ipo_slot_refinement::Bool,
         aggressive_constant_propagation::Bool,
         assume_bindings_static::Bool,
         ignore_recursion_hardlimit::Bool,
@@ -227,6 +232,7 @@ struct InferenceParams
             max_tuple_splat,
             tuple_complexity_limit_depth,
             ipo_constant_propagation,
+            ipo_slot_refinement,
             aggressive_constant_propagation,
             assume_bindings_static,
             ignore_recursion_hardlimit,
@@ -242,6 +248,7 @@ function InferenceParams(
         #=max_tuple_splat::Int=# 32,
         #=tuple_complexity_limit_depth::Int=# 3,
         #=ipo_constant_propagation::Bool=# true,
+        #=ipo_slot_refinement::Bool=# false, # TODO: default to `true` before merge!
         #=aggressive_constant_propagation::Bool=# false,
         #=assume_bindings_static::Bool=# false,
         #=ignore_recursion_hardlimit::Bool=# false,
@@ -253,6 +260,7 @@ function InferenceParams(
     max_tuple_splat::Int = params.max_tuple_splat,
     tuple_complexity_limit_depth::Int = params.tuple_complexity_limit_depth,
     ipo_constant_propagation::Bool = params.ipo_constant_propagation,
+    ipo_slot_refinement::Bool = params.ipo_slot_refinement,
     aggressive_constant_propagation::Bool = params.aggressive_constant_propagation,
     assume_bindings_static::Bool = params.assume_bindings_static,
     ignore_recursion_hardlimit::Bool = params.ignore_recursion_hardlimit,
@@ -265,6 +273,7 @@ function InferenceParams(
         max_tuple_splat,
         tuple_complexity_limit_depth,
         ipo_constant_propagation,
+        ipo_slot_refinement,
         aggressive_constant_propagation,
         assume_bindings_static,
         ignore_recursion_hardlimit,

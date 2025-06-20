@@ -174,7 +174,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 this_conditional = ignorelimited(rt)
                 this_rt = widenwrappedconditional(rt)
                 this_exct = exct
-                if merged_refinements !== nothing
+                if merged_refinements !== nothing && ipo_slot_refinement_enabled(interp)
                     merge_slot_refinements!(merged_refinements, 𝕃ᵢ, refinements, fargs, match)
                 end
                 # try constant propagation with argtypes for this match
@@ -220,7 +220,6 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 end
 
                 state.all_effects = merge_effects(state.all_effects, effects)
-
                 if const_result !== nothing
                     local const_results = state.const_results
                     if const_results === nothing
@@ -4381,12 +4380,14 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
-                # TODO: update `refinements`
+                # The aliasing assumption drops: a slot changing from even `::T` -> `::T`
+                # makes IPO slot refinement unsound, because the link with any caller slot becomes broken.
+                @assert !is_argument_slot(frame, changes.var)
             end
             if refinements !== nothing
                 apply_refinements!(𝕃ᵢ, refinements, currstate, changes)
-                if should_eagerly_apply_refinements(refinement_propagation, currbb)
-                    apply_refinements!(𝕃ᵢ, refinements, frame.refinements, changes)
+                if should_eagerly_apply_refinements(interp, refinement_propagation, currbb)
+                    apply_refinements!(𝕃ᵢ, refinements, frame.refinements, nothing)
                 else
                     record_refinements!(refinement_propagation, currbb, interp, refinements, changes)
                 end
@@ -4431,12 +4432,19 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
     return CurrentState()
 end
 
-function apply_refinement!(𝕃ᵢ::AbstractLattice, refinement::SlotRefinement,
-                           currstate::VarTable, currchanges::Union{Nothing,StateUpdate})
+function ipo_slot_refinement_enabled(interp::AbstractInterpreter)
+    inf_params = InferenceParams(interp)
+    return inf_params.ipo_slot_refinement
+end
+
+function is_argument_slot(frame::InferenceState, slot::SlotNumber)
+    def = frame.linfo.def
+    isa(def, Method) || return false
+    return slot.id ≤ def.nargs
+end
+
+function apply_refinement!(𝕃ᵢ::AbstractLattice, refinement::SlotRefinement, currstate::VarTable)
     slot = refinement.slot
-    if currchanges !== nothing && currchanges.var == slot
-        return # type propagation from statement (like assignment) should have the precedence
-    end
     vtype = currstate[slot_id(slot)]
     oldtyp = vtype.typ
     newtyp = refinement.typ
@@ -4450,7 +4458,9 @@ end
 function apply_refinements!(𝕃ᵢ::AbstractLattice, refinements#=::Iterable{SlotRefinement}=#,
                             state::VarTable, changes::Union{Nothing,StateUpdate} = nothing)
     for refinement in refinements
-        apply_refinement!(𝕃ᵢ, refinement, state, changes)
+        # type propagation from statement (like assignment) should have the precedence
+        changes !== nothing && changes.var == refinement.slot && continue
+        apply_refinement!(𝕃ᵢ, refinement, state)
     end
 end
 
@@ -4497,7 +4507,9 @@ function SlotRefinementPropagationState(cfg::CFG)
         info = cfg.blocks[v]
         preds = info.preds
         length(preds) ≥ 2 || continue
-        a = paths[preds[1]]
+        i = findfirst(≠(0), preds)
+        i === nothing && continue
+        a = paths[preds[i]]
         a == 0 && continue # don't process nodes that are not reachable
         for i in 2:length(preds)
             u = preds[i]
@@ -4514,12 +4526,13 @@ function SlotRefinementPropagationState(cfg::CFG)
     initial_refinements = Vector{SlotRefinement}[SlotRefinement[] for _ in 1:path_bound]
     updates = IdDict{Int,SlotRefinement}[IdDict{Int,SlotRefinement}() for _ in 1:path_bound]
 
-    SlotRefinementPropagationState(postdomtree, paths, initial_refinements, updates, merge_points, terminating_blocks, top_level_blocks)
+    return SlotRefinementPropagationState(postdomtree, paths, initial_refinements, updates, merge_points, terminating_blocks, top_level_blocks)
 end
 
 function record_refinements!(state::SlotRefinementPropagationState, block::BBIndex,
                              interp::AbstractInterpreter, refinements#=::Iterable{SlotRefinement}=#,
                              changes::Union{Nothing,StateUpdate} = nothing)
+    ipo_slot_refinement_enabled(interp) || return
     path = state.paths[block]
     updates = state.updates[path]
     record_refinements!(updates, interp, refinements, changes)
@@ -4567,12 +4580,18 @@ function merge_updates_from_paths(𝕃ᵢ::AbstractLattice, state::SlotRefinemen
             end
         end
     end
-    result
+    return result
+end
+
+function should_eagerly_apply_refinements(interp::AbstractInterpreter, state::SlotRefinementPropagationState, bb::Int)
+    ipo_slot_refinement_enabled(interp) || return false
+    return should_eagerly_apply_refinements(state, bb)
 end
 
 should_eagerly_apply_refinements(state::SlotRefinementPropagationState, bb::Int) = in(bb, state.top_level_blocks)
 
 function merge_refinements_from_predecessors!(frame::InferenceState, currstate::VarTable, interp::AbstractInterpreter)
+    ipo_slot_refinement_enabled(interp) || return
     block = frame.currbb
     state = frame.refinement_propagation
     in(block, state.merge_points) || return
@@ -4592,6 +4611,7 @@ function merge_refinements_from_predecessors!(frame::InferenceState, currstate::
 end
 
 function finish_merging_global_refinements!(frame::InferenceState, interp::AbstractInterpreter)
+    ipo_slot_refinement_enabled(interp) || return
     state = frame.refinement_propagation
     length(state.terminating_blocks) ≥ 2 || return
     𝕃ᵢ = typeinf_lattice(interp)
@@ -4610,7 +4630,7 @@ function nonthrowing_paths(state::SlotRefinementPropagationState, frame::Inferen
         inferred === Union{} && continue
         push!(paths, state.paths[v])
     end
-    paths
+    return paths
 end
 
 function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt::Conditional, then_or_else::Bool)
