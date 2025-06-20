@@ -812,12 +812,6 @@ static const auto jlhasnofield_func = new JuliaFunction<>{
              PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted)}, false); },
     get_attrs_noreturn,
 };
-static const auto jlboundserrorv_func = new JuliaFunction<TypeFnContextAndSizeT>{
-    XSTR(jl_bounds_error_ints),
-    [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
-            {PointerType::get(JuliaType::get_jlvalue_ty(C), AddressSpace::CalleeRooted), PointerType::getUnqual(T_size->getContext()), T_size}, false); },
-    get_attrs_noreturn,
-};
 static const auto jlboundserror_func = new JuliaFunction<TypeFnContextAndSizeT>{
     XSTR(jl_bounds_error_int),
     [](LLVMContext &C, Type *T_size) { return FunctionType::get(getVoidTy(C),
@@ -9973,7 +9967,6 @@ static void init_jit_functions(void)
     add_named_global(jlthrow_func, &jl_throw);
     add_named_global(jlundefvarerror_func, &jl_undefined_var_error);
     add_named_global(jlhasnofield_func, &jl_has_no_field_error);
-    add_named_global(jlboundserrorv_func, &jl_bounds_error_ints);
     add_named_global(jlboundserror_func, &jl_bounds_error_int);
     add_named_global(jlvboundserror_func, &jl_bounds_error_tuple_int);
     add_named_global(jluboundserror_func, &jl_bounds_error_unboxed_int);
