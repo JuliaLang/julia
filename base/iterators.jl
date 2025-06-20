@@ -16,7 +16,7 @@ using .Base:
     (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
     any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
     tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
-    afoldl
+    afoldl, mod1
 using .Core
 using Core: @doc
 
@@ -32,7 +32,7 @@ import Base:
     getindex, setindex!, get, iterate,
     popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth
 public accumulate, filter, map, peel, reverse, Stateful
 
 """
@@ -991,6 +991,7 @@ end
 reverse(it::Cycle) = Cycle(reverse(it.xs))
 last(it::Cycle) = last(it.xs)
 
+
 # Repeated - repeat an object infinitely many times
 
 struct Repeated{O}
@@ -1601,5 +1602,84 @@ end
 # According to the docs of iterate(::AbstractString), the iteration state must
 # be the same as the keys, so this is a valid optimization (see #51631)
 pairs(s::AbstractString) = IterableStatePairs(s)
+
+"""
+    nth(itr, n::Integer)
+
+Get the `n`th element of an iterable collection. Throw a `BoundsError`[@ref] if not existing.
+Will advance any `Stateful`[@ref] iterator.
+
+See also: [`first`](@ref), [`last`](@ref)
+
+# Examples
+```jldoctest
+julia> Iterators.nth(2:2:10, 4)
+8
+
+julia> Iterators.nth(reshape(1:30, (5,6)), 6)
+6
+
+julia> stateful = Iterators.Stateful(1:10); Iterators.nth(stateful, 7)
+7
+
+julia> first(stateful)
+8
+```
+"""
+nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
+nth(itr::Cycle{I}, n::Integer) where I = _nth(IteratorSize(I), itr, n)
+nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where O = _nth(IteratorSize(O), itr, n)
+@propagate_inbounds nth(itr::AbstractArray, n::Integer) = itr[begin + n - 1]
+
+function _nth(::Union{HasShape, HasLength}, itr::Cycle{I}, n::Integer) where {I}
+    N = length(itr.xs)
+    N == 0 && throw(BoundsError(itr, n))
+
+    # prevents wrap around behaviour and inherit the error handling
+    return nth(itr.xs, n > 0 ? mod1(n, N) : n)
+end
+
+# Flatten{Take{Repeated{O}}} is the actual type of an Iterators.cycle(iterable::O, m) iterator
+function _nth(::Union{HasShape, HasLength}, itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
+    cycles = itr.it.n
+    torepeat = itr.it.xs.x
+    k = length(torepeat)
+    (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
+
+    # prevent wrap around behaviour and inherit the error handling
+    return nth(torepeat, n > 0 ? mod1(n, k) : n)
+end
+
+function _nth(::IteratorSize, itr, n::Integer)
+    # unrolled version of `first(drop)`
+    n > 0 || throw(BoundsError(itr, n))
+    y = iterate(itr)
+    for _ in 1:n-1
+        y === nothing && break
+        y = iterate(itr, y[2])
+    end
+    y === nothing && throw(BoundsError(itr, n))
+    y[1]
+end
+"""
+    nth(n::Integer)
+
+Return a function that gets the `n`-th element from any iterator passed to it.
+Equivalent to `Base.Fix2(nth, n)` or `itr -> nth(itr, n)`.
+
+See also: [`nth`](@ref), [`Base.Fix2`](@ref)
+# Examples
+```jldoctest
+julia> fifth_element = Iterators.nth(5)
+(::Base.Fix2{typeof(Base.Iterators.nth), Int64}) (generic function with 2 methods)
+
+julia> fifth_element(reshape(1:30, (5,6)))
+5
+
+julia> map(fifth_element, ("Willis", "Jovovich", "Oldman"))
+('i', 'v', 'a')
+```
+"""
+nth(n::Integer) = Base.Fix2(nth, n)
 
 end
