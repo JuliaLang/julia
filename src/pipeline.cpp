@@ -151,7 +151,9 @@ namespace {
             // bool UseOdrIndicator = CodeGenOpts.SanitizeAddressUseOdrIndicator;
             // llvm::AsanDtorKind DestructorKind =
             //     CodeGenOpts.getSanitizeAddressDtor();
-            // AddressSanitizerOptions Opts;
+            AddressSanitizerOptions Opts;
+            // Apple's addrsan really wants to be used with Apple LLVM.
+            Opts.InsertVersionCheck = !__APPLE__;
             // Opts.CompileKernel = CompileKernel;
             // Opts.Recover = CodeGenOpts.SanitizeRecover.has(Mask);
             // Opts.UseAfterScope = CodeGenOpts.SanitizeAddressUseAfterScope;
@@ -160,7 +162,7 @@ namespace {
             //Let's assume the defaults are actually fine for our purposes
             // MPM.addPass(AddressSanitizerPass(
             //     Opts, UseGlobalGC, UseOdrIndicator, DestructorKind));
-            MPM.addPass(AddressSanitizerPass(AddressSanitizerOptions(), true, false));
+            MPM.addPass(AddressSanitizerPass(Opts, true, false));
         //   }
         };
         ASanPass(/*SanitizerKind::Address, */false);

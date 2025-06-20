@@ -98,7 +98,7 @@ void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT
 }
 #endif
 
-#if defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_ASAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
+#if defined(_COMPILER_MSAN_ENABLED_) || defined(_COMPILER_TSAN_ENABLED_)
 struct link_map;
 typedef void* (dlopen_prototype)(const char* filename, int flags);
 
