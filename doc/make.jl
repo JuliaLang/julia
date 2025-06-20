@@ -318,7 +318,6 @@ if use_revise
 end
 function maybe_revise(ex)
     use_revise || return ex
-    STDLIB_DIR = Sys.STDLIB
     STDLIBS = filter!(x -> isfile(joinpath(STDLIB_DIR, x, "src", "$(x).jl")), readdir(STDLIB_DIR))
     return quote
         $ex

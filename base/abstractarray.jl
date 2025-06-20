@@ -796,7 +796,7 @@ julia> similar(1:10, 1, 4)
 Conversely, `similar(trues(10,10), 2)` returns an uninitialized `BitVector` with two
 elements since `BitArray`s are both mutable and can support 1-dimensional arrays:
 
-```julia-repl
+```jldoctest; filter = r"[01]"
 julia> similar(trues(10,10), 2)
 2-element BitVector:
  0
