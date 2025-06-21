@@ -719,6 +719,11 @@ function get_test_result(ex, source)
             $(QuoteNode(source)),
             $negate,
         ))
+    elseif isa(ex, Expr) && (ex.head === :|| || ex.head === :&&) && length(ex.args) == 2
+        # Handle logical expressions using recursive tree-based evaluation
+        logical_tree = build_logical_tree(ex, source)
+        should_negate_root = negate === QuoteNode(true)
+        testret = evaluate_logical_tree(logical_tree, should_negate_root)
     else
         ex = Expr(:block, source, esc(orig_ex))
         testret = :(Returned($ex, nothing, $(QuoteNode(source))))
@@ -2399,6 +2404,8 @@ function _check_bitarray_consistency(B::BitArray{N}) where N
     return true
 end
 
+include("logical_tree.jl")
+using .LogicalTreeTests
 include("logging.jl")
 include("precompile.jl")
 

@@ -1892,3 +1892,174 @@ end
         @test _escape_call(:((==).(x, y))) == (; func=Expr(:., esc(:(==))), args, kwargs, quoted_func=QuoteNode(Expr(:., :(==))))
     end
 end
+
+# Test logical expression test failures
+@testset "Logical expression expansion" begin
+    # Test basic logical expressions and their display behavior
+    let logical_fails = @testset NoThrowTestSet begin
+            # Literals - should NOT show "Evaluated:"
+            @test false || false
+            @test true && false
+            @test false || (1 == 2)
+            @test (1 < 2) && (3 > 4)
+
+            # Variables - should show "Evaluated:" with substituted values
+            x, y = 1, 2
+            @test x > y || y < x
+
+            # Function calls - should show appropriate expansion
+            @test isempty([1]) && length([1, 2]) == 1
+        end
+
+        for fail in logical_fails
+            @test fail isa Test.Fail
+        end
+
+        # Literals should not show "Evaluated:"
+        for i in 1:4
+            let str = sprint(show, logical_fails[i])
+                @test !occursin("Evaluated:", str)
+            end
+        end
+
+        # Variables should show "Evaluated:" with values
+        let str = sprint(show, logical_fails[5])
+            @test occursin("Expression: x > y || y < x", str)
+            @test occursin("Evaluated: 1 > 2 || 2 < 1", str)
+        end
+
+        # Function calls should show short-circuiting with "..."
+        let str = sprint(show, logical_fails[6])
+            @test occursin("Expression: isempty([1]) && length([1, 2]) == 1", str)
+            @test occursin("Evaluated: isempty([1]) && ...", str)
+        end
+    end
+    counter = 0
+    # Test short-circuiting behavior and "..." notation
+    let short_circuit_fails = @testset NoThrowTestSet begin
+            @test false && ((counter += 1); true)
+            @test (1 == 2) && (3 == 4) && (5 == 6)  # Multi-level short-circuiting
+        end
+
+        let str = sprint(show, short_circuit_fails[1])
+            @test counter == 0
+            @test occursin("Evaluated: false && ...", str)
+            @test counter == 0
+        end
+        let str = sprint(show, short_circuit_fails[2])
+            @test occursin("Evaluated: 1 == 2 && ...", str)
+        end
+    end
+
+    # Test multi-level expression flattening
+    let recursive_fails = @testset NoThrowTestSet begin
+            @test (1 == 2) || (3 == 4) || (5 == 6)
+            @test (1 == 1) && (2 == 2) && (3 == 4)
+        end
+
+        let str = sprint(show, recursive_fails[1])
+            @test occursin("Evaluated: 1 == 2 || 3 == 4 || 5 == 6", str)
+        end
+        let str = sprint(show, recursive_fails[2])
+            @test occursin("Evaluated: 1 == 1 && 2 == 2 && 3 == 4", str)
+        end
+    end
+
+    # Test that passing expressions don't show expansion details
+    @test true || error("should not be evaluated")
+    @test (1 == 1) && (2 == 2) && (3 == 3)
+    @testset "Negated" begin
+        # Test negated logical expressions show complete evaluation (no short-circuiting)
+        let negated_fails = @testset NoThrowTestSet begin
+                # These should fail and show full evaluation including the !
+                @test !(isempty([]) && length([1]) == 1)  # !(true && true) = false
+                @test !(true || false)  # !(true) = false
+                @test !((1 == 1) && (2 == 2))  # !(true && true) = false
+
+                # Variables - should show "Evaluated:" with substituted values and !
+                x, y = 1, 2
+                @test !(x < y && y > x)  # !(true && true) = false
+            end
+
+            for fail in negated_fails
+                @test fail isa Test.Fail
+            end
+
+            # Test that negated expressions show full expansion (no short-circuiting)
+            let str = sprint(show, negated_fails[1])
+                @test occursin("Expression: !(isempty([]) && length([1]) == 1)", str)
+                @test occursin("Evaluated: !(isempty(Any[]) && 1 == 1)", str)
+                @test !occursin("&& ...", str)  # Should not short-circuit when negated
+            end
+
+            # Test negated OR expression
+            let str = sprint(show, negated_fails[2])
+                @test occursin("Expression: !(true || false)", str)
+                # Note: This might not show "Evaluated:" because it's all literals
+            end
+
+            # Test negated expression with literals (should not show "Evaluated:")
+            let str = sprint(show, negated_fails[3])
+                @test occursin("Expression: !(1 == 1 && 2 == 2)", str)
+                @test !occursin("Evaluated:", str)  # Literals shouldn't show evaluation
+            end
+
+            # Test negated expression with variables (should show "Evaluated:" with !)
+            let str = sprint(show, negated_fails[4])
+                @test occursin("Expression: !(x < y && y > x)", str)
+                @test occursin("Evaluated: !(1 < 2 && 2 > 1)", str)
+            end
+        end
+
+        # Test that passing negated expressions don't show expansion details
+        @test !(false && true)  # !(false) = true - should pass
+        @test !((1 == 2) || (3 == 4))  # !(false || false) = !(false) = true - should pass
+    end
+    @testset "Nested negation expansion" begin
+        # Test simple nested negation cases
+        let nested_fails = @testset NoThrowTestSet begin
+                # Cases that should fail (evaluate to false)
+                @test !(!false)  # !(!false) = !(true) = false - should fail
+                @test !(!(true && false))  # !(!(true && false)) = !(!(false)) = !true = false - should fail
+                x, y = 1, 2
+                @test !((x < y) && !(x > y))
+                x = [1]
+                @test !(true && !(isempty(x) && isempty(x)))
+            end
+
+            for nf in nested_fails
+                @test nf isa Test.Fail
+            end
+
+            # Test display of nested negation shows proper expansion
+            let str = sprint(show, nested_fails[1])
+                @test occursin("Expression: !(!false)", str)
+                # For simple literals, may not show "Evaluated" line
+            end
+
+            let str = sprint(show, nested_fails[2])
+                @test occursin("Expression: !(!(true && false))", str)
+                # Should show some expansion since it involves logical operators
+            end
+
+            let str = sprint(show, nested_fails[3])
+                @test occursin("Evaluated: !(1 < 2 && !(1 > 2))", str)
+            end
+
+            let str = sprint(show, nested_fails[4])
+                @test occursin("Evaluated: !(true && !(isempty([1]) && ...))", str)
+            end
+
+            @test true && !(false && false)
+            @test true && !(false && true)
+            @test true && !(false && !false)
+            @test true && !(false && !true)
+
+            # With variables
+            x = [1]
+            y = []
+            @test true && !(false && isempty(x))
+            @test true && !(false && isempty(y))
+        end
+    end
+end
