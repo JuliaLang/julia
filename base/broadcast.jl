@@ -1396,4 +1396,9 @@ function Base.show(io::IO, op::BroadcastFunction)
 end
 Base.show(io::IO, ::MIME"text/plain", op::BroadcastFunction) = show(io, op)
 
+# interface callables, like in interface_callables_base.jl, but for `Broadcast` instead of for `Base`.
+for f ∈ Any[broadcastable, instantiate]
+    Base._stable_typeof(f).name.max_methods = 0x1
+end
+
 end # module
