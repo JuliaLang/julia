@@ -613,7 +613,15 @@ macro kwdef(expr)
             P = T.args[2:end]
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            body1 = Expr(:block, __source__, Expr(:call, esc(S), fieldnames...))
+            typecalls = map(Q) do para
+                for arg in fieldsblock.args
+                    isa(arg, Base.LineNumberNode) && continue
+                    fname, ftype = arg.args
+                    ftype === para && return :(typeof($fname))
+                end
+            end
+            ST = :($S{$(typecalls...)})
+            body1 = Expr(:block, __source__, Expr(:call, esc(ST), fieldnames...))
             sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
             def1 = Expr(:function, sig1, body1)
             body2 = Expr(:block, __source__, Expr(:call, esc(SQ), fieldnames...))
