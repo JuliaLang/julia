@@ -2466,7 +2466,6 @@ isasome(::Nothing) = false
     return 0
 end |> only === Int
 
-
 @testset "Interprocedural slot refinement" begin
     return_after(f, x) = (f(x); x)
     return_after(f, x, y) = (f(x, y); (x, y))
@@ -2595,6 +2594,25 @@ end |> only === Int
             # TODO: Implement merging of local refinements into global refinements
             # @test src.rettype === Float64
         end
+    end
+
+    # Make sure that reassigned slots have their frame refinements dropped.
+    # For now, we only refine argument slots which should not be reassigned,
+    # but best to be safe.
+    let subfunc(x) = begin
+            x::Union{Int, Nothing}
+            while true
+                if !isa(x, Int)
+                    x = Base.inferencebarrier("hello")
+                    if isa(x, String)
+                        x = 2
+                    end
+                    return Val(!isa(x, Int))
+                end
+            end
+        end
+        src = code_typed1(f, (Any,); optimize = false)
+        @test src.rettype == Val # especially not `Val{true}`
     end
 end
 
