@@ -4385,11 +4385,11 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
                 @assert !is_argument_slot(frame, changes.var)
             end
             if refinements !== nothing
-                apply_refinements!(𝕃ᵢ, refinements, currstate, changes)
+                apply_refinements!(currstate, 𝕃ᵢ, refinements, changes)
                 if should_eagerly_apply_refinements(interp, refinement_propagation, currbb)
-                    apply_refinements!(𝕃ᵢ, refinements, frame.refinements, nothing)
+                    apply_refinements!(frame.refinements, 𝕃ᵢ, refinements)
                 else
-                    record_refinements!(refinement_propagation, currbb, interp, refinements, changes)
+                    record_refinements!(refinement_propagation, currbb, interp, refinements)
                 end
             end
             if rt === nothing
@@ -4443,24 +4443,24 @@ function is_argument_slot(frame::InferenceState, slot::SlotNumber)
     return slot.id ≤ def.nargs
 end
 
-function apply_refinement!(𝕃ᵢ::AbstractLattice, refinement::SlotRefinement, currstate::VarTable)
+function apply_refinement!(vartable::VarTable, 𝕃ᵢ::AbstractLattice, refinement::SlotRefinement)
     slot = refinement.slot
-    vtype = currstate[slot_id(slot)]
+    vtype = vartable[slot_id(slot)]
     oldtyp = vtype.typ
     newtyp = refinement.typ
     ⊏ = strictpartialorder(𝕃ᵢ)
     if newtyp ⊏ oldtyp
         stmtupdate = StateUpdate(slot, VarState(newtyp, vtype.undef))
-        stoverwrite1!(currstate, stmtupdate)
+        stoverwrite1!(vartable, stmtupdate)
     end
 end
 
-function apply_refinements!(𝕃ᵢ::AbstractLattice, refinements#=::Iterable{SlotRefinement}=#,
-                            state::VarTable, changes::Union{Nothing,StateUpdate} = nothing)
+function apply_refinements!(vartable::VarTable, 𝕃ᵢ::AbstractLattice, refinements#=::Iterable{SlotRefinement}=#,
+                            changes::Union{Nothing,StateUpdate} = nothing)
     for refinement in refinements
         # type propagation from statement (like assignment) should have the precedence
         changes !== nothing && changes.var == refinement.slot && continue
-        apply_refinement!(𝕃ᵢ, refinement, state)
+        apply_refinement!(vartable, 𝕃ᵢ, refinement)
     end
 end
 
@@ -4530,22 +4530,16 @@ function SlotRefinementPropagationState(cfg::CFG)
 end
 
 function record_refinements!(state::SlotRefinementPropagationState, block::BBIndex,
-                             interp::AbstractInterpreter, refinements#=::Iterable{SlotRefinement}=#,
-                             changes::Union{Nothing,StateUpdate} = nothing)
+                             interp::AbstractInterpreter, refinements#=::Iterable{SlotRefinement}=#)
     ipo_slot_refinement_enabled(interp) || return
     path = state.paths[block]
     updates = state.updates[path]
-    record_refinements!(updates, interp, refinements, changes)
+    record_refinements!(updates, interp, refinements)
 end
 
 function record_refinements!(updates::IdDict{Int, SlotRefinement}, interp::AbstractInterpreter,
-                             refinements#=::Iterable{SlotRefinement}=#, changes::Union{Nothing,StateUpdate} = nothing)
+                             refinements#=::Iterable{SlotRefinement}=#)
     for refinement in refinements
-        if changes !== nothing && changes.var == refinement.slot
-            # type propagation from statement (like assignment) should have the precedence
-            @assert !changes.vtype.undef
-            refinement = SlotRefinement(refinement.slot, changes.vtype.typ)
-        end
         i = slot_id(refinement.slot)
         existing = get(updates, i, nothing)
         if existing === nothing
@@ -4590,7 +4584,7 @@ end
 
 should_eagerly_apply_refinements(state::SlotRefinementPropagationState, bb::Int) = in(bb, state.top_level_blocks)
 
-function merge_refinements_from_predecessors!(frame::InferenceState, currstate::VarTable, interp::AbstractInterpreter)
+function merge_refinements_from_predecessors!(frame::InferenceState, vartable::VarTable, interp::AbstractInterpreter)
     ipo_slot_refinement_enabled(interp) || return
     block = frame.currbb
     state = frame.refinement_propagation
@@ -4601,9 +4595,9 @@ function merge_refinements_from_predecessors!(frame::InferenceState, currstate::
     updates = merge_updates_from_paths(𝕃ᵢ, state, paths, frame)
     updates === nothing && return
     refinements = values(updates)
-    apply_refinements!(𝕃ᵢ, refinements, currstate)
+    apply_refinements!(vartable, 𝕃ᵢ, refinements)
     if should_eagerly_apply_refinements(state, block)
-        apply_refinements!(𝕃ᵢ, refinements, frame.refinements)
+        apply_refinements!(frame.refinements, 𝕃ᵢ, refinements)
     else
         path = state.paths[block]
         state.updates[path] = updates
@@ -4619,7 +4613,7 @@ function finish_merging_global_refinements!(frame::InferenceState, interp::Abstr
     updates = merge_updates_from_paths(𝕃ᵢ, state, paths, frame)
     updates === nothing && return
     refinements = values(updates)
-    apply_refinements!(𝕃ᵢ, refinements, frame.refinements)
+    apply_refinements!(frame.refinements, 𝕃ᵢ, refinements)
 end
 
 function nonthrowing_paths(state::SlotRefinementPropagationState, frame::InferenceState, blocks)
