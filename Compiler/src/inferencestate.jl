@@ -259,6 +259,28 @@ end
 intersect(world::WorldWithRange, valid_worlds::WorldRange) =
     WorldWithRange(world.this, intersect(world.valid_worlds, valid_worlds))
 
+struct SlotRefinement
+    slot::SlotNumber
+    typ::Any
+    SlotRefinement(slot::SlotNumber, @nospecialize(typ)) = new(slot, typ)
+end
+
+Base.iterate(refinement::SlotRefinement) = (refinement, nothing)
+Base.iterate(refinement::SlotRefinement, state) = nothing
+
+const BBIndex = Int
+const PathIndex = Int
+
+struct SlotRefinementPropagationState
+    postdomtree::PostDomTree
+    paths::Vector{PathIndex} # indexed by basic block
+    initial_refinements::Vector{Vector{SlotRefinement}} # indexed by path
+    updates::Vector{IdDict{Int,SlotRefinement}} # indexed by path
+    merge_points::IdSet{BBIndex} # these blocks are those where refinements from different paths are to be merged
+    terminating_blocks::IdSet{BBIndex} # these blocks (excluding those that throw) will be processed after inference to derive global refinements
+    top_level_blocks::IdSet{BBIndex} # indicates whether we need to stage refinements or if we can apply them directly
+end
+
 mutable struct InferenceState
     #= information about this method instance =#
     linfo::MethodInstance
@@ -289,6 +311,8 @@ mutable struct InferenceState
     pclimitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on currpc ssavalue
     limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
     cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
+    refinements::VarTable
+    refinement_propagation::SlotRefinementPropagationState
 
     # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
     callstack #::Vector{AbsIntState}
@@ -347,6 +371,8 @@ mutable struct InferenceState
         bb_saw_latestworld = Bool[false for i = 1:length(cfg.blocks)]
         bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
+        refinements = VarTable(undef, nslots)
+        refinement_propagation = SlotRefinementPropagationState(cfg)
         argtypes = result.argtypes
 
         argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
@@ -359,6 +385,7 @@ mutable struct InferenceState
             end
             slottypes[i] = argtyp
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
+            refinements[i] = VarState((i > nargtypes) ? Any : argtypes[i], i > nargtypes)
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
         ssaflags = copy(src.ssaflags)
@@ -394,7 +421,7 @@ mutable struct InferenceState
         this = new(
             mi, WorldWithRange(world, valid_worlds), mod, sptypes, slottypes, src, cfg, spec_info,
             currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
-            tasks, pclimitations, limitations, cycle_backedges, callstack, parentid, frameid, cycleid,
+            tasks, pclimitations, limitations, cycle_backedges, refinements, refinement_propagation, callstack, parentid, frameid, cycleid,
             result, unreachable, bestguess, exc_bestguess, ipo_effects,
             _time_ns(), 0.0, 0, 0,
             restrict_abstract_call_sites, cache_mode, insert_coverage,
