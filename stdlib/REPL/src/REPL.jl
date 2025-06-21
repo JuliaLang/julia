@@ -1876,7 +1876,7 @@ function create_global_out!(mod)
         end
         return out
     end
-    return getglobal(mod, Out)
+    return getglobal(mod, :Out)
 end
 
 function capture_result(n::Ref{Int}, @nospecialize(x))

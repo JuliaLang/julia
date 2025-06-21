@@ -34,7 +34,7 @@ htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
 
 // During incremental compilation, the following gets set
-jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
+jl_module_t *jl_precompile_toplevel_module = NULL;   // the first toplevel module being defined
 
 jl_module_t *jl_add_standard_imports(jl_module_t *m)
 {
@@ -54,12 +54,6 @@ void jl_init_main_module(void)
     jl_set_initial_const(jl_main_module, jl_symbol("Core"), (jl_value_t*)jl_core_module, 0); // const Core.Main = Main
 }
 
-static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROOT)
-{
-    return (jl_function_t*)jl_get_global(m, jl_symbol("__init__"));
-}
-
-
 void jl_module_run_initializer(jl_module_t *m)
 {
     JL_TIMING(INIT_MODULE, INIT_MODULE);
@@ -68,9 +62,12 @@ void jl_module_run_initializer(jl_module_t *m)
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_function_t *f = jl_module_get_initializer(m);
-        if (f != NULL)
+        jl_value_t *f = jl_get_global_value(m, jl_symbol("__init__"));
+        if (f != NULL) {
+            JL_GC_PUSH1(&f);
             jl_apply(&f, 1);
+            JL_GC_POP();
+        }
         ct->world_age = last_age;
     }
     JL_CATCH {
@@ -110,7 +107,7 @@ jl_array_t *jl_get_loaded_modules(void)
 static int jl_is__toplevel__mod(jl_module_t *mod)
 {
     return jl_base_module &&
-        (jl_value_t*)mod == jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
+        (jl_value_t*)mod == jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"));
 }
 
 // TODO: add locks around global state mutation operations
@@ -175,7 +172,6 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
 
-    jl_module_t *old_toplevel_module = jl_precompile_toplevel_module;
     size_t last_age = ct->world_age;
 
     if (parent_module == jl_main_module && name == jl_symbol("Base") && jl_base_module == NULL) {
@@ -185,7 +181,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 
     if (is_parent__toplevel__) {
         jl_register_root_module(newm);
-        if (jl_options.incremental) {
+        if (jl_options.incremental && jl_precompile_toplevel_module == NULL) {
             jl_precompile_toplevel_module = newm;
         }
     }
@@ -244,8 +240,6 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
             jl_module_run_initializer(m);
         }
     }
-
-    jl_precompile_toplevel_module = old_toplevel_module;
 
     JL_GC_POP();
     return (jl_value_t*)newm;
@@ -426,7 +420,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
             if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
                 *has_ccall = 1;
             }
-            if (called == jl_builtin__typebody) { // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
+            if (called == BUILTIN(_typebody)) { // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
                 *has_defs = 1;
             }
         }
@@ -705,7 +699,7 @@ static void jl_eval_throw(jl_module_t *m, jl_value_t *exc, const char *filename,
 {
     jl_value_t *throw_ex = (jl_value_t*)jl_exprn(jl_call_sym, 2);
     JL_GC_PUSH1(&throw_ex);
-    jl_exprargset(throw_ex, 0, jl_builtin_throw);
+    jl_exprargset(throw_ex, 0, BUILTIN(throw));
     jl_exprargset(throw_ex, 1, exc);
     jl_toplevel_eval_flex(m, throw_ex, 0, 0, &filename, &lineno);
     JL_GC_POP();
@@ -1091,7 +1085,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     jl_filename = "none";
     size_t last_age = ct->world_age;
     JL_TRY {
-        ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         v = jl_toplevel_eval(m, ex);
     }
     JL_CATCH {
@@ -1150,10 +1144,10 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
                 jl_lineno = lineno;
                 continue;
             }
-            ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             expression = jl_expand_with_loc_warn(expression, module,
                                                  jl_string_data(filename), lineno);
-            ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }
         ct->world_age = last_age;
