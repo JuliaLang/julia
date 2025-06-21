@@ -7,6 +7,21 @@ Core._import(Base, Core, :_eval_using, :_eval_using, true)
 
 using .Core.Intrinsics, .Core.IR
 
+macro max_methods_1(f::Symbol)
+    :(typeof(function $f end).name.max_methods = 0x1)
+end
+macro max_methods_2(f::Symbol)
+    :(typeof(function $f end).name.max_methods = 0x2)
+end
+
+# Minimize world-splitting for functions to which package authors will
+# add more methods.
+#
+# `@max_methods_2` is for functions which take type arguments and need
+# a method for the bottom type. `@max_methods_1` does not suffice in that case.
+@max_methods_1 !
+# ...
+
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
 # start this big so that we don't have to resize before we have defined how to grow an array
