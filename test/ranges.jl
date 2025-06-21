@@ -2817,3 +2817,9 @@ end
     @test StepRange(r) == r
     @test StepRange(r) isa StepRange{Date,Day}
 end
+
+@testset "collect with oversized range" begin
+    r = typemin(Int):typemax(Int)
+    @test_throws OverflowError collect(r)
+    @test_throws OverflowError vcat(r)
+end
