@@ -68,7 +68,8 @@ JL_DLLEXPORT int jl_timing_enabled(void);
 #define HAVE_TIMING_SUPPORT
 #endif
 
-#if defined( USE_TRACY ) || defined( USE_ITTAPI ) || defined( USE_NVTX ) || defined( USE_TIMING_COUNTS )
+#if defined( USE_TRACY ) || defined( USE_ITTAPI ) || defined( USE_NVTX ) ||  \
+            defined( USE_TIMING_COUNTS ) || defined( USE_APPLE_OSLOG )
 #define ENABLE_TIMINGS
 #endif
 
@@ -115,6 +116,11 @@ typedef struct ___tracy_source_location_data TracySrcLocData;
 
 #ifdef USE_ITTAPI
 #include <ittapi/ittnotify.h>
+#endif
+
+#ifdef USE_APPLE_OSLOG
+#include <os/log.h>
+#include <os/signpost.h>
 #endif
 
 #ifdef USE_NVTX
@@ -298,7 +304,25 @@ typedef struct _jl_timing_counts_t {
 #define _NVTX_STOP(block)
 #endif
 
+#ifdef USE_APPLE_OSLOG
 
+typedef struct {
+    os_log_t log; // This stores the subsystem
+    const char *name; // Event name
+} _jl_os_log_event_t;
+
+
+
+#define _APPLE_OSLOG_EVENT_MEMBER      _jl_os_log_event_t os_log_event;
+#define _APPLE_OSLOG_BLOCK_MEMBER      os_signpost_id_t signpost_id;
+#define _APPLE_OSLOG_START(block)      _jl_os_signpost_start(block);
+#define _APPLE_OSLOG_STOP(block)       _jl_os_signpost_stop(block);
+#else
+#define _APPLE_OSLOG_MEMBER
+#define _APPLE_OSLOG_BLOCK_MEMBER
+#define _APPLE_OSLOG_START(block)
+#define _APPLE_OSLOG_STOP(block)
+#endif // USE_APPLE_OSLOG
 /**
  * Top-level jl_timing implementation
  **/
@@ -316,6 +340,7 @@ struct _jl_timing_event_t { // typedef in julia.h
     _TRACY_EVENT_MEMBER
     _ITTAPI_EVENT_MEMBER
     _NVTX_EVENT_MEMBER
+    _APPLE_OSLOG_EVENT_MEMBER
     _COUNTS_EVENT_MEMBER
 
     int subsystem;
@@ -335,6 +360,7 @@ struct _jl_timing_block_t { // typedef in julia.h
     _TRACY_BLOCK_MEMBER
     _ITTAPI_BLOCK_MEMBER
     _NVTX_BLOCK_MEMBER
+    _APPLE_OSLOG_BLOCK_MEMBER
     _COUNTS_BLOCK_MEMBER
 
     uint8_t is_running;
@@ -393,6 +419,12 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
 #define _NVTX_COUNTER_MEMBER
 #endif
 
+#ifdef USE_APPLE_OSLOG
+#define _APPLE_OSLOG_COUNTER_MEMBER void * _oslog_null;
+#else
+#define _APPLE_OSLOG_COUNTER_MEMBER
+#endif
+
 #ifdef USE_TRACY
 # define _TRACY_COUNTER_MEMBER jl_tracy_counter_t tracy_counter;
 # else
@@ -408,6 +440,7 @@ STATIC_INLINE void _jl_timing_suspend_destroy(jl_timing_suspend_t *suspend) JL_N
 typedef struct {
     _ITTAPI_COUNTER_MEMBER
     _NVTX_COUNTER_MEMBER
+    _APPLE_OSLOG_COUNTER_MEMBER
     _TRACY_COUNTER_MEMBER
     _COUNTS_MEMBER
 } jl_timing_counter_t;
