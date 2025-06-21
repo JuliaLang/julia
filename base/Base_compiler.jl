@@ -143,7 +143,7 @@ include("exports.jl")
 
 # core docsystem
 include("docs/core.jl")
-Core.atdoc!(CoreDocs.docm)
+Core._set_setdoc!(CoreDocs.boot_setdoc)
 
 eval(x) = Core.eval(Base, x)
 eval(m::Module, x) = Core.eval(m, x)
