@@ -387,6 +387,7 @@ function eachindex(A::AbstractArray, B::AbstractArray...)
     @inline
     eachindex(IndexStyle(A,B...), A, B...)
 end
+eachindex(::IndexLinear, A::Union{Array, Memory}) = unchecked_oneto(length(A))
 eachindex(::IndexLinear, A::AbstractArray) = (@inline; oneto(length(A)))
 eachindex(::IndexLinear, A::AbstractVector) = (@inline; axes1(A))
 function eachindex(::IndexLinear, A::AbstractArray, B::AbstractArray...)
@@ -749,7 +750,7 @@ false
 checkindex(::Type{Bool}, inds, i) = throw(ArgumentError(LazyString("unable to check bounds for indices of type ", typeof(i))))
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::Real) = (first(inds) <= i) & (i <= last(inds))
 checkindex(::Type{Bool}, inds::IdentityUnitRange, i::Real) = checkindex(Bool, inds.indices, i)
-checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = unsigned(i - one(i)) < unsigned(last(inds))
+checkindex(::Type{Bool}, inds::OneTo{T}, i::T) where {T<:BitInteger} = _checkbounds_array_onebased(Bool, last(inds), i)
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Colon) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, ::Slice) = true
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::AbstractRange) =
@@ -1237,7 +1238,7 @@ oneunit(x::AbstractMatrix{T}) where {T} = _one(oneunit(T), x)
 iterate_starting_state(A) = iterate_starting_state(A, IndexStyle(A))
 iterate_starting_state(A, ::IndexLinear) = firstindex(A)
 iterate_starting_state(A, ::IndexStyle) = (eachindex(A),)
-iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate(A, state)
+@inline iterate(A::AbstractArray, state = iterate_starting_state(A)) = _iterate(A, state)
 function _iterate(A::AbstractArray, state::Tuple)
     y = iterate(state...)
     y === nothing && return nothing
@@ -1245,7 +1246,7 @@ function _iterate(A::AbstractArray, state::Tuple)
 end
 function _iterate(A::AbstractArray, state::Integer)
     checkbounds(Bool, A, state) || return nothing
-    @inbounds(A[state]), state + one(state)
+    A[state], state + one(state)
 end
 
 isempty(a::AbstractArray) = (length(a) == 0)

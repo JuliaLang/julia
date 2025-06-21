@@ -377,13 +377,20 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
-function _checkbounds_array(::Type{Bool}, A::Union{Array, GenericMemory}, i::Int)
+# NOTE: this function expects one-based indexing.  We can't use `require_one_based_indexing`
+# here because it's defined later in the bootstrap process.  Use only where you are really
+# sure about indexing.
+function _checkbounds_array_onebased(::Type{Bool}, len::Integer, i::Int)
     @inline
-    ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A)))
+    ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, len))
 end
-function _checkbounds_array(A::Union{Array, GenericMemory}, i::Int)
+function _checkbounds_array_onebased(::Type{Bool}, A::AbstractArray, i::Int)
     @inline
-    _checkbounds_array(Bool, A, i) || throw_boundserror(A, (i,))
+    _checkbounds_array_onebased(Bool, length(A), i)
+end
+function _checkbounds_array_onebased(A::Union{Array, GenericMemory}, i::Int)
+    @inline
+    _checkbounds_array_onebased(Bool, A, i) || throw_boundserror(A, (i,))
 end
 
 default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
@@ -393,7 +400,7 @@ default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
-    (@_boundscheck) && _checkbounds_array(A, i)
+    (@_boundscheck) && _checkbounds_array_onebased(A, i)
     memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
 end
 
@@ -962,13 +969,13 @@ end
 # linear indexing
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck _checkbounds_array(A, i)
+    @boundscheck _checkbounds_array_onebased(A, i)
     memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
 end
 # simple Array{Any} operations needed for bootstrap
 function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck _checkbounds_array(A, i)
+    @boundscheck _checkbounds_array_onebased(A, i)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
