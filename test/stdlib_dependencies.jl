@@ -220,6 +220,19 @@ try
                     missing_deps = setdiff(real_lib_deps, lazy_lib_deps)
                     extraneous_deps = setdiff(lazy_lib_deps, real_lib_deps)
 
+                    # The library name is `libpcre2-8`, with a dash in
+                    # its name. That works fine on Unix. On Windows, a
+                    # suffix starting with a dash denotes the
+                    # library's soversion. So we think (on Windows)
+                    # that this is the library `libpcre2`, soversion
+                    # 8, and things don't match.
+                    if Sys.iswindows()
+                        if "libpcre2-8" in missing_deps && "libpcre2" in extraneous_deps
+                            missing_deps = setdiff(missing_deps, ["libpcre2-8"])
+                            extraneous_deps = setdiff(extraneous_deps, ["libpcre2"])
+                        end
+                    end
+
                     # We expect there to be no missing or extraneous deps
                     deps_mismatch = !isempty(missing_deps) || !isempty(extraneous_deps)
 
