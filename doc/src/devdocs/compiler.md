@@ -94,11 +94,16 @@ Use appropriate care when copying.
 
 ## Specialized Calling Convention Signature Representation
 
-A `jl_returninfo_t` object describes the calling convention details of any callable.
+A `jl_returninfo_t` object describes the specialized calling convention details of any
+callable. It can be generated from any (specTypes, rettype) pair, such as a CodeInstance, or
+other place they are declared. This is the expected calling convention for specptr, but
+other data may be stored there. Only if the function pointer stored there has the
+expected specialized calling convention will the corresponding flag be set in specsigflags
+to indicate it is useable.
 
-If any of the arguments or return type of a method can be represented unboxed,
-and the method is not varargs, it'll be given an optimized calling convention
-signature based on its `specTypes` and `rettype` fields.
+If any of the arguments or return type of a method can be represented unboxed, and none are
+unable to be represented unboxed (such as an unbounded vararg), it will be given an
+optimized calling convention signature based on the `specTypes` and `rettype` values.
 
 The general principles are that:
 
@@ -112,4 +117,5 @@ The total logic for this is implemented by `get_specsig_function` and `deserves_
 
 Additionally, if the return type is a union, it may be returned as a pair of values (a pointer and a tag).
 If the union values can be stack-allocated, then sufficient space to store them will also be passed as a hidden first argument.
+If the struct to return needs gc roots, space for those will be passed as a hidden second argument.
 It is up to the callee whether the returned pointer will point to this space, a boxed object, or even other constant memory.

@@ -3,7 +3,8 @@
 """
     Base64
 
-Functionality for base-64 encoded strings and IO.
+Functionality for [base64 encoding and decoding](https://en.wikipedia.org/wiki/Base64),
+a method to represent binary data using text, common on the web.
 """
 module Base64
 
@@ -32,7 +33,7 @@ include("decode.jl")
 """
     stringmime(mime, x; context=nothing)
 
-Returns an `AbstractString` containing the representation of `x` in the
+Return an `AbstractString` containing the representation of `x` in the
 requested `mime` type. This is similar to [`repr(mime, x)`](@ref) except
 that binary data is base64-encoded as an ASCII string.
 

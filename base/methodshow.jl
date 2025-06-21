@@ -7,11 +7,11 @@ function strip_gensym(sym)
     if sym === :var"#self#" || sym === :var"#unused#"
         return empty_sym
     end
-    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$" => s"\1"))
+    return Symbol(replace(String(sym), r"^(.*)#(.*#)?\d+$"sa => s"\1"))
 end
 
 function argtype_decl(env, n, @nospecialize(sig::DataType), i::Int, nargs, isva::Bool) # -> (argname, argtype)
-    t = sig.parameters[unwrapva(min(i, end))]
+    t = unwrapva(sig.parameters[min(i, end)])
     if i == nargs && isva
         va = sig.parameters[end]
         if isvarargtype(va) && (!isdefined(va, :N) || !isa(va.N, Int))
@@ -59,8 +59,7 @@ function arg_decl_parts(m::Method, html=false)
         push!(tv, sig.var)
         sig = sig.body
     end
-    file = m.file
-    line = m.line
+    file, line = updated_methodloc(m)
     argnames = method_argnames(m)
     if length(argnames) >= m.nargs
         show_env = ImmutableDict{Symbol, Any}()
@@ -79,11 +78,10 @@ end
 
 # NOTE: second argument is deprecated and is no longer used
 function kwarg_decl(m::Method, kwtype = nothing)
-    mt = get_methodtable(m)
-    if isdefined(mt, :kwsorter)
-        kwtype = typeof(mt.kwsorter)
-        sig = rewrap_unionall(Tuple{kwtype, Any, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
-        kwli = ccall(:jl_methtable_lookup, Any, (Any, Any, UInt), kwtype.name.mt, sig, get_world_counter())
+    if m.sig !== Tuple # OpaqueClosure or Builtin
+        kwtype = typeof(Core.kwcall)
+        sig = rewrap_unionall(Tuple{kwtype, NamedTuple, (unwrap_unionall(m.sig)::DataType).parameters...}, m.sig)
+        kwli = ccall(:jl_methtable_lookup, Any, (Any, UInt), sig, get_world_counter())
         if kwli !== nothing
             kwli = kwli::Method
             slotnames = ccall(:jl_uncompress_argnames, Vector{Symbol}, (Any,), kwli.slot_syms)
@@ -95,6 +93,7 @@ function kwarg_decl(m::Method, kwtype = nothing)
                 push!(kws, kws[i])
                 deleteat!(kws, i)
             end
+            isempty(kws) && push!(kws,  :var"...")
             return kws
         end
     end
@@ -132,11 +131,17 @@ function fixup_stdlib_path(path::String)
     # The file defining Base.Sys gets included after this file is included so make sure
     # this function is valid even in this intermediary state
     if isdefined(@__MODULE__, :Sys)
-        BUILD_STDLIB_PATH = Sys.BUILD_STDLIB_PATH::String
-        STDLIB = Sys.STDLIB::String
-        if BUILD_STDLIB_PATH != STDLIB
+        if Sys.BUILD_STDLIB_PATH != Sys.STDLIB
             # BUILD_STDLIB_PATH gets defined in sysinfo.jl
-            path = replace(path, normpath(BUILD_STDLIB_PATH) => normpath(STDLIB))
+            npath = normpath(path)
+            npath′ = replace(npath, normpath(Sys.BUILD_STDLIB_PATH) => normpath(Sys.STDLIB))
+            path = npath == npath′ ? path : npath′
+        end
+        if isdefined(@__MODULE__, :Core) && isdefined(Core, :Compiler)
+            compiler_folder = dirname(String(Base.moduleloc(Core.Compiler).file))
+            if dirname(path) == compiler_folder
+                return abspath(Sys.STDLIB, "..", "..", "Compiler", "src", basename(path))
+            end
         end
     end
     return path
@@ -160,7 +165,7 @@ functionloc(m::Core.MethodInstance) = functionloc(m.def)
 """
     functionloc(m::Method)
 
-Returns a tuple `(filename,line)` giving the location of a `Method` definition.
+Return a tuple `(filename,line)` giving the location of a `Method` definition.
 """
 function functionloc(m::Method)
     file, ln = updated_methodloc(m)
@@ -173,7 +178,7 @@ end
 """
     functionloc(f::Function, types)
 
-Returns a tuple `(filename,line)` giving the location of a generic `Function` definition.
+Return a tuple `(filename,line)` giving the location of a generic `Function` definition.
 """
 functionloc(@nospecialize(f), @nospecialize(types)) = functionloc(which(f,types))
 
@@ -193,6 +198,9 @@ function functionloc(@nospecialize(f))
 end
 
 function sym_to_string(sym)
+    if sym === :var"..."
+        return "..."
+    end
     s = String(sym)
     if endswith(s, "...")
         return string(sprint(show_sym, Symbol(s[1:end-3])), "...")
@@ -201,41 +209,64 @@ function sym_to_string(sym)
     end
 end
 
-function show(io::IO, m::Method)
+# default compact view
+show(io::IO, m::Method; kwargs...) = show_method(IOContext(io, :compact=>true), m; kwargs...)
+
+show(io::IO, ::MIME"text/plain", m::Method; kwargs...) = show_method(io, m; kwargs...)
+
+function show_method(io::IO, m::Method;
+                     modulecolor = :light_black, digit_align_width = 1,
+                     print_signature_only::Bool = get(io, :print_method_signature_only, false)::Bool)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
         # Builtin
-        print(io, m.name, "(...) in ", m.module)
-        return
+        print(io, m.name, "(...)")
+        file = "none"
+        line = 0
+    else
+        print(io, decls[1][2], "(")
+
+        # arguments
+        for (i,d) in enumerate(decls[2:end])
+            printstyled(io, d[1], color=:light_black)
+            if !isempty(d[2])
+                print(io, "::")
+                print_type_bicolor(io, d[2], color=:bold, inner_color=:normal)
+            end
+            i < length(decls)-1 && print(io, ", ")
+        end
+
+        kwargs = kwarg_decl(m)
+        if !isempty(kwargs)
+            print(io, "; ")
+            for kw in kwargs
+                skw = sym_to_string(kw)
+                print(io, skw)
+                if kw != last(kwargs)
+                    print(io, ", ")
+                end
+            end
+        end
+        print(io, ")")
+        show_method_params(io, tv)
     end
-    print(io, decls[1][2], "(")
-    join(
-        io,
-        String[isempty(d[2]) ? d[1] : string(d[1], "::", d[2]) for d in decls[2:end]],
-        ", ",
-        ", ",
-    )
-    kwargs = kwarg_decl(m)
-    if !isempty(kwargs)
-        print(io, "; ")
-        join(io, map(sym_to_string, kwargs), ", ", ", ")
+
+    if !print_signature_only
+        if !(get(io, :compact, false)::Bool) # single-line mode
+            println(io)
+            digit_align_width += 4
+        end
+        # module & file, re-using function from errorshow.jl
+        print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
     end
-    print(io, ")")
-    show_method_params(io, tv)
-    print(io, " in ", m.module)
-    if line > 0
-        file, line = updated_methodloc(m)
-        print(io, " at ", file, ":", line)
-    end
-    nothing
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
-    mt = ms.mt
-    name = mt.name
-    hasname = isdefined(mt.module, name) &&
-              typeof(getfield(mt.module, name)) <: Function
+    tn = ms.tn
+    name = tn.singletonname
+    hasname = isdefined(tn.module, name) &&
+              typeof(getfield(tn.module, name)) <: Function
     n = length(ms)
     m = n==1 ? "method" : "methods"
     print(io, "# $n $m")
@@ -244,27 +275,55 @@ function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)
     if hasname
         what = (startswith(sname, '@') ?
                     "macro"
-               : mt.module === Core && last(ms).sig === Tuple ?
+               : tn.module === Core && tn.wrapper <: Core.Builtin ?
                     "builtin function"
                : # else
                     "generic function")
-        print(io, " for ", what, " ", namedisplay)
+        print(io, " for ", what, " ", namedisplay, " from ")
+
+        col = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, parentmodule_before_main(tn.module))
+
+        printstyled(io, tn.module, color=col)
     elseif '#' in sname
         print(io, " for anonymous function ", namedisplay)
-    elseif mt === _TYPE_NAME.mt
+    elseif tn === _TYPE_NAME || iskindtype(tn.wrapper)
         print(io, " for type constructor")
     else
         print(io, " for callable object")
     end
-    n > 0 && print(io, ":")
-    nothing
+    !iszero(n) && print(io, ":")
+end
+
+# Determine the `modulecolor` value to pass to `show_method`
+function _modulecolor(method::Method)
+    mmt = get_methodtable(method)
+    # TODO: this looks like a buggy bit of internal hacking, so disable for now
+    return nothing
+    if mmt === nothing || mmt.module === parentmodule(method)
+        return nothing
+    end
+    # `mmt` is only particularly relevant for external method tables. Since the primary
+    # method table is shared, we now need to distinguish "primary" methods by trying to
+    # check if there is a primary `DataType` to identify it with. c.f. how `jl_method_def`
+    # would derive this same information (for the name).
+    ft = argument_datatype((unwrap_unionall(method.sig)::DataType).parameters[1])
+    # `ft` should be the type associated with the first argument in the method signature.
+    # If it's `Type`, try to unwrap it again.
+    if isType(ft)
+        ft = argument_datatype(ft.parameters[1])
+    end
+    if ft === nothing || parentmodule(method) === parentmodule(ft) !== Core
+        return nothing
+    end
+    m = parentmodule_before_main(method)
+    return get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
 end
 
 function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=true)
-    mt = ms.mt
-    name = mt.name
-    hasname = isdefined(mt.module, name) &&
-              typeof(getfield(mt.module, name)) <: Function
+    tn = ms.tn
+    name = tn.singletonname
+    hasname = isdefined(tn.module, name) &&
+              typeof(getfield(tn.module, name)) <: Function
     if header
         show_method_list_header(io, ms, str -> "\""*str*"\"")
     end
@@ -274,12 +333,17 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     last_shown_line_infos = get(io, :last_shown_line_infos, nothing)
     last_shown_line_infos === nothing || empty!(last_shown_line_infos)
 
+    digit_align_width = length(string(max > 0 ? max : length(ms)))
+
     for meth in ms
         if max == -1 || n < max
             n += 1
             println(io)
-            print(io, "[$n] ")
-            show(io, meth)
+
+            print(io, " ", lpad("[$n]", digit_align_width + 2), " ")
+
+            show_method(io, meth; modulecolor=_modulecolor(meth))
+
             file, line = updated_methodloc(meth)
             if last_shown_line_infos !== nothing
                 push!(last_shown_line_infos, (string(file), line))
@@ -292,7 +356,7 @@ function show_method_table(io::IO, ms::MethodList, max::Int=-1, header::Bool=tru
     if rest > 0
         println(io)
         if rest == 1
-            show(io, last)
+            show_method(io, last)
         else
             print(io, "... $rest methods not shown")
             if hasname
@@ -305,7 +369,7 @@ end
 
 show(io::IO, ms::MethodList) = show_method_table(io, ms)
 show(io::IO, ::MIME"text/plain", ms::MethodList) = show_method_table(io, ms)
-show(io::IO, mt::Core.MethodTable) = show_method_table(io, MethodList(mt))
+show(io::IO, mt::Core.MethodTable) = print(io, mt.module, ".", mt.name, " is a Core.MethodTable with ", length(mt), " methods.")
 
 function inbase(m::Module)
     if m == Base
@@ -318,13 +382,12 @@ end
 fileurl(file) = let f = find_source_file(file); f === nothing ? "" : "file://"*f; end
 
 function url(m::Method)
-    M = m.module
+    M = parentmodule(m)
     (m.file === :null || m.file === :string) && return ""
     file = string(m.file)
     line = m.line
-    line <= 0 || occursin(r"In\[[0-9]+\]", file) && return ""
+    line <= 0 || occursin(r"In\[[0-9]+\]"a, file) && return ""
     Sys.iswindows() && (file = replace(file, '\\' => '/'))
-    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
     if inbase(M)
         if isempty(Base.GIT_VERSION_INFO.commit)
             # this url will only work if we're on a tagged release
@@ -332,14 +395,16 @@ function url(m::Method)
         else
             return "https://github.com/JuliaLang/julia/tree/$(Base.GIT_VERSION_INFO.commit)/base/$file#L$line"
         end
-    elseif root_module_exists(libgit2_id)
-        LibGit2 = root_module(libgit2_id)
+    end
+    libgit2_id = PkgId(UUID((0x76f85450_5226_5b5a,0x8eaa_529ad045b433)), "LibGit2")
+    LibGit2 = maybe_root_module(libgit2_id)
+    if LibGit2 isa Module
         try
             d = dirname(file)
             return LibGit2.with(LibGit2.GitRepoExt(d)) do repo
                 LibGit2.with(LibGit2.GitConfig(repo)) do cfg
                     u = LibGit2.get(cfg, "remote.origin.url", "")
-                    u = match(LibGit2.GITHUB_REGEX,u).captures[1]
+                    u = (match(LibGit2.GITHUB_REGEX,u)::AbstractMatch).captures[1]
                     commit = string(LibGit2.head_oid(repo))
                     root = LibGit2.path(repo)
                     if startswith(file, root) || startswith(realpath(file), root)
@@ -350,11 +415,10 @@ function url(m::Method)
                 end
             end
         catch
-            return fileurl(file)
+            # oops, this was a bad idea
         end
-    else
-        return fileurl(file)
     end
+    return fileurl(file)
 end
 
 function show(io::IO, ::MIME"text/html", m::Method)
@@ -362,14 +426,14 @@ function show(io::IO, ::MIME"text/html", m::Method)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
         # Builtin
-        print(io, m.name, "(...) in ", m.module)
+        print(io, m.name, "(...) in ", parentmodule(m))
         return
     end
     print(io, decls[1][2], "(")
     join(
         io,
         String[
-            isempty(d[2]) ? d[1] : string(d[1], "::<b>", d[2], "</b>") for d in decls[2:end]
+            isempty(d[2]) ? string(d[1]) : string(d[1], "::<b>", d[2] , "</b>") for d in decls[2:end]
         ],
         ", ",
         ", ",
@@ -386,7 +450,7 @@ function show(io::IO, ::MIME"text/html", m::Method)
         show_method_params(io, tv)
         print(io,"</i>")
     end
-    print(io, " in ", m.module)
+    print(io, " in ", parentmodule(m))
     if line > 0
         file, line = updated_methodloc(m)
         u = url(m)
@@ -400,7 +464,6 @@ function show(io::IO, ::MIME"text/html", m::Method)
 end
 
 function show(io::IO, mime::MIME"text/html", ms::MethodList)
-    mt = ms.mt
     show_method_list_header(io, ms, str -> "<b>"*str*"</b>")
     print(io, "<ul>")
     for meth in ms
@@ -410,8 +473,6 @@ function show(io::IO, mime::MIME"text/html", ms::MethodList)
     end
     print(io, "</ul>")
 end
-
-show(io::IO, mime::MIME"text/html", mt::Core.MethodTable) = show(io, mime, MethodList(mt))
 
 # pretty-printing of AbstractVector{Method}
 function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
@@ -428,6 +489,8 @@ function show(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method})
             push!(last_shown_line_infos, (string(file), line))
         end
     end
+    first && summary(io, mt)
+    nothing
 end
 
 function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
@@ -440,4 +503,5 @@ function show(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
         end
         print(io, "</ul>")
     end
+    nothing
 end

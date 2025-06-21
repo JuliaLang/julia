@@ -2,7 +2,7 @@
 
 ## Running the analysis
 
-The analyzer plugin that drives the anlysis ships with julia. Its
+The analyzer plugin that drives the analysis ships with julia. Its
 source code can be found in `src/clangsa`. Running it requires
 the clang dependency to be build. Set the `BUILD_LLVM_CLANG` variable
 in your Make.user in order to build an appropriate version of clang.

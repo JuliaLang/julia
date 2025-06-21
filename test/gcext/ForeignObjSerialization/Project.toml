@@ -1,0 +1,6 @@
+name = "ForeignObjSerialization"
+uuid = "2c015d96-a6ca-42f0-bc68-f9090de6bc2c"
+version = "0.1.0"
+
+[deps]
+Foreign = "de1f6f7a-d7b3-400f-91c2-33f248ee89c4"

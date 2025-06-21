@@ -3,7 +3,7 @@
 #include <locale.h>
 #include "libsupport.h"
 
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
+#ifndef _OS_WINDOWS_
 #include <sys/resource.h>
 #endif
 
@@ -25,7 +25,7 @@ void libsupport_init(void)
     if (!isInitialized) {
         ios_init_stdstreams();
         isInitialized = 1;
-#if defined(_POSIX_C_SOURCE) && _POSIX_C_SOURCE >= 200112L
+#ifndef _OS_WINDOWS_
         // Raise the open file descriptor limit.
         {
             struct rlimit rl;

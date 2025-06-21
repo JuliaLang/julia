@@ -119,4 +119,3 @@ __attribute__((destructor))
 static void fini(void) {
     SetBLASParamErrorProc(NULL); /* restore default handler */
 }
-

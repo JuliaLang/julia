@@ -23,6 +23,7 @@
 #        @printf "0x%016x,\n" k
 #        I -= k
 #    end
+
 const INV_2PI = (
     0x28be_60db_9391_054a,
     0x7f09_d5f4_7d4d_3770,
@@ -93,9 +94,9 @@ end
     return unsafe_trunc(Int, fn), DoubleFloat64(y1, y2)
 end
 
+
 """
     fromfraction(f::Int128)
-
 Compute a tuple of values `(z1,z2)` such that
     ``z1 + z2 == f / 2^128``
 and the significand of `z1` has 27 trailing zeros.
@@ -108,7 +109,7 @@ function fromfraction(f::Int128)
     # 1. get leading term truncated to 26 bits
     s = ((f < 0) % UInt64) << 63     # sign bit
     x = abs(f) % UInt128             # magnitude
-    n1 = 128-leading_zeros(x)         # ndigits0z(x,2)
+    n1 = Base.top_set_bit(x)          # ndigits0z(x,2)
     m1 = ((x >> (n1-26)) % UInt64) << 27
     d1 = ((n1-128+1021) % UInt64) << 52
     z1 = reinterpret(Float64, s | (d1 + m1))
@@ -118,7 +119,7 @@ function fromfraction(f::Int128)
     if x2 == 0
         return (z1, 0.0)
     end
-    n2 = 128-leading_zeros(x2)
+    n2 = Base.top_set_bit(x2)
     m2 = (x2 >> (n2-53)) % UInt64
     d2 = ((n2-128+1021) % UInt64) << 52
     z2 = reinterpret(Float64,  s | (d2 + m2))
@@ -164,15 +165,15 @@ function paynehanek(x::Float64)
     idx = k >> 6
 
     shift = k - (idx << 6)
-    if shift == 0
-        @inbounds a1 = INV_2PI[idx+1]
-        @inbounds a2 = INV_2PI[idx+2]
-        @inbounds a3 = INV_2PI[idx+3]
+    Base.@assume_effects :nothrow :noub @inbounds if shift == 0
+        a1 = INV_2PI[idx+1]
+        a2 = INV_2PI[idx+2]
+        a3 = INV_2PI[idx+3]
     else
         # use shifts to extract the relevant 64 bit window
-        @inbounds a1 = (idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift) | (INV_2PI[idx+2] >> (64 - shift))
-        @inbounds a2 = (INV_2PI[idx+2] << shift) | (INV_2PI[idx+3] >> (64 - shift))
-        @inbounds a3 = (INV_2PI[idx+3] << shift) | (INV_2PI[idx+4] >> (64 - shift))
+        a1 = (idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift) | (INV_2PI[idx+2] >> (64 - shift))
+        a2 = (INV_2PI[idx+2] << shift) | (INV_2PI[idx+3] >> (64 - shift))
+        a3 = (INV_2PI[idx+3] << shift) | (INV_2PI[idx+4] >> (64 - shift))
     end
 
     # 3. Perform the multiplication:
@@ -210,14 +211,13 @@ end
 
 """
     rem_pio2_kernel(x::Union{Float32, Float64})
-
 Calculate `x` divided by `π/2` accurately for arbitrarily large `x`.
 Returns a pair `(k, r)`, where `k` is the quadrant of the result
 (multiple of π/2) and `r` is the remainder, such that ``k * π/2 = x - r``.
 The remainder is given as a double-double pair.
 `k` is positive if `x > 0` and is negative if `x ≤ 0`.
 """
-@inline function rem_pio2_kernel(x::Float64)
+@inline function rem_pio2_kernel(x::Float64) # accurate to 1e-22
     xhp = poshighword(x)
     #  xhp <= highword(5pi/4) implies |x| ~<= 5pi/4,
     if xhp <= 0x400f6a7a
@@ -279,50 +279,15 @@ The remainder is given as a double-double pair.
     return paynehanek(x)
 end
 
-## Float32
 @inline function rem_pio2_kernel(x::Float32)
-    pio2_1 = 1.57079631090164184570e+00
-    pio2_1t = 1.58932547735281966916e-08
-    inv_pio2 = 6.36619772367581382433e-01
     xd = convert(Float64, x)
-    absxd = abs(xd)
-    # it is assumed that NaN and Infs have been checked
-    if absxd <= pi*5/4
-        if absxd <= pi*3/4
-            if x > 0
-                return 1, DoubleFloat32(xd - pi/2)
-            else
-                return -1, DoubleFloat32(xd + pi/2)
-            end
-        end
-        if x > 0
-            return 2, DoubleFloat32(xd - pi)
-        else
-            return -2, DoubleFloat32(xd + pi)
-        end
-    elseif absxd <= pi*9/4
-        if absxd <= pi*7/4
-            if x > 0
-                return 3, DoubleFloat32(xd - pi*3/2)
-            else
-                return -3, DoubleFloat32(xd + pi*3/2)
-            end
-        end
-        if x > 0
-            return 4, DoubleFloat32(xd - pi*4/2)
-        else
-            return -4, DoubleFloat32(xd + pi*4/2)
-        end
-    end
-    #/* 33+53 bit pi is good enough for medium size */
-    if absxd < Float32(pi)/2*2.0f0^28 # medium size */
-        # use Cody Waite reduction with two coefficients
-        fn = round(xd*inv_pio2)
-        r  = xd-fn*pio2_1
-        w  = fn*pio2_1t
-        y = r-w;
+    # use Cody Waite reduction with two coefficients
+    if abs(x) < Float32(pi*0x1p27) # x < 2^28 * pi/2
+        fn = round(xd * (2/pi))
+        r  = fma(fn, -pi/2, xd)
+        y = fma(fn, -6.123233995736766e-17, r) # big(pi)/2 - pi/2 remainder
         return unsafe_trunc(Int, fn), DoubleFloat32(y)
     end
-    n, y = rem_pio2_kernel(xd)
+    n, y = @noinline paynehanek(xd)
     return n, DoubleFloat32(y.hi)
 end

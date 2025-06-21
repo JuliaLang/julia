@@ -1,4 +1,4 @@
-# Punctuation
+# [Punctuation](@id man-punctuation)
 
 Extended documentation for mathematical symbols & functions is [here](@ref math-ops).
 
@@ -22,6 +22,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `'`         | a trailing apostrophe is the [`adjoint`](@ref) (that is, the complex transpose) operator Aᴴ |
 | [`*`](@ref) | the asterisk is used for multiplication, including matrix multiplication and [string concatenation](@ref man-concatenation) |
 | [`/`](@ref) | forward slash divides the argument on its left by the one on its right                      |
+| [`//`](@ref) | double forward slash performs exact, rational division                                     |
 | [`\`](@ref) | backslash operator divides the argument on its right by the one on its left, commonly used to solve matrix equations |
 | `()`        | parentheses with no arguments constructs an empty [`Tuple`](@ref)                           |
 | `(a,...)`   | parentheses with comma-separated arguments constructs a tuple containing its arguments      |
@@ -30,7 +31,7 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `a[]`       | [array indexing](@ref man-array-indexing) (calling [`getindex`](@ref) or [`setindex!`](@ref)) |
 | `[,]`       | [vector literal constructor](@ref man-array-literals) (calling [`vect`](@ref Base.vect))    |
 | `[;]`       | [vertical concatenation](@ref man-array-concatenation) (calling [`vcat`](@ref) or [`hvcat`](@ref)) |
-| `[    ]`    | with space-separated expressions, [horizontal concatenation](@ref man-concatenation) (calling [`hcat`](@ref) or [`hvcat`](@ref)) |
+| `[    ]`    | with space-separated expressions, [horizontal concatenation](@ref man-concatenation) (calling [`hcat`](@ref) or [`hvcat`](@ref)) |
 | `T{ }`      | curly braces following a type list that type's [parameters](@ref Parametric-Types)          |
 | `{}`        | curly braces can also be used to group multiple [`where`](@ref) expressions in function declarations |
 | `;`         | semicolons separate statements, begin a list of keyword arguments in function declarations or calls, or are used to separate array literals for vertical concatenation |
@@ -58,3 +59,4 @@ Extended documentation for mathematical symbols & functions is [here](@ref math-
 | `->`        | right arrow using a hyphen defines an [anonymous function](@ref man-anonymous-functions) on a single line |
 | [`\|>`](@ref)       | pipe operator passes output from the left argument to input of the right argument, usually a [function](@ref Function-composition-and-piping) |
 | `∘`         | function composition operator (typed with \circ{tab}) combines two functions as though they are a single larger [function](@ref Function-composition-and-piping) |
+| `_`         | underscores may be assigned values which will not be saved, often used to ignore [multiple return values](@ref destructuring-assignment) or create repetitive [comprehensions](@ref man-comprehensions) |

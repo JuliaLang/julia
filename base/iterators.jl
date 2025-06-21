@@ -3,26 +3,37 @@
 """
 Methods for working with Iterators.
 """
-module Iterators
+baremodule Iterators
 
 # small dance to make this work from Base or Intrinsics
-import ..@__MODULE__, ..parentmodule
+import Base: @__MODULE__, parentmodule
 const Base = parentmodule(@__MODULE__)
 using .Base:
-    @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexCartesian, IndexStyle, AbstractVector, Vector,
-    tail, SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
-    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, AbstractRange,
-    LinearIndices, (:), |, +, -, !==, !, <=, <, missing, any, _counttuple
+    @inline, Pair, Pairs, AbstractDict, IndexLinear, IndexStyle, AbstractVector, Vector,
+    SizeUnknown, HasLength, HasShape, IsInfinite, EltypeUnknown, HasEltype, OneTo,
+    @propagate_inbounds, @isdefined, @boundscheck, @inbounds, Generator, IdDict,
+    AbstractRange, AbstractUnitRange, UnitRange, LinearIndices, TupleOrBottom,
+    (:), |, +, -, *, !==, !, ==, !=, <=, <, >, >=, =>, missing,
+    any, _counttuple, eachindex, ntuple, zero, prod, reduce, in, firstindex, lastindex,
+    tail, fieldtypes, min, max, minimum, zero, oneunit, promote, promote_shape, LazyString,
+    afoldl, mod1
+using .Core
+using Core: @doc
 
-import .Base:
+using Base:
+    cld, fld, resize!, IndexCartesian, Checked
+using .Checked: checked_mul
+
+import Base:
     first, last,
     isempty, length, size, axes, ndims,
-    eltype, IteratorSize, IteratorEltype,
+    eltype, IteratorSize, IteratorEltype, promote_typejoin,
     haskey, keys, values, pairs,
     getindex, setindex!, get, iterate,
-    popfirst!, isdone, peek
+    popfirst!, isdone, peek, intersect
 
-export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, partition
+export enumerate, zip, rest, countfrom, take, drop, takewhile, dropwhile, cycle, repeated, product, flatten, flatmap, partition, nth
+public accumulate, filter, map, peel, reverse, Stateful
 
 """
     Iterators.map(f, iterators...)
@@ -42,10 +53,7 @@ julia> collect(Iterators.map(x -> x^2, 1:3))
  9
 ```
 """
-map(f, args...) = Base.Generator(f, args...)
-
-tail_if_any(::Tuple{}) = ()
-tail_if_any(x::Tuple) = tail(x)
+map(f, arg, args...) = Base.Generator(f, arg, args...)
 
 _min_length(a, b, ::IsInfinite, ::IsInfinite) = min(length(a),length(b)) # inherit behaviour, error
 _min_length(a, b, A, ::IsInfinite) = length(a)
@@ -55,7 +63,10 @@ _min_length(a, b, A, B) = min(length(a),length(b))
 _diff_length(a, b, A, ::IsInfinite) = 0
 _diff_length(a, b, ::IsInfinite, ::IsInfinite) = 0
 _diff_length(a, b, ::IsInfinite, B) = length(a) # inherit behaviour, error
-_diff_length(a, b, A, B) = max(length(a)-length(b), 0)
+function _diff_length(a, b, A, B)
+    m, n = length(a), length(b)
+    return m > n ? m - n : zero(n - m)
+end
 
 and_iteratorsize(isz::T, ::T) where {T} = isz
 and_iteratorsize(::HasLength, ::HasShape) = HasLength()
@@ -72,15 +83,20 @@ and_iteratoreltype(a, b) = EltypeUnknown()
 
 Given an iterator `itr`, then `reverse(itr)` is an iterator over the
 same collection but in the reverse order.
-
 This iterator is "lazy" in that it does not make a copy of the collection in
 order to reverse it; see [`Base.reverse`](@ref) for an eager implementation.
 
+(By default, this returns
+an `Iterators.Reverse` object wrapping `itr`, which is iterable
+if the corresponding [`iterate`](@ref) methods are defined, but some `itr` types
+may implement more specialized `Iterators.reverse` behaviors.)
+
 Not all iterator types `T` support reverse-order iteration.  If `T`
 doesn't, then iterating over `Iterators.reverse(itr::T)` will throw a [`MethodError`](@ref)
-because of the missing [`iterate`](@ref) methods for `Iterators.Reverse{T}`.
+because of the missing `iterate` methods for `Iterators.Reverse{T}`.
 (To implement these methods, the original iterator
-`itr::T` can be obtained from `r = Iterators.reverse(itr)` by `r.itr`.)
+`itr::T` can be obtained from an `r::Iterators.Reverse{T}` object by `r.itr`;
+more generally, one can use `Iterators.reverse(r)`.)
 
 # Examples
 ```jldoctest
@@ -141,10 +157,12 @@ end
 An iterator that yields `(i, x)` where `i` is a counter starting at 1,
 and `x` is the `i`th value from the given iterator. It's useful when
 you need not only the values `x` over which you are iterating, but
-also the number of iterations so far. Note that `i` may not be valid
-for indexing `iter`; it's also possible that `x != iter[i]`, if `iter`
-has indices that do not start at 1. See the `pairs(IndexLinear(),
-iter)` method if you want to ensure that `i` is an index.
+also the number of iterations so far.
+
+Note that `i` may not be valid for indexing `iter`, or may index a
+different element. This will happen if `iter` has indices that do not
+start at 1, and may happen for strings, dictionaries, etc.
+See the `pairs(IndexLinear(), iter)` method if you want to ensure that `i` is an index.
 
 # Examples
 ```jldoctest
@@ -156,6 +174,18 @@ julia> for (index, value) in enumerate(a)
 1 a
 2 b
 3 c
+
+julia> str = "naïve";
+
+julia> for (i, val) in enumerate(str)
+           print("i = ", i, ", val = ", val, ", ")
+           try @show(str[i]) catch e println(e) end
+       end
+i = 1, val = n, str[i] = 'n'
+i = 2, val = a, str[i] = 'a'
+i = 3, val = ï, str[i] = 'ï'
+i = 4, val = v, StringIndexError("naïve", 4)
+i = 5, val = e, str[i] = 'v'
 ```
 """
 enumerate(iter) = Enumerate(iter)
@@ -170,7 +200,7 @@ size(e::Enumerate) = size(e.itr)
 end
 last(e::Enumerate) = (length(e.itr), e.itr[end])
 
-eltype(::Type{Enumerate{I}}) where {I} = Tuple{Int, eltype(I)}
+eltype(::Type{Enumerate{I}}) where {I} = TupleOrBottom(Int, eltype(I))
 
 IteratorSize(::Type{Enumerate{I}}) where {I} = IteratorSize(I)
 IteratorEltype(::Type{Enumerate{I}}) where {I} = IteratorEltype(I)
@@ -200,7 +230,7 @@ of `A`.
 
 Specifying [`IndexLinear()`](@ref) ensures that `i` will be an integer;
 specifying [`IndexCartesian()`](@ref) ensures that `i` will be a
-[`CartesianIndex`](@ref); specifying `IndexStyle(A)` chooses whichever has
+[`Base.CartesianIndex`](@ref); specifying `IndexStyle(A)` chooses whichever has
 been defined as the native indexing style for array `A`.
 
 Mutation of the bounds of the underlying array will invalidate this iterator.
@@ -233,23 +263,24 @@ CartesianIndex(2, 2) e
 See also [`IndexStyle`](@ref), [`axes`](@ref).
 """
 pairs(::IndexLinear,    A::AbstractArray) = Pairs(A, LinearIndices(A))
-pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, CartesianIndices(axes(A)))
 
 # preserve indexing capabilities for known indexable types
 # faster than zip(keys(a), values(a)) for arrays
 pairs(tuple::Tuple) = Pairs{Int}(tuple, keys(tuple))
 pairs(nt::NamedTuple) = Pairs{Symbol}(nt, keys(nt))
 pairs(v::Core.SimpleVector) = Pairs(v, LinearIndices(v))
-pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 pairs(A::AbstractVector) = pairs(IndexLinear(), A)
 # pairs(v::Pairs) = v # listed for reference, but already defined from being an AbstractDict
+
+pairs(::IndexCartesian, A::AbstractArray) = Pairs(A, Base.CartesianIndices(axes(A)))
+pairs(A::AbstractArray)  = pairs(IndexCartesian(), A)
 
 length(v::Pairs) = length(getfield(v, :itr))
 axes(v::Pairs) = axes(getfield(v, :itr))
 size(v::Pairs) = size(getfield(v, :itr))
 
-@propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
-    return Pair{K, V}(idx, getfield(p, :data)[idx])
+Base.@eval @propagate_inbounds function _pairs_elt(p::Pairs{K, V}, idx) where {K, V}
+    return $(Expr(:new, :(Pair{K, V}), :idx, :(getfield(p, :data)[idx])))
 end
 
 @propagate_inbounds function iterate(p::Pairs{K, V}, state...) where {K, V}
@@ -269,7 +300,7 @@ end
 @inline isdone(v::Pairs, state...) = isdone(getfield(v, :itr), state...)
 
 IteratorSize(::Type{<:Pairs{<:Any, <:Any, I}}) where {I} = IteratorSize(I)
-IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:Base.AbstractUnitRange, <:Tuple}}) = HasLength()
+IteratorSize(::Type{<:Pairs{<:Any, <:Any, <:AbstractUnitRange, <:Tuple}}) = HasLength()
 
 function last(v::Pairs{K, V}) where {K, V}
     idx = last(getfield(v, :itr))
@@ -300,7 +331,11 @@ the `zip` iterator is a tuple of values of its subiterators.
     `zip` orders the calls to its subiterators in such a way that stateful iterators will
     not advance when another iterator finishes in the current iteration.
 
-See also: [`enumerate`](@ref), [`splat`](@ref Base.splat).
+!!! note
+
+    `zip()` with no arguments yields an infinite iterator of empty tuples.
+
+See also: [`enumerate`](@ref), [`Base.splat`](@ref).
 
 # Examples
 ```jldoctest
@@ -341,6 +376,22 @@ function _zip_min_length(is)
     end
 end
 _zip_min_length(is::Tuple{}) = nothing
+
+# For a collection of iterators `is`, returns a tuple (b, n), where
+# `b` is true when every component of `is` has a statically-known finite
+# length and all such lengths are equal. Otherwise, `b` is false.
+# `n` is an implementation detail, and will be the `length` of the first
+# iterator if it is statically-known and finite. Otherwise, `n` is `nothing`.
+function _zip_lengths_finite_equal(is)
+    i = is[1]
+    if IteratorSize(i) isa Union{IsInfinite, SizeUnknown}
+        return (false, nothing)
+    else
+        b, n = _zip_lengths_finite_equal(tail(is))
+        return (b && (n === nothing || n == length(i)), length(i))
+    end
+end
+_zip_lengths_finite_equal(is::Tuple{}) = (true, nothing)
 size(z::Zip) = _promote_tuple_shape(Base.map(size, z.is)...)
 axes(z::Zip) = _promote_tuple_shape(Base.map(axes, z.is)...)
 _promote_tuple_shape((a,)::Tuple{OneTo}, (b,)::Tuple{OneTo}) = (intersect(a, b),)
@@ -348,7 +399,7 @@ _promote_tuple_shape((m,)::Tuple{Integer}, (n,)::Tuple{Integer}) = (min(m, n),)
 _promote_tuple_shape(a, b) = promote_shape(a, b)
 _promote_tuple_shape(a, b...) = _promote_tuple_shape(a, _promote_tuple_shape(b...))
 _promote_tuple_shape(a) = a
-eltype(::Type{Zip{Is}}) where {Is<:Tuple} = Tuple{ntuple(n -> eltype(fieldtype(Is, n)), _counttuple(Is)::Int)...}
+eltype(::Type{Zip{Is}}) where {Is<:Tuple} = TupleOrBottom(map(eltype, fieldtypes(Is))...)
 #eltype(::Type{Zip{Tuple{}}}) = Tuple{}
 #eltype(::Type{Zip{Tuple{A}}}) where {A} = Tuple{eltype(A)}
 #eltype(::Type{Zip{Tuple{A, B}}}) where {A, B} = Tuple{eltype(A), eltype(B)}
@@ -422,8 +473,13 @@ zip_iteratoreltype() = HasEltype()
 zip_iteratoreltype(a) = a
 zip_iteratoreltype(a, tail...) = and_iteratoreltype(a, zip_iteratoreltype(tail...))
 
-reverse(z::Zip) = Zip(Base.map(reverse, z.is)) # n.b. we assume all iterators are the same length
 last(z::Zip) = getindex.(z.is, minimum(Base.map(lastindex, z.is)))
+function reverse(z::Zip)
+    if !first(_zip_lengths_finite_equal(z.is))
+        throw(ArgumentError("Cannot reverse zipped iterators of unknown, infinite, or unequal lengths"))
+    end
+    Zip(Base.map(reverse, z.is))
+end
 
 # filter
 
@@ -444,6 +500,15 @@ and use ``Θ(1)`` additional space, and `flt` will not be called by an
 invocation of `filter`. Calls to `flt` will be made when iterating over the
 returned iterable object. These calls are not cached and repeated calls will be
 made when reiterating.
+
+!!! warning
+    Subsequent *lazy* transformations on the iterator returned from `filter`, such
+    as those performed by `Iterators.reverse` or `cycle`, will also delay calls to `flt`
+    until collecting or iterating over the returned iterable object. If the filter
+    predicate is nondeterministic or its return values depend on the order of iteration
+    over the elements of `itr`, composition with lazy transformations may result in
+    surprising behavior. If this is undesirable, either ensure that `flt` is a pure
+    function or collect intermediate `filter` iterators before further transformations.
 
 See [`Base.filter`](@ref) for an eager implementation of filtering for arrays.
 
@@ -659,7 +724,7 @@ struct Take{I}
     xs::I
     n::Int
     function Take(xs::I, n::Integer) where {I}
-        n < 0 && throw(ArgumentError("Take length must be nonnegative"))
+        n < 0 && throw(ArgumentError("Take length must be non-negative"))
         return new{I}(xs, n)
     end
 end
@@ -669,7 +734,7 @@ end
 
 An iterator that generates at most the first `n` elements of `iter`.
 
-See also: [`drop`](@ref Iterators.drop), [`peel`](@ref Iterators.peel), [`first`](@ref), [`take!`](@ref).
+See also: [`drop`](@ref Iterators.drop), [`peel`](@ref Iterators.peel), [`first`](@ref), [`Base.take!`](@ref).
 
 # Examples
 ```jldoctest
@@ -718,7 +783,7 @@ struct Drop{I}
     xs::I
     n::Int
     function Drop(xs::I, n::Integer) where {I}
-        n < 0 && throw(ArgumentError("Drop length must be nonnegative"))
+        n < 0 && throw(ArgumentError("Drop length must be non-negative"))
         return new{I}(xs, n)
     end
 end
@@ -877,12 +942,17 @@ struct Cycle{I}
 end
 
 """
-    cycle(iter)
+    cycle(iter[, n::Int])
 
 An iterator that cycles through `iter` forever.
-If `iter` is empty, so is `cycle(iter)`.
+If `n` is specified, then it cycles through `iter` that many times.
+When `iter` is empty, so are `cycle(iter)` and `cycle(iter, n)`.
 
-See also: [`Iterators.repeated`](@ref), [`repeat`](@ref).
+`Iterators.cycle(iter, n)` is the lazy equivalent of [`Base.repeat`](@ref)`(vector, n)`,
+while [`Iterators.repeated`](@ref)`(iter, n)` is the lazy [`Base.fill`](@ref)`(item, n)`.
+
+!!! compat "Julia 1.11"
+    The method `cycle(iter, n)` was added in Julia 1.11.
 
 # Examples
 ```jldoctest
@@ -891,13 +961,23 @@ julia> for (i, v) in enumerate(Iterators.cycle("hello"))
            i > 10 && break
        end
 hellohelloh
+
+julia> foreach(print, Iterators.cycle(['j', 'u', 'l', 'i', 'a'], 3))
+juliajuliajulia
+
+julia> repeat([1,2,3], 4) == collect(Iterators.cycle([1,2,3], 4))
+true
+
+julia> fill([1,2,3], 4) == collect(Iterators.repeated([1,2,3], 4))
+true
 ```
 """
 cycle(xs) = Cycle(xs)
+cycle(xs, n::Integer) = flatten(repeated(xs, n))
 
 eltype(::Type{Cycle{I}}) where {I} = eltype(I)
 IteratorEltype(::Type{Cycle{I}}) where {I} = IteratorEltype(I)
-IteratorSize(::Type{Cycle{I}}) where {I} = IsInfinite()
+IteratorSize(::Type{Cycle{I}}) where {I} = IsInfinite() # XXX: this is false if iterator ever becomes empty
 
 iterate(it::Cycle) = iterate(it.xs)
 isdone(it::Cycle) = isdone(it.xs)
@@ -910,6 +990,7 @@ end
 
 reverse(it::Cycle) = Cycle(reverse(it.xs))
 last(it::Cycle) = last(it.xs)
+
 
 # Repeated - repeat an object infinitely many times
 
@@ -924,7 +1005,7 @@ repeated(x) = Repeated(x)
 An iterator that generates the value `x` forever. If `n` is specified, generates `x` that
 many times (equivalent to `take(repeated(x), n)`).
 
-See also: [`Iterators.cycle`](@ref), [`repeat`](@ref).
+See also [`fill`](@ref Base.fill), and compare [`Iterators.cycle`](@ref).
 
 # Examples
 ```jldoctest
@@ -936,6 +1017,12 @@ julia> collect(a)
  [1 2]
  [1 2]
  [1 2]
+
+julia> ans == fill([1 2], 4)
+true
+
+julia> Iterators.cycle([1 2], 4) |> collect |> println
+[1, 2, 1, 2, 1, 2, 1, 2]
 ```
 """
 repeated(x, n::Integer) = take(repeated(x), Int(n))
@@ -1002,7 +1089,7 @@ _prod_size(t::Tuple) = (_prod_size1(t[1], IteratorSize(t[1]))..., _prod_size(tai
 _prod_size1(a, ::HasShape)  = size(a)
 _prod_size1(a, ::HasLength) = (length(a),)
 _prod_size1(a, A) =
-    throw(ArgumentError("Cannot compute size for object of type $(typeof(a))"))
+    throw(ArgumentError(LazyString("Cannot compute size for object of type ", typeof(a))))
 
 axes(P::ProductIterator) = _prod_indices(P.iterators)
 _prod_indices(::Tuple{}) = ()
@@ -1010,10 +1097,10 @@ _prod_indices(t::Tuple) = (_prod_axes1(t[1], IteratorSize(t[1]))..., _prod_indic
 _prod_axes1(a, ::HasShape)  = axes(a)
 _prod_axes1(a, ::HasLength) = (OneTo(length(a)),)
 _prod_axes1(a, A) =
-    throw(ArgumentError("Cannot compute indices for object of type $(typeof(a))"))
+    throw(ArgumentError(LazyString("Cannot compute indices for object of type ", typeof(a))))
 
 ndims(p::ProductIterator) = length(axes(p))
-length(P::ProductIterator) = prod(size(P))
+length(P::ProductIterator) = reduce(checked_mul, size(P); init=1)
 
 IteratorEltype(::Type{ProductIterator{Tuple{}}}) = HasEltype()
 IteratorEltype(::Type{ProductIterator{Tuple{I}}}) where {I} = IteratorEltype(I)
@@ -1026,8 +1113,7 @@ end
 
 eltype(::Type{ProductIterator{I}}) where {I} = _prod_eltype(I)
 _prod_eltype(::Type{Tuple{}}) = Tuple{}
-_prod_eltype(::Type{I}) where {I<:Tuple} =
-    Tuple{ntuple(n -> eltype(fieldtype(I, n)), _counttuple(I)::Int)...}
+_prod_eltype(::Type{I}) where {I<:Tuple} = TupleOrBottom(ntuple(n -> eltype(fieldtype(I, n)), _counttuple(I)::Int)...)
 
 iterate(::ProductIterator{Tuple{}}) = (), true
 iterate(::ProductIterator{Tuple{}}, state) = nothing
@@ -1041,6 +1127,7 @@ iterate(::ProductIterator{Tuple{}}, state) = nothing
     done1 === true || return done1 # false or missing
     return _pisdone(tail(iters), tail(states)) # check tail
 end
+@inline isdone(::ProductIterator{Tuple{}}, states) = true
 @inline isdone(P::ProductIterator, states) = _pisdone(P.iterators, states)
 
 @inline _piterate() = ()
@@ -1081,6 +1168,7 @@ end
 
 reverse(p::ProductIterator) = ProductIterator(Base.map(reverse, p.iterators))
 last(p::ProductIterator) = Base.map(last, p.iterators)
+intersect(a::ProductIterator, b::ProductIterator) = ProductIterator(intersect.(a.iterators, b.iterators))
 
 # flatten an iterator of iterators
 
@@ -1117,12 +1205,19 @@ julia> [(x,y) for x in 0:1 for y in 'a':'c']  # collects generators involving It
 flatten(itr) = Flatten(itr)
 
 eltype(::Type{Flatten{I}}) where {I} = eltype(eltype(I))
-eltype(::Type{Flatten{Tuple{}}}) = eltype(Tuple{})
+
+# For tuples, we statically know the element type of each index, so we can compute
+# this at compile time.
+function eltype(::Type{Flatten{I}}) where {I<:Union{Tuple,NamedTuple}}
+    afoldl((T, i) -> promote_typejoin(T, eltype(i)), Union{}, fieldtypes(I)...)
+end
+
 IteratorEltype(::Type{Flatten{I}}) where {I} = _flatteneltype(I, IteratorEltype(I))
 IteratorEltype(::Type{Flatten{Tuple{}}}) = IteratorEltype(Tuple{})
 _flatteneltype(I, ::HasEltype) = IteratorEltype(eltype(I))
 _flatteneltype(I, et) = EltypeUnknown()
 
+flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{Union{}}, slurp...) = HasLength() # length==0
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:NTuple{N,Any}}) where {N} = HasLength()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Tuple}) = SizeUnknown()
 flatten_iteratorsize(::Union{HasShape, HasLength}, ::Type{<:Number}) = HasLength()
@@ -1134,6 +1229,7 @@ _flatten_iteratorsize(sz, ::HasEltype, ::Type{Tuple{}}) = HasLength()
 
 IteratorSize(::Type{Flatten{I}}) where {I} = _flatten_iteratorsize(IteratorSize(I), IteratorEltype(I), I)
 
+flatten_length(f, T::Type{Union{}}, slurp...) = 0
 function flatten_length(f, T::Type{<:NTuple{N,Any}}) where {N}
     return N * length(f.it)
 end
@@ -1163,6 +1259,47 @@ reverse(f::Flatten) = Flatten(reverse(itr) for itr in reverse(f.it))
 last(f::Flatten) = last(last(f.it))
 
 """
+    Iterators.flatmap(f, iterators...)
+
+Equivalent to `flatten(map(f, iterators...))`.
+
+See also [`Iterators.flatten`](@ref), [`Iterators.map`](@ref).
+
+!!! compat "Julia 1.9"
+    This function was added in Julia 1.9.
+
+# Examples
+```jldoctest
+julia> Iterators.flatmap(n -> -n:2:n, 1:3) |> collect
+9-element Vector{Int64}:
+ -1
+  1
+ -2
+  0
+  2
+ -3
+ -1
+  1
+  3
+
+julia> stack(n -> -n:2:n, 1:3)
+ERROR: DimensionMismatch: stack expects uniform slices, got axes(x) == (1:3,) while first had (1:2,)
+[...]
+
+julia> Iterators.flatmap(n -> (-n, 10n), 1:2) |> collect
+4-element Vector{Int64}:
+ -1
+ 10
+ -2
+ 20
+
+julia> ans == vec(stack(n -> (-n, 10n), 1:2))
+true
+```
+"""
+flatmap(f, c...) = flatten(map(f, c...))
+
+@doc """
     partition(collection, n)
 
 Iterate over a collection `n` elements at a time.
@@ -1175,8 +1312,7 @@ julia> collect(Iterators.partition([1,2,3,4,5], 2))
  [3, 4]
  [5]
 ```
-"""
-function partition(c, n::Integer)
+""" function partition(c, n::Integer)
     n < 1 && throw(ArgumentError("cannot create partitions of length $n"))
     return PartitionIterator(c, Int(n))
 end
@@ -1186,14 +1322,14 @@ struct PartitionIterator{T}
     n::Int
 end
 # Partitions are explicitly a linear indexing operation, so reshape to 1-d immediately
-PartitionIterator(A::AbstractArray, n::Int) = PartitionIterator(vec(A), n)
+PartitionIterator(A::AbstractArray, n::Int) = PartitionIterator(Base.vec(A), n)
 PartitionIterator(v::AbstractVector, n::Int) = PartitionIterator{typeof(v)}(v, n)
 
 eltype(::Type{PartitionIterator{T}}) where {T} = Vector{eltype(T)}
 # Arrays use a generic `view`-of-a-`vec`, so we cannot exactly predict what we'll get back
 eltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = AbstractVector{eltype(T)}
 # But for some common implementations in Base we know the answer exactly
-eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
+eltype(::Type{PartitionIterator{T}}) where {T<:Vector} = Base.SubArray{eltype(T), 1, T, Tuple{UnitRange{Int}}, true}
 
 IteratorEltype(::Type{PartitionIterator{T}}) where {T} = IteratorEltype(T)
 IteratorEltype(::Type{PartitionIterator{T}}) where {T<:AbstractArray} = EltypeUnknown()
@@ -1219,7 +1355,7 @@ end
 function iterate(itr::PartitionIterator{<:AbstractArray}, state = firstindex(itr.c))
     state > lastindex(itr.c) && return nothing
     r = min(state + itr.n - 1, lastindex(itr.c))
-    return @inbounds view(itr.c, state:r), r + 1
+    return @inbounds Base.view(itr.c, state:r), r + 1
 end
 
 struct IterationCutShort; end
@@ -1244,7 +1380,7 @@ function iterate(itr::PartitionIterator, state...)
     return resize!(v, i), y === nothing ? IterationCutShort() : y[2]
 end
 
-"""
+@doc """
     Stateful(itr)
 
 There are several different ways to think about this iterator wrapper:
@@ -1257,7 +1393,7 @@ There are several different ways to think about this iterator wrapper:
    whenever an item is produced.
 
 `Stateful` provides the regular iterator interface. Like other mutable iterators
-(e.g. [`Channel`](@ref)), if iteration is stopped early (e.g. by a [`break`](@ref) in a [`for`](@ref) loop),
+(e.g. [`Base.Channel`](@ref)), if iteration is stopped early (e.g. by a [`break`](@ref) in a [`for`](@ref) loop),
 iteration can be resumed from the same spot by continuing to iterate over the
 same iterator object (in contrast, an immutable iterator would restart from the
 beginning).
@@ -1306,57 +1442,56 @@ mutable struct Stateful{T, VS}
     itr::T
     # A bit awkward right now, but adapted to the new iteration protocol
     nextvalstate::Union{VS, Nothing}
-    taken::Int
     @inline function Stateful{<:Any, Any}(itr::T) where {T}
-        new{T, Any}(itr, iterate(itr), 0)
+        return new{T, Any}(itr, iterate(itr))
     end
     @inline function Stateful(itr::T) where {T}
         VS = approx_iter_type(T)
-        return new{T, VS}(itr, iterate(itr)::VS, 0)
+        return new{T, VS}(itr, iterate(itr)::VS)
     end
 end
 
-function reset!(s::Stateful{T,VS}, itr::T=s.itr) where {T,VS}
+function reset!(s::Stateful)
+    setfield!(s, :nextvalstate, iterate(s.itr)) # bypass convert call of setproperty!
+    return s
+end
+function reset!(s::Stateful{T}, itr::T) where {T}
     s.itr = itr
-    setfield!(s, :nextvalstate, iterate(itr))
-    s.taken = 0
-    s
+    reset!(s)
+    return s
 end
 
-if Base === Core.Compiler
-    approx_iter_type(a::Type) = Any
-else
-    # Try to find an appropriate type for the (value, state tuple),
-    # by doing a recursive unrolling of the iteration protocol up to
-    # fixpoint.
-    approx_iter_type(itrT::Type) = _approx_iter_type(itrT, Base._return_type(iterate, Tuple{itrT}))
-    # Not actually called, just passed to return type to avoid
-    # having to typesplit on Nothing
-    function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
-        valstate === nothing && return nothing
-        val, st = valstate
-        return iterate(itr, st)
-    end
-    function _approx_iter_type(itrT::Type, vstate::Type)
-        vstate <: Union{Nothing, Tuple{Any, Any}} || return Any
-        vstate <: Union{} && return Union{}
-        nextvstate = Base._return_type(doiterate, Tuple{itrT, vstate})
-        return (nextvstate <: vstate ? vstate : Any)
-    end
+
+# Try to find an appropriate type for the (value, state tuple),
+# by doing a recursive unrolling of the iteration protocol up to
+# fixpoint.
+approx_iter_type(itrT::Type) = _approx_iter_type(itrT, Base._return_type(iterate, Tuple{itrT}))
+# Not actually called, just passed to return type to avoid
+# having to typesplit on Nothing
+function doiterate(itr, valstate::Union{Nothing, Tuple{Any, Any}})
+    valstate === nothing && return nothing
+    val, st = valstate
+    return iterate(itr, st)
+end
+function _approx_iter_type(itrT::Type, vstate::Type)
+    vstate <: Union{Nothing, Tuple{Any, Any}} || return Any
+    vstate <: Union{} && return Union{}
+    itrT <: Union{} && return Union{}
+    nextvstate = Base._return_type(doiterate, Tuple{itrT, vstate})
+    return (nextvstate <: vstate ? vstate : Any)
 end
 
+Stateful(x::Stateful) = x
 convert(::Type{Stateful}, itr) = Stateful(itr)
-
 @inline isdone(s::Stateful, st=nothing) = s.nextvalstate === nothing
 
 @inline function popfirst!(s::Stateful)
     vs = s.nextvalstate
     if vs === nothing
-        throw(EOFError())
+        throw(Base.EOFError())
     else
         val, state = vs
         Core.setfield!(s, :nextvalstate, iterate(s.itr, state))
-        s.taken += 1
         return val
     end
 end
@@ -1366,10 +1501,9 @@ end
     return ns !== nothing ? ns[1] : sentinel
 end
 @inline iterate(s::Stateful, state=nothing) = s.nextvalstate === nothing ? nothing : (popfirst!(s), nothing)
-IteratorSize(::Type{Stateful{T,VS}}) where {T,VS} = IteratorSize(T) isa HasShape ? HasLength() : IteratorSize(T)
-eltype(::Type{Stateful{T, VS}} where VS) where {T} = eltype(T)
-IteratorEltype(::Type{Stateful{T,VS}}) where {T,VS} = IteratorEltype(T)
-length(s::Stateful) = length(s.itr) - s.taken
+IteratorSize(::Type{<:Stateful{T}}) where {T} = IteratorSize(T) isa IsInfinite ? IsInfinite() : SizeUnknown()
+eltype(::Type{<:Stateful{T}}) where {T} = eltype(T)
+IteratorEltype(::Type{<:Stateful{T}}) where {T} = IteratorEltype(T)
 
 """
     only(x)
@@ -1401,7 +1535,9 @@ Stacktrace:
 [...]
 ```
 """
-@propagate_inbounds function only(x)
+@propagate_inbounds only(x) = _only(x, iterate)
+
+@propagate_inbounds function _only(x, ::typeof(iterate))
     i = iterate(x)
     @boundscheck if i === nothing
         throw(ArgumentError("Collection is empty, must contain exactly 1 element"))
@@ -1413,18 +1549,137 @@ Stacktrace:
     return ret
 end
 
-# Collections of known size
-only(x::Ref) = x[]
-only(x::Number) = x
-only(x::Char) = x
+@inline function _only(x, ::typeof(first))
+    @boundscheck if length(x) != 1
+        throw(ArgumentError("Collection must contain exactly 1 element"))
+    end
+    @inbounds first(x)
+end
+
+@propagate_inbounds only(x::IdDict) = _only(x, first)
+
+# Specific error messages for tuples and named tuples
 only(x::Tuple{Any}) = x[1]
 only(x::Tuple) = throw(
     ArgumentError("Tuple contains $(length(x)) elements, must contain exactly 1 element")
 )
-only(a::AbstractArray{<:Any, 0}) = @inbounds return a[]
 only(x::NamedTuple{<:Any, <:Tuple{Any}}) = first(x)
 only(x::NamedTuple) = throw(
     ArgumentError("NamedTuple contains $(length(x)) elements, must contain exactly 1 element")
 )
+
+"""
+    IterableStatePairs(x)
+
+This internal type is returned by [`pairs`](@ref), when the key is the same as
+the state of `iterate`. This allows the iterator to determine the key => value
+pairs by only calling iterate on the values.
+
+"""
+struct IterableStatePairs{T}
+    x::T
+end
+
+IteratorSize(::Type{<:IterableStatePairs{T}}) where T = IteratorSize(T)
+length(x::IterableStatePairs) = length(x.x)
+Base.eltype(::Type{IterableStatePairs{T}}) where T = Pair{<:Any, eltype(T)}
+
+function iterate(x::IterableStatePairs, state=first(keys(x.x)))
+    it = iterate(x.x, state)
+    it === nothing && return nothing
+    (state => first(it), last(it))
+end
+
+reverse(x::IterableStatePairs) = IterableStatePairs(Iterators.reverse(x.x))
+reverse(x::IterableStatePairs{<:Iterators.Reverse}) = IterableStatePairs(x.x.itr)
+
+function iterate(x::IterableStatePairs{<:Iterators.Reverse}, state=last(keys(x.x.itr)))
+    it = iterate(x.x, state)
+    it === nothing && return nothing
+    (state => first(it), last(it))
+end
+
+# According to the docs of iterate(::AbstractString), the iteration state must
+# be the same as the keys, so this is a valid optimization (see #51631)
+pairs(s::AbstractString) = IterableStatePairs(s)
+
+"""
+    nth(itr, n::Integer)
+
+Get the `n`th element of an iterable collection. Throw a `BoundsError`[@ref] if not existing.
+Will advance any `Stateful`[@ref] iterator.
+
+See also: [`first`](@ref), [`last`](@ref)
+
+# Examples
+```jldoctest
+julia> Iterators.nth(2:2:10, 4)
+8
+
+julia> Iterators.nth(reshape(1:30, (5,6)), 6)
+6
+
+julia> stateful = Iterators.Stateful(1:10); Iterators.nth(stateful, 7)
+7
+
+julia> first(stateful)
+8
+```
+"""
+nth(itr, n::Integer) = _nth(IteratorSize(itr), itr, n)
+nth(itr::Cycle{I}, n::Integer) where I = _nth(IteratorSize(I), itr, n)
+nth(itr::Flatten{Take{Repeated{O}}}, n::Integer) where O = _nth(IteratorSize(O), itr, n)
+@propagate_inbounds nth(itr::AbstractArray, n::Integer) = itr[begin + n - 1]
+
+function _nth(::Union{HasShape, HasLength}, itr::Cycle{I}, n::Integer) where {I}
+    N = length(itr.xs)
+    N == 0 && throw(BoundsError(itr, n))
+
+    # prevents wrap around behaviour and inherit the error handling
+    return nth(itr.xs, n > 0 ? mod1(n, N) : n)
+end
+
+# Flatten{Take{Repeated{O}}} is the actual type of an Iterators.cycle(iterable::O, m) iterator
+function _nth(::Union{HasShape, HasLength}, itr::Flatten{Take{Repeated{O}}}, n::Integer) where {O}
+    cycles = itr.it.n
+    torepeat = itr.it.xs.x
+    k = length(torepeat)
+    (n > k*cycles || k == 0) && throw(BoundsError(itr, n))
+
+    # prevent wrap around behaviour and inherit the error handling
+    return nth(torepeat, n > 0 ? mod1(n, k) : n)
+end
+
+function _nth(::IteratorSize, itr, n::Integer)
+    # unrolled version of `first(drop)`
+    n > 0 || throw(BoundsError(itr, n))
+    y = iterate(itr)
+    for _ in 1:n-1
+        y === nothing && break
+        y = iterate(itr, y[2])
+    end
+    y === nothing && throw(BoundsError(itr, n))
+    y[1]
+end
+"""
+    nth(n::Integer)
+
+Return a function that gets the `n`-th element from any iterator passed to it.
+Equivalent to `Base.Fix2(nth, n)` or `itr -> nth(itr, n)`.
+
+See also: [`nth`](@ref), [`Base.Fix2`](@ref)
+# Examples
+```jldoctest
+julia> fifth_element = Iterators.nth(5)
+(::Base.Fix2{typeof(Base.Iterators.nth), Int64}) (generic function with 2 methods)
+
+julia> fifth_element(reshape(1:30, (5,6)))
+5
+
+julia> map(fifth_element, ("Willis", "Jovovich", "Oldman"))
+('i', 'v', 'a')
+```
+"""
+nth(n::Integer) = Base.Fix2(nth, n)
 
 end

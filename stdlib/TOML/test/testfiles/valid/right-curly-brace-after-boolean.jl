@@ -1,1 +1,0 @@
-Dict{String,Any}("black" => Dict{String,Any}("allow_prereleases" => Dict{String,Any}("value" => "true","type" => "bool"),"python" => Dict{String,Any}("value" => ">3.6","type" => "string"),"version" => Dict{String,Any}("value" => ">=18.9b0","type" => "string")))

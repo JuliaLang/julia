@@ -4,72 +4,172 @@
 
 baremodule CompilerSupportLibraries_jll
 using Base, Libdl, Base.BinaryPlatforms
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
 
-const PATH_list = String[]
-const LIBPATH_list = String[]
-
-export libgfortran, libstdcxx, libgomp
+export libgfortran, libstdcxx, libgomp, libatomic, libgcc_s
 
 # These get calculated in __init__()
 const PATH = Ref("")
+const PATH_list = String[]
 const LIBPATH = Ref("")
-artifact_dir = ""
-libgfortran_handle = C_NULL
-libgfortran_path = ""
-libstdcxx_handle = C_NULL
-libstdcxx_path = ""
-libgomp_handle = C_NULL
-libgomp_path = ""
+const LIBPATH_list = String[]
+artifact_dir::String = ""
 
-if Sys.iswindows()
-    if arch(HostPlatform()) == "x86_64"
-        const libgcc_s = "libgcc_s_seh-1.dll"
+libatomic_path::String = ""
+const libatomic = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libatomic-1.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libatomic.1.dylib")
+    elseif Sys.isfreebsd()
+        BundledLazyLibraryPath("libatomic.so.3")
+    elseif Sys.islinux()
+        BundledLazyLibraryPath("libatomic.so.1")
     else
-        const libgcc_s = "libgcc_s_sjlj-1.dll"
+        error("CompilerSupportLibraries_jll: Library 'libatomic' is not available for $(Sys.KERNEL)")
     end
-    const libgfortran = string("libgfortran-", libgfortran_version(HostPlatform()).major, ".dll")
-    const libstdcxx = "libstdc++-6.dll"
-    const libgomp = "libgomp-1.dll"
-elseif Sys.isapple()
-    if arch(HostPlatform()) == "aarch64"
-        const libgcc_s = "@rpath/libgcc_s.2.dylib"
-    else
-        const libgcc_s = "@rpath/libgcc_s.1.dylib"
-    end
-    const libgfortran = string("@rpath/", "libgfortran.", libgfortran_version(HostPlatform()).major, ".dylib")
-    const libstdcxx = "@rpath/libstdc++.6.dylib"
-    const libgomp = "@rpath/libgomp.1.dylib"
-else
-    const libgcc_s = "libgcc_s.so.1"
-    const libgfortran = string("libgfortran.so.", libgfortran_version(HostPlatform()).major)
-    const libstdcxx = "libstdc++.so.6"
-    const libgomp = "libgomp.so.1"
+)
+
+if Sys.iswindows() || Sys.isapple() || arch(HostPlatform()) ∈ ("x86_64", "i686")
+    global libquadmath_path::String = ""
+    const libquadmath = LazyLibrary(
+        if Sys.iswindows()
+            BundledLazyLibraryPath("libquadmath-0.dll")
+        elseif Sys.isapple()
+            BundledLazyLibraryPath("libquadmath.0.dylib")
+        elseif (Sys.islinux() || Sys.isfreebsd()) && arch(HostPlatform()) ∈ ("x86_64", "i686")
+            BundledLazyLibraryPath("libquadmath.so.0")
+        else
+            error("CompilerSupportLibraries_jll: Library 'libquadmath' is not available for $(Sys.KERNEL)")
+        end
+    )
 end
 
+libgcc_s_path::String = ""
+const libgcc_s = LazyLibrary(
+    if Sys.iswindows()
+        if arch(HostPlatform()) == "x86_64"
+            BundledLazyLibraryPath("libgcc_s_seh-1.dll")
+        else
+            BundledLazyLibraryPath("libgcc_s_sjlj-1.dll")
+        end
+    elseif Sys.isapple()
+        if arch(HostPlatform()) == "aarch64" || libgfortran_version(HostPlatform()) == v"5"
+            BundledLazyLibraryPath("libgcc_s.1.1.dylib")
+        else
+            BundledLazyLibraryPath("libgcc_s.1.dylib")
+        end
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libgcc_s.so.1")
+    else
+        error("CompilerSupportLibraries_jll: Library 'libgcc_s' is not available for $(Sys.KERNEL)")
+    end
+)
+
+libgfortran_path::String = ""
+const libgfortran = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath(string("libgfortran-", libgfortran_version(HostPlatform()).major, ".dll"))
+    elseif Sys.isapple()
+        BundledLazyLibraryPath(string("libgfortran.", libgfortran_version(HostPlatform()).major, ".dylib"))
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath(string("libgfortran.so.", libgfortran_version(HostPlatform()).major))
+    else
+        error("CompilerSupportLibraries_jll: Library 'libgfortran' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = @static if @isdefined(libquadmath)
+        LazyLibrary[libgcc_s, libquadmath]
+    else
+        LazyLibrary[libgcc_s]
+    end
+)
+
+libstdcxx_path::String = ""
+const libstdcxx = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libstdc++-6.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libstdc++.6.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libstdc++.so.6")
+    else
+        error("CompilerSupportLibraries_jll: Library 'libstdcxx' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = LazyLibrary[libgcc_s]
+)
+
+libgomp_path::String = ""
+const libgomp = LazyLibrary(
+    if Sys.iswindows()
+        BundledLazyLibraryPath("libgomp-1.dll")
+    elseif Sys.isapple()
+        BundledLazyLibraryPath("libgomp.1.dylib")
+    elseif Sys.islinux() || Sys.isfreebsd()
+        BundledLazyLibraryPath("libgomp.so.1")
+    else
+        error("CompilerSupportLibraries_jll: Library 'libgomp' is not available for $(Sys.KERNEL)")
+    end;
+    dependencies = if Sys.iswindows()
+        LazyLibrary[libgcc_s]
+    else
+        LazyLibrary[]
+    end
+)
+
+# only define if isfile
+let
+    if Sys.iswindows() || Sys.isapple() || libc(HostPlatform()) != "musl"
+        _libssp_path = if Sys.iswindows()
+            BundledLazyLibraryPath("libssp-0.dll")
+        elseif Sys.isapple()
+            BundledLazyLibraryPath("libssp.0.dylib")
+        elseif Sys.islinux() && libc(HostPlatform()) != "musl"
+            BundledLazyLibraryPath("libssp.so.0")
+        end
+        if isfile(string(_libssp_path))
+            global libssp_path::String = ""
+            @eval const libssp = LazyLibrary($(_libssp_path))
+        end
+    end
+end
+
+# Conform to LazyJLLWrappers API
+function eager_mode()
+    if @isdefined(libatomic)
+        dlopen(libatomic)
+    end
+    dlopen(libgcc_s)
+    dlopen(libgomp)
+    if @isdefined libquadmath
+        dlopen(libquadmath)
+    end
+    if @isdefined libssp
+        dlopen(libssp)
+    end
+    dlopen(libgfortran)
+    dlopen(libstdcxx)
+end
+is_available() = true
+
 function __init__()
-    global libgcc_s_handle = dlopen(libgcc_s)
-    global libgcc_s_path = dlpath(libgcc_s_handle)
-    global libgfortran_handle = dlopen(libgfortran)
-    global libgfortran_path = dlpath(libgfortran_handle)
-    global libstdcxx_handle = dlopen(libstdcxx)
-    global libstdcxx_path = dlpath(libstdcxx_handle)
-    global libgomp_handle = dlopen(libgomp)
-    global libgomp_path = dlpath(libgomp_handle)
+    global libatomic_path = string(libatomic.path)
+    global libgcc_s_path = string(libgcc_s.path)
+    global libgomp_path = string(libgomp.path)
+    if @isdefined libquadmath_path
+        global libquadmath_path = string(libquadmath.path)
+    end
+    if @isdefined libssp_path
+        global libssp_path = string(libssp.path)
+    end
+    global libgfortran_path = string(libgfortran.path)
+    global libstdcxx_path = string(libstdcxx.path)
     global artifact_dir = dirname(Sys.BINDIR)
     LIBPATH[] = dirname(libgcc_s_path)
     push!(LIBPATH_list, LIBPATH[])
 end
 
-# JLLWrappers API compatibility shims.  Note that not all of these will really make sense.
-# For instance, `find_artifact_dir()` won't actually be the artifact directory, because
-# there isn't one.  It instead returns the overall Julia prefix.
-is_available() = true
-find_artifact_dir() = artifact_dir
-dev_jll() = error("stdlib JLLs cannot be dev'ed")
-best_wrapper = nothing
-get_libgfortran_path() = libgfortran_path
-get_libstdcxx_path() = libstdcxx_path
-get_libgomp_path() = libgomp_path
+if Base.generating_output()
+    precompile(eager_mode, ())
+    precompile(is_available, ())
+end
 
 end  # module CompilerSupportLibraries_jll

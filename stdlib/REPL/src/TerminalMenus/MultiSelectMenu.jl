@@ -11,7 +11,7 @@ A menu that allows a user to select a multiple options from a list.
 ```julia-repl
 julia> request(MultiSelectMenu(options))
 Select the fruits you like:
-[press: d=done, a=all, n=none]
+[press: Enter=toggle, a=all, n=none, d=done, q=abort]
    [ ] apple
  > [X] orange
    [X] grape
@@ -38,7 +38,7 @@ end
 
 """
 
-    MultiSelectMenu(options::Array{String,1}; pagesize::Int=10, selected=[], kwargs...)
+    MultiSelectMenu(options::Vector{String}; pagesize::Int=10, selected=[], kwargs...)
 
 Create a MultiSelectMenu object. Use `request(menu::MultiSelectMenu)` to get
 user input. It returns a `Set` containing the indices of options that
@@ -46,7 +46,7 @@ were selected by the user.
 
 # Arguments
 
-  - `options::Array{String, 1}`: Options to be displayed
+  - `options::Vector{String}`: Options to be displayed
   - `pagesize::Int=10`: The number of options to be displayed at one time, the menu will scroll if length(options) > pagesize
   - `selected=[]`: pre-selected items. `i ∈ selected` means that `options[i]` is preselected.
 
@@ -86,7 +86,7 @@ end
 # See AbstractMenu.jl
 #######################################
 
-header(m::MultiSelectMenu) = "[press: d=done, a=all, n=none]"
+header(m::MultiSelectMenu) = "[press: Enter=toggle, a=all, n=none, d=done, q=abort]"
 
 options(m::MultiSelectMenu) = m.options
 

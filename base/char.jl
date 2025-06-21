@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: AbstractChar, Char
+
 """
 The `AbstractChar` type is the supertype of all character implementations
 in Julia. A character represents a Unicode code point, and can be converted
@@ -52,7 +54,7 @@ Char
 (::Type{T})(x::T) where {T<:AbstractChar} = x
 
 """
-    ncodeunits(c::Char) -> Int
+    ncodeunits(c::Char)::Int
 
 Return the number of code units required to encode a character as UTF-8.
 This is the number of bytes which will be printed if the character is written
@@ -62,10 +64,17 @@ to an output stream, or `ncodeunits(string(c))` but computed efficiently.
     This method requires at least Julia 1.1. In Julia 1.0 consider
     using `ncodeunits(string(c))`.
 """
-ncodeunits(c::Char) = write(devnull, c) # this is surprisingly efficient
+function ncodeunits(c::Char)
+    u = reinterpret(UInt32, c)
+    # We care about how many trailing bytes are all zero
+    # subtract that from the total number of bytes
+    n_nonzero_bytes = sizeof(UInt32) - div(trailing_zeros(u), 0x8)
+    # Take care of '\0', which has an all-zero bitpattern
+    n_nonzero_bytes + iszero(u)
+end
 
 """
-    codepoint(c::AbstractChar) -> Integer
+    codepoint(c::AbstractChar)::Integer
 
 Return the Unicode codepoint (an unsigned integer) corresponding
 to the character `c` (or throw an exception if `c` does not represent
@@ -105,7 +114,7 @@ end
 #           not to support malformed or overlong encodings.
 
 """
-    ismalformed(c::AbstractChar) -> Bool
+    ismalformed(c::AbstractChar)::Bool
 
 Return `true` if `c` represents malformed (non-Unicode) data according to the
 encoding used by `c`. Defaults to `false` for non-`Char` types.
@@ -115,7 +124,7 @@ See also [`show_invalid`](@ref).
 ismalformed(c::AbstractChar) = false
 
 """
-    isoverlong(c::AbstractChar) -> Bool
+    isoverlong(c::AbstractChar)::Bool
 
 Return `true` if `c` represents an overlong UTF-8 sequence. Defaults
 to `false` for non-`Char` types.
@@ -140,7 +149,7 @@ isoverlong(c::AbstractChar) = false
 end
 
 """
-    decode_overlong(c::AbstractChar) -> Integer
+    decode_overlong(c::AbstractChar)::Integer
 
 When [`isoverlong(c)`](@ref) is `true`, `decode_overlong(c)` returns
 the Unicode codepoint value of `c`. `AbstractChar` implementations
@@ -181,9 +190,9 @@ end
 end
 
 convert(::Type{AbstractChar}, x::Number) = Char(x) # default to Char
-convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)
-convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)
-convert(::Type{T}, c::AbstractChar) where {T<:AbstractChar} = T(c)
+convert(::Type{T}, x::Number) where {T<:AbstractChar} = T(x)::T
+convert(::Type{T}, x::AbstractChar) where {T<:Number} = T(x)::T
+convert(::Type{T}, c::AbstractChar) where {T<:AbstractChar} = T(c)::T
 convert(::Type{T}, c::T) where {T<:AbstractChar} = c
 
 rem(x::AbstractChar, ::Type{T}) where {T<:Number} = rem(codepoint(x), T)
@@ -196,7 +205,7 @@ size(c::AbstractChar, d::Integer) = d < 1 ? throw(BoundsError()) : 1
 ndims(c::AbstractChar) = 0
 ndims(::Type{<:AbstractChar}) = 0
 length(c::AbstractChar) = 1
-IteratorSize(::Type{Char}) = HasShape{0}()
+IteratorSize(::Type{<:AbstractChar}) = HasShape{0}()
 firstindex(c::AbstractChar) = 1
 lastindex(c::AbstractChar) = 1
 getindex(c::AbstractChar) = c
@@ -213,9 +222,7 @@ in(x::AbstractChar, y::AbstractChar) = x == y
 ==(x::Char, y::Char) = bitcast(UInt32, x) == bitcast(UInt32, y)
 isless(x::Char, y::Char) = bitcast(UInt32, x) < bitcast(UInt32, y)
 hash(x::Char, h::UInt) =
-    hash_uint64(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h))
-
-first_utf8_byte(c::Char) = (bitcast(UInt32, c) >> 24) % UInt8
+    hash_finalizer(((bitcast(UInt32, x) + UInt64(0xd4d64234)) << 32) ⊻ UInt64(h)) % UInt
 
 # fallbacks:
 isless(x::AbstractChar, y::AbstractChar) = isless(Char(x), Char(y))
@@ -318,7 +325,7 @@ end
 
 function show(io::IO, ::MIME"text/plain", c::T) where {T<:AbstractChar}
     show(io, c)
-    get(io, :compact, false) && return
+    get(io, :compact, false)::Bool && return
     if !ismalformed(c)
         print(io, ": ")
         if isoverlong(c)

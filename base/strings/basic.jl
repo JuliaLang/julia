@@ -1,5 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+import Core: Symbol
+
 """
 The `AbstractString` type is the supertype of all string implementations in
 Julia. Strings are encodings of sequences of [Unicode](https://unicode.org/)
@@ -16,9 +18,7 @@ about strings:
   * Each `AbstractChar` in a string is encoded by one or more code units
   * Only the index of the first code unit of an `AbstractChar` is a valid index
   * The encoding of an `AbstractChar` is independent of what precedes or follows it
-  * String encodings are [self-synchronizing] – i.e. `isvalid(s, i)` is O(1)
-
-[self-synchronizing]: https://en.wikipedia.org/wiki/Self-synchronizing_code
+  * String encodings are [self-synchronizing](https://en.wikipedia.org/wiki/Self-synchronizing_code) – i.e. `isvalid(s, i)` is O(1)
 
 Some string functions that extract code units, characters or substrings from
 strings error if you pass them out-of-bounds or invalid string indices. This
@@ -31,7 +31,7 @@ types may choose different "imaginary" character sizes as makes sense for their
 implementations (e.g. substrings may pass index arithmetic through to the
 underlying string they provide a view into). Relaxed indexing functions include
 those intended for index arithmetic: `thisind`, `nextind` and `prevind`. This
-model allows index arithmetic to work with out-of- bounds indices as
+model allows index arithmetic to work with out-of-bounds indices as
 intermediate values so long as one never uses them to retrieve a character,
 which often helps avoid needing to code around edge cases.
 
@@ -43,11 +43,11 @@ AbstractString
 ## required string functions ##
 
 """
-    ncodeunits(s::AbstractString) -> Int
+    ncodeunits(s::AbstractString)::Int
 
 Return the number of code units in a string. Indices that are in bounds to
-access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indices
-are valid – they may not be the start of a character, but they will return a
+access this string must satisfy `1 ≤ i ≤ ncodeunits(s)`. Not all such indices
+are valid – they may not be the start of a character, but they will return a
 code unit value when calling `codeunit(s,i)`.
 
 # Examples
@@ -68,7 +68,7 @@ See also [`codeunit`](@ref), [`checkbounds`](@ref), [`sizeof`](@ref),
 ncodeunits(s::AbstractString)
 
 """
-    codeunit(s::AbstractString) -> Type{<:Union{UInt8, UInt16, UInt32}}
+    codeunit(s::AbstractString)::Type{<:Union{UInt8, UInt16, UInt32}}
 
 Return the code unit type of the given string object. For ASCII, Latin-1, or
 UTF-8 encoded strings, this would be `UInt8`; for UCS-2 and UTF-16 it would be
@@ -84,7 +84,7 @@ codeunit(s::AbstractString)
 const CodeunitType = Union{Type{UInt8},Type{UInt16},Type{UInt32}}
 
 """
-    codeunit(s::AbstractString, i::Integer) -> Union{UInt8, UInt16, UInt32}
+    codeunit(s::AbstractString, i::Integer)::Union{UInt8, UInt16, UInt32}
 
 Return the code unit value in the string `s` at index `i`. Note that
 
@@ -104,11 +104,11 @@ UInt8
 
 See also [`ncodeunits`](@ref), [`checkbounds`](@ref).
 """
-@propagate_inbounds codeunit(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds codeunit(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
 
 """
-    isvalid(s::AbstractString, i::Integer) -> Bool
+    isvalid(s::AbstractString, i::Integer)::Bool
 
 Predicate indicating whether the given index is the start of the encoding of a
 character in `s` or not. If `isvalid(s, i)` is true then `s[i]` will return the
@@ -140,21 +140,20 @@ Stacktrace:
 [...]
 ```
 """
-@propagate_inbounds isvalid(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds isvalid(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(isvalid, (s, i))) : isvalid(s, Int(i))
 
 """
-    iterate(s::AbstractString, i::Integer) -> Union{Tuple{<:AbstractChar, Int}, Nothing}
+    iterate(s::AbstractString, i::Integer)::Union{Tuple{<:AbstractChar, Int}, Nothing}
 
 Return a tuple of the character in `s` at index `i` with the index of the start
 of the following character in `s`. This is the key method that allows strings to
-be iterated, yielding a sequences of characters. If `i` is out of bounds in `s`
-then a bounds error is raised. The `iterate` function, as part of the iteration
-protocol may assume that `i` is the start of a character in `s`.
+be iterated, yielding a sequences of characters. The `iterate` function, as part
+of the iteration protocol may assume that `i` is the start of a character in `s`.
 
 See also [`getindex`](@ref), [`checkbounds`](@ref).
 """
-@propagate_inbounds iterate(s::AbstractString, i::Integer) = typeof(i) === Int ?
+@propagate_inbounds iterate(s::AbstractString, i::Integer) = i isa Int ?
     throw(MethodError(iterate, (s, i))) : iterate(s, Int(i))
 
 ## basic generic definitions ##
@@ -181,6 +180,8 @@ firstindex(s::AbstractString) = 1
 lastindex(s::AbstractString) = thisind(s, ncodeunits(s)::Int)
 isempty(s::AbstractString) = iszero(ncodeunits(s)::Int)
 
+@propagate_inbounds first(s::AbstractString) = s[firstindex(s)]
+
 function getindex(s::AbstractString, i::Integer)
     @boundscheck checkbounds(s, i)
     @inbounds return isvalid(s, i) ? (iterate(s, i)::NTuple{2,Any})[1] : string_index_err(s, i)
@@ -195,12 +196,7 @@ getindex(s::AbstractString, v::AbstractVector{Bool}) =
     throw(ArgumentError("logical indexing not supported for strings"))
 
 function get(s::AbstractString, i::Integer, default)
-# TODO: use ternary once @inbounds is expression-like
-    if checkbounds(Bool, s, i)
-        @inbounds return s[i]
-    else
-        return default
-    end
+    checkbounds(Bool, s, i) ? (@inbounds s[i]) : default
 end
 
 ## bounds checking ##
@@ -229,7 +225,7 @@ Symbol(s::AbstractString) = Symbol(String(s))
 Symbol(x...) = Symbol(string(x...))
 
 convert(::Type{T}, s::T) where {T<:AbstractString} = s
-convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)
+convert(::Type{T}, s::AbstractString) where {T<:AbstractString} = T(s)::T
 
 ## summary ##
 
@@ -241,11 +237,12 @@ end
 ## string & character concatenation ##
 
 """
-    *(s::Union{AbstractString, AbstractChar}, t::Union{AbstractString, AbstractChar}...) -> AbstractString
+    *(s::Union{AbstractString, AbstractChar}, t::Union{AbstractString, AbstractChar}...)::AbstractString
 
-Concatenate strings and/or characters, producing a [`String`](@ref). This is equivalent
-to calling the [`string`](@ref) function on the arguments. Concatenation of built-in
-string types always produces a value of type `String` but other string types may choose
+Concatenate strings and/or characters, producing a [`String`](@ref) or
+[`AnnotatedString`](@ref) (as appropriate). This is equivalent to calling the
+[`string`](@ref) or [`annotatedstring`](@ref) function on the arguments. Concatenation of built-in string
+types always produces a value of type `String` but other string types may choose
 to return a string of a different type as appropriate.
 
 # Examples
@@ -257,14 +254,26 @@ julia> 'j' * "ulia"
 "julia"
 ```
 """
-(*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...) = string(s1, ss...)
+function (*)(s1::Union{AbstractChar, AbstractString}, ss::Union{AbstractChar, AbstractString}...)
+    if _isannotated(s1) || any(_isannotated, ss)
+        annotatedstring(s1, ss...)
+    else
+        string(s1, ss...)
+    end
+end
 
 one(::Union{T,Type{T}}) where {T<:AbstractString} = convert(T, "")
+
+# This could be written as a single statement with three ||-clauses, however then effect
+# analysis thinks it may throw and runtime checks are added.
+# Also see `substring.jl` for the `::SubString{T}` method.
+_isannotated(S::Type) = S != Union{} && (S <: AnnotatedString || S <: AnnotatedChar)
+_isannotated(s) = _isannotated(typeof(s))
 
 ## generic string comparison ##
 
 """
-    cmp(a::AbstractString, b::AbstractString) -> Int
+    cmp(a::AbstractString, b::AbstractString)::Int
 
 Compare two strings. Return `0` if both strings have the same length and the character
 at each index is the same in both strings. Return `-1` if `a` is a prefix of `b`, or if
@@ -298,19 +307,21 @@ julia> cmp("b", "β")
 """
 function cmp(a::AbstractString, b::AbstractString)
     a === b && return 0
-    a, b = Iterators.Stateful(a), Iterators.Stateful(b)
-    for (c::AbstractChar, d::AbstractChar) in zip(a, b)
+    (iv1, iv2) = (iterate(a), iterate(b))
+    while iv1 !== nothing && iv2 !== nothing
+        (c, d) = (first(iv1)::AbstractChar, first(iv2)::AbstractChar)
         c ≠ d && return ifelse(c < d, -1, 1)
+        (iv1, iv2) = (iterate(a, last(iv1)), iterate(b, last(iv2)))
     end
-    isempty(a) && return ifelse(isempty(b), 0, -1)
-    return 1
+    return iv1 === nothing ? (iv2 === nothing ? 0 : -1) : 1
 end
 
 """
-    ==(a::AbstractString, b::AbstractString) -> Bool
+    ==(a::AbstractString, b::AbstractString)::Bool
 
 Test whether two strings are equal character by character (technically, Unicode
-code point by code point).
+code point by code point). Should either string be a [`AnnotatedString`](@ref) the
+string properties must match too.
 
 # Examples
 ```jldoctest
@@ -324,7 +335,7 @@ false
 ==(a::AbstractString, b::AbstractString) = cmp(a, b) == 0
 
 """
-    isless(a::AbstractString, b::AbstractString) -> Bool
+    isless(a::AbstractString, b::AbstractString)::Bool
 
 Test whether string `a` comes before string `b` in alphabetical order
 (technically, in lexicographical order by Unicode code points).
@@ -345,7 +356,9 @@ isless(a::AbstractString, b::AbstractString) = cmp(a, b) < 0
 
 # faster comparisons for symbols
 
-cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
+@assume_effects :total function cmp(a::Symbol, b::Symbol)
+    Int(sign(ccall(:strcmp, Int32, (Cstring, Cstring), a, b)))
+end
 
 isless(a::Symbol, b::Symbol) = cmp(a, b) < 0
 
@@ -356,8 +369,8 @@ hash(s::AbstractString, h::UInt) = hash(String(s), h)
 ## character index arithmetic ##
 
 """
-    length(s::AbstractString) -> Int
-    length(s::AbstractString, i::Integer, j::Integer) -> Int
+    length(s::AbstractString)::Int
+    length(s::AbstractString, i::Integer, j::Integer)::Int
 
 Return the number of characters in string `s` from indices `i` through `j`.
 
@@ -389,7 +402,7 @@ length(s::AbstractString) = @inbounds return length(s, 1, ncodeunits(s)::Int)
 function length(s::AbstractString, i::Int, j::Int)
     @boundscheck begin
         0 < i ≤ ncodeunits(s)::Int+1 || throw(BoundsError(s, i))
-        0 ≤ j < ncodeunits(s)::Int+1 || throw(BoundsError(s, j))
+        0 ≤ j < ncodeunits(s)::Int+1 || throw(BoundsError(s, j))
     end
     n = 0
     for k = i:j
@@ -402,7 +415,7 @@ end
     length(s, Int(i), Int(j))
 
 """
-    thisind(s::AbstractString, i::Integer) -> Int
+    thisind(s::AbstractString, i::Integer)::Int
 
 If `i` is in bounds in `s` return the index of the start of the character whose
 encoding code unit `i` is part of. In other words, if `i` is the start of a
@@ -438,15 +451,15 @@ thisind(s::AbstractString, i::Integer) = thisind(s, Int(i))
 function thisind(s::AbstractString, i::Int)
     z = ncodeunits(s)::Int + 1
     i == z && return i
-    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
-    @inbounds while 1 < i && !(isvalid(s, i)::Bool)
+    @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
+    @inbounds while 1 < i && !(isvalid(s, i)::Bool)
         i -= 1
     end
     return i
 end
 
 """
-    prevind(str::AbstractString, i::Integer, n::Integer=1) -> Int
+    prevind(str::AbstractString, i::Integer, n::Integer=1)::Int
 
 * Case `n == 1`
 
@@ -495,17 +508,17 @@ prevind(s::AbstractString, i::Int)                 = prevind(s, i, 1)
 
 function prevind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
-    z = ncodeunits(s) + 1
+    z = ncodeunits(s)::Int + 1
     @boundscheck 0 < i ≤ z || throw(BoundsError(s, i))
-    n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
-    while n > 0 && 1 < i
-        @inbounds n -= isvalid(s, i -= 1)
+    n == 0 && return thisind(s, i)::Int == i ? i : string_index_err(s, i)
+    while n > 0 && 1 < i
+        @inbounds n -= isvalid(s, i -= 1)::Bool
     end
     return i - n
 end
 
 """
-    nextind(str::AbstractString, i::Integer, n::Integer=1) -> Int
+    nextind(str::AbstractString, i::Integer, n::Integer=1)::Int
 
 * Case `n == 1`
 
@@ -554,11 +567,11 @@ nextind(s::AbstractString, i::Int)                 = nextind(s, i, 1)
 
 function nextind(s::AbstractString, i::Int, n::Int)
     n < 0 && throw(ArgumentError("n cannot be negative: $n"))
-    z = ncodeunits(s)
+    z = ncodeunits(s)::Int
     @boundscheck 0 ≤ i ≤ z || throw(BoundsError(s, i))
-    n == 0 && return thisind(s, i) == i ? i : string_index_err(s, i)
-    while n > 0 && i < z
-        @inbounds n -= isvalid(s, i += 1)
+    n == 0 && return thisind(s, i)::Int == i ? i : string_index_err(s, i)
+    while n > 0 && i < z
+        @inbounds n -= isvalid(s, i += 1)::Bool
     end
     return i + n
 end
@@ -577,7 +590,7 @@ iterate(e::EachStringIndex, state=firstindex(e.s)) = state > ncodeunits(e.s) ? n
 eltype(::Type{<:EachStringIndex}) = Int
 
 """
-    isascii(c::Union{AbstractChar,AbstractString}) -> Bool
+    isascii(c::Union{AbstractChar,AbstractString})::Bool
 
 Test whether a character belongs to the ASCII character set, or whether this is true for
 all elements of a string.
@@ -610,6 +623,38 @@ isascii(c::Char) = bswap(reinterpret(UInt32, c)) < 0x80
 isascii(s::AbstractString) = all(isascii, s)
 isascii(c::AbstractChar) = UInt32(c) < 0x80
 
+@inline function _isascii(code_units::AbstractVector{CU}, first, last) where {CU}
+    r = zero(CU)
+    for n = first:last
+        @inbounds r |= code_units[n]
+    end
+    return 0 ≤ r < 0x80
+end
+
+#The chunking algorithm makes the last two chunks overlap inorder to keep the size fixed
+@inline function  _isascii_chunks(chunk_size,cu::AbstractVector{CU}, first,last) where {CU}
+    n=first
+    while n <= last - chunk_size
+        _isascii(cu,n,n+chunk_size-1) || return false
+        n += chunk_size
+    end
+    return  _isascii(cu,last-chunk_size+1,last)
+end
+"""
+    isascii(cu::AbstractVector{CU}) where {CU <: Integer}::Bool
+
+Test whether all values in the vector belong to the ASCII character set (0x00 to 0x7f).
+This function is intended to be used by other string implementations that need a fast ASCII check.
+"""
+function isascii(cu::AbstractVector{CU}) where {CU <: Integer}
+    chunk_size = 1024
+    chunk_threshold =  chunk_size + (chunk_size ÷ 2)
+    first = firstindex(cu);   last = lastindex(cu)
+    l = last - first + 1
+    l < chunk_threshold && return _isascii(cu,first,last)
+    return _isascii_chunks(chunk_size,cu,first,last)
+end
+
 ## string map, filter ##
 
 function map(f, s::AbstractString)
@@ -633,7 +678,7 @@ function filter(f, s::AbstractString)
     for c in s
         f(c) && write(out, c)
     end
-    String(take!(out))
+    takestring!(out)
 end
 
 ## string first and last ##
@@ -715,7 +760,7 @@ julia> repeat("ha", 3)
 repeat(s::AbstractString, r::Integer) = repeat(String(s), r)
 
 """
-    ^(s::Union{AbstractString,AbstractChar}, n::Integer)
+    ^(s::Union{AbstractString,AbstractChar}, n::Integer)::AbstractString
 
 Repeat a string or character `n` times. This can also be written as `repeat(s, n)`.
 
@@ -757,8 +802,8 @@ IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 
-unsafe_convert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = unsafe_convert(Ptr{T}, s.s)
-unsafe_convert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = unsafe_convert(Ptr{Int8}, s.s)
+cconvert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = cconvert(Ptr{T}, s.s)
+cconvert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = cconvert(Ptr{Int8}, s.s)
 
 """
     codeunits(s::AbstractString)
@@ -780,3 +825,16 @@ julia> codeunits("Juλia")
 ```
 """
 codeunits(s::AbstractString) = CodeUnits(s)
+
+function _split_rest(s::AbstractString, n::Int)
+    lastind = lastindex(s)
+    i = try
+        prevind(s, lastind, n)
+    catch e
+        e isa BoundsError || rethrow()
+        _check_length_split_rest(length(s), n)
+    end
+    last_n = SubString(s, nextind(s, i), lastind)
+    front = s[begin:i]
+    return front, last_n
+end

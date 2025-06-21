@@ -1,7 +1,7 @@
 # [Getting Started](@id man-getting-started)
 
 Julia installation is straightforward, whether using precompiled binaries or compiling from source.
-Download and install Julia by following the instructions at [https://julialang.org/downloads/](https://julialang.org/downloads/).
+Download and install Julia by following the instructions at [https://julialang.org/install/](https://julialang.org/install/).
 
 If you are coming to Julia from one of the following languages, then you should start by reading the section on noteworthy differences from [MATLAB](@ref Noteworthy-differences-from-MATLAB), [R](@ref Noteworthy-differences-from-R), [Python](@ref Noteworthy-differences-from-Python), [C/C++](@ref Noteworthy-differences-from-C/C) or [Common Lisp](@ref Noteworthy-differences-from-Common-Lisp). This will help you avoid some common pitfalls since Julia differs from those languages in many subtle ways.
 
@@ -10,9 +10,10 @@ known as a read-eval-print loop or "REPL") by double-clicking the Julia executab
 `julia` from the command line:
 
 ```@eval
+using REPL
 io = IOBuffer()
-Base.banner(io)
-banner = String(take!(io))
+REPL.banner(io)
+banner = takestring!(io)
 import Markdown
 Markdown.parse("```\n\$ julia\n\n$(banner)\njulia> 1 + 2\n3\n\njulia> ans\n3\n```")
 ```
@@ -34,8 +35,7 @@ command:
 $ julia script.jl
 ```
 
-You can pass additional arguments to Julia, and to your program `script.jl`. A detailed list of all the available switches can be found at [Command-line Options](@ref
-command-line-options).
+You can pass additional arguments to Julia, and to your program `script.jl`. A detailed list of all the available options can be found under [Command-line Interface](@ref cli).
 
 ## Resources
 
@@ -56,4 +56,4 @@ search: begin disable_sigint reenable_sigint
   begin...end denotes a block of code.
 ```
 
-If you already know Julia a bit, you might want to peek ahead at [Performance Tips](@ref man-performance-tips) and [Workflow Tips](@ref man-workflow-tips).
+If you already know Julia a bit, you might want to peek ahead at [Performance Tips](@ref man-performance-tips) and [Workflow Tips](@ref man-workflow-tips), or check out the comprehensive [ModernJuliaWorkflows](https://modernjuliaworkflows.org/) blog.

@@ -19,18 +19,26 @@ SRCDIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 # get the executable suffix, if any
 EXE := $(suffix $(abspath $(JULIA)))
 
+OS := $(shell uname)
+ifeq ($(OS), Darwin)
+  DYLIB := .dylib
+else
+  DYLIB := .so
+endif
+
 # get compiler and linker flags. (see: `contrib/julia-config.jl`)
 JULIA_CONFIG := $(JULIA) -e 'include(joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "julia-config.jl"))' --
 CPPFLAGS_ADD :=
 CFLAGS_ADD = $(shell $(JULIA_CONFIG) --cflags)
 LDFLAGS_ADD = -lm $(shell $(JULIA_CONFIG) --ldflags --ldlibs)
+DYLIBFLAGS := --shared -fPIC
 
 DEBUGFLAGS += -g
 
 #=============================================================================
 
-release: $(BIN)/gcext$(EXE)
-debug:   $(BIN)/gcext-debug$(EXE)
+release: $(BIN)/gcext$(EXE) $(BIN)/Foreign/deps/foreignlib$(DYLIB)
+debug:   $(BIN)/gcext-debug$(EXE) $(BIN)/Foreign/deps/foreignlib-debug$(DYLIB)
 
 $(BIN)/gcext$(EXE): $(SRCDIR)/gcext.c
 	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
@@ -38,19 +46,27 @@ $(BIN)/gcext$(EXE): $(SRCDIR)/gcext.c
 $(BIN)/gcext-debug$(EXE): $(SRCDIR)/gcext.c
 	$(CC) $^ -o $@ $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS) $(DEBUGFLAGS)
 
+$(BIN)/foreignlib$(DYLIB): $(SRCDIR)/Foreign/deps/foreignlib.c
+	$(CC) $^ -o $@ $(DYLIBFLAGS) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS)
+
+$(BIN)/foreignlib-debug$(DYLIB): $(SRCDIR)/Foreign/deps/foreignlib.c
+	$(CC) $^ -o $@ $(DYLIBFLAGS) $(CPPFLAGS_ADD) $(CPPFLAGS) $(CFLAGS_ADD) $(CFLAGS) $(LDFLAGS_ADD) $(LDFLAGS) $(DEBUGFLAGS)
+
 ifneq ($(abspath $(BIN)),$(abspath $(SRCDIR)))
 # for demonstration purposes, our demo code is also installed
 # in $BIN, although this would likely not be typical
-$(BIN)/LocalModule.jl: $(SRCDIR)/LocalModule.jl
+$(BIN)/LocalTest.jl: $(SRCDIR)/LocalTest.jl
 	cp $< $@
 endif
 
-check: $(BIN)/gcext$(EXE) $(BIN)/LocalTest.jl
-	$(JULIA) --depwarn=error $(SRCDIR)/gcext-test.jl $<
+check: $(BIN)/gcext$(EXE) $(BIN)/LocalTest.jl $(BIN)/foreignlib$(DYLIB)
+	BINDIR=$(BIN) $(JULIA) --depwarn=error $(SRCDIR)/gcext-test.jl $<
 	@echo SUCCESS
 
 clean:
 	-rm -f $(BIN)/gcext-debug$(EXE) $(BIN)/gcext$(EXE)
+	-rm -f $(BIN)/foreignlib$(DYLIB)
+	-rm -f $(BIN)/foreignlib-debug$(DYLIB)
 
 .PHONY: release debug clean check
 

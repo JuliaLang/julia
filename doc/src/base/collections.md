@@ -36,15 +36,15 @@ Fully implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `Number`
+  * [`Tuple`](@ref)
+  * [`Number`](@ref)
   * [`AbstractArray`](@ref)
   * [`BitSet`](@ref)
   * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
   * `EachLine`
-  * `AbstractString`
+  * [`AbstractString`](@ref)
   * [`Set`](@ref)
   * [`Pair`](@ref)
   * [`NamedTuple`](@ref)
@@ -64,6 +64,7 @@ Base.LinRange
 
 ```@docs
 Base.isempty
+Base.isdone
 Base.empty!
 Base.length
 Base.checked_length
@@ -73,14 +74,14 @@ Fully implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `Number`
+  * [`Tuple`](@ref)
+  * [`Number`](@ref)
   * [`AbstractArray`](@ref)
   * [`BitSet`](@ref)
   * [`IdDict`](@ref)
   * [`Dict`](@ref)
   * [`WeakKeyDict`](@ref)
-  * `AbstractString`
+  * [`AbstractString`](@ref)
   * [`Set`](@ref)
   * [`NamedTuple`](@ref)
 
@@ -89,6 +90,7 @@ Fully implemented by:
 ```@docs
 Base.in
 Base.:∉
+Base.hasfastin
 Base.eltype
 Base.indexin
 Base.unique
@@ -96,6 +98,7 @@ Base.unique!
 Base.allunique
 Base.allequal
 Base.reduce(::Any, ::Any)
+Base.reduce(::Any, ::AbstractArray)
 Base.foldl(::Any, ::Any)
 Base.foldr(::Any, ::Any)
 Base.maximum
@@ -140,6 +143,7 @@ Base.replace(::Any, ::Pair...)
 Base.replace(::Base.Callable, ::Any)
 Base.replace!
 Base.rest
+Base.split_rest
 ```
 
 ## Indexable Collections
@@ -162,8 +166,8 @@ Partially implemented by:
 
   * [`AbstractRange`](@ref)
   * [`UnitRange`](@ref)
-  * `Tuple`
-  * `AbstractString`
+  * [`Tuple`](@ref)
+  * [`AbstractString`](@ref)
   * [`Dict`](@ref)
   * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
@@ -191,7 +195,7 @@ Dictionaries may also be created with generators. For example, `Dict(i => f(i) f
 
 Given a dictionary `D`, the syntax `D[x]` returns the value of key `x` (if it exists) or throws
 an error, and `D[x] = y` stores the key-value pair `x => y` in `D` (replacing any existing value
-for the key `x`).  Multiple arguments to `D[...]` are converted to tuples; for example, the syntax
+for the key `x`). Multiple arguments to `D[...]` are converted to tuples; for example, the syntax
 `D[x,y]`  is equivalent to `D[(x,y)]`, i.e. it refers to the value keyed by the tuple `(x,y)`.
 
 ```@docs
@@ -200,6 +204,7 @@ Base.Dict
 Base.IdDict
 Base.WeakKeyDict
 Base.ImmutableDict
+Base.PersistentDict
 Base.haskey
 Base.get
 Base.get!
@@ -220,18 +225,20 @@ Base.valtype
 
 Fully implemented by:
 
-  * [`IdDict`](@ref)
   * [`Dict`](@ref)
+  * [`IdDict`](@ref)
   * [`WeakKeyDict`](@ref)
 
 Partially implemented by:
 
-  * [`BitSet`](@ref)
   * [`Set`](@ref)
+  * [`BitSet`](@ref)
+  * [`IdSet`](@ref)
   * [`EnvDict`](@ref Base.EnvDict)
   * [`Array`](@ref)
   * [`BitArray`](@ref)
   * [`ImmutableDict`](@ref Base.ImmutableDict)
+  * [`PersistentDict`](@ref Base.PersistentDict)
   * [`Iterators.Pairs`](@ref)
 
 ## Set-Like Collections
@@ -240,6 +247,7 @@ Partially implemented by:
 Base.AbstractSet
 Base.Set
 Base.BitSet
+Base.IdSet
 Base.union
 Base.union!
 Base.intersect
@@ -249,6 +257,7 @@ Base.symdiff
 Base.symdiff!
 Base.intersect!
 Base.issubset
+Base.in!
 Base.:⊈
 Base.:⊊
 Base.issetequal
@@ -257,8 +266,10 @@ Base.isdisjoint
 
 Fully implemented by:
 
-  * [`BitSet`](@ref)
   * [`Set`](@ref)
+  * [`BitSet`](@ref)
+  * [`IdSet`](@ref)
+
 
 Partially implemented by:
 

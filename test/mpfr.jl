@@ -653,6 +653,10 @@ end
     @test typeof(round(Int64, x)) == Int64 && round(Int64, x) == 42
     @test typeof(round(Int, x)) == Int && round(Int, x) == 42
     @test typeof(round(UInt, x)) == UInt && round(UInt, x) == 0x2a
+
+    # Issue #44662
+    @test_throws InexactError round(Integer, big(Inf))
+    @test_throws InexactError round(Integer, big(NaN))
 end
 @testset "string representation" begin
     str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012"
@@ -663,16 +667,19 @@ end
         @test string(parse(BigFloat, "0.1")) == "0.10000002"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.9000015"
+        @test string(parse(BigFloat, "1e6")) == "1.0e6"
     end
     setprecision(40) do
         @test string(parse(BigFloat, "0.1")) == "0.10000000000002"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999942"
+        @test string(parse(BigFloat, "1e6")) == "1.0e6"
     end
     setprecision(123) do
         @test string(parse(BigFloat, "0.1")) == "0.0999999999999999999999999999999999999953"
         @test string(parse(BigFloat, "0.5")) == "0.5"
         @test string(parse(BigFloat, "-9.9")) == "-9.8999999999999999999999999999999999997"
+        @test string(parse(BigFloat, "1e6")) == "1.0e6"
     end
 end
 @testset "eps" begin
@@ -994,7 +1001,7 @@ end
 
     test_show_bigfloat(big"1.23456789", contains_e=false, starts="1.23")
     test_show_bigfloat(big"-1.23456789", contains_e=false, starts="-1.23")
-    test_show_bigfloat(big"2.3457645687563543266576889678956787e10000", starts="2.345", ends="e+10000")
+    test_show_bigfloat(big"2.3457645687563543266576889678956787e10000", starts="2.345", ends="e10000")
     test_show_bigfloat(big"-2.3457645687563543266576889678956787e-10000", starts="-2.345", ends="e-10000")
     test_show_bigfloat(big"42.0", contains_e=false, starts="42.0")
     test_show_bigfloat(big"420.0", contains_e=false, starts="420.0") # '0's have to be added on the right before point
@@ -1002,10 +1009,10 @@ end
     test_show_bigfloat(big"420000.0", contains_e=false, starts="420000.0")
     test_show_bigfloat(big"654321.0", contains_e=false, starts="654321.0")
     test_show_bigfloat(big"-654321.0", contains_e=false, starts="-654321.0")
-    test_show_bigfloat(big"6543210.0", contains_e=true, starts="6.5", ends="e+06")
+    test_show_bigfloat(big"6543210.0", contains_e=true, starts="6.5", ends="e6")
     test_show_bigfloat(big"0.000123", contains_e=false, starts="0.000123")
     test_show_bigfloat(big"-0.000123", contains_e=false, starts="-0.000123")
-    test_show_bigfloat(big"0.00001234", contains_e=true, starts="1.23", ends="e-05")
+    test_show_bigfloat(big"0.00001234", contains_e=true, starts="1.23", ends="e-5")
 
     for to_string in [string,
                       x->sprint(show, x),
@@ -1033,5 +1040,70 @@ end
             @test precision(BigFloat, base=100) == 50
             @test precision(BigFloat) == precision(BigFloat, base=2) == 333
         end
+    end
+end
+
+@testset "issue #50642" begin
+    setprecision(BigFloat, 500) do
+        bf = big"1.4901162082026128889687591176485489397376143775948511e-07"
+        @test Float16(bf) == Float16(2.0e-7)
+    end
+end
+
+# PR #54284
+import Base.MPFR: clear_flags, had_underflow, had_overflow, had_divbyzero,
+    had_nan, had_inexact_exception, had_range_exception
+
+function all_flags_54284()
+    (
+        had_underflow(),
+        had_overflow(),
+        had_divbyzero(),
+        had_nan(),
+        had_inexact_exception(),
+        had_range_exception(),
+    )
+end
+@testset "MPFR flags" begin
+    let x, a = floatmin(BigFloat), b = floatmax(BigFloat), c = zero(BigFloat)
+        clear_flags()
+        @test !any(all_flags_54284())
+
+        x = a - a # normal
+        @test all_flags_54284() == (false, false, false, false, false, false)
+        x = 1 / c # had_divbyzero
+        @test all_flags_54284() == (false, false, true, false, false, false)
+        clear_flags()
+        x = nextfloat(a) - a # underflow
+        @test all_flags_54284() == (true, false, false, false, true, false)
+        clear_flags()
+        x = 1 / a # overflow
+        @test all_flags_54284() == (false, true, false, false, true, false)
+        clear_flags()
+        x = c / c # nan
+        @test all_flags_54284() == (false, false, false, true, false, false)
+        clear_flags()
+        x = prevfloat(BigFloat(1.0)) * 100 # inexact
+        @test all_flags_54284() == (false, false, false, false, true, false)
+        clear_flags()
+        try convert(Int, b); catch; end # range exception
+        @test all_flags_54284() == (false, false, false, false, false, true)
+        clear_flags()
+    end
+end
+
+@testset "BigFloatData truncation OOB read" begin
+    @testset "T: $T" for T ∈ (UInt8, UInt16, UInt32, UInt64, UInt128)
+        v = Base.MPFR.BigFloatData{T}(fill(typemax(T), 1 + Base.MPFR.offset_p_limbs))
+        @testset "bit_count: $bit_count" for bit_count ∈ (0:10:80)
+            @test Base.MPFR.truncated(UInt128, v, bit_count) isa Any
+        end
+    end
+end
+
+# BigFloatData is the Ref type for BigFloat in ccall:
+@testset "cconvert(Ref{BigFloat}, x)" begin
+    for x in (1.0, big"1.0", Ref(big"1.0"))
+        @test Base.cconvert(Ref{BigFloat}, x) isa Base.MPFR.BigFloatData
     end
 end

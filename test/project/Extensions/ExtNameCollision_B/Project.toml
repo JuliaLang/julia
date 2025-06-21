@@ -1,0 +1,9 @@
+name = "ExtNameCollision_B"
+uuid = "597d654f-44d8-4443-9b1e-1f2f4b45906f"
+version = "0.1.0"
+
+[weakdeps]
+REPL = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
+
+[extensions]
+REPLExt = "REPL"

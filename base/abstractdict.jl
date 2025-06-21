@@ -12,6 +12,8 @@ struct KeyError <: Exception
     key
 end
 
+KeyTypeError(K, key) = TypeError(:var"dict key", K, key)
+
 const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::AbstractDict, k) = in(k, keys(d))
@@ -86,11 +88,11 @@ Return an iterator over all keys in a dictionary.
 When the keys are stored internally in a hash table,
 as is the case for `Dict`,
 the order in which they are returned may vary.
-But `keys(a)` and `values(a)` both iterate `a` and
-return the elements in the same order.
+But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
+and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+'\\S'.*\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -112,11 +114,11 @@ Return an iterator over all values in a collection.
 When the values are stored internally in a hash table,
 as is the case for `Dict`,
 the order in which they are returned may vary.
-But `keys(a)` and `values(a)` both iterate `a` and
-return the elements in the same order.
+But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
+and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+(\\s+=>\\s+\\d)?\$"m
 julia> D = Dict('a'=>2, 'b'=>3)
 Dict{Char, Int64} with 2 entries:
   'a' => 2
@@ -136,9 +138,13 @@ values(a::AbstractDict) = ValueIterator(a)
 Return an iterator over `key => value` pairs for any
 collection that maps a set of keys to a set of values.
 This includes arrays, where the keys are the array indices.
+When the entries are stored internally in a hash table,
+as is the case for `Dict`, the order in which they are returned may vary.
+But `keys(a)`, `values(a)` and `pairs(a)` all iterate `a`
+and return the elements in the same order.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> a = Dict(zip(["a", "b", "c"], [1, 2, 3]))
 Dict{String, Int64} with 3 entries:
   "c" => 3
@@ -201,7 +207,7 @@ Update collection with pairs from the other collections.
 See also [`merge`](@ref).
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> d1 = Dict(1 => 2, 3 => 4);
 
 julia> d2 = Dict(1 => 4, 4 => 5);
@@ -217,6 +223,9 @@ Dict{Int64, Int64} with 3 entries:
 """
 function merge!(d::AbstractDict, others::AbstractDict...)
     for other in others
+        if haslength(d) && haslength(other)
+            sizehint!(d, length(d) + length(other); shrink = false)
+        end
         for (k,v) in other
             d[k] = v
         end
@@ -242,7 +251,7 @@ compatibility.
     `mergewith!` requires Julia 1.5 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\d\$"m
 julia> d1 = Dict(1 => 2, 3 => 4);
 
 julia> d2 = Dict(1 => 4, 4 => 5);
@@ -296,7 +305,7 @@ julia> keytype(Dict(Int32(1) => "foo"))
 Int32
 ```
 """
-keytype(::Type{<:AbstractDict{K,V}}) where {K,V} = K
+keytype(::Type{<:AbstractDict{K}}) where {K} = K
 keytype(a::AbstractDict) = keytype(typeof(a))
 
 """
@@ -310,7 +319,7 @@ julia> valtype(Dict(Int32(1) => "foo"))
 String
 ```
 """
-valtype(::Type{<:AbstractDict{K,V}}) where {K,V} = V
+valtype(::Type{<:AbstractDict{<:Any,V}}) where {V} = V
 valtype(a::AbstractDict) = valtype(typeof(a))
 
 """
@@ -323,7 +332,7 @@ value for that key will be the value it has in the last collection listed.
 See also [`mergewith`](@ref) for custom handling of values with the same key.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String, Float64} with 2 entries:
   "bar" => 42.0
@@ -368,7 +377,7 @@ Method `merge(combine::Union{Function,Type}, args...)` as an alias of
     `mergewith` requires Julia 1.5 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+\\s+=>\\s+\\S+\$"m
 julia> a = Dict("foo" => 0.0, "bar" => 42.0)
 Dict{String, Float64} with 2 entries:
   "bar" => 42.0
@@ -387,6 +396,10 @@ Dict{String, Float64} with 3 entries:
 
 julia> ans == mergewith(+)(a, b)
 true
+
+julia> mergewith(-, Dict(), Dict(:a=>1))  # Combining function only used if key is present in both
+Dict{Any, Any} with 1 entry:
+  :a => 1
 ```
 """
 mergewith(combine, d::AbstractDict, others::AbstractDict...) =
@@ -411,8 +424,8 @@ end
 Update `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
-# Example
-```jldoctest
+# Examples
+```jldoctest; filter = r"^\\s+\\d\\s+=>\\s+\\S+\$"m
 julia> d = Dict(1=>"a", 2=>"b", 3=>"c")
 Dict{Int64, String} with 3 entries:
   2 => "b"
@@ -454,7 +467,7 @@ Return a copy of `d`, removing elements for which `f` is `false`.
 The function `f` is passed `key=>value` pairs.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\d\\s+=>\\s+\\S+\$"m
 julia> d = Dict(1=>"a", 2=>"b")
 Dict{Int64, String} with 2 entries:
   2 => "b"
@@ -521,6 +534,9 @@ function ==(l::AbstractDict, r::AbstractDict)
     return anymissing ? missing : true
 end
 
+# Fallback implementation
+sizehint!(d::AbstractDict, n) = d
+
 const hasha_seed = UInt === UInt64 ? 0x6d35bb51952d5539 : 0x952d5539
 function hash(a::AbstractDict, h::UInt)
     hv = hasha_seed
@@ -530,12 +546,12 @@ function hash(a::AbstractDict, h::UInt)
     hash(hv, h)
 end
 
-function getindex(t::AbstractDict, key)
+function getindex(t::AbstractDict{<:Any,V}, key) where V
     v = get(t, key, secret_table_token)
     if v === secret_table_token
         throw(KeyError(key))
     end
-    return v
+    return v::V
 end
 
 # t[k1,k2,ks...] is syntactic sugar for t[(k1,k2,ks...)].  (Note
@@ -545,21 +561,21 @@ setindex!(t::AbstractDict, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...
 
 get!(t::AbstractDict, key, default) = get!(() -> default, t, key)
 function get!(default::Callable, t::AbstractDict{K,V}, key) where K where V
-    haskey(t, key) && return t[key]
-    val = default()
-    t[key] = val
-    return val
+    key = convert(K, key)
+    if haskey(t, key)
+        return t[key]
+    else
+        return t[key] = convert(V, default())
+    end
 end
 
 push!(t::AbstractDict, p::Pair) = setindex!(t, p.second, p.first)
-push!(t::AbstractDict, p::Pair, q::Pair) = push!(push!(t, p), q)
-push!(t::AbstractDict, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
 # AbstractDicts are convertible
 convert(::Type{T}, x::T) where {T<:AbstractDict} = x
 
 function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
-    h = T(x)
+    h = T(x)::T
     if length(h) != length(x)
         error("key collision during dictionary conversion")
     end
@@ -567,9 +583,58 @@ function convert(::Type{T}, x::AbstractDict) where T<:AbstractDict
 end
 
 # hashing objects by identity
-_tablesz(x::Integer) = x < 16 ? 16 : one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
+_tablesz(x::T) where T <: Integer = x < 16 ? T(16) : one(T)<<(top_set_bit(x-one(T)))
 
 TP{K,V} = Union{Type{Tuple{K,V}},Type{Pair{K,V}}}
+
+# This error is thrown if `grow_to!` cannot validate the contents of the iterator argument to it, which it does by testing the iteration protocol (isiterable) on it each time it is about to start iteration on it
+_throw_dict_kv_error() = throw(ArgumentError("AbstractDict(kv): kv needs to be an iterator of 2-tuples or pairs"))
+
+function grow_to!(dest::AbstractDict, itr)
+    applicable(iterate, itr) || _throw_dict_kv_error()
+    y = iterate(itr)
+    y === nothing && return dest
+    kv, st = y
+    applicable(iterate, kv) || _throw_dict_kv_error()
+    k = iterate(kv)
+    k === nothing && _throw_dict_kv_error()
+    k, kvst = k
+    v = iterate(kv, kvst)
+    v === nothing && _throw_dict_kv_error()
+    v, kvst = v
+    iterate(kv, kvst) === nothing || _throw_dict_kv_error()
+    if !(dest isa AbstractDict{typeof(k), typeof(v)})
+        dest = empty(dest, typeof(k), typeof(v))
+    end
+    dest[k] = v
+    return grow_to!(dest, itr, st)
+end
+
+function grow_to!(dest::AbstractDict{K,V}, itr, st) where {K, V}
+    y = iterate(itr, st)
+    while y !== nothing
+        kv, st = y
+        applicable(iterate, kv) || _throw_dict_kv_error()
+        kst = iterate(kv)
+        kst === nothing && _throw_dict_kv_error()
+        k, kvst = kst
+        vst = iterate(kv, kvst)
+        vst === nothing && _throw_dict_kv_error()
+        v, kvst = vst
+        iterate(kv, kvst) === nothing || _throw_dict_kv_error()
+        if isa(k, K) && isa(v, V)
+            dest[k] = v
+        else
+            new = empty(dest, promote_typejoin(K, typeof(k)), promote_typejoin(V, typeof(v)))
+            merge!(new, dest)
+            new[k] = v
+            return grow_to!(new, itr, st)
+        end
+        y = iterate(itr, st)
+    end
+    return dest
+end
+
 
 dict_with_eltype(DT_apply, kv, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
 dict_with_eltype(DT_apply, kv::Generator, ::TP{K,V}) where {K,V} = DT_apply(K, V)(kv)
@@ -595,7 +660,7 @@ of `dict` then it will be converted to the value type if possible and otherwise 
     `map!(f, values(dict::AbstractDict))` requires Julia 1.2 or later.
 
 # Examples
-```jldoctest
+```jldoctest; filter = r"^\\s+\\S+(\\s+=>\\s+\\d)?\$"m
 julia> d = Dict(:a => 1, :b => 2)
 Dict{Symbol, Int64} with 2 entries:
   :a => 1

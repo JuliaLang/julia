@@ -46,14 +46,15 @@ function Base.shred!(cred::GitCredential)
     cred.host = nothing
     cred.path = nothing
     cred.username = nothing
-    cred.password !== nothing && Base.shred!(cred.password)
+    pwd = cred.password
+    pwd !== nothing && Base.shred!(pwd)
     cred.password = nothing
     return cred
 end
 
 
 """
-    ismatch(url, git_cred) -> Bool
+    ismatch(url, git_cred)::Bool
 
 Checks if the `git_cred` is valid for the given `url`.
 """
@@ -122,7 +123,7 @@ function Base.read!(io::IO, cred::GitCredential)
         if key == "url"
             # Any components which are missing from the URL will be set to empty
             # https://git-scm.com/docs/git-credential#git-credential-codeurlcode
-            Base.shred!(parse(GitCredential, value)) do urlcred
+            Base.shred!(parse(GitCredential, value::AbstractString)) do urlcred
                 copy!(cred, urlcred)
             end
         elseif key in GIT_CRED_ATTRIBUTES
@@ -182,16 +183,16 @@ end
 
 function run!(helper::GitCredentialHelper, operation::AbstractString, cred::GitCredential)
     cmd = `$(helper.cmd) $operation`
-    p = open(cmd, "r+")
+    open(cmd, "r+") do p
+        # Provide the helper with the credential information we know
+        write(p, cred)
+        write(p, "\n")
+        t = @async close(p.in)
 
-    # Provide the helper with the credential information we know
-    write(p, cred)
-    write(p, "\n")
-    t = @async close(p.in)
-
-    # Process the response from the helper
-    Base.read!(p, cred)
-    wait(p)
+        # Process the response from the helper
+        Base.read!(p, cred)
+        wait(t)
+    end
 
     return cred
 end
@@ -210,7 +211,7 @@ approve(helper::GitCredentialHelper, cred::GitCredential) = run(helper, "store",
 reject(helper::GitCredentialHelper, cred::GitCredential) = run(helper, "erase", cred)
 
 """
-    credential_helpers(config, git_cred) -> Vector{GitCredentialHelper}
+    credential_helpers(config, git_cred)::Vector{GitCredentialHelper}
 
 Return all of the `GitCredentialHelper`s found within the provided `config` which are valid
 for the specified `git_cred`.
@@ -219,7 +220,7 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
     helpers = GitCredentialHelper[]
 
     # https://git-scm.com/docs/gitcredentials#gitcredentials-helper
-    for entry in GitConfigIter(cfg, r"credential.*\.helper")
+    for entry in GitConfigIter(cfg, r"credential.*\.helper$")
         section, url, name, value = split_cfg_entry(entry)
         @assert name == "helper"
 
@@ -238,7 +239,7 @@ function credential_helpers(cfg::GitConfig, cred::GitCredential)
 end
 
 """
-    default_username(config, git_cred) -> Union{String, Nothing}
+    default_username(config, git_cred)::Union{String, Nothing}
 
 Return the default username, if any, provided by the `config` which is valid for the
 specified `git_cred`.

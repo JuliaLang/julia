@@ -47,21 +47,52 @@ macro _lock_ios(s, expr)
 end
 
 """
-    fd(stream)
+    fd(x)::RawFD
 
-Return the file descriptor backing the stream or file. Note that this function only applies
-to synchronous `File`'s and `IOStream`'s not to any of the asynchronous streams.
+Return the file descriptor backing the stream, file, or socket.
+
+`RawFD` objects can be passed directly to other languages via the `ccall` interface.
+
+!!! compat "Julia 1.12"
+    Prior to 1.12, this function returned an `Int` instead of a `RawFD`. You may use
+    `RawFD(fd(x))` to produce a `RawFD` in all Julia versions.
+
+!!! compat "Julia 1.12"
+    Getting the file descriptor of sockets are supported as of Julia 1.12.
+
+!!! warning
+    Duplicate the returned file descriptor with [`Libc.dup()`](@ref) before
+    passing it to another system that will take ownership of it (e.g. a C
+    library). Otherwise both the Julia object `x` and the other system may try
+    to close the file descriptor, which will cause errors.
+
+!!! warning
+    The file descriptors for sockets are asynchronous (i.e. `O_NONBLOCK` on
+    POSIX and `OVERLAPPED` on Windows), they may behave differently than regular
+    file descriptors.
 """
-fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
+fd(s::IOStream) = RawFD(ccall(:jl_ios_fd, Clong, (Ptr{Cvoid},), s.ios))
 
 stat(s::IOStream) = stat(fd(s))
 
+"""
+    isopen(s::IOStream)
+
+Check if the stream is not yet closed.
+
+A closed `IOStream` may still have data to read in its buffer,
+use [`eof`](@ref) to check for the ability to read data.
+
+Use the `FileWatching` package to be notified when a file might be writable or readable.
+"""
 isopen(s::IOStream) = ccall(:ios_isopen, Cint, (Ptr{Cvoid},), s.ios) != 0
 
 function close(s::IOStream)
     bad = @_lock_ios s ccall(:ios_close, Cint, (Ptr{Cvoid},), s.ios) != 0
     systemerror("close", bad)
 end
+
+closewrite(s::IOStream) = nothing
 
 function flush(s::IOStream)
     sigatomic_begin()
@@ -90,7 +121,7 @@ julia> write(io, "JuliaLang is a GitHub organization.")
 julia> truncate(io, 15)
 IOBuffer(data=UInt8[...], readable=true, writable=true, seekable=true, append=false, size=15, maxsize=Inf, ptr=16, mark=-1)
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a "
 
 julia> io = IOBuffer();
@@ -99,7 +130,7 @@ julia> write(io, "JuliaLang is a GitHub organization.");
 
 julia> truncate(io, 40);
 
-julia> String(take!(io))
+julia> takestring!(io)
 "JuliaLang is a GitHub organization.\\0\\0\\0\\0\\0"
 ```
 """
@@ -222,8 +253,8 @@ end
 function filesize(s::IOStream)
     sz = @_lock_ios s ccall(:ios_filesize, Int64, (Ptr{Cvoid},), s.ios)
     if sz == -1
-        err = Libc.errno()
-        throw(IOError(string("filesize: ", Libc.strerror(err), " for ", s.name), err))
+        # if `s` is not seekable `ios_filesize` can fail, so fall back to slower stat method
+        sz = filesize(stat(s))
     end
     return sz
 end
@@ -236,7 +267,7 @@ eof(s::IOStream) = @_lock_ios s _eof_nolock(s)
 # "own" means the descriptor will be closed with the IOStream
 
 """
-    fdio([name::AbstractString, ]fd::Integer[, own::Bool=false]) -> IOStream
+    fdio([name::AbstractString, ]fd::Integer[, own::Bool=false])::IOStream
 
 Create an [`IOStream`](@ref) object from an integer file descriptor. If `own` is `true`, closing
 this object will close the underlying descriptor. By default, an `IOStream` is closed when
@@ -251,7 +282,7 @@ end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
 """
-    open(filename::AbstractString; lock = true, keywords...) -> IOStream
+    open(filename::AbstractString; lock = true, keywords...)::IOStream
 
 Open a file in a mode specified by five boolean keyword arguments:
 
@@ -272,7 +303,7 @@ safe multi-threaded access.
 !!! compat "Julia 1.5"
     The `lock` argument is available as of Julia 1.5.
 """
-function open(fname::AbstractString; lock = true,
+function open(fname::String; lock = true,
     read     :: Union{Bool,Nothing} = nothing,
     write    :: Union{Bool,Nothing} = nothing,
     create   :: Union{Bool,Nothing} = nothing,
@@ -290,18 +321,22 @@ function open(fname::AbstractString; lock = true,
     if !lock
         s._dolock = false
     end
-    systemerror("opening file $(repr(fname))",
-                ccall(:ios_file, Ptr{Cvoid},
-                      (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
-                      s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL)
+    if ccall(:ios_file, Ptr{Cvoid},
+             (Ptr{UInt8}, Cstring, Cint, Cint, Cint, Cint),
+             s.ios, fname, flags.read, flags.write, flags.create, flags.truncate) == C_NULL
+        systemerror("opening file $(repr(fname))")
+    end
     if flags.append
-        systemerror("seeking to end of file $fname", ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0)
+        if ccall(:ios_seek_end, Int64, (Ptr{Cvoid},), s.ios) != 0
+            systemerror("seeking to end of file $fname")
+        end
     end
     return s
 end
+open(fname::AbstractString; kwargs...) = open(convert(String, fname)::String; kwargs...)
 
 """
-    open(filename::AbstractString, [mode::AbstractString]; lock = true) -> IOStream
+    open(filename::AbstractString, [mode::AbstractString]; lock = true)::IOStream
 
 Alternate syntax for open, where a string-based mode specifier is used instead of the five
 booleans. The values of `mode` correspond to those from `fopen(3)` or Perl `open`, and are
@@ -442,14 +477,45 @@ end
 function readuntil_string(s::IOStream, delim::UInt8, keep::Bool)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, delim, 1, !keep)
 end
+readuntil(s::IOStream, delim::AbstractChar; keep::Bool=false) =
+    isascii(delim) ? readuntil_string(s, delim % UInt8, keep) :
+    takestring!(copyuntil(IOBuffer(sizehint=70), s, delim; keep))
 
 function readline(s::IOStream; keep::Bool=false)
     @_lock_ios s ccall(:jl_readuntil, Ref{String}, (Ptr{Cvoid}, UInt8, UInt8, UInt8), s.ios, '\n', 1, keep ? 0 : 2)
 end
 
-function readbytes_all!(s::IOStream,
-                        b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                        nb::Integer)
+function copyuntil(out::IOBuffer, s::IOStream, delim::UInt8; keep::Bool=false)
+    ensureroom(out, 1) # make sure we can read at least 1 byte, for iszero(n) check below
+    while true
+        d = out.data
+        len = length(d)
+        ptr = (out.append ? out.size+1 : out.ptr)
+        GC.@preserve d @_lock_ios s n=
+            Int(ccall(:jl_readuntil_buf, Csize_t, (Ptr{Cvoid}, UInt8, Ptr{UInt8}, Csize_t),
+                s.ios, delim, pointer(d, ptr), (len - ptr + 1) % Csize_t))
+        iszero(n) && break
+        ptr += n
+        found = (d[ptr - 1] == delim)
+        found && !keep && (ptr -= 1)
+        out.size = max(out.size, ptr - 1)
+        out.append || (out.ptr = ptr)
+        found && break
+        (eof(s) || len == out.maxsize) && break
+        len = min(2len + 64, out.maxsize)
+        ensureroom(out, len)
+        @assert length(out.data) >= len
+    end
+    return out
+end
+
+function copyuntil(out::IOStream, s::IOStream, delim::UInt8; keep::Bool=false)
+    @_lock_ios out @_lock_ios s ccall(:ios_copyuntil, Csize_t,
+        (Ptr{Cvoid}, Ptr{Cvoid}, UInt8, Cint), out.ios, s.ios, delim, keep)
+    return out
+end
+
+function readbytes_all!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb::Integer)
     olb = lb = length(b)
     nr = 0
     let l = s._dolock, slock = s.lock
@@ -477,9 +543,7 @@ function readbytes_all!(s::IOStream,
     return nr
 end
 
-function readbytes_some!(s::IOStream,
-                         b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                         nb::Integer)
+function readbytes_some!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb::Integer)
     olb = length(b)
     if nb > olb
         resize!(b, nb)
@@ -508,10 +572,7 @@ requested bytes, until an error or end-of-file occurs. If `all` is `false`, at m
 `read` call is performed, and the amount of data returned is device-dependent. Note that not
 all stream types support the `all` option.
 """
-function readbytes!(s::IOStream,
-                    b::Union{Array{UInt8}, FastContiguousSubArray{UInt8,<:Any,<:Array{UInt8}}},
-                    nb=length(b);
-                    all::Bool=true)
+function readbytes!(s::IOStream, b::MutableDenseArrayType{UInt8}, nb=length(b); all::Bool=true)
     return all ? readbytes_all!(s, b, nb) : readbytes_some!(s, b, nb)
 end
 
