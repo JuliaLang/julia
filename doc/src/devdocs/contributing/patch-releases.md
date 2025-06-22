@@ -1,5 +1,4 @@
-
-### Contributing to patch releases
+# Contributing to patch releases
 
 The process of [creating a patch release](https://docs.julialang.org/en/v1/devdocs/build/distributing/#Point-releasing-101) is roughly as follows:
 

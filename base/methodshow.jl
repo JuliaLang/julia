@@ -214,7 +214,9 @@ show(io::IO, m::Method; kwargs...) = show_method(IOContext(io, :compact=>true), 
 
 show(io::IO, ::MIME"text/plain", m::Method; kwargs...) = show_method(io, m; kwargs...)
 
-function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_width = 1)
+function show_method(io::IO, m::Method;
+                     modulecolor = :light_black, digit_align_width = 1,
+                     print_signature_only::Bool = get(io, :print_method_signature_only, false)::Bool)
     tv, decls, file, line = arg_decl_parts(m)
     sig = unwrap_unionall(m.sig)
     if sig === Tuple
@@ -250,12 +252,14 @@ function show_method(io::IO, m::Method; modulecolor = :light_black, digit_align_
         show_method_params(io, tv)
     end
 
-    if !(get(io, :compact, false)::Bool) # single-line mode
-        println(io)
-        digit_align_width += 4
+    if !print_signature_only
+        if !(get(io, :compact, false)::Bool) # single-line mode
+            println(io)
+            digit_align_width += 4
+        end
+        # module & file, re-using function from errorshow.jl
+        print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
     end
-    # module & file, re-using function from errorshow.jl
-    print_module_path_file(io, parentmodule(m), string(file), line; modulecolor, digit_align_width)
 end
 
 function show_method_list_header(io::IO, ms::MethodList, namefmt::Function)

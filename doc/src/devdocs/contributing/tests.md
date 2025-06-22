@@ -1,4 +1,4 @@
-### Writing tests
+# Writing tests
 
 There are never enough tests. Track [code coverage at Codecov](https://codecov.io/github/JuliaLang/julia), and help improve it.
 

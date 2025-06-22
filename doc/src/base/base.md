@@ -193,6 +193,7 @@ Base.typeintersect
 Base.promote_type
 Base.promote_rule
 Base.promote_typejoin
+Base.iskindtype
 Base.isdispatchtuple
 ```
 
@@ -251,6 +252,7 @@ Base.instances
 Core.Any
 Core.Union
 Union{}
+Core.TypeofBottom
 Core.UnionAll
 Core.Tuple
 Core.NTuple

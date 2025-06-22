@@ -28,9 +28,9 @@ end
 if use_revise
     # First put this at the top of the DEPOT PATH to install revise if necessary.
     # Once it's loaded, we swizzle it to the end, to avoid confusing any tests.
-    pushfirst!(DEPOT_PATH, joinpath(buildroot, "test", "deps"))
+    pushfirst!(DEPOT_PATH, joinpath(buildroot, "deps", "jlutilities", "depot"))
     using Pkg
-    Pkg.activate(joinpath(@__DIR__, "deps"))
+    Pkg.activate(joinpath(@__DIR__, "..", "deps", "jlutilities", "revise"))
     Pkg.instantiate()
     using Revise
     union!(Revise.stdlib_names, Symbol.(STDLIBS))
@@ -414,7 +414,7 @@ cd(@__DIR__) do
             # deserialization errors or something similar.  Record this testset as Errored.
             fake = Test.DefaultTestSet(testname)
             fake.time_end = fake.time_start + duration
-            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1)))
+            Test.record(fake, Test.Error(:nontest_error, testname, nothing, Any[(resp, [])], LineNumberNode(1), nothing))
             Test.push_testset(fake)
             Test.record(o_ts, fake)
             Test.pop_testset()
@@ -423,7 +423,7 @@ cd(@__DIR__) do
     for test in all_tests
         (test in completed_tests) && continue
         fake = Test.DefaultTestSet(test)
-        Test.record(fake, Test.Error(:test_interrupted, test, nothing, [("skipped", [])], LineNumberNode(1)))
+        Test.record(fake, Test.Error(:test_interrupted, test, nothing, [("skipped", [])], LineNumberNode(1), nothing))
         Test.push_testset(fake)
         Test.record(o_ts, fake)
         Test.pop_testset()

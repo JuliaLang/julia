@@ -83,7 +83,7 @@ julia> NaN == NaN, isequal(NaN, NaN), isnan(NaN)
 !!! note
     Always use [`isnan`](@ref) or [`isequal`](@ref) for checking for `NaN`.
     Using `x === NaN` may give unexpected results:
-    ```julia-repl
+    ```jldoctest
     julia> reinterpret(UInt32, NaN32)
     0x7fc00000
 

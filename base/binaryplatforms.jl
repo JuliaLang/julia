@@ -796,6 +796,17 @@ function platform_dlext(p::AbstractPlatform = HostPlatform())
     end
 end
 
+# Not general purpose, just for parse_dl_name_version
+function _this_os_name()
+    if Sys.iswindows()
+        return "windows"
+    elseif Sys.isapple()
+        return "macos"
+    else
+        return "other"
+    end
+end
+
 """
     parse_dl_name_version(path::String, platform::AbstractPlatform)
 
@@ -806,9 +817,10 @@ valid dynamic library, this method throws an error.  If no soversion
 can be extracted from the filename, as in "libbar.so" this method
 returns `"libbar", nothing`.
 """
-function parse_dl_name_version(path::String, os::String)
+function parse_dl_name_version(path::String, os::String=_this_os_name())
     # Use an extraction regex that matches the given OS
     local dlregex
+    # Keep this up to date with _this_os_name
     if os == "windows"
         # On Windows, libraries look like `libnettle-6.dll`
         dlregex = r"^(.*?)(?:-((?:[\.\d]+)*))?\.dll$"sa
@@ -837,7 +849,7 @@ function parse_dl_name_version(path::String, os::String)
 end
 
 # Adapter for `AbstractString`
-function parse_dl_name_version(path::AbstractString, os::AbstractString)
+function parse_dl_name_version(path::AbstractString, os::AbstractString=_this_os_name())
     return parse_dl_name_version(string(path)::String, string(os)::String)
 end
 
