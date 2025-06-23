@@ -347,7 +347,7 @@ end
 
 function merge_slot_refinements!(merged_refinements::Vector{SlotRefinement}, 𝕃ᵢ::AbstractLattice, refinements::Union{Nothing, Vector{SlotRefinement}}, fargs::Vector{Any}, match::MethodMatch)
     valid_as_lattice(match.spec_types, true) || return nothing
-    ⊔, ⊓ = join(𝕃ᵢ), meet(𝕃ᵢ)
+    ⊔ = join(𝕃ᵢ)
     for i in 1:length(merged_refinements)
         merged_refinement = merged_refinements[i]
         newt = refinements === nothing ? Any : begin
@@ -359,7 +359,7 @@ function merge_slot_refinements!(merged_refinements::Vector{SlotRefinement}, �
             isa(fargₖ, SlotNumber) || continue
             fargₖ === merged_refinement.slot || continue
             sigtₖ = fieldtype(match.spec_types, k)
-            newt = newt ⊓ sigtₖ
+            newt = intersect_refined_types(newt, sigtₖ, 𝕃ᵢ)
         end
         merged_refinements[i] = SlotRefinement(merged_refinement.slot, merged_refinement.typ ⊔ newt)
     end

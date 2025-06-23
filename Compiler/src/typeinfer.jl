@@ -1209,6 +1209,7 @@ function intersect_refined_types(@nospecialize(xtyp), @nospecialize(ytyp), 𝕃�
     ⊓ = meet(𝕃ₚ)
     isa(xtyp, Const) && isa(ytyp, Const) && return xtyp == ytyp ? xtyp : Union{}
     isa(ytyp, Const) && ((xtyp, ytyp) = (ytyp, xtyp))
+    !isa(xtyp, Type) && !isa(ytyp, Type) && return Union{}
     xtyp ⊓ ytyp
 end
 
