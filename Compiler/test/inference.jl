@@ -2591,8 +2591,48 @@ end |> only === Int
         let subfunc(x) = rand(Bool) ? x::Float64 : subfunc(x)
             src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
             @test src.rettype === Any
-            # TODO: Implement merging of local refinements into global refinements
+
+            # XXX: Correctly inferring that would requiring proving that the
+            # `x::Float64` branch dominates any exit of a terminating *program* in a
+            # recursive context. This requires IPO for the more general case of entering
+            # another function and possibly calling back into the caller.
+            # (even though here we could special-case re-entry into itself in theory)
+
+            # Any non-throwing, globally terminating program will be dominated by the type assertion.
             # @test src.rettype === Float64
+        end
+
+        let f(y::Number) = y::Signed
+            f(y) = y::Symbol
+            subfunc_2 = f # prevent function from being boxed
+            subfunc(x, y) = begin
+                if isa(x, Float64)
+                    y::Integer
+                else
+                    isa(x, Int64) || error("")
+                    y::Real
+                end
+                subfunc_2(y)
+            end
+            src = code_typed1(return_after, (typeof(subfunc), Any, Any); optimize = false)
+            @test src.rettype === Tuple{Union{Float64, Int64}, Signed}
+        end
+
+        let subfunc(x) = begin
+                i = 0
+                @label a
+                x > 0 ? @goto(b) : @goto(c)
+                @label b
+                i += 1
+                x::Symbol
+                i > 4 && @goto(d)
+                @label c
+                x::Real
+                i > 5 || @goto(b)
+                @label d
+            end
+            src = code_typed1(return_after, (typeof(subfunc), Any); optimize = false)
+            # @test src.rettype === Tuple{Union{Float64, Int64}, Signed}
         end
     end
 
@@ -2613,6 +2653,31 @@ end |> only === Int
         end
         src = code_typed1(f, (Any,); optimize = false)
         @test src.rettype == Val # especially not `Val{true}`
+    end
+
+    @eval module SlotIPO_1
+
+    f1(x::Number) = x
+    f2(x::Signed) = x
+    f2(x::Symbol) = x
+    f3(x::Integer) = x::Int64
+    f3(x::AbstractFloat) = x::Float64
+    g1(x) = isa(x, String) ? x : throw(ArgumentError("Expected a String"))
+    function f(x)
+        if inferencebarrier(true)
+            f1(x) # -> x::Number
+            f2(x) # -> x::Signed
+            f3(x) # -> x::Integer -> x::Int64
+        else
+            g1(x) # -> x::String
+        end
+        x # -> ::Union{Int64, String}
+    end
+
+    end # module
+
+    let src = code_typed1(return_after, (typeof(@invokelatest(SlotIPO_1.f)), Any); optimize = false)
+        @test src.rettype === Union{Int64, String}
     end
 end
 

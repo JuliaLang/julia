@@ -4618,19 +4618,21 @@ function finish_merging_global_refinements!(frame::InferenceState, interp::Abstr
     state = frame.refinement_propagation
     length(state.terminating_blocks) ≥ 2 || return
     𝕃ᵢ = typeinf_lattice(interp)
-    paths = nonthrowing_paths(state, frame, state.terminating_blocks)
+    paths = nonthrowing_paths(state, frame, state.terminating_blocks; finished = true)
     updates = merge_updates_from_paths(𝕃ᵢ, state, paths, frame)
     updates === nothing && return
     refinements = values(updates)
     apply_refinements!(frame.refinements, 𝕃ᵢ, refinements)
 end
 
-function nonthrowing_paths(state::SlotRefinementPropagationState, frame::InferenceState, blocks)
+function nonthrowing_paths(state::SlotRefinementPropagationState, frame::InferenceState, blocks; finished::Bool = false)
     paths = PathIndex[]
     for v in blocks
         i = last(frame.cfg.blocks[v].stmts)
         inferred = frame.src.ssavaluetypes[i]
         inferred === Union{} && continue
+        # If we call this post-inference, `NOT_FOUND` indicates unreachable code.
+        inferred === NOT_FOUND && finished && continue
         push!(paths, state.paths[v])
     end
     return paths
