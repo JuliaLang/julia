@@ -851,10 +851,45 @@ end
 """
     isdispatchtuple(T)
 
-Determine whether type `T` is a tuple of concrete types,
-meaning it could appear as a type signature in dispatch
-and has no subtypes (or supertypes) which could appear in a call.
+Determine whether type `T` is a [`Tuple`](@ref) that could appear as a type
+signature in dispatch.  For this to be true, every element of the tuple type
+must be either:
+- [concrete](@ref isconcretetype) but not a [kind type](@ref Base.iskindtype)
+- a [`Type{U}`](@ref Type) with no free type variables in `U`
+
+!!! note
+    A dispatch tuple is relevant for method dispatch because it has no inhabited
+    subtypes.
+
+    For example, `Tuple{Int, DataType}` is concrete, but is not a dispatch tuple
+    because `Tuple{Int, Type{Bool}}` is an inhabited subtype.
+
+    `Tuple{Tuple{DataType}}` *is* a dispatch tuple because `Tuple{DataType}` is
+    concrete and not a kind; the subtype `Tuple{Tuple{Type{Int}}}` is not
+    inhabited.
+
 If `T` is not a type, then return `false`.
+
+# Examples
+```jldoctest
+julia> isdispatchtuple(Int)
+false
+
+julia> isdispatchtuple(Tuple{Int})
+true
+
+julia> isdispatchtuple(Tuple{Number})
+false
+
+julia> isdispatchtuple(Tuple{DataType})
+false
+
+julia> isdispatchtuple(Tuple{Type{Int}})
+true
+
+julia> isdispatchtuple(Tuple{Type})
+false
+```
 """
 isdispatchtuple(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0004) == 0x0004)
 
@@ -900,7 +935,40 @@ function isidentityfree(@nospecialize(t))
     return false
 end
 
+"""
+    Base.iskindtype(T)
+
+Determine whether `T` is a kind, that is, the type of a Julia type:
+a [`DataType`](@ref), [`Union`](@ref), [`UnionAll`](@ref),
+or [`Core.TypeofBottom`](@ref).
+
+All kinds are [concrete](@ref isconcretetype) because types are Julia values.
+"""
 iskindtype(@nospecialize t) = (t === DataType || t === UnionAll || t === Union || t === typeof(Bottom))
+
+"""
+    Base.isconcretedispatch(T)
+
+Returns true if `T` is a [concrete type](@ref isconcretetype) that could appear
+as an element of a [dispatch tuple](@ref isdispatchtuple).
+
+See also: [`isdispatchtuple`](@ref).
+
+# Examples
+```jldoctest
+julia> Base.isconcretedispatch(Int)
+true
+
+julia> Base.isconcretedispatch(Number)
+false
+
+julia> Base.isconcretedispatch(DataType)
+false
+
+julia> Base.isconcretedispatch(Type{Int})
+false
+```
+"""
 isconcretedispatch(@nospecialize t) = isconcretetype(t) && !iskindtype(t)
 
 using Core: has_free_typevars
@@ -923,6 +991,16 @@ Determine whether type `T` is a concrete type, meaning it could have direct inst
 Note that this is not the negation of `isabstracttype(T)`.
 If `T` is not a type, then return `false`.
 
+!!! note
+    While concrete types are not [abstract](@ref isabstracttype) and
+    vice versa, types can be neither concrete nor abstract (for example,
+    `Vector` (a [`UnionAll`](@ref))).
+
+!!! note
+    `T` must be the exact type that would be returned from `typeof`.  It is
+    possible for a type `U` to exist such that `T == U`, `isconcretetype(T)`,
+    but `!isconcretetype(U)`.
+
 See also: [`isbits`](@ref), [`isabstracttype`](@ref), [`issingletontype`](@ref).
 
 # Examples
@@ -932,6 +1010,9 @@ false
 
 julia> isconcretetype(Complex{Float32})
 true
+
+julia> isconcretetype(Vector)
+false
 
 julia> isconcretetype(Vector{Complex})
 true
@@ -944,6 +1025,9 @@ false
 
 julia> isconcretetype(Union{Int,String})
 false
+
+julia> isconcretetype(Tuple{T} where T<:Int)
+false
 ```
 """
 isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags & 0x0002) == 0x0002)
@@ -953,8 +1037,14 @@ isconcretetype(@nospecialize(t)) = (@_total_meta; isa(t, DataType) && (t.flags &
 
 Determine whether type `T` was declared as an abstract type
 (i.e. using the `abstract type` syntax).
-Note that this is not the negation of `isconcretetype(T)`.
 If `T` is not a type, then return `false`.
+
+!!! note
+    While abstract types are not [concrete](@ref isconcretetype) and
+    vice versa, types can be neither concrete nor abstract (for example,
+    `Vector` (a [`UnionAll`](@ref))).
+
+See also: [`isconcretetype`](@ref).
 
 # Examples
 ```jldoctest
