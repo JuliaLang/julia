@@ -380,7 +380,7 @@ end
 # NOTE: this function expects one-based indexing.  We can't use `require_one_based_indexing`
 # here because it's defined later in the bootstrap process.  Use only where you are really
 # sure about indexing.
-function _checkbounds_array_onebased(::Type{Bool}, len::Integer, i::Int)
+function _checkbounds_array_onebased(::Type{Bool}, len::Integer, i::Integer)
     @inline
     ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, len))
 end
