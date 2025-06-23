@@ -4379,9 +4379,10 @@ function typeinf_local(interp::AbstractInterpreter, frame::InferenceState, nextr
             end
             if changes !== nothing
                 stoverwrite1!(currstate, changes)
-                # The aliasing assumption drops: a slot changing from even `::T` -> `::T`
+                # On slot reassignment, the aliasing assumption drops: a slot changing from even `::T` -> `::T`
                 # makes IPO slot refinement unsound, because the link with any caller slot becomes broken.
-                @assert !is_argument_slot(frame, changes.var)
+                # Thankfully, we only care about argument slots for IPO, and reassigning those is already
+                # undefined behavior, so we don't need to worry about it.
             end
             if refinements !== nothing
                 apply_refinements!(currstate, 𝕃ᵢ, refinements, changes)

@@ -2651,7 +2651,7 @@ end |> only === Int
                 end
             end
         end
-        src = code_typed1(f, (Any,); optimize = false)
+        src = code_typed1(subfunc, (Any,); optimize = false)
         @test src.rettype == Val # especially not `Val{true}`
     end
 
