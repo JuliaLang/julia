@@ -515,13 +515,20 @@ end
 # Since bounds-checking is performance-critical and uses
 # indices, it's worth optimizing these implementations thoroughly
 axes(S::SubArray) = (@inline; _indices_sub(S.indices...))
-axes1(::SubArray{<:Any,0}) = OneTo(1)
-axes1(S::SubArray) = (@inline; axes1(S.indices[1]))
 _indices_sub(::Real, I...) = (@inline; _indices_sub(I...))
 _indices_sub() = ()
 function _indices_sub(i1::AbstractArray, I...)
     @inline
     (axes(i1)..., _indices_sub(I...)...)
+end
+
+axes1(::SubArray{<:Any,0}) = OneTo(1)
+axes1(S::SubArray) = (@inline; axes1(S.indices[1]))
+_axes1_sub(::Real, I...) = (@inline; _axes1_sub(I...))
+_axes1_sub() = ()
+function _axes1_sub(i1::AbstractArray, I...)
+    @inline
+    axes1(i1)
 end
 
 has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)
