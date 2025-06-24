@@ -797,7 +797,7 @@ size(s::CodeUnits) = (length(s),)
 elsize(s::Type{<:CodeUnits{T}}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
-checkbounds(::Type{Bool}, s::CodeUnits, i) = checkbounds(Bool, s.s, i)
+checkbounds(::Type{Bool}, s::CodeUnits, i::Integer) = checkbounds(Bool, s.s, i)
 
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
