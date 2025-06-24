@@ -528,9 +528,10 @@ function _indices_sub(i1::AbstractArray, I...)
 end
 
 axes1(::SubArray{<:Any,0}) = OneTo(1)
-axes1(S::SubArray) = (@inline; axes1(S.indices[1]))
-_axes1_sub(::Real, I...) = (@inline; _axes1_sub(I...))
+axes1(S::SubArray) = (@inline; _axes1_sub(S.indices...))
 _axes1_sub() = ()
+_axes1_sub(::Real, I...) = (@inline; _axes1_sub(I...))
+_axes1_sub(::AbstractArray{<:Any,0}, I...) = _axes1_sub(I...)
 function _axes1_sub(i1::AbstractArray, I...)
     @inline
     axes1(i1)
