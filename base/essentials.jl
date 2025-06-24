@@ -377,13 +377,14 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
-function _checkbounds_array(::Type{Bool}, A::Union{Array, GenericMemory}, i::Int)
+# These special checkbounds methods are defined early for bootstrapping
+function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
     @inline
     ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A)))
 end
-function _checkbounds_array(A::Union{Array, GenericMemory}, i::Int)
+function checkbounds(A::Union{Array, GenericMemory}, i::Int)
     @inline
-    _checkbounds_array(Bool, A, i) || throw_boundserror(A, (i,))
+    checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
 end
 
 default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
@@ -393,7 +394,7 @@ default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
 function getindex(A::GenericMemory, i::Int)
     @_noub_if_noinbounds_meta
-    (@_boundscheck) && _checkbounds_array(A, i)
+    (@_boundscheck) && checkbounds(A, i)
     memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
 end
 
@@ -962,13 +963,13 @@ end
 # linear indexing
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck _checkbounds_array(A, i)
+    @boundscheck checkbounds(A, i)
     memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
 end
 # simple Array{Any} operations needed for bootstrap
 function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck _checkbounds_array(A, i)
+    @boundscheck checkbounds(A, i)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
