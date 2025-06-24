@@ -497,6 +497,7 @@ end
                 "Issue53126()." => :other
                 "using " => :other
                 "global xxx::Number = Base." => :other
+                "let x = 1 # comment" => :other
             ]
             @testset "$(repr(str))" begin
                 # Test :statement parsing

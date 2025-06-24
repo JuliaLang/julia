@@ -970,10 +970,11 @@ function last_non_whitespace_byte(stream::ParseStream)
     for i = length(stream.output):-1:1
         node = stream.output[i]
         if is_terminal(node)
-            if !(kind(node) in KSet"Comment Whitespace NewlineWs ErrorEofMultiComment")
+            if kind(node) in KSet"Comment Whitespace NewlineWs ErrorEofMultiComment" || kind(node) == K"error" && node.byte_span == 0
+                byte_pos -= node.byte_span
+            else
                 return byte_pos - 1
             end
-            byte_pos -= node.byte_span
         end
     end
     return first_byte(stream) - 1
