@@ -106,7 +106,7 @@ sizeof(a::GenericMemory) = Core.sizeof(a)
 # multi arg case will be overwritten later. This is needed for bootstrapping
 function isassigned(a::GenericMemory, i::Int)
     @inline
-    @boundscheck (i - 1)%UInt < length(a)%UInt || return false
+    @boundscheck checkbounds(Bool, a, i) || return false
     return @inbounds memoryref_isassigned(memoryref(a, i), default_access_order(a), false)
 end
 
@@ -227,7 +227,7 @@ Memory{T}(x::AbstractArray{S,1}) where {T,S} = copyto_axcheck!(Memory{T}(undef, 
 
 function _iterate_array(A::Union{Memory, Array}, i::Int)
     @inline
-    (i - 1)%UInt < length(A)%UInt ? (A[i], i + 1) : nothing
+    checkbounds(Bool, A, i) ? (A[i], i + 1) : nothing
 end
 
 iterate(A::Memory, i=1) = (@inline; _iterate_array(A, i))
