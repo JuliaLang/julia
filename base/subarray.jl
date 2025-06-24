@@ -324,11 +324,6 @@ FastSubArray{T,N,P,I} = SubArray{T,N,P,I,true}
 @inline _reindexlinear(V::FastSubArray, i::Int) = V.offset1 + V.stride1*i
 @inline _reindexlinear(V::FastSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ V.stride1 .* i
 
-# For Fast subarrays, we can safely compute the parent's index for its checkbounds; this
-# helps with automatic bounds elision (but isn't possible generally because it's precisely
-# the re-indexing into `V.indices` that might go out-of-bounds)
-checkbounds(::Type{Bool}, V::FastSubArray, i::Int) = (@inline(); checkbounds(Bool, V.parent, _reindexlinear(V, i)))
-
 function getindex(V::FastSubArray, i::Int)
     @inline
     @boundscheck checkbounds(V, i)
