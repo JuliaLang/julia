@@ -1454,9 +1454,10 @@ end
         @test tpt.c == []
         @test tpt.d == 1
     end
-    tpt1 = @test_nowarn TestParametricTypeWithUnused(String; a = 1)
-    tpt2 = @test_nowarn TestParametricTypeWithUnused(String; a = 1, b = 2)
-    tpt3 = @test_nowarn TestParametricTypeWithUnused(String; a = 1, b = 2, c = [])
+    @test_throws MethodError TestParametricTypeWithUnused()
+    tpt1 = @test_nowarn TestParametricTypeWithUnused{Int, String, Vector{Any}}(a = 1)
+    tpt2 = @test_nowarn TestParametricTypeWithUnused{Int, String, Vector{Any}}(a = 1, b = 2)
+    tpt3 = @test_nowarn TestParametricTypeWithUnused{Int, String, Vector{Any}}(a = 1, b = 2, c = [])
     @testset for tpt in (tpt1, tpt2, tpt3)
         @test tpt.a # == true
         @test tpt.b == 2

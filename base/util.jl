@@ -622,17 +622,15 @@ macro kwdef(expr)
                 return para
             end
             unused = [x for x in Q if x in typecalls]
-            def1 = if typecalls != unused
+            def1 = if isempty(unused)
                 ST = :($S{$(typecalls...)})
                 body1 = Expr(:block, __source__, Expr(:call, esc(ST), fieldnames...))
-                sig1 = if isempty(unused)
-                    Expr(:call, esc(S), Expr(:parameters, parameters...))
-                else
-                    Expr(:call, esc(S), Expr(:parameters, parameters...), esc.(unused)...)
-                end
+                sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
                 Expr(:function, sig1, body1)
             else
-                nothing
+                body1 = Expr(:block, __source__, Expr(:call, esc(S), fieldnames...))
+                sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
+                Expr(:function, sig1, body1)
             end
             body2 = Expr(:block, __source__, Expr(:call, esc(SQ), fieldnames...))
             sig2 = :($(Expr(:call, esc(SQ), Expr(:parameters, parameters...))) where {$(esc.(P)...)})
