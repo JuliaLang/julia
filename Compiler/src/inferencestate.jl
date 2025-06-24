@@ -312,7 +312,7 @@ mutable struct InferenceState
     limitations::IdSet{InferenceState} # causes of precision restrictions (LimitedAccuracy) on return
     cycle_backedges::Vector{Tuple{InferenceState, Int}} # call-graph backedges connecting from callee to caller
     refinements::VarTable
-    refinement_propagation::SlotRefinementPropagationState
+    refinement_propagation::Union{Nothing,SlotRefinementPropagationState}
 
     # IPO tracking of in-process work, shared with all frames given AbstractInterpreter
     callstack #::Vector{AbsIntState}
@@ -371,8 +371,13 @@ mutable struct InferenceState
         bb_saw_latestworld = Bool[false for i = 1:length(cfg.blocks)]
         bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
         bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
-        refinements = VarTable(undef, nslots)
-        refinement_propagation = SlotRefinementPropagationState(cfg)
+        if ipo_slot_refinement_enabled(interp)
+            refinements = VarTable(undef, nslots)
+            refinement_propagation = SlotRefinementPropagationState(cfg)
+        else
+            refinements = VarTable()
+            refinement_propagation = nothing
+        end
         argtypes = result.argtypes
 
         argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
@@ -385,7 +390,9 @@ mutable struct InferenceState
             end
             slottypes[i] = argtyp
             bb_vartable1[i] = VarState(argtyp, i > nargtypes)
-            refinements[i] = VarState((i > nargtypes) ? Any : argtypes[i], i > nargtypes)
+            if ipo_slot_refinement_enabled(interp)
+                refinements[i] = VarState((i > nargtypes) ? Any : argtypes[i], i > nargtypes)
+            end
         end
         src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
         ssaflags = copy(src.ssaflags)

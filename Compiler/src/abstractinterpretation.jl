@@ -4540,7 +4540,7 @@ end
 function record_refinements!(frame::InferenceState, block::BBIndex,
                              interp::AbstractInterpreter, refinements#=::Iterable{SlotRefinement}=#)
     ipo_slot_refinement_enabled(interp) || return
-    state = frame.refinement_propagation
+    state = frame.refinement_propagation::SlotRefinementPropagationState
     path = state.paths[block]
     updates = state.updates[path]
     record_refinements!(frame, updates, interp, refinements)
@@ -4589,7 +4589,8 @@ end
 
 function should_eagerly_apply_refinements_for_ipo(interp::AbstractInterpreter, frame::InferenceState, bb::Int)
     ipo_slot_refinement_enabled(interp) || return false
-    return should_eagerly_apply_refinements_for_ipo(frame.refinement_propagation, bb)
+    state = frame.refinement_propagation::SlotRefinementPropagationState
+    return should_eagerly_apply_refinements_for_ipo(state, bb)
 end
 
 should_eagerly_apply_refinements_for_ipo(state::SlotRefinementPropagationState, bb::Int) = in(bb, state.top_level_blocks)
@@ -4597,7 +4598,7 @@ should_eagerly_apply_refinements_for_ipo(state::SlotRefinementPropagationState, 
 function merge_refinements_from_predecessors!(frame::InferenceState, vartable::VarTable, interp::AbstractInterpreter)
     ipo_slot_refinement_enabled(interp) || return
     block = frame.currbb
-    state = frame.refinement_propagation
+    state = frame.refinement_propagation::SlotRefinementPropagationState
     in(block, state.merge_points) || return
     𝕃ᵢ = typeinf_lattice(interp)
     preds = frame.cfg.blocks[block].preds
@@ -4616,7 +4617,7 @@ end
 
 function finish_merging_global_refinements!(frame::InferenceState, interp::AbstractInterpreter)
     ipo_slot_refinement_enabled(interp) || return
-    state = frame.refinement_propagation
+    state = frame.refinement_propagation::SlotRefinementPropagationState
     length(state.terminating_blocks) ≥ 2 || return
     𝕃ᵢ = typeinf_lattice(interp)
     paths = nonthrowing_paths(state, frame, state.terminating_blocks; finished = true)
