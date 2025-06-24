@@ -827,6 +827,9 @@ $(error "please install either GNU tar or bsdtar")
 endif
 endif
 
+# Do not try to extract owner uids, even if we're root (e.g. in sandboxes)
+TAR += --no-same-owner
+
 ifeq ($(WITH_GC_VERIFY), 1)
 JCXXFLAGS += -DGC_VERIFY
 JCFLAGS += -DGC_VERIFY
