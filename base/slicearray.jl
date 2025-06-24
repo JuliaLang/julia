@@ -25,7 +25,7 @@ struct Slices{P,SM,AX,S,N} <: AbstractSlices{S,N}
     """
     parent::P
     """
-    A tuple of length `ndims(parent)`, denoting how each dimension should be handled:
+    A tuple of length at least `ndims(parent)`, denoting how each dimension should be handled:
       - an integer `i`: this is the `i`th dimension of the outer `Slices` object.
       - `:`: an "inner" dimension
     """
@@ -39,6 +39,8 @@ end
 unitaxis(::AbstractArray) = Base.OneTo(1)
 
 function Slices(A::P, slicemap::SM, ax::AX) where {P,SM,AX}
+    length(slicemap) >= ndims(A) ||
+        throw(ArgumentError("Slices cannot be constructed with a slicemap of fewer elements than the parent has dimensions"))
     N = length(ax)
     parent_axes = ntuple(d -> axes(A, d), length(slicemap))
     argT = map((a,l) -> l === (:) ? Colon : eltype(a), parent_axes, slicemap)
