@@ -60,17 +60,21 @@ ifeq ($(BUILD_LLD), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lld
 endif
 
+# Remove ; if it's the first character
+ifneq ($(LLVM_ENABLE_RUNTIMES),)
+	LLVM_ENABLE_RUNTIMES := $(patsubst ;%,%,$(LLVM_ENABLE_RUNTIMES))
+endif
 
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
 # Figure out which targets to build
-LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly;BPF
+LLVM_TARGETS := host;NVPTX;AMDGPU;WebAssembly;BPF;AVR
 LLVM_EXPERIMENTAL_TARGETS :=
 
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
-LLVM_LDFLAGS :=
+LLVM_LDFLAGS := "-L$(build_shlibdir)" # hacky way to force zlib to be found when linking against libLLVM and sysroot is set
 LLVM_CMAKE :=
 
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
@@ -86,22 +90,23 @@ endif
 LLVM_CMAKE += -DLLVM_WINDOWS_PREFER_FORWARD_SLASH=False
 
 # Allow adding LLVM specific flags
-LLVM_CFLAGS += $(CFLAGS)
-LLVM_CXXFLAGS += $(CXXFLAGS)
+LLVM_CFLAGS += $(CFLAGS) $(BOLT_CFLAGS)
+LLVM_CXXFLAGS += $(CXXFLAGS) $(BOLT_CFLAGS)
 LLVM_CPPFLAGS += $(CPPFLAGS)
 LLVM_LDFLAGS += $(LDFLAGS)
+LLVM_LDFLAGS += $(BOLT_LDFLAGS)
 LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYPE="$(LLVM_CMAKE_BUILDTYPE)"
 LLVM_CMAKE += -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD:STRING="$(LLVM_EXPERIMENTAL_TARGETS)"
 LLVM_CMAKE += -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
-LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=ON -DZLIB_LIBRARY="$(build_prefix)/lib"
-LLVM_CMAKE += -DCOMPILER_RT_ENABLE_IOS=OFF -DCOMPILER_RT_ENABLE_WATCHOS=OFF -DCOMPILER_RT_ENABLE_TVOS=OFF
+LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=FORCE_ON -DZLIB_ROOT="$(build_prefix)"
+LLVM_CMAKE += -DLLVM_ENABLE_ZSTD=FORCE_ON -DZSTD_ROOT="$(build_prefix)"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
 LLVM_CMAKE += -DLLVM_TOOLS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_UTILS_INSTALL_DIR=$(call rel_path,$(build_prefix),$(build_depsbindir))
 LLVM_CMAKE += -DLLVM_INCLUDE_UTILS=ON -DLLVM_INSTALL_UTILS=ON
-LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_HISTEDIT_H=Off -DHAVE_LIBEDIT=Off
+LLVM_CMAKE += -DLLVM_BINDINGS_LIST="" -DLLVM_ENABLE_BINDINGS=OFF -DLLVM_INCLUDE_DOCS=Off -DLLVM_ENABLE_TERMINFO=Off -DHAVE_LIBEDIT=Off -DLLVM_ENABLE_LIBEDIT=OFF
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_CMAKE += -DLLVM_ENABLE_ASSERTIONS:BOOL=ON
 endif # LLVM_ASSERTIONS
@@ -120,7 +125,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 LLVM_CMAKE += -DLLVM_BUILD_LLVM_DYLIB:BOOL=ON -DLLVM_LINK_LLVM_DYLIB:BOOL=ON
 endif
 ifeq ($(USE_INTEL_JITEVENTS), 1)
-LLVM_CMAKE += -DLLVM_USE_INTEL_JITEVENTS:BOOL=ON
+LLVM_CMAKE += -DLLVM_USE_INTEL_JITEVENTS:BOOL=ON -DITTAPI_SOURCE_DIR=$(SRCCACHE)/$(ITTAPI_SRC_DIR)
 endif # USE_INTEL_JITEVENTS
 
 ifeq ($(USE_OPROFILE_JITEVENTS), 1)
@@ -133,7 +138,7 @@ endif # USE_PERF_JITEVENTS
 
 ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),0)
-LLVM_CXXFLAGS += -std=c++0x
+LLVM_CXXFLAGS += -std=c++17
 endif # USECLANG
 ifeq ($(LLDB_DISABLE_PYTHON),1)
 LLVM_CXXFLAGS += -DLLDB_DISABLE_PYTHON
@@ -182,6 +187,11 @@ endif
 
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
+else
+ifeq ($(OS),FreeBSD)
+    # On FreeBSD, we must force even statically-linked code to have -fPIC
+    LLVM_CMAKE += -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE
+endif
 endif
 
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
@@ -210,11 +220,14 @@ LLVM_CMAKE += -DCMAKE_EXE_LINKER_FLAGS="$(LLVM_LDFLAGS)" \
 LLVM_CMAKE += -DLLVM_VERSION_SUFFIX:STRING="jl"
 LLVM_CMAKE += -DLLVM_SHLIB_SYMBOL_VERSION:STRING="JL_LLVM_$(LLVM_VER_SHORT)"
 
+# Change the default bug report URL to Julia's issue tracker
+LLVM_CMAKE += -DBUG_REPORT_URL="https://github.com/julialang/julia"
+
 # Apply version-specific LLVM patches sequentially
 LLVM_PATCH_PREV :=
 define LLVM_PATCH
 $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
-	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm && patch -p1 < $$(SRCDIR)/patches/$1.patch
+	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR)/llvm && patch -p1 -f < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 # declare that applying any patch must re-run the compile step
 $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
@@ -223,21 +236,45 @@ endef
 
 define LLVM_PROJ_PATCH
 $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/source-extracted | $$(SRCDIR)/patches/$1.patch $$(LLVM_PATCH_PREV)
-	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR) && patch -p1 < $$(SRCDIR)/patches/$1.patch
+	cd $$(SRCCACHE)/$$(LLVM_SRC_DIR) && patch -p1 -f < $$(SRCDIR)/patches/$1.patch
 	echo 1 > $$@
 # declare that applying any patch must re-run the compile step
 $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
+ifeq ($(shell test $(LLVM_VER_MAJ) -lt 19 && echo true),true)
+$(eval $(call LLVM_PATCH,llvm-ittapi-cmake))
+endif
+
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
+
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zstd
+endif
+
 
 # NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
 
 # declare that all patches must be applied before running ./configure
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(LLVM_PATCH_PREV)
+
+# Apply Julia's specific patches if requested, e.g. if not using Julia's fork of LLVM.
+ifeq ($(LLVM_APPLY_JULIA_PATCHES), 1)
+# Download Julia's patchset.
+$(BUILDDIR)/julia-patches.patch:
+	$(JLDOWNLOAD) $@ $(LLVM_JULIA_DIFF_GITHUB_REPO)/compare/$(LLVM_BASE_REF)...$(LLVM_JULIA_REF).diff
+
+# Apply the patch.
+$(SRCCACHE)/$(LLVM_SRC_DIR)/julia-patches.patch-applied: $(BUILDDIR)/julia-patches.patch $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
+	cd $(SRCCACHE)/$(LLVM_SRC_DIR) && patch -p1 -f < $(realpath $<)
+	echo 1 > $@
+
+# Require application of Julia's patchset before configuring LLVM.
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(SRCCACHE)/$(LLVM_SRC_DIR)/julia-patches.patch-applied
+endif
 
 $(LLVM_BUILDDIR_withtype)/build-configured: $(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
@@ -271,6 +308,9 @@ ifeq ($(OS),Darwin)
 # https://github.com/JuliaLang/julia/issues/29981
 LLVM_INSTALL += && ln -s libLLVM.dylib $2$$(build_shlibdir)/libLLVM-$$(LLVM_VER_SHORT).dylib
 endif
+ifeq ($(BUILD_LLD), 1)
+LLVM_INSTALL += && cp $2$$(build_bindir)/lld$$(EXE) $2$$(build_depsbindir)
+endif
 
 $(eval $(call staged-install, \
 	llvm,$$(LLVM_SRC_DIR)/build_$$(LLVM_BUILDTYPE), \
@@ -286,6 +326,11 @@ configure-llvm: $(LLVM_BUILDDIR_withtype)/build-configured
 compile-llvm: $(LLVM_BUILDDIR_withtype)/build-compiled
 fastcheck-llvm: #none
 check-llvm: $(LLVM_BUILDDIR_withtype)/build-checked
+
+ifeq ($(USE_INTEL_JITEVENTS),1)
+$(SRCCACHE)/$(LLVM_SRC_DIR)/source-extracted: $(SRCCACHE)/$(ITTAPI_SRC_DIR)/source-extracted
+endif
+
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
 
 else # USE_BINARYBUILDER_LLVM
@@ -311,6 +356,10 @@ $(eval $(call bb-install,llvm,LLVM,false,true))
 $(eval $(call bb-install,lld,LLD,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
+
+# work-around for Yggdrasil packaging bug (https://github.com/JuliaPackaging/Yggdrasil/pull/11231)
+$(build_prefix)/manifest/llvm-tools uninstall-llvm-tools: \
+	TAR:=$(TAR) --exclude=llvm-config.exe
 
 endif # USE_BINARYBUILDER_LLVM
 

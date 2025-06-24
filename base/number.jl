@@ -7,7 +7,7 @@ convert(::Type{T}, x::T)      where {T<:Number} = x
 convert(::Type{T}, x::Number) where {T<:Number} = T(x)::T
 
 """
-    isinteger(x) -> Bool
+    isinteger(x)::Bool
 
 Test whether `x` is numerically equal to some integer.
 
@@ -62,7 +62,7 @@ true
 isone(x) = x == one(x) # fallback method
 
 """
-    isfinite(f) -> Bool
+    isfinite(f)::Bool
 
 Test whether a number is finite.
 
@@ -135,6 +135,50 @@ true
 ```
 """
 signbit(x::Real) = x < 0
+
+"""
+    ispositive(x)
+
+Test whether `x > 0`. See also [`isnegative`](@ref).
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+# Examples
+```jldoctest
+julia> ispositive(-4.0)
+false
+
+julia> ispositive(99)
+true
+
+julia> ispositive(0.0)
+false
+```
+"""
+ispositive(x::Real) = x > 0
+
+"""
+    isnegative(x)
+
+Test whether `x < 0`. See also [`ispositive`](@ref).
+
+!!! compat "Julia 1.13"
+    This function requires at least Julia 1.13.
+
+# Examples
+```jldoctest
+julia> isnegative(-4.0)
+true
+
+julia> isnegative(99)
+false
+
+julia> isnegative(-0.0)
+false
+```
+"""
+isnegative(x::Real) = x < 0
 
 """
     sign(x)
@@ -287,7 +331,12 @@ map(f, x::Number, ys::Number...) = f(x, ys...)
     zero(x)
     zero(::Type)
 
-Get the additive identity element for the type of `x` (`x` can also specify the type itself).
+Get the additive identity element for `x`. If the additive identity can be deduced
+from the type alone, then a type may be given as an argument to `zero`.
+
+For example, `zero(Int)` will work because the additive identity is the same for all
+instances of `Int`, but `zero(Vector{Int})` is not defined because vectors of different
+lengths have different additive identities.
 
 See also [`iszero`](@ref), [`one`](@ref), [`oneunit`](@ref), [`oftype`](@ref).
 
@@ -307,15 +356,19 @@ julia> zero(rand(2,2))
 """
 zero(x::Number) = oftype(x,0)
 zero(::Type{T}) where {T<:Number} = convert(T,0)
+zero(::Type{Union{}}, slurp...) = Union{}(0)
 
 """
     one(x)
-    one(T::type)
+    one(T::Type)
 
 Return a multiplicative identity for `x`: a value such that
-`one(x)*x == x*one(x) == x`.  Alternatively `one(T)` can
-take a type `T`, in which case `one` returns a multiplicative
-identity for any `x` of type `T`.
+`one(x)*x == x*one(x) == x`. If the multiplicative identity can
+be deduced from the type alone, then a type may be given as
+an argument to `one` (e.g. `one(Int)` will work because the
+multiplicative identity is the same for all instances of `Int`,
+but `one(Matrix{Int})` is not defined because matrices of
+different shapes have different multiplicative identities.)
 
 If possible, `one(x)` returns a value of the same type as `x`,
 and `one(T)` returns a value of type `T`.  However, this may
@@ -345,6 +398,7 @@ julia> import Dates; one(Dates.Day(1))
 """
 one(::Type{T}) where {T<:Number} = convert(T,1)
 one(x::T) where {T<:Number} = one(T)
+one(::Type{Union{}}, slurp...) = Union{}(1)
 # note that convert(T, 1) should throw an error if T is dimensionful,
 # so this fallback definition should be okay.
 
@@ -352,9 +406,10 @@ one(x::T) where {T<:Number} = one(T)
     oneunit(x::T)
     oneunit(T::Type)
 
-Return `T(one(x))`, where `T` is either the type of the argument or
-(if a type is passed) the argument.  This differs from [`one`](@ref) for
-dimensionful quantities: `one` is dimensionless (a multiplicative identity)
+Return `T(one(x))`, where `T` is either the type of the argument, or
+the argument itself in cases where the `oneunit` can be deduced from
+the type alone. This differs from [`one`](@ref) for dimensionful
+quantities: `one` is dimensionless (a multiplicative identity)
 while `oneunit` is dimensionful (of the same type as `x`, or of type `T`).
 
 # Examples
@@ -368,6 +423,7 @@ julia> import Dates; oneunit(Dates.Day)
 """
 oneunit(x::T) where {T} = T(one(x))
 oneunit(::Type{T}) where {T} = T(one(T))
+oneunit(::Type{Union{}}, slurp...) = Union{}(1)
 
 """
     big(T::Type)
@@ -388,3 +444,4 @@ Complex{BigInt}
 ```
 """
 big(::Type{T}) where {T<:Number} = typeof(big(zero(T)))
+big(::Type{Union{}}, slurp...) = Union{}(0)

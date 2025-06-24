@@ -8,8 +8,6 @@
 using Test
 using Logging
 
-using Base: remove_linenums!
-
 module DeprecationTests # to test @deprecate
     f() = true
 
@@ -70,6 +68,7 @@ begin # @deprecate
     ex = :(module M22845; import ..DeprecationTests: bar;
                           bar(x::Number) = x + 3; end)
     @test_warn "importing deprecated binding" eval(ex)
+    @Core.latestworld
     @test @test_nowarn(DeprecationTests.bar(4)) == 7
 
     @test @test_warn "`f1` is deprecated, use `f` instead." f1()
@@ -116,8 +115,8 @@ begin # @deprecate
 
     # test that positional and keyword arguments are forwarded when
     # there is no explicit type annotation
-    @test DeprecationTests.old_return_args(1, 2, 3) == ((1, 2, 3),(;))
-    @test DeprecationTests.old_return_args(1, 2, 3; a = 4, b = 5) == ((1, 2, 3), (a = 4, b = 5))
+    @test_logs (:warn,) @test DeprecationTests.old_return_args(1, 2, 3) == ((1, 2, 3),(;))
+    @test_logs (:warn,) @test DeprecationTests.old_return_args(1, 2, 3; a = 4, b = 5) == ((1, 2, 3), (a = 4, b = 5))
 end
 
 f24658() = depwarn24658()

@@ -4,7 +4,7 @@
     Random
 
 Support for generating random numbers. Provides [`rand`](@ref), [`randn`](@ref),
-[`AbstractRNG`](@ref), [`MersenneTwister`](@ref), and [`RandomDevice`](@ref).
+[`AbstractRNG`](@ref), [`Xoshiro`](@ref), [`MersenneTwister`](@ref), and [`RandomDevice`](@ref).
 """
 module Random
 
@@ -13,9 +13,10 @@ include("DSFMT.jl")
 using .DSFMT
 using Base.GMP.MPZ
 using Base.GMP: Limb
-import SHA
+using SHA: SHA, SHA2_256_CTX, SHA2_512_CTX, SHA_CTX
 
-using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing
+using Base: BitInteger, BitInteger_types, BitUnsigned, require_one_based_indexing,
+    _throw_argerror
 
 import Base: copymutable, copy, copy!, ==, hash, convert,
              rand, randn, show
@@ -29,6 +30,8 @@ export rand!, randn!,
        randperm, randperm!,
        randcycle, randcycle!,
        AbstractRNG, MersenneTwister, RandomDevice, TaskLocalRNG, Xoshiro
+
+public seed!, default_rng, Sampler, SamplerType, SamplerTrivial, SamplerSimple
 
 ## general definitions
 
@@ -137,11 +140,9 @@ the amount of precomputation, if applicable.
 *types* and *values*, respectively. [`Random.SamplerSimple`](@ref) can be used to store
 pre-computed values without defining extra types for only this purpose.
 """
-Sampler(rng::AbstractRNG, x, r::Repetition=Val(Inf)) = Sampler(typeof_rng(rng), x, r)
+Sampler(rng::AbstractRNG, x, r::Repetition=Val(Inf)) = Sampler(typeof(rng), x, r)
 Sampler(rng::AbstractRNG, ::Type{X}, r::Repetition=Val(Inf)) where {X} =
-    Sampler(typeof_rng(rng), X, r)
-
-typeof_rng(rng::AbstractRNG) = typeof(rng)
+    Sampler(typeof(rng), X, r)
 
 # this method is necessary to prevent rand(rng::AbstractRNG, X) from
 # recursively constructing nested Sampler types.
@@ -165,6 +166,11 @@ struct SamplerType{T} <: Sampler{T} end
 Sampler(::Type{<:AbstractRNG}, ::Type{T}, ::Repetition) where {T} = SamplerType{T}()
 
 Base.getindex(::SamplerType{T}) where {T} = T
+
+# SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
+SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
+const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
+
 
 struct SamplerTrivial{T,E} <: Sampler{E}
     self::T
@@ -294,19 +300,24 @@ rand(                ::Type{X}, dims::Dims) where {X} = rand(default_rng(), X, d
 rand(r::AbstractRNG, ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(r, X, Dims((d, dims...)))
 rand(                ::Type{X}, d::Integer, dims::Integer...) where {X} = rand(X, Dims((d, dims...)))
 
-# SamplerUnion(X, Y, ...}) == Union{SamplerType{X}, SamplerType{Y}, ...}
-SamplerUnion(U...) = Union{Any[SamplerType{T} for T in U]...}
-const SamplerBoolBitInteger = SamplerUnion(Bool, BitInteger_types...)
+
+### UnsafeView
+# internal array-like type to circumvent the lack of flexibility with reinterpret
+
+struct UnsafeView{T} <: DenseArray{T,1}
+    ptr::Ptr{T}
+    len::Int
+end
+
+Base.length(a::UnsafeView) = a.len
+Base.getindex(a::UnsafeView, i::Int) = unsafe_load(a.ptr, i)
+Base.setindex!(a::UnsafeView, x, i::Int) = unsafe_store!(a.ptr, x, i)
+Base.pointer(a::UnsafeView) = a.ptr
+Base.size(a::UnsafeView) = (a.len,)
+Base.elsize(::Type{UnsafeView{T}}) where {T} = sizeof(T)
 
 
-include("Xoshiro.jl")
-include("RNGs.jl")
-include("generation.jl")
-include("normal.jl")
-include("misc.jl")
-include("XoshiroSimd.jl")
-
-## rand & rand! & seed! docstrings
+## rand & rand! docstrings
 
 """
     rand([rng=default_rng()], [S], [dims...])
@@ -314,38 +325,62 @@ include("XoshiroSimd.jl")
 Pick a random element or array of random elements from the set of values specified by `S`;
 `S` can be
 
-* an indexable collection (for example `1:9` or `('x', "y", :z)`),
-* an `AbstractDict` or `AbstractSet` object,
+* an indexable collection (for example `1:9` or `('x', "y", :z)`)
+
+* an `AbstractDict` or `AbstractSet` object
+
 * a string (considered as a collection of characters), or
-* a type: the set of values to pick from is then equivalent to `typemin(S):typemax(S)` for
-  integers (this is not applicable to [`BigInt`](@ref)), to ``[0, 1)`` for floating
-  point numbers and to ``[0, 1)+i[0, 1)`` for complex floating point numbers;
+
+* a type from the list below, corresponding to the specified set of values
+
+  + concrete integer types sample from `typemin(S):typemax(S)` (excepting [`BigInt`](@ref) which is not supported)
+
+  + concrete floating point types sample from `[0, 1)`
+
+  + concrete complex types `Complex{T}` if `T` is a sampleable type take their real and imaginary components
+    independently from the set of values corresponding to `T`, but are not supported if `T` is not sampleable.
+
+  + all `<:AbstractChar` types sample from the set of valid Unicode scalars
+
+  + a user-defined type and set of values; for implementation guidance please see [Hooking into the `Random` API](@ref rand-api-hook)
+
+  + a tuple type of known size and where each parameter of `S` is itself a sampleable type; return a value of type `S`.
+    Note that tuple types such as `Tuple{Vararg{T}}` (unknown size) and `Tuple{1:2}` (parameterized with a value) are not supported
+
+  + a `Pair` type, e.g. `Pair{X, Y}` such that `rand` is defined for `X` and `Y`,
+    in which case random pairs are produced.
+
 
 `S` defaults to [`Float64`](@ref).
 When only one argument is passed besides the optional `rng` and is a `Tuple`, it is interpreted
 as a collection of values (`S`) and not as `dims`.
 
 
+See also [`randn`](@ref) for normally distributed numbers, and [`rand!`](@ref) and [`randn!`](@ref) for the in-place equivalents.
+
 !!! compat "Julia 1.1"
     Support for `S` as a tuple requires at least Julia 1.1.
+
+!!! compat "Julia 1.11"
+    Support for `S` as a `Tuple` type requires at least Julia 1.11.
 
 # Examples
 ```julia-repl
 julia> rand(Int, 2)
-2-element Array{Int64,1}:
+2-element Vector{Int64}:
  1339893410598768192
  1575814717733606317
 
 julia> using Random
 
-julia> rand(MersenneTwister(0), Dict(1=>2, 3=>4))
-1=>2
+julia> rand(Xoshiro(0), Dict(1=>2, 3=>4))
+3 => 4
 
 julia> rand((2, 3))
 3
 
 julia> rand(Float64, (2, 3))
-2×3 Array{Float64,2}:
+2×3 Matrix{Float64}:
  0.999717  0.0143835  0.540787
  0.696556  0.783855   0.938235
 ```
@@ -371,73 +406,24 @@ but without allocating a new array.
 
 # Examples
 ```jldoctest
-julia> rng = MersenneTwister(1234);
-
-julia> rand!(rng, zeros(5))
+julia> rand!(Xoshiro(123), zeros(5))
 5-element Vector{Float64}:
- 0.5908446386657102
- 0.7667970365022592
- 0.5662374165061859
- 0.4600853424625171
- 0.7940257103317943
+ 0.521213795535383
+ 0.5868067574533484
+ 0.8908786980927811
+ 0.19090669902576285
+ 0.5256623915420473
 ```
 """
 rand!
 
-"""
-    seed!([rng=default_rng()], seed) -> rng
-    seed!([rng=default_rng()]) -> rng
 
-Reseed the random number generator: `rng` will give a reproducible
-sequence of numbers if and only if a `seed` is provided. Some RNGs
-don't accept a seed, like `RandomDevice`.
-After the call to `seed!`, `rng` is equivalent to a newly created
-object initialized with the same seed.
-
-If `rng` is not specified, it defaults to seeding the state of the
-shared task-local generator.
-
-# Examples
-```julia-repl
-julia> Random.seed!(1234);
-
-julia> x1 = rand(2)
-2-element Vector{Float64}:
- 0.32597672886359486
- 0.5490511363155669
-
-julia> Random.seed!(1234);
-
-julia> x2 = rand(2)
-2-element Vector{Float64}:
- 0.32597672886359486
- 0.5490511363155669
-
-julia> x1 == x2
-true
-
-julia> rng = Xoshiro(1234); rand(rng, 2) == x1
-true
-
-julia> Xoshiro(1) == Random.seed!(rng, 1)
-true
-
-julia> rand(Random.seed!(rng), Bool) # not reproducible
-true
-
-julia> rand(Random.seed!(rng), Bool) # not reproducible either
-false
-
-julia> rand(Xoshiro(), Bool) # not reproducible either
-true
-```
-"""
-seed!(rng::AbstractRNG, ::Nothing) = seed!(rng)
-
-# Randomize quicksort pivot selection. This code is here because of bootstrapping:
-# we need to sort things before we load this standard library.
-# TODO move this into Sort.jl
-Base.delete_method(only(methods(Base.Sort.select_pivot)))
-Base.Sort.select_pivot(lo::Integer, hi::Integer) = rand(lo:hi)
+include("Xoshiro.jl")
+include("RNGs.jl")
+include("MersenneTwister.jl")
+include("generation.jl")
+include("normal.jl")
+include("misc.jl")
+include("XoshiroSimd.jl")
 
 end # module

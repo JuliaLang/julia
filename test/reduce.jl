@@ -53,8 +53,8 @@ end
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
 @test reduce(+, 1:5; init=1000) == (1000 + 1 + 2 + 3 + 4 + 5)
 @test reduce(+, 1) == 1
-@test_throws "reducing with * over an empty collection of element type Union{} is not allowed" reduce(*, ())
-@test_throws "reducing with * over an empty collection of element type Union{} is not allowed" reduce(*, Union{}[])
+@test_throws "reducing over an empty collection is not allowed" reduce(*, ())
+@test_throws "reducing over an empty collection is not allowed" reduce(*, Union{}[])
 
 # mapreduce
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
@@ -91,8 +91,7 @@ end
 @test mapreduce(abs2, *, Float64[]) === 1.0
 @test mapreduce(abs2, max, Float64[]) === 0.0
 @test mapreduce(abs, max, Float64[]) === 0.0
-@test_throws ["reducing over an empty collection is not allowed",
-              "consider supplying `init`"] mapreduce(abs2, &, Float64[])
+@test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, &, Float64[])
 @test_throws str -> !occursin("Closest candidates are", str) mapreduce(abs2, &, Float64[])
 @test_throws "reducing over an empty collection is not allowed" mapreduce(abs2, |, Float64[])
 
@@ -144,9 +143,8 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
-@test_throws "reducing with add_sum over an empty collection of element type Union{} is not allowed" sum(Union{}[])
-@test_throws ["reducing over an empty collection is not allowed",
-              "consider supplying `init`"] sum(sin, Int[])
+@test_throws "reducing over an empty collection is not allowed" sum(Union{}[])
+@test_throws "reducing over an empty collection is not allowed" sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
 a = sum(sin, z)
@@ -301,19 +299,37 @@ end
             arr = zeros(N)
             @test minimum(arr) === 0.0
             @test maximum(arr) === 0.0
+            @test minimum(abs, arr) === 0.0
+            @test maximum(abs, arr) === 0.0
+            @test minimum(-, arr) === -0.0
+            @test maximum(-, arr) === -0.0
 
             arr[i] = -0.0
             @test minimum(arr) === -0.0
             @test maximum(arr) ===  0.0
+            @test minimum(abs, arr) === 0.0
+            @test maximum(abs, arr) === 0.0
+            @test minimum(-, arr) === -0.0
+            @test maximum(-, arr) ===  0.0
 
             arr = -zeros(N)
             @test minimum(arr) === -0.0
             @test maximum(arr) === -0.0
+            @test minimum(abs, arr) === 0.0
+            @test maximum(abs, arr) === 0.0
+            @test minimum(-, arr) === 0.0
+            @test maximum(-, arr) === 0.0
             arr[i] = 0.0
             @test minimum(arr) === -0.0
-            @test maximum(arr) === 0.0
+            @test maximum(arr) ===  0.0
+            @test minimum(abs, arr) === 0.0
+            @test maximum(abs, arr) === 0.0
+            @test minimum(-, arr) === -0.0
+            @test maximum(-, arr) ===  0.0
         end
     end
+
+    @test minimum(abs, fill(-0.0, 16)) === mapreduce(abs, (x,y)->min(x,y), fill(-0.0, 16)) === 0.0
 end
 
 @testset "maximum works on generic order #30320" begin
@@ -439,39 +455,39 @@ end
 
 # any & all
 
-@test @inferred any([]) == false
-@test @inferred any(Bool[]) == false
-@test @inferred any([true]) == true
-@test @inferred any([false, false]) == false
-@test @inferred any([false, true]) == true
-@test @inferred any([true, false]) == true
-@test @inferred any([true, true]) == true
-@test @inferred any([true, true, true]) == true
-@test @inferred any([true, false, true]) == true
-@test @inferred any([false, false, false]) == false
+@test @inferred(Union{Missing,Bool}, any([])) == false
+@test @inferred(any(Bool[])) == false
+@test @inferred(any([true])) == true
+@test @inferred(any([false, false])) == false
+@test @inferred(any([false, true])) == true
+@test @inferred(any([true, false])) == true
+@test @inferred(any([true, true])) == true
+@test @inferred(any([true, true, true])) == true
+@test @inferred(any([true, false, true])) == true
+@test @inferred(any([false, false, false])) == false
 
-@test @inferred all([]) == true
-@test @inferred all(Bool[]) == true
-@test @inferred all([true]) == true
-@test @inferred all([false, false]) == false
-@test @inferred all([false, true]) == false
-@test @inferred all([true, false]) == false
-@test @inferred all([true, true]) == true
-@test @inferred all([true, true, true]) == true
-@test @inferred all([true, false, true]) == false
-@test @inferred all([false, false, false]) == false
+@test @inferred(Union{Missing,Bool}, all([])) == true
+@test @inferred(all(Bool[])) == true
+@test @inferred(all([true])) == true
+@test @inferred(all([false, false])) == false
+@test @inferred(all([false, true])) == false
+@test @inferred(all([true, false])) == false
+@test @inferred(all([true, true])) == true
+@test @inferred(all([true, true, true])) == true
+@test @inferred(all([true, false, true])) == false
+@test @inferred(all([false, false, false])) == false
 
-@test @inferred any(x->x>0, []) == false
-@test @inferred any(x->x>0, Int[]) == false
-@test @inferred any(x->x>0, [-3]) == false
-@test @inferred any(x->x>0, [4]) == true
-@test @inferred any(x->x>0, [-3, 4, 5]) == true
+@test @inferred(Union{Missing,Bool}, any(x->x>0, [])) == false
+@test @inferred(any(x->x>0, Int[])) == false
+@test @inferred(any(x->x>0, [-3])) == false
+@test @inferred(any(x->x>0, [4])) == true
+@test @inferred(any(x->x>0, [-3, 4, 5])) == true
 
-@test @inferred all(x->x>0, []) == true
-@test @inferred all(x->x>0, Int[]) == true
-@test @inferred all(x->x>0, [-3]) == false
-@test @inferred all(x->x>0, [4]) == true
-@test @inferred all(x->x>0, [-3, 4, 5]) == false
+@test @inferred(Union{Missing,Bool}, all(x->x>0, [])) == true
+@test @inferred(all(x->x>0, Int[])) == true
+@test @inferred(all(x->x>0, [-3])) == false
+@test @inferred(all(x->x>0, [4])) == true
+@test @inferred(all(x->x>0, [-3, 4, 5])) == false
 
 @test reduce((a, b) -> a .| b, fill(trues(5), 24))  == trues(5)
 @test reduce((a, b) -> a .| b, fill(falses(5), 24)) == falses(5)
@@ -570,11 +586,11 @@ struct NonFunctionIsZero end
 @test count(NonFunctionIsZero(), [0]) == 1
 @test count(NonFunctionIsZero(), [1]) == 0
 
-@test count(Iterators.repeated(true, 3), init=0x04) === 0x07
-@test count(!=(2), Iterators.take(1:7, 3), init=Int32(0)) === Int32(2)
-@test count(identity, [true, false], init=Int8(5)) === Int8(6)
-@test count(!, [true false; false true], dims=:, init=Int16(0)) === Int16(2)
-@test isequal(count(identity, [true false; false true], dims=2, init=UInt(4)), reshape(UInt[5, 5], 2, 1))
+@test count(Iterators.repeated(true, 3), init=UInt(0)) === UInt(3)
+@test count(!=(2), Iterators.take(1:7, 3), init=Int32(0)) === 2
+@test count(identity, [true, false], init=Int8(0)) === 1
+@test count(!, [true false; false true], dims=:, init=Int16(0)) === 2
+@test isequal(count(identity, [true false; false true], dims=2, init=UInt(0)), reshape(UInt[1, 1], 2, 1))
 
 ## cumsum, cummin, cummax
 
@@ -683,6 +699,27 @@ end
     end
 end
 
+@testset "issue #45562" begin
+    @test all([true, true, true], dims = 1) == [true]
+    @test any([true, true, true], dims = 1) == [true]
+    @test_throws TypeError all([3, 3, 3], dims = 1)
+    @test_throws TypeError any([3, 3, 3], dims = 1)
+    @test_throws TypeError all(Any[true, 3, 3], dims = 1)
+    @test_throws TypeError any(Any[false, 3, 3], dims = 1)
+    @test_throws TypeError all([1, 1, 1], dims = 1)
+    @test_throws TypeError any([0, 0, 0], dims = 1)
+    @test_throws TypeError all!([false], [3, 3, 3])
+    @test_throws TypeError any!([false], [3, 3, 3])
+    @test_throws TypeError all!([false], Any[true, 3, 3])
+    @test_throws TypeError any!([false], Any[false, 3, 3])
+    @test_throws TypeError all!([false], [1, 1, 1])
+    @test_throws TypeError any!([false], [0, 0, 0])
+    @test reduce(|, Bool[]) == false
+    @test reduce(&, Bool[]) == true
+    @test reduce(|, Bool[], dims=1) == [false]
+    @test reduce(&, Bool[], dims=1) == [true]
+end
+
 # issue #45748
 @testset "foldl's stability for nested Iterators" begin
     a = Iterators.flatten((1:3, 1:3))
@@ -704,4 +741,39 @@ end
 let a = NamedTuple(Symbol(:x,i) => i for i in 1:33),
     b = (a...,)
     @test fold_alloc(a) == fold_alloc(b) == 0
+end
+
+@testset "concrete eval `[any|all](f, itr::Tuple)`" begin
+    intf = in((1,2,3)); Intf = typeof(intf)
+    symf = in((:one,:two,:three)); Symf = typeof(symf)
+    @test Core.Compiler.is_foldable(Base.infer_effects(intf, (Int,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(symf, (Symbol,)))
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Intf,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(all, (Symf,Tuple{Symbol,Symbol,Symbol})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Intf,Tuple{Int,Int,Int})))
+    @test Core.Compiler.is_foldable(Base.infer_effects(any, (Symf,Tuple{Symbol,Symbol,Symbol})))
+    @test Base.return_types() do
+        Val(all(in((1,2,3)), (1,2,3)))
+    end |> only == Val{true}
+    @test Base.return_types() do
+        Val(all(in((1,2,3)), (1,2,3,4)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(any(in((1,2,3)), (4,5,3)))
+    end |> only == Val{true}
+    @test Base.return_types() do
+        Val(any(in((1,2,3)), (4,5,6)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(all(in((:one,:two,:three)),(:three,:four)))
+    end |> only == Val{false}
+    @test Base.return_types() do
+        Val(any(in((:one,:two,:three)),(:four,:three)))
+    end |> only == Val{true}
+end
+
+# `reduce(vcat, A)` should not alias the input for length-1 collections
+let A=[1;;]
+    @test reduce(vcat, Any[A]) !== A
+    @test reduce(hcat, Any[A]) !== A
 end

@@ -118,6 +118,10 @@ end
     @test big"1.0" == BigFloat(1.0)
     @test_throws ArgumentError big"1.0.3"
     @test_throws ArgumentError big"pi"
+
+    @test_throws ArgumentError big"_æ1"
+    @test_throws ArgumentError big"æ_1"
+    @test_throws ArgumentError big"_ææ"
 end
 
 @test round(UInt8, 123) == 123
@@ -202,7 +206,7 @@ end
         for T2 in Base.BitInteger_types
             for op in (>>, <<, >>>)
                 if sizeof(T2)==sizeof(Int) || T <: Signed || (op==>>>) || T2 <: Unsigned
-                    @test Core.Compiler.is_total(Base.infer_effects(op, (T, T2)))
+                    @test Core.Compiler.is_foldable_nothrow(Base.infer_effects(op, (T, T2)))
                 else
                     @test Core.Compiler.is_foldable(Base.infer_effects(op, (T, T2)))
                     # #47835, TODO implement interval arithmetic analysis
@@ -300,6 +304,29 @@ end
     end
 end
 
+@testset "typemin typemax" begin
+    @test typemin(Int8   ) === Int8(-128)
+    @test typemax(Int8   ) === Int8(127)
+    @test typemin(UInt8  ) === UInt8(0)
+    @test typemax(UInt8  ) === UInt8(255)
+    @test typemin(Int16  ) === Int16(-32768)
+    @test typemax(Int16  ) === Int16(32767)
+    @test typemin(UInt16 ) === UInt16(0)
+    @test typemax(UInt16 ) === UInt16(65535)
+    @test typemin(Int32  ) === Int32(-2147483648)
+    @test typemax(Int32  ) === Int32(2147483647)
+    @test typemin(UInt32 ) === UInt32(0)
+    @test typemax(UInt32 ) === UInt32(4294967295)
+    @test typemin(Int64  ) === Int64(-9223372036854775808)
+    @test typemax(Int64  ) === Int64(9223372036854775807)
+    @test typemin(UInt64 ) === UInt64(0)
+    @test typemax(UInt64 ) === UInt64(0xffff_ffff_ffff_ffff)
+    @test typemin(UInt128) === UInt128(0)
+    @test typemax(UInt128) === UInt128(0xffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff)
+    @test typemin(Int128 ) === Int128(-170141183460469231731687303715884105728)
+    @test typemax(Int128 ) === Int128(170141183460469231731687303715884105727)
+end
+
 @testset "issue #15489" begin
     @test 0x00007ffea27edaa0 + (-40) === (-40) + 0x00007ffea27edaa0 === 0x00007ffea27eda78
     @test UInt64(1) * Int64(-1) === typemax(UInt64)
@@ -331,6 +358,23 @@ end
                 else
                     # otherwise Unsigned wins
                     @test c isa (T <: Unsigned ? T : S)
+                end
+            end
+        end
+    end
+    # exhaustive UInt8/Int8 tests for mixed signedness
+    for f in (mod, rem)
+        for i in -128:127
+            for j in 0:255
+                if iszero(i)
+                    @test_throws DivideError f(UInt8(j), Int8(i))
+                else
+                    @test f(UInt8(j), Int8(i)) == f(j, i)
+                end
+                if iszero(j)
+                    @test_throws DivideError f(Int8(i), UInt8(j))
+                else
+                    @test f(Int8(i), UInt8(j)) == f(i,j)
                 end
             end
         end
@@ -420,30 +464,6 @@ end
     @test bitreverse(0x80) === 0x01
     @test bitreverse(Int64(456618293)) === Int64(-6012608040035942400)
     @test bitreverse(Int32(456618293)) === Int32(-1399919400)
-end
-
-@testset "min/max of datatype" begin
-    @test typemin(Int8) === Int8(-128)
-    @test typemin(UInt8) === UInt8(0)
-    @test typemin(Int16) === Int16(-32768)
-    @test typemin(UInt16) === UInt16(0)
-    @test typemin(Int32) === Int32(-2147483648)
-    @test typemin(UInt32) === UInt32(0)
-    @test typemin(Int64) === Int64(-9223372036854775808)
-    @test typemin(UInt64) === UInt64(0)
-    @test typemin(Int128) === Int128(-170141183460469231731687303715884105728)
-    @test typemin(UInt128) === UInt128(0)
-
-    @test typemax(Int8) === Int8(127)
-    @test typemax(UInt8) === UInt8(255)
-    @test typemax(Int16) === Int16(32767)
-    @test typemax(UInt16) === UInt16(65535)
-    @test typemax(Int32) === Int32(2147483647)
-    @test typemax(UInt32) === UInt32(4294967295)
-    @test typemax(Int64) === Int64(9223372036854775807)
-    @test typemax(UInt64) === UInt64(0xffffffffffffffff)
-    @test typemax(Int128) === Int128(170141183460469231731687303715884105727)
-    @test typemax(UInt128) === UInt128(0xffffffffffffffffffffffffffffffff)
 end
 
 @testset "BitIntegerType" begin

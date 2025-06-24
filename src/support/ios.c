@@ -196,6 +196,9 @@ static char *_buf_realloc(ios_t *s, size_t sz)
 
     if (sz <= s->maxsize) return s->buf;
 
+    if (!s->growable)
+        return NULL;
+
     if (s->ownbuf && s->buf != &s->local[0]) {
         // if we own the buffer we're free to resize it
         temp = (char*)LLT_REALLOC(s->buf, sz);
@@ -207,8 +210,10 @@ static char *_buf_realloc(ios_t *s, size_t sz)
         if (temp == NULL)
             return NULL;
         s->ownbuf = 1;
-        if (s->size > 0)
+        if (s->size > 0) {
+            assert(s->buf != NULL);
             memcpy(temp, s->buf, (size_t)s->size);
+        }
     }
 
     s->buf = temp;
@@ -597,11 +602,11 @@ int ios_eof(ios_t *s)
 {
     if (s->state == bst_rd && s->bpos < s->size)
         return 0;
-    if (s->bm == bm_mem)
-        return (s->_eof ? 1 : 0);
-    if (s->fd == -1)
-        return 1;
     if (s->_eof)
+        return 1;
+    if (s->bm == bm_mem)
+        return 0;
+    if (s->fd == -1)
         return 1;
     return 0;
     /*
@@ -610,6 +615,12 @@ int ios_eof(ios_t *s)
     s->_eof = 1;
     return 1;
     */
+}
+
+void ios_reseteof(ios_t *s)
+{
+    if (s->bm != bm_mem && s->fd != -1)
+        s->_eof = 0;
 }
 
 int ios_eof_blocking(ios_t *s)
@@ -718,8 +729,10 @@ char *ios_take_buffer(ios_t *s, size_t *psize)
         buf = (char*)LLT_ALLOC((size_t)s->size + 1);
         if (buf == NULL)
             return NULL;
-        if (s->size)
+        if (s->size) {
+            assert(s->buf != NULL);
             memcpy(buf, s->buf, (size_t)s->size);
+        }
     }
     else if (s->size == s->maxsize) {
         buf = (char*)LLT_REALLOC(s->buf, (size_t)s->size + 1);
@@ -829,7 +842,7 @@ size_t ios_copyall(ios_t *to, ios_t *from)
 
 #define LINE_CHUNK_SIZE 160
 
-size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
+size_t ios_copyuntil(ios_t *to, ios_t *from, char delim, int keep)
 {
     size_t total = 0, avail = (size_t)(from->size - from->bpos);
     while (!ios_eof(from)) {
@@ -847,9 +860,9 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
             avail = 0;
         }
         else {
-            size_t ntowrite = pd - (from->buf+from->bpos) + 1;
+            size_t ntowrite = pd - (from->buf+from->bpos) + (keep != 0);
             written = ios_write(to, from->buf+from->bpos, ntowrite);
-            from->bpos += ntowrite;
+            from->bpos += ntowrite + (keep == 0);
             total += written;
             return total;
         }
@@ -892,6 +905,7 @@ static void _ios_init(ios_t *s)
     s->readable = 1;
     s->writable = 1;
     s->rereadable = 0;
+    s->growable = 1;
 }
 
 /* stream object initializers. we do no allocation. */
@@ -935,9 +949,11 @@ ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int tru
 {
     int flags;
     int fd;
-    if (!(rd || wr))
+    if (!(rd || wr)) {
         // must specify read and/or write
+        errno = EINVAL;
         goto open_file_err;
+    }
     flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
@@ -1211,9 +1227,11 @@ char *ios_readline(ios_t *s)
 {
     ios_t dest;
     ios_mem(&dest, 0);
-    ios_copyuntil(&dest, s, '\n');
+    ios_copyuntil(&dest, s, '\n', 1);
     size_t n;
-    return ios_take_buffer(&dest, &n);
+    char * ret = ios_take_buffer(&dest, &n);
+    ios_close(&dest);
+    return ret;
 }
 
 extern int vasprintf(char **strp, const char *fmt, va_list ap);

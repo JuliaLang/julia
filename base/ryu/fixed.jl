@@ -38,7 +38,7 @@ function writefixed(buf, pos, v::T,
     mant = bits & MANTISSA_MASK
     exp = Int((bits >> 52) & EXP_MASK)
 
-    if exp == 0
+    if exp == 0 # subnormal
         e2 = 1 - 1023 - 52
         m2 = mant
     else
@@ -53,13 +53,13 @@ function writefixed(buf, pos, v::T,
         i = len - 1
         while i >= 0
             j = p10bits - e2
-            #=@inbounds=# mula, mulb, mulc = POW10_SPLIT[POW10_OFFSET[idx + 1] + i + 1]
+            mula, mulb, mulc = POW10_SPLIT[POW10_OFFSET[idx + 1] + i + 1]
             digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
             if nonzero
                 pos = append_nine_digits(digits, buf, pos)
             elseif digits != 0
                 olength = decimallength(digits)
-                pos = append_n_digits(olength, digits, buf, pos)
+                pos = append_c_digits(olength, digits, buf, pos)
                 nonzero = true
             end
             i -= 1
@@ -103,7 +103,7 @@ function writefixed(buf, pos, v::T,
                 end
                 break
             end
-            #=@inbounds=# mula, mulb, mulc = POW10_SPLIT_2[p + 1]
+            mula, mulb, mulc = POW10_SPLIT_2[p + 1]
             digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
             if i < blocks - 1
                 pos = append_nine_digits(digits, buf, pos)
@@ -118,11 +118,11 @@ function writefixed(buf, pos, v::T,
                     k += 1
                 end
                 if lastDigit != 5
-                    roundUp = lastDigit > 5
+                    roundUp = lastDigit > 5 ? 1 : 0
                 else
                     requiredTwos = -e2 - precision - 1
                     trailingZeros = requiredTwos <= 0 || (requiredTwos < 60 && pow2(m2, requiredTwos))
-                    roundUp = trailingZeros ? 2 : 1
+                    roundUp = trailingZeros ? 2 : 1 # 2 means round only if odd
                 end
                 if maximum > 0
                     pos = append_c_digits(maximum, digits, buf, pos)
@@ -137,13 +137,13 @@ function writefixed(buf, pos, v::T,
             while true
                 roundPos -= 1
                 if roundPos == (startpos - 1) || (buf[roundPos] == UInt8('-')) || (plus && buf[roundPos] == UInt8('+')) || (space && buf[roundPos] == UInt8(' '))
+                    buf[pos] = UInt8('0')
                     buf[roundPos + 1] = UInt8('1')
                     if dotPos > 1
                         buf[dotPos] = UInt8('0')
                         buf[dotPos + 1] = decchar
                         hasfractional = true
                     end
-                    buf[pos] = UInt8('0')
                     pos += 1
                     break
                 end

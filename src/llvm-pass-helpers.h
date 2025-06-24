@@ -20,7 +20,7 @@ namespace jl_intrinsics {
     // intrinsics and declare new intrinsics if necessary.
     struct IntrinsicDescription final {
         // The type of function that declares an intrinsic.
-        typedef llvm::Function *(*DeclarationFunction)(const JuliaPassContext&) JL_NOTSAFEPOINT;
+        typedef llvm::Function *(*DeclarationFunction)(llvm::Type *T_size) JL_NOTSAFEPOINT;
 
         // Creates an intrinsic description with a particular
         // name and declaration function.
@@ -56,11 +56,14 @@ struct JuliaPassContext {
     llvm::Function *gc_preserve_begin_func;
     llvm::Function *gc_preserve_end_func;
     llvm::Function *pointer_from_objref_func;
+    llvm::Function *gc_loaded_func;
     llvm::Function *alloc_obj_func;
     llvm::Function *typeof_func;
     llvm::Function *write_barrier_func;
+    llvm::Function *pop_handler_noexcept_func;
     llvm::Function *call_func;
     llvm::Function *call2_func;
+    llvm::Function *call3_func;
 
     // Creates a pass context. Type and function pointers
     // are set to `nullptr`. Metadata nodes are initialized.
@@ -82,8 +85,9 @@ struct JuliaPassContext {
 
     // Gets a call to the `julia.get_pgcstack' intrinsic in the entry
     // point of the given function, if there exists such a call.
+    // Otherwise, gets a swiftself argument, if there exists such an argument.
     // Otherwise, `nullptr` is returned.
-    llvm::CallInst *getPGCstack(llvm::Function &F) const;
+    llvm::Value *getPGCstack(llvm::Function &F) const;
 
     // Gets the intrinsic or well-known function that conforms to
     // the given description if it exists in the module. If not,
@@ -126,6 +130,9 @@ namespace jl_intrinsics {
 
     // `julia.queue_gc_root`: an intrinsic that queues a GC root.
     extern const IntrinsicDescription queueGCRoot;
+
+    // `julia.safepoint`: an intrinsic that triggers a GC safepoint.
+    extern const IntrinsicDescription safepoint;
 }
 
 // A namespace for well-known Julia runtime function descriptions.
@@ -141,11 +148,16 @@ namespace jl_well_known {
     // `jl_gc_big_alloc`: allocates bytes.
     extern const WellKnownFunctionDescription GCBigAlloc;
 
-    // `jl_gc_pool_alloc`: allocates bytes.
-    extern const WellKnownFunctionDescription GCPoolAlloc;
+    // `jl_gc_small_alloc`: allocates bytes.
+    extern const WellKnownFunctionDescription GCSmallAlloc;
 
     // `jl_gc_queue_root`: queues a GC root.
     extern const WellKnownFunctionDescription GCQueueRoot;
+
+    // `jl_gc_alloc_typed`: allocates bytes.
+    extern const WellKnownFunctionDescription GCAllocTyped;
 }
+
+void setName(llvm::Value *V, const llvm::Twine &Name, int debug_info);
 
 #endif

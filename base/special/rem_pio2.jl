@@ -109,7 +109,7 @@ function fromfraction(f::Int128)
     # 1. get leading term truncated to 26 bits
     s = ((f < 0) % UInt64) << 63     # sign bit
     x = abs(f) % UInt128             # magnitude
-    n1 = 128-leading_zeros(x)         # ndigits0z(x,2)
+    n1 = Base.top_set_bit(x)          # ndigits0z(x,2)
     m1 = ((x >> (n1-26)) % UInt64) << 27
     d1 = ((n1-128+1021) % UInt64) << 52
     z1 = reinterpret(Float64, s | (d1 + m1))
@@ -119,17 +119,14 @@ function fromfraction(f::Int128)
     if x2 == 0
         return (z1, 0.0)
     end
-    n2 = 128-leading_zeros(x2)
+    n2 = Base.top_set_bit(x2)
     m2 = (x2 >> (n2-53)) % UInt64
     d2 = ((n2-128+1021) % UInt64) << 52
     z2 = reinterpret(Float64,  s | (d2 + m2))
     return (z1,z2)
 end
 
-# XXX we want to mark :consistent-cy here so that this function can be concrete-folded,
-# because the effect analysis currently can't prove it in the presence of `@inbounds` or
-# `:boundscheck`, but still the accesses to `INV_2PI` are really safe here
-Base.@assume_effects :consistent function paynehanek(x::Float64)
+function paynehanek(x::Float64)
     # 1. Convert to form
     #
     #    x = X * 2^k,
@@ -168,15 +165,15 @@ Base.@assume_effects :consistent function paynehanek(x::Float64)
     idx = k >> 6
 
     shift = k - (idx << 6)
-    if shift == 0
-        @inbounds a1 = INV_2PI[idx+1]
-        @inbounds a2 = INV_2PI[idx+2]
-        @inbounds a3 = INV_2PI[idx+3]
+    Base.@assume_effects :nothrow :noub @inbounds if shift == 0
+        a1 = INV_2PI[idx+1]
+        a2 = INV_2PI[idx+2]
+        a3 = INV_2PI[idx+3]
     else
         # use shifts to extract the relevant 64 bit window
-        @inbounds a1 = (idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift) | (INV_2PI[idx+2] >> (64 - shift))
-        @inbounds a2 = (INV_2PI[idx+2] << shift) | (INV_2PI[idx+3] >> (64 - shift))
-        @inbounds a3 = (INV_2PI[idx+3] << shift) | (INV_2PI[idx+4] >> (64 - shift))
+        a1 = (idx < 0 ? zero(UInt64) : INV_2PI[idx+1] << shift) | (INV_2PI[idx+2] >> (64 - shift))
+        a2 = (INV_2PI[idx+2] << shift) | (INV_2PI[idx+3] >> (64 - shift))
+        a3 = (INV_2PI[idx+3] << shift) | (INV_2PI[idx+4] >> (64 - shift))
     end
 
     # 3. Perform the multiplication:

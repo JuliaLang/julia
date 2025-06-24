@@ -11,6 +11,11 @@ ee = typemax(Int64)
     @test BigInt <: Signed
     @test big(1) isa Signed
 
+    if sizeof(Culong) >= 8
+        @test_throws OutOfMemoryError big(96608869069402268615522366320733234710)^16374500563449903721
+        @test_throws OutOfMemoryError 555555555555555555555555555555555555555555555555555^55555555555555555
+    end
+
     let x = big(1)
         @test signed(x) === x
         @test convert(Signed, x) === x
@@ -215,6 +220,8 @@ end
 end
 @testset "combinatorics" begin
     @test factorial(BigInt(40)) == parse(BigInt,"815915283247897734345611269596115894272000000000")
+    @test_throws DomainError factorial(BigInt(-1))
+    @test_throws DomainError factorial(BigInt(rand(-999:-2)))
     @test binomial(BigInt(1), -1) == BigInt(0)
     @test binomial(BigInt(1), 2)  == BigInt(0)
     @test binomial(BigInt(-53), 42) == parse(BigInt,"959509335087854414441273718")
@@ -336,11 +343,13 @@ end
 @testset "digits" begin
     n = Int64(2080310129088201558)
     N = big(n)
-    for base in (2,7,10,11,16,30,50,62,64,100), pad in (0,1,10,100)
-        @test digits(n; base, pad) == digits(N; base, pad)
+    for base in (2,7,10,11,16,30,50,62,64,100,128), pad in (0,1,10,100)
+        @test digits(n; base, pad) == digits(N; base, pad) == digits(UInt8, N; base, pad)
         @test digits(-n; base, pad) == digits(-N; base, pad)
         @test digits!(Vector{Int}(undef, pad), n; base) == digits!(Vector{Int}(undef, pad), N; base)
     end
+    @test digits(UInt8, n; base=1<<8) == digits(UInt8, N; base=1<<8)
+    @test digits(UInt16, n; base=1<<16) == digits(UInt16, N; base=1<<16)
 end
 
 # serialization (#5133)
@@ -436,11 +445,106 @@ end
     @test string(big(0), base = rand(2:62), pad = 0) == ""
 end
 
+@testset "Base.GMP.MPZ.export!" begin
+
+    function Base_GMP_MPZ_import!(x::BigInt, n::AbstractVector{T}; order::Integer=-1, nails::Integer=0, endian::Integer=0) where {T<:Base.BitInteger}
+        ccall((:__gmpz_import, Base.GMP.MPZ.libgmp),
+               Cvoid,
+               (Base.GMP.MPZ.mpz_t, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Cvoid}),
+               x, length(n), order, sizeof(T), endian, nails, n)
+        return x
+    end
+    # test import
+    bytes_to_import_from = Vector{UInt8}([1, 0])
+    int_to_import_to = BigInt()
+    Base_GMP_MPZ_import!(int_to_import_to, bytes_to_import_from, order=0)
+    @test int_to_import_to == BigInt(256)
+
+    # test export
+    int_to_export_from = BigInt(256)
+    bytes_to_export_to = Vector{UInt8}(undef, 2)
+    Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
+    @test all(bytes_to_export_to .== bytes_to_import_from)
+
+    # test both composed import(export) is identity
+    int_to_export_from = BigInt(256)
+    bytes_to_export_to = Vector{UInt8}(undef, 2)
+    Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
+    int_to_import_to = BigInt()
+    Base_GMP_MPZ_import!(int_to_import_to, bytes_to_export_to, order=0)
+    @test int_to_export_from == int_to_import_to
+
+    # test both composed export(import) is identity
+    bytes_to_import_from = Vector{UInt8}([1, 0])
+    int_to_import_to = BigInt()
+    Base_GMP_MPZ_import!(int_to_import_to, bytes_to_import_from, order=0)
+    bytes_to_export_to = Vector{UInt8}(undef, 2)
+    Base.GMP.MPZ.export!(bytes_to_export_to, int_to_export_from, order=0)
+    @test all(bytes_to_export_to .== bytes_to_import_from)
+
+    # test export of 0 is T[0]
+    zero_to_export = BigInt(0)
+    bytes_to_export_to = Vector{UInt8}(undef, 0)
+    Base.GMP.MPZ.export!(bytes_to_export_to, zero_to_export, order=0)
+    @test bytes_to_export_to == UInt8[0]
+
+    # test export on nonzero vector
+    x_to_export = BigInt(6)
+    bytes_to_export_to = UInt8[1, 2, 3, 4, 5]
+    Base.GMP.MPZ.export!(bytes_to_export_to, x_to_export, order=0)
+    @test bytes_to_export_to == UInt8[6, 0, 0, 0, 0]
+end
+
 @test isqrt(big(4)) == 2
 @test isqrt(big(5)) == 2
 
-@test big(5)^true == big(5)
-@test big(5)^false == one(BigInt)
+
+@testset "Exponentiation operator" begin
+    @test big(5)^true == big(5)
+    @test big(5)^false == one(BigInt)
+    testvals = Int8[-128:-126; -3:3; 125:127]
+    @testset "BigInt and Int8 are consistent: $i^$j" for i in testvals, j in testvals
+        int8_res = try
+            i^j
+        catch e
+            e
+        end
+        if int8_res isa Int8
+            @test (big(i)^big(j)) % Int8 === int8_res
+        else
+            # Test both have exception of the same type
+            @test_throws typeof(int8_res) big(i)^big(j)
+        end
+    end
+end
+
+@testset "modular invert" begin
+    # test invert is correct and does not mutate
+    a = BigInt(3)
+    b = BigInt(7)
+    i = BigInt(5)
+    @test Base.GMP.MPZ.invert(a, b) == i
+    @test a == BigInt(3)
+    @test b == BigInt(7)
+
+    # test in place invert does mutate first argument
+    a = BigInt(3)
+    b = BigInt(7)
+    i = BigInt(5)
+    i_inplace = BigInt(3)
+    Base.GMP.MPZ.invert!(i_inplace, b)
+    @test i_inplace == i
+
+    # test in place invert does mutate only first argument
+    a = BigInt(3)
+    b = BigInt(7)
+    i = BigInt(5)
+    i_inplace = BigInt(0)
+    Base.GMP.MPZ.invert!(i_inplace, a, b)
+    @test i_inplace == i
+    @test a == BigInt(3)
+    @test b == BigInt(7)
+end
 
 @testset "math ops returning BigFloat" begin
     # operations that when applied to Int64 give Float64, should give BigFloat
@@ -703,4 +807,28 @@ t = Rational{BigInt}(0, 1)
 
         @test Base.GMP.MPQ.div!(-oo, zo) == -oz
     end
+end
+
+@testset "hashing" begin
+    for i in 1:10:100
+        for shift in vcat(0:8, 9:8:81)
+            for sgn in (1, -1)
+                bint = sgn * (big(11)^i << shift)
+                bfloat = float(bint)
+                @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+                @test hash(bint, Base.HASH_SEED) ==
+                    @invoke(hash(bint::Real, Base.HASH_SEED))
+                @test Base.hash_integer(bint, Base.HASH_SEED) ==
+                    @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
+            end
+        end
+    end
+
+    bint = big(0)
+    bfloat = float(bint)
+    @test (hash(bint) == hash(bfloat)) == (bint == bfloat)
+    @test hash(bint, Base.HASH_SEED) ==
+        @invoke(hash(bint::Real, Base.HASH_SEED))
+    @test Base.hash_integer(bint, Base.HASH_SEED) ==
+        @invoke(Base.hash_integer(bint::Integer, Base.HASH_SEED))
 end

@@ -47,6 +47,7 @@ close(s)
 @test_throws ErrorException mmap(file, Vector{Ref}) # must be bit-type
 GC.gc(); GC.gc()
 
+file = tempname() # new name to reduce chance of issues due slow windows fs
 s = open(f->f,file,"w")
 @test mmap(file) == Vector{UInt8}() # requested len=0 on empty file
 @test mmap(file,Vector{UInt8},0) == Vector{UInt8}()
@@ -100,9 +101,9 @@ if !(Sys.ARCH === :powerpc64le || Sys.ARCH === :ppc64le)
     s = open(file, "r")
     m = mmap(s)
     @test_throws ReadOnlyMemoryError m[5] = UInt8('x') # tries to setindex! on read-only array
-    finalize(m); m=nothing; GC.gc()
+    finalize(m); m=nothing;
 end
-
+GC.gc()
 write(file, "Hello World\n")
 
 s = open(file, "r")
@@ -191,6 +192,7 @@ m = mmap(file,Vector{UInt8},2,6)
 @test_throws BoundsError m[3]
 finalize(m); m = nothing; GC.gc()
 
+file = tempname() # new name to reduce chance of issues due slow windows fs
 s = open(file, "w")
 write(s, [0xffffffffffffffff,
           0xffffffffffffffff,
@@ -336,6 +338,11 @@ open(file, "r+") do s
     finalize(A); A = nothing; GC.gc()
     A = mmap(s, Vector{UInt8}, (10,), 1)
     Mmap.sync!(A)
-    finalize(A); A = nothing; GC.gc()
+    finalize(A); A = nothing;
 end
+GC.gc()
 rm(file)
+
+@testset "Docstrings" begin
+    @test isempty(Docs.undocumented_names(Mmap))
+end

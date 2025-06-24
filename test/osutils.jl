@@ -29,6 +29,11 @@ using Libdl
     else
         @test Sys.windows_version() >= v"1.0.0-"
     end
+
+    # TODO: When we have a WSL CI, add a new test here `@test detectwsl()`
+    if !Sys.islinux()
+        @test !Sys.detectwsl()
+    end
 end
 
 @testset "@static" begin
@@ -51,7 +56,7 @@ end
 if Sys.iswindows()
     @testset "path variables use correct path delimiters on windows" begin
         for path in (Base.SYSCONFDIR, Base.DATAROOTDIR, Base.DOCDIR,
-                     Base.LIBDIR, Base.PRIVATE_LIBDIR, Base.INCLUDEDIR, Base.LIBEXECDIR)
+                     Base.LIBDIR, Base.PRIVATE_LIBDIR, Base.INCLUDEDIR, Base.LIBEXECDIR, Base.PRIVATE_LIBEXECDIR)
             @test !occursin("/", path)
             @test !occursin("\\\\", path)
         end

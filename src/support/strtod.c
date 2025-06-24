@@ -11,7 +11,7 @@
 extern "C" {
 #endif
 
-#if !defined(_OS_WINDOWS_)
+#if !defined(_OS_WINDOWS_) && !defined(__OpenBSD__)
 // This code path should be used for systems that support the strtod_l function
 
 // Cache locale object

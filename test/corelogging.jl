@@ -103,16 +103,29 @@ end
         logmsg = (function() @info msg x=y end,
                   function() @info msg x=y z=1+1 end)[i]
         @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true logmsg()
-        @test_throws UndefVarError(:msg) collect_test_logs(logmsg)
-        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:msg)
+        @test_throws UndefVarError(:msg, :local) collect_test_logs(logmsg)
+        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:msg, :local)
         msg = "the msg"
         @test_logs (Error, Test.Ignored(), Test.Ignored(), :logevent_error) catch_exceptions=true logmsg()
-        @test_throws UndefVarError(:y) collect_test_logs(logmsg)
-        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:y)
+        @test_throws UndefVarError(:y, :local) collect_test_logs(logmsg)
+        @test (only(collect_test_logs(logmsg, catch_exceptions=true)[1]).kwargs[:exception]::Tuple{UndefVarError, Vector})[1] === UndefVarError(:y, :local)
         y = "the y"
         @test_logs (Info,"the msg") logmsg()
         @test only(collect_test_logs(logmsg)[1]).kwargs[:x] === "the y"
     end
+end
+@testset "Log message handle_message exception handling" begin
+    # Exceptions in log handling (printing) of msg are caught by default.
+    struct Foo end
+    Base.show(::IO, ::Foo) = 1 ÷ 0
+
+    # We cannot use `@test_logs` here, since test_logs does not actually _print_ the message
+    # (i.e. it does not invoke handle_message). To test exception handling during printing,
+    # we have to use `@test_warn` to see what was printed.
+    @test_warn r"Error: Exception while generating log record in module .*DivideError: integer division error"s @info Foo()
+
+    # Exceptions in log handling (printing) of attributes are caught by default
+    @test_warn r"Error: Exception while generating log record in module .*DivideError: integer division error"s @info "foo" x=Foo()
 end
 
 @testset "Special keywords" begin
@@ -140,9 +153,9 @@ end
     end
     @test length(logger.logs) == 1
     record = logger.logs[1]
-    @test record._module == nothing
-    @test record.file == nothing
-    @test record.line == nothing
+    @test record._module === nothing
+    @test record.file === nothing
+    @test record.line === nothing
 end
 
 # PR #28209

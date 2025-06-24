@@ -10,7 +10,7 @@
 ;; comma - higher than assignment outside parentheses, lower when inside
 (define prec-pair (add-dots '(=>)))
 (define prec-conditional '(?))
-(define prec-arrow       (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⭄ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻ --> <-- <-->)))
+(define prec-arrow       (add-dots '(← → ↔ ↚ ↛ ↞ ↠ ↢ ↣ ↦ ↤ ↮ ⇎ ⇍ ⇏ ⇐ ⇒ ⇔ ⇴ ⇶ ⇷ ⇸ ⇹ ⇺ ⇻ ⇼ ⇽ ⇾ ⇿ ⟵ ⟶ ⟷ ⟹ ⟺ ⟻ ⟼ ⟽ ⟾ ⟿ ⤀ ⤁ ⤂ ⤃ ⤄ ⤅ ⤆ ⤇ ⤌ ⤍ ⤎ ⤏ ⤐ ⤑ ⤔ ⤕ ⤖ ⤗ ⤘ ⤝ ⤞ ⤟ ⤠ ⥄ ⥅ ⥆ ⥇ ⥈ ⥊ ⥋ ⥎ ⥐ ⥒ ⥓ ⥖ ⥗ ⥚ ⥛ ⥞ ⥟ ⥢ ⥤ ⥦ ⥧ ⥨ ⥩ ⥪ ⥫ ⥬ ⥭ ⥰ ⧴ ⬱ ⬰ ⬲ ⬳ ⬴ ⬵ ⬶ ⬷ ⬸ ⬹ ⬺ ⬻ ⬼ ⬽ ⬾ ⬿ ⭀ ⭁ ⭂ ⭃ ⥷ ⭄ ⥺ ⭇ ⭈ ⭉ ⭊ ⭋ ⭌ ￩ ￫ ⇜ ⇝ ↜ ↝ ↩ ↪ ↫ ↬ ↼ ↽ ⇀ ⇁ ⇄ ⇆ ⇇ ⇉ ⇋ ⇌ ⇚ ⇛ ⇠ ⇢ ↷ ↶ ↺ ↻ --> <-- <--> 🢲)))
 (define prec-lazy-or     (add-dots '(|\|\||)))
 (define prec-lazy-and    (add-dots '(&&)))
 (define prec-comparison
@@ -20,7 +20,7 @@
 (define prec-pipe>       '(|.\|>| |\|>|))
 (define prec-colon       (append! '(: |..|) (add-dots '(… ⁝ ⋮ ⋱ ⋰ ⋯))))
 (define prec-plus        (append! '($)
-                          (add-dots '(+ - − ¦ |\|| ⊕ ⊖ ⊞ ⊟ |++| ∪ ∨ ⊔ ± ∓ ∔ ∸ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣))))
+                          (add-dots '(+ - − ¦ |\|| ⊕ ⊖ ⊞ ⊟ |++| ∪ ∨ ⊔ ± ∓ ∔ ∸ ≏ ⊎ ⊻ ⊽ ⋎ ⋓ ⟇ ⧺ ⧻ ⨈ ⨢ ⨣ ⨤ ⨥ ⨦ ⨧ ⨨ ⨩ ⨪ ⨫ ⨬ ⨭ ⨮ ⨹ ⨺ ⩁ ⩂ ⩅ ⩊ ⩌ ⩏ ⩐ ⩒ ⩔ ⩖ ⩗ ⩛ ⩝ ⩡ ⩢ ⩣))))
 (define prec-times       (add-dots '(* / ⌿ ÷ % & · · ⋅ ∘ × |\\| ∩ ∧ ⊗ ⊘ ⊙ ⊚ ⊛ ⊠ ⊡ ⊓ ∗ ∙ ∤ ⅋ ≀ ⊼ ⋄ ⋆ ⋇ ⋉ ⋊ ⋋ ⋌ ⋏ ⋒ ⟑ ⦸ ⦼ ⦾ ⦿ ⧶ ⧷ ⨇ ⨰ ⨱ ⨲ ⨳ ⨴ ⨵ ⨶ ⨷ ⨸ ⨻ ⨼ ⨽ ⩀ ⩃ ⩄ ⩋ ⩍ ⩎ ⩑ ⩓ ⩕ ⩘ ⩚ ⩜ ⩞ ⩟ ⩠ ⫛ ⊍ ▷ ⨝ ⟕ ⟖ ⟗ ⨟)))
 (define prec-rational    (add-dots '(//)))
 (define prec-bitshift    (add-dots '(<< >> >>>)))
@@ -49,7 +49,7 @@
         ((not (length> l 8))
          (eval `(lambda (x)
                   (not (not (,(if (every symbol? l) 'memq 'memv) x (quote ,l)))))))
-        ((and (every symbol? l) (not (length> l 20)))
+        ((and (not (length> l 20)) (every symbol? l))
          (eval `(lambda (x)
                   (not (not (memq x (quote ,l)))))))
         (else
@@ -716,7 +716,7 @@
 
 ;; ";" at the top level produces a sequence of top level expressions
 (define (parse-stmts s)
-  (let ((ex (parse-Nary s (lambda (s) (parse-docstring s parse-eq))
+  (let ((ex (parse-Nary s (lambda (s) (parse-public s parse-eq))
                         '(#\;) 'toplevel (lambda (x) (eqv? x #\newline)) #f)))
     ;; check for unparsed junk after an expression
     (let ((t (peek-token s)))
@@ -1329,13 +1329,13 @@
 
 (define (valid-func-sig? paren sig)
   (and (pair? sig)
-       (or (eq? (car sig) 'call)
-           (eq? (car sig) 'tuple)
+       (or (memq (car sig) '(call tuple))
+           (and (not paren) (eq? (car sig) 'macrocall))
            (and paren (eq? (car sig) 'block))
            (and paren (eq? (car sig) '...))
            (and (eq? (car sig) '|::|)
                 (pair? (cadr sig))
-                (eq? (car (cadr sig)) 'call))
+                (memq (car (cadr sig)) '(call macrocall)))
            (and (eq? (car sig) 'where)
                 (valid-func-sig? paren (cadr sig))))))
 
@@ -1608,18 +1608,18 @@
        ((module baremodule)
         (let* ((name (parse-unary-prefix s))
                (loc  (line-number-node s))
-               (body (parse-block s (lambda (s) (parse-docstring s parse-eq)))))
+               (body (parse-block s (lambda (s) (parse-public s parse-eq)))))
           (if (reserved-word? name)
               (error (string "invalid module name \"" name "\"")))
           (expect-end s word)
           (list 'module (if (eq? word 'module) '(true) '(false)) name
                 `(block ,loc ,@(cdr body)))))
-       ((export)
+       ((export public)
         (let ((es (map macrocall-to-atsym
                        (parse-comma-separated s parse-unary-prefix))))
           (if (not (every symbol-or-interpolate? es))
-              (error "invalid \"export\" statement"))
-          `(export ,@es)))
+              (error (string "invalid \"" word "\" statement")))
+          `(,word ,@es)))
        ((import using)
         (parse-imports s word))
        ((do)
@@ -2610,15 +2610,23 @@
 
 (define (valid-modref? e)
   (and (length= e 3) (eq? (car e) '|.|) (pair? (caddr e))
-       (eq? (car (caddr e)) 'quote) (symbol? (cadr (caddr e)))
+       (or (eq? (car (caddr e)) 'quote)
+           (eq? (car (caddr e)) 'inert))
+       (symbol? (cadr (caddr e)))
        (or (symbol? (cadr e))
            (valid-modref? (cadr e)))))
 
 (define (macroify-name e . suffixes)
   (cond ((symbol? e) (symbol (apply string #\@ e suffixes)))
+        ((and (pair? e) (eq? (car e) 'quote))
+         `(quote ,(apply macroify-name (cadr e) suffixes)))
+        ((and (pair? e) (eq? (car e) 'inert))
+         `(inert ,(apply macroify-name (cadr e) suffixes)))
+        ((globalref? e)
+         `(globalref ,(cadr e) ,(apply macroify-name (caddr e) suffixes)))
         ((valid-modref? e)
          `(|.| ,(cadr e)
-               (quote ,(apply macroify-name (cadr (caddr e)) suffixes))))
+               ,(apply macroify-name (caddr e) suffixes)))
         (else (error (string "invalid macro usage \"@(" (deparse e) ")\"" )))))
 
 (define (macroify-call s call startloc)
@@ -2663,6 +2671,17 @@
       (and (pair? e)
            ;; string interpolation
            (eq? (car e) 'string))))
+
+(define (parse-public s production)
+  (if (eq? (peek-token s) 'public)
+      (let ((spc (ts:space? s)))
+        (take-token s)
+        (if (memv (peek-token s) '(#\( = #\[))
+            (begin ;; TODO: deprecation warning here
+                   (ts:put-back! s 'public spc)
+                   (parse-docstring s production))
+            (parse-resword s 'public)))
+      (parse-docstring s production)))
 
 (define (parse-docstring s production)
   (let ((startloc (line-number-node s)) ; be sure to use the line number from the head of the docstring
