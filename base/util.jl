@@ -619,6 +619,10 @@ macro kwdef(expr)
                 for arg in fieldsblock.args
                     isa(arg, Base.LineNumberNode) && continue
                     isa(arg, Symbol) && continue
+                    if arg.head in (:const, :atomic)
+                        arg = arg.args[1]
+                        isa(arg, Symbol) && continue
+                    end
                     fname, ftype = arg.args
                     ftype === para && return :(typeof($fname))
                 end
