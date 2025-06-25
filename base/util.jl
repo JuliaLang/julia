@@ -590,6 +590,7 @@ macro kwdef(expr)
     fieldtypes = Any[]
     defvals = Any[]
     extract_names_types_and_defvals_from_kwdef_fieldblock!(fieldsblock, fieldnames, fieldtypes, defvals)
+    isconsistent = compare_types_vals(fieldtypes, defvals)
     parameters = map(fieldnames, defvals) do fieldname, defval
         if isnothing(defval)
             return fieldname
@@ -623,7 +624,7 @@ macro kwdef(expr)
                 return para
             end
             unused = [x for x in Q if x in typecalls]
-            def1 = if isempty(unused)
+            def1 = if isempty(unused) && isconsistent
                 ST = :($S{$(typecalls...)})
                 body1 = Expr(:block, __source__, Expr(:call, esc(ST), fieldnames...))
                 sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
@@ -692,6 +693,14 @@ function def_name_type_defval_from_kwdef_fielddef(kwdef)
     end
 end
 
+function compare_types_vals(fieldtypes, defvals)
+    all(unique(fieldtypes)) do sym
+        idxs = findall(==(sym), fieldtypes)
+        idxs === nothing && return false
+        deftypes = typeof.(defvals[idxs])
+        allequal(deftypes)
+    end
+end
 # testing
 
 """
