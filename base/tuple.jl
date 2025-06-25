@@ -151,7 +151,7 @@ function keys(t::Tuple, t2::Tuple...)
     @inline
     lent = length(t)
     if !all(==(lent) ∘ length, t2)
-        let inds = map(axes, (t, t2...))
+        let inds = map(only ∘ axes, (t, t2...))
             throw_eachindex_mismatch_indices("indices", inds...)
         end
     end
