@@ -618,6 +618,7 @@ macro kwdef(expr)
             typecalls = map(Q) do para
                 for arg in fieldsblock.args
                     isa(arg, Base.LineNumberNode) && continue
+                    isa(arg, Symbol) && continue
                     fname, ftype = arg.args
                     ftype === para && return :(typeof($fname))
                 end
@@ -696,7 +697,7 @@ end
 function compare_types_vals(fieldtypes, defvals)
     all(unique(fieldtypes)) do sym
         idxs = findall(==(sym), fieldtypes)
-        idxs === nothing && return false
+        isempty(idxs) && return false
         deftypes = typeof.(defvals[idxs])
         allequal(deftypes)
     end
