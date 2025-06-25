@@ -778,12 +778,12 @@ precompile_test_harness("code caching") do dir
     Base.compilecache(pkgid)
     @test Base.isprecompiled(pkgid)
     @eval using $Cache_module
-    M = invokelatest(getfield, @__MODULE__, Cache_module)
+    M = invokelatest(getglobal, @__MODULE__, Cache_module)
     Mid = rootid(M)
     invokelatest() do
         # Test that this cache file "owns" all the roots
         for name in (:f, :fpush, :callboth)
-            func = getfield(M, name)
+            func = getglobal(M, name)
             m = only(collect(methods(func)))
             @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
         end
@@ -1033,7 +1033,7 @@ precompile_test_harness("code caching") do dir
         Base.compilecache(Base.PkgId(string(pkg)))
     end
     @eval using $StaleA
-    MA = invokelatest(getfield, @__MODULE__, StaleA)
+    MA = invokelatest(getglobal, @__MODULE__, StaleA)
     Base.eval(MA, :(nbits(::UInt8) = 8))
     Base.eval(MA, quote
         struct InvalidatedBinding
@@ -1154,7 +1154,7 @@ precompile_test_harness("precompiletools") do dir
     Base.compilecache(pkgid)
     @test Base.isprecompiled(pkgid)
     @eval using $PrecompileToolsModule
-    M = invokelatest(getfield, @__MODULE__, PrecompileToolsModule)
+    M = invokelatest(getglobal, @__MODULE__, PrecompileToolsModule)
     invokelatest() do
         m = which(Tuple{typeof(findfirst), Base.Fix2{typeof(==), T}, Vector{T}} where T)
         success = 0
@@ -1281,7 +1281,7 @@ precompile_test_harness("invoke") do dir
           """)
     Base.compilecache(Base.PkgId(string(CallerModule)))
     @eval using $InvokeModule: $InvokeModule
-    MI = invokelatest(getfield, @__MODULE__, InvokeModule)
+    MI = invokelatest(getglobal, @__MODULE__, InvokeModule)
     @eval $MI.getlast(a::UnitRange) = a.stop
     @eval using $CallerModule
     invokelatest() do
