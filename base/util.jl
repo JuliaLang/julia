@@ -655,7 +655,7 @@ end
 function extract_names_types_and_defvals_from_kwdef_fieldblock!(block, names, types, defvals)
     for (i, item) in pairs(block.args)
         if isexpr(item, :block)
-            extract_names_tpyes_and_defvals_from_kwdef_fieldblock!(item, names, types, defvals)
+            extract_names_types_and_defvals_from_kwdef_fieldblock!(item, names, types, defvals)
         elseif item isa Expr && item.head in (:escape, :var"hygienic-scope")
             n = length(names)
             extract_names_types_and_defvals_from_kwdef_fieldblock!(item, names, types, defvals)
