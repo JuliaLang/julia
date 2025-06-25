@@ -391,8 +391,6 @@ check_ptr_indexable(a::Array, sz) = sizeof(eltype(a)) !== sz
 check_ptr_indexable(a::Memory, sz) = true
 check_ptr_indexable(a::AbstractArray, sz) = false
 
-@propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
-
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) && (check_ptr_indexable(a) || _isassigned_ra(a, inds...))
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::SCartesianIndex2) = isassigned(a.parent, inds.j)
 @propagate_inbounds _isassigned_ra(a::ReinterpretArray, inds...) = true # that is not entirely true, but computing exactly which indexes will be accessed in the parent requires a lot of duplication from the _getindex_ra code
