@@ -104,8 +104,10 @@ UInt8
 
 See also [`ncodeunits`](@ref), [`checkbounds`](@ref).
 """
-@propagate_inbounds codeunit(s::AbstractString, i::Integer) = i isa Int ?
-    throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
+@propagate_inbounds codeunit(s::AbstractString, i::Integer) = begin
+    i isa Int ? throw(MethodError(codeunit, (s, i))) : codeunit(s, Int(i))
+end
+
 
 """
     isvalid(s::AbstractString, i::Integer)::Bool
