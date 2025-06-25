@@ -2189,7 +2189,7 @@ precompile_test_harness("Pre-compile Core methods") do load_path
     invokelatest() do
         let tt = Tuple{Type{Vector{CorePrecompilation.Foo}}, UndefInitializer, Tuple{Int}},
             match = first(Base._methods_by_ftype(tt, -1, Base.get_world_counter())),
-            mi = Base.specialize_method(match)
+            mi = Core.Compiler.specialize_method(match)
             @test isdefined(mi, :cache)
             @test mi.cache.max_world === typemax(UInt)
             @test mi.cache.invoke != C_NULL
