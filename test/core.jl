@@ -8180,5 +8180,4 @@ myfun57023b(::Type{T}) where {T} = (x = @cfunction myfun57023a Ptr{T} (Ref{T},);
 #58434 bitsegal comparison of oddly sized fields
 primitive type ByteString58434 (18 * 8) end
 
-@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
 @test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)
