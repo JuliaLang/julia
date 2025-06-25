@@ -4,11 +4,11 @@ include $(SRCDIR)/patchelf.version
 $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2: | $(SRCCACHE)
 	$(JLDOWNLOAD) $@ https://github.com/NixOS/patchelf/releases/download/$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.bz2
 
-$(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
+$(BUILDDIR)/patchelf-$(PATCHELF_VER)/source-extracted: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	mkdir $(dir $@)
 	cd $(dir $@) && $(TAR) jxf $< --strip-components=1
-	touch -c $(SRCCACHE)/patchelf-$(PATCHELF_VER)/configure # old target
+	touch -c $(BUILDDIR)/patchelf-$(PATCHELF_VER)/configure # old target
 	echo 1 > $@
 
 checksum-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
@@ -17,7 +17,7 @@ checksum-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: CC:=$(HOSTCC)
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: CXX:=$(HOSTCXX)
 $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: XC_HOST:=$(BUILD_MACHINE)
-$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
+$(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(dir $<)/configure $(CONFIGURE_COMMON) LDFLAGS="$(CXXLDFLAGS)" CPPFLAGS="$(CPPFLAGS)" MAKE=$(MAKE)
@@ -45,12 +45,11 @@ clean-patchelf:
 
 distclean-patchelf:
 	rm -rf $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2 \
-		$(SRCCACHE)/patchelf-$(PATCHELF_VER) \
 		$(BUILDDIR)/patchelf-$(PATCHELF_VER)
 
 
 get-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER).tar.bz2
-extract-patchelf: $(SRCCACHE)/patchelf-$(PATCHELF_VER)/source-extracted
+extract-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/source-extracted
 configure-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-configured
 compile-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-compiled
 check-patchelf: $(BUILDDIR)/patchelf-$(PATCHELF_VER)/build-checked
