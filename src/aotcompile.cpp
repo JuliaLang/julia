@@ -2404,23 +2404,22 @@ void jl_dump_native_impl(void *native_code,
     }
 }
 
-
 // sometimes in GDB you want to find out what code would be created from a mi
-extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instance_t *mi)
+extern "C" JL_DLLEXPORT_CODEGEN jl_code_instance_t *jl_gdbdumpcode(jl_method_instance_t *mi)
 {
     jl_llvmf_dump_t llvmf_dump;
     size_t world = jl_current_task->world_age;
     JL_STREAM *stream = (JL_STREAM*)STDERR_FILENO;
 
-    jl_code_info_t *src = jl_gdbcodetyped1(mi, world);
-    JL_GC_PUSH1(&src);
+    jl_code_instance_t *ci = jl_type_infer(mi, world, SOURCE_MODE_GET_SOURCE);
+    JL_GC_PUSH1(&ci);
 
     jl_printf(stream, "---- dumping IR for ----\n");
     jl_static_show(stream, (jl_value_t*)mi);
     jl_printf(stream, "\n----\n");
 
     jl_printf(stream, "\n---- unoptimized IR ----\n");
-    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, false, jl_default_cgparams);
+    jl_get_llvmf_defn(&llvmf_dump, ci, NULL, 0, false, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
         if (ir != NULL && jl_is_string(ir))
@@ -2429,7 +2428,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     jl_printf(stream, "\n----\n");
 
     jl_printf(stream, "\n---- optimized IR ----\n");
-    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, jl_default_cgparams);
+    jl_get_llvmf_defn(&llvmf_dump, ci, NULL, 0, true, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_ir(&llvmf_dump, 0, 1, "source");
         if (ir != NULL && jl_is_string(ir))
@@ -2438,7 +2437,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     jl_printf(stream, "\n----\n");
 
     jl_printf(stream, "\n---- assembly ----\n");
-    jl_get_llvmf_defn(&llvmf_dump, mi, src, 0, true, jl_default_cgparams);
+    jl_get_llvmf_defn(&llvmf_dump, ci, NULL, 0, true, jl_default_cgparams);
     if (llvmf_dump.F) {
         jl_value_t *ir = jl_dump_function_asm(&llvmf_dump, 0, "", "source", 0, true);
         if (ir != NULL && jl_is_string(ir))
@@ -2447,7 +2446,7 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
     jl_printf(stream, "\n----\n");
     JL_GC_POP();
 
-    return src;
+    return ci;
 }
 
 // --- native code info, and dump function to IR and ASM ---
@@ -2455,11 +2454,12 @@ extern "C" JL_DLLEXPORT_CODEGEN jl_code_info_t *jl_gdbdumpcode(jl_method_instanc
 // for use in reflection from Julia.
 // This is paired with jl_dump_function_ir and jl_dump_function_asm, either of which will free all memory allocated here
 extern "C" JL_DLLEXPORT_CODEGEN
-void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_code_info_t *src, char getwrapper, char optimize, const jl_cgparams_t params)
+void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_code_instance_t *ci, jl_code_info_t *src, char getwrapper, char optimize, const jl_cgparams_t params)
 {
     // emit this function into a new llvm module
     dump->F = nullptr;
     dump->TSM = nullptr;
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
     if (src && jl_is_code_info(src)) {
         auto ctx = jl_ExecutionEngine->makeContext();
         const auto &DL = jl_ExecutionEngine->getDataLayout();
@@ -2476,7 +2476,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
             output.imaging_mode = jl_options.image_codegen;
             output.temporary_roots = jl_alloc_array_1d(jl_array_any_type, 0);
             JL_GC_PUSH1(&output.temporary_roots);
-            jl_llvm_functions_t decls = jl_emit_code(m, mi, src, mi->specTypes, src->rettype, output);
+            jl_llvm_functions_t decls = jl_emit_codeinst(m, ci, src, output);
             // while not required, also emit the cfunc thunks, based on the
             // inferred ABIs of their targets in the current latest world,
             // since otherwise it is challenging to see all relevant codes
