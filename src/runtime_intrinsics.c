@@ -676,7 +676,7 @@ JL_DLLEXPORT jl_value_t *jl_cglobal(jl_value_t *v, jl_value_t *ty)
         f_lib = (char*)jl_dlfind(f_name);
 
     void *ptr;
-    jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1);
+    jl_dlsym(jl_get_library(f_lib), f_name, &ptr, 1, 0);
     jl_value_t *jv = jl_gc_alloc(jl_current_task->ptls, sizeof(void*), rt);
     *(void**)jl_data_ptr(jv) = ptr;
     JL_GC_POP();
