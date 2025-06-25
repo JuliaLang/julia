@@ -240,7 +240,8 @@ JL_DLLEXPORT int jl_dlclose(void *handle) JL_NOTSAFEPOINT
 #endif
 }
 
-void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err) {
+void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err) JL_NOTSAFEPOINT
+{
     void *handle;
 #ifdef _OS_WINDOWS_
     if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
