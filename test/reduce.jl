@@ -825,3 +825,9 @@ iterunknown(x) = (y = skipmissing(convert(Array{Union{Missing, eltype(x)}}, x));
 
     @test sum((rand(Float32) for _ in 1:100000000))/100000000 ≈ 0.5
 end
+
+# `reduce(vcat, A)` should not alias the input for length-1 collections
+let A=[1;;]
+    @test reduce(vcat, Any[A]) !== A
+    @test reduce(hcat, Any[A]) !== A
+end

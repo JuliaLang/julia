@@ -255,12 +255,46 @@ static void finish_params(Module *M, jl_codegen_params_t &params, SmallVector<or
     }
 }
 
+// Return a specptr that is ABI-compatible with `from_abi` which invokes `codeinst`.
+//
+// If `codeinst` is NULL, the returned specptr instead performs a standard `apply_generic`
+// call via a dynamic dispatch.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_jit_abi_converter_impl(jl_task_t *ct, void *unspecialized, jl_value_t *declrt, jl_value_t *sigt, size_t nargs, int specsig,
-                                jl_code_instance_t *codeinst, jl_callptr_t invoke, void *target, int target_specsig)
+void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
+                                jl_code_instance_t *codeinst)
 {
-    if (codeinst == nullptr && unspecialized != nullptr)
-        return unspecialized;
+    void *target = nullptr;
+    bool target_specsig = false;
+    jl_callptr_t invoke = nullptr;
+    if (codeinst != nullptr) {
+        uint8_t specsigflags;
+        jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+        void *specptr = nullptr;
+        jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &specptr, /* waitcompile */ 1);
+        if (invoke != nullptr) {
+            if (invoke == jl_fptr_const_return_addr) {
+                target = nullptr;
+                target_specsig = false;
+            }
+            else if (invoke == jl_fptr_args_addr) {
+                assert(specptr != nullptr);
+                if (!from_abi.specsig && jl_subtype(codeinst->rettype, from_abi.rt))
+                    return specptr; // no adapter required
+
+                target = specptr;
+                target_specsig = false;
+            }
+            else if (specsigflags & 0b1) {
+                assert(specptr != nullptr);
+                if (from_abi.specsig && jl_egal(mi->specTypes, from_abi.sigt) && jl_egal(codeinst->rettype, from_abi.rt))
+                    return specptr; // no adapter required
+
+                target = specptr;
+                target_specsig = true;
+            }
+        }
+    }
+
     orc::ThreadSafeModule result_m;
     std::string gf_thunk_name;
     {
@@ -272,14 +306,14 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, void *unspecialized, jl_value_t *
         Module *M = result_m.getModuleUnlocked();
         if (target) {
             Value *llvmtarget = literal_static_pointer_val((void*)target, PointerType::get(M->getContext(), 0));
-            gf_thunk_name = emit_abi_converter(M, params, declrt, sigt, nargs, specsig, codeinst, llvmtarget, target_specsig);
+            gf_thunk_name = emit_abi_converter(M, params, from_abi, codeinst, llvmtarget, target_specsig);
         }
         else if (invoke == jl_fptr_const_return_addr) {
-            gf_thunk_name = emit_abi_constreturn(M, params, declrt, sigt, nargs, specsig, codeinst->rettype_const);
+            gf_thunk_name = emit_abi_constreturn(M, params, from_abi, codeinst->rettype_const);
         }
         else {
             Value *llvminvoke = invoke ? literal_static_pointer_val((void*)invoke, PointerType::get(M->getContext(), 0)) : nullptr;
-            gf_thunk_name = emit_abi_dispatcher(M, params, declrt, sigt, nargs, specsig, codeinst, llvminvoke);
+            gf_thunk_name = emit_abi_dispatcher(M, params, from_abi, codeinst, llvminvoke);
         }
         SmallVector<orc::ThreadSafeModule,0> sharedmodules;
         finish_params(M, params, sharedmodules);
@@ -689,8 +723,17 @@ static void jl_compile_codeinst_now(jl_code_instance_t *codeinst)
             if (!decls.specFunctionObject.empty())
                 NewDefs.push_back(decls.specFunctionObject);
         }
-        auto Addrs = jl_ExecutionEngine->findSymbols(NewDefs);
-
+        // Split batches to avoid stack overflow in the JIT linker.
+        // FIXME: Patch ORCJITs InPlaceTaskDispatcher to not recurse on task dispatches but
+        // push the tasks to a queue to be drained later. This avoids the stackoverflow caused by recursion
+        // in the linker when compiling a large number of functions at once.
+        SmallVector<uint64_t, 0> Addrs;
+        for (size_t i = 0; i < NewDefs.size(); i += 1000) {
+            auto end = std::min(i + 1000, NewDefs.size());
+            SmallVector<StringRef> batch(NewDefs.begin() + i, NewDefs.begin() + end);
+            auto AddrsBatch = jl_ExecutionEngine->findSymbols(batch);
+            Addrs.append(AddrsBatch);
+        }
         size_t nextaddr = 0;
         for (auto &this_code : linkready) {
             auto it = invokenames.find(this_code);
@@ -2008,16 +2051,13 @@ JuliaOJIT::JuliaOJIT()
         reinterpret_cast<void *>(static_cast<uintptr_t>(msan_workaround::MSanTLS::origin))), JITSymbolFlags::Exported};
     cantFail(GlobalJD.define(orc::absoluteSymbols(msan_crt)));
 #endif
-#if JL_LLVM_VERSION < 200000
 #ifdef _COMPILER_ASAN_ENABLED_
     // this is a hack to work around a bad assertion:
     //   /workspace/srcdir/llvm-project/llvm/lib/ExecutionEngine/Orc/Core.cpp:3028: llvm::Error llvm::orc::ExecutionSession::OL_notifyResolved(llvm::orc::MaterializationResponsibility&, const SymbolMap&): Assertion `(KV.second.getFlags() & ~JITSymbolFlags::Common) == (I->second & ~JITSymbolFlags::Common) && "Resolving symbol with incorrect flags"' failed.
-    // hopefully fixed upstream by e7698a13e319a9919af04d3d693a6f6ea7168a44
     static int64_t jl___asan_globals_registered;
     orc::SymbolMap asan_crt;
     asan_crt[mangle("___asan_globals_registered")] = {ExecutorAddr::fromPtr(&jl___asan_globals_registered), JITSymbolFlags::Common | JITSymbolFlags::Exported};
     cantFail(JD.define(orc::absoluteSymbols(asan_crt)));
-#endif
 #endif
 }
 

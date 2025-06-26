@@ -3,21 +3,12 @@
 module StaticData
 
 using .Core: CodeInstance, MethodInstance
-using .Base: JLOptions, Compiler, get_world_counter, _methods_by_ftype, get_methodtable
+using .Base: JLOptions, Compiler, get_world_counter, _methods_by_ftype, get_methodtable, get_ci_mi
 
 const WORLD_AGE_REVALIDATION_SENTINEL::UInt = 1
 const _jl_debug_method_invalidation = Ref{Union{Nothing,Vector{Any}}}(nothing)
 debug_method_invalidation(onoff::Bool) =
     _jl_debug_method_invalidation[] = onoff ? Any[] : nothing
-
-function get_ci_mi(codeinst::CodeInstance)
-    def = codeinst.def
-    if def isa Core.ABIOverride
-        return def.def
-    else
-        return def::MethodInstance
-    end
-end
 
 # Restore backedges to external targets
 # `edges` = [caller1, ...], the list of worklist-owned code instances internally
@@ -91,9 +82,9 @@ end
 function needs_instrumentation(codeinst::CodeInstance, mi::MethodInstance, def::Method, validation_world::UInt)
     if JLOptions().code_coverage != 0 || JLOptions().malloc_log != 0
         # test if the code needs to run with instrumentation, in which case we cannot use existing generated code
-        if isdefined(def, :debuginfo) ? # generated_only functions do not have debuginfo, so fall back to considering their codeinst debuginfo though this may be slower (and less accurate?)
+        if isdefined(def, :debuginfo) ? # generated_only functions do not have debuginfo, so fall back to considering their codeinst debuginfo though this may be slower and less reliable
             Compiler.should_instrument(def.module, def.debuginfo) :
-            Compiler.should_instrument(def.module, codeinst.debuginfo)
+            isdefined(codeinst, :debuginfo) && Compiler.should_instrument(def.module, codeinst.debuginfo)
             return true
         end
         gensig = gen_staged_sig(def, mi)

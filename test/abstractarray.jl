@@ -2286,3 +2286,27 @@ end
         @test_throws "no method matching $Int(::$Infinity)" similar(ones(2), OneToInf())
     end
 end
+
+@testset "effect inference for `iterate` for `Array` and for `Memory`" begin
+    for El ∈ (Float32, Real, Any)
+        for Arr ∈ (Memory{El}, Array{El, 0}, Vector{El}, Matrix{El}, Array{El, 3})
+            effects = Base.infer_effects(iterate, Tuple{Arr, Int})
+            @test Base.Compiler.is_effect_free(effects)
+            @test Base.Compiler.is_terminates(effects)
+            @test Base.Compiler.is_notaskstate(effects)
+            @test Base.Compiler.is_noub(effects)
+            @test Base.Compiler.is_nonoverlayed(effects)
+            @test Base.Compiler.is_nortcall(effects)
+        end
+    end
+end
+
+@testset "iterate for linear indexing" begin
+    A = [1 2; 3 4]
+    v = view(A, :)
+    @test sum(x for x in v) == sum(A)
+    v = view(A, 1:2:lastindex(A))
+    @test sum(x for x in v) == sum(A[1:2:end])
+    v2 = view(A, Base.IdentityUnitRange(1:length(A)))
+    @test sum(x for x in v2) == sum(A)
+end

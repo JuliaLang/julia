@@ -569,7 +569,7 @@ julia> collect(LinRange(-0.1, 0.3, 5))
   0.3
 ```
 
-See also [`Logrange`](@ref Base.LogRange) for logarithmically spaced points.
+See also [`Base.LogRange`](@ref Base.LogRange) for logarithmically spaced points.
 """
 struct LinRange{T,L<:Integer} <: AbstractRange{T}
     start::T

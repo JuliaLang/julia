@@ -68,6 +68,11 @@ public
     ispublic,
     remove_linenums!,
 
+# AST handling
+    IR,
+    isa_ast_node,
+    quoted,
+
 # Operators
     operator_associativity,
     operator_precedence,
@@ -111,6 +116,7 @@ public
     reseteof,
     link_pipe!,
     dup,
+    showarg,
 
 # filesystem operations
     rename,
