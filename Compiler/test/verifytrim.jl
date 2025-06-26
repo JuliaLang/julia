@@ -36,24 +36,27 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Nothing, Tuple{typeof(finalizer),
              \[1\] finalizer\(f::Any, o::Any\)""", repr)
 end
 
+# test that basic `cfunction` generation is allowed, when the dispatch target can be resolved
 make_cfunction() = @cfunction(+, Float64, (Int64,Int64))
-
-# use TRIM_UNSAFE to bypass verifier inside typeinf_ext_toplevel
 let infos = typeinf_ext_toplevel(Any[Core.svec(Ptr{Cvoid}, Tuple{typeof(make_cfunction)})], [Base.get_world_counter()], TRIM_UNSAFE)
     errors, parents = get_verify_typeinf_trim(infos)
-    @test_broken isempty(errors) # missing cfunction
+    @test isempty(errors)
+end
 
-    desc = only(errors)
-    @test desc.first
-    desc = desc.second
+# use TRIM_UNSAFE to bypass verifier inside typeinf_ext_toplevel
+make_cfunction_bad(@nospecialize(f::Any)) = @cfunction($f, Float64, (Int64,Int64))::Base.CFunction
+let infos = typeinf_ext_toplevel(Any[Core.svec(Base.CFunction, Tuple{typeof(make_cfunction_bad), Any})], [Base.get_world_counter()], TRIM_UNSAFE)
+    errors, parents = get_verify_typeinf_trim(infos)
+    @test !isempty(errors) # missing cfunction
+
+    (is_warning, desc) = only(errors)
+    @test !is_warning
     @test desc isa CallMissing
     @test occursin("cfunction", desc.desc)
     repr = sprint(verify_print_error, desc, parents)
-    @test occursin(
-        r"""^unresolved cfunction from statement \$\(Expr\(:cfunction, Ptr{Nothing}, :\(\$\(QuoteNode\(\+\)\)\), Float64, :\(svec\(Int64, Int64\)::Core.SimpleVector\), :\(:ccall\)\)\)::Ptr{Nothing}
+    @test occursin(r"""^unresolved cfunction from statement \$\(Expr\(:cfunction, Base.CFunction, :\(f::Any\), Float64, :\(svec\(Int64, Int64\)::Core.SimpleVector\), :\(:ccall\)\)\)::Base.CFunction
             Stacktrace:
-             \[1\] make_cfunction\(\)""", repr)
-
+             \[1\] make_cfunction_bad\(f::Any\)""", repr)
     resize!(infos, 1)
     @test infos[1] isa Core.SimpleVector && infos[1][1] isa Type && infos[1][2] isa Type
     errors, parents = get_verify_typeinf_trim(infos)
@@ -61,11 +64,11 @@ let infos = typeinf_ext_toplevel(Any[Core.svec(Ptr{Cvoid}, Tuple{typeof(make_cfu
     @test !desc.first
     desc = desc.second
     @test desc isa CCallableMissing
-    @test desc.rt == Ptr{Cvoid}
-    @test desc.sig == Tuple{typeof(make_cfunction)}
+    @test desc.rt == Base.CFunction
+    @test desc.sig == Tuple{typeof(make_cfunction_bad), Any}
     @test occursin("unresolved ccallable", desc.desc)
     repr = sprint(verify_print_error, desc, parents)
-    @test repr == "unresolved ccallable for Tuple{$(typeof(make_cfunction))} => Ptr{Nothing}\n\n"
+    @test repr == "unresolved ccallable for Tuple{$(typeof(make_cfunction_bad)), Any} => Base.CFunction\n\n"
 end
 
 let infos = typeinf_ext_toplevel(Any[Core.svec(Base.SecretBuffer, Tuple{Type{Base.SecretBuffer}})], [Base.get_world_counter()], TRIM_UNSAFE)
