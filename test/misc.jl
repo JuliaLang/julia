@@ -1444,6 +1444,12 @@ end
     d::T = 1.0
 end
 
+@kwdef mutable struct TestParametricType2{S}
+    a = 1
+    const b = 2
+    @atomic(c::S) = 3
+end
+
 @testset "@kwdef with parametric type" begin
     tpt1 = @test_nowarn TestParametricType(; a = 1)
     tpt2 = @test_nowarn TestParametricType(; a = 1, b = 2)
@@ -1463,6 +1469,14 @@ end
         @test tpt.b == 2
         @test tpt.c == []
         @test tpt.d == 1
+    end
+    tpt1 = @test_nowarn TestParametricType2(a = 1)
+    tpt2 = @test_nowarn TestParametricType2(a = 1, b = 2)
+    tpt3 = @test_nowarn TestParametricType2(a = 1, b = 2, c = 3)
+    @testset for tpt in (tpt1, tpt2, tpt3)
+        @test tpt.a == 1
+        @test tpt.b == 2
+        @test tpt.c == 3
     end
 end
 
