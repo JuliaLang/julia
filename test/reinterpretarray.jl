@@ -524,6 +524,7 @@ end
     @test_throws ArgumentError reinterpret(Missing, fill(1f0, ()))
     @test_throws ArgumentError reinterpret(reshape, Float64, fill(nothing, ()))
     @test_throws ArgumentError reinterpret(reshape, Nothing, fill(17, ()))
+    @test_throws MethodError z[] = nothing
 
     @test @inferred(ndims(reinterpret(reshape, SomeSingleton, t))) == 2
     @test @inferred(axes(reinterpret(reshape, Tuple{}, t))) == (Base.OneTo(3),Base.OneTo(5))
