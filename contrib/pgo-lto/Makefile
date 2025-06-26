@@ -32,7 +32,7 @@ STAGE2_FLAGS:=LDFLAGS="-fuse-ld=lld -flto=thin -Wl,--undefined-version -fprofile
 			CFLAGS="-fprofile-use=$(PROFILE_FILE)" $\
 			CXXFLAGS="-fprofile-use=$(PROFILE_FILE)"
 
-COMMON_FLAGS:=USECLANG=1 USE_BINARYBUILDER_LLVM=0
+COMMON_FLAGS:=USE_BINARYBUILDER_LLVM=0
 
 all: stage2 # Default target as first in file
 

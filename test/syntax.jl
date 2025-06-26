@@ -2897,6 +2897,9 @@ end
     @test Meta.isexpr(Meta.lower(Main, :(for _ in 1:2; 1; end)), :thunk)
     @test (try; throw(1); catch _; 2; end) === 2
     @test (let _ = 1; 2; end) === 2
+    @test (function f(_, _); 2; end)(0,0) === 2
+    @test (function f(_, _=1); 2; end)(0,0) === 2
+    @test (function f(_, _; kw1=2); kw1; end)(0,0) === 2
     # ERROR: syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
     @test Meta.isexpr(Meta.lower(Main, :(_ = 1; a = _)), :error)
     @test Meta.isexpr(Meta.lower(Main, :(let; function f(); _; end; end)), :error)
