@@ -1480,16 +1480,30 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 # No dynamic dispatch to resolve / enqueue
                 continue
             end
+        elseif isexpr(stmt, :cfunction) && length(stmt.args) == 5
+            (pointer_type, f, rt, at, call_type) = stmt.args
+            linfo = ci.parent
 
-            let workqueue = invokelatest_queue
-                # make a best-effort attempt to enqueue the relevant code for the finalizer
-                mi = compileable_specialization_for_call(workqueue.interp, atype)
-                mi === nothing && continue
+            linfo isa MethodInstance || continue
+            at isa SimpleVector || continue
 
-                push!(workqueue, mi)
+            ft = argextype(f, ci, sptypes)
+            argtypes = Any[ft]
+            for i = 1:length(at)
+                push!(argtypes, sp_type_rewrap(at[i], linfo, #= isreturn =# false))
             end
+            atype = argtypes_to_type(argtypes)
+        else
+            # TODO: handle other StmtInfo like OpaqueClosure?
+            continue
         end
-        # TODO: handle other StmtInfo like @cfunction and OpaqueClosure?
+        let workqueue = invokelatest_queue
+            # make a best-effort attempt to enqueue the relevant code for the dynamic invokelatest call
+            mi = compileable_specialization_for_call(workqueue.interp, atype)
+            mi === nothing && continue
+
+            push!(workqueue, mi)
+        end
     end
 end
 
