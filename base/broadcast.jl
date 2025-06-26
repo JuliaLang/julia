@@ -911,7 +911,7 @@ end
 _all_args_can_drop_zerodim_container(::Tuple{}) = true
 _all_args_can_drop_zerodim_container(t::Tuple{<:Broadcasted, Vararg{Any}}) =
     _all_args_can_drop_zerodim_container(t[1].args) && _all_args_can_drop_zerodim_container(tail(t))
-_all_args_can_drop_zerodim_container(t::Tuple{<:Union{Number, Ref}, Vararg{Any}}) =
+_all_args_can_drop_zerodim_container(t::Tuple{<:Union{Number, Ref, AbstractChar}, Vararg{Any}}) =
     _all_args_can_drop_zerodim_container(tail(t))
 _all_args_can_drop_zerodim_container(t::Tuple{<:Any, Vararg{Any}}) = false
 @inline function copy(bc::Broadcasted{<:AbstractArrayStyle{0}})
