@@ -529,7 +529,7 @@ end
     end
 end
 
-@inline @propagate_inbounds function setindex!(a::ReinterpretArray{T,0,S}, v) where {T,S}
+@propagate_inbounds function setindex!(a::ReinterpretArray{T,0,S}, v) where {T,S}
     check_writable(a)
     v = convert(T, v)::T
     check_ptr_indexable(a) && return _setindex_ptr!(a, v)
