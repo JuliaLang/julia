@@ -486,7 +486,7 @@ function mapreduce_pairwise(f::F, op::G, A::AbstractArrayOrBroadcasted, init) wh
     n <= pairwise_blocksize(f, op) && return mapreduce_kernel(f, op, A, init, eachindex(A))
     return mapreduce_pairwise(f, op, A, init, eachindex(A))
 end
-mapreduce_pairwise(f::F, op::G, itr, init) where {F, G} = mapreduce_pairwise(f, op, itr, init, IteratorSize(itr)) 
+mapreduce_pairwise(f::F, op::G, itr, init) where {F, G} = mapreduce_pairwise(f, op, itr, init, IteratorSize(itr))
 function mapreduce_pairwise(f, op, itr, init, S::Union{HasLength, HasShape})
     n = length(itr)
     n == 0 && return _mapreduce_start(f, op, itr, init)
