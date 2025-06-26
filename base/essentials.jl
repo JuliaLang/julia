@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryrefnew, memoryrefget, memoryrefset!
+using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryref, memoryrefnew, memoryrefget, memoryrefset!
 
 const Callable = Union{Function,Type}
 
@@ -377,13 +377,27 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
+# These special checkbounds methods are defined early for bootstrapping
+function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
+    @inline
+    ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A)))
+end
+function checkbounds(A::Union{Array, GenericMemory}, i::Int)
+    @inline
+    checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+end
+
 default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemory{:atomic}) = :monotonic
 default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
-getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryrefnew(memoryrefnew(A), i, @_boundscheck), default_access_order(A), false))
+function getindex(A::GenericMemory, i::Int)
+    @_noub_if_noinbounds_meta
+    (@_boundscheck) && checkbounds(A, i)
+    memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
+end
+
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
@@ -949,13 +963,13 @@ end
 # linear indexing
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
 end
 # simple Array{Any} operations needed for bootstrap
 function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end

@@ -5,6 +5,7 @@ New language features
 ---------------------
 
   - New `Base.@acquire` macro for a non-closure version of `Base.acquire(f, s::Base.Semaphore)`, like `@lock`. ([#56845])
+  - New `nth` function to access the `n`-th element of a generic iterable. ([#56580])
   - The character U+1F8B2 🢲 (RIGHTWARDS ARROW WITH LOWER HOOK), newly added by Unicode 16,
     is now a valid operator with arrow precedence, accessible as `\hookunderrightarrow` at the REPL.
     ([JuliaLang/JuliaSyntax.jl#525], [#57143])
@@ -50,6 +51,7 @@ New library features
 * `fieldoffset` now also accepts the field name as a symbol as `fieldtype` already did ([#58100]).
 * `sort(keys(::Dict))` and `sort(values(::Dict))` now automatically collect, they previously threw ([#56978]).
 * `Base.AbstractOneTo` is added as a supertype of one-based axes, with `Base.OneTo` as its subtype ([#56902]).
+* `takestring!(::IOBuffer)` removes the content from the buffer, returning the content as a `String`.
 
 Standard library changes
 ------------------------
@@ -60,7 +62,13 @@ Standard library changes
 
 #### Profile
 
+#### Random
+
+* `randperm!` and `randcycle!` now support non-`Array` `AbstractArray` inputs, assuming they are mutable and their indices are one-based ([#58596]).
+
 #### REPL
+
+* The display of `AbstractChar`s in the main REPL mode now includes LaTeX input information like what is shown in help mode ([#58181]).
 
 #### Test
 
@@ -69,6 +77,7 @@ Standard library changes
 #### InteractiveUtils
 
 * Introspection utilities such as `@code_typed`, `@which` and `@edit` now accept type annotations as substitutes for values, recognizing forms such as `f(1, ::Float64, 3)` or even `sum(::Vector{T}; init = ::T) where {T<:Real}`. Type-annotated variables as in `f(val::Int; kw::Float64)` are not evaluated if the type annotation provides the necessary information, making this syntax compatible with signatures found in stacktraces ([#57909], [#58222]).
+* Code introspection macros such as `@code_lowered` and `@code_typed` now have a much better support for broadcasting expressions, including broadcasting assignments of the form `x .+= f(y)` ([#58349]).
 
 External dependencies
 ---------------------

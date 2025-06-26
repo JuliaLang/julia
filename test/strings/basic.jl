@@ -49,6 +49,24 @@ using Random
     end
 end
 
+@testset "takestring!" begin
+    v = [0x61, 0x62, 0x63]
+    old_mem = v.ref.mem
+    @test takestring!(v) == "abc"
+    @test isempty(v)
+    @test v.ref.mem !== old_mem # memory is changed
+    for v in [
+        UInt8[],
+        [0x01, 0x02, 0x03],
+        collect(codeunits("æøå"))
+    ]
+        cp = copy(v)
+        s = takestring!(v)
+        @test isempty(v)
+        @test codeunits(s) == cp
+    end
+end
+
 @testset "{starts,ends}with" begin
     @test startswith("abcd", 'a')
     @test startswith('a')("abcd")
@@ -1444,4 +1462,13 @@ if Sys.iswindows()
         @test_throws ArgumentError Base.cwstring(str_2)
         @test Base.cwstring(str_3) == UInt16[0x0061, 0x0723, 0xd808, 0xdc00, 0x0000]
     end
+end
+
+
+@testset "eltype for AbstractString subtypes" begin
+    @test eltype(String) == Char
+    @test eltype(SubString{String}) == Char
+
+    u = b"hello"
+    @test eltype(u) === UInt8
 end

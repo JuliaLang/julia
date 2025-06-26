@@ -482,7 +482,7 @@ The resulting string may contain different characters than the input strings,
 and its number of characters may be lower than sum of numbers of characters
 of the concatenated strings, e.g.:
 
-```julia-repl
+```jldoctest
 julia> a, b = "\xe2\x88", "\x80"
 ("\xe2\x88", "\x80")
 
@@ -992,7 +992,7 @@ The `r"..."` literal is constructed without interpolation and unescaping (except
 quotation mark `"` which still has to be escaped). Here is an example
 showing the difference from standard string literals:
 
-```julia-repl
+```jldoctest
 julia> x = 10
 10
 
@@ -1006,7 +1006,10 @@ julia> r"\x"
 r"\x"
 
 julia> "\x"
-ERROR: syntax: invalid escape sequence
+ERROR: ParseError:
+# Error @ none:1:2
+"\x"
+#└┘ ── invalid hex escape sequence
 ```
 
 Triple-quoted regex strings, of the form `r"""..."""`, are also supported (and may be convenient

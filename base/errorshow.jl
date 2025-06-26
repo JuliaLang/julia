@@ -307,7 +307,7 @@ function showerror(io::IO, ex::MethodError)
         iob = IOContext(buf, io)     # for type abbreviation as in #49795; some, like `convert(T, x)`, should not abbreviate
         show_signature_function(iob, Core.Typeof(f))
         show_tuple_as_call(iob, :function, arg_types; hasfirst=false, kwargs = isempty(kwargs) ? nothing : kwargs)
-        str = String(take!(buf))
+        str = takestring!(buf)
         str = type_limited_string_from_context(io, str)
         print(io, str)
     end
@@ -327,13 +327,33 @@ function showerror(io::IO, ex::MethodError)
     if ft <: AbstractArray
         print(io, "\nIn case you're trying to index into the array, use square brackets [] instead of parentheses ().")
     end
-    # Check for local functions that shadow methods in Base
-    let name = ft.name.mt.name
-        if f_is_function && isdefined(Base, name)
-            basef = getfield(Base, name)
-            if basef !== f && hasmethod(basef, arg_types)
-                print(io, "\nYou may have intended to import ")
-                show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
+    # Check for functions with the same name in other modules
+    if f_is_function && ex.world != typemax(UInt)
+        let name = ft.name.singletonname
+            modules_to_check = Set{Module}()
+            push!(modules_to_check, Base)
+            for T in san_arg_types_param
+                modulesof!(modules_to_check, T)
+            end
+
+            # Check all modules (sorted for consistency)
+            sorted_modules = sort!(collect(modules_to_check), by=nameof)
+            for mod in sorted_modules
+                if isdefined(mod, name)
+                    candidate = getfield(mod, name)
+                    if candidate !== f && hasmethod(candidate, arg_types; world=ex.world)
+                        if mod === Base
+                            print(io, "\nYou may have intended to import ")
+                            show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
+                        else
+                            print(io, "\nThe definition in ")
+                            show_unquoted(io, mod)
+                            print(io, " may have intended to extend ")
+                            f_module = parentmodule(ft)
+                            show_unquoted(io, Expr(:., f_module, QuoteNode(name)))
+                        end
+                    end
+                end
             end
         end
     end
@@ -382,7 +402,7 @@ end
 
 function showerror(io::IO, exc::FieldError)
     @nospecialize
-    print(io, "FieldError: type $(exc.type |> nameof) has no field `$(exc.field)`")
+    print(io, "FieldError: type $(exc.type.name.wrapper) has no field `$(exc.field)`")
     Base.Experimental.show_error_hints(io, exc)
 end
 
@@ -598,7 +618,7 @@ function show_method_candidates(io::IO, ex::MethodError, kwargs=[])
             m = parentmodule_before_main(method)
             modulecolor = get!(() -> popfirst!(STACKTRACE_MODULECOLORS), STACKTRACE_FIXEDCOLORS, m)
             print_module_path_file(iob, m, string(file), line; modulecolor, digit_align_width = 3)
-            push!(lines, String(take!(buf)))
+            push!(lines, takestring!(buf))
             push!(line_score, -(right_matches * 2 + (length(arg_types_param) < 2 ? 1 : 0)))
         end
     end
@@ -1127,7 +1147,7 @@ Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 function fielderror_listfields_hint_handler(io, exc)
     fields = fieldnames(exc.type)
     if isempty(fields)
-        print(io, "; $(nameof(exc.type)) has no fields at all.")
+        print(io, "; $(exc.type.name.wrapper) has no fields at all.")
     else
         print(io, ", available fields: $(join(map(k -> "`$k`", fields), ", "))")
     end
@@ -1154,21 +1174,41 @@ function UndefVarError_hint(io::IO, ex::UndefVarError)
     if isdefined(ex, :scope)
         scope = ex.scope
         if scope isa Module
-            bpart = Base.lookup_binding_partition(ex.world, GlobalRef(scope, var))
-            kind = Base.binding_kind(bpart)
-            if kind === Base.PARTITION_KIND_GLOBAL || kind === Base.PARTITION_KIND_UNDEF_CONST || kind == Base.PARTITION_KIND_DECLARED
+            bpart = lookup_binding_partition(ex.world, GlobalRef(scope, var))
+            kind = binding_kind(bpart)
+
+            # Get the current world's binding partition for comparison
+            curworld = tls_world_age()
+            cur_bpart = lookup_binding_partition(curworld, GlobalRef(scope, var))
+            cur_kind = binding_kind(cur_bpart)
+
+            # Track if we printed the "too new" message
+            printed_too_new = false
+
+            # Check if the binding exists in the current world but was undefined in the error's world
+            if kind === PARTITION_KIND_GUARD
+                if isdefinedglobal(scope, var)
+                    print(io, "\nThe binding may be too new: running in world age $(ex.world), while current world is $(curworld).")
+                    printed_too_new = true
+                else
+                    print(io, "\nSuggestion: check for spelling errors or missing imports.")
+                end
+            elseif kind === PARTITION_KIND_GLOBAL || kind === PARTITION_KIND_UNDEF_CONST || kind == PARTITION_KIND_DECLARED
                 print(io, "\nSuggestion: add an appropriate import or assignment. This global was declared but not assigned.")
-            elseif kind === Base.PARTITION_KIND_FAILED
+            elseif kind === PARTITION_KIND_FAILED
                 print(io, "\nHint: It looks like two or more modules export different ",
                 "bindings with this name, resulting in ambiguity. Try explicitly ",
                 "importing it from a particular module, or qualifying the name ",
                 "with the module it should come from.")
-            elseif kind === Base.PARTITION_KIND_GUARD
-                print(io, "\nSuggestion: check for spelling errors or missing imports.")
-            elseif Base.is_some_explicit_imported(kind)
-                print(io, "\nSuggestion: this global was defined as `$(Base.partition_restriction(bpart).globalref)` but not assigned a value.")
-            elseif kind === Base.PARTITION_KIND_BACKDATED_CONST
+            elseif is_some_explicit_imported(kind)
+                print(io, "\nSuggestion: this global was defined as `$(partition_restriction(bpart).globalref)` but not assigned a value.")
+            elseif kind === PARTITION_KIND_BACKDATED_CONST
                 print(io, "\nSuggestion: define the const at top-level before running function that uses it (stricter Julia v1.12+ rule).")
+            end
+
+            # Check if binding kind changed between the error's world and current world
+            if !printed_too_new && kind !== cur_kind
+                print(io, "\nNote: the binding state changed since the error occurred (was: $(kind), now: $(cur_kind)).")
             end
         elseif scope === :static_parameter
             print(io, "\nSuggestion: run Test.detect_unbound_args to detect method arguments that do not fully constrain a type parameter.")

@@ -169,7 +169,7 @@ region_active(s::PromptState) = s.region_active
 region_active(s::ModeState) = :off
 
 
-input_string(s::PromptState) = String(take!(copy(s.input_buffer)))::String
+input_string(s::PromptState) = takestring!(copy(s.input_buffer))::String
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -1526,7 +1526,7 @@ function edit_input(s, f = (filename, line, column) -> InteractiveUtils.edit(fil
     end
     buf = buffer(s)
     pos = position(buf)
-    str = String(take!(buf))
+    str = takestring!(buf)
     lines = readlines(IOBuffer(str); keep=true)
 
     # Compute line
@@ -1760,7 +1760,7 @@ function normalize_key(key::Union{String,SubString{String}})
             write(buf, c)
         end
     end
-    return String(take!(buf))
+    return takestring!(buf)
 end
 
 function normalize_keys(keymap::Union{Dict{Char,Any},AnyDict})
@@ -2100,7 +2100,7 @@ function history_set_backward(s::SearchState, backward::Bool)
     nothing
 end
 
-input_string(s::SearchState) = String(take!(copy(s.query_buffer)))
+input_string(s::SearchState) = takestring!(copy(s.query_buffer))
 
 function reset_state(s::SearchState)
     if s.query_buffer.size != 0
@@ -2188,7 +2188,7 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal,
     return ias
 end
 
-input_string(s::PrefixSearchState) = String(take!(copy(s.response_buffer)))
+input_string(s::PrefixSearchState) = takestring!(copy(s.response_buffer))
 
 write_prompt(terminal, s::PrefixSearchState, color::Bool) = write_prompt(terminal, s.histprompt.parent_prompt, color)
 prompt_string(s::PrefixSearchState) = prompt_string(s.histprompt.parent_prompt.prompt)

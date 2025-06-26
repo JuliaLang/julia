@@ -17,10 +17,11 @@ for (T, c) in (
         (Core.CodeInstance, [:def, :owner, :rettype, :exctype, :rettype_const, :analysis_results, :time_infer_total, :time_infer_cache_saved, :time_infer_self]),
         (Core.Method, [#=:name, :module, :file, :line, :primary_world, :sig, :slot_syms, :external_mt, :nargs, :called, :nospecialize, :nkw, :isva, :is_for_opaque_closure, :constprop=#]),
         (Core.MethodInstance, [#=:def, :specTypes, :sparam_vals=#]),
-        (Core.MethodTable, [:module]),
+        (Core.MethodTable, [:cache, :module, :name]),
+        (Core.MethodCache, []),
         (Core.TypeMapEntry, [:sig, :simplesig, :guardsigs, :func, :isleafsig, :issimplesig, :va]),
         (Core.TypeMapLevel, []),
-        (Core.TypeName, [:name, :module, :names, :wrapper, :mt, :hash, :n_uninitialized, :flags]),
+        (Core.TypeName, [:name, :module, :names, :wrapper, :hash, :n_uninitialized, :flags]),
         (DataType, [:name, :super, :parameters, :instance, :hash]),
         (TypeVar, [:name, :ub, :lb]),
         (Core.Memory, [:length, :ptr]),
@@ -37,10 +38,11 @@ for (T, c) in (
         (Core.CodeInstance, [:next, :min_world, :max_world, :inferred, :edges, :debuginfo, :ipo_purity_bits, :invoke, :specptr, :specsigflags, :precompile, :time_compile]),
         (Core.Method, [:primary_world, :dispatch_status]),
         (Core.MethodInstance, [:cache, :flags]),
-        (Core.MethodTable, [:defs, :leafcache, :cache, :max_args]),
+        (Core.MethodTable, [:defs]),
+        (Core.MethodCache, [:leafcache, :cache, :var""]),
         (Core.TypeMapEntry, [:next, :min_world, :max_world]),
         (Core.TypeMapLevel, [:arg1, :targ, :name1, :tname, :list, :any]),
-        (Core.TypeName, [:cache, :linearcache, :cache_entry_count]),
+        (Core.TypeName, [:cache, :linearcache, :Typeofwrapper, :max_args, :cache_entry_count]),
         (DataType, [:types, :layout]),
         (Core.Memory, []),
         (Core.GenericMemoryRef, []),
@@ -307,22 +309,9 @@ end  |> only == Type{typejoin(Int, UInt)}
     typejoin(Int, UInt, Float64)
 end  |> only == Type{typejoin(Int, UInt, Float64)}
 
-let res = @test_throws TypeError let
-        Base.Experimental.@force_compile
-        typejoin(1, 2)
-        nothing
-    end
-    err = res.value
-    @test err.func === :<:
-end
-let res = @test_throws TypeError let
-        Base.Experimental.@force_compile
-        typejoin(1, 2, 3)
-        nothing
-    end
-    err = res.value
-    @test err.func === :<:
-end
+@test typejoin(1, 2) === Any
+@test typejoin(1, 2, 3) === Any
+@test typejoin(Int, Int, 3) === Any
 
 # promote_typejoin returns a Union only with Nothing/Missing combined with concrete types
 for T in (Nothing, Missing)
@@ -2647,11 +2636,14 @@ struct D14919 <: Function; end
 @test B14919()() == "It's a brand new world"
 @test C14919()() == D14919()() == "Boo."
 
-for f in (:Any, :Function, :(Core.Builtin), :(Union{Nothing, Type}), :(Union{typeof(+), Type}), :(Union{typeof(+), typeof(-)}), :(Base.Callable))
-    @test_throws ErrorException("Method dispatch is unimplemented currently for this method signature") @eval (::$f)() = 1
-end
-for f in (:(Core.getfield), :((::typeof(Core.getfield))), :((::Core.IntrinsicFunction)))
-    @test_throws ErrorException("cannot add methods to a builtin function") @eval $f() = 1
+let ex = ErrorException("cannot add methods to a builtin function")
+    for f in (:(Core.Any), :(Core.Function), :(Core.Builtin), :(Base.Callable), :(Union{Nothing,F} where F), :(typeof(Core.getfield)), :(Core.IntrinsicFunction))
+        @test_throws ex @eval (::$f)() = 1
+    end
+    @test_throws ex @eval (::Union{Nothing,F})() where {F<:Function} = 1
+    for f in (:(Core.getfield),)
+        @test_throws ex @eval $f() = 1
+    end
 end
 
 # issue #33370
@@ -4687,8 +4679,28 @@ end
 @test Macro_Yielding_Global_Assignment.x == 2
 
 # issue #15718
-@test :(f($NaN)) == :(f($NaN))
-@test isequal(:(f($NaN)), :(f($NaN)))
+function compare_test(x, y)
+    lx = Meta.lower(@__MODULE__, x)
+    ly = Meta.lower(@__MODULE__, y)
+    if isequal(x, y)
+        @test x == y
+        @test hash(x) == hash(y)
+        @test isequal(lx, ly)
+        @test lx == ly
+        @test hash(lx) == hash(ly)
+        true
+    else
+        @test x != y
+        @test !isequal(lx, ly)
+        @test lx != ly
+        false
+    end
+end
+@test compare_test(:(f($NaN)), :(f($NaN)))
+@test !compare_test(:(1 + (1 * 1)), :(1 + (1 * 1.0)))
+@test compare_test(:(1 + (1 * $NaN)), :(1 + (1 * $NaN)))
+@test compare_test(QuoteNode(NaN), QuoteNode(NaN))
+@test !compare_test(QuoteNode(1), QuoteNode(1.0))
 
 # PR #16011 Make sure dead code elimination doesn't delete push and pop
 # of metadata
@@ -5092,7 +5104,7 @@ function f16340(x::T) where T
     return g
 end
 let g = f16340(1)
-    @test isa(typeof(g).name.mt.defs.sig, UnionAll)
+    @test isa(only(methods(g)).sig, UnionAll)
 end
 
 # issue #16793
@@ -8534,3 +8546,9 @@ module GlobalBindingMulti
     using .M.C
 end
 @test GlobalBindingMulti.S === GlobalBindingMulti.M.C.S
+
+#58434 bitsegal comparison of oddly sized fields
+primitive type ByteString58434 (18 * 8) end
+
+@test Base.datatype_isbitsegal(Tuple{ByteString58434}) == false
+@test Base.datatype_haspadding(Tuple{ByteString58434}) == (length(Base.padding(Tuple{ByteString58434})) > 0)

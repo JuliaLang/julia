@@ -1,4 +1,4 @@
-# The World Age mechanism
+# [The World Age mechanism](@id man-world-age)
 
 !!! note
     World age is an advanced concept. For the vast majority of Julia users, the world age

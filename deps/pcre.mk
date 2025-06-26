@@ -21,7 +21,7 @@ $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2: | $(SRCCACHE)
 
 $(SRCCACHE)/pcre2-$(PCRE_VER)/source-extracted: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) jxf $(notdir $<)
+	cd $(dir $<) && $(TAR) -jxf $(notdir $<)
 	echo 1 > $@
 
 checksum-pcre: $(SRCCACHE)/pcre2-$(PCRE_VER).tar.bz2

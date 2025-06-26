@@ -214,15 +214,17 @@ struct Error <: Result
     orig_expr::String
     value::String
     backtrace::String
+    context::Union{Nothing, String}
     source::LineNumberNode
 
-    function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode)
+    function Error(test_type::Symbol, orig_expr, value, bt, source::LineNumberNode, context::Union{Nothing, String}=nothing)
         if test_type === :test_error
             bt = scrub_exc_stack(bt, nothing, extract_file(source))
         end
         if test_type === :test_error || test_type === :nontest_error
             bt_str = try # try the latest world for this, since we might have eval'd new code for show
-                    Base.invokelatest(sprint, Base.show_exception_stack, bt; context=stdout)
+                    # Apply REPL backtrace scrubbing to hide REPL internals, similar to how REPL.jl handles it
+                    Base.invokelatest(sprint, Base.show_exception_stack, Base.scrub_repl_backtrace(bt); context=stdout)
                 catch ex
                     "#=ERROR showing exception stack=# " *
                         try
@@ -248,7 +250,13 @@ struct Error <: Result
             string(orig_expr),
             value,
             bt_str,
+            context,
             source)
+    end
+
+    # Internal constructor for creating Error with pre-processed values (used by ContextTestSet)
+    function Error(test_type::Symbol, orig_expr::String, value::String, backtrace::String, context::Union{Nothing, String}, source::LineNumberNode)
+        return new(test_type, orig_expr, value, backtrace, context, source)
     end
 end
 
@@ -267,6 +275,9 @@ function Base.show(io::IO, t::Error)
     elseif t.test_type === :test_error
         println(io, "  Test threw exception")
         println(io, "  Expression: ", t.orig_expr)
+        if t.context !== nothing
+            println(io, "     Context: ", t.context)
+        end
         # Capture error message and indent to match
         join(io, ("  " * line for line in filter!(!isempty, split(t.backtrace, "\n"))), "\n")
     elseif t.test_type === :test_unbroken
@@ -751,13 +762,13 @@ function do_test(result::ExecutionResult, orig_expr)
                     Fail(:test, orig_expr, result.data, value, nothing, result.source, false)
         else
             # If the result is non-Boolean, this counts as an Error
-            Error(:test_nonbool, orig_expr, value, nothing, result.source)
+            Error(:test_nonbool, orig_expr, value, nothing, result.source, nothing)
         end
     else
         # The predicate couldn't be evaluated without throwing an
         # exception, so that is an Error and not a Fail
         @assert isa(result, Threw)
-        testres = Error(:test_error, orig_expr, result.exception, result.backtrace::Vector{Any}, result.source)
+        testres = Error(:test_error, orig_expr, result.exception, result.backtrace::Vector{Any}, result.source, nothing)
     end
     isa(testres, Pass) || trigger_test_failure_break(result)
     record(get_testset(), testres)
@@ -770,11 +781,11 @@ function do_broken_test(result::ExecutionResult, orig_expr)
         value = result.value
         if isa(value, Bool)
             if value
-                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source)
+                testres = Error(:test_unbroken, orig_expr, value, nothing, result.source, nothing)
             end
         else
             # If the result is non-Boolean, this counts as an Error
-            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source)
+            testres = Error(:test_nonbool, orig_expr, value, nothing, result.source, nothing)
         end
     end
     record(get_testset(), testres)
@@ -1107,6 +1118,13 @@ function record(c::ContextTestSet, t::Fail)
     context = string(c.context_name, " = ", c.context)
     context = t.context === nothing ? context : string(t.context, "\n              ", context)
     record(c.parent_ts, Fail(t.test_type, t.orig_expr, t.data, t.value, context, t.source, t.message_only))
+end
+function record(c::ContextTestSet, t::Error)
+    context = string(c.context_name, " = ", c.context)
+    context = t.context === nothing ? context : string(t.context, "\n              ", context)
+    # Create a new Error with the same data but updated context using internal constructor
+    new_error = Error(t.test_type, t.orig_expr, t.value, t.backtrace, context, t.source)
+    record(c.parent_ts, new_error)
 end
 
 #-----------------------------------------------------------------------
@@ -1726,6 +1744,10 @@ end
 trigger_test_failure_break(@nospecialize(err)) =
     ccall(:jl_test_failure_breakpoint, Cvoid, (Any,), err)
 
+is_failfast_error(err::FailFastError) = true
+is_failfast_error(err::LoadError) = is_failfast_error(err.error) # handle `include` barrier
+is_failfast_error(err) = false
+
 """
 Generate the code for an `@testset` with a `let` argument.
 """
@@ -1837,10 +1859,10 @@ function testset_beginend_call(args, tests, source)
             # something in the test block threw an error. Count that as an
             # error in this test set
             trigger_test_failure_break(err)
-            if err isa FailFastError
+            if is_failfast_error(err)
                 get_testset_depth() > 1 ? rethrow() : failfast_print()
             else
-                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source)), nothing))
             end
         finally
             copy!(default_rng(), default_rng_orig)
@@ -1925,8 +1947,10 @@ function testset_forloop(args, testloop, source)
             # Something in the test block threw an error. Count that as an
             # error in this test set
             trigger_test_failure_break(err)
-            if !isa(err, FailFastError)
-                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source))))
+            if is_failfast_error(err)
+                get_testset_depth() > 1 ? rethrow() : failfast_print()
+            else
+                record(ts, Error(:nontest_error, Expr(:tuple), err, Base.current_exceptions(), $(QuoteNode(source)), nothing))
             end
         end
     end
@@ -2134,7 +2158,7 @@ function _inferred(ex, mod, allow = :(Union{}))
                     kwargs = gensym()
                     quote
                         $(esc(args)), $(esc(kwargs)), result = $(esc(Expr(:call, _args_and_call, ex.args[2:end]..., ex.args[1])))
-                        inftype = $(gen_call_with_extracted_types(mod, Base.infer_return_type, :($(ex.args[1])($(args)...; $(kwargs)...))))
+                        inftype = $(gen_call_with_extracted_types(mod, Base.infer_return_type, :($(ex.args[1])($(args)...; $(kwargs)...)); is_source_reflection = false))
                     end
                 else
                     # No keywords
@@ -2215,30 +2239,7 @@ function detect_ambiguities(mods::Module...;
             end
         end
     end
-    work = Base.loaded_modules_array()
-    filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
-    while !isempty(work)
-        mod = pop!(work)
-        for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
-            if !isdefined(mod, n)
-                if is_in_mods(mod, recursive, mods)
-                    if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
-                        println("Skipping ", mod, '.', n)  # typically stale exports
-                    end
-                end
-                continue
-            end
-            f = Base.unwrap_unionall(getfield(mod, n))
-            if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
-                push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
-                examine(f.name.mt)
-            end
-        end
-    end
-    examine(Symbol.name.mt)
-    examine(DataType.name.mt)
+    examine(Core.GlobalMethods)
     return collect(ambs)
 end
 
@@ -2286,30 +2287,7 @@ function detect_unbound_args(mods...;
             push!(ambs, m)
         end
     end
-    work = Base.loaded_modules_array()
-    filter!(mod -> mod === parentmodule(mod), work) # some items in loaded_modules_array are not top modules (really just Base)
-    while !isempty(work)
-        mod = pop!(work)
-        for n in names(mod, all = true)
-            Base.isdeprecated(mod, n) && continue
-            if !isdefined(mod, n)
-                if is_in_mods(mod, recursive, mods)
-                    if allowed_undefineds === nothing || GlobalRef(mod, n) ∉ allowed_undefineds
-                        println("Skipping ", mod, '.', n)  # typically stale exports
-                    end
-                end
-                continue
-            end
-            f = Base.unwrap_unionall(getfield(mod, n))
-            if isa(f, Module) && f !== mod && parentmodule(f) === mod && nameof(f) === n
-                push!(work, f)
-            elseif isa(f, DataType) && isdefined(f.name, :mt) && parentmodule(f) === mod && nameof(f) === n && f.name.mt !== Symbol.name.mt && f.name.mt !== DataType.name.mt
-                examine(f.name.mt)
-            end
-        end
-    end
-    examine(Symbol.name.mt)
-    examine(DataType.name.mt)
+    examine(Core.GlobalMethods)
     return collect(ambs)
 end
 
