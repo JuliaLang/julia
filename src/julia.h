@@ -324,6 +324,7 @@ typedef struct _jl_method_t {
     jl_sym_t *file;
     int32_t line;
     _Atomic(uint8_t) dispatch_status; // bits defined in staticdata.jl
+    _Atomic(jl_genericmemory_t*) interferences; // set of intersecting methods not more specific
     _Atomic(size_t) primary_world;
 
     // method's type signature. redundant with TypeMapEntry->specTypes

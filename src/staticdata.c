@@ -1854,8 +1854,6 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                         int new_dispatch_status = 0;
                         if (!(dispatch_status & METHOD_SIG_LATEST_ONLY))
                             new_dispatch_status |= METHOD_SIG_PRECOMPILE_MANY;
-                        if (dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)
-                            new_dispatch_status |= METHOD_SIG_PRECOMPILE_HAS_NOTMORESPECIFIC;
                         jl_atomic_store_relaxed(&newm->dispatch_status, new_dispatch_status);
                         arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
