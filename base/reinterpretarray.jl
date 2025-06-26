@@ -249,11 +249,16 @@ struct IndexSCartesian2{K} <: IndexStyle end   # K = sizeof(S) ÷ sizeof(T), a s
 
 IndexStyle(::Type{ReinterpretArray{T,N,S,A,false}}) where {T,N,S,A<:AbstractArray{S,N}} = IndexStyle(A)
 function IndexStyle(::Type{ReinterpretArray{T,N,S,A,true}}) where {T,N,S,A<:AbstractArray{S}}
-    if sizeof(T) < sizeof(S)
-        IndexStyle(A) === IndexLinear() && return IndexSCartesian2{sizeof(S) ÷ sizeof(T)}()
+    if sizeof(T) >= sizeof(S)
+        return IndexStyle(A)
+    end
+
+    # channel dimension added
+    if (IndexStyle(A) === IndexLinear()) && (ndims(A) > 0)
+        return IndexSCartesian2{sizeof(S) ÷ sizeof(T)}()
+    else
         return IndexCartesian()
     end
-    return IndexStyle(A)
 end
 IndexStyle(::IndexSCartesian2{K}, ::IndexSCartesian2{K}) where {K} = IndexSCartesian2{K}()
 
