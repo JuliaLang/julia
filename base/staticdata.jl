@@ -1,9 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-module StaticData
-
 using .Core: CodeInstance, MethodInstance
-using .Base: JLOptions, Compiler, get_world_counter, _methods_by_ftype, get_methodtable, get_ci_mi
+using .Base: JLOptions, Compiler, get_world_counter, _methods_by_ftype, get_methodtable, get_ci_mi, morespecific
 
 const WORLD_AGE_REVALIDATION_SENTINEL::UInt = 1
 const _jl_debug_method_invalidation = Ref{Union{Nothing,Vector{Any}}}(nothing)
@@ -282,22 +280,47 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     return 0, minworld, maxworld
 end
 
+function get_method_from_edge(@nospecialize t)
+    if t isa Method
+        return t
+    else
+        if t isa CodeInstance
+            t = get_ci_mi(t)::MethodInstance
+        else
+            t = t::MethodInstance
+        end
+        return t.def::Method
+    end
+end
+
 function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool)
     # verify that these edges intersect with the same methods as before
     mi = nothing
-    if n == 1
+    expected_deleted = false
+    for j = 1:n
+        t = expecteds[i+j-1]
+        meth = get_method_from_edge(t)
+        if iszero(meth.dispatch_status & METHOD_SIG_LATEST_WHICH)
+            expected_deleted = true
+            break
+        end
+    end
+    if expected_deleted
+        if _jl_debug_method_invalidation[] === nothing && world == get_world_counter()
+            result = Any[] # result is unused
+            return UInt(1), UInt(0), result
+        end
+    elseif n == 1
         # first, fast-path a check if the expected method simply dominates its sig anyways
         # so the result of ml_matches is already simply known
         let t = expecteds[i], meth, minworld, maxworld, result
-            if t isa Method
-                meth = t
-            else
+            meth = get_method_from_edge(t)
+            if !(t isa Method)
                 if t isa CodeInstance
                     mi = get_ci_mi(t)::MethodInstance
                 else
                     mi = t::MethodInstance
                 end
-                meth = mi.def::Method
                 # Fast path is legal when fully_covers=true OR when METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC is unset
                 if (fully_covers || iszero(meth.dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)) &&
                    !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
@@ -319,7 +342,83 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                 end
             end
         end
-    end
+    elseif n > 1
+        # Try the interference set fast path: check if all interference sets are covered by expecteds
+        interference_fast_path_success = true
+        if !fully_covers
+            # If expected doesn't fully cover, then need to make sure that no new methods are possibly present
+            for j = 1:n
+                meth = get_method_from_edge(expecteds[i+j-1])
+                if !iszero(meth.dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)
+                    interference_fast_path_success = false
+                    for j = reverse(1:n)
+                        meth2 = get_method_from_edge(expecteds[i+j-1])
+                        if meth !== meth2 && typeintersect(sig, meth.sig) <: meth2.sig && !(meth2.sig <: meth.sig)
+                            interference_fast_path_success = true
+                        end
+                    end
+                    if !interference_fast_path_success
+                        break
+                    end
+                end
+            end
+        end
+        if interference_fast_path_success
+            local interference_minworld::UInt = 1
+            for j = 1:n
+                meth = get_method_from_edge(expecteds[i+j-1])
+                if interference_minworld < meth.primary_world
+                    interference_minworld = meth.primary_world
+                end
+                interferences = meth.interferences
+                for k = 1:length(interferences)
+                    isassigned(interferences, k) || break # no more entries
+                    interference_method = interferences[k]::Method
+                    if iszero(interference_method.dispatch_status & METHOD_SIG_LATEST_WHICH)
+                        # detected a deleted interference_method, so need the full lookup to compute minworld
+                        interference_fast_path_success = false
+                        break
+                    end
+                    world < interference_method.primary_world && break # this and later entries are for a future world
+                    local found_in_expecteds = false
+                    for j = 1:n
+                        if interference_method === get_method_from_edge(expecteds[i+j-1])
+                            found_in_expecteds = true
+                            break
+                        end
+                    end
+                    if !found_in_expecteds
+                        ti = typeintersect(sig, interference_method.sig)
+                        if !(ti === Union{})
+                            # try looking for a different expected method that fully hides the interference_method anyways
+                            for j = 1:n
+                                meth2 = get_method_from_edge(expecteds[i+j-1])
+                                if meth2 !== interference_method && ti <: meth2.sig && morespecific(meth2, interference_method)
+                                    found_in_expecteds = true
+                                    break
+                                end
+                            end
+                            if !found_in_expecteds
+                                meth2 = get_method_from_edge(expecteds[i])
+                                interference_fast_path_success = false
+                                break
+                            end
+                        end
+                    end
+                end
+                if !interference_fast_path_success
+                    break
+                end
+            end
+            if interference_fast_path_success
+                # All interference sets are covered by expecteds, can return success
+                @assert interference_minworld ≤ world
+                maxworld = typemax(UInt)
+                result = Any[] # result is unused
+                return interference_minworld, maxworld, result
+            end
+        end
+   end
     # next, compare the current result of ml_matches to the old result
     lim = _jl_debug_method_invalidation[] !== nothing ? Int(typemax(Int32)) : n
     minworld = Ref{UInt}(1)
@@ -339,17 +438,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
             local found = false
             for j = 1:n
                 t = expecteds[i+j-1]
-                if t isa Method
-                    meth = t
-                else
-                    if t isa CodeInstance
-                        t = get_ci_mi(t)::MethodInstance
-                    else
-                        t = t::MethodInstance
-                    end
-                    meth = t.def::Method
-                end
-                if match.method == meth
+                if match.method == get_method_from_edge(t)
                     found = true
                     break
                 end
@@ -413,5 +502,3 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
     end
     return minworld, maxworld, matched
 end
-
-end # module StaticData
