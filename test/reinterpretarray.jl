@@ -320,6 +320,23 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
         @test r[goodinds...] == -5
     end
 end
+
+let a = rand(ComplexF32, 5)
+    r = reinterpret(reshape, Float32, a)
+    ref = Array(r)
+
+    @test r[1, :, 1]        == ref[1, :]
+    @test r[1, :, 1, 1, 1]  == ref[1, :]
+    @test r[1, :, UInt8(1)] == ref[1, :]
+
+    r[2, :, 1] .= 0f0
+    ref[2,  :] .= 0f0
+    @test r[2, :, 1] == ref[2, :]
+
+    @test r[4] == ref[4]
+    @test_throws BoundsError r[1, :, 2]
+end
+
 let ar = [(1,2), (3,4)]
     arr = reinterpret(reshape, Int, ar)
     @test @inferred(IndexStyle(arr)) == Base.IndexSCartesian2{2}()

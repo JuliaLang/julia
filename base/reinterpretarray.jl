@@ -314,11 +314,11 @@ end
 _maybe_reshape(::IndexSCartesian2, A::ReshapedReinterpretArray, I...) = A
 
 # fallbacks
-function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, I::Vararg{Int, N}) where {T,N}
+function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, I::Int...) where {T,N}
     @_propagate_inbounds_meta
     getindex(A, I...)
 end
-function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) where {T,N}
+function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, I::Int...) where {T,N}
     @_propagate_inbounds_meta
     setindex!(A, v, I...)
 end
@@ -397,10 +397,10 @@ check_ptr_indexable(a::AbstractArray, sz) = false
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::SCartesianIndex2) = isassigned(a.parent, inds.j)
 @propagate_inbounds _isassigned_ra(a::ReinterpretArray, inds...) = true # that is not entirely true, but computing exactly which indexes will be accessed in the parent requires a lot of duplication from the _getindex_ra code
 
-@propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, inds::Vararg{Int, N}) where {T,N,S}
+@propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, i1::Int, inds::Int...) where {T,N,S}
     check_readable(a)
-    check_ptr_indexable(a) && return _getindex_ptr(a, inds...)
-    _getindex_ra(a, inds[1], tail(inds))
+    check_ptr_indexable(a) && return _getindex_ptr(a, i1, inds...)
+    _getindex_ra(a, i1, inds)
 end
 
 @propagate_inbounds function getindex(a::ReinterpretArray{T,N,S}, i::Int) where {T,N,S}
@@ -543,10 +543,10 @@ end
 
 @propagate_inbounds setindex!(a::ReinterpretArray, v) = setindex!(a, v, firstindex(a))
 
-@propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
+@propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, i1::Int, inds::Int...) where {T,N,S}
     check_writable(a)
-    check_ptr_indexable(a) && return _setindex_ptr!(a, v, inds...)
-    _setindex_ra!(a, v, inds[1], tail(inds))
+    check_ptr_indexable(a) && return _setindex_ptr!(a, v, i1, inds...)
+    _setindex_ra!(a, v, i1, inds)
 end
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, i::Int) where {T,N,S}
