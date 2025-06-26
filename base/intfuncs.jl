@@ -335,6 +335,11 @@ function invmod(n::T) where {T<:BitInteger}
 end
 
 # ^ for any x supporting *
+function to_power_type(x::Number)
+    T = promote_type(typeof(x), typeof(x*x))
+    convert(T, x)
+end
+to_power_type(x) = oftype(x*x, x)
 @noinline throw_domerr_powbysq(::Any, p) = throw(DomainError(p, LazyString(
     "Cannot raise an integer x to a negative power ", p, ".",
     "\nConvert input to float.")))
@@ -350,23 +355,12 @@ end
     "or write float(x)^", p, " or Rational.(x)^", p, ".")))
 # The * keyword supports `*=checked_mul` for `checked_pow`
 @assume_effects :terminates_locally function power_by_squaring(x_, p::Integer; mul=*)
-    x_squared_ = x_ * x_
-    x_squared_type = typeof(x_squared_)
-    T = if x_ isa Number
-        promote_type(typeof(x_), x_squared_type)
-    else
-        x_squared_type
-    end
-    x = convert(T, x_)
-    square_is_useful = mul === *
+    x = to_power_type(x_)
     if p == 1
         return copy(x)
     elseif p == 0
         return one(x)
     elseif p == 2
-        if square_is_useful  # avoid performing the same multiplication a second time when possible
-            return convert(T, x_squared_)
-        end
         return mul(x, x)
     elseif p < 0
         isone(x) && return copy(x)
@@ -375,11 +369,6 @@ end
     end
     t = trailing_zeros(p) + 1
     p >>= t
-    if square_is_useful  # avoid performing the same multiplication a second time when possible
-        if (t -= 1) > 0
-            x = convert(T, x_squared_)
-        end
-    end
     while (t -= 1) > 0
         x = mul(x, x)
     end
