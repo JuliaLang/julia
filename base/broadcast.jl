@@ -883,7 +883,7 @@ but in some cases it is necessary to always return a container — even in the 0
 @inline function broadcast_preserving_zero_d(f, As...)
     bc = broadcasted(f, As...)
     r = materialize(bc)
-    return length(axes(bc)) == 0 ? fill!(similar(bc, typeof(r)), r) : r
+    return _all_args_can_drop_zerodim_container(bc.args) ? fill!(similar(bc, typeof(r)), r) : r
 end
 @inline broadcast_preserving_zero_d(f) = fill(f())
 @inline broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
