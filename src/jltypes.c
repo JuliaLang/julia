@@ -3575,7 +3575,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_module_type,
                             jl_symbol_type,
                             jl_int32_type,
-                            jl_int32_type,
+                            jl_uint8_type,
                             jl_ulong_type,
                             jl_type_type,
                             jl_any_type, // union(jl_simplevector_type, jl_method_instance_type),
@@ -3613,27 +3613,29 @@ void jl_init_types(void) JL_GC_DISABLED
     jl_method_instance_type =
         jl_new_datatype(jl_symbol("MethodInstance"), core,
                         jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(7,
+                        jl_perm_symsvec(8,
                             "def",
                             "specTypes",
                             "sparam_vals",
                             "backedges",
                             "cache",
                             "cache_with_orig",
-                            "flags"),
-                        jl_svec(7,
+                            "flags",
+                            "dispatch_status"),
+                        jl_svec(8,
                             jl_new_struct(jl_uniontype_type, jl_method_type, jl_module_type),
                             jl_any_type,
                             jl_simplevector_type,
                             jl_array_any_type,
                             jl_any_type/*jl_code_instance_type*/,
                             jl_bool_type,
-                            jl_bool_type),
+                            jl_bool_type,
+                            jl_uint8_type),
                         jl_emptysvec,
                         0, 1, 3);
     // These fields should be constant, but Serialization wants to mutate them in initialization
     //const static uint32_t method_instance_constfields[1] = { 0b0000111 }; // fields 1, 2, 3
-    const static uint32_t method_instance_atomicfields[1]  = { 0b1010000 }; // fields 5, 7
+    const static uint32_t method_instance_atomicfields[1]  = { 0b11010000 }; // fields 5, 7, 8
     //Fields 4 and 5 must be protected by method->write_lock, and thus all operations on jl_method_instance_t are threadsafe.
     //jl_method_instance_type->name->constfields = method_instance_constfields;
     jl_method_instance_type->name->atomicfields = method_instance_atomicfields;
