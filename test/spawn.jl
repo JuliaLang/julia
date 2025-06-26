@@ -21,7 +21,7 @@ sleepcmd = `sleep`
 lscmd = `ls`
 havebb = false
 
-busybox_hash_correct(file) = bytes2ex(open(SHA.sha256, file)) == "ed2f95da9555268e93c7af52feb48e148534ee518b9128f65dda9a2767b61b9e"
+busybox_hash_correct(file) = bytes2hex(open(SHA.sha256, file)) == "ed2f95da9555268e93c7af52feb48e148534ee518b9128f65dda9a2767b61b9e"
 
 function _tryonce_download_from_cache(desired_url::AbstractString)
     cache_url = "https://cache.julialang.org/$(desired_url)"
