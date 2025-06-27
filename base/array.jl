@@ -1426,13 +1426,30 @@ julia> prepend!([6], [1, 2], [3, 4, 5])
 """
 function prepend! end
 
-function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T},Tuple}) where T
+import Base: _capacity, _set_length!
+
+function prepend!(a::Vector{T}, items::Union{AbstractVector{<:T}, Tuple}) where T
+    # Convert tuple to vector if needed
     items isa Tuple && (items = map(x -> convert(T, x), items))
     n = length(items)
-    _growbeg!(a, n)
-    # in case of aliasing, the _growbeg might have shifted our data, so copy
-    # just the last n elements instead of all of them from the first
-    copyto!(a, 1, items, lastindex(items)-n+1, n)
+    len = length(a)
+    cap = _capacity(a)
+
+    if cap >= len + n
+        # Enough capacity: shift elements right by n
+        for i in reverse(1:len)
+            a[i + n] = a[i]
+        end
+        # Copy new items at the beginning
+        copyto!(a, 1, items, lastindex(items) - n + 1, n)
+        # Update length of the vector
+        _set_length!(a, len + n)
+    else
+        # Not enough capacity: fall back to growbeg! (may allocate)
+        _growbeg!(a, n)
+        copyto!(a, 1, items, lastindex(items) - n + 1, n)
+    end
+
     return a
 end
 
@@ -1440,20 +1457,43 @@ prepend!(a::AbstractVector, iter) = _prepend!(a, IteratorSize(iter), iter)
 pushfirst!(a::AbstractVector, iter...) = prepend!(a, iter)
 prepend!(a::AbstractVector, iter...) = (for v = reverse(iter); prepend!(a, v); end; return a)
 
-function _prepend!(a::Vector, ::Union{HasLength,HasShape}, iter)
+function _prepend!(a::Vector, ::Union{HasLength, HasShape}, iter)
     @_terminates_locally_meta
     require_one_based_indexing(a)
     n = Int(length(iter))::Int
-    sizehint!(a, length(a) + n; first=true, shrink=false)
-    n = 0
-    for item in iter
-        n += 1
-        pushfirst!(a, item)
+    len = length(a)
+    cap = Base._capacity(a)
+
+    if cap < len + n
+        # Not enough capacity, fallback to repeated pushfirst! (less efficient)
+        sizehint!(a, len + n; first=true, shrink=false)
+        for item in iter
+            pushfirst!(a, item)
+        end
+        reverse!(a, 1, n)
+        return a
     end
-    reverse!(a, 1, n)
-    a
+
+    # Enough capacity: shift elements right once
+    for i in reverse(1:len)
+        a[i + n] = a[i]
+    end
+
+    # Copy items to the front
+    idx = 1
+    for item in iter
+        a[idx] = item
+        idx += 1
+    end
+
+    # Update length after prepend
+    Base._set_length!(a, len + n)
+
+    return a
 end
+
 function _prepend!(a::Vector, ::IteratorSize, iter)
+    # fallback for iterators with unknown length
     n = 0
     for item in iter
         n += 1
@@ -1462,6 +1502,7 @@ function _prepend!(a::Vector, ::IteratorSize, iter)
     reverse!(a, 1, n)
     a
 end
+
 
 """
     resize!(a::Vector, n::Integer) -> a
