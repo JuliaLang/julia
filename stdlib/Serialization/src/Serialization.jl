@@ -23,10 +23,24 @@ mutable struct Serializer{I<:IO} <: AbstractSerializer
     pending_refs::Vector{Int}
     known_object_data::Dict{UInt64,Any}
     version::Int
-    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}(), ser_version)
+    current_module::Union{Nothing,Module}
+    Serializer{I}(io::I) where I<:IO = new(io, 0, IdDict(), Int[], Dict{UInt64,Any}(), ser_version, nothing)
 end
 
 Serializer(io::IO) = Serializer{typeof(io)}(io)
+
+macro withmodule(s, m, code)
+    s, m, code = esc(s), esc(m), esc(code)
+    quote
+        _prev = ($s).current_module
+        ($s).current_module = $m
+        try
+            $code
+        finally
+            ($s).current_module = _prev
+        end
+    end
+end
 
 ## serializing values ##
 
@@ -1064,7 +1078,10 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
     nospecializeinfer = false
     constprop = 0x00
     purity = 0x0000
-    template_or_is_opaque = deserialize(s)
+    local template_or_is_opaque, template
+    @withmodule s mod begin
+        template_or_is_opaque = deserialize(s)
+    end
     if isa(template_or_is_opaque, Bool)
         is_for_opaque_closure = template_or_is_opaque
         if format_version(s) >= 24
@@ -1078,7 +1095,9 @@ function deserialize(s::AbstractSerializer, ::Type{Method})
         elseif format_version(s) >= 17
             purity = UInt16(deserialize(s)::UInt8)
         end
-        template = deserialize(s)
+        @withmodule s mod begin
+            template = deserialize(s)
+        end
     else
         template = template_or_is_opaque
     end
@@ -1182,6 +1201,22 @@ function deserialize(s::AbstractSerializer, ::Type{PhiNode})
     return PhiNode(edges, values)
 end
 
+# v1.12 disallows bare symbols in IR, but older CodeInfos might still have them
+function symbol_to_globalref(@nospecialize(x), m::Module)
+    mapper(@nospecialize(x)) = symbol_to_globalref(x, m)
+    if x isa Symbol
+        return GlobalRef(m, x)
+    elseif x isa Expr
+        return Expr(x.head, map(mapper, x.args)...)
+    elseif x isa ReturnNode
+        return ReturnNode(mapper(x.val))
+    elseif x isa GotoIfNot
+        return GotoIfNot(mapper(x.cond), x.dest)
+    else
+        return x
+    end
+end
+
 function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
     ci = ccall(:jl_new_code_info_uninit, Ref{CodeInfo}, ())
     deserialize_cycle(s, ci)
@@ -1199,6 +1234,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
                 code[i] = GotoIfNot(ex.args[1], ex.args[2])
             end
         end
+    end
+    if s.current_module !== nothing
+        map!(x->symbol_to_globalref(x, s.current_module), code)
     end
     _x = deserialize(s)
     have_debuginfo = _x isa Core.DebugInfo
@@ -1248,6 +1286,9 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
         ci.slottypes = deserialize(s)
         ci.rettype = deserialize(s)
         ci.parent = deserialize(s)
+        if format_version(s) < 29 && ci.parent isa MethodInstance && ci.parent.def isa Method
+            ci.nargs = ci.parent.def.nargs
+        end
         world_or_edges = deserialize(s)
         pre_13 = isa(world_or_edges, Union{UInt, Int})
         if pre_13
@@ -1258,7 +1299,7 @@ function deserialize(s::AbstractSerializer, ::Type{CodeInfo})
             ci.min_world = deserialize(s)::UInt
             ci.max_world = deserialize(s)::UInt
         end
-        if format_version(s) >= 26
+        if format_version(s) >= 29
             ci.method_for_inference_limit_heuristics = deserialize(s)
         end
     end
