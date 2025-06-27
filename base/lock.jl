@@ -674,6 +674,9 @@ calls in the same process will return exactly the same value. This is useful in
 code that will be precompiled, as it allows setting up caches or other state
 which won't get serialized.
 
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
+
 ## Example
 
 ```jldoctest
@@ -783,6 +786,9 @@ if that behavior is correct within your library's threading-safety design.
     task after the call might not be the same as the one at the start of the call.
 
 See also: [`OncePerTask`](@ref).
+
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 
 ## Example
 
@@ -911,6 +917,9 @@ Calling a `OncePerTask` object returns a value of type `T` by running the functi
 exactly once per Task. All future calls in the same Task will return exactly the same value.
 
 See also: [`task_local_storage`](@ref).
+
+!!! compat "Julia 1.12"
+    This type requires Julia 1.12 or later.
 
 ## Example
 

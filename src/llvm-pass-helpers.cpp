@@ -18,6 +18,9 @@
 #include "julia_assert.h"
 #include "llvm-pass-helpers.h"
 
+#define STR(csym)           #csym
+#define XSTR(csym)          STR(csym)
+
 using namespace llvm;
 
 JuliaPassContext::JuliaPassContext()

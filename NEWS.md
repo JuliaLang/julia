@@ -134,6 +134,8 @@ New library features
 * `Timer` now has readable `timeout` and `interval` properties, and a more descriptive `show` method ([#57081]).
 * `sort` now supports `NTuple`s ([#54494]).
 * `map!(f, A)` now stores the results in `A`, like `map!(f, A, A)` or `A .= f.(A)` ([#40632]).
+* `setprecision` with a function argument (typically a `do` block) is now thread safe. Other forms
+  should be avoided, and types should switch to an implementation using `ScopedValue` ([#51362]).
 
 Standard library changes
 ------------------------
@@ -225,8 +227,10 @@ Tooling Improvements
 [#40989]: https://github.com/JuliaLang/julia/issues/40989
 [#45793]: https://github.com/JuliaLang/julia/issues/45793
 [#49355]: https://github.com/JuliaLang/julia/issues/49355
+[#49933]: https://github.com/JuliaLang/julia/issues/49933
 [#50988]: https://github.com/JuliaLang/julia/issues/50988
 [#51149]: https://github.com/JuliaLang/julia/issues/51149
+[#51362]: https://github.com/JuliaLang/julia/issues/51362
 [#51810]: https://github.com/JuliaLang/julia/issues/51810
 [#52103]: https://github.com/JuliaLang/julia/issues/52103
 [#52999]: https://github.com/JuliaLang/julia/issues/52999
@@ -284,3 +288,4 @@ Tooling Improvements
 [#57087]: https://github.com/JuliaLang/julia/issues/57087
 [#57109]: https://github.com/JuliaLang/julia/issues/57109
 [#57253]: https://github.com/JuliaLang/julia/issues/57253
+[#57727]: https://github.com/JuliaLang/julia/issues/57727

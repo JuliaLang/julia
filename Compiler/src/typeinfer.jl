@@ -572,12 +572,17 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
     nothing
 end
 
-# record the backedges
-function store_backedges(caller::CodeInstance, edges::SimpleVector)
-    isa(caller.def.def, Method) || return # don't add backedges to toplevel method instance
-    i = 1
-    while true
-        i > length(edges) && return nothing
+# Iterate a series of back-edges that need registering, based on the provided forward edge list.
+# Back-edges are returned as (invokesig, item), where the item is a Binding, MethodInstance, or
+# MethodTable.
+struct ForwardToBackedgeIterator
+    forward_edges::SimpleVector
+end
+
+function Base.iterate(it::ForwardToBackedgeIterator, i::Int = 1)
+    edges = it.forward_edges
+    i > length(edges) && return nothing
+    while i ≤ length(edges)
         item = edges[i]
         if item isa Int
             i += 2
@@ -587,32 +592,55 @@ function store_backedges(caller::CodeInstance, edges::SimpleVector)
             i += 1
             continue
         elseif isa(item, Core.Binding)
-            i += 1
-            maybe_add_binding_backedge!(item, caller)
-            continue
+            return ((nothing, item), i + 1)
         end
         if isa(item, CodeInstance)
-            item = item.def
-        end
-        if isa(item, MethodInstance) # regular dispatch
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, nothing, caller)
-            i += 1
+            item = get_ci_mi(item)
+            return ((nothing, item), i + 1)
+        elseif isa(item, MethodInstance) # regular dispatch
+            return ((nothing, item), i + 1)
         else
+            invokesig = item
             callee = edges[i+1]
-            if isa(callee, MethodTable) # abstract dispatch (legacy style edges)
-                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
-                i += 2
-                continue
-            elseif isa(callee, Method)
-                # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
-                i += 2
-                continue
-            # `invoke` edge
-            elseif isa(callee, CodeInstance)
-                callee = get_ci_mi(callee)
+            isa(callee, Method) && (i += 2; continue) # ignore `Method`-edges (from e.g. failed `abstract_call_method`)
+            if isa(callee, MethodTable)
+                # abstract dispatch (legacy style edges)
+                return ((invokesig, callee), i + 2)
+            else
+                # `invoke` edge
+                callee = isa(callee, CodeInstance) ? get_ci_mi(callee) : callee::MethodInstance
+                return ((invokesig, callee), i + 2)
             end
-            ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), callee, item, caller)
-            i += 2
+        end
+    end
+    return nothing
+end
+
+# record the backedges
+function store_backedges(caller::CodeInstance, edges::SimpleVector)
+    isa(caller.def.def, Method) || return # don't add backedges to toplevel method instance
+
+    backedges = ForwardToBackedgeIterator(edges)
+    for (i, (invokesig, item)) in enumerate(backedges)
+        # check for any duplicate edges we've already registered
+        duplicate_found = false
+        for (i′, (invokesig′, item′)) in enumerate(backedges)
+            i == i′ && break
+            if item′ === item && invokesig′ == invokesig
+                duplicate_found = true
+                break
+            end
+        end
+
+        if !duplicate_found
+            if item isa Core.Binding
+                maybe_add_binding_backedge!(item, caller)
+            elseif item isa MethodTable
+                ccall(:jl_method_table_add_backedge, Cvoid, (Any, Any), invokesig, caller)
+            else
+                item::MethodInstance
+                ccall(:jl_method_instance_add_backedge, Cvoid, (Any, Any, Any), item, invokesig, caller)
+            end
         end
     end
     nothing
@@ -1333,16 +1361,30 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 # No dynamic dispatch to resolve / enqueue
                 continue
             end
+        elseif isexpr(stmt, :cfunction) && length(stmt.args) == 5
+            (pointer_type, f, rt, at, call_type) = stmt.args
+            linfo = ci.parent
 
-            let workqueue = invokelatest_queue
-                # make a best-effort attempt to enqueue the relevant code for the finalizer
-                mi = compileable_specialization_for_call(workqueue.interp, atype)
-                mi === nothing && continue
+            linfo isa MethodInstance || continue
+            at isa SimpleVector || continue
 
-                push!(workqueue, mi)
+            ft = argextype(f, ci, sptypes)
+            argtypes = Any[ft]
+            for i = 1:length(at)
+                push!(argtypes, sp_type_rewrap(at[i], linfo, #= isreturn =# false))
             end
+            atype = argtypes_to_type(argtypes)
+        else
+            # TODO: handle other StmtInfo like OpaqueClosure?
+            continue
         end
-        # TODO: handle other StmtInfo like @cfunction and OpaqueClosure?
+        let workqueue = invokelatest_queue
+            # make a best-effort attempt to enqueue the relevant code for the dynamic invokelatest call
+            mi = compileable_specialization_for_call(workqueue.interp, atype)
+            mi === nothing && continue
+
+            push!(workqueue, mi)
+        end
     end
 end
 
@@ -1403,8 +1445,9 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, s
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
-function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
-    interp = NativeInterpreter(world)
+function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8, trim_mode::UInt8)
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+    interp = NativeInterpreter(world; inf_params)
     return typeinf_ext_toplevel(interp, mi, source_mode)
 end
 
@@ -1487,11 +1530,11 @@ end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
 # The trim_mode can be any of:
-const TRIM_NO = 0
-const TRIM_SAFE = 1
-const TRIM_UNSAFE = 2
-const TRIM_UNSAFE_WARN = 3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
+const TRIM_NO = 0x0
+const TRIM_SAFE = 0x1
+const TRIM_UNSAFE = 0x2
+const TRIM_UNSAFE_WARN = 0x3
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative

@@ -42,6 +42,6 @@ end
 
 aliasof(b::Binding)     = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b
 aliasof(d::DataType, b) = Binding(d.name.module, d.name.name)
-aliasof(λ::Function, b) = (m = typeof(λ).name.mt; Binding(m.module, m.name))
+aliasof(λ::Function, b) = (m = typeof(λ).name; Binding(m.module, m.singletonname))
 aliasof(m::Module,   b) = Binding(m, nameof(m))
 aliasof(other,       b) = b
