@@ -4119,7 +4119,7 @@ JL_DLLEXPORT void *jl_realloc(void *p, size_t sz)
 
 JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = jl_get_current_task();
     void *data = malloc(sz);
     if (data != NULL && ct != NULL && ct->world_age) {
         sz = memory_block_usable_size(data, 0);
@@ -4136,7 +4136,7 @@ JL_DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 
 JL_DLLEXPORT void *jl_gc_counted_calloc(size_t nm, size_t sz)
 {
-    jl_task_t *ct = jl_current_task;
+    jl_task_t *ct = jl_get_current_task();
     void *data = calloc(nm, sz);
     if (data != NULL && ct != NULL && ct->world_age) {
         sz = memory_block_usable_size(data, 0);

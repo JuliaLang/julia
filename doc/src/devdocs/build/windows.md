@@ -32,7 +32,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 ## Binary distribution
 
 For the binary distribution installation notes on Windows please see the instructions at
-[https://julialang.org/downloads/platform/#windows](https://julialang.org/downloads/platform/#windows).
+[https://julialang.org/downloads/platform/#windows](https://julialang.org/downloads/platform/#windows). Note, however, that on all platforms [using `juliaup`](https://julialang.org/install/) is recommended over manually installing binaries.
 
 ## Source distribution
 

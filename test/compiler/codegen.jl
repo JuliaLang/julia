@@ -936,5 +936,24 @@ end
 
 struct Vec56937 x::NTuple{8, VecElement{Int}} end
 
-x56937 = Ref(Vec56937(ntuple(_->VecElement(1),8)))
-@test x56937[].x[1] == VecElement{Int}(1) # shouldn't crash
+# 58470 tbaa for unionselbyte of heap allocated mutables
+mutable struct Wrapper58470
+    x::Union{Nothing,Int}
+end
+
+function findsomething58470(dict, inds)
+    default = Wrapper58470(nothing)
+    for i in inds
+        x = get(dict, i, default).x
+        if !isnothing(x)
+            return x
+        end
+    end
+    return nothing
+end
+
+let io = IOBuffer()
+    code_llvm(io, findsomething58470, Tuple{Dict{Int64, Wrapper58470}, Vector{Int}}, dump_module=true, raw=true, optimize=false)
+    str = String(take!(io))
+    @test !occursin("jtbaa_unionselbyte", str)
+end
