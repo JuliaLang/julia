@@ -2009,7 +2009,9 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
     }
     unsigned nb = isboxed ? sizeof(void*) : jl_datatype_size(jltype);
     AllocaInst *intcast = nullptr;
+    Type *intcast_eltyp = nullptr;
     if (!isboxed && Order != AtomicOrdering::NotAtomic && !elty->isIntOrPtrTy()) {
+        intcast_eltyp = elty;
         if (!issetfield) {
             intcast = emit_static_alloca(ctx, elty);
             setName(ctx.emission_context, intcast, "atomic_store_box");
@@ -2284,6 +2286,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             ctx.builder.SetInsertPoint(BB);
         }
         if (r) {
+            if (!isboxed && intcast_eltyp) {
+                // r was cast to an integer for the atomic operation,
+                // so reload rhs with the correct type to find its GC references
+                r = emit_unbox(ctx, intcast_eltyp, rhs, jltype);
+            }
             if (!isboxed)
                 emit_write_multibarrier(ctx, parent, r, rhs.typ);
             else if (!type_is_permalloc(rhs.typ))

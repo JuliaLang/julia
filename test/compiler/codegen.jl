@@ -879,3 +879,19 @@ struct Vec56937 x::NTuple{8, VecElement{Int}} end
 
 x56937 = Ref(Vec56937(ntuple(_->VecElement(1),8)))
 @test x56937[].x[1] == VecElement{Int}(1) # shouldn't crash
+
+# atomic stores of inline aggregates with references need a write barrier (#58760)
+struct InlineRef58760
+    x::Any
+end
+mutable struct AtomicHolder58760
+    @atomic x::InlineRef58760
+end
+for f in ((a, y) -> (@atomic a.x = y; nothing),
+          (a, y) -> (@atomicswap a.x = y; nothing),
+          (a, y) -> (@atomicreplace a.x a.x => y; nothing),
+          (a, y) -> (@atomic a.x right y; nothing))
+    local io = IOBuffer()
+    code_llvm(io, f, (AtomicHolder58760, InlineRef58760), raw=true, optimize=false)
+    @test occursin("julia.write_barrier", String(take!(io)))
+end
