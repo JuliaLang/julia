@@ -403,7 +403,7 @@ static jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi 
 // returns the inferred source, and may cache the result in mi
 // if successful, also updates the mi argument to describe the validity of this src
 // if inference doesn't occur (or can't finish), returns NULL instead
-jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_t source_mode)
+jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_t source_mode, uint8_t trim_mode)
 {
     if (jl_typeinf_func == NULL) {
         if (source_mode == SOURCE_MODE_ABI)
@@ -427,11 +427,12 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
         return NULL;
     JL_TIMING(INFERENCE, INFERENCE);
     jl_value_t **fargs;
-    JL_GC_PUSHARGS(fargs, 4);
+    JL_GC_PUSHARGS(fargs, 5);
     fargs[0] = (jl_value_t*)jl_typeinf_func;
     fargs[1] = (jl_value_t*)mi;
     fargs[2] = jl_box_ulong(world);
     fargs[3] = jl_box_uint8(source_mode);
+    fargs[4] = jl_box_uint8(trim_mode);
     int last_errno = errno;
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
@@ -458,7 +459,7 @@ jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_
     // allocate another bit for the counter.
     ct->reentrant_timing += 0b10;
     JL_TRY {
-        ci = (jl_code_instance_t*)jl_apply(fargs, 4);
+        ci = (jl_code_instance_t*)jl_apply(fargs, 5);
     }
     JL_CATCH {
         jl_value_t *e = jl_current_exception(ct);
@@ -3196,7 +3197,7 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
         int should_skip_inference = !jl_is_method(mi->def.method) || jl_symbol_name(mi->def.method->name)[0] == '@';
 
         if (!should_skip_inference) {
-            codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI);
+            codeinst = jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim);
         }
     }
 
@@ -3516,7 +3517,7 @@ static void _generate_from_hint(jl_method_instance_t *mi, size_t world)
 {
     jl_value_t *codeinst = jl_rettype_inferred_native(mi, world, world);
     if (codeinst == jl_nothing) {
-        (void)jl_type_infer(mi, world, SOURCE_MODE_NOT_REQUIRED);
+        (void)jl_type_infer(mi, world, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
         codeinst = jl_rettype_inferred_native(mi, world, world);
     }
     if (codeinst != jl_nothing) {
@@ -3559,10 +3560,10 @@ JL_DLLEXPORT void jl_compile_method_instance(jl_method_instance_t *mi, jl_tuplet
             miflags = jl_atomic_load_relaxed(&mi2->flags) | JL_MI_FLAGS_MASK_PRECOMPILED;
             jl_atomic_store_relaxed(&mi2->flags, miflags);
             if (jl_rettype_inferred_native(mi2, world, world) == jl_nothing)
-                (void)jl_type_infer(mi2, world, SOURCE_MODE_NOT_REQUIRED);
+                (void)jl_type_infer(mi2, world, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
             if (jl_typeinf_func && jl_atomic_load_relaxed(&mi->def.method->primary_world) <= tworld) {
                 if (jl_rettype_inferred_native(mi2, tworld, tworld) == jl_nothing)
-                    (void)jl_type_infer(mi2, tworld, SOURCE_MODE_NOT_REQUIRED);
+                    (void)jl_type_infer(mi2, tworld, SOURCE_MODE_NOT_REQUIRED, jl_options.trim);
             }
         }
     }

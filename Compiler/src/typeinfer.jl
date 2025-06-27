@@ -1564,8 +1564,9 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, s
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
-function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
-    interp = NativeInterpreter(world)
+function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8, trim_mode::UInt8)
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+    interp = NativeInterpreter(world; inf_params)
     return typeinf_ext_toplevel(interp, mi, source_mode)
 end
 
@@ -1648,11 +1649,11 @@ end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
 # The trim_mode can be any of:
-const TRIM_NO = 0
-const TRIM_SAFE = 1
-const TRIM_UNSAFE = 2
-const TRIM_UNSAFE_WARN = 3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
+const TRIM_NO = 0x0
+const TRIM_SAFE = 0x1
+const TRIM_UNSAFE = 0x2
+const TRIM_UNSAFE_WARN = 0x3
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative
