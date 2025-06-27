@@ -102,8 +102,18 @@ struct RvCharPosIter{S}
     last_char_byte::UInt8
 end
 
-IteratorSize(s::Type{<:Union{FwCharPosIter, RvCharPosIter}}) = SizeUnknown()
-eltype(::Type{<:Union{FwCharPosIter, RvCharPosIter}}) = Int
+@nospecializeinfer function IteratorSize(@nospecialize unused::Type{<:FwCharPosIter})
+    SizeUnknown()
+end
+@nospecializeinfer function eltype(@nospecialize unused::Type{<:FwCharPosIter})
+    Int
+end
+@nospecializeinfer function IteratorSize(@nospecialize unused::Type{<:RvCharPosIter})
+    SizeUnknown()
+end
+@nospecializeinfer function eltype(@nospecialize unused::Type{<:RvCharPosIter})
+    Int
+end
 
 function RvCharPosIter(s::Union{String, SubString{String}}, c::AbstractChar)
     char = Char(c)::Char
