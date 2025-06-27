@@ -2683,6 +2683,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 ctx.builder.CreateStore(r, intcast);
                 r = ctx.builder.CreateLoad(intcast_eltyp, intcast);
             }
+            else if (!isboxed && intcast_eltyp) {
+                assert(issetfield);
+                // issetfield doesn't use intcast, so need to reload rhs with the correct type
+                r = emit_unbox(ctx, intcast_eltyp, rhs, jltype);
+            }
             if (!isboxed)
                 emit_write_multibarrier(ctx, parent, r, rhs.typ);
             else
