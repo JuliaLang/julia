@@ -3607,7 +3607,7 @@ void jl_init_types(void) JL_GC_DISABLED
                         0, 1, 10);
     //const static uint32_t method_constfields[1] = { 0b0 }; // (1<<0)|(1<<1)|(1<<2)|(1<<3)|(1<<6)|(1<<9)|(1<<10)|(1<<17)|(1<<21)|(1<<22)|(1<<23)|(1<<24)|(1<<25)|(1<<26)|(1<<27)|(1<<28)|(1<<29)|(1<<30);
     //jl_method_type->name->constfields = method_constfields;
-    const static uint32_t method_atomicfields[1] = { 0x00000030 }; // (1<<4)|(1<<5)
+    const static uint32_t method_atomicfields[1] = { 0x10000030 }; // (1<<4)|(1<<5)||(1<<28)
     jl_method_type->name->atomicfields = method_atomicfields;
 
     jl_method_instance_type =
