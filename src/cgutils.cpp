@@ -1611,8 +1611,7 @@ static Value *null_pointer_cmp(jl_codectx_t &ctx, Value *v)
     return ctx.builder.CreateICmpNE(
             v,
             ctx.builder.CreateAddrSpaceCast(
-                Constant::getNullValue(ctx.builder.getPtrTy(AddressSpace::Derived)),
-                PointerType::get(T, T->getPointerAddressSpace())));
+                Constant::getNullValue(ctx.builder.getPtrTy(0)), T);
 }
 
 
