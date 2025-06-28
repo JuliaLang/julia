@@ -206,6 +206,10 @@ function scan_new_method!(method::Method, image_backedges_only::Bool)
 end
 
 function scan_new_methods!(extext_methods::Vector{Any}, internal_methods::Vector{Any}, image_backedges_only::Bool)
+    if image_backedges_only && Base.generating_output(true)
+        # Replacing image bindings is forbidden during incremental precompilation - skip backedge insertion
+        return
+    end
     for method in internal_methods
         if isa(method, Method)
            scan_new_method!(method, image_backedges_only)

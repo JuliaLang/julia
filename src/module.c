@@ -1669,8 +1669,14 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     // Until the first such replacement, we can fast-path validation.
     // For these purposes, we consider the `Main` module to be a non-sysimg module.
     // This is legal, because we special case the `Main` in check_safe_import_from.
-    if (jl_object_in_image((jl_value_t*)b) && b->globalref->mod != jl_main_module && jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0)
+    if (jl_object_in_image((jl_value_t*)b) && b->globalref->mod != jl_main_module && jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0) {
+        // During incremental compilation replacement of image bindings is forbidden;
+        // We use this to avoid inserting backedges while loading pkgimages.
+        // `check_safe_newbinding` checks an equivalent condition on `b->globalref->mod`,
+        // but doesn't quite query `jl_object_in_image`, so assert here to be extra sure.
+        assert(!(jl_options.incremental && jl_generating_output()));
         jl_atomic_store_relaxed(&jl_first_image_replacement_world, new_world);
+    }
 
     assert(jl_atomic_load_relaxed(&b->partitions) == old_bpart);
     jl_binding_partition_t *new_bpart = new_binding_partition();
