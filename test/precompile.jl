@@ -1083,9 +1083,8 @@ precompile_test_harness("code caching") do dir
         @test hasvalid(mi, world)       # was compiled with the new method
         m = only(methods(MA.fib))
         mi = m.specializations::Core.MethodInstance
-        @test isdefined(mi, :cache)     # it was precompiled by StaleB
-        @test_broken !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
-        @test_broken MA.fib() === 2.0
+        @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        @test MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
         @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
