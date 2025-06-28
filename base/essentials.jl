@@ -369,10 +369,6 @@ macro _noub_if_noinbounds_meta()
         #=:nortcall=#false))
 end
 
-# another version of inlining that propagates an inbounds context
-macro _propagate_inbounds_meta()
-    return Expr(:meta, :inline, :propagate_inbounds)
-end
 macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
