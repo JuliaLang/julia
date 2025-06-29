@@ -62,7 +62,7 @@ function writeexp(buf, pos, v::T,
         i = len - 1
         while i >= 0
             j = p10bits - e2
-            #=@inbounds=# mula, mulb, mulc = POW10_SPLIT[POW10_OFFSET[idx + 1] + i + 1]
+            #=@inbounds=# mula, mulb, mulc = POW10_SPLIT[pow10_offset(idx) + i + 1]
             digits = mulshiftmod1e9(m2 << 8, mula, mulb, mulc, j + 8)
             if !iszero(printedDigits)
                 if printedDigits + 9 > precision
