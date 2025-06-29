@@ -1067,10 +1067,10 @@ function _growbeg!(a::Vector, delta::Integer)
     len = length(a)
     offset = memoryrefoffset(ref)
     newlen = len + delta
-    setfield!(a, :size, (newlen,))
     # if offset is far enough advanced to fit data in existing memory without copying
     if delta <= offset - 1
         setfield!(a, :ref, @inbounds memoryref(ref, 1 - delta))
+        setfield!(a, :size, (newlen,))
     else
         @noinline (function()
         @_terminates_locally_meta
@@ -1095,6 +1095,7 @@ function _growbeg!(a::Vector, delta::Integer)
             unsafe_copyto!(newmem, newoffset + delta, mem, offset, len)
         end
         setfield!(a, :ref, @inbounds memoryref(newmem, newoffset))
+        setfield!(a, :size, (newlen,))
         end)()
     end
     return
@@ -1110,7 +1111,6 @@ function _growend!(a::Vector, delta::Integer)
     len = length(a)
     newlen = len + delta
     offset = memoryrefoffset(ref)
-    setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
         @noinline (function()
@@ -1132,7 +1132,10 @@ function _growend!(a::Vector, delta::Integer)
         newref = @inbounds memoryref(newmem, newoffset)
         unsafe_copyto!(newref, ref, len)
         setfield!(a, :ref, newref)
+        setfield!(a, :size, (newlen,))
         end)()
+    else
+        setfield!(a, :size, (newlen,))
     end
     return
 end
@@ -1151,7 +1154,6 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
     memlen = length(mem)
     newlen = len + delta
     offset = memoryrefoffset(ref)
-    setfield!(a, :size, (newlen,))
     newmemlen = offset + newlen - 1
 
     # which side would we rather grow into?
@@ -1161,11 +1163,13 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         newref = @inbounds memoryref(mem, offset - delta)
         unsafe_copyto!(newref, ref, i)
         setfield!(a, :ref, newref)
+        setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
             @inbounds _unsetindex!(a, j)
         end
     elseif !prefer_start && memlen >= newmemlen
         unsafe_copyto!(mem, offset - 1 + delta + i, mem, offset - 1 + i, len - i + 1)
+        setfield!(a, :size, (newlen,))
         for j in i:i+delta-1
             @inbounds _unsetindex!(a, j)
         end
@@ -1179,6 +1183,10 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         unsafe_copyto!(newref, ref, i-1)
         unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
         setfield!(a, :ref, newref)
+        setfield!(a, :size, (newlen,))
+        for j in i:i+delta-1
+            @inbounds _unsetindex!(a, j)
+        end
     end
 end
 
@@ -1191,11 +1199,11 @@ function _deletebeg!(a::Vector, delta::Integer)
         @inbounds _unsetindex!(a, i)
     end
     newlen = len - delta
+    setfield!(a, :size, (newlen,))
     if newlen != 0 # if newlen==0 we could accidentally index past the memory
         newref = @inbounds memoryref(a.ref, delta + 1)
         setfield!(a, :ref, newref)
     end
-    setfield!(a, :size, (newlen,))
     return
 end
 function _deleteend!(a::Vector, delta::Integer)
