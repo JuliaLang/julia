@@ -883,7 +883,7 @@ but in some cases it is necessary to always return a container — even in the 0
 @inline function broadcast_preserving_zero_d(f, As...)
     bc = broadcasted(f, As...)
     r = materialize(bc)
-    return length(axes(bc)) == 0 ? fill!(similar(bc, typeof(r)), r) : r
+    return _all_args_can_drop_zerodim_container(As) ? fill!(similar(bc, typeof(r)), r) : r
 end
 @inline broadcast_preserving_zero_d(f) = fill(f())
 @inline broadcast_preserving_zero_d(f, as::Number...) = fill(f(as...))
@@ -908,7 +908,22 @@ end
 end
 
 ## general `copy` methods
-@inline copy(bc::Broadcasted{<:AbstractArrayStyle{0}}) = bc[CartesianIndex()]
+_all_args_can_drop_zerodim_container(::Tuple{}) = true
+_all_args_can_drop_zerodim_container(t::Tuple{<:Broadcasted, Vararg{Any}}) =
+    _all_args_can_drop_zerodim_container(t[1].args) && _all_args_can_drop_zerodim_container(tail(t))
+_all_args_can_drop_zerodim_container(t::Tuple{<:Union{Number, Ref, AbstractChar}, Vararg{Any}}) =
+    _all_args_can_drop_zerodim_container(tail(t))
+_all_args_can_drop_zerodim_container(t::Tuple{<:Any, Vararg{Any}}) = false
+@inline function copy(bc::Broadcasted{<:AbstractArrayStyle{0}})
+    r = bc[CartesianIndex()]
+    if _all_args_can_drop_zerodim_container(bc.args)
+        return r
+    else
+        dest = similar(bc, typeof(r))
+        dest[] = r
+        return dest
+    end
+end
 copy(bc::Broadcasted{<:Union{Nothing,Unknown}}) =
     throw(ArgumentError("broadcasting requires an assigned BroadcastStyle"))
 
