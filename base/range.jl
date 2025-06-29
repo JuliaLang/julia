@@ -810,10 +810,8 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
         # n.b. !(s isa T)
         if s isa Unsigned || -1 <= s <= 1 || s == -s
             a = div(diff, s) % typeof(diff)
-        elseif s < 0
-            a = div(unsigned(-diff), -s) % typeof(diff)
         else
-            a = div(unsigned(diff), s) % typeof(diff)
+            a = div(unsigned(sign(s)*diff), abs(s)) % typeof(diff)
         end
         return a + oneunit(a)
     end

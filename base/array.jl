@@ -902,10 +902,6 @@ function grow_to!(dest, itr, st)
     return dest
 end
 
-## Iteration ##
-
-iterate(A::Array, i=1) = (@inline; _iterate_array(A, i))
-
 ## Indexing: getindex ##
 
 """
