@@ -129,4 +129,18 @@ end
     @test Dates.nanosecond(t) == 0
 end
 
+@testset "idempotency of conversion for TimeType subtypes" begin
+    for T in [DateTime, Date, Time]
+        @test T(T(0)) == T(0)
+    end
+end
+
+@testset "idempotency of conversion for Period subtypes" begin
+    for T in [Nanosecond, Millisecond,
+              Second, Minute, Hour,
+              Day, Week, Month, Quarter, Year]
+        @test T(T(0)) == T(0)
+    end
+end
+
 end

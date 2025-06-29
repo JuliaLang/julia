@@ -25,7 +25,7 @@ DateTime(dt::TimeType) = convert(DateTime, dt)
 Convert a `DateTime` to a `Time`. The hour, minute, second, and millisecond parts of
 the `DateTime` are used to create the new `Time`. Microsecond and nanoseconds are zero by default.
 """
-Time(dt::DateTime) = convert(Time, dt)
+Time(dt::TimeType) = convert(Time, dt)
 
 Base.convert(::Type{DateTime}, dt::Date) = DateTime(UTM(value(dt) * 86400000))
 Base.convert(::Type{Date}, dt::DateTime) = Date(UTD(days(dt)))

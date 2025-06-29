@@ -539,6 +539,8 @@ dr  = Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(23, 2, 1)
 dr1 = Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(23, 1, 1)
 dr2 = Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(22, 2, 1) # empty range
 dr3 = Dates.Time(23, 1, 1):Dates.Minute(-1):Dates.Time(22, 1, 1) # negative step
+dr4 = range(Dates.Time(0), step=Dates.Hour(1), length=23) # by step, length
+
 # Big ranges
 dr8 = typemin(Dates.Time):Dates.Second(1):typemax(Dates.Time)
 dr9 = typemin(Dates.Time):Dates.Nanosecond(1):typemax(Dates.Time)
@@ -555,7 +557,7 @@ dr18 = typemax(Dates.Time):Dates.Minute(-100):typemin(Dates.Time)
 dr19 = typemax(Dates.Time):Dates.Hour(-10):typemin(Dates.Time)
 dr20 = typemin(Dates.Time):Dates.Microsecond(2):typemax(Dates.Time)
 
-drs = Any[dr, dr1, dr2, dr3, dr8, dr9, dr10,
+drs = Any[dr, dr1, dr2, dr3, dr4, dr8, dr9, dr10,
           dr11, dr12, dr13, dr14, dr15, dr16, dr17, dr18, dr19, dr20]
 
 @test map(length, drs) == map(x->size(x)[1], drs)
