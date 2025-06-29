@@ -1225,9 +1225,6 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
         unsafe_copyto!(newmem, newoffset + delta + i - 1, mem, offset + i - 1, len - i + 1)
         setfield!(a, :ref, newref)
         setfield!(a, :size, (newlen,))
-        for j in i:i+delta-1
-            @inbounds _unsetindex!(a, j)
-        end
     end
 end
 
