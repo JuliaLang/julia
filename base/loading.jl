@@ -4188,6 +4188,20 @@ end
 compiler_chi(tup::Tuple) = CacheHeaderIncludes(expand_compiler_path(tup))
 
 """
+    isprecompilable(f, argtypes::Tuple{Vararg{Any}})
+
+Check, as far as is possible without actually compiling, if the given
+function `f` can be compiled for the argument tuple (of types) `argtypes`.
+"""
+function isprecompilable(@nospecialize(f), @nospecialize(argtypes::Tuple))
+    isprecompilable(Tuple{Core.Typeof(f), argtypes...})
+end
+
+function isprecompilable(@nospecialize(argt::Type))
+    ccall(:jl_is_compilable, Int32, (Any,), argt) != 0
+end
+
+"""
     precompile(f, argtypes::Tuple{Vararg{Any}})
 
 Compile the given function `f` for the argument tuple (of types) `argtypes`, but do not execute it.
