@@ -3679,34 +3679,33 @@ end
 
 # If we've asked for a specific UUID, this function will extract the prefs
 # for that particular UUID.  Otherwise, it returns all preferences.
-function filter_preferences(prefs::Dict{String, Any}, pkg_name)
-    if pkg_name === nothing
+function filter_preferences(toml_path::String, prefs::Dict{String, Any}, pkg_names::Set{String})
+    if isempty(pkg_names)
         return prefs
     else
-        return get(Dict{String, Any}, prefs, pkg_name)::Dict{String, Any}
+        present_pkg_names = filter(n -> n ∈ keys(prefs), pkg_names)
+        if length(present_pkg_names) > 1
+            @warn("""
+            $(toml_path) contains preference mappings that refer to the same UUID!
+            """, pkg_names=present_pkg_names)
+        end
+        if length(present_pkg_names) == 1
+            return prefs[only(present_pkg_names)]::Dict{String, Any}
+        end
+        return Dict{String,Any}()
     end
 end
 
-function collect_preferences(project_toml::String, uuid::Union{UUID,Nothing})
+function collect_preferences(project_toml::String, uuid::Union{UUID,Nothing}, uuid_name_map::Dict{UUID,Set{String}})
     # We'll return a list of dicts to be merged
     dicts = Dict{String, Any}[]
 
     project = parsed_toml(project_toml)
-    pkg_name = nothing
-    if uuid !== nothing
-        # If we've been given a UUID, map that to the name of the package as
-        # recorded in the preferences section.  If we can't find that mapping,
-        # exit out, as it means there's no way preferences can be set for that
-        # UUID, as we only allow actual dependencies to have preferences set.
-        pkg_name = get_uuid_name(project, uuid)
-        if pkg_name === nothing
-            return dicts
-        end
-    end
+    pkg_names = get(Set{String}, uuid_name_map, uuid)::Set{String}
 
     # Look first inside of `Project.toml` to see we have preferences embedded within there
     proj_preferences = get(Dict{String, Any}, project, "preferences")::Dict{String, Any}
-    push!(dicts, filter_preferences(proj_preferences, pkg_name))
+    push!(dicts, filter_preferences(project_toml, proj_preferences, pkg_names))
 
     # Next, look for `(Julia)LocalPreferences.toml` files next to this `Project.toml`
     project_dir = dirname(project_toml)
@@ -3714,7 +3713,7 @@ function collect_preferences(project_toml::String, uuid::Union{UUID,Nothing})
         toml_path = joinpath(project_dir, name)
         if isfile(toml_path)
             prefs = parsed_toml(toml_path)
-            push!(dicts, filter_preferences(prefs, pkg_name))
+            push!(dicts, filter_preferences(toml_path, prefs, pkg_names))
 
             # If we find `JuliaLocalPreferences.toml`, don't look for `LocalPreferences.toml`
             break
@@ -3766,6 +3765,48 @@ function get_projects_workspace_to_root(project_file)
     end
 end
 
+function build_uuid_name_map(envs::Vector{String})
+    uuid_map = Dict{UUID,Set{String}}()
+    name_map = Dict{String,UUID}()
+    disabled_names = Set{String}()
+    for env in envs
+        project_toml = env_project_file(env)
+        if !isa(project_toml, String)
+            continue
+        end
+
+        manifest_toml = project_file_manifest_path(project_toml)
+        if manifest_toml === nothing
+            continue
+        end
+        deps = get_deps(parsed_toml(manifest_toml))
+        for (name, entries) in deps
+            if name ∈ disabled_names
+                continue
+            end
+
+            uuid = UUID(only(entries)["uuid"])
+            # We keep the `name_map` just to ensure that our mapping of name -> uuid
+            # is unique, and therefore LocalPreferences.toml files are non-ambiguous
+            if get(name_map, name, uuid) != uuid
+                push!(disabled_names, name)
+                @warn("""
+                Two different UUIDs mapped to the same name in this environment!
+                Preferences are disabled for these packages due to this ambiguity.
+                """, name, uuid1=uuid, uuid2=name_map[name])
+                delete!(uuid_map, name_map[name])
+            else
+                if !haskey(uuid_map, uuid)
+                    uuid_map[uuid] = Set{String}()
+                end
+                push!(uuid_map[uuid], name)
+                name_map[name] = uuid
+            end
+        end
+    end
+    return uuid_map
+end
+
 function get_preferences(uuid::Union{UUID,Nothing} = nothing)
     merged_prefs = Dict{String,Any}()
     loadpath = load_path()
@@ -3775,6 +3816,11 @@ function get_preferences(uuid::Union{UUID,Nothing} = nothing)
         prepend!(projects_to_merge_prefs, get_projects_workspace_to_root(first(loadpath)))
     end
 
+    # Build a mapping of UUIDs to names across our entire load path.
+    # This allows us to look up the name(s) of a UUID for a LocalPreferences.jl
+    # file that may not even have the package added as a direct dependency.
+    uuid_name_map = build_uuid_name_map(projects_to_merge_prefs)
+
     for env in reverse(projects_to_merge_prefs)
         project_toml = env_project_file(env)
         if !isa(project_toml, String)
@@ -3782,7 +3828,7 @@ function get_preferences(uuid::Union{UUID,Nothing} = nothing)
         end
 
         # Collect all dictionaries from the current point in the load path, then merge them in
-        dicts = collect_preferences(project_toml, uuid)
+        dicts = collect_preferences(project_toml, uuid, uuid_name_map)
         merged_prefs = recursive_prefs_merge(merged_prefs, dicts...)
     end
     return merged_prefs
