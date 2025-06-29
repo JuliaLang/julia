@@ -587,8 +587,10 @@ macro kwdef(expr)
     end
 
     fieldnames = Any[]
+    fieldtypes = Any[]
     defvals = Any[]
-    extract_names_and_defvals_from_kwdef_fieldblock!(fieldsblock, fieldnames, defvals)
+    extract_names_types_and_defvals_from_kwdef_fieldblock!(fieldsblock, fieldnames, fieldtypes, defvals)
+    isconsistent = compare_types_vals(fieldtypes, defvals)
     parameters = map(fieldnames, defvals) do fieldname, defval
         if isnothing(defval)
             return fieldname
@@ -613,9 +615,30 @@ macro kwdef(expr)
             P = T.args[2:end]
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            body1 = Expr(:block, __source__, Expr(:call, esc(S), fieldnames...))
-            sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
-            def1 = Expr(:function, sig1, body1)
+            typecalls = map(Q) do para
+                for arg in fieldsblock.args
+                    isa(arg, Base.LineNumberNode) && continue
+                    isa(arg, Symbol) && continue
+                    if arg.head in (:const, :atomic)
+                        arg = arg.args[1]
+                        isa(arg, Symbol) && continue
+                    end
+                    fname, ftype = arg.args
+                    ftype === para && return :(typeof($fname))
+                end
+                return para
+            end
+            unused = [x for x in Q if x in typecalls]
+            def1 = if isempty(unused) && isconsistent
+                ST = :($S{$(typecalls...)})
+                body1 = Expr(:block, __source__, Expr(:call, esc(ST), fieldnames...))
+                sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
+                Expr(:function, sig1, body1)
+            else
+                body1 = Expr(:block, __source__, Expr(:call, esc(S), fieldnames...))
+                sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
+                Expr(:function, sig1, body1)
+            end
             body2 = Expr(:block, __source__, Expr(:call, esc(SQ), fieldnames...))
             sig2 = :($(Expr(:call, esc(SQ), Expr(:parameters, parameters...))) where {$(esc.(P)...)})
             def2 = Expr(:function, sig2, body2)
@@ -634,46 +657,55 @@ end
 
 # @kwdef helper function
 # mutates arguments inplace
-function extract_names_and_defvals_from_kwdef_fieldblock!(block, names, defvals)
+function extract_names_types_and_defvals_from_kwdef_fieldblock!(block, names, types, defvals)
     for (i, item) in pairs(block.args)
         if isexpr(item, :block)
-            extract_names_and_defvals_from_kwdef_fieldblock!(item, names, defvals)
+            extract_names_types_and_defvals_from_kwdef_fieldblock!(item, names, types, defvals)
         elseif item isa Expr && item.head in (:escape, :var"hygienic-scope")
             n = length(names)
-            extract_names_and_defvals_from_kwdef_fieldblock!(item, names, defvals)
+            extract_names_types_and_defvals_from_kwdef_fieldblock!(item, names, types, defvals)
             for j in n+1:length(defvals)
                 if !isnothing(defvals[j])
                     defvals[j] = Expr(item.head, defvals[j])
                 end
             end
         else
-            def, name, defval = @something(def_name_defval_from_kwdef_fielddef(item), continue)
+            def, name, type, defval = @something(def_name_type_defval_from_kwdef_fielddef(item), continue)
             block.args[i] = def
             push!(names, name)
+            push!(types, type)
             push!(defvals, defval)
         end
     end
 end
 
-function def_name_defval_from_kwdef_fielddef(kwdef)
+function def_name_type_defval_from_kwdef_fielddef(kwdef)
     if kwdef isa Symbol
-        return kwdef, kwdef, nothing
+        return kwdef, kwdef, Any, nothing
     elseif isexpr(kwdef, :(::))
-        name, _ = kwdef.args
-        return kwdef, Meta.unescape(name), nothing
+        name, type = kwdef.args
+        return kwdef, Meta.unescape(name), type, nothing
     elseif isexpr(kwdef, :(=))
         lhs, rhs = kwdef.args
-        def, name, _ = @something(def_name_defval_from_kwdef_fielddef(lhs), return nothing)
-        return def, name, rhs
+        def, name, type, _ = @something(def_name_type_defval_from_kwdef_fielddef(lhs), return nothing)
+        return def, name, type, rhs
     elseif kwdef isa Expr && kwdef.head in (:const, :atomic)
-        def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
-        return Expr(kwdef.head, def), name, defval
+        def, name, type, defval = @something(def_name_type_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
+        return Expr(kwdef.head, def), name, type, defval
     elseif kwdef isa Expr && kwdef.head in (:escape, :var"hygienic-scope")
-        def, name, defval = @something(def_name_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
-        return Expr(kwdef.head, def), name, isnothing(defval) ? defval : Expr(kwdef.head, defval)
+        def, name, type, defval = @something(def_name_type_defval_from_kwdef_fielddef(kwdef.args[1]), return nothing)
+        return Expr(kwdef.head, def), name, type, isnothing(defval) ? defval : Expr(kwdef.head, defval)
     end
 end
 
+function compare_types_vals(fieldtypes, defvals)
+    all(unique(fieldtypes)) do sym
+        idxs = findall(==(sym), fieldtypes)
+        isempty(idxs) && return false
+        deftypes = typeof.(defvals[idxs])
+        allequal(deftypes)
+    end
+end
 # testing
 
 """
