@@ -376,12 +376,10 @@ elsize(::Type{<:ReinterpretArray{T}}) where {T} = sizeof(T)
 cconvert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = cconvert(Ptr{S}, a.parent)
 unsafe_convert(::Type{Ptr{T}}, a::ReinterpretArray{T,N,S} where N) where {T,S} = Ptr{T}(unsafe_convert(Ptr{S},a.parent))
 
-@propagate_inbounds function getindex(a::NonReshapedReinterpretArray{T,0,S}) where {T,S}
-    if isprimitivetype(T) && isprimitivetype(S)
-        reinterpret(T, a.parent[])
-    else
-        a[firstindex(a)]
-    end
+@propagate_inbounds function getindex(a::ReinterpretArray{T,0,S,IsReshaped}) where {T,S,IsReshaped}
+    check_readable(a)
+    check_ptr_indexable(a) && return _getindex_ptr(a)
+    return reinterpret(T, a.parent[])
 end
 
 check_ptr_indexable(a::ReinterpretArray, sz = elsize(a)) = check_ptr_indexable(parent(a), sz)
@@ -390,8 +388,6 @@ check_ptr_indexable(a::FastContiguousSubArray, sz) = check_ptr_indexable(parent(
 check_ptr_indexable(a::Array, sz) = sizeof(eltype(a)) !== sz
 check_ptr_indexable(a::Memory, sz) = true
 check_ptr_indexable(a::AbstractArray, sz) = false
-
-@propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
 
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) && (check_ptr_indexable(a) || _isassigned_ra(a, inds...))
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::SCartesianIndex2) = isassigned(a.parent, inds.j)
@@ -533,15 +529,13 @@ end
     end
 end
 
-@propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
-    if isprimitivetype(S) && isprimitivetype(T)
-        a.parent[] = reinterpret(S, v)
-        return a
-    end
-    setindex!(a, v, firstindex(a))
+@propagate_inbounds function setindex!(a::ReinterpretArray{T,0,S}, v) where {T,S}
+    check_writable(a)
+    v = convert(T, v)::T
+    check_ptr_indexable(a) && return _setindex_ptr!(a, v)
+    a.parent[] = reinterpret(S, v)
+    return a
 end
-
-@propagate_inbounds setindex!(a::ReinterpretArray, v) = setindex!(a, v, firstindex(a))
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
