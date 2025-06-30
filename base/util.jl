@@ -621,7 +621,6 @@ macro kwdef(expr)
                     isa(arg, Base.LineNumberNode) && continue
                     isa(arg, String) && continue
                     isa(arg, Symbol) && continue
-                    arg.head === :function && (hasinnerconstructor = true)
                     if arg.head in (:const, :atomic)
                         arg = arg.args[1]
                         isa(arg, Symbol) && continue
