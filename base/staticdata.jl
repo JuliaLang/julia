@@ -281,6 +281,7 @@ end
 
 function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt)
     # verify that these edges intersect with the same methods as before
+    mi = nothing
     if n == 1
         # first, fast-path a check if the expected method simply dominates its sig anyways
         # so the result of ml_matches is already simply known
@@ -289,11 +290,18 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                 meth = t
             else
                 if t isa CodeInstance
-                    t = get_ci_mi(t)
+                    mi = get_ci_mi(t)::MethodInstance
                 else
-                    t = t::MethodInstance
+                    mi = t::MethodInstance
                 end
-                meth = t.def::Method
+                meth = mi.def::Method
+                if !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                    minworld = meth.primary_world
+                    @assert minworld ≤ world
+                    maxworld = typemax(UInt)
+                    result = Any[] # result is unused
+                    return minworld, maxworld, result
+                end
             end
             if !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
                 minworld = meth.primary_world
@@ -327,7 +335,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     meth = t
                 else
                     if t isa CodeInstance
-                        t = get_ci_mi(t)
+                        t = get_ci_mi(t)::MethodInstance
                     else
                         t = t::MethodInstance
                     end
@@ -353,6 +361,9 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         if maxworld[] ≠ typemax(UInt) && _jl_debug_method_invalidation[] !== nothing
             resize!(result, ins)
         end
+    end
+    if maxworld[] == typemax(UInt) && mi isa MethodInstance
+        ccall(:jl_promote_mi_to_current, Cvoid, (Any, UInt, UInt), mi, minworld[], world)
     end
     return minworld[], maxworld[], result
 end
