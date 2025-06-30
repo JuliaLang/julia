@@ -6,7 +6,7 @@
 using LazyArtifacts
 
 module JuliaConfig
-    include(joinpath(@__DIR__, "julia-config.jl"))
+    include(joinpath(@__DIR__, "..", "julia-config.jl"))
 end
 
 julia_cmd = `$(Base.julia_cmd()) --startup-file=no --history-file=no`
