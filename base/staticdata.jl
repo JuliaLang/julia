@@ -168,12 +168,15 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             end
             if edge isa MethodInstance
                 sig = edge.specTypes
-                min_valid2, max_valid2, matches = verify_call(sig, callees, j, 1, world)
+                min_valid2, max_valid2, matches = verify_call(sig, callees, j, 1, world, true)
                 j += 1
             elseif edge isa Int
                 sig = callees[j+1]
-                min_valid2, max_valid2, matches = verify_call(sig, callees, j+2, edge, world)
-                j += 2 + edge
+                # Handle negative counts (fully_covers=false)
+                nmatches = abs(edge)
+                fully_covers = edge > 0
+                min_valid2, max_valid2, matches = verify_call(sig, callees, j+2, nmatches, world, fully_covers)
+                j += 2 + nmatches
                 edge = sig
             elseif edge isa Core.Binding
                 j += 1
@@ -279,10 +282,10 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     return 0, minworld, maxworld
 end
 
-function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt)
+function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool)
     # verify that these edges intersect with the same methods as before
     mi = nothing
-    if n == 1
+    if n == 1 && fully_covers
         # first, fast-path a check if the expected method simply dominates its sig anyways
         # so the result of ml_matches is already simply known
         let t = expecteds[i], meth, minworld, maxworld, result
