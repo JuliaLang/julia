@@ -376,6 +376,8 @@ end
 const METHOD_SIG_LATEST_WHICH = 0x1
 # true indicates this method would be returned as the only result from `methods` when calling `method.sig` in the current latest world
 const METHOD_SIG_LATEST_ONLY = 0x2
+# true indicates there exists some other method that is not more specific than this one in the current latest world (which might be more fully covering)
+const METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC = 0x8
 
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt)
     @assert invokesig isa Type
