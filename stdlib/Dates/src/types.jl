@@ -417,6 +417,11 @@ function DateTime(dt::Date, t::Time)
     return DateTime(y, m, d, hour(t), minute(t), second(t), millisecond(t))
 end
 
+# explicit copy constructors
+# (to avoid the Fallbacks which attempt to convert single param to Int64)
+DateTime(dt::DateTime) = dt
+Date(d::Date) = d
+Time(t::Time) = t
 # Fallback constructors
 DateTime(y, m=1, d=1, h=0, mi=0, s=0, ms=0, ampm::AMPM=TWENTYFOURHOUR) = DateTime(Int64(y), Int64(m), Int64(d), Int64(h), Int64(mi), Int64(s), Int64(ms), ampm)
 Date(y, m=1, d=1) = Date(Int64(y), Int64(m), Int64(d))
