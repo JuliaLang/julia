@@ -1176,8 +1176,8 @@ function _growend!(a::Vector, delta::Integer)
     newmemlen = offset + newlen - 1
     if memlen < newmemlen
         @noinline _growend_internal!(a, delta, len)
-        setfield!(a, :size, (newlen,))
     end
+    setfield!(a, :size, (newlen,))
     return
 end
 
