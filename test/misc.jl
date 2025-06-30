@@ -1446,6 +1446,7 @@ end
 
 @kwdef mutable struct TestParametricType2{S}
     a = 1
+    "this field is nice"
     const b = 2
     @atomic(c::S) = 3
 end
