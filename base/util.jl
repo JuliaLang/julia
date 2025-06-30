@@ -615,12 +615,11 @@ macro kwdef(expr)
             P = T.args[2:end]
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
-            hasinnerconstructor = any(x->x isa Base.LineNumberNode || (x.head === :function), fieldsblock.args)
+            should_skip = x -> x isa Base.LineNumberNode || x isa String || x isa Symbol
+            hasinnerconstructor = any(x->!should_skip(x) && (x.head === :function), fieldsblock.args)
             typecalls = map(Q) do para
                 for arg in fieldsblock.args
-                    isa(arg, Base.LineNumberNode) && continue
-                    isa(arg, String) && continue
-                    isa(arg, Symbol) && continue
+                    should_skip(arg) && continue
                     if arg.head in (:const, :atomic)
                         arg = arg.args[1]
                         isa(arg, Symbol) && continue
