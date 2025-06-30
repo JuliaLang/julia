@@ -1,6 +1,6 @@
-### Code Formatting Guidelines
+# Code Formatting Guidelines
 
-#### General Formatting Guidelines for Julia code contributions
+## General Formatting Guidelines for Julia code contributions
 
  - Follow the latest dev version of [Julia Style Guide](https://docs.julialang.org/en/v1/manual/style-guide/).
  - use whitespace to make the code more readable
@@ -11,7 +11,7 @@
    Unicode equivalents whenever possible
  - in docstrings refer to the language as "Julia" and the executable as "`julia`"
 
-#### General Formatting Guidelines For C code contributions
+## General Formatting Guidelines For C code contributions
 
  - 4 spaces per indentation level, no tabs
  - space between `if` and `(` (`if (x) ...`)

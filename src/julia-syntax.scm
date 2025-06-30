@@ -3,11 +3,16 @@
 
 ;; pass 1: syntax desugaring
 
-;; allow (:: T) => (:: #gensym T) in formal argument lists
+;; unnamed or all-underscore arguments may still be read from internally, so
+;; convert (:: T) => (:: #gensym T) and _ => #gensym in formal argument lists
 (define (fill-missing-argname a unused)
-  (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
-      `(|::| ,(if unused UNUSED (gensy)) ,(cadr a))
-      a))
+  (define (replace-if-underscore u)
+    (if (underscore-symbol? u) (if unused UNUSED (gensy)) u))
+  (if (and (pair? a) (eq? (car a) '|::|))
+      (cond ((null? (cddr a))  `(|::| ,(if unused UNUSED (gensy)) ,(cadr a)))
+            ((null? (cdddr a)) `(|::| ,(replace-if-underscore (cadr a)) ,(caddr a)))
+            (else a))
+      (replace-if-underscore a)))
 (define (fix-arglist l (unused #t))
   (if (any vararg? (butlast l))
       (error "invalid \"...\" on non-final argument"))
@@ -165,10 +170,7 @@
 ;; GF method does not need to keep decl expressions on lambda args
 ;; except for rest arg
 (define (method-lambda-expr argl body rett)
-  (let ((argl (map (lambda (x)
-                     (let ((n (arg-name x)))
-                       (if (underscore-symbol? n) UNUSED n)))
-                   argl))
+  (let ((argl (map arg-name argl))
         (body (blockify body)))
     `(lambda ,argl ()
              (scope-block
@@ -374,7 +376,7 @@
                                    (append req opt vararg) rett)))))
    ;; no optional positional args
    (let* ((names (map car sparams))
-          (anames (map (lambda (x) (if (underscore-symbol? x) UNUSED x)) (llist-vars argl)))
+          (anames (llist-vars argl))
           (unused_anames (filter (lambda (x) (not (eq? x UNUSED))) anames))
           (ename (if (nodot-sym-ref? name) name
                     (if (overlay? name) (cadr name) `(null)))))

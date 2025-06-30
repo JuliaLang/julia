@@ -69,6 +69,9 @@ function invalidate_method_for_globalref!(gr::GlobalRef, method::Method, invalid
         src = _uncompressed_ir(method)
         invalidate_all = should_invalidate_code_for_globalref(gr, src)
     end
+    if invalidate_all && !Base.generating_output()
+        @atomic method.did_scan_source |= 0x4
+    end
     invalidated_any = false
     for mi in specializations(method)
         isdefined(mi, :cache) || continue
@@ -182,7 +185,7 @@ function binding_was_invalidated(b::Core.Binding)
     b.partitions.min_world > unsafe_load(cglobal(:jl_require_world, UInt))
 end
 
-function scan_new_method!(methods_with_invalidated_source::IdSet{Method}, method::Method, image_backedges_only::Bool)
+function scan_new_method!(method::Method, image_backedges_only::Bool)
     isdefined(method, :source) || return
     if image_backedges_only && !has_image_globalref(method)
         return
@@ -195,21 +198,20 @@ function scan_new_method!(methods_with_invalidated_source::IdSet{Method}, method
             # TODO: We could turn this into an addition if condition. For now, use it as a reasonably cheap
             # additional consistency check
             @assert !image_backedges_only
-            push!(methods_with_invalidated_source, method)
+            @atomic method.did_scan_source |= 0x4
         end
         maybe_add_binding_backedge!(b, method)
     end
+    @atomic method.did_scan_source |= 0x1
 end
 
-function scan_new_methods(extext_methods::Vector{Any}, internal_methods::Vector{Any}, image_backedges_only::Bool)
-    methods_with_invalidated_source = IdSet{Method}()
+function scan_new_methods!(extext_methods::Vector{Any}, internal_methods::Vector{Any}, image_backedges_only::Bool)
     for method in internal_methods
         if isa(method, Method)
-           scan_new_method!(methods_with_invalidated_source, method, image_backedges_only)
+           scan_new_method!(method, image_backedges_only)
         end
     end
     for tme::Core.TypeMapEntry in extext_methods
-        scan_new_method!(methods_with_invalidated_source, tme.func::Method, image_backedges_only)
+        scan_new_method!(tme.func::Method, image_backedges_only)
     end
-    return methods_with_invalidated_source
 end

@@ -327,6 +327,8 @@ jl_value_t *jl_get_cfunction_trampoline(
 JL_GCC_IGNORE_STOP
 
 struct cfuncdata_t {
+    _Atomic(void *) fptr;
+    _Atomic(size_t) last_world;
     jl_code_instance_t** plast_codeinst;
     jl_code_instance_t* last_codeinst;
     void *unspecialized;
@@ -358,7 +360,7 @@ static jl_mutex_t cfun_lock;
 // read theFptr
 // acquire jl_world_counter
 extern "C" JL_DLLEXPORT
-void *jl_get_abi_converter(jl_task_t *ct, _Atomic(void*) *fptr, _Atomic(size_t) *last_world, void *data)
+void *jl_get_abi_converter(jl_task_t *ct, void *data)
 {
     cfuncdata_t *cfuncdata = (cfuncdata_t*)data;
     jl_value_t *sigt = *cfuncdata->sigt;
@@ -373,8 +375,8 @@ void *jl_get_abi_converter(jl_task_t *ct, _Atomic(void*) *fptr, _Atomic(size_t) 
     // check first, while behind this lock, of the validity of the current contents of this cfunc thunk
     JL_LOCK(&cfun_lock);
     do {
-        size_t last_world_v = jl_atomic_load_relaxed(last_world);
-        void *f = jl_atomic_load_relaxed(fptr);
+        size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
+        void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
         jl_code_instance_t *last_ci = cfuncdata->plast_codeinst ? *cfuncdata->plast_codeinst : nullptr;
         world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
@@ -386,14 +388,14 @@ void *jl_get_abi_converter(jl_task_t *ct, _Atomic(void*) *fptr, _Atomic(size_t) 
         if (f != nullptr) {
             if (last_ci == nullptr) {
                 if (mi == nullptr) {
-                    jl_atomic_store_release(last_world, world);
+                    jl_atomic_store_release(&cfuncdata->last_world, world);
                     JL_UNLOCK(&cfun_lock);
                     return f;
                 }
             }
             else {
                 if (jl_get_ci_mi(last_ci) == mi && jl_atomic_load_relaxed(&last_ci->max_world) >= world) { // same dispatch and source
-                    jl_atomic_store_release(last_world, world);
+                    jl_atomic_store_release(&cfuncdata->last_world, world);
                     JL_UNLOCK(&cfun_lock);
                     return f;
                 }
@@ -401,59 +403,44 @@ void *jl_get_abi_converter(jl_task_t *ct, _Atomic(void*) *fptr, _Atomic(size_t) 
         }
         JL_UNLOCK(&cfun_lock);
         // next, try to figure out what the target should look like (outside of the lock since this is very slow)
-        codeinst = mi ? jl_type_infer(mi, world, SOURCE_MODE_ABI) : nullptr;
+        codeinst = mi ? jl_type_infer(mi, world, SOURCE_MODE_ABI, jl_options.trim) : nullptr;
         // relock for the remainder of the function
         JL_LOCK(&cfun_lock);
     } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart entirely, since jl_world_counter changed thus jl_get_specialization1 might have changed
     // double-check if the values were set on another thread
-    size_t last_world_v = jl_atomic_load_relaxed(last_world);
-    void *f = jl_atomic_load_relaxed(fptr);
+    size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
+    void *f = jl_atomic_load_relaxed(&cfuncdata->fptr);
     if (world == last_world_v) {
         JL_UNLOCK(&cfun_lock);
         return f; // another thread fixed this up while we were away
     }
-    auto assign_fptr = [fptr, last_world, cfuncdata, world, codeinst](void *f) {
+    auto assign_fptr = [cfuncdata, world, codeinst](void *f) {
         cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
         cfuncdata->last_codeinst = codeinst;
-        jl_atomic_store_relaxed(fptr, f);
-        jl_atomic_store_release(last_world, world);
+        jl_atomic_store_relaxed(&cfuncdata->fptr, f);
+        jl_atomic_store_release(&cfuncdata->last_world, world);
         JL_UNLOCK(&cfun_lock);
         return f;
     };
-    jl_callptr_t invoke = nullptr;
-    if (codeinst != NULL) {
-        jl_value_t *astrt = codeinst->rettype;
-        if (astrt != (jl_value_t*)jl_bottom_type &&
-            jl_type_intersection(astrt, declrt) == jl_bottom_type) {
-            // Do not warn if the function never returns since it is
-            // occasionally required by the C API (typically error callbacks)
-            // even though we're likely to encounter memory errors in that case
-            jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
-        }
-        uint8_t specsigflags;
-        jl_read_codeinst_invoke(codeinst, &specsigflags, &invoke, &f, 1);
-        if (invoke != nullptr) {
-            if (invoke == jl_fptr_const_return_addr) {
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, nullptr, false));
-            }
-            else if (invoke == jl_fptr_args_addr) {
-                assert(f);
-                if (!specsig && jl_subtype(astrt, declrt))
-                    return assign_fptr(f);
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, f, false));
-            }
-            else if (specsigflags & 0b1) {
-                assert(f);
-                if (specsig && jl_egal(mi->specTypes, sigt) && jl_egal(declrt, astrt))
-                    return assign_fptr(f);
-                return assign_fptr(jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, f, true));
-            }
-        }
+    bool is_opaque_closure = false;
+    jl_abi_t from_abi = { sigt, declrt, nargs, specsig, is_opaque_closure };
+    if (codeinst == nullptr) {
+        // Generate an adapter to a dynamic dispatch
+        if (cfuncdata->unspecialized == nullptr)
+            cfuncdata->unspecialized = jl_jit_abi_converter(ct, from_abi, nullptr);
+
+        return assign_fptr(cfuncdata->unspecialized);
     }
-    f = jl_jit_abi_converter(ct, cfuncdata->unspecialized, declrt, sigt, nargs, specsig, codeinst, invoke, nullptr, false);
-    if (codeinst == nullptr)
-        cfuncdata->unspecialized = f;
-    return assign_fptr(f);
+
+    jl_value_t *astrt = codeinst->rettype;
+    if (astrt != (jl_value_t*)jl_bottom_type &&
+        jl_type_intersection(astrt, declrt) == jl_bottom_type) {
+        // Do not warn if the function never returns since it is
+        // occasionally required by the C API (typically error callbacks)
+        // even though we're likely to encounter memory errors in that case
+        jl_printf(JL_STDERR, "WARNING: cfunction: return type of %s does not match\n", name_from_method_instance(mi));
+    }
+    return assign_fptr(jl_jit_abi_converter(ct, from_abi, codeinst));
 }
 
 void jl_init_runtime_ccall(void)

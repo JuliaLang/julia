@@ -2490,6 +2490,7 @@ end
 @test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
+@test string(Union{Array, Memory}) == "Union{Array, Memory}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"
@@ -2886,4 +2887,16 @@ end
     @test_repr """:(var"~!@#\$%^&*[]_+?" = 1)"""
     @test_repr """:(var"\a\b\t\n\v\f\r\e" = 1)"""
     @test_repr """:(var"\x01\u03c0\U03c0" = 1)"""
+end
+
+# test `print_signature_only::Bool` argument of `Base.show_method`
+f_show_method(x::T) where T<:Integer = :integer
+let m = only(methods(f_show_method))
+    let io = IOBuffer()
+        Base.show_method(io, m; print_signature_only=true)
+        @test "f_show_method(x::T) where T<:Integer" == String(take!(io))
+    end
+    let s = sprint(show, m; context=:print_method_signature_only=>true)
+        @test "f_show_method(x::T) where T<:Integer" == s
+    end
 end

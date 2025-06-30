@@ -867,20 +867,30 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             assert(!jl_object_in_image((jl_value_t*)tn->module));
             assert(!jl_object_in_image((jl_value_t*)tn->wrapper));
         }
+    }
+    if (jl_is_mtable(v)) {
+        jl_methtable_t *mt = (jl_methtable_t*)v;
         // Any back-edges will be re-validated and added by staticdata.jl, so
         // drop them from the image here
         if (s->incremental || jl_options.trim || jl_options.strip_ir) {
-            record_field_change((jl_value_t**)&tn->backedges, NULL);
+            record_field_change((jl_value_t**)&mt->backedges, jl_an_empty_memory_any);
         }
         else {
             // don't recurse into all backedges memory (yet)
-            jl_value_t *backedges = get_replaceable_field((jl_value_t**)&tn->backedges, 1);
-            if (backedges) {
-                jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
-                for (size_t i = 0, n = jl_array_nrows(backedges); i < n; i += 2) {
-                    jl_value_t *t = jl_array_ptr_ref(backedges, i);
-                    assert(!jl_is_code_instance(t));
-                    jl_queue_for_serialization(s, t);
+            jl_value_t *allbackedges = get_replaceable_field((jl_value_t**)&mt->backedges, 1);
+            jl_queue_for_serialization_(s, allbackedges, 0, 1);
+            for (size_t i = 0, n = ((jl_genericmemory_t*)allbackedges)->length; i < n; i += 2) {
+                jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
+                jl_queue_for_serialization(s, tn);
+                jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i + 1);
+                if (backedges && backedges != jl_nothing) {
+                    jl_queue_for_serialization_(s, (jl_value_t*)((jl_array_t*)backedges)->ref.mem, 0, 1);
+                    jl_queue_for_serialization(s, backedges);
+                    for (size_t i = 0, n = jl_array_nrows(backedges); i < n; i += 2) {
+                        jl_value_t *t = jl_array_ptr_ref(backedges, i);
+                        assert(!jl_is_code_instance(t));
+                        jl_queue_for_serialization(s, t);
+                    }
                 }
             }
         }
@@ -901,30 +911,36 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             }
         }
         jl_value_t *inferred = jl_atomic_load_relaxed(&ci->inferred);
-        if (inferred && inferred != jl_nothing) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
+        if (inferred && inferred != jl_nothing && !jl_is_uint8(inferred)) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
             jl_method_t *def = mi->def.method;
             if (jl_is_method(def)) { // don't delete toplevel code
                 int is_relocatable = !s->incremental || jl_is_code_info(inferred) ||
                     (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
+                int discard = 0;
                 if (!is_relocatable) {
-                    inferred = jl_nothing;
+                    discard = 1;
                 }
                 else if (def->source == NULL) {
                     // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
                 }
                 else if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
                     jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
-                    inferred = jl_nothing;
+                    discard = 1;
                 }
                 else if (native_functions && // don't delete any code if making a ji file
                          (ci->owner == jl_nothing) && // don't delete code for external interpreters
                          !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
                          jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
                     // delete the code now: if we thought it was worth keeping, it would have been converted to object code
-                    inferred = jl_nothing;
+                    discard = 1;
                 }
-                if (inferred == jl_nothing) {
-                    record_field_change((jl_value_t**)&ci->inferred, jl_nothing);
+                if (discard) {
+                    // keep only the inlining cost, so inference can later decide if it is worth getting the source back
+                    if (jl_is_string(inferred) || jl_is_code_info(inferred))
+                        inferred = jl_box_uint8(jl_encode_inlining_cost(jl_ir_inlining_cost(inferred)));
+                    else
+                        inferred = jl_nothing;
+                    record_field_change((jl_value_t**)&ci->inferred, inferred);
                 }
                 else if (s->incremental && jl_is_string(inferred)) {
                     // New roots for external methods
@@ -2573,8 +2589,6 @@ static void jl_prune_mi_backedges(jl_array_t *backedges)
 
 static void jl_prune_tn_backedges(jl_array_t *backedges)
 {
-    if (backedges == NULL)
-        return;
     size_t i = 0, ins = 0, n = jl_array_nrows(backedges);
     for (i = 1; i < n; i += 2) {
         jl_value_t *ci = jl_array_ptr_ref(backedges, i);
@@ -2586,6 +2600,15 @@ static void jl_prune_tn_backedges(jl_array_t *backedges)
     jl_array_del_end(backedges, n - ins);
 }
 
+static void jl_prune_mt_backedges(jl_genericmemory_t *allbackedges)
+{
+    for (size_t i = 0, n = allbackedges->length; i < n; i += 2) {
+        jl_value_t *tn = jl_genericmemory_ptr_ref(allbackedges, i);
+        jl_value_t *backedges = jl_genericmemory_ptr_ref(allbackedges, i + 1);
+        if (tn && tn != jl_nothing && backedges)
+            jl_prune_tn_backedges((jl_array_t*)backedges);
+    }
+}
 
 static void jl_prune_binding_backedges(jl_array_t *backedges)
 {
@@ -2687,7 +2710,7 @@ static void strip_specializations_(jl_method_instance_t *mi)
     jl_code_instance_t *codeinst = jl_atomic_load_relaxed(&mi->cache);
     while (codeinst) {
         jl_value_t *inferred = jl_atomic_load_relaxed(&codeinst->inferred);
-        if (inferred && inferred != jl_nothing) {
+        if (inferred && inferred != jl_nothing && !jl_is_uint8(inferred)) {
             if (jl_options.strip_ir) {
                 record_field_change((jl_value_t**)&codeinst->inferred, jl_nothing);
             }
@@ -3240,8 +3263,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                     jl_prune_type_cache_hash(jl_atomic_load_relaxed(&tn->cache)));
                 jl_gc_wb(tn, jl_atomic_load_relaxed(&tn->cache));
                 jl_prune_type_cache_linear(jl_atomic_load_relaxed(&tn->linearcache));
-                jl_value_t *backedges = get_replaceable_field((jl_value_t**)&tn->backedges, 1);
-                jl_prune_tn_backedges((jl_array_t*)backedges);
             }
             else if (jl_is_method_instance(v)) {
                 jl_method_instance_t *mi = (jl_method_instance_t*)v;
@@ -3252,6 +3273,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
                 jl_binding_t *b = (jl_binding_t*)v;
                 jl_value_t *backedges = get_replaceable_field((jl_value_t**)&b->backedges, 1);
                 jl_prune_binding_backedges((jl_array_t*)backedges);
+            }
+            else if (jl_is_mtable(v)) {
+                jl_methtable_t *mt = (jl_methtable_t*)v;
+                jl_value_t *backedges = get_replaceable_field((jl_value_t**)&mt->backedges, 1);
+                jl_prune_mt_backedges((jl_genericmemory_t*)backedges);
             }
         }
     }

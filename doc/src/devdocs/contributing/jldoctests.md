@@ -5,8 +5,17 @@ This page describes how to write and maintain `jldoctest` blocks in the document
 ## Filters
 
 Use `filter =` whenever output contains text that might vary across runs.
-The documentation relies on several recurring patterns:
+The following are common situations where this may happen:
 
+- The output contains arrays with undefined memory (e.g. from `undef` or `similar`)
+- The output contains random numbers
+- The output contains timing information
+- The output contains file system paths
+
+
+### Common filter sequences
+
+The documentation relies on several recurring patterns:
 - `r"int.jl:\\d+"` — remove line numbers from introspection macros.
 - `r"Stacktrace:(\\n \\[0-9]+\\].*)*"` — hide stack traces when illustrating
   errors.
@@ -28,6 +37,12 @@ The documentation relies on several recurring patterns:
 If none of these match your situation, craft a regular expression that
 removes the varying text. Using filters keeps doctests stable across
 platforms and Julia versions.
+
+!!! note "Double escaping in docstrings"
+    When writing regex filters inside docstrings, remember to double escape
+    backslashes. For example, use `r"[\\d\\.]+"` instead of `r"[\d\.]+"`.
+    This is necessary because the docstring itself processes escape sequences
+    before the regex is created.
 
 ## Setup code
 
@@ -53,6 +68,17 @@ and disable it afterwards with
 ````
 ```@meta
 DocTestSetup = nothing
+```
+````
+
+### Teardown code
+
+If you need teardown code (e.g. to delete created temporary files or to reset
+the current directory), you can use the `teardown =` option:
+
+````
+```jldoctest; setup = :(oldpath = pwd(); cd(mktempdir())), teardown = :(cd(oldpath))
+...
 ```
 ````
 

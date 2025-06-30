@@ -14,7 +14,7 @@ using ..Compiler:
      argextype, empty!, error, get, get_ci_mi, get_world_counter, getindex, getproperty,
      hasintersect, haskey, in, isdispatchelem, isempty, isexpr, iterate, length, map!, max,
      pop!, popfirst!, push!, pushfirst!, reinterpret, reverse!, reverse, setindex!,
-     setproperty!, similar, singleton_type, sptypes_from_meth_instance,
+     setproperty!, similar, singleton_type, sptypes_from_meth_instance, sp_type_rewrap,
      unsafe_pointer_to_objref, widenconst, isconcretetype,
      # misc
      @nospecialize, @assert, C_NULL
@@ -256,9 +256,27 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
                 warn = true # downgrade must-throw calls to be only a warning
             end
         elseif isexpr(stmt, :cfunction)
+            length(stmt.args) != 5 && continue # required by IR legality
+            (pointer_type, f, rt, at, call_type) = stmt.args
+
+            at isa SimpleVector || continue  # required by IR legality
+            ft = argextype(f, codeinfo, sptypes)
+            argtypes = Any[ft]
+            for i = 1:length(at)
+                push!(argtypes, sp_type_rewrap(at[i], get_ci_mi(codeinst), #= isreturn =# false))
+            end
+            atype = argtypes_to_type(argtypes)
+
+            mi = compileable_specialization_for_call(interp, atype)
+            if mi !== nothing
+                # n.b.: Codegen may choose unpredictably to emit this `@cfunction` as a dynamic invoke or a full
+                # dynamic call, but in either case it guarantees that the required adapter(s) are emitted. All
+                # that we are required to verify here is that the callee CodeInstance is covered.
+                ci = get(caches, mi, nothing)
+                ci isa CodeInstance && continue
+            end
+
             error = "unresolved cfunction"
-            #TODO: parse the cfunction expression to check the target is defined
-            warn = true
         elseif isexpr(stmt, :foreigncall)
             foreigncall = stmt.args[1]
             if foreigncall isa QuoteNode

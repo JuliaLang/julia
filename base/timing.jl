@@ -495,7 +495,7 @@ function is_simply_call(@nospecialize ex)
     for a in ex.args
         a isa QuoteNode && continue
         a isa Symbol && continue
-        Base.is_self_quoting(a) && continue
+        isa_ast_node(a) || continue
         return false
     end
     return true

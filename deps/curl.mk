@@ -31,7 +31,7 @@ $(SRCCACHE)/curl-$(CURL_VER).tar.bz2: | $(SRCCACHE)
 
 $(SRCCACHE)/curl-$(CURL_VER)/source-extracted: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2
 	$(JLCHECKSUM) $<
-	cd $(dir $<) && $(TAR) jxf $(notdir $<)
+	cd $(dir $<) && $(TAR) -jxf $(notdir $<)
 	echo 1 > $@
 
 checksum-curl: $(SRCCACHE)/curl-$(CURL_VER).tar.bz2

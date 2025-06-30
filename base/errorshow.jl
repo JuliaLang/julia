@@ -327,13 +327,33 @@ function showerror(io::IO, ex::MethodError)
     if ft <: AbstractArray
         print(io, "\nIn case you're trying to index into the array, use square brackets [] instead of parentheses ().")
     end
-    # Check for local functions that shadow methods in Base
-    let name = ft.name.singletonname
-        if f_is_function && isdefined(Base, name)
-            basef = getfield(Base, name)
-            if basef !== f && hasmethod(basef, arg_types)
-                print(io, "\nYou may have intended to import ")
-                show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
+    # Check for functions with the same name in other modules
+    if f_is_function && ex.world != typemax(UInt)
+        let name = ft.name.singletonname
+            modules_to_check = Set{Module}()
+            push!(modules_to_check, Base)
+            for T in san_arg_types_param
+                modulesof!(modules_to_check, T)
+            end
+
+            # Check all modules (sorted for consistency)
+            sorted_modules = sort!(collect(modules_to_check), by=nameof)
+            for mod in sorted_modules
+                if isdefinedglobal(mod, name)
+                    candidate = getglobal(mod, name)
+                    if candidate !== f && hasmethod(candidate, arg_types; world=ex.world)
+                        if mod === Base
+                            print(io, "\nYou may have intended to import ")
+                            show_unquoted(io, Expr(:., :Base, QuoteNode(name)))
+                        else
+                            print(io, "\nThe definition in ")
+                            show_unquoted(io, mod)
+                            print(io, " may have intended to extend ")
+                            f_module = parentmodule(ft)
+                            show_unquoted(io, Expr(:., f_module, QuoteNode(name)))
+                        end
+                    end
+                end
             end
         end
     end
@@ -382,7 +402,7 @@ end
 
 function showerror(io::IO, exc::FieldError)
     @nospecialize
-    print(io, "FieldError: type $(exc.type |> nameof) has no field `$(exc.field)`")
+    print(io, "FieldError: type $(exc.type.name.wrapper) has no field `$(exc.field)`")
     Base.Experimental.show_error_hints(io, exc)
 end
 
@@ -1127,7 +1147,7 @@ Experimental.register_error_hint(fielderror_dict_hint_handler, FieldError)
 function fielderror_listfields_hint_handler(io, exc)
     fields = fieldnames(exc.type)
     if isempty(fields)
-        print(io, "; $(nameof(exc.type)) has no fields at all.")
+        print(io, "; $(exc.type.name.wrapper) has no fields at all.")
     else
         print(io, ", available fields: $(join(map(k -> "`$k`", fields), ", "))")
     end
