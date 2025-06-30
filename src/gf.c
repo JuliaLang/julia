@@ -2140,12 +2140,6 @@ static int jl_type_intersection2(jl_value_t *t1, jl_value_t *t2, jl_value_t **is
 }
 
 
-enum morespec_options {
-    morespec_unknown,
-    morespec_isnot,
-    morespec_is
-};
-
 // check if `type` is replacing `m` with an ambiguity here, given other methods in `d` that already match it
 static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_t *const *d, size_t n, jl_value_t *isect, jl_value_t *isect2, char *morespec)
 {
@@ -2155,9 +2149,7 @@ static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_
         // see if m2 also fully covered this intersection
         if (m == m2 || !(jl_subtype(isect, m2->sig) || (isect2 && jl_subtype(isect2, m2->sig))))
             continue;
-        if (morespec[k] == (char)morespec_unknown)
-            morespec[k] = (char)(jl_type_morespecific(m2->sig, type) ? morespec_is : morespec_isnot);
-        if (morespec[k] == (char)morespec_is)
+        if (morespec[k])
             // not actually shadowing this--m2 will still be better
             return 0;
         // if type is not more specific than m (thus now dominating it)
@@ -2165,7 +2157,7 @@ static int is_replacing(char ambig, jl_value_t *type, jl_method_t *m, jl_method_
         // since m2 was also a previous match over isect,
         // see if m was previously dominant over all m2
         // or if this was already ambiguous before
-        if (ambig == morespec_is && !jl_type_morespecific(m->sig, m2->sig)) {
+        if (ambig && !jl_type_morespecific(m->sig, m2->sig)) {
             // m and m2 were previously ambiguous over the full intersection of mi with type, and will still be ambiguous with addition of type
             return 0;
         }
@@ -2659,17 +2651,27 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, max_world);
 
     int invalidated = 0;
-    int only = !(jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_PRECOMPILE_MANY); // will compute if this will be currently the only result that would returned from `ml_matches` given `sig`
+    int dispatch_bits = METHOD_SIG_LATEST_WHICH; // Always set LATEST_WHICH
+    // Check precompiled dispatch status bits
+    int precompiled_status = jl_atomic_load_relaxed(&method->dispatch_status);
+    if (!(precompiled_status & METHOD_SIG_PRECOMPILE_MANY))
+        dispatch_bits |= METHOD_SIG_LATEST_ONLY; // Tentatively set, will be cleared if not applicable
+    if (precompiled_status & METHOD_SIG_PRECOMPILE_HAS_NOTMORESPECIFIC)
+        dispatch_bits |= METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC;
     if (replaced) {
         oldvalue = (jl_value_t*)replaced;
         jl_method_t *m = replaced->func.method;
         invalidated = 1;
         method_overwrite(newentry, m);
-        // this is an optimized version of below, given we know the type-intersection is exact
+        // This is an optimized version of below, given we know the type-intersection is exact
         jl_method_table_invalidate(m, max_world);
         int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
-        jl_atomic_store_relaxed(&m->dispatch_status, 0);
-        only = m_dispatch & METHOD_SIG_LATEST_ONLY;
+        // Clear METHOD_SIG_LATEST_ONLY and METHOD_SIG_LATEST_WHICH bits, only keeping NOTMORESPECIFIC
+        jl_atomic_store_relaxed(&m->dispatch_status, m_dispatch & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC);
+        // Edge case: don't set dispatch_bits |= METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC unconditionally since `m` is not an visible method for invalidations
+        dispatch_bits |= (m_dispatch & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC);
+        if (!(m_dispatch & METHOD_SIG_LATEST_ONLY))
+            dispatch_bits &= ~METHOD_SIG_LATEST_ONLY;
     }
     else {
         jl_method_t *const *d;
@@ -2685,13 +2687,28 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
 
             oldmi = jl_alloc_vec_any(0);
             char *morespec = (char*)alloca(n);
-            memset(morespec, morespec_unknown, n);
+            // Compute all morespec values upfront
+            for (j = 0; j < n; j++)
+                morespec[j] = (char)jl_type_morespecific(d[j]->sig, type);
             for (j = 0; j < n; j++) {
                 jl_method_t *m = d[j];
-                if (morespec[j] == (char)morespec_is) {
-                    only = 0;
-                    continue;
+                // Compute ambig state: is there an ambiguity between new method and old m?
+                char ambig = !morespec[j] && !jl_type_morespecific(type, m->sig);
+                // Compute updates to the dispatch state bits
+                int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
+                if (morespec[j] || ambig) {
+                    // !morespecific(new, old)
+                    dispatch_bits &= ~METHOD_SIG_LATEST_ONLY;
+                    m_dispatch |= METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC;
                 }
+                if (!morespec[j]) {
+                    // !morespecific(old, new)
+                    dispatch_bits |= METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC;
+                    m_dispatch &= ~METHOD_SIG_LATEST_ONLY;
+                }
+                jl_atomic_store_relaxed(&m->dispatch_status, m_dispatch);
+                if (morespec[j])
+                    continue;
                 loctag = jl_atomic_load_relaxed(&m->specializations); // use loctag for a gcroot
                 _Atomic(jl_method_instance_t*) *data;
                 size_t l;
@@ -2703,27 +2720,19 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     data = (_Atomic(jl_method_instance_t*)*) &loctag;
                     l = 1;
                 }
-                enum morespec_options ambig = morespec_unknown;
                 for (size_t i = 0; i < l; i++) {
                     jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
                     if ((jl_value_t*)mi == jl_nothing)
                         continue;
                     isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
                     if (jl_type_intersection2(type, isect3, &isect, &isect2)) {
+                        // Replacing a method--see if this really was the selected method previously
+                        // over the intersection (not ambiguous) and the new method will be selected now (morespec_is).
                         // TODO: this only checks pair-wise for ambiguities, but the ambiguities could arise from the interaction of multiple methods
                         // and thus might miss a case where we introduce an ambiguity between two existing methods
                         // We could instead work to sort this into 3 groups `morespecific .. ambiguous .. lesspecific`, with `type` in ambiguous,
                         // such that everything in `morespecific` dominates everything in `ambiguous`, and everything in `ambiguous` dominates everything in `lessspecific`
                         // And then compute where each isect falls, and whether it changed group--necessitating invalidation--or not.
-                        if (morespec[j] == (char)morespec_unknown)
-                            morespec[j] = (char)(jl_type_morespecific(m->sig, type) ? morespec_is : morespec_isnot);
-                        if (morespec[j] == (char)morespec_is)
-                            // not actually shadowing--the existing method is still better
-                            break;
-                        if (ambig == morespec_unknown)
-                            ambig = jl_type_morespecific(type, m->sig) ? morespec_isnot : morespec_is;
-                        // replacing a method--see if this really was the selected method previously
-                        // over the intersection (not ambiguous) and the new method will be selected now (morespec_is)
                         int replaced_dispatch = is_replacing(ambig, type, m, d, n, isect, isect2, morespec);
                         // found that this specialization dispatch got replaced by m
                         // call invalidate_backedges(mi, max_world, "jl_method_table_insert");
@@ -2738,20 +2747,6 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                             jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
                         }
                         invalidated |= invalidatedmi;
-                    }
-                }
-                // now compute and store updates to METHOD_SIG_LATEST_ONLY
-                int m_dispatch = jl_atomic_load_relaxed(&m->dispatch_status);
-                if (m_dispatch & METHOD_SIG_LATEST_ONLY) {
-                    if (morespec[j] == (char)morespec_unknown)
-                        morespec[j] = (char)(jl_type_morespecific(m->sig, type) ? morespec_is : morespec_isnot);
-                    if (morespec[j] == (char)morespec_isnot)
-                        jl_atomic_store_relaxed(&m->dispatch_status, ~METHOD_SIG_LATEST_ONLY & m_dispatch);
-                }
-                if (only) {
-                    if (morespec[j] == (char)morespec_is || ambig == morespec_is ||
-                        (ambig == morespec_unknown && !jl_type_morespecific(type, m->sig))) {
-                        only = 0;
                     }
                 }
             }
@@ -2802,7 +2797,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
     }
     jl_atomic_store_relaxed(&newentry->max_world, ~(size_t)0);
-    jl_atomic_store_relaxed(&method->dispatch_status, METHOD_SIG_LATEST_WHICH | (only ? METHOD_SIG_LATEST_ONLY : 0)); // TODO: this should be sequenced fully after the world counter store
+    jl_atomic_store_relaxed(&method->dispatch_status, dispatch_bits); // TODO: this should be sequenced fully after the world counter store
     JL_GC_POP();
 }
 
