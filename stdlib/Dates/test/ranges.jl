@@ -534,43 +534,54 @@ let d = Dates.Day(1)
     @test (Dates.Date(2000):d:Dates.Date(2001)) - d == (Dates.Date(2000) - d:d:Dates.Date(2001) - d)
 end
 
-# Time ranges
-dr  = Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(23, 2, 1)
-dr1 = Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(23, 1, 1)
-dr2 = Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(22, 2, 1) # empty range
-dr3 = Dates.Time(23, 1, 1):Dates.Minute(-1):Dates.Time(22, 1, 1) # negative step
-dr4 = range(Dates.Time(0), step=Dates.Hour(1), length=23) # by step, length
+# small Time ranges
+small_ranges_with = Any[
+    Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(23, 2, 1),
+    Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(23, 1, 1),
+    Dates.Time(23, 1, 1):Dates.Minute(-1):Dates.Time(22, 1, 1) # negative step
+]
+empty_range = Dates.Time(23, 1, 1):Dates.Second(1):Dates.Time(22, 2, 1)
+small_ranges_without = Any[
+    empty_range,
+    range(Dates.Time(0), step=Dates.Hour(1), length=23) # by step, length
+]
+small_ranges = Any[small_ranges_with; small_ranges_without]
 
-# Big ranges
-dr8 = typemin(Dates.Time):Dates.Second(1):typemax(Dates.Time)
-dr9 = typemin(Dates.Time):Dates.Nanosecond(1):typemax(Dates.Time)
-# Other steps
-dr10 = typemax(Dates.Time):Dates.Microsecond(-1):typemin(Dates.Time)
-dr11 = typemin(Dates.Time):Dates.Millisecond(1):typemax(Dates.Time)
-dr12 = typemin(Dates.Time):Dates.Minute(1):typemax(Dates.Time)
-dr13 = typemin(Dates.Time):Dates.Hour(1):typemax(Dates.Time)
-dr14 = typemin(Dates.Time):Dates.Millisecond(10):typemax(Dates.Time)
-dr15 = typemin(Dates.Time):Dates.Minute(100):typemax(Dates.Time)
-dr16 = typemin(Dates.Time):Dates.Hour(1000):typemax(Dates.Time)
-dr17 = typemax(Dates.Time):Dates.Millisecond(-10000):typemin(Dates.Time)
-dr18 = typemax(Dates.Time):Dates.Minute(-100):typemin(Dates.Time)
-dr19 = typemax(Dates.Time):Dates.Hour(-10):typemin(Dates.Time)
-dr20 = typemin(Dates.Time):Dates.Microsecond(2):typemax(Dates.Time)
+# Big ranges of various steps, increasing and decreasing
+big_ranges = Any[
+              [typemin(Dates.Time):step:typemax(Dates.Time) for step in [
+                    Dates.Second(1)
+                    Dates.Nanosecond(1)
+                    Dates.Microsecond(2)
+                    Dates.Millisecond(1)
+                    Dates.Minute(1)
+                    Dates.Hour(1)
+                    Dates.Millisecond(10)
+                    Dates.Minute(100)
+                    Dates.Hour(1000)
+                   ]]
+              [typemax(Dates.Time):step:typemin(Dates.Time) for step in [
+                    Dates.Microsecond(-1)
+                    Dates.Millisecond(-10000)
+                    Dates.Minute(-100)
+                    Dates.Hour(-10)
+                   ]]
+             ]
 
-drs = Any[dr, dr1, dr2, dr3, dr4, dr8, dr9, dr10,
-          dr11, dr12, dr13, dr14, dr15, dr16, dr17, dr18, dr19, dr20]
+
+drs = Any[small_ranges; big_ranges]
 
 @test map(length, drs) == map(x->size(x)[1], drs)
-@test all(x->findall(in(x), x) == [1:length(x);], drs[1:4])
-@test isempty(dr2)
+@test all(x->findall(in(x), x) == [1:length(x);], small_ranges)
+@test isempty(empty_range)
 @test all(x->reverse(x) == last(x): - step(x):first(x), drs)
-@test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), drs[4:end])
-@test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)), drs[4:end])
-@test_throws MethodError dr .+ 1
+@test all(x->minimum(x) == (step(x) < zero(step(x)) ? last(x) : first(x)), big_ranges)
+@test all(x->maximum(x) == (step(x) < zero(step(x)) ? first(x) : last(x)), big_ranges)
+@test_throws MethodError drs[1] .+ 1
 
 a = Dates.Time(23, 1, 1)
-@test map(x->a in x, drs[1:4]) == [true, true, false, true]
-@test a in dr
+@test all(x->a in x, small_ranges_with)
+@test all(x->!(a in x), small_ranges_without)
 
 @test all(x->sort(x) == (step(x) < zero(step(x)) ? reverse(x) : x), drs)
 @test all(x->step(x) < zero(step(x)) ? issorted(reverse(x)) : issorted(x), drs)
@@ -612,5 +623,12 @@ end
     dmin = epoch + Day(typemin(fieldtype(Day, :value)))
     @test_throws OverflowError StepRange(dmin, Day(1), dmax)
 end
+
+@testset "StepRangeLen{Time} periodicity, indexing" begin
+    r = range(Time(0), step = Hour(9), length = 5)
+    @test length(r) == 5
+    @test r[begin:end] == [Time(0), Time(9), Time(18), Time(3), Time(12)]
+end
+
 
 end  # RangesTest module
