@@ -221,7 +221,7 @@ let mod = Base.include(Main, ARGS[1])
     #entrypoint(join, (Base.GenericIOBuffer{Memory{UInt8}}, Array{String, 1}, Char))
     entrypoint(Base.task_done_hook, (Task,))
     entrypoint(Base.wait, ())
-    entrypoint(Base.wait_forever, ())
+    entrypoint(Base.poptask, (Base.StickyWorkqueue,))
     entrypoint(Base.trypoptask, (Base.StickyWorkqueue,))
     entrypoint(Base.checktaskempty, ())
     if ARGS[3] == "true"
