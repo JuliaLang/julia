@@ -2318,8 +2318,9 @@ end
     v[1] = v
     m[1] = m
 
-    @test v == v == v[1]
-    @test m == m == m[1]
+    # TODO: unclear how this (and `hash`) can work without tracking the objectid of each element
+    @test_broken (v == v == v[1])
+    @test_broken (m == m == m[1])
 
     io = IOBuffer()
     show(io, v)

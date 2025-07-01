@@ -3029,9 +3029,6 @@ Return `true` when `A` is less than `B` in lexicographic order.
 isless(A::AbstractVector, B::AbstractVector) = cmp(A, B) < 0
 
 function (==)(A::AbstractArray, B::AbstractArray)
-    if A === B
-        return true
-    end
     if axes(A) != axes(B)
         return false
     end
