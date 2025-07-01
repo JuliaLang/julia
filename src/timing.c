@@ -6,7 +6,7 @@
 #include "options.h"
 #include "stdio.h"
 
-#if defined(USE_TRACY) || defined(USE_ITTAPI) || defined(USE_NVTX)
+#if defined(USE_TRACY) || defined(USE_ITTAPI) || defined(USE_NVTX) || defined(USE_APPLE_OSLOG)
 #define DISABLE_FREQUENT_EVENTS
 #endif
 
@@ -255,6 +255,45 @@ static __itt_event _jl_timing_ittapi_event_create(const char *event) {
 
 #endif // USE_ITTAPI
 
+#ifdef USE_APPLE_OSLOG
+
+void _jl_os_log_signpost_print(jl_timing_block_t* block, const char *message) {
+    if (!os_signpost_enabled(block->event->os_log_event.log)) {
+        return;
+    }
+    uint8_t _Alignas(16) buffer[12];
+    buffer[0] = 2;  // HasNonScalarItems
+    buffer[1] = 1; // ItemCount
+    buffer[2] = 0x22; // StringKind + Public
+    buffer[3] = 8; // length
+    memcpy(&buffer[4], &message, 8); // Copy the pointer into the buffer
+    _os_signpost_emit_with_name_impl(&__dso_handle, block->event->os_log_event.log, OS_SIGNPOST_EVENT,
+        block->signpost_id, (block)->event->os_log_event.name, "%s", buffer, sizeof(buffer) );
+}
+
+void _jl_os_signpost_start(jl_timing_block_t* block) {
+    if (!os_signpost_enabled(block->event->os_log_event.log)) {
+        return;
+    }
+    uint8_t _Alignas(16) buffer[64];
+    buffer[0] = 0;
+    block->signpost_id = os_signpost_id_make_with_pointer((block)->event->os_log_event.log, (void *)(block));
+    _os_signpost_emit_with_name_impl(&__dso_handle, block->event->os_log_event.log, OS_SIGNPOST_INTERVAL_BEGIN,
+        block->signpost_id, (block)->event->os_log_event.name,"", buffer, sizeof(buffer));
+}
+
+void _jl_os_signpost_stop(jl_timing_block_t * block) {
+    if (!os_signpost_enabled(block->event->os_log_event.log)) {
+        return;
+    }
+    uint8_t _Alignas(16) buffer[64];
+    buffer[0] = 0;
+
+    _os_signpost_emit_with_name_impl(&__dso_handle, block->event->os_log_event.log, OS_SIGNPOST_INTERVAL_END,
+        block->signpost_id, (block)->event->os_log_event.name,"", buffer, sizeof(buffer));
+}
+#endif
+
 #ifdef USE_TIMING_COUNTS
 
 // This function is analogous to __itt_event_create but for the counts backend
@@ -365,6 +404,10 @@ JL_DLLEXPORT jl_timing_event_t *_jl_timing_event_create(const char *subsystem, c
     event->tracy_srcloc.color = color;
 #endif // USE_TRACY
 
+#ifdef USE_APPLE_OSLOG
+    event->os_log_event.log = os_log_create("julia", subsystem);
+    event->os_log_event.name = name;
+#endif // USE_APPLE_OSLOG
     return event;
 }
 
@@ -389,6 +432,7 @@ JL_DLLEXPORT void _jl_timing_block_start(jl_timing_block_t *block) {
     _ITTAPI_START(block);
     _NVTX_START(block);
     _TRACY_START(block);
+    _APPLE_OSLOG_START(block);
 
     jl_timing_block_t **prevp = &jl_current_task->ptls->timing_stack;
     block->prev = *prevp;
@@ -406,6 +450,7 @@ JL_DLLEXPORT void _jl_timing_block_end(jl_timing_block_t *block) {
         _NVTX_STOP(block);
         _TRACY_STOP(block->tracy_ctx);
         _COUNTS_STOP(block, t);
+        _APPLE_OSLOG_STOP(block);
 
         jl_task_t *ct = jl_current_task;
         jl_timing_block_t **pcur = &ct->ptls->timing_stack;
@@ -481,6 +526,18 @@ JL_DLLEXPORT void jl_timing_show(jl_value_t *v, jl_timing_block_t *cur_block)
 
     TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
 #endif
+#ifdef USE_APPLE_OSLOG
+    ios_t buf;
+    ios_mem(&buf, IOS_INLSIZE);
+    buf.growable = 0; // Restrict to inline buffer to avoid allocation
+
+    jl_static_show((JL_STREAM*)&buf, v);
+    if (buf.size == buf.maxsize)
+        memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
+    buf.buf[buf.size] = '\0'; // Ensure null-termination
+    if (os_signpost_enabled(cur_block->event->os_log_event.log))
+        _jl_os_log_signpost_print(cur_block, buf.buf);
+#endif
 }
 
 JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_block)
@@ -494,6 +551,13 @@ JL_DLLEXPORT void jl_timing_show_module(jl_module_t *m, jl_timing_block_t *cur_b
         jl_timing_printf(cur_block, "%s.%s", jl_symbol_name(root->name), jl_symbol_name(m->name));
     }
 #endif
+#ifdef USE_APPLE_OSLOG
+    jl_module_t *root = jl_module_root(m);
+    if (root == m || root == jl_main_module) {
+        const char *module_name = jl_symbol_name(m->name);
+        _jl_os_log_signpost_print(cur_block, module_name);
+    }
+#endif
 }
 
 JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *cur_block)
@@ -502,11 +566,17 @@ JL_DLLEXPORT void jl_timing_show_filename(const char *path, jl_timing_block_t *c
     const char *filename = gnu_basename(path);
     TracyCZoneText(cur_block->tracy_ctx, filename, strlen(filename));
 #endif
+#ifdef USE_APPLE_OSLOG
+    const char *filename = gnu_basename(path);
+    if (os_signpost_enabled(cur_block->event->os_log_event.log)) {
+        _jl_os_log_signpost_print(cur_block, filename);
+    }
+#endif
 }
 
 JL_DLLEXPORT void jl_timing_show_location(const char *file, int line, jl_module_t* mod, jl_timing_block_t *cur_block)
 {
-#ifdef USE_TRACY
+#if defined(USE_TRACY) || defined(USE_APPLE_OSLOG)
     jl_module_t *root = jl_module_root(mod);
     if (root == mod || root == jl_main_module) {
         jl_timing_printf(cur_block, "%s:%d in %s",
@@ -556,7 +626,22 @@ JL_DLLEXPORT void jl_timing_show_func_sig(jl_value_t *v, jl_timing_block_t *cur_
 
     TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
 #endif
+#ifdef USE_APPLE_OSLOG
+    ios_t buf;
+    ios_mem(&buf, IOS_INLSIZE);
+    buf.growable = 0; // Restrict to inline buffer to avoid allocation
+
+    jl_static_show_config_t config = { /* quiet */ 1 };
+    jl_static_show_func_sig_((JL_STREAM*)&buf, v, config);
+    if (buf.size == buf.maxsize)
+        memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
+    buf.buf[buf.size] = '\0'; // Ensure null-termination
+    if (os_signpost_enabled(cur_block->event->os_log_event.log)) {
+        _jl_os_log_signpost_print(cur_block, buf.buf);
+    }
+#endif
 }
+
 
 JL_DLLEXPORT void jl_timing_show_macro(jl_method_instance_t *macro, jl_value_t* lno, jl_module_t* mod, jl_timing_block_t *cur_block)
 {
@@ -583,6 +668,18 @@ JL_DLLEXPORT void jl_timing_printf(jl_timing_block_t *cur_block, const char *for
 
     TracyCZoneText(cur_block->tracy_ctx, buf.buf, buf.size);
 #endif
+#ifdef USE_APPLE_OSLOG
+    ios_t buf;
+    ios_mem(&buf, IOS_INLSIZE);
+    buf.growable = 0; // Restrict to inline buffer to avoid allocation
+    jl_vprintf((JL_STREAM*)&buf, format, args);
+    if (buf.size == buf.maxsize)
+        memset(&buf.buf[IOS_INLSIZE - 3], '.', 3);
+    buf.buf[buf.size] = '\0'; // Ensure null-termination
+    if (os_signpost_enabled(cur_block->event->os_log_event.log)) {
+        _jl_os_log_signpost_print(cur_block, buf.buf);
+    }
+#endif
     va_end(args);
 }
 
@@ -590,6 +687,11 @@ JL_DLLEXPORT void jl_timing_puts(jl_timing_block_t *cur_block, const char *str)
 {
 #ifdef USE_TRACY
     TracyCZoneText(cur_block->tracy_ctx, str, strlen(str));
+#endif
+#ifdef USE_APPLE_OSLOG
+    if (os_signpost_enabled(cur_block->event->os_log_event.log)) {
+        _jl_os_log_signpost_print(cur_block, str);
+    }
 #endif
 }
 
