@@ -556,7 +556,7 @@ end
         return _setindex_ra!(a, v, i, ())
     end
     inds = _to_subscript_indices(a, i)
-    _setindex_ra!(a, v, inds[1], tail(inds))
+    isempty(inds) ? _setindex_ra!(a, v, 1, ()) : _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
 @propagate_inbounds function setindex!(a::ReshapedReinterpretArray{T,N,S}, v, ind::SCartesianIndex2) where {T,N,S}

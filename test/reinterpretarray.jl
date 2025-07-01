@@ -21,6 +21,7 @@ A = Int64[1, 2, 3, 4]
 Ars = Int64[1 3; 2 4]
 B = Complex{Int64}[5+6im, 7+8im, 9+10im]
 Av = [Int32[1,2], Int32[3,4]]
+C = view([1,1], [1,2])
 
 test_many_wrappers(Ars, (identity, tslow)) do Ar
     @test @inferred(ndims(reinterpret(reshape, Complex{Int64}, Ar))) == 1
@@ -115,6 +116,14 @@ test_many_wrappers(A3) do A3_
     A3r[CartesianIndex(1,2)] = 300+400im
     @test A3[1,1,2] == 300
     @test A3[2,1,2] == 400
+end
+
+test_many_wrappers(C) do Cr
+    r = reinterpret(reshape, Tuple{Int, Int}, Cr)
+    r[] = (2,2)
+    @test r[] === (2,2)
+    r[1] = (3,3)
+    @test r[1,1] === (3,3)
 end
 
 # same-size reinterpret where one of the types is non-primitive
