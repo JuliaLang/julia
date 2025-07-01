@@ -124,9 +124,8 @@ test_many_wrappers(C) do Cr
     @test r[] === (2,2)
     r[1] = (3,3)
     @test r[1] === (3,3)
-    r[1] = (3,3)
-    @test r[1,1] === (4,4)
     r[1,1] = (4,4)
+    @test r[1,1] === (4,4)
 end
 
 # same-size reinterpret where one of the types is non-primitive
