@@ -811,7 +811,7 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
         if s isa Unsigned || -1 <= s <= 1 || s == -s
             a = div(diff, s) % typeof(diff)
         else
-            a = div(unsigned(sign(s)*diff), abs(s)) % typeof(diff)
+            a = div(unsigned(flipsign(diff, s)), abs(s)) % typeof(diff)
         end
         return a + oneunit(a)
     end
