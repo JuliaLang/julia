@@ -617,9 +617,9 @@ function module_depth(from::Module, to::Module)
 end
 function has_backslashes(mod::Module)
     for n in names(mod, all = true, imported = true)
-        isdefined(mod, n) || continue
+        isdefinedglobal(mod, n) || continue
         Base.isdeprecated(mod, n) && continue
-        f = getfield(mod, n)
+        f = getglobal(mod, n)
         if isa(f, Module) && module_depth(Main, f) <= module_depth(Main, mod)
             continue
         end

@@ -1,3 +1,5 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Julia compiler wrapper script
 # NOTE: The interface and location of this script are considered unstable/experimental
 
