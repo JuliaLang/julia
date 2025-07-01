@@ -30,7 +30,7 @@ BC/BCE, etc.
 
 The [`Time`](@ref) is also an immutable [`Int64`](@ref) wrapper, also based on the UT second [^1],
 but constrained to represent the periodic (cyclic) time of the 24-hour day starting at midnight.
-Note that midnight is represented as 0 hour - 24 hour is out of range.
+Note that midnight is represented as 0 hour. 24 hour is out of range.
 
 [^1]:
     The notion of the UT second is actually quite fundamental. There are basically two different notions
