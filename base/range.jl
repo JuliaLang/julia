@@ -808,7 +808,7 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
         # compute `(diff ÷ s) + 1` in a manner robust to overflow
         # by using the absolute values as unsigneds for non-empty ranges
         a = div(unsigned(flipsign(diff, s)), unsigned(abs(s))) % typeof(diff)
-        return max(a + oneunit(a), zero(a))
+        return a + oneunit(a)
     end
     function checked_length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
