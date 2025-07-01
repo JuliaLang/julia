@@ -2310,3 +2310,20 @@ end
     v2 = view(A, Base.IdentityUnitRange(1:length(A)))
     @test sum(x for x in v2) == sum(A)
 end
+
+@testset "self referential" begin
+    v = Any[1,2,3]
+    m = Any[1 2 3]
+
+    v[1] = v
+    m[1] = m
+
+    @test v == v == v[1]
+    @test m == m == m[1]
+
+    io = IOBuffer()
+    show(io, v)
+    @test String(take!(io)) == "Any[Any[#= circular reference @-1 =#], 2, 3]"
+    show(io, m)
+    @test String(take!(io)) == "Any[#= circular reference @-1 =# 2 3]"
+end
