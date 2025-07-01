@@ -132,7 +132,7 @@ struct UTC <: TimeZone end
 """
     TimeType
 
-`TimeType` types wrap `Instant` machine instances to provide human representations of the
+`TimeType` types wrap `Instant` machine instants to provide human representations of the
 machine instant. `Time`, `DateTime` and `Date` are subtypes of `TimeType`.
 """
 abstract type TimeType <: AbstractTime end
