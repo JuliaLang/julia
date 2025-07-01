@@ -3485,7 +3485,39 @@ function refine_partial_type(@nospecialize t)
     return t
 end
 
+function abstract_eval_nonlinearized_foreigncall_name(interp::AbstractInterpreter, e, sstate::StatementState, sv::AbsIntState)
+    if isexpr(e, :call)
+        n = length(e.args)
+        argtypes = Vector{Any}(undef, n)
+        for i = 1:n
+            argtypes[i] = abstract_eval_nonlinearized_foreigncall_name(interp, e.args[i], sstate, sv)
+        end
+        result = abstract_call(interp, ArgInfo(e.args, argtypes), sstate, sv)
+    else
+        result = abstract_eval_basic_statement(interp, e, sstate, sv)
+    end
+    if result isa Future
+        if !isready(result)
+            result
+        else
+            result[].rt
+        end
+    else
+        result.rt
+    end
+end
+
 function abstract_eval_foreigncall(interp::AbstractInterpreter, e::Expr, sstate::StatementState, sv::AbsIntState)
+    callee = e.args[1]
+    if isexpr(callee, :call) && length(callee.args) > 1 && callee.args[1] == GlobalRef(Core, :tuple)
+        # NOTE these expressions are not properly linearized
+        abstract_eval_nonlinearized_foreigncall_name(interp, callee.args[2], sstate, sv)
+        if length(callee.args) > 2
+            abstract_eval_nonlinearized_foreigncall_name(interp, callee.args[3], sstate, sv)
+        end
+    else
+        abstract_eval_value(interp, callee, sstate, sv)
+    end
     mi = frame_instance(sv)
     t = sp_type_rewrap(e.args[2], mi, true)
     for i = 3:length(e.args)
