@@ -285,7 +285,7 @@ end
 function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool)
     # verify that these edges intersect with the same methods as before
     mi = nothing
-    if n == 1 && fully_covers
+    if n == 1
         # first, fast-path a check if the expected method simply dominates its sig anyways
         # so the result of ml_matches is already simply known
         let t = expecteds[i], meth, minworld, maxworld, result
@@ -298,7 +298,9 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     mi = t::MethodInstance
                 end
                 meth = mi.def::Method
-                if !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                # Fast path is legal when fully_covers=true OR when METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC is unset
+                if (fully_covers || iszero(meth.dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)) &&
+                   !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
                     minworld = meth.primary_world
                     @assert minworld ≤ world
                     maxworld = typemax(UInt)
@@ -306,12 +308,15 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     return minworld, maxworld, result
                 end
             end
-            if !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
-                minworld = meth.primary_world
-                @assert minworld ≤ world
-                maxworld = typemax(UInt)
-                result = Any[] # result is unused
-                return minworld, maxworld, result
+            # Fast path is legal when fully_covers=true OR when METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC is unset
+            if fully_covers || iszero(meth.dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)
+                if !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                    minworld = meth.primary_world
+                    @assert minworld ≤ world
+                    maxworld = typemax(UInt)
+                    result = Any[] # result is unused
+                    return minworld, maxworld, result
+                end
             end
         end
     end
