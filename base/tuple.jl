@@ -150,7 +150,11 @@ nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
 function keys(t::Tuple, t2::Tuple...)
     @inline
     lent = length(t)
-    all(x->length(x) == lent, t2) || throw_eachindex_mismatch_indices(IndexLinear(), t, t2...)
+    if !all(==(lent) ∘ length, t2)
+        let inds = map(only ∘ axes, (t, t2...))
+            throw_eachindex_mismatch_indices("indices", inds...)
+        end
+    end
     Base.OneTo(lent)
 end
 

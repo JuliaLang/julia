@@ -39,7 +39,7 @@ macro handle_as(hand, typ)
     end
 end
 
-associate_julia_struct(handle::Ptr{Cvoid}, @nospecialize(jlobj)) =
+@nospecializeinfer associate_julia_struct(handle::Ptr{Cvoid}, @nospecialize(jlobj)) =
     ccall(:jl_uv_associate_julia_struct, Cvoid, (Ptr{Cvoid}, Any), handle, jlobj)
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
 disassociate_julia_struct(handle::Ptr{Cvoid}) =
@@ -52,14 +52,14 @@ iolock_end() = ccall(:jl_iolock_end, Cvoid, ())
 # and should thus not be garbage collected
 const uvhandles = IdDict()
 const preserve_handle_lock = Threads.SpinLock()
-function preserve_handle(x)
+@nospecializeinfer function preserve_handle(@nospecialize(x))
     lock(preserve_handle_lock)
     v = get(uvhandles, x, 0)::Int
     uvhandles[x] = v + 1
     unlock(preserve_handle_lock)
     nothing
 end
-function unpreserve_handle(x)
+@nospecializeinfer function unpreserve_handle(@nospecialize(x))
     lock(preserve_handle_lock)
     v = get(uvhandles, x, 0)::Int
     if v == 0

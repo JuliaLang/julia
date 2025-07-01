@@ -339,8 +339,8 @@ function showerror(io::IO, ex::MethodError)
             # Check all modules (sorted for consistency)
             sorted_modules = sort!(collect(modules_to_check), by=nameof)
             for mod in sorted_modules
-                if isdefined(mod, name)
-                    candidate = getfield(mod, name)
+                if isdefinedglobal(mod, name)
+                    candidate = getglobal(mod, name)
                     if candidate !== f && hasmethod(candidate, arg_types; world=ex.world)
                         if mod === Base
                             print(io, "\nYou may have intended to import ")
