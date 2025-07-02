@@ -802,7 +802,6 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
     # slightly more accurate length and checked_length in extreme cases
     # (near typemax) for types with known `unsigned` functions
     function length(r::OrdinalRange{T}) where T<:bigints
-        @inline
         s = step(r)
         diff = last(r) - first(r)
         isempty(r) && return zero(diff)
