@@ -239,6 +239,13 @@ if bc_opt != bc_off
     @test_throws BoundsError BadVector20469([1,2,3])[:]
 end
 
+# Accumulate: do not set inbounds context for user-supplied functions
+if bc_opt != bc_off
+    Base.@propagate_inbounds op58200(a, b) = (1, 2)[a] + (1, 2)[b]
+    @test_throws BoundsError accumulate(op58200, 1:10)
+    @test_throws BoundsError Base.accumulate_pairwise(op58200, 1:10)
+end
+
 # Ensure iteration over arrays is vectorizable
 function g27079(X)
     r = 0

@@ -603,11 +603,12 @@ end
 # here so it's possible to time all imports, including InteractiveUtils and its deps
 macro time_imports(ex)
     quote
-        try
-            Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
-            $(esc(ex))
-        finally
+        Base.Threads.atomic_add!(Base.TIMING_IMPORTS, 1)
+        @__tryfinally(
+            # try
+            $(esc(ex)),
+            # finally
             Base.Threads.atomic_sub!(Base.TIMING_IMPORTS, 1)
-        end
+        )
     end
 end
