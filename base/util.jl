@@ -705,10 +705,10 @@ end
 function compute_deftypes(fieldtypes, defvals)
     Dict(map(unique(fieldtypes)) do sym
         idxs = findall(==(sym), fieldtypes)
-        isempty(idxs) && return Union{}
-        deftypes = typeof.(eval.(defvals[idxs]))
+        isempty(idxs) && return sym => Union{}
+        deftypes = typeof.(eval.(filter(!isnothing, defvals[idxs])))
         deftype = unique(deftypes)
-        length(deftype) > 1 && return Union{}
+        (isempty(deftype) || length(deftype) > 1) && return sym => Union{}
         sym => only(deftype)
     end)
 end
