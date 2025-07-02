@@ -18,6 +18,8 @@ function @main(args::Vector{String})::Cint
     println(Core.stdout, ver)
     @assert ver == build_ver
 
+    sleep(0.01)
+
     # Add an indirection via `@cfunction` / 1-arg ccall
     cfunc = @cfunction(print_string, Cvoid, (Ptr{Cvoid},))
     fptr = dlsym(Zstd_jll.libzstd_handle, :ZSTD_versionString)
