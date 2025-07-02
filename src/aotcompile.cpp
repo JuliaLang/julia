@@ -620,7 +620,7 @@ static void generate_cfunc_thunks(jl_codegen_params_t &params, jl_compiled_funct
             }
         }
         Function *f = codeinst ? aot_abi_converter(params, M, declrt, sigt, cfunc.nargs, cfunc.specsig, codeinst, defM, func, "", false) : unspec;
-        return assign_fptr(f);
+        assign_fptr(f);
     }
 }
 
