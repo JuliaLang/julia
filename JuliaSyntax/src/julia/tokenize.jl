@@ -197,13 +197,12 @@ struct RawToken
     # Offsets into a string or buffer
     startbyte::Int # The byte where the token start in the buffer
     endbyte::Int # The byte where the token ended in the buffer
-    dotop::Bool
     suffix::Bool
 end
 function RawToken(kind::Kind, startbyte::Int, endbyte::Int)
-    RawToken(kind, startbyte, endbyte, false, false)
+    RawToken(kind, startbyte, endbyte, false)
 end
-RawToken() = RawToken(K"error", 0, 0, false, false)
+RawToken() = RawToken(K"error", 0, 0, false)
 
 const EMPTY_TOKEN = RawToken()
 
@@ -254,7 +253,6 @@ mutable struct Lexer{IO_t <: IO}
     string_states::Vector{StringState}
     chars::Tuple{Char,Char,Char,Char}
     charspos::Tuple{Int,Int,Int,Int}
-    dotop::Bool
 end
 
 function Lexer(io::IO)
@@ -283,7 +281,7 @@ function Lexer(io::IO)
     end
     Lexer(io, position(io),
                   K"error", Vector{StringState}(),
-                  (c1,c2,c3,c4), (p1,p2,p3,p4), false)
+                  (c1,c2,c3,c4), (p1,p2,p3,p4))
 end
 Lexer(str::AbstractString) = Lexer(IOBuffer(str))
 
@@ -438,9 +436,8 @@ function emit(l::Lexer, kind::Kind, maybe_op=true)
         end
     end
 
-    tok = RawToken(kind, startpos(l), position(l) - 1, l.dotop, suffix)
+    tok = RawToken(kind, startpos(l), position(l) - 1, suffix)
 
-    l.dotop = false
     l.last_token = kind
     return tok
 end
@@ -924,7 +921,7 @@ function lex_minus(l::Lexer)
         else
             return emit(l, K"ErrorInvalidOperator") # "--" is an invalid operator
         end
-    elseif !l.dotop && accept(l, '>')
+    elseif l.last_token != K"." && accept(l, '>')
         return emit(l, K"->")
     elseif accept(l, '=')
         return emit(l, K"op=")
@@ -1184,87 +1181,16 @@ function lex_dot(l::Lexer)
         return lex_digit(l, K"Float")
     else
         pc, dpc = dpeekchar(l)
-        if pc == '+'
-            l.dotop = true
-            readchar(l)
-            return lex_plus(l)
-        elseif pc =='-'
-            l.dotop = true
-            readchar(l)
-            return lex_minus(l)
-        elseif pc == '−'
-            l.dotop = true
-            readchar(l)
-            return emit(l, accept(l, '=') ? K"op=" : K"-")
-        elseif pc =='*'
-            l.dotop = true
-            readchar(l)
-            return lex_star(l)
-        elseif pc =='/'
-            l.dotop = true
-            readchar(l)
-            return lex_forwardslash(l)
-        elseif pc =='\\'
-            l.dotop = true
-            readchar(l)
-            return lex_backslash(l)
-        elseif pc =='^'
-            l.dotop = true
-            readchar(l)
-            return lex_circumflex(l)
-        elseif pc =='<'
-            l.dotop = true
-            readchar(l)
-            return lex_less(l)
-        elseif pc =='>'
-            l.dotop = true
-            readchar(l)
-            return lex_greater(l)
-        elseif pc =='&'
-            l.dotop = true
-            readchar(l)
-            if accept(l, '=')
-                return emit(l, K"op=")
-            else
-                if accept(l, '&')
-                    return emit(l, K"&&")
-                end
-                return emit(l, K"&")
-            end
-        elseif pc =='%'
-            l.dotop = true
-            readchar(l)
-            return lex_percent(l)
-        elseif pc == '=' && dpc != '>'
-            l.dotop = true
-            readchar(l)
-            return lex_equal(l)
-        elseif pc == '|'
-            l.dotop = true
-            readchar(l)
-            if accept(l, '|')
-                return emit(l, K"||")
-            end
-            return lex_bar(l)
-        elseif pc == '!' && dpc == '='
-            l.dotop = true
-            readchar(l)
-            return lex_exclaim(l)
-        elseif pc == '⊻'
-            l.dotop = true
-            readchar(l)
-            return lex_xor(l)
+        # When we see a dot followed by an operator, we want to emit just the dot
+        # and let the next token be the operator
+        if is_operator_start_char(pc) || (pc == '!' && dpc == '=')
+            return emit(l, K".")
         elseif pc == '÷'
-            l.dotop = true
-            readchar(l)
-            return lex_division(l)
+            return emit(l, K".")
         elseif pc == '=' && dpc == '>'
-            l.dotop = true
-            readchar(l)
-            return lex_equal(l)
+            return emit(l, K".")
         elseif is_dottable_operator_start_char(pc)
-            l.dotop = true
-            return _next_token(l, readchar(l))
+            return emit(l, K".")
         end
         return emit(l, K".")
     end

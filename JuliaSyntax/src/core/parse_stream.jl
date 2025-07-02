@@ -376,7 +376,6 @@ function _buffer_lookahead_tokens(lexer, lookahead)
         was_whitespace = is_whitespace(k)
         had_whitespace |= was_whitespace
         f = EMPTY_FLAGS
-        raw.dotop      && (f |= DOTOP_FLAG)
         raw.suffix     && (f |= SUFFIXED_FLAG)
         push!(lookahead, SyntaxToken(SyntaxHead(k, f), k,
                                      had_whitespace, raw.endbyte + 2))

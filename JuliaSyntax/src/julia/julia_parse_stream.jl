@@ -1,6 +1,4 @@
 # Token flags - may be set for operator kinded tokens
-# Operator is dotted
-const DOTOP_FLAG = RawFlags(1<<1)
 # Operator has a suffix
 const SUFFIXED_FLAG = RawFlags(1<<2)
 
@@ -112,12 +110,6 @@ Return true for postfix operator calls such as the `'ᵀ` call node parsed from 
 """
 is_postfix_op_call(x) = call_type_flags(x) == POSTFIX_OP_FLAG
 
-"""
-    is_dotted(x)
-
-Return true for dotted syntax tokens
-"""
-is_dotted(x) = has_flags(x, DOTOP_FLAG)
 
 """
     is_suffixed(x)
@@ -126,12 +118,6 @@ Return true for operators which have suffixes, such as `+₁`
 """
 is_suffixed(x) = has_flags(x, SUFFIXED_FLAG)
 
-"""
-    is_decorated(x)
-
-Return true for operators which are decorated with a dot or suffix.
-"""
-is_decorated(x) = is_dotted(x) || is_suffixed(x)
 
 """
     numeric_flags(x)
@@ -144,11 +130,7 @@ numeric_flags(x) = numeric_flags(flags(x))
 function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
     str = (is_error(kind(head)) ? untokenize(kind(head); unique=false) :
            untokenize(kind(head); unique=unique))::String
-    if is_dotted(head)
-        str = "."*str
-    end
     if include_flag_suff
-        # Ignore DOTOP_FLAG - it's represented above with . prefix
         is_trivia(head)  && (str = str*"-t")
         is_infix_op_call(head)   && (str = str*"-i")
         is_prefix_op_call(head)  && (str = str*"-pre")
@@ -312,4 +294,33 @@ function bump_split(stream::ParseStream, split_spec::Vararg{Any, N}) where {N}
     @assert tok.next_byte == prev_b
     stream.peek_count = 0
     return position(stream)
+end
+
+function peek_dotted_op_token(ps, allow_whitespace=false)
+    # Peek the next token, but if it is a dot, peek the next one as well
+    t = peek_token(ps)
+    isdotted = kind(t) == K"."
+    if isdotted
+        t2 = peek_token(ps, 2)
+        if !is_operator(t2) || (!allow_whitespace && preceding_whitespace(t2))
+            isdotted = false
+        else
+            t = t2
+        end
+    end
+    return (isdotted, t)
+end
+
+function bump_dotted(ps, isdot, flags=EMPTY_FLAGS; emit_dot_node=false, remap_kind=K"None")
+    if isdot
+        if emit_dot_node
+            dotmark = position(ps)
+            bump(ps, TRIVIA_FLAG) # TODO: NOTATION_FLAG
+        else
+            bump(ps, TRIVIA_FLAG) # TODO: NOTATION_FLAG
+        end
+    end
+    pos = bump(ps, flags, remap_kind=remap_kind)
+    isdot && emit_dot_node && (pos = emit(ps, dotmark, K"."))
+    return pos
 end

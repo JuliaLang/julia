@@ -78,7 +78,7 @@ end
     @test diagnostic("f(x, y #=hi=#\ng(z)") == Diagnostic(7, 6, :error, "Expected `)` or `,`")
     @test diagnostic("(x, y \nz") == Diagnostic(6, 5, :error, "Expected `)` or `,`")
     @test diagnostic("function f(x, y \nz end") == Diagnostic(16, 15, :error, "Expected `)` or `,`")
- 
+
     @test diagnostic("sin. (1)") ==
         Diagnostic(5, 5, :error, "whitespace is not allowed here")
     @test diagnostic("x [i]") ==

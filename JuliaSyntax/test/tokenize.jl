@@ -718,20 +718,20 @@ end
     @test toks("0x01..") == ["0x01"=>K"HexInt", ".."=>K".."]
 
     # Dotted operators and other dotted suffixes
-    @test toks("1234 .+1") == ["1234"=>K"Integer", " "=>K"Whitespace", ".+"=>K"+", "1"=>K"Integer"]
+    @test toks("1234 .+1") == ["1234"=>K"Integer", " "=>K"Whitespace", "."=>K".", "+"=>K"+", "1"=>K"Integer"]
     @test toks("1234.0+1") == ["1234.0"=>K"Float", "+"=>K"+", "1"=>K"Integer"]
-    @test toks("1234.0 .+1") == ["1234.0"=>K"Float", " "=>K"Whitespace", ".+"=>K"+", "1"=>K"Integer"]
+    @test toks("1234.0 .+1") == ["1234.0"=>K"Float", " "=>K"Whitespace", "."=>K".", "+"=>K"+", "1"=>K"Integer"]
     @test toks("1234 .f(a)") == ["1234"=>K"Integer", " "=>K"Whitespace", "."=>K".",
                                  "f"=>K"Identifier", "("=>K"(", "a"=>K"Identifier", ")"=>K")"]
     @test toks("1234.0 .f(a)") == ["1234.0"=>K"Float", " "=>K"Whitespace", "."=>K".",
                                    "f"=>K"Identifier", "("=>K"(", "a"=>K"Identifier", ")"=>K")"]
-    @test toks("1f0./1") == ["1f0"=>K"Float32", "./"=>K"/", "1"=>K"Integer"]
+    @test toks("1f0./1") == ["1f0"=>K"Float32", "."=>K".", "/"=>K"/", "1"=>K"Integer"]
 
     # Dotted operators after numeric constants are ok
-    @test toks("1e1.⫪")  == ["1e1"=>K"Float", ".⫪"=>K"⫪"]
-    @test toks("1.1.⫪")  == ["1.1"=>K"Float", ".⫪"=>K"⫪"]
-    @test toks("1e1.−")  == ["1e1"=>K"Float", ".−"=>K"-"]
-    @test toks("1.1.−")  == ["1.1"=>K"Float", ".−"=>K"-"]
+    @test toks("1e1.⫪")  == ["1e1"=>K"Float", "."=>K".", "⫪"=>K"⫪"]
+    @test toks("1.1.⫪")  == ["1.1"=>K"Float", "."=>K".", "⫪"=>K"⫪"]
+    @test toks("1e1.−")  == ["1e1"=>K"Float", "."=>K".", "−"=>K"-"]
+    @test toks("1.1.−")  == ["1.1"=>K"Float", "."=>K".", "−"=>K"-"]
     # Non-dottable operators are not ok
     @test toks("1e1.\$")  == ["1e1."=>K"ErrorInvalidNumericConstant", "\$"=>K"$"]
     @test toks("1.1.\$")  == ["1.1."=>K"ErrorInvalidNumericConstant", "\$"=>K"$"]
@@ -821,10 +821,28 @@ for opkind in Tokenize._nondot_symbolic_operator_kinds()
                 tokens = collect(tokenize(str))
                 exop = expr.head == :call ? expr.args[1] : expr.head
                 #println(str)
-                if Symbol(Tokenize.untokenize(tokens[arity == 1 ? 1 : 3], str)) != exop
-                    @info "" arity str exop
+                # For dotted operators, we need to reconstruct the operator from separate tokens
+                # Note: .. and ... are not dotted operators, they're regular operators
+                exop_str = string(exop)
+                is_dotted = occursin(".", exop_str) && exop != :.. && exop != :...
+                if is_dotted
+                    # Dotted operators are now two tokens: . and the operator
+                    dot_pos = arity == 1 ? 1 : 3
+                    op_pos = arity == 1 ? 2 : 4
+                    reconstructed_op = Symbol(Tokenize.untokenize(tokens[dot_pos], str) *
+                                            Tokenize.untokenize(tokens[op_pos], str))
+                    if reconstructed_op != exop
+                        @info "" arity str exop reconstructed_op
+                    end
+                    @test reconstructed_op == exop
+                else
+                    # Regular operators and suffixed operators
+                    op_pos = arity == 1 ? 1 : 3
+                    if Symbol(Tokenize.untokenize(tokens[op_pos], str)) != exop
+                        @info "" arity str exop op_pos
+                    end
+                    @test Symbol(Tokenize.untokenize(tokens[op_pos], str)) == exop
                 end
-                @test Symbol(Tokenize.untokenize(tokens[arity == 1 ? 1 : 3], str)) == exop
             else
                 break
             end
@@ -837,13 +855,13 @@ end
     # https://github.com/JuliaLang/julia/pull/25157
     @test tok("\u00b7").kind == K"⋅"
     @test tok("\u0387").kind == K"⋅"
-    @test tok(".\u00b7").dotop
-    @test tok(".\u0387").dotop
+    @test toks(".\u00b7") == ["."=>K".", "\u00b7"=>K"⋅"]
+    @test toks(".\u0387") == ["."=>K".", "\u0387"=>K"⋅"]
 
     # https://github.com/JuliaLang/julia/pull/40948
     @test tok("−").kind == K"-"
     @test tok("−=").kind == K"op="
-    @test tok(".−").dotop
+    @test toks(".−") == ["."=>K".", "−"=>K"-"]
 end
 
 @testset "perp" begin
@@ -1158,15 +1176,15 @@ end
 end
 
 @testset "dotop miscellanea" begin
-    @test strtok("a .-> b")  ==  ["a", " ", ".-", ">", " ", "b", ""]
-    @test strtok(".>: b")    ==  [".>:", " ", "b", ""]
-    @test strtok(".<: b")    ==  [".<:", " ", "b", ""]
+    @test strtok("a .-> b")  ==  ["a", " ", ".", "-", ">", " ", "b", ""]
+    @test strtok(".>: b")    ==  [".", ">:", " ", "b", ""]
+    @test strtok(".<: b")    ==  [".", "<:", " ", "b", ""]
     @test strtok("a ||₁ b")  ==  ["a", " ", "||", "₁", " ", "b", ""]
     @test strtok("a ||̄ b")   ==  ["a", " ", "||", "̄", " ", "b", ""]
-    @test strtok("a .||₁ b") ==  ["a", " ", ".||", "₁", " ", "b", ""]
+    @test strtok("a .||₁ b") ==  ["a", " ", ".", "||", "₁", " ", "b", ""]
     @test strtok("a &&₁ b")  ==  ["a", " ", "&&", "₁", " ", "b", ""]
     @test strtok("a &&̄ b")   ==  ["a", " ", "&&", "̄", " ", "b", ""]
-    @test strtok("a .&&₁ b") ==  ["a", " ", ".&&", "₁", " ", "b", ""]
+    @test strtok("a .&&₁ b") ==  ["a", " ", ".", "&&", "₁", " ", "b", ""]
 end
 
 end

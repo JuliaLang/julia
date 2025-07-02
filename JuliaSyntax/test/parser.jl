@@ -9,17 +9,17 @@ function parse_to_sexpr_str(production, code::AbstractString; v=v"1.6", show_kws
     return sprint(io->show(io, MIME("text/x.sexpression"), s; show_kws...))
 end
 
-function test_parse(production, input, output)
+function test_parse(production, input, expected)
     if !(input isa AbstractString)
         opts, input = input
     else
         opts = NamedTuple()
     end
     parsed = parse_to_sexpr_str(production, input; opts...)
-    if output isa Regex # Could be AbstractPattern, but that type was added in Julia 1.6.
-        @test match(output, parsed) !== nothing
+    if expected isa Regex # Could be AbstractPattern, but that type was added in Julia 1.6.
+        @test match(expected, parsed) !== nothing
     else
-        @test parsed == output
+        @test parsed == expected
     end
 end
 
@@ -119,6 +119,7 @@ tests = [
         "x < y"       => "(call-i x < y)"
         "x .< y"      => "(dotcall-i x < y)"
         "x .<: y"     => "(dotcall-i x <: y)"
+        ":. == :."    => "(call-i (quote-: .) == (quote-: .))"
         # Comparison chains
         "x < y < z"   => "(comparison x < y < z)"
         "x == y < z"  => "(comparison x == y < z)"
@@ -235,6 +236,7 @@ tests = [
         "+(a,)"    =>  "(call-, + a)"
         ".+(a,)"   =>  "(call-, (. +) a)"
         "(.+)(a)"  =>  "(call (parens (. +)) a)"
+        "(.~(a))"  =>  "(parens (dotcall-pre ~ (parens a)))"
         "+(a=1,)"  =>  "(call-, + (= a 1))"
         "+(a...)"  =>  "(call + (... a))"
         "+(a;b,c)" =>  "(call + a (parameters b c))"
@@ -442,6 +444,8 @@ tests = [
         # Field/property syntax
         "f.x.y"  =>  "(. (. f x) y)"
         "x .y"   =>  "(. x (error-t) y)"
+        "x.?"    =>  "(. x ?)"
+        "x.in"   =>  "(. x in)"
         # Adjoint
         "f'"  => "(call-post f ')"
         "f'ᵀ" => "(call-post f 'ᵀ)"
