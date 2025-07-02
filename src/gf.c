@@ -2401,7 +2401,6 @@ struct invalidate_mt_env {
     jl_typemap_entry_t *newentry;
     jl_array_t *shadowed;
     size_t max_world;
-    int invalidated;
 };
 static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
 {
@@ -2443,7 +2442,6 @@ static int invalidate_mt_cache(jl_typemap_entry_t *oldentry, void *closure0)
                 JL_GC_POP();
             }
             jl_atomic_store_relaxed(&oldentry->max_world, env->max_world);
-            env->invalidated = 1;
         }
     }
     return 1;
@@ -2930,8 +2928,7 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                     jl_method_instance_t *mi = jl_atomic_load_relaxed(&data[i]);
                     if ((jl_value_t*)mi == jl_nothing)
                         continue;
-                    isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
-                    if (jl_type_intersection2(type, isect3, &isect, &isect2)) {
+                    if (jl_type_intersection2(type, mi->specTypes, &isect, &isect2)) {
                         // Replacing a method--see if this really was the selected method previously
                         // over the intersection (not ambiguous) and the new method will be selected now (morespec).
                         // TODO: this only checks pair-wise for ambiguities, but the ambiguities could arise from the interaction of multiple methods
@@ -2946,7 +2943,6 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                         int invalidatedmi = _invalidate_dispatch_backedges(mi, type, m, d, n, replaced_dispatch, ambig, max_world, morespec);
                         if (replaced_dispatch)
                             jl_atomic_store_relaxed(&mi->dispatch_status, 0);
-                        // No longer tracking intersection count on method instances
                         jl_array_ptr_1d_push(oldmi, (jl_value_t*)mi);
                         if (_jl_debug_method_invalidation && invalidatedmi) {
                             jl_array_ptr_1d_push(_jl_debug_method_invalidation, (jl_value_t*)mi);
@@ -2955,6 +2951,22 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                         }
                         invalidated |= invalidatedmi;
                     }
+
+                    isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
+                    jl_value_t *isect4 = NULL;
+                    jl_value_t *isect5 = NULL;
+                    JL_GC_PUSH2(&isect4, &isect5);
+                    jl_type_intersection2(type, isect3, &isect4, &isect5);
+                    if (!jl_types_egal(isect, isect4) && (!isect2 || !jl_types_egal(isect2, isect4)) &&
+                        (!isect5 || (!jl_types_egal(isect, isect5) && (!isect2 || !jl_types_egal(isect2, isect5))))) {
+                        jl_(type);
+                        jl_(mi->specTypes);
+                        jl_(m->sig);
+                    }
+                    JL_GC_POP();
+
+                    isect = NULL;
+                    isect2 = NULL;
                 }
             }
         }
@@ -2974,27 +2986,15 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
         }
         invalidated |= typename_env.invalidated;
         if (oldmi && jl_array_nrows(oldmi)) {
-            // search mc->cache and leafcache and drop anything that might overlap with the new method
-            // this is very cheap, so we don't mind being fairly conservative at over-approximating this
+            // drop leafcache and search mc->cache and drop anything that might overlap with the new method
+            // this is very cheap, so we don't mind being very conservative at over-approximating this
             struct invalidate_mt_env mt_cache_env;
             mt_cache_env.max_world = max_world;
             mt_cache_env.shadowed = oldmi;
             mt_cache_env.newentry = newentry;
-            mt_cache_env.invalidated = 0;
 
             jl_typemap_visitor(jl_atomic_load_relaxed(&mc->cache), invalidate_mt_cache, (void*)&mt_cache_env);
-            jl_genericmemory_t *leafcache = jl_atomic_load_relaxed(&mc->leafcache);
-            size_t i, l = leafcache->length;
-            for (i = 1; i < l; i += 2) {
-                jl_value_t *entry = jl_genericmemory_ptr_ref(leafcache, i);
-                if (entry) {
-                    while (entry != jl_nothing) {
-                        invalidate_mt_cache((jl_typemap_entry_t*)entry, (void*)&mt_cache_env);
-                        entry = (jl_value_t*)jl_atomic_load_relaxed(&((jl_typemap_entry_t*)entry)->next);
-                    }
-                }
-            }
-            invalidated |= mt_cache_env.invalidated;
+            jl_atomic_store_relaxed(&mc->leafcache, (jl_genericmemory_t*)jl_an_empty_memory_any);
         }
         JL_UNLOCK(&mc->writelock);
     }
@@ -4431,12 +4431,6 @@ static int ml_matches_visitor(jl_typemap_entry_t *ml, struct typemap_intersectio
     return 1;
 }
 
-static int ml_mtable_visitor(jl_methtable_t *mt, void *closure0)
-{
-    struct typemap_intersection_env* env = (struct typemap_intersection_env*)closure0;
-    return jl_typemap_intersection_visitor(jl_atomic_load_relaxed(&mt->defs), 0, env);
-}
-
 // Visit the candidate methods, starting from t[idx], to determine a possible valid sort ordering,
 // where every morespecific method appears before any method which it has a common
 // intersection with but is not partly ambiguous with (ambiguity is not transitive, since morespecific is not transitive).
@@ -4717,7 +4711,7 @@ static jl_value_t *ml_matches(jl_methtable_t *mt, jl_methcache_t *mc,
         }
     }
     // then scan everything
-    if (!ml_mtable_visitor(mt, &env.match) && env.t == jl_an_empty_vec_any) {
+    if (!jl_typemap_intersection_visitor(jl_atomic_load_relaxed(&mt->defs), 0, &env.match) && env.t == jl_an_empty_vec_any) {
         JL_GC_POP();
         // if we return early without returning methods, set only the min/max valid collected from matching
         *min_valid = env.match.min_valid;

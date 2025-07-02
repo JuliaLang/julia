@@ -3577,7 +3577,7 @@ void jl_init_types(void) JL_GC_DISABLED
                             jl_symbol_type,
                             jl_int32_type,
                             jl_uint8_type,
-                            jl_genericmemory_type,
+                            jl_memory_any_type,
                             jl_ulong_type,
                             jl_type_type,
                             jl_any_type, // union(jl_simplevector_type, jl_method_instance_type),
