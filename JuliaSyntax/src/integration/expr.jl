@@ -65,7 +65,7 @@ end
 
 
 reverse_nontrivia_children(cursor::RedTreeCursor) = Iterators.filter(should_include_node, Iterators.reverse(cursor))
-reverse_nontrivia_children(cursor::SyntaxNode) = Iterators.filter(should_include_node, Iterators.reverse(children(cursor)))
+reverse_nontrivia_children(cursor) = Iterators.filter(should_include_node, Iterators.reverse(children(cursor)))
 
 # Julia string literals in a `K"string"` node may be split into several chunks
 # interspersed with trivia in two situations:
@@ -74,7 +74,7 @@ reverse_nontrivia_children(cursor::SyntaxNode) = Iterators.filter(should_include
 #
 # This function concatenating adjacent string chunks together as done in the
 # reference parser.
-function _string_to_Expr(cursor::Union{RedTreeCursor, SyntaxNode}, source::SourceFile, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
+function _string_to_Expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
     ret = Expr(:string)
     args2 = Any[]
     i = 1
@@ -197,7 +197,7 @@ function _append_iterspec!(args::Vector{Any}, @nospecialize(ex))
     return args
 end
 
-function parseargs!(retexpr::Expr, loc::LineNumberNode, cursor::Union{RedTreeCursor, SyntaxNode}, source::SourceFile, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
+function parseargs!(retexpr::Expr, loc::LineNumberNode, cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
     args = retexpr.args
     firstchildhead = head(cursor)
     firstchildrange::UnitRange{UInt32} = byte_range(cursor)
@@ -215,8 +215,14 @@ function parseargs!(retexpr::Expr, loc::LineNumberNode, cursor::Union{RedTreeCur
     return (firstchildhead, firstchildrange)
 end
 
-# Convert internal node of the JuliaSyntax parse tree to an Expr
-function node_to_expr(cursor::Union{RedTreeCursor, SyntaxNode}, source::SourceFile, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32=UInt32(0))
+_expr_leaf_val(node::SyntaxNode, _...) = node.val
+_expr_leaf_val(cursor::RedTreeCursor, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32) =
+    parse_julia_literal(txtbuf, head(cursor), byte_range(cursor) .+ txtbuf_offset)
+# Extended in JuliaLowering to support `node_to_expr(::SyntaxTree, ...)`
+
+# Convert `cursor` (SyntaxNode or RedTreeCursor) to an Expr
+# `source` is a SourceFile, or if node was an Expr originally, a LineNumberNode
+function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32=UInt32(0))
     if !should_include_node(cursor)
         return nothing
     end
@@ -225,14 +231,12 @@ function node_to_expr(cursor::Union{RedTreeCursor, SyntaxNode}, source::SourceFi
     k = kind(cursor)
     srcrange::UnitRange{UInt32} = byte_range(cursor)
     if is_leaf(cursor)
-        if k == K"MacroName" && view(source, srcrange) == "."
-            return Symbol("@__dot__")
-        elseif is_error(k)
+        if is_error(k)
             return k == K"error" ?
                 Expr(:error) :
                 Expr(:error, "$(_token_error_descriptions[k]): `$(source[srcrange])`")
         else
-            val = parse_julia_literal(txtbuf, head(cursor), srcrange .+ txtbuf_offset)
+            val = _expr_leaf_val(cursor, txtbuf, txtbuf_offset)
             if val isa Union{Int128,UInt128,BigInt}
                 # Ignore the values of large integers and convert them back to
                 # symbolic/textural form for compatibility with the Expr
@@ -242,6 +246,8 @@ function node_to_expr(cursor::Union{RedTreeCursor, SyntaxNode}, source::SourceFi
                         val isa UInt128 ? Symbol("@uint128_str") :
                         Symbol("@big_str")
                 return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
+            elseif k == K"MacroName" && val === Symbol("@.")
+                return Symbol("@__dot__")
             else
                 return val
             end
@@ -297,7 +303,7 @@ end
                                  firstchildhead::SyntaxHead,
                                  firstchildrange::UnitRange{UInt32},
                                  nodehead::SyntaxHead,
-                                 source::SourceFile)
+                                 source)
     args = retexpr.args
     k = kind(nodehead)
     endloc = source_location(LineNumberNode, source, last(srcrange))
@@ -635,9 +641,11 @@ function build_tree(::Type{Expr}, stream::ParseStream, source::SourceFile)
     return entry
 end
 
-function Base.Expr(node::SyntaxNode)
+function to_expr(node)
     source = sourcefile(node)
     txtbuf_offset, txtbuf = _unsafe_wrap_substring(sourcetext(source))
     wrapper_head = SyntaxHead(K"wrapper",EMPTY_FLAGS)
     return fixup_Expr_child(wrapper_head, node_to_expr(node, source, txtbuf, UInt32(txtbuf_offset)), false)
 end
+
+Base.Expr(node::SyntaxNode) = to_expr(node)
