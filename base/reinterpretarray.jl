@@ -391,7 +391,7 @@ check_ptr_indexable(a::Array, sz) = sizeof(eltype(a)) !== sz
 check_ptr_indexable(a::Memory, sz) = true
 check_ptr_indexable(a::AbstractArray, sz) = false
 
-@propagate_inbounds getindex(a::ReinterpretArray) = a[firstindex(a)]
+@propagate_inbounds getindex(a::ReshapedReinterpretArray{T,0}) where {T} = a[firstindex(a)]
 
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::Integer...) = checkbounds(Bool, a, inds...) && (check_ptr_indexable(a) || _isassigned_ra(a, inds...))
 @propagate_inbounds isassigned(a::ReinterpretArray, inds::SCartesianIndex2) = isassigned(a.parent, inds.j)
@@ -541,7 +541,7 @@ end
     setindex!(a, v, firstindex(a))
 end
 
-@propagate_inbounds setindex!(a::ReinterpretArray, v) = setindex!(a, v, firstindex(a))
+@propagate_inbounds setindex!(a::ReshapedReinterpretArray{T,0}, v) where {T} = setindex!(a, v, firstindex(a))
 
 @propagate_inbounds function setindex!(a::ReinterpretArray{T,N,S}, v, inds::Vararg{Int, N}) where {T,N,S}
     check_writable(a)
