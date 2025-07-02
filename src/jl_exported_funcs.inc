@@ -265,6 +265,7 @@
     XX(jl_istopmod) \
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
+    XX(jl_is_compilable) \
     XX(jl_is_const) \
     XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \
