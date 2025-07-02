@@ -293,7 +293,9 @@ register_kinds!(JuliaSyntax, 0, [
     "BEGIN_ASSIGNMENTS"
         "BEGIN_SYNTACTIC_ASSIGNMENTS"
         "="
+        ".="
         "op="  # Updating assignment operator ( $= %= &= *= += -= //= /= <<= >>= >>>= \= ^= |= ÷= ⊻= )
+        ".op="
         ":="
         "END_SYNTACTIC_ASSIGNMENTS"
         "~"
@@ -470,11 +472,13 @@ register_kinds!(JuliaSyntax, 0, [
     # Level 4
     "BEGIN_LAZYOR"
         "||"
+        ".||"
     "END_LAZYOR"
 
     # Level 5
     "BEGIN_LAZYAND"
         "&&"
+        ".&&"
     "END_LAZYAND"
 
     # Level 6

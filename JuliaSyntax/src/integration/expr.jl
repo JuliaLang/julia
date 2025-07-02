@@ -313,9 +313,13 @@ end
         op = args[2]
         rhs = args[3]
         headstr = string(args[2], '=')
-        if is_dotted(nodehead)
-            headstr = '.'*headstr
-        end
+        retexpr.head = Symbol(headstr)
+        retexpr.args = Any[lhs, rhs]
+    elseif k == K".op=" && length(args) == 3
+        lhs = args[1]
+        op = args[2]
+        rhs = args[3]
+        headstr = '.' * string(args[2], '=')
         retexpr.head = Symbol(headstr)
         retexpr.args = Any[lhs, rhs]
     elseif k == K"macrocall"
