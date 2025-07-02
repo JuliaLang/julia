@@ -2813,9 +2813,8 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
     jl_value_t *loctag = NULL;  // debug info for invalidation
     jl_value_t *isect = NULL;
     jl_value_t *isect2 = NULL;
-    jl_value_t *isect3 = NULL;
     jl_genericmemory_t *interferences = NULL;
-    JL_GC_PUSH7(&oldvalue, &oldmi, &loctag, &isect, &isect2, &isect3, &interferences);
+    JL_GC_PUSH6(&oldvalue, &oldmi, &loctag, &isect, &isect2, &interferences);
     jl_typemap_entry_t *replaced = NULL;
     // Check what entries this intersects with in the prior world.
     oldvalue = get_intersect_matches(jl_atomic_load_relaxed(&mt->defs), newentry, &replaced, max_world);
@@ -2951,20 +2950,20 @@ void jl_method_table_activate(jl_typemap_entry_t *newentry)
                         }
                         invalidated |= invalidatedmi;
                     }
-
-                    isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
-                    jl_value_t *isect4 = NULL;
-                    jl_value_t *isect5 = NULL;
-                    JL_GC_PUSH2(&isect4, &isect5);
-                    jl_type_intersection2(type, isect3, &isect4, &isect5);
-                    if (!jl_types_egal(isect, isect4) && (!isect2 || !jl_types_egal(isect2, isect4)) &&
-                        (!isect5 || (!jl_types_egal(isect, isect5) && (!isect2 || !jl_types_egal(isect2, isect5))))) {
-                        jl_(type);
-                        jl_(mi->specTypes);
-                        jl_(m->sig);
-                    }
-                    JL_GC_POP();
-
+                    // TODO: do we have any interesting cases left where isect3 is useful
+                    //jl_value_t *isect3 = NULL;
+                    //jl_value_t *isect4 = NULL;
+                    //jl_value_t *isect5 = NULL;
+                    //JL_GC_PUSH3(&isec3, &isect4, &isect5);
+                    //isect3 = jl_type_intersection(m->sig, (jl_value_t*)mi->specTypes);
+                    //jl_type_intersection2(type, isect3, &isect4, &isect5);
+                    //if (!jl_types_equal(isect, isect4) && (!isect2 || !jl_types_equal(isect2, isect4)) &&
+                    //    (!isect5 || (!jl_types_equal(isect, isect5) && (!isect2 || !jl_types_equal(isect2, isect5))))) {
+                    //    jl_(type);
+                    //    jl_(mi->specTypes);
+                    //    jl_(m->sig);
+                    //}
+                    //JL_GC_POP();
                     isect = NULL;
                     isect2 = NULL;
                 }
