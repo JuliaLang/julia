@@ -1069,3 +1069,9 @@ let io = IOBuffer()
     str = String(take!(io))
     @test !occursin("jtbaa_unionselbyte", str)
 end
+
+let io = IOBuffer()
+    code_llvm(io, (x, y) -> (@atomic x[1] = y; nothing), (AtomicMemory{Pair{Any,Any}}, Pair{Any,Any},), raw=true, optimize=false)
+    str = String(take!(io))
+    @test occursin("julia.write_barrier", str)
+end

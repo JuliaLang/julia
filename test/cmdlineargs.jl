@@ -240,6 +240,10 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         @test startswith(read(`$exename --help`, String), header)
     end
 
+    # Test to make sure that command line --help and --help-hidden do not return a description which is more than 100 characters wide
+    @test isempty(filter(x->length(x) > 100, readlines(`$exename -h`)))
+    @test isempty(filter(x->length(x) > 100, readlines(`$exename --help-hidden`)))
+
     # ~ expansion in --project and JULIA_PROJECT
     if !Sys.iswindows()
         let expanded = abspath(expanduser("~/foo/Project.toml"))
