@@ -238,6 +238,7 @@
     XX(jl_init_) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
+    XX(jl_init_with_image) \
     XX(jl_init_with_image_file) \
     XX(jl_init_with_image_handle) \
     XX(jl_install_sigint_handler) \

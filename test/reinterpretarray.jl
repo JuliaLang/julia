@@ -21,6 +21,7 @@ A = Int64[1, 2, 3, 4]
 Ars = Int64[1 3; 2 4]
 B = Complex{Int64}[5+6im, 7+8im, 9+10im]
 Av = [Int32[1,2], Int32[3,4]]
+C = view([1,1], [1,2])
 
 test_many_wrappers(Ars, (identity, tslow)) do Ar
     @test @inferred(ndims(reinterpret(reshape, Complex{Int64}, Ar))) == 1
@@ -34,6 +35,10 @@ test_many_wrappers(B, (identity, tslow)) do _B
     @test @inferred(ndims(reinterpret(reshape, Int128, _B))) == 1
     @test @inferred(axes(reinterpret(reshape, Int128, _B))) === (Base.OneTo(3),)
     @test @inferred(size(reinterpret(reshape, Int128, _B))) == (3,)
+end
+
+test_many_wrappers(C) do Cr
+    @test reinterpret(reshape, Tuple{Int8, Int}, Cr) == fill((1,1))
 end
 
 @test_throws ArgumentError("cannot reinterpret `Int64` as `Vector{Int64}`, type `Vector{Int64}` is not a bits type") reinterpret(Vector{Int64}, A)
@@ -272,7 +277,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 2)
     @test all(a .=== reinterpret(Float64, [Int64(2)])[1])
     @test all(r .=== Int64(2))
-    for badinds in (0, 16, (0,1), (1,0), (6,3), (5,4))
+    for badinds in ((), 0, 16, (0,1), (1,0), (6,3), (5,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -2
     end
@@ -285,7 +290,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 3)
     @test all(a .=== reinterpret(Float64, [(Int32(3), Int32(3))])[1])
     @test all(r .=== Int32(3))
-    for badinds in (0, 31, (0,1), (1,0), (11,3), (10,4))
+    for badinds in ((), 0, 31, (0,1), (1,0), (11,3), (10,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -3
     end
@@ -298,7 +303,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 4)
     @test all(a[1:2:5,:] .=== reinterpret(Float64, [Int64(4)])[1])
     @test all(r .=== Int64(4))
-    for badinds in (0, 10, (0,1), (1,0), (4,3), (3,4))
+    for badinds in ((), 0, 10, (0,1), (1,0), (4,3), (3,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -4
     end
@@ -311,7 +316,7 @@ test_many_wrappers(fill(1.0, 5, 3), (identity, wrapper)) do a_
     fill!(r, 5)
     @test all(a[1:2:5,:] .=== reinterpret(Float64, [(Int32(5), Int32(5))])[1])
     @test all(r .=== Int32(5))
-    for badinds in (0, 19, (0,1), (1,0), (7,3), (6,4))
+    for badinds in ((), 0, 19, (0,1), (1,0), (7,3), (6,4))
         @test_throws BoundsError r[badinds...]
         @test_throws BoundsError r[badinds...] = -5
     end
