@@ -805,10 +805,12 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
         s = step(r)
         diff = last(r) - first(r)
         isempty(r) && return zero(diff)
-        # compute `(diff ÷ s) + 1` in a manner robust to overflow
-        # by using the absolute values as unsigneds for non-empty ranges
-        a = div(unsigned(flipsign(diff, s)), unsigned(abs(s))) % typeof(diff)
-        return a + oneunit(a)
+        # Compute `(diff ÷ s) + 1` in a manner robust to signed overflow
+        # by using the absolute values as unsigneds for non-empty ranges.
+        # Note that `s` may be a different type from T and diff; it may not
+        # even be a BitInteger that supports `unsigned`. Handle with care.
+        a = div(unsigned(flipsign(diff, s)), s) % typeof(diff)
+        return flipsign(a, s) + oneunit(a)
     end
     function checked_length(r::OrdinalRange{T}) where T<:bigints
         s = step(r)
