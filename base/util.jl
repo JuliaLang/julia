@@ -590,7 +590,8 @@ macro kwdef(expr)
     fieldtypes = Any[]
     defvals = Any[]
     extract_names_types_and_defvals_from_kwdef_fieldblock!(fieldsblock, fieldnames, fieldtypes, defvals)
-    isconsistent = compare_types_vals(fieldtypes, defvals)
+    deftypes = compute_deftypes(fieldtypes, defvals)
+    isconsistent = !(Union{} in values(deftypes))
     parameters = map(fieldnames, defvals) do fieldname, defval
         if isnothing(defval)
             return fieldname
@@ -617,20 +618,22 @@ macro kwdef(expr)
             SQ = :($S{$(Q...)})
             should_skip = x -> x isa Base.LineNumberNode || x isa String || x isa Symbol
             hasinnerconstructor = any(x->!should_skip(x) && (x.head === :function || x.head === :(=)), fieldsblock.args)
-            typecalls = map(Q) do para
-                for arg in fieldsblock.args
-                    should_skip(arg) && continue
-                    if arg.head in (:const, :atomic)
-                        arg = arg.args[1]
-                        isa(arg, Symbol) && continue
+            if isconsistent
+                typecalls = map(Q) do para
+                    for arg in fieldsblock.args
+                        should_skip(arg) && continue
+                        if arg.head in (:const, :atomic)
+                            arg = arg.args[1]
+                            isa(arg, Symbol) && continue
+                        end
+                        fname, ftype = arg.args
+                        ftype === para && return deftypes[para]
                     end
-                    fname, ftype = arg.args
-                    ftype === para && return :(typeof($fname))
+                    return para
                 end
-                return para
+                unused = [x for x in Q if x in typecalls]
             end
-            unused = [x for x in Q if x in typecalls]
-            def1 = if isempty(unused) && isconsistent && !hasinnerconstructor
+            def1 = if isconsistent && isempty(unused) && !hasinnerconstructor
                 ST = :($S{$(typecalls...)})
                 body1 = Expr(:block, __source__, Expr(:call, esc(ST), fieldnames...))
                 sig1 = Expr(:call, esc(S), Expr(:parameters, parameters...))
@@ -699,13 +702,15 @@ function def_name_type_defval_from_kwdef_fielddef(kwdef)
     end
 end
 
-function compare_types_vals(fieldtypes, defvals)
-    all(unique(fieldtypes)) do sym
+function compute_deftypes(fieldtypes, defvals)
+    Dict(map(unique(fieldtypes)) do sym
         idxs = findall(==(sym), fieldtypes)
-        isempty(idxs) && return false
-        deftypes = typeof.(defvals[idxs])
-        allequal(deftypes)
-    end
+        isempty(idxs) && return Union{}
+        deftypes = typeof.(eval.(defvals[idxs]))
+        deftype = unique(deftypes)
+        length(deftype) > 1 && return Union{}
+        sym => only(deftype)
+    end)
 end
 # testing
 
