@@ -1078,6 +1078,7 @@ let s = "∀x∃y", u = codeunits(s)
     @test_throws Base.CanonicalIndexError (u[1] = 0x00)
     @test collect(u) == b"∀x∃y"
     @test Base.elsize(u) == Base.elsize(typeof(u)) == 1
+    @test similar(typeof(u), 3) isa Vector{UInt8}
 end
 
 @testset "issue #24388" begin
