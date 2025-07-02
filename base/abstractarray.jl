@@ -2582,20 +2582,13 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     blockcount = 0
     elementcount = 0
     for i ∈ eachindex(as)
-        #@info "Processing element $i of $(length(as))"
         elementcount += cat_length(as[i])
         currentdims[d1] += first_dim_zero ? 1 : cat_size(as[i], d1)
-        #@info "    Current dimensions: $(currentdims)"
-        #@info "    Current elementcount: $elementcount"
         if currentdims[d1] == outdims[d1]
-            #@info "    Reached end of dimension $d1, reset d1 to 0, now iterating over remaining dimensions to roll over"
             currentdims[d1] = 0
             for d ∈ (d2, 3:N...)
-                #@info "        d = $d"
-                #@info "        as[$i] size: $(cat_size(as[i], d))"
                 currentdims[d] += cat_size(as[i], d)
                 if outdims[d] == 0 # unfixed dimension
-                    #@info "        unfixed dimension"
                     blockcount += 1
                     if blockcount == dims[d]
                         outdims[d] = currentdims[d]
@@ -2605,7 +2598,6 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
                         break
                     end
                 else # fixed dimension
-                    #@info "        fixed dimension"
                     if currentdims[d] == outdims[d] # end of dimension
                         currentdims[d] = 0
                     elseif currentdims[d] < outdims[d] # dimension in progress
@@ -2614,11 +2606,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
                         throw(DimensionMismatch("argument $i has too many elements along axis $d"))
                     end
                 end
-                #@info "        outdims: $(outdims)"
-                #@info "        currentdims: $(currentdims)"
             end
-                #@info "    outdims: $(outdims)"
-                #@info "    currentdims: $(currentdims)"
         elseif currentdims[d1] > outdims[d1] # exceeded dimension
             throw(DimensionMismatch("argument $i has too many elements along axis $d1"))
         end
@@ -2627,7 +2615,6 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     if first_dim_zero
         outdims[d1] = 0
     end
-    #@info outdims
 
     outlen = prod(outdims)
     elementcount == outlen ||
