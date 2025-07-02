@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-irshow_was_loaded() = invokelatest(isdefined, Compiler.IRShow, :debuginfo_firstline)
+irshow_was_loaded() = invokelatest(isdefinedglobal, Compiler.IRShow, :debuginfo_firstline)
 function maybe_show_ir(ir::IRCode)
     if irshow_was_loaded()
         # ensure we use I/O that does not yield, as this gets called during compilation

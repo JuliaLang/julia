@@ -797,13 +797,15 @@ size(s::CodeUnits) = (length(s),)
 elsize(s::Type{<:CodeUnits{T}}) where {T} = sizeof(T)
 @propagate_inbounds getindex(s::CodeUnits, i::Int) = codeunit(s.s, i)
 IndexStyle(::Type{<:CodeUnits}) = IndexLinear()
-@inline iterate(s::CodeUnits, i=1) = checkbounds(Bool, s, i) ? (@inbounds s[i], i + 1) : nothing
+checkbounds(::Type{Bool}, s::CodeUnits, i::Integer) = checkbounds(Bool, s.s, i)
 
 
 write(io::IO, s::CodeUnits) = write(io, s.s)
 
 cconvert(::Type{Ptr{T}},    s::CodeUnits{T}) where {T} = cconvert(Ptr{T}, s.s)
 cconvert(::Type{Ptr{Int8}}, s::CodeUnits{UInt8}) = cconvert(Ptr{Int8}, s.s)
+
+similar(::Type{<:CodeUnits{T}}, dims::Dims) where {T} = similar(Array{T}, dims)
 
 """
     codeunits(s::AbstractString)
