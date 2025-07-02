@@ -156,6 +156,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     elseif maxworld == Base.get_require_world()
         # if no new worlds were allocated since serializing the base module, then no new validation is worth doing right now either
     else
+        matches = []
         j = 1
         while j ≤ length(callees)
             local min_valid2::UInt, max_valid2::UInt
@@ -166,14 +167,14 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             end
             if edge isa MethodInstance
                 sig = edge.specTypes
-                min_valid2, max_valid2, matches = verify_call(sig, callees, j, 1, world, true)
+                min_valid2, max_valid2 = verify_call(sig, callees, j, 1, world, true, matches)
                 j += 1
             elseif edge isa Int
                 sig = callees[j+1]
                 # Handle negative counts (fully_covers=false)
                 nmatches = abs(edge)
                 fully_covers = edge > 0
-                min_valid2, max_valid2, matches = verify_call(sig, callees, j+2, nmatches, world, fully_covers)
+                min_valid2, max_valid2 = verify_call(sig, callees, j+2, nmatches, world, fully_covers, matches)
                 j += 2 + nmatches
                 edge = sig
             elseif edge isa Core.Binding
@@ -190,7 +191,6 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
                     min_valid2 = 1
                     max_valid2 = 0
                 end
-                matches = nothing
             else
                 callee = callees[j+1]
                 if callee isa Core.MethodTable # skip the legacy edge (missing backedge)
@@ -205,7 +205,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
                 else
                     meth = callee::Method
                 end
-                min_valid2, max_valid2, matches = verify_invokesig(edge, meth, world)
+                min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches)
                 j += 2
             end
             if minworld < min_valid2
@@ -216,7 +216,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             end
             invalidations = _jl_debug_method_invalidation[]
             if max_valid2 ≠ typemax(UInt) && invalidations !== nothing
-                push!(invalidations, edge, "insert_backedges_callee", codeinst, matches)
+                push!(invalidations, edge, "insert_backedges_callee", codeinst, copy(matches))
             end
             if max_valid2 == 0 && invalidations === nothing
                 break
@@ -293,7 +293,7 @@ function get_method_from_edge(@nospecialize t)
     end
 end
 
-function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool)
+function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool, matches::Vector{Any})
     # verify that these edges intersect with the same methods as before
     mi = nothing
     expected_deleted = false
@@ -307,13 +307,12 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
     end
     if expected_deleted
         if _jl_debug_method_invalidation[] === nothing && world == get_world_counter()
-            result = Any[] # result is unused
-            return UInt(1), UInt(0), result
+            return UInt(1), UInt(0)
         end
     elseif n == 1
         # first, fast-path a check if the expected method simply dominates its sig anyways
         # so the result of ml_matches is already simply known
-        let t = expecteds[i], meth, minworld, maxworld, result
+        let t = expecteds[i], meth, minworld, maxworld
             meth = get_method_from_edge(t)
             if !(t isa Method)
                 if t isa CodeInstance
@@ -327,8 +326,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     minworld = meth.primary_world
                     @assert minworld ≤ world
                     maxworld = typemax(UInt)
-                    result = Any[] # result is unused
-                    return minworld, maxworld, result
+                    return minworld, maxworld
                 end
             end
             # Fast path is legal when fully_covers=true OR when METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC is unset
@@ -337,8 +335,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     minworld = meth.primary_world
                     @assert minworld ≤ world
                     maxworld = typemax(UInt)
-                    result = Any[] # result is unused
-                    return minworld, maxworld, result
+                    return minworld, maxworld
                 end
             end
         end
@@ -414,8 +411,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                 # All interference sets are covered by expecteds, can return success
                 @assert interference_minworld ≤ world
                 maxworld = typemax(UInt)
-                result = Any[] # result is unused
-                return interference_minworld, maxworld, result
+                return interference_minworld, maxworld
             end
         end
    end
@@ -426,6 +422,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
     has_ambig = Ref{Int32}(0)
     result = _methods_by_ftype(sig, nothing, lim, world, #=ambig=#false, minworld, maxworld, has_ambig)
     if result === nothing
+        empty!(matches)
         maxworld[] = 0
     else
         # setdiff!(result, expected)
@@ -457,12 +454,13 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
         end
         if maxworld[] ≠ typemax(UInt) && _jl_debug_method_invalidation[] !== nothing
             resize!(result, ins)
+            copy!(matches, result)
         end
     end
     if maxworld[] == typemax(UInt) && mi isa MethodInstance
         ccall(:jl_promote_mi_to_current, Cvoid, (Any, UInt, UInt), mi, minworld[], world)
     end
-    return minworld[], maxworld[], result
+    return minworld[], maxworld[]
 end
 
 # fast-path dispatch_status bit definitions (false indicates unknown)
@@ -473,10 +471,10 @@ const METHOD_SIG_LATEST_ONLY = 0x2
 # true indicates there exists some other method that is not more specific than this one in the current latest world (which might be more fully covering)
 const METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC = 0x8
 
-function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt)
+function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt, matches::Vector{Any})
     @assert invokesig isa Type
     local minworld::UInt, maxworld::UInt
-    matched = nothing
+    empty!(matches)
     if invokesig === expected.sig && !iszero(expected.dispatch_status & METHOD_SIG_LATEST_WHICH)
         # the invoke match is `expected` for `expected->sig`, unless `expected` is replaced
         minworld = expected.primary_world
@@ -493,12 +491,12 @@ function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UIn
             if matched === nothing
                 maxworld = 0
             else
-                matched = Any[matched.method]
-                if matched[] !== expected
+                push!(matches, matched.method)
+                if matched !== expected
                     maxworld = 0
                 end
             end
         end
     end
-    return minworld, maxworld, matched
+    return minworld, maxworld
 end
