@@ -287,7 +287,7 @@ end
 @test isempty(methods(Ambig8.f, (Int,)))
 @test isempty(methods(Ambig8.g, (Int,)))
 for f in (Ambig8.f, Ambig8.g)
-    @test length(methods(f, (Integer,))) == 2 # 1 is also acceptable
+    @test length(methods(f, (Integer,))) == 3 # 2 is also acceptable
     @test length(methods(f, (Signed,))) == 1 # 2 is also acceptable
     @test length(Base.methods_including_ambiguous(f, (Signed,))) == 2
     @test f(0x00) == 1
@@ -299,13 +299,13 @@ for f in (Ambig8.f, Ambig8.g)
     let ambig = Ref{Int32}(0)
         ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, 10, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test ms isa Vector
-        @test length(ms) == 2
+        @test length(ms) == 3
         @test ambig[] == 1
     end
     let ambig = Ref{Int32}(0)
         ms = Base._methods_by_ftype(Tuple{typeof(f), Union{Int,AbstractIrrational}}, nothing, -1, Base.get_world_counter(), false, Ref{UInt}(typemin(UInt)), Ref{UInt}(typemax(UInt)), ambig)
         @test ms isa Vector
-        @test length(ms) == 2
+        @test length(ms) == 3 # 2 is also acceptable
         @test ambig[] == 1
     end
     let ambig = Ref{Int32}(0)
@@ -459,15 +459,15 @@ struct U55231{P} end
 struct V55231{P} end
 U55231(::V55231) = nothing
 (::Type{T})(::V55231) where {T<:U55231} = nothing
-@test length(methods(U55231)) == 2
+@test length(methods(U55231)) == 1
 U55231(a, b) = nothing
-@test length(methods(U55231)) == 3
+@test length(methods(U55231)) == 2
 struct S55231{P} end
 struct T55231{P} end
 (::Type{T})(::T55231) where {T<:S55231} = nothing
 S55231(::T55231) = nothing
-@test length(methods(S55231)) == 2
+@test length(methods(S55231)) == 1
 S55231(a, b) = nothing
-@test length(methods(S55231)) == 3
+@test length(methods(S55231)) == 2
 
 nothing
