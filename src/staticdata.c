@@ -732,7 +732,8 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
                  !strcmp(jl_symbol_name(b->globalref->name), "__init__") ||
                  // ... or point to Base functions accessed by the runtime
                  (m == jl_base_module && (!strcmp(jl_symbol_name(b->globalref->name), "wait") ||
-                                          !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook"))))) {
+                                          !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook") ||
+                                          !strcmp(jl_symbol_name(b->globalref->name), "_uv_hook_close"))))) {
                 jl_queue_for_serialization(s, b);
             }
         }
