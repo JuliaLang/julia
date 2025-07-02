@@ -616,7 +616,7 @@ macro kwdef(expr)
             Q = Any[isexpr(U, :<:) ? U.args[1] : U for U in P]
             SQ = :($S{$(Q...)})
             should_skip = x -> x isa Base.LineNumberNode || x isa String || x isa Symbol
-            hasinnerconstructor = any(x->!should_skip(x) && (x.head === :function), fieldsblock.args)
+            hasinnerconstructor = any(x->!should_skip(x) && (x.head === :function || x.head === :(=)), fieldsblock.args)
             typecalls = map(Q) do para
                 for arg in fieldsblock.args
                     should_skip(arg) && continue
