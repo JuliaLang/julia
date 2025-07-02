@@ -19,6 +19,8 @@ is considered a bug fix ([#47102])
 
   - A `promote_type` invocation used to recur without bound in some cases while trying to get `promote_rule` to converge. There's now a fixed recursion depth limit to prevent infinite recursion, after which `promote_type` gives up, throwing `ArgumentError`. A subset of cases that would've caused infinite recursion before is caught even before reaching the depth limit. The depth limit is expected to be high enough for there to be no breakage due to this change. NB: there is in actuality no recursion any more, it is emulated up to a shallow depth via metaprogramming. ([#57517])
 
+* Indexless `getindex` and `setindex!` (i.e. `A[]`) on `ReinterpretArray` now correctly throw a `BoundsError` when there is more than one element. ([#58814])
+
 Compiler/Runtime improvements
 -----------------------------
 

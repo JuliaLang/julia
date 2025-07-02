@@ -341,11 +341,11 @@ static void find_perm_offsets(jl_datatype_t *typ, SmallVectorImpl<unsigned> &res
 }
 
 // load a pointer to N inlined_roots into registers (as a SmallVector)
-static llvm::SmallVector<Value*,0> load_gc_roots(jl_codectx_t &ctx, Value *inline_roots_ptr, size_t npointers, bool isVolatile=false)
+static llvm::SmallVector<Value*,0> load_gc_roots(jl_codectx_t &ctx, Value *inline_roots_ptr, size_t npointers, MDNode *tbaa, bool isVolatile=false)
 {
     SmallVector<Value*,0> gcroots(npointers);
     Type *T_prjlvalue = ctx.types().T_prjlvalue;
-    auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, ctx.tbaa().tbaa_gcframe);
+    auto roots_ai = jl_aliasinfo_t::fromTBAA(ctx, tbaa);
     for (size_t i = 0; i < npointers; i++) {
         auto *ptr = ctx.builder.CreateAlignedLoad(T_prjlvalue, emit_ptrgep(ctx, inline_roots_ptr, i * sizeof(jl_value_t*)), Align(sizeof(void*)), isVolatile);
         roots_ai.decorateInst(ptr);
@@ -1601,10 +1601,17 @@ static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name, 
     ctx.builder.SetInsertPoint(ifok);
 }
 
+// ctx.builder.CreateIsNotNull(v) lowers incorrectly in non-standard
+// address spaces where null is not zero
+// TODO: adapt to https://github.com/llvm/llvm-project/pull/131557 once merged
 static Value *null_pointer_cmp(jl_codectx_t &ctx, Value *v)
 {
     ++EmittedNullchecks;
-    return ctx.builder.CreateIsNotNull(v);
+    Type *T = v->getType();
+    return ctx.builder.CreateICmpNE(
+            v,
+            ctx.builder.CreateAddrSpaceCast(
+                Constant::getNullValue(ctx.builder.getPtrTy(0)), T));
 }
 
 
@@ -2682,6 +2689,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
             if (intcast) {
                 ctx.builder.CreateStore(r, intcast);
                 r = ctx.builder.CreateLoad(intcast_eltyp, intcast);
+            }
+            else if (!isboxed && intcast_eltyp) {
+                assert(issetfield);
+                // issetfield doesn't use intcast, so need to reload rhs with the correct type
+                r = emit_unbox(ctx, intcast_eltyp, rhs, jltype);
             }
             if (!isboxed)
                 emit_write_multibarrier(ctx, parent, r, rhs.typ);
