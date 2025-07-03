@@ -9,54 +9,54 @@ const INFIX_FLAG       = RawFlags(1<<3)
 const PREFIX_OP_FLAG   = RawFlags(2<<3)
 const POSTFIX_OP_FLAG  = RawFlags(3<<3)
 
-# The following flags are quite head-specific and may overlap
+# The following flags are quite head-specific and may overlap with numeric flags
 
 """
 Set when K"string" or K"cmdstring" was triple-delimited as with \"\"\" or ```
 """
-const TRIPLE_STRING_FLAG = RawFlags(1<<5)
+const TRIPLE_STRING_FLAG = RawFlags(1<<8)
 
 """
 Set when a K"string", K"cmdstring" or K"Identifier" needs raw string unescaping
 """
-const RAW_STRING_FLAG = RawFlags(1<<6)
+const RAW_STRING_FLAG = RawFlags(1<<9)
 
 """
 Set for K"tuple", K"block" or K"macrocall" which are delimited by parentheses
 """
-const PARENS_FLAG = RawFlags(1<<5)
+const PARENS_FLAG = RawFlags(1<<8)
 
 """
 Set for various delimited constructs when they contains a trailing comma. For
 example, to distinguish `(a,b,)` vs `(a,b)`, and `f(a)` vs `f(a,)`. Kinds where
 this applies are: `tuple call dotcall macrocall vect curly braces <: >:`.
 """
-const TRAILING_COMMA_FLAG = RawFlags(1<<6)
+const TRAILING_COMMA_FLAG = RawFlags(1<<9)
 
 """
 Set for K"quote" for the short form `:x` as opposed to long form `quote x end`
 """
-const COLON_QUOTE = RawFlags(1<<5)
+const COLON_QUOTE = RawFlags(1<<8)
 
 """
 Set for K"toplevel" which is delimited by parentheses
 """
-const TOPLEVEL_SEMICOLONS_FLAG = RawFlags(1<<5)
+const TOPLEVEL_SEMICOLONS_FLAG = RawFlags(1<<8)
 
 """
 Set for K"function" in short form definitions such as `f() = 1`
 """
-const SHORT_FORM_FUNCTION_FLAG = RawFlags(1<<5)
+const SHORT_FORM_FUNCTION_FLAG = RawFlags(1<<8)
 
 """
 Set for K"struct" when mutable
 """
-const MUTABLE_FLAG = RawFlags(1<<5)
+const MUTABLE_FLAG = RawFlags(1<<8)
 
 """
 Set for K"module" when it's not bare (`module`, not `baremodule`)
 """
-const BARE_MODULE_FLAG = RawFlags(1<<5)
+const BARE_MODULE_FLAG = RawFlags(1<<8)
 
 # Flags holding the dimension of an nrow or other UInt8 not held in the source
 # TODO: Given this is only used for nrow/ncat, we could actually use all the flags?
@@ -137,29 +137,34 @@ function untokenize(head::SyntaxHead; unique=true, include_flag_suff=true)
         is_postfix_op_call(head) && (str = str*"-post")
 
         k = kind(head)
-        if k in KSet"string cmdstring Identifier"
-            has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"-s")
-            has_flags(head, RAW_STRING_FLAG) && (str = str*"-r")
-        elseif k in KSet"tuple block macrocall"
-            has_flags(head, PARENS_FLAG) && (str = str*"-p")
-        elseif k == K"quote"
-            has_flags(head, COLON_QUOTE) && (str = str*"-:")
-        elseif k == K"toplevel"
-            has_flags(head, TOPLEVEL_SEMICOLONS_FLAG) && (str = str*"-;")
-        elseif k == K"function"
-            has_flags(head, SHORT_FORM_FUNCTION_FLAG) && (str = str*"-=")
-        elseif k == K"struct"
-            has_flags(head, MUTABLE_FLAG) && (str = str*"-mut")
-        elseif k == K"module"
-            has_flags(head, BARE_MODULE_FLAG) && (str = str*"-bare")
-        end
-        if k in KSet"tuple call dotcall macrocall vect curly braces <: >:" &&
-                has_flags(head, TRAILING_COMMA_FLAG)
-            str *= "-,"
+        # Handle numeric flags for nrow/ncat nodes
+        if k in KSet"nrow ncat typed_ncat"
+            n = numeric_flags(head)
+            n != 0 && (str = str*"-"*string(n))
+        else
+            # Handle head-specific flags that overlap with numeric flags
+            if k in KSet"string cmdstring Identifier"
+                has_flags(head, TRIPLE_STRING_FLAG) && (str = str*"-s")
+                has_flags(head, RAW_STRING_FLAG) && (str = str*"-r")
+            elseif k in KSet"tuple block macrocall"
+                has_flags(head, PARENS_FLAG) && (str = str*"-p")
+            elseif k == K"quote"
+                has_flags(head, COLON_QUOTE) && (str = str*"-:")
+            elseif k == K"toplevel"
+                has_flags(head, TOPLEVEL_SEMICOLONS_FLAG) && (str = str*"-;")
+            elseif k == K"function"
+                has_flags(head, SHORT_FORM_FUNCTION_FLAG) && (str = str*"-=")
+            elseif k == K"struct"
+                has_flags(head, MUTABLE_FLAG) && (str = str*"-mut")
+            elseif k == K"module"
+                has_flags(head, BARE_MODULE_FLAG) && (str = str*"-bare")
+            end
+            if k in KSet"tuple call dotcall macrocall vect curly braces <: >:" &&
+                    has_flags(head, TRAILING_COMMA_FLAG)
+                str *= "-,"
+            end
         end
         is_suffixed(head) && (str = str*"-suf")
-        n = numeric_flags(head)
-        n != 0 && (str = str*"-"*string(n))
     end
     str
 end

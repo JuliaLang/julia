@@ -1098,8 +1098,8 @@ function parse_where_chain(ps0::ParseState, mark)
             # x where {y for y in ys}  ==>  (where x (braces (generator y (iteration (in y ys)))))
             m = position(ps)
             bump(ps, TRIVIA_FLAG)
-            ckind, cflags = parse_cat(ps, K"}", ps.end_symbol)
-            emit_braces(ps, m, ckind, cflags)
+            ckind, cflags, dim = parse_cat(ps, K"}", ps.end_symbol)
+            emit_braces(ps, m, ckind, cflags, dim)
             emit(ps, mark, K"where")
         else
             # x where T     ==>  (where x T)
@@ -1589,7 +1589,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
             # a [i]  ==>  (ref a (error-t) i)
             bump_disallowed_space(ps)
             bump(ps, TRIVIA_FLAG)
-            ckind, cflags = parse_cat(ParseState(ps, end_symbol=true),
+            ckind, cflags, dim = parse_cat(ParseState(ps, end_symbol=true),
                                       K"]", ps.end_symbol)
             if is_macrocall
                 # @S[a,b]  ==>  (macrocall @S (vect a b))
@@ -1600,7 +1600,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                 #v1.7: @S[a ;; b]  ==>  (macrocall @S (ncat-2 a b))
                 #v1.6: @S[a ;; b]  ==>  (macrocall @S (error (ncat-2 a b)))
                 fix_macro_name_kind!(ps, macro_name_position)
-                emit(ps, m, ckind, cflags)
+                emit(ps, m, ckind, cflags | set_numeric_flags(dim))
                 check_ncat_compat(ps, m, ckind)
                 emit(ps, mark, K"macrocall")
                 is_macrocall = false
@@ -1621,7 +1621,7 @@ function parse_call_chain(ps::ParseState, mark, is_macrocall=false)
                        ckind == K"comprehension" ? K"typed_comprehension"  :
                        ckind == K"ncat"          ? K"typed_ncat"           :
                        internal_error("unrecognized kind in parse_cat ", string(ckind))
-                emit(ps, mark, outk, cflags)
+                emit(ps, mark, outk, cflags | set_numeric_flags(dim))
                 check_ncat_compat(ps, mark, ckind)
             end
         elseif k == K"."
@@ -2840,7 +2840,7 @@ function parse_array(ps::ParseState, mark, closer, end_is_symbol)
     if binding_power == typemin(Int)
         # [x@y  ==>  (hcat x (error-t ✘ y))
         bump_closing_token(ps, closer)
-        return (K"hcat", EMPTY_FLAGS)
+        return (K"hcat", 0)
     end
     while true
         (next_dim, next_bp) = parse_array_inner(ps, binding_power, array_order)
@@ -2856,9 +2856,9 @@ function parse_array(ps::ParseState, mark, closer, end_is_symbol)
         binding_power = next_bp
     end
     bump_closing_token(ps, closer)
-    return binding_power == -1 ? (K"vcat", EMPTY_FLAGS) :
-           binding_power ==  0 ? (K"hcat", EMPTY_FLAGS) :
-           (K"ncat", set_numeric_flags(dim))
+    return binding_power == -1 ? (K"vcat", 0) :
+           binding_power ==  0 ? (K"hcat", 0) :
+           (K"ncat", dim)
 end
 
 # Parse equal and ascending precedence chains of array concatenation operators -
@@ -3012,7 +3012,8 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
     mark = position(ps)
     if k == closer
         # []  ==>  (vect)
-        return parse_vect(ps, closer, false)
+        ckind, cflags = parse_vect(ps, closer, false)
+        return (ckind, cflags, 0)
     elseif k == K";"
         #v1.8: [;]           ==>  (ncat-1)
         #v1.8: [;;]          ==>  (ncat-2)
@@ -3022,7 +3023,7 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
         dim, _ = parse_array_separator(ps, Ref(:unknown))
         min_supported_version(v"1.8", ps, mark, "empty multidimensional array syntax")
         bump_closing_token(ps, closer)
-        return (K"ncat", set_numeric_flags(dim))
+        return (K"ncat", EMPTY_FLAGS, dim)
     end
     parse_eq_star(ps)
     k = peek(ps, skip_newlines=true)
@@ -3035,15 +3036,18 @@ function parse_cat(ps::ParseState, closer, end_is_symbol)
         # [x]      ==>  (vect x)
         # [x \n ]  ==>  (vect x)
         # [x       ==>  (vect x (error-t))
-        parse_vect(ps, closer, prefix_trailing_comma)
+        ckind, cflags = parse_vect(ps, closer, prefix_trailing_comma)
+        return (ckind, cflags, 0)
     elseif k == K"for"
         # [x for a in as]  ==>  (comprehension (generator x (iteration (in a as))))
         # [x \n\n for a in as]  ==>  (comprehension (generator x (iteration (in a as))))
-        parse_comprehension(ps, mark, closer)
+        ckind, cflags = parse_comprehension(ps, mark, closer)
+        return (ckind, cflags, 0)
     else
         # [x y]  ==>  (hcat x y)
         # and other forms; See parse_array.
-        parse_array(ps, mark, closer, end_is_symbol)
+        ckind, dim = parse_array(ps, mark, closer, end_is_symbol)
+        return (ckind, EMPTY_FLAGS, dim)
     end
 end
 
@@ -3448,13 +3452,13 @@ function parse_string(ps::ParseState, raw::Bool)
     emit(ps, mark, string_kind, str_flags)
 end
 
-function emit_braces(ps, mark, ckind, cflags)
+function emit_braces(ps, mark, ckind, cflags, dim=0)
     if ckind == K"hcat"
         # {x y}  ==>  (bracescat (row x y))
         emit(ps, mark, K"row", cflags & ~TRAILING_COMMA_FLAG)
     elseif ckind == K"ncat"
         # {x ;;; y}  ==>  (bracescat (nrow-3 x y))
-        emit(ps, mark, K"nrow", cflags & ~TRAILING_COMMA_FLAG)
+        emit(ps, mark, K"nrow", set_numeric_flags(dim))
     end
     check_ncat_compat(ps, mark, ckind)
     outk = ckind in KSet"vect comprehension" ? K"braces" : K"bracescat"
@@ -3638,13 +3642,13 @@ function parse_atom(ps::ParseState, check_identifiers=true, has_unary_prefix=fal
         parse_paren(ps, check_identifiers, has_unary_prefix)
     elseif leading_kind == K"[" # cat expression
         bump(ps, TRIVIA_FLAG)
-        ckind, cflags = parse_cat(ps, K"]", ps.end_symbol)
-        emit(ps, mark, ckind, cflags)
+        ckind, cflags, dim = parse_cat(ps, K"]", ps.end_symbol)
+        emit(ps, mark, ckind, cflags | set_numeric_flags(dim))
         check_ncat_compat(ps, mark, ckind)
     elseif leading_kind == K"{" # cat expression
         bump(ps, TRIVIA_FLAG)
-        ckind, cflags = parse_cat(ps, K"}", ps.end_symbol)
-        emit_braces(ps, mark, ckind, cflags)
+        ckind, cflags, dim = parse_cat(ps, K"}", ps.end_symbol)
+        emit_braces(ps, mark, ckind, cflags, dim)
     elseif leading_kind == K"@" # macro call
         # Macro names can be keywords
         # @end x  ==> (macrocall @end x)

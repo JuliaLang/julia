@@ -890,6 +890,8 @@ tests = [
         "{x,y,}"     =>  "(braces-, x y)"
         "{x y}"      =>  "(bracescat (row x y))"
         ((v=v"1.7",), "{x ;;; y}") =>  "(bracescat (nrow-3 x y))"
+        ((v=v"1.7",), "{a ;; b}") =>  "(bracescat (nrow-2 a b))"
+        ((v=v"1.7",), "{a ;;;; b}") =>  "(bracescat (nrow-4 a b))"
         # Macro names can be keywords
         "@end x" => "(macrocall @end x)"
         # __dot__ macro
@@ -929,6 +931,11 @@ tests = [
         # Column major
         ((v=v"1.7",), "[x ; y ;; z ; w ;;; a ; b ;; c ; d]")  =>
             "(ncat-3 (nrow-2 (nrow-1 x y) (nrow-1 z w)) (nrow-2 (nrow-1 a b) (nrow-1 c d)))"
+        # Dimension 4 ncat
+        ((v=v"1.7",), "[x ;;;; y]")  =>  "(ncat-4 x y)"
+        ((v=v"1.7",), "[a ; b ;;;; c ; d]")  =>  "(ncat-4 (nrow-1 a b) (nrow-1 c d))"
+        ((v=v"1.7",), "[a b ; c d ;;;; e f ; g h]")  =>
+            "(ncat-4 (nrow-1 (row a b) (row c d)) (nrow-1 (row e f) (row g h)))"
         # Array separators
         # Newlines before semicolons are not significant
         "[a \n ;]"  =>  "(vcat a)"
