@@ -720,7 +720,9 @@ function iscall_with_boundscheck(@nospecialize(stmt), sv::PostOptAnalysisState)
     f === nothing && return false
     if f === getfield
         nargs = 4
-    elseif f === memoryrefnew || f === memoryrefget || f === memoryref_isassigned
+    elseif f === memoryrefnew
+        nargs= 3
+    elseif f === memoryrefget || f === memoryref_isassigned
         nargs = 4
     elseif f === memoryrefset!
         nargs = 5
