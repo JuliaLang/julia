@@ -756,6 +756,15 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
     }
 }
 
+static int codeinst_may_be_runnable(jl_code_instance_t *ci, int incremental) {
+    size_t max_world = jl_atomic_load_relaxed(&ci->max_world);
+    if (max_world == ~(size_t)0)
+        return 1;
+    if (incremental)
+        return 0;
+    return jl_atomic_load_relaxed(&ci->min_world) <= jl_typeinf_world && jl_typeinf_world <= max_world;
+}
+
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
 // in serialization (i.e., have its own entry in `serialization_order`). Consequently,
 // objects that act as containers for other potentially-"problematic" objects must add such "children"
@@ -924,8 +933,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 else if (def->source == NULL) {
                     // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
                 }
-                else if (jl_atomic_load_relaxed(&ci->max_world) != ~(size_t)0 || // delete all code that cannot run
-                    jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
+                else if (!codeinst_may_be_runnable(ci, s->incremental) || // delete all code that cannot run
+                         jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) { // delete all code that just returns a constant
                     discard = 1;
                 }
                 else if (native_functions && // don't delete any code if making a ji file
