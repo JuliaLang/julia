@@ -1568,7 +1568,7 @@ jl_task_t *jl_init_root_task(jl_ptls_t ptls, void *stack_lo, void *stack_hi)
     ct->queue = jl_nothing;
     ct->tls = jl_nothing;
     jl_atomic_store_relaxed(&ct->_state, JL_TASK_STATE_RUNNABLE);
-    ct->start = NULL;
+    ct->start = jl_nothing;
     ct->result = jl_nothing;
     ct->donenotify = jl_nothing;
     jl_atomic_store_relaxed(&ct->_isexception, 0);
