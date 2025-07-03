@@ -482,9 +482,10 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     m->parent = parent ? parent : m;
     m->istopmod = 0;
     m->uuid = uuid_zero;
-    static unsigned int mcounter; // simple counter backup, in case hrtime is not incrementing
+    static _Atomic(unsigned int) mcounter; // simple counter backup, in case hrtime is not incrementing
+    unsigned int count = jl_atomic_fetch_add_relaxed(&mcounter, 1);
     // TODO: this is used for ir decompression and is liable to hash collisions so use more of the bits
-    m->build_id.lo = bitmix(jl_hrtime() + (++mcounter), jl_rand());
+    m->build_id.lo = bitmix(jl_hrtime() + count, jl_rand());
     if (!m->build_id.lo)
         m->build_id.lo++; // build id 0 is invalid
     m->build_id.hi = ~(uint64_t)0;
@@ -1669,8 +1670,14 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     // Until the first such replacement, we can fast-path validation.
     // For these purposes, we consider the `Main` module to be a non-sysimg module.
     // This is legal, because we special case the `Main` in check_safe_import_from.
-    if (jl_object_in_image((jl_value_t*)b) && b->globalref->mod != jl_main_module && jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0)
+    if (jl_object_in_image((jl_value_t*)b) && b->globalref->mod != jl_main_module && jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0) {
+        // During incremental compilation replacement of image bindings is forbidden;
+        // We use this to avoid inserting backedges while loading pkgimages.
+        // `check_safe_newbinding` checks an equivalent condition on `b->globalref->mod`,
+        // but doesn't quite query `jl_object_in_image`, so assert here to be extra sure.
+        assert(!(jl_options.incremental && jl_generating_output()));
         jl_atomic_store_relaxed(&jl_first_image_replacement_world, new_world);
+    }
 
     assert(jl_atomic_load_relaxed(&b->partitions) == old_bpart);
     jl_binding_partition_t *new_bpart = new_binding_partition();

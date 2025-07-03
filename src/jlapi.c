@@ -120,6 +120,13 @@ JL_DLLEXPORT void jl_init_with_image_file(const char *julia_bindir,
     jl_exception_clear();
 }
 
+// Deprecated function, kept for backward compatibility
+JL_DLLEXPORT void jl_init_with_image(const char *julia_bindir,
+                                    const char *image_path)
+{
+    jl_init_with_image_file(julia_bindir, image_path);
+}
+
 /**
  * @brief Initialize the Julia runtime.
  *
