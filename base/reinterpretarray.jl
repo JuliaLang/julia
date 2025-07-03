@@ -535,7 +535,7 @@ end
 
 @propagate_inbounds function setindex!(a::NonReshapedReinterpretArray{T,0,S}, v) where {T,S}
     if isprimitivetype(S) && isprimitivetype(T)
-        a.parent[] = reinterpret(S, v)
+        a.parent[] = reinterpret(S, convert(T, v)::T)
         return a
     end
     setindex!(a, v, firstindex(a))
