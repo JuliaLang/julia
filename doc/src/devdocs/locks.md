@@ -10,7 +10,7 @@ the 4th Coffman condition: circular wait).
 ## Types of locks
 
 `uv_mutex_t` (or `std::mutex`) is a wrapper around platform-specific locks
-(`pthread_mutex_t` on Unix, `CRITICAL_SECTION` on Windows).  It may cuase the
+(`pthread_mutex_t` on Unix, `CRITICAL_SECTION` on Windows).  It may cause the
 current OS thread to block, is not reentrant, and is not a safepoint.
 
 `jl_mutex_t` is a reentrant spinlock.  `jl_mutex_t`s acquired in a `try` block
