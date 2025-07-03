@@ -522,6 +522,16 @@ function _indices_sub(i1::AbstractArray, I...)
     (axes(i1)..., _indices_sub(I...)...)
 end
 
+axes1(::SubArray{<:Any,0}) = OneTo(1)
+axes1(S::SubArray) = (@inline; _axes1_sub(S.indices...))
+_axes1_sub() = ()
+_axes1_sub(::Real, I...) = (@inline; _axes1_sub(I...))
+_axes1_sub(::AbstractArray{<:Any,0}, I...) = _axes1_sub(I...)
+function _axes1_sub(i1::AbstractArray, I...)
+    @inline
+    axes1(i1)
+end
+
 has_offset_axes(S::SubArray) = has_offset_axes(S.indices...)
 
 function replace_in_print_matrix(S::SubArray{<:Any,2,<:AbstractMatrix}, i::Integer, j::Integer, s::AbstractString)

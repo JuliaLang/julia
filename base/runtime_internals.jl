@@ -1414,6 +1414,8 @@ Returns the world the [current_task()](@ref) is executing within.
 """
 tls_world_age() = ccall(:jl_get_tls_world_age, UInt, ())
 
+get_require_world() = unsafe_load(cglobal(:jl_require_world, UInt))
+
 """
     propertynames(x, private=false)
 

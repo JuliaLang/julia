@@ -109,7 +109,7 @@ end
         if mod ∉ visited
             push!(visited, mod)
             for name in names(mod, all=true)
-                isdefined(mod, name) || continue
+                isdefinedglobal(mod, name) || continue
                 Base.isdeprecated(mod, name) && continue
                 value = getfield(mod, name)
                 if value isa Module

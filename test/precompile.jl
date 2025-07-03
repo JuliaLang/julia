@@ -778,12 +778,12 @@ precompile_test_harness("code caching") do dir
     Base.compilecache(pkgid)
     @test Base.isprecompiled(pkgid)
     @eval using $Cache_module
-    M = invokelatest(getfield, @__MODULE__, Cache_module)
+    M = invokelatest(getglobal, @__MODULE__, Cache_module)
     Mid = rootid(M)
     invokelatest() do
         # Test that this cache file "owns" all the roots
         for name in (:f, :fpush, :callboth)
-            func = getfield(M, name)
+            func = getglobal(M, name)
             m = only(collect(methods(func)))
             @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
         end
@@ -1033,7 +1033,7 @@ precompile_test_harness("code caching") do dir
         Base.compilecache(Base.PkgId(string(pkg)))
     end
     @eval using $StaleA
-    MA = invokelatest(getfield, @__MODULE__, StaleA)
+    MA = invokelatest(getglobal, @__MODULE__, StaleA)
     Base.eval(MA, :(nbits(::UInt8) = 8))
     Base.eval(MA, quote
         struct InvalidatedBinding
@@ -1083,9 +1083,8 @@ precompile_test_harness("code caching") do dir
         @test hasvalid(mi, world)       # was compiled with the new method
         m = only(methods(MA.fib))
         mi = m.specializations::Core.MethodInstance
-        @test isdefined(mi, :cache)     # it was precompiled by StaleB
-        @test_broken !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
-        @test_broken MA.fib() === 2.0
+        @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        @test MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
         @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
@@ -1154,7 +1153,7 @@ precompile_test_harness("precompiletools") do dir
     Base.compilecache(pkgid)
     @test Base.isprecompiled(pkgid)
     @eval using $PrecompileToolsModule
-    M = invokelatest(getfield, @__MODULE__, PrecompileToolsModule)
+    M = invokelatest(getglobal, @__MODULE__, PrecompileToolsModule)
     invokelatest() do
         m = which(Tuple{typeof(findfirst), Base.Fix2{typeof(==), T}, Vector{T}} where T)
         success = 0
@@ -1281,7 +1280,7 @@ precompile_test_harness("invoke") do dir
           """)
     Base.compilecache(Base.PkgId(string(CallerModule)))
     @eval using $InvokeModule: $InvokeModule
-    MI = invokelatest(getfield, @__MODULE__, InvokeModule)
+    MI = invokelatest(getglobal, @__MODULE__, InvokeModule)
     @eval $MI.getlast(a::UnitRange) = a.stop
     @eval using $CallerModule
     invokelatest() do
