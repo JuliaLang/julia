@@ -1051,11 +1051,12 @@ _test_at_locals2(1,1,0.5f0)
 
 @testset "issue #31687" begin
     import InteractiveUtils._dump_function
+    import InteractiveUtils.ArgInfo
 
     @noinline f31687_child(i) = f31687_nonexistent(i)
     f31687_parent() = f31687_child(0)
     params = Base.CodegenParams()
-    _dump_function(f31687_parent, Tuple{},
+    _dump_function(ArgInfo(f31687_parent, Tuple{}),
                    #=native=#false, #=wrapper=#false, #=raw=#true,
                    #=dump_module=#true, #=syntax=#:att, #=optimize=#false, :none,
                    #=binary=#false)

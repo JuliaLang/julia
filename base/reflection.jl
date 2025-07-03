@@ -72,7 +72,7 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     return method_instances(tt, world)
 end
 
-function method_instance(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}),
+function method_instance(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}});
                          world=Base.get_world_counter(), method_table=nothing)
     tt = to_tuple_type(argtypes)
     mi = ccall(:jl_method_lookup_by_tt, Any,
