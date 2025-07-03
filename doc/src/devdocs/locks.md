@@ -103,11 +103,6 @@ exception frames, and taking/releasing locks.
       while holding any other lock listed above may result in pernicious and
       hard-to-find deadlocks.
 
-The following is a level 7 lock, which can only be acquired when not holding any other locks:
-
->   * world_counter_lock
-
-
 * Individual `ThreadSynchronizer` locks
   !!! danger
       This may continue to be held after releasing the iolock, or acquired
