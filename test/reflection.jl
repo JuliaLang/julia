@@ -16,6 +16,11 @@ function test_ir_reflection(freflect, f, types)
     nothing
 end
 
+function test_ir_reflection(freflect, argtypes)
+    @test !isempty(freflect(argtypes))
+    nothing
+end
+
 function test_bin_reflection(freflect, f, types)
     iob = IOBuffer()
     freflect(iob, f, types)
@@ -27,6 +32,9 @@ end
 function test_code_reflection(freflect, f, types, tester)
     tester(freflect, f, types)
     tester(freflect, f, (types.parameters...,))
+    tt = Base.signature_type(f, types)
+    tester(freflect, tt)
+    tester(freflect, (tt.parameters...,))
     nothing
 end
 
@@ -43,6 +51,7 @@ end
 
 test_code_reflections(test_ir_reflection, code_lowered)
 test_code_reflections(test_ir_reflection, code_typed)
+test_code_reflections(test_ir_reflection, Base.code_ircode)
 
 io = IOBuffer()
 Base.print_statement_costs(io, map, (typeof(sqrt), Tuple{Int}))
@@ -682,6 +691,10 @@ end
 @test Base.code_typed_by_type(Tuple{Type{<:Val}})[2][2] == Val
 @test Base.code_typed_by_type(Tuple{typeof(sin), Float64})[1][2] === Float64
 
+# functor-like code_typed(...)
+@test Base.code_typed((Type{<:Val},))[2][2] == Val
+@test Base.code_typed((typeof(sin), Float64))[1][2] === Float64
+
 # New reflection methods in 0.6
 struct ReflectionExample{T<:AbstractFloat, N}
     x::Tuple{T, N}
@@ -1131,9 +1144,12 @@ end
     @test 1+1 == 2
     mi1 = Base.method_instance(+, (Int, Int))
     @test mi1.def.name == :+
-    # Note `jl_method_lookup` doesn't returns CNull if not found
-    mi2 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
-    @test mi1 == mi2
+    mi2 = Base.method_instance((typeof(+), Int, Int))
+    @test mi2.def.name == :+
+    # Note `jl_method_lookup` doesn't return CNull if not found
+    mi3 = @ccall jl_method_lookup(Any[+, 1, 1]::Ptr{Any}, 3::Csize_t, Base.get_world_counter()::Csize_t)::Ref{Core.MethodInstance}
+    @test mi1 == mi3
+    @test mi2 == mi3
 end
 
 Base.@assume_effects :terminates_locally function issue41694(x::Int)
