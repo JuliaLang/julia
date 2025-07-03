@@ -412,7 +412,7 @@ end
     # Convert to full indices here, to avoid needing multiple conversions in
     # the loop in _getindex_ra
     inds = _to_subscript_indices(a, i)
-    isempty(inds) ? _getindex_ra(a, 1, ()) : _getindex_ra(a, inds[1], tail(inds))
+    isempty(inds) ? _getindex_ra(a, firstindex(a), ()) : _getindex_ra(a, inds[1], tail(inds))
 end
 
 @propagate_inbounds function getindex(a::ReshapedReinterpretArray{T,N,S}, ind::SCartesianIndex2) where {T,N,S}
@@ -556,7 +556,7 @@ end
         return _setindex_ra!(a, v, i, ())
     end
     inds = _to_subscript_indices(a, i)
-    _setindex_ra!(a, v, inds[1], tail(inds))
+    isempty(inds) ? _setindex_ra!(a, v, firstindex(a), ()) : _setindex_ra!(a, v, inds[1], tail(inds))
 end
 
 @propagate_inbounds function setindex!(a::ReshapedReinterpretArray{T,N,S}, v, ind::SCartesianIndex2) where {T,N,S}

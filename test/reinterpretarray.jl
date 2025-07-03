@@ -160,6 +160,16 @@ test_many_wrappers(A3) do A3_
     @test A3[2,1,2] == 400
 end
 
+test_many_wrappers(C) do Cr
+    r = reinterpret(reshape, Tuple{Int, Int}, Cr)
+    r[] = (2,2)
+    @test r[] === (2,2)
+    r[1] = (3,3)
+    @test r[1] === (3,3)
+    r[1,1] = (4,4)
+    @test r[1,1] === (4,4)
+end
+
 # same-size reinterpret where one of the types is non-primitive
 let a = NTuple{4,UInt8}[(0x01,0x02,0x03,0x04)]
     test_many_wrappers(a, (identity, wrapper, fcviews)) do a_
