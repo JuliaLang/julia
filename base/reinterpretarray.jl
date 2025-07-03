@@ -313,13 +313,13 @@ end
 _maybe_reshape(::IndexSCartesian2, A::ReshapedReinterpretArray, I...) = A
 
 # fallbacks
-function _getindex(::IndexSCartesian2, A::AbstractArray{T,N}, I::Vararg{Int, N}) where {T,N}
+function _getindex(::IndexSCartesian2, A::AbstractArray, I::Vararg{Int, N}) where {N}
     @_propagate_inbounds_meta
-    getindex(A, I...)
+    _getindex(IndexCartesian(), A, I...)
 end
-function _setindex!(::IndexSCartesian2, A::AbstractArray{T,N}, v, I::Vararg{Int, N}) where {T,N}
+function _setindex!(::IndexSCartesian2, A::AbstractArray, v, I::Vararg{Int, N}) where {N}
     @_propagate_inbounds_meta
-    setindex!(A, v, I...)
+    _setindex!(IndexCartesian(), A, v, I...)
 end
 # fallbacks for array types that use "pass-through" indexing (e.g., `IndexStyle(A) = IndexStyle(parent(A))`)
 # but which don't handle SCartesianIndex2
