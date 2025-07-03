@@ -168,12 +168,15 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             end
             if edge isa MethodInstance
                 sig = edge.specTypes
-                min_valid2, max_valid2, matches = verify_call(sig, callees, j, 1, world)
+                min_valid2, max_valid2, matches = verify_call(sig, callees, j, 1, world, true)
                 j += 1
             elseif edge isa Int
                 sig = callees[j+1]
-                min_valid2, max_valid2, matches = verify_call(sig, callees, j+2, edge, world)
-                j += 2 + edge
+                # Handle negative counts (fully_covers=false)
+                nmatches = abs(edge)
+                fully_covers = edge > 0
+                min_valid2, max_valid2, matches = verify_call(sig, callees, j+2, nmatches, world, fully_covers)
+                j += 2 + nmatches
                 edge = sig
             elseif edge isa Core.Binding
                 j += 1
@@ -279,7 +282,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     return 0, minworld, maxworld
 end
 
-function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt)
+function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool)
     # verify that these edges intersect with the same methods as before
     mi = nothing
     if n == 1
@@ -295,7 +298,9 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     mi = t::MethodInstance
                 end
                 meth = mi.def::Method
-                if !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                # Fast path is legal when fully_covers=true OR when METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC is unset
+                if (fully_covers || iszero(meth.dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)) &&
+                   !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
                     minworld = meth.primary_world
                     @assert minworld ≤ world
                     maxworld = typemax(UInt)
@@ -303,12 +308,15 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     return minworld, maxworld, result
                 end
             end
-            if !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
-                minworld = meth.primary_world
-                @assert minworld ≤ world
-                maxworld = typemax(UInt)
-                result = Any[] # result is unused
-                return minworld, maxworld, result
+            # Fast path is legal when fully_covers=true OR when METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC is unset
+            if fully_covers || iszero(meth.dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)
+                if !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                    minworld = meth.primary_world
+                    @assert minworld ≤ world
+                    maxworld = typemax(UInt)
+                    result = Any[] # result is unused
+                    return minworld, maxworld, result
+                end
             end
         end
     end
@@ -373,6 +381,8 @@ end
 const METHOD_SIG_LATEST_WHICH = 0x1
 # true indicates this method would be returned as the only result from `methods` when calling `method.sig` in the current latest world
 const METHOD_SIG_LATEST_ONLY = 0x2
+# true indicates there exists some other method that is not more specific than this one in the current latest world (which might be more fully covering)
+const METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC = 0x8
 
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt)
     @assert invokesig isa Type

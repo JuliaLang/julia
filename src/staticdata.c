@@ -1842,7 +1842,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
                         jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
                         int dispatch_status = jl_atomic_load_relaxed(&newm->dispatch_status);
-                        jl_atomic_store_relaxed(&newm->dispatch_status, dispatch_status & METHOD_SIG_LATEST_ONLY ? 0 : METHOD_SIG_PRECOMPILE_MANY);
+                        int new_dispatch_status = 0;
+                        if (!(dispatch_status & METHOD_SIG_LATEST_ONLY))
+                            new_dispatch_status |= METHOD_SIG_PRECOMPILE_MANY;
+                        if (dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)
+                            new_dispatch_status |= METHOD_SIG_PRECOMPILE_HAS_NOTMORESPECIFIC;
+                        jl_atomic_store_relaxed(&newm->dispatch_status, new_dispatch_status);
                         arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
                 }
