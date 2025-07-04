@@ -115,7 +115,7 @@ maybeview(v, k::Integer) = v[k]
 """
     partialsort!(v, k; by=identity, lt=isless, rev=false)
 
-Mutate the vector `v` so that so that the value at index `k` (or
+Mutate the vector `v` so that the value at index `k` (or
 range of adjacent values if `k` is a range) occurs
 at the position where it would appear if the array were fully sorted. If `k` is a single
 index, that value is returned; if `k` is a range, an array of values at those indices is
