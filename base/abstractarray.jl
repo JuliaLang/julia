@@ -3107,6 +3107,7 @@ _ind2sub(inds::Indices, ind::Integer)     = (@inline; _ind2sub_recurse(inds, ind
 _ind2sub(inds::Indices{1}, ind::Integer) =
     throw(ArgumentError("Linear indexing is not defined for one-dimensional arrays"))
 _ind2sub(inds::Tuple{OneTo}, ind::Integer) = (ind,)
+_ind2sub(inds::Tuple{AbstractUnitRange}, ind::Integer) = (first(inds[1]) + ind - 1,) 
 
 _ind2sub_recurse(::Tuple{}, ind) = (ind+1,)
 function _ind2sub_recurse(indslast::NTuple{1}, ind)

@@ -311,6 +311,7 @@ SimdLoop.simd_inner_length(::SCartesianIndices2{K}, ::Any) where K = K
     SCartesianIndex2{K}(I1+1, Ilast)
 end
 
+_maybe_reshape(::IndexSCartesian2, A::AbstractArray, I...) = _maybe_reshape(IndexCartesian(), A, I...)
 _maybe_reshape(::IndexSCartesian2, A::ReshapedReinterpretArray, I...) = A
 
 # fallbacks
