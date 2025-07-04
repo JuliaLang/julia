@@ -51,9 +51,9 @@ using LinearAlgebra: BlasComplex, BlasFloat, BlasReal, QRPivoted
     @test sf2.U*Diagonal(sf2.S)*sf2.Vt' ≊ m2
 
     @test ldiv!([0., 0.], svd(Matrix(I, 2, 2)), [1., 1.]) ≊ [1., 1.]
+    @test_throws DimensionMismatch inv(svd(Matrix(I, 3, 2)))
     @test inv(svd(Matrix(I, 2, 2))) ≈ I
     @test inv(svd([1 2; 3 4])) ≈ [-2.0 1.0; 1.5 -0.5]
-    @test inv(svd([1 0 1; 0 1 0])) ≈ [0.5 0.0; 0.0 1.0; 0.5 0.0]
     @test_throws SingularException inv(svd([0 0; 0 0]))
     @test inv(svd([1+2im 3+4im; 5+6im 7+8im])) ≈ [-0.5 + 0.4375im 0.25 - 0.1875im; 0.375 - 0.3125im -0.125 + 0.0625im]
 end
