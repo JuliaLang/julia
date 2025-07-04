@@ -11,7 +11,7 @@ using NetworkOptions
 using Printf: @printf
 using SHA: sha1, sha256
 
-export with, GitRepo, GitConfig
+export with, GitRepo, GitConfig, SidebandPayload, get_sideband_messages, clear_sideband_messages, sideband_progress_cb
 
 using LibGit2_jll
 
@@ -298,9 +298,13 @@ function fetch(repo::GitRepo; remote::AbstractString="origin",
         else
             Base.shred!(cred_payload)
         end
+        # Clear sideband messages since they've been included in the error
+        clear_sideband_messages()
         rethrow()
     finally
         close(rmt)
+        # Clear sideband messages on success
+        clear_sideband_messages()
     end
     approve(cred_payload)
     return result
@@ -354,9 +358,13 @@ function push(repo::GitRepo; remote::AbstractString="origin",
         else
             Base.shred!(cred_payload)
         end
+        # Clear sideband messages since they've been included in the error
+        clear_sideband_messages()
         rethrow()
     finally
         close(rmt)
+        # Clear sideband messages on success
+        clear_sideband_messages()
     end
     approve(cred_payload)
     return result
@@ -588,10 +596,14 @@ function clone(repo_url::AbstractString, repo_path::AbstractString;
             else
                 Base.shred!(cred_payload)
             end
+            # Clear sideband messages since they've been included in the error
+            clear_sideband_messages()
             rethrow()
         end
     end
     approve(cred_payload)
+    # Clear sideband messages on success
+    clear_sideband_messages()
     return repo
 end
 
@@ -618,19 +630,24 @@ function connect(rmt::GitRemote, direction::Consts.GIT_DIRECTION;
             "`callbacks` also contain a credentials payload.")))
     end
 
-    remote_callbacks = RemoteCallbacks(callbacks)
-    try
+    result = try
+        remote_callbacks = RemoteCallbacks(callbacks)
         connect(rmt, direction, remote_callbacks)
+        rmt
     catch err
         if isa(err, GitError) && err.code === Error.EAUTH
             reject(cred_payload)
         else
             Base.shred!(cred_payload)
         end
+        # Clear sideband messages since they've been included in the error
+        clear_sideband_messages()
         rethrow()
     end
     approve(cred_payload)
-    return rmt
+    # Clear sideband messages on success
+    clear_sideband_messages()
+    return result
 end
 
 """ git reset [<committish>] [--] <pathspecs>... """

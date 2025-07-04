@@ -374,6 +374,7 @@ function getpass(input::TTY, output::IO, prompt::AbstractString; with_suffix::Bo
                 write(s, c)
             end
         end
+        println(output) # Add newline after password input
         return seekstart(s)
     end
 end

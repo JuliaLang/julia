@@ -1,5 +1,85 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
+using Base.ScopedValues: ScopedValue
+
+# Payload structure to store sideband progress messages from remote
+mutable struct SidebandPayload
+    messages::Vector{String}
+    SidebandPayload() = new(String[])
+end
+
+# Thread-safe storage for sideband messages
+# We use task-local storage for proper isolation
+const SIDEBAND_STORAGE = IdDict{Task, SidebandPayload}()
+const SIDEBAND_LOCK = ReentrantLock()
+
+# Store sideband messages for the current task
+function store_sideband_message(message::String)
+    task = Base.current_task()
+    Base.lock(SIDEBAND_LOCK) do
+        payload = Base.get!(SIDEBAND_STORAGE, task, SidebandPayload())
+        Base.push!(payload.messages, message)
+    end
+end
+
+# Get accumulated sideband messages for the current task
+function get_sideband_messages()
+    task = Base.current_task()
+    Base.lock(SIDEBAND_LOCK) do
+        payload = Base.get(SIDEBAND_STORAGE, task, nothing)
+        return payload === nothing ? String[] : Base.copy(payload.messages)
+    end
+end
+
+# Clear sideband messages for the current task
+function clear_sideband_messages()
+    task = Base.current_task()
+    Base.lock(SIDEBAND_LOCK) do
+        Base.delete!(SIDEBAND_STORAGE, task)
+    end
+end
+
+# Legacy ScopedValue definition for compatibility (not used in C callbacks)
+const SIDEBAND_MESSAGES = ScopedValue{SidebandPayload}()
+
+# Get the current sideband payload from scoped value (legacy)
+function get_sideband_payload()
+    try
+        payload = SIDEBAND_MESSAGES[]
+        if payload !== nothing
+            return payload
+        else
+            # Return a dummy payload if we're not in a scoped context
+            return SidebandPayload()
+        end
+    catch
+        # Return a dummy payload if we're not in a scoped context
+        return SidebandPayload()
+    end
+end
+
+"""
+Sideband progress callback
+
+This function is called by libgit2 when progress information is received from the remote
+server, including "remote:" messages that contain helpful information like authentication
+errors or other server messages.
+"""
+function sideband_progress_callback(str::Cstring, len::Cint, payload_ptr::Ptr{Cvoid})::Cint
+    try
+        # Convert the C string to a Julia string (handle non-null-terminated data)
+        if str != C_NULL && len > 0
+            data = unsafe_string(str, len)
+            
+            # Store the message in task-local storage
+            store_sideband_message(data)
+        end
+        return Cint(0)  # Success
+    catch
+        return Cint(-1)  # Error
+    end
+end
+
 """Mirror callback function
 
 Function sets `+refs/*:refs/*` refspecs and `mirror` flag for remote reference.
@@ -51,17 +131,41 @@ end
 
 function prompt_limit()
     ensure_initialized()
+    
+    # Check if we have sideband messages that contain useful information
+    sideband_messages = get_sideband_messages()
+    if !isempty(sideband_messages)
+        # If we have sideband messages, include them in the error
+        sideband_text = join(sideband_messages, "\n")
+        error_msg = sideband_text * "\nAborting, maximum number of prompts reached."
+    else
+        # Original generic message
+        error_msg = "Aborting, maximum number of prompts reached."
+    end
+    
     ccall((:git_error_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
-          "Aborting, maximum number of prompts reached.")
+          error_msg)
     return Cint(Error.EAUTH)
 end
 
 function exhausted_abort()
     ensure_initialized()
+    
+    # Check if we have sideband messages that contain useful information
+    sideband_messages = get_sideband_messages()
+    if !isempty(sideband_messages)
+        # If we have sideband messages, include them in the error
+        sideband_text = join(sideband_messages, "\n")
+        error_msg = sideband_text * "\nAll authentication methods have failed."
+    else
+        # Original generic message
+        error_msg = "All authentication methods have failed."
+    end
+    
     ccall((:git_error_set_str, libgit2), Cvoid,
           (Cint, Cstring), Cint(Error.Callback),
-          "All authentication methods have failed.")
+          error_msg)
     return Cint(Error.EAUTH)
 end
 
@@ -518,3 +622,5 @@ fetchhead_foreach_cb() = @cfunction(fetchhead_foreach_callback, Cint, (Cstring, 
 certificate_cb() = @cfunction(certificate_callback, Cint, (Ptr{CertHostKey}, Cint, Ptr{Cchar}, Ptr{Cvoid}))
 "C function pointer for `trace_callback`"
 trace_cb() = @cfunction(trace_callback, Cint, (Cint, Cstring))
+"C function pointer for `sideband_progress_callback`"
+sideband_progress_cb() = @cfunction(sideband_progress_callback, Cint, (Cstring, Cint, Ptr{Cvoid}))

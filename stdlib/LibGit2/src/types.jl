@@ -274,6 +274,13 @@ function RemoteCallbacks(c::Callbacks)
         payloads[name] = payload
     end
 
+    # Always add sideband_progress callback to capture remote messages
+    # This helps capture "remote:" messages from services like GitHub
+    if !haskey(callbacks, :sideband_progress)
+        callbacks[:sideband_progress] = sideband_progress_cb()
+        payloads[:sideband_progress] = nothing
+    end
+
     RemoteCallbacks(; payload=payloads, callbacks...)
 end
 
