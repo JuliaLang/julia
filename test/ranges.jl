@@ -1890,6 +1890,7 @@ struct Position <: Integer
     val::Int
 end
 Position(x::Position) = x # to resolve ambiguity with boot.jl:770
+Base.Int(p::Position) = p.val
 
 struct Displacement <: Integer
     val::Int
