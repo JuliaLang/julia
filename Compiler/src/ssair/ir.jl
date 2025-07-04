@@ -105,6 +105,9 @@ function compute_basic_blocks(stmts::Vector{Any})
     end
     # Compute successors/predecessors
     for (num, b) in enumerate(blocks)
+        if b.stmts.start == 1
+            push!(b.preds, 0) # the entry block has a virtual predecessor
+        end
         terminator = stmts[last(b.stmts)]
         if isa(terminator, ReturnNode)
             # return never has any successors

@@ -161,6 +161,42 @@ begin
     @test "42" == String(take!(GLOBAL_BUFFER))
 end
 
+begin
+    deduped_callee(x::Int) = @noinline rand(Int)
+    deduped_caller1(x::Int) = @noinline deduped_callee(x)
+    deduped_caller2(x::Int) = @noinline deduped_callee(x)
+
+    # run inference on both `deduped_callerx` and `deduped_callee`
+    let (src, rt) = code_typed((Int,); interp=InvalidationTester()) do x
+            @inline deduped_caller1(x)
+            @inline deduped_caller2(x)
+        end |> only
+        @test rt === Int
+        @test any(isinvoke(:deduped_callee), src.code)
+    end
+
+    # Verify that adding the backedge again does not actually add a new backedge
+    let mi = Base.method_instance(deduped_caller1, (Int,)),
+        ci = mi.cache
+
+        callee_mi = Base.method_instance(deduped_callee, (Int,))
+
+        # Inference should have added the callers to the callee's backedges
+        @test ci in callee_mi.backedges
+
+        # In practice, inference will never end up calling `store_backedges`
+        # twice on the same CodeInstance like this - we only need to check
+        # that de-duplication works for a single invocation
+        N = length(callee_mi.backedges)
+        Core.Compiler.store_backedges(ci, Core.svec(callee_mi, callee_mi))
+        N′ = length(callee_mi.backedges)
+
+        # A single `store_backedges` invocation should de-duplicate any of the
+        # edges it is adding.
+        @test N′ - N == 1
+    end
+end
+
 # we can avoid adding backedge even if the callee's return type is not the top
 # when the return value is not used within the caller
 begin take!(GLOBAL_BUFFER)

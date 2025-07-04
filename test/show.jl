@@ -858,7 +858,7 @@ struct S45879{P} end
 let ms = methods(S45879)
     @test ms isa Base.MethodList
     @test length(ms) == 0
-    @test sprint(show, Base.MethodList(Method[], typeof(S45879).name.mt)) isa String
+    @test sprint(show, Base.MethodList(Method[], typeof(S45879).name)) isa String
 end
 
 function f49475(a=12.0; b) end
@@ -1651,7 +1651,7 @@ struct f_with_params{t} <: Function end
 end
 
 let io = IOBuffer()
-    show(io, MIME"text/html"(), ModFWithParams.f_with_params.body.name.mt)
+    show(io, MIME"text/html"(), methods(ModFWithParams.f_with_params{Int}()))
     @test occursin("ModFWithParams.f_with_params", String(take!(io)))
 end
 
@@ -1803,10 +1803,10 @@ end
     anonfn_type_repr = "$modname.var\"$(typeof(anonfn).name.name)\""
     @test repr(typeof(anonfn)) == anonfn_type_repr
     @test repr(anonfn) == anonfn_type_repr * "()"
-    @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", anonfn) == "$(typeof(anonfn).name.singletonname) (generic function with 1 method)"
     mkclosure = x->y->x+y
     clo = mkclosure(10)
-    @test repr("text/plain", clo) == "$(typeof(clo).name.mt.name) (generic function with 1 method)"
+    @test repr("text/plain", clo) == "$(typeof(clo).name.singletonname) (generic function with 1 method)"
     @test repr(UnionAll) == "UnionAll"
 end
 
@@ -2458,6 +2458,7 @@ end
 @test string(Union{M37012.SimpleU, Nothing, T} where T) == "Union{Nothing, $(curmod_prefix)M37012.SimpleU, T} where T"
 @test string(Union{AbstractVector{T}, T} where T) == "Union{AbstractVector{T}, T} where T"
 @test string(Union{AbstractVector, T} where T) == "Union{AbstractVector, T} where T"
+@test string(Union{Array, Memory}) == "Union{Array, Memory}"
 
 @test sprint(show, :(./)) == ":((./))"
 @test sprint(show, :((.|).(.&, b))) == ":((.|).((.&), b))"

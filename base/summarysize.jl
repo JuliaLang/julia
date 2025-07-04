@@ -139,7 +139,7 @@ end
 function (ss::SummarySize)(obj::Core.TypeName)
     key = pointer_from_objref(obj)
     haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
-    return Core.sizeof(obj) + (isdefined(obj, :mt) ? ss(obj.mt) : 0)
+    return Core.sizeof(obj)
 end
 
 function (ss::SummarySize)(obj::GenericMemory)

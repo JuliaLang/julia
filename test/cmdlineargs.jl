@@ -351,6 +351,7 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
 
     # -t, --threads
     code = "print(Threads.threadpoolsize())"
+    code2 = "print(Threads.maxthreadid())"
     cpu_threads = ccall(:jl_effective_threads, Int32, ())
     @test string(cpu_threads) ==
         read(`$exename --threads auto -e $code`, String) ==
@@ -361,6 +362,11 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
         withenv("JULIA_NUM_THREADS" => nt) do
             @test read(`$exename --threads=2 -e $code`, String) ==
                 read(`$exename -t 2 -e $code`, String) == "2"
+            if nt === nothing
+                @test read(`$exename -e $code2`, String) == "2" #default + interactive
+            elseif nt == "1"
+                @test read(`$exename -e $code2`, String) == "1" #if user asks for 1 give 1
+            end
         end
     end
     # We want to test oversubscription, but on manycore machines, this can
@@ -1281,3 +1287,6 @@ end
         end
     end
 end
+
+# https://github.com/JuliaLang/julia/issues/58229 Recursion in jitlinking with inline=no
+@test success(`$(Base.julia_cmd()) --inline=no -e 'Base.compilecache(Base.identify_package("Pkg"))'`)

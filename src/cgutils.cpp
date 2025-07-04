@@ -2641,6 +2641,11 @@ static jl_cgval_t typed_store(jl_codectx_t &ctx,
                 ctx.builder.CreateStore(r, intcast);
                 r = ctx.builder.CreateLoad(intcast_eltyp, intcast);
             }
+            else if (!isboxed && intcast_eltyp) {
+                assert(issetfield);
+                // issetfield doesn't use intcast, so need to reload rhs with the correct type
+                r = emit_unbox(ctx, intcast_eltyp, rhs, jltype);
+            }
             if (!isboxed)
                 emit_write_multibarrier(ctx, parent, r, rhs.typ);
             else
@@ -4638,7 +4643,7 @@ static Value *emit_memoryref_FCA(jl_codectx_t &ctx, const jl_cgval_t &ref, const
 static jl_cgval_t emit_memoryref(jl_codectx_t &ctx, const jl_cgval_t &ref, jl_cgval_t idx, jl_value_t *inbounds, const jl_datatype_layout_t *layout)
 {
     ++EmittedArrayNdIndex;
-    emit_typecheck(ctx, idx, (jl_value_t*)jl_long_type, "memoryref");
+    emit_typecheck(ctx, idx, (jl_value_t*)jl_long_type, "memoryrefnew");
     idx = update_julia_type(ctx, idx, (jl_value_t*)jl_long_type);
     if (idx.typ == jl_bottom_type)
         return jl_cgval_t();

@@ -332,9 +332,9 @@ static int jl_collect_methtable_from_mod(jl_methtable_t *mt, void *env)
 // Collect methods of external functions defined by modules in the worklist
 // "extext" = "extending external"
 // Also collect relevant backedges
-static void jl_collect_extext_methods_from_mod(jl_array_t *s, jl_module_t *m)
+static void jl_collect_extext_methods(jl_array_t *s, jl_array_t *mod_array)
 {
-    foreach_mtable_in_module(m, jl_collect_methtable_from_mod, s);
+    jl_foreach_reachable_mtable(jl_collect_methtable_from_mod, mod_array, s);
 }
 
 static void jl_record_edges(jl_method_instance_t *caller, jl_array_t *edges)
@@ -532,35 +532,40 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 {
     int64_t initial_pos = 0;
     int64_t pos = 0;
-    static jl_array_t *deps = NULL;
-    if (!deps)
-        deps = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("_require_dependencies"));
-
-    // unique(deps) to eliminate duplicates while preserving order:
-    // we preserve order so that the topmost included .jl file comes first
-    static jl_value_t *unique_func = NULL;
-    if (!unique_func)
-        unique_func = jl_get_global(jl_base_module, jl_symbol("unique"));
-    jl_value_t *uniqargs[2] = {unique_func, (jl_value_t*)deps};
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-    jl_array_t *udeps = (*udepsp = deps && unique_func ? (jl_array_t*)jl_apply(uniqargs, 2) : NULL);
-    ct->world_age = last_age;
-
-    static jl_value_t *replace_depot_func = NULL;
-    if (!replace_depot_func)
-        replace_depot_func = jl_get_global(jl_base_module, jl_symbol("replace_depot_path"));
-    static jl_value_t *normalize_depots_func = NULL;
-    if (!normalize_depots_func)
-        normalize_depots_func = jl_get_global(jl_base_module, jl_symbol("normalize_depots_for_relocation"));
-
     jl_value_t *depots = NULL, *prefs_hash = NULL, *prefs_list = NULL;
-    JL_GC_PUSH2(&depots, &prefs_list);
-    last_age = ct->world_age;
-    ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
+    jl_value_t *unique_func = NULL;
+    jl_value_t *replace_depot_func = NULL;
+    jl_value_t *normalize_depots_func = NULL;
+    jl_value_t *toplevel = NULL;
+    jl_value_t *prefs_hash_func = NULL;
+    jl_value_t *get_compiletime_prefs_func = NULL;
+    JL_GC_PUSH8(&depots, &prefs_list, &unique_func, &replace_depot_func, &normalize_depots_func, &toplevel, &prefs_hash_func, &get_compiletime_prefs_func);
+
+    jl_array_t *udeps = (jl_array_t*)jl_get_global_value(jl_base_module, jl_symbol("_require_dependencies"), ct->world_age);
+    *udepsp = udeps;
+
+    // unique(udeps) to eliminate duplicates while preserving order:
+    // we preserve order so that the topmost included .jl file comes first
+    if (udeps) {
+        unique_func = jl_eval_global_var(jl_base_module, jl_symbol("unique"), ct->world_age);
+        jl_value_t *uniqargs[2] = {unique_func, (jl_value_t*)udeps};
+        udeps = (jl_array_t*)jl_apply(uniqargs, 2);
+        *udepsp = udeps;
+        JL_TYPECHK(write_dependency_list, array_any, (jl_value_t*)udeps);
+    }
+
+    replace_depot_func = jl_get_global_value(jl_base_module, jl_symbol("replace_depot_path"), ct->world_age);
+    normalize_depots_func = jl_eval_global_var(jl_base_module, jl_symbol("normalize_depots_for_relocation"), ct->world_age);
+
     depots = jl_apply(&normalize_depots_func, 1);
-    ct->world_age = last_age;
+
+    jl_datatype_t *deptuple_p[5] = {jl_module_type, jl_string_type, jl_uint64_type, jl_uint32_type, jl_float64_type};
+    jl_value_t *jl_deptuple_type = jl_apply_tuple_type_v((jl_value_t**)deptuple_p, 5);
+    JL_GC_PROMISE_ROOTED(jl_deptuple_type);
+#define jl_is_deptuple(v) (jl_typeis((v), jl_deptuple_type))
 
     // write a placeholder for total size so that we can quickly seek past all of the
     // dependencies if we don't need them
@@ -569,20 +574,16 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     size_t i, l = udeps ? jl_array_nrows(udeps) : 0;
     for (i = 0; i < l; i++) {
         jl_value_t *deptuple = jl_array_ptr_ref(udeps, i);
-        jl_value_t *deppath = jl_fieldref(deptuple, 1);
+        JL_TYPECHK(write_dependency_list, deptuple, deptuple);
+        jl_value_t *deppath = jl_fieldref_noalloc(deptuple, 1);
 
         if (replace_depot_func) {
-            jl_value_t **replace_depot_args;
-            JL_GC_PUSHARGS(replace_depot_args, 3);
+            jl_value_t *replace_depot_args[3];
             replace_depot_args[0] = replace_depot_func;
             replace_depot_args[1] = deppath;
             replace_depot_args[2] = depots;
-            ct = jl_current_task;
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             deppath = (jl_value_t*)jl_apply(replace_depot_args, 3);
-            ct->world_age = last_age;
-            JL_GC_POP();
+            JL_TYPECHK(write_dependency_list, string, deppath);
         }
 
         size_t slen = jl_string_len(deppath);
@@ -591,7 +592,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         write_uint64(s, jl_unbox_uint64(jl_fieldref(deptuple, 2)));    // fsize
         write_uint32(s, jl_unbox_uint32(jl_fieldref(deptuple, 3)));    // hash
         write_float64(s, jl_unbox_float64(jl_fieldref(deptuple, 4)));  // mtime
-        jl_module_t *depmod = (jl_module_t*)jl_fieldref(deptuple, 0);  // evaluating module
+        jl_module_t *depmod = (jl_module_t*)jl_fieldref_noalloc(deptuple, 0);  // evaluating module
         jl_module_t *depmod_top = depmod;
         while (!is_serialization_root_module(depmod_top))
             depmod_top = depmod_top->parent;
@@ -615,34 +616,31 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
     // Calculate Preferences hash for current package.
     if (jl_base_module) {
         // Toplevel module is the module we're currently compiling, use it to get our preferences hash
-        jl_value_t * toplevel = (jl_value_t*)jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
-        jl_value_t * prefs_hash_func = jl_get_global(jl_base_module, jl_symbol("get_preferences_hash"));
-        jl_value_t * get_compiletime_prefs_func = jl_get_global(jl_base_module, jl_symbol("get_compiletime_preferences"));
+        toplevel = jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
+        prefs_hash_func = jl_eval_global_var(jl_base_module, jl_symbol("get_preferences_hash"), ct->world_age);
+        get_compiletime_prefs_func = jl_eval_global_var(jl_base_module, jl_symbol("get_compiletime_preferences"), ct->world_age);
 
-        if (toplevel && prefs_hash_func && get_compiletime_prefs_func) {
-            // Temporary invoke in newest world age
-            size_t last_age = ct->world_age;
-            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-
+        if (toplevel) {
             // call get_compiletime_prefs(__toplevel__)
             jl_value_t *args[3] = {get_compiletime_prefs_func, (jl_value_t*)toplevel, NULL};
             prefs_list = (jl_value_t*)jl_apply(args, 2);
+            JL_TYPECHK(write_dependency_list, array, prefs_list);
 
             // Call get_preferences_hash(__toplevel__, prefs_list)
             args[0] = prefs_hash_func;
             args[2] = prefs_list;
             prefs_hash = (jl_value_t*)jl_apply(args, 3);
-
-            // Reset world age to normal
-            ct->world_age = last_age;
+            JL_TYPECHK(write_dependency_list, uint64, prefs_hash);
         }
     }
+    ct->world_age = last_age;
 
     // If we successfully got the preferences, write it out, otherwise write `0` for this `.ji` file.
     if (prefs_hash != NULL && prefs_list != NULL) {
         size_t i, l = jl_array_nrows(prefs_list);
         for (i = 0; i < l; i++) {
             jl_value_t *pref_name = jl_array_ptr_ref(prefs_list, i);
+            JL_TYPECHK(write_dependency_list, string, pref_name);
             size_t slen = jl_string_len(pref_name);
             write_int32(s, slen);
             ios_write(s, jl_string_data(pref_name), slen);
@@ -660,6 +658,7 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
         write_uint64(s, 0);
     }
     JL_GC_POP(); // for depots, prefs_list
+#undef jl_is_deptuple
 
     // write a dummy file position to indicate the beginning of the source-text
     pos = ios_pos(s);
@@ -727,9 +726,7 @@ static void jl_activate_methods(jl_array_t *external, jl_array_t *internal, size
         }
         for (i = 0; i < l; i++) {
             jl_typemap_entry_t *entry = (jl_typemap_entry_t*)jl_array_ptr_ref(external, i);
-            jl_methtable_t *mt = jl_method_get_table(entry->func.method);
-            assert((jl_value_t*)mt != jl_nothing);
-            jl_method_table_activate(mt, entry);
+            jl_method_table_activate(entry);
         }
     }
 }

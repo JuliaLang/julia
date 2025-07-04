@@ -933,13 +933,7 @@ this is a compiler-generated name. For explicitly-declared subtypes of
 `Function`, it is the name of the function's type.
 """
 function nameof(f::Function)
-    t = typeof(f)
-    mt = t.name.mt
-    if mt === Symbol.name.mt
-        # uses shared method table, so name is not unique to this function type
-        return nameof(t)
-    end
-    return mt.name
+    return typeof(f).name.singletonname
 end
 
 function nameof(f::Core.IntrinsicFunction)
@@ -1275,16 +1269,17 @@ macro invoke(ex)
     return esc(out)
 end
 
-apply_gr(gr::GlobalRef, @nospecialize args...) = getglobal(gr.mod, gr.name)(args...)
-apply_gr_kw(@nospecialize(kwargs::NamedTuple), gr::GlobalRef, @nospecialize args...) = Core.kwcall(kwargs, getglobal(gr.mod, gr.name), args...)
+getglobalref(gr::GlobalRef, world::UInt) = ccall(:jl_eval_globalref, Any, (Any, UInt), gr, world)
 
-function invokelatest_gr(gr::GlobalRef, @nospecialize args...; kwargs...)
+function invokelatest_gr(gr::GlobalRef, args...; kwargs...)
     @inline
     kwargs = merge(NamedTuple(), kwargs)
+    world = get_world_counter()
+    f = getglobalref(gr, world)
     if isempty(kwargs)
-        return invokelatest(apply_gr, gr, args...)
+        return invoke_in_world(world, f, args...)
     end
-    return invokelatest(apply_gr_kw, kwargs, gr, args...)
+    return invoke_in_world(world, Core.kwcall, kwargs, f, args...)
 end
 
 """

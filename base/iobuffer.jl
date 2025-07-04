@@ -771,7 +771,7 @@ function take!(io::IOBuffer)
         elseif io.writable
             data = wrap(Array, memoryref(io.data, io.ptr), nbytes)
         else
-            data = read!(io, data)
+            error("Unreachable IOBuffer state")
         end
     end
     if io.writable

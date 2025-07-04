@@ -1,8 +1,12 @@
+# This file is a part of Julia. License is MIT: https://julialang.org/license
+
 # Julia compiler wrapper script
 # NOTE: The interface and location of this script are considered unstable/experimental
 
+using LazyArtifacts
+
 module JuliaConfig
-    include(joinpath(@__DIR__, "julia-config.jl"))
+    include(joinpath(@__DIR__, "..", "julia-config.jl"))
 end
 
 julia_cmd = `$(Base.julia_cmd()) --startup-file=no --history-file=no`
@@ -26,6 +30,57 @@ if help !== nothing
         --verbose            Request verbose output
         """)
     exit(0)
+end
+
+# Copied from PackageCompiler
+# https://github.com/JuliaLang/PackageCompiler.jl/blob/1c35331d8ef81494f054bbc71214811253101993/src/PackageCompiler.jl#L147-L190
+function get_compiler_cmd(; cplusplus::Bool=false)
+    cc = get(ENV, "JULIA_CC", nothing)
+    path = nothing
+    @static if Sys.iswindows()
+        path = joinpath(LazyArtifacts.artifact"mingw-w64",
+                        "extracted_files",
+                        (Int==Int64 ? "mingw64" : "mingw32"),
+                        "bin",
+                        cplusplus ? "g++.exe" : "gcc.exe")
+        compiler_cmd = `$path`
+    end
+    if cc !== nothing
+        compiler_cmd = Cmd(Base.shell_split(cc))
+        path = nothing
+    elseif !Sys.iswindows()
+        compilers_cpp = ("g++", "clang++")
+        compilers_c = ("gcc", "clang")
+        found_compiler = false
+        if cplusplus
+            for compiler in compilers_cpp
+                if Sys.which(compiler) !== nothing
+                    compiler_cmd = `$compiler`
+                    found_compiler = true
+                    break
+                end
+            end
+        end
+        if !found_compiler
+            for compiler in compilers_c
+                if Sys.which(compiler) !== nothing
+                    compiler_cmd = `$compiler`
+                    found_compiler = true
+                    if cplusplus && !WARNED_CPP_COMPILER[]
+                        @warn "could not find a c++ compiler (g++ or clang++), falling back to $compiler, this might cause link errors"
+                        WARNED_CPP_COMPILER[] = true
+                    end
+                    break
+                end
+            end
+        end
+        found_compiler || error("could not find a compiler, looked for ",
+            join(((cplusplus ? compilers_cpp : ())..., compilers_c...), ", ", " and "))
+    end
+    if path !== nothing
+        compiler_cmd = addenv(compiler_cmd, "PATH" => string(ENV["PATH"], ";", dirname(path)))
+    end
+    return compiler_cmd
 end
 
 # arguments to forward to julia compilation process
@@ -80,6 +135,7 @@ function get_rpath(; relative::Bool = false)
     end
 end
 
+cc = get_compiler_cmd()
 absfile = abspath(file)
 cflags = JuliaConfig.cflags(; framework=false)
 cflags = Base.shell_split(cflags)
@@ -90,7 +146,6 @@ rpath = Base.shell_split(rpath)
 tmpdir = mktempdir(cleanup=false)
 img_path = joinpath(tmpdir, "img.a")
 bc_path = joinpath(tmpdir, "img-bc.a")
-
 
 function precompile_env()
     # Pre-compile the environment
@@ -119,7 +174,6 @@ function compile_products(enable_trim::Bool)
         println(stderr, "\nFailed to compile $file")
         exit(1)
     end
-
 end
 
 function link_products()
@@ -135,11 +189,11 @@ function link_products()
     julia_libs = Base.shell_split(Base.isdebugbuild() ? "-ljulia-debug -ljulia-internal-debug" : "-ljulia -ljulia-internal")
     try
         if output_type == "--output-lib"
-            cmd2 = `cc $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)  $(julia_libs)`
+            cmd2 = `$(cc) $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)  $(julia_libs)`
         elseif output_type == "--output-sysimage"
-            cmd2 = `cc $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             $(julia_libs)`
+            cmd2 = `$(cc) $(allflags) $(rpath) -o $outname -shared -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path  -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)             $(julia_libs)`
         else
-            cmd2 = `cc $(allflags) $(rpath) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)  $(julia_libs)`
+            cmd2 = `$(cc) $(allflags) $(rpath) -o $outname -Wl,$(Base.Linking.WHOLE_ARCHIVE) $img_path -Wl,$(Base.Linking.NO_WHOLE_ARCHIVE)  $(julia_libs)`
         end
         verbose && println("Running: $cmd2")
         run(cmd2)

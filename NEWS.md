@@ -36,9 +36,10 @@ Language changes
 * Julia now defaults to 1 "interactive" thread, in addition to the 1 default "worker" thread. i.e. `-t1,1`.
   This means in default configuration the main task and repl (when in interactive mode), which both run on
   thread 1, now run within the `interactive` threadpool. The libuv IO loop also runs on thread 1,
-  helping efficient utilization of the worker threadpool used by `Threads.@spawn`. Pass `0` to disable the
-  interactive thread i.e. `-t1,0` or `JULIA_NUM_THREADS=1,0`, or `-tauto,0` etc. The zero is explicitly
-  required to disable it, `-t2` will set the equivalent of `-t2,1` ([#57087]).
+  helping efficient utilization of the worker threadpool used by `Threads.@spawn`. Asking for specifically 1 thread
+  (`-t1`/`JULIA_NUM_THREADS=1`) or passing `0` will disable the interactive thread i.e. `-t1,0` or `JULIA_NUM_THREADS=1,0`
+  , or `-tauto,0` etc. Asking for more than 1 thread will enable the interactive thread so
+  `-t2` will set the equivalent of `-t2,1` ([#57087]).
 * When a method is replaced with an exactly equivalent one, the old method is not deleted. Instead, the
   new method takes priority and becomes more specific than the old method. Thus if the new method is deleted
   later, the old method will resume operating. This can be useful in mocking frameworks (as in SparseArrays,
@@ -134,6 +135,8 @@ New library features
 * `Timer` now has readable `timeout` and `interval` properties, and a more descriptive `show` method ([#57081]).
 * `sort` now supports `NTuple`s ([#54494]).
 * `map!(f, A)` now stores the results in `A`, like `map!(f, A, A)` or `A .= f.(A)` ([#40632]).
+* `setprecision` with a function argument (typically a `do` block) is now thread safe. Other forms
+  should be avoided, and types should switch to an implementation using `ScopedValue` ([#51362]).
 
 Standard library changes
 ------------------------
@@ -225,8 +228,10 @@ Tooling Improvements
 [#40989]: https://github.com/JuliaLang/julia/issues/40989
 [#45793]: https://github.com/JuliaLang/julia/issues/45793
 [#49355]: https://github.com/JuliaLang/julia/issues/49355
+[#49933]: https://github.com/JuliaLang/julia/issues/49933
 [#50988]: https://github.com/JuliaLang/julia/issues/50988
 [#51149]: https://github.com/JuliaLang/julia/issues/51149
+[#51362]: https://github.com/JuliaLang/julia/issues/51362
 [#51810]: https://github.com/JuliaLang/julia/issues/51810
 [#52103]: https://github.com/JuliaLang/julia/issues/52103
 [#52999]: https://github.com/JuliaLang/julia/issues/52999
@@ -284,3 +289,4 @@ Tooling Improvements
 [#57087]: https://github.com/JuliaLang/julia/issues/57087
 [#57109]: https://github.com/JuliaLang/julia/issues/57109
 [#57253]: https://github.com/JuliaLang/julia/issues/57253
+[#57727]: https://github.com/JuliaLang/julia/issues/57727

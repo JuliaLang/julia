@@ -27,6 +27,9 @@
 #include "llvm-codegen-shared.h"
 #include <map>
 
+#define STR(x) #x
+#define XSTR(x) STR(x)
+
 #define DEBUG_TYPE "lower_handlers"
 #undef DEBUG
 STATISTIC(MaxExceptionHandlerDepth, "Maximum nesting of exception handlers");
