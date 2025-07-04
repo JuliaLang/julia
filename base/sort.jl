@@ -115,14 +115,11 @@ maybeview(v, k::Integer) = v[k]
 """
     partialsort!(v, k; by=identity, lt=isless, rev=false)
 
-Partially sort the vector `v` in-place so that the value at index `k` (or
+Mutate the vector `v` so that so that the value at index `k` (or
 range of adjacent values if `k` is a range) occurs
 at the position where it would appear if the array were fully sorted. If `k` is a single
 index, that value is returned; if `k` is a range, an array of values at those indices is
 returned. Note that `partialsort!` may not fully sort the input array.
-
-While the result of this function is stored in `v`, scratch space may be allocated to
-improve the performance of the sorting process.
 
 For the keyword arguments, see the documentation of [`sort!`](@ref).
 
@@ -1628,13 +1625,11 @@ defalg(v) = DEFAULT_STABLE
 """
     sort!(v; alg::Base.Sort.Algorithm=Base.Sort.defalg(v), lt=isless, by=identity, rev::Bool=false, order::Base.Order.Ordering=Base.Order.Forward)
 
-Sort the vector `v` in-place.
+Mutate the vector `v` so that it is sorted.
 
-A stable algorithm is used by default: the
-ordering of elements that compare equal is preserved. A specific algorithm can
-be selected via the `alg` keyword (see [Sorting Algorithms](@ref) for available
-algorithms). While the result of this function is stored in `v`, scratch space
-may be allocated to improve the performance of the sorting process.
+A stable algorithm is used by default: the ordering of elements that
+compare equal is preserved. A specific algorithm can be selected via the
+`alg` keyword (see [Sorting Algorithms](@ref) for available algorithms).
 
 Elements are first transformed with the function `by` and then compared
 according to either the function `lt` or the ordering `order`. Finally, the
@@ -1751,7 +1746,7 @@ end
 Variant of [`sort!`](@ref) that returns a sorted copy of `v` leaving `v` itself unmodified.
 
 When calling `sort` on the [`keys`](@ref) or [`values](@ref) of a dictionary, `v` is
-collected and then sorted in-place.
+collected and then sorted.
 
 !!! compat "Julia 1.12"
     Sorting `NTuple`s requires Julia 1.12 or later.
