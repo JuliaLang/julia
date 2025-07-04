@@ -557,4 +557,11 @@ true
 """
 isbindingresolved
 
+# Some packages call this function
+function to_power_type(x::Number)
+    T = promote_type(typeof(x), typeof(x*x))
+    convert(T, x)
+end
+to_power_type(x) = oftype(x*x, x)
+
 # END 1.12 deprecations
