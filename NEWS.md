@@ -17,6 +17,8 @@ is considered a bug fix ([#47102])
 
   - The `hash` algorithm and its values have changed. Most `hash` specializations will remain correct and require no action. Types that reimplement the core hashing logic independently, such as some third-party string packages do, may require a migration to the new algorithm. ([#57509])
 
+* Indexless `getindex` and `setindex!` (i.e. `A[]`) on `ReinterpretArray` now correctly throw a `BoundsError` when there is more than one element. ([#58814])
+
 Compiler/Runtime improvements
 -----------------------------
 
@@ -44,6 +46,7 @@ New library functions
 
 * `ispositive(::Real)` and `isnegative(::Real)` are provided for performance and convenience ([#53677]).
 * Exporting function `fieldindex` to get the index of a struct's field ([#58119]).
+* `Base.donotdelete` is now public. It prevents deadcode elemination of its arguments ([#55774]).
 
 New library features
 --------------------

@@ -2567,8 +2567,15 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     end
 
     # discover number of rows or columns
+    # d1 dimension is increased by 1 to appropriately handle 0-length arrays
     for i ∈ 1:dims[d1]
         outdims[d1] += cat_size(as[i], d1)
+    end
+
+    # adjustment to handle 0-length arrays
+    first_dim_zero = outdims[d1] == 0
+    if first_dim_zero
+        outdims[d1] = dims[d1]
     end
 
     currentdims = zeros(Int, N)
@@ -2576,7 +2583,7 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
     elementcount = 0
     for i ∈ eachindex(as)
         elementcount += cat_length(as[i])
-        currentdims[d1] += cat_size(as[i], d1)
+        currentdims[d1] += first_dim_zero ? 1 : cat_size(as[i], d1)
         if currentdims[d1] == outdims[d1]
             currentdims[d1] = 0
             for d ∈ (d2, 3:N...)
@@ -2603,6 +2610,10 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         elseif currentdims[d1] > outdims[d1] # exceeded dimension
             throw(DimensionMismatch("argument $i has too many elements along axis $d1"))
         end
+    end
+    # restore 0-length adjustment
+    if first_dim_zero
+        outdims[d1] = 0
     end
 
     outlen = prod(outdims)

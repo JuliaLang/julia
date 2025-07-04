@@ -290,7 +290,7 @@ end
 
 # Can be extended by compiler packages to customize backtrace display of custom code instance frames
 function show_custom_spec_sig(io::IO, @nospecialize(owner), linfo::CodeInstance, frame::StackFrame)
-    mi = get_ci_mi(linfo)
+    mi = Base.get_ci_mi(linfo)
     return show_spec_sig(io, mi.def, mi.specTypes)
 end
 
