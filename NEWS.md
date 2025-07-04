@@ -117,6 +117,7 @@ New library functions
   `dropdims` ([#45793]).
 * A new `Fix` type generalizes `Fix1/Fix2` for fixing a single argument ([#54653]).
 * `Sys.detectwsl()` tests whether Julia is running inside WSL at runtime ([#57069]).
+* `Base.donotdelete` is now public. It prevents deadcode elimination of its arguments ([#55774]).
 
 New library features
 --------------------
