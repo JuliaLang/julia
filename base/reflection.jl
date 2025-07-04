@@ -242,13 +242,12 @@ julia> code_typed((Type{Int}, UInt8))
 └──      return %1
 ) => Int64
 
-julia> code_typed((Base.Broadcast.Pick{2}, Tuple{Bool,Float64,Int64}))
+julia> code_typed((Returns{Int64},))
 1-element Vector{Any}:
  CodeInfo(
-1 ─ %1 = \$(Expr(:boundscheck, true))::Bool
-│   %2 = Base.getfield(args, 2, %1)::Float64
-└──      return %2
-) => Float64
+1 ─ %1 =   builtin Base.getfield(obj, :value)::Int64
+└──      return %1
+) => Int64
 ```
 """
 function code_typed end
