@@ -18,18 +18,19 @@ end
 
 function rewrap_where(ex::Expr, where_params::Union{Nothing, Vector{Any}})
     isnothing(where_params) && return ex
-    Expr(:where, ex, esc.(where_params)...)
+    Expr(:where, ex, where_params...)
 end
 
+get_typeof(ex::Ref) = ex[]
 function get_typeof(@nospecialize ex)
-    isexpr(ex, :(::), 1) && return esc(ex.args[1])
-    isexpr(ex, :(::), 2) && return esc(ex.args[2])
+    isexpr(ex, :(::), 1) && return ex.args[1]
+    isexpr(ex, :(::), 2) && return ex.args[2]
     if isexpr(ex, :..., 1)
         splatted = ex.args[1]
-        isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, esc(splatted.args[1]))
-        return :(Any[Core.Typeof(x) for x in $(esc(splatted))]...)
+        isexpr(splatted, :(::), 1) && return Expr(:curly, :Vararg, splatted.args[1])
+        return :(Any[Core.Typeof(x) for x in $splatted]...)
     end
-    return :(Core.Typeof($(esc(ex))))
+    return :(Core.Typeof($ex))
 end
 
 function is_broadcasting_call(ex)
@@ -94,8 +95,8 @@ function recursive_dotcalls!(ex, args, i=1)
 end
 
 function extract_farg(@nospecialize arg)
-    !isexpr(arg, :(::), 1) && return esc(arg)
-    fT = esc(arg.args[1])
+    !isexpr(arg, :(::), 1) && return arg
+    fT = arg.args[1]
     :($construct_callable($fT))
 end
 
@@ -147,7 +148,7 @@ function generate_merged_namedtuple_type(kwargs::Vector{Any})
                 push!(nts, generate_namedtuple_type(ntargs))
                 empty!(ntargs)
             end
-            push!(nts, Expr(:call, typeof_nt, esc(ex.args[1])))
+            push!(nts, Expr(:call, typeof_nt, ex.args[1]))
         elseif isexpr(ex, :kw, 2)
             push!(ntargs, ex.args[1]::Symbol => get_typeof(ex.args[2]))
         elseif isexpr(ex, :(::), 2)
@@ -190,12 +191,18 @@ function merge_namedtuple_types(nt::Type{<:NamedTuple}, nts::Type{<:NamedTuple}.
             end
         end
     end
-    NamedTuple{Tuple(names), Tuple{types...}}
+    return NamedTuple{Tuple(names), Tuple{types...}}
+end
+
+function gen_call(fcn, args, where_params, kws; use_signature_tuple::Bool)
+    use_signature_tuple && return :($fcn($(esc(typesof_expr(args, where_params))); $(kws...)))
+    f, args... = args
+    return :($fcn($(esc(extract_farg(f))), $(esc(typesof_expr(args, where_params))); $(kws...)))
 end
 
 is_code_macro(fcn) = startswith(string(fcn), "code_")
 
-function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_source_reflection = !is_code_macro(fcn), supports_binding_reflection = false)
+function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_source_reflection = !is_code_macro(fcn), supports_binding_reflection = false, use_signature_tuple = false)
     if isexpr(ex0, :ref)
         ex0 = replace_ref_begin_end!(ex0)
     end
@@ -249,10 +256,10 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
             end
             fully_qualified_symbol &= ex1 isa Symbol
             if fully_qualified_symbol || isexpr(ex1, :(::), 1)
-                call_reflection = :($(fcn)(Base.getproperty, $(typesof_expr(ex0.args, where_params))))
+                call_reflection = gen_call(fcn, [:(Base.getproperty); ex0.args], where_params, kws; use_signature_tuple)
                 isexpr(ex0.args[1], :(::), 1) && return call_reflection
                 if supports_binding_reflection
-                    binding_reflection = :($fcn(arg1, $(ex0.args[2])))
+                    binding_reflection = :($fcn(arg1, $(ex0.args[2]); $(kws...)))
                 else
                     binding_reflection = :(error("expression is not a function call"))
                 end
@@ -279,28 +286,22 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 $(esc(ex0)) # trigger syntax errors if any
             end
             nt = generate_merged_namedtuple_type(kwargs)
-            tt = rewrap_where(:(Tuple{$nt, $(get_typeof.(args)...)}), where_params)
-            return :($(fcn)(Core.kwcall, $tt; $(kws...)))
+            nt = Ref(nt) # ignore `get_typeof` handling
+            return gen_call(fcn, Any[:(Core.kwcall), nt, args...], where_params, kws; use_signature_tuple)
         elseif ex0.head === :call
-            argtypes = Any[get_typeof(arg) for arg in ex0.args[2:end]]
+            args = copy(ex0.args)
             if ex0.args[1] === :^ && length(ex0.args) >= 3 && isa(ex0.args[3], Int)
-                farg = :(Base.literal_pow)
-                pushfirst!(argtypes, :(typeof(^)))
-                argtypes[3] = :(Val{$(ex0.args[3])})
-            else
-                farg = extract_farg(ex0.args[1])
+                pushfirst!(args, :(Base.literal_pow))
+                args[4] = :(Val($(ex0.args[3])))
             end
-            tt = rewrap_where(:(Tuple{$(argtypes...)}), where_params)
-            return Expr(:call, fcn, farg, tt, kws...)
+            return gen_call(fcn, args, where_params, kws; use_signature_tuple)
         elseif ex0.head === :(=) && length(ex0.args) == 2
             lhs, rhs = ex0.args
             if isa(lhs, Expr)
                 if lhs.head === :(.)
-                    return Expr(:call, fcn, Base.setproperty!,
-                                typesof_expr(Any[lhs.args..., rhs], where_params), kws...)
+                    return gen_call(fcn, Any[:(Base.setproperty!), lhs.args..., rhs], where_params, kws; use_signature_tuple)
                 elseif lhs.head === :ref
-                    return Expr(:call, fcn, Base.setindex!,
-                                typesof_expr(Any[lhs.args[1], rhs, lhs.args[2:end]...], where_params), kws...)
+                    return gen_call(fcn, Any[:(Base.setindex!), lhs.args[1], rhs, lhs.args[2:end]...], where_params, kws; use_signature_tuple)
                 end
             end
         elseif ex0.head === :vcat || ex0.head === :typed_vcat
@@ -316,20 +317,21 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
                 lens = map(length, rows)
                 args = Any[Expr(:tuple, lens...); vcat(rows...)]
                 ex0.head === :typed_vcat && pushfirst!(args, ex0.args[1])
-                return Expr(:call, fcn, hf, typesof_expr(args, where_params), kws...)
+                return gen_call(fcn, Any[hf, args...], where_params, kws; use_signature_tuple)
             else
-                return Expr(:call, fcn, f, typesof_expr(ex0.args, where_params), kws...)
+                return gen_call(fcn, Any[f, ex0.args...], where_params, kws; use_signature_tuple)
             end
         else
             for (head, f) in (:ref => Base.getindex, :hcat => Base.hcat, :(.) => Base.getproperty, :vect => Base.vect, Symbol("'") => Base.adjoint, :typed_hcat => Base.typed_hcat, :string => string)
                 if ex0.head === head
-                    return Expr(:call, fcn, f, typesof_expr(ex0.args, where_params), kws...)
+                    return gen_call(fcn, Any[f, ex0.args...], where_params, kws; use_signature_tuple)
                 end
             end
         end
     end
     if isa(ex0, Expr) && ex0.head === :macrocall # Make @edit @time 1+2 edit the macro by using the types of the *expressions*
-        return Expr(:call, fcn, esc(ex0.args[1]), Tuple{#=__source__=#LineNumberNode, #=__module__=#Module, Any[ Core.Typeof(a) for a in ex0.args[3:end] ]...}, kws...)
+        args = [#=__source__::=#LineNumberNode, #=__module__::=#Module, Core.Typeof.(ex0.args[3:end])...]
+        return gen_call(fcn, Any[ex0.args[1], Ref.(args)...], where_params, kws; use_signature_tuple)
     end
 
     ex = Meta.lower(__module__, ex0)
@@ -337,25 +339,13 @@ function gen_call_with_extracted_types(__module__, fcn, ex0, kws = Expr[]; is_so
         return Expr(:call, :error, "expression is not a function call or symbol")
     end
 
-    exret = Expr(:none)
-    if ex.head === :call
-        if any(@nospecialize(x) -> isexpr(x, :...), ex0.args) &&
-            (ex.args[1] === GlobalRef(Core,:_apply_iterate) ||
-             ex.args[1] === GlobalRef(Base,:_apply_iterate))
-            # check for splatting
-            exret = Expr(:call, ex.args[2], fcn,
-                        Expr(:tuple, extract_farg(ex.args[3]), typesof_expr(ex.args[4:end], where_params)))
-        else
-            exret = Expr(:call, fcn, extract_farg(ex.args[1]), typesof_expr(ex.args[2:end], where_params), kws...)
-        end
-    end
     if ex.head === :thunk || exret.head === :none
-        exret = Expr(:call, :error, "expression is not a function call, "
+        return Expr(:call, :error, "expression is not a function call, "
                                   * "or is too complex for @$fcn to analyze; "
                                   * "break it down to simpler parts if possible. "
                                   * "In some cases, you may want to use Meta.@lower.")
     end
-    return exret
+    return Expr(:none)
 end
 
 """
@@ -363,7 +353,7 @@ Same behaviour as `gen_call_with_extracted_types` except that keyword arguments
 of the form "foo=bar" are passed on to the called function as well.
 The keyword arguments must be given before the mandatory argument.
 """
-function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; is_source_reflection = !is_code_macro(fcn), supports_binding_reflection = false)
+function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; is_source_reflection = !is_code_macro(fcn), supports_binding_reflection = false, use_signature_tuple = false)
     kws = Expr[]
     arg = ex0[end] # Mandatory argument
     for i in 1:length(ex0)-1
@@ -377,7 +367,7 @@ function gen_call_with_extracted_types_and_kwargs(__module__, fcn, ex0; is_sourc
             return Expr(:call, :error, "@$fcn expects only one non-keyword argument")
         end
     end
-    return gen_call_with_extracted_types(__module__, fcn, arg, kws; is_source_reflection, supports_binding_reflection)
+    return gen_call_with_extracted_types(__module__, fcn, arg, kws; is_source_reflection, supports_binding_reflection, use_signature_tuple)
 end
 
 for fname in [:which, :less, :edit, :functionloc]
@@ -398,13 +388,13 @@ end
 for fname in [:code_warntype, :code_llvm, :code_native,
               :infer_return_type, :infer_effects, :infer_exception_type]
     @eval macro ($fname)(ex0...)
-        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_source_reflection = false)
+        gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_source_reflection = false, use_signature_tuple = $(in(fname, [:code_warntype, :code_llvm, :code_native])))
     end
 end
 
 for fname in [:code_typed, :code_lowered, :code_ircode]
     @eval macro ($fname)(ex0...)
-        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_source_reflection = false)
+        thecall = gen_call_with_extracted_types_and_kwargs(__module__, $(QuoteNode(fname)), ex0; is_source_reflection = false, use_signature_tuple = true)
         quote
             local results = $thecall
             length(results) == 1 ? results[1] : results
