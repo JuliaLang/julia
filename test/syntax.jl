@@ -4351,3 +4351,40 @@ let f = NoSpecClosure.K(1)
     @test f(2) == 1
     @test typeof(f).parameters == Core.svec()
 end
+
+# var"#self#"
+# regular functions can use var"#self#" to refer to the function itself
+regular_func() = var"#self#"
+@test regular_func() === regular_func
+
+# callable structs can also use var"#self#", which will refer to the struct instance
+struct CallableStruct
+    value::Int
+end
+(obj::CallableStruct)() = var"#self#"
+(obj::CallableStruct)(x) = var"#self#".value + x
+
+let cs = CallableStruct(42)
+    @test cs() === cs
+    @test cs(10) === 52
+end
+
+struct RecursiveCallableStruct; end
+(::RecursiveCallableStruct)(n) = n <= 1 ? n : var"#self#"(n-1) + var"#self#"(n-2)
+
+@test RecursiveCallableStruct()(10) === 55
+
+# In closures, var"#self#" should refer to the enclosing function,
+# NOT the enclosing struct instance
+struct CallableStruct2; end
+function (obj::CallableStruct2)()
+    function inner_func()
+        var"#self#"
+    end
+    inner_func
+end
+
+let cs = CallableStruct2()
+    @test cs()() === cs()
+    @test cs()() !== cs
+end
