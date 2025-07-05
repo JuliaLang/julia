@@ -846,7 +846,15 @@ function iterate(d::ImmutableDict{K,V}, t=d) where {K, V}
     !isdefined(t, :parent) && return nothing
     (Pair{K,V}(t.key, t.value), t.parent)
 end
-length(t::ImmutableDict) = count(Returns(true), t)
+# length is defined in terms of iteration; using a higher-order function to do the iteration
+# is likely to call `length` again, so this is a manual for loop:
+function length(t::ImmutableDict)
+    r = 0
+    for _ in t
+        r+=1
+    end
+    return r
+end
 isempty(t::ImmutableDict) = !isdefined(t, :parent)
 empty(::ImmutableDict, ::Type{K}, ::Type{V}) where {K, V} = ImmutableDict{K,V}()
 

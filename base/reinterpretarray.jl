@@ -905,43 +905,29 @@ end
 
 # Reductions with IndexSCartesian2
 
-function _mapreduce(f::F, op::OP, style::IndexSCartesian2{K}, A::AbstractArrayOrBroadcasted) where {F,OP,K}
-    inds = eachindex(style, A)
-    n = size(inds)[2]
-    if n == 0
-        return mapreduce_empty_iter(f, op, A, IteratorEltype(A))
-    else
-        return mapreduce_impl(f, op, A, first(inds), last(inds))
-    end
+@noinline _halve_error() = throw(AssertionError("cannot split SCartesianIndices2{$K} into halves smaller than $K"))
+
+function halves(inds::SCartesianIndices2{K}) where {K}
+    inds2 = inds.indices2
+    length(inds2) == 1 && _halve_error()
+    map(SCartesianIndices2{K}, halves(inds2))
 end
 
-@noinline function mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted,
-                                  ifirst::SCI, ilast::SCI, blksize::Int) where {F,OP,SCI<:SCartesianIndex2{K}} where K
-    if ilast.j - ifirst.j < blksize
-        # sequential portion
-        @inbounds a1 = A[ifirst]
-        @inbounds a2 = A[SCI(2,ifirst.j)]
-        v = op(f(a1), f(a2))
-        @simd for i = ifirst.i + 2 : K
-            @inbounds ai = A[SCI(i,ifirst.j)]
+function mapreduce_kernel(f, op, A, init, inds::SCartesianIndices2{K}) where K
+    js = inds.indices2
+    j1 = first(js)
+    v = _mapreduce_start(f, op, A, init, @inbounds A[SCartesianIndex2{K}(1, j1)])
+    # finish the first column
+    @simd for i in 2:K
+        @inbounds ai = A[SCartesianIndex2{K}(i, j1)]
+        v = op(v, f(ai))
+    end
+    # Remaining columns
+    for j in js[begin+1:end]
+        @simd for i in 1:K
+            @inbounds ai = A[SCartesianIndex2{K}(i,j)]
             v = op(v, f(ai))
         end
-        # Remaining columns
-        for j = ifirst.j+1 : ilast.j
-            @simd for i = 1:K
-                @inbounds ai = A[SCI(i,j)]
-                v = op(v, f(ai))
-            end
-        end
-        return v
-    else
-        # pairwise portion
-        jmid = ifirst.j + (ilast.j - ifirst.j) >> 1
-        v1 = mapreduce_impl(f, op, A, ifirst, SCI(K,jmid), blksize)
-        v2 = mapreduce_impl(f, op, A, SCI(1,jmid+1), ilast, blksize)
-        return op(v1, v2)
     end
+    return v
 end
-
-mapreduce_impl(f::F, op::OP, A::AbstractArrayOrBroadcasted, ifirst::SCartesianIndex2, ilast::SCartesianIndex2) where {F,OP} =
-    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))

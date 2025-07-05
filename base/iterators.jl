@@ -192,6 +192,7 @@ enumerate(iter) = Enumerate(iter)
 
 length(e::Enumerate) = length(e.itr)
 size(e::Enumerate) = size(e.itr)
+axes(e::Enumerate) = axes(e.itr)
 @propagate_inbounds function iterate(e::Enumerate, state=(1,))
     i, rest = state[1], tail(state)
     n = iterate(e.itr, rest...)

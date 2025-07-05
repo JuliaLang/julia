@@ -211,7 +211,6 @@ Base.show(io::IO, r::IdOffsetRange) = print(io, IdOffsetRange, "(values=",first(
 
 # Optimizations
 @inline Base.checkindex(::Type{Bool}, inds::IdOffsetRange, i::Real) = Base.checkindex(Bool, inds.parent, i - inds.offset)
-Base._firstslice(i::IdOffsetRange) = IdOffsetRange(Base._firstslice(i.parent), i.offset)
 
 ########################################################################################################
 # origin.jl

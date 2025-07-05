@@ -925,3 +925,11 @@ end
     @test parent(B) == A0
     @test axes(B) == Base.IdentityUnitRange.((-10:-9, 9:10))
 end
+
+# issue #38660
+@testset "`findmin/max` for OffsetArray" begin
+    ov = OffsetVector([-1, 1], 0:1)
+    @test @inferred(findmin(ov; dims = 1)) .|> first == (-1, 0)
+    ov = OffsetVector([-1, 1], -1:0)
+    @test @inferred(findmax(ov; dims = 1)) .|> first == (1, 0)
+end

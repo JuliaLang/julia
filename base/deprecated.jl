@@ -27,6 +27,7 @@ const __internal_changes_list = (
     :codeinfonargs,  # #54341
     :ocnopartial,
     :printcodeinfocalls,
+    :reducerefactor,
     # Add new change names above this line
 )
 
@@ -565,3 +566,29 @@ end
 to_power_type(x) = oftype(x*x, x)
 
 # END 1.12 deprecations
+
+# BEGIN 1.13 deprecations
+
+## These are all mapreduce internals that were not exported or public, but have deprecations to minimize disruptions
+@deprecate reducedim_init(f, op, A::AbstractArray, region) (v = mapreduce_empty(f, op, eltype(A)); fill!(mapreduce_similar(A, typeof(v), reduced_indices(A,region)), v)) false
+const _dep_message_reducedim_init = ", these internals have been removed. To customize the array returned by dimensional reductions, implement mapreduce_similar instead"
+deprecate(Base, :reducedim_init)
+deprecate(Base, Symbol("#reducedim_init"))
+
+@deprecate (reducedim_initarray(A::Union{Base.AbstractBroadcasted, AbstractArray}, region, init, ::Type{T}) where {T}) fill!(mapreduce_similar(A,T,reduced_indices(A,region)), init) false
+@deprecate reducedim_initarray(A::Union{Base.AbstractBroadcasted, AbstractArray}, region, init) fill!(mapreduce_similar(A,typeof(init),reduced_indices(A,region)), init) false
+const _dep_message_reducedim_init = ", these internals have been removed. To customize the array returned by dimensional reductions, implement mapreduce_similar instead"
+deprecate(Base, :reducedim_initarray)
+deprecate(Base, Symbol("#reducedim_initarray"))
+
+@deprecate _mapreduce_dim(f, op, nt, A::Union{Base.AbstractBroadcasted, AbstractArray}, dims) mapreducedim(f, op, A, nt, dims) false
+
+@deprecate_binding mapreducedim! Base.mapreduce! false
+@deprecate_binding _mapreducedim! Base.mapreduce! false
+@deprecate_binding reducedim! Base.reduce! false
+
+@deprecate mapreduce_impl(f, op, A::AbstractArrayOrBroadcasted, ifirst::Integer, ilast::Integer, blksize::Int=pairwise_blocksize(f, op)) Base.mapreduce_pairwise(f, op, A, _InitialValue(), ifirst:ilast) false
+@deprecate _mapreduce(f, op, A) Base.mapreduce_pairwise(f, op, A, Base._InitialValue()) false
+@deprecate _mapreduce(f, op, _, A) Base.mapreduce_pairwise(f, op, A, Base._InitialValue()) false
+
+# END 1.13 deprecations

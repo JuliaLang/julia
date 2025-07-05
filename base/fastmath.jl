@@ -401,19 +401,14 @@ minimum_fast(a; kw...) = Base.reduce(min_fast, a; kw...)
 maximum_fast(f, a; kw...) = Base.mapreduce(f, max_fast, a; kw...)
 minimum_fast(f, a; kw...) = Base.mapreduce(f, min_fast, a; kw...)
 
-Base.reducedim_init(f, ::typeof(max_fast), A::AbstractArray, region) =
-    Base.reducedim_init(f, max, A::AbstractArray, region)
-Base.reducedim_init(f, ::typeof(min_fast), A::AbstractArray, region) =
-    Base.reducedim_init(f, min, A::AbstractArray, region)
-
 maximum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
     maximum!_fast(identity, r, A; kw...)
 minimum!_fast(r::AbstractArray, A::AbstractArray; kw...) =
     minimum!_fast(identity, r, A; kw...)
 
 maximum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
-    Base.mapreducedim!(f, max_fast, Base.initarray!(r, f, max, init, A), A)
+    Base.mapreduce!(f, max_fast, r, A; update=!init)
 minimum!_fast(f::Function, r::AbstractArray, A::AbstractArray; init::Bool=true) =
-    Base.mapreducedim!(f, min_fast, Base.initarray!(r, f, min, init, A), A)
+    Base.mapreduce!(f, min_fast, r, A; update=!init)
 
 end

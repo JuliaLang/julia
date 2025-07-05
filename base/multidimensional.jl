@@ -1064,6 +1064,213 @@ end
     $(_generate_unsafe_setindex!_body(2))
 end
 
+# Reduction support for CartesianIndices
+halves(inds::CartesianIndices) = map(CartesianIndices∘tuple, _halves(inds.indices)...)
+function mapreduce_kernel(f, op, A, init, inds::CartesianIndices{N}) where {N}
+    N == 0 && return _mapreduce_start(f, op, A, init, A[inds[]])
+    N == 1 && return mapreduce_kernel(f, op, A, init, inds.indices[1])
+    is_commutative_op(op) && return mapreduce_kernel_commutative(f, op, A, init, inds)
+    r = inds.indices[1]
+    if length(r) == 1
+        # A one-element inner loop is less-than-helpful
+        i1, s = iterate(inds)
+        a1 = @inbounds A[i1]
+        v = _mapreduce_start(f, op, A, init, a1)
+        for i in Iterators.rest(inds, s)
+            ai = @inbounds A[i]
+            v = op(v, f(ai))
+        end
+    else
+        # Divide the loop into an outer and inner loop, and skip the first element
+        # in the first iteration of the outer loop
+        outer = CartesianIndices(tail(inds.indices))
+        o1, so = iterate(outer)
+        v = _mapreduce_start(f, op, A, init, A[r[begin], o1])
+        for i in r[begin+1:end]
+            ai = @inbounds A[i, o1]
+            v = op(v, f(ai))
+        end
+        for o in Iterators.rest(outer, so)
+            for i in r
+                ai = @inbounds A[i, o]
+                v = op(v, f(ai))
+            end
+        end
+    end
+    return v
+end
+
+function mapreduce_kernel_commutative(f, op, A, init, inds::AbstractArray)
+    if length(inds) < 16
+        i1, iN = firstindex(inds), lastindex(inds)
+        v_1 = _mapreduce_start(f, op, A, init, @inbounds A[inds[i1]])
+        for i in i1+1:iN
+            a = @inbounds A[inds[i]]
+            v_1 = op(v_1, f(a))
+        end
+        return v_1
+    end
+    return _mapreduce_kernel_commutative(f, op, A, init, inds)
+end
+
+# This special internal method must have at least 8 indices and allows passing
+# optional scalar leading and trailing dimensions
+function _mapreduce_kernel_commutative(f, op, A, init, inds, leading=(), trailing=())
+    i1, iN = firstindex(inds), lastindex(inds)
+    n = length(inds)
+    @nexprs 8 N->a_N = @inbounds A[leading..., inds[i1+(N-1)], trailing...]
+    @nexprs 8 N->v_N = _mapreduce_start(f, op, A, init, a_N)
+    for batch in 1:(n>>3)-1
+        i = i1 + batch*8
+        @nexprs 8 N->a_N = @inbounds A[leading..., inds[i+(N-1)], trailing...]
+        @nexprs 8 N->fa_N = f(a_N)
+        @nexprs 8 N->v_N = op(v_N, fa_N)
+    end
+    v = op(op(op(v_1, v_2), op(v_3, v_4)), op(op(v_5, v_6), op(v_7, v_8)))
+    i = i1 + (n>>3)*8 - 1
+    i == iN && return v
+    for i in i+1:iN
+        ai = @inbounds A[leading..., inds[i], trailing...]
+        v = op(v, f(ai))
+    end
+    return v
+end
+
+function mapreduce_kernel_commutative(f::F, op::G, A, init, inds::CartesianIndices{N}) where {N,F,G}
+    N == 0 && return _mapreduce_start(f, op, A, init, A[inds[]])
+    N == 1 && return mapreduce_kernel_commutative(f, op, A, init, inds.indices[1])
+    is = inds.indices[1]
+    js = inds.indices[2]
+    if length(is) == 1 && length(js) >= 8
+        # It's quite useful to optimize this case for dimensional reductions
+        i = only(is)
+        outer = CartesianIndices(tail(tail(inds.indices)))
+        o1, s = iterate(outer)
+        v = _mapreduce_kernel_commutative(f, op, A, init, js, (i,), o1.I)
+        for o in Iterators.rest(outer, s)
+            v = op(v, _mapreduce_kernel_commutative(f, op, A, init, js, (i,), o.I))
+        end
+        return v
+    elseif length(is) < 8 # TODO: tune this number
+        # These small cases could be further optimized
+        return mapreduce_kernel_commutative(i->f(A[i]), op, inds, init, HasShape{N}(), length(inds))[1]
+    else
+        outer = CartesianIndices(tail(inds.indices))
+        o1, s = iterate(outer)
+        v = _mapreduce_kernel_commutative(f, op, A, init, is, (), o1.I)
+        for o in Iterators.rest(outer, s)
+            v = op(v, _mapreduce_kernel_commutative(f, op, A, init, is, (), o.I))
+        end
+        return v
+    end
+end
+
+@noinline _throw_iterator_assertion_error() = throw(AssertionError("iterator promised a length longer than it iterates"))
+function mapreduce_kernel_commutative(f, op, itr, init, ::Union{HasLength, HasShape}, n, state...)
+    it = iterate(itr, state...)
+    it === nothing && _throw_iterator_assertion_error()
+    a, s = it
+    v_1 = _mapreduce_start(f, op, itr, init, a)
+    if n < 16
+        for _ in 2:n
+            it = iterate(itr, s)
+            it === nothing && _throw_iterator_assertion_error()
+            a, s = it
+            v_1 = op(v_1, f(a))
+        end
+        return v_1, s
+    end
+    @nexprs 7 n->begin
+        it = iterate(itr, s)
+        it === nothing && _throw_iterator_assertion_error()
+        a, s = it
+        v_{n+1} = _mapreduce_start(f, op, itr, init, a)
+    end
+    i = 8
+    for outer i in 16:8:n
+        @nexprs 8 n->begin
+            it = iterate(itr, s)
+            it === nothing && _throw_iterator_assertion_error()
+            a_n, s = it
+        end
+        @nexprs 8 n-> fa_n = f(a_n)
+        @nexprs 8 n-> v_n = op(v_n, fa_n)
+    end
+    v = op(op(op(v_1, v_2), op(v_3, v_4)), op(op(v_5, v_6), op(v_7, v_8)))
+    for _ in i+1:n
+        it = iterate(itr, s)
+        it === nothing && _throw_iterator_assertion_error()
+        a, s = it
+        v = op(v, f(a))
+    end
+    return v, s
+end
+function mapreduce_kernel_commutative(f, op, itr, init, ::IteratorSize, n, state...)
+    it = iterate(itr, state...)
+    it === nothing && return nothing
+    a, s = it
+    v_1 = _mapreduce_start(f, op, itr, init, a)
+    it = iterate(itr, s)
+    it === nothing && return Some(v_1)
+    a, s = it
+    v_2 = _mapreduce_start(f, op, itr, init, a)
+    it = iterate(itr, s)
+    it === nothing && return Some(op(v_1, v_2))
+    a, s = it
+    v_3 = _mapreduce_start(f, op, itr, init, a)
+    it = iterate(itr, s)
+    it === nothing && return Some(op(op(v_1, v_2), v_3))
+    a, s = it
+    v_4 = _mapreduce_start(f, op, itr, init, a)
+    it = iterate(itr, s)
+    it === nothing && return Some(op(op(v_1, v_2), op(v_3, v_4)))
+    a, s = it
+    v_5 = _mapreduce_start(f, op, itr, init, a)
+    it = iterate(itr, s)
+    it === nothing && return Some(op(op(op(v_1, v_2), op(v_3, v_4)), v_5))
+    a, s = it
+    v_6 = _mapreduce_start(f, op, itr, init, a)
+    it = iterate(itr, s)
+    it === nothing && return Some(op(op(op(v_1, v_2), op(v_3, v_4)), op(v_5, v_6)))
+    a, s = it
+    v_7 = _mapreduce_start(f, op, itr, init, a)
+    it = iterate(itr, s)
+    it === nothing && return Some(op(op(op(v_1, v_2), op(v_3, v_4)), op(op(v_5, v_6), v_7)))
+    a, s = it
+    v_8 = _mapreduce_start(f, op, itr, init, a)
+    for _ in 3:n>>3
+        @nexprs 8 N->begin
+            it = iterate(itr, s)
+            if it === nothing
+                N > 7 && (v_7 = op(v_7, f(a_7)))
+                N > 6 && (v_6 = op(v_6, f(a_6)))
+                N > 5 && (v_5 = op(v_5, f(a_5)))
+                N > 4 && (v_4 = op(v_4, f(a_4)))
+                N > 3 && (v_3 = op(v_3, f(a_3)))
+                N > 2 && (v_2 = op(v_2, f(a_2)))
+                N > 1 && (v_1 = op(v_1, f(a_1)))
+                return Some(op(op(op(v_1, v_2), op(v_3, v_4)), op(op(v_5, v_6), op(v_7, v_8))))
+            end
+            a_N, s = it
+        end
+        @nexprs 8 N->fa_N = f(a_N)
+        @nexprs 8 N->v_N = op(v_N, fa_N)
+    end
+    v = op(op(op(v_1, v_2), op(v_3, v_4)), op(op(v_5, v_6), op(v_7, v_8)))
+    i = (n>>3)*8
+    @nexprs 8 N->begin
+        it = iterate(itr, s)
+        if it === nothing
+            return Some(v)
+        elseif n < i+N
+            return (v, s)
+        end
+        a, s = it
+        v = op(v, f(a))
+    end
+    return (v, s)
+end
+
 diff(a::AbstractVector) = diff(a, dims=1)
 
 """
