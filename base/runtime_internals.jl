@@ -173,6 +173,8 @@ false
 """
 ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m, s) != 0
 
+_function_macro_error() = (@noinline; error("@__FUNCTION__ can only be used within a function"))
+
 """
     @__FUNCTION__ -> Function
 
@@ -217,7 +219,10 @@ julia> factorial(5)
 ```
 """
 macro __FUNCTION__()
-    return esc(:(var"#self#"))
+    quote
+        $(esc(Expr(:isdefined, :var"#self#"))) || $(esc(_function_macro_error))()
+        $(esc(:var"#self#"))
+    end
 end
 
 # TODO: this is vaguely broken because it only works for explicit calls to

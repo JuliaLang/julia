@@ -141,6 +141,14 @@ end
             c = CallableStruct(5)
             @test_throws UndefVarError c()
         end
+
+        @testset "Error upon misuse" begin
+            @gensym A
+            @test_throws(
+                "@__FUNCTION__ can only be used within a function",
+                @eval(module $A; @__FUNCTION__; end)
+            )
+        end
     end
 end
 
