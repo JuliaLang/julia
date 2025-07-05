@@ -145,10 +145,12 @@
 (define *in-lowering* #f)
 
 (define (lower-toplevel-expr e file line)
-  (cond ((or (atom? e) (toplevel-only-expr? e))
+  (cond ((atom? e)
          (if (underscore-symbol? e)
              (error "all-underscore identifiers are write-only and their values cannot be used in expressions"))
          e)
+        ((toplevel-only-expr? e) e)
+        ((and (eq? (car e) 'doc) (toplevel-only-expr? (caddr e))) (lower-toplevel-doc e))
         (else
          (let ((last *in-lowering*))
            (if (not last)
