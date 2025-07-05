@@ -346,6 +346,7 @@ end
     @test (@which Int[::Int 2;3 (::Int)]).name === :typed_hvcat
     @test (@which (::Vector{Float64})').name === :adjoint
     @test (@which "$(::Symbol) is a symbol").sig === Tuple{typeof(string), Vararg{Union{Char, String, Symbol}}}
+    @test (@which (::Int)^4).name === :literal_pow
     @test (@which +(some_x::Int, some_y::Float64)).name === :+
     @test (@which +(::Any, ::Any, ::Any, ::Any...)).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
     @test (@which +(::Any, ::Any, ::Any, ::Vararg{Any})).sig === Tuple{typeof(+), Any, Any, Any, Vararg{Any}}
@@ -380,6 +381,11 @@ end
     @test (@code_typed optimize=false ::Vector{Int} .= ::Int)[2] == Vector{Int}
     @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ ::Vector{Int})[2] == Vector{Float64}
     @test (@code_typed optimize=false ::Vector{Float64} .= 1 .+ round.(base = ::Int, ::Vector{Int}; digits = 3))[2] == Vector{Float64}
+
+    @testset "Callable objects" begin
+        @test (@code_typed (::Base.Fix2{typeof(+), Float64})(3))[2] == Float64
+        @test (@code_typed optimize=false (::Returns{Float64})(::Int64; name::String))[2] == Float64
+    end
 end
 
 module MacroTest
@@ -592,7 +598,9 @@ end # module ReflectionTest
 # Issue #18883, code_llvm/code_native for generated functions
 @generated f18883() = nothing
 @test !isempty(sprint(code_llvm, f18883, Tuple{}))
+@test !isempty(sprint(code_llvm, (typeof(f18883),)))
 @test !isempty(sprint(code_native, f18883, Tuple{}))
+@test !isempty(sprint(code_native, (typeof(f18883),)))
 
 ix86 = r"i[356]86"
 
@@ -863,6 +871,27 @@ let # `default_tt` should work with any function with one method
     @test (code_native(devnull, function (a::Int)
         sin(a)
     end); true)
+end
+
+let # specifying calls as argtypes (incl. arg0) should be supported
+    @test (code_warntype(devnull, (typeof(function ()
+        sin(42)
+    end),)); true)
+    @test (code_warntype(devnull, (typeof(function (a::Int)
+        sin(42)
+    end), Int)); true)
+    @test (code_llvm(devnull, (typeof(function ()
+        sin(42)
+    end),)); true)
+    @test (code_llvm(devnull, (typeof(function (a::Int)
+        sin(42)
+    end), Int)); true)
+    @test (code_native(devnull, (typeof(function ()
+        sin(42)
+    end),)); true)
+    @test (code_native(devnull, (typeof(function (a::Int)
+        sin(42)
+    end), Int)); true)
 end
 
 @testset "code_llvm on opaque_closure" begin
