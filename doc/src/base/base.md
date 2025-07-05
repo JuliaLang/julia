@@ -480,10 +480,10 @@ Base.moduleroot
 __module__
 __source__
 Base.@__MODULE__
+Base.@__FUNCTION__
 Base.@__FILE__
 Base.@__DIR__
 Base.@__LINE__
-Base.@__FUNCTION__
 Base.fullname
 Base.names
 Base.isexported
