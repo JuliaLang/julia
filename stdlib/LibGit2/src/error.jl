@@ -93,7 +93,7 @@ struct GitError <: Exception
     code::Code
     msg::String
 end
-Base.show(io::IO, err::GitError) = print(io, "GitError(Code:$(err.code), Class:$(err.class), $(err.msg))")
+Base.show(io::IO, err::GitError) = print(io, """GitError: Code:$(err.code), Class:$(err.class), Message:\n$(err.msg)""")
 
 function last_error()
     ensure_initialized()
