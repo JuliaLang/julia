@@ -16,7 +16,7 @@ The keyword `debuginfo` controls the amount of code metadata present in the outp
 Note that an error will be thrown if `types` are not concrete types when `generated` is
 `true` and any of the corresponding methods are an `@generated` method.
 """
-function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
+function code_lowered(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); generated::Bool=true, debuginfo::Symbol=:default)
     if @isdefined(IRShow)
         debuginfo = IRShow.debuginfo(debuginfo)
     elseif debuginfo === :default
@@ -28,7 +28,7 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     world = get_world_counter()
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
     ret = CodeInfo[]
-    for m in method_instances(f, t, world)
+    for m in method_instances(argtypes, world)
         if generated && hasgenerator(m)
             if may_invoke_generator(m)
                 code = ccall(:jl_code_for_staged, Ref{CodeInfo}, (Any, UInt, Ptr{Cvoid}), m, world, C_NULL)
@@ -46,12 +46,17 @@ function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=
     return ret
 end
 
+function code_lowered(@nospecialize(f), @nospecialize(t=Tuple); generated::Bool=true, debuginfo::Symbol=:default)
+    tt = signature_type(f, t)
+    return code_lowered(tt; generated, debuginfo)
+end
+
 # for backwards compat
 const uncompressed_ast = uncompressed_ir
 const _uncompressed_ast = _uncompressed_ir
 
-function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
-    tt = signature_type(f, t)
+function method_instances(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}), world::UInt)
+    tt = to_tuple_type(argtypes)
     results = Core.MethodInstance[]
     # this make a better error message than the typeassert that follows
     world == typemax(UInt) && error("code reflection cannot be used from generated functions")
@@ -62,13 +67,24 @@ function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     return results
 end
 
-function method_instance(@nospecialize(f), @nospecialize(t);
-                         world=Base.get_world_counter(), method_table=nothing)
+function method_instances(@nospecialize(f), @nospecialize(t), world::UInt)
     tt = signature_type(f, t)
+    return method_instances(tt, world)
+end
+
+function method_instance(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}});
+                         world=Base.get_world_counter(), method_table=nothing)
+    tt = to_tuple_type(argtypes)
     mi = ccall(:jl_method_lookup_by_tt, Any,
                 (Any, Csize_t, Any),
                 tt, world, method_table)
     return mi::Union{Nothing, MethodInstance}
+end
+
+function method_instance(@nospecialize(f), @nospecialize(t);
+                         world=Base.get_world_counter(), method_table=nothing)
+    tt = signature_type(f, t)
+    return method_instance(tt; world, method_table)
 end
 
 default_debug_info_kind() = unsafe_load(cglobal(:jl_default_debug_info_kind, Cint))
@@ -211,13 +227,42 @@ julia> code_typed(+, (Float64, Float64))
 1 ─ %1 = Base.add_float(x, y)::Float64
 └──      return %1
 ) => Float64
+
+julia> code_typed((typeof(-), Float64, Float64))
+1-element Vector{Any}:
+ CodeInfo(
+1 ─ %1 = Base.sub_float(x, y)::Float64
+└──      return %1
+) => Float64
+
+julia> code_typed((Type{Int}, UInt8))
+1-element Vector{Any}:
+ CodeInfo(
+1 ─ %1 = Core.zext_int(Core.Int64, x)::Int64
+└──      return %1
+) => Int64
+
+julia> code_typed((Returns{Int64},))
+1-element Vector{Any}:
+ CodeInfo(
+1 ─ %1 =   builtin Base.getfield(obj, :value)::Int64
+└──      return %1
+) => Int64
 ```
 """
+function code_typed end
+
 function code_typed(@nospecialize(f), @nospecialize(types=default_tt(f)); kwargs...)
     if isa(f, Core.OpaqueClosure)
         return code_typed_opaque_closure(f, types; kwargs...)
     end
     tt = signature_type(f, types)
+    return code_typed_by_type(tt; kwargs...)
+end
+
+# support 'functor'-like queries, such as `(::Foo)(::Int, ::Int)` via `code_typed((Foo, Int, Int))`
+function code_typed(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...)
+    tt = to_tuple_type(argtypes)
     return code_typed_by_type(tt; kwargs...)
 end
 
@@ -399,6 +444,11 @@ function code_ircode(@nospecialize(f), @nospecialize(types = default_tt(f)); kwa
         error("OpaqueClosure not supported")
     end
     tt = signature_type(f, types)
+    return code_ircode_by_type(tt; kwargs...)
+end
+
+function code_ircode(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...)
+    tt = to_tuple_type(argtypes)
     return code_ircode_by_type(tt; kwargs...)
 end
 
