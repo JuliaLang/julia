@@ -172,6 +172,23 @@
 (define (method-lambda-expr argl body rett)
   (let ((argl (map arg-name argl))
         (body (blockify body)))
+    ;; If the method body mentions |#self#| but no parameter is called
+    ;; |#self#|, introduce a local alias so var"#self#" works for
+    ;; callable objects as it does for ordinary functions.
+    (let* ((have-self-arg? (memq '|#self#| argl))
+           (first          (and (pair? argl) (car argl)))
+           (needs-alias?
+             (and (not have-self-arg?)
+                  (expr-contains-p
+                    (lambda (x) (and (symbol? x)
+                                     (eq? x '|#self#|)))
+                    body))))
+      (when needs-alias?
+        (set! body
+              (insert-after-meta
+               body
+               `((local |#self#|)
+                 (= |#self#| ,first))))))
     `(lambda ,argl ()
              (scope-block
               ,(if (equal? rett '(core Any))
