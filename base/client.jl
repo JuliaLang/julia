@@ -270,10 +270,6 @@ function exec_options(opts)
     interactiveinput = (repl || is_interactive::Bool) && isa(stdin, TTY)
     is_interactive::Bool |= interactiveinput
 
-    # load terminfo in for styled printing
-    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
-    global current_terminfo = load_terminfo(term_env)
-
     # load ~/.julia/config/startup.jl file
     if startup
         try
