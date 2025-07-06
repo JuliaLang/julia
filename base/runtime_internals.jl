@@ -184,7 +184,9 @@ Get the innermost enclosing function object.
     In functions like `f() = [@__FUNCTION__ for _ in 1:10]`, this would
     refer to the generator function in the comprehension, NOT the enclosing
     function `f`. Similarly, in a closure function, this will refer to the
-    closure function object rather than the enclosing function.
+    closure function object rather than the enclosing function. Note that
+    macros like [`@spawn`](@ref Threads.@spawn), [`@async`](@ref), etc., also
+    create closures.
 
 !!! note
     This does not work in the context of callable structs as there is no
