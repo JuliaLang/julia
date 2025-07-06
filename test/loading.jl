@@ -131,23 +131,23 @@ end
             test_do_block()
         end
 
-        @testset "Callable structs throw error" begin
-            struct CallableStruct{T}
-                val::T
-            end
-            function (c::CallableStruct)()
-                return @__FUNCTION__
-            end
-            c = CallableStruct(5)
-            @test_throws UndefVarError c()
-        end
-
         @testset "Error upon misuse" begin
             @gensym A
             @test_throws(
                 "@__FUNCTION__ can only be used within a function",
                 @eval(module $A; @__FUNCTION__; end)
             )
+        end
+
+        @testset "Callable structs throw error" begin
+            @gensym A
+            @eval module $A
+                struct CallableStruct{T}; val::T; end
+                (c::CallableStruct)() = @__FUNCTION__
+            end
+            @eval using .$A: CallableStruct
+            c = CallableStruct(5)
+            @test_throws "@__FUNCTION__ can only be used within a function" c()
         end
     end
 end
