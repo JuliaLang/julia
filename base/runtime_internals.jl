@@ -219,6 +219,16 @@ julia> factorial = n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1);
 julia> factorial(5)
 120
 ```
+
+`@__FUNCTION__` can also be combined with `nameof` to get the symbol of the
+enclosing function:
+
+```jldoctest
+julia> bar() = nameof(@__FUNCTION__);
+
+julia> bar()
+:bar
+```
 """
 macro __FUNCTION__()
     quote
