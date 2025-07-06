@@ -181,7 +181,7 @@ _function_macro_error() = (@noinline; error("@__FUNCTION__ can only be used with
 Get the innermost enclosing function object.
 
 !!! note
-    In functions like `f() = [@__FUNCTION__ for _ in 1:10]`, this would
+    In functions like `f() = [(@__FUNCTION__) for _ in 1:10]`, this would
     refer to the generator function in the comprehension, NOT the enclosing
     function `f`. Similarly, in a closure function, this will refer to the
     closure function object rather than the enclosing function. Note that
@@ -195,7 +195,7 @@ Get the innermost enclosing function object.
 # Examples
 
 `@__FUNCTION__` is useful for closures that need to refer to themselves,
-as otherwise the function object itself would be a variable and would be boxed:
+as otherwise the function object would be captured as a variable and boxed.
 
 ```jldoctest
 julia> function make_fib()
@@ -208,10 +208,10 @@ julia> make_fib()(7)
 21
 ```
 
-If we had instead written `fib(n) = n <= 1 ? 1 : fib(n - 1) + fib(n - 2)`
-for the closure function, `fib` would be treated as a variable, and be boxed.
+If we had instead used `fib(n - 1) + fib(n - 2)` directly, `fib` would be boxed,
+leading to type instabilities.
 
-Note that `@__FUNCTION__` is available for anonymous functions:
+Note that `@__FUNCTION__` is also available for anonymous functions:
 
 ```jldoctest
 julia> factorial = n -> n <= 1 ? 1 : n * (@__FUNCTION__)(n - 1);
@@ -220,7 +220,7 @@ julia> factorial(5)
 120
 ```
 
-`@__FUNCTION__` can also be combined with `nameof` to get the symbol of the
+`@__FUNCTION__` can also be combined with `nameof` to get the symbol for an
 enclosing function:
 
 ```jldoctest
