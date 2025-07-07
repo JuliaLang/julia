@@ -131,6 +131,11 @@ end
             test_do_block()
         end
 
+        @testset "Compatibility with kwargs" begin
+            foo(; n) = n <= 1 ? 1 : n * (@__FUNCTION__)(; n = n - 1)
+            @test foo(n = 5) == 120
+        end
+
         @testset "Error upon misuse" begin
             @gensym A
             @test_throws(
