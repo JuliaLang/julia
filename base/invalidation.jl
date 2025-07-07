@@ -149,7 +149,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
         usings_backedges = ccall(:jl_get_module_usings_backedges, Any, (Any,), gr.mod)
         if usings_backedges !== nothing
             for user::Module in usings_backedges::Vector{Any}
-                user_binding = ccall(:jl_get_module_binding_or_nothing, Any, (Any, Any), user, gr.name)
+                user_binding = ccall(:jl_get_module_binding_or_nothing, Any, (Any, Any), user, gr.name)::Union{Core.Binding, Nothing}
                 user_binding === nothing && continue
                 isdefined(user_binding, :partitions) || continue
                 latest_bpart = user_binding.partitions
