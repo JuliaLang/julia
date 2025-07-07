@@ -200,7 +200,7 @@ end
 end
 
 """
-    Compute line number annotations for an IRCode
+    Compute line number annotations for an IRCode or CodeInfo.
 
 This functions compute three sets of annotations for each IR line. Take the following
 example (taken from `@code_typed sin(1.0)`):
@@ -259,7 +259,7 @@ to catch up and print the intermediate scopes. Which scope is printed is indicat
 by the indentation of the method name and by an increased thickness of the appropriate
 line for the scope.
 """
-function compute_ir_line_annotations(code::IRCode)
+function compute_ir_line_annotations(code::Union{IRCode,CodeInfo})
     loc_annotations = String[]
     loc_methods = String[]
     loc_lineno = String[]
@@ -269,7 +269,8 @@ function compute_ir_line_annotations(code::IRCode)
     last_printed_depth = 0
     debuginfo = code.debuginfo
     def = :var"unknown scope"
-    for idx in 1:length(code.stmts)
+    n = isa(code, IRCode) ? length(code.stmts) : length(code.code)
+    for idx in 1:n
         buf = IOBuffer()
         print(buf, "│")
         stack = buildLineInfoNode(debuginfo, def, idx)
@@ -833,7 +834,7 @@ function new_nodes_iter(compact::IncrementalCompact)
 end
 
 # print only line numbers on the left, some of the method names and nesting depth on the right
-function inline_linfo_printer(code::IRCode)
+function inline_linfo_printer(code::Union{IRCode,CodeInfo})
     loc_annotations, loc_methods, loc_lineno = compute_ir_line_annotations(code)
     max_loc_width = maximum(length, loc_annotations)
     max_lineno_width = maximum(length, loc_lineno)
@@ -902,12 +903,15 @@ function stmts_used(::IO, code::CodeInfo)
     return used
 end
 
-function default_config(code::IRCode; verbose_linetable=false)
-    return IRShowConfig(verbose_linetable ? statementidx_lineinfo_printer(code)
-                                          : inline_linfo_printer(code);
-                        bb_color=:normal)
+function default_config(code::IRCode; debuginfo = :source_inline)
+    return IRShowConfig(get_debuginfo_printer(code, debuginfo); bb_color=:normal)
 end
-default_config(code::CodeInfo) = IRShowConfig(statementidx_lineinfo_printer(code))
+default_config(code::CodeInfo; debuginfo = :source) = IRShowConfig(get_debuginfo_printer(code, debuginfo))
+function default_config(io::IO, src)
+    debuginfo = get(io, :debuginfo, nothing)
+    debuginfo !== nothing && return default_config(src; debuginfo)
+    return default_config(src)
+end
 
 function show_ir_stmts(io::IO, ir::Union{IRCode, CodeInfo, IncrementalCompact}, inds, config::IRShowConfig,
                        sptypes::Vector{VarState}, used::BitSet, cfg::CFG, bb_idx::Int; pop_new_node! = Returns(nothing))
@@ -927,8 +931,7 @@ function finish_show_ir(io::IO, cfg::CFG, config::IRShowConfig)
     return nothing
 end
 
-function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
-                 pop_new_node! = new_nodes_iter(ir))
+function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(io, ir); pop_new_node! = new_nodes_iter(ir))
     used = stmts_used(io, ir)
     cfg = ir.cfg
     maxssaid = length(ir.stmts) + length(ir.new_nodes)
@@ -938,7 +941,7 @@ function show_ir(io::IO, ir::IRCode, config::IRShowConfig=default_config(ir);
     finish_show_ir(io, cfg, config)
 end
 
-function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
+function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(io, ci);
                  pop_new_node! = Returns(nothing))
     used = stmts_used(io, ci)
     cfg = compute_basic_blocks(ci.code)
@@ -952,7 +955,7 @@ function show_ir(io::IO, ci::CodeInfo, config::IRShowConfig=default_config(ci);
     finish_show_ir(io, cfg, config)
 end
 
-function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(compact.ir))
+function show_ir(io::IO, compact::IncrementalCompact, config::IRShowConfig=default_config(io, compact.ir))
     cfg = compact.ir.cfg
 
 
@@ -1154,3 +1157,35 @@ const __debuginfo = Dict{Symbol, Any}(
     )
 const default_debuginfo = Ref{Symbol}(:none)
 debuginfo(sym) = sym === :default ? default_debuginfo[] : sym
+
+const __debuginfo = Dict{Symbol, Any}(
+    # :full => src -> statementidx_lineinfo_printer(src), # and add variable slot information
+    :source => src -> statementidx_lineinfo_printer(src),
+    :source_inline => src -> inline_linfo_printer(src),
+    # :oneliner => src -> statementidx_lineinfo_printer(PartialLineInfoPrinter, src),
+    :none => src -> lineinfo_disabled,
+    )
+
+const debuginfo_modes = [:none, :source, :source_inline]
+@assert Set(debuginfo_modes) == Set(keys(__debuginfo))
+
+function validate_debuginfo_mode(mode::Symbol)
+    in(mode, debuginfo_modes) && return true
+    throw(ArgumentError("`debuginfo` must be one of the following: $(join([repr(mode) for mode in debuginfo_modes], ", "))"))
+end
+
+const default_debuginfo_mode = Ref{Symbol}(:none)
+function expand_debuginfo_mode(mode::Symbol, default = default_debuginfo_mode[])
+    if mode === :default
+        mode = default
+    end
+    validate_debuginfo_mode(mode)
+    return mode
+end
+
+function get_debuginfo_printer(mode::Symbol)
+    mode = expand_debuginfo_mode(mode)
+    return __debuginfo[mode]
+end
+
+get_debuginfo_printer(src, mode::Symbol) = get_debuginfo_printer(mode)(src)
