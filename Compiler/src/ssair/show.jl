@@ -105,11 +105,30 @@ function print_stmt(io::IO, idx::Int, @nospecialize(stmt), code::Union{IRCode,Co
             printstyled(io, "dynamic invoke "; color = :yellow)
             abi = (ci::Core.MethodInstance).specTypes
         end
-        show_unquoted(io, stmt.args[2], indent)
-        print(io, "(")
         # XXX: this is wrong if `sig` is not a concretetype method
         # more correct would be to use `fieldtype(sig, i)`, but that would obscure / discard Varargs information in show
         sig = abi == Tuple ? Core.svec() : Base.unwrap_unionall(abi).parameters::Core.SimpleVector
+        f = stmt.args[2]
+        ft = maybe_argextype(f, code, sptypes)
+
+        # We can elide the type for arg0 if it...
+        skip_ftype = (length(sig) == 0) # doesn't exist...
+        skip_ftype = skip_ftype || (
+            # ... or, f prints as a user-accessible value...
+            (f isa GlobalRef) &&
+            # ... and matches the value of the singleton type of the invoked MethodInstance
+            (singleton_type(ft) === singleton_type(sig[1]) !== nothing)
+        )
+        if skip_ftype
+            show_unquoted(io, f, indent)
+        else
+            print(io, "(")
+            show_unquoted(io, f, indent)
+            print(io, "::", sig[1], ")")
+        end
+
+        # Print the remaining arguments (with type annotations from the invoked MethodInstance)
+        print(io, "(")
         print_arg(i) = sprint(; context=io) do io
             show_unquoted(io, stmt.args[i], indent)
             if (i - 1) <= length(sig)
