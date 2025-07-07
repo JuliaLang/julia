@@ -231,10 +231,11 @@ julia> bar()
 ```
 """
 macro __FUNCTION__()
-    quote
-        $(esc(Expr(:isdefined, :var"#self#"))) || $(esc(_function_macro_error))()
-        $(esc(:var"#self#"))
-    end
+    esc(quote
+        false && (var"#self#" = var"#self#") # declare self is a local variable to avoid polluting or accessing globals
+        @isdefined var"#self#" || $Base._function_macro_error()
+        var"#self#"
+    end)
 end
 
 # TODO: this is vaguely broken because it only works for explicit calls to
