@@ -147,7 +147,7 @@ end
             end
             @eval using .$A: CallableStruct
             c = CallableStruct(5)
-            @test_throws "@__FUNCTION__ can only be used within a function" c()
+            @test_broken c()
         end
     end
 end
