@@ -176,7 +176,7 @@ ispublic(m::Module, s::Symbol) = ccall(:jl_module_public_p, Cint, (Any, Any), m,
 _function_macro_error() = (@noinline; error("@__FUNCTION__ can only be used within a function"))
 
 """
-    @__FUNCTION__ -> Function
+    @__FUNCTION__
 
 Get the innermost enclosing function object.
 
