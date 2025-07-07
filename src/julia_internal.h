@@ -687,6 +687,8 @@ typedef union {
 #define METHOD_SIG_LATEST_WHICH             0b0001
 #define METHOD_SIG_LATEST_ONLY              0b0010
 #define METHOD_SIG_PRECOMPILE_MANY          0b0100
+#define METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC 0b1000  // indicates there exists some other method that is not more specific than this one
+#define METHOD_SIG_PRECOMPILE_HAS_NOTMORESPECIFIC 0b10000  // precompiled version of METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC
 
 JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_value_t *owner);
 JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src);
