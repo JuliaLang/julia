@@ -421,8 +421,8 @@ extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
 
 void free_stack(void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
 
-JL_DLLEXPORT extern int jl_lineno;
-JL_DLLEXPORT extern const char *jl_filename;
+JL_DLLEXPORT extern _Atomic(int) jl_lineno;
+JL_DLLEXPORT extern _Atomic(const char *) jl_filename;
 
 jl_value_t *jl_gc_small_alloc_noinline(jl_ptls_t ptls, int offset,
                                    int osize);

@@ -637,7 +637,7 @@ void jl_critical_error(int sig, int si_code, bt_context_t *context, jl_task_t *c
         else
             jl_safe_printf("\n[%d] signal %d: %s\n", getpid(), sig, strsignal(sig));
     }
-    jl_safe_printf("in expression starting at %s:%d\n", jl_filename, jl_lineno);
+    jl_safe_printf("in expression starting at %s:%d\n", jl_atomic_load_relaxed(&jl_filename), jl_atomic_load_relaxed(&jl_lineno));
     if (context && ct) {
         // Must avoid extended backtrace frames here unless we're sure bt_data
         // is properly rooted.
