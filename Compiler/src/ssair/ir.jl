@@ -105,6 +105,9 @@ function compute_basic_blocks(stmts::Vector{Any})
     end
     # Compute successors/predecessors
     for (num, b) in enumerate(blocks)
+        if b.stmts.start == 1
+            push!(b.preds, 0) # the entry block has a virtual predecessor
+        end
         terminator = stmts[last(b.stmts)]
         if isa(terminator, ReturnNode)
             # return never has any successors
@@ -609,7 +612,7 @@ end
     elseif isa(stmt, EnterNode)
         op == 1 || throw(BoundsError())
         stmt = EnterNode(stmt.catch_dest, v)
-    elseif isa(stmt, Union{AnySSAValue, GlobalRef})
+    elseif isa(stmt, Union{AnySSAValue, Argument, GlobalRef})
         op == 1 || throw(BoundsError())
         stmt = v
     elseif isa(stmt, UpsilonNode)
@@ -640,7 +643,7 @@ end
 function userefs(@nospecialize(x))
     relevant = (isa(x, Expr) && is_relevant_expr(x)) ||
         isa(x, GotoIfNot) || isa(x, ReturnNode) || isa(x, SSAValue) || isa(x, OldSSAValue) || isa(x, NewSSAValue) ||
-        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode)
+        isa(x, PiNode) || isa(x, PhiNode) || isa(x, PhiCNode) || isa(x, UpsilonNode) || isa(x, EnterNode) || isa(x, Argument)
     return UseRefIterator(x, relevant)
 end
 
@@ -810,7 +813,7 @@ end
 types(ir::Union{IRCode, IncrementalCompact}) = TypesView(ir)
 
 function getindex(compact::IncrementalCompact, ssa::SSAValue)
-    (1 ≤ ssa.id ≤ compact.result_idx) || throw(InvalidIRError())
+    (1 ≤ ssa.id < compact.result_idx) || throw(InvalidIRError())
     return compact.result[ssa.id]
 end
 

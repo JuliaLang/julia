@@ -37,6 +37,8 @@ the documented object. Here is a basic example:
 "Tell whether there are too foo items in the array."
 foo(xs::Array) = ...
 ```
+!!! note "Reminder"
+    Any empty lines between the docstring and the object being documented detach the former from the latter, making the docstring ineffective.
 
 Documentation is interpreted as [Markdown](https://en.wikipedia.org/wiki/Markdown), so you can
 use indentation and code fences to delimit code examples from text. Technically, any object can
@@ -330,6 +332,10 @@ documentation between different versions of a function:
 @doc "..." foo!
 @doc (@doc foo!) foo
 ```
+
+!!! compat "Julia 1.11"
+    In Julia 1.11 and newer, retrieving documentation with the `@doc` macro requires that
+    the `REPL` stdlib is loaded.
 
 Or for use with Julia's metaprogramming functionality:
 

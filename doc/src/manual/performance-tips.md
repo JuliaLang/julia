@@ -58,14 +58,16 @@ Passing arguments to functions is better style. It leads to more reusable code a
 
 In the following REPL session:
 
-```julia-repl
+```jldoctest
 julia> x = 1.0
+1.0
 ```
 
 is equivalent to:
 
-```julia-repl
+```jldoctest
 julia> global x = 1.0
+1.0
 ```
 
 so all the performance issues discussed previously apply.
@@ -1697,7 +1699,7 @@ in generated code by using Julia's [`code_native`](@ref) function.
 
 Note that `@fastmath` also assumes that `NaN`s will not occur during the computation, which can lead to surprising behavior:
 
-```julia-repl
+```jldoctest
 julia> f(x) = isnan(x);
 
 julia> f(NaN)

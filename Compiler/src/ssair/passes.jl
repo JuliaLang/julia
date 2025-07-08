@@ -9,7 +9,9 @@ end
 function is_known_invoke_or_call(@nospecialize(x), @nospecialize(func), ir::Union{IRCode,IncrementalCompact})
     isinvoke = isexpr(x, :invoke)
     (isinvoke || isexpr(x, :call)) || return false
-    ft = argextype(x.args[isinvoke ? 2 : 1], ir)
+    narg = isinvoke ? 2 : 1
+    length(x.args) < narg && return false
+    ft = argextype(x.args[narg], ir)
     return singleton_type(ft) === func
 end
 

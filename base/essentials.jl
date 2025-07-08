@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryrefnew, memoryrefget, memoryrefset!
+using Core: CodeInfo, SimpleVector, donotdelete, compilerbarrier, memoryref, memoryrefnew, memoryrefget, memoryrefset!
 
 const Callable = Union{Function,Type}
 
@@ -377,13 +377,27 @@ macro _nospecializeinfer_meta()
     return Expr(:meta, :nospecializeinfer)
 end
 
+# These special checkbounds methods are defined early for bootstrapping
+function checkbounds(::Type{Bool}, A::Union{Array, Memory}, i::Int)
+    @inline
+    ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A)))
+end
+function checkbounds(A::Union{Array, GenericMemory}, i::Int)
+    @inline
+    checkbounds(Bool, A, i) || throw_boundserror(A, (i,))
+end
+
 default_access_order(a::GenericMemory{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemory{:atomic}) = :monotonic
 default_access_order(a::GenericMemoryRef{:not_atomic}) = :not_atomic
 default_access_order(a::GenericMemoryRef{:atomic}) = :monotonic
 
-getindex(A::GenericMemory, i::Int) = (@_noub_if_noinbounds_meta;
-    memoryrefget(memoryrefnew(memoryrefnew(A), i, @_boundscheck), default_access_order(A), false))
+function getindex(A::GenericMemory, i::Int)
+    @_noub_if_noinbounds_meta
+    (@_boundscheck) && checkbounds(A, i)
+    memoryrefget(memoryrefnew(memoryrefnew(A), i, false), default_access_order(A), false)
+end
+
 getindex(A::GenericMemoryRef) = memoryrefget(A, default_access_order(A), @_boundscheck)
 
 """
@@ -717,12 +731,14 @@ Neither `convert` nor `cconvert` should take a Julia object and turn it into a `
 """
 function cconvert end
 
-cconvert(T::Type, x) = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
+cconvert(::Type{T}, x) where {T} = x isa T ? x : convert(T, x) # do the conversion eagerly in most cases
 cconvert(::Type{Union{}}, x...) = convert(Union{}, x...)
 cconvert(::Type{<:Ptr}, x) = x # but defer the conversion to Ptr to unsafe_convert
 unsafe_convert(::Type{T}, x::T) where {T} = x # unsafe_convert (like convert) defaults to assuming the convert occurred
 unsafe_convert(::Type{T}, x::T) where {T<:Ptr} = x  # to resolve ambiguity with the next method
 unsafe_convert(::Type{P}, x::Ptr) where {P<:Ptr} = convert(P, x)
+unsafe_convert(::Type{Ptr{UInt8}}, s::String) = ccall(:jl_string_ptr, Ptr{UInt8}, (Any,), s)
+unsafe_convert(::Type{Ptr{Int8}}, s::String) = ccall(:jl_string_ptr, Ptr{Int8}, (Any,), s)
 
 """
     reinterpret(::Type{Out}, x::In)
@@ -947,13 +963,13 @@ end
 # linear indexing
 function getindex(A::Array, i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefget(memoryrefnew(getfield(A, :ref), i, false), :not_atomic, false)
 end
 # simple Array{Any} operations needed for bootstrap
 function setindex!(A::Array{Any}, @nospecialize(x), i::Int)
     @_noub_if_noinbounds_meta
-    @boundscheck ult_int(bitcast(UInt, sub_int(i, 1)), bitcast(UInt, length(A))) || throw_boundserror(A, (i,))
+    @boundscheck checkbounds(A, i)
     memoryrefset!(memoryrefnew(getfield(A, :ref), i, false), x, :not_atomic, false)
     return A
 end
@@ -1298,5 +1314,3 @@ typename(typeof(function <= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
 typename(typeof(function >= end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
 typename(typeof(function < end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
 typename(typeof(function > end)).constprop_heuristic  = Core.SAMETYPE_HEURISTIC
-typename(typeof(function << end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC
-typename(typeof(function >> end)).constprop_heuristic = Core.SAMETYPE_HEURISTIC

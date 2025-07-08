@@ -20,13 +20,15 @@ function f22938(a, b, x...)
     return i * a
 end
 
-msig = Tuple{typeof(f22938),Int,Int,Int,Int}
-world = Base.get_world_counter()
-match = only(Base._methods_by_ftype(msig, -1, world))
-mi = Compiler.specialize_method(match)
-c0 = Compiler.retrieve_code_info(mi, world)
-
-@test isempty(Compiler.validate_code(mi, c0))
+const c0 = let
+    msig = Tuple{typeof(f22938),Int,Int,Int,Int}
+    world = Base.get_world_counter()
+    match = only(Base._methods_by_ftype(msig, -1, world))
+    mi = Compiler.specialize_method(match)
+    c0 = Compiler.retrieve_code_info(mi, world)
+    @test isempty(Compiler.validate_code(mi, c0))
+    c0
+end
 
 @testset "INVALID_EXPR_HEAD" begin
     c = copy(c0)
@@ -114,28 +116,10 @@ end
     @test errors[1].kind === Compiler.SSAFLAGS_MISMATCH
 end
 
-@testset "SIGNATURE_NARGS_MISMATCH" begin
-    old_sig = mi.def.sig
-    mi.def.sig = Tuple{1,2}
-    errors = Compiler.validate_code(mi, nothing)
-    mi.def.sig = old_sig
-    @test length(errors) == 1
-    @test errors[1].kind === Compiler.SIGNATURE_NARGS_MISMATCH
-end
-
 @testset "NON_TOP_LEVEL_METHOD" begin
     c = copy(c0)
     c.code[1] = Expr(:method, :dummy)
     errors = Compiler.validate_code(c)
     @test length(errors) == 1
     @test errors[1].kind === Compiler.NON_TOP_LEVEL_METHOD
-end
-
-@testset "SLOTNAMES_NARGS_MISMATCH" begin
-    mi.def.nargs += 20
-    errors = Compiler.validate_code(mi, c0)
-    mi.def.nargs -= 20
-    @test length(errors) == 2
-    @test count(e.kind === Compiler.SLOTNAMES_NARGS_MISMATCH for e in errors) == 1
-    @test count(e.kind === Compiler.SIGNATURE_NARGS_MISMATCH for e in errors) == 1
 end

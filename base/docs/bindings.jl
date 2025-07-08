@@ -16,8 +16,8 @@ end
 
 bindingexpr(x) = Expr(:call, Binding, splitexpr(x)...)
 
-defined(b::Binding) = invokelatest(isdefined, b.mod, b.var)
-resolve(b::Binding) = invokelatest(getfield, b.mod, b.var)
+defined(b::Binding) = invokelatest(isdefinedglobal, b.mod, b.var)
+resolve(b::Binding) = invokelatest(getglobal, b.mod, b.var)
 
 function splitexpr(x::Expr)
     isexpr(x, :macrocall) ? splitexpr(x.args[1]) :
@@ -42,6 +42,6 @@ end
 
 aliasof(b::Binding)     = defined(b) ? (a = aliasof(resolve(b), b); defined(a) ? a : b) : b
 aliasof(d::DataType, b) = Binding(d.name.module, d.name.name)
-aliasof(λ::Function, b) = (m = typeof(λ).name.mt; Binding(m.module, m.name))
+aliasof(λ::Function, b) = (m = typeof(λ).name; Binding(m.module, m.singletonname))
 aliasof(m::Module,   b) = Binding(m, nameof(m))
 aliasof(other,       b) = b

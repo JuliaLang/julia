@@ -105,6 +105,11 @@ precompile_test_harness(false) do dir
               process_state_calls = 0
               @assert process_state() === process_state()
               @assert process_state_calls === 0
+
+              const empty_state = Base.OncePerProcess{Nothing}() do
+                  return nothing
+              end
+              @assert empty_state() === nothing
           end
           """)
     write(Foo2_file,
@@ -773,12 +778,12 @@ precompile_test_harness("code caching") do dir
     Base.compilecache(pkgid)
     @test Base.isprecompiled(pkgid)
     @eval using $Cache_module
-    M = invokelatest(getfield, @__MODULE__, Cache_module)
+    M = invokelatest(getglobal, @__MODULE__, Cache_module)
     Mid = rootid(M)
     invokelatest() do
         # Test that this cache file "owns" all the roots
         for name in (:f, :fpush, :callboth)
-            func = getfield(M, name)
+            func = getglobal(M, name)
             m = only(collect(methods(func)))
             @test all(i -> root_provenance(m, i) == Mid, 1:length(m.roots))
         end
@@ -951,6 +956,23 @@ precompile_test_harness("code caching") do dir
         use_stale(c) = stale(c[1]) + not_stale("hello")
         build_stale(x) = use_stale(Any[x])
 
+        # bindings
+        struct InvalidatedBinding
+            x::Int
+        end
+        struct Wrapper
+            ib::InvalidatedBinding
+        end
+        makewib(x) = Wrapper(InvalidatedBinding(x))
+        const gib = makewib(1)
+        fib() = gib.ib.x
+
+        struct LogBindingInvalidation
+            x::Int
+        end
+        const glbi = LogBindingInvalidation(1)
+        flbi() = @__MODULE__().glbi.x
+
         # force precompilation
         build_stale(37)
         stale('c')
@@ -975,11 +997,15 @@ precompile_test_harness("code caching") do dir
         useA() = $StaleA.stale("hello")
         useA2() = useA()
 
+        useflbi() = $StaleA.flbi()
+
         # force precompilation
         begin
             Base.Experimental.@force_compile
             useA2()
+            useflbi()
         end
+        precompile($StaleA.fib, ())
 
         ## Reporting tests
         call_nbits(x::Integer) = $StaleA.nbits(x)
@@ -1007,8 +1033,24 @@ precompile_test_harness("code caching") do dir
         Base.compilecache(Base.PkgId(string(pkg)))
     end
     @eval using $StaleA
-    MA = invokelatest(getfield, @__MODULE__, StaleA)
+    MA = invokelatest(getglobal, @__MODULE__, StaleA)
     Base.eval(MA, :(nbits(::UInt8) = 8))
+    Base.eval(MA, quote
+        struct InvalidatedBinding
+            x::Float64
+        end
+        struct Wrapper
+            ib::InvalidatedBinding
+        end
+        const gib = makewib(2.0)
+    end)
+    # TODO: test a "method_globalref" invalidation also
+    Base.eval(MA, quote
+        struct LogBindingInvalidation # binding invalidations can't be done during precompilation
+            x::Float64
+        end
+        const glbi = LogBindingInvalidation(2.0)
+    end)
     @eval using $StaleC
     invalidations = Base.StaticData.debug_method_invalidation(true)
     @eval using $StaleB
@@ -1039,6 +1081,10 @@ precompile_test_harness("code caching") do dir
         m = only(methods(MC.call_buildstale))
         mi = m.specializations::Core.MethodInstance
         @test hasvalid(mi, world)       # was compiled with the new method
+        m = only(methods(MA.fib))
+        mi = m.specializations::Core.MethodInstance
+        @test !hasvalid(mi, world)      # invalidated by redefining `gib` before loading StaleB
+        @test MA.fib() === 2.0
 
         # Reporting test (ensure SnoopCompile works)
         @test all(i -> isassigned(invalidations, i), eachindex(invalidations))
@@ -1064,6 +1110,16 @@ precompile_test_harness("code caching") do dir
         mi = only(Base.specializations(m))
         @test !hasvalid(mi, world)
         @test any(x -> x isa Core.CodeInstance && x.def === mi, invalidations)
+
+        idxb = findfirst(x -> x isa Core.Binding, invalidations)
+        @test invalidations[idxb+1] == "insert_backedges_callee"
+        idxv = findnext(==("verify_methods"), invalidations, idxb)
+        if invalidations[idxv-1].def.def.name === :getproperty
+            idxv = findnext(==("verify_methods"), invalidations, idxv+1)
+        end
+        @test invalidations[idxv-1].def.def.name === :flbi
+        idxv = findnext(==("verify_methods"), invalidations, idxv+1)
+        @test invalidations[idxv-1].def.def.name === :useflbi
 
         m = only(methods(MB.map_nbits))
         @test !hasvalid(m.specializations::Core.MethodInstance, world+1) # insert_backedges invalidations also trigger their backedges
@@ -1097,7 +1153,7 @@ precompile_test_harness("precompiletools") do dir
     Base.compilecache(pkgid)
     @test Base.isprecompiled(pkgid)
     @eval using $PrecompileToolsModule
-    M = invokelatest(getfield, @__MODULE__, PrecompileToolsModule)
+    M = invokelatest(getglobal, @__MODULE__, PrecompileToolsModule)
     invokelatest() do
         m = which(Tuple{typeof(findfirst), Base.Fix2{typeof(==), T}, Vector{T}} where T)
         success = 0
@@ -1224,7 +1280,7 @@ precompile_test_harness("invoke") do dir
           """)
     Base.compilecache(Base.PkgId(string(CallerModule)))
     @eval using $InvokeModule: $InvokeModule
-    MI = invokelatest(getfield, @__MODULE__, InvokeModule)
+    MI = invokelatest(getglobal, @__MODULE__, InvokeModule)
     @eval $MI.getlast(a::UnitRange) = a.stop
     @eval using $CallerModule
     invokelatest() do
@@ -1927,8 +1983,12 @@ precompile_test_harness("PkgCacheInspector") do load_path
     end
 
     modules, init_order, edges, new_ext_cis, external_methods, new_method_roots, cache_sizes = sv
-    m = only(external_methods).func::Method
-    @test m.name == :repl_cmd && m.nargs < 2
+    for m in external_methods
+        m = m.func::Method
+        if m.name !== :f
+            @test m.name == :repl_cmd && m.nargs == 1
+        end
+    end
     @test new_ext_cis === nothing || any(new_ext_cis) do ci
         mi = ci.def::Core.MethodInstance
         mi.specTypes == Tuple{typeof(Base.repl_cmd), Int, String}
@@ -2111,6 +2171,29 @@ precompile_test_harness("No backedge precompile") do load_path
     @eval using NoBackEdges
     invokelatest() do
         @test first(methods(NoBackEdges.f)).specializations.cache.max_world === typemax(UInt)
+    end
+end
+
+precompile_test_harness("Pre-compile Core methods") do load_path
+    # Core methods should support pre-compilation as external CI's like anything else
+    # https://github.com/JuliaLang/julia/issues/58497
+    write(joinpath(load_path, "CorePrecompilation.jl"),
+          """
+          module CorePrecompilation
+          struct Foo end
+          precompile(Tuple{Type{Vector{Foo}}, UndefInitializer, Tuple{Int}})
+          end
+          """)
+    ji, ofile = Base.compilecache(Base.PkgId("CorePrecompilation"))
+    @eval using CorePrecompilation
+    invokelatest() do
+        let tt = Tuple{Type{Vector{CorePrecompilation.Foo}}, UndefInitializer, Tuple{Int}},
+            match = first(Base._methods_by_ftype(tt, -1, Base.get_world_counter())),
+            mi = Base.specialize_method(match)
+            @test isdefined(mi, :cache)
+            @test mi.cache.max_world === typemax(UInt)
+            @test mi.cache.invoke != C_NULL
+        end
     end
 end
 

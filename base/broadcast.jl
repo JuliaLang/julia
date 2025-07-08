@@ -585,15 +585,17 @@ an `Int`.
 """
 Base.@propagate_inbounds newindex(arg, I::CartesianIndex) = to_index(_newindex(axes(arg), I.I))
 Base.@propagate_inbounds newindex(arg, I::Integer) = to_index(_newindex(axes(arg), (I,)))
-Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(length(ax[1]) == 1, ax[1][1], I[1]), _newindex(tail(ax), tail(I))...)
+Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple) = (ifelse(length(ax[1]) == 1, ax[1][begin], I[1]), _newindex(tail(ax), tail(I))...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple) = ()
-Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][1], _newindex(tail(ax), ())...)
+Base.@propagate_inbounds _newindex(ax::Tuple, I::Tuple{}) = (ax[1][begin], _newindex(tail(ax), ())...)
 Base.@propagate_inbounds _newindex(ax::Tuple{}, I::Tuple{}) = ()
 
 # If dot-broadcasting were already defined, this would be `ifelse.(keep, I, Idefault)`.
 @inline newindex(I::CartesianIndex, keep, Idefault) = to_index(_newindex(I.I, keep, Idefault))
-@inline newindex(i::Integer, keep::Tuple, idefault) = ifelse(keep[1], i, idefault[1])
-@inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex(())
+@inline newindex(I::CartesianIndex{1}, keep, Idefault) = newindex(I.I[1], keep, Idefault)
+@inline newindex(i::Integer, keep::Tuple, idefault) = CartesianIndex(ifelse(keep[1], Int(i), Int(idefault[1])), idefault[2])
+@inline newindex(i::Integer, keep::Tuple{Bool}, idefault) = ifelse(keep[1], i, idefault[1])
+@inline newindex(i::Integer, keep::Tuple{}, idefault) = CartesianIndex()
 @inline _newindex(I, keep, Idefault) =
     (ifelse(keep[1], I[1], Idefault[1]), _newindex(tail(I), tail(keep), tail(Idefault))...)
 @inline _newindex(I, keep::Tuple{}, Idefault) = ()  # truncate if keep is shorter than I

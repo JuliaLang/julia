@@ -23,6 +23,11 @@ where `T` is the type to be specialized for, and `dict` keeps track of objects c
 so far within the recursion. Within the definition, `deepcopy_internal` should be used
 in place of `deepcopy`, and the `dict` variable should be
 updated as appropriate before returning.
+
+!!! warning
+    It is better to avoid this function in favor of custom `copy` methods or use-case-specific
+    copying functions. `deepcopy` is slow and can easily copy too many objects, or generate an
+    object that violates invariants, since it does not respect abstraction boundaries.
 """
 function deepcopy(@nospecialize x)
     isbitstype(typeof(x)) && return x

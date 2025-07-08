@@ -139,6 +139,8 @@ Core.:(===)
 Core.isa
 Base.isequal
 Base.isless
+Base.ispositive
+Base.isnegative
 Base.isunordered
 Base.ifelse
 Core.typeassert
@@ -191,6 +193,7 @@ Base.typeintersect
 Base.promote_type
 Base.promote_rule
 Base.promote_typejoin
+Base.iskindtype
 Base.isdispatchtuple
 ```
 
@@ -207,6 +210,7 @@ Base.isstructtype
 Base.nameof(::DataType)
 Base.fieldnames
 Base.fieldname
+Base.fieldindex
 Core.fieldtype
 Base.fieldtypes
 Base.fieldcount
@@ -248,6 +252,7 @@ Base.instances
 Core.Any
 Core.Union
 Union{}
+Core.TypeofBottom
 Core.UnionAll
 Core.Tuple
 Core.NTuple

@@ -983,6 +983,13 @@ let ends_with_semicolon = REPL.ends_with_semicolon
     @test ends_with_semicolon("f()= 1;")
     # the next result does not matter because this is not legal syntax
     @test_nowarn ends_with_semicolon("1; #=# 2")
+
+    # #46189 - adjoint operator with comment
+    @test ends_with_semicolon("W';") == true
+    @test ends_with_semicolon("W'; # comment")
+    @test !ends_with_semicolon("W'")
+    @test !ends_with_semicolon("x'")
+    @test !ends_with_semicolon("'a'")
 end
 
 # PR #20794, TTYTerminal with other kinds of streams
@@ -1550,59 +1557,61 @@ end
 
 @testset "Install missing packages via hooks" begin
     @testset "Parse AST for packages" begin
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo"))
+        test_find_packages(e) =
+            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, e))
+        test_find_packages(s::String) =
+            REPL.modules_to_be_loaded(Meta.lower(@__MODULE__, Meta.parse(s)))
+
+        mods = test_find_packages("using Foo")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo"))
+        mods = test_find_packages("import Foo")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo, Bar"))
+        mods = test_find_packages("using Foo, Bar")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo, Bar"))
+        mods = test_find_packages("import Foo, Bar")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Foo.bar, Foo.baz"))
+        mods = test_find_packages("using Foo.bar, Foo.baz")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo end"))
+        mods = test_find_packages("if false using Foo end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false if false using Foo end end"))
+        mods = test_find_packages("if false if false using Foo end end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo, Bar end"))
+        mods = test_find_packages("if false using Foo, Bar end")
         @test mods == [:Foo, :Bar]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("if false using Foo: bar end"))
+        mods = test_find_packages("if false using Foo: bar end")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("import Foo.bar as baz"))
+        mods = test_find_packages("import Foo.bar as baz")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using .Foo"))
+        mods = test_find_packages("using .Foo")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base"))
+        mods = test_find_packages("using Base")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Base: nope"))
+        mods = test_find_packages("using Base: nope")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Main"))
+        mods = test_find_packages("using Main")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("using Core"))
-        @test isempty(mods)
-
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line(":(using Foo)"))
-        @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("ex = :(using Foo)"))
+        mods = test_find_packages("using Core")
         @test isempty(mods)
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Foo"))
+        mods = test_find_packages(":(using Foo)")
+        @test isempty(mods)
+        mods = test_find_packages("ex = :(using Foo)")
         @test isempty(mods)
 
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("@eval using Foo"))
+        mods = test_find_packages("@eval using Foo")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; @eval using Bar end"))
+        mods = test_find_packages("begin using Foo; @eval using Bar end")
         @test mods == [:Foo]
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("Core.eval(Main,\"using Foo\")"))
+        mods = test_find_packages("Core.eval(Main,\"using Foo\")")
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(Base.parse_input_line("begin using Foo; Core.eval(Main,\"using Foo\") end"))
+        mods = test_find_packages("begin using Foo; Core.eval(Main,\"using Foo\") end")
         @test mods == [:Foo]
 
-        mods = REPL.modules_to_be_loaded(:(import .Foo: a))
+        mods = test_find_packages(:(import .Foo: a))
         @test isempty(mods)
-        mods = REPL.modules_to_be_loaded(:(using .Foo: a))
+        mods = test_find_packages(:(using .Foo: a))
         @test isempty(mods)
     end
 end
@@ -1948,6 +1957,9 @@ end
         @test output == "…[printing stopped after displaying 0 bytes; $hint]"
         @test sprint(io -> show(REPL.LimitIO(io, 5), "abc")) == "\"abc\""
         @test_throws REPL.LimitIOException(1) sprint(io -> show(REPL.LimitIO(io, 1), "abc"))
+
+        # displaying objects at the REPL sometimes needs access to displaysize, like Dict
+        @test displaysize(IOContext(REPL.LimitIO(stdout, 100), stdout)) == displaysize(stdout)
     finally
         REPL.SHOW_MAXIMUM_BYTES = previous
     end
@@ -1986,4 +1998,33 @@ end
 
     write(proj_file, "name = \"Bar\"\n")
     @test get_prompt("--project=$proj_file") == "(Bar) pkg> "
+end
+
+# Issue #58158 add alias for Char display in REPL
+@testset "REPL show_repl Char alias" begin
+    # Test character with a known emoji alias
+    output = sprint(REPL.show_repl, MIME("text/plain"), '😼'; context=(:color => true))
+    # Check for base info and the specific alias
+    @test occursin("'😼': Unicode U+1F63C (category So: Symbol, other)", output)
+    @test occursin(", input as ", output) # Check for the prefix text
+    @test occursin("\\:smirk_cat:<tab>", output) # Check for the alias text (may be colored)
+
+    # Test character with a known LaTeX alias
+    output = sprint(REPL.show_repl, MIME("text/plain"), 'α'; context=(:color => true))
+    # Check for base info and the specific alias
+    @test occursin("'α': Unicode U+03B1 (category Ll: Letter, lowercase)", output)
+    @test occursin(", input as ", output) # Check for the prefix text
+    @test occursin("\\alpha<tab>", output) # Check for the alias text (may be colored)
+
+    # Test character without an alias
+    output = sprint(REPL.show_repl, MIME("text/plain"), 'X'; context=(:color => true))
+    # Check for base info only
+    @test occursin("'X': ASCII/Unicode U+0058 (category Lu: Letter, uppercase)", output)
+    # Ensure alias part is *not* printed
+    @test !occursin(", input as ", output)
+
+    # Test another character without an alias (symbol)
+    output = sprint(REPL.show_repl, MIME("text/plain"), '+'; context=(:color => true))
+    @test occursin("'+': ASCII/Unicode U+002B (category Sm: Symbol, math)", output)
+    @test !occursin(", input as ", output)
 end

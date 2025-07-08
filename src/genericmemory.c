@@ -56,7 +56,7 @@ jl_genericmemory_t *_new_genericmemory_(jl_value_t *mtype, size_t nel, int8_t is
 {
     if (nel == 0) // zero-sized allocation optimization
         return (jl_genericmemory_t*)((jl_datatype_t*)mtype)->instance;
-    size_t nbytes;
+    size_t nbytes = 0; // initialized to workaround clang sa bug on v20: https://github.com/llvm/llvm-project/issues/136292
     int overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
     if (isunion) {
         // an extra byte for each isbits union memory element, stored at m->ptr + m->length
@@ -152,7 +152,7 @@ JL_DLLEXPORT jl_genericmemory_t *jl_ptr_to_genericmemory(jl_value_t *mtype, void
     if (((uintptr_t)data) & ((align > JL_HEAP_ALIGNMENT ? JL_HEAP_ALIGNMENT : align) - 1))
         jl_exceptionf(jl_argumenterror_type,
                       "unsafe_wrap: pointer %p is not properly aligned to %u bytes", data, align);
-    size_t nbytes;
+    size_t nbytes = 0; // initialized to workaround clang sa bug on v20: https://github.com/llvm/llvm-project/issues/136292
     int overflow = __builtin_mul_overflow(nel, elsz, &nbytes);
     if (isunion) {
         // an extra byte for each isbits union memory element, stored at m->ptr + m->length
@@ -197,7 +197,6 @@ JL_DLLEXPORT jl_value_t *jl_genericmemory_to_string(jl_genericmemory_t *m, size_
     }
     int how = jl_genericmemory_how(m);
     size_t mlength = m->length;
-    m->length = 0;
     if (how != 0) {
         jl_value_t *o = jl_genericmemory_data_owner_field(m);
         jl_genericmemory_data_owner_field(m) = NULL;
@@ -283,6 +282,9 @@ JL_DLLEXPORT jl_genericmemory_t *jl_genericmemory_copy_slice(jl_genericmemory_t 
         memcpy(jl_genericmemory_typetagdata(new_mem), jl_genericmemory_typetagdata(mem) + (size_t)data, len);
     }
     else if (layout->first_ptr != -1) {
+        if (data == NULL) {
+            assert(len * elsz / sizeof(void*) == 0); // make static analyzer happy
+        }
         memmove_refs((_Atomic(void*)*)new_mem->ptr, (_Atomic(void*)*)data, len * elsz / sizeof(void*));
     }
     else if (data != NULL) {

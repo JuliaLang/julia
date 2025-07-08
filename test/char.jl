@@ -290,6 +290,7 @@ Base.codepoint(c::ASCIIChar) = reinterpret(UInt8, c)
     @test !isempty(ASCIIChar('x'))
     @test ndims(ASCIIChar('x')) == 0
     @test ndims(ASCIIChar) == 0
+    @test Base.IteratorSize(ASCIIChar) === Base.HasShape{0}()
     @test firstindex(ASCIIChar('x')) == 1
     @test lastindex(ASCIIChar('x')) == 1
     @test eltype(ASCIIChar) == ASCIIChar

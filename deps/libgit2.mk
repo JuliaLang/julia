@@ -13,7 +13,15 @@ ifeq ($(USE_SYSTEM_OPENSSL), 0)
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/openssl
 endif
 
-LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=ON -DUSE_SSH=ON -DBUILD_CLI=OFF
+ifeq ($(USE_SYSTEM_PCRE), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/pcre
+endif
+
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+$(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/zlib
+endif
+
+LIBGIT2_OPTS := $(CMAKE_COMMON) -DCMAKE_BUILD_TYPE=Release -DUSE_THREADS=ON -DUSE_BUNDLED_ZLIB=OFF -DUSE_SSH=ON -DREGEX_BACKEND=pcre2 -DBUILD_CLI=OFF
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON
 ifeq ($(USE_SYSTEM_LIBSSH2), 0)
@@ -42,16 +50,12 @@ ifneq (,$(findstring $(OS),Linux FreeBSD OpenBSD))
 LIBGIT2_OPTS += -DUSE_HTTPS="OpenSSL" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-# use the bundled distribution of libpcre. we should consider linking against the
-# pcre2 library we're building anyway, but this is currently how Yggdrasil does it.
-LIBGIT2_OPTS += -DREGEX_BACKEND="builtin"
-
 LIBGIT2_SRC_PATH := $(SRCCACHE)/$(LIBGIT2_SRC_DIR)
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured: $(LIBGIT2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(LIBGIT2_OPTS)
+	$(CMAKE) -G"Unix Makefiles" $(dir $<) $(LIBGIT2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBGIT2_SRC_DIR)/build-configured

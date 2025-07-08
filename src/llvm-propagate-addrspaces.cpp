@@ -289,7 +289,11 @@ bool propagateJuliaAddrspaces(Function &F) {
     PropagateJuliaAddrspacesVisitor visitor;
     visitor.visit(F);
     for (auto it : visitor.ToInsert)
+#if JL_LLVM_VERSION >= 200000
+        it.first->insertBefore(it.second->getIterator());
+#else
         it.first->insertBefore(it.second);
+#endif
     for (Instruction *I : visitor.ToDelete)
         I->eraseFromParent();
     visitor.ToInsert.clear();

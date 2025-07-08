@@ -6,7 +6,7 @@ module Unicode
 import Base: show, ==, hash, string, Symbol, isless, length, eltype,
              convert, isvalid, ismalformed, isoverlong, iterate,
              AnnotatedString, AnnotatedChar, annotated_chartransform,
-             @assume_effects, annotations
+             @assume_effects, annotations, is_overlong_enc
 
 # whether codepoints are valid Unicode scalar values, i.e. 0-0xd7ff, 0xe000-0x10ffff
 
@@ -262,17 +262,15 @@ julia> textwidth('⛵')
 2
 ```
 """
-function textwidth(c::AbstractChar)
-    ismalformed(c) && return 1
-    i = codepoint(c)
-    i < 0x7f && return Int(i >= 0x20) # ASCII fast path
-    Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), i))
-end
+textwidth(c::AbstractChar) = textwidth(Char(c)::Char)
 
 function textwidth(c::Char)
-    b = bswap(reinterpret(UInt32, c)) # from isascii(c)
+    u = reinterpret(UInt32, c)
+    b = bswap(u) # from isascii(c)
     b < 0x7f && return Int(b >= 0x20) # ASCII fast path
-    ismalformed(c) && return 1
+    # We can't know a priori how terminals will render invalid UTF8 chars,
+    # so we conservatively decide a width of 1.
+    (ismalformed(c) || is_overlong_enc(u)) && return 1
     Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 end
 
@@ -702,7 +700,7 @@ function titlecase(s::AbstractString; wordsep::Function = !isletter, strict::Boo
         end
         c0 = c
     end
-    return String(take!(b))
+    return takestring!(b)
 end
 
 # TODO: improve performance characteristics, room for a ~10x improvement.
@@ -800,7 +798,7 @@ isgraphemebreak(c1::AbstractChar, c2::AbstractChar) =
 # Stateful grapheme break required by Unicode-9 rules: the string
 # must be processed in sequence, with state initialized to Ref{Int32}(0).
 # Requires utf8proc v2.0 or later.
-function isgraphemebreak!(state::Ref{Int32}, c1::AbstractChar, c2::AbstractChar)
+@inline function isgraphemebreak!(state::Ref{Int32}, c1::AbstractChar, c2::AbstractChar)
     if ismalformed(c1) || ismalformed(c2)
         state[] = 0
         return true

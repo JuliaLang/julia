@@ -149,12 +149,13 @@ nextind(@nospecialize(t::Tuple), i::Integer) = Int(i)+1
 
 function keys(t::Tuple, t2::Tuple...)
     @inline
-    OneTo(_maxlength(t, t2...))
-end
-_maxlength(t::Tuple) = length(t)
-function _maxlength(t::Tuple, t2::Tuple, t3::Tuple...)
-    @inline
-    max(length(t), _maxlength(t2, t3...))
+    lent = length(t)
+    if !all(==(lent) ∘ length, t2)
+        let inds = map(only ∘ axes, (t, t2...))
+            throw_eachindex_mismatch_indices("indices", inds...)
+        end
+    end
+    Base.OneTo(lent)
 end
 
 # this allows partial evaluation of bounded sequences of next() calls on tuples,
@@ -576,10 +577,10 @@ function _eq(t1::Any32, t2::Any32)
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash(::Tuple{}, h::UInt) = h + tuplehash_seed
+hash(::Tuple{}, h::UInt) = h ⊻ tuplehash_seed
 hash(t::Tuple, h::UInt) = hash(t[1], hash(tail(t), h))
 function hash(t::Any32, h::UInt)
-    out = h + tuplehash_seed
+    out = h ⊻ tuplehash_seed
     for i = length(t):-1:1
         out = hash(t[i], out)
     end

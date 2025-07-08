@@ -120,6 +120,7 @@ ifeq ($(OS),WINNT)
 GCC_VERSION = 14
 install-csl:
 	mkdir -p $(build_private_libdir)/
+	cp -a $(build_shlibdir)/$(call versioned_libname,libstdc++,6) $(build_shlibdir)/libstdc++.$(SHLIB_EXT)
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc_s.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libgcc.a $(build_private_libdir)/
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libmsvcrt.a $(build_private_libdir)/
@@ -127,12 +128,15 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/$(GCC_VERSION)/libssp.dll.a $(build_libdir)/
 endif
 endif
+
 ifeq ($(OS),WINNT)
 uninstall-csl: uninstall-gcc-libraries
 uninstall-gcc-libraries:
+	-rm -f $(build_shlibdir)/libstdc++.$(SHLIB_EXT)
 	-rm -f $(build_private_libdir)/libgcc_s.a
 	-rm -f $(build_private_libdir)/libgcc.a
 	-rm -f $(build_private_libdir)/libmsvcrt.a
 	-rm -f $(build_private_libdir)/libssp.dll.a
 	-rm -f $(build_libdir)/libssp.dll.a
+.PHONY: uninstall-gcc-libraries
 endif

@@ -83,7 +83,7 @@ julia> NaN == NaN, isequal(NaN, NaN), isnan(NaN)
 !!! note
     Always use [`isnan`](@ref) or [`isequal`](@ref) for checking for `NaN`.
     Using `x === NaN` may give unexpected results:
-    ```julia-repl
+    ```jldoctest
     julia> reinterpret(UInt32, NaN32)
     0x7fc00000
 
@@ -603,7 +603,10 @@ function rem(x::T, y::T) where {T<:IEEEFloat}
     end
 end
 
-function mod(x::T, y::T) where {T<:AbstractFloat}
+function mod(x::T, y::T) where T<:AbstractFloat
+    if isinf(y) && isfinite(x)
+        return x
+    end
     r = rem(x,y)
     if r == 0
         copysign(r,y)

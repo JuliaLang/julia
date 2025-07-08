@@ -60,6 +60,10 @@ ifeq ($(BUILD_LLD), 1)
 LLVM_ENABLE_PROJECTS := $(LLVM_ENABLE_PROJECTS);lld
 endif
 
+# Remove ; if it's the first character
+ifneq ($(LLVM_ENABLE_RUNTIMES),)
+	LLVM_ENABLE_RUNTIMES := $(patsubst ;%,%,$(LLVM_ENABLE_RUNTIMES))
+endif
 
 LLVM_LIB_FILE := libLLVMCodeGen.a
 
@@ -70,7 +74,7 @@ LLVM_EXPERIMENTAL_TARGETS :=
 LLVM_CFLAGS :=
 LLVM_CXXFLAGS :=
 LLVM_CPPFLAGS :=
-LLVM_LDFLAGS :=
+LLVM_LDFLAGS := "-L$(build_shlibdir)" # hacky way to force zlib to be found when linking against libLLVM and sysroot is set
 LLVM_CMAKE :=
 
 LLVM_CMAKE += -DLLVM_ENABLE_PROJECTS="$(LLVM_ENABLE_PROJECTS)"
@@ -95,7 +99,7 @@ LLVM_CMAKE += -DLLVM_TARGETS_TO_BUILD:STRING="$(LLVM_TARGETS)" -DCMAKE_BUILD_TYP
 LLVM_CMAKE += -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD:STRING="$(LLVM_EXPERIMENTAL_TARGETS)"
 LLVM_CMAKE += -DLLVM_ENABLE_LIBXML2=OFF -DLLVM_HOST_TRIPLE="$(or $(XC_HOST),$(BUILD_MACHINE))"
 LLVM_CMAKE += -DLLVM_ENABLE_ZLIB=FORCE_ON -DZLIB_ROOT="$(build_prefix)"
-LLVM_CMAKE += -DLLVM_ENABLE_ZSTD=OFF
+LLVM_CMAKE += -DLLVM_ENABLE_ZSTD=FORCE_ON -DZSTD_ROOT="$(build_prefix)"
 ifeq ($(USE_POLLY_ACC),1)
 LLVM_CMAKE += -DPOLLY_ENABLE_GPGPU_CODEGEN=ON
 endif
@@ -183,6 +187,11 @@ endif
 
 ifeq ($(fPIC),)
 LLVM_CMAKE += -DLLVM_ENABLE_PIC=OFF
+else
+ifeq ($(OS),FreeBSD)
+    # On FreeBSD, we must force even statically-linked code to have -fPIC
+    LLVM_CMAKE += -DCMAKE_POSITION_INDEPENDENT_CODE=TRUE
+endif
 endif
 
 LLVM_CMAKE += -DCMAKE_C_FLAGS="$(LLVM_CPPFLAGS) $(LLVM_CFLAGS)" \
@@ -241,6 +250,11 @@ endif
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
+
+ifeq ($(USE_SYSTEM_ZSTD), 0)
+$(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zstd
+endif
+
 
 # NOTE: LLVM 12 and 13 have their patches applied to JuliaLang/llvm-project
 
@@ -342,6 +356,10 @@ $(eval $(call bb-install,llvm,LLVM,false,true))
 $(eval $(call bb-install,lld,LLD,false,true))
 $(eval $(call bb-install,clang,CLANG,false,true))
 $(eval $(call bb-install,llvm-tools,LLVM_TOOLS,false,true))
+
+# work-around for Yggdrasil packaging bug (https://github.com/JuliaPackaging/Yggdrasil/pull/11231)
+$(build_prefix)/manifest/llvm-tools uninstall-llvm-tools: \
+	TAR:=$(TAR) --exclude=llvm-config.exe
 
 endif # USE_BINARYBUILDER_LLVM
 

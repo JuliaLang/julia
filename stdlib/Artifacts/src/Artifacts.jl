@@ -562,7 +562,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     meta = artifact_meta(name, artifact_dict, artifacts_toml; platform)
     if meta !== nothing && get(meta, "lazy", false)
         if LazyArtifacts isa Module && isdefined(LazyArtifacts, :ensure_artifact_installed)
-            if nameof(LazyArtifacts) in (:Pkg, :Artifacts)
+            if nameof(LazyArtifacts) in (:Pkg, :Artifacts, :PkgArtifacts)
                 Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
             end
             return jointail(LazyArtifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform), path_tail)
@@ -697,7 +697,7 @@ macro artifact_str(name, platform=nothing)
     # Check if the user has provided `LazyArtifacts`, and thus supports lazy artifacts
     # If not, check to see if `Pkg` or `Pkg.Artifacts` has been imported.
     LazyArtifacts = nothing
-    for module_name in (:LazyArtifacts, :Pkg, :Artifacts)
+    for module_name in (:LazyArtifacts, :Pkg, :Artifacts, :PkgArtifacts)
         if isdefined(__module__, module_name)
             LazyArtifacts = GlobalRef(__module__, module_name)
             break

@@ -125,11 +125,6 @@
     XX(jl_exit) \
     XX(jl_exit_on_sigint) \
     XX(jl_exit_threaded_region) \
-    XX(jl_expand) \
-    XX(jl_expand_stmt) \
-    XX(jl_expand_stmt_with_loc) \
-    XX(jl_expand_with_loc) \
-    XX(jl_expand_with_loc_warn) \
     XX(jl_field_index) \
     XX(jl_field_isdefined) \
     XX(jl_gc_add_finalizer) \
@@ -240,9 +235,12 @@
     XX(jl_hrtime) \
     XX(jl_idtable_rehash) \
     XX(jl_init) \
+    XX(jl_init_) \
     XX(jl_init_options) \
     XX(jl_init_restored_module) \
     XX(jl_init_with_image) \
+    XX(jl_init_with_image_file) \
+    XX(jl_init_with_image_handle) \
     XX(jl_install_sigint_handler) \
     XX(jl_instantiate_type_in_env) \
     XX(jl_instantiate_unionall) \
@@ -267,6 +265,7 @@
     XX(jl_istopmod) \
     XX(jl_is_binding_deprecated) \
     XX(jl_is_char_signed) \
+    XX(jl_is_compilable) \
     XX(jl_is_const) \
     XX(jl_is_assertsbuild) \
     XX(jl_is_debugbuild) \
@@ -289,6 +288,7 @@
     XX(jl_load_dynamic_library) \
     XX(jl_load_file_string) \
     XX(jl_lookup_code_address) \
+    XX(jl_lower) \
     XX(jl_lseek) \
     XX(jl_lstat) \
     XX(jl_macroexpand) \
@@ -314,7 +314,6 @@
     XX(jl_module_parent) \
     XX(jl_module_getloc) \
     XX(jl_module_public_p) \
-    XX(jl_module_use) \
     XX(jl_module_using) \
     XX(jl_module_usings) \
     XX(jl_module_uuid) \
@@ -517,6 +516,7 @@
     YY(jl_get_LLVM_VERSION) \
     YY(jl_dump_native) \
     YY(jl_get_llvm_gvs) \
+    YY(jl_get_llvm_gv_inits) \
     YY(jl_get_llvm_external_fns) \
     YY(jl_get_llvm_mis) \
     YY(jl_dump_function_asm) \

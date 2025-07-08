@@ -187,7 +187,7 @@ UNINSTALL_$(strip $1) := $2 staged-uninstaller
 
 $$(build_prefix)/manifest/$(strip $1): $$(build_staging)/$2.tar | $(build_prefix)/manifest
 	-+[ ! -e $$@ ] || $$(MAKE) uninstall-$(strip $1)
-	$(UNTAR) $$< -C $$(build_prefix)
+	$$(UNTAR) $$< -C $$(build_prefix)
 	$6
 	echo '$$(UNINSTALL_$(strip $1))' > $$@
 .PHONY: $(addsuffix -$(strip $1),stage install distclean uninstall reinstall)

@@ -53,6 +53,7 @@ ci(x) = CartesianIndex(x)
 @test @inferred(newindex(ci((2,2)), (true,), (-1,)))   == 2
 @test @inferred(newindex(ci((2,2)), (false,), (-1,)))  == -1
 @test @inferred(newindex(ci((2,2)), (), ())) == ci(())
+@test @inferred(newindex(ci((2,)), (true, false, false), (-1, -1, -1))) == ci((2, -1))
 
 end
 
@@ -853,29 +854,34 @@ let
     @test Dict(c .=> d) == Dict("foo" => 1, "bar" => 2)
 end
 
-# Broadcasted iterable/indexable APIs
-let
-    bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5))
-    @test IndexStyle(bc) == IndexLinear()
-    @test eachindex(bc) === Base.OneTo(5)
-    @test length(bc) === 5
-    @test ndims(bc) === 1
-    @test ndims(typeof(bc)) === 1
-    @test bc[1] === bc[CartesianIndex((1,))] === 5.0
-    @test copy(bc) == [v for v in bc] == collect(bc)
-    @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
-    @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+isdefined(Main, :OffsetArrays) || @eval Main include("testhelpers/OffsetArrays.jl")
+using .Main.OffsetArrays
+@testset "Broadcasted iterable/indexable APIs" begin
+    for f in (identity, x -> OffsetArray(x, ntuple(Returns(-1), ndims(x))))
+        a = f(zeros(5))
+        bc = Broadcast.instantiate(Broadcast.broadcasted(+, a, 5))
+        @test IndexStyle(bc) == IndexLinear()
+        @test eachindex(bc) === eachindex(a)
+        @test length(bc) === 5
+        @test ndims(bc) === 1
+        @test ndims(typeof(bc)) === 1
+        @test bc[1] === bc[CartesianIndex((1,))] === 5.0
+        @test copy(bc) == [v for v in bc] == collect(bc)
+        @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
+        @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
 
-    bc = Broadcast.instantiate(Broadcast.broadcasted(+, zeros(5), 5*ones(1, 4)))
-    @test IndexStyle(bc) == IndexCartesian()
-    @test eachindex(bc) === CartesianIndices((Base.OneTo(5), Base.OneTo(4)))
-    @test length(bc) === 20
-    @test ndims(bc) === 2
-    @test ndims(typeof(bc)) === 2
-    @test bc[1,1] == bc[CartesianIndex((1,1))] === 5.0
-    @test copy(bc) == [v for v in bc] == collect(bc)
-    @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
-    @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+        b = f(5*ones(1, 4))
+        bc = Broadcast.instantiate(Broadcast.broadcasted(+, a, b))
+        @test IndexStyle(bc) == IndexCartesian()
+        @test eachindex(bc) === CartesianIndices((axes(a, 1), axes(b, 2)))
+        @test length(bc) === 20
+        @test ndims(bc) === 2
+        @test ndims(typeof(bc)) === 2
+        @test bc[1,1] == bc[CartesianIndex((1,1))] === 5.0
+        @test copy(bc) == [v for v in bc] == collect(bc)
+        @test eltype(copy(bc)) == eltype([v for v in bc]) == eltype(collect(bc))
+        @test ndims(copy(bc)) == ndims([v for v in bc]) == ndims(collect(bc)) == ndims(bc)
+    end
 
     struct MyFill{T,N} <: AbstractArray{T,N}
         val :: T
@@ -1118,24 +1124,14 @@ end
 end
 
 @testset "inplace broadcast with trailing singleton dims" begin
-    for (a, b, c) in (([1, 2], reshape([3 4], :, 1), reshape([5, 6], :, 1, 1)),
+    for (a_, b_, c_) in (([1, 2], reshape([3 4], :, 1), reshape([5, 6], :, 1, 1)),
             ([1 2; 3 4], reshape([5 6; 7 8], 2, 2, 1), reshape([9 10; 11 12], 2, 2, 1, 1)))
-
-        a_ = copy(a)
-        a_ .= b
-        @test a_ == dropdims(b, dims=(findall(==(1), size(b))...,))
-
-        a_ = copy(a)
-        a_ .= b
-        @test a_ == dropdims(b, dims=(findall(==(1), size(b))...,))
-
-        a_ = copy(a)
-        a_ .= b .+ c
-        @test a_ == dropdims(b .+ c, dims=(findall(==(1), size(c))...,))
-
-        a_ = copy(a)
-        a_ .*= c
-        @test a_ == dropdims(a .* c, dims=(findall(==(1), size(c))...,))
+        for fun in (x -> OffsetArray(x, ntuple(Returns(1), ndims(x))), identity)
+            a, b, c = fun(a_), fun(b_), fun(c_)
+            @test (deepcopy(a) .= b) == dropdims(b, dims=(findall(==(1), size(b))...,))
+            @test (deepcopy(a) .= b .+ c) == dropdims(b .+ c, dims=(findall(==(1), size(c))...,))
+            @test (deepcopy(a) .*= c)  == dropdims(a .* c, dims=(findall(==(1), size(c))...,))
+        end
     end
 end
 

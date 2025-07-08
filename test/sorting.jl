@@ -808,6 +808,16 @@ end
     end
 end
 
+@testset "partialsort(x; scratch)" begin
+    for n in [1,10,100,1000]
+        v = rand(n)
+        scratch = [0.0]
+        k = n ÷ 2 + 1
+        @test partialsort(v, k) == partialsort(v, k; scratch)
+        @test partialsort!(copy(v), k) == partialsort!(copy(v), k; scratch)
+    end
+end
+
 @testset "sorting preserves identity" begin
     a = BigInt.([2, 2, 2, 1, 1, 1]) # issue #39620
     sort!(a)
