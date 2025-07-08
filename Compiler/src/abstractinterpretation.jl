@@ -278,7 +278,7 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                 state.exctype = state.exctype ⊔ₚ MethodError
             end
             if merged_refinements !== nothing
-                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, merged_refinements, argtypes, fargs, applicable)
+                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, merged_refinements, argtypes, fargs)
             end
             state.rettype = from_interprocedural!(interp, state.rettype, sv, arginfo, state.conditionals)
             if call_result_unused(si) && !(state.rettype === Bottom)
@@ -590,7 +590,7 @@ function conditional_argtype(𝕃ᵢ::AbstractLattice, @nospecialize(rt), @nospe
     end
 end
 
-function collect_slot_refinements(𝕃ᵢ::AbstractLattice, merged_refinements::Vector{SlotRefinement}, argtypes::Vector{Any}, fargs::Vector{Any}, applicable)
+function collect_slot_refinements(𝕃ᵢ::AbstractLattice, merged_refinements::Vector{SlotRefinement}, argtypes::Vector{Any}, fargs::Vector{Any})
     ⊏ = strictpartialorder(𝕃ᵢ)
     slotrefinements = nothing
     for i = 1:length(fargs)

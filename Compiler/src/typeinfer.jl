@@ -1192,11 +1192,50 @@ function propagate_refinements(callee::InferenceState, caller::InferenceState, s
     refinements
 end
 
+# This function is a situational `tmeet` extension to support `Const` and `PartialStruct`.
+# Semantics are slightly different, in that we are allowed to bail out and return Bottom,
+# instead of requiring an accurate result.
 function intersect_refined_types(@nospecialize(xtyp), @nospecialize(ytyp), 𝕃ₚ::AbstractLattice)
     ⊓ = meet(𝕃ₚ)
-    isa(xtyp, Const) && isa(ytyp, Const) && return xtyp == ytyp ? xtyp : Union{}
+    isa(xtyp, Const) && isa(ytyp, Const) && return xtyp == ytyp ? xtyp : Bottom
     isa(ytyp, Const) && ((xtyp, ytyp) = (ytyp, xtyp))
-    !isa(xtyp, Type) && !isa(ytyp, Type) && return Union{}
+    if isa(xtyp, Const) && isa(ytyp, PartialStruct)
+        xT = widenconst(xtyp)
+        yT = widenconst(ytyp)
+        T = typeintersect(xT, yT)
+        T !== xT && return Bottom
+        for i in eachindex(ytyp.fields)
+            ytyp.undefs[i] === true && return Bottom
+            a = getfield_tfunc(𝕃ₚ, xtyp, Const(i))
+            b = getfield_tfunc(𝕃ₚ, ytyp, Const(i))
+            subT = intersect_refined_types(a, b, 𝕃ₚ)
+            subT !== a && return Bottom
+        end
+        return xtyp
+    elseif isa(xtyp, PartialStruct) && isa(ytyp, PartialStruct)
+        xT = widenconst(xtyp)
+        yT = widenconst(ytyp)
+        xT === yT || return Bottom
+        # XXX: support non-identical types
+        # T = typeintersect(xT, yT)
+        # valid_as_lattice(T, true) || return Bottom
+        length(xtyp.fields) == length(ytyp.fields) || return Bottom
+        undefs = Union{Bool,Nothing}[]
+        fields = Any[]
+        for i in eachindex(ytyp.fields)
+            xu = xtyp.undefs[i]
+            yu = ytyp.undefs[i]
+            xu !== yu && xu !== nothing && yu !== nothing && return Bottom # conflicting information
+            push!(undefs, xu === nothing ? yu : xu)
+            a = getfield_tfunc(𝕃ₚ, xtyp, Const(i))
+            b = getfield_tfunc(𝕃ₚ, ytyp, Const(i))
+            subT = intersect_refined_types(a, b, 𝕃ₚ)
+            valid_as_lattice(widenconst(subT), true) || return Bottom
+            push!(fields, subT)
+        end
+        return PartialStruct(xT, undefs, fields)
+    end
+    !isa(xtyp, Type) && !isa(ytyp, Type) && return Bottom
     xtyp ⊓ ytyp
 end
 
