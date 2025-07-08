@@ -180,7 +180,7 @@
            (needs-alias?
              (and (not have-self-arg?)
                   (expr-contains-p
-                    (lambda (x) (and (symbol? x)
+                    (lambda (x) (and
                                      (eq? x '|#self#|)))
                     body))))
       (when needs-alias?
