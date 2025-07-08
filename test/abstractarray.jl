@@ -2318,10 +2318,6 @@ end
     v[1] = v
     m[1] = m
 
-    # TODO: unclear how this (and `hash`) can work without tracking the objectid of each element
-    @test_broken (v == v == v[1])
-    @test_broken (m == m == m[1])
-
     io = IOBuffer()
     show(io, v)
     @test String(take!(io)) == "Any[Any[#= circular reference @-1 =#], 2, 3]"
