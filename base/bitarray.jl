@@ -1451,37 +1451,6 @@ function bitcount(Bc::Vector{UInt64}; init::T=0) where {T}
     return n
 end
 
-function _count(
-        ::typeof(identity),
-        v::SubArray{Bool, N, <:BitArray, <:Tuple{Union{Integer, AbstractUnitRange}}, true},
-        ::Colon,
-        init::T
-    ) where {N, T}
-    pi = only(parentindices(v))
-    (fst, lst) = (first(pi), last(pi))
-    fst > lst && return init
-    chunks = parent(v).chunks
-
-    # Mask away the bits in the chunks not inside the view
-    mask1 = typemax(UInt64) << ((fst - 1) & 63)
-    mask2 = typemax(UInt64) >> ((64 - lst) & 63)
-    start_index = ((fst - 1) >>> 6) + 1
-    stop_index = ((lst - 1) >>> 6) + 1
-    # If the whole view is contained in one chunk, then mask it from both sides
-    if start_index == stop_index
-        return (init + count_ones(@inbounds chunks[start_index] & mask1 & mask2)) % T
-    end
-    # Else, mask first and last chunk individually, then add all whole chunks
-    # in a separate loop below.
-    n = init + count_ones(@inbounds chunks[start_index] & mask1)
-    n += count_ones(@inbounds chunks[stop_index] & mask2)
-    for i in (start_index + 1):(stop_index - 1)
-        n += count_ones(@inbounds chunks[i])
-    end
-    return n % T
-end
-
-
 _count(::typeof(identity), B::BitArray, ::Colon, init) = bitcount(B.chunks; init)
 
 function unsafe_bitfindnext(Bc::Vector{UInt64}, start::Int)
