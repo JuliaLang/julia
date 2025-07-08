@@ -4352,17 +4352,17 @@ let f = NoSpecClosure.K(1)
     @test typeof(f).parameters == Core.svec()
 end
 
-# var"#self#"
-# regular functions can use var"#self#" to refer to the function itself
-regular_func() = var"#self#"
+# Expr(:thisfunction)
+# regular functions can use Expr(:thisfunction) to refer to the function itself
+@eval regular_func() = $(Expr(:thisfunction))
 @test regular_func() === regular_func
 
-# callable structs can also use var"#self#", which will refer to the struct instance
+# This also works in callable structs, which refers to the instance
 struct CallableStruct
     value::Int
 end
-(obj::CallableStruct)() = var"#self#"
-(obj::CallableStruct)(x) = var"#self#".value + x
+@eval (obj::CallableStruct)() = $(Expr(:thisfunction))
+@eval (obj::CallableStruct)(x) = $(Expr(:thisfunction)).value + x
 
 let cs = CallableStruct(42)
     @test cs() === cs
@@ -4370,16 +4370,16 @@ let cs = CallableStruct(42)
 end
 
 struct RecursiveCallableStruct; end
-(::RecursiveCallableStruct)(n) = n <= 1 ? n : var"#self#"(n-1) + var"#self#"(n-2)
+@eval (::RecursiveCallableStruct)(n) = n <= 1 ? n : $(Expr(:thisfunction))(n-1) + $(Expr(:thisfunction))(n-2)
 
 @test RecursiveCallableStruct()(10) === 55
 
 # In closures, var"#self#" should refer to the enclosing function,
 # NOT the enclosing struct instance
 struct CallableStruct2; end
-function (obj::CallableStruct2)()
+@eval function (obj::CallableStruct2)()
     function inner_func()
-        var"#self#"
+        $(Expr(:thisfunction))
     end
     inner_func
 end
