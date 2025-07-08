@@ -41,7 +41,7 @@ See also [Scripting](@ref man-scripting) for more information on writing Julia s
 
 ## The `Main.main` entry point
 
-As of Julia, 1.11, `Base` exports the macro `@main`. This macro expands to the symbol `main`,
+As of Julia 1.11, `Base` exports the macro `@main`. This macro expands to the symbol `main`,
 but at the conclusion of executing a script or expression, `julia` will attempt to execute
 `Main.main(Base.ARGS)` if such a function `Main.main` has been defined and this behavior was opted into
 by using the `@main` macro.
@@ -148,7 +148,7 @@ atreplinit() do repl
     # ...
 end
 ```
-If [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) is set, the startup file should be located there
+If [`JULIA_DEPOT_PATH`](@ref JULIA_DEPOT_PATH) is set, the startup file should be located there:
 `$JULIA_DEPOT_PATH/config/startup.jl`.
 
 ## [Command-line switches for Julia](@id command-line-interface)
@@ -177,7 +177,7 @@ The following is a complete list of command-line switches available when launchi
 |`--pkgimages={yes*\|no\|existing}`     |Enable or disable usage of native code caching in the form of pkgimages. The `existing` option allows use of existing pkgimages but disallows creation of new ones|
 |`-e`, `--eval <expr>`                  |Evaluate `<expr>`|
 |`-E`, `--print <expr>`                 |Evaluate `<expr>` and display the result|
-|`-m`, `--module <Package> [args]`      |Run entry point of `Package` (`@main` function) with `args'|
+|`-m`, `--module <Package> [args]`      |Run entry point of `Package` (`@main` function) with `args`|
 |`-L`, `--load <file>`                  |Load `<file>` immediately on all processors|
 |`-t`, `--threads {auto\|N[,auto\|M]}`  |Enable N[+M] threads; N threads are assigned to the `default` threadpool, and if M is specified, M threads are assigned to the `interactive` threadpool; `auto` tries to infer a useful default number of threads to use but the exact behavior might change in the future. Currently sets N to the number of CPUs assigned to this Julia process based on the OS-specific affinity assignment interface if supported (Linux and Windows) or to the number of CPU threads if not supported (MacOS) or if process affinity is not configured, and sets M to 1.|
 | `--gcthreads=N[,M]`                   |Use N threads for the mark phase of GC and M (0 or 1) threads for the concurrent sweeping phase of GC. N is set to the number of compute threads and M is set to 0 if unspecified.|

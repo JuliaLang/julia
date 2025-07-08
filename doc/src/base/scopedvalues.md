@@ -25,7 +25,7 @@ provided scoped value taking priority over previous definitions.
 
 Let's first look at an example of **lexical** scope. A `let` statement begins
 a new lexical scope within which the outer definition of `x` is shadowed by
-it's inner definition.
+its inner definition.
 
 ```jldoctest
 julia> x = 1
