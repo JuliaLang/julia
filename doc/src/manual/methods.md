@@ -1173,7 +1173,7 @@ explicitly can call the `NoPad` variant directly.
 Suppose:
 * there is a generic function, say `f`
 * `f` is intended to have methods added to it from packages with unrelated ownership
-* a newly defined method may take more than argument
+* a newly defined method may take more than one argument
 * the argument types of the method may be heterogeneous, such that one argument type comes from a different package than another, and these packages have unrelated ownership
 
 Some examples of such functions that this advice applies to:
