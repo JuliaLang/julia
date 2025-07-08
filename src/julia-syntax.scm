@@ -172,15 +172,16 @@
 (define (method-lambda-expr argl body rett)
   (let ((argl (map arg-name argl))
         (body (blockify body)))
-    ;; If the method body mentions |#self#| but no parameter is called
-    ;; |#self#|, introduce a local alias so var"#self#" works for
-    ;; callable objects as it does for ordinary functions.
+    ;; If the method body mentions |#self#| or thisfunction but no parameter is called
+    ;; |#self#|, introduce a local alias so var"#self#" and Expr(:thisfunction) work for
+    ;; callable objects as they do for ordinary functions.
     (let* ((have-self-arg? (memq '|#self#| argl))
            (first          (and (pair? argl) (car argl)))
            (needs-alias?
              (and (not have-self-arg?)
                   (expr-contains-p
-                    (lambda (x) (eq? x '|#self#|))
+                    (lambda (x) (or (eq? x '|#self#|)
+                                    (and (pair? x) (eq? (car x) 'thisfunction))))
                     body))))
       (when needs-alias?
         (set! body
