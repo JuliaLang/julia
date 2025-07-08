@@ -632,8 +632,8 @@ function make_typealias(@nospecialize(x::Type))
     x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
-            if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
-                alias = getfield(mod, name)
+            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && x <: alias
                     if alias isa UnionAll
                         (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
@@ -836,8 +836,8 @@ function make_typealiases(@nospecialize(x::Type))
     x isa UnionAll && push!(xenv, x)
     for mod in mods
         for name in unsorted_names(mod)
-            if isdefined(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
-                alias = getfield(mod, name)
+            if isdefinedglobal(mod, name) && !isdeprecated(mod, name) && isconst(mod, name)
+                alias = getglobal(mod, name)
                 if alias isa Type && !has_free_typevars(alias) && !print_without_params(alias) && !(alias <: Tuple)
                     (ti, env) = ccall(:jl_type_intersection_with_env, Any, (Any, Any), x, alias)::SimpleVector
                     ti === Union{} && continue

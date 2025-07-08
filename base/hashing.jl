@@ -45,7 +45,7 @@ end
 hash_mix(a::UInt64, b::UInt64) = ⊻(mul_parts(a, b)...)
 
 # faster-but-weaker than hash_mix intended for small keys
-hash_mix_linear(x::UInt64, h::UInt) = 3h - x
+hash_mix_linear(x::Union{UInt64, UInt32}, h::UInt) = 3h - x
 function hash_finalizer(x::UInt64)
     x ⊻= (x >> 32)
     x *= 0x63652a4cd374b267

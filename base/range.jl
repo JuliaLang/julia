@@ -687,7 +687,7 @@ end
 ## interface implementations
 
 length(r::AbstractRange) = error("length implementation missing") # catch mistakes
-size(r::AbstractRange) = (length(r),)
+size(r::AbstractRange) = (@inline; (length(r),))
 
 isempty(r::StepRange) =
     # steprange_last(r.start, r.step, r.stop) == r.stop
@@ -802,6 +802,7 @@ let bigints = Union{Int, UInt, Int64, UInt64, Int128, UInt128},
     # slightly more accurate length and checked_length in extreme cases
     # (near typemax) for types with known `unsigned` functions
     function length(r::OrdinalRange{T}) where T<:bigints
+        @inline
         s = step(r)
         diff = last(r) - first(r)
         isempty(r) && return zero(diff)

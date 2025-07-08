@@ -20,6 +20,28 @@ const llstyle = Dict{Symbol, Tuple{Bool, Union{Symbol, Int}}}(
     :funcname    => (false, :light_yellow),
 )
 
+struct ArgInfo
+    oc::Union{Core.OpaqueClosure,Nothing}
+    tt::Type{<:Tuple}
+
+    # Construct from a function object + argtypes
+    function ArgInfo(@nospecialize(f), @nospecialize(t))
+        if isa(f, Core.Builtin)
+            throw(ArgumentError("argument is not a generic function"))
+        elseif f isa Core.OpaqueClosure
+            return new(f, Base.to_tuple_type(t))
+        else
+            return new(nothing, signature_type(f, t))
+        end
+    end
+
+    # Construct from argtypes (incl. arg0)
+    function ArgInfo(@nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}))
+        tt = Base.to_tuple_type(argtypes)
+        return new(nothing, tt)
+    end
+end
+
 function printstyled_ll(io::IO, x, s::Symbol, trailing_spaces="")
     printstyled(io, x, bold=llstyle[s][1], color=llstyle[s][2])
     print(io, trailing_spaces)
@@ -143,7 +165,7 @@ See the [`@code_warntype`](@ref man-code-warntype) section in the Performance Ti
 
 See also: [`@code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref), [`code_native`](@ref).
 """
-function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_tt(f));
+function code_warntype(io::IO, arginfo::ArgInfo;
                        world=Base.get_world_counter(),
                        interp::Base.Compiler.AbstractInterpreter=Base.Compiler.NativeInterpreter(world),
                        debuginfo::Symbol=:default, optimize::Bool=false, kwargs...)
@@ -152,13 +174,14 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_t
     debuginfo = Base.IRShow.debuginfo(debuginfo)
     lineprinter = Base.IRShow.__debuginfo[debuginfo]
     nargs::Int = 0
-    if isa(f, Core.OpaqueClosure)
-        isa(f.source, Method) && (nargs = f.source.nargs)
-        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(f, tt)[1]..., nargs;
+    if arginfo.oc !== nothing
+        (; oc, tt) = arginfo
+        isa(oc.source, Method) && (nargs = oc.source.nargs)
+        print_warntype_codeinfo(io, Base.code_typed_opaque_closure(oc, tt)[1]..., nargs;
                                 lineprinter, label_dynamic_calls = optimize)
         return nothing
     end
-    tt = Base.signature_type(f, tt)
+    tt = arginfo.tt
     matches = findall(tt, Base.Compiler.method_table(interp))
     matches === nothing && Base.raise_match_failure(:code_warntype, tt)
     for match in matches.matches
@@ -176,6 +199,8 @@ function code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_t
     end
     nothing
 end
+code_warntype(io::IO, @nospecialize(f), @nospecialize(tt=Base.default_tt(f)); kwargs...) = code_warntype(io, ArgInfo(f, tt); kwargs...)
+code_warntype(io::IO, @nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...) = code_warntype(io, ArgInfo(argtypes); kwargs...)
 code_warntype(args...; kwargs...) = (@nospecialize; code_warntype(stdout, args...; kwargs...))
 
 using Base: CodegenParams
@@ -189,33 +214,30 @@ const OC_MISMATCH_WARNING =
 
 # Printing code representations in IR and assembly
 
-function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrapper::Bool,
+function _dump_function(arginfo::ArgInfo, native::Bool, wrapper::Bool,
                         raw::Bool, dump_module::Bool, syntax::Symbol,
                         optimize::Bool, debuginfo::Symbol, binary::Bool,
                         params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
     ccall(:jl_is_in_pure_context, Bool, ()) && error("code reflection cannot be used from generated functions")
-    if isa(f, Core.Builtin)
-        throw(ArgumentError("argument is not a generic function"))
-    end
     warning = ""
     # get the MethodInstance for the method match
-    if !isa(f, Core.OpaqueClosure)
+    if arginfo.oc === nothing
         world = Base.get_world_counter()
-        match = Base._which(signature_type(f, t); world)
+        match = Base._which(arginfo.tt; world)
         mi = Base.specialize_method(match)
         # TODO: use jl_is_cacheable_sig instead of isdispatchtuple
         isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
     else
-        world = UInt64(f.world)
-        tt = Base.to_tuple_type(t)
-        if !isdefined(f.source, :source)
+        (; oc, tt) = arginfo
+        world = UInt64(oc.world)
+        if !isdefined(oc.source, :source)
             # OC was constructed from inferred source. There's only one
             # specialization and we can't infer anything more precise either.
-            world = f.source.primary_world
-            mi = f.source.specializations::Core.MethodInstance
-            Base.hasintersect(typeof(f).parameters[1], tt) || (warning = OC_MISMATCH_WARNING)
+            world = oc.source.primary_world
+            mi = oc.source.specializations::Core.MethodInstance
+            Base.hasintersect(typeof(oc).parameters[1], tt) || (warning = OC_MISMATCH_WARNING)
         else
-            mi = Base.specialize_method(f.source, Tuple{typeof(f.captures), tt.parameters...}, Core.svec())
+            mi = Base.specialize_method(oc.source, Tuple{typeof(oc.captures), tt.parameters...}, Core.svec())
             isdispatchtuple(mi.specTypes) || (warning = GENERIC_SIG_WARNING)
         end
     end
@@ -236,19 +258,19 @@ function _dump_function(@nospecialize(f), @nospecialize(t), native::Bool, wrappe
         end
         if isempty(str)
             # if that failed (or we want metadata), use LLVM to generate more accurate assembly output
-            if !isa(f, Core.OpaqueClosure)
+            if arginfo.oc === nothing
                 src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
             else
-                src, rt = Base.get_oc_code_rt(nothing, f, tt, true)
+                src, rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
             end
             src isa Core.CodeInfo || error("failed to infer source for $mi")
             str = _dump_function_native_assembly(mi, src, wrapper, syntax, debuginfo, binary, raw, params)
         end
     else
-        if !isa(f, Core.OpaqueClosure)
+        if arginfo.oc === nothing
             src = Base.Compiler.typeinf_code(Base.Compiler.NativeInterpreter(world), mi, true)
         else
-            src, rt = Base.get_oc_code_rt(nothing, f, tt, true)
+            src, rt = Base.get_oc_code_rt(nothing, arginfo.oc, arginfo.tt, true)
         end
         src isa Core.CodeInfo || error("failed to infer source for $mi")
         str = _dump_function_llvm(mi, src, wrapper, !raw, dump_module, optimize, debuginfo, params)
@@ -311,16 +333,18 @@ Keyword argument `debuginfo` may be one of source (default) or none, to specify 
 
 See also: [`@code_llvm`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_native`](@ref).
 """
-function code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
+function code_llvm(io::IO, arginfo::ArgInfo;
                    raw::Bool=false, dump_module::Bool=false, optimize::Bool=true, debuginfo::Symbol=:default,
                    params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
-    d = _dump_function(f, types, false, false, raw, dump_module, :intel, optimize, debuginfo, false, params)
+    d = _dump_function(arginfo, false, false, raw, dump_module, :intel, optimize, debuginfo, false, params)
     if highlighting[:llvm] && get(io, :color, false)::Bool
         print_llvm(io, d)
     else
         print(io, d)
     end
 end
+code_llvm(io::IO, @nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...) = code_llvm(io, ArgInfo(argtypes); kwargs...)
+code_llvm(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f)); kwargs...) = code_llvm(io, ArgInfo(f, types); kwargs...)
 code_llvm(args...; kwargs...) = (@nospecialize; code_llvm(stdout, args...; kwargs...))
 
 """
@@ -337,17 +361,19 @@ generic function and type signature to `io`.
 
 See also: [`@code_native`](@ref), [`code_warntype`](@ref), [`code_typed`](@ref), [`code_lowered`](@ref), [`code_llvm`](@ref).
 """
-function code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f));
+function code_native(io::IO, arginfo::ArgInfo;
                      dump_module::Bool=true, syntax::Symbol=:intel, raw::Bool=false,
                      debuginfo::Symbol=:default, binary::Bool=false,
                      params::CodegenParams=CodegenParams(debug_info_kind=Cint(0), debug_info_level=Cint(2), safepoint_on_entry=raw, gcstack_arg=raw))
-    d = _dump_function(f, types, true, false, raw, dump_module, syntax, true, debuginfo, binary, params)
+    d = _dump_function(arginfo, true, false, raw, dump_module, syntax, true, debuginfo, binary, params)
     if highlighting[:native] && get(io, :color, false)::Bool
         print_native(io, d)
     else
         print(io, d)
     end
 end
+code_native(io::IO, @nospecialize(argtypes::Union{Tuple,Type{<:Tuple}}); kwargs...) = code_native(io, ArgInfo(argtypes); kwargs...)
+code_native(io::IO, @nospecialize(f), @nospecialize(types=Base.default_tt(f)); kwargs...) = code_native(io, ArgInfo(f, types); kwargs...)
 code_native(args...; kwargs...) = (@nospecialize; code_native(stdout, args...; kwargs...))
 
 ## colorized IR and assembly printing
