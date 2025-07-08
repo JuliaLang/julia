@@ -2539,7 +2539,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref module toplevel ssavalue null true false meta export public thismodule toplevel-only)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref module toplevel ssavalue null true false meta export public thismodule thisfunction toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -2583,6 +2583,12 @@
    'macro          expand-macro-def
    'struct         expand-struct-def
    'try            expand-try
+
+   'thisfunction
+   (lambda (e)
+     ;; (thisfunction) expands to |#self#| symbol which will later
+     ;; be resolved to the appropriate reference
+     '|#self#|)
 
    'lambda
    (lambda (e)
@@ -4112,7 +4118,7 @@ f(x) = yt(x)
        ((atom? e) e)
        (else
         (case (car e)
-          ((quote top core global globalref thismodule lineinfo line break inert module toplevel null true false meta) e)
+          ((quote top core global globalref thismodule thisfunction lineinfo line break inert module toplevel null true false meta) e)
           ((toplevel-only)
            ;; hack to avoid generating a (method x) expr for struct types
            (if (eq? (cadr e) 'struct)

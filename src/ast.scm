@@ -400,7 +400,7 @@
 
 (define (simple-atom? x)
   (or (number? x) (string? x) (char? x)
-      (and (pair? x) (memq (car x) '(ssavalue null true false thismodule)))
+      (and (pair? x) (memq (car x) '(ssavalue null true false thismodule thisfunction)))
       (eq? (typeof x) 'julia_value)))
 
 ;; identify some expressions that are safe to repeat
