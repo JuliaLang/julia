@@ -550,26 +550,31 @@ function _count(
         ::typeof(identity),
         v::SubArray{Bool, N, <:BitArray, <:Tuple{Union{Integer, AbstractUnitRange}}, true},
         ::Colon,
-        init::T
-    ) where {N, T}
+        init::Integer
+    ) where N
+    T = typeof(init)
     pi = only(parentindices(v))
-    (fst, lst) = (first(pi), last(pi))
+    (fst, lst) = (Int(first(pi))::Int, Int(last(pi))::Int)
     fst > lst && return init
     chunks = parent(v).chunks
 
     # Mask away the bits in the chunks not inside the view
-    mask1 = typemax(UInt64) << ((fst - 1) & 63)
-    mask2 = typemax(UInt64) >> ((64 - lst) & 63)
-    start_index = ((fst - 1) >>> 6) + 1
-    stop_index = ((lst - 1) >>> 6) + 1
+    (start_index, start_nmask) = get_chunks_id(fst)
+    (stop_index, stop_nmask) = get_chunks_id(lst)
+
+    mask_start = typemax(UInt64) << ((fst - 1) & 63)
+    mask_end = _msk_end(lst)
+    start_index = _div64(fst - 1) + 1
+    stop_index = _div64(lst - 1) + 1
     # If the whole view is contained in one chunk, then mask it from both sides
     if start_index == stop_index
-        return (init + count_ones(@inbounds chunks[start_index] & mask1 & mask2)) % T
+        in_chunk =  count_ones(@inbounds chunks[start_index] & mask_start & mask_end)
+        return (init + in_chunk) % T
     end
     # Else, mask first and last chunk individually, then add all whole chunks
     # in a separate loop below.
-    n = init + count_ones(@inbounds chunks[start_index] & mask1)
-    n += count_ones(@inbounds chunks[stop_index] & mask2)
+    n = init + count_ones(@inbounds chunks[start_index] & mask_start)
+    n += count_ones(@inbounds chunks[stop_index] & mask_end)
     for i in (start_index + 1):(stop_index - 1)
         n += count_ones(@inbounds chunks[i])
     end
