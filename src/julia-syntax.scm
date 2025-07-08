@@ -2539,7 +2539,7 @@
       `(= ,lhs ,rhs)))
 
 (define (expand-forms e)
-  (if (or (atom? e) (memq (car e) '(quote inert top core globalref module toplevel ssavalue null true false meta export public thismodule thisfunction toplevel-only)))
+  (if (or (atom? e) (memq (car e) '(quote inert top core globalref module toplevel ssavalue null true false meta export public thismodule toplevel-only)))
       e
       (let ((ex (get expand-table (car e) #f)))
         (if ex
@@ -3880,7 +3880,7 @@ f(x) = yt(x)
   (Set '(quote top core lineinfo line inert local-def unnecessary copyast
          meta inbounds boundscheck loopinfo decl aliasscope popaliasscope
          thunk with-static-parameters toplevel-only
-         global globalref global-if-global assign-const-if-global isglobal thismodule
+         global globalref global-if-global assign-const-if-global isglobal thismodule thisfunction
          const atomic null true false ssavalue isdefined toplevel module lambda
          error gc_preserve_begin gc_preserve_end export public inline noinline purity)))
 
