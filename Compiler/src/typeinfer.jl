@@ -1480,16 +1480,30 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 # No dynamic dispatch to resolve / enqueue
                 continue
             end
+        elseif isexpr(stmt, :cfunction) && length(stmt.args) == 5
+            (pointer_type, f, rt, at, call_type) = stmt.args
+            linfo = ci.parent
 
-            let workqueue = invokelatest_queue
-                # make a best-effort attempt to enqueue the relevant code for the finalizer
-                mi = compileable_specialization_for_call(workqueue.interp, atype)
-                mi === nothing && continue
+            linfo isa MethodInstance || continue
+            at isa SimpleVector || continue
 
-                push!(workqueue, mi)
+            ft = argextype(f, ci, sptypes)
+            argtypes = Any[ft]
+            for i = 1:length(at)
+                push!(argtypes, sp_type_rewrap(at[i], linfo, #= isreturn =# false))
             end
+            atype = argtypes_to_type(argtypes)
+        else
+            # TODO: handle other StmtInfo like OpaqueClosure?
+            continue
         end
-        # TODO: handle other StmtInfo like @cfunction and OpaqueClosure?
+        let workqueue = invokelatest_queue
+            # make a best-effort attempt to enqueue the relevant code for the dynamic invokelatest call
+            mi = compileable_specialization_for_call(workqueue.interp, atype)
+            mi === nothing && continue
+
+            push!(workqueue, mi)
+        end
     end
 end
 
@@ -1550,8 +1564,9 @@ function typeinf_ext_toplevel(interp::AbstractInterpreter, mi::MethodInstance, s
 end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
-function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8)
-    interp = NativeInterpreter(world)
+function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8, trim_mode::UInt8)
+    inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
+    interp = NativeInterpreter(world; inf_params)
     return typeinf_ext_toplevel(interp, mi, source_mode)
 end
 
@@ -1634,11 +1649,11 @@ end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on set of Method matches
 # The trim_mode can be any of:
-const TRIM_NO = 0
-const TRIM_SAFE = 1
-const TRIM_UNSAFE = 2
-const TRIM_UNSAFE_WARN = 3
-function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::Int)
+const TRIM_NO = 0x0
+const TRIM_SAFE = 0x1
+const TRIM_UNSAFE = 0x2
+const TRIM_UNSAFE_WARN = 0x3
+function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_mode::UInt8)
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
 
     # Create an "invokelatest" queue to enable eager compilation of speculative

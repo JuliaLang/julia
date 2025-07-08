@@ -17,20 +17,20 @@ function insert_backedges(edges::Vector{Any}, ext_ci_list::Union{Nothing,Vector{
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
     backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-    methods_with_invalidated_source = Base.scan_new_methods(extext_methods, internal_methods, backedges_only)
+    Base.scan_new_methods!(extext_methods, internal_methods, backedges_only)
     stack = CodeInstance[]
     visiting = IdDict{CodeInstance,Int}()
-    _insert_backedges(edges, stack, visiting, methods_with_invalidated_source)
+    _insert_backedges(edges, stack, visiting)
     if ext_ci_list !== nothing
-        _insert_backedges(ext_ci_list, stack, visiting, methods_with_invalidated_source, #=external=#true)
+        _insert_backedges(ext_ci_list, stack, visiting, #=external=#true)
     end
 end
 
-function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method}, external::Bool=false)
+function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, external::Bool=false)
     for i = 1:length(edges)
         codeinst = edges[i]::CodeInstance
         validation_world = get_world_counter()
-        verify_method_graph(codeinst, stack, visiting, mwis, validation_world)
+        verify_method_graph(codeinst, stack, visiting, validation_world)
         # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
         # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
         # validity.
@@ -54,15 +54,13 @@ function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visi
     end
 end
 
-function verify_method_graph(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method}, validation_world::UInt)
+function verify_method_graph(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, validation_world::UInt)
     @assert isempty(stack); @assert isempty(visiting);
-    child_cycle, minworld, maxworld = verify_method(codeinst, stack, visiting, mwis, validation_world)
+    child_cycle, minworld, maxworld = verify_method(codeinst, stack, visiting, validation_world)
     @assert child_cycle == 0
     @assert isempty(stack); @assert isempty(visiting);
     nothing
 end
-
-get_require_world() = unsafe_load(cglobal(:jl_require_world, UInt))
 
 function gen_staged_sig(def::Method, mi::MethodInstance)
     isdefined(def, :generator) || return nothing
@@ -113,7 +111,7 @@ end
 # - Visit the entire call graph, starting from edges[idx] to determine if that method is valid
 # - Implements Tarjan's SCC (strongly connected components) algorithm, simplified to remove the count variable
 #   and slightly modified with an early termination option once the computation reaches its minimum
-function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, mwis::IdSet{Method}, validation_world::UInt)
+function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visiting::IdDict{CodeInstance,Int}, validation_world::UInt)
     world = codeinst.min_world
     let max_valid2 = codeinst.max_world
         if max_valid2 ≠ WORLD_AGE_REVALIDATION_SENTINEL
@@ -127,13 +125,13 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     end
 
     # Implicitly referenced bindings in the current module do not get explicit edges.
-    # If they were invalidated, they'll be in `mwis`. If they weren't, they imply a minworld
+    # If they were invalidated, they'll have the flag set in did_scan_source. If they weren't, they imply a minworld
     # of `get_require_world`. In principle, this is only required for methods that do reference
     # an implicit globalref. However, we already don't perform this validation for methods that
     # don't have any (implicit or explicit) edges at all. The remaining corner case (some explicit,
     # but no implicit edges) is rare and there would be little benefit to lower the minworld for it
     # in any case, so we just always use `get_require_world` here.
-    local minworld::UInt, maxworld::UInt = get_require_world(), validation_world
+    local minworld::UInt, maxworld::UInt = Base.get_require_world(), validation_world
     if haskey(visiting, codeinst)
         return visiting[codeinst], minworld, maxworld
     end
@@ -143,7 +141,11 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     # TODO JL_TIMING(VERIFY_IMAGE, VERIFY_Methods)
     callees = codeinst.edges
     # Check for invalidation of the implicit edges from GlobalRef in the Method source
-    if def in mwis
+    if (def.did_scan_source & 0x1) == 0x0
+        backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
+        Base.scan_new_method!(def, backedges_only)
+    end
+    if (def.did_scan_source & 0x4) != 0x0
         maxworld = 0
         invalidations = _jl_debug_method_invalidation[]
         if invalidations !== nothing
@@ -153,7 +155,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     # verify current edges
     if isempty(callees)
         # quick return: no edges to verify (though we probably shouldn't have gotten here from WORLD_AGE_REVALIDATION_SENTINEL)
-    elseif maxworld == get_require_world()
+    elseif maxworld == Base.get_require_world()
         # if no new worlds were allocated since serializing the base module, then no new validation is worth doing right now either
     else
         j = 1
@@ -166,12 +168,15 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             end
             if edge isa MethodInstance
                 sig = edge.specTypes
-                min_valid2, max_valid2, matches = verify_call(sig, callees, j, 1, world)
+                min_valid2, max_valid2, matches = verify_call(sig, callees, j, 1, world, true)
                 j += 1
             elseif edge isa Int
                 sig = callees[j+1]
-                min_valid2, max_valid2, matches = verify_call(sig, callees, j+2, edge, world)
-                j += 2 + edge
+                # Handle negative counts (fully_covers=false)
+                nmatches = abs(edge)
+                fully_covers = edge > 0
+                min_valid2, max_valid2, matches = verify_call(sig, callees, j+2, nmatches, world, fully_covers)
+                j += 2 + nmatches
                 edge = sig
             elseif edge isa Core.Binding
                 j += 1
@@ -231,7 +236,7 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
             end
             callee = edge
             local min_valid2::UInt, max_valid2::UInt
-            child_cycle, min_valid2, max_valid2 = verify_method(callee, stack, visiting, mwis, validation_world)
+            child_cycle, min_valid2, max_valid2 = verify_method(callee, stack, visiting, validation_world)
             if minworld < min_valid2
                 minworld = min_valid2
             end
@@ -277,8 +282,9 @@ function verify_method(codeinst::CodeInstance, stack::Vector{CodeInstance}, visi
     return 0, minworld, maxworld
 end
 
-function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt)
+function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n::Int, world::UInt, fully_covers::Bool)
     # verify that these edges intersect with the same methods as before
+    mi = nothing
     if n == 1
         # first, fast-path a check if the expected method simply dominates its sig anyways
         # so the result of ml_matches is already simply known
@@ -287,18 +293,30 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                 meth = t
             else
                 if t isa CodeInstance
-                    t = get_ci_mi(t)
+                    mi = get_ci_mi(t)::MethodInstance
                 else
-                    t = t::MethodInstance
+                    mi = t::MethodInstance
                 end
-                meth = t.def::Method
+                meth = mi.def::Method
+                # Fast path is legal when fully_covers=true OR when METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC is unset
+                if (fully_covers || iszero(meth.dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)) &&
+                   !iszero(mi.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                    minworld = meth.primary_world
+                    @assert minworld ≤ world
+                    maxworld = typemax(UInt)
+                    result = Any[] # result is unused
+                    return minworld, maxworld, result
+                end
             end
-            if !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
-                minworld = meth.primary_world
-                @assert minworld ≤ world
-                maxworld = typemax(UInt)
-                result = Any[] # result is unused
-                return minworld, maxworld, result
+            # Fast path is legal when fully_covers=true OR when METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC is unset
+            if fully_covers || iszero(meth.dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)
+                if !iszero(meth.dispatch_status & METHOD_SIG_LATEST_ONLY)
+                    minworld = meth.primary_world
+                    @assert minworld ≤ world
+                    maxworld = typemax(UInt)
+                    result = Any[] # result is unused
+                    return minworld, maxworld, result
+                end
             end
         end
     end
@@ -325,7 +343,7 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
                     meth = t
                 else
                     if t isa CodeInstance
-                        t = get_ci_mi(t)
+                        t = get_ci_mi(t)::MethodInstance
                     else
                         t = t::MethodInstance
                     end
@@ -352,6 +370,9 @@ function verify_call(@nospecialize(sig), expecteds::Core.SimpleVector, i::Int, n
             resize!(result, ins)
         end
     end
+    if maxworld[] == typemax(UInt) && mi isa MethodInstance
+        ccall(:jl_promote_mi_to_current, Cvoid, (Any, UInt, UInt), mi, minworld[], world)
+    end
     return minworld[], maxworld[], result
 end
 
@@ -360,6 +381,8 @@ end
 const METHOD_SIG_LATEST_WHICH = 0x1
 # true indicates this method would be returned as the only result from `methods` when calling `method.sig` in the current latest world
 const METHOD_SIG_LATEST_ONLY = 0x2
+# true indicates there exists some other method that is not more specific than this one in the current latest world (which might be more fully covering)
+const METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC = 0x8
 
 function verify_invokesig(@nospecialize(invokesig), expected::Method, world::UInt)
     @assert invokesig isa Type

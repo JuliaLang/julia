@@ -732,7 +732,8 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
                  !strcmp(jl_symbol_name(b->globalref->name), "__init__") ||
                  // ... or point to Base functions accessed by the runtime
                  (m == jl_base_module && (!strcmp(jl_symbol_name(b->globalref->name), "wait") ||
-                                          !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook"))))) {
+                                          !strcmp(jl_symbol_name(b->globalref->name), "task_done_hook") ||
+                                          !strcmp(jl_symbol_name(b->globalref->name), "_uv_hook_close"))))) {
                 jl_queue_for_serialization(s, b);
             }
         }
@@ -1841,7 +1842,12 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                     if (jl_atomic_load_relaxed(&newm->primary_world) > 1) {
                         jl_atomic_store_relaxed(&newm->primary_world, ~(size_t)0); // min-world
                         int dispatch_status = jl_atomic_load_relaxed(&newm->dispatch_status);
-                        jl_atomic_store_relaxed(&newm->dispatch_status, dispatch_status & METHOD_SIG_LATEST_ONLY ? 0 : METHOD_SIG_PRECOMPILE_MANY);
+                        int new_dispatch_status = 0;
+                        if (!(dispatch_status & METHOD_SIG_LATEST_ONLY))
+                            new_dispatch_status |= METHOD_SIG_PRECOMPILE_MANY;
+                        if (dispatch_status & METHOD_SIG_LATEST_HAS_NOTMORESPECIFIC)
+                            new_dispatch_status |= METHOD_SIG_PRECOMPILE_HAS_NOTMORESPECIFIC;
+                        jl_atomic_store_relaxed(&newm->dispatch_status, new_dispatch_status);
                         arraylist_push(&s->fixup_objs, (void*)reloc_offset);
                     }
                 }
@@ -1853,6 +1859,9 @@ static void jl_write_values(jl_serializer_state *s) JL_GC_DISABLED
                 assert(f == s->s);
                 jl_method_instance_t *newmi = (jl_method_instance_t*)&f->buf[reloc_offset];
                 jl_atomic_store_relaxed(&newmi->flags, 0);
+                if (s->incremental) {
+                    jl_atomic_store_relaxed(&newmi->dispatch_status, 0);
+                }
             }
             else if (jl_is_code_instance(v)) {
                 assert(f == s->s);
@@ -3742,6 +3751,7 @@ invalidated:
     // We need to go through and re-validate any bindings in the same image that
     // may have imported us.
     if (b->backedges) {
+        JL_LOCK(&b->globalref->mod->lock);
         for (size_t i = 0; i < jl_array_len(b->backedges); i++) {
             jl_value_t *edge = jl_array_ptr_ref(b->backedges, i);
             if (!jl_is_binding(edge))
@@ -3749,8 +3759,11 @@ invalidated:
             jl_binding_t *bedge = (jl_binding_t*)edge;
             if (!jl_atomic_load_relaxed(&bedge->partitions))
                 continue;
+            JL_UNLOCK(&b->globalref->mod->lock);
             jl_validate_binding_partition(bedge, jl_atomic_load_relaxed(&bedge->partitions), mod_idx, 0, 0);
+            JL_LOCK(&b->globalref->mod->lock);
         }
+        JL_UNLOCK(&b->globalref->mod->lock);
     }
     if (bpart->kind & PARTITION_FLAG_EXPORTED) {
         jl_module_t *mod = b->globalref->mod;
@@ -4547,49 +4560,6 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     return mod;
 }
 
-JL_DLLEXPORT void _jl_promote_ci_to_current(jl_code_instance_t *ci, size_t validated_world) JL_NOTSAFEPOINT
-{
-    if (jl_atomic_load_relaxed(&ci->max_world) != validated_world)
-        return;
-    jl_atomic_store_relaxed(&ci->max_world, ~(size_t)0);
-    jl_svec_t *edges = jl_atomic_load_relaxed(&ci->edges);
-    for (size_t i = 0; i < jl_svec_len(edges); i++) {
-        jl_value_t *edge = jl_svecref(edges, i);
-        if (!jl_is_code_instance(edge))
-            continue;
-        _jl_promote_ci_to_current((jl_code_instance_t *)edge, validated_world);
-    }
-}
-
-JL_DLLEXPORT void jl_promote_ci_to_current(jl_code_instance_t *ci, size_t validated_world)
-{
-    size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
-    // No need to acquire the lock if we've been invalidated anyway
-    if (current_world > validated_world)
-        return;
-    JL_LOCK(&world_counter_lock);
-    current_world = jl_atomic_load_relaxed(&jl_world_counter);
-    if (current_world == validated_world) {
-        _jl_promote_ci_to_current(ci, validated_world);
-    }
-    JL_UNLOCK(&world_counter_lock);
-}
-
-JL_DLLEXPORT void jl_promote_cis_to_current(jl_code_instance_t **cis, size_t n, size_t validated_world)
-{
-    size_t current_world = jl_atomic_load_relaxed(&jl_world_counter);
-    // No need to acquire the lock if we've been invalidated anyway
-    if (current_world > validated_world)
-        return;
-    JL_LOCK(&world_counter_lock);
-    current_world = jl_atomic_load_relaxed(&jl_world_counter);
-    if (current_world == validated_world) {
-        for (size_t i = 0; i < n; i++) {
-            _jl_promote_ci_to_current(cis[i], validated_world);
-        }
-    }
-    JL_UNLOCK(&world_counter_lock);
-}
 
 #ifdef __cplusplus
 }
