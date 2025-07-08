@@ -470,6 +470,25 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_bindin
     return NULL;
 }
 
+JL_DLLEXPORT size_t jl_binding_backedges_length(jl_binding_t *b)
+{
+    JL_LOCK(&b->globalref->mod->lock);
+    size_t len = 0;
+    if (b->backedges)
+        len = jl_array_len(b->backedges);
+    JL_UNLOCK(&b->globalref->mod->lock);
+    return len;
+}
+
+JL_DLLEXPORT jl_value_t *jl_binding_backedges_getindex(jl_binding_t *b, size_t i)
+{
+    JL_LOCK(&b->globalref->mod->lock);
+    assert(b->backedges);
+    jl_value_t *ret = jl_array_ptr_ref(b->backedges, i-1);
+    JL_UNLOCK(&b->globalref->mod->lock);
+    return ret;
+}
+
 static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
 {
     jl_task_t *ct = jl_current_task;
@@ -527,7 +546,9 @@ jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default
 {
     jl_module_t *m = jl_new_module__(name, parent);
     JL_GC_PUSH1(&m);
+    JL_LOCK(&world_counter_lock);
     jl_add_default_names(m, default_using_core, self_name);
+    JL_UNLOCK(&world_counter_lock);
     JL_GC_POP();
     return m;
 }
@@ -1620,6 +1641,7 @@ void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *inv
 
 JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge)
 {
+    JL_LOCK(&b->globalref->mod->lock);
     if (!b->backedges) {
         b->backedges = jl_alloc_vec_any(0);
         jl_gc_wb(b, b->backedges);
@@ -1627,9 +1649,11 @@ JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge)
                jl_array_ptr_ref(b->backedges, jl_array_len(b->backedges)-1) == edge) {
         // Optimization: Deduplicate repeated insertion of the same edge (e.g. during
         // definition of a method that contains many references to the same global)
+        JL_UNLOCK(&b->globalref->mod->lock);
         return;
     }
     jl_array_ptr_1d_push(b->backedges, edge);
+    JL_UNLOCK(&b->globalref->mod->lock);
 }
 
 // Called for all GlobalRefs found in lowered code. Adds backedges for cross-module
