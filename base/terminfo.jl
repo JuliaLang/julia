@@ -323,8 +323,8 @@ Return a boolean signifying whether the current terminal supports 24-bit colors.
 
 Multiple conditions are taken as signifying truecolor support, specifically any of the following:
 - The `COLORTERM` environment variable is set to `"truecolor"` or `"24bit"`
-- The current terminfo sets the [`RGB`[^1]
-  capability](https://invisible-island.net/ncurses/man/user_caps.5.html#h3-Recognized-Capabilities)
+- The current terminfo sets the [`RGB`
+  capability](https://invisible-island.net/ncurses/man/user_caps.5.html#h3-Recognized-Capabilities)[^1]
   (or the legacy `Tc` capability[^2]) flag
 - The current terminfo provides `setrgbf` and `setrgbb` strings[^3]
 - The current terminfo has a `colors` number greater that `256`, on a unix system
