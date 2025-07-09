@@ -40,7 +40,7 @@ elseif Sys.iswindows()
         # Not a slash in either direction.
         N = raw"[^\\/]"
         # Drive letter, e.g. `C:`
-        drive = "$(N)+:"
+        drive = "$(N):"
         # UNC path, e.g. `\\server\share`
         unc = "$(S)$(S)$(N)+$(S)$(N)+"
         # Long drive letter, e.g. `\\?\C:`
