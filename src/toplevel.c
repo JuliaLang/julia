@@ -34,7 +34,7 @@ htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
 
 // During incremental compilation, the following gets set
-jl_module_t *jl_precompile_toplevel_module = NULL;   // the toplevel module currently being defined
+jl_module_t *jl_precompile_toplevel_module = NULL;   // the first toplevel module being defined
 
 jl_module_t *jl_add_standard_imports(jl_module_t *m)
 {
@@ -54,12 +54,6 @@ void jl_init_main_module(void)
     jl_set_initial_const(jl_main_module, jl_symbol("Core"), (jl_value_t*)jl_core_module, 0); // const Core.Main = Main
 }
 
-static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROOT)
-{
-    return (jl_function_t*)jl_get_global(m, jl_symbol("__init__"));
-}
-
-
 void jl_module_run_initializer(jl_module_t *m)
 {
     JL_TIMING(INIT_MODULE, INIT_MODULE);
@@ -68,9 +62,12 @@ void jl_module_run_initializer(jl_module_t *m)
     size_t last_age = ct->world_age;
     JL_TRY {
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
-        jl_function_t *f = jl_module_get_initializer(m);
-        if (f != NULL)
+        jl_value_t *f = jl_get_global_value(m, jl_symbol("__init__"), ct->world_age);
+        if (f != NULL) {
+            JL_GC_PUSH1(&f);
             jl_apply(&f, 1);
+            JL_GC_POP();
+        }
         ct->world_age = last_age;
     }
     JL_CATCH {
@@ -107,10 +104,10 @@ jl_array_t *jl_get_loaded_modules(void)
     return NULL;
 }
 
-static int jl_is__toplevel__mod(jl_module_t *mod)
+static int jl_is__toplevel__mod(jl_module_t *mod, jl_task_t *ct)
 {
     return jl_base_module &&
-        (jl_value_t*)mod == jl_get_global(jl_base_module, jl_symbol("__toplevel__"));
+        (jl_value_t*)mod == jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
 }
 
 // TODO: add locks around global state mutation operations
@@ -132,7 +129,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         jl_type_error("module", (jl_value_t*)jl_symbol_type, (jl_value_t*)name);
     }
 
-    int is_parent__toplevel__ = jl_is__toplevel__mod(parent_module);
+    int is_parent__toplevel__ = jl_is__toplevel__mod(parent_module, ct);
     // If we have `Base`, don't also try to import `Core` - the `Base` exports are a superset.
     // While we allow multiple imports of the same binding from different modules, various error printing
     // performs reflection on which module a binding came from and we'd prefer users see "Base" here.
@@ -175,7 +172,6 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
 
-    jl_module_t *old_toplevel_module = jl_precompile_toplevel_module;
     size_t last_age = ct->world_age;
 
     if (parent_module == jl_main_module && name == jl_symbol("Base") && jl_base_module == NULL) {
@@ -185,7 +181,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
 
     if (is_parent__toplevel__) {
         jl_register_root_module(newm);
-        if (jl_options.incremental) {
+        if (jl_options.incremental && jl_precompile_toplevel_module == NULL) {
             jl_precompile_toplevel_module = newm;
         }
     }
@@ -245,25 +241,22 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
 
-    jl_precompile_toplevel_module = old_toplevel_module;
-
     JL_GC_POP();
     return (jl_value_t*)newm;
 }
 
-static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast, const char **toplevel_filename, int *toplevel_lineno)
+static jl_value_t *jl_eval_dot_expr(jl_task_t *ct, jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast, const char **toplevel_filename, int *toplevel_lineno)
 {
-    jl_task_t *ct = jl_current_task;
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 3);
     args[1] = jl_toplevel_eval_flex(m, x, fast, 0, toplevel_filename, toplevel_lineno);
     args[2] = jl_toplevel_eval_flex(m, f, fast, 0, toplevel_filename, toplevel_lineno);
     if (jl_is_module(args[1])) {
         JL_TYPECHK(getglobal, symbol, args[2]);
-        args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2]);
+        args[0] = jl_eval_global_var((jl_module_t*)args[1], (jl_sym_t*)args[2], ct->world_age);
     }
     else {
-        args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"));
+        args[0] = jl_eval_global_var(jl_base_relative_to(m), jl_symbol("getproperty"), ct->world_age);
         size_t last_age = ct->world_age;
         ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         args[0] = jl_apply(args, 3);
@@ -426,7 +419,7 @@ static void expr_attributes(jl_value_t *v, jl_array_t *body, int *has_ccall, int
             if (jl_is_intrinsic(called) && jl_unbox_int32(called) == (int)llvmcall) {
                 *has_ccall = 1;
             }
-            if (called == jl_builtin__typebody) { // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
+            if (called == BUILTIN(_typebody)) { // TODO: rely on latestworld instead of function callee detection here (or add it to jl_is_toplevel_only_expr)
                 *has_defs = 1;
             }
         }
@@ -566,7 +559,7 @@ static jl_module_t *eval_import_path(jl_task_t *ct, jl_module_t *where, jl_modul
             jl_errorf("invalid %s path: \".\" in identifier path", keyword);
         if (i == jl_array_nrows(args)-1)
             break;
-        m = (jl_module_t*)jl_eval_global_var(m, var);
+        m = (jl_module_t*)jl_eval_global_var(m, var, ct->world_age);
         JL_GC_PROMISE_ROOTED(m);
         if (!jl_is_module(m))
             jl_errorf("invalid %s path: \"%s\" does not name a module", keyword, jl_symbol_name(var));
@@ -676,7 +669,7 @@ static jl_module_t *eval_import_from(jl_task_t *ct, jl_module_t *m JL_PROPAGATES
                     jl_sym_t *name = NULL;
                     jl_module_t *from = eval_import_path(ct, m, NULL, path->args, &name, keyword);
                     if (name != NULL) {
-                        from = (jl_module_t*)jl_eval_global_var(from, name);
+                        from = (jl_module_t*)jl_eval_global_var(from, name, ct->world_age);
                         if (!from || !jl_is_module(from))
                             jl_errorf("invalid %s path: \"%s\" does not name a module", keyword, jl_symbol_name(name));
                     }
@@ -705,7 +698,7 @@ static void jl_eval_throw(jl_module_t *m, jl_value_t *exc, const char *filename,
 {
     jl_value_t *throw_ex = (jl_value_t*)jl_exprn(jl_call_sym, 2);
     JL_GC_PUSH1(&throw_ex);
-    jl_exprargset(throw_ex, 0, jl_builtin_throw);
+    jl_exprargset(throw_ex, 0, BUILTIN(throw));
     jl_exprargset(throw_ex, 1, exc);
     jl_toplevel_eval_flex(m, throw_ex, 0, 0, &filename, &lineno);
     JL_GC_POP();
@@ -761,6 +754,16 @@ JL_DLLEXPORT void jl_eval_const_decl(jl_module_t *m, jl_value_t *arg, jl_value_t
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int fast, int expanded, const char **toplevel_filename, int *toplevel_lineno)
 {
     jl_task_t *ct = jl_current_task;
+    if (jl_is_globalref(e)) {
+        return jl_eval_globalref((jl_globalref_t*)e, ct->world_age);
+    }
+    if (jl_is_symbol(e)) {
+        char *n = jl_symbol_name((jl_sym_t*)e), *n0 = n;
+        while (*n == '_') ++n;
+        if (*n == 0 && n > n0)
+            jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno, "all-underscore identifiers are write-only and their values cannot be used in expressions");
+        return jl_eval_global_var(m, (jl_sym_t*)e, ct->world_age);
+    }
     if (!jl_is_expr(e)) {
         if (jl_is_linenode(e)) {
             *toplevel_lineno = jl_linenode_line(e);
@@ -774,12 +777,6 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
             jl_lineno = *toplevel_lineno;
             return jl_nothing;
         }
-        if (jl_is_symbol(e)) {
-            char *n = jl_symbol_name((jl_sym_t*)e), *n0 = n;
-            while (*n == '_') ++n;
-            if (*n == 0 && n > n0)
-                jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno, "all-underscore identifiers are write-only and their values cannot be used in expressions");
-        }
         return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
     }
 
@@ -792,7 +789,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         jl_value_t *rhs = jl_exprarg(ex, 1);
         // only handle `a.b` syntax here, so qualified names can be eval'd in pure contexts
         if (jl_is_quotenode(rhs) && jl_is_symbol(jl_fieldref(rhs, 0))) {
-            return jl_eval_dot_expr(m, lhs, rhs, fast, toplevel_filename, toplevel_lineno);
+            return jl_eval_dot_expr(ct, m, lhs, rhs, fast, toplevel_filename, toplevel_lineno);
         }
     }
 
@@ -838,7 +835,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
                 else {
                     jl_module_t *u = import;
                     if (name != NULL)
-                        u = (jl_module_t*)jl_eval_global_var(import, name);
+                        u = (jl_module_t*)jl_eval_global_var(import, name, ct->world_age);
                     if (!jl_is_module(u))
                         jl_eval_errorf(m, *toplevel_filename, *toplevel_lineno,
                             "invalid using path: \"%s\" does not name a module",
@@ -992,7 +989,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
     }
     else if (jl_is_symbol(ex)) {
         JL_GC_POP();
-        return jl_eval_global_var(m, (jl_sym_t*)ex);
+        return jl_eval_global_var(m, (jl_sym_t*)ex, ct->world_age);
     }
     else if (head == NULL) {
         JL_GC_POP();
@@ -1022,7 +1019,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_val
         size_t world = jl_atomic_load_acquire(&jl_world_counter);
         ct->world_age = world;
         if (!has_defs && jl_get_module_infer(m) != 0) {
-            (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI);
+            (void)jl_type_infer(mfunc, world, SOURCE_MODE_ABI, jl_options.trim);
         }
         result = jl_invoke(/*func*/NULL, /*args*/NULL, /*nargs*/0, mfunc);
         ct->world_age = last_age;
@@ -1069,7 +1066,7 @@ JL_DLLEXPORT void jl_check_top_level_effect(jl_module_t *m, char *fname)
                 }
             }
             JL_UNLOCK(&jl_modules_mutex);
-            if (!open && !jl_is__toplevel__mod(m)) {
+            if (!open && !jl_is__toplevel__mod(m, jl_current_task)) {
                 const char* name = jl_symbol_name(m->name);
                 jl_errorf("Evaluation into the closed module `%s` breaks incremental compilation "
                           "because the side effects will not be permanent. "
@@ -1091,7 +1088,7 @@ JL_DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex)
     jl_filename = "none";
     size_t last_age = ct->world_age;
     JL_TRY {
-        ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
+        ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
         v = jl_toplevel_eval(m, ex);
     }
     JL_CATCH {
@@ -1150,10 +1147,10 @@ static jl_value_t *jl_parse_eval_all(jl_module_t *module, jl_value_t *text,
                 jl_lineno = lineno;
                 continue;
             }
-            ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             expression = jl_expand_with_loc_warn(expression, module,
                                                  jl_string_data(filename), lineno);
-            ct->world_age = jl_atomic_load_relaxed(&jl_world_counter);
+            ct->world_age = jl_atomic_load_acquire(&jl_world_counter);
             result = jl_toplevel_eval_flex(module, expression, 1, 1, &filename_str, &lineno);
         }
         ct->world_age = last_age;

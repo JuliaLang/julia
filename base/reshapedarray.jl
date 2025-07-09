@@ -36,7 +36,7 @@ length(R::ReshapedArrayIterator) = length(R.iter)
 eltype(::Type{<:ReshapedArrayIterator{I}}) where {I} = @isdefined(I) ? ReshapedIndex{eltype(I)} : Any
 
 @noinline throw_dmrsa(dims, len) =
-    throw(DimensionMismatch("new dimensions $(dims) must be consistent with array length $len"))
+    throw(DimensionMismatch(LazyString("new dimensions ", dims, " must be consistent with array length ", len)))
 
 ## reshape(::Array, ::Dims) returns a new Array (to avoid conditionally aliasing the structure, only the data)
 # reshaping to same # of dimensions

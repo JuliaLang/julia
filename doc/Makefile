@@ -25,7 +25,7 @@ help:
 DOCUMENTER_OPTIONS := linkcheck=$(linkcheck) doctest=$(doctest) buildroot=$(call cygpath_w,$(BUILDROOT)) \
     texplatform=$(texplatform) revise=$(revise)
 
-UNICODE_DATA_VERSION=13.0.0
+UNICODE_DATA_VERSION=16.0.0
 $(SRCCACHE)/UnicodeData-$(UNICODE_DATA_VERSION).txt:
 	@mkdir -p "$(SRCCACHE)"
 	$(JLDOWNLOAD) "$@" https://www.unicode.org/Public/$(UNICODE_DATA_VERSION)/ucd/UnicodeData.txt

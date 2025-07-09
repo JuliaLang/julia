@@ -335,7 +335,7 @@ void JL_NORETURN jl_finish_task(jl_task_t *ct)
     // let the runtime know this task is dead and find a new task to run
     jl_function_t *done = jl_atomic_load_relaxed(&task_done_hook_func);
     if (done == NULL) {
-        done = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("task_done_hook"));
+        done = (jl_function_t*)jl_get_global_value(jl_base_module, jl_symbol("task_done_hook"), ct->world_age);
         if (done != NULL)
             jl_atomic_store_release(&task_done_hook_func, done);
     }

@@ -366,7 +366,7 @@ JL_DLLEXPORT jl_binding_partition_t *jl_maybe_reresolve_implicit(jl_binding_t *b
 
 JL_DLLEXPORT void jl_update_loaded_bpart(jl_binding_t *b, jl_binding_partition_t *bpart)
 {
-    struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, jl_atomic_load_relaxed(&jl_world_counter), 0);
+    struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, jl_atomic_load_acquire(&jl_world_counter), 0);
     jl_atomic_store_relaxed(&bpart->min_world, resolution.min_world);
     jl_atomic_store_relaxed(&bpart->max_world, resolution.max_world);
     bpart->restriction = resolution.binding_or_const;
@@ -470,6 +470,25 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_leaf_partitions_value_if_const(jl_bindin
     return NULL;
 }
 
+JL_DLLEXPORT size_t jl_binding_backedges_length(jl_binding_t *b)
+{
+    JL_LOCK(&b->globalref->mod->lock);
+    size_t len = 0;
+    if (b->backedges)
+        len = jl_array_len(b->backedges);
+    JL_UNLOCK(&b->globalref->mod->lock);
+    return len;
+}
+
+JL_DLLEXPORT jl_value_t *jl_binding_backedges_getindex(jl_binding_t *b, size_t i)
+{
+    JL_LOCK(&b->globalref->mod->lock);
+    assert(b->backedges);
+    jl_value_t *ret = jl_array_ptr_ref(b->backedges, i-1);
+    JL_UNLOCK(&b->globalref->mod->lock);
+    return ret;
+}
+
 static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
 {
     jl_task_t *ct = jl_current_task;
@@ -482,9 +501,10 @@ static jl_module_t *jl_new_module__(jl_sym_t *name, jl_module_t *parent)
     m->parent = parent ? parent : m;
     m->istopmod = 0;
     m->uuid = uuid_zero;
-    static unsigned int mcounter; // simple counter backup, in case hrtime is not incrementing
+    static _Atomic(unsigned int) mcounter; // simple counter backup, in case hrtime is not incrementing
+    unsigned int count = jl_atomic_fetch_add_relaxed(&mcounter, 1);
     // TODO: this is used for ir decompression and is liable to hash collisions so use more of the bits
-    m->build_id.lo = bitmix(jl_hrtime() + (++mcounter), jl_rand());
+    m->build_id.lo = bitmix(jl_hrtime() + count, jl_rand());
     if (!m->build_id.lo)
         m->build_id.lo++; // build id 0 is invalid
     m->build_id.hi = ~(uint64_t)0;
@@ -526,7 +546,9 @@ jl_module_t *jl_new_module_(jl_sym_t *name, jl_module_t *parent, uint8_t default
 {
     jl_module_t *m = jl_new_module__(name, parent);
     JL_GC_PUSH1(&m);
+    JL_LOCK(&world_counter_lock);
     jl_add_default_names(m, default_using_core, self_name);
+    JL_UNLOCK(&world_counter_lock);
     JL_GC_POP();
     return m;
 }
@@ -831,11 +853,12 @@ JL_DLLEXPORT jl_binding_t *jl_get_binding_wr(jl_module_t *m JL_PROPAGATES_ROOT, 
 // return module of binding
 JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var)
 {
+    size_t world = jl_current_task->world_age;
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+    jl_walk_binding_inplace(&b, &bpart, world);
     if (jl_binding_kind(bpart) == PARTITION_KIND_IMPLICIT_CONST) {
-        struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, jl_current_task->world_age, 0);
+        struct implicit_search_resolution resolution = jl_resolve_implicit_import(b, NULL, world, 0);
         if (!resolution.debug_only_ultimate_binding)
             jl_error("Constant binding was imported from multiple modules");
         b = resolution.debug_only_ultimate_binding;
@@ -845,8 +868,6 @@ JL_DLLEXPORT jl_module_t *jl_get_module_of_binding(jl_module_t *m, jl_sym_t *var
 
 static NOINLINE void print_backdate_admonition(jl_binding_t *b) JL_NOTSAFEPOINT
 {
-    if (jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
-        jl_undefined_var_error(b->globalref->name, (jl_value_t*)b->globalref->mod);
     jl_safe_printf(
         "WARNING: Detected access to binding `%s.%s` in a world prior to its definition world.\n"
         "  Julia 1.12 has introduced more strict world age semantics for global bindings.\n"
@@ -859,9 +880,13 @@ static NOINLINE void print_backdate_admonition(jl_binding_t *b) JL_NOTSAFEPOINT
 
 static inline void check_backdated_binding(jl_binding_t *b, enum jl_partition_kind kind) JL_NOTSAFEPOINT
 {
-    if (__unlikely(kind == PARTITION_KIND_BACKDATED_CONST) &&
-        !(jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION) & BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION)) {
-        print_backdate_admonition(b);
+    if (__unlikely(kind == PARTITION_KIND_BACKDATED_CONST)) {
+        // We don't want functions that inference executes speculatively to print this warning, so turn those into
+        // an error for inference purposes.
+        if (jl_current_task->ptls->in_pure_callback || jl_options.depwarn == JL_OPTIONS_DEPWARN_ERROR)
+            jl_undefined_var_error(b->globalref->name, (jl_value_t*)b->globalref->mod);
+        if (!(jl_atomic_fetch_or_relaxed(&b->flags, BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION) & BINDING_FLAG_DID_PRINT_BACKDATE_ADMONITION))
+            print_backdate_admonition(b);
     }
 }
 
@@ -885,16 +910,17 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_in_world(jl_binding_t *b, size_t w
     return jl_atomic_load_relaxed(&b->value);
 }
 
-JL_DLLEXPORT jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b)
+static jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b, size_t world)
 {
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     if (jl_options.depwarn) {
         int needs_depwarn = 0;
-        jl_walk_binding_inplace_depwarn(&b, &bpart, jl_current_task->world_age, &needs_depwarn);
+        jl_walk_binding_inplace_depwarn(&b, &bpart, world, &needs_depwarn);
         if (needs_depwarn)
             jl_binding_deprecation_warning(b);
-    } else {
-        jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
+    }
+    else {
+        jl_walk_binding_inplace(&b, &bpart, world);
     }
     enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (jl_bkind_is_some_guard(kind))
@@ -907,11 +933,11 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_depwarn(jl_binding_t *b)
     return jl_atomic_load_relaxed(&b->value);
 }
 
-
 JL_DLLEXPORT jl_value_t *jl_get_binding_value_seqcst(jl_binding_t *b)
 {
-    jl_binding_partition_t *bpart = jl_get_binding_partition(b, jl_current_task->world_age);
-    jl_walk_binding_inplace(&b, &bpart, jl_current_task->world_age);
+    size_t world = jl_current_task->world_age;
+    jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
+    jl_walk_binding_inplace(&b, &bpart, world);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
     if (jl_bkind_is_some_guard(kind))
         return NULL;
@@ -926,7 +952,7 @@ JL_DLLEXPORT jl_value_t *jl_get_binding_value_seqcst(jl_binding_t *b)
 JL_DLLEXPORT jl_value_t *jl_get_latest_binding_value_if_const(jl_binding_t *b)
 {
     // See note below. Note that this is for some deprecated uses, and should not be added to new code.
-    size_t world = jl_atomic_load_relaxed(&jl_world_counter);
+    size_t world = jl_atomic_load_acquire(&jl_world_counter);
     jl_binding_partition_t *bpart = jl_get_binding_partition(b, world);
     jl_walk_binding_inplace(&b, &bpart, world);
     enum jl_partition_kind kind = jl_binding_kind(bpart);
@@ -1157,14 +1183,14 @@ static void jl_binding_dep_message(jl_binding_t *b)
                 jl_printf(JL_STDERR, " instead.");
             }
             else {
-                jl_methtable_t *mt = jl_gf_mtable(v);
-                if (mt != NULL) {
+                jl_typename_t *tn = ((jl_datatype_t*)jl_typeof(v))->name;
+                if (tn != NULL) {
                     jl_printf(JL_STDERR, ", use ");
-                    if (mt->module != jl_core_module) {
-                        jl_static_show(JL_STDERR, (jl_value_t*)mt->module);
+                    if (tn->module != jl_core_module) {
+                        jl_static_show(JL_STDERR, (jl_value_t*)tn->module);
                         jl_printf(JL_STDERR, ".");
                     }
-                    jl_printf(JL_STDERR, "%s", jl_symbol_name(mt->name));
+                    jl_printf(JL_STDERR, "%s", jl_symbol_name(tn->singletonname));
                     jl_printf(JL_STDERR, " instead.");
                 }
             }
@@ -1535,18 +1561,27 @@ JL_DLLEXPORT jl_binding_t *jl_get_module_binding(jl_module_t *m, jl_sym_t *var, 
 }
 
 
-JL_DLLEXPORT jl_value_t *jl_get_globalref_value(jl_globalref_t *gr)
+// get the value (or null) in the world
+jl_value_t *jl_get_globalref_value(jl_globalref_t *gr, size_t world)
 {
     jl_binding_t *b = gr->binding;
     if (!b)
         b = jl_get_module_binding(gr->mod, gr->name, 1);
-    return jl_get_binding_value_depwarn(b);
+    return jl_get_binding_value_depwarn(b, world);
 }
 
+// get the value (or null) in the world
+jl_value_t *jl_get_global_value(jl_module_t *m, jl_sym_t *var, size_t world)
+{
+    jl_binding_t *b = jl_get_module_binding(m, var, 1);
+    return jl_get_binding_value_depwarn(b, world);
+}
+
+// get the global (or null) in the latest world
 JL_DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_module_binding(m, var, 1);
-    return jl_get_binding_value_depwarn(b);
+    return jl_get_binding_value_depwarn(b, jl_atomic_load_acquire(&jl_world_counter));
 }
 
 JL_DLLEXPORT void jl_set_global(jl_module_t *m JL_ROOTING_ARGUMENT, jl_sym_t *var, jl_value_t *val JL_ROOTED_ARGUMENT)
@@ -1603,6 +1638,7 @@ void jl_invalidate_binding_refs(jl_globalref_t *ref, jl_binding_partition_t *inv
 
 JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge)
 {
+    JL_LOCK(&b->globalref->mod->lock);
     if (!b->backedges) {
         b->backedges = jl_alloc_vec_any(0);
         jl_gc_wb(b, b->backedges);
@@ -1610,9 +1646,11 @@ JL_DLLEXPORT void jl_add_binding_backedge(jl_binding_t *b, jl_value_t *edge)
                jl_array_ptr_ref(b->backedges, jl_array_len(b->backedges)-1) == edge) {
         // Optimization: Deduplicate repeated insertion of the same edge (e.g. during
         // definition of a method that contains many references to the same global)
+        JL_UNLOCK(&b->globalref->mod->lock);
         return;
     }
     jl_array_ptr_1d_push(b->backedges, edge);
+    JL_UNLOCK(&b->globalref->mod->lock);
 }
 
 // Called for all GlobalRefs found in lowered code. Adds backedges for cross-module
