@@ -141,14 +141,20 @@ tests = [
         "1:\n2"     => "(call-i 1 : (error))"
     ],
     JuliaSyntax.parse_range => [
-        "a..b"       => "(call-i a .. b)"
+        "a..b"       => "(call-i a (DotsIdentifier-2) b)"
+        "a..+b"      => "(call-i a (DotsIdentifier-2) (error-t) (call-pre + b))"
+        # `..` may be directly followed by the operand-starting operators `: :: $ '`
+        "a..:b"      => "(call-i a (DotsIdentifier-2) (quote-: b))"
+        "'a'..'b'"   => "(call-i (char 'a') (DotsIdentifier-2) (char 'b'))"
+        "a..\$b"     => "(call-i a (DotsIdentifier-2) (\$ b))"
+        "a..::b"     => "(call-i a (DotsIdentifier-2) (::-pre b))"
         "a … b"      => "(call-i a … b)"
         "a .… b"     => "(dotcall-i a … b)"
         "[1 :a]"     => "(hcat 1 (quote-: a))"
         "[1 2:3 :a]" =>  "(hcat 1 (call-i 2 : 3) (quote-: a))"
         "x..."     => "(... x)"
         "x:y..."   => "(... (call-i x : y))"
-        "x..y..."  => "(... (call-i x .. y))"
+        "x..y..."  => "(... (call-i x (DotsIdentifier-2) y))"
     ],
     JuliaSyntax.parse_invalid_ops => [
         "a--b"  =>  "(call-i a (ErrorInvalidOperator) b)"
@@ -738,7 +744,7 @@ tests = [
         "import A.:(+)" =>  "(import (importpath A (quote-: (parens +))))"
         "import A.=="   =>  "(import (importpath A ==))"
         "import A.⋆.f"  =>  "(import (importpath A ⋆ f))"
-        "import A..."   =>  "(import (importpath A ..))"
+        "import A..."   =>  "(import (importpath A (DotsIdentifier-2)))"
         "import A; B"   =>  "(import (importpath A))"
         # Colons not allowed first in import paths
         # but are allowed in trailing components (#473)
@@ -835,7 +841,7 @@ tests = [
         "&&"  =>  "(error &&)"
         "||"  =>  "(error ||)"
         "."   =>  "(error .)"
-        "..." =>  "(error ...)"
+        "..." =>  "(error (DotsIdentifier-3))"
         "+="  =>  "(error +=)"
         "-="  =>  "(error -=)"
         "*="  =>  "(error *=)"
@@ -1226,7 +1232,7 @@ parsestmt_with_kind_tests = [
     "a →  b" => "(call-i a::Identifier →::Identifier b::Identifier)"
     "a < b < c" => "(comparison a::Identifier <::Identifier b::Identifier <::Identifier c::Identifier)"
     "a .<: b"=> "(dotcall-i a::Identifier <:::Identifier b::Identifier)"
-    "a .. b" => "(call-i a::Identifier ..::Identifier b::Identifier)"
+    "a .. b" => "(call-i a::Identifier (DotsIdentifier-2) b::Identifier)"
     "a : b"  => "(call-i a::Identifier :::Identifier b::Identifier)"
     "-2^x"   => "(call-pre -::Identifier (call-i 2::Integer ^::Identifier x::Identifier))"
     "-(2)"   => "(call-pre -::Identifier (parens 2::Integer))"
