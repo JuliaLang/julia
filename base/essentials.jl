@@ -435,7 +435,7 @@ Stacktrace:
 [...]
 ```
 
-If `T` is a [`AbstractFloat`](@ref) type, then it will return the
+If `T` is an [`AbstractFloat`](@ref) type, then it will return the
 closest value to `x` representable by `T`. Inf is treated as one
 ulp greater than `floatmax(T)` for purposes of determining nearest.
 
