@@ -112,12 +112,6 @@ exception frames, and taking/releasing locks.
 * `Libdl.LazyLibrary.lock` (`ReentrantLock`)
 
 * `orc::ThreadSafeContext`
-  !!! note
-      Acquiring a TSCtx should only be done from the JIT's pool of TSCtx's, and
-      all locks on that TSCtx should be released prior to returning it to the
-      pool. If multiple TSCtx locks must be acquired at the same time (due to
-      recursive compilation), then locks should be acquired in the order that
-      the TSCtxs were borrowed from the pool.
 
 * `cfun_lock`
 
