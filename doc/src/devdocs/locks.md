@@ -93,6 +93,8 @@ exception frames, and taking/releasing locks.
 
 ### Level 6
 
+No Julia code may be called while holding a lock above this point.
+
 * `JuliaOJIT::EmissionMutex` (`std::recursive_mutex`)
 
 * `jl_modules_mutex`
