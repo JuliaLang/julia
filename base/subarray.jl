@@ -544,14 +544,22 @@ end
 # XXX: this is considerably more unsafe than the other similarly named methods
 unsafe_wrap(::Type{Vector{UInt8}}, s::FastContiguousSubArray{UInt8,1,Vector{UInt8}}) = unsafe_wrap(Vector{UInt8}, pointer(s), size(s))
 
+const ContiguousBitView = SubArray{
+    Bool,
+    N,
+    <:BitArray,
+    <:Union{Tuple{Vararg{Real}}, Tuple{AbstractUnitRange, Vararg{Any}}},
+    true
+} where N
+
 # This function is placed here because bitarray.jl is run in bootstrap before SubArray
 # is defined.
 function _count(
         ::typeof(identity),
-        v::SubArray{Bool, N, <:BitArray, <:Tuple{Union{Integer, AbstractUnitRange}}, true},
+        v::ContiguousBitView,
         ::Colon,
         init::Integer
-    ) where N
+    )
     T = typeof(init)
     pi = only(parentindices(v))
     (fst, lst) = (Int(first(pi))::Int, Int(last(pi))::Int)
@@ -559,11 +567,9 @@ function _count(
     chunks = parent(v).chunks
 
     # Mask away the bits in the chunks not inside the view
-    (start_index, start_nmask) = get_chunks_id(fst)
-    (stop_index, stop_nmask) = get_chunks_id(lst)
-
     mask_start = typemax(UInt64) << ((fst - 1) & 63)
     mask_end = _msk_end(lst)
+
     start_index = _div64(fst - 1) + 1
     stop_index = _div64(lst - 1) + 1
     # If the whole view is contained in one chunk, then mask it from both sides
