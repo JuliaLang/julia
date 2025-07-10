@@ -194,15 +194,6 @@ register_kinds!(JuliaSyntax, 0, [
     "BEGIN_IDENTIFIERS"
         "Identifier"
         "Placeholder" # Used for empty catch variables, and all-underscore identifiers in lowering
-        # Macro names are modelled as special kinds of identifiers because the full
-        # macro name may not appear as characters in the source: The `@` may be
-        # detached from the macro name as in `@A.x` (ugh!!), or have a _str or _cmd
-        # suffix appended.
-        "BEGIN_MACRO_NAMES"
-            "MacroName"
-            "StringMacroName"
-            "CmdMacroName"
-        "END_MACRO_NAMES"
     "END_IDENTIFIERS"
 
     "BEGIN_KEYWORDS"
@@ -1048,6 +1039,10 @@ register_kinds!(JuliaSyntax, 0, [
         "iteration"
         "comprehension"
         "typed_comprehension"
+        # Macro names
+        "macro_name"
+        "macro_name_cmd"
+        "macro_name_str"
         # Container for a single statement/atom plus any trivia and errors
         "wrapper"
     "END_SYNTAX_KINDS"
@@ -1111,10 +1106,6 @@ const _nonunique_kind_names = Set([
     K"String"
     K"Char"
     K"CmdString"
-
-    K"MacroName"
-    K"StringMacroName"
-    K"CmdMacroName"
 ])
 
 """
@@ -1201,7 +1192,6 @@ is_prec_unicode_ops(x) = K"BEGIN_UNICODE_OPS" <= kind(x) <= K"END_UNICODE_OPS"
 is_prec_pipe_lt(x)     = kind(x) == K"<|"
 is_prec_pipe_gt(x)     = kind(x) == K"|>"
 is_syntax_kind(x)      = K"BEGIN_SYNTAX_KINDS"<= kind(x) <= K"END_SYNTAX_KINDS"
-is_macro_name(x)       = K"BEGIN_MACRO_NAMES" <= kind(x) <= K"END_MACRO_NAMES"
 is_syntactic_assignment(x) = K"BEGIN_SYNTACTIC_ASSIGNMENTS" <= kind(x) <= K"END_SYNTACTIC_ASSIGNMENTS"
 
 function is_string_delim(x)

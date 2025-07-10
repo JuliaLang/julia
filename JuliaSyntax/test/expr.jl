@@ -554,6 +554,7 @@
 
         # var""
         @test parsestmt("@var\"#\" a") == Expr(:macrocall, Symbol("@#"), LineNumberNode(1), :a)
+        @test parsestmt("@var\"\\\"\" a") == Expr(:macrocall, Symbol("@\""), LineNumberNode(1), :a)
         @test parsestmt("A.@var\"#\" a") == Expr(:macrocall, Expr(:., :A, QuoteNode(Symbol("@#"))), LineNumberNode(1), :a)
 
         # Square brackets

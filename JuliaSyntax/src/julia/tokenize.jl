@@ -1168,30 +1168,21 @@ end
 function lex_dot(l::Lexer)
     if accept(l, '.')
         if accept(l, '.')
+            l.last_token == K"@" && return emit(l, K"Identifier")
             return emit(l, K"...")
         else
             if is_dottable_operator_start_char(peekchar(l))
                 readchar(l)
                 return emit(l, K"ErrorInvalidOperator")
             else
+                l.last_token == K"@" && return emit(l, K"Identifier")
                 return emit(l, K"..")
             end
         end
     elseif Base.isdigit(peekchar(l))
         return lex_digit(l, K"Float")
     else
-        pc, dpc = dpeekchar(l)
-        # When we see a dot followed by an operator, we want to emit just the dot
-        # and let the next token be the operator
-        if is_operator_start_char(pc) || (pc == '!' && dpc == '=')
-            return emit(l, K".")
-        elseif pc == '÷'
-            return emit(l, K".")
-        elseif pc == '=' && dpc == '>'
-            return emit(l, K".")
-        elseif is_dottable_operator_start_char(pc)
-            return emit(l, K".")
-        end
+        l.last_token == K"@" && return emit(l, K"Identifier")
         return emit(l, K".")
     end
 end

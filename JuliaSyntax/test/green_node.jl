@@ -33,8 +33,9 @@
          1:1      │  Identifier             ✔
          2:2      │  (
          3:7      │  [macrocall]
-         3:3      │    @
-         4:4      │    MacroName            ✔
+         3:4      │    [macro_name]
+         3:3      │      @
+         4:4      │      Identifier         ✔
          5:5      │    (
          6:6      │    Identifier           ✔
          7:7      │    )
@@ -50,8 +51,9 @@
          1:1      │  Identifier             ✔   "f"
          2:2      │  (                          "("
          3:7      │  [macrocall]
-         3:3      │    @                        "@"
-         4:4      │    MacroName            ✔   "x"
+         3:4      │    [macro_name]
+         3:3      │      @                      "@"
+         4:4      │      Identifier         ✔   "x"
          5:5      │    (                        "("
          6:6      │    Identifier           ✔   "y"
          7:7      │    )                        ")"
