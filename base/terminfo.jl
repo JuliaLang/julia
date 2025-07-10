@@ -303,16 +303,24 @@ end
 """
 The terminfo of the current terminal.
 """
-current_terminfo::TermInfo = TermInfo()
+const current_terminfo = OncePerProcess{TermInfo}() do
+    term_env = get(ENV, "TERM", @static Sys.iswindows() ? "" : "dumb")
+    terminfo = load_terminfo(term_env)
+    # Ensure setaf is set for xterm terminals
+    if !haskey(terminfo, :setaf) && startswith(term_env, "xterm")
+        # For xterm-like terminals without setaf, add a reasonable default
+        terminfo.strings[:setaf] = "\e[3%p1%dm"
+    end
+    return terminfo
+end
 
 # Legacy/TTY methods and the `:color` parameter
 
 if Sys.iswindows()
-    ttyhascolor(term_type = nothing) = true
+    ttyhascolor() = true
 else
-    function ttyhascolor(term_type = get(ENV, "TERM", ""))
-        startswith(term_type, "xterm") ||
-            haskey(current_terminfo, :setaf)
+    function ttyhascolor()
+        haskey(current_terminfo(), :setaf)
     end
 end
 
@@ -352,9 +360,9 @@ Multiple conditions are taken as signifying truecolor support, specifically any 
 function ttyhastruecolor()
     # Lasciate ogne speranza, voi ch'intrate
     get(ENV, "COLORTERM", "") ∈ ("truecolor", "24bit") ||
-        get(current_terminfo, :RGB, false) || get(current_terminfo, :Tc, false) ||
-        (haskey(current_terminfo, :setrgbf) && haskey(current_terminfo, :setrgbb)) ||
-        @static if Sys.isunix() get(current_terminfo, :colors, 0) > 256 else false end ||
+        get(current_terminfo(), :RGB, false) || get(current_terminfo(), :Tc, false) ||
+        (haskey(current_terminfo(), :setrgbf) && haskey(current_terminfo(), :setrgbb)) ||
+        @static if Sys.isunix() get(current_terminfo(), :colors, 0) > 256 else false end ||
         (Sys.iswindows() && Sys.windows_version() ≥ v"10.0.14931") || # See <https://devblogs.microsoft.com/commandline/24-bit-color-in-the-windows-console/>
         something(tryparse(Int, get(ENV, "VTE_VERSION", "")), 0) >= 3600 || # Per GNOME bug #685759 <https://bugzilla.gnome.org/show_bug.cgi?id=685759>
         haskey(ENV, "XTERM_VERSION") ||
