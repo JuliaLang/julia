@@ -542,14 +542,8 @@ function jointail(dir, tail)
     end
 end
 
-const _artifact_str_world_age = Ref{UInt}(typemax(UInt))
-
-function __init__()
-    _artifact_str_world_age[] = Base.get_world_counter()
-end
-
 function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
-    world = _artifact_str_world_age[]
+    world = Base._require_world_age[]
     if world == typemax(UInt)
         world = Base.get_world_counter()
     end
