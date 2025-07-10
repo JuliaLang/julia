@@ -110,7 +110,8 @@ end
             push!(visited, mod)
             for name in names(mod, all=true)
                 isdefinedglobal(mod, name) || continue
-                value = getglobal(mod, name)
+                Base.isdeprecated(mod, name) && continue
+                value = getfield(mod, name)
                 if value isa Module
                     value === Main && continue
                     test_exceptions(value, visited)

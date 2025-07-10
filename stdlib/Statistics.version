@@ -1,4 +1,4 @@
-STATISTICS_BRANCH = master
-STATISTICS_SHA1 = 77bd5707f143eb624721a7df28ddef470e70ecef
-STATISTICS_GIT_URL := https://github.com/JuliaStats/Statistics.jl.git
-STATISTICS_TAR_URL = https://api.github.com/repos/JuliaStats/Statistics.jl/tarball/$1
+STATISTICS_BRANCH = mb/reduce-reuse-recycle
+STATISTICS_SHA1 = c674ab823526d05e7a85b468065089bf563823aa
+STATISTICS_GIT_URL := https://github.com/mbauman/Statistics.jl.git
+STATISTICS_TAR_URL = https://api.github.com/repos/mbauman/Statistics.jl/tarball/$1

@@ -269,99 +269,70 @@ function show(io::IO, s::SkipMissing)
     print(io, ')')
 end
 
-# Optimized mapreduce implementation
-# The generic method is faster when !(eltype(A) >: Missing) since it does not need
-# additional loops to identify the two first non-missing values of each block
-mapreduce(f, op, itr::SkipMissing{<:AbstractArray}) =
-    _mapreduce(f, op, IndexStyle(itr.x), eltype(itr.x) >: Missing ? itr : itr.x)
-
-function _mapreduce(f, op, ::IndexLinear, itr::SkipMissing{<:AbstractArray})
-    A = itr.x
-    ai = missing
-    inds = LinearIndices(A)
-    i = first(inds)
-    ilast = last(inds)
-    for outer i in i:ilast
-        @inbounds ai = A[i]
-        !ismissing(ai) && break
-    end
-    ismissing(ai) && return mapreduce_empty(f, op, eltype(itr))
-    a1::eltype(itr) = ai
-    i == typemax(typeof(i)) && return mapreduce_first(f, op, a1)
-    i += 1
-    ai = missing
-    for outer i in i:ilast
-        @inbounds ai = A[i]
-        !ismissing(ai) && break
-    end
-    ismissing(ai) && return mapreduce_first(f, op, a1)
-    # We know A contains at least two non-missing entries: the result cannot be nothing
-    something(mapreduce_impl(f, op, itr, first(inds), last(inds)))
+# Simple optimization: catch skipmissings that wrap iterators that don't include Missing
+function mapreduce(f::F, op::G, itr::SkipMissing; init=Base._InitialValue()) where {F,G}
+    (IteratorEltype(itr.x) === HasEltype() && !(eltype(itr.x) >: Missing)) && return mapreduce(f, op, itr.x; init)
+    return mapreduce_pairwise(f, op, itr, init)
 end
 
-_mapreduce(f, op, ::IndexCartesian, itr::SkipMissing) = mapfoldl(f, op, itr)
+function mapreduce_pairwise(f::F, op::G, itr::SkipMissing{<:AbstractArray}, init) where {F,G}
+    v = mapreduce_skipmissing_pairwise(f, op, itr.x, init, eachindex(itr.x))
+    return ismissing(v) ? _mapreduce_start(f, op, itr, init) : v
+end
 
-mapreduce_impl(f, op, A::SkipMissing, ifirst::Integer, ilast::Integer) =
-    mapreduce_impl(f, op, A, ifirst, ilast, pairwise_blocksize(f, op))
-
-# Returns nothing when the input contains only missing values, and Some(x) otherwise
-@noinline function mapreduce_impl(f, op, itr::SkipMissing{<:AbstractArray},
-                                  ifirst::Integer, ilast::Integer, blksize::Int)
-    A = itr.x
-    if ifirst > ilast
-        return nothing
-    elseif ifirst == ilast
-        @inbounds a1 = A[ifirst]
-        if ismissing(a1)
-            return nothing
-        else
-            return Some(mapreduce_first(f, op, a1))
-        end
-    elseif ilast - ifirst < blksize
-        # sequential portion
-        ai = missing
-        i = ifirst
-        for outer i in i:ilast
-            @inbounds ai = A[i]
-            !ismissing(ai) && break
-        end
-        ismissing(ai) && return nothing
-        a1 = ai::eltype(itr)
-        i == typemax(typeof(i)) && return Some(mapreduce_first(f, op, a1))
-        i += 1
-        ai = missing
-        for outer i in i:ilast
-            @inbounds ai = A[i]
-            !ismissing(ai) && break
-        end
-        ismissing(ai) && return Some(mapreduce_first(f, op, a1))
-        a2 = ai::eltype(itr)
-        i == typemax(typeof(i)) && return Some(op(f(a1), f(a2)))
-        i += 1
-        v = op(f(a1), f(a2))
-        @simd for i = i:ilast
-            @inbounds ai = A[i]
-            if !ismissing(ai)
-                v = op(v, f(ai))
-            end
-        end
-        return Some(v)
+# This is based on mapreduce_pairwise, but with special sauce that allows one or both of the pairwise splits
+# to not process any elements; returning `missing` as the sentinel in such a situation
+function mapreduce_skipmissing_pairwise(f::F, op::G, A, init, inds) where {F,G}
+    if length(inds) <= max(10, pairwise_blocksize(f, op))
+        return mapreduce_skipmissing_kernel(f, op, A, init, inds)
     else
-        # pairwise portion
-        imid = ifirst + (ilast - ifirst) >> 1
-        v1 = mapreduce_impl(f, op, itr, ifirst, imid, blksize)
-        v2 = mapreduce_impl(f, op, itr, imid+1, ilast, blksize)
-        if v1 === nothing && v2 === nothing
-            return nothing
-        elseif v1 === nothing
-            return v2
-        elseif v2 === nothing
-            return v1
-        else
-            return Some(op(something(v1), something(v2)))
-        end
+        p1, p2 = halves(inds)
+        v1 = mapreduce_skipmissing_pairwise(f, op, A, init, p1)
+        v2 = mapreduce_skipmissing_pairwise(f, op, A, init, p2)
+        return ismissing(v1) ? v2 : ismissing(v2) ? v1 : op(v1, v2)
     end
 end
+
+function mapreduce_skipmissing_kernel(f, op, A, init, inds::AbstractUnitRange)
+    i1, iN = first(inds), last(inds)
+    i = i1; ai = missing
+    for outer i in i1:iN
+        ai = @inbounds A[i]
+        !ismissing(ai) && break
+    end
+    ismissing(ai) && return missing
+    v = _mapreduce_start(f, op, A, init, ai)
+    i == typemax(typeof(i)) && return v
+    for i in i+1:iN
+        @inbounds ai = A[i]
+        if !ismissing(ai)
+            v = op(v, f(ai))
+        end
+    end
+    return v
+end
+
+function mapreduce_skipmissing_kernel(f, op, A, init, inds)
+    it = iterate(inds)
+    local s
+    ai = missing
+    while it !== nothing
+        i, s = it
+        ai = @inbounds A[i]
+        !ismissing(ai) && break
+        it = iterate(inds, s)
+    end
+    ismissing(ai) && return missing
+    v = _mapreduce_start(f, op, A, init, ai)
+    for i in Iterators.rest(inds, s)
+        @inbounds ai = A[i]
+        if !ismissing(ai)
+            v = op(v, f(ai))
+        end
+    end
+    return v
+end
+
 
 """
     filter(f, itr::SkipMissing{<:AbstractArray})

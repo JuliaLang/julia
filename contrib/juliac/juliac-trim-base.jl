@@ -79,31 +79,31 @@ end
     end
     show_type_name(io::IO, tn::Core.TypeName) = print(io, tn.name)
 
-    mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) where {F, F2} =
-    _mapreduce_dim(f, op, init, A, dims)
-    mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted...; kw...) where {F, F2} =
-        reduce(op, map(f, A...); kw...)
+    # mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted; dims=:, init=_InitialValue()) where {F, F2} =
+    # _mapreduce_dim(f, op, init, A, dims)
+    # mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted...; kw...) where {F, F2} =
+    #     reduce(op, map(f, A...); kw...)
 
-    _mapreduce_dim(f::F, op::F2, nt, A::AbstractArrayOrBroadcasted, ::Colon) where {F, F2} =
-        mapfoldl_impl(f, op, nt, A)
+    # _mapreduce_dim(f::F, op::F2, nt, A::AbstractArrayOrBroadcasted, ::Colon) where {F, F2} =
+    #     mapfoldl_impl(f, op, nt, A)
 
-    _mapreduce_dim(f::F, op::F2, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) where {F, F2} =
-        _mapreduce(f, op, IndexStyle(A), A)
+    # _mapreduce_dim(f::F, op::F2, ::_InitialValue, A::AbstractArrayOrBroadcasted, ::Colon) where {F, F2} =
+    #     _mapreduce(f, op, IndexStyle(A), A)
 
-    _mapreduce_dim(f::F, op::F2, nt, A::AbstractArrayOrBroadcasted, dims) where {F, F2} =
-        mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
+    # _mapreduce_dim(f::F, op::F2, nt, A::AbstractArrayOrBroadcasted, dims) where {F, F2} =
+    #     mapreducedim!(f, op, reducedim_initarray(A, dims, nt), A)
 
-    _mapreduce_dim(f::F, op::F2, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) where {F,F2} =
-        mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
+    # _mapreduce_dim(f::F, op::F2, ::_InitialValue, A::AbstractArrayOrBroadcasted, dims) where {F,F2} =
+    #     mapreducedim!(f, op, reducedim_init(f, op, A, dims), A)
 
-    mapreduce_empty_iter(f::F, op::F2, itr, ItrEltype) where {F, F2} =
-        reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
-        mapreduce_first(f::F, op::F2, x) where {F,F2} = reduce_first(op, f(x))
+    # mapreduce_empty_iter(f::F, op::F2, itr, ItrEltype) where {F, F2} =
+    #     reduce_empty_iter(MappingRF(f, op), itr, ItrEltype)
+    #     mapreduce_first(f::F, op::F2, x) where {F,F2} = reduce_first(op, f(x))
 
-    _mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted) where {F,F2} = _mapreduce(f, op, IndexStyle(A), A)
-    mapreduce_empty(::typeof(identity), op::F, T) where {F} = reduce_empty(op, T)
-    mapreduce_empty(::typeof(abs), op::F, T) where {F}     = abs(reduce_empty(op, T))
-    mapreduce_empty(::typeof(abs2), op::F, T) where {F}    = abs2(reduce_empty(op, T))
+    # _mapreduce(f::F, op::F2, A::AbstractArrayOrBroadcasted) where {F,F2} = _mapreduce(f, op, IndexStyle(A), A)
+    # mapreduce_empty(::typeof(identity), op::F, T) where {F} = reduce_empty(op, T)
+    # mapreduce_empty(::typeof(abs), op::F, T) where {F}     = abs(reduce_empty(op, T))
+    # mapreduce_empty(::typeof(abs2), op::F, T) where {F}    = abs2(reduce_empty(op, T))
 end
 @eval Base.Sys begin
     __init_build() = nothing

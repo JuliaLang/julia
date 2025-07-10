@@ -61,10 +61,12 @@ julia> struct Squares
        end
 
 julia> Base.iterate(S::Squares, state=1) = state > S.count ? nothing : (state*state, state+1)
+
+julia> Base.length(S::Squares) = S.count
 ```
 
-With only [`iterate`](@ref) definition, the `Squares` type is already pretty powerful.
-We can iterate over all the elements:
+With just these [`iterate`](@ref) and [`length](@ref) definitions, the `Squares` type is already
+pretty powerful. We can iterate over all the elements:
 
 ```jldoctest squaretype
 julia> for item in Squares(7)
@@ -90,16 +92,13 @@ julia> sum(Squares(100))
 338350
 ```
 
-There are a few more methods we can extend to give Julia more information about this iterable
+There are other methods we can extend to give Julia more information about this iterable
 collection. We know that the elements in a `Squares` sequence will always be `Int`. By extending
 the [`eltype`](@ref) method, we can give that information to Julia and help it make more specialized
-code in the more complicated methods. We also know the number of elements in our sequence, so
-we can extend [`length`](@ref), too:
+code in the more complicated methods:
 
 ```jldoctest squaretype
 julia> Base.eltype(::Type{Squares}) = Int # Note that this is defined for the type
-
-julia> Base.length(S::Squares) = S.count
 ```
 
 Now, when we ask Julia to [`collect`](@ref) all the elements into an array it can preallocate a `Vector{Int}`
