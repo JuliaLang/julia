@@ -547,7 +547,7 @@ function _artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dic
     if world == typemax(UInt)
         world = Base.get_world_counter()
     end
-    return Base.invoke_in_world(world, __artifact_str, __module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, Val(LazyArtifacts))
+    return Base.invoke_in_world(world, __artifact_str, __module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, Val(LazyArtifacts))::String
 end
 
 function __artifact_str(__module__, artifacts_toml, name, path_tail, artifact_dict, hash, platform, ::Val{LazyArtifacts}) where LazyArtifacts
