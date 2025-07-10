@@ -573,7 +573,7 @@ function __artifact_str(__module__, artifacts_toml, name, path_tail, artifact_di
             if nameof(LazyArtifacts) in (:Pkg, :Artifacts, :PkgArtifacts)
                 Base.depwarn("using Pkg instead of using LazyArtifacts is deprecated", :var"@artifact_str", force=true)
             end
-            path_base = @invokelatest LazyArtifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform)
+            path_base = (@invokelatest LazyArtifacts.ensure_artifact_installed(string(name), meta, artifacts_toml; platform))::String
             return jointail(path_base, path_tail)
         end
         error("Artifact $(repr(name)) is a lazy artifact; package developers must call `using LazyArtifacts` in $(__module__) before using lazy artifacts.")
