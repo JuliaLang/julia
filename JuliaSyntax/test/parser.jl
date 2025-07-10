@@ -76,6 +76,19 @@ tests = [
         "f(x) where S where U = 1" =>  "(function-= (where (where (call f x) S) U) 1)"
         "(f(x)::T) where S = 1" =>  "(function-= (where (parens (::-i (call f x) T)) S) 1)"
         "f(x) = 1 = 2"    =>  "(function-= (call f x) (= 1 2))" # Should be a warning!
+        # Suffixed operators don't form compound assignments (matching the
+        # reference parser): `+₁` is parsed as the operator, leaving a stray `=`
+        "a +₁= b" =>  "(call-i a +₁ (error =))"
+        # ... and likewise operators which simply have no compound-assignment
+        # form are parsed as an identifier being assigned to
+        "⋅ = 5" =>  "(= ⋅ 5)"
+        "⋅=5" =>  "(= ⋅ 5)"
+        # Operators followed by `==`, `===` or `=>` (rather than the single
+        # token `=`) are not compound assignments
+        "a +== b"   => "(call-i a + (call-pre (error ==) b))"
+        "a -=> b"   => "(call-i a - (call-pre (error =>) b))"
+        "a >>>== b" => "(call-i a >>> (call-pre (error ==) b))"
+        "a .+== b"  => "(dotcall-i a + (call-pre (error ==) b))"
     ],
     JuliaSyntax.parse_pair => [
         "a => b"  =>  "(call-i a => b)"
@@ -119,6 +132,8 @@ tests = [
         "x < y"       => "(call-i x < y)"
         "x .< y"      => "(dotcall-i x < y)"
         "x .<: y"     => "(dotcall-i x <: y)"
+        # A dotted operator directly following a float literal
+        "1.1.∈a"      => "(dotcall-i 1.1 ∈ a)"
         ":. == :."    => "(call-i (quote-: .) == (quote-: .))"
         # Comparison chains
         "x < y < z"   => "(comparison x < y < z)"
@@ -206,6 +221,9 @@ tests = [
         "x 'y"      =>  "x"
         "x@y"       =>  "x"
         "(begin end)x" => "(parens (block))"
+        # Invalid operators (`**`, `--`) are not juxtaposed
+        "2**2"      =>  "2"
+        "2--2"      =>  "2"
     ],
     JuliaSyntax.parse_unary => [
         ":T"       => "(quote-: T)"
@@ -642,7 +660,7 @@ tests = [
         "function (\n        ::T\n        )(x, y) end" =>  "(function (call (parens (::-pre T)) x y) (block))"
         "function (\n        f::T{g(i)}\n        )() end" => "(function (call (parens (::-i f (curly T (call g i))))) (block))"
         "function (\n        x, y\n        ) x + y end" => "(function (tuple-p x y) (block (call-i x + y)))"
-        "function (:*=(f))() end" => "(function (call (parens (call (quote-: *=) f))) (block))"
+        "function (:*=(f))() end" => "(function (call (parens (call (quote-: (op= *)) f))) (block))"
         "function begin() end" =>  "(function (call (error begin)) (block))"
         "function f() end"     =>  "(function (call f) (block))"
         "function type() end"  =>  "(function (call type) (block))"
@@ -842,24 +860,24 @@ tests = [
         "||"  =>  "(error ||)"
         "."   =>  "(error .)"
         "..." =>  "(error (DotsIdentifier-3))"
-        "+="  =>  "(error +=)"
-        "-="  =>  "(error -=)"
-        "*="  =>  "(error *=)"
-        "/="  =>  "(error /=)"
-        "//=" =>  "(error //=)"
-        "|="  =>  "(error |=)"
-        "^="  =>  "(error ^=)"
-        "÷="  =>  "(error ÷=)"
-        "%="  =>  "(error %=)"
-        "<<=" =>  "(error <<=)"
-        ">>=" =>  "(error >>=)"
-        ">>>="=>  "(error >>>=)"
-        "\\=" =>  "(error \\=)"
-        "&="  =>  "(error &=)"
-        ":="  =>  "(error :=)"
-        "\$=" =>  "(error \$=)"
-        "⊻="  =>  "(error ⊻=)"
-        ".+=" =>  "(error (. +=))"
+        "+="  =>  "(error (op= +))"
+        "-="  =>  "(error (op= -))"
+        "*="  =>  "(error (op= *))"
+        "/="  =>  "(error (op= /))"
+        "//=" =>  "(error (op= //))"
+        "|="  =>  "(error (op= |))"
+        "^="  =>  "(error (op= ^))"
+        "÷="  =>  "(error (op= ÷))"
+        "%="  =>  "(error (op= %))"
+        "<<=" =>  "(error (op= <<))"
+        ">>=" =>  "(error (op= >>))"
+        ">>>="=>  "(error (op= >>>))"
+        "\\=" =>  "(error (op= \\))"
+        "&="  =>  "(error (op= &))"
+        ":="  =>  "(error :=)" # Assignment operator, not `:`-update
+        "\$=" =>  "(error (op= \$))"
+        "⊻="  =>  "(error (op= ⊻))"
+        ".+=" =>  "(error (.op= +))"
         # Normal operators
         "+"  =>  "+"
         # Assignment-precedence operators which can be used as identifiers
@@ -868,8 +886,8 @@ tests = [
         "⩴"  =>  "⩴"
         "≕"  =>  "≕"
         # Quoted syntactic operators allowed
-        ":+="  =>  "(quote-: +=)"
-        ":.+=" =>  "(quote-: (. +=))"
+        ":+="  =>  "(quote-: (op= +))"
+        ":.+=" =>  "(quote-: (.op= +))"
         ":.="  =>  "(quote-: (. =))"
         ":.&&" =>  "(quote-: (. &&))"
         # Special symbols quoted
@@ -1259,8 +1277,8 @@ parsestmt_with_kind_tests = [
     "a += b" => "(op= a::Identifier +::Identifier b::Identifier)"
     "a .+= b" => "(.op= a::Identifier +::Identifier b::Identifier)"
     "a >>= b" => "(op= a::Identifier >>::Identifier b::Identifier)"
-    ":+="    => "(quote-: +=::op=)"
-    ":.+="   => "(quote-: (. +=::op=))"
+    ":+="    => "(quote-: (op= +::Identifier))"
+    ":.+="   => "(quote-: (.op= +::Identifier))"
     # str/cmd macro name kinds
     "x\"str\""   => """(macrocall x::StrMacroName (string-r "str"::String))"""
     "x`str`"     => """(macrocall x::CmdMacroName (cmdstring-r "str"::CmdString))"""
