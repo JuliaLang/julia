@@ -495,6 +495,19 @@ A `generic` or empty CPU name means the basic required feature set of the target
 which is at least the architecture the C/C++ runtime is compiled with. Each string
 is interpreted by LLVM.
 
+#### Examples of valid `JULIA_CPU_TARGET` values
+
+- `generic` - produces portable code for the basic ISA
+- `haswell` - optimizes for Intel Haswell microarchitecture
+- `generic;haswell` - creates multi-versioned images with both generic and optimized variants
+- `x86-64-v3;x86-64-v4` - targets x86-64 microarchitecture levels v3 and v4
+
+!!! note
+    Package images can only target the same or more specific CPU features than
+    their base system image. If your system image was built with `JULIA_CPU_TARGET=generic`,
+    package images can use any target. However, if your system image targets a specific CPU
+    (e.g., `haswell`), package images cannot target a less capable CPU.
+
 A few special features are supported:
 
 1. `sysimage`
