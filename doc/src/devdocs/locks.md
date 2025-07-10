@@ -95,6 +95,10 @@ exception frames, and taking/releasing locks.
 
 No Julia code may be called while holding a lock above this point.
 
+* `world_counter_lock`
+
+### Level 
+
 * `JuliaOJIT::EmissionMutex` (`std::recursive_mutex`)
 
 * `jl_modules_mutex`
@@ -117,8 +121,8 @@ No Julia code may be called while holding a lock above this point.
 
 * `cfun_lock`
 
-### Level 7
-* `world_counter_lock`
+### Level 8
+
 * `precomp_statement_out_lock`
 * `dispatch_statement_out_lock`
 
