@@ -1225,8 +1225,9 @@ Stateful iterators that want to opt into this feature should define an `isdone`
 method that returns true/false depending on whether the iterator is done or
 not. Stateless iterators need not implement this function.
 
-If the result is `missing`, callers may go ahead and compute
-`iterate(x, state) === nothing` to compute a definite answer.
+If the result is `missing`, then `isdone` cannot determine whether the iterator
+state is terminal, and callers must compute `iterate(itr, state) === nothing`
+to obtain a definitive answer.
 
 See also [`iterate`](@ref), [`isempty`](@ref)
 """
