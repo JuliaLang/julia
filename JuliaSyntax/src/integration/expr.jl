@@ -246,8 +246,6 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
                         val isa UInt128 ? Symbol("@uint128_str") :
                         Symbol("@big_str")
                 return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
-            elseif k == K"MacroName" && val === Symbol("@.")
-                return Symbol("@__dot__")
             else
                 return val
             end
@@ -296,7 +294,31 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
                          nodehead, source)
 end
 
-# Split out from the above for codesize reasons, to avoid specialization on multiple
+function adjust_macro_name!(retexpr::Union{Expr, Symbol}, k::Kind)
+    if !(retexpr isa Symbol)
+        retexpr::Expr
+        # can happen for incomplete or errors
+        (length(retexpr.args) < 2 || retexpr.head != :(.)) && return retexpr
+        arg2 = retexpr.args[2]
+        isa(arg2, QuoteNode) || return retexpr
+        retexpr.args[2] = QuoteNode(adjust_macro_name!(arg2.value, k))
+        return retexpr
+    end
+    if k == K"macro_name"
+        if retexpr === Symbol(".")
+            return Symbol("@__dot__")
+        else
+            return Symbol("@$retexpr")
+        end
+    elseif k == K"macro_name_cmd"
+        return Symbol("@$(retexpr)_cmd")
+    else
+        @assert k == K"macro_name_str"
+        return Symbol("@$(retexpr)_str")
+    end
+end
+
+# Split out from `node_to_expr` for codesize reasons, to avoid specialization on multiple
 # tree types.
 @noinline function _node_to_expr(retexpr::Expr, loc::LineNumberNode,
                                  srcrange::UnitRange{UInt32},
@@ -312,6 +334,8 @@ end
         # However, errors can add additional errors tokens which we represent
         # as e.g. `Expr(:var, ..., Expr(:error))`.
         return retexpr.args[1]
+    elseif k in KSet"macro_name macro_name_cmd macro_name_str"
+        return adjust_macro_name!(retexpr.args[1], k)
     elseif k == K"?"
         retexpr.head = :if
     elseif k == K"op=" && length(args) == 3
@@ -331,7 +355,7 @@ end
     elseif k == K"macrocall"
         if length(args) >= 2
             a2 = args[2]
-            if @isexpr(a2, :macrocall) && kind(firstchildhead) == K"CmdMacroName"
+            if @isexpr(a2, :macrocall) && kind(firstchildhead) == K"macro_name_cmd"
                 # Fix up for custom cmd macros like foo`x`
                 args[2] = a2.args[3]
             end

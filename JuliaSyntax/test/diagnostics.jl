@@ -53,7 +53,7 @@ end
         Diagnostic(1, 9, :error, "try without catch or finally")
     # TODO: better range
 	@test diagnostic("@A.\$x a") ==
-        Diagnostic(6, 5, :error, "invalid macro name")
+        Diagnostic(4, 5, :error, "invalid macro name")
 
 	@test diagnostic("a, , b") ==
         Diagnostic(4, 4, :error, "unexpected `,`")

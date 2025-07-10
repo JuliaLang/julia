@@ -430,12 +430,6 @@ function parse_julia_literal(txtbuf::Vector{UInt8}, head::SyntaxHead, srcrange)
             Symbol(normalize_identifier(val_str))
     elseif k == K"error"
         ErrorVal()
-    elseif k == K"MacroName"
-        Symbol("@$(normalize_identifier(val_str))")
-    elseif k == K"StringMacroName"
-        Symbol("@$(normalize_identifier(val_str))_str")
-    elseif k == K"CmdMacroName"
-        Symbol("@$(normalize_identifier(val_str))_cmd")
     elseif is_syntax_kind(head)
         nothing
     elseif is_keyword(k)
