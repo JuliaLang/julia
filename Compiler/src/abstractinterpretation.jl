@@ -4414,7 +4414,7 @@ function conditional_change(𝕃ᵢ::AbstractLattice, currstate::VarTable, condt
         # "causes" since we ignored those in the comparison
         newtyp = tmerge(𝕃ᵢ, newtyp, LimitedAccuracy(Bottom, oldtyp.causes))
     end
-    # if this `Conditional` is from from `@isdefined condt.slot`, refine its `undef` information
+    # if this `Conditional` is from `@isdefined condt.slot`, refine its `undef` information
     newundef = condt.isdefined ? !then_or_else : vtype.undef
     return StateUpdate(SlotNumber(condt.slot), VarState(newtyp, newundef), #=conditional=#true)
 end
