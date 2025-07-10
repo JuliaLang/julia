@@ -3,7 +3,7 @@
 """
     Base.Chars = Union{AbstractChar,Tuple{Vararg{AbstractChar}},AbstractVector{<:AbstractChar},AbstractSet{<:AbstractChar}}
 
-An alias type for a either single character or a tuple/vector/set of characters, used to describe arguments
+An alias type for either a single character or a tuple/vector/set of characters, used to describe arguments
 of several string-matching functions such as [`startswith`](@ref) and [`strip`](@ref).
 
 !!! compat "Julia 1.11"

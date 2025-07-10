@@ -37,7 +37,7 @@ function _insert_backedges(edges::Vector{Any}, stack::Vector{CodeInstance}, visi
         @ccall jl_promote_ci_to_current(codeinst::Any, validation_world::UInt)::Cvoid
         minvalid = codeinst.min_world
         maxvalid = codeinst.max_world
-        # Finally, if this CI is still valid in some world age and and belongs to an external method(specialization),
+        # Finally, if this CI is still valid in some world age and belongs to an external method(specialization),
         # poke it that mi's cache
         if maxvalid ≥ minvalid && external
             caller = get_ci_mi(codeinst)

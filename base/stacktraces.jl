@@ -24,7 +24,7 @@ Stack information representing execution context, with the following fields:
 
 - `linfo::Union{Method, Core.MethodInstance, Core.CodeInstance, Core.CodeInfo, Nothing}`
 
-  The Method, MethodInstance, CodeInstance, or CodeInfo containing the execution context (if it could be found), \
+  The Method, MethodInstance, CodeInstance, or CodeInfo containing the execution context (if it could be found),
      or nothing (for example, if the inlining was a result of macro expansion).
 
 - `file::Symbol`
