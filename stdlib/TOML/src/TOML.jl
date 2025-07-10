@@ -148,4 +148,6 @@ Internals.reinit!(p::Parser, str::String; filepath::Union{Nothing, String}=nothi
 Internals.parse(p::Parser) = Internals.parse(p._p)
 Internals.tryparse(p::Parser) = Internals.tryparse(p._p)
 
+include("precompile.jl")
+
 end
