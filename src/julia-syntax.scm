@@ -172,23 +172,6 @@
 (define (method-lambda-expr argl body rett)
   (let ((argl (map arg-name argl))
         (body (blockify body)))
-    ;; If the method body mentions |#self#| or thisfunction but no parameter is called
-    ;; |#self#|, introduce a local alias so var"#self#" and Expr(:thisfunction) work for
-    ;; callable objects as they do for ordinary functions.
-    (let* ((have-self-arg? (memq '|#self#| argl))
-           (first          (and (pair? argl) (car argl)))
-           (needs-alias?
-             (and (not have-self-arg?)
-                  (expr-contains-p
-                    (lambda (x) (or (eq? x '|#self#|)
-                                    (and (pair? x) (eq? (car x) 'thisfunction))))
-                    body))))
-      (when needs-alias?
-        (set! body
-              (insert-after-meta
-               body
-               `((local |#self#|)
-                 (= |#self#| ,first))))))
     `(lambda ,argl ()
              (scope-block
               ,(if (equal? rett '(core Any))
@@ -324,10 +307,7 @@
                     (cdr e))))))
 
 (define (make-generator-function name sp-names arg-names body)
-  (let ((arg-names (append sp-names
-                           (map (lambda (n)
-                                  (if (eq? n '|#self#|) (gensy) n))
-                                arg-names))))
+  (let ((arg-names (append sp-names arg-names)))
     (let ((body (insert-after-meta body  ;; don't specialize on generator arguments
                                    ;; arg-names slots start at 2 (after name)
                                    `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 2))) (iota (length arg-names))))))))
@@ -1228,11 +1208,11 @@
                   (argname    (if (overlay? name) (caddr name) name))
                   ;; fill in first (closure) argument
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
-                                            `(|::| |#self#| ,(cadr n))
+                                            `(|::| ,argname ,(cadr n))
                                             n)))
                   (farg    (if (decl? argname)
                                (adj-decl argname)
-                               `(|::| |#self#| (call (core Typeof) ,argname))))
+                               `(|::| ,argname (call (core Typeof) ,argname))))
                   (body       (insert-after-meta body (cdr argl-stmts)))
                   (argl    (cdr argl))
                   (argl    (fix-arglist
@@ -2585,12 +2565,6 @@
    'struct         expand-struct-def
    'try            expand-try
 
-   'thisfunction
-   (lambda (e)
-     ;; (thisfunction) expands to |#self#| symbol which will later
-     ;; be resolved to the appropriate reference
-     '|#self#|)
-
    'lambda
    (lambda (e)
      `(lambda ,(map expand-forms (cadr e))
@@ -3460,7 +3434,7 @@
               vi)
     tab))
 
-;; env:      list of vinfo (includes any closure #self#; should not include globals)
+;; env:      list of vinfo (should not include globals)
 ;; captvars: list of vinfo
 ;; sp:       list of symbol
 ;; new-sp:   list of symbol (static params declared here)
@@ -5159,6 +5133,25 @@ f(x) = yt(x)
 
             ((error)
              (error (cadr e)))
+
+            ;; thisfunction replaced with first argument name
+            ((thisfunction)
+             (let ((first-arg (and (pair? (lam:args lam)) (car (lam:args lam)))))
+               (if first-arg
+                   (let ((arg-name (if (symbol? first-arg)
+                                       first-arg
+                                       (if (pair? first-arg)
+                                           (cadr first-arg) ;; extract name from (:: name type)
+                                           first-arg))))
+                     (let ((e1 (if (and arg-map (symbol? arg-name))
+                                   (get arg-map arg-name arg-name)
+                                   arg-name)))
+                       (cond (tail  (emit-return tail e1))
+                             (value e1)
+                             ((symbol? e1) (emit e1) #f)
+                             (else #f))))
+                   (error "thisfunction used in context with no arguments"))))
+
             (else
              (error (string "invalid syntax " (deparse e)))))))
     ;; introduce new slots for assigned arguments
