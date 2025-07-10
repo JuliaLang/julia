@@ -625,7 +625,8 @@ end
 """
     rest(iter, state)
 
-An iterator that yields the same elements as `iter`, but starting at the given `state`.
+An iterator that yields the same elements as `iter`, but starting at the given `state`, which
+must be a state obtainable via a sequence of one or more calls to `iterate(iter[, state])`
 
 See also: [`Iterators.drop`](@ref), [`Iterators.peel`](@ref), [`Base.rest`](@ref).
 
