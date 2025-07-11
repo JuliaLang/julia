@@ -306,6 +306,15 @@
                (map (lambda (x) (replace-vars x renames))
                     (cdr e))))))
 
+;; Check if an expression contains thisfunction
+(define (contains-thisfunction? expr)
+  (cond ((atom? expr) #f)
+        ((not (pair? expr)) #f)
+        ((eq? (car expr) 'thisfunction) #t)
+        (else (or (contains-thisfunction? (car expr))
+                  (and (pair? (cdr expr))
+                       (contains-thisfunction? (cdr expr)))))))
+
 (define (make-generator-function name sp-names arg-names body)
   (let ((arg-names (append sp-names arg-names)))
     (let ((body (insert-after-meta body  ;; don't specialize on generator arguments
@@ -549,8 +558,9 @@
           (insert-after-meta `(block
                                ,@stmts)
                              (cons `(meta nkw ,(+ (length vars) (length restkw)))
-                                   (cons `(meta thisfunction-original ,name)
-                                         annotations)))
+                                   (if (and (contains-thisfunction? `(block ,@stmts)) name (not (eq? name #f)))
+                                       (cons `(meta thisfunction-original ,name) annotations)
+                                       annotations)))
           rett)
 
         ;; call with no keyword args
@@ -5139,11 +5149,7 @@ f(x) = yt(x)
             ((thisfunction)
              (let ((first-arg (and (pair? (lam:args lam)) (car (lam:args lam)))))
                (if first-arg
-                   (let* ((arg-name (if (symbol? first-arg)
-                                        first-arg
-                                        (if (pair? first-arg)
-                                            (cadr first-arg) ;; extract name from (:: name type)
-                                            first-arg)))
+                   (let* ((arg-name (arg-name first-arg))
                           ;; Check for thisfunction-original metadata in keyword wrapper functions
                           (original-name (let ((body (lam:body lam)))
                                           (and (pair? body) (pair? (cdr body))
@@ -5163,7 +5169,7 @@ f(x) = yt(x)
                        (cond (tail  (emit-return tail e1))
                              (value e1)
                              ((symbol? e1) (emit e1) #f)
-                             (else #f))))
+                             (else (emit e1) #f))))
                    (error "thisfunction used in context with no arguments"))))
 
             (else
