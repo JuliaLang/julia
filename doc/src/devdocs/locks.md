@@ -143,6 +143,14 @@ the same level:
   for backedges.  To avoid deadlocks, we must already hold `world_counter_lock`
   before acquiring multiple `jl_method_t.writelock`s.
 
+### Broken locks
+
+The following locks are broken:
+
+* `loading.jl`: `require` and `register_root_module`
+
+   This file potentially has numerous problems. (fix: needs locks)
+
 ## Updates to the world counter
 
 Thanks to the [world age](@ref man-world-age) mechanism, Julia can allow the
