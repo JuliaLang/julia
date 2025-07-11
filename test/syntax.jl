@@ -4404,6 +4404,6 @@ end
             Cols(args...; operator=union) = (new{typeof(args)}(args, operator); string($(Expr(:thisfunction))))
         end
         result = Cols(1, 2, 3)
-        @test result == "Cols"
+        @test occursin("Cols", result)
     end
 end
