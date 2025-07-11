@@ -1217,13 +1217,15 @@
                   (argl       (car argl-stmts))
                   (name       (check-dotop (car argl)))
                   (argname    (if (overlay? name) (caddr name) name))
+                  ;;
                   ;; fill in first (closure) argument
+                  (self-name  (if (nodot-sym-ref? argname) argname (gensy)))
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
-                                            `(|::| ,argname ,(cadr n))
+                                            `(|::| ,self-name ,(cadr n))
                                             n)))
                   (farg    (if (decl? argname)
                                (adj-decl argname)
-                               `(|::| ,argname (call (core Typeof) ,argname))))
+                               `(|::| ,self-name (call (core Typeof) ,argname))))
                   (body       (insert-after-meta body (cdr argl-stmts)))
                   (argl    (cdr argl))
                   (argl    (fix-arglist
