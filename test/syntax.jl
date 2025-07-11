@@ -4352,39 +4352,58 @@ let f = NoSpecClosure.K(1)
     @test typeof(f).parameters == Core.svec()
 end
 
-# Expr(:thisfunction)
-# regular functions can use Expr(:thisfunction) to refer to the function itself
-@eval regular_func() = $(Expr(:thisfunction))
-@test regular_func() === regular_func
+@testset "Expr(:thisfunction)" begin
+    # regular functions can use Expr(:thisfunction) to refer to the function itself
+    @eval regular_func() = $(Expr(:thisfunction))
+    @test regular_func() === regular_func
 
-# This also works in callable structs, which refers to the instance
-struct CallableStruct
-    value::Int
-end
-@eval (obj::CallableStruct)() = $(Expr(:thisfunction))
-@eval (obj::CallableStruct)(x) = $(Expr(:thisfunction)).value + x
-
-let cs = CallableStruct(42)
-    @test cs() === cs
-    @test cs(10) === 52
-end
-
-struct RecursiveCallableStruct; end
-@eval (::RecursiveCallableStruct)(n) = n <= 1 ? n : $(Expr(:thisfunction))(n-1) + $(Expr(:thisfunction))(n-2)
-
-@test RecursiveCallableStruct()(10) === 55
-
-# In closures, var"#self#" should refer to the enclosing function,
-# NOT the enclosing struct instance
-struct CallableStruct2; end
-@eval function (obj::CallableStruct2)()
-    function inner_func()
-        $(Expr(:thisfunction))
+    # This also works in callable structs, which refers to the instance
+    struct CallableStruct
+        value::Int
     end
-    inner_func
-end
+    @eval (obj::CallableStruct)() = $(Expr(:thisfunction))
+    @eval (obj::CallableStruct)(x) = $(Expr(:thisfunction)).value + x
 
-let cs = CallableStruct2()
-    @test cs()() === cs()
-    @test cs()() !== cs
+    let cs = CallableStruct(42)
+        @test cs() === cs
+        @test cs(10) === 52
+    end
+
+    struct RecursiveCallableStruct; end
+    @eval (::RecursiveCallableStruct)(n) = n <= 1 ? n : $(Expr(:thisfunction))(n-1) + $(Expr(:thisfunction))(n-2)
+
+    @test RecursiveCallableStruct()(10) === 55
+
+    # In closures, var"#self#" should refer to the enclosing function,
+    # NOT the enclosing struct instance
+    struct CallableStruct2; end
+    @eval function (obj::CallableStruct2)()
+        function inner_func()
+            $(Expr(:thisfunction))
+        end
+        inner_func
+    end
+
+    let cs = CallableStruct2()
+        @test cs()() === cs()
+        @test cs()() !== cs
+    end
+
+    # Keywords
+    let
+        @eval f2(; n=1) = n <= 1 ? n : n * $(Expr(:thisfunction))(; n=n-1)
+        result = f2(n=5)
+        @test result == 120
+    end
+
+    # Struct constructor with thisfunction
+    let
+        @eval struct Cols{T<:Tuple}
+            cols::T
+            operator
+            Cols(args...; operator=union) = (new{typeof(args)}(args, operator); string($(Expr(:thisfunction))))
+        end
+        result = Cols(1, 2, 3)
+        @test result == "Cols"
+    end
 end
