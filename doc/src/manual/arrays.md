@@ -103,7 +103,7 @@ same type, then that is its `eltype`. If they all have a common
 [promotion type](@ref conversion-and-promotion) then they get converted to that type using
 [`convert`](@ref) and that type is the array's `eltype`. Otherwise, a heterogeneous array
 that can hold anything — a `Vector{Any}` — is constructed; this includes the literal `[]`
-where no arguments are given. [Array literal can be typed](@ref man-array-typed-literal) with
+where no arguments are given. [Array literals can be typed](@ref man-array-typed-literal) with
 the syntax `T[A, B, C, ...]` where `T` is a type.
 
 ```jldoctest
