@@ -341,116 +341,116 @@ mutable struct InferenceState
     # The interpreter that created this inference state. Not looked at by
     # NativeInterpreter. But other interpreters may use this to detect cycles
     interp::AbstractInterpreter
+end
 
-    # src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
-    function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
-                            interp::AbstractInterpreter)
-        mi = result.linfo
-        world = get_inference_world(interp)
-        if world == typemax(UInt)
-            error("Entering inference from a generated function with an invalid world")
-        end
-        def = mi.def
-        mod = isa(def, Method) ? def.module : def
-        sptypes = sptypes_from_meth_instance(mi)
-        code = src.code::Vector{Any}
-        cfg = compute_basic_blocks(code)
-        spec_info = SpecInfo(src)
-
-        currbb = currpc = 1
-        ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
-        handler_info = ComputeTryCatch{TryCatchFrame}()(code)
-        nssavalues = src.ssavaluetypes::Int
-        ssavalue_uses = find_ssavalue_uses(code, nssavalues)
-        nstmts = length(code)
-        edges = []
-        stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
-
-        nslots = length(src.slotflags)
-        slottypes = Vector{Any}(undef, nslots)
-        bb_saw_latestworld = Bool[false for i = 1:length(cfg.blocks)]
-        bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
-        bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
-        if ipo_slot_refinement_enabled(interp)
-            refinements = VarTable(undef, nslots)
-            refinement_propagation = SlotRefinementPropagationState(cfg)
-        else
-            refinements = VarTable()
-            refinement_propagation = nothing
-        end
-        argtypes = result.argtypes
-
-        argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
-
-        nargtypes = length(argtypes)
-        for i = 1:nslots
-            argtyp = (i > nargtypes) ? Bottom : argtypes[i]
-            if argtyp === Bool && has_conditional(typeinf_lattice(interp))
-                argtyp = Conditional(i, Const(true), Const(false))
-            end
-            slottypes[i] = argtyp
-            bb_vartable1[i] = VarState(argtyp, i > nargtypes)
-            if ipo_slot_refinement_enabled(interp)
-                refinements[i] = VarState((i > nargtypes) ? Any : argtypes[i], i > nargtypes)
-            end
-        end
-        src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
-        ssaflags = copy(src.ssaflags)
-
-        unreachable = BitSet()
-        pclimitations = IdSet{InferenceState}()
-        limitations = IdSet{InferenceState}()
-        cycle_backedges = Tuple{InferenceState,Int}[]
-        callstack = AbsIntState[]
-        tasks = WorkThunk[]
-
-        valid_worlds = WorldRange(1, get_world_counter())
-        bestguess = Bottom
-        exc_bestguess = Bottom
-        ipo_effects = EFFECTS_TOTAL
-
-        insert_coverage = should_insert_coverage(mod, src.debuginfo)
-        if insert_coverage
-            ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
-        end
-
-        if def isa Method
-            nonoverlayed = is_nonoverlayed(def) ? ALWAYS_TRUE :
-                is_effect_overridden(def, :consistent_overlay) ? CONSISTENT_OVERLAY :
-                ALWAYS_FALSE
-            ipo_effects = Effects(ipo_effects; nonoverlayed)
-        end
-
-        restrict_abstract_call_sites = isa(def, Module)
-
-        parentid = frameid = cycleid = 0
-
-        this = new(
-            mi, WorldWithRange(world, valid_worlds), mod, sptypes, slottypes, src, cfg, spec_info,
-            currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
-            tasks, pclimitations, limitations, cycle_backedges, refinements, refinement_propagation, callstack, parentid, frameid, cycleid,
-            result, unreachable, bestguess, exc_bestguess, ipo_effects,
-            _time_ns(), 0.0, 0, 0,
-            restrict_abstract_call_sites, cache_mode, insert_coverage,
-            interp)
-
-        # some more setups
-        if !iszero(cache_mode & CACHE_MODE_LOCAL)
-            push!(get_inference_cache(interp), result)
-        end
-        if !iszero(cache_mode & CACHE_MODE_GLOBAL)
-            push!(callstack, this)
-            this.cycleid = this.frameid = length(callstack)
-        end
-
-        # Apply generated function restrictions
-        if src.min_world != 1 || src.max_world != typemax(UInt)
-            # From generated functions
-            update_valid_age!(this, WorldRange(src.min_world, src.max_world))
-        end
-
-        return this
+# src is assumed to be a newly-allocated CodeInfo, that can be modified in-place to contain intermediate results
+function InferenceState(result::InferenceResult, src::CodeInfo, cache_mode::UInt8,
+                        interp::AbstractInterpreter)
+    mi = result.linfo
+    world = get_inference_world(interp)
+    if world == typemax(UInt)
+        error("Entering inference from a generated function with an invalid world")
     end
+    def = mi.def
+    mod = isa(def, Method) ? def.module : def
+    sptypes = sptypes_from_meth_instance(mi)
+    code = src.code::Vector{Any}
+    cfg = compute_basic_blocks(code)
+    spec_info = SpecInfo(src)
+
+    currbb = currpc = 1
+    ip = BitSet(1) # TODO BitSetBoundedMinPrioritySet(1)
+    handler_info = ComputeTryCatch{TryCatchFrame}()(code)
+    nssavalues = src.ssavaluetypes::Int
+    ssavalue_uses = find_ssavalue_uses(code, nssavalues)
+    nstmts = length(code)
+    edges = []
+    stmt_info = CallInfo[ NoCallInfo() for i = 1:nstmts ]
+
+    nslots = length(src.slotflags)
+    slottypes = Vector{Any}(undef, nslots)
+    bb_saw_latestworld = Bool[false for i = 1:length(cfg.blocks)]
+    bb_vartables = Union{Nothing,VarTable}[ nothing for i = 1:length(cfg.blocks) ]
+    bb_vartable1 = bb_vartables[1] = VarTable(undef, nslots)
+    if ipo_slot_refinement_enabled(interp)
+        refinements = VarTable(undef, nslots)
+        refinement_propagation = SlotRefinementPropagationState(cfg)
+    else
+        refinements = VarTable()
+        refinement_propagation = nothing
+    end
+    argtypes = result.argtypes
+
+    argtypes = va_process_argtypes(typeinf_lattice(interp), argtypes, src.nargs, src.isva)
+
+    nargtypes = length(argtypes)
+    for i = 1:nslots
+        argtyp = (i > nargtypes) ? Bottom : argtypes[i]
+        if argtyp === Bool && has_conditional(typeinf_lattice(interp))
+            argtyp = Conditional(i, Const(true), Const(false))
+        end
+        slottypes[i] = argtyp
+        bb_vartable1[i] = VarState(argtyp, i > nargtypes)
+        if ipo_slot_refinement_enabled(interp)
+            refinements[i] = VarState((i > nargtypes) ? Any : argtypes[i], i > nargtypes)
+        end
+    end
+    src.ssavaluetypes = ssavaluetypes = Any[ NOT_FOUND for i = 1:nssavalues ]
+    ssaflags = copy(src.ssaflags)
+
+    unreachable = BitSet()
+    pclimitations = IdSet{InferenceState}()
+    limitations = IdSet{InferenceState}()
+    cycle_backedges = Tuple{InferenceState,Int}[]
+    callstack = AbsIntState[]
+    tasks = WorkThunk[]
+
+    valid_worlds = WorldRange(1, get_world_counter())
+    bestguess = Bottom
+    exc_bestguess = Bottom
+    ipo_effects = EFFECTS_TOTAL
+
+    insert_coverage = should_insert_coverage(mod, src.debuginfo)
+    if insert_coverage
+        ipo_effects = Effects(ipo_effects; effect_free = ALWAYS_FALSE)
+    end
+
+    if def isa Method
+        nonoverlayed = is_nonoverlayed(def) ? ALWAYS_TRUE :
+            is_effect_overridden(def, :consistent_overlay) ? CONSISTENT_OVERLAY :
+            ALWAYS_FALSE
+        ipo_effects = Effects(ipo_effects; nonoverlayed)
+    end
+
+    restrict_abstract_call_sites = isa(def, Module)
+
+    parentid = frameid = cycleid = 0
+
+    this = InferenceState(
+        mi, WorldWithRange(world, valid_worlds), mod, sptypes, slottypes, src, cfg, spec_info,
+        currbb, currpc, ip, handler_info, ssavalue_uses, bb_vartables, bb_saw_latestworld, ssavaluetypes, ssaflags, edges, stmt_info,
+        tasks, pclimitations, limitations, cycle_backedges, refinements, refinement_propagation, callstack, parentid, frameid, cycleid,
+        result, unreachable, bestguess, exc_bestguess, ipo_effects,
+        _time_ns(), 0.0, 0, 0,
+        restrict_abstract_call_sites, cache_mode, insert_coverage,
+        interp)
+
+    # some more setups
+    if !iszero(cache_mode & CACHE_MODE_LOCAL)
+        push!(get_inference_cache(interp), result)
+    end
+    if !iszero(cache_mode & CACHE_MODE_GLOBAL)
+        push!(callstack, this)
+        this.cycleid = this.frameid = length(callstack)
+    end
+
+    # Apply generated function restrictions
+    if src.min_world != 1 || src.max_world != typemax(UInt)
+        # From generated functions
+        update_valid_age!(this, WorldRange(src.min_world, src.max_world))
+    end
+
+    return this
 end
 
 gethandler(frame::InferenceState, pc::Int=frame.currpc) = gethandler(frame.handler_info, pc)
