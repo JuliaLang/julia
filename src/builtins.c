@@ -1768,9 +1768,9 @@ JL_CALLABLE(jl_f_memoryrefnew)
         JL_TYPECHK(memoryrefnew, long, args[1]);
         if (nargs == 3)
             JL_TYPECHK(memoryrefnew, bool, args[2]);
-        size_t i = jl_unbox_long(args[1]) - 1;
+        size_t i = (size_t) jl_unbox_long(args[1]) - 1;
         char *data;
-        if(jl_is_genericmemory(args[0])) {
+        if (jl_is_genericmemory(args[0])) {
             jl_genericmemory_t *m = (jl_genericmemory_t*)args[0];
             jl_value_t *typ = jl_apply_type((jl_value_t*)jl_genericmemoryref_type, jl_svec_data(((jl_datatype_t*)jl_typetagof(m))->parameters), 3);
             JL_GC_PROMISE_ROOTED(typ); // it is a concrete type
