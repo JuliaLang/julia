@@ -310,7 +310,10 @@
   (expr-contains-p (lambda (x) (and (pair? x) (eq? (car x) 'thisfunction))) expr))
 
 (define (make-generator-function name sp-names arg-names body)
-  (let ((arg-names (append sp-names arg-names)))
+  (let ((arg-names (append sp-names
+                           (map (lambda (n)
+                                  (if (eq? n '|#self#|) (gensy) n))
+                                arg-names))))
     (let ((body (insert-after-meta body  ;; don't specialize on generator arguments
                                    ;; arg-names slots start at 2 (after name)
                                    `((meta nospecialize ,@(map (lambda (idx) `(slot ,(+ idx 2))) (iota (length arg-names))))))))
@@ -1211,7 +1214,6 @@
                   (argl       (car argl-stmts))
                   (name       (check-dotop (car argl)))
                   (argname    (if (overlay? name) (caddr name) name))
-                  ;;
                   ;; fill in first (closure) argument
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
                                             `(|::| |#self#| ,(cadr n))
