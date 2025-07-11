@@ -545,10 +545,7 @@
         ;; call with keyword args pre-sorted - original method code goes here
         ,(method-def-expr-
           mangled sparams
-          `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw
-            ;; strip type off function self argument if not needed for a static param.
-            ;; then it is ok for cl-convert to move this definition above the original def.
-            ,@not-optional ,@vararg)
+          `((|::| ,mangled (call (core typeof) ,mangled)) ,@vars ,@restkw ,@not-optional ,@vararg)
           (insert-after-meta `(block
                                ,@stmts)
                              (cons `(meta nkw ,(+ (length vars) (length restkw)))
