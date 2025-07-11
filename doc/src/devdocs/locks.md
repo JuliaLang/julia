@@ -76,6 +76,11 @@ exception frames, and taking/releasing locks.
 * `live_tasks_lock` (`uv_mutex_t`)
 * `heapsnapshot_lock`
 * `jitlock`
+* `jl_safepoint_suspend_all_threads` and `jl_safepoint_resume_all_threads`
+  !!! note
+      Inside a region protected by these functions, all other threads are
+      blocked inside a safepoint.  It is unsafe to take locks that may safepoint
+      in this region.
 
 ### Level 3
 
