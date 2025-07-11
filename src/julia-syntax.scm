@@ -1214,7 +1214,10 @@
                   (argname    (if (overlay? name) (caddr name) name))
                   ;;
                   ;; fill in first (closure) argument
-                  (self-name  (if (nodot-sym-ref? argname) argname (gensy)))
+                  (self-name  (if (decl? argname)
+                                  (let ((var (decl-var argname)))
+                                    (if (nodot-sym-ref? var) var '|#self#|))
+                                  (if (nodot-sym-ref? argname) argname '|#self#|)))
                   (adj-decl (lambda (n) (if (and (decl? n) (length= n 2))
                                             `(|::| ,self-name ,(cadr n))
                                             n)))
