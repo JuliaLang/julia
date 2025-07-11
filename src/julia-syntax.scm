@@ -558,7 +558,7 @@
           (insert-after-meta `(block
                                ,@stmts)
                              (cons `(meta nkw ,(+ (length vars) (length restkw)))
-                                   (if (and (contains-thisfunction? `(block ,@stmts)) name (not (eq? name #f)))
+                                   (if (and name (contains-thisfunction? `(block ,@stmts)))
                                        (cons `(meta thisfunction-original ,name) annotations)
                                        annotations)))
           rett)
