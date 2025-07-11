@@ -302,7 +302,7 @@ end
 Base.copy(data::SyntaxData) = SyntaxData(data.source, data.raw, data.byte_end, data.val)
 
 function build_tree(::Type{SyntaxNode}, stream::ParseStream;
-                    filename=nothing, first_line=1, keep_parens=false, kws...)
+                    filename=nothing, first_line=1, keep_parens=false)
     source = SourceFile(stream, filename=filename, first_line=first_line)
     cursor = RedTreeCursor(stream)
     if has_toplevel_siblings(cursor)
