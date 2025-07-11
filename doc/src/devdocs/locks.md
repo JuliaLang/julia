@@ -137,3 +137,86 @@ the same level:
   Invalidation acquires the lock for every method during its depth-first search
   for backedges.  To avoid deadlocks, we must already hold `world_counter_lock`
   before acquiring multiple `jl_method_t.writelock`s.
+
+## Updates to the world counter
+
+Thanks to the [world age](@ref man-world-age) mechanism, Julia can allow the
+replacement of both methods and bindings, yet remain amenable to optimization.
+Every compiled `CodeInstance` has a range of valid world ages; we could
+conservatively assume all CIs are stale after a world age increment.  However,
+to avoid spurious recompilation, we track dependencies, called "edges", while
+maintaining the following invariant:
+
+For every published `CodeInstance`, either:
+- `min_world` and `max_world` are finite, and the CI is valid for every world
+  in that range.
+- `max_world` is ∞ (`-1`), and this CI is ready for invalidation, meaning
+  for every forward edge:
+  - If the edge is a `CodeInstance` that is invoked or inlined into this CI,
+    the edge's `MethodInstance` `backedge` array has an entry pointing back.
+  - If the edge is a `Binding`:
+      - If the binding is in another module, it has an entry for this CI in its
+        `backedges` array.
+      - If the binding is in the same module, the `Method` for this CI is in the
+        module's `scanned_methods` array.
+
+For example, the following code replaces a constant in another module, causing a
+chain of invalidations:
+```julia
+const c1 = 1
+module M const c2 = 2 end
+f() = getfield(M, :c2)
+g() = f() + c1
+
+g()                   # compile g
+
+@eval M const c2 = 3  # invalidate f, g
+g()                   # recompile g
+```
+
+After compiling the two versions of `g()`, the global cache looks like this:
+![Global cache state after invalidation](./img/invalidation-example.svg)
+
+The maximum world age, `jl_world_counter`, is protected by the
+`world_counter_lock`.  Julia uses a form of optimistic concurrency control to
+allow type inference without holding `world_counter_lock`.
+
+Publishing a new method or binding follows these steps:
+- Acquire `world_counter_lock`.
+- Relaxed-load `jl_world_counter` and let `new_world = jl_world_counter + 1`.
+- Publish the new binding partitions or method table entries with world range
+  `[new_world, ∞)`.  This step is described in the section on the [lock free
+  data structures](@ref man-lock-free-data).
+- Release-store `new_world` to `jl_world_counter`.
+- Release `world_counter_lock`.
+
+Type inference proceeds like so:
+- Acquire-load `jl_world_counter` (call this `validation_world`).
+- Perform type inference in that world, reading the bindings and method table in
+  that world using the lock-free data structures.
+- Store back edges for every inferred `CodeInstance`:
+  - For non-local bindings, this acquires the binding's module's lock.
+  - For CIs, this acquires the method's lock.
+- Acquire `world_counter_lock`.
+- Relaxed-load `jl_world_counter` and compare it to `validation_world`:
+  - If it is different, leave the valid world ranges for the inferred CIs
+    unchanged.
+  - If it is unchanged, our optimism was rewarded.  We can promote all the
+    inferred CIs valid in `validation_world` to `[validation_world, ∞)` and rely
+    on the backedges for invalidation.
+- Release `world_counter_lock`.
+
+![Two threads doing type inference while another adds a method](./img/typeinf-promotion.svg)
+
+In the above diagram, threads 1 and 2 are doing type inference (the dotted
+line), while thread 3 is activating a new method.  The solid boxes represent
+critical sections where the `world_counter_lock` is held.  `acq`, `rel`, and
+`read`, are acquire loads, release stores, and relaxed loads respectively.
+
+T1 promotes its CI in time, but T2 takes too long, blocking on
+`world_counter_lock` until T3 has finished publishing the new method and
+incrementing the world counter.  It reads `W+1` and fails to promote its CI,
+leaving it with a maximum world of `W`.
+
+## [Lock free data structures](@id man-lock-free-data)
+TODO
